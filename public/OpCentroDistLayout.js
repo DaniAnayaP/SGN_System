@@ -1470,6 +1470,12 @@ let scene3d = null;
 let scene3dLoading = null;
 let scene3dTimer = 0;
 let scene3dLabels = true;
+// Las capas del 3D que se están viendo (se recuerdan en este navegador): paredes, puertas, luz, columnas, zonas y activos.
+const LAYERS3D_KEY = 'sgn_layout_3d_layers';
+const LAYER3D_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'assets'];
+const LAYER3D_LABEL_KEYS = { walls: 'main.layout3dCapaWalls', doors: 'main.layout3dCapaDoors', power: 'main.layout3dCapaPower', columns: 'main.layout3dCapaColumns', zones: 'main.layout3dCapaZones', assets: 'main.layout3dCapaAssets' };
+const scene3dLayers = { walls: true, doors: true, power: true, columns: true, zones: true, assets: true };
+try { Object.assign(scene3dLayers, JSON.parse(localStorage.getItem(LAYERS3D_KEY) || '{}')); } catch (err) { /* sin almacenamiento: se ven todas */ }
 const lazyScripts = {};
 const can3d = () => !!(state.perms && state.perms.canView3D);
 function loadScriptOnce(src) {
@@ -1512,7 +1518,7 @@ function show3dInfo(sel) {
     }
 }
 function refreshScene3d() {
-    if (scene3d && state.view3d && state.draft) scene3d.update(state.draft, { labels: scene3dLabels });
+    if (scene3d && state.view3d && state.draft) scene3d.update(state.draft, { labels: scene3dLabels, layers: scene3dLayers });
 }
 function scheduleScene3d() {
     if (!state.view3d) return;
@@ -1533,6 +1539,16 @@ function updateViewBtns() {
     $('layout-map3d').hidden = !state.view3d;
     $('layout-views').classList.toggle('is-3d', state.view3d);
     [['layout-3d-zoom-in', 'main.layout3dAcercar'], ['layout-3d-zoom-out', 'main.layout3dAlejar']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
+    // Capas del 3D: un grupo de iconos con su propia hoja del árbol; solo se ve quien la tiene.
+    $('layout-3d-layers').hidden = !(state.perms && state.perms.canToggle3dLayers);
+    document.querySelectorAll('[data-3d-layer]').forEach((btn) => {
+        const name = btn.getAttribute('data-3d-layer');
+        const on = scene3dLayers[name] !== false;
+        btn.setAttribute('aria-pressed', String(on));
+        btn.classList.toggle('off', !on);
+        btn.setAttribute('aria-label', t(on ? 'main.layout3dCapaOcultar' : 'main.layout3dCapaVer', { name: t(LAYER3D_LABEL_KEYS[name]) }));
+        btn.title = btn.getAttribute('aria-label');
+    });
     const labelsBtn = $('layout-3d-labels');
     labelsBtn.setAttribute('aria-pressed', String(scene3dLabels));
     labelsBtn.classList.toggle('off', !scene3dLabels);
@@ -1565,6 +1581,13 @@ document.querySelectorAll('.layout-3d-view').forEach((btn) => btn.addEventListen
     if (!scene3d) return;
     document.querySelectorAll('.layout-3d-view').forEach((b) => b.classList.toggle('on', b === btn));
     scene3d.setView(btn.getAttribute('data-view'));
+}));
+document.querySelectorAll('[data-3d-layer]').forEach((btn) => btn.addEventListener('click', () => {
+    const name = btn.getAttribute('data-3d-layer');
+    scene3dLayers[name] = scene3dLayers[name] === false;
+    try { localStorage.setItem(LAYERS3D_KEY, JSON.stringify(scene3dLayers)); } catch (err) { /* no se recuerda */ }
+    updateViewBtns();
+    if (scene3d) scene3d.setLayer(name, scene3dLayers[name]);
 }));
 $('layout-3d-labels').addEventListener('click', () => {
     scene3dLabels = !scene3dLabels;

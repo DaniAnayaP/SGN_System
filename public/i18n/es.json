@@ -1769,6 +1769,15 @@
     "layoutHojaConNombres": "Nombres de las zonas",
     "layoutZoomBtn": "Acercar y alejar el croquis",
     "layoutVista3DBtn": "Ver el Layout en 3D",
+    "layout3dCapasBtn": "Mostrar u ocultar las capas del 3D",
+    "layout3dCapaWalls": "Paredes",
+    "layout3dCapaDoors": "Puertas",
+    "layout3dCapaPower": "Conexiones de luz",
+    "layout3dCapaColumns": "Columnas",
+    "layout3dCapaZones": "Zonas",
+    "layout3dCapaAssets": "Activos (anaqueles, tarimas y gabinetes)",
+    "layout3dCapaVer": "Ver: {name}",
+    "layout3dCapaOcultar": "Ocultar: {name}",
     "layoutVer2D": "Ver el croquis en 2D",
     "layoutVer3D": "Ver el Layout en 3D",
     "layout3dGeneral": "Vista general",
@@ -3683,6 +3692,10 @@
     "layoutView3d": {
       "what": "Cambia entre el croquis plano (2D) y el Layout levantado en 3D con las mismas medidas, alturas y niveles. En 3D arrastras para girar, con Shift o clic derecho lo mueves y tocas un anaquel o una zona para ver sus datos. Lo que cambias en el panel se ve en el 3D al momento. El 3D no guarda nada: solo es para ver.",
       "example": "quieres revisar si las tarimas tienen el alto correcto: pasas a 3D y, si se ven como torres, corriges su alto en Huella-Espacio."
+    },
+    "layout3dLayers": {
+      "what": "Muestra u oculta una capa del 3D, una por icono: Paredes, Puertas, Conexiones de luz, Columnas, Zonas y Activos (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Lo que ocultas deja de verse y de poder tocarse; los rótulos de esa capa también se van. Se recuerda en este navegador.",
+      "example": "ocultas las paredes para ver todo el piso desde un lado, o los activos para ver cómo quedaron las zonas."
     },
     "layout3dViews": {
       "what": "Acomoda la cámara del 3D: Vista general (en diagonal), Planta (desde arriba, como el croquis) o Frente (de lado, para ver las alturas).",

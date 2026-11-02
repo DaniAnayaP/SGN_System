@@ -6424,6 +6424,8 @@ function layoutPermissions(req) {
         canZoom: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutZoom'),
         // Ver el Layout en 3D (y volver al 2D) es otro icono con su hoja (iconLayoutVista3D).
         canView3D: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutVista3D'),
+        // Mostrar u ocultar las capas del 3D (paredes, puertas, luz, columnas, zonas y activos) son iconos de un mismo grupo, con su hoja (iconLayout3dCapas).
+        canToggle3dLayers: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayout3dCapas'),
         // "QR y descarga" por Zona (la hoja con las categorías de los códigos que hay en la zona) se usa con el icono Imprimir por zona (hoja <pantalla>/iconLayoutImprimirZona).
         canPrintZone: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutImprimirZona'),
         // Girar el croquis (en pantalla y en la hoja que se descarga) usa el icono Girar (hoja <pantalla>/iconLayoutGirar del árbol).
@@ -6451,9 +6453,9 @@ function buildPublicLayoutPayload(clientId, row) {
     const pub = {
         heightM: l.heightM,
         vertices: l.vertices,
-        doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, wall: d.wall, dist: d.dist, width: d.width })),
+        doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, wall: d.wall, dist: d.dist, width: d.width, height: d.height })),
         zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}), ...(Array.isArray(z.categories) && z.categories.length ? { categories: z.categories } : {}) })),
-        spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h })),
+        spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels })),
         // Las conexiones de luz salen en la página pública (con su propia capa, apagada al entrar) porque Daniel pidió esos botones ahí; las columnas y el plano de fondo no.
         obstacles: [], power: (l.power || []).map((e) => ({ type: e.type, wall: e.wall, dist: e.dist, height: e.height })),
     };

@@ -18,6 +18,8 @@
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
             home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
             rotate: 'Girar el croquis', measures: 'Medidas', areaBtn: 'm² de las zonas', layers: 'Capas del croquis', mapToggle: 'Croquis',
+            view2d: 'Ver el croquis en 2D', view3d: 'Ver el Layout en 3D', v3General: 'Vista general', v3Plan: 'Planta', v3Front: 'Frente', layerWalls: 'Paredes', loading3d: 'Cargando la vista 3D…',
+            error3d: 'No se pudo abrir la vista 3D en este navegador.', level1: '1 nivel', levelsN: '{n} niveles',
             search: 'Buscar', searchAll: 'Buscar en todo el Layout', searchIn: 'Buscar en {z}', searchClear: 'Borrar', searchTypes: 'Buscar en', searchFieldsAll: 'Todos', searchSelected: '{n} elegidos', searchField: { zone: 'Zona', furniture: 'Mobiliario', place: 'Ubicación', sku: 'SKU', desc: 'Descripción', cat: 'Categoría' },
             searchClose: 'Cerrar', groupMap: 'Croquis', namesBtn: 'Nombres de las zonas', spaceType: { rack: 'Anaquel', rackpal: 'Rack', cabinet: 'Gabeta', pallet: 'Tarima en piso' },
             searchMode: 'Tipo de Filtro', searchModes: { startsWith: 'Inicia con', contains: 'Contiene', equals: 'Igual que' },
@@ -44,6 +46,8 @@
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
             home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
             rotate: 'Rotate the sketch', measures: 'Measures', areaBtn: 'Zone m²', layers: 'Sketch layers', mapToggle: 'Sketch',
+            view2d: 'View the sketch in 2D', view3d: 'View the Layout in 3D', v3General: 'Overview', v3Plan: 'Top view', v3Front: 'Front view', layerWalls: 'Walls', loading3d: 'Loading the 3D view…',
+            error3d: 'The 3D view could not be opened in this browser.', level1: '1 level', levelsN: '{n} levels',
             search: 'Search', searchAll: 'Search the whole Layout', searchIn: 'Search in {z}', searchClear: 'Clear', searchTypes: 'Search in', searchFieldsAll: 'All', searchSelected: '{n} selected', searchField: { zone: 'Zone', furniture: 'Furniture', place: 'Location', sku: 'SKU', desc: 'Description', cat: 'Category' },
             searchClose: 'Close', groupMap: 'Sketch', namesBtn: 'Zone names', spaceType: { rack: 'Rack (shelf)', rackpal: 'Pallet rack', cabinet: 'Cabinet', pallet: 'Floor pallet' },
             searchMode: 'Filter type', searchModes: { startsWith: 'Starts with', contains: 'Contains', equals: 'Equal to' },
@@ -230,12 +234,13 @@
         code: '<path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/>',
         names: '<text x="12" y="16" font-size="11" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">Aa</text>',
         sliders: '<path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.2"/><circle cx="9.5" cy="17" r="2.2"/>',
+        cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9"/>',
     };
 
     // Botones del croquis (los mismos del Layout con sesión): girar, ver/ocultar medidas, ver/ocultar los m² de cada zona y las capas que se dibujan. Cada quien los mueve para verlo
     // como le conviene; al escanear de nuevo todo vuelve a como se guardó. Contorno siempre se ve; las conexiones de luz salen apagadas hasta que se prende su capa.
     const LAYER_KEYS = ['contorno', 'puertas', 'luz', 'zonas', 'espacios'];
-    const mapView = { layers: ['contorno', 'puertas', 'zonas', 'espacios'], measures: true, area: true, names: true, rotation: 0 };
+    const mapView = { layers: ['contorno', 'puertas', 'zonas', 'espacios'], measures: true, area: true, names: true, rotation: 0, mode3d: false, walls: true };
     // Lo que se está buscando en el croquis ({ zones: { id: color } }): la zona de la categoría que se escaneó sale sombreada y el resto tenue.
     // value = lo que se dibuja ahora (el croquis base o el de la búsqueda); base = lo que corresponde a la página sin buscar; key = lo ya dibujado, para no redibujar sin necesidad.
     const viewFocus = { value: null, base: null, key: 'null' };
@@ -248,12 +253,15 @@
         wrap.classList.toggle('nomap', !pageView.map);
         wrap.classList.toggle('nometrics', !pageView.metrics);
         wrap.classList.toggle('nozones', !pageView.zones);
+        wrap.classList.toggle('mode3d', mapView.mode3d);
         document.querySelectorAll('[data-page-toggle]').forEach((b) => b.setAttribute('aria-pressed', String(pageView[b.dataset.pageToggle])));
     }
     function mapToolbarHtml() {
         const icon = (name, extra = '') => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}${extra}</svg>`;
         const slash = '<path class="slash" d="M4 20L20 4"/>';
         const pills = LAYER_KEYS.map((key) => `<button type="button" class="lpill" data-map-layer="${key}" aria-pressed="${mapView.layers.includes(key)}"${key === 'contorno' ? ' aria-disabled="true"' : ''}>${esc(TEXT.layer[key])}</button>`).join('');
+        // En 3D hay una pastilla más: las paredes (en 2D no existen). Las demás capas son las mismas del croquis.
+        const wallsPill = `<button type="button" class="lpill only3d" data-map-walls aria-pressed="${mapView.walls}">${esc(TEXT.layerWalls)}</button>`;
         // Datos métricos y Distribución solo están en el Layout general; en una zona o categoría solo se ofrece el del croquis.
         const general = !searchPageZone();
         const toggle = (key, label, glyph) => `<button type="button" class="ricon" data-page-toggle="${key}" aria-pressed="${pageView[key]}" aria-label="${esc(label)}" title="${esc(label)}">${icon(glyph, slash)}</button>`;
@@ -264,29 +272,108 @@
             <div class="tgrp tmap"><span class="tgl">${esc(TEXT.groupMap)}</span>
             ${toggle('map', TEXT.mapToggle, 'map')}${general ? `${toggle('metrics', TEXT.metrics, 'chart')}${listedZones(view.data).length ? toggle('zones', TEXT.zones, 'layers') : ''}` : ''}
             <span class="tsep draw"></span>
-            <button type="button" class="ricon draw" data-map-rot aria-label="${esc(TEXT.rotate)}" title="${esc(TEXT.rotate)}">${icon('rotate')}</button>
-            <button type="button" class="ricon draw" data-map-meas aria-pressed="${mapView.measures}" aria-label="${esc(TEXT.measures)}" title="${esc(TEXT.measures)}">${icon('ruler', slash)}</button>
-            <button type="button" class="ricon draw" data-map-area aria-pressed="${mapView.area}" aria-label="${esc(TEXT.areaBtn)}" title="${esc(TEXT.areaBtn)}">${icon('area', slash)}</button>
+            <button type="button" class="ricon draw" data-map-mode="2d" aria-pressed="${!mapView.mode3d}" aria-label="${esc(TEXT.view2d)}" title="${esc(TEXT.view2d)}">${icon('map')}</button>
+            <button type="button" class="ricon draw" data-map-mode="3d" aria-pressed="${mapView.mode3d}" aria-label="${esc(TEXT.view3d)}" title="${esc(TEXT.view3d)}">${icon('cube')}</button>
+            <button type="button" class="ricon draw no3d" data-map-rot aria-label="${esc(TEXT.rotate)}" title="${esc(TEXT.rotate)}">${icon('rotate')}</button>
+            <button type="button" class="ricon draw no3d" data-map-meas aria-pressed="${mapView.measures}" aria-label="${esc(TEXT.measures)}" title="${esc(TEXT.measures)}">${icon('ruler', slash)}</button>
+            <button type="button" class="ricon draw no3d" data-map-area aria-pressed="${mapView.area}" aria-label="${esc(TEXT.areaBtn)}" title="${esc(TEXT.areaBtn)}">${icon('area', slash)}</button>
             <button type="button" class="ricon draw" data-map-names aria-pressed="${mapView.names}" aria-label="${esc(TEXT.namesBtn)}" title="${esc(TEXT.namesBtn)}">${icon('names', slash)}</button>
             </div>
-        </div><div class="lpills" role="group" aria-label="${esc(TEXT.layers)}">${pills}</div></div>${searchPanelHtml()}`;
+        </div><div class="lpills" role="group" aria-label="${esc(TEXT.layers)}">${pills}${wallsPill}</div></div>${searchPanelHtml()}`;
     }
     function mapInnerHtml(data) {
+        if (mapView.mode3d) return map3dHtml();
         const theme = window.LayoutMapSvg.theme(data.companyColor);
         viewFocus.key = JSON.stringify(viewFocus.value);
         return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, layers: mapView.layers, measures: mapView.measures, area: mapView.area, names: mapView.names, rotation: mapView.rotation, focus: viewFocus.value })}${mapToolsHtml()}`;
     }
     // Barra de botones + croquis + el lugar donde salen los resultados del buscador (la lupa); igual en el Layout general, en una zona y en una categoría.
     const mapBlockHtml = (data) => `${mapToolbarHtml()}<div class="map">${mapInnerHtml(data)}</div><div id="sres" class="sres" aria-live="polite"></div>`;
-    // El croquis se vuelve a dibujar con los botones; el contenedor es nuevo para que el zoom empiece limpio y no se acumulen sus escuchas.
+    // El croquis se vuelve a dibujar con los botones; el contenedor es nuevo para que el zoom empiece limpio y no se acumulen sus escuchas. Con el 3D ya abierto no se reconstruye: solo se ajustan sus capas.
     function redrawMap(data) {
+        if (mapView.mode3d && scene3d) { sync3d(); return; }
+        replaceMap(data);
+    }
+    function replaceMap(data) {
         const old = document.querySelector('#wrap .map');
         if (!old) return;
         const next = document.createElement('div');
         next.className = 'map';
         next.innerHTML = mapInnerHtml(data);
         old.replaceWith(next);
-        enableMapZoom();
+        afterMapMount(data);
+    }
+
+    // ---- Vista 3D (los iconos Ver 2D y Ver 3D de la barra): ocupa el lugar del croquis, se arma con lo mismo que el croquis (LayoutScene3D.js) y respeta sus capas. three.js (unos 600 KB) se carga solo
+    // la primera vez que alguien pide el 3D. Mientras se ve el 3D, la búsqueda sigue funcionando pero no sombrea el dibujo.
+    let scene3d = null;
+    const lazyScripts = {};
+    function loadScriptOnce(src) {
+        if (!lazyScripts[src]) {
+            lazyScripts[src] = new Promise((resolve, reject) => {
+                const el = document.createElement('script');
+                el.src = src;
+                el.onload = resolve;
+                el.onerror = () => { delete lazyScripts[src]; reject(new Error(src)); };
+                document.head.appendChild(el);
+            });
+        }
+        return lazyScripts[src];
+    }
+    function map3dHtml() {
+        const views = [['general', TEXT.v3General], ['planta', TEXT.v3Plan], ['frente', TEXT.v3Front]].map(([key, label], i) => `<button type="button" class="lpill" data-m3d-view="${key}" aria-pressed="${i === 0}">${esc(label)}</button>`).join('');
+        const zoomBtn = (key, label, path) => `<button type="button" class="ricon" data-m3d-zoom="${key}" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg></button>`;
+        return `<div class="m3d-bar">${views}<span class="m3d-gap"></span>${zoomBtn('in', TEXT.zoomIn, '<path d="M12 5v14M5 12h14"/>')}${zoomBtn('out', TEXT.zoomOut, '<path d="M5 12h14"/>')}</div><div class="m3d-stage" id="m3d-stage"><div class="m3d-msg" id="m3d-msg"></div></div><div class="m3d-info" id="m3d-info" hidden></div>`;
+    }
+    function layers3d() {
+        return { walls: mapView.walls, doors: mapView.layers.includes('puertas'), power: mapView.layers.includes('luz'), zones: mapView.layers.includes('zonas'), assets: mapView.layers.includes('espacios'), columns: true };
+    }
+    function sync3d() {
+        if (!scene3d) return;
+        const layers = layers3d();
+        Object.keys(layers).forEach((name) => scene3d.setLayer(name, layers[name]));
+        scene3d.setLabels(mapView.names);
+    }
+    function destroy3d() {
+        if (scene3d) { scene3d.destroy(); scene3d = null; }
+    }
+    function show3dInfo(sel) {
+        const box = document.getElementById('m3d-info');
+        if (!box) return;
+        if (!sel || !view.data) { box.hidden = true; return; }
+        const layout = view.data.layout;
+        if (sel.kind === 'space') {
+            const s = sel.space;
+            const zone = (layout.zones || []).find((z) => z.id === s.zoneId);
+            const levels = (s.levels || 1) === 1 ? TEXT.level1 : fill(TEXT.levelsN, { n: s.levels });
+            box.innerHTML = `<b>${esc(s.code)}</b> · ${esc(TEXT.spaceType[s.type] || s.type)}${zone ? ` · ${esc(zone.name)}` : ''} · ${fmt(s.l)} × ${fmt(s.d)} × ${fmt(s.h)} m · ${esc(levels)}`;
+        } else {
+            const z = sel.zone;
+            box.innerHTML = `<b>${esc(z.name)}</b> · ${esc(z.type ? (TEXT.zone[z.type] || z.type) : TEXT.noZone)} · ${fmt(window.LayoutCalc.zoneArea(z))} m²`;
+        }
+        box.hidden = false;
+    }
+    async function mount3d(data) {
+        const stage = document.getElementById('m3d-stage');
+        if (!stage) return;
+        const msg = document.getElementById('m3d-msg');
+        msg.textContent = TEXT.loading3d;
+        msg.hidden = false;
+        try {
+            await loadScriptOnce('/vendor/three/three.min.js');
+            await loadScriptOnce('/LayoutScene3D.js');
+            if (document.getElementById('m3d-stage') !== stage || !mapView.mode3d) return; // mientras cargaba se cambió de pantalla o se volvió al 2D
+            destroy3d();
+            scene3d = window.LayoutScene3D.create(stage, { labels: mapView.names, layers: layers3d(), onSelect: show3dInfo });
+            msg.hidden = true;
+            scene3d.update(data.layout, { labels: mapView.names, layers: layers3d() });
+        } catch (err) {
+            console.error('Layout público: la vista 3D no se pudo abrir', err);
+            msg.textContent = TEXT.error3d;
+        }
+    }
+    function afterMapMount(data) {
+        if (mapView.mode3d) mount3d(data); else enableMapZoom();
     }
 
     // ---- Buscador (la lupa) ----------------------------------------------------------------------------------------------------------------------------------------------------
@@ -743,6 +830,7 @@
     }
 
     function render(data) {
+        destroy3d();
         const theme = window.LayoutMapSvg.theme(data.companyColor);
         const ctx = scanContext(data);
         document.title = pageTitle(data);
@@ -774,7 +862,7 @@
         if (!ctx.zone && window.location.hash === '#distribucion') pageView.zones = true;
         document.getElementById('wrap').innerHTML = `${brandBar(data)}${body}<div class="footer">${esc(TEXT.footer)}</div>`;
         applyPageView();
-        enableMapZoom();
+        afterMapMount(data);
         loadZoneCategoryBanner();
         loadClassificationList();
         if (classPage) fetchClassification(false);
@@ -799,6 +887,7 @@
             <div class="tablebox"><table><thead><tr><th>${esc(TEXT.colZone)}</th><th>${esc(TEXT.colType)}</th><th class="num">${esc(key === 'volume' ? TEXT.colVolume : TEXT.colArea)}</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="2">${esc(TEXT.sum)}</td><td class="num">${fmt(m.sum)} ${m.unit}</td></tr></tfoot></table></div>`;
     }
     function renderMetrics(data, key) {
+        destroy3d();
         const theme = window.LayoutMapSvg.theme(data.companyColor);
         const k = data.kpis;
         resetSearch();
@@ -917,6 +1006,29 @@
             applyPageView();
             return;
         }
+        // Ver 2D / Ver 3D, la pastilla de las paredes y los botones propios del 3D (vistas y zoom)
+        const modeBtn = event.target.closest('[data-map-mode]');
+        if (modeBtn && view.data) {
+            const on = modeBtn.dataset.mapMode === '3d';
+            if (on !== mapView.mode3d) {
+                mapView.mode3d = on;
+                destroy3d();
+                applyPageView();
+                document.querySelectorAll('[data-map-mode]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.mapMode === '3d') === on)));
+                replaceMap(view.data);
+            }
+            return;
+        }
+        const wallsPill = event.target.closest('[data-map-walls]');
+        if (wallsPill) { mapView.walls = !mapView.walls; wallsPill.setAttribute('aria-pressed', String(mapView.walls)); sync3d(); return; }
+        const view3dBtn = event.target.closest('[data-m3d-view]');
+        if (view3dBtn) {
+            if (scene3d) scene3d.setView(view3dBtn.dataset.m3dView);
+            document.querySelectorAll('[data-m3d-view]').forEach((b) => b.setAttribute('aria-pressed', String(b === view3dBtn)));
+            return;
+        }
+        const zoom3dBtn = event.target.closest('[data-m3d-zoom]');
+        if (zoom3dBtn) { if (scene3d) scene3d.zoom(zoom3dBtn.dataset.m3dZoom === 'in' ? 1.3 : 1 / 1.3); return; }
         // botones del croquis: girar, medidas, m² de las zonas y capas
         const rot = event.target.closest('[data-map-rot]');
         const meas = event.target.closest('[data-map-meas]');

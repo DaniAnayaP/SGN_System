@@ -6440,6 +6440,13 @@ function seedLayoutVista3DIconGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(LAYOUT_VISTA3D_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutVista3D`], 'the Layout 3D view icon');
 }
+// Los iconos para mostrar u ocultar las capas del 3D (iconLayout3dCapas) se dan igual, una sola vez, a quien ya tiene la pantalla Layout.
+const LAYOUT_3D_LAYERS_SEED_KEY = 'seed-layout-3d-layers-icon-v1';
+function seedLayout3dLayersIconGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(LAYOUT_3D_LAYERS_SEED_KEY, path, [`${path.submenuPrefix}/iconLayout3dCapas`], 'the Layout 3D layers icons');
+}
 // El icono Centrar las categorías de la tarjeta (iconLayoutTarjetaCentrar) se quitó: con varias categorías el marco ya se reparte solo y esa opción no cambiaba nada. Una sola vez se borran
 // los accesos que se habían sembrado para ese icono (en todos los niveles), para que no queden hojas sueltas de un icono que ya no existe en el árbol.
 const LAYOUT_CARD_CENTER_CLEANUP_KEY = 'cleanup-layout-card-center-v1';
@@ -10877,6 +10884,7 @@ seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();
 seedLayoutVista3DIconGrants();
+seedLayout3dLayersIconGrants();
 cleanupLayoutCardCenterGrants();
 seedTipoCodigoValuesOnce();
 seedActivosFijosValuesOnce();

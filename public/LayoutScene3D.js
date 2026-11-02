@@ -1,9 +1,11 @@
 // ---------------------------------------------------------------------------
-// Vista 3D del Layout (Operaciones, C. Distribución). Levanta en 3D lo MISMO que se ve en el croquis: el contorno con la altura de cada esquina, las puertas y las conexiones de luz en
-// sus paredes, las columnas, las zonas (con el color que se les puso) y los espacios (anaqueles, anaqueles con tarimas, gabinetes y tarimas) con sus medidas y niveles. No inventa nada:
-// no dibuja mercancía, solo la estructura capturada. Se arma con el borrador que se está editando, así que lo que se cambia en el panel se ve en 3D al momento.
-// Necesita three.js (public/vendor/three/three.min.js, global THREE); la pantalla lo carga solo la primera vez que se pide el 3D.
-// Uso: const scene = LayoutScene3D.create(contenedor, { onSelect }); scene.update(layout, { labels: true }); scene.setView('general'); scene.zoom(1.25); scene.destroy().
+// Vista 3D del Layout (Operaciones, C. Distribución, y la página pública del QR). Levanta en 3D lo MISMO que se ve en el croquis: el contorno con la altura de cada esquina, las puertas y las
+// conexiones de luz en sus paredes, las columnas, las zonas (con el color que se les puso) y los espacios (anaqueles, anaqueles con tarimas, gabinetes y tarimas) con sus medidas y niveles.
+// No inventa nada: no dibuja mercancía, solo la estructura capturada. En el editor se arma con el borrador que se está editando, así que lo que se cambia en el panel se ve en 3D al momento.
+// Capas que se pueden mostrar u ocultar (setLayer): walls (paredes), doors (puertas), power (conexiones de luz), columns (columnas), zones (zonas) y assets (activos: anaqueles, anaqueles con
+// tarimas, gabinetes y tarimas); los rótulos tienen su propio interruptor (setLabels).
+// Necesita three.js (public/vendor/three/three.min.js, global THREE); las pantallas lo cargan solo la primera vez que se pide el 3D.
+// Uso: const scene = LayoutScene3D.create(contenedor, { onSelect }); scene.update(layout, { labels: true, layers: { power: false } }); scene.setView('general'); scene.zoom(1.25); scene.destroy().
 // ---------------------------------------------------------------------------
 (function (root) {
     'use strict';
@@ -13,6 +15,7 @@
     const POWER_COLOR = { panel: 0x6b6f7c, outlet110: 0xf1c232, outlet220: 0xe8892b, 'three-phase': 0xd93a2f };
     const WOOD = 0xb98a52;
     const MAX_SPACE_LABELS = 300;
+    const LAYER_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'assets'];
 
     function wallSegment(vertices, wall) {
         const n = vertices.length;
@@ -39,10 +42,9 @@
         scene.add(new THREE.HemisphereLight(0xffffff, 0x8a93a8, 0.62));
         const sun = new THREE.DirectionalLight(0xffffff, 0.5);
         scene.add(sun);
-        const content = new THREE.Group();
-        scene.add(content);
-        const labelsGroup = new THREE.Group();
-        scene.add(labelsGroup);
+        // Un grupo por capa: así cada una se muestra u oculta sola.
+        const group = {};
+        ['floor', 'walls', 'doors', 'power', 'columns', 'zones', 'assets', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
         const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a }));
         outline.visible = false;
         scene.add(outline);
@@ -53,7 +55,10 @@
         let dirty = true;
         let anim = 0;
         let destroyed = false;
+        let placed = false;
         let labelsOn = options.labels !== false;
+        const layerOn = {};
+        LAYER_NAMES.forEach((n) => { layerOn[n] = !(options.layers && options.layers[n] === false); });
         let hitSpaces = null;
         let spaceList = [];
         let zoneMeshes = [];
@@ -61,6 +66,19 @@
 
         const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
         const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
+
+        function applyVisibility() {
+            group.walls.visible = layerOn.walls;
+            group.doors.visible = layerOn.doors;
+            group.power.visible = layerOn.power;
+            group.columns.visible = layerOn.columns;
+            group.zones.visible = layerOn.zones;
+            group.assets.visible = layerOn.assets;
+            group.zoneLabels.visible = labelsOn && layerOn.zones;
+            group.spaceLabels.visible = labelsOn && layerOn.assets;
+            if (!layerOn.assets && !layerOn.zones) outline.visible = false;
+            dirty = true;
+        }
 
         function applyCam() {
             const sp = Math.sin(st.phi);
@@ -116,32 +134,32 @@
             textureCache.set(text, entry);
             return entry;
         }
-        function addLabel(text, x, y, z, h, flat) {
+        function addLabel(target, text, x, y, z, h, flat) {
             if (!text) return;
             const { tex, ratio } = textTexture(text);
             if (flat) {
                 const m = new THREE.Mesh(new THREE.PlaneGeometry(h * ratio, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
                 m.rotation.x = -Math.PI / 2;
                 m.position.set(x, y, z);
-                labelsGroup.add(m);
+                target.add(m);
                 return;
             }
             const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
             s.scale.set(h * ratio, h, 1);
             s.position.set(x, y, z);
             s.renderOrder = 10;
-            labelsGroup.add(s);
+            target.add(s);
         }
 
-        function clearGroup(group) {
-            while (group.children.length) {
-                const o = group.children.pop();
+        function clearGroup(g) {
+            while (g.children.length) {
+                const o = g.children.pop();
                 if (o.geometry) o.geometry.dispose();
                 if (o.material && !o.material.map) o.material.dispose();
             }
         }
 
-        function instanced(list, material) {
+        function instanced(target, list, material) {
             if (!list.length) return null;
             const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, list.length);
             const dummy = new THREE.Object3D();
@@ -155,21 +173,21 @@
             });
             mesh.instanceMatrix.needsUpdate = true;
             mesh.instanceColor.needsUpdate = true;
-            content.add(mesh);
+            target.add(mesh);
             return mesh;
         }
 
         // ---- arma la escena con el Layout (metros; el centro de la nave queda en el origen)
         function update(layout, opts) {
             if (opts && typeof opts.labels === 'boolean') labelsOn = opts.labels;
-            clearGroup(content);
-            clearGroup(labelsGroup);
+            if (opts && opts.layers) LAYER_NAMES.forEach((n) => { if (typeof opts.layers[n] === 'boolean') layerOn[n] = opts.layers[n]; });
+            Object.keys(group).forEach((n) => clearGroup(group[n]));
             outline.visible = false;
             hitSpaces = null;
             spaceList = [];
             zoneMeshes = [];
             const V = layout && Array.isArray(layout.vertices) ? layout.vertices.filter((p) => Array.isArray(p) && p.length >= 2) : [];
-            if (V.length < 3) { dirty = true; return; }
+            if (V.length < 3) { applyVisibility(); return; }
             const xs = V.map((p) => p[0]);
             const ys = V.map((p) => p[1]);
             const minX = Math.min(...xs); const maxX = Math.max(...xs); const minY = Math.min(...ys); const maxY = Math.max(...ys);
@@ -183,13 +201,13 @@
             const PZ = (y) => y - CY;
             bounds = { diag: Math.max(10, Math.hypot(maxX - minX, maxY - minY)), maxH, sx: maxX - minX, sy: maxY - minY };
 
-            // piso
+            // piso (siempre se ve: es la forma de la nave)
             try {
                 const shape = new THREE.Shape(V.map((p) => new THREE.Vector2(p[0], p[1])));
                 const g = new THREE.ShapeGeometry(shape);
                 g.rotateX(Math.PI / 2);
                 g.translate(-CX, 0, -CY);
-                content.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: 0xc3c8d8, side: THREE.DoubleSide })));
+                group.floor.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: 0xc3c8d8, side: THREE.DoubleSide })));
             } catch (err) { /* contorno que no se puede triangular: se dibujan solo las paredes */ }
 
             // paredes: translúcidas (con la altura de cada esquina) y sus aristas
@@ -207,10 +225,10 @@
             const wg = new THREE.BufferGeometry();
             wg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
             wg.computeVertexNormals();
-            content.add(new THREE.Mesh(wg, new THREE.MeshLambertMaterial({ color: 0x8ea6d4, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false })));
+            group.walls.add(new THREE.Mesh(wg, new THREE.MeshLambertMaterial({ color: 0x8ea6d4, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false })));
             const lg = new THREE.BufferGeometry();
             lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
-            content.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x4a5f8f })));
+            group.walls.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x4a5f8f })));
 
             // puertas y conexiones de luz (la pared 1 va de la esquina 1 a la 2; dist es desde la esquina de inicio)
             (layout.doors || []).forEach((d) => {
@@ -222,7 +240,7 @@
                 const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.2), lam(DOOR_COLOR[d.type] || DOOR_COLOR.staff));
                 m.position.set(PX(seg.p[0] + seg.ux * along), h / 2, PZ(seg.p[1] + seg.uy * along));
                 m.rotation.y = -Math.atan2(seg.uy, seg.ux);
-                content.add(m);
+                group.doors.add(m);
             });
             (layout.power || []).forEach((e) => {
                 const seg = wallSegment(V, Number(e.wall) || 1);
@@ -231,13 +249,13 @@
                 const m = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.16), lam(POWER_COLOR[e.type] || POWER_COLOR.outlet110));
                 m.position.set(PX(seg.p[0] + seg.ux * along), Math.max(0.2, Number(e.height) || 0.4), PZ(seg.p[1] + seg.uy * along));
                 m.rotation.y = -Math.atan2(seg.uy, seg.ux);
-                content.add(m);
+                group.power.add(m);
             });
             // columnas y obstáculos: del piso al techo
             (layout.obstacles || []).forEach((o) => {
                 const m = new THREE.Mesh(new THREE.BoxGeometry(Math.max(o.l, 0.1), avgH, Math.max(o.w, 0.1)), lam(0x3a3f4d));
                 m.position.set(PX(o.x + o.l / 2), avgH / 2, PZ(o.y + o.w / 2));
-                content.add(m);
+                group.columns.add(m);
             });
 
             // zonas: losas de color (el que se les puso en Formato de zona, o el de su tipo)
@@ -255,15 +273,15 @@
                 const inactive = z.active === false;
                 const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive, opacity: inactive ? 0.35 : 1 }));
                 mesh.userData = { kind: 'zone', zone: z };
-                content.add(mesh);
+                group.zones.add(mesh);
                 zoneMeshes.push(mesh);
                 let ax; let ay;
                 try { const a = LCalc && LCalc.zoneLabelAnchor ? LCalc.zoneLabelAnchor(z) : null; if (a) { ax = a.x; ay = a.y; } } catch (err) { /* usa el centro */ }
                 if (ax === undefined) { ax = z.x + z.l / 2; ay = z.y + z.w / 2; }
-                if (!inactive) addLabel(z.name, PX(ax), 0.12 + 0.004 * i, PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
+                if (!inactive) addLabel(group.zoneLabels, z.name, PX(ax), 0.12 + 0.004 * i, PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
             });
 
-            // espacios: anaqueles (postes y repisas por nivel), anaqueles con tarimas, gabinetes y tarimas
+            // activos: anaqueles (postes y repisas por nivel), anaqueles con tarimas, gabinetes y tarimas
             const upr = []; const dck = []; const blk = [];
             const edges = [];
             const edgeBox = (x, y, z, sx, sy, sz) => {
@@ -291,29 +309,29 @@
                 spaceList.push({ s, x: cx, z: cz });
             });
             const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-            instanced(upr, mat);
-            instanced(dck, mat);
-            instanced(blk, mat);
+            instanced(group.assets, upr, mat);
+            instanced(group.assets, dck, mat);
+            instanced(group.assets, blk, mat);
             if (edges.length) {
                 const eg = new THREE.BufferGeometry();
                 eg.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
-                content.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x8a5a34 })));
+                group.assets.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x8a5a34 })));
             }
             if (spaceList.length) {
                 hitSpaces = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ visible: false }), spaceList.length);
                 const dummy = new THREE.Object3D();
                 spaceList.forEach((e, i) => { dummy.position.set(e.x, e.s.h / 2, e.z); dummy.scale.set(e.s.l, e.s.h, e.s.d); dummy.updateMatrix(); hitSpaces.setMatrixAt(i, dummy.matrix); });
                 hitSpaces.instanceMatrix.needsUpdate = true;
-                content.add(hitSpaces);
+                group.assets.add(hitSpaces);
             }
-            if (spaceList.length <= MAX_SPACE_LABELS) spaceList.forEach((e) => addLabel(e.s.code, e.x, e.s.h + 0.4, e.z, 0.38, false));
+            if (spaceList.length <= MAX_SPACE_LABELS) spaceList.forEach((e) => addLabel(group.spaceLabels, e.s.code, e.x, e.s.h + 0.4, e.z, 0.38, false));
 
-            labelsGroup.visible = labelsOn;
-            if (!update.placed) { update.placed = true; go(viewTarget('general'), false); }
-            dirty = true;
+            applyVisibility();
+            if (!placed) { placed = true; go(viewTarget('general'), false); }
         }
 
-        function setLabels(on) { labelsOn = !!on; labelsGroup.visible = labelsOn; dirty = true; }
+        function setLabels(on) { labelsOn = !!on; applyVisibility(); }
+        function setLayer(name, on) { if (LAYER_NAMES.includes(name)) { layerOn[name] = !!on; applyVisibility(); } }
         function setView(name) { go(viewTarget(name), true); }
         function zoom(factor) { st.r = clamp(st.r / factor, 3, bounds.diag * 6); applyCam(); }
 
@@ -350,14 +368,15 @@
         function pick(e) {
             const r = canvas.getBoundingClientRect();
             raycaster.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), cam);
-            let hit = hitSpaces ? raycaster.intersectObject(hitSpaces)[0] : null;
+            // una capa oculta no se puede tocar
+            let hit = hitSpaces && layerOn.assets ? raycaster.intersectObject(hitSpaces)[0] : null;
             let payload = null;
             let box = null;
             if (hit && hit.instanceId !== undefined) {
                 const e2 = spaceList[hit.instanceId];
                 payload = { kind: 'space', space: e2.s };
                 box = { x: e2.x, y: e2.s.h / 2, z: e2.z, sx: e2.s.l, sy: e2.s.h, sz: e2.s.d };
-            } else {
+            } else if (layerOn.zones) {
                 hit = raycaster.intersectObjects(zoneMeshes)[0];
                 if (hit) {
                     const b = new THREE.Box3().setFromObject(hit.object);
@@ -417,14 +436,13 @@
             canvas.removeEventListener('pointerup', onUp);
             canvas.removeEventListener('pointercancel', onCancel);
             canvas.removeEventListener('wheel', onWheel);
-            clearGroup(content);
-            clearGroup(labelsGroup);
+            Object.keys(group).forEach((n) => clearGroup(group[n]));
             textureCache.forEach((e) => e.tex.dispose());
             renderer.dispose();
             canvas.remove();
         }
-        return { update, setLabels, setView, zoom, resize, destroy, canvas };
+        return { update, setLabels, setLayer, setView, zoom, resize, destroy, canvas, layers: LAYER_NAMES.slice() };
     }
 
-    root.LayoutScene3D = { create };
+    root.LayoutScene3D = { create, LAYERS: LAYER_NAMES.slice() };
 })(typeof window !== 'undefined' ? window : globalThis);
