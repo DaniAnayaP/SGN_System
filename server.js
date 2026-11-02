@@ -6038,10 +6038,42 @@ app.get('/api/business/sku-items/upcs', requireAuth, (req, res) => {
     res.json({ upcs: listSkuItemUpcs(req.user.clientId, req.user.isTestAccount).map((r) => [r.upc, String(r.record_number).padStart(6, '0')]) });
 });
 
-// Carga por plantilla: da de alta muchos artículos a la vez (Excel o filas pegadas, ya revisadas en pantalla). El servidor vuelve a revisar CADA fila con las mismas reglas
-// (public/SkuTemplate.js): las buenas se cargan y las malas regresan con su motivo, nada se carga a medias. Solo lleva los 11 datos del artículo y sus 7 categorías; las 6 fotos se
-// toman con el producto en la mano, así que el artículo queda sin código QR hasta tenerlas. Pide la hoja "Cargar por Plantilla" y, para cada dato que viene, la hoja de esa columna.
+// Carga por plantilla: da de alta muchos artículos a la vez, y con "update" también actualiza los que ya existen (Excel o filas pegadas, ya revisadas en pantalla). El servidor vuelve a revisar CADA fila con
+// la misma regla (SkuTemplate.planRow, public/SkuTemplate.js): las buenas se cargan y las malas regresan con su motivo, nada se carga a medias dentro de una fila. Lleva los 11 datos del artículo, sus 7
+// categorías y la clasificación; las 6 fotos se toman con el producto en la mano, así que el artículo queda sin código QR hasta tenerlas. Un código ya completo no se toca (se corrige en Edición Código).
+// Sin "columns" se cargan todas las columnas que traiga la fila; con ella, solo las elegidas (el SKU y el UPC siempre son llaves). Una celda vacía nunca borra lo que el código ya tiene.
 const SkuTemplate = require('./public/SkuTemplate.js');
+// Un código para la carga por plantilla: { id, sku, upc, complete, v: { campo: valor actual } } (solo los datos que ya tiene; la clasificación va con su nombre).
+function skuTemplateItem(row, classificationNames) {
+    const v = {};
+    SkuTemplate.COLUMNS.forEach((c) => {
+        const value = row[SKU_ITEM_PATCHABLE_FIELDS[c.key].column];
+        if (isSkuFieldFilled(value)) v[c.key] = value;
+    });
+    if (row.classification_id != null && classificationNames.has(row.classification_id)) v.classificationId = classificationNames.get(row.classification_id);
+    return { id: row.id, sku: String(row.record_number).padStart(6, '0'), upc: row.upc, complete: isSkuItemComplete(row), v };
+}
+// Las clasificaciones que se pueden poner: todas las activas del catálogo y, de cada categoría Inventario, las suyas.
+function skuTemplateClassifications(clientId, isTest) {
+    const all = listArticleCategories(clientId, 'clasificaciones', isTest);
+    const byId = new Map(all.map((r) => [r.id, r]));
+    const byCategory = {};
+    listArticleCategories(clientId, 'inventario', isTest).forEach((cat) => {
+        byCategory[cat.name] = parseClassificationIds(cat.classification_ids).map((id) => byId.get(id)).filter((r) => r && r.status === 'active').map((r) => r.name);
+    });
+    return { all: all.filter((r) => r.status === 'active').map((r) => r.name), byCategory, names: new Map(all.map((r) => [r.id, r.name])) };
+}
+// Lo que necesita la ventana para revisar cada fila sin preguntar al servidor: los códigos que ya existen (con sus datos actuales) y las clasificaciones.
+app.get('/api/business/sku-items/template-context', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const cls = skuTemplateClassifications(clientId, isTestAccount);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        items: listSkuItems(clientId, isTestAccount).map((r) => skuTemplateItem(r, cls.names)),
+        classifications: { all: cls.all, byCategory: cls.byCategory },
+    });
+});
 app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
@@ -6053,48 +6085,94 @@ app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
     if (!Array.isArray(input) || !input.length) return res.status(400).json({ message: 'No hay filas para cargar.' });
     if (input.length > SkuTemplate.MAX_ROWS) return res.status(400).json({ message: `El máximo es ${SkuTemplate.MAX_ROWS} filas por carga. Parte el archivo en varios.` });
     const rows = input.map((r, i) => ({ n: Number.isInteger(r && r.n) ? r.n : i + 2, v: r && typeof r.v === 'object' && r.v ? r.v : {} }));
-    // Cada dato que viene necesita su propia hoja (Ver y Operar o Modificar), igual que al llenar una celda vacía de la tabla.
-    if (grants) {
-        const missing = new Set();
-        rows.forEach((r) => SkuTemplate.COLUMNS.forEach((c) => {
-            if (String(r.v[c.key] == null ? '' : r.v[c.key]).trim() && !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, 'nuestros-articulos', c.col))) missing.add(SKU_ITEM_PATCHABLE_FIELDS[c.key].fieldKey);
-        }));
-        if (missing.size) return res.status(403).json({ message: 'No tienes permiso para llenar una de las columnas de la plantilla.', fields: [...missing] });
-    }
-    const existing = new Map(listSkuItemUpcs(clientId, isTestAccount).map((r) => [r.upc, String(r.record_number).padStart(6, '0')]));
+    const allowUpdate = !!(req.body && req.body.update === true);
+    const selected = Array.isArray(req.body && req.body.columns) ? new Set(req.body.columns.filter((k) => SkuTemplate.BY_KEY_ALL[k])) : null;
+    const cls = skuTemplateClassifications(clientId, isTestAccount);
+    const items = listSkuItems(clientId, isTestAccount).map((r) => skuTemplateItem(r, cls.names));
+    const bySku = new Map(items.map((i) => [Number(i.sku), i]));
+    const byUpc = new Map(items.filter((i) => i.upc).map((i) => [i.upc, i]));
     const accepted = new Map();
     const categories = {};
     SkuTemplate.COLUMNS.filter((c) => c.kind === 'category').forEach((c) => { categories[c.type] = listActiveArticleCategoryNames(clientId, c.type, isTestAccount); });
     const ctx = {
-        udm: listActiveArticleCategoryNames(clientId, 'udm', isTestAccount), categories,
-        existingUpc: (upc) => existing.get(upc) || '',
-        priorRowWithUpc: (upc, row) => { const n = accepted.get(upc); return n && n !== row.n ? n : 0; },
+        allowUpdate, selected, udm: listActiveArticleCategoryNames(clientId, 'udm', isTestAccount), categories, classifications: { all: cls.all, byCategory: cls.byCategory },
+        itemBySku: (n) => bySku.get(n) || null, itemByUpc: (upc) => byUpc.get(upc) || null,
+        priorRowWithKey: (key, row) => { const n = accepted.get(key); return n && n !== row.n ? n : 0; },
+    };
+    // Cada dato que se escribe necesita su propia hoja, igual que en la tabla: llenar uno vacío pide Ver y Operar (o Modificar); cambiar uno que ya tenía pide Modificar y, como en la tabla, queda
+    // como cambio por autorizar (lo aplica directo el administrador del cliente).
+    const needLevel = (key) => (grants ? getColumnGrantLevel(grants, 'nuestros-articulos', SkuTemplate.BY_KEY_ALL[key].col) : 'editar');
+    const labelOf = (key) => SkuTemplate.BY_KEY_ALL[key].es;
+    const permissionError = (plan) => {
+        if (!grants) return null;
+        const writes = plan.action === 'create' ? Object.keys(plan.patch).map((key) => ({ key, kind: 'fill' })) : plan.changes;
+        for (const w of writes) {
+            const level = needLevel(w.key);
+            const can = w.kind === 'change' ? level === 'editar' : (level === 'ver-y-operar' || level === 'editar');
+            if (!can) return { field: w.key, code: 'noPermission', params: { label: labelOf(w.key), change: w.kind === 'change' }, message: w.kind === 'change' ? `No tienes permiso para cambiar «${labelOf(w.key)}» porque ese código ya tenía dato.` : `No tienes permiso para llenar «${labelOf(w.key)}».` };
+        }
+        return null;
     };
     const created = [];
+    const updated = [];
+    const unchanged = [];
+    const completeSkipped = [];
     const failed = [];
     const changedBy = changedByLabel(req);
+    const classIdOf = (name, category) => { const found = inventoryClassificationsFor(clientId, isTestAccount, category).find((r) => r.name === name); return found ? found.id : null; };
+    const className = (id) => classificationNameOf(clientId, isTestAccount, id);
     rows.forEach((row, index) => {
-        const err = SkuTemplate.validateRow(row, ctx);
-        if (err) { failed.push({ index, n: row.n, field: err.field, code: err.code, params: err.params, message: SkuTemplate.message(err) }); return; }
+        const plan = SkuTemplate.planRow(row, ctx);
+        if (plan.error) { failed.push({ index, n: row.n, field: plan.error.field, code: plan.error.code, params: plan.error.params, message: SkuTemplate.message(plan.error) }); return; }
+        if (plan.action === 'complete') { accepted.set(plan.key, row.n); completeSkipped.push({ index, n: row.n, sku: plan.item.sku }); return; }
+        if (plan.action === 'same') { accepted.set(plan.key, row.n); unchanged.push({ index, n: row.n, sku: plan.item.sku }); return; }
+        const denied = permissionError(plan);
+        if (denied) { failed.push({ index, n: row.n, field: denied.field, code: denied.code, params: denied.params, message: denied.message }); return; }
         try {
-            const patch = SkuTemplate.normalizeRow(row, ctx);
-            let item = createSkuItem({ clientId, isTestData: isTestAccount });
-            item = updateSkuItem(item.id, clientId, patch, isTestAccount);
-            logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'create', changedBy });
-            Object.entries(patch).forEach(([key, value]) => logTableChange({
-                clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'update',
-                fieldKey: SKU_ITEM_PATCHABLE_FIELDS[key].fieldKey, oldValue: '', newValue: String(value), changedBy,
-            }));
-            logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'update', fieldKey: 'main.articuloOrigenAlta', oldValue: '', newValue: 'Carga por plantilla', changedBy });
-            accepted.set(patch.upc, row.n);
-            created.push({ index, n: row.n, id: item.id, sku: String(item.record_number).padStart(6, '0') });
+            if (plan.action === 'create') {
+                const patch = { ...plan.patch };
+                if (patch.classificationId !== undefined) patch.classificationId = classIdOf(patch.classificationId, patch.categoryInventario);
+                const prepared = prepareSkuClassificationPatch(req, { category_inventario: '', classification_id: null }, patch);
+                if (prepared.error) { failed.push({ index, n: row.n, field: 'classificationId', code: 'serverError', params: {}, message: prepared.error.message }); return; }
+                let item = createSkuItem({ clientId, isTestData: isTestAccount });
+                item = updateSkuItem(item.id, clientId, prepared.patch, isTestAccount);
+                logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'create', changedBy });
+                Object.entries(prepared.patch).forEach(([key, value]) => logTableChange({
+                    clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'update',
+                    fieldKey: SKU_ITEM_PATCHABLE_FIELDS[key].fieldKey, oldValue: '', newValue: key === 'classificationId' ? className(value) : String(value), changedBy,
+                }));
+                logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'update', fieldKey: 'main.articuloOrigenAlta', oldValue: '', newValue: 'Carga por plantilla', changedBy });
+                accepted.set(plan.key, row.n);
+                if (plan.patch.upc) byUpc.set(plan.patch.upc, { id: item.id, sku: String(item.record_number).padStart(6, '0'), upc: plan.patch.upc, complete: false, v: {} });
+                created.push({ index, n: row.n, id: item.id, sku: String(item.record_number).padStart(6, '0') });
+                return;
+            }
+            // update: lo mismo que cambiar las celdas a mano en la tabla (permisos por columna, historial, avisos, clasificación que ya no le toca, QR de la ficha)
+            const existing = getSkuItemById(plan.item.id, clientId, isTestAccount);
+            if (!existing) { failed.push({ index, n: row.n, field: 'sku', code: 'skuUnknown', params: { sku: plan.item.sku }, message: SkuTemplate.message({ code: 'skuUnknown', params: { sku: plan.item.sku } }) }); return; }
+            const patch = { ...plan.patch };
+            if (patch.classificationId !== undefined) patch.classificationId = classIdOf(patch.classificationId, patch.categoryInventario || existing.category_inventario);
+            const prepared = prepareSkuClassificationPatch(req, existing, patch);
+            if (prepared.error) { failed.push({ index, n: row.n, field: 'classificationId', code: 'serverError', params: {}, message: prepared.error.message }); return; }
+            const sanitizers = { classificationId: (v) => classificationNameOf(clientId, isTestAccount, v) };
+            const result = checkAndLogFieldChanges(req, existing, prepared.patch, SKU_ITEM_PATCHABLE_FIELDS, 'nuestros-articulos', `#${existing.id}`, sanitizers);
+            let item = updateSkuItem(existing.id, clientId, result.appliedPatch, isTestAccount);
+            if (item.classification_id != null && !inventoryClassificationsFor(clientId, isTestAccount, item.category_inventario).some((r) => r.id === item.classification_id)) {
+                const oldName = className(item.classification_id);
+                item = updateSkuItem(existing.id, clientId, { classificationId: null }, isTestAccount);
+                logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'update', fieldKey: 'main.colArticuloClasificacion', oldValue: oldName, newValue: '', changedBy });
+            }
+            maybeIssueSkuPublicToken(item, clientId, isTestAccount);
+            logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: existing.id, recordLabel: `#${existing.id}`, action: 'update', fieldKey: 'main.articuloOrigenAlta', oldValue: '', newValue: 'Actualización por plantilla', changedBy });
+            accepted.set(plan.key, row.n);
+            updated.push({ index, n: row.n, id: existing.id, sku: plan.item.sku, applied: Object.keys(result.appliedPatch).length, pending: result.pendingFields.length, rejected: result.rejectedFields.length });
         } catch (error) {
             console.error('Carga por plantilla: no se pudo guardar una fila', error);
             failed.push({ index, n: row.n, field: '', code: 'serverError', params: {}, message: 'No se pudo guardar esta fila. Inténtalo de nuevo.' });
         }
     });
-    if (created.length) notifyButtonAction(req, 'nuestros-articulos', 'import', `${created.length} (${created[0].sku} – ${created[created.length - 1].sku})`);
-    res.json({ created, failed });
+    if (created.length || updated.length) notifyButtonAction(req, 'nuestros-articulos', 'import', `${created.length} nuevos${created.length ? ` (${created[0].sku} – ${created[created.length - 1].sku})` : ''}, ${updated.length} actualizados`);
+    res.json({ created, updated, unchanged, complete: completeSkipped, failed });
 });
 
 // Editar un código ya completo: pasa de Catálogos > Códigos (solo lectura) a Operaciones > Edición Código, donde se corrige con las mismas reglas de siempre (permisos por columna,

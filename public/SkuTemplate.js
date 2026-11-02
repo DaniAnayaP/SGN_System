@@ -37,17 +37,26 @@
 
     // sin mayúsculas, acentos, paréntesis (las unidades) ni signos: "Alto (cm)" y "alto" son la misma columna
     const norm = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
-    const HEADER_INDEX = (() => {
+    // Columnas nuevas de la carga con actualización (Web): SKU = el registro único de cada código (lo asigna el sistema) y Clasificación (se guarda su id, aquí va el nombre). La App sigue con
+    // COLUMNS (las 18 de siempre) y las mismas funciones de siempre; lo nuevo es ALL_COLUMNS, planRow y rowsFromMatrix(matrix, { full: true }).
+    const SKU_COLUMN = { key: 'sku', es: 'SKU', en: 'SKU', kind: 'sku', aliases: ['registro unico', 'sku del sistema', 'codigo sku'] };
+    const CLASSIFICATION_COLUMN = { key: 'classificationId', es: 'Clasificación', en: 'Classification', col: 'colArticuloClasificacion', kind: 'classification', aliases: ['clasificacion del articulo'] };
+    const ALL_COLUMNS = [SKU_COLUMN, ...COLUMNS, CLASSIFICATION_COLUMN];
+    const BY_KEY_ALL = Object.fromEntries(ALL_COLUMNS.map((c) => [c.key, c]));
+    const indexFor = (cols) => {
         const map = new Map();
-        COLUMNS.forEach((c) => { [c.es, c.en, ...(c.aliases || [])].forEach((name) => { if (!map.has(norm(name))) map.set(norm(name), c.key); }); });
+        cols.forEach((c) => { [c.es, c.en, ...(c.aliases || [])].forEach((name) => { if (!map.has(norm(name))) map.set(norm(name), c.key); }); });
         return map;
-    })();
+    };
+    const HEADER_INDEX = indexFor(COLUMNS);
+    const HEADER_INDEX_ALL = indexFor(ALL_COLUMNS);
 
     // Qué columna es cada celda de la primera fila. matched = cuántos encabezados se reconocieron; ignored = los que no (no se usan).
-    function mapHeaders(firstRow) {
+    function mapHeaders(firstRow, full) {
         const used = new Set();
+        const index = full ? HEADER_INDEX_ALL : HEADER_INDEX;
         const keys = (firstRow || []).map((cell) => {
-            const key = HEADER_INDEX.get(norm(cell));
+            const key = index.get(norm(cell));
             if (!key || used.has(key)) return null;
             used.add(key);
             return key;
@@ -56,18 +65,22 @@
             keys,
             matched: keys.filter(Boolean).length,
             hasUpc: used.has('upc'),
+            hasKey: used.has('upc') || used.has('sku'),
             ignored: (firstRow || []).map((cell, i) => (keys[i] ? '' : String(cell == null ? '' : cell).trim())).filter(Boolean),
         };
     }
 
     // Convierte una matriz de celdas (Excel o texto pegado) en filas { n, v: { campo: texto } }. n = número de fila de Excel (1 = encabezados).
-    function rowsFromMatrix(matrix) {
+    // opts.full = lee también las columnas SKU y Clasificación y basta con que traiga UPC o SKU (se puede cargar un archivo con una sola columna).
+    function rowsFromMatrix(matrix, opts = {}) {
+        const full = !!opts.full;
+        const cols = full ? ALL_COLUMNS : COLUMNS;
         const first = matrix.findIndex((r) => (r || []).some((c) => String(c == null ? '' : c).trim() !== ''));
         if (first < 0) return { error: 'empty', rows: [] };
-        const head = mapHeaders(matrix[first]);
+        const head = mapHeaders(matrix[first], full);
         let keys;
         let start;
-        if (head.hasUpc && head.matched >= 2) { keys = head.keys; start = first + 1; }
+        if (full ? (head.hasKey && head.matched >= 1) : (head.hasUpc && head.matched >= 2)) { keys = head.keys; start = first + 1; }
         else if (/^\d/.test(String(matrix[first][0] == null ? '' : matrix[first][0]).trim())) { keys = COLUMNS.map((c) => c.key); start = first; } // sin encabezados: el orden de la plantilla
         else return { error: 'columns', rows: [] };
         const rows = [];
@@ -76,7 +89,7 @@
             const v = {};
             keys.forEach((key, c) => { if (key) v[key] = String(cells[c] == null ? '' : cells[c]).trim(); });
             if (!Object.values(v).some((x) => x !== '')) continue;
-            COLUMNS.forEach((c) => { if (v[c.key] === undefined) v[c.key] = ''; });
+            cols.forEach((c) => { if (v[c.key] === undefined) v[c.key] = ''; });
             rows.push({ n: i + 1, v });
         }
         return { rows, ignored: head.ignored, usedKeys: keys.filter(Boolean) };
@@ -162,6 +175,99 @@
         return out;
     }
 
+    // ---- Carga con actualización (Web): qué pasa con cada fila ------------------------------------------------------------------------------
+    // planRow decide el destino de UNA fila y es la misma regla en la ventana (que la muestra) y en el servidor (que la aplica y nunca se fía de la ventana):
+    //   create = código nuevo · update = el código ya existe y cambia algo · same = ya tiene exactamente esos datos · complete = ya está completo (se corrige en Edición Código, aquí no se toca)
+    //   error  = { field, code, params }.
+    // ctx = {
+    //   allowUpdate,                              // false = como siempre: un UPC que ya existe es error (la App)
+    //   selected,                                 // Set con las columnas que se cargan (null = todas); el SKU y el UPC siempre son llaves
+    //   udm, categories,                          // catálogos activos
+    //   classifications: { all: [nombres], byCategory: { [categoría Inventario]: [nombres] } },
+    //   itemBySku(n), itemByUpc(upc),             // artículo existente: { sku, upc, complete, v: { campo: valor actual } } o null
+    //   priorRowWithKey(key, row),                // fila anterior del archivo que ya usa ese mismo código (0 = ninguna)
+    // }
+    const sameValue = (a, b) => (typeof b === 'number' ? Number(a) === b : String(a == null ? '' : a) === String(b));
+    const isEmptyValue = (v) => v === '' || v == null || v === 0;
+    function planRow(row, ctx) {
+        const v = row.v || {};
+        const chosen = (key) => !ctx.selected || ctx.selected.has(key);
+        const val = (key) => String(v[key] == null ? '' : v[key]).trim();
+        const skuRaw = val('sku');
+        const upc = val('upc');
+        const fail = (field, code, params) => ({ error: { field, code, params: params || {} } });
+        let item = null;
+        if (skuRaw) {
+            if (!/^\d{1,9}$/.test(skuRaw)) return fail('sku', 'skuFormat');
+            item = ctx.itemBySku ? ctx.itemBySku(Number(skuRaw)) : null;
+            if (!item) return fail('sku', 'skuUnknown', { sku: skuRaw });
+        } else if (upc) {
+            if (!/^\d{8,14}$/.test(upc)) return fail('upc', 'upcFormat');
+            item = ctx.itemByUpc ? ctx.itemByUpc(upc) : null;
+        } else {
+            return fail('upc', 'keyRequired');
+        }
+        if (upc && !/^\d{8,14}$/.test(upc)) return fail('upc', 'upcFormat');
+        if (item && !ctx.allowUpdate) return fail('upc', 'upcExists', { sku: item.sku });
+        const key = item ? `sku:${item.sku}` : `upc:${upc}`;
+        const prior = ctx.priorRowWithKey ? ctx.priorRowWithKey(key, row) : 0;
+        if (prior) return fail(skuRaw ? 'sku' : 'upc', 'upcDuplicateFile', { row: prior });
+        if (item && item.complete) return { action: 'complete', item, key };
+        if (item && upc && upc !== item.upc) {
+            const other = ctx.itemByUpc ? ctx.itemByUpc(upc) : null;
+            if (other && other.sku !== item.sku) return fail('upc', 'upcExists', { sku: other.sku });
+        }
+        // cada dato que viene (de las columnas elegidas), con las mismas reglas de siempre
+        for (const c of ALL_COLUMNS) {
+            if (c.kind === 'sku' || c.key === 'upc' || !chosen(c.key)) continue;
+            const value = val(c.key);
+            if (!value) continue;
+            if (c.kind === 'text' && value.length > MAX_TEXT) return fail(c.key, 'tooLong', { label: c.es, labelEn: c.en, max: MAX_TEXT });
+            if (c.kind === 'udm' && !matchName(value, ctx.udm)) return fail(c.key, 'udmUnknown', { value, options: (ctx.udm || []).slice(0, 8).join(', ') });
+            if (c.kind === 'type' && !TYPES[stripKey(value)]) return fail(c.key, 'typeUnknown');
+            if (c.kind === 'number') {
+                const n = parseNumber(value);
+                if (!Number.isFinite(n) || n <= 0 || n > MAX_NUMBER) return fail(c.key, 'number', { label: c.es, labelEn: c.en, unit: c.unit });
+            }
+            if (c.kind === 'category' && !matchName(value, (ctx.categories || {})[c.type])) return fail(c.key, 'categoryUnknown', { label: c.es, labelEn: c.en, value });
+        }
+        // lo que se escribiría, normalizado (nombre exacto del catálogo, tipo en su clave, números como número)
+        const incoming = {};
+        for (const c of ALL_COLUMNS) {
+            if (c.kind === 'sku' || (c.key !== 'upc' && !chosen(c.key))) continue;
+            const value = val(c.key);
+            if (!value) continue;
+            if (c.kind === 'udm') incoming[c.key] = matchName(value, ctx.udm);
+            else if (c.kind === 'type') incoming[c.key] = TYPES[stripKey(value)];
+            else if (c.kind === 'number') incoming[c.key] = parseNumber(value);
+            else if (c.kind === 'category') incoming[c.key] = matchName(value, (ctx.categories || {})[c.type]);
+            else if (c.kind === 'classification') incoming[c.key] = matchName(value, ((ctx.classifications || {}).all) || []) || value;
+            else incoming[c.key] = value;
+        }
+        // la clasificación solo vale si es de la Categoría Inventario del código (la de esta fila o la que ya tiene)
+        const categoryNow = incoming.categoryInventario || (item && item.v.categoryInventario) || '';
+        const allowedFor = (category) => ((ctx.classifications || {}).byCategory || {})[category] || [];
+        if (incoming.classificationId !== undefined) {
+            if (!matchName(incoming.classificationId, ((ctx.classifications || {}).all) || [])) return fail('classificationId', 'classUnknown', { value: incoming.classificationId });
+            if (!categoryNow) return fail('classificationId', 'classNeedsCategory');
+            const allowed = allowedFor(categoryNow);
+            if (!matchName(incoming.classificationId, allowed)) return fail('classificationId', 'classNotOfCategory', { value: incoming.classificationId, category: categoryNow, options: allowed.slice(0, 8).join(', ') || '—' });
+        }
+        if (!item) return { action: 'create', patch: incoming, key };
+        const changes = [];
+        Object.entries(incoming).forEach(([field, to]) => {
+            const from = item.v[field] == null ? '' : item.v[field];
+            if (sameValue(from, to)) return;
+            changes.push({ key: field, from, to, kind: isEmptyValue(from) ? 'fill' : 'change' });
+        });
+        // si cambia la categoría y la clasificación que tenía ya no es de la nueva, se quita sola (igual que al cambiarla a mano en la tabla)
+        const clears = [];
+        if (incoming.categoryInventario && incoming.categoryInventario !== item.v.categoryInventario && item.v.classificationId && incoming.classificationId === undefined
+            && !matchName(item.v.classificationId, allowedFor(incoming.categoryInventario))) clears.push('classificationId');
+        if (!changes.length && !clears.length) return { action: 'same', item, key };
+        return { action: 'update', item, key, changes, clears, patch: Object.fromEntries(changes.map((c) => [c.key, c.to])) };
+    }
+
     const MESSAGES_ES = {
         upcRequired: () => 'UPC: es obligatorio.',
         upcFormat: () => 'UPC: escribe solo números, de 8 a 14 dígitos.',
@@ -172,8 +278,14 @@
         typeUnknown: () => 'Tipo de Artículo: escribe «Artículo Terminado» o «Materia Prima».',
         number: (p) => `${p.label}: escribe solo el número, en ${p.unit === 'kg' ? 'kilos (por ejemplo 0.5)' : 'centímetros (por ejemplo 12)'}.`,
         categoryUnknown: (p) => `${p.label}: «${p.value}» no está en el catálogo.`,
+        skuFormat: () => 'SKU: escribe solo el número del SKU (por ejemplo 000123).',
+        skuUnknown: (p) => `El SKU ${p.sku} no existe. El SKU lo asigna el sistema: déjalo vacío si la fila es nueva, o corrígelo.`,
+        keyRequired: () => 'Escribe el UPC (o el SKU, si el código ya existe).',
+        classUnknown: (p) => `Clasificación: «${p.value}» no está en el catálogo.`,
+        classNeedsCategory: () => 'Clasificación: primero necesita la Categoría Inventario del código (ponla en la misma fila o llénala antes).',
+        classNotOfCategory: (p) => `Clasificación: «${p.value}» no es de la categoría «${p.category}». Opciones: ${p.options}.`,
     };
     const message = (err) => (err ? (MESSAGES_ES[err.code] || (() => err.code))(err.params || {}) : '');
 
-    return { MAX_ROWS, COLUMNS, BY_KEY, TYPE_LABELS, norm, mapHeaders, rowsFromMatrix, parseDelimited, validateRow, normalizeRow, message };
+    return { MAX_ROWS, COLUMNS, BY_KEY, ALL_COLUMNS, BY_KEY_ALL, TYPE_LABELS, norm, mapHeaders, rowsFromMatrix, parseDelimited, validateRow, normalizeRow, planRow, message };
 }));

@@ -2303,7 +2303,7 @@
     "tplInstExample": "Example",
     "tplYes": "Yes",
     "tplNo": "No",
-    "tplInstUpc": "Barcode, numbers only (8 to 14). It cannot be repeated.",
+    "tplInstUpc": "Barcode, numbers only (8 to 14). It cannot be repeated. Required in new rows; for a code that already exists it recognizes it when you do not put the SKU.",
     "tplInstText": "Free text (up to 200 letters). It can be left empty and filled in later.",
     "tplInstUdm": "A unit from the Our Unit of Measure catalog: {list}.",
     "tplInstType": "Artículo Terminado (finished article) or Materia Prima (raw material).",
@@ -2312,8 +2312,8 @@
     "tplInstCategory": "A name from the catalog: {list}.",
     "tplErr_upcRequired": "UPC: it is required.",
     "tplErr_upcFormat": "UPC: type numbers only, 8 to 14 digits.",
-    "tplErr_upcDuplicateFile": "That UPC is already in row {row} of your file. Type another UPC or remove the row.",
-    "tplErr_upcExists": "That UPC already exists as SKU {sku} and is not loaded again. Type another UPC or remove the row.",
+    "tplErr_upcDuplicateFile": "That code (SKU or UPC) is already in row {row} of your file. Remove one of the two rows.",
+    "tplErr_upcExists": "That UPC already exists as SKU {sku}. Type another UPC or remove the row.",
     "tplErr_tooLong": "{label}: it is too long (maximum {max} letters).",
     "tplErr_udmUnknown": "Main UOM: \"{value}\" is not in the catalog. Options: {options}.",
     "tplErr_typeUnknown": "Article Type: type \"Artículo Terminado\" or \"Materia Prima\".",
@@ -2321,6 +2321,48 @@
     "tplErr_number_kg": "{label}: type only the number, in kilos (for example 0.5).",
     "tplErr_categoryUnknown": "{label}: \"{value}\" is not in the catalog.",
     "tplErr_serverError": "This row could not be saved. Try again.",
+    "tplStepCols": "Choose the columns to load",
+    "tplColsFile": "Columns in your file",
+    "tplColsMissing": "Template columns not in your file (left untouched)",
+    "tplKeyLabel": "How an existing code is recognized",
+    "tplKeyFirst": "1st SKU",
+    "tplKeySecond": "2nd UPC",
+    "tplKeyNote": "If the row has a SKU, the SKU rules (so you can fix a wrong UPC); otherwise it is looked up by UPC. A column left unchecked is not loaded and changes nothing.",
+    "tplKeyTag": "key",
+    "tplStateNew": "New",
+    "tplStateUpdate": "Updates",
+    "tplStateSame": "No changes",
+    "tplStateComplete": "Already complete",
+    "tplWillCreateOnly": "Created with the UPC only; the rest stays pending in Alta Artículos.",
+    "tplWillCreate": "Created with {n} values; the rest stays pending in Alta Artículos.",
+    "tplWillUpdate": "SKU {sku}: {parts}.",
+    "tplUpdChange": "changes {list}",
+    "tplUpdFill": "fills in {list}",
+    "tplUpdClear": "removes the classification, which no longer belongs to the category",
+    "tplSameMsg": "It already has exactly these values.",
+    "tplCompleteMsg": "This code (SKU {sku}) is already complete: it is corrected in Edición Código. It is not changed here.",
+    "tplCountNew": "new",
+    "tplCountUpdate": "updated",
+    "tplCountSame": "unchanged",
+    "tplCountComplete": "already complete",
+    "tplResultBoth": "{c} new articles were loaded and {u} were updated",
+    "tplResultUpdOne": "1 article was updated",
+    "tplResultUpdN": "{n} articles were updated",
+    "tplResultUpdated": "Updated: {list}",
+    "tplResultPending": " · {n} changes are waiting for authorization",
+    "tplInstSku": "Number assigned by the system (for example 000123). Leave it empty in a new row; fill it in to change a code that already exists.",
+    "tplInstClass": "A classification from the catalog that belongs to the code's Inventory Category: {list}. Put the category in the same row (or the code must already have it).",
+    "tplYesNew": "Yes, in new rows",
+    "tplInstRulesTitle": "Rules",
+    "tplInstRule1": "Each row is recognized by its SKU; if it has none, by its UPC. If the code already exists the same line is updated; if not, it is created.",
+    "tplInstRule2": "An empty cell never erases what the code already has. Only the columns you check when you upload the file are loaded.",
+    "tplInstRule3": "A code that is already complete is not changed here: it is corrected in Edición Código. The 6 photos are not part of the template.",
+    "tplErr_skuFormat": "SKU: type only the SKU number (for example 000123).",
+    "tplErr_skuUnknown": "SKU {sku} does not exist. The system assigns the SKU: leave it empty if the row is new, or correct it.",
+    "tplErr_keyRequired": "Type the UPC (or the SKU, if the code already exists).",
+    "tplErr_classUnknown": "Classification: \"{value}\" is not in the catalog.",
+    "tplErr_classNeedsCategory": "Classification: it first needs the code's Inventory Category (put it in the same row or fill it in first).",
+    "tplErr_classNotOfCategory": "Classification: \"{value}\" does not belong to the category \"{category}\". Options: {options}.",
     "colRelSku": "Code (SKU)",
     "colRelUpc": "UPC",
     "colRelDescripcion": "Unique Description",
@@ -3307,7 +3349,7 @@
       "example": "you load 40 new codes at once instead of one by one."
     },
     "tplDownload": {
-      "what": "Downloads the Excel template with the article columns and an Instructions sheet with what goes in each one (and the catalog options). Only the UPC is required; the 6 photos are not part of the template.",
+      "what": "Downloads the Excel template with all the fill-in columns (including the SKU and the classification) and an Instructions sheet with what goes in each one and the catalog options. Only the UPC (or the SKU, if the code already exists) is required; the 6 photos are not part of the template.",
       "example": "you fill it in on your computer with the supplier data."
     },
     "tplUpload": {
@@ -3319,16 +3361,20 @@
       "example": "you copy 20 lines in Excel and paste them here."
     },
     "tplReview": {
-      "what": "Each line is a row of your file. What is in red has an error and its reason is on the right: type it correctly right there and the row becomes \"Ready\". Rows with errors are not loaded.",
-      "example": "you replace the repeated UPC with the right one and the row becomes Ready."
+      "what": "Each line is a row of your file and says what will happen: new, updates (what changes is blue and what gets filled in is green), no changes or already complete (not touched). What is in red has an error and its reason is on the right: type it correctly right there and the row is fixed. Rows with errors are not loaded.",
+      "example": "you replace the repeated UPC with the right one and the row becomes New."
+    },
+    "tplColumns": {
+      "what": "Here you choose which columns of your file are loaded. A column left unchecked is not loaded and changes nothing, so you can load only the UPC and fill in the rest later. The SKU and the UPC are the keys that recognize each code: if there is a SKU the SKU rules (it also lets you fix a UPC), otherwise the UPC.",
+      "example": "you load only the UPC column and fill in the descriptions in another load using the SKUs."
     },
     "tplNext": {
       "what": "Moves the cursor to the first field with an error that is still not fixed.",
       "example": "you go through the errors one by one."
     },
     "tplLoad": {
-      "what": "Creates the rows that are ready. The ones you did not fix or removed are not loaded and you can download them in an Excel with their reason. The new articles have no QR code until they have their 6 photos and all their data, just like the ones entered by hand.",
-      "example": "you load 18 of 21 rows and download the 3 with errors."
+      "what": "Loads the ready rows: creates the new ones and updates those that already exist. The ones you removed, with errors, with no changes or already complete are not touched and you can download them in an Excel with their reason. The new articles have no QR code until they have their 6 photos and all their data, just like the ones entered by hand.",
+      "example": "you load 12 of 15 rows and download the 3 that were not loaded."
     },
     "relCodeSearch": {
       "what": "Finds the code you will locate by its SKU (with or without zeros), UPC or description. It lists the codes from Article Setup.",

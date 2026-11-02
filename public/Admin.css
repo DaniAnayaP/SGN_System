@@ -7458,6 +7458,25 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .tpl-what-bad{ color: #9A2A1F; }
 .tpl-what-ok{ color: #1E7E34; }
 .tpl-what-grey{ color: var(--color-text-secondary); }
+/* Carga con actualización: estados nuevos (actualiza, ya completo), paso "Elige las columnas" y datos que cambian o se llenan */
+.tpl-tag-info{ border-color: #7C9CD6; background: rgba(60, 110, 200, 0.12); color: #1D3A63; }
+.tpl-tag-warn{ border-color: #D9A441; background: rgba(217, 164, 65, 0.16); color: #7A5310; }
+.tpl-what-info{ color: #1D3A63; }
+.tpl-what-warn{ color: #7A5310; }
+.tpl-cnt-info{ border-color: #7C9CD6; background: rgba(60, 110, 200, 0.12); color: #1D3A63; }
+.tpl-cnt-warn{ border-color: #D9A441; background: rgba(217, 164, 65, 0.16); color: #7A5310; }
+.tpl-table input.tpl-chg{ border-color: #7C9CD6; background: rgba(60, 110, 200, 0.1); color: #1D3A63; font-weight: 600; }
+.tpl-table input.tpl-fill{ border-color: #8CCB9D; background: rgba(60, 170, 100, 0.12); color: #1E7E34; font-weight: 600; }
+.tpl-table .tpl-c-sku input{ min-width: 6rem; }
+.tpl-sub{ font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); }
+.tpl-pcs{ display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.tpl-pc{ display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.76rem; border: 1px solid var(--color-border); border-radius: 999px; padding: 0.2rem 0.75rem; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; }
+.tpl-pc input{ margin: 0; accent-color: var(--color-text-primary); }
+.tpl-pc small{ font-size: 0.6rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); }
+.tpl-pc-key{ cursor: default; border-color: var(--color-text-primary); }
+.tpl-pc-na{ cursor: default; border-style: dashed; color: var(--color-text-secondary); font-size: 0.7rem; padding: 0.12rem 0.65rem; }
+.tpl-keybox{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.tpl-keybox .tpl-muted{ max-width: 70ch; }
 .tpl-result{ display: flex; flex-direction: column; gap: 1rem; padding: 1rem 0; }
 .tpl-result-main{ display: flex; gap: 0.8rem; align-items: center; }
 .tpl-result-main b{ display: block; font-size: 1rem; }

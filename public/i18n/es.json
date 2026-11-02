@@ -2302,7 +2302,7 @@
     "tplInstExample": "Ejemplo",
     "tplYes": "Sí",
     "tplNo": "No",
-    "tplInstUpc": "Código de barras, solo números (de 8 a 14). No se puede repetir.",
+    "tplInstUpc": "Código de barras, solo números (de 8 a 14). No se puede repetir. Es obligatorio en filas nuevas; en un código que ya existe sirve para reconocerlo si no pones el SKU.",
     "tplInstText": "Texto libre (hasta 200 letras). Se puede dejar vacío y llenarse después.",
     "tplInstUdm": "Una unidad del catálogo Nuestras Unidad Medida: {list}.",
     "tplInstType": "Artículo Terminado o Materia Prima.",
@@ -2311,8 +2311,8 @@
     "tplInstCategory": "Un nombre del catálogo: {list}.",
     "tplErr_upcRequired": "UPC: es obligatorio.",
     "tplErr_upcFormat": "UPC: escribe solo números, de 8 a 14 dígitos.",
-    "tplErr_upcDuplicateFile": "Ese UPC ya está en la fila {row} de tu archivo. Escribe otro UPC o quita la fila.",
-    "tplErr_upcExists": "Ese UPC ya existe como SKU {sku} y no se vuelve a cargar. Escribe otro UPC o quita la fila.",
+    "tplErr_upcDuplicateFile": "Ese código (SKU o UPC) ya está en la fila {row} de tu archivo. Quita una de las dos filas.",
+    "tplErr_upcExists": "Ese UPC ya existe como SKU {sku}. Escribe otro UPC o quita la fila.",
     "tplErr_tooLong": "{label}: es demasiado largo (máximo {max} letras).",
     "tplErr_udmUnknown": "UDM Principal: «{value}» no está en el catálogo. Opciones: {options}.",
     "tplErr_typeUnknown": "Tipo de Artículo: escribe «Artículo Terminado» o «Materia Prima».",
@@ -2320,6 +2320,48 @@
     "tplErr_number_kg": "{label}: escribe solo el número, en kilos (por ejemplo 0.5).",
     "tplErr_categoryUnknown": "{label}: «{value}» no está en el catálogo.",
     "tplErr_serverError": "No se pudo guardar esta fila. Inténtalo de nuevo.",
+    "tplStepCols": "Elige las columnas que se cargan",
+    "tplColsFile": "Columnas que trae tu archivo",
+    "tplColsMissing": "Columnas de la plantilla que no trae (no se tocan)",
+    "tplKeyLabel": "Cómo reconoce un código que ya existe",
+    "tplKeyFirst": "1.º SKU",
+    "tplKeySecond": "2.º UPC",
+    "tplKeyNote": "Si la fila trae SKU, manda el SKU (así puedes corregir un UPC mal capturado); si no, se busca por UPC. Una columna sin marcar no se carga ni cambia nada.",
+    "tplKeyTag": "llave",
+    "tplStateNew": "Alta nueva",
+    "tplStateUpdate": "Actualiza",
+    "tplStateSame": "Sin cambios",
+    "tplStateComplete": "Ya completo",
+    "tplWillCreateOnly": "Se da de alta solo con el UPC; lo demás queda pendiente en Alta Artículos.",
+    "tplWillCreate": "Se da de alta con {n} datos; lo demás queda pendiente en Alta Artículos.",
+    "tplWillUpdate": "SKU {sku}: {parts}.",
+    "tplUpdChange": "cambia {list}",
+    "tplUpdFill": "llena {list}",
+    "tplUpdClear": "quita la clasificación, que ya no es de la categoría",
+    "tplSameMsg": "Ya tiene exactamente estos datos.",
+    "tplCompleteMsg": "Este código (SKU {sku}) ya está completo: se corrige en Edición Código. Aquí no se cambia.",
+    "tplCountNew": "altas nuevas",
+    "tplCountUpdate": "se actualizan",
+    "tplCountSame": "sin cambios",
+    "tplCountComplete": "ya completos",
+    "tplResultBoth": "Se cargaron {c} artículos nuevos y se actualizaron {u}",
+    "tplResultUpdOne": "Se actualizó 1 artículo",
+    "tplResultUpdN": "Se actualizaron {n} artículos",
+    "tplResultUpdated": "Actualizados: {list}",
+    "tplResultPending": " · {n} cambios quedan pendientes de autorización",
+    "tplInstSku": "Número que asigna el sistema (por ejemplo 000123). Déjalo vacío en una fila nueva; ponlo para cambiar un código que ya existe.",
+    "tplInstClass": "Una clasificación del catálogo que tenga la Categoría Inventario del código: {list}. Pon la categoría en la misma fila (o que el código ya la tenga).",
+    "tplYesNew": "Sí, en filas nuevas",
+    "tplInstRulesTitle": "Reglas",
+    "tplInstRule1": "Cada fila se reconoce por su SKU; si no lo trae, por su UPC. Si el código ya existe se actualiza la misma línea; si no existe se da de alta.",
+    "tplInstRule2": "Una celda vacía nunca borra lo que el código ya tiene. Solo se cargan las columnas que marques al subir el archivo.",
+    "tplInstRule3": "Un código que ya está completo no se cambia aquí: se corrige en Edición Código. Las 6 fotos no van en la plantilla.",
+    "tplErr_skuFormat": "SKU: escribe solo el número del SKU (por ejemplo 000123).",
+    "tplErr_skuUnknown": "El SKU {sku} no existe. El SKU lo asigna el sistema: déjalo vacío si la fila es nueva, o corrígelo.",
+    "tplErr_keyRequired": "Escribe el UPC (o el SKU, si el código ya existe).",
+    "tplErr_classUnknown": "Clasificación: «{value}» no está en el catálogo.",
+    "tplErr_classNeedsCategory": "Clasificación: primero necesita la Categoría Inventario del código (ponla en la misma fila o llénala antes).",
+    "tplErr_classNotOfCategory": "Clasificación: «{value}» no es de la categoría «{category}». Opciones: {options}.",
     "colRelSku": "Código (SKU)",
     "colRelUpc": "UPC",
     "colRelDescripcion": "Descripción Única",
@@ -3306,7 +3348,7 @@
       "example": "cargas 40 códigos nuevos de una sola vez en lugar de uno por uno."
     },
     "tplDownload": {
-      "what": "Baja la plantilla de Excel con las columnas del artículo y una hoja de Instrucciones con lo que va en cada una (y las opciones de los catálogos). Solo el UPC es obligatorio; las 6 fotos no van en la plantilla.",
+      "what": "Baja la plantilla de Excel con todas las columnas de llenado (incluidos el SKU y la clasificación) y una hoja de Instrucciones con lo que va en cada una y las opciones de los catálogos. Solo el UPC (o el SKU, si el código ya existe) es obligatorio; las 6 fotos no van en la plantilla.",
       "example": "la llenas en tu computadora con los datos del proveedor."
     },
     "tplUpload": {
@@ -3318,16 +3360,20 @@
       "example": "copias 20 renglones en Excel y los pegas aquí."
     },
     "tplReview": {
-      "what": "Cada renglón es una fila de tu archivo. Lo que está en rojo tiene un error y su motivo está a la derecha: escríbelo bien ahí mismo y la fila pasa a «Lista». Las filas con error no se cargan.",
-      "example": "cambias el UPC repetido por el correcto y la fila se vuelve Lista."
+      "what": "Cada renglón es una fila de tu archivo y dice qué pasará: alta nueva, actualiza (lo que cambia va en azul y lo que se llena en verde), sin cambios o ya completo (no se toca). Lo que está en rojo tiene un error y su motivo está a la derecha: escríbelo bien ahí mismo y la fila se corrige. Las filas con error no se cargan.",
+      "example": "cambias el UPC repetido por el correcto y la fila se vuelve Alta nueva."
+    },
+    "tplColumns": {
+      "what": "Aquí eliges qué columnas de tu archivo se cargan. Una columna sin marcar no se carga ni cambia nada, así puedes cargar solo el UPC y llenar el resto después. El SKU y el UPC son las llaves con las que se reconoce cada código: si trae SKU manda el SKU (también sirve para corregir un UPC), y si no, el UPC.",
+      "example": "cargas solo la columna UPC y llenas las descripciones en otra carga con los SKU."
     },
     "tplNext": {
       "what": "Lleva el cursor al primer dato con error que sigue sin corregir.",
       "example": "recorres los errores uno por uno."
     },
     "tplLoad": {
-      "what": "Da de alta las filas que están listas. Las que no se corrigieron o quitaste no se cargan y puedes bajarlas en un Excel con su motivo. Los artículos nuevos quedan sin código QR hasta tener sus 6 fotos y sus datos completos, igual que los capturados a mano.",
-      "example": "cargas 18 de 21 filas y bajas las 3 con error."
+      "what": "Carga las filas listas: da de alta las nuevas y actualiza las que ya existen. Las que quitaste, con error, sin cambios o ya completas no se tocan y puedes bajarlas en un Excel con su motivo. Los artículos nuevos quedan sin código QR hasta tener sus 6 fotos y sus datos completos, igual que los capturados a mano.",
+      "example": "cargas 12 de 15 filas y bajas las 3 que no se cargaron."
     },
     "relCodeSearch": {
       "what": "Busca el código que vas a ubicar por su SKU (con o sin ceros), su UPC o su descripción. Salen los códigos de Alta Artículos.",
