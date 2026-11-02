@@ -101,7 +101,7 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-zonas'];
+const FILTER_TABLE_IDS = ['layout-zonas', 'layout-espacios', 'layout-activos'];
 function bindLayoutFilters(root = document.getElementById('layout-panel')) {
     if (!window.Dashboard || !Dashboard.bindExternalColumnFilters || !root) return;
     root.querySelectorAll('table[data-filter-table]').forEach((tbl) => {
@@ -458,14 +458,14 @@ function stepHtml(step) {
         const pick = (i, key, help, list, selected) => `<td><select data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="${help}"${dis ? ' disabled' : ''}>${assetOptions(list, selected || 0)}</select></td>`;
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
         const rows = d.spaces.map((s, i) => `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(s.name || '—')}</td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}</tr>`);
-        return d.spaces.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones'], rows) : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        return d.spaces.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones'], rows, 'layout-activos') : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
         const saved = isSavedRow('spaces', s.id);
         return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('spaces', i, 'name', s.name || '', dis)}${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('spaces', i, 'x', s.x, dis)}${cellNum('spaces', i, 'y', s.y, dis)}${cellNum('spaces', i, 'l', s.l, dis)}${cellNum('spaces', i, 'd', s.d, dis)}${cellNum('spaces', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('spaces', i, s.active, dis) : removeCell('spaces', i, dis)}</tr>`;
     });
-    return `${table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaVolumen', ''], rows)}${addButton('spaces', 'main.layoutAgregarEspacio', dis)}`;
+    return `${table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaVolumen', ''], rows, 'layout-espacios')}${addButton('spaces', 'main.layoutAgregarEspacio', dis)}`;
 }
 
 // Los pasos son capas del croquis: se pueden tener activos varios a la vez y el croquis muestra siempre la nave más lo de los pasos activos. Abajo solo sale el formulario del
