@@ -272,9 +272,10 @@
         const titleSize = Math.min(17 * f, ((W - 2 * m) / Math.max(titleText.length, 1)) * 1.75);
         s += `<text x="${W / 2}" y="${m + 62 * f}" font-size="${titleSize}" font-weight="700" fill="${ink}" text-anchor="middle">${esc(titleText)}</text>`;
         const cols = wide && n > 1 ? 2 : 1;
-        // Una sola categoría en una tarjeta de forma vertical: en vez de una fila arriba y un hueco enorme abajo, el nombre va arriba (sobre un fondo suave de su color) y el QR grande
-        // abajo, repartidos en el marco. Con dos o más categorías, o en una hoja ancha, la tarjeta sigue como siempre.
-        const single = n === 1 && !wide;
+        // Una sola categoría: en vez de una fila arriba y un hueco enorme abajo, el nombre grande y centrado va arriba (sobre un fondo suave de su color) y el QR centrado abajo,
+        // tan grande como alcance, repartidos en el marco. Vale en tarjetas verticales y anchas (en las anchas el nombre ocupa menos alto para que el QR crezca). Con dos o más
+        // categorías la tarjeta sigue como siempre.
+        const single = n === 1;
         const gap = 18 * f;
         // El espacio de las categorías lleva su contorno (un marco con las esquinas redondeadas) y todo va adentro, con un poco de aire.
         const pad = 10 * f;
@@ -327,11 +328,12 @@
             // el nombre va sobre un fondo suave, difuminado, del color de la categoría
             const gid = `ctint${String(cat.color).replace(/[^0-9a-fA-F]/g, '')}`;
             const panelY = fy0 + 16 * f;
-            const panelH = split - panelY - 4 * f;
+            const panelH = wide ? Math.min((fy1 - panelY) * 0.4, 96 * f) : split - panelY - 4 * f;
             s += `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${esc(cat.color)}" stop-opacity="0.26"/><stop offset="1" stop-color="${esc(cat.color)}" stop-opacity="0.07"/></linearGradient></defs>`;
             s += `<rect x="${fx}" y="${panelY}" width="${fw}" height="${panelH}" rx="${10 * f}" fill="url(#${gid})"/>`;
-            const isz = Math.min(44 * f, panelH * 0.42);
-            const nameSize = Math.min(19 * f, ((fw - 16 * f) / Math.max(cat.name.length, 1)) * 1.75);
+            // el bloque (icono, nombre, descripción) siempre cabe en su fondo aunque la tarjeta sea baja
+            const isz = Math.min((wide ? 36 : 44) * f, panelH * 0.42, (panelH - 4 * f) * 0.4);
+            const nameSize = Math.min((wide ? 26 : 19) * f, ((fw - 16 * f) / Math.max(cat.name.length, 1)) * 1.75, (panelH - 4 * f) * 0.34);
             const blockH = isz + 8 * f + nameSize + (cat.desc ? 14 * f : 0);
             const by = panelY + (panelH - blockH) / 2;
             s += `<rect x="${W / 2 - isz / 2}" y="${by}" width="${isz}" height="${isz}" rx="${isz * 0.24}" fill="${esc(cat.color)}"/>`;
@@ -340,8 +342,18 @@
             s += `<text x="${W / 2}" y="${nameY}" font-size="${nameSize}" font-weight="700" fill="${ink}" text-anchor="middle">${esc(cat.name)}</text>`;
             if (cat.desc) s += `<text x="${W / 2}" y="${nameY + 14 * f}" font-size="${8.4 * f}" fill="#3F435D" text-anchor="middle">${esc(cat.desc)}</text>`;
             // el QR grande, abajo, con BÚSCAME encima
-            const qs = Math.min(fw * 0.88, (fy1 - split - 14 * f) * 0.96);
-            const qy = fy1 - qs - 2 * f;
+            let qs;
+            let qy;
+            if (wide) {
+                // hoja ancha: el QR centrado debajo del nombre, tan grande como el alto que queda
+                const qTop = panelY + panelH + 16 * f;
+                const rest = fy1 - qTop - 2 * f;
+                qs = Math.min(rest, fw * 0.5);
+                qy = qTop + (rest - qs) / 2;
+            } else {
+                qs = Math.min(fw * 0.88, (fy1 - split - 14 * f) * 0.96);
+                qy = fy1 - qs - 2 * f;
+            }
             s += `<text x="${W / 2}" y="${qy - 8 * f}" font-size="${9 * f}" font-weight="700" fill="${brand}" text-anchor="middle">${esc(labels.cardReview)}</text>`;
             s += qrPath(cat.qrRows, W / 2 - qs / 2, qy, qs, '#FFFFFF', 0);
         }
