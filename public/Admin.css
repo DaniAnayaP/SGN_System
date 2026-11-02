@@ -7293,6 +7293,12 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-area-btn{ right: 3rem; }
 .layout-rotate-btn{ right: 5.5rem; }
 .layout-names-btn{ right: 8rem; }
+/* zoom del croquis: columna de botones debajo de los iconos, en el borde derecho */
+.layout-zoom-tools{ position: absolute; top: 3.1rem; right: 0.5rem; z-index: 2; display: flex; flex-direction: column; gap: 0.4rem; }
+.layout-zoom-tools[hidden]{ display: none; }
+.layout-zoom-tools .layout-measures-btn{ position: static; }
+.layout-canvas svg.can-zoom{ touch-action: pan-y; } /* con un dedo sigue moviéndose la página; con dos dedos se hace zoom */
+.layout-canvas svg.zoomed{ cursor: grab; touch-action: none; }
 .layout-rotate-btn.off::after{ display: none; } /* girar no se "apaga": el icono no lleva la raya */
 
 /* simbología: al lado del croquis cuando el cuadro es ancho; debajo cuando es angosto */

@@ -1727,6 +1727,10 @@
     "layoutNombresOcultar": "Hide names",
     "layoutNombresVer": "Show names",
     "layoutHojaConNombres": "Zone names",
+    "layoutZoomBtn": "Zoom in and out of the sketch",
+    "layoutZoomAcercar": "Zoom in",
+    "layoutZoomAlejar": "Zoom out",
+    "layoutZoomTodo": "Show the whole sketch",
     "layoutFiltrosBtn": "Layout table filters",
     "layoutFiltroQuitar": "Clear filters",
     "layoutFiltroNota": "Filtering: showing {shown} of {total} rows",
@@ -3508,6 +3512,10 @@
     "layoutNames": {
       "what": "Shows or hides the name of each zone on the sketch. If the m² are visible they stay, in the place of the name. The downloaded sheet (PDF or image) comes out as you see it and in the download window you can change it for that download only; the public QR view does not change and the tables keep showing the names.",
       "example": "you hide the names to print the sketch with only the m² of each zone, or to see the walls and racks better without letters on top."
+    },
+    "layoutZoom": {
+      "what": "Zooms the sketch in or out to see the details: + zooms in, − zooms out and the corners button shows the whole sketch again (it only appears when zoomed in). Ctrl and the mouse wheel, a double click on the sketch or two fingers on a phone also work; once zoomed in, drag the background to move around. Zones are still moved by dragging them. It only changes what you see: it does not change what is saved or the downloaded sheet.",
+      "example": "you zoom in to read the names and measures of the small zones, and use the corners button to get the whole sketch back."
     },
     "layoutRotate": {
       "what": "Rotates the sketch a quarter turn to the right each time you tap it (90°, 180°, 270° and back to the start). Use it to arrange the sketch the way you will print it, for example with the warehouse lying down or standing up. It only turns the drawing: the tables and what is saved do not change, the texts stay upright and the rotation is remembered in this browser. The downloaded sheet comes out with this rotation (you can change it right there for that download only).",

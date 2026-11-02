@@ -20,6 +20,11 @@ const state = {
 };
 let view = null;
 let drag = null;
+// Zoom del croquis (ver más abajo): s = aumento (1 = se ve todo), x/y = esquina de lo que se ve, en las medidas del dibujo (700 × 460).
+const MAP_W = 700;
+const MAP_H = 460;
+const ZOOM_MAX = 8;
+const zoom = { s: 1, x: 0, y: 0 };
 
 const t = (key, params) => Dashboard.t(key, params);
 const $ = (id) => document.getElementById(id);
@@ -611,6 +616,7 @@ function renderSvg() {
     putOuter('lt2', M + bar + 6, H - 8, 'start', '5 m');
     s = `${s.slice(0, halosAt)}${outerHalos}${s.slice(halosAt)}${outerLabels}`;
     $('layout-svg').innerHTML = s;
+    applyZoom(); // cada redibujo conserva el aumento y el lugar donde se estaba viendo
 }
 
 function renderSummary() {
@@ -721,6 +727,7 @@ try { state.rotation = Math.max(0, Math.min(3, parseInt(localStorage.getItem(ROT
 $('layout-rotate-btn').addEventListener('click', () => {
     state.rotation = ((state.rotation || 0) + 1) % 4;
     try { localStorage.setItem(ROTATION_KEY, String(state.rotation)); } catch (err) { /* no se recuerda */ }
+    resetZoom(); // el croquis girado cambia de forma: se vuelve a ver completo
     updateRotateBtn();
     if (state.draft) renderSvg();
 });
@@ -736,6 +743,7 @@ function showEditor() {
     updateAreaBtn();
     updateNamesBtn();
     updateRotateBtn();
+    updateZoomUi();
     $('layout-empty').hidden = true;
     $('layout-plan-width').hidden = true;
     $('layout-editor').hidden = false;
@@ -1327,7 +1335,7 @@ window.addEventListener('pointermove', (event) => {
     const z = state.draft.zones.find((r) => r.id === drag.id);
     if (!z) { drag = null; return; }
     const rect = $('layout-svg').getBoundingClientRect();
-    const k = view.W / rect.width / view.sc;
+    const k = (view.W / zoom.s) / rect.width / view.sc;
     let dx = (event.clientX - drag.px) * k;
     let dy = (event.clientY - drag.py) * k;
     // Con el croquis girado, el movimiento que se ve en pantalla se regresa a los ejes del Layout (giro inverso).
@@ -1360,6 +1368,99 @@ window.addEventListener('pointerup', () => {
     drag = null;
     if (moved && state.draft) { renderPanel(); refreshLive(); }
 });
+
+// ---- zoom del croquis ---------------------------------------------------------------------------------------------------------
+// Acercar y alejar el croquis con los botones (+, − y ver todo), Ctrl + rueda, doble clic o toque, dos dedos y, ya acercado, arrastrando el fondo (las zonas se siguen moviendo con su arrastre de
+// siempre). Se cambia el viewBox del SVG (no un transform), así el dibujo y sus letras se ven nítidos al acercar. Solo es de pantalla: no cambia lo guardado ni la hoja que se descarga.
+const canZoomMap = () => !!(state.perms && state.perms.canZoom);
+function applyZoom() {
+    const svg = $('layout-svg');
+    if (!canZoomMap()) { zoom.s = 1; zoom.x = 0; zoom.y = 0; }
+    const w = MAP_W / zoom.s;
+    const h = MAP_H / zoom.s;
+    zoom.x = Math.min(Math.max(zoom.x, 0), MAP_W - w);
+    zoom.y = Math.min(Math.max(zoom.y, 0), MAP_H - h);
+    svg.setAttribute('viewBox', `${zoom.x.toFixed(2)} ${zoom.y.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}`);
+    const zoomed = zoom.s > 1.001;
+    svg.classList.toggle('zoomed', zoomed);
+    $('layout-zoom-reset').hidden = !zoomed;
+}
+function updateZoomUi() {
+    const allowed = canZoomMap();
+    $('layout-zoom-tools').hidden = !allowed;
+    [['layout-zoom-in', 'main.layoutZoomAcercar'], ['layout-zoom-out', 'main.layoutZoomAlejar'], ['layout-zoom-reset', 'main.layoutZoomTodo']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
+    $('layout-svg').classList.toggle('can-zoom', allowed);
+    applyZoom();
+}
+function resetZoom() { zoom.s = 1; zoom.x = 0; zoom.y = 0; applyZoom(); }
+// El punto de pantalla (cx, cy) se queda quieto mientras cambia el aumento.
+function zoomTo(next, cx, cy) {
+    const rect = $('layout-svg').getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const fx = (cx - rect.left) / rect.width;
+    const fy = (cy - rect.top) / rect.height;
+    const px = zoom.x + fx * (MAP_W / zoom.s);
+    const py = zoom.y + fy * (MAP_H / zoom.s);
+    zoom.s = Math.min(Math.max(next, 1), ZOOM_MAX);
+    zoom.x = px - fx * (MAP_W / zoom.s);
+    zoom.y = py - fy * (MAP_H / zoom.s);
+    applyZoom();
+}
+const mapCenter = () => { const r = $('layout-svg').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+$('layout-zoom-in').addEventListener('click', () => zoomTo(zoom.s * 1.6, ...mapCenter()));
+$('layout-zoom-out').addEventListener('click', () => zoomTo(zoom.s / 1.6, ...mapCenter()));
+$('layout-zoom-reset').addEventListener('click', resetZoom);
+document.querySelector('.layout-map').addEventListener('wheel', (event) => {
+    if (!canZoomMap() || (!event.ctrlKey && !event.metaKey)) return; // sin Ctrl la rueda sigue moviendo la página
+    event.preventDefault();
+    zoomTo(zoom.s * (event.deltaY < 0 ? 1.2 : 1 / 1.2), event.clientX, event.clientY);
+}, { passive: false });
+$('layout-svg').addEventListener('dblclick', (event) => { if (canZoomMap()) zoomTo(zoom.s > 1.001 ? 1 : 2.5, event.clientX, event.clientY); });
+const zoomPts = new Map();
+let pinch = null;
+let panId = null;
+// Con dos dedos la zona que se estaba arrastrando vuelve a donde estaba: el gesto es de zoom, no de mover la zona.
+function cancelZoneDrag() {
+    if (!drag) return;
+    const z = state.draft && state.draft.zones.find((r) => r.id === drag.id);
+    const { start, moved } = drag;
+    drag = null;
+    if (z && moved) { translateFrom(start, z, 0, 0); renderPanel(); refreshLive(); }
+}
+$('layout-svg').addEventListener('pointerdown', (event) => {
+    if (!canZoomMap()) return;
+    zoomPts.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (zoomPts.size === 2) {
+        cancelZoneDrag();
+        const [a, b] = [...zoomPts.values()];
+        pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: zoom.s };
+        panId = null;
+    } else if (!drag && zoom.s > 1.001) {
+        panId = event.pointerId; // acercado, arrastrar el fondo (o una zona que no se puede mover) recorre el croquis
+    }
+});
+window.addEventListener('pointermove', (event) => {
+    const prev = zoomPts.get(event.pointerId);
+    if (!prev) return;
+    const cur = { x: event.clientX, y: event.clientY };
+    zoomPts.set(event.pointerId, cur);
+    if (zoomPts.size === 2 && pinch) {
+        const [a, b] = [...zoomPts.values()];
+        zoomTo(pinch.s * (Math.hypot(a.x - b.x, a.y - b.y) / pinch.d), (a.x + b.x) / 2, (a.y + b.y) / 2);
+    } else if (panId === event.pointerId) {
+        const rect = $('layout-svg').getBoundingClientRect();
+        zoom.x -= ((cur.x - prev.x) * (MAP_W / zoom.s)) / rect.width;
+        zoom.y -= ((cur.y - prev.y) * (MAP_H / zoom.s)) / rect.height;
+        applyZoom();
+    }
+});
+const releaseZoomPointer = (event) => {
+    zoomPts.delete(event.pointerId);
+    if (zoomPts.size < 2) pinch = null;
+    if (panId === event.pointerId) panId = null;
+};
+window.addEventListener('pointerup', releaseZoomPointer);
+window.addEventListener('pointercancel', releaseZoomPointer);
 
 // ---- guardar / descartar -----------------------------------------------------------------------------------------------
 $('layout-save').addEventListener('click', async () => {

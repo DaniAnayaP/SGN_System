@@ -1727,6 +1727,10 @@
     "layoutNombresOcultar": "Ocultar nombres",
     "layoutNombresVer": "Ver nombres",
     "layoutHojaConNombres": "Nombres de las zonas",
+    "layoutZoomBtn": "Acercar y alejar el croquis",
+    "layoutZoomAcercar": "Acercar el croquis",
+    "layoutZoomAlejar": "Alejar el croquis",
+    "layoutZoomTodo": "Ver todo el croquis",
     "layoutFiltrosBtn": "Filtros de las tablas del Layout",
     "layoutFiltroQuitar": "Quitar filtros",
     "layoutFiltroNota": "Filtrando: se ven {shown} de {total} filas",
@@ -3507,6 +3511,10 @@
     "layoutNames": {
       "what": "Muestra u oculta el nombre de cada zona en el croquis. Si los m² están visibles se quedan, en el lugar del nombre. La hoja que se descarga (PDF o imagen) sale igual que lo ves y en la ventana de descarga lo puedes cambiar solo para esa descarga; la vista pública del QR no cambia y las tablas siguen mostrando los nombres.",
       "example": "ocultas los nombres para imprimir el croquis solo con los m² de cada zona, o para ver mejor las paredes y los anaqueles sin letras encima."
+    },
+    "layoutZoom": {
+      "what": "Acerca o aleja el croquis para ver los detalles: el botón + acerca, el − aleja y el de las esquinas lo vuelve a mostrar completo (solo sale cuando está acercado). También sirve Ctrl y la rueda del mouse, doble clic en el croquis o dos dedos en el celular; ya acercado, arrastra el fondo para recorrerlo. Las zonas se siguen moviendo arrastrándolas. Solo cambia lo que ves: no cambia lo guardado ni la hoja que se descarga.",
+      "example": "acercas el croquis para leer los nombres y las medidas de las zonas chicas, y con el botón de las esquinas lo regresas completo."
     },
     "layoutRotate": {
       "what": "Gira el croquis un cuarto de vuelta a la derecha cada vez que lo tocas (90°, 180°, 270° y de nuevo como estaba). Sirve para acomodarlo como lo vas a imprimir, por ejemplo con la nave acostada o parada. Solo gira el dibujo: las tablas y lo guardado no cambian, los textos siguen derechos y el giro se recuerda en este navegador. La hoja que se descarga sale con este giro (ahí mismo se puede cambiar solo para esa descarga).",

@@ -6358,6 +6358,13 @@ function seedLayoutNamesIconGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(LAYOUT_NAMES_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutNombres`], 'the Layout names icon');
 }
+// El icono Acercar y alejar el croquis (iconLayoutZoom) se da igual, una sola vez, a quien ya tiene la pantalla Layout (mismos niveles que la siembra del icono Girar).
+const LAYOUT_ZOOM_SEED_KEY = 'seed-layout-zoom-icon-v1';
+function seedLayoutZoomIconGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(LAYOUT_ZOOM_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutZoom`], 'the Layout zoom icon');
+}
 // El icono Centrar las categorías de la tarjeta (iconLayoutTarjetaCentrar) se quitó: con varias categorías el marco ya se reparte solo y esa opción no cambiaba nada. Una sola vez se borran
 // los accesos que se habían sembrado para ese icono (en todos los niveles), para que no queden hojas sueltas de un icono que ya no existe en el árbol.
 const LAYOUT_CARD_CENTER_CLEANUP_KEY = 'cleanup-layout-card-center-v1';
@@ -10730,6 +10737,7 @@ seedLayoutNewIconGrants();
 seedCodigosScreensGrants();
 seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
+seedLayoutZoomIconGrants();
 cleanupLayoutCardCenterGrants();
 seedTipoCodigoValuesOnce();
 
