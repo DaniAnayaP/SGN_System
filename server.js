@@ -7030,6 +7030,14 @@ function prepareClassificationPatch(req, categoryType, existing, patch) {
     return { patch: { ...patch, classificationIds: ordered.length ? JSON.stringify(ordered) : '' }, sanitizers: { classificationIds: nameOf } };
 }
 
+// Activos Fijos: su campo propio es el Uso (kind): almacena inventario o es de uso operativo.
+const FIXED_ASSET_USE_LABELS = { inventory: 'Almacena inventario', operational: 'Uso operativo' };
+function prepareFixedAssetPatch(categoryType, patch) {
+    if (categoryType !== 'activos-fijos' || !Object.prototype.hasOwnProperty.call(patch, 'kind')) return { patch, sanitizers: {} };
+    if (!['', 'inventory', 'operational'].includes(patch.kind)) return { error: { status: 400, message: 'El uso debe ser "Almacena inventario" o "Uso operativo".' } };
+    return { patch, sanitizers: { kind: (v) => FIXED_ASSET_USE_LABELS[v] || '' } };
+}
+
 function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null) {
     if (!row) return row;
     const config = articleCategoryTypeConfig(row.category_type);
@@ -7045,6 +7053,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             parentId: row.parent_id, parentName: ctx.warehouses.get(row.parent_id) || '',
             kind: row.kind, locations: row.kind === 'physical' ? parseWarehouseLocations(row.locations) : [],
         } : {}),
+        ...(row.category_type === 'activos-fijos' ? { kind: row.kind } : {}),
         ...(ctx && row.category_type === 'inventario' ? (() => {
             const ids = parseClassificationIds(row.classification_ids);
             return { classificationIds: ids, classifications: ids.map((id) => ({ id, ...(ctx.classifications.get(id) || {}) })).filter((c) => c.name !== undefined) };
@@ -7101,7 +7110,9 @@ app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, (re
     if (preparedWarehouse.error) return res.status(preparedWarehouse.error.status).json({ message: preparedWarehouse.error.message });
     const preparedClassification = prepareClassificationPatch(req, req.params.categoryType, existing, preparedWarehouse.patch);
     if (preparedClassification.error) return res.status(preparedClassification.error.status).json({ message: preparedClassification.error.message });
-    const prepared = { patch: preparedClassification.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers } };
+    const preparedFixedAsset = prepareFixedAssetPatch(req.params.categoryType, preparedClassification.patch);
+    if (preparedFixedAsset.error) return res.status(preparedFixedAsset.error.status).json({ message: preparedFixedAsset.error.message });
+    const prepared = { patch: preparedFixedAsset.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers } };
     const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, articleCategoryPatchableFields(req.params.categoryType), config.tableKey, `#${existing.id}`, prepared.sanitizers, { baseline, overrideConflicts });
     const category = updateArticleCategory(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);

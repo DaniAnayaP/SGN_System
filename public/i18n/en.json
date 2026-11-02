@@ -305,6 +305,9 @@
     "catCentroDistSubAlmacenes": "Our Sub-warehouses",
     "catCentroDistSubAlmacenesAbbr1": "Sub-warehouses",
     "catCentroDistSubAlmacenesAbbr2": "Sub-whs.",
+    "catCentroDistActivosFijos": "Our Fixed Assets",
+    "catCentroDistActivosFijosAbbr1": "Fixed Assets",
+    "catCentroDistActivosFijosAbbr2": "Fix. Assets",
     "opTransVolNuestrosTraslados": "Our Transfers",
     "opTransVolCotizaciones": "Our Quotes",
     "classCotizaciones": "Our Quotes",
@@ -2444,6 +2447,10 @@
     "clsNone": "There are no classifications yet. Create them in Catalogs > Our Classifications.",
     "newWarehouse": "New Warehouse",
     "newSubWarehouse": "New Sub-warehouse",
+    "newFixedAsset": "New Fixed Asset",
+    "colActivoFijoUso": "Use",
+    "faStoresInventory": "Stores inventory",
+    "faOperational": "Operational use",
     "whChoose": "Choose…",
     "whPhysical": "Physical",
     "whVirtual": "Virtual",
@@ -3440,6 +3447,10 @@
     "whParentWarehouse": {
       "what": "The warehouse this sub-warehouse belongs to. Only active warehouses are offered.",
       "example": "General Warehouse."
+    },
+    "fixedAssetUse": {
+      "what": "Says what this fixed asset is for. Stores inventory: holds goods, like a rack or a shelf (its spaces count as storage). Operational use: it is for work, like a desk or a table (it does not hold inventory).",
+      "example": "Rack is Stores inventory; Desk is Operational use."
     },
     "whKind": {
       "what": "Physical: it exists in the building and gets Layout zones or racks assigned. Virtual: it takes no room in the building, for example goods in transit or on consignment.",

@@ -308,6 +308,9 @@
     "catCentroDistSubAlmacenes": "Nuestros Sub Almacenes",
     "catCentroDistSubAlmacenesAbbr1": "Sub Almacenes",
     "catCentroDistSubAlmacenesAbbr2": "Sub Alm.",
+    "catCentroDistActivosFijos": "Nuestros Activos Fijos",
+    "catCentroDistActivosFijosAbbr1": "Activos Fijos",
+    "catCentroDistActivosFijosAbbr2": "Act. Fijos",
     "opTransVolNuestrosTraslados": "Nuestros Traslados",
     "opTransVolCotizaciones": "Nuestras Cotizaciones",
     "classCotizaciones": "Nuestras Cotizaciones",
@@ -2443,6 +2446,10 @@
     "clsNone": "Todavía no hay clasificaciones. Créalas en Catálogos > Nuestras Clasificaciones.",
     "newWarehouse": "Nuevo Almacén",
     "newSubWarehouse": "Nuevo Sub Almacén",
+    "newFixedAsset": "Nuevo Activo Fijo",
+    "colActivoFijoUso": "Uso",
+    "faStoresInventory": "Almacena inventario",
+    "faOperational": "Uso operativo",
     "whChoose": "Elige…",
     "whPhysical": "Físico",
     "whVirtual": "Virtual",
@@ -3439,6 +3446,10 @@
     "whParentWarehouse": {
       "what": "El almacén al que pertenece este sub almacén. Solo ofrece almacenes activos.",
       "example": "Almacén General."
+    },
+    "fixedAssetUse": {
+      "what": "Dice para qué sirve este activo fijo. Almacena inventario: guarda mercancía, como un rack o un anaquel (sus espacios cuentan como almacenamiento). Uso operativo: es de trabajo, como un escritorio o una mesa (no guarda inventario).",
+      "example": "Rack es Almacena inventario; Escritorio es Uso operativo."
     },
     "whKind": {
       "what": "Físico: existe en la nave y se le asignan zonas o anaqueles del Layout. Virtual: no ocupa lugar en la nave, por ejemplo mercancía en tránsito o en consignación.",
