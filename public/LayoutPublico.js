@@ -27,7 +27,7 @@
             articlesOne: '1 artículo, ordenados por ubicación', articlesMany: '{n} artículos, ordenados por ubicación', viewGrid: 'Cuadrícula', viewList: 'Lista', viewLabel: 'Vista',
             clsMore: 'Ver más', clsShowing: 'Mostrando {n} de {t}', clsNoLoc: 'Sin ubicación', clsLevel: 'Nivel {n}', clsCode: 'Código {n}',
             clsError: 'No se pudo cargar la clasificación. Intenta de nuevo.', clsGone: 'Esta clasificación ya no está disponible.', clsEmpty: 'Todavía no hay artículos en esta clasificación en esta zona.',
-            layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Anaqueles y gabetas' },
+            layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Huella-Espacio' },
             zone: { dry: 'Seco', cold: 'Refrigerado', chemical: 'Químicos', finished: 'Producto terminado', dock: 'Andén', office: 'Oficina', aisle: 'Pasillo principal', aisle2: 'Pasillo entre anaqueles' },
         },
         en: {
@@ -50,7 +50,7 @@
             articlesOne: '1 item, sorted by location', articlesMany: '{n} items, sorted by location', viewGrid: 'Grid', viewList: 'List', viewLabel: 'View',
             clsMore: 'Show more', clsShowing: 'Showing {n} of {t}', clsNoLoc: 'No location', clsLevel: 'Level {n}', clsCode: 'Code {n}',
             clsError: 'The classification could not be loaded. Try again.', clsGone: 'This classification is no longer available.', clsEmpty: 'There are no items in this classification in this zone yet.',
-            layer: { contorno: 'Outline', puertas: 'Doors', luz: 'Power connections', zonas: 'Zones', espacios: 'Racks and cabinets' },
+            layer: { contorno: 'Outline', puertas: 'Doors', luz: 'Power connections', zonas: 'Zones', espacios: 'Footprint-Space' },
             zone: { dry: 'Dry', cold: 'Refrigerated', chemical: 'Chemicals', finished: 'Finished goods', dock: 'Dock', office: 'Office', aisle: 'Main aisle', aisle2: 'Aisle between racks' },
         },
     }[LANG];
