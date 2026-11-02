@@ -60,10 +60,13 @@
         .mbtn[aria-expanded="true"] .go{ transform:rotate(90deg); }
         .zlist[hidden]{ display:none; }
         .zlist{ margin:-4px 16px 12px; border:1px solid var(--brand-line, var(--border)); border-radius:12px; overflow:hidden; }
-        .zrow{ display:flex; justify-content:space-between; align-items:center; gap:12px; padding:11px 14px; border-bottom:1px solid var(--brand-line, var(--border)); font-size:13.5px; }
+        .zhead, .zrow{ display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) 78px 10px; align-items:center; gap:8px; padding:11px 14px; }
+        .zhead{ padding-block:8px; border-bottom:1.5px solid var(--brand-line, var(--border)); font-size:11px; font-weight:700; color:var(--text-muted); }
+        .zrow{ border-bottom:1px solid var(--brand-line, var(--border)); font-size:13.5px; }
         .zrow:last-child{ border-bottom:0; }
-        .zrow b{ font-size:14.5px; }
-        .zc{ color:var(--text-muted); font-size:12.5px; white-space:nowrap; }
+        .zrow b{ font-size:14.5px; overflow-wrap:anywhere; }
+        .zk{ color:var(--text-secondary); font-size:13px; overflow-wrap:anywhere; }
+        .zc{ color:var(--text-muted); font-size:12.5px; white-space:nowrap; text-align:right; }
         .zc i{ font-style:normal; font-weight:800; color:var(--brand-ink, var(--text-primary)); font-variant-numeric:tabular-nums; font-size:14px; }
         .hbtn{ margin-left:auto; width:36px; height:36px; display:grid; place-items:center; flex:none; border:1px solid var(--brand-line, var(--border)); border-radius:999px; background:#fff; color:var(--brand, var(--accent-2)); text-decoration:none; }
         .hbtn svg{ width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }

@@ -468,7 +468,10 @@
         if (!list.length) return '';
         const codes = data.zoneCodes || {};
         const total = list.reduce((acc, z) => acc + (codes[z.id] || 0), 0);
-        const rows = list.map((z) => `<a class="zrow" href="${esc(zoneHref(z))}"><b>${esc(z.name)}</b><span class="zc"><i>${fmt(codes[z.id] || 0)}</i> ${esc(codes[z.id] === 1 ? TEXT.codeWordOne : TEXT.codeWordMany)}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
+        // Tipo de zona de cada una (Seco, Pasillo principal…), el mismo que sale en Datos métricos y en la página de la zona.
+        const kindOf = (z) => { const info = (data.kpis.zones || []).find((k) => k.id === z.id); return info && info.type ? (TEXT.zone[info.type] || info.type) : TEXT.noZone; };
+        const head = `<div class="zhead" aria-hidden="true"><span>${esc(TEXT.colZone)}</span><span>${esc(TEXT.colType)}</span><span></span><span></span></div>`;
+        const rows = head + list.map((z) => `<a class="zrow" href="${esc(zoneHref(z))}"><b>${esc(z.name)}</b><span class="zk">${esc(kindOf(z))}</span><span class="zc"><i>${fmt(codes[z.id] || 0)}</i> ${esc(codes[z.id] === 1 ? TEXT.codeWordOne : TEXT.codeWordMany)}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
         return `<button type="button" class="mbtn" data-zones-toggle aria-expanded="false" aria-controls="zones-list">${iconSvg('layers')}<span class="t"><b>${esc(TEXT.zones)}</b><small>${esc(TEXT.zonesHint.replace('{z}', fmt(list.length)).replace('{c}', fmt(total)))}</small></span><span class="go" aria-hidden="true">›</span></button>
             <div id="zones-list" class="zlist" hidden>${rows}</div>`;
     }
