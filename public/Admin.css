@@ -6920,6 +6920,14 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     .layout-panel .layout-section{
         flex: 1 1 auto;
         min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    /* El título del paso con sus botones de agregar queda fijo; solo se desliza el cuerpo (con su barra) y el encabezado de la tabla se queda arriba de él. */
+    .layout-panel .layout-section-body{
+        flex: 1 1 auto;
+        min-height: 0;
         overflow-y: auto;
         padding-right: 0.4rem;
         scrollbar-width: thin;
@@ -6975,6 +6983,25 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
+}
+.layout-head-actions{
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-left: auto;
+}
+.layout-head-actions:empty{
+    display: none;
+}
+.layout-sidesbar:empty{
+    display: none;
+}
+.layout-section-body{
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-width: 0;
 }
 .layout-section-head{
     display: flex;
