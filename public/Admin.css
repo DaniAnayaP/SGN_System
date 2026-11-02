@@ -6909,11 +6909,10 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
         contain: size;
         min-height: 26rem;
     }
-    .layout-panel .layout-scroll{
+    /* Una sola barra: la de todo el paso. La tabla ya no se desliza por su cuenta (ni a lo alto ni a lo ancho: eso lo hace el paso) y su encabezado se queda fijo arriba al deslizar. */
+    .layout-panel .layout-section .layout-scroll{
         max-height: none;
-    }
-    .layout-panel .layout-scroll .layout-table thead th{
-        position: relative;
+        overflow: visible;
     }
     .layout-panel .layout-steps{
         flex: none;
