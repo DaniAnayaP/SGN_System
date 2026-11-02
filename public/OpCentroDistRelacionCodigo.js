@@ -124,7 +124,10 @@ async function refreshTable() {
     try {
         const res = await fetch(API, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
-        const { relations } = await res.json();
+        const body = await res.json();
+        // Solo las relaciones de los centros de costos marcados arriba (una sin centro se ve siempre, para poder asignárselo).
+        const selected = Dashboard.getSelectedCostCenterIds();
+        const relations = body.relations.filter((r) => !selected || !r.costCenterId || selected.includes(r.costCenterId));
         tbody.innerHTML = '';
         if (!relations.length) { ensureEmptyState(); return; }
         relations.forEach((r) => tbody.appendChild(buildRow(r)));
@@ -133,6 +136,8 @@ async function refreshTable() {
         console.error('Relación Código: failed to load records', err);
     }
 }
+
+document.addEventListener('sgn:cost-centers-changed', () => refreshTable());
 
 function applyFilters() {
     const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
@@ -187,7 +192,14 @@ let st = null;          // { sku: {id, sku, description, upc, uom} | null, centr
 let modalEl = null;
 let searchTimer = null;
 
-const blankState = () => ({ sku: null, centro: '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '' });
+// Los centros que se pueden elegir: los completos que están marcados arriba (más el de la relación que se edita, aunque ya no esté marcado). Con uno solo, la relación nueva arranca en él.
+function centerChoices() {
+    const selected = Dashboard.getSelectedCostCenterIds();
+    const list = opts.costCenters.filter((c) => !selected || selected.includes(c.id));
+    if (editing && editing.costCenterId && !list.some((c) => c.id === editing.costCenterId)) list.push({ id: editing.costCenterId, name: editing.centroCostos });
+    return list;
+}
+const blankState = () => ({ sku: null, centro: opts && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '' });
 const $m = (id) => document.getElementById(id);
 const byId = (list, id) => (list || []).find((x) => String(x.id) === String(id));
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
@@ -298,7 +310,8 @@ function derived() {
     const sub = byId(opts.subWarehouses, st.sub);
     const physical = !!sub && sub.kind === 'physical';
     const zoneEntries = physical ? sub.locations : [];
-    const zones = opts.zones.filter((z) => zoneEntries.some((e) => e.zoneId === z.id));
+    // Las zonas y los anaqueles son los del Layout del centro de costos elegido.
+    const zones = ((opts.zonesByCenter && opts.zonesByCenter[st.centro]) || []).filter((z) => zoneEntries.some((e) => e.zoneId === z.id));
     const zone = byId(zones, st.zona);
     const entry = zone ? zoneEntries.find((e) => e.zoneId === zone.id) : null;
     const racks = zone ? zone.spaces.filter((s) => !entry.spaceIds.length || entry.spaceIds.includes(s.id)) : [];
@@ -317,7 +330,7 @@ function renderForm() {
     $m('rel-art').innerHTML = st.sku
         ? `<b>${esc(st.sku.sku)} · ${esc(st.sku.description)}</b><span>${esc([st.sku.upc ? `UPC ${st.sku.upc}` : '', st.sku.uom].filter(Boolean).join(' · '))}</span>`
         : `<span>${esc(t('main.relPickCode'))}</span>`;
-    fillSelect('rel-centro', opts.costCenters.map((c) => ({ value: c.id, label: c.name })), t('main.relChooseCost'), st.centro, false);
+    fillSelect('rel-centro', centerChoices().map((c) => ({ value: c.id, label: c.name })), t('main.relChooseCost'), st.centro, false);
     const whs = opts.warehouses.filter((w) => w.parentId === st.centro && (w.status === 'active' || w.id === keepWh));
     fillSelect('rel-alm', whs.map((w) => ({ value: w.id, label: w.name })), st.centro ? t('main.relChooseWarehouse') : t('main.relFirstCost'), st.alm, !st.centro || !whs.length);
     const subs = opts.subWarehouses.filter((s) => s.parentId === st.alm && (s.status === 'active' || s.id === keepSub));

@@ -284,7 +284,9 @@ function derived() {
     const sub = byId(options.subWarehouses, st.sub);
     const physical = !!sub && sub.kind === 'physical';
     const entries = physical ? sub.locations : [];
-    const zones = options.zones.filter((z) => entries.some((e) => e.zoneId === z.id));
+    // Las zonas son las del Layout del centro elegido (una copia vieja de las opciones, sin zonesByCenter, trae solo "zones").
+    const centerZones = options.zonesByCenter ? (options.zonesByCenter[st.centro] || []) : (options.zones || []);
+    const zones = centerZones.filter((z) => entries.some((e) => e.zoneId === z.id));
     const zone = byId(zones, st.zona);
     const entry = zone ? entries.find((e) => e.zoneId === zone.id) : null;
     const racks = zone ? zone.spaces.filter((s) => !entry.spaceIds.length || entry.spaceIds.includes(s.id)) : [];

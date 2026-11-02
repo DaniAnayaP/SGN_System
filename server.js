@@ -7487,7 +7487,22 @@ function codeRelationContext(req) {
 function codeRelationContextFor(clientId, isTestAccount) {
     const warehouses = new Map();
     ['almacenes', 'sub-almacenes'].forEach((t) => listArticleCategories(clientId, t, isTestAccount).forEach((r) => warehouses.set(r.id, r)));
-    return { costCenters: new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c])), warehouses, layout: warehouseLayoutIndex(clientId) };
+    const costCenters = new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c]));
+    // El Layout es de un centro de costos: cada relación usa las zonas y los anaqueles del Layout de SU centro (cost_center_id).
+    const layouts = new Map();
+    const layoutFor = (centerId) => {
+        const key = centerId || 0;
+        if (!layouts.has(key)) layouts.set(key, warehouseLayoutIndex(clientId, key));
+        return layouts.get(key);
+    };
+    // Para los nombres del historial, donde solo llega el id de la zona o del anaquel: se busca en los Layouts de todos los centros (los ids no se repiten).
+    const anyLayout = (find) => {
+        for (const id of [...costCenters.keys(), 0]) { const hit = find(layoutFor(id)); if (hit) return hit; }
+        return null;
+    };
+    let complete = null;
+    const isCompleteCenter = (id) => { if (!complete) complete = new Set(listCompleteCostCenterIds(clientId, isTestAccount)); return complete.has(id); };
+    return { costCenters, warehouses, layoutFor, anyLayout, isCompleteCenter };
 }
 
 function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
@@ -7495,8 +7510,9 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
     const cc = ctx.costCenters.get(row.cost_center_id);
     const wh = ctx.warehouses.get(row.warehouse_id);
     const sub = ctx.warehouses.get(row.sub_warehouse_id);
-    const zone = ctx.layout.zoneById.get(row.zone_id);
-    const space = ctx.layout.spaceById.get(row.space_id);
+    const layout = ctx.layoutFor(row.cost_center_id);
+    const zone = layout.zoneById.get(row.zone_id);
+    const space = layout.spaceById.get(row.space_id);
     // Ubicado = un sub almacén virtual (no tiene dónde más) o el camino físico completo hasta el espacio; lo demás queda A medias.
     const located = !!row.sub_warehouse_id && ((sub && sub.kind === 'virtual') || (row.space_id && row.level && row.slot));
     return {
@@ -7529,8 +7545,8 @@ function codeRelationSanitizers(ctx, req) {
         costCenterId: (v) => { const c = ctx.costCenters.get(Number(v)); return c ? c.name : (v == null ? '' : String(v)); },
         warehouseId: (v) => { const w = ctx.warehouses.get(Number(v)); return w ? w.name : (v == null ? '' : String(v)); },
         subWarehouseId: (v) => { const w = ctx.warehouses.get(Number(v)); return w ? w.name : (v == null ? '' : String(v)); },
-        zoneId: (v) => { const z = ctx.layout.zoneById.get(v); return z ? z.name : (v || ''); },
-        spaceId: (v) => { const s = ctx.layout.spaceById.get(v); return s ? s.code : (v || ''); },
+        zoneId: (v) => { const z = ctx.anyLayout((l) => l.zoneById.get(v)); return z ? z.name : (v || ''); },
+        spaceId: (v) => { const s = ctx.anyLayout((l) => l.spaceById.get(v)); return s ? s.code : (v || ''); },
         level: (v) => (v == null ? '' : String(v)),
         slot: (v) => (v == null ? '' : String(v)),
     };
@@ -7562,6 +7578,8 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     const bad = (message, status = 400) => ({ error: { status, message } });
     if (!state.skuItemId || !getSkuItemById(state.skuItemId, clientId, isTestAccount)) return bad('Elige un código de Alta Artículos.');
     if (!state.costCenterId || !ctx.costCenters.has(state.costCenterId)) return bad('Elige un centro de costos.');
+    if (!(existing && existing.cost_center_id === state.costCenterId) && !ctx.isCompleteCenter(state.costCenterId)) return bad('Ese centro de costos está incompleto o inactivo. Complétalo primero en Nuestros Centros Costos.');
+    const layout = ctx.layoutFor(state.costCenterId);
     const wh = state.warehouseId ? ctx.warehouses.get(state.warehouseId) : null;
     if (!wh || wh.category_type !== 'almacenes') return bad('Elige un almacén.');
     if (wh.parent_id !== state.costCenterId) return bad('Ese almacén no pertenece a ese centro de costos.');
@@ -7583,9 +7601,9 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     if (hasZone) {
         if (!sub || sub.kind !== 'physical') return bad('Este sub almacén no es físico: no lleva zona, anaquel, nivel ni espacio.');
         const entry = parseWarehouseLocations(sub.locations).find((e) => e.zoneId === state.zoneId);
-        if (!entry || !ctx.layout.zoneById.has(state.zoneId)) return bad('Esa zona no está asignada a ese sub almacén.');
+        if (!entry || !layout.zoneById.has(state.zoneId)) return bad('Esa zona no está asignada a ese sub almacén.');
         if (hasSpace) {
-            const space = ctx.layout.spaceById.get(state.spaceId);
+            const space = layout.spaceById.get(state.spaceId);
             if (!space || space.zoneId !== state.zoneId) return bad('Ese anaquel no está en esa zona.');
             if (entry.spaceIds.length && !entry.spaceIds.includes(state.spaceId)) return bad('Ese anaquel no está asignado a ese sub almacén.');
             if (hasLevel) {
@@ -7619,22 +7637,31 @@ app.get('/api/business/code-relations', requireAuth, (req, res) => {
     res.json({ relations: listCodeRelations(req.user.clientId, req.user.isTestAccount).map((r) => mapCodeRelation(r, pendingByRecord, client?.company_name, ctx)) });
 });
 
-// Todo lo que necesita la ventana "Nueva relación": centros de costos, almacenes, sub almacenes (con sus ubicaciones), zonas y anaqueles del Layout y los espacios que ya están ocupados.
+// Todo lo que necesita la ventana "Nueva relación": centros de costos completos, almacenes, sub almacenes (con sus ubicaciones), las zonas y anaqueles del Layout de cada centro (zonesByCenter) y los espacios que ya están ocupados.
+// "zones" (las del primer Layout) se sigue mandando solo para las copias viejas de la App que todavía no conocen zonesByCenter.
 app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
     const ctx = codeRelationContext(req);
     const sub = [...ctx.warehouses.values()].filter((r) => r.category_type === 'sub-almacenes');
     const almacenes = [...ctx.warehouses.values()].filter((r) => r.category_type === 'almacenes');
+    const layouts = listClientLayouts(clientId);
+    const zonesOf = (row) => {
+        const idx = layoutIndexOf(row);
+        return idx.zones.map((z) => ({
+            id: z.id, name: z.name,
+            spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, levels: s.levels || 1, slots: s.slots || 1 })),
+        }));
+    };
+    const zonesByCenter = {};
+    layouts.forEach((row) => { zonesByCenter[row.costCenterId || 0] = zonesOf(row); });
     res.set('Cache-Control', 'no-store');
     res.json({
-        costCenters: [...ctx.costCenters.values()].map((c) => ({ id: c.id, code: c.code, name: c.name })),
+        costCenters: [...ctx.costCenters.values()].filter((c) => ctx.isCompleteCenter(c.id)).map((c) => ({ id: c.id, code: c.code, name: c.name })),
         warehouses: almacenes.map((r) => ({ id: r.id, name: r.name, parentId: r.parent_id, status: r.status })),
         subWarehouses: sub.map((r) => ({ id: r.id, name: r.name, parentId: r.parent_id, status: r.status, kind: r.kind, locations: r.kind === 'physical' ? parseWarehouseLocations(r.locations) : [] })),
-        zones: ctx.layout.zones.map((z) => ({
-            id: z.id, name: z.name,
-            spaces: ctx.layout.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, levels: s.levels || 1, slots: s.slots || 1 })),
-        })),
+        zonesByCenter,
+        zones: layouts.length ? zonesOf(layouts[0]) : [],
         occupied: listCodeRelations(clientId, isTestAccount).filter((r) => r.space_id && r.level && r.slot).map((r) => ({ id: r.id, spaceId: r.space_id, level: r.level, slot: r.slot, sku: padSku(r.sku_number) })),
     });
 });
