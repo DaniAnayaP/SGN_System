@@ -3478,6 +3478,7 @@ const TABLE_GRANT_PATHS = {
     'categorias-riesgo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-riesgo' },
     'categorias-vidautil': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-vidautil' },
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
+    'clasificaciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
@@ -3659,6 +3660,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'categorias-riesgo': CATEGORY_BUTTON_NOTIFY,
     'categorias-vidautil': CATEGORY_BUTTON_NOTIFY,
     'unidad-medida': CATEGORY_BUTTON_NOTIFY,
+    'clasificaciones': CATEGORY_BUTTON_NOTIFY,
     'almacenes': CATEGORY_BUTTON_NOTIFY,
     'sub-almacenes': CATEGORY_BUTTON_NOTIFY,
     'layout': { create: 'colLayoutCrearDesdeCero' },
@@ -5103,6 +5105,9 @@ const ARTICLE_CATEGORY_TYPES = {
     // ARTICLE_CATEGORY_AREA_LABEL's own default for this one (see
     // mapArticleCategoryRecord in server.js).
     'tipos-cliente': { prefix: 'TCL', tableKey: 'tipos-cliente', pantalla: 'Nuestros Tipos Cliente', area: 'Transporte Volumen' },
+    // Clasificaciones (Patente, Genérico, Antibiótico…): misma forma que las de arriba (código, nombre, descripción, estatus). Cada categoría de Inventario elige cuáles tiene
+    // y el código las ofrece según su categoría; la descripción es la que sale en la página pública del QR de la clasificación.
+    clasificaciones: { prefix: 'CLA', tableKey: 'clasificaciones', pantalla: 'Nuestras Clasificaciones' },
     // Almacenes y Sub almacenes: misma forma (código, nombre, descripción, estatus) más sus campos propios (ver ARTICLE_CATEGORY_EXTRA_FIELDS).
     almacenes: { prefix: 'ALN', tableKey: 'almacenes', pantalla: 'Nuestros Almacenes' },
     'sub-almacenes': { prefix: 'SUB', tableKey: 'sub-almacenes', pantalla: 'Nuestros Sub Almacenes' },
@@ -6603,6 +6608,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'categorias-riesgo', labelKey: 'menu.catCentroDistCategoriasRiesgo' },
     { key: 'categorias-vidautil', labelKey: 'menu.catCentroDistCategoriasVidautil' },
     { key: 'unidad-medida', labelKey: 'menu.catCentroDistUnidadMedida' },
+    { key: 'clasificaciones', labelKey: 'menu.catCentroDistClasificaciones' },
     { key: 'almacenes', labelKey: 'menu.catCentroDistAlmacenes' },
     { key: 'sub-almacenes', labelKey: 'menu.catCentroDistSubAlmacenes' },
     { key: 'nuestras-cotizaciones', labelKey: 'menu.opTransVolCotizaciones' },

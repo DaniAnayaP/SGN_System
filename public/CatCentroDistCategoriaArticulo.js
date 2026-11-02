@@ -26,6 +26,7 @@ const CATEGORY_TYPE_TABLE_KEYS = {
     // Cliente (el historial, los permisos de edición y la tabla misma se buscaban
     // con la clave "undefined").
     udm: 'unidad-medida',
+    clasificaciones: 'clasificaciones',
     'tipos-cliente': 'tipos-cliente',
     // Catálogos con campos propios (centro de costos / almacén, tipo físico o virtual, ubicación asignada): ver buildExtraCells.
     almacenes: 'almacenes',
@@ -37,7 +38,7 @@ const TABLE_KEY = CATEGORY_TYPE_TABLE_KEYS[CATEGORY_TYPE];
 const CATEGORY_API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
 const DELETE_AUTH_COL = 'colCatDeleteAuth';
 const IS_WAREHOUSE = CATEGORY_TYPE === 'almacenes' || CATEGORY_TYPE === 'sub-almacenes';
-const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : 'main.newArticleCategory';
+const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : 'main.newArticleCategory';
 // Centros de costos, almacenes y las zonas / anaqueles del Layout guardado (GET /api/business/warehouse-options).
 let warehouseOptions = { costCenters: [], warehouses: [], zones: [] };
 
