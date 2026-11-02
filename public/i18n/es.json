@@ -2831,6 +2831,8 @@
     "articuloScanManual": "Escribir a mano en su lugar",
     "relappSearch": "Buscar por SKU, UPC, descripción o ubicación",
     "relappEmpty": "Todavía no hay relaciones.",
+    "siteRequiredTitle": "Primero falta un centro de costos completo",
+    "siteRequiredBody": "Toda operación va ligada a un centro de costos. Pídele a quien administra tu cuenta que lo cree en la versión web (Nuestros Centros Costos), con todos sus datos y sus códigos.",
     "relappScan": "Escanear el código de barras",
     "relappNotFound": "El código {code} no está en Alta Artículos.",
     "relappPending": "{n} guardadas en tu celular, esperando señal",

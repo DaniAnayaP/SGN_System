@@ -74,6 +74,9 @@ const {
     setGeoShortCode,
     updateCostCenterNickname,
     setCostCenterStatus,
+    listCompleteCostCenterIds,
+    hasCompleteCostCenter,
+    linkClientDataToFirstCostCenter,
     listCountries,
     listStates,
     listMunicipalities,
@@ -808,6 +811,31 @@ function requireClientAdmin(req, res, next) {
         return res.status(403).json({ message: 'Client admin access required.' });
     }
     next();
+}
+
+// Toda operación va ligada a un centro de costos: sin al menos uno COMPLETO (ver hasCompleteCostCenter en db.js) no se guarda nada en las pantallas de operación. Las cuentas sin cliente
+// (GEIPSA) pasan: esas rutas ya les contestan que no hay cliente.
+function requireCostCenter(req, res, next) {
+    if (!req.user?.clientId || hasCompleteCostCenter(req.user.clientId, req.user.isTestAccount)) return next();
+    res.status(409).json({
+        code: 'COST_CENTER_REQUIRED',
+        message: 'Primero crea un centro de costos completo en Nuestros Centros Costos: toda operación va ligada a uno.',
+    });
+}
+// De los catálogos de categorías, solo Almacenes cuelga de un centro de costos.
+function requireCostCenterForWarehouses(req, res, next) {
+    return req.params.categoryType === 'almacenes' ? requireCostCenter(req, res, next) : next();
+}
+// Cuando el cliente ya tiene su PRIMER centro completo, lo que había capturado sin sitio se liga a él.
+function linkOrphansToFirstCostCenter(req) {
+    try {
+        const ids = listCompleteCostCenterIds(req.user.clientId, req.user.isTestAccount);
+        if (ids.length !== 1) return;
+        const linked = linkClientDataToFirstCostCenter(req.user.clientId, req.user.isTestAccount, ids[0]);
+        if (linked.warehouses || linked.relations || linked.layouts) console.log(`[cost-centers] Cliente ${req.user.clientId}: lo capturado sin sitio quedó ligado a su primer centro de costos (${ids[0]}):`, linked);
+    } catch (err) {
+        console.error('[cost-centers] No se pudo ligar lo capturado al primer centro de costos:', err);
+    }
 }
 
 // Un permiso fino del equipo SaaS para una ruta de escritura: el administrador principal (admin_saas) o quien tenga alguna de las hojas dadas de la
@@ -4594,6 +4622,7 @@ app.get('/api/business/cost-centers', requireAuth, (req, res) => {
     res.json({
         costCenters: listCostCenters(req.user.clientId, req.user.isTestAccount).map((cc) => mapCostCenter(cc, client.company_name)),
         limit: client.cost_centers_limit,
+        siteReady: hasCompleteCostCenter(req.user.clientId, req.user.isTestAccount),
     });
 });
 
@@ -4616,6 +4645,7 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
             recordLabel: costCenter.code, action: 'create', changedBy: changedByLabel(req),
         });
         notifyButtonAction(req, 'centros-costo', 'create', costCenter.code);
+        linkOrphansToFirstCostCenter(req);
         res.status(201).json({ costCenter: mapCostCenter(costCenter, client.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -4646,6 +4676,7 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
             code: costCenter.code, name: costCenter.name, description: costCenter.description,
             responsible: costCenter.responsible, sucursal: costCenter.sucursal, siteCode: costCenter.site_code || '',
         }, COST_CENTER_FIELDS, 'centros-costo', existing.code);
+        linkOrphansToFirstCostCenter(req);
         res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -4668,6 +4699,7 @@ app.patch('/api/business/cost-centers/:id/status', requireAuth, requireClientAdm
         clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
         recordLabel: costCenter.code, action: 'update', changedBy: changedByLabel(req),
     });
+    linkOrphansToFirstCostCenter(req);
     res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
 });
 
@@ -6060,7 +6092,7 @@ app.get('/api/business/sku-items', requireAuth, (req, res) => {
     res.json({ skuItems: rows.map((r) => mapSkuItemRecord(r, pendingByRecord, client?.company_name)) });
 });
 
-app.post('/api/business/sku-items', requireAuth, (req, res) => {
+app.post('/api/business/sku-items', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'nuestros-articulos', 'colArticuloCreateAuth')) {
         return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
@@ -6137,7 +6169,7 @@ app.get('/api/business/sku-items/template-context', requireAuth, (req, res) => {
         classifications: { all: cls.all, byCategory: cls.byCategory },
     });
 });
-app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
+app.post('/api/business/sku-items/import', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
     const grants = req.user.isClientAdmin ? null : getUserEffectiveGrants(req.user.sub);
@@ -6254,7 +6286,7 @@ function logSkuScreenMove(req, skuItem, from, to) {
         fieldKey: 'main.skuUbicacionPantalla', oldValue: from, newValue: to, changedBy: changedByLabel(req),
     });
 }
-app.post('/api/business/sku-items/:id/edit', requireAuth, (req, res) => {
+app.post('/api/business/sku-items/:id/edit', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!canUseEdicionCodigo(req)) return res.status(403).json({ message: 'No tienes permiso para mandar códigos a Edición Código.' });
     const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
@@ -6266,7 +6298,7 @@ app.post('/api/business/sku-items/:id/edit', requireAuth, (req, res) => {
     const client = getClientById(req.user.clientId);
     res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name) });
 });
-app.post('/api/business/sku-items/:id/finish-edit', requireAuth, (req, res) => {
+app.post('/api/business/sku-items/:id/finish-edit', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!canUseEdicionCodigo(req)) return res.status(403).json({ message: 'No tienes permiso para terminar la edición de códigos.' });
     const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
@@ -6290,7 +6322,7 @@ function validateSkuStackingPatch(patch) {
     return '';
 }
 
-app.patch('/api/business/sku-items/:id', requireAuth, (req, res) => {
+app.patch('/api/business/sku-items/:id', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
@@ -6317,7 +6349,7 @@ app.patch('/api/business/sku-items/:id', requireAuth, (req, res) => {
     res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
 });
 
-app.delete('/api/business/sku-items/:id', requireAuth, (req, res) => {
+app.delete('/api/business/sku-items/:id', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
@@ -6484,7 +6516,7 @@ app.get('/api/business/layout', requireAuth, (req, res) => {
     const row = getClientLayout(req.user.clientId);
     res.json({
         layout: row ? row.layout : null, version: row ? row.version : 0, updatedAt: row ? row.updatedAt : '', updatedBy: row ? row.updatedBy : '',
-        hasPlanImage: row ? row.hasPlanImage : false, permissions: layoutPermissions(req),
+        hasPlanImage: row ? row.hasPlanImage : false, permissions: layoutPermissions(req), costCenterId: row ? row.costCenterId : null,
     });
 });
 
@@ -6495,7 +6527,7 @@ app.get('/api/business/layout/plan-image', requireAuth, (req, res) => {
     res.json({ image: row.planImage });
 });
 
-app.put('/api/business/layout', requireAuth, (req, res) => {
+app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const body = req.body || {};
     const checked = LayoutCalc.sanitizeLayout(body.layout);
@@ -6577,7 +6609,9 @@ app.put('/api/business/layout', requireAuth, (req, res) => {
     }
     if (!changed.length && planImage === undefined && existing) return res.json({ version: existing.version, changed: [] });
 
-    const result = saveClientLayout({ clientId: req.user.clientId, layout: next, planImage, expectedVersion, updatedBy: changedByLabel(req) });
+    // Un Layout nuevo nace ligado al primer centro de costos completo del cliente (el Layout es uno por cliente; las cuentas de práctica no lo ligan).
+    const costCenterId = req.user.isTestAccount ? null : (listCompleteCostCenterIds(req.user.clientId, false)[0] || null);
+    const result = saveClientLayout({ clientId: req.user.clientId, layout: next, planImage, expectedVersion, updatedBy: changedByLabel(req), costCenterId });
     if (result.conflict) return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: result.currentVersion });
 
     const actor = { actorUserId: req.user.sub, actorLabel: changedByLabel(req) };
@@ -6721,7 +6755,7 @@ app.get('/api/business/layout/zone-classifications', requireAuth, (req, res) => 
 });
 
 // Cambiar el QR a propósito (por ejemplo si lo fotografiaron fuera de la empresa): el anterior deja de funcionar y hay que volver a imprimir.
-app.post('/api/business/layout/qr/regenerate', requireAuth, (req, res) => {
+app.post('/api/business/layout/qr/regenerate', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!layoutPermissions(req).canRegenerateQr) return res.status(403).json({ message: 'No tienes permiso para cambiar el QR del Layout.' });
     if (!req.body || req.body.confirm !== true) return res.status(400).json({ message: 'Falta confirmar el cambio del QR.' });
@@ -7245,7 +7279,7 @@ app.get('/api/business/article-categories/:categoryType', requireAuth, (req, res
     });
 });
 
-app.post('/api/business/article-categories/:categoryType', requireAuth, (req, res) => {
+app.post('/api/business/article-categories/:categoryType', requireAuth, requireCostCenterForWarehouses, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const config = articleCategoryTypeConfig(req.params.categoryType);
     if (!config) return res.status(404).json({ message: 'Unknown category type.' });
@@ -7262,7 +7296,7 @@ app.post('/api/business/article-categories/:categoryType', requireAuth, (req, re
     res.status(201).json({ category: mapArticleCategoryRecord(category, null, client?.company_name, categoryContext(req, req.params.categoryType)) });
 });
 
-app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, (req, res) => {
+app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, requireCostCenterForWarehouses, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const config = articleCategoryTypeConfig(req.params.categoryType);
     if (!config) return res.status(404).json({ message: 'Unknown category type.' });
@@ -7282,7 +7316,7 @@ app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, (re
     res.json({ category: mapArticleCategoryRecord(category, null, client?.company_name, categoryContext(req, req.params.categoryType)), pendingFields, rejectedFields, conflictFields });
 });
 
-app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, (req, res) => {
+app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, requireCostCenterForWarehouses, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const config = articleCategoryTypeConfig(req.params.categoryType);
     if (!config) return res.status(404).json({ message: 'Unknown category type.' });
@@ -7550,7 +7584,7 @@ app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
     });
 });
 
-app.post('/api/business/code-relations', requireAuth, (req, res) => {
+app.post('/api/business/code-relations', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
     const grants = req.user.isClientAdmin ? null : getUserEffectiveGrants(req.user.sub);
@@ -7582,7 +7616,7 @@ app.post('/api/business/code-relations', requireAuth, (req, res) => {
     res.status(201).json({ relation: mapCodeRelation(row, null, client?.company_name, ctx) });
 });
 
-app.patch('/api/business/code-relations/:id', requireAuth, (req, res) => {
+app.patch('/api/business/code-relations/:id', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
     const existing = getCodeRelationById(req.params.id, clientId, isTestAccount);
@@ -7611,7 +7645,7 @@ app.patch('/api/business/code-relations/:id', requireAuth, (req, res) => {
     res.json({ relation: mapCodeRelation(row, null, client?.company_name, ctx), pendingFields, rejectedFields, conflictFields });
 });
 
-app.delete('/api/business/code-relations/:id', requireAuth, (req, res) => {
+app.delete('/api/business/code-relations/:id', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getCodeRelationById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Relation not found.' });
@@ -7625,7 +7659,7 @@ app.delete('/api/business/code-relations/:id', requireAuth, (req, res) => {
 });
 
 // Verificador Código (SKU): la ficha de un artículo (sin fotos ni Control Interno) y DÓNDE ESTÁ, que sale de Relación Código (un renglón por cada lugar). Con sesión.
-app.get('/api/business/verificador/:id', requireAuth, (req, res) => {
+app.get('/api/business/verificador/:id', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
     const item = getSkuItemById(req.params.id, clientId, isTestAccount);

@@ -87,3 +87,35 @@ window.apiUrl = function apiUrl(path) {
         return res;
     };
 })();
+
+// --- Toda operación va ligada a un centro de costos completo (ver hasCompleteCostCenter en db.js) --------------------------------------------------
+// Las pantallas de la App que operan (Alta de artículos y Relación Código) preguntan aquí antes de mostrarse. Sin señal o sin respuesta NO se bloquea: lo que se capture se guarda en el celular y el
+// servidor lo vuelve a revisar al subirse.
+window.AppSiteGate = {
+    async blocked() {
+        try {
+            const res = await fetch(window.apiUrl('/api/business/cost-centers'), { credentials: 'include' });
+            if (!res.ok) return false;
+            const data = await res.json();
+            return data.siteReady === false;
+        } catch {
+            return false;
+        }
+    },
+    // t = la función de textos de la pantalla (home.siteRequiredTitle / home.siteRequiredBody)
+    show(container, t) {
+        container.innerHTML = '';
+        const box = document.createElement('div');
+        box.className = 'home-empty';
+        box.setAttribute('role', 'alert');
+        const icon = document.createElement('i');
+        icon.className = 'bx bx-error-circle';
+        icon.setAttribute('aria-hidden', 'true');
+        const title = document.createElement('b');
+        title.textContent = t('home.siteRequiredTitle');
+        const body = document.createElement('p');
+        body.textContent = t('home.siteRequiredBody');
+        box.append(icon, title, body);
+        container.appendChild(box);
+    },
+};

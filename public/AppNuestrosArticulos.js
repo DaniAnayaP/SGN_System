@@ -855,6 +855,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
         if (!meRes.ok) { window.location.replace('Login.html'); return; }
         const { user } = await meRes.json();
         currentUser = user;
+        if (await window.AppSiteGate.blocked()) { window.AppSiteGate.show(bodyEl, t); return; }
         templateAllowed = window.AppSkuTemplate ? await window.AppSkuTemplate.canUse(user) : false;
         await Promise.all([loadGateMap(), loadRecords(), loadBrandingForTheme(), loadCategoryOptions()]);
         applyStyle(getStoredStyle());

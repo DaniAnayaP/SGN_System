@@ -10874,11 +10874,14 @@ function persistCostCenterSelection() {
     );
 }
 
+// ¿El cliente ya tiene al menos un centro de costos COMPLETO? (null = no se pudo saber). Toda operación va ligada a uno: las pantallas que operan (body con data-requires-site) se bloquean sin él.
+let clientSiteReady = null;
 async function fetchCostCenters() {
     try {
         const res = await fetch(`${API_BASE}/business/cost-centers`, { credentials: 'include' });
         if (!res.ok) return [];
         const data = await res.json();
+        clientSiteReady = typeof data.siteReady === 'boolean' ? data.siteReady : null;
         return data.costCenters || [];
     } catch {
         return [];
@@ -12106,18 +12109,26 @@ const SHELL_ALERT_TEXTS = {
         waiting: 'Verificando tus accesos…',
         verifyTitle: 'No pudimos verificar tus accesos', verifyBody: 'Revisa tu conexión e inténtalo de nuevo.', retry: 'Reintentar', logout: 'Cerrar sesión',
         noAccessTitle: 'No tienes acceso a esta pantalla', noAccessBody: 'Tu cuenta no tiene habilitada esta pantalla.', home: 'Ir a Inicio',
+        noSiteTitle: 'Primero falta un centro de costos completo',
+        noSiteBody: 'Toda operación va ligada a un centro de costos. Créalo en Nuestros Centros Costos, con todos sus datos y sus códigos, y vuelve a esta pantalla.',
+        noSiteBodyUser: 'Toda operación va ligada a un centro de costos. Pídele a quien administra tu cuenta que cree el primero, con todos sus datos y sus códigos.',
+        goCostCenters: 'Ir a Centros Costos',
     },
     en: {
         waiting: 'Checking your access…',
         verifyTitle: "We couldn't verify your access", verifyBody: 'Check your connection and try again.', retry: 'Try again', logout: 'Log out',
         noAccessTitle: "You don't have access to this screen", noAccessBody: "Your account doesn't have this screen enabled.", home: 'Go to Home',
+        noSiteTitle: 'A complete cost center is needed first',
+        noSiteBody: 'Every operation is tied to a cost center. Create it in Our Cost Centers, with all its data and codes, then come back to this screen.',
+        noSiteBodyUser: 'Every operation is tied to a cost center. Ask whoever manages your account to create the first one, with all its data and codes.',
+        goCostCenters: 'Go to Cost Centers',
     },
 };
 function clearShellAlert() {
     document.getElementById('sgn-shell-alert')?.remove();
     document.body.classList.remove('sgn-alert');
 }
-// kind: 'waiting' (tarda más de lo normal) | 'verify' (no se pudo leer qué tiene la cuenta) | 'noAccess' (la cuenta no tiene esta pantalla).
+// kind: 'waiting' (tarda más de lo normal) | 'verify' (no se pudo leer qué tiene la cuenta) | 'noAccess' (la cuenta no tiene esta pantalla) | 'noSite' (el cliente todavía no tiene un centro de costos completo).
 function showShellAlert(kind) {
     clearShellAlert();
     const lang = typeof getStoredLang === 'function' ? getStoredLang() : 'es';
@@ -12151,6 +12162,14 @@ function showShellAlert(kind) {
         addText('h2', text.noAccessTitle);
         addText('p', text.noAccessBody);
         focusTarget = addButton(text.home, () => window.location.replace('Inicio-en.html'), true);
+    } else if (kind === 'noSite') {
+        // Solo el administrador del cliente puede crear centros de costos; los demás ven a quién pedírselo.
+        const canCreate = !!currentUser?.isClientAdmin;
+        addText('h2', text.noSiteTitle);
+        addText('p', canCreate ? text.noSiteBody : text.noSiteBodyUser);
+        if (canCreate) focusTarget = addButton(text.goCostCenters, () => window.location.replace('Business-CentrosCosto.html'), true);
+        const homeBtn = addButton(text.home, () => window.location.replace('Inicio-en.html'), !canCreate);
+        if (!focusTarget) focusTarget = homeBtn;
     } else {
         addText('h2', text.verifyTitle);
         addText('p', text.verifyBody);
@@ -12346,6 +12365,11 @@ async function initDashboardInner({ activePage } = {}) {
         applyClientBranding(clientBranding);
         updateDatabaseMenuLabel(clientBranding);
         await initCostCenterPicker(loads.costCenters);
+        // Pantallas de operación (body con data-requires-site): sin un centro de costos completo no se muestran; el servidor además rechaza lo que se intente guardar.
+        if (document.body.hasAttribute('data-requires-site') && clientSiteReady === false) {
+            showShellAlert('noSite');
+            return null;
+        }
         await loadPersonalizedReports(loads.reports);
     } else {
         document.getElementById('cc-picker')?.classList.add('cc-picker-disabled');

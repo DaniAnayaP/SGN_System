@@ -2421,6 +2421,10 @@ const clientLayoutColumns = db.prepare('PRAGMA table_info(client_layouts)').all(
 if (!clientLayoutColumns.some((c) => c.name === 'public_token')) {
     db.exec("ALTER TABLE client_layouts ADD COLUMN public_token TEXT NOT NULL DEFAULT ''");
 }
+// Centro de costos (sitio) al que pertenece el Layout: el primero completo del cliente. Los Layouts de antes se ligan a él cuando ese centro existe (ver linkClientDataToFirstCostCenter).
+if (!clientLayoutColumns.some((c) => c.name === 'cost_center_id')) {
+    db.exec('ALTER TABLE client_layouts ADD COLUMN cost_center_id INTEGER');
+}
 db.exec('CREATE INDEX IF NOT EXISTS idx_client_layouts_public_token ON client_layouts(public_token)');
 
 // --- Indexes -------------------------------------------------------------
@@ -4185,6 +4189,31 @@ function setCostCenterStatus(id, clientId, status, forTestAccount = false) {
     return getCostCenterById(id, clientId, forTestAccount);
 }
 
+// Regla: toda operación va ligada a un centro de costos. Un centro está "completo" (listo para operar) cuando está activo, tiene todos sus datos (país, estado, municipio, localidad, calle,
+// sucursal y nombre), su código del sitio y el Estado y la Localidad que eligió ya tienen su código corto: sin eso no se puede armar el localizador.
+const COMPLETE_COST_CENTER_FROM = `
+    FROM cost_centers cc
+    JOIN geo_states s ON s.id = cc.state_id AND s.code <> ''
+    JOIN geo_localities l ON l.id = cc.locality_id AND l.code <> ''
+    WHERE cc.client_id = ? AND cc.is_test_data = ? AND cc.status = 'active'
+      AND cc.site_code <> '' AND cc.country_id IS NOT NULL AND cc.municipality_id IS NOT NULL AND cc.street_id IS NOT NULL
+      AND cc.sucursal <> '' AND cc.name <> ''`;
+function listCompleteCostCenterIds(clientId, forTestAccount = false) {
+    return db.prepare(`SELECT cc.id ${COMPLETE_COST_CENTER_FROM} ORDER BY cc.id ASC`).all(clientId, forTestAccount ? 1 : 0).map((r) => r.id);
+}
+function hasCompleteCostCenter(clientId, forTestAccount = false) {
+    return !!db.prepare(`SELECT 1 ${COMPLETE_COST_CENTER_FROM} LIMIT 1`).get(clientId, forTestAccount ? 1 : 0);
+}
+// Lo que el cliente ya había capturado sin sitio (Layout, almacenes y relaciones de códigos) se liga a su PRIMER centro de costos completo. Solo toca lo que no tiene centro, así que repetirlo no cambia nada.
+function linkClientDataToFirstCostCenter(clientId, forTestAccount, costCenterId) {
+    const testFlag = forTestAccount ? 1 : 0;
+    return db.transaction(() => ({
+        warehouses: db.prepare("UPDATE article_categories SET parent_id = ? WHERE client_id = ? AND is_test_data = ? AND category_type = 'almacenes' AND (parent_id IS NULL OR parent_id = 0)").run(costCenterId, clientId, testFlag).changes,
+        relations: db.prepare('UPDATE code_relations SET cost_center_id = ? WHERE client_id = ? AND is_test_data = ? AND cost_center_id IS NULL').run(costCenterId, clientId, testFlag).changes,
+        layouts: forTestAccount ? 0 : db.prepare('UPDATE client_layouts SET cost_center_id = ? WHERE client_id = ? AND cost_center_id IS NULL').run(costCenterId, clientId).changes,
+    }))();
+}
+
 // --- Query helpers: job positions (Puestos de Trabajo, scoped to one client) -
 function listJobPositions(clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM job_positions WHERE client_id = ? AND is_test_data = ? ORDER BY name ASC').all(clientId, forTestAccount ? 1 : 0);
@@ -5103,7 +5132,7 @@ function setSkuItemPublicToken(id, clientId, token) {
 const LayoutCalc = require('./public/LayoutCalc.js');
 // withPlanImage: el plano pesa; solo se lee cuando de verdad se va a dibujar (GET .../layout/plan-image).
 function getClientLayout(clientId, { withPlanImage = false } = {}) {
-    const row = db.prepare('SELECT data, plan_image, version, created_at, updated_at, updated_by FROM client_layouts WHERE client_id = ?').get(clientId);
+    const row = db.prepare('SELECT data, plan_image, version, created_at, updated_at, updated_by, cost_center_id FROM client_layouts WHERE client_id = ?').get(clientId);
     if (!row) return null;
     let layout = null;
     try { layout = JSON.parse(row.data); } catch { layout = null; }
@@ -5111,7 +5140,7 @@ function getClientLayout(clientId, { withPlanImage = false } = {}) {
     layout = LayoutCalc.normalize(layout);
     return {
         layout, version: row.version, createdAt: row.created_at, updatedAt: row.updated_at, updatedBy: row.updated_by,
-        hasPlanImage: !!row.plan_image, planImage: withPlanImage ? row.plan_image : undefined,
+        hasPlanImage: !!row.plan_image, planImage: withPlanImage ? row.plan_image : undefined, costCenterId: row.cost_center_id || null,
     };
 }
 
@@ -5143,14 +5172,14 @@ function getLayoutByPublicToken(token) {
 
 // Crea o reemplaza el Layout del cliente. expectedVersion = la versión que la persona tenía abierta (0 = todavía no había Layout): si ya cambió, no se
 // pisa y se avisa. planImage: undefined = dejar el plano como está, '' = quitarlo, texto = plano nuevo.
-function saveClientLayout({ clientId, layout, planImage, expectedVersion, updatedBy }) {
+function saveClientLayout({ clientId, layout, planImage, expectedVersion, updatedBy, costCenterId = null }) {
     const run = db.transaction(() => {
         const current = db.prepare('SELECT version FROM client_layouts WHERE client_id = ?').get(clientId);
         const currentVersion = current ? current.version : 0;
         if (currentVersion !== expectedVersion) return { conflict: true, currentVersion };
         const data = JSON.stringify(layout);
         if (!current) {
-            db.prepare('INSERT INTO client_layouts (client_id, data, plan_image, version, updated_by, public_token) VALUES (?, ?, ?, 1, ?, ?)').run(clientId, data, planImage || '', updatedBy || '', generatePublicToken());
+            db.prepare('INSERT INTO client_layouts (client_id, data, plan_image, version, updated_by, public_token, cost_center_id) VALUES (?, ?, ?, 1, ?, ?, ?)').run(clientId, data, planImage || '', updatedBy || '', generatePublicToken(), costCenterId);
             return { conflict: false, version: 1 };
         }
         if (planImage === undefined) {
@@ -11077,6 +11106,9 @@ module.exports = {
     updateCostCenter,
     updateCostCenterNickname,
     setCostCenterStatus,
+    listCompleteCostCenterIds,
+    hasCompleteCostCenter,
+    linkClientDataToFirstCostCenter,
     listCountries,
     listStates,
     listMunicipalities,

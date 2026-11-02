@@ -2113,7 +2113,8 @@ $('layout-qr-pop').addEventListener('click', async (event) => {
 
 (async function init() {
     try {
-        await Dashboard.initDashboard({ activePage: 'cat-operaciones-centro-dist-layout' });
+        const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-centro-dist-layout' });
+        if (!role) return;
         await loadLayout();
     } catch (err) {
         console.error('Layout failed to initialize:', err);
