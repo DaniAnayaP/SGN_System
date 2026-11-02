@@ -41,7 +41,8 @@
     // COLUMNS (las 18 de siempre) y las mismas funciones de siempre; lo nuevo es ALL_COLUMNS, planRow y rowsFromMatrix(matrix, { full: true }).
     const SKU_COLUMN = { key: 'sku', es: 'SKU', en: 'SKU', kind: 'sku', aliases: ['registro unico', 'sku del sistema', 'codigo sku'] };
     const CLASSIFICATION_COLUMN = { key: 'classificationId', es: 'Clasificación', en: 'Classification', col: 'colArticuloClasificacion', kind: 'classification', aliases: ['clasificacion del articulo'] };
-    const ALL_COLUMNS = [SKU_COLUMN, ...COLUMNS, CLASSIFICATION_COLUMN];
+    const TIPO_CODIGO_COLUMN = { key: 'categoryTipoCodigo', es: 'Tipo Código', en: 'Code Type', col: 'colArticuloCategoriaTipoCodigo', kind: 'category', type: 'tipocodigo', aliases: ['tipo de codigo', 'tipo codigo'] };
+    const ALL_COLUMNS = [SKU_COLUMN, ...COLUMNS, TIPO_CODIGO_COLUMN, CLASSIFICATION_COLUMN];
     const BY_KEY_ALL = Object.fromEntries(ALL_COLUMNS.map((c) => [c.key, c]));
     const indexFor = (cols) => {
         const map = new Map();

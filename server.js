@@ -5964,6 +5964,7 @@ function mapSkuItemRecord(row, pendingByRecord, companyName) {
         categoryManejo: row.category_manejo,
         categoryRiesgo: row.category_riesgo,
         categoryVidautil: row.category_vidautil,
+        categoryTipoCodigo: row.category_tipocodigo,
         classificationId: row.classification_id == null ? null : row.classification_id,
         classificationName: classificationNameOf(row.client_id, !!row.is_test_data, row.classification_id),
         publicToken: row.public_token,
@@ -6046,7 +6047,7 @@ const SkuTemplate = require('./public/SkuTemplate.js');
 // Un código para la carga por plantilla: { id, sku, upc, complete, v: { campo: valor actual } } (solo los datos que ya tiene; la clasificación va con su nombre).
 function skuTemplateItem(row, classificationNames) {
     const v = {};
-    SkuTemplate.COLUMNS.forEach((c) => {
+    SkuTemplate.ALL_COLUMNS.filter((c) => c.kind !== 'sku' && c.kind !== 'classification').forEach((c) => {
         const value = row[SKU_ITEM_PATCHABLE_FIELDS[c.key].column];
         if (isSkuFieldFilled(value)) v[c.key] = value;
     });
@@ -6093,7 +6094,7 @@ app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
     const byUpc = new Map(items.filter((i) => i.upc).map((i) => [i.upc, i]));
     const accepted = new Map();
     const categories = {};
-    SkuTemplate.COLUMNS.filter((c) => c.kind === 'category').forEach((c) => { categories[c.type] = listActiveArticleCategoryNames(clientId, c.type, isTestAccount); });
+    SkuTemplate.ALL_COLUMNS.filter((c) => c.kind === 'category').forEach((c) => { categories[c.type] = listActiveArticleCategoryNames(clientId, c.type, isTestAccount); });
     const ctx = {
         allowUpdate, selected, udm: listActiveArticleCategoryNames(clientId, 'udm', isTestAccount), categories, classifications: { all: cls.all, byCategory: cls.byCategory },
         itemBySku: (n) => bySku.get(n) || null, itemByUpc: (upc) => byUpc.get(upc) || null,
@@ -7445,7 +7446,7 @@ app.get('/api/business/verificador/:id', requireAuth, (req, res) => {
     const full = mapSkuItemRecord(item, null, client?.company_name);
     const article = {};
     ['id', 'sku', 'upc', 'uniqueDescription', 'knownDescription', 'customDescription', 'mainUom', 'articleType', 'height', 'length', 'width', 'articleWeight', 'packageWeight',
-        'categoryInventario', 'categoryCompra', 'categoryAlmacenamiento', 'categoryRotacion', 'categoryManejo', 'categoryRiesgo', 'categoryVidautil'].forEach((key) => { article[key] = full[key]; });
+        'categoryInventario', 'categoryCompra', 'categoryAlmacenamiento', 'categoryRotacion', 'categoryManejo', 'categoryRiesgo', 'categoryVidautil', 'categoryTipoCodigo'].forEach((key) => { article[key] = full[key]; });
     const ctx = codeRelationContext(req);
     const locations = listCodeRelations(clientId, isTestAccount).filter((r) => r.sku_item_id === item.id).map((r) => mapCodeRelation(r, null, client?.company_name, ctx));
     res.set('Cache-Control', 'no-store');

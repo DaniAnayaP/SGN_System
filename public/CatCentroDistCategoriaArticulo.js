@@ -21,6 +21,7 @@ const CATEGORY_TYPE_TABLE_KEYS = {
     manejo: 'categorias-manejo',
     riesgo: 'categorias-riesgo',
     vidautil: 'categorias-vidautil',
+    tipocodigo: 'categorias-tipocodigo',
     // Misma forma que las 7 de arriba (ver ARTICLE_CATEGORY_TYPES en db.js): sin
     // estas dos claves TABLE_KEY quedaba undefined en Unidad de Medida y Tipos de
     // Cliente (el historial, los permisos de edición y la tabla misma se buscaban

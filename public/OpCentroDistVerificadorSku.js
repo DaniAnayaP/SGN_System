@@ -98,7 +98,7 @@
             const { article: a, locations } = await res.json();
             $('vf-q').value = `${a.sku} · ${a.uniqueDescription || a.knownDescription || a.upc}`;
             const cats = [['main.colArticuloCategoriaInventario', a.categoryInventario], ['main.colArticuloCategoriaCompra', a.categoryCompra], ['main.colArticuloCategoriaAlmacenamiento', a.categoryAlmacenamiento],
-                ['main.colArticuloCategoriaRotacion', a.categoryRotacion], ['main.colArticuloCategoriaManejo', a.categoryManejo], ['main.colArticuloCategoriaRiesgo', a.categoryRiesgo], ['main.colArticuloCategoriaVidautil', a.categoryVidautil]];
+                ['main.colArticuloCategoriaRotacion', a.categoryRotacion], ['main.colArticuloCategoriaManejo', a.categoryManejo], ['main.colArticuloCategoriaRiesgo', a.categoryRiesgo], ['main.colArticuloCategoriaVidautil', a.categoryVidautil], ['main.colArticuloCategoriaTipoCodigo', a.categoryTipoCodigo]];
             detail.innerHTML = `<section class="vf-card" data-help-key="verificadorFicha">
                     <h2>${esc(a.sku)} · ${esc(a.uniqueDescription || a.knownDescription || a.customDescription || a.upc)}</h2>
                     <div class="vf-grid">

@@ -2326,7 +2326,7 @@ if (!fuelLoadingColumns.some((c) => c.name === 'fuel_type')) {
 // changes what an already-tagged artículo displays (see article_categories'
 // own status column for why "deactivate, don't delete" matters here).
 const skuItemColumns = db.prepare('PRAGMA table_info(sku_items)').all();
-for (const col of ['category_inventario', 'category_compra', 'category_almacenamiento', 'category_rotacion', 'category_manejo', 'category_riesgo', 'category_vidautil']) {
+for (const col of ['category_inventario', 'category_compra', 'category_almacenamiento', 'category_rotacion', 'category_manejo', 'category_riesgo', 'category_vidautil', 'category_tipocodigo']) {
     if (!skuItemColumns.some((c) => c.name === col)) {
         db.exec(`ALTER TABLE sku_items ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
     }
@@ -2942,6 +2942,7 @@ function createClient({
             }).lastInsertRowid;
     });
     const created = getClientById(create());
+    seedTipoCodigoValues(created.id);
     resetClientTimeZoneCache();
     return created;
 }
@@ -3484,6 +3485,7 @@ const TABLE_GRANT_PATHS = {
     'categorias-manejo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-manejo' },
     'categorias-riesgo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-riesgo' },
     'categorias-vidautil': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-vidautil' },
+    'categorias-tipocodigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-tipocodigo' },
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
     'clasificaciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
@@ -3666,6 +3668,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'categorias-manejo': CATEGORY_BUTTON_NOTIFY,
     'categorias-riesgo': CATEGORY_BUTTON_NOTIFY,
     'categorias-vidautil': CATEGORY_BUTTON_NOTIFY,
+    'categorias-tipocodigo': CATEGORY_BUTTON_NOTIFY,
     'unidad-medida': CATEGORY_BUTTON_NOTIFY,
     'clasificaciones': CATEGORY_BUTTON_NOTIFY,
     'almacenes': CATEGORY_BUTTON_NOTIFY,
@@ -4977,6 +4980,8 @@ const SKU_ITEM_PATCHABLE_FIELDS = {
     categoryManejo: { column: 'category_manejo', fieldKey: 'main.colArticuloCategoriaManejo' },
     categoryRiesgo: { column: 'category_riesgo', fieldKey: 'main.colArticuloCategoriaRiesgo' },
     categoryVidautil: { column: 'category_vidautil', fieldKey: 'main.colArticuloCategoriaVidautil' },
+    // Tipo Código (Terminado, Unidosis…): opcional, no cuenta para los 24 datos que completan un código (ver isSkuItemComplete en server.js); se guarda el NOMBRE, como las demás categorías.
+    categoryTipoCodigo: { column: 'category_tipocodigo', fieldKey: 'main.colArticuloCategoriaTipoCodigo', optional: true },
     // Clasificación: opcional, no cuenta para los 24 datos que completan un código (ver isSkuItemComplete en server.js); se guarda el id (ver classification_id arriba).
     classificationId: { column: 'classification_id', fieldKey: 'main.colArticuloClasificacion', optional: true },
 };
@@ -5111,6 +5116,7 @@ const ARTICLE_CATEGORY_TYPES = {
     manejo: { prefix: 'MAN', tableKey: 'categorias-manejo', pantalla: 'Nuestras Categorías Manejo Especial' },
     riesgo: { prefix: 'RIE', tableKey: 'categorias-riesgo', pantalla: 'Nuestras Categorías Riesgo' },
     vidautil: { prefix: 'VID', tableKey: 'categorias-vidautil', pantalla: 'Nuestras Categorías Vida Útil' },
+    tipocodigo: { prefix: 'TCO', tableKey: 'categorias-tipocodigo', pantalla: 'Nuestras Categorías Tipo Código' },
     // Not a "categoría" semantically, but the exact same shape (Código/
     // Nombre/Descripción/Estatus feeding a select on Alta Nuestros
     // Artículos) -- reuses this same table/routes/screen instead of a
@@ -5142,7 +5148,7 @@ function getArticleCategoryById(id, clientId, forTestAccount = false) {
 // aunque esté en varios lugares de la zona. Las categorías se guardan como texto en sku_items (ver arriba), por eso aquí se agrupa por ese texto; '' = sin categoría.
 const ZONE_CATEGORY_COLUMNS = {
     inventario: 'category_inventario', compra: 'category_compra', almacenamiento: 'category_almacenamiento', rotacion: 'category_rotacion',
-    manejo: 'category_manejo', riesgo: 'category_riesgo', vidautil: 'category_vidautil',
+    manejo: 'category_manejo', riesgo: 'category_riesgo', vidautil: 'category_vidautil', tipocodigo: 'category_tipocodigo',
 };
 function countZoneCodesByCategory(clientId, forTestAccount, zoneId, categoryType) {
     const column = ZONE_CATEGORY_COLUMNS[categoryType];
@@ -6654,6 +6660,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'categorias-manejo', labelKey: 'menu.catCentroDistCategoriasManejo' },
     { key: 'categorias-riesgo', labelKey: 'menu.catCentroDistCategoriasRiesgo' },
     { key: 'categorias-vidautil', labelKey: 'menu.catCentroDistCategoriasVidautil' },
+    { key: 'categorias-tipocodigo', labelKey: 'menu.catCentroDistCategoriasTipocodigo' },
     { key: 'unidad-medida', labelKey: 'menu.catCentroDistUnidadMedida' },
     { key: 'clasificaciones', labelKey: 'menu.catCentroDistClasificaciones' },
     { key: 'almacenes', labelKey: 'menu.catCentroDistAlmacenes' },
@@ -10689,12 +10696,34 @@ function setUserGrants(userId, grants, changedBy) {
 // --- Query helpers: user <-> profile assignment -------------------------------
 const systemReset = createSystemReset(db, DATA_DIR);
 
+// Tipo Código: el catálogo arranca con Terminado y Unidosis (el cliente puede agregar más desde su pantalla). Se siembra una vez para cada cliente que ya existe y al crear uno nuevo.
+const TIPO_CODIGO_DEFAULTS = ['Terminado', 'Unidosis'];
+const TIPO_CODIGO_SEED_KEY = 'seed-tipocodigo-values-v1';
+function seedTipoCodigoValues(clientId) {
+    if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = 'tipocodigo' LIMIT 1").get(clientId)) return 0;
+    TIPO_CODIGO_DEFAULTS.forEach((name) => {
+        const row = createArticleCategory({ clientId, categoryType: 'tipocodigo', isTestData: false });
+        db.prepare("UPDATE article_categories SET name = ?, status = 'active' WHERE id = ?").run(name, row.id);
+    });
+    return TIPO_CODIGO_DEFAULTS.length;
+}
+function seedTipoCodigoValuesOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(TIPO_CODIGO_SEED_KEY)) return;
+    let seeded = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => { seeded += seedTipoCodigoValues(c.id); });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(TIPO_CODIGO_SEED_KEY);
+    })();
+    console.log(`[db] Seeded the Tipo Código catalog (Terminado, Unidosis) for existing clients: ${seeded} values (one-time).`);
+}
+
 // Siembra de Opciones de Búsqueda (definida arriba): aquí ya existe todo lo que usa findPantallaNode.
 seedColumnSearchOptionGrants();
 seedLayoutNewIconGrants();
 seedCodigosScreensGrants();
 seedLayoutRotateIconGrants();
 cleanupLayoutCardCenterGrants();
+seedTipoCodigoValuesOnce();
 
 module.exports = {
     db,

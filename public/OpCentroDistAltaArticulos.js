@@ -59,6 +59,7 @@ const CATEGORY_SELECT_FIELDS = [
     ['colArticuloCategoriaManejo', 'categoryManejo', 'manejo'],
     ['colArticuloCategoriaRiesgo', 'categoryRiesgo', 'riesgo'],
     ['colArticuloCategoriaVidautil', 'categoryVidautil', 'vidautil'],
+    ['colArticuloCategoriaTipoCodigo', 'categoryTipoCodigo', 'tipocodigo'],
 ];
 let categoryOptions = {};
 // Clasificación del código: por cada Categoría Inventario (su nombre), las clasificaciones activas que tiene ({ id, name }); el campo Clasificación solo ofrece esas.
@@ -560,7 +561,7 @@ function ensureEmptyState() {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = 42;
+    td.colSpan = 43;
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');
