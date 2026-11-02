@@ -312,6 +312,9 @@
     "catCentroDistActivosFijos": "Nuestros Activos Fijos",
     "catCentroDistActivosFijosAbbr1": "Activos Fijos",
     "catCentroDistActivosFijosAbbr2": "Act. Fijos",
+    "catCentroDistActivosClasificacion": "Nuestras Clasificaciones de Activos",
+    "catCentroDistActivosClasificacionAbbr1": "Clasificación de Activos",
+    "catCentroDistActivosClasificacionAbbr2": "Clasif. Activos",
     "opTransVolNuestrosTraslados": "Nuestros Traslados",
     "opTransVolCotizaciones": "Nuestras Cotizaciones",
     "classCotizaciones": "Nuestras Cotizaciones",
@@ -2469,6 +2472,10 @@
     "newWarehouse": "Nuevo Almacén",
     "newSubWarehouse": "Nuevo Sub Almacén",
     "newFixedAsset": "Nuevo Activo Fijo",
+    "newAssetClass": "Nueva Clasificación",
+    "colActClasMetrica": "Se mide en",
+    "acMetricM2": "m² (mobiliario)",
+    "acMetricM3": "m³ (almacenamiento)",
     "colActivoFijoUso": "Uso",
     "faStoresInventory": "Almacena inventario",
     "faOperational": "Uso operativo",
@@ -3472,6 +3479,10 @@
     "fixedAssetUse": {
       "what": "Dice para qué sirve este activo fijo. Almacena inventario: guarda mercancía, como un rack o un anaquel (sus espacios cuentan como almacenamiento). Uso operativo: es de trabajo, como un escritorio o una mesa (no guarda inventario).",
       "example": "Rack es Almacena inventario; Escritorio es Uso operativo."
+    },
+    "assetClassMetric": {
+      "what": "Con qué métrica cuenta esta clasificación en el Layout. m² (mobiliario): el espacio entra en los m² de mobiliario, como el mobiliario operativo. m³ (almacenamiento): se miden sus m³ de almacenamiento, para saber cuántos m³ se están aprovechando.",
+      "example": "Mobiliario operativo se mide en m²; Mobiliario almacenamiento se mide en m³."
     },
     "whKind": {
       "what": "Físico: existe en la nave y se le asignan zonas o anaqueles del Layout. Virtual: no ocupa lugar en la nave, por ejemplo mercancía en tránsito o en consignación.",

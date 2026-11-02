@@ -32,8 +32,9 @@ const CATEGORY_TYPE_TABLE_KEYS = {
     // Catálogos con campos propios (centro de costos / almacén, tipo físico o virtual, ubicación asignada): ver buildExtraCells.
     almacenes: 'almacenes',
     'sub-almacenes': 'sub-almacenes',
-    // Activos Fijos: misma tabla con su campo propio, el Uso (almacena inventario o uso operativo).
+    // Activos Fijos (el tipo de activo) y su Clasificación (con su métrica propia: m² o m³).
     'activos-fijos': 'activos-fijos',
+    'activos-clasificacion': 'activos-clasificacion',
 };
 
 const CATEGORY_TYPE = document.body.dataset.categoryType;
@@ -41,7 +42,7 @@ const TABLE_KEY = CATEGORY_TYPE_TABLE_KEYS[CATEGORY_TYPE];
 const CATEGORY_API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
 const DELETE_AUTH_COL = 'colCatDeleteAuth';
 const IS_WAREHOUSE = CATEGORY_TYPE === 'almacenes' || CATEGORY_TYPE === 'sub-almacenes';
-const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : 'main.newArticleCategory';
+const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : 'main.newArticleCategory';
 // Centros de costos, almacenes y las zonas / anaqueles del Layout guardado (GET /api/business/warehouse-options).
 let warehouseOptions = { costCenters: [], warehouses: [], zones: [] };
 // Categorías de Inventario: cada una elige cuáles clasificaciones (catálogo Nuestras Clasificaciones) tiene; aquí van todas las del catálogo con su estatus.
@@ -284,7 +285,7 @@ function applyCategoryFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActivoFijoUso']
+        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !haystack.includes(text);
@@ -509,9 +510,9 @@ function buildExtraCells(record) {
             warehouseOptions.costCenters.map((c) => ({ value: c.id, label: c.name })), record.parentId, record.parentName,
             (v) => ({ parentId: v === '' ? null : Number(v) }))];
     }
-    if (CATEGORY_TYPE === 'activos-fijos') {
-        return [buildOptionCell(record, 'colActivoFijoUso', 'kind', 'fixedAssetUse',
-            [{ value: 'inventory', label: Dashboard.t('main.faStoresInventory') }, { value: 'operational', label: Dashboard.t('main.faOperational') }], record.kind || '', '',
+    if (CATEGORY_TYPE === 'activos-clasificacion') {
+        return [buildOptionCell(record, 'colActClasMetrica', 'kind', 'assetClassMetric',
+            [{ value: 'm2', label: Dashboard.t('main.acMetricM2') }, { value: 'm3', label: Dashboard.t('main.acMetricM3') }], record.kind || '', '',
             (v) => ({ kind: v }))];
     }
     if (CATEGORY_TYPE === 'sub-almacenes') {

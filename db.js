@@ -2950,6 +2950,7 @@ function createClient({
     const created = getClientById(create());
     seedTipoCodigoValues(created.id);
     seedActivosFijosValues(created.id);
+    seedActivosClasificacionValues(created.id);
     resetClientTimeZoneCache();
     return created;
 }
@@ -3498,6 +3499,7 @@ const TABLE_GRANT_PATHS = {
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
     'activos-fijos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-fijos' },
+    'activos-clasificacion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-clasificacion' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
     'nuestros-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestros-traslados' },
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
@@ -3682,6 +3684,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'almacenes': CATEGORY_BUTTON_NOTIFY,
     'sub-almacenes': CATEGORY_BUTTON_NOTIFY,
     'activos-fijos': CATEGORY_BUTTON_NOTIFY,
+    'activos-clasificacion': CATEGORY_BUTTON_NOTIFY,
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth' },
 };
@@ -5151,9 +5154,10 @@ const ARTICLE_CATEGORY_TYPES = {
     // Almacenes y Sub almacenes: misma forma (código, nombre, descripción, estatus) más sus campos propios (ver ARTICLE_CATEGORY_EXTRA_FIELDS).
     almacenes: { prefix: 'ALN', tableKey: 'almacenes', pantalla: 'Nuestros Almacenes' },
     'sub-almacenes': { prefix: 'SUB', tableKey: 'sub-almacenes', pantalla: 'Nuestros Sub Almacenes' },
-    // Activos Fijos (rack, escritorio, tarima, gabeta…): misma forma (código, nombre, descripción, estatus) más su Uso (kind): 'inventory' = almacena inventario, 'operational' = uso operativo.
-    // Cada Huella-Espacio del Layout tendrá uno de estos activos (pendiente: todavía ningún espacio lo usa).
+    // Activos Fijos = el TIPO de activo (rack, gabinete, refrigerador, estante, escritorio, mesa…): misma forma (código, nombre, descripción, estatus). Cada Huella-Espacio del Layout elegirá uno en su paso «Activos».
     'activos-fijos': { prefix: 'AFI', tableKey: 'activos-fijos', pantalla: 'Nuestros Activos Fijos' },
+    // Clasificación de Activos (Mobiliario operativo, Mobiliario almacenamiento…): la lista que va ANTES del tipo. Cada una lleva su métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
+    'activos-clasificacion': { prefix: 'ACL', tableKey: 'activos-clasificacion', pantalla: 'Nuestras Clasificaciones de Activos' },
 };
 
 function listArticleCategories(clientId, categoryType, forTestAccount = false) {
@@ -5249,8 +5253,8 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
         kind: { column: 'kind', fieldKey: 'main.colSubAlmTipo' },
         locations: { column: 'locations', fieldKey: 'main.colSubAlmUbicacion' },
     },
-    'activos-fijos': {
-        kind: { column: 'kind', fieldKey: 'main.colActivoFijoUso' },
+    'activos-clasificacion': {
+        kind: { column: 'kind', fieldKey: 'main.colActClasMetrica' },
     },
 };
 function articleCategoryPatchableFields(categoryType) {
@@ -6704,6 +6708,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'almacenes', labelKey: 'menu.catCentroDistAlmacenes' },
     { key: 'sub-almacenes', labelKey: 'menu.catCentroDistSubAlmacenes' },
     { key: 'activos-fijos', labelKey: 'menu.catCentroDistActivosFijos' },
+    { key: 'activos-clasificacion', labelKey: 'menu.catCentroDistActivosClasificacion' },
     { key: 'nuestras-cotizaciones', labelKey: 'menu.opTransVolCotizaciones' },
     { key: 'nuestros-traslados', labelKey: 'menu.opTransVolNuestrosTraslados' },
     { key: 'tipos-cliente', labelKey: 'menu.catTransVolTiposCliente' },
@@ -10756,17 +10761,56 @@ function seedTipoCodigoValuesOnce() {
     console.log(`[db] Seeded the Tipo Código catalog (Terminado, Unidosis) for existing clients: ${seeded} values (one-time).`);
 }
 
-// Activos Fijos: el catálogo arranca con los dos ejemplos de Daniel (un rack que almacena inventario y un escritorio de uso operativo); el cliente agrega los suyos desde su pantalla. Se siembra
-// una vez para cada cliente que ya existe y al crear uno nuevo.
-const ACTIVOS_FIJOS_DEFAULTS = [{ name: 'Rack', kind: 'inventory' }, { name: 'Escritorio', kind: 'operational' }];
+// Activos Fijos (el TIPO de activo): el catálogo arranca con la lista de Daniel (rack, gabinete, refrigerador, estante, escritorio, mesa); el cliente agrega los suyos desde su pantalla. Se siembra
+// una vez para cada cliente que ya existe y al crear uno nuevo. (La primera siembra, v1, solo puso Rack y Escritorio y con un «Uso» que ya no existe; la v2 completa la lista y lo limpia.)
+const ACTIVOS_FIJOS_DEFAULTS = ['Rack', 'Gabinete', 'Refrigerador', 'Estante', 'Escritorio', 'Mesa'];
 const ACTIVOS_FIJOS_SEED_KEY = 'seed-activos-fijos-values-v1';
+const ACTIVOS_FIJOS_TIPOS_SEED_KEY = 'seed-activos-fijos-tipos-v2';
 function seedActivosFijosValues(clientId) {
     if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = 'activos-fijos' LIMIT 1").get(clientId)) return 0;
-    ACTIVOS_FIJOS_DEFAULTS.forEach(({ name, kind }) => {
+    ACTIVOS_FIJOS_DEFAULTS.forEach((name) => {
         const row = createArticleCategory({ clientId, categoryType: 'activos-fijos', isTestData: false });
-        db.prepare("UPDATE article_categories SET name = ?, kind = ?, status = 'active' WHERE id = ?").run(name, kind, row.id);
+        db.prepare("UPDATE article_categories SET name = ?, status = 'active' WHERE id = ?").run(name, row.id);
     });
     return ACTIVOS_FIJOS_DEFAULTS.length;
+}
+// v2: a los clientes que ya tenían el catálogo (con Rack y Escritorio) se les agregan los tipos que faltan de la lista y se limpia el «Uso» viejo. No toca nombres ni estatus que el cliente ya cambió.
+function seedActivosFijosTiposOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_TIPOS_SEED_KEY)) return;
+    let added = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => {
+            const names = new Set(db.prepare("SELECT name FROM article_categories WHERE client_id = ? AND category_type = 'activos-fijos'").all(c.id).map((r) => String(r.name).trim().toLowerCase()));
+            ACTIVOS_FIJOS_DEFAULTS.filter((n) => !names.has(n.toLowerCase())).forEach((name) => {
+                const row = createArticleCategory({ clientId: c.id, categoryType: 'activos-fijos', isTestData: false });
+                db.prepare("UPDATE article_categories SET name = ?, status = 'active' WHERE id = ?").run(name, row.id);
+                added += 1;
+            });
+        });
+        db.prepare("UPDATE article_categories SET kind = '' WHERE category_type = 'activos-fijos' AND kind <> ''").run();
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_FIJOS_TIPOS_SEED_KEY);
+    })();
+    console.log(`[db] Completed the Activos Fijos types (rack, cabinet, fridge, shelf, desk, table): ${added} values added (one-time).`);
+}
+// Clasificación de Activos: arranca con Mobiliario operativo (m²) y Mobiliario almacenamiento (m³); el cliente agrega las suyas.
+const ACTIVOS_CLASIFICACION_DEFAULTS = [{ name: 'Mobiliario operativo', kind: 'm2' }, { name: 'Mobiliario almacenamiento', kind: 'm3' }];
+const ACTIVOS_CLASIFICACION_SEED_KEY = 'seed-activos-clasificacion-v1';
+function seedActivosClasificacionValues(clientId) {
+    if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = 'activos-clasificacion' LIMIT 1").get(clientId)) return 0;
+    ACTIVOS_CLASIFICACION_DEFAULTS.forEach(({ name, kind }) => {
+        const row = createArticleCategory({ clientId, categoryType: 'activos-clasificacion', isTestData: false });
+        db.prepare("UPDATE article_categories SET name = ?, kind = ?, status = 'active' WHERE id = ?").run(name, kind, row.id);
+    });
+    return ACTIVOS_CLASIFICACION_DEFAULTS.length;
+}
+function seedActivosClasificacionValuesOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_CLASIFICACION_SEED_KEY)) return;
+    let seeded = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => { seeded += seedActivosClasificacionValues(c.id); });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_CLASIFICACION_SEED_KEY);
+    })();
+    console.log(`[db] Seeded the Activos clasificación catalog (Mobiliario operativo m², Mobiliario almacenamiento m³) for existing clients: ${seeded} values (one-time).`);
 }
 function seedActivosFijosValuesOnce() {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_SEED_KEY)) return;
@@ -10775,7 +10819,7 @@ function seedActivosFijosValuesOnce() {
         db.prepare('SELECT id FROM clients').all().forEach((c) => { seeded += seedActivosFijosValues(c.id); });
         db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_FIJOS_SEED_KEY);
     })();
-    console.log(`[db] Seeded the Activos Fijos catalog (Rack, Escritorio) for existing clients: ${seeded} values (one-time).`);
+    console.log(`[db] Seeded the Activos Fijos catalog (rack, cabinet, fridge, shelf, desk, table) for existing clients: ${seeded} values (one-time).`);
 }
 
 // Siembra de Opciones de Búsqueda (definida arriba): aquí ya existe todo lo que usa findPantallaNode.
@@ -10788,6 +10832,8 @@ seedLayoutZoomIconGrants();
 cleanupLayoutCardCenterGrants();
 seedTipoCodigoValuesOnce();
 seedActivosFijosValuesOnce();
+seedActivosFijosTiposOnce();
+seedActivosClasificacionValuesOnce();
 
 module.exports = {
     db,

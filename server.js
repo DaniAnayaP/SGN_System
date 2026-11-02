@@ -7051,12 +7051,12 @@ function prepareClassificationPatch(req, categoryType, existing, patch) {
     return { patch: { ...patch, classificationIds: ordered.length ? JSON.stringify(ordered) : '' }, sanitizers: { classificationIds: nameOf } };
 }
 
-// Activos Fijos: su campo propio es el Uso (kind): almacena inventario o es de uso operativo.
-const FIXED_ASSET_USE_LABELS = { inventory: 'Almacena inventario', operational: 'Uso operativo' };
+// Clasificación de Activos: su campo propio es la métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
+const ASSET_CLASS_METRIC_LABELS = { m2: 'm² (mobiliario)', m3: 'm³ (almacenamiento)' };
 function prepareFixedAssetPatch(categoryType, patch) {
-    if (categoryType !== 'activos-fijos' || !Object.prototype.hasOwnProperty.call(patch, 'kind')) return { patch, sanitizers: {} };
-    if (!['', 'inventory', 'operational'].includes(patch.kind)) return { error: { status: 400, message: 'El uso debe ser "Almacena inventario" o "Uso operativo".' } };
-    return { patch, sanitizers: { kind: (v) => FIXED_ASSET_USE_LABELS[v] || '' } };
+    if (categoryType !== 'activos-clasificacion' || !Object.prototype.hasOwnProperty.call(patch, 'kind')) return { patch, sanitizers: {} };
+    if (!['', 'm2', 'm3'].includes(patch.kind)) return { error: { status: 400, message: 'La métrica debe ser m² o m³.' } };
+    return { patch, sanitizers: { kind: (v) => ASSET_CLASS_METRIC_LABELS[v] || '' } };
 }
 
 function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null) {
@@ -7074,7 +7074,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             parentId: row.parent_id, parentName: ctx.warehouses.get(row.parent_id) || '',
             kind: row.kind, locations: row.kind === 'physical' ? parseWarehouseLocations(row.locations) : [],
         } : {}),
-        ...(row.category_type === 'activos-fijos' ? { kind: row.kind } : {}),
+        ...(row.category_type === 'activos-clasificacion' ? { kind: row.kind } : {}),
         ...(ctx && row.category_type === 'inventario' ? (() => {
             const ids = parseClassificationIds(row.classification_ids);
             return { classificationIds: ids, classifications: ids.map((id) => ({ id, ...(ctx.classifications.get(id) || {}) })).filter((c) => c.name !== undefined) };

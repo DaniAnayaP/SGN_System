@@ -308,6 +308,9 @@
     "catCentroDistActivosFijos": "Our Fixed Assets",
     "catCentroDistActivosFijosAbbr1": "Fixed Assets",
     "catCentroDistActivosFijosAbbr2": "Fix. Assets",
+    "catCentroDistActivosClasificacion": "Our Asset Classifications",
+    "catCentroDistActivosClasificacionAbbr1": "Asset Classification",
+    "catCentroDistActivosClasificacionAbbr2": "Asset Class.",
     "opTransVolNuestrosTraslados": "Our Transfers",
     "opTransVolCotizaciones": "Our Quotes",
     "classCotizaciones": "Our Quotes",
@@ -2470,6 +2473,10 @@
     "newWarehouse": "New Warehouse",
     "newSubWarehouse": "New Sub-warehouse",
     "newFixedAsset": "New Fixed Asset",
+    "newAssetClass": "New Classification",
+    "colActClasMetrica": "Measured in",
+    "acMetricM2": "m² (furniture)",
+    "acMetricM3": "m³ (storage)",
     "colActivoFijoUso": "Use",
     "faStoresInventory": "Stores inventory",
     "faOperational": "Operational use",
@@ -3473,6 +3480,10 @@
     "fixedAssetUse": {
       "what": "Says what this fixed asset is for. Stores inventory: holds goods, like a rack or a shelf (its spaces count as storage). Operational use: it is for work, like a desk or a table (it does not hold inventory).",
       "example": "Rack is Stores inventory; Desk is Operational use."
+    },
+    "assetClassMetric": {
+      "what": "Which metric this classification counts in the Layout. m² (furniture): the space goes into the furniture m², like operational furniture. m³ (storage): its storage m³ are measured, to know how many m³ are being used.",
+      "example": "Operational furniture is measured in m²; Storage furniture is measured in m³."
     },
     "whKind": {
       "what": "Physical: it exists in the building and gets Layout zones or racks assigned. Virtual: it takes no room in the building, for example goods in transit or on consignment.",
