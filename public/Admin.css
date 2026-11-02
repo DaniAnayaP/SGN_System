@@ -5282,6 +5282,9 @@ button.data-table-layout-item{
 .data-table-search-filter-body .data-table-col-filter-mode-menu{
     left: 0;
 }
+.data-table-search-filter-body .data-table-col-filter-sign-menu{
+    left: 2.25rem;
+}
 .data-table-search-filter-body .data-table-col-filter-list{
     max-height: 9rem;
 }

@@ -1316,6 +1316,14 @@
     "filterModeStartsWith": "Inicia con",
     "filterModeContains": "Contiene",
     "filterModeEquals": "Igual que",
+    "filterSignsLabel": "Signos de búsqueda",
+    "filterSignBefore": "Antes",
+    "filterSignBeforeHelp": "Otra palabra ANTES · rack$cajón",
+    "filterSignAfter": "Después",
+    "filterSignAfterHelp": "Otra palabra DESPUÉS · rack@cajón",
+    "filterSignComma": "Otra búsqueda",
+    "filterSignCommaHelp": "Sirve cualquiera de las dos · rack, estante",
+    "filterSignOff": "No aplica con este tipo de filtro",
     "filterDateFrom": "Fecha desde",
     "filterDateTo": "Fecha hasta",
     "filterFuelSearchHint": "Unidad, placas, chofer, coordinador...",
@@ -3800,6 +3808,10 @@
     "filterClear": {
       "what": "Borra todos los filtros y deja la tabla como al inicio: todos los registros y las columnas en su orden original.",
       "example": "después de buscar un cliente, tocas Limpiar para volver a ver todos."
+    },
+    "filterSigns": {
+      "what": "Escribe con un toque los signos de la búsqueda: $ pide otra palabra ANTES de la buscada, @ otra palabra DESPUÉS y la coma separa búsquedas (sirve cualquiera). También los puedes teclear. Con Inicia con solo sirve @ y con Igual que solo la coma.",
+      "example": "escribes «rack», tocas $ y escribes «cajón»: «rack$cajón» encuentra los textos donde «cajón» está antes de «rack»."
     },
     "clearSearch": {
       "what": "Quita la búsqueda guardada que tienes aplicada y deja la tabla sin filtros, mostrando todos los registros.",

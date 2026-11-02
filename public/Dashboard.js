@@ -3772,6 +3772,73 @@ function setRuleHighlightedText(el, value, mode, text) {
     if (last < value.length) el.appendChild(document.createTextNode(value.slice(last)));
 }
 
+// Los signos de la búsqueda ($ antes, @ después, coma = otra búsqueda) para escribirlos con un
+// toque, sin buscarlos en el teclado: un botón junto al del tipo de filtro con su menú. Escribe
+// el signo donde está el cursor de la caja y lo deja justo después. $ solo vale con Contiene
+// (con Inicia con no hay nada antes del arranque) y @ no vale con Igual que, donde los signos
+// son letras normales; el botón se esconde en Desde–Hasta, que no tiene caja de texto.
+function createSignPicker(input, getMode, onChange, container, modeMenu) {
+    const SIGNS = [['$', 'Before'], ['@', 'After'], [',', 'Comma']];
+    const isOff = (sign) => (sign === '$' && getMode() !== 'contains') || (sign === '@' && getMode() === 'equals');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-col-filter-mode-btn data-table-col-filter-sign-btn';
+    btn.setAttribute('data-help-key', 'filterSigns');
+    btn.setAttribute('aria-label', t('main.filterSignsLabel'));
+    btn.title = t('main.filterSignsLabel');
+    btn.textContent = '$@';
+    const menu = document.createElement('div');
+    menu.className = 'data-table-col-filter-mode-menu data-table-col-filter-sign-menu';
+    menu.hidden = true;
+    const options = SIGNS.map(([sign, key]) => {
+        const opt = document.createElement('button');
+        opt.type = 'button';
+        opt.className = 'data-table-col-filter-mode-option data-table-col-filter-sign-option';
+        const glyph = document.createElement('b');
+        glyph.textContent = sign;
+        const label = document.createElement('span');
+        label.textContent = t(`main.filterSign${key}`);
+        opt.append(glyph, label);
+        opt.addEventListener('click', (event) => {
+            event.stopPropagation();
+            menu.hidden = true;
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? start;
+            const typed = sign === ',' ? ', ' : sign;
+            input.value = input.value.slice(0, start) + typed + input.value.slice(end);
+            input.focus();
+            try { input.setSelectionRange(start + typed.length, start + typed.length); } catch (err) { /* algunos teclados no dejan mover el cursor */ }
+            onChange();
+        });
+        menu.appendChild(opt);
+        return [sign, opt, t(`main.filterSign${key}Help`)];
+    });
+    // la explicación con su ejemplo va en el globito de cada opción y en Modo ayuda, no escrita en el menú
+    const refresh = () => {
+        options.forEach(([sign, opt, help]) => {
+            opt.disabled = isOff(sign);
+            opt.title = opt.disabled ? t('main.filterSignOff') : help;
+        });
+        const range = getMode() === 'range';
+        btn.style.display = range ? 'none' : '';
+        if (range) menu.hidden = true;
+    };
+    // tocar el botón o una opción no le quita el cursor (ni el teclado del celular) a la caja
+    btn.addEventListener('mousedown', (event) => event.preventDefault());
+    menu.addEventListener('mousedown', (event) => event.preventDefault());
+    btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        refresh();
+        menu.hidden = !menu.hidden;
+        if (modeMenu) modeMenu.hidden = true;
+    });
+    container.addEventListener('click', (event) => {
+        if (!menu.hidden && event.target !== btn && !menu.contains(event.target)) menu.hidden = true;
+    });
+    refresh();
+    return { btn, menu, refresh };
+}
+
 // Una pastilla por palabra escrita, unidas por "o", con una ✕ que quita esa
 // palabra. Solo se ve cuando hay dos o más: con una sola no aporta nada.
 function createRuleTermChips(getText, setText) {
@@ -4195,6 +4262,7 @@ function openColumnFilterMenu(th, tableId, key) {
             btn.classList.add('data-table-col-filter-mode-option-active');
             modeMenu.hidden = true;
             showMode();
+            signPicker.refresh();
             if (searchMode === 'range') {
                 applyRangeRule();
             } else {
@@ -4209,10 +4277,14 @@ function openColumnFilterMenu(th, tableId, key) {
         return btn;
     });
     searchRow.appendChild(modeMenu);
+    const signPicker = createSignPicker(searchInput, () => searchMode, () => textInputChanged(), menu, modeMenu);
+    searchRow.insertBefore(signPicker.btn, searchInput);
+    searchRow.appendChild(signPicker.menu);
 
     modeBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         modeMenu.hidden = !modeMenu.hidden;
+        signPicker.menu.hidden = true;
     });
     menu.addEventListener('click', (event) => {
         if (!modeMenu.hidden && event.target !== modeBtn && !modeMenu.contains(event.target)) modeMenu.hidden = true;
@@ -6917,6 +6989,7 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule, opts = {}
             btn.classList.add('data-table-col-filter-mode-option-active');
             modeMenu.hidden = true;
             showMode();
+            signPicker.refresh();
             refreshList();
             change();
         });
@@ -6924,7 +6997,10 @@ function buildSearchFilterBody(tableId, key, selected, onChange, rule, opts = {}
         return btn;
     });
     searchRow.appendChild(modeMenu);
-    modeBtn.addEventListener('click', () => { modeMenu.hidden = !modeMenu.hidden; });
+    const signPicker = createSignPicker(searchInput, () => mode, () => { rule.text = searchInput.value; refreshList(); change(); }, body, modeMenu);
+    searchRow.insertBefore(signPicker.btn, searchInput);
+    searchRow.appendChild(signPicker.menu);
+    modeBtn.addEventListener('click', () => { modeMenu.hidden = !modeMenu.hidden; signPicker.menu.hidden = true; });
     searchInput.addEventListener('input', () => { rule.text = searchInput.value; refreshList(); change(); });
     showMode();
     body.appendChild(searchRow);

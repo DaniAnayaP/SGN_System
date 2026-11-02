@@ -3327,6 +3327,40 @@
         font-weight: 600;
         color: var(--color-accent, #1a73e8);
     }
+    /* Los signos de la búsqueda ($ antes, @ después, coma = otra búsqueda): botón junto al del
+       tipo de filtro y su menú (createSignPicker en Dashboard.js). */
+    .data-table-col-filter-sign-btn{
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    .data-table-col-filter-sign-menu{
+        left: 2.65rem;
+        min-width: 10rem;
+    }
+    .data-table-col-filter-sign-option{
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .data-table-col-filter-sign-option b{
+        flex-shrink: 0;
+        width: 1.1rem;
+        text-align: center;
+        font-size: 1rem;
+        color: var(--color-accent, #1a73e8);
+    }
+    .data-table-col-filter-sign-option span{
+        display: grid;
+    }
+    .data-table-col-filter-sign-option small{
+        font-size: 0.68rem;
+        color: var(--color-text-secondary);
+    }
+    .data-table-col-filter-sign-option:disabled{
+        opacity: 0.4;
+        cursor: default;
+    }
     .data-table-col-filter-date-label{
         flex-shrink: 0;
         color: var(--color-text-secondary);

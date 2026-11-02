@@ -21,6 +21,8 @@
             search: 'Buscar', searchAll: 'Buscar en todo el Layout', searchIn: 'Buscar en {z}', searchClear: 'Borrar', searchTypes: 'Buscar en', searchFieldsAll: 'Todos', searchSelected: '{n} elegidos', searchField: { zone: 'Zona', furniture: 'Mobiliario', place: 'Ubicación', sku: 'SKU', desc: 'Descripción', cat: 'Categoría' },
             groupAlways: 'Siempre', groupMap: 'Croquis', namesBtn: 'Nombres de las zonas', spaceType: { rack: 'Anaquel', rackpal: 'Rack', cabinet: 'Gabeta', pallet: 'Tarima en piso' },
             searchMode: 'Tipo de Filtro', searchModes: { startsWith: 'Inicia con', contains: 'Contiene', equals: 'Igual que' },
+            searchSigns: 'Signos de búsqueda', searchSign: { before: 'Antes', after: 'Después', comma: 'Otra búsqueda' }, searchSignOff: 'No aplica con este tipo de filtro',
+            searchSignHelp: { before: 'Otra palabra ANTES · rack$cajón', after: 'Otra palabra DESPUÉS · rack@cajón', comma: 'Sirve cualquiera de las dos · rack, estante' },
             searchScopeLabel: 'Buscando en:', searchScopeZone: '{z} (tocar para ampliar)', searchScopeAll: 'Todo el Layout (tocar para limitar a {z})', searchHint: 'Escribe una zona, un mobiliario, una ubicación, un SKU o una descripción. Con comas se busca cualquiera de las palabras.',
             searchNone: 'No hay resultados para "{q}".', searchNoneZone: 'No hay resultados para "{q}" en {z}.', searchWiden: 'Buscar en todo el Layout', searchBusy: 'Buscando…', searchError: 'No se pudo buscar. Intenta de nuevo.',
             searchGroup: { zone: 'Zonas', furniture: 'Mobiliario', place: 'Ubicación', cat: 'Categorías', code: 'Códigos' }, searchOne: '1 resultado', searchMany: '{n} resultados', searchMore: 'Mostrando {n} de {t}. Escribe más para afinar.', searchCats: '{n} categorías', searchCat1: '1 categoría',
@@ -45,6 +47,8 @@
             search: 'Search', searchAll: 'Search the whole Layout', searchIn: 'Search in {z}', searchClear: 'Clear', searchTypes: 'Search in', searchFieldsAll: 'All', searchSelected: '{n} selected', searchField: { zone: 'Zone', furniture: 'Furniture', place: 'Location', sku: 'SKU', desc: 'Description', cat: 'Category' },
             groupAlways: 'Always', groupMap: 'Sketch', namesBtn: 'Zone names', spaceType: { rack: 'Rack (shelf)', rackpal: 'Pallet rack', cabinet: 'Cabinet', pallet: 'Floor pallet' },
             searchMode: 'Filter type', searchModes: { startsWith: 'Starts with', contains: 'Contains', equals: 'Equal to' },
+            searchSigns: 'Search signs', searchSign: { before: 'Before', after: 'After', comma: 'Another search' }, searchSignOff: 'Not available with this filter type',
+            searchSignHelp: { before: 'Another word BEFORE · rack$drawer', after: 'Another word AFTER · rack@drawer', comma: 'Either one matches · rack, shelf' },
             searchScopeLabel: 'Searching in:', searchScopeZone: '{z} (tap to widen)', searchScopeAll: 'Whole Layout (tap to limit to {z})', searchHint: 'Type a zone, a furniture item, a location, a SKU or a description. With commas, any of the words matches.',
             searchNone: 'No results for "{q}".', searchNoneZone: 'No results for "{q}" in {z}.', searchWiden: 'Search the whole Layout', searchBusy: 'Searching…', searchError: 'The search failed. Try again.',
             searchGroup: { zone: 'Zones', furniture: 'Furniture', place: 'Location', cat: 'Categories', code: 'Codes' }, searchOne: '1 result', searchMany: '{n} results', searchMore: 'Showing {n} of {t}. Type more to narrow it down.', searchCats: '{n} categories', searchCat1: '1 category',
@@ -312,6 +316,22 @@
         });
         return out + esc(t.slice(at));
     }
+    // Los signos de la búsqueda (SearchSyntax.js) para quien no los tiene a la mano en el teclado: $ = otra palabra antes, @ = otra palabra después, coma = otra búsqueda. Con Inicia con no hay nada «antes» del
+    // arranque y con Igual que solo cuenta la coma, así que esos signos se apagan.
+    const SIGN_KEYS = { '$': 'before', '@': 'after', ',': 'comma' };
+    const signOff = (sign, mode) => (sign === '$' && mode !== 'contains') || (sign === '@' && mode === 'equals');
+    // Escribe el signo donde está el cursor de la caja (la coma lleva su espacio) y deja el cursor justo después, con el teclado abierto.
+    function insertSign(inputId, sign, onChange) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+        const end = input.selectionEnd == null ? start : input.selectionEnd;
+        const text = sign === ',' ? ', ' : sign;
+        input.value = input.value.slice(0, start) + text + input.value.slice(end);
+        input.focus();
+        try { input.setSelectionRange(start + text.length, start + text.length); } catch (err) { /* algunos teclados no dejan mover el cursor */ }
+        onChange(input.value);
+    }
     const searchEl = (id) => document.getElementById(id);
     // La zona donde se está parado (página de una zona o de una categoría) y si la búsqueda está limitada a ella.
     const searchPageZone = () => (view.data ? scanContext(view.data).zone : null);
@@ -322,11 +342,14 @@
         const zone = searchPageZone();
         // El mismo menú de filtros de las tablas: el tipo de filtro con su icono (Inicia con, Contiene, Igual que), la caja de búsqueda y la lista con «Todos» (aquí, los campos donde se busca), plegada en una línea.
         const modes = SEARCH_MODES.map((k) => `<button type="button" class="mopt" role="menuitemradio" data-search-mode="${k}" aria-pressed="${searchState.mode === k}">${esc(TEXT.searchModes[k])}</button>`).join('');
+        const signs = Object.keys(SIGN_KEYS).map((s) => `<button type="button" class="mopt sg" role="menuitem" data-search-sign="${s}"${signOff(s, searchState.mode) ? ` disabled title="${esc(TEXT.searchSignOff)}"` : ''}><b aria-hidden="true">${s}</b><span>${esc(TEXT.searchSign[SIGN_KEYS[s]])}<small>${esc(TEXT.searchSignHelp[SIGN_KEYS[s]])}</small></span></button>`).join('');
         return `<div class="spanel" id="search-panel" hidden><div class="fmenu">
             <div class="mcur" id="search-mode-cur">${esc(TEXT.searchModes[searchState.mode])}</div>
             <div class="srow"><button type="button" class="fmode" data-search-modebtn aria-haspopup="menu" aria-label="${esc(TEXT.searchMode)}" title="${esc(TEXT.searchMode)}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.sliders}</svg></button>
+            <button type="button" class="fmode fsign" data-search-signbtn aria-haspopup="menu" aria-label="${esc(TEXT.searchSigns)}" title="${esc(TEXT.searchSigns)}"><span aria-hidden="true">$@</span></button>
             <div class="sbox" id="search-box"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.search}</svg><input id="search-q" type="search" inputmode="search" enterkeyhint="search" maxlength="60" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(TEXT.searchAll)}" aria-label="${esc(TEXT.search)}"><button type="button" class="sx" data-search-clear aria-label="${esc(TEXT.searchClear)}" title="${esc(TEXT.searchClear)}" hidden>×</button></div>
-            <div class="mpop" id="search-mode-pop" role="menu" aria-label="${esc(TEXT.searchMode)}" hidden>${modes}</div></div>
+            <div class="mpop" id="search-mode-pop" role="menu" aria-label="${esc(TEXT.searchMode)}" hidden>${modes}</div>
+            <div class="mpop sign" id="search-sign-pop" role="menu" aria-label="${esc(TEXT.searchSigns)}" hidden>${signs}</div></div>
             <button type="button" class="sumrow" data-search-fields-toggle aria-expanded="false" aria-controls="search-fields"><span class="lbl">${esc(TEXT.searchTypes)}</span><b id="search-fields-sum">${esc(searchFieldsSummary())}</b><i aria-hidden="true"></i></button>
             <div class="flist" id="search-fields" role="group" aria-label="${esc(TEXT.searchTypes)}" hidden>${fieldsListHtml()}</div>
             ${zone ? `<div class="sscope"><span>${esc(TEXT.searchScopeLabel)}</span><button type="button" id="search-scope" data-search-scope></button></div>` : ''}
@@ -368,6 +391,13 @@
         document.querySelectorAll('[data-search-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.searchMode === searchState.mode)));
         const pop = searchEl('search-mode-pop');
         if (pop) pop.hidden = true;
+        document.querySelectorAll('[data-search-sign]').forEach((b) => {
+            const off = signOff(b.dataset.searchSign, searchState.mode);
+            b.disabled = off;
+            if (off) b.title = TEXT.searchSignOff; else b.removeAttribute('title');
+        });
+        const signPop = searchEl('search-sign-pop');
+        if (signPop) signPop.hidden = true;
     }
     function closeFieldsList() {
         const list = searchEl('search-fields');
@@ -619,9 +649,10 @@
     }
     function clsBodyHtml(d) {
         const modes = SEARCH_MODES.map((m) => `<button type="button" class="lpill" data-cls-mode="${m}" aria-pressed="${clsState.mode === m}">${esc(TEXT.searchModes[m])}</button>`).join('');
+        const signs = Object.keys(SIGN_KEYS).map((s) => `<button type="button" class="lpill" data-cls-sign="${s}" title="${esc(TEXT.searchSignHelp[SIGN_KEYS[s]])}"${signOff(s, clsState.mode) ? ' disabled' : ''}>${s} ${esc(TEXT.searchSign[SIGN_KEYS[s]])}</button>`).join('');
         const seg = (key, label, glyph) => `<button type="button" data-cls-view="${key}" aria-pressed="${clsState.view === key}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[glyph]}</svg>${esc(label)}</button>`;
         return `<div class="cl-search"><div class="sbox"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.search}</svg><input id="cls-q" type="search" inputmode="search" enterkeyhint="search" maxlength="80" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(fill(TEXT.searchIn, { z: clsName(d.classification) }))}" aria-label="${esc(fill(TEXT.searchIn, { z: clsName(d.classification) }))}"><button type="button" class="sx" data-cls-clear aria-label="${esc(TEXT.searchClear)}" title="${esc(TEXT.searchClear)}" hidden>×</button></div>
-            <div class="schips" id="cls-modes" role="group" aria-label="${esc(TEXT.searchMode)}" hidden>${modes}</div></div>
+            <div class="schips" id="cls-modes" role="group" aria-label="${esc(TEXT.searchMode)}" hidden>${modes}<span class="sep" aria-hidden="true"></span>${signs}</div></div>
             <div class="cl-seg" role="group" aria-label="${esc(TEXT.viewLabel)}">${seg('grid', TEXT.viewGrid, 'grid')}${seg('list', TEXT.viewList, 'list')}</div>
             <div id="cls-results"></div>`;
     }
@@ -808,7 +839,16 @@
             // el menú del tipo de filtro se cierra al tocar fuera de él
             const modePop = searchEl('search-mode-pop');
             if (modePop && !modePop.hidden && !event.target.closest('[data-search-modebtn]') && !event.target.closest('#search-mode-pop')) modePop.hidden = true;
-            if (event.target.closest('[data-search-modebtn]')) { modePop.hidden = !modePop.hidden; return; }
+            const signPop = searchEl('search-sign-pop');
+            if (signPop && !signPop.hidden && !event.target.closest('[data-search-signbtn]') && !event.target.closest('#search-sign-pop')) signPop.hidden = true;
+            if (event.target.closest('[data-search-modebtn]')) { modePop.hidden = !modePop.hidden; if (signPop) signPop.hidden = true; return; }
+            if (event.target.closest('[data-search-signbtn]')) { signPop.hidden = !signPop.hidden; modePop.hidden = true; return; }
+            const sign = event.target.closest('[data-search-sign]');
+            if (sign) {
+                if (!sign.disabled) insertSign('search-q', sign.dataset.searchSign, (value) => { searchState.q = value; queueSearch(); });
+                signPop.hidden = true;
+                return;
+            }
             const fieldsToggle = event.target.closest('[data-search-fields-toggle]');
             if (fieldsToggle) {
                 const list = searchEl('search-fields');
@@ -850,7 +890,13 @@
         if (clsMode) {
             clsState.mode = clsMode.dataset.clsMode;
             document.querySelectorAll('[data-cls-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b === clsMode)));
+            document.querySelectorAll('[data-cls-sign]').forEach((b) => { b.disabled = signOff(b.dataset.clsSign, clsState.mode); });
             fetchClassification(false);
+            return;
+        }
+        const clsSign = event.target.closest('[data-cls-sign]');
+        if (clsSign) {
+            insertSign('cls-q', clsSign.dataset.clsSign, (value) => { clsState.q = value; queueClsSearch(); });
             return;
         }
         if (event.target.closest('[data-cls-clear]')) {
@@ -903,6 +949,9 @@
     document.getElementById('wrap').addEventListener('change', (event) => {
         const field = event.target.closest && event.target.closest('[data-search-field]');
         if (field) setSearchField(field.dataset.searchField, field.checked);
+    });
+    document.getElementById('wrap').addEventListener('mousedown', (event) => {
+        if (event.target.closest('[data-search-signbtn], [data-search-sign], [data-cls-sign]')) event.preventDefault();
     });
     document.getElementById('wrap').addEventListener('input', (event) => {
         if (event.target.id === 'cls-q') { clsState.q = event.target.value; queueClsSearch(); return; }

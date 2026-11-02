@@ -1317,6 +1317,14 @@
     "filterModeStartsWith": "Starts with",
     "filterModeContains": "Contains",
     "filterModeEquals": "Equal to",
+    "filterSignsLabel": "Search signs",
+    "filterSignBefore": "Before",
+    "filterSignBeforeHelp": "Another word BEFORE · rack$drawer",
+    "filterSignAfter": "After",
+    "filterSignAfterHelp": "Another word AFTER · rack@drawer",
+    "filterSignComma": "Another search",
+    "filterSignCommaHelp": "Either one matches · rack, shelf",
+    "filterSignOff": "Not available with this filter type",
     "filterDateFrom": "From date",
     "filterDateTo": "To date",
     "filterFuelSearchHint": "Unit, plates, driver, coordinator...",
@@ -3801,6 +3809,10 @@
     "filterClear": {
       "what": "Clears every filter and leaves the table as it started: all records and the columns in their original order.",
       "example": "after searching for one client, you tap Clear to see everyone again."
+    },
+    "filterSigns": {
+      "what": "Types the search signs with one tap: $ asks for another word BEFORE the searched one, @ another word AFTER it, and the comma separates searches (either one matches). You can also type them. With Starts with only @ works, and with Equal to only the comma.",
+      "example": "you type \"rack\", tap $ and type \"drawer\": \"rack$drawer\" finds the texts where \"drawer\" comes before \"rack\"."
     },
     "clearSearch": {
       "what": "Removes the saved search you have applied and leaves the table with no filters, showing every record.",

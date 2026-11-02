@@ -103,7 +103,7 @@
         .sbox{ display:flex; align-items:center; gap:8px; padding:9px 12px; border:1.5px solid var(--brand, var(--accent-2)); border-radius:14px; background:#fff; }
         .sbox:focus-within{ box-shadow:0 0 0 2px var(--brand-line, var(--border)); }
         .sbox svg{ width:18px; height:18px; stroke:var(--brand, var(--accent-2)); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
-        .sbox input{ flex:1; min-width:0; border:0; outline:0; font:inherit; font-size:16px; color:var(--text-primary); background:transparent; -webkit-appearance:none; appearance:none; }
+        .sbox input{ flex:1; width:0; min-width:0; border:0; outline:0; font:inherit; font-size:16px; color:var(--text-primary); background:transparent; -webkit-appearance:none; appearance:none; }
         .sbox input::placeholder{ color:var(--text-muted); }
         .sbox input::-webkit-search-cancel-button, .sbox input::-webkit-search-decoration{ -webkit-appearance:none; display:none; }
         .sx{ width:24px; height:24px; flex:none; border:0; border-radius:50%; background:var(--brand-soft, #eef0fd); color:var(--brand, var(--accent-2)); font-size:15px; line-height:1; cursor:pointer; padding:0; }
@@ -147,6 +147,14 @@
         .fmode{ width:40px; height:40px; flex:none; display:grid; place-items:center; padding:0; border:1px solid var(--brand, var(--accent-2)); border-radius:12px; background:var(--brand-soft, #eef0fd); color:var(--brand-ink, var(--text-primary)); cursor:pointer; }
         .fmode svg{ width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
         .fmode:focus-visible, .mopt:focus-visible, .sumrow:focus-visible{ outline:2px solid var(--brand, var(--accent-2)); outline-offset:2px; }
+        .fsign span{ font-size:13px; font-weight:800; letter-spacing:-.02em; }
+        .mpop.sign{ left:48px; min-width:250px; }
+        .mopt.sg{ display:flex; align-items:center; gap:12px; }
+        .mopt.sg b{ width:22px; flex:none; text-align:center; font-size:17px; color:var(--brand, var(--accent-2)); }
+        .mopt.sg span{ display:grid; gap:1px; }
+        .mopt.sg small{ font-size:11.5px; font-weight:400; color:var(--text-muted); }
+        .mopt:disabled, .lpill:disabled{ opacity:.4; cursor:default; }
+        .schips .sep{ flex:none; width:1px; margin:2px 2px; background:var(--brand-line, var(--border)); }
         .mpop[hidden]{ display:none; }
         .mpop{ position:absolute; left:0; top:46px; z-index:5; min-width:160px; background:#fff; border:1px solid var(--brand-line, var(--border)); border-radius:12px; box-shadow:0 10px 26px rgba(20,22,31,.18); padding:5px; display:grid; gap:2px; }
         .mopt{ font:inherit; font-size:13.5px; text-align:left; padding:9px 12px; border:0; border-radius:8px; background:transparent; color:var(--text-primary); cursor:pointer; }
