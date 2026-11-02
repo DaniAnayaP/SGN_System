@@ -2341,6 +2341,8 @@
     "vfNoResults": "No matches",
     "vfWhere": "Where it is",
     "vfNoLocation": "This code has no location in Code Relation yet.",
+    "vfNoneInSelected": "In the cost centers you have checked above this code has no location, but it is placed in another cost center (places: {n}). Check it above to see it.",
+    "vfAlsoElsewhere": "It is also in another cost center that you have not checked above (places: {n}).",
     "vfLoadError": "The article could not be opened.",
     "colArticuloTemplateAuth": "Authorization to Load by Template",
     "noticeRecordsImported": "Template load",
@@ -3426,7 +3428,7 @@
       "example": "you see it is a 4 × 11 × 6 cm box of the Medicine category."
     },
     "verificadorUbicacion": {
-      "what": "The places where this code is, taken from Code Relation: one line per place, with the full route from cost center down to slot. \"Located\" means the exact slot is known (or it is a virtual sub-warehouse); \"Partial\" means it still needs completing.",
+      "what": "The places where this code is, taken from Code Relation: one line per place, with the full route from cost center down to slot. Only the places in the cost centers you have checked above are shown; if there are more in other centers, it tells you. \"Located\" means the exact slot is known (or it is a virtual sub-warehouse); \"Partial\" means it still needs completing.",
       "example": "it is in CEDIS Monterrey › General Warehouse › Medicines › Zone 1 › R-01 › Level 2 › Slot 3."
     },
     "layoutSteps": {

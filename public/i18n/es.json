@@ -2340,6 +2340,8 @@
     "vfNoResults": "Sin resultados",
     "vfWhere": "Dónde está",
     "vfNoLocation": "Este código todavía no tiene ubicación en Relación Código.",
+    "vfNoneInSelected": "En los centros de costos que tienes marcados arriba este código no tiene ubicación, pero sí está ubicado en otro centro de costos (lugares: {n}). Márcalo arriba para verlo.",
+    "vfAlsoElsewhere": "Además está en otro centro de costos que no tienes marcado arriba (lugares: {n}).",
     "vfLoadError": "No se pudo abrir el artículo.",
     "colArticuloTemplateAuth": "Autorización para Cargar por Plantilla",
     "noticeRecordsImported": "Carga por plantilla",
@@ -3425,7 +3427,7 @@
       "example": "ves que es una caja de 4 × 11 × 6 cm de la categoría Medicamento."
     },
     "verificadorUbicacion": {
-      "what": "Los lugares donde está este código, tomados de Relación Código: un renglón por lugar, con la ruta completa desde el centro de costos hasta el espacio. «Ubicado» es que ya se sabe el espacio exacto (o que es un sub almacén virtual); «A medias» es que falta completarlo.",
+      "what": "Los lugares donde está este código, tomados de Relación Código: un renglón por lugar, con la ruta completa desde el centro de costos hasta el espacio. Solo salen los lugares de los centros de costos que tienes marcados arriba; si hay más en otros centros, te lo avisa. «Ubicado» es que ya se sabe el espacio exacto (o que es un sub almacén virtual); «A medias» es que falta completarlo.",
       "example": "está en CEDIS Monterrey › Almacén General › Medicamentos › Zona 1 › R-01 › Nivel 2 › Espacio 3."
     },
     "layoutSteps": {

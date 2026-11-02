@@ -15,6 +15,7 @@
     const API = '/api/business';
     let searchTimer = null;
     let searchToken = 0;
+    let currentId = null;   // el artículo abierto (se vuelve a abrir al cambiar los centros de costos marcados arriba)
 
     (async function init() {
         try {
@@ -89,7 +90,18 @@
         return `<div class="vf-loc"><div class="rel-path">${path}</div><div class="vf-loc-tags">${kind}${tag}</div></div>`;
     }
 
+    // "Dónde está" sigue al selector de centros de costos de arriba: solo los lugares de los centros marcados (uno sin centro se ve siempre). Lo que queda fuera se avisa, sin enseñarlo.
+    function whereHtml(locations) {
+        const selected = Dashboard.getSelectedCostCenterIds();
+        const shown = locations.filter((l) => !selected || !l.costCenterId || selected.includes(l.costCenterId));
+        const hidden = locations.length - shown.length;
+        if (!shown.length) return `<p class="vf-muted">${esc(hidden ? t('main.vfNoneInSelected', { n: hidden }) : t('main.vfNoLocation'))}</p>`;
+        return shown.map(locationHtml).join('') + (hidden ? `<p class="vf-muted">${esc(t('main.vfAlsoElsewhere', { n: hidden }))}</p>` : '');
+    }
+    document.addEventListener('sgn:cost-centers-changed', () => { if (currentId) openArticle(currentId); });
+
     async function openArticle(id) {
+        currentId = id;
         $('vf-results').hidden = true;
         const detail = $('vf-detail');
         try {
@@ -111,7 +123,7 @@
                 </section>
                 <section class="vf-card" data-help-key="verificadorUbicacion">
                     <h2>${esc(t('main.vfWhere'))}</h2>
-                    ${locations.length ? locations.map(locationHtml).join('') : `<p class="vf-muted">${esc(t('main.vfNoLocation'))}</p>`}
+                    ${whereHtml(locations)}
                 </section>`;
         } catch (err) {
             console.error('Verificador: no se pudo abrir el artículo', err);
