@@ -520,6 +520,10 @@ body.dark-mode .admin-error{
 .cc-cascade-grid{
     grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 }
+/* sin esto, en pantallas angostas la columna se hacía más ancha que la ventana (por el ancho natural de los campos) y los botones + y Agregar quedaban pegados al borde */
+.cc-cascade-grid > .admin-field{
+    min-width: 0;
+}
 .cc-select-row{
     display: flex;
     gap: 0.4rem;
@@ -571,6 +575,18 @@ body.dark-mode .admin-error{
 .cc-add-new-row .cc-code-input{
     flex: 0 0 8.4rem;
     font-size: 0.75rem;
+}
+/* En pantallas angostas el nombre se quedaba en una rendija entre el código y el botón: el nombre va solo en su renglón y abajo van el código y Agregar */
+@media (max-width: 560px){
+    .cc-add-new-row:has(.cc-code-input){
+        flex-wrap: wrap;
+    }
+    .cc-add-new-row:has(.cc-code-input) > input:first-child{
+        flex: 1 1 100%;
+    }
+    .cc-add-new-row:has(.cc-code-input) .cc-code-input{
+        flex: 1 1 0;
+    }
 }
 .cc-code-row{
     display: flex;
