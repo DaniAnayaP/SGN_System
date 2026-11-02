@@ -10880,6 +10880,10 @@ function getSingleSelectedCostCenterId() {
     const chosen = sidebarCostCenters.filter((cc) => isCostCenterSelected(cc.id));
     return chosen.length === 1 ? chosen[0].id : null;
 }
+// Los centros de costos marcados en el selector de arriba: null = todos; si no, la lista de ids. Las listas de Almacenes y Sub almacenes solo muestran lo de esos centros.
+function getSelectedCostCenterIds() {
+    return selectedCostCenterIds === 'all' ? null : Array.from(selectedCostCenterIds);
+}
 // Deja marcado solo ese centro en el selector (por ejemplo para volver al que se estaba editando).
 function selectOnlyCostCenter(id) {
     selectedCostCenterIds = new Set([id]);
@@ -12904,6 +12908,7 @@ function openPlanChangeHistory(plan) {
 window.Dashboard = {
     initDashboard,
     getSingleSelectedCostCenterId,
+    getSelectedCostCenterIds,
     selectOnlyCostCenter,
     t,
     svgifyLogo,

@@ -2565,7 +2565,8 @@
     "whAssignTitle": "Ubicación de {name}",
     "whWholeZone": "Toda la zona",
     "whWhole": "toda",
-    "whNoZones": "Todavía no hay zonas en el Layout. Créalas en Operaciones > Layout.",
+    "whNoZones": "El Layout del centro de costos de este almacén todavía no tiene zonas. Créalas en Operaciones > Layout (con ese centro elegido arriba).",
+    "whChooseWarehouseFirst": "Primero elige el almacén",
     "whNoRacks": "Esta zona no tiene anaqueles.",
     "whSave": "Guardar",
     "whClose": "Cerrar",
@@ -3560,11 +3561,11 @@
       "example": "Pasar el código del nivel 2 al nivel 3."
     },
     "whCostCenter": {
-      "what": "El centro de costos al que pertenece este almacén. La lista sale de Servicio Contratado.",
-      "example": "CEDIS Monterrey."
+      "what": "El centro de costos al que pertenece este almacén. Solo ofrece los centros completos que tienes marcados arriba, en el selector de centros de costos; esta lista solo muestra los almacenes de esos centros.",
+      "example": "CEDIS Chihuahua."
     },
     "whParentWarehouse": {
-      "what": "El almacén al que pertenece este sub almacén. Solo ofrece almacenes activos.",
+      "what": "El almacén al que pertenece este sub almacén. Solo ofrece almacenes activos de los centros de costos marcados arriba. El centro del sub almacén es el de su almacén.",
       "example": "Almacén General."
     },
     "fixedAssetUse": {
@@ -3608,7 +3609,7 @@
       "example": "marcas Patente y Genérico y guardas: esas dos quedan en la columna Clasificaciones."
     },
     "whLocationBtn": {
-      "what": "Asigna a este sub almacén las zonas completas o los anaqueles del Layout que le pertenecen. Una zona o un anaquel solo puede ser de un sub almacén.",
+      "what": "Asigna a este sub almacén las zonas completas o los anaqueles del Layout que le pertenecen. Las zonas salen del Layout del centro de costos de su almacén. Una zona o un anaquel solo puede ser de un sub almacén.",
       "example": "Medicamentos: la Zona 1 completa. Material de curación: los anaqueles B-01 y B-02 de la Zona 2."
     },
     "whZoneAll": {

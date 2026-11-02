@@ -2566,7 +2566,8 @@
     "whAssignTitle": "Location of {name}",
     "whWholeZone": "Whole zone",
     "whWhole": "whole",
-    "whNoZones": "There are no zones in the Layout yet. Create them in Operations > Layout.",
+    "whNoZones": "The Layout of this warehouse's cost center has no zones yet. Create them in Operations > Layout (with that cost center chosen above).",
+    "whChooseWarehouseFirst": "Choose the warehouse first",
     "whNoRacks": "This zone has no racks.",
     "whSave": "Save",
     "whClose": "Close",
@@ -3561,11 +3562,11 @@
       "example": "Move the code from level 2 to level 3."
     },
     "whCostCenter": {
-      "what": "The cost center this warehouse belongs to. The list comes from Contracted Service.",
-      "example": "CEDIS Monterrey."
+      "what": "The cost center this warehouse belongs to. It only offers the complete cost centers you have checked above, in the cost center selector; this list only shows the warehouses of those centers.",
+      "example": "CEDIS Chihuahua."
     },
     "whParentWarehouse": {
-      "what": "The warehouse this sub-warehouse belongs to. Only active warehouses are offered.",
+      "what": "The warehouse this sub-warehouse belongs to. Only active warehouses of the cost centers checked above are offered. The sub-warehouse's cost center is its warehouse's.",
       "example": "General Warehouse."
     },
     "fixedAssetUse": {
@@ -3609,7 +3610,7 @@
       "example": "you check Brand and Generic and save: those two stay in the Classifications column."
     },
     "whLocationBtn": {
-      "what": "Assigns this sub-warehouse the whole zones or the Layout racks that belong to it. A zone or a rack can belong to only one sub-warehouse.",
+      "what": "Assigns this sub-warehouse the whole zones or the Layout racks that belong to it. The zones come from the Layout of its warehouse's cost center. A zone or a rack can belong to only one sub-warehouse.",
       "example": "Medicines: all of Zone 1. Dressings: racks B-01 and B-02 of Zone 2."
     },
     "whZoneAll": {

@@ -7075,11 +7075,20 @@ function articleCategoryTypeConfig(categoryType) {
 const WAREHOUSE_TYPES = new Set(['almacenes', 'sub-almacenes']);
 const SUB_WAREHOUSE_KIND_LABELS = { physical: 'Físico', virtual: 'Virtual' };
 
-function warehouseLayoutIndex(clientId) {
-    const row = getClientLayout(clientId);
+// Zonas y anaqueles activos de UN Layout (row = lo que regresa getClientLayout / listClientLayouts).
+function layoutIndexOf(row) {
     const zones = ((row && row.layout.zones) || []).filter((z) => z.active !== false);
     const spaces = ((row && row.layout.spaces) || []).filter((s) => s.active !== false);
     return { zones, spaces, zoneById: new Map(zones.map((z) => [z.id, z])), spaceById: new Map(spaces.map((s) => [s.id, s])) };
+}
+// El Layout es de un centro de costos: costCenterId sin indicar = el primer Layout del cliente (las pantallas que todavía no eligen centro).
+function warehouseLayoutIndex(clientId, costCenterId) {
+    return layoutIndexOf(getClientLayout(clientId, { costCenterId }));
+}
+// El centro de costos de un sub almacén es el de su almacén (parent_id del sub = almacén; parent_id del almacén = centro). null = el almacén todavía no tiene centro.
+function costCenterOfWarehouse(clientId, isTest, warehouseId) {
+    const wh = warehouseId ? getArticleCategoryById(warehouseId, clientId, isTest) : null;
+    return wh && wh.category_type === 'almacenes' ? (wh.parent_id || null) : null;
 }
 
 // locations se guarda como texto JSON canónico: [{"z":"<zona>"}] = zona completa, [{"z":"<zona>","s":["<anaquel>",...]}] = solo esos anaqueles.
@@ -7090,11 +7099,10 @@ function parseWarehouseLocations(text) {
     return list.filter((e) => e && typeof e.z === 'string').map((e) => ({ zoneId: e.z, spaceIds: Array.isArray(e.s) ? e.s.filter((x) => typeof x === 'string') : [] }));
 }
 
-// Recibe [{ zoneId, spaceIds: [] }] ([] = zona completa), lo valida contra el Layout guardado y lo deja en orden del Layout.
-function canonicalWarehouseLocations(clientId, input) {
+// Recibe [{ zoneId, spaceIds: [] }] ([] = zona completa), lo valida contra el Layout del centro (idx) y lo deja en orden del Layout.
+function canonicalWarehouseLocations(idx, input) {
     if (input === '' || input == null) return { value: '', entries: [] };
     if (!Array.isArray(input)) return { error: 'Las ubicaciones no tienen el formato correcto.' };
-    const idx = warehouseLayoutIndex(clientId);
     const byZone = new Map();
     for (const raw of input) {
         const zoneId = raw && typeof raw.zoneId === 'string' ? raw.zoneId : '';
@@ -7129,10 +7137,12 @@ function describeWarehouseLocations(idx, text) {
     }).filter(Boolean).join(' · ');
 }
 
-// Si otro sub almacén físico y activo ya tiene la zona (o alguno de los anaqueles pedidos) devuelve el mensaje; si no, ''.
-function findWarehouseLocationConflict(clientId, isTest, selfId, entries, idx) {
+// Si otro sub almacén físico y activo del MISMO centro de costos ya tiene la zona (o alguno de los anaqueles pedidos) devuelve el mensaje; si no, ''.
+function findWarehouseLocationConflict(clientId, isTest, selfId, entries, idx, center) {
+    const centerOfWarehouse = new Map(listArticleCategories(clientId, 'almacenes', isTest).map((w) => [w.id, w.parent_id || null]));
     for (const other of listArticleCategories(clientId, 'sub-almacenes', isTest)) {
         if (other.id === selfId || other.status !== 'active' || other.kind !== 'physical') continue;
+        if ((centerOfWarehouse.get(other.parent_id) || null) !== (center || null)) continue;
         const label = other.name || `SUB-${String(other.record_number).padStart(3, '0')}`;
         for (const oe of parseWarehouseLocations(other.locations)) {
             for (const e of entries) {
@@ -7173,6 +7183,7 @@ function prepareWarehousePatch(req, categoryType, existing, patch) {
             if (!Number.isInteger(id)) return bad('Elige una opción de la lista.');
             if (categoryType === 'almacenes') {
                 if (!getCostCenterById(id, clientId, isTestAccount)) return bad('Ese centro de costos no existe.');
+                if (id !== existing.parent_id && !listCompleteCostCenterIds(clientId, isTestAccount).includes(id)) return bad('Ese centro de costos está incompleto o inactivo. Complétalo primero en Nuestros Centros Costos.');
             } else {
                 const wh = getArticleCategoryById(id, clientId, isTestAccount);
                 if (!wh || wh.category_type !== 'almacenes') return bad('Ese almacén no existe.');
@@ -7180,12 +7191,27 @@ function prepareWarehousePatch(req, categoryType, existing, patch) {
             }
             out.parentId = id;
         }
+        // Un almacén que ya tiene sub almacenes o códigos relacionados no se pasa a otro centro de costos: su Layout y sus ubicaciones son los del centro de antes.
+        if (categoryType === 'almacenes' && existing.parent_id && out.parentId !== existing.parent_id) {
+            const hasSubs = listArticleCategories(clientId, 'sub-almacenes', isTestAccount).some((r) => r.parent_id === existing.id);
+            if (hasSubs || listCodeRelationsBy(clientId, isTestAccount, 'warehouse_id', existing.id).length) {
+                return { error: { status: 409, message: 'Este almacén ya tiene sub almacenes o códigos relacionados, así que no se puede pasar a otro centro de costos. Márcalo Inactivo y crea otro en el centro nuevo.' } };
+            }
+        }
     }
-    const idx = warehouseLayoutIndex(clientId);
+    // Las zonas y los anaqueles de un sub almacén salen del Layout del centro de costos de su almacén.
+    const center = categoryType === 'sub-almacenes' ? costCenterOfWarehouse(clientId, isTestAccount, has('parentId') ? out.parentId : existing.parent_id) : null;
+    const idx = categoryType === 'sub-almacenes' ? warehouseLayoutIndex(clientId, center) : null;
     if (categoryType === 'sub-almacenes') {
         if (has('kind') && !['', 'physical', 'virtual'].includes(out.kind)) return bad('El tipo debe ser Físico o Virtual.');
+        // Pasarlo a un almacén de otro centro: sus zonas y anaqueles eran del Layout del centro anterior.
+        if (has('parentId') && existing.parent_id && center !== costCenterOfWarehouse(clientId, isTestAccount, existing.parent_id)) {
+            const after = has('locations') ? (Array.isArray(out.locations) ? out.locations : []) : parseWarehouseLocations(existing.locations);
+            if (after.length) return { error: { status: 409, message: 'Este sub almacén tiene zonas o anaqueles del Layout de otro centro de costos. Quítalos primero y luego cámbialo de almacén.' } };
+            if (listCodeRelationsBy(clientId, isTestAccount, 'sub_warehouse_id', existing.id).length) return { error: { status: 409, message: 'Ya hay códigos relacionados en Relación Código. Quítalos primero o crea otro sub almacén en el almacén del otro centro.' } };
+        }
         if (has('locations')) {
-            const canon = canonicalWarehouseLocations(clientId, out.locations);
+            const canon = canonicalWarehouseLocations(idx, out.locations);
             if (canon.error) return bad(canon.error);
             out.locations = canon.value;
         }
@@ -7193,7 +7219,7 @@ function prepareWarehousePatch(req, categoryType, existing, patch) {
         const locations = has('locations') ? out.locations : existing.locations;
         if (has('locations') && out.locations && kind !== 'physical') return bad('Un sub almacén virtual (o sin tipo) no lleva ubicación física. Primero elige Físico.');
         if (kind === 'physical' && locations && (has('locations') || has('kind'))) {
-            const conflict = findWarehouseLocationConflict(clientId, isTestAccount, existing.id, parseWarehouseLocations(locations), idx);
+            const conflict = findWarehouseLocationConflict(clientId, isTestAccount, existing.id, parseWarehouseLocations(locations), idx, center);
             if (conflict) return { error: { status: 409, message: conflict } };
         }
         // Si ya hay códigos ubicados en una zona o anaquel de este sub almacén, no se le puede quitar (ni pasarlo a Virtual) sin quitar primero esos códigos.
@@ -7214,7 +7240,7 @@ function prepareWarehousePatch(req, categoryType, existing, patch) {
     };
     sanitizers.parentId = nameOf;
     sanitizers.kind = (v) => SUB_WAREHOUSE_KIND_LABELS[v] || '';
-    sanitizers.locations = (v) => describeWarehouseLocations(idx, v);
+    if (idx) sanitizers.locations = (v) => describeWarehouseLocations(idx, v);
     return { patch: out, sanitizers };
 }
 
@@ -7421,16 +7447,21 @@ app.get('/api/business/article-categories-active', requireAuth, (req, res) => {
     res.json({ options, classificationsByInventory });
 });
 
-// Lo que necesitan las pantallas Almacenes y Sub almacenes para sus listas: centros de costos, almacenes y las zonas / anaqueles del Layout guardado.
+// Lo que necesitan las pantallas Almacenes y Sub almacenes para sus listas: los centros de costos completos, los almacenes y, por cada centro, las zonas / anaqueles de SU Layout (zonesByCenter).
 app.get('/api/business/warehouse-options', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
-    const idx = warehouseLayoutIndex(clientId);
+    const complete = new Set(listCompleteCostCenterIds(clientId, isTestAccount));
+    const zonesByCenter = {};
+    listClientLayouts(clientId).forEach((row) => {
+        const idx = layoutIndexOf(row);
+        zonesByCenter[row.costCenterId || 0] = idx.zones.map((z) => ({ id: z.id, name: z.name, spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type })) }));
+    });
     res.set('Cache-Control', 'no-store');
     res.json({
-        costCenters: listCostCenters(clientId, isTestAccount).map((c) => ({ id: c.id, code: c.code, name: c.name })),
+        costCenters: listCostCenters(clientId, isTestAccount).filter((c) => complete.has(c.id)).map((c) => ({ id: c.id, code: c.code, name: c.name })),
         warehouses: listArticleCategories(clientId, 'almacenes', isTestAccount).map((r) => ({ id: r.id, name: r.name, status: r.status, parentId: r.parent_id })),
-        zones: idx.zones.map((z) => ({ id: z.id, name: z.name, spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type })) })),
+        zonesByCenter,
     });
 });
 

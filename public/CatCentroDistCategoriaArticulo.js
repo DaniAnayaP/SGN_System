@@ -43,8 +43,8 @@ const CATEGORY_API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
 const DELETE_AUTH_COL = 'colCatDeleteAuth';
 const IS_WAREHOUSE = CATEGORY_TYPE === 'almacenes' || CATEGORY_TYPE === 'sub-almacenes';
 const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : 'main.newArticleCategory';
-// Centros de costos, almacenes y las zonas / anaqueles del Layout guardado (GET /api/business/warehouse-options).
-let warehouseOptions = { costCenters: [], warehouses: [], zones: [] };
+// Centros de costos completos, almacenes y, por cada centro, las zonas / anaqueles de su Layout (GET /api/business/warehouse-options).
+let warehouseOptions = { costCenters: [], warehouses: [], zonesByCenter: {} };
 // Categorías de Inventario: cada una elige cuáles clasificaciones (catálogo Nuestras Clasificaciones) tiene; aquí van todas las del catálogo con su estatus.
 const IS_INVENTORY = CATEGORY_TYPE === 'inventario';
 let classificationOptions = [];
@@ -104,7 +104,7 @@ async function ensureCreatedThenPatch(record, patch) {
         record.id = category.id;
         record.registroUnico = category.registroUnico;
         record.code = category.code;
-        await patchCategory(category.id, patch);
+        await patchCategory(category.id, CATEGORY_TYPE === 'almacenes' && record.parentId ? { parentId: record.parentId, ...patch } : patch);
     } catch (err) {
         console.error('Nuestras Categorías: failed to create record', err);
         Dashboard.showToast(err.message === 'create failed' ? Dashboard.t('admin.saveError') : err.message, 'error');
@@ -270,7 +270,8 @@ async function refreshTable() {
     try {
         const res = await fetch(CATEGORY_API_BASE, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
-        const { categories } = await res.json();
+        const body = await res.json();
+        const categories = IS_WAREHOUSE ? body.categories.filter(isInSelectedCenters) : body.categories;
         tbody.innerHTML = '';
         if (!categories.length) { ensureEmptyState(); return; }
         categories.forEach((record) => tbody.appendChild(buildRow(record)));
@@ -299,7 +300,9 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear
 // ensureCreatedThenPatch), so clicking this and never touching the row never
 // leaves a blank category behind.
 function createNewCategory() {
-    const draft = { id: null, registroUnico: '', code: '', name: '', description: '', status: '', parentId: null, parentName: '', kind: '', locations: [], classificationIds: [], classifications: [], pendingFields: [] };
+    // Un almacén nuevo nace en el centro de costos elegido arriba (si hay uno solo a elegir).
+    const choices = CATEGORY_TYPE === 'almacenes' ? centerChoices() : [];
+    const draft = { id: null, registroUnico: '', code: '', name: '', description: '', status: '', parentId: choices.length === 1 ? choices[0].id : null, parentName: choices.length === 1 ? choices[0].name : '', kind: '', locations: [], classificationIds: [], classifications: [], pendingFields: [] };
     const tbody = getTbody();
     const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
     if (emptyRow) emptyRow.remove();
@@ -334,6 +337,29 @@ async function loadWarehouseOptions() {
     }
 }
 
+// Almacenes y Sub almacenes siguen al selector de centros de costos de arriba: solo se ven los de los centros marcados (lo que todavía no tiene centro se ve siempre, para poder asignárselo).
+// El centro de un almacén es su Centro de Costos; el de un sub almacén es el de su almacén.
+function centerOfRecord(record) {
+    if (CATEGORY_TYPE === 'almacenes') return record.parentId || null;
+    const wh = warehouseOptions.warehouses.find((w) => w.id === record.parentId);
+    return wh ? wh.parentId || null : null;
+}
+function isInSelectedCenters(record) {
+    const selected = Dashboard.getSelectedCostCenterIds();
+    const center = centerOfRecord(record);
+    return !selected || !center || selected.includes(center);
+}
+// Los centros que se pueden elegir: los completos que están marcados arriba.
+function centerChoices() {
+    const selected = Dashboard.getSelectedCostCenterIds();
+    return warehouseOptions.costCenters.filter((c) => !selected || selected.includes(c.id));
+}
+// Las zonas y anaqueles de un sub almacén son los del Layout del centro de su almacén.
+function zonesOf(record) {
+    return warehouseOptions.zonesByCenter[centerOfRecord(record) || 0] || [];
+}
+document.addEventListener('sgn:cost-centers-changed', () => { if (IS_WAREHOUSE) refreshTable(); });
+
 // Select de un campo propio: la opción actual siempre aparece aunque ya no esté en la lista (por ejemplo un almacén que quedó inactivo).
 function buildOptionCell(record, colId, apiKey, helpKey, items, currentValue, currentLabel, toPatch) {
     const td = document.createElement('td');
@@ -364,9 +390,9 @@ function buildOptionCell(record, colId, apiKey, helpKey, items, currentValue, cu
     return td;
 }
 
-function describeLocations(locations) {
+function describeLocations(locations, zones) {
     const parts = (locations || []).map((e) => {
-        const zone = warehouseOptions.zones.find((z) => z.id === e.zoneId);
+        const zone = zones.find((z) => z.id === e.zoneId);
         if (!zone) return '';
         if (!e.spaceIds.length) return `${zone.name} (${Dashboard.t('main.whWhole')})`;
         const codes = e.spaceIds.map((sid) => (zone.spaces.find((s) => s.id === sid) || {}).code).filter(Boolean);
@@ -383,7 +409,12 @@ function buildLocationCell(record) {
         td.classList.add('wh-muted');
         return td;
     }
-    const summary = describeLocations(record.locations);
+    if (!record.parentId) {
+        td.textContent = Dashboard.t('main.whChooseWarehouseFirst');
+        td.classList.add('wh-muted');
+        return td;
+    }
+    const summary = describeLocations(record.locations, zonesOf(record));
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn btn-secondary wh-location-btn';
@@ -507,7 +538,7 @@ function buildExtraCells(record) {
     if (IS_INVENTORY) return [buildClassificationCell(record)];
     if (CATEGORY_TYPE === 'almacenes') {
         return [buildOptionCell(record, 'colAlmCentroCostos', 'parentId', 'whCostCenter',
-            warehouseOptions.costCenters.map((c) => ({ value: c.id, label: c.name })), record.parentId, record.parentName,
+            centerChoices().map((c) => ({ value: c.id, label: c.name })), record.parentId, record.parentName,
             (v) => ({ parentId: v === '' ? null : Number(v) }))];
     }
     if (CATEGORY_TYPE === 'activos-clasificacion') {
@@ -516,7 +547,8 @@ function buildExtraCells(record) {
             (v) => ({ kind: v }))];
     }
     if (CATEGORY_TYPE === 'sub-almacenes') {
-        const active = warehouseOptions.warehouses.filter((w) => w.status === 'active');
+        const selected = Dashboard.getSelectedCostCenterIds();
+        const active = warehouseOptions.warehouses.filter((w) => w.status === 'active' && (!selected || !w.parentId || selected.includes(w.parentId)));
         return [
             buildOptionCell(record, 'colSubAlmAlmacen', 'parentId', 'whParentWarehouse',
                 active.map((w) => ({ value: w.id, label: w.name || Dashboard.t('main.whNoName') })), record.parentId, record.parentName,
@@ -533,7 +565,7 @@ function buildExtraCells(record) {
 
 // --- Selector de ubicación de un sub almacén físico: zonas completas o anaqueles sueltos del Layout --------------------------------
 let locModalEl = null;
-let locState = null; // { record, picked: Map(zoneId -> { whole, spaces: Set }) }
+let locState = null; // { record, zones, picked: Map(zoneId -> { whole, spaces: Set }) }
 
 function ensureLocationModal() {
     if (locModalEl) return;
@@ -568,14 +600,14 @@ function ensureLocationModal() {
 function renderLocationList() {
     const list = document.getElementById('wh-location-list');
     list.innerHTML = '';
-    if (!warehouseOptions.zones.length) {
+    if (!locState.zones.length) {
         const p = document.createElement('p');
         p.className = 'wh-muted';
         p.textContent = Dashboard.t('main.whNoZones');
         list.appendChild(p);
         return;
     }
-    warehouseOptions.zones.forEach((zone) => {
+    locState.zones.forEach((zone) => {
         const cur = locState.picked.get(zone.id) || { whole: false, spaces: new Set() };
         const box = document.createElement('div');
         box.className = 'wh-zone';
@@ -625,7 +657,7 @@ function openLocationDialog(record) {
     ensureLocationModal();
     const picked = new Map();
     (record.locations || []).forEach((e) => picked.set(e.zoneId, { whole: !e.spaceIds.length, spaces: new Set(e.spaceIds) }));
-    locState = { record, picked };
+    locState = { record, zones: zonesOf(record), picked };
     document.getElementById('wh-location-title').textContent = Dashboard.t('main.whAssignTitle').replace('{name}', record.name || record.code || '');
     renderLocationList();
     locModalEl.hidden = false;
