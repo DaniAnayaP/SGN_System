@@ -13,6 +13,9 @@
             kpiTotal: 'Superficie total', kpiOffices: 'Oficinas', kpiAisles: 'Pasillos', kpiDocks: 'Andenes', kpiStorage: 'Zonas de almacenamiento', kpiDead: 'Espacios muertos', kpiVolume: 'Volumen de la nave',
             spaces: 'espacios', noZone: 'Sin zona asignada', zoneWord: 'Zona', noCodes: 'Todavía no hay códigos en esta categoría. Aquí aparecerán con sus fotos y su ubicación.',
             zoomIn: 'Acercar', zoomOut: 'Alejar', zoomReset: 'Ver todo el croquis', codesOne: '1 código en esta zona', codesMany: '{n} códigos en esta zona',
+            metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
+            restRow: 'Sin zona (espacio muerto)', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos',
+            codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
             zone: { dry: 'Seco', cold: 'Refrigerado', chemical: 'Químicos', finished: 'Producto terminado', dock: 'Andén', office: 'Oficina', aisle: 'Pasillo principal', aisle2: 'Pasillo entre anaqueles' },
         },
         en: {
@@ -21,6 +24,9 @@
             kpiTotal: 'Total area', kpiOffices: 'Offices', kpiAisles: 'Aisles', kpiDocks: 'Docks', kpiStorage: 'Storage zones', kpiDead: 'Dead space', kpiVolume: 'Warehouse volume',
             spaces: 'spaces', noZone: 'No zone assigned', zoneWord: 'Zone', noCodes: 'There are no codes in this category yet. They will appear here with their photos and location.',
             zoomIn: 'Zoom in', zoomOut: 'Zoom out', zoomReset: 'Show the whole map', codesOne: '1 code in this zone', codesMany: '{n} codes in this zone',
+            metrics: 'Metric data', metricsHint: '{n} m² of total area and more', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
+            restRow: 'No zone (dead space)', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes',
+            codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
             zone: { dry: 'Dry', cold: 'Refrigerated', chemical: 'Chemicals', finished: 'Finished goods', dock: 'Dock', office: 'Office', aisle: 'Main aisle', aisle2: 'Aisle between racks' },
         },
     }[LANG];
@@ -159,24 +165,20 @@
         apply();
     }
 
-    function render(data) {
-        const k = data.kpis;
-        const theme = window.LayoutMapSvg.theme(data.companyColor);
+    const ICONS = {
+        ruler: '<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>',
+        layers: '<path d="M12 3l9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/>',
+    };
+    const iconSvg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+    const brandBar = (data) => {
         const initials = (data.companyName || '').trim().slice(0, 2).toUpperCase() || '··';
-        const kpis = [[k.total, 'kpiTotal'], [k.offices, 'kpiOffices'], [k.aisles, 'kpiAisles'], [k.docks, 'kpiDocks'], [k.storage, 'kpiStorage'], [k.dead, 'kpiDead'], [k.volume, 'kpiVolume']]
-            .map(([value, key]) => `<div class="kpi"><b>${fmt(value)} ${key === 'kpiVolume' ? 'm³' : 'm²'}</b><span>${esc(TEXT[key])}</span></div>`);
-        const zones = k.zones.map((z) => `<div class="row"><span>${esc(z.name)} · ${esc(z.type ? (TEXT.zone[z.type] || z.type) : TEXT.noZone)}</span><span>${fmt(z.area)} m²${z.spaces ? ` · ${z.spaces} ${esc(TEXT.spaces)}` : ''}</span></div>`).join('');
-        document.getElementById('wrap').innerHTML = `
-            <div class="brand">${data.hasLogo ? `<img class="brand-logo" src="/api/public/layout/${encodeURIComponent(publicToken())}/logo" alt="">` : `<span class="brand-mark">${esc(initials)}</span>`}<span class="brand-name">${esc(data.companyName)}</span></div>
-            ${categoryBanner(data)}<div id="catslot"></div>
-            <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${esc(TEXT.version)} ${data.version} · ${esc(TEXT.updated)} ${esc(stamp(data.updatedAt))}</p></div>
-            <div class="map">${window.LayoutMapSvg.mapSvg(data.layout, { theme })}${mapToolsHtml()}</div>
-            <div class="kpis">${kpis.join('')}</div>
-            <h2>${esc(TEXT.zones)}</h2>${zones}
-            <div class="footer">${esc(TEXT.footer)}</div>`;
-        enableMapZoom();
-        loadZoneCategoryBanner();
-        // Con color de cliente, la marca, los títulos, las tarjetas y los marcos van en su escala; sin color la página se ve como siempre.
+        return `<div class="brand">${data.hasLogo ? `<img class="brand-logo" src="/api/public/layout/${encodeURIComponent(publicToken())}/logo" alt="">` : `<span class="brand-mark">${esc(initials)}</span>`}<span class="brand-name">${esc(data.companyName)}</span></div>`;
+    };
+    // El título de la página es el Sitio (p. ej. CEDIS CHIHUAHUA); sin Sitio guardado queda "Layout de la nave" como siempre.
+    const pageTitle = (data) => data.siteName || TEXT.title;
+    const versionLine = (data) => `${esc(TEXT.version)} ${data.version} · ${esc(TEXT.updated)} ${esc(stamp(data.updatedAt))}`;
+    // Con color de cliente, la marca, los títulos, las tarjetas y los marcos van en su escala; sin color la página se ve como siempre.
+    function applyBrand(theme) {
         const wrap = document.getElementById('wrap');
         ['--brand', '--brand-ink', '--brand-soft', '--brand-line'].forEach((name) => wrap.style.removeProperty(name));
         if (theme.custom) {
@@ -187,6 +189,94 @@
         }
     }
 
+    // Las zonas que guardan algo (categorías o códigos), en orden natural (Zona 2 antes que Zona 10); lo demás (recepción, oficinas, pasillos…) se ve en Datos métricos.
+    function holdingZones(data) {
+        const codes = data.zoneCodes || {};
+        return (data.layout.zones || [])
+            .filter((z) => (Array.isArray(z.categories) && z.categories.length) || codes[z.id] > 0)
+            .sort((a, b) => String(a.name).localeCompare(String(b.name), LANG, { numeric: true }));
+    }
+    function zonesSectionHtml(data) {
+        const list = holdingZones(data);
+        if (!list.length) return '';
+        const codes = data.zoneCodes || {};
+        const total = list.reduce((acc, z) => acc + (codes[z.id] || 0), 0);
+        const rows = list.map((z) => `<div class="zrow"><b>${esc(z.name)}</b><span class="zc"><i>${fmt(codes[z.id] || 0)}</i> ${esc(codes[z.id] === 1 ? TEXT.codeWordOne : TEXT.codeWordMany)}</span></div>`).join('');
+        return `<button type="button" class="mbtn" data-zones-toggle aria-expanded="false" aria-controls="zones-list">${iconSvg('layers')}<span class="t"><b>${esc(TEXT.zones)}</b><small>${esc(TEXT.zonesHint.replace('{z}', fmt(list.length)).replace('{c}', fmt(total)))}</small></span><span class="go" aria-hidden="true">›</span></button>
+            <div id="zones-list" class="zlist" hidden>${rows}</div>`;
+    }
+
+    function render(data) {
+        const theme = window.LayoutMapSvg.theme(data.companyColor);
+        document.title = pageTitle(data);
+        document.getElementById('wrap').innerHTML = `
+            ${brandBar(data)}
+            ${categoryBanner(data)}<div id="catslot"></div>
+            <div class="info"><h1>${esc(pageTitle(data))}</h1><p class="sub">${data.siteName ? `${esc(TEXT.title)} · ` : ''}${versionLine(data)}</p></div>
+            <div class="map">${window.LayoutMapSvg.mapSvg(data.layout, { theme })}${mapToolsHtml()}</div>
+            <a class="mbtn" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
+            ${zonesSectionHtml(data)}
+            <div class="footer">${esc(TEXT.footer)}</div>`;
+        enableMapZoom();
+        loadZoneCategoryBanner();
+        applyBrand(theme);
+    }
+
+    // Datos métricos: las cifras de siempre; al tocar una, abajo salen solo las zonas que la forman (LayoutCalc.metricRows), con sus metros y la suma.
+    const METRIC_LABELS = { total: 'kpiTotal', offices: 'kpiOffices', aisles: 'kpiAisles', docks: 'kpiDocks', storage: 'kpiStorage', dead: 'kpiDead', volume: 'kpiVolume' };
+    function metricDetailHtml(data, key) {
+        const m = window.LayoutCalc.metricRows(data.kpis, key);
+        const rows = m.rows.map((r) => {
+            const name = r.kind === 'rest' ? TEXT.restRow : r.kind === 'overlap' ? TEXT.overlapRow : r.name;
+            const type = r.kind === 'zone' ? (r.type ? (TEXT.zone[r.type] || r.type) : TEXT.noZone) : '—';
+            return `<tr><td>${esc(name)}</td><td>${esc(type)}</td><td class="num">${fmt(r.value)} ${m.unit}</td></tr>`;
+        }).join('') || `<tr><td colspan="3" class="emptyrow">${esc(TEXT.noZonesInMetric)}</td></tr>`;
+        return `<h2>${esc(TEXT.byZone)} · ${esc(TEXT[METRIC_LABELS[key]])}</h2>
+            <div class="tablebox"><table><thead><tr><th>${esc(TEXT.colZone)}</th><th>${esc(TEXT.colType)}</th><th class="num">${esc(key === 'volume' ? TEXT.colVolume : TEXT.colArea)}</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td colspan="2">${esc(TEXT.sum)}</td><td class="num">${fmt(m.sum)} ${m.unit}</td></tr></tfoot></table></div>`;
+    }
+    function renderMetrics(data, key) {
+        const theme = window.LayoutMapSvg.theme(data.companyColor);
+        const k = data.kpis;
+        document.title = `${TEXT.metrics} · ${pageTitle(data)}`;
+        const cards = window.LayoutCalc.METRIC_KEYS.map((metric) => `<button type="button" class="kpi" data-metric="${metric}" aria-pressed="${metric === key}"><b>${fmt(k[metric])} ${metric === 'volume' ? 'm³' : 'm²'}</b><span>${esc(TEXT[METRIC_LABELS[metric]])}</span></button>`).join('');
+        document.getElementById('wrap').innerHTML = `
+            ${brandBar(data)}
+            <a class="back" href="#"><span aria-hidden="true">‹</span> ${esc(pageTitle(data))}</a>
+            <div class="info"><h1>${esc(TEXT.metrics)}</h1><p class="sub">${versionLine(data)}</p></div>
+            <div class="kpis">${cards}</div>
+            <div id="metric-detail">${metricDetailHtml(data, key)}</div>
+            <div class="footer">${esc(TEXT.footer)}</div>`;
+        applyBrand(theme);
+    }
+
+    const view = { data: null };
+    // Las dos pantallas viven en la misma dirección del QR (que nunca cambia): "#datos-metricos" abre las cifras y "#datos-metricos/<cifra>" una cifra tocada.
+    function route() {
+        const data = view.data;
+        if (!data) return;
+        const m = /^#datos-metricos(?:\/([a-z]+))?$/.exec(window.location.hash);
+        if (m) renderMetrics(data, window.LayoutCalc.METRIC_KEYS.includes(m[1]) ? m[1] : 'total');
+        else render(data);
+        window.scrollTo(0, 0);
+    }
+    window.addEventListener('hashchange', route);
+    document.getElementById('wrap').addEventListener('click', (event) => {
+        const metric = event.target.closest('[data-metric]');
+        if (metric && view.data) {
+            const key = metric.dataset.metric;
+            document.querySelectorAll('#wrap [data-metric]').forEach((b) => b.setAttribute('aria-pressed', String(b === metric)));
+            document.getElementById('metric-detail').innerHTML = metricDetailHtml(view.data, key);
+            window.history.replaceState(null, '', `#datos-metricos/${key}`);
+            return;
+        }
+        const toggle = event.target.closest('[data-zones-toggle]');
+        if (toggle) {
+            const open = toggle.getAttribute('aria-expanded') !== 'true';
+            toggle.setAttribute('aria-expanded', String(open));
+            document.getElementById('zones-list').hidden = !open;
+        }
+    });
+
     (async function init() {
         // /q/<token>: el token es el último tramo de la dirección.
         const token = decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop() || '');
@@ -195,7 +285,8 @@
             const res = await fetch(`/api/public/layout/${encodeURIComponent(token)}`, { cache: 'no-store' });
             if (res.status === 404) { renderState(TEXT.notFound); return; }
             if (!res.ok) throw new Error('layout public failed');
-            render(await res.json());
+            view.data = await res.json();
+            route();
         } catch (err) {
             console.error('Layout público: no se pudo cargar', err);
             renderState(TEXT.error);

@@ -5130,6 +5130,13 @@ function countZoneCodesByCategory(clientId, forTestAccount, zoneId, categoryType
         FROM code_relations r JOIN sku_items s ON s.id = r.sku_item_id
         WHERE r.client_id = ? AND r.is_test_data = ? AND r.zone_id = ? GROUP BY s.${column}`).all(clientId, forTestAccount ? 1 : 0, zoneId);
 }
+// Cuántos códigos distintos tiene Relación Código en cada zona ({ idDeLaZona: n }); alimenta la lista de Zonas de la página pública del QR del Layout.
+function countCodesByZone(clientId, forTestAccount = false) {
+    const out = {};
+    db.prepare("SELECT zone_id AS zoneId, COUNT(DISTINCT sku_item_id) AS codes FROM code_relations WHERE client_id = ? AND is_test_data = ? AND zone_id IS NOT NULL AND zone_id != '' GROUP BY zone_id")
+        .all(clientId, forTestAccount ? 1 : 0).forEach((r) => { out[r.zoneId] = r.codes; });
+    return out;
+}
 function countZoneCodesInCategory(clientId, forTestAccount, zoneId, categoryType, name) {
     const column = ZONE_CATEGORY_COLUMNS[categoryType];
     if (!column) return 0;
@@ -10728,6 +10735,7 @@ module.exports = {
     ZONE_CATEGORY_COLUMNS,
     countZoneCodesByCategory,
     countZoneCodesInCategory,
+    countCodesByZone,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     articleCategoryPatchableFields,

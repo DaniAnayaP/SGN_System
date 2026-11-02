@@ -382,6 +382,35 @@
         };
     }
 
+    // Qué zonas forman cada cifra de "Datos métricos" (la página pública del QR del Layout): al tocar una cifra se ven solo sus zonas con sus metros.
+    // key = total | offices | aisles | docks | storage | dead | volume. Cada renglón es { kind: 'zone' | 'rest' | 'overlap', id, name, type, value } y la suma es la cifra misma (kpis[key]).
+    // Espacio muerto = las zonas sin tipo asignado + el piso de la nave que no tiene ninguna zona ('rest'); en total y volumen, además, lo encimado o fuera de la nave se resta
+    // ('overlap'). El volumen de cada renglón son sus m² por la altura promedio de la nave (volumen / superficie).
+    const METRIC_KEYS = ['total', 'offices', 'aisles', 'docks', 'storage', 'dead', 'volume'];
+    function metricRows(kpis, key) {
+        if (!kpis || !METRIC_KEYS.includes(key)) return { rows: [], sum: 0, unit: 'm²' };
+        const zones = kpis.zones || [];
+        const volume = key === 'volume';
+        const factor = volume ? (kpis.total > 0 ? kpis.volume / kpis.total : 0) : 1;
+        const zoneRow = (z) => ({ kind: 'zone', id: z.id, name: z.name, type: z.type || '', value: round2((z.area || 0) * factor) });
+        const restArea = Math.max(0, round2((kpis.dead || 0) - (kpis.unassigned || 0)));
+        const restRow = () => ({ kind: 'rest', id: '', name: '', type: '', value: round2(restArea * factor) });
+        let rows;
+        if (key === 'offices') rows = zones.filter((z) => z.type === 'office').map(zoneRow);
+        else if (key === 'aisles') rows = zones.filter((z) => z.type === 'aisle' || z.type === 'aisle2').map(zoneRow);
+        else if (key === 'docks') rows = zones.filter((z) => z.type === 'dock').map(zoneRow);
+        else if (key === 'storage') rows = zones.filter((z) => STORAGE_ZONE_TYPES.includes(z.type)).map(zoneRow);
+        else if (key === 'dead') {
+            rows = zones.filter((z) => !z.type).map(zoneRow);
+            if (restArea > 0) rows.push(restRow());
+        } else {
+            rows = zones.map(zoneRow);
+            if (restArea > 0) rows.push(restRow());
+            if ((kpis.overlap || 0) > 0.005) rows.push({ kind: 'overlap', id: '', name: '', type: '', value: -round2(kpis.overlap * factor) });
+        }
+        return { rows, sum: kpis[key] || 0, unit: volume ? 'm³' : 'm²' };
+    }
+
     // ---- validación (la usa el servidor antes de guardar; la pantalla solo la usa para avisar) --------------------------
     function sanitizeLayout(input) {
         const errors = [];
@@ -608,7 +637,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, sanitizeLayout, sectionData, sectionHasData, rotateLayout,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

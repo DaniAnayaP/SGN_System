@@ -157,6 +157,7 @@ const {
     ZONE_CATEGORY_COLUMNS,
     countZoneCodesByCategory,
     countZoneCodesInCategory,
+    countCodesByZone,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     articleCategoryPatchableFields,
@@ -6244,7 +6245,8 @@ function buildPublicLayoutPayload(clientId, row) {
     };
     // Color representativo del cliente (el que se elige al darlo de alta): la hoja y la vista pública se pintan con él. Sin color válido va vacío y todo se ve como siempre.
     const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
-    return { companyName: (client && client.company_name) || '', hasLogo: !!clientLogoDataUrl(clientId), companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis(pub) };
+    // siteName = el Sitio (título de la página, p. ej. CEDIS CHIHUAHUA); zoneCodes = cuántos códigos hay en cada zona (solo la cuenta, nunca la lista).
+    return { companyName: (client && client.company_name) || '', siteName: l.siteName || '', zoneCodes: countCodesByZone(clientId), hasLogo: !!clientLogoDataUrl(clientId), companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis(pub) };
 }
 
 function layoutSummary(layout, section) {
