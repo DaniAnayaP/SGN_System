@@ -94,6 +94,9 @@ function renderCostCenters() {
             inputType: 'text',
             onCommit: (value) => saveCostCenterNickname(cc, value),
         });
+        const tdSiteCode = document.createElement('td');
+        tdSiteCode.dataset.col = 'ccSiteCode';
+        tdSiteCode.textContent = cc.siteCode || '—';
         const tdSucursal = document.createElement('td');
         tdSucursal.dataset.col = 'ccSucursal';
         tdSucursal.textContent = cc.sucursal || '—';
@@ -147,7 +150,7 @@ function renderCostCenters() {
         toggleBtn.addEventListener('click', () => toggleCostCenterStatus(cc));
         tdActions.append(historyBtn, editBtn, toggleBtn);
 
-        tr.append(tdCode, tdNickname, tdSucursal, tdName, tdResponsible, tdDescription, tdAccountNumber, tdRecordCode, tdStatus, tdActions);
+        tr.append(tdCode, tdSiteCode, tdNickname, tdSucursal, tdName, tdResponsible, tdDescription, tdAccountNumber, tdRecordCode, tdStatus, tdActions);
         tableBody.appendChild(tr);
     });
     refreshLimitStatus();
@@ -162,7 +165,7 @@ function applyCcFilters() {
     const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
     tableBody.querySelectorAll('tr').forEach((tr) => {
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['ccCode', 'ccNickname', 'ccSucursal', 'ccName', 'ccResponsible', 'ccDescription']
+        const haystack = ['ccCode', 'ccSiteCode', 'ccNickname', 'ccSucursal', 'ccName', 'ccResponsible', 'ccDescription']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
@@ -236,6 +239,7 @@ const ccModalTitle = document.getElementById('cc-modal-title');
 const idField = document.getElementById('cc-id');
 const companyDisplay = document.getElementById('cc-company-display');
 const sucursalField = document.getElementById('cc-sucursal');
+const siteCodeField = document.getElementById('cc-site-code');
 const nameField = document.getElementById('cc-name');
 const responsibleField = document.getElementById('cc-responsible');
 const descriptionField = document.getElementById('cc-description');
@@ -266,8 +270,11 @@ const cascadeLevels = {
         addConfirm: document.getElementById('cc-state-add-confirm'), items: [], parent: 'country',
         listUrl: (parentId) => `/api/business/geo/states?countryId=${parentId}`,
         createUrl: () => '/api/business/geo/states',
-        createBody: (name, parentId) => ({ countryId: parentId, name }),
+        createBody: (name, parentId, code) => ({ countryId: parentId, name, code }),
         titleKey: 'business.ccAddNewState',
+        // código corto del localizador: 4 letras (se pone al agregar o, si falta, aquí abajo; ya puesto no se cambia)
+        codeLength: 4, addCode: document.getElementById('cc-state-add-code'), codeRow: document.getElementById('cc-state-code-row'),
+        codeInput: document.getElementById('cc-state-code'), codeSave: document.getElementById('cc-state-code-save'), codeUrl: (id) => `/api/business/geo/states/${id}/code`,
     },
     municipality: {
         select: document.getElementById('cc-municipality'), addToggle: document.getElementById('cc-municipality-add-toggle'),
@@ -284,8 +291,10 @@ const cascadeLevels = {
         addConfirm: document.getElementById('cc-locality-add-confirm'), items: [], parent: 'state',
         listUrl: (parentId) => `/api/business/geo/localities?stateId=${parentId}`,
         createUrl: () => '/api/business/geo/localities',
-        createBody: (name, parentId) => ({ stateId: parentId, name }),
+        createBody: (name, parentId, code) => ({ stateId: parentId, name, code }),
         titleKey: 'business.ccAddNewLocality',
+        codeLength: 3, addCode: document.getElementById('cc-locality-add-code'), codeRow: document.getElementById('cc-locality-code-row'),
+        codeInput: document.getElementById('cc-locality-code'), codeSave: document.getElementById('cc-locality-code-save'), codeUrl: (id) => `/api/business/geo/localities/${id}/code`,
     },
     street: {
         select: document.getElementById('cc-street'), addToggle: document.getElementById('cc-street-add-toggle'),
@@ -297,6 +306,32 @@ const cascadeLevels = {
         titleKey: 'business.ccAddNewStreet',
     },
 };
+
+// Los códigos cortos son solo letras A–Z sin acentos y en mayúsculas.
+function cleanShortCode(value, length) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, length);
+}
+function bindShortCodeInput(input, length) {
+    if (!input) return;
+    input.addEventListener('input', () => {
+        const clean = cleanShortCode(input.value, length);
+        if (input.value !== clean) input.value = clean;
+    });
+}
+// La fila del código del nivel (Estado, Localidad) según lo elegido: con código se ve fijo, sin código se escribe y se guarda; sin elegir nada se esconde.
+function refreshCodeRow(levelKey) {
+    const level = cascadeLevels[levelKey];
+    if (!level.codeRow) return;
+    const item = level.items.find((i) => String(i.id) === String(level.select.value));
+    level.codeRow.hidden = !item;
+    if (!item) return;
+    level.codeInput.value = item.code || '';
+    level.codeInput.disabled = !!item.code;
+    level.codeSave.hidden = !!item.code;
+}
+function levelOptionText(level, item) {
+    return level.codeLength && item.code ? `${item.name} · ${item.code}` : item.name;
+}
 
 function firstLetter(s) {
     return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().charAt(0).toUpperCase() || '_';
@@ -313,7 +348,7 @@ function updateCodePreview() {
     codePreviewValue.textContent = `${companyLetter}${levelLetters.join('')}${sucursalLetter}`;
 }
 
-function populateSelect(selectEl, items) {
+function populateSelect(selectEl, items, level) {
     selectEl.innerHTML = '';
     const placeholder = document.createElement('option');
     placeholder.value = '';
@@ -322,7 +357,7 @@ function populateSelect(selectEl, items) {
     items.forEach((item) => {
         const opt = document.createElement('option');
         opt.value = item.id;
-        opt.textContent = item.name;
+        opt.textContent = level ? levelOptionText(level, item) : item.name;
         selectEl.appendChild(opt);
     });
 }
@@ -334,8 +369,9 @@ async function loadLevel(levelKey, parentId) {
     const level = cascadeLevels[levelKey];
     if (level.parent && !parentId) {
         level.items = [];
-        populateSelect(level.select, []);
+        populateSelect(level.select, [], level);
         level.select.querySelector('option').textContent = Dashboard.t('business.ccSelectParentFirst');
+        refreshCodeRow(levelKey);
         level.select.disabled = true;
         level.addToggle.disabled = true;
         level.addRow.hidden = true;
@@ -347,9 +383,10 @@ async function loadLevel(levelKey, parentId) {
     } catch {
         level.items = [];
     }
-    populateSelect(level.select, level.items);
+    populateSelect(level.select, level.items, level);
     level.select.disabled = false;
     level.addToggle.disabled = false;
+    refreshCodeRow(levelKey);
 }
 
 LEVEL_ORDER.forEach((levelKey, idx) => {
@@ -369,8 +406,41 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
             await loadLevel(childKey, cascadeLevels[child.parent].select.value || null);
             affected.add(childKey);
         }
+        refreshCodeRow(levelKey);
         updateCodePreview();
     });
+    bindShortCodeInput(level.addCode, level.codeLength);
+    bindShortCodeInput(level.codeInput, level.codeLength);
+    // poner el código que le falta a lo ya elegido (el catálogo es de todos los clientes y un código puesto no se cambia)
+    if (level.codeSave) {
+        level.codeSave.addEventListener('click', async () => {
+            const item = level.items.find((i) => String(i.id) === String(level.select.value));
+            const code = cleanShortCode(level.codeInput.value, level.codeLength);
+            if (!item) return;
+            if (code.length !== level.codeLength) {
+                Dashboard.showToast(Dashboard.t(`business.ccGeoCodeInvalid${level.codeLength}`), 'error');
+                return;
+            }
+            level.codeSave.disabled = true;
+            try {
+                const res = await fetch(level.codeUrl(item.id), {
+                    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ code }),
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(body.message || 'save failed');
+                item.code = body.item.code;
+                const keep = level.select.value;
+                populateSelect(level.select, level.items, level);
+                level.select.value = keep;
+                refreshCodeRow(levelKey);
+                Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+            } catch (err) {
+                Dashboard.showToast(err.message && err.message !== 'save failed' ? err.message : Dashboard.t('admin.saveError'), 'error');
+            } finally {
+                level.codeSave.disabled = false;
+            }
+        });
+    }
     level.addToggle.addEventListener('click', () => {
         level.addRow.hidden = !level.addRow.hidden;
         if (!level.addRow.hidden) level.addInput.focus();
@@ -378,6 +448,12 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
     level.addConfirm.addEventListener('click', async () => {
         const name = level.addInput.value.trim();
         if (!name) return;
+        const code = level.codeLength ? cleanShortCode(level.addCode.value, level.codeLength) : '';
+        if (level.codeLength && code.length !== level.codeLength) {
+            Dashboard.showToast(Dashboard.t(`business.ccGeoCodeInvalid${level.codeLength}`), 'error');
+            level.addCode.focus();
+            return;
+        }
         const parentId = level.parent ? cascadeLevels[level.parent].select.value : null;
         level.addConfirm.disabled = true;
         try {
@@ -385,29 +461,33 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify(level.createBody(name, parentId)),
+                body: JSON.stringify(level.createBody(name, parentId, code)),
             });
-            if (!res.ok) throw new Error('create failed');
-            const { item } = await res.json();
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body.message || 'create failed');
+            const { item } = body;
             await loadLevel(levelKey, parentId);
             level.select.value = item.id;
             level.addInput.value = '';
+            if (level.addCode) level.addCode.value = '';
             level.addRow.hidden = true;
             level.select.dispatchEvent(new Event('change'));
-        } catch {
-            Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        } catch (err) {
+            Dashboard.showToast(err.message && !/^(create|save) failed$/.test(err.message) ? err.message : Dashboard.t('admin.saveError'), 'error');
         } finally {
             level.addConfirm.disabled = false;
         }
     });
 });
 sucursalField.addEventListener('input', updateCodePreview);
+bindShortCodeInput(siteCodeField, 5);
 
 function resetCascadeAddRows() {
     LEVEL_ORDER.forEach((key) => {
         const level = cascadeLevels[key];
         level.addRow.hidden = true;
         level.addInput.value = '';
+        if (level.addCode) level.addCode.value = '';
     });
 }
 
@@ -416,6 +496,7 @@ async function openNewModal() {
     ccModalTitle.textContent = Dashboard.t('business.ccModalTitleNew');
     companyDisplay.textContent = clientBranding?.companyName || '—';
     sucursalField.value = '';
+    siteCodeField.value = '';
     nameField.value = '';
     responsibleField.value = '';
     descriptionField.value = '';
@@ -436,6 +517,7 @@ async function openEditModal(cc) {
     ccModalTitle.textContent = Dashboard.t('business.ccModalTitleEdit');
     companyDisplay.textContent = clientBranding?.companyName || '—';
     sucursalField.value = cc.sucursal || '';
+    siteCodeField.value = cc.siteCode || '';
     nameField.value = cc.name;
     responsibleField.value = cc.responsible || '';
     descriptionField.value = cc.description || '';
@@ -474,9 +556,24 @@ async function saveCcModal() {
     const streetId = Number(cascadeLevels.street.select.value) || null;
     const sucursal = sucursalField.value.trim();
     const name = nameField.value.trim();
+    const siteCode = cleanShortCode(siteCodeField.value, 5);
     if (!countryId || !stateId || !municipalityId || !localityId || !streetId || !sucursal || !name) {
         modalError.textContent = Dashboard.t('admin.requiredFields');
         modalError.hidden = false;
+        return;
+    }
+    // Para armar el localizador hacen falta los códigos cortos: del Estado y la Localidad elegidos y el del sitio.
+    const pickedState = cascadeLevels.state.items.find((i) => i.id === stateId);
+    const pickedLocality = cascadeLevels.locality.items.find((i) => i.id === localityId);
+    if (!pickedState?.code || !pickedLocality?.code) {
+        modalError.textContent = Dashboard.t('business.ccNeedGeoCodes');
+        modalError.hidden = false;
+        return;
+    }
+    if (siteCode.length !== 5) {
+        modalError.textContent = Dashboard.t('business.ccSiteCodeInvalid');
+        modalError.hidden = false;
+        siteCodeField.focus();
         return;
     }
     const responsible = responsibleField.value.trim();
@@ -491,13 +588,13 @@ async function saveCcModal() {
             method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ countryId, stateId, municipalityId, localityId, streetId, sucursal, name, responsible, description }),
+            body: JSON.stringify({ countryId, stateId, municipalityId, localityId, streetId, sucursal, siteCode, name, responsible, description }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
             modalError.textContent = body.message === 'Cost center limit reached for this client.'
                 ? Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit })
-                : (body.message || Dashboard.t('admin.saveError'));
+                : (body.message === 'That site code is already used by another cost center.' ? Dashboard.t('business.ccSiteCodeUsed') : (body.message || Dashboard.t('admin.saveError')));
             modalError.hidden = false;
             return;
         }

@@ -987,6 +987,15 @@ if (!costCenterColumns.some((c) => c.name === 'municipality_id')) {
 if (!costCenterColumns.some((c) => c.name === 'nickname')) {
     db.exec("ALTER TABLE cost_centers ADD COLUMN nickname TEXT NOT NULL DEFAULT ''");
 }
+// Localizador del grupo (Relación Código): la locación del código se arma con códigos cortos y fijos: Estado (4 letras, p. ej. CHIH), Localidad (3 letras, p. ej. CEN) y el código del sitio
+// (5 letras, p. ej. CDCHI, lo escribe el administrador en el Centro de Costos). El catálogo geográfico es de todos los clientes, así que el código de un Estado o una Localidad también lo es:
+// se captura una vez (al agregarlo o después) y ya no se cambia, porque los localizadores impresos y guardados lo llevan. Sin código = todavía no se puede usar para un sitio.
+if (!db.prepare('PRAGMA table_info(geo_states)').all().some((c) => c.name === 'code')) db.exec("ALTER TABLE geo_states ADD COLUMN code TEXT NOT NULL DEFAULT ''");
+if (!db.prepare('PRAGMA table_info(geo_localities)').all().some((c) => c.name === 'code')) db.exec("ALTER TABLE geo_localities ADD COLUMN code TEXT NOT NULL DEFAULT ''");
+if (!costCenterColumns.some((c) => c.name === 'site_code')) db.exec("ALTER TABLE cost_centers ADD COLUMN site_code TEXT NOT NULL DEFAULT ''");
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_geo_states_code ON geo_states(country_id, code) WHERE code <> ''");
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_geo_localities_code ON geo_localities(state_id, code) WHERE code <> ''");
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_cost_centers_site_code ON cost_centers(client_id, is_test_data, site_code) WHERE site_code <> ''");
 
 // Seed data for the geo catalog — a real, well-known list of países (not a
 // live internet fetch: no outbound access from this server has been set up,
@@ -3961,11 +3970,41 @@ function createCountry(name) {
     const { lastInsertRowid } = db.prepare('INSERT INTO geo_countries (name) VALUES (?)').run(trimmed);
     return db.prepare('SELECT * FROM geo_countries WHERE id = ?').get(lastInsertRowid);
 }
-function createState(countryId, name) {
+// Códigos cortos del localizador: solo letras A–Z sin acentos, en mayúsculas, de largo exacto (Estado 4, Localidad 3, sitio 5). Devuelve '' si no cumple.
+const SHORT_CODE_LENGTH = { state: 4, locality: 3, site: 5 };
+function normalizeShortCode(value, length) {
+    const code = String(value == null ? '' : value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    return new RegExp(`^[A-Z]{${length}}$`).test(code) ? code : '';
+}
+function getStateById(id) {
+    return db.prepare('SELECT * FROM geo_states WHERE id = ?').get(id);
+}
+function getLocalityById(id) {
+    return db.prepare('SELECT * FROM geo_localities WHERE id = ?').get(id);
+}
+// Pone el código corto de un Estado o una Localidad que todavía no lo tiene. Un código ya puesto no se cambia (lo usan los localizadores): poner el mismo no hace nada y otro da 'locked'.
+// Devuelve { item } o { error: 'invalid' | 'locked' | 'duplicate' | 'notfound' }.
+function setGeoShortCode(kind, id, rawCode) {
+    const isState = kind === 'state';
+    const table = isState ? 'geo_states' : 'geo_localities';
+    const row = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+    if (!row) return { error: 'notfound' };
+    const code = normalizeShortCode(rawCode, isState ? SHORT_CODE_LENGTH.state : SHORT_CODE_LENGTH.locality);
+    if (!code) return { error: 'invalid' };
+    if (row.code) return row.code === code ? { item: row } : { error: 'locked' };
+    try {
+        db.prepare(`UPDATE ${table} SET code = ? WHERE id = ?`).run(code, id);
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return { error: 'duplicate' };
+        throw err;
+    }
+    return { item: db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) };
+}
+function createState(countryId, name, code = '') {
     const trimmed = (name || '').trim();
     const existing = db.prepare('SELECT * FROM geo_states WHERE country_id = ? AND name = ? COLLATE NOCASE').get(countryId, trimmed);
     if (existing) return existing;
-    const { lastInsertRowid } = db.prepare('INSERT INTO geo_states (country_id, name) VALUES (?, ?)').run(countryId, trimmed);
+    const { lastInsertRowid } = db.prepare('INSERT INTO geo_states (country_id, name, code) VALUES (?, ?, ?)').run(countryId, trimmed, code || '');
     return db.prepare('SELECT * FROM geo_states WHERE id = ?').get(lastInsertRowid);
 }
 function createMunicipality(stateId, name) {
@@ -3975,11 +4014,11 @@ function createMunicipality(stateId, name) {
     const { lastInsertRowid } = db.prepare('INSERT INTO geo_municipalities (state_id, name) VALUES (?, ?)').run(stateId, trimmed);
     return db.prepare('SELECT * FROM geo_municipalities WHERE id = ?').get(lastInsertRowid);
 }
-function createLocality(stateId, name) {
+function createLocality(stateId, name, code = '') {
     const trimmed = (name || '').trim();
     const existing = db.prepare('SELECT * FROM geo_localities WHERE state_id = ? AND name = ? COLLATE NOCASE').get(stateId, trimmed);
     if (existing) return existing;
-    const { lastInsertRowid } = db.prepare('INSERT INTO geo_localities (state_id, name) VALUES (?, ?)').run(stateId, trimmed);
+    const { lastInsertRowid } = db.prepare('INSERT INTO geo_localities (state_id, name, code) VALUES (?, ?, ?)').run(stateId, trimmed, code || '');
     return db.prepare('SELECT * FROM geo_localities WHERE id = ?').get(lastInsertRowid);
 }
 function createStreet(localityId, name) {
@@ -4059,7 +4098,7 @@ function deleteFieldFillRule(id, clientId) {
     db.prepare('DELETE FROM field_fill_rules WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
-function createCostCenter({ clientId, countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, nickname, isTestData = false }) {
+function createCostCenter({ clientId, countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, nickname, siteCode = '', isTestData = false }) {
     const client = getClientById(clientId);
     const baseCode = buildCostCenterCodeBase(client, countryId, stateId, municipalityId, localityId, streetId, sucursal);
     const create = db.transaction(() => {
@@ -4075,19 +4114,19 @@ function createCostCenter({ clientId, countryId, stateId, municipalityId, locali
                 INSERT INTO cost_centers (
                     client_id, code, name, description, responsible,
                     country_id, state_id, municipality_id, locality_id, street_id, sucursal,
-                    account_number, record_code, is_test_data, nickname
+                    account_number, record_code, is_test_data, nickname, site_code
                 )
                 VALUES (
                     @clientId, @code, @name, @description, @responsible,
                     @countryId, @stateId, @municipalityId, @localityId, @streetId, @sucursal,
-                    @accountNumber, @recordCode, @isTestData, @nickname
+                    @accountNumber, @recordCode, @isTestData, @nickname, @siteCode
                 )
             `)
             .run({
                 clientId, code, name, description: description || '', responsible: responsible || '',
                 countryId, stateId, municipalityId: municipalityId || null, localityId, streetId, sucursal: sucursal || '',
                 accountNumber, recordCode: computeCostCenterRecordCode(clientId, code, accountNumber),
-                isTestData: isTestData ? 1 : 0, nickname: nickname || '',
+                isTestData: isTestData ? 1 : 0, nickname: nickname || '', siteCode: siteCode || '',
             });
         return result.lastInsertRowid;
     });
@@ -4102,13 +4141,14 @@ const COST_CENTER_FIELDS = {
     responsible: { column: 'responsible', fieldKey: 'business.ccResponsible' },
     description: { column: 'description', fieldKey: 'business.ccDescription' },
     sucursal: { column: 'sucursal', fieldKey: 'business.ccBranch' },
+    siteCode: { column: 'site_code', fieldKey: 'business.ccSiteCode' },
 };
 
 // code is recomputed from the new geo selections (not resubmitted directly)
 // -- unlike record_code (frozen forever at creation, see
 // computeCostCenterRecordCode's own comment), código is allowed to change on
 // edit since it exists to reflect the currently-selected location.
-function updateCostCenter(id, clientId, { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible }, forTestAccount = false) {
+function updateCostCenter(id, clientId, { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, siteCode }, forTestAccount = false) {
     const client = getClientById(clientId);
     const baseCode = buildCostCenterCodeBase(client, countryId, stateId, municipalityId, localityId, streetId, sucursal);
     const code = generateUniqueCostCenterCode(clientId, baseCode, id);
@@ -4116,11 +4156,11 @@ function updateCostCenter(id, clientId, { countryId, stateId, municipalityId, lo
         UPDATE cost_centers
         SET code = @code, name = @name, description = @description, responsible = @responsible,
             country_id = @countryId, state_id = @stateId, municipality_id = @municipalityId,
-            locality_id = @localityId, street_id = @streetId, sucursal = @sucursal
+            locality_id = @localityId, street_id = @streetId, sucursal = @sucursal, site_code = @siteCode
         WHERE id = @id AND client_id = @clientId
     `).run({
         id, clientId, code, name, description: description || '', responsible: responsible || '',
-        countryId, stateId, municipalityId: municipalityId || null, localityId, streetId, sucursal: sucursal || '',
+        countryId, stateId, municipalityId: municipalityId || null, localityId, streetId, sucursal: sucursal || '', siteCode: siteCode || '',
     });
     return getCostCenterById(id, clientId, forTestAccount);
 }
@@ -11013,6 +11053,11 @@ module.exports = {
     countCostCenters,
     getCostCenterById,
     createCostCenter,
+    SHORT_CODE_LENGTH,
+    normalizeShortCode,
+    getStateById,
+    getLocalityById,
+    setGeoShortCode,
     updateCostCenter,
     updateCostCenterNickname,
     setCostCenterStatus,

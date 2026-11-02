@@ -398,6 +398,7 @@
                             <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group="menu.classControlInterno">Week</th>
                             <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno">Time</th>
                             <th data-i18n="business.ccCode" data-col="ccCode">Code</th>
+                            <th data-i18n="business.ccSiteCode" data-col="ccSiteCode">Site code</th>
                             <th data-i18n="business.ccNickname" data-col="ccNickname">Nickname</th>
                             <th data-i18n="business.ccBranch" data-col="ccSucursal">Branch</th>
                             <th data-i18n="business.ccName" data-col="ccName">Name</th>
@@ -448,8 +449,13 @@
                         <select id="cc-state" disabled></select>
                         <button type="button" class="cc-add-new-btn" id="cc-state-add-toggle" title="Add new state" disabled>+</button>
                     </div>
+                    <div class="cc-code-row" id="cc-state-code-row" hidden>
+                        <input type="text" id="cc-state-code" class="cc-code-input" maxlength="4" autocomplete="off" data-help-key="ccGeoCode" data-i18n-placeholder="business.ccShortCode4" placeholder="Code · 4 letters">
+                        <button type="button" class="btn btn-secondary" id="cc-state-code-save" data-i18n="business.ccSaveCode">Save code</button>
+                    </div>
                     <div class="cc-add-new-row" id="cc-state-add-row" hidden>
                         <input type="text" id="cc-state-add-input" data-i18n-placeholder="business.ccAddNewState" placeholder="New state">
+                        <input type="text" id="cc-state-add-code" class="cc-code-input" maxlength="4" autocomplete="off" data-help-key="ccGeoCode" data-i18n-placeholder="business.ccShortCode4" placeholder="Code · 4 letters">
                         <button type="button" class="btn btn-secondary" id="cc-state-add-confirm" data-i18n="admin.add">Add</button>
                     </div>
                 </div>
@@ -470,8 +476,13 @@
                         <select id="cc-locality" disabled></select>
                         <button type="button" class="cc-add-new-btn" id="cc-locality-add-toggle" title="Add new locality" disabled>+</button>
                     </div>
+                    <div class="cc-code-row" id="cc-locality-code-row" hidden>
+                        <input type="text" id="cc-locality-code" class="cc-code-input" maxlength="3" autocomplete="off" data-help-key="ccGeoCode" data-i18n-placeholder="business.ccShortCode3" placeholder="Code · 3 letters">
+                        <button type="button" class="btn btn-secondary" id="cc-locality-code-save" data-i18n="business.ccSaveCode">Save code</button>
+                    </div>
                     <div class="cc-add-new-row" id="cc-locality-add-row" hidden>
                         <input type="text" id="cc-locality-add-input" data-i18n-placeholder="business.ccAddNewLocality" placeholder="New locality">
+                        <input type="text" id="cc-locality-add-code" class="cc-code-input" maxlength="3" autocomplete="off" data-help-key="ccGeoCode" data-i18n-placeholder="business.ccShortCode3" placeholder="Code · 3 letters">
                         <button type="button" class="btn btn-secondary" id="cc-locality-add-confirm" data-i18n="admin.add">Add</button>
                     </div>
                 </div>
@@ -492,6 +503,10 @@
                 <div class="admin-field">
                     <label for="cc-sucursal" data-i18n="business.ccBranch">Branch</label>
                     <input id="cc-sucursal" type="text" required>
+                </div>
+                <div class="admin-field">
+                    <label for="cc-site-code" data-i18n="business.ccSiteCode">Site code</label>
+                    <input id="cc-site-code" type="text" class="cc-code-input" maxlength="5" autocomplete="off" required data-help-key="ccSiteCode" data-i18n-placeholder="business.ccShortCode5" placeholder="Code · 5 letters">
                 </div>
             </div>
 

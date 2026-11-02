@@ -1166,6 +1166,16 @@
     "ccLocality": "Locality",
     "ccStreet": "Street",
     "ccBranch": "Branch",
+    "ccSiteCode": "Site code",
+    "ccShortCode3": "Code · 3 letters",
+    "ccShortCode4": "Code · 4 letters",
+    "ccShortCode5": "Code · 5 letters",
+    "ccSaveCode": "Save code",
+    "ccGeoCodeInvalid3": "The code is 3 letters.",
+    "ccGeoCodeInvalid4": "The code is 4 letters.",
+    "ccSiteCodeInvalid": "The site code is 5 letters.",
+    "ccSiteCodeUsed": "That site code is already used by another cost center.",
+    "ccNeedGeoCodes": "The chosen State and Locality need their short code. Type it and save it below each one.",
     "ccNickname": "Nickname",
     "ccCodePreview": "Generated code",
     "ccSelectPlaceholder": "Select...",
@@ -3647,6 +3657,14 @@
     "layoutQrZoneType": {
       "what": "Which of the 7 code categories the list is made from: Inventory, Purchasing, Storage, Rotation, Special handling, Risk or Shelf life. Each code appears under the category written for it in Item Registration. Codes without that category are left out.",
       "example": "with Inventory Category the list says Medications, Wound care and Solutions."
+    },
+    "ccSiteCode": {
+      "what": "This site's short code, 5 letters, typed by you. It is the last piece of the location part of each product's locator and it cannot repeat across your cost centers.",
+      "example": "for the Chihuahua DC you type CDCHI, and the product locator starts with CHIST.CHIH.CEN.CDCHI."
+    },
+    "ccGeoCode": {
+      "what": "The short code of the State (4 letters) or the Locality (3 letters). It is typed once and never changes, because the catalog is shared by every client and locators carry it.",
+      "example": "Chihuahua is saved as CHIH and the locality Centro as CEN."
     },
     "layoutViews": {
       "what": "The buttons that change how the sketch looks: show or hide measures, zone areas and names, rotate it and zoom in or out. They only change what you see; they do not modify the Layout.",

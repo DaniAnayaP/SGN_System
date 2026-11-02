@@ -67,6 +67,11 @@ const {
     getCostCenterById,
     createCostCenter,
     updateCostCenter,
+    SHORT_CODE_LENGTH,
+    normalizeShortCode,
+    getStateById,
+    getLocalityById,
+    setGeoShortCode,
     updateCostCenterNickname,
     setCostCenterStatus,
     listCountries,
@@ -4534,6 +4539,12 @@ function validateCostCenterBody(body) {
     if (!countryId || !stateId || !municipalityId || !localityId || !streetId || !sucursal || !name) {
         return 'countryId, stateId, municipalityId, localityId, streetId, sucursal and name are required.';
     }
+    // Localizador del grupo: el código del sitio son 5 letras y el Estado y la Localidad elegidos ya deben tener su código corto (4 y 3 letras).
+    if (!normalizeShortCode(body.siteCode, SHORT_CODE_LENGTH.site)) return 'siteCode must be 5 letters (A-Z).';
+    const state = getStateById(Number(stateId));
+    const locality = getLocalityById(Number(localityId));
+    if (!state || !state.code) return 'The state needs its 4-letter code first.';
+    if (!locality || !locality.code) return 'The locality needs its 3-letter code first.';
     return null;
 }
 
@@ -4565,6 +4576,7 @@ function mapCostCenter(row, companyName) {
         streetId: row.street_id,
         sucursal: row.sucursal,
         nickname: row.nickname,
+        siteCode: row.site_code || '',
         ...getSystemColumnsForRecord({
             companyName,
             area: COST_CENTER_AREA_LABEL,
@@ -4593,9 +4605,10 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
         return res.status(409).json({ message: 'Cost center limit reached for this client.' });
     }
     const { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible } = req.body;
+    const siteCode = normalizeShortCode(req.body.siteCode, SHORT_CODE_LENGTH.site);
     try {
         const costCenter = createCostCenter({
-            clientId: req.user.clientId, countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible,
+            clientId: req.user.clientId, countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, siteCode,
             isTestData: req.user.isTestAccount,
         });
         logTableChange({
@@ -4606,7 +4619,7 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
         res.status(201).json({ costCenter: mapCostCenter(costCenter, client.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-            return res.status(409).json({ message: 'A cost center with that code already exists.' });
+            return res.status(409).json({ message: /site_code/.test(err.message) ? 'That site code is already used by another cost center.' : 'A cost center with that code already exists.' });
         }
         throw err;
     }
@@ -4618,9 +4631,10 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     const error = validateCostCenterBody(req.body);
     if (error) return res.status(400).json({ message: error });
     const { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible } = req.body;
+    const siteCode = normalizeShortCode(req.body.siteCode, SHORT_CODE_LENGTH.site);
     try {
         const costCenter = updateCostCenter(req.params.id, req.user.clientId, {
-            countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible,
+            countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, siteCode,
         }, req.user.isTestAccount);
         // requireClientAdmin-gated route: req.user.isClientAdmin is always
         // true here, so every field always lands in appliedPatch and
@@ -4630,12 +4644,12 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
         // the submitted body — it's derived from the geo ids.
         checkAndLogFieldChanges(req, existing, {
             code: costCenter.code, name: costCenter.name, description: costCenter.description,
-            responsible: costCenter.responsible, sucursal: costCenter.sucursal,
+            responsible: costCenter.responsible, sucursal: costCenter.sucursal, siteCode: costCenter.site_code || '',
         }, COST_CENTER_FIELDS, 'centros-costo', existing.code);
         res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-            return res.status(409).json({ message: 'A cost center with that code already exists.' });
+            return res.status(409).json({ message: /site_code/.test(err.message) ? 'That site code is already used by another cost center.' : 'A cost center with that code already exists.' });
         }
         throw err;
     }
@@ -4708,11 +4722,35 @@ app.post('/api/business/geo/countries', requireAuth, requireClientAdmin, (req, r
     if (!name) return res.status(400).json({ message: 'name is required.' });
     res.status(201).json({ item: createCountry(name) });
 });
+// Códigos cortos del localizador (Estado 4 letras, Localidad 3): al agregar uno nuevo el código es obligatorio; uno que ya existe sin código lo recibe aquí mismo; uno con código no se cambia.
+function geoShortCodeError(error) {
+    const messages = { invalid: 'The code has the wrong length or letters.', locked: 'That entry already has a code and it cannot change.', duplicate: 'Another entry in the same place already uses that code.', notfound: 'Not found.' };
+    return messages[error] || 'Could not save the code.';
+}
 app.post('/api/business/geo/states', requireAuth, requireClientAdmin, (req, res) => {
     const countryId = Number(req.body?.countryId) || 0;
     const name = (req.body?.name || '').trim();
     if (!countryId || !name) return res.status(400).json({ message: 'countryId and name are required.' });
-    res.status(201).json({ item: createState(countryId, name) });
+    const code = normalizeShortCode(req.body?.code, SHORT_CODE_LENGTH.state);
+    if (!code) return res.status(400).json({ message: 'The state code must be 4 letters (A-Z).' });
+    let item;
+    try {
+        item = createState(countryId, name, code);
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({ message: geoShortCodeError('duplicate') });
+        throw err;
+    }
+    if (!item.code) {
+        const set = setGeoShortCode('state', item.id, code);
+        if (set.error) return res.status(409).json({ message: geoShortCodeError(set.error) });
+        item = set.item;
+    }
+    res.status(201).json({ item });
+});
+app.patch('/api/business/geo/states/:id/code', requireAuth, requireClientAdmin, (req, res) => {
+    const set = setGeoShortCode('state', Number(req.params.id) || 0, req.body?.code);
+    if (set.error) return res.status(set.error === 'notfound' ? 404 : (set.error === 'invalid' ? 400 : 409)).json({ message: geoShortCodeError(set.error) });
+    res.json({ item: set.item });
 });
 app.post('/api/business/geo/municipalities', requireAuth, requireClientAdmin, (req, res) => {
     const stateId = Number(req.body?.stateId) || 0;
@@ -4724,7 +4762,26 @@ app.post('/api/business/geo/localities', requireAuth, requireClientAdmin, (req, 
     const stateId = Number(req.body?.stateId) || 0;
     const name = (req.body?.name || '').trim();
     if (!stateId || !name) return res.status(400).json({ message: 'stateId and name are required.' });
-    res.status(201).json({ item: createLocality(stateId, name) });
+    const code = normalizeShortCode(req.body?.code, SHORT_CODE_LENGTH.locality);
+    if (!code) return res.status(400).json({ message: 'The locality code must be 3 letters (A-Z).' });
+    let item;
+    try {
+        item = createLocality(stateId, name, code);
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({ message: geoShortCodeError('duplicate') });
+        throw err;
+    }
+    if (!item.code) {
+        const set = setGeoShortCode('locality', item.id, code);
+        if (set.error) return res.status(409).json({ message: geoShortCodeError(set.error) });
+        item = set.item;
+    }
+    res.status(201).json({ item });
+});
+app.patch('/api/business/geo/localities/:id/code', requireAuth, requireClientAdmin, (req, res) => {
+    const set = setGeoShortCode('locality', Number(req.params.id) || 0, req.body?.code);
+    if (set.error) return res.status(set.error === 'notfound' ? 404 : (set.error === 'invalid' ? 400 : 409)).json({ message: geoShortCodeError(set.error) });
+    res.json({ item: set.item });
 });
 app.post('/api/business/geo/streets', requireAuth, requireClientAdmin, (req, res) => {
     const localityId = Number(req.body?.localityId) || 0;

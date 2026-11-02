@@ -1165,6 +1165,16 @@
     "ccLocality": "Localidad",
     "ccStreet": "Calle",
     "ccBranch": "Sucursal",
+    "ccSiteCode": "Código del sitio",
+    "ccShortCode3": "Código · 3 letras",
+    "ccShortCode4": "Código · 4 letras",
+    "ccShortCode5": "Código · 5 letras",
+    "ccSaveCode": "Guardar código",
+    "ccGeoCodeInvalid3": "El código son 3 letras.",
+    "ccGeoCodeInvalid4": "El código son 4 letras.",
+    "ccSiteCodeInvalid": "El código del sitio son 5 letras.",
+    "ccSiteCodeUsed": "Ese código de sitio ya lo usa otro centro de costos.",
+    "ccNeedGeoCodes": "El Estado y la Localidad elegidos necesitan su código corto. Escríbelo y guárdalo debajo de cada uno.",
     "ccNickname": "Apodo",
     "ccCodePreview": "Código generado",
     "ccSelectPlaceholder": "Selecciona...",
@@ -3646,6 +3656,14 @@
     "layoutQrZoneType": {
       "what": "De cuál de las 7 categorías de los códigos se hace la lista: Inventario, Compra, Almacenamiento, Rotación, Manejo especial, Riesgo o Vida útil. Cada código aparece en la categoría que tiene escrita en Alta Artículos. Los códigos sin esa categoría no salen.",
       "example": "con Categoría Inventario la lista dice Medicamentos, Material de curación y Soluciones."
+    },
+    "ccSiteCode": {
+      "what": "El código corto de este sitio, de 5 letras, que lo escribes tú. Es la última pieza de la locación del localizador de cada producto y no se puede repetir en tus centros de costos.",
+      "example": "para el CEDIS de Chihuahua escribes CDCHI, y el localizador del producto empieza con CHIST.CHIH.CEN.CDCHI."
+    },
+    "ccGeoCode": {
+      "what": "El código corto del Estado (4 letras) o de la Localidad (3 letras). Se escribe una sola vez y ya no se cambia, porque el catálogo es de todos los clientes y los localizadores lo llevan escrito.",
+      "example": "Chihuahua se guarda como CHIH y la localidad Centro como CEN."
     },
     "layoutViews": {
       "what": "Los botones para cambiar cómo se ve el croquis: ver u ocultar las medidas, los m² de las zonas y los nombres, girarlo y acercarlo o alejarlo. Solo cambian lo que ves; no modifican el Layout.",
