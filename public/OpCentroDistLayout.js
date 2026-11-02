@@ -102,9 +102,9 @@ function table(headKeys, rows, filterId) {
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
 const FILTER_TABLE_IDS = ['layout-zonas'];
-function bindLayoutFilters() {
-    if (!window.Dashboard || !Dashboard.bindExternalColumnFilters) return;
-    document.querySelectorAll('#layout-panel table[data-filter-table]').forEach((tbl) => {
+function bindLayoutFilters(root = document.getElementById('layout-panel')) {
+    if (!window.Dashboard || !Dashboard.bindExternalColumnFilters || !root) return;
+    root.querySelectorAll('table[data-filter-table]').forEach((tbl) => {
         const id = tbl.dataset.filterTable;
         const keys = Array.from(tbl.tHead.rows[0].cells).map((th) => th.dataset.col || '');
         Array.from(tbl.tBodies[0].rows).forEach((tr) => {
@@ -116,7 +116,7 @@ function bindLayoutFilters() {
             });
         });
         Dashboard.bindExternalColumnFilters(id, tbl);
-        const note = tbl.closest('.layout-section')?.querySelector(`[data-filter-note="${id}"]`);
+        const note = tbl.closest('.layout-section, .layout-summary')?.querySelector(`[data-filter-note="${id}"]`);
         if (!note) return;
         const refresh = () => {
             const rows = Array.from(tbl.tBodies[0].rows);
@@ -633,9 +633,15 @@ function renderSvg() {
 function renderSummary() {
     const k = LC.computeKpis(state.draft);
     const rows = k.zones.map((z) => `<tr><td>${esc(z.name)}</td><td>${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}</td><td>${esc(z.use ? typeLabel('use', z.use) : '—')}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
+    // Tabla del sistema: encabezado sombreado y, para quien tiene el icono Filtros en el árbol, el embudo de filtros de todas las tablas en cada encabezado (se vuelve a enganchar en cada dibujo y conserva los filtros).
+    const filterable = !!(state.perms && state.perms.canFilterTables);
+    const heads = ['main.layoutZona', 'main.layoutTipoZona', 'main.layoutUsoZona', 'main.layoutSuperficie', 'main.layoutEspacios', 'main.layoutHuella', 'main.layoutOcupacion', 'main.layoutVolumen'];
+    const head = heads.map((k) => `<th${filterable ? ` data-col="${k}" class="layout-th-filter"` : ''}>${esc(t(k))}</th>`).join('');
+    const note = filterable ? `<div class="layout-filter-note" data-filter-note="layout-resumen" hidden><span></span><button type="button" class="btn btn-secondary layout-toggle" data-filter-clear="layout-resumen" data-help-key="layoutFilterClear">${esc(t('main.layoutFiltroQuitar'))}</button></div>` : '';
     $('layout-summary').innerHTML = rows.length
-        ? `<table class="layout-table layout-summary-table"><thead><tr><th>${esc(t('main.layoutZona'))}</th><th>${esc(t('main.layoutTipoZona'))}</th><th>${esc(t('main.layoutUsoZona'))}</th><th>${esc(t('main.layoutSuperficie'))}</th><th>${esc(t('main.layoutEspacios'))}</th><th>${esc(t('main.layoutHuella'))}</th><th>${esc(t('main.layoutOcupacion'))}</th><th>${esc(t('main.layoutVolumen'))}</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
+        ? `${note}<div class="layout-scroll"><table class="layout-table layout-summary-table"${filterable ? ' data-filter-table="layout-resumen"' : ''}><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`
         : `<p class="layout-muted">${esc(t('main.layoutSinZonas'))}</p>`;
+    bindLayoutFilters($('layout-summary'));
 }
 
 // Cada vez que cambia el borrador: KPIs, croquis, resumen y estado del botón Guardar. El formulario NO se redibuja (así no se pierde el cursor al teclear).

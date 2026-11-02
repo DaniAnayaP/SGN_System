@@ -7082,12 +7082,41 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     margin-top: 1rem;
     overflow-x: auto;
 }
-.layout-summary-table td, .layout-summary-table th{
-    padding: 0.35rem 0.6rem;
-    font-variant-numeric: tabular-nums;
+/* Resumen por zona: se ve como una tabla del sistema (encabezado sombreado en mayúsculas, líneas entre filas y entre columnas, fila resaltada al pasar), igual que .data-table */
+.layout-summary .layout-scroll{
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    background: var(--color-surface);
 }
-.layout-summary-table tr + tr td{
-    border-top: 1px solid var(--color-border);
+.layout-summary-table td, .layout-summary-table th{
+    padding: 0.5rem 0.7rem;
+    font-variant-numeric: tabular-nums;
+    border-right: 1px solid color-mix(in srgb, var(--color-border) 35%, transparent);
+}
+.layout-summary-table th:last-child, .layout-summary-table td:last-child{
+    border-right: none;
+}
+.layout-summary-table th{
+    background-color: var(--color-bg);
+    border-bottom: 2px solid var(--color-border);
+    font-size: 0.66rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+.layout-summary-table th:first-child{ border-top-left-radius: 0.55rem; }
+.layout-summary-table th:last-child{ border-top-right-radius: 0.55rem; }
+.layout-summary-table td{
+    border-bottom: 1px solid var(--color-border);
+}
+.layout-summary-table tbody tr:last-child td{
+    border-bottom: none;
+}
+.layout-summary-table tbody tr:hover td{
+    background-color: var(--color-bg);
+}
+.layout-summary .layout-filter-note{
+    margin-bottom: 0.5rem;
 }
 .layout-muted{
     margin: 0;
