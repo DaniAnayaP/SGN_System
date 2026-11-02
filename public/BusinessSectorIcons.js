@@ -117,7 +117,7 @@
             // active rubro -- someone typing "tooth" wants that icon even
             // while "Transporte" is still selected from a moment ago, not
             // an empty grid because dental isn't part of that rubro.
-            if (q) return data.all.filter((name) => name.toLowerCase().includes(q));
+            if (q) return data.all.filter((name) => SearchSyntax.matches('contains', q, name));
             return activeCategory ? (data.curated[activeCategory] || []) : data.all;
         }
 

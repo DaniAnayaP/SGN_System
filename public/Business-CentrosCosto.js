@@ -165,7 +165,7 @@ function applyCcFilters() {
         const haystack = ['ccCode', 'ccNickname', 'ccSucursal', 'ccName', 'ccResponsible', 'ccDescription']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
-        tr.hidden = !haystack.includes(text);
+        tr.hidden = !SearchSyntax.matches('contains', text, haystack);
     });
 }
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyCcFilters);

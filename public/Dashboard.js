@@ -3729,44 +3729,46 @@ function isDateColumn(distinctValues) {
 // se ignora ("VALE, " es solo VALE). Vale igual para Contiene, Inicia con e
 // Igual que, en el embudo del encabezado, en el panel de filtro y en Búsqueda
 // Guardada, porque los tres pasan por esta misma función.
+// Además de la coma, lo escrito acepta $ (otra palabra ANTES de la buscada) y @
+// (otra palabra DESPUÉS): "rack$número@cajón". El motor es uno solo para todo el
+// sistema, el servidor también lo usa (SearchSyntax.js).
 function splitRuleTerms(text, keepCase = false) {
     return String(text ?? '').split(',').map((s) => s.trim()).filter(Boolean)
         .map((s) => (keepCase ? s : s.toLowerCase()));
 }
 
+// Igual que en el embudo: ambos lados se parten por coma (una celda puede traer
+// varios valores, p. ej. los Centros de Costos). La prueba se arma una vez por
+// texto escrito y se reusa en cada fila.
+let lastRuleKey = '';
+let lastRuleTest = null;
 function textRuleMatches(mode, query, value) {
-    const terms = splitRuleTerms(query);
-    if (!terms.length) return true;
-    const v = String(value ?? '').toLowerCase();
-    if (mode === 'equals') {
-        // Igual que en el embudo: ambos lados se parten por coma (una celda
-        // puede traer varios valores, p. ej. los Centros de Costos).
-        const valueTerms = v.split(',').map((s) => s.trim());
-        return terms.some((term) => valueTerms.includes(term));
+    const key = `${mode}\u0001${query}`;
+    if (key !== lastRuleKey) {
+        lastRuleKey = key;
+        lastRuleTest = SearchSyntax.compile(mode, query);
     }
-    return terms.some((term) => (mode === 'startsWith' ? v.startsWith(term) : v.includes(term)));
+    return lastRuleTest(value);
 }
 
 // Marca en amarillo, dentro de un valor de la lista, lo que cumple lo escrito:
-// cada aparición de cualquier palabra (Contiene) o el arranque (Inicia con).
+// cada aparición de la palabra buscada (Contiene) o el arranque (Inicia con); las
+// palabras de $ (antes) y @ (después) se marcan más claro.
 function setRuleHighlightedText(el, value, mode, text) {
     const label = value || '—';
     el.textContent = '';
-    const terms = mode === 'equals' || mode === 'range' ? [] : splitRuleTerms(text);
-    if (!terms.length || !value) { el.textContent = label; return; }
-    const pattern = terms.sort((a, b) => b.length - a.length)
-        .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    const re = new RegExp(mode === 'startsWith' ? `^(?:${pattern})` : pattern, 'gi');
+    if (mode === 'equals' || mode === 'range' || !value) { el.textContent = label; return; }
+    const spans = SearchSyntax.ranges(mode, text, value);
+    if (!spans.length) { el.textContent = label; return; }
     let last = 0;
-    let match;
-    while ((match = re.exec(value)) !== null) {
-        if (match.index > last) el.appendChild(document.createTextNode(value.slice(last, match.index)));
+    spans.forEach((r) => {
+        if (r.start > last) el.appendChild(document.createTextNode(value.slice(last, r.start)));
         const mark = document.createElement('mark');
-        mark.textContent = match[0];
+        if (r.role !== 'main') mark.className = 'aux';
+        mark.textContent = value.slice(r.start, r.end);
         el.appendChild(mark);
-        last = match.index + match[0].length;
-        if (mode === 'startsWith') break;
-    }
+        last = r.end;
+    });
     if (last < value.length) el.appendChild(document.createTextNode(value.slice(last)));
 }
 
@@ -5053,7 +5055,7 @@ function renderColumnArrangeTabs() {
 
 function columnArrangeVisibleKeys(state) {
     const q = columnArrangeState.query.trim().toLowerCase();
-    if (q) return state.columnKeys.filter((k) => (state.labels[k] || k).toLowerCase().includes(q));
+    if (q) return state.columnKeys.filter((k) => SearchSyntax.matches('contains', q, state.labels[k] || k));
     return state.columnKeys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === columnArrangeState.activeTab);
 }
 
@@ -5573,12 +5575,19 @@ function ensureSavedLayoutMenu() {
     window.addEventListener('scroll', positionSavedLayoutMenu, true);
 }
 
+// Marca lo que cumple lo escrito, con la misma sintaxis de todo el sistema (coma, $ antes, @ después).
 function appendHighlightedText(el, text, lowerQuery) {
-    const at = lowerQuery ? text.toLowerCase().indexOf(lowerQuery) : -1;
-    if (at < 0) { el.textContent = text; return; }
-    const mark = document.createElement('mark');
-    mark.textContent = text.slice(at, at + lowerQuery.length);
-    el.append(text.slice(0, at), mark, text.slice(at + lowerQuery.length));
+    const spans = lowerQuery ? SearchSyntax.ranges('contains', lowerQuery, text) : [];
+    if (!spans.length) { el.textContent = text; return; }
+    let last = 0;
+    spans.forEach((r) => {
+        const mark = document.createElement('mark');
+        if (r.role !== 'main') mark.className = 'aux';
+        mark.textContent = text.slice(r.start, r.end);
+        el.append(text.slice(last, r.start), mark);
+        last = r.end;
+    });
+    el.append(text.slice(last));
 }
 
 function renderSavedLayoutMenu() {
@@ -5607,7 +5616,7 @@ function renderSavedLayoutMenu() {
 
     const query = state.query.trim();
     const lowerQuery = query.toLowerCase();
-    const shown = lowerQuery ? state.layouts.filter((l) => l.name.toLowerCase().includes(lowerQuery)) : state.layouts;
+    const shown = lowerQuery ? state.layouts.filter((l) => SearchSyntax.matches('contains', lowerQuery, l.name)) : state.layouts;
     if (!shown.length) {
         const empty = document.createElement('p');
         empty.className = 'data-table-layout-empty';
@@ -6438,7 +6447,7 @@ function renderSavedSearchMenu() {
 
     const query = state.query.trim();
     const lowerQuery = query.toLowerCase();
-    const shown = lowerQuery ? state.searches.filter((s) => s.name.toLowerCase().includes(lowerQuery)) : state.searches;
+    const shown = lowerQuery ? state.searches.filter((s) => SearchSyntax.matches('contains', lowerQuery, s.name)) : state.searches;
     if (!shown.length) {
         const empty = document.createElement('p');
         empty.className = 'data-table-layout-empty';
@@ -6748,7 +6757,7 @@ function renderSearchEditorTabs() {
 function searchEditorVisibleKeys(state) {
     const keys = searchEditorKeys(state);
     const q = searchEditorState.query.trim().toLowerCase();
-    if (q) return keys.filter((k) => (state.labels[k] || k).toLowerCase().includes(q));
+    if (q) return keys.filter((k) => SearchSyntax.matches('contains', q, state.labels[k] || k));
     return keys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === searchEditorState.activeTab);
 }
 
@@ -8706,7 +8715,7 @@ function toggleAdvancedPicker(btn, tableId) {
         });
         const q = picker.query.trim().toLowerCase();
         const visible = q
-            ? keys.filter((k) => (state.labels[k] || k).toLowerCase().includes(q))
+            ? keys.filter((k) => SearchSyntax.matches('contains', q, state.labels[k] || k))
             : keys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === picker.tab);
         listEl.innerHTML = '';
         visible.forEach((key) => {
@@ -10590,7 +10599,7 @@ function renderSidebarSearchResults(query) {
         return;
     }
     const matches = getSearchableLinks()
-        .filter((a) => normalizeSearchText(searchableLabel(a)).includes(q))
+        .filter((a) => SearchSyntax.matches('contains', q, searchableLabel(a)))
         .slice(0, 8);
     if (!matches.length) {
         const li = document.createElement('li');

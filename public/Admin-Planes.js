@@ -423,7 +423,7 @@ function applyPlanFilters() {
             const haystack = ['name', 'description', 'businessSector', 'createdBy']
                 .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
                 .join(' ');
-            if (!haystack.includes(text)) visible = false;
+            if (!SearchSyntax.matches('contains', text, haystack)) visible = false;
         }
         if (status && tr.dataset.planStatus !== status) visible = false;
         tr.hidden = !visible;

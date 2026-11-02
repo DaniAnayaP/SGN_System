@@ -419,7 +419,7 @@ function applyUsersFilters() {
             const haystack = ['accUsername', 'accName', 'accEmail']
                 .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
                 .join(' ');
-            if (!haystack.includes(text)) visible = false;
+            if (!SearchSyntax.matches('contains', text, haystack)) visible = false;
         }
         if (operationalStatus && tr.dataset.operationalStatus !== operationalStatus) visible = false;
         tr.hidden = !visible;

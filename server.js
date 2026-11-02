@@ -6048,6 +6048,7 @@ app.get('/api/business/sku-items/upcs', requireAuth, (req, res) => {
 // categorías y la clasificación; las 6 fotos se toman con el producto en la mano, así que el artículo queda sin código QR hasta tenerlas. Un código ya completo no se toca (se corrige en Edición Código).
 // Sin "columns" se cargan todas las columnas que traiga la fila; con ella, solo las elegidas (el SKU y el UPC siempre son llaves). Una celda vacía nunca borra lo que el código ya tiene.
 const SkuTemplate = require('./public/SkuTemplate.js');
+const SearchSyntax = require('./public/SearchSyntax.js');
 // Un código para la carga por plantilla: { id, sku, upc, complete, v: { campo: valor actual } } (solo los datos que ya tiene; la clasificación va con su nombre).
 function skuTemplateItem(row, classificationNames) {
     const v = {};
@@ -6720,28 +6721,29 @@ function publicSearchData(clientId) {
 const PUBLIC_SEARCH_LIMIT = 10;
 const PUBLIC_SEARCH_FIELDS = ['zone', 'furniture', 'place', 'sku', 'desc', 'cat'];
 const PUBLIC_SEARCH_LEGACY_TYPES = { zone: ['zone'], cat: ['cat'], code: ['sku', 'desc', 'cat'] };
-// Igual que el "Tipo de Filtro" de las tablas (textRuleMatches en Dashboard.js): Inicia con, Contiene o Igual que; lo escrito puede ser varias palabras separadas por coma y se cumple CUALQUIERA de
-// ellas (un "o", nunca un "y"); mayúsculas, acentos y espacios junto a la coma no cuentan. "Igual que" también parte por coma lo que trae el campo.
+// Igual que el "Tipo de Filtro" de las tablas: Inicia con, Contiene o Igual que, con la misma sintaxis (coma = cualquiera de las búsquedas, $ = otra palabra antes, @ = otra palabra después). El motor es
+// uno solo para todo el sistema (public/SearchSyntax.js): la pantalla y el servidor leen igual lo escrito. Mayúsculas, acentos y espacios junto a la coma o al signo no cuentan.
 const PUBLIC_SEARCH_MODES = ['startsWith', 'contains', 'equals'];
-const publicSearchMatcher = (mode, terms) => (fields) => fields.some((f) => {
-    if (!f) return false;
-    if (mode === 'equals') { const parts = f.split(',').map((p) => p.trim()); return terms.some((t) => parts.includes(t)); }
-    return terms.some((t) => (mode === 'startsWith' ? f.startsWith(t) : f.includes(t)));
-});
+// Lo escrito en la URL: hasta 80 letras y 6 búsquedas separadas por coma.
+const publicSearchQuery = (raw) => String(raw || '').slice(0, 80).split(',').slice(0, 6).join(',');
+const publicSearchMatcher = (mode, query) => {
+    const test = SearchSyntax.compile(mode, query);
+    return (fields) => fields.some((f) => !!f && test(f));
+};
 app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
     const row = getLayoutByPublicToken(req.params.token);
     if (!row) return res.status(404).json({ message: 'Layout not found.' });
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
-    const terms = foldText(String(req.query.q || '').slice(0, 80)).split(',').map((s) => s.trim()).filter(Boolean).slice(0, 6);
+    const query = publicSearchQuery(req.query.q);
     const asked = String(req.query.fields || '').split(',').map((s) => s.trim()).filter((f) => PUBLIC_SEARCH_FIELDS.includes(f));
     const fields = new Set(asked.length ? asked : (PUBLIC_SEARCH_LEGACY_TYPES[req.query.type] || PUBLIC_SEARCH_FIELDS));
     const zones = (row.layout.zones || []).filter((z) => z.active !== false);
     const zoneFilter = zones.some((z) => z.id === String(req.query.z || '')) ? String(req.query.z) : '';
     const out = { zones: [], categories: [], codes: [], furniture: [], places: [], totals: { zones: 0, categories: 0, codes: 0, furniture: 0, places: 0 } };
     // Contiene pide al menos 2 letras o números (con 1 saldría casi todo); Inicia con e Igual que sí sirven con 1 (una zona "A", un anaquel "B").
-    if (!terms.length || Math.max(...terms.map((t) => t.length)) < (mode === 'contains' ? 2 : 1)) return res.json(out);
-    const matches = publicSearchMatcher(mode, terms);
+    if (!SearchSyntax.ready(mode, query)) return res.json(out);
+    const matches = publicSearchMatcher(mode, query);
     const inScope = (id) => !zoneFilter || id === zoneFilter;
     if (fields.has('zone')) {
         const found = zones.filter((z) => inScope(z.id) && matches([foldText(z.name)]));
@@ -6853,9 +6855,9 @@ app.get('/api/public/layout/:token/classification', publicSearchLimiter, async (
             };
         });
         const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
-        const terms = foldText(String(req.query.q || '').slice(0, 80)).split(',').map((s) => s.trim()).filter(Boolean).slice(0, 6);
-        const filtering = terms.length > 0 && Math.max(...terms.map((t) => t.length)) >= (mode === 'contains' ? 2 : 1);
-        const matches = publicSearchMatcher(mode, terms);
+        const query = publicSearchQuery(req.query.q);
+        const filtering = SearchSyntax.ready(mode, query);
+        const matches = publicSearchMatcher(mode, query);
         const found = (filtering ? codes.filter((c) => matches(c.fields)) : codes).sort((a, b) => {
             const pa = a.places[0]; const pb = b.places[0];
             return ((pa && pa.space ? 0 : 1) - (pb && pb.space ? 0 : 1)) || naturalCompare(pa ? pa.space : '', pb ? pb.space : '') || (pa ? pa.level : 0) - (pb ? pb.level : 0) || (pa ? pa.slot : 0) - (pb ? pb.slot : 0) || a.code.record_number - b.code.record_number;

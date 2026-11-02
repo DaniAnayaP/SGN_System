@@ -1808,7 +1808,7 @@
             filterInput.addEventListener('input', () => {
                 const q = filterInput.value.trim().toLowerCase();
                 Array.from(tableEl.querySelectorAll('tbody tr')).forEach((tr) => {
-                    tr.style.display = (!q || tr.textContent.toLowerCase().includes(q)) ? '' : 'none';
+                    tr.style.display = (!q || SearchSyntax.matches('contains', q, tr.textContent)) ? '' : 'none';
                 });
             });
 

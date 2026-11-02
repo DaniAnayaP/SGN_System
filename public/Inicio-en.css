@@ -2754,6 +2754,10 @@
         border-radius: 0.2rem;
         padding: 0 0.08rem;
     }
+    /* Las palabras de $ (antes) y @ (después): más claro que la buscada. */
+    .data-table-col-filter-option mark.aux{
+        background: color-mix(in srgb, #f5c542 24%, transparent);
+    }
     /* Pastillas de las palabras de un filtro de texto ("VALE" o "ABI"). */
     .data-table-term-chips{
         display: flex;

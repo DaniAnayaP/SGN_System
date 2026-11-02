@@ -295,30 +295,21 @@
     const searchState = { open: false, q: '', fields: [], mode: 'contains', scope: false, timer: null, ctl: null, seq: 0, busy: false, error: false, results: null };
     const foldText = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
     const fill = (text, vars) => Object.keys(vars).reduce((acc, k) => acc.split(`{${k}}`).join(vars[k]), text);
-    // Lo escrito son una o varias palabras separadas por coma (cualquiera de ellas sirve), sin acentos ni mayúsculas; igual que en las tablas.
-    const searchTerms = (raw) => foldText(raw).split(',').map((s) => s.trim()).filter(Boolean).slice(0, 6);
+    // Lo escrito se lee con el mismo motor que las tablas y el servidor (SearchSyntax.js): varias búsquedas separadas por coma (sirve CUALQUIERA), y en cada una $ = otra palabra ANTES de la buscada
+    // y @ = otra palabra DESPUÉS ("rack$número@cajón"). Hasta 80 letras y 6 búsquedas, igual que acepta el servidor.
+    const searchTerms = (raw) => String(raw == null ? '' : raw).slice(0, 80).split(',').slice(0, 6).join(',');
     // Contiene pide al menos 2 letras o números; Inicia con e Igual que sirven con 1 (lo mismo que valida el servidor).
-    const searchReady = (terms) => terms.length > 0 && Math.max(...terms.map((t) => t.length)) >= (searchState.mode === 'contains' ? 2 : 1);
-    // Marca lo que cumple, como en las tablas: cada aparición de cualquier palabra (Contiene) o solo el arranque (Inicia con); con Igual que no se marca.
-    function highlight(text, terms, mode = searchState.mode) {
+    const searchReady = (query) => window.SearchSyntax.ready(searchState.mode, query);
+    // Marca lo que cumple, como en las tablas: cada aparición de la palabra buscada (Contiene) o solo el arranque (Inicia con); las palabras de $ y @ se marcan más claro; con Igual que no se marca.
+    function highlight(text, query, mode = searchState.mode) {
         const t = String(text == null ? '' : text);
-        if (!terms || !terms.length || mode === 'equals') return esc(t);
-        const folded = foldText(t);
-        const sorted = terms.slice().sort((a, b) => b.length - a.length);
+        if (!query || mode === 'equals') return esc(t);
         let out = '';
         let at = 0;
-        while (at < t.length) {
-            let hit = -1;
-            let len = 0;
-            sorted.forEach((term) => {
-                const i = searchState.mode === 'startsWith' ? (folded.startsWith(term, at) && at === 0 ? 0 : -1) : folded.indexOf(term, at);
-                if (i >= 0 && (hit < 0 || i < hit)) { hit = i; len = term.length; }
-            });
-            if (hit < 0) break;
-            out += `${esc(t.slice(at, hit))}<mark>${esc(t.slice(hit, hit + len))}</mark>`;
-            at = hit + len;
-            if (searchState.mode === 'startsWith') break;
-        }
+        window.SearchSyntax.ranges(mode, query, t).forEach((r) => {
+            out += `${esc(t.slice(at, r.start))}<mark${r.role === 'main' ? '' : ' class="aux"'}>${esc(t.slice(r.start, r.end))}</mark>`;
+            at = r.end;
+        });
         return out + esc(t.slice(at));
     }
     const searchEl = (id) => document.getElementById(id);
@@ -531,9 +522,12 @@
         const mark = data.hasLogo ? `<img class="brand-logo" src="/api/public/layout/${encodeURIComponent(publicToken())}/logo" alt="">` : `<span class="brand-mark">${esc(initials)}</span>`;
         // Fuera del Layout general (una zona, una categoría…) el icono de casa regresa al Layout general desde cualquier nivel.
         const home = scanContext(data).zone ? `<a class="hbtn" href="${esc(window.location.pathname)}" aria-label="${esc(TEXT.home)}" title="${esc(TEXT.home)}">${iconSvg('home')}</a>` : '';
-        // Con Sitio guardado, lo fuerte va arriba (el Sitio) y lo débil abajo (el nombre de la empresa), igual que en el reporte y la tarjeta.
-        if (data.siteName) return `<div class="brand">${mark}<div class="brand-names"><span class="brand-site">${esc(data.siteName)}</span><span class="brand-name weak">${esc(data.companyName)}</span></div>${home}</div>`;
-        return `<div class="brand">${mark}<span class="brand-name">${esc(data.companyName)}</span>${home}</div>`;
+        // El encabezado lleva, de arriba abajo: «Layout», el Sitio (lo fuerte, igual que en el reporte y la tarjeta), el nombre de la empresa (lo débil) y la versión con su fecha; así la página no gasta otro bloque
+        // de título abajo de la línea morada. Sin Sitio guardado salen «Layout», la empresa y la versión.
+        const meta = `<span class="brand-meta">${versionLine(data)}</span>`;
+        const kind = `<span class="brand-kind">${esc(TEXT.title)}</span>`;
+        if (data.siteName) return `<div class="brand">${mark}<div class="brand-names">${kind}<span class="brand-site">${esc(data.siteName)}</span><span class="brand-name weak">${esc(data.companyName)}</span>${meta}</div>${home}</div>`;
+        return `<div class="brand">${mark}<div class="brand-names">${kind}<span class="brand-name">${esc(data.companyName)}</span>${meta}</div>${home}</div>`;
     };
     // El título de la página es el Sitio (p. ej. CEDIS CHIHUAHUA); sin Sitio guardado queda "Layout".
     const pageTitle = (data) => data.siteName || TEXT.title;
@@ -740,7 +734,6 @@
                 ${mapBlockHtml(data)}<div id="clsslot" class="zextra"></div>`;
         } else {
             body = `${categoryBanner(data)}<div id="catslot"></div>
-                <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${versionLine(data)}</p></div>
                 ${mapBlockHtml(data)}
                 <div class="zextra"><a class="mbtn pg-metrics" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
                 ${zonesSectionHtml(data)}</div>`;
@@ -782,7 +775,7 @@
         document.getElementById('wrap').innerHTML = `
             ${brandBar(data)}
             <a class="back" href="#"><span aria-hidden="true">‹</span> ${esc(pageTitle(data))}</a>
-            <div class="info"><h1>${esc(TEXT.metrics)}</h1><p class="sub">${versionLine(data)}</p></div>
+            <div class="info"><h1>${esc(TEXT.metrics)}</h1></div>
             <div class="kpis">${cards}</div>
             <div id="metric-detail">${metricDetailHtml(data, key)}</div>
             <div class="footer">${esc(TEXT.footer)}</div>`;

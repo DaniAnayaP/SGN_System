@@ -312,7 +312,7 @@ function applyFleetFilters() {
         const haystack = ['colFleetEco', 'colFleetPlates', 'colFleetBrandModel']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
-        tr.hidden = !haystack.includes(text);
+        tr.hidden = !SearchSyntax.matches('contains', text, haystack);
     });
 }
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFleetFilters);
