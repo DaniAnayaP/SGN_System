@@ -513,7 +513,16 @@ function renderSvg() {
     let zoneLabels = '';
     let measureLabels = '';
     const draggable = canEdit('zonas');
-    const measureText = (pts, minPx) => LC.sideMeasures(pts, false).filter((m) => m.len * sc >= minPx && !LC.onPolygonEdge(m.mx, m.my, d.vertices)).map((m) => `<text class="lm" x="${(X(m.mx) + m.nx * 9).toFixed(1)}" y="${(Y(m.my) + m.ny * 9 + 3).toFixed(1)}" text-anchor="middle">${fmt(m.len)}</text>`).join('');
+    // Recuadros (aprox.) que ocupan los nombres y los m² de las zonas: una medida de lado que caería encima se omite (su contorno blanco borraba el nombre de la zona).
+    const labelBoxes = [];
+    const addBox = (x, baseline, text, size, anchor) => { labelBoxes.push(LC.labelBox(x, baseline, text, size, anchor)); };
+    const measureJobs = [];
+    const measureText = (pts, minPx) => LC.sideMeasures(pts, false).filter((m) => m.len * sc >= minPx && !LC.onPolygonEdge(m.mx, m.my, d.vertices)).filter((m) => {
+        const cxm = X(m.mx) + m.nx * 9;
+        const cym = Y(m.my) + m.ny * 9 + 3;
+        const w = String(fmt(m.len)).length * 4.9 + 2;
+        return !labelBoxes.some(([bx0, by0, bx1, by1]) => cxm - w / 2 < bx1 && cxm + w / 2 > bx0 && cym - 10 < by1 && cym + 3 > by0);
+    }).map((m) => `<text class="lm" x="${(X(m.mx) + m.nx * 9).toFixed(1)}" y="${(Y(m.my) + m.ny * 9 + 3).toFixed(1)}" text-anchor="middle">${fmt(m.len)}</text>`).join('');
     (on('zonas') ? d.zones : []).forEach((z) => {
         const typeText = z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona');
         const cls = `lz ${z.type ? (ZONE_CLASS[z.type] || 'lz-dock') : 'lz-none'}${z.active === false ? ' lz-off' : ''}${state.open.zones[z.id] ? ' lz-warn' : ''}${draggable ? ' lz-drag' : ''}`;
@@ -525,7 +534,9 @@ function renderSvg() {
                     : `<polygon class="${cls}" data-zid="${esc(z.id)}" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}">${title}</polygon>`;
                 const a = LC.zoneLabelAnchor(z);
                 zoneLabels += `<text class="lt" x="${X(a.x)}" y="${Y(a.y) - 1}" text-anchor="middle">${esc(z.name)}</text>${state.showArea ? `<text class="lt2" x="${X(a.x)}" y="${Y(a.y) + 10}" text-anchor="middle">${fmt(LC.zoneArea(z))} m²</text>` : ''}`;
-                if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureLabels += measureText(z.pts, 30);
+                addBox(X(a.x), Y(a.y) - 1, z.name, 10, 'middle');
+                if (state.showArea) addBox(X(a.x), Y(a.y) + 10, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle');
+                if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureJobs.push([z.pts, 30]);
             } else if (z.pts.length) {
                 if (z.pts.length > 1) s += `<polyline class="lz-open" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
                 s += `<circle class="lv" cx="${X(z.pts[0][0])}" cy="${Y(z.pts[0][1])}" r="4"/>`;
@@ -536,13 +547,16 @@ function renderSvg() {
             ? `<g class="lzf${z.active === false ? ' lz-off' : ''}${draggable ? ' lz-drag' : ''}" data-zid="${esc(z.id)}">${window.LayoutMapSvg.zonePaint(`ef-${z.id}`, z.fmt).markup(LC.zonePoints(z).map((p) => `${X(p[0])},${Y(p[1])}`).join(' '))}${title}</g>`
             : `<rect class="${cls}" data-zid="${esc(z.id)}" x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4">${title}</rect>`;
         const spot = LC.zoneLabelSpot(z, d.spaces, sc);
-        const tx = spot.right ? X(z.x + z.l) - 5 : X(z.x) + 5;
-        const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
-        const anchor = spot.right ? 'end' : 'start';
+        // si el nombre cae encima del de otra zona (zonas chicas o croquis chico) se corre a otra esquina, más abajo o afuera de la zona
+        const place = LC.placeZoneLabel(z, spot, X, Y, sc, labelBoxes, state.showArea ? `${fmt(z.l * z.w)} m²` : '');
+        const { tx, ty, anchor } = place;
         zoneLabels += `<text class="lt" x="${tx}" y="${ty}" text-anchor="${anchor}">${esc(z.name)}</text>`;
-        if (state.showArea && z.w * sc > 26) zoneLabels += `<text class="lt2" x="${tx}" y="${ty + 11}" text-anchor="${anchor}">${fmt(z.l * z.w)} m²</text>`;
-        if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureLabels += measureText(LC.zonePoints(z), 30);
+        if (place.withArea) zoneLabels += `<text class="lt2" x="${tx}" y="${ty + 11}" text-anchor="${anchor}">${fmt(z.l * z.w)} m²</text>`;
+        place.boxes.forEach((b) => labelBoxes.push(b));
+        if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureJobs.push([LC.zonePoints(z), 30]);
     });
+    // las medidas de adentro se calculan al final, cuando ya se conocen los nombres de TODAS las zonas
+    measureJobs.forEach(([pts, minPx]) => { measureLabels += measureText(pts, minPx); });
     s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     (on('contorno') ? d.obstacles : []).forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
     (on('espacios') ? d.spaces : []).forEach((sp) => {

@@ -141,11 +141,17 @@
         let zoneLabels = '';
         // Recuadros (aprox.) que ocupan los nombres y los m² de las zonas: una medida de lado que caería encima se omite para que no tape el nombre (tenía un contorno blanco que lo borraba).
         const labelBoxes = [];
-        const addBox = (x, baseline, text, size, anchor) => {
-            const w = String(text).length * size * 0.58 + 3;
-            const x0 = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x;
-            labelBoxes.push([x0, baseline - size, x0 + w, baseline + 3]);
-        };
+        const addBox = (x, baseline, text, size, anchor) => { labelBoxes.push(LC.labelBox(x, baseline, text, size, anchor)); };
+        // las medidas de afuera de la nave también cuentan: un nombre que sobresale de la nave no debe quedar debajo de una
+        if (options.measures !== false) {
+            LC.sideMeasures(layout.vertices, true).forEach((m) => {
+                if (m.len * sc < 24) return;
+                const w = String(fmt(m.len)).length * 4.4 + 2;
+                const cx = X(m.mx) + m.nx * 11;
+                const cy = Y(m.my) + m.ny * 11 + 2.5;
+                labelBoxes.push([cx - w / 2, cy - 9, cx + w / 2, cy + 3]);
+            });
+        }
         (on('zonas') ? (layout.zones || []) : []).forEach((z) => {
             const c = z.type ? (T.types[z.type] || T.types.dock) : T.types.none;
             const style = `fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`;
@@ -161,12 +167,12 @@
             } else {
                 s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(LC.zonePoints(z).map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4" ${style}/>`;
                 const spot = LC.zoneLabelSpot(z, layout.spaces || [], sc);
-                const tx = spot.right ? X(z.x + z.l) - 5 : X(z.x) + 5;
-                const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
-                const anchor = spot.right ? 'end' : 'start';
+                // si el nombre cae encima del de otra zona (zonas chicas o croquis chico) se corre a otra esquina, más abajo o afuera de la zona
+                const place = LC.placeZoneLabel(z, spot, X, Y, sc, labelBoxes, options.area !== false ? `${fmt(z.l * z.w)} m²` : '');
+                const { tx, ty, anchor } = place;
                 zoneLabels += `<text x="${tx}" y="${ty}" font-size="10" font-weight="600" fill="#14161F" text-anchor="${anchor}" ${halo}>${esc(z.name)}</text>`;
-                addBox(tx, ty, z.name, 10, anchor);
-                if (options.area !== false && z.w * sc > 26) { zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`; addBox(tx, ty + 11, `${fmt(z.l * z.w)} m²`, 8.5, anchor); }
+                if (place.withArea) zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`;
+                place.boxes.forEach((b) => labelBoxes.push(b));
             }
             if (focus) {
                 if (focusZones[z.id]) {

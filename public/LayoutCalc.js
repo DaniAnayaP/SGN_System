@@ -586,6 +586,43 @@
         return { right: best.right, bottom: best.bottom };
     }
 
+    // Recuadro aproximado [x0, y0, x1, y1] que ocupa un texto del croquis (para que nombres, m² y medidas no se encimen).
+    function labelBox(x, baseline, text, size, anchor) {
+        const w = String(text).length * size * 0.58 + 3;
+        const x0 = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x;
+        return [x0, baseline - size, x0 + w, baseline + 3];
+    }
+
+    // Dónde poner el nombre (y los m²) de una zona de rectángulo sin taparle el nombre a otra: primero la esquina que eligió zoneLabelSpot; si ahí cae encima de un nombre ya
+    // puesto (taken = recuadros de labelBox), prueba las otras esquinas, luego más abajo dentro de la zona y al final afuera (debajo y arriba). Si nada queda libre se queda con la primera.
+    function placeZoneLabel(z, spot, X, Y, sc, taken, areaText) {
+        const x0 = X(z.x); const x1 = X(z.x + z.l); const y0 = Y(z.y); const y1 = Y(z.y + z.w);
+        const bottomTy = y1 - (z.w * sc > 26 ? 17 : 5);
+        const topTy = y0 + 12;
+        const makeAt = (tx, anchor, ty) => {
+            const withArea = Boolean(areaText) && z.w * sc > 26;
+            const boxes = [labelBox(tx, ty, z.name, 10, anchor)];
+            if (withArea) boxes.push(labelBox(tx, ty + 11, areaText, 8.5, anchor));
+            return { tx, ty, anchor, withArea, boxes };
+        };
+        const make = (right, ty) => makeAt(right ? x1 - 5 : x0 + 5, right ? 'end' : 'start', ty);
+        const overlapArea = (c) => c.boxes.reduce((acc, b) => acc + (taken || []).reduce((a2, o) => {
+            const ox = Math.min(b[2], o[2]) - Math.max(b[0], o[0]);
+            const oy = Math.min(b[3], o[3]) - Math.max(b[1], o[1]);
+            return ox > 0 && oy > 0 ? a2 + ox * oy : a2;
+        }, 0), 0);
+        const firstTy = spot.bottom ? bottomTy : topTy;
+        const otherTy = spot.bottom ? topTy : bottomTy;
+        const tries = [make(spot.right, firstTy), make(!spot.right, firstTy), make(spot.right, otherTy), make(!spot.right, otherTy)];
+        for (let ty = topTy + 12; ty < y1 - 4; ty += 12) tries.push(make(spot.right, ty), make(!spot.right, ty));
+        // zonas muy chicas: el nombre sale afuera, pegado a la derecha o a la izquierda de la zona y debajo o arriba de ella
+        [y0 + 12, (y0 + y1) / 2 + 3, y1 - 4, y1 + 12, y0 - 4, y1 + 24, y0 - 16].forEach((ty) => { tries.push(makeAt(x1 + 4, 'start', ty), makeAt(x0 - 4, 'end', ty)); });
+        const free = tries.find((c) => overlapArea(c) === 0);
+        if (free) return free;
+        // nada quedó libre: la opción que menos se encima
+        return tries.reduce((best, c) => (overlapArea(c) < overlapArea(best) ? c : best), tries[0]);
+    }
+
     // Qué datos tiene cada sección (para saber si "Ver y Operar" todavía puede llenarla).
     // Gira el Layout (SOLO para dibujarlo; lo guardado no cambia) en cuartos de vuelta hacia la derecha: 0, 1 (90°), 2 (180°) o 3 (270°). Se giran las esquinas, las zonas (con sus
     // esquinas si son de forma libre), los espacios y las columnas; las puertas y las conexiones de luz van por número de pared, así que siguen a su pared solas. Los textos del
@@ -638,7 +675,7 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout,
-        normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, coveredArea,
+        normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
 }));
