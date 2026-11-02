@@ -328,7 +328,7 @@ function geoErrorText(levelKey, err) {
         GEO_CODE_INVALID: `business.ccGeoCodeInvalid${level.codeLength}`,
         GEO_IN_USE: 'business.ccGeoInUse',
         GEO_NAME_DUPLICATE: 'business.ccGeoNameDup',
-        GEO_NAME_REQUIRED: 'admin.requiredFields',
+        GEO_NAME_REQUIRED: 'business.ccTypeNameFirst',
     };
     return Dashboard.t(keys[err && err.geoCode] || 'admin.saveError');
 }
@@ -442,7 +442,7 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
             const editable = !item.in_use;
             const name = editable ? level.nameInput.value.trim() : item.name;
             if (!name) {
-                Dashboard.showToast(Dashboard.t('admin.requiredFields'), 'error');
+                Dashboard.showToast(Dashboard.t('business.ccTypeNameFirst'), 'error');
                 level.nameInput.focus();
                 return;
             }
@@ -475,7 +475,7 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
     level.addConfirm.addEventListener('click', async () => {
         const name = level.addInput.value.trim();
         if (!name) {
-            Dashboard.showToast(Dashboard.t('admin.requiredFields'), 'error');
+            Dashboard.showToast(Dashboard.t('business.ccTypeNameFirst'), 'error');
             level.addInput.focus();
             return;
         }
@@ -589,7 +589,20 @@ async function saveCcModal() {
     const name = nameField.value.trim();
     const siteCode = cleanShortCode(siteCodeField.value, 5);
     if (!countryId || !stateId || !municipalityId || !localityId || !streetId || !sucursal || !name) {
-        modalError.textContent = Dashboard.t('admin.requiredFields');
+        // Dice QUÉ falta (antes salía un texto de otra pantalla). Si lo que falta se escribió en su renglón de "Nuevo…" pero no se pulsó Agregar, se avisa eso.
+        const levelIds = { country: countryId, state: stateId, municipality: municipalityId, locality: localityId, street: streetId };
+        const levelLabel = { country: 'business.ccCountry', state: 'business.ccState', municipality: 'business.ccMunicipality', locality: 'business.ccLocality', street: 'business.ccStreet' };
+        const missingLevels = LEVEL_ORDER.filter((key) => !levelIds[key]);
+        const typedNotAdded = missingLevels.find((key) => cascadeLevels[key].addInput.value.trim());
+        if (typedNotAdded) {
+            modalError.textContent = Dashboard.t('business.ccPressAdd', { field: Dashboard.t(levelLabel[typedNotAdded]) });
+            cascadeLevels[typedNotAdded].addConfirm.focus();
+        } else {
+            const fields = missingLevels.map((key) => Dashboard.t(levelLabel[key]));
+            if (!sucursal) fields.push(Dashboard.t('business.ccBranch'));
+            if (!name) fields.push(Dashboard.t('business.ccName'));
+            modalError.textContent = Dashboard.t('business.ccMissingFields', { fields: fields.join(', ') });
+        }
         modalError.hidden = false;
         return;
     }
