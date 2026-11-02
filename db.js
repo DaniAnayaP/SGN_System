@@ -5160,6 +5160,15 @@ function listCodePlacesForSearch(clientId) {
     return db.prepare("SELECT sku_item_id, zone_id, space_id, level FROM code_relations WHERE client_id = ? AND is_test_data = 0 AND zone_id IS NOT NULL AND zone_id != '' ORDER BY id ASC")
         .all(clientId);
 }
+// Página pública de una clasificación: los códigos de UNA categoría Inventario (por su nombre, que es lo que guarda el código) que Relación Código tiene en una zona, con su clasificación y
+// cada lugar donde están (anaquel, nivel y espacio). Una fila por lugar; quien llama agrupa por código.
+function listZoneCodesWithPlaces(clientId, zoneId, categoryName) {
+    return db.prepare(`SELECT s.id, s.record_number, s.upc, s.unique_description, s.known_description, s.custom_description, s.classification_id, s.public_token, s.evidence_front,
+            r.space_id, r.level, r.slot
+        FROM code_relations r JOIN sku_items s ON s.id = r.sku_item_id
+        WHERE r.client_id = ? AND r.is_test_data = 0 AND s.is_test_data = 0 AND r.zone_id = ? AND s.category_inventario = ? ORDER BY r.id ASC`)
+        .all(clientId, zoneId, categoryName);
+}
 // Cuántos códigos distintos tiene Relación Código en cada zona ({ idDeLaZona: n }); alimenta la lista de Zonas de la página pública del QR del Layout.
 function countCodesByZone(clientId, forTestAccount = false) {
     const out = {};
@@ -10782,6 +10791,7 @@ module.exports = {
     countCodesByZone,
     listPublicSkuItemsForSearch,
     listCodePlacesForSearch,
+    listZoneCodesWithPlaces,
     countSkuItemsByClassification,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,

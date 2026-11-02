@@ -160,6 +160,7 @@ const {
     countCodesByZone,
     listPublicSkuItemsForSearch,
     listCodePlacesForSearch,
+    listZoneCodesWithPlaces,
     countSkuItemsByClassification,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
@@ -6642,6 +6643,96 @@ app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
         });
     }
     res.json(out);
+});
+
+// --- Página pública de una clasificación (?z=<zona>&k=inventario.<id>&l=<id de la clasificación | sin>) ---------------------------------------------------------------------
+// Las clasificaciones que tiene una categoría Inventario del catálogo (relación hecha en Nuestras Categorías Inventario) y, de cada una, los códigos de esa zona que Relación Código ya ubicó.
+// SIN CLASIFICAR no se guarda: se arma al vuelo con los códigos de la categoría que todavía no traen clasificación, así que se vacía sola conforme se clasifican. Nunca costos ni datos internos.
+function publicClassificationContext(row, query) {
+    const zone = (row.layout.zones || []).find((z) => z.id === String(query.z || '') && z.active !== false);
+    const match = /^inventario\.(\d{1,9})$/.exec(String(query.k || ''));
+    if (!zone || !match) return null;
+    const category = getArticleCategoryById(Number(match[1]), row.clientId, false);
+    if (!category || category.category_type !== 'inventario') return null;
+    const all = new Map(listArticleCategories(row.clientId, 'clasificaciones', false).map((r) => [r.id, r]));
+    const catalog = parseClassificationIds(category.classification_ids).map((id) => all.get(id)).filter(Boolean);
+    if (!catalog.length) return { zone, category, items: [], groups: new Map() };
+    const validIds = new Set(catalog.map((c) => c.id));
+    const byCode = new Map();
+    listZoneCodesWithPlaces(row.clientId, zone.id, category.name).forEach((r) => {
+        let code = byCode.get(r.id);
+        if (!code) { code = { ...r, places: [] }; byCode.set(r.id, code); }
+        code.places.push({ spaceId: r.space_id || '', level: r.level, slot: r.slot });
+    });
+    const groups = new Map([...catalog.map((c) => [String(c.id), []]), ['sin', []]]);
+    byCode.forEach((code) => groups.get(code.classification_id && validIds.has(code.classification_id) ? String(code.classification_id) : 'sin').push(code));
+    const items = [
+        ...catalog.map((c) => ({ key: String(c.id), name: c.name, description: c.description || '', seed: c.record_number, virtual: false, count: groups.get(String(c.id)).length })),
+        { key: 'sin', name: '', description: '', seed: 0, virtual: true, count: groups.get('sin').length },
+    ];
+    return { zone, category, items, groups };
+}
+app.get('/api/public/layout/:token/classifications', publicLayoutLimiter, (req, res) => {
+    const row = getLayoutByPublicToken(req.params.token);
+    if (!row) return res.status(404).json({ message: 'Layout not found.' });
+    const ctx = publicClassificationContext(row, req.query);
+    if (!ctx) return res.status(404).json({ message: 'Category not found.' });
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json({ zoneName: ctx.zone.name, categoryName: ctx.category.name, categorySeed: ctx.category.record_number, items: ctx.items });
+});
+const CLASSIFICATION_PAGE_LIMIT = 30;
+const naturalCompare = (a, b) => String(a).localeCompare(String(b), 'es', { numeric: true });
+app.get('/api/public/layout/:token/classification', publicSearchLimiter, async (req, res) => {
+    try {
+        const row = getLayoutByPublicToken(req.params.token);
+        if (!row) return res.status(404).json({ message: 'Layout not found.' });
+        const ctx = publicClassificationContext(row, req.query);
+        const key = String(req.query.l || '');
+        const meta = ctx && ctx.items.find((i) => i.key === key);
+        if (!ctx || !meta) return res.status(404).json({ message: 'Classification not found.' });
+        res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+        const spaceById = new Map((row.layout.spaces || []).filter((s) => s.active !== false).map((s) => [s.id, s]));
+        // cada código con sus lugares ordenados: primero los que tienen anaquel (por anaquel, nivel y espacio) y al final los que aún no
+        const codes = (ctx.groups.get(key) || []).map((code) => {
+            const places = code.places.map((p) => { const sp = spaceById.get(p.spaceId); return { space: sp ? sp.code : '', spaceId: sp ? sp.id : '', level: Number(p.level) || 0, slot: Number(p.slot) || 0 }; })
+                .sort((a, b) => (a.space ? 0 : 1) - (b.space ? 0 : 1) || naturalCompare(a.space, b.space) || a.level - b.level || a.slot - b.slot);
+            const sku = String(code.record_number).padStart(6, '0');
+            return {
+                code, places, sku, name: code.custom_description || code.known_description || code.unique_description || '',
+                fields: [sku, String(code.record_number), code.upc, code.unique_description, code.known_description, code.custom_description, ...places.map((p) => p.space), ...places.filter((p) => p.level).map((p) => `nivel ${p.level}`)].map(foldText),
+            };
+        });
+        const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
+        const terms = foldText(String(req.query.q || '').slice(0, 80)).split(',').map((s) => s.trim()).filter(Boolean).slice(0, 6);
+        const filtering = terms.length > 0 && Math.max(...terms.map((t) => t.length)) >= (mode === 'contains' ? 2 : 1);
+        const matches = publicSearchMatcher(mode, terms);
+        const found = (filtering ? codes.filter((c) => matches(c.fields)) : codes).sort((a, b) => {
+            const pa = a.places[0]; const pb = b.places[0];
+            return ((pa && pa.space ? 0 : 1) - (pb && pb.space ? 0 : 1)) || naturalCompare(pa ? pa.space : '', pb ? pb.space : '') || (pa ? pa.level : 0) - (pb ? pb.level : 0) || (pa ? pa.slot : 0) - (pb ? pb.slot : 0) || a.code.record_number - b.code.record_number;
+        });
+        const offset = Math.max(0, Math.min(Number(req.query.offset) || 0, found.length));
+        const limit = Math.max(1, Math.min(Number(req.query.limit) || CLASSIFICATION_PAGE_LIMIT, 60));
+        const page = found.slice(offset, offset + limit);
+        const photoOf = async (code) => {
+            if (!code.evidence_front || !isR2Configured()) return '';
+            try { return await getDownloadUrl(code.evidence_front); } catch (err) { console.error('Clasificación pública: foto', err.message); return ''; }
+        };
+        const items = await Promise.all(page.map(async (c) => ({
+            sku: c.sku, name: c.name, token: c.code.public_token || '', photo: await photoOf(c.code),
+            loc: c.places[0] && c.places[0].space ? { space: c.places[0].space, level: c.places[0].level, slot: c.places[0].slot, more: c.places.length - 1 } : null,
+        })));
+        res.json({
+            zoneName: row.layout.zones.find((z) => z.id === ctx.zone.id).name, zoneId: ctx.zone.id, categoryName: ctx.category.name, categoryKey: `inventario.${ctx.category.id}`,
+            classification: { key: meta.key, name: meta.name, description: meta.description, seed: meta.seed, virtual: meta.virtual, count: meta.count },
+            siblings: ctx.items.map((i) => ({ key: i.key, name: i.name, seed: i.seed, virtual: i.virtual, count: i.count })),
+            total: found.length, offset, items,
+            // los anaqueles donde están los códigos que se están viendo (con la búsqueda aplicada): el croquis los rellena
+            spaceIds: [...new Set(found.flatMap((c) => c.places.map((p) => p.spaceId).filter(Boolean)))],
+        });
+    } catch (err) {
+        console.error('Clasificación pública: no se pudo armar', err);
+        res.status(500).json({ message: 'Failed to load classification.' });
+    }
 });
 
 // --- Nuestras Categorías <Tipo> (Catálogos > Cadena de Suministro > C. -----

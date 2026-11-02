@@ -23,6 +23,10 @@
             searchScopeLabel: 'Buscando en:', searchScopeZone: '{z} (tocar para ampliar)', searchScopeAll: 'Todo el Layout (tocar para limitar a {z})', searchHint: 'Escribe un código, una descripción, una zona o una categoría. Con comas se busca cualquiera de las palabras.',
             searchNone: 'No hay resultados para "{q}".', searchNoneZone: 'No hay resultados para "{q}" en {z}.', searchWiden: 'Buscar en todo el Layout', searchBusy: 'Buscando…', searchError: 'No se pudo buscar. Intenta de nuevo.',
             searchGroup: { zone: 'Zonas', cat: 'Categorías', code: 'Códigos' }, searchOne: '1 resultado', searchMany: '{n} resultados', searchMore: 'Mostrando {n} de {t}. Escribe más para afinar.', searchCats: '{n} categorías', searchCat1: '1 categoría',
+            classifications: 'Clasificaciones', noClassification: 'SIN CLASIFICAR', noClassificationDesc: 'Códigos que todavía no tienen clasificación',
+            articlesOne: '1 artículo, ordenados por ubicación', articlesMany: '{n} artículos, ordenados por ubicación', viewGrid: 'Cuadrícula', viewList: 'Lista', viewLabel: 'Vista',
+            clsMore: 'Ver más', clsShowing: 'Mostrando {n} de {t}', clsNoLoc: 'Sin ubicación', clsLevel: 'Nivel {n}', clsCode: 'Código {n}',
+            clsError: 'No se pudo cargar la clasificación. Intenta de nuevo.', clsGone: 'Esta clasificación ya no está disponible.', clsEmpty: 'Todavía no hay artículos en esta clasificación en esta zona.',
             layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Anaqueles y gabetas' },
             zone: { dry: 'Seco', cold: 'Refrigerado', chemical: 'Químicos', finished: 'Producto terminado', dock: 'Andén', office: 'Oficina', aisle: 'Pasillo principal', aisle2: 'Pasillo entre anaqueles' },
         },
@@ -42,6 +46,10 @@
             searchScopeLabel: 'Searching in:', searchScopeZone: '{z} (tap to widen)', searchScopeAll: 'Whole Layout (tap to limit to {z})', searchHint: 'Type a code, a description, a zone or a category. With commas, any of the words matches.',
             searchNone: 'No results for "{q}".', searchNoneZone: 'No results for "{q}" in {z}.', searchWiden: 'Search the whole Layout', searchBusy: 'Searching…', searchError: 'The search failed. Try again.',
             searchGroup: { zone: 'Zones', cat: 'Categories', code: 'Codes' }, searchOne: '1 result', searchMany: '{n} results', searchMore: 'Showing {n} of {t}. Type more to narrow it down.', searchCats: '{n} categories', searchCat1: '1 category',
+            classifications: 'Classifications', noClassification: 'UNCLASSIFIED', noClassificationDesc: 'Codes that do not have a classification yet',
+            articlesOne: '1 item, sorted by location', articlesMany: '{n} items, sorted by location', viewGrid: 'Grid', viewList: 'List', viewLabel: 'View',
+            clsMore: 'Show more', clsShowing: 'Showing {n} of {t}', clsNoLoc: 'No location', clsLevel: 'Level {n}', clsCode: 'Code {n}',
+            clsError: 'The classification could not be loaded. Try again.', clsGone: 'This classification is no longer available.', clsEmpty: 'There are no items in this classification in this zone yet.',
             layer: { contorno: 'Outline', puertas: 'Doors', luz: 'Power connections', zonas: 'Zones', espacios: 'Racks and cabinets' },
             zone: { dry: 'Dry', cold: 'Refrigerated', chemical: 'Chemicals', finished: 'Finished goods', dock: 'Dock', office: 'Office', aisle: 'Main aisle', aisle2: 'Aisle between racks' },
         },
@@ -67,7 +75,7 @@
     function scanContext(data) {
         const params = new URLSearchParams(window.location.search);
         const zone = (data.layout.zones || []).find((z) => z.id === params.get('z')) || null;
-        return { zone, c: zone ? params.get('c') : null, k: zone ? params.get('k') : null };
+        return { zone, c: zone ? params.get('c') : null, k: zone ? params.get('k') : null, l: zone ? params.get('l') : null };
     }
     // El recorrido de arriba: cada nivel se toca para subir (Distribución = el Layout general con la lista de zonas abierta).
     const zoneHref = (zone) => `${window.location.pathname}?z=${encodeURIComponent(zone.id)}`;
@@ -93,7 +101,7 @@
     async function loadZoneCategoryBanner() {
         const params = new URLSearchParams(window.location.search);
         const slot = document.getElementById('catslot');
-        if (!slot || !params.get('z') || !params.get('k')) return;
+        if (!slot || !params.get('z') || !params.get('k') || params.get('l')) return;
         try {
             const res = await fetch(`/api/public/layout/${encodeURIComponent(publicToken())}/category?z=${encodeURIComponent(params.get('z'))}&k=${encodeURIComponent(params.get('k'))}`, { cache: 'no-store' });
             if (!res.ok) return;
@@ -209,6 +217,10 @@
         search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
         map: '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
         chart: '<path d="M5 20v-9M12 20V4M19 20v-6"/>',
+        pill: '<path d="M8.5 15.5l7-7a3.5 3.5 0 0 0-5-5l-7 7a3.5 3.5 0 0 0 5 5z"/><path d="M9 9l6 6"/>',
+        help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1.1.9-1.1 1.7"/><path d="M12 17h.01"/>',
+        grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+        list: '<path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
         code: '<path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/>',
     };
 
@@ -278,9 +290,9 @@
     // Contiene pide al menos 2 letras o números; Inicia con e Igual que sirven con 1 (lo mismo que valida el servidor).
     const searchReady = (terms) => terms.length > 0 && Math.max(...terms.map((t) => t.length)) >= (searchState.mode === 'contains' ? 2 : 1);
     // Marca lo que cumple, como en las tablas: cada aparición de cualquier palabra (Contiene) o solo el arranque (Inicia con); con Igual que no se marca.
-    function highlight(text, terms) {
+    function highlight(text, terms, mode = searchState.mode) {
         const t = String(text == null ? '' : text);
-        if (!terms || !terms.length || searchState.mode === 'equals') return esc(t);
+        if (!terms || !terms.length || mode === 'equals') return esc(t);
         const folded = foldText(t);
         const sorted = terms.slice().sort((a, b) => b.length - a.length);
         let out = '';
@@ -501,6 +513,143 @@
             <div class="zextra"><h2>${esc(TEXT.categories)}</h2>${rows || `<p class="emptynote">${esc(TEXT.noCats)}</p>`}</div>`;
     }
 
+    // ---- Clasificaciones ------------------------------------------------------------------------------------------------------------------------------------------------------
+    // Una categoría Inventario del catálogo (?z=&k=inventario.<id>) lista sus clasificaciones con cuántos artículos tiene cada una en esa zona; al tocar una se abre su página (?z=&k=&l=<id | sin>):
+    // título con su descripción, cuántos artículos y en qué orden, las demás clasificaciones para saltar de una a otra, el croquis con la zona y los anaqueles donde están, la búsqueda de la lista y
+    // Cuadrícula | Lista. SIN CLASIFICAR (l=sin) se arma sola con los códigos que todavía no traen clasificación. Las direcciones solo llevan ids, así que el QR impreso nunca cambia.
+    const CLS_NEUTRAL = '#6F7794';
+    const clsLook = (item) => (item.virtual ? { color: CLS_NEUTRAL, icon: 'help' } : window.LayoutCalc.categoryLook(item.seed));
+    const clsName = (item) => (item.virtual ? TEXT.noClassification : item.name);
+    const clsGlyph = (look) => (look.icon === 'help' ? `<g fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS.help}</g>` : window.LayoutMapSvg.categoryGlyph(look.icon, '#FFFFFF', 2));
+    const clsHref = (zoneId, categoryKey, key) => `${window.location.pathname}?z=${encodeURIComponent(zoneId)}&k=${encodeURIComponent(categoryKey)}&l=${encodeURIComponent(key)}`;
+    const clsState = { view: 'list', q: '', mode: 'contains', data: null, items: [], total: 0, timer: null, ctl: null, seq: 0, error: false, gone: false, built: false };
+    function resetClassification() {
+        window.clearTimeout(clsState.timer);
+        if (clsState.ctl) clsState.ctl.abort();
+        clsState.seq += 1;
+        Object.assign(clsState, { view: 'list', q: '', mode: 'contains', data: null, items: [], total: 0, error: false, gone: false, built: false });
+    }
+    async function loadClassificationList() {
+        const params = new URLSearchParams(window.location.search);
+        const slot = document.getElementById('clsslot');
+        const k = params.get('k') || '';
+        if (!slot || !params.get('z') || !/^inventario\.\d+$/.test(k) || params.get('l')) return;
+        try {
+            const res = await fetch(`/api/public/layout/${encodeURIComponent(publicToken())}/classifications?z=${encodeURIComponent(params.get('z'))}&k=${encodeURIComponent(k)}`, { cache: 'no-store' });
+            if (!res.ok) return;
+            const body = await res.json();
+            if (!body.items.length) return;
+            const rows = body.items.map((item) => `<a class="cl-opt" href="${esc(clsHref(params.get('z'), k, item.key))}"><span class="cl-dot" style="background:${esc(clsLook(item).color)}"></span><span class="cl-nm">${esc(clsName(item))}</span><span class="cl-ct">${fmt(item.count)}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
+            slot.innerHTML = `<h2>${esc(TEXT.classifications)}</h2>${rows}`;
+        } catch (err) {
+            console.error('Layout público: no se pudieron leer las clasificaciones', err);
+        }
+    }
+    function clsHeaderHtml(d) {
+        const zone = (view.data.layout.zones || []).find((z) => z.id === d.zoneId);
+        const item = d.classification;
+        const look = clsLook(item);
+        const desc = item.virtual ? TEXT.noClassificationDesc : item.description;
+        const count = item.count === 1 ? TEXT.articlesOne : fill(TEXT.articlesMany, { n: fmt(item.count) });
+        const categoryHref = `${window.location.pathname}?z=${encodeURIComponent(d.zoneId)}&k=${encodeURIComponent(d.categoryKey)}`;
+        const crumbs = crumbsHtml([[TEXT.zones, `${window.location.pathname}#distribucion`], [zone ? zone.name : d.zoneName, zone ? zoneHref(zone) : ''], [d.categoryName, categoryHref], [clsName(item)]]);
+        const banner = `<div class="catbanner" style="border-left-color:${esc(look.color)}"><span class="catmark" style="background:${esc(look.color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">${clsGlyph(look)}</svg></span><div><div class="cattitle">${esc(clsName(item))}</div>${desc ? `<div class="catsub">${esc(desc)}</div>` : ''}<p class="catnote">${esc(count)}</p></div></div>`;
+        const chips = `<div class="cl-chips" role="group" aria-label="${esc(TEXT.classifications)}">${d.siblings.map((s) => `<a class="cl-chip${s.key === item.key ? ' on' : ''}" href="${esc(clsHref(d.zoneId, d.categoryKey, s.key))}"${s.key === item.key ? ' aria-current="true"' : ''}>${esc(clsName(s))} <i>${fmt(s.count)}</i></a>`).join('')}</div>`;
+        return crumbs + banner + chips;
+    }
+    function clsBodyHtml(d) {
+        const modes = SEARCH_MODES.map((m) => `<button type="button" class="lpill" data-cls-mode="${m}" aria-pressed="${clsState.mode === m}">${esc(TEXT.searchModes[m])}</button>`).join('');
+        const seg = (key, label, glyph) => `<button type="button" data-cls-view="${key}" aria-pressed="${clsState.view === key}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[glyph]}</svg>${esc(label)}</button>`;
+        return `<div class="cl-search"><div class="sbox"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.search}</svg><input id="cls-q" type="search" inputmode="search" enterkeyhint="search" maxlength="80" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(fill(TEXT.searchIn, { z: clsName(d.classification) }))}" aria-label="${esc(fill(TEXT.searchIn, { z: clsName(d.classification) }))}"><button type="button" class="sx" data-cls-clear aria-label="${esc(TEXT.searchClear)}" title="${esc(TEXT.searchClear)}" hidden>×</button></div>
+            <div class="schips" id="cls-modes" role="group" aria-label="${esc(TEXT.searchMode)}" hidden>${modes}</div></div>
+            <div class="cl-seg" role="group" aria-label="${esc(TEXT.viewLabel)}">${seg('grid', TEXT.viewGrid, 'grid')}${seg('list', TEXT.viewList, 'list')}</div>
+            <div id="cls-results"></div>`;
+    }
+    function clsItemHtml(item, color, terms) {
+        const where = item.loc ? [item.loc.space, item.loc.level ? fill(TEXT.clsLevel, { n: item.loc.level }) : ''].filter(Boolean).join(' · ') + (item.loc.more > 0 ? ` +${item.loc.more}` : '') : TEXT.clsNoLoc;
+        const loc = `<span class="cl-loc${item.loc ? '' : ' none'}">${esc(where)}</span>`;
+        const tag = item.token ? 'a' : 'div';
+        const href = item.token ? ` href="/Ficha.html?token=${encodeURIComponent(item.token)}"` : '';
+        const name = highlight(item.name, terms, clsState.mode);
+        const code = esc(fill(TEXT.clsCode, { n: item.sku }));
+        if (clsState.view === 'grid') {
+            return `<${tag} class="cl-card"${href}><span class="cl-photo" style="--c:${esc(color)}">${item.photo ? `<img src="${esc(item.photo)}" alt="" loading="lazy">` : `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.pill}</svg>`}</span><b>${name}</b><small>${code}</small>${loc}</${tag}>`;
+        }
+        return `<${tag} class="cl-row"${href}><span class="cl-tile" style="background:${esc(color)}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.pill}</svg></span><span class="cl-rt"><b>${name}</b><small>${code}</small></span>${loc}</${tag}>`;
+    }
+    function renderClsResults() {
+        const box = document.getElementById('cls-results');
+        if (!box || !clsState.data) return;
+        if (clsState.error) { box.innerHTML = `<p class="sempty">${esc(TEXT.clsError)}</p>`; return; }
+        const raw = clsState.q.trim();
+        if (!clsState.items.length) { box.innerHTML = `<p class="sempty">${esc(raw ? fill(TEXT.searchNone, { q: raw }) : TEXT.clsEmpty)}</p>`; return; }
+        const color = clsLook(clsState.data.classification).color;
+        const terms = searchTerms(raw);
+        const rows = clsState.items.map((item) => clsItemHtml(item, color, terms)).join('');
+        const more = clsState.items.length < clsState.total ? `<button type="button" class="cl-more" data-cls-more><span>${esc(TEXT.clsMore)}</span><small>${esc(fill(TEXT.clsShowing, { n: fmt(clsState.items.length), t: fmt(clsState.total) }))}</small></button>` : '';
+        box.innerHTML = `<div class="${clsState.view === 'grid' ? 'cl-grid' : 'cl-list'}">${rows}</div>${more}`;
+    }
+    // El croquis sombrea la zona y rellena los anaqueles donde están los artículos que se están viendo (con la búsqueda aplicada), con el color de la clasificación.
+    function clsApplyFocus() {
+        const d = clsState.data;
+        if (!d || !view.data) return;
+        const color = clsLook(d.classification).color;
+        const spaces = {};
+        d.spaceIds.forEach((id) => { spaces[id] = color; });
+        setBaseFocus({ zones: { [d.zoneId]: color }, spaces });
+        if (searchState.open) applySearchFocus();
+        else if (JSON.stringify(viewFocus.base) !== viewFocus.key) redrawMap(view.data);
+    }
+    async function fetchClassification(append) {
+        const params = new URLSearchParams(window.location.search);
+        window.clearTimeout(clsState.timer);
+        if (clsState.ctl) clsState.ctl.abort();
+        const my = ++clsState.seq;
+        const ctl = new AbortController();
+        clsState.ctl = ctl;
+        const q = clsState.q.trim();
+        const url = `/api/public/layout/${encodeURIComponent(publicToken())}/classification?z=${encodeURIComponent(params.get('z'))}&k=${encodeURIComponent(params.get('k'))}&l=${encodeURIComponent(params.get('l'))}&mode=${clsState.mode}&offset=${append ? clsState.items.length : 0}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+        try {
+            const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+            if (res.status === 404) { clsState.gone = true; throw new Error('classification gone'); }
+            if (!res.ok) throw new Error('classification failed');
+            const body = await res.json();
+            if (my !== clsState.seq) return;
+            clsState.data = body;
+            clsState.items = append ? clsState.items.concat(body.items) : body.items;
+            clsState.total = body.total;
+            clsState.error = false;
+        } catch (err) {
+            if (my !== clsState.seq || (err && err.name === 'AbortError')) return;
+            console.error('Layout público: no se pudo leer la clasificación', err);
+            clsState.error = true;
+        }
+        const slot = document.getElementById('catslot');
+        const body = document.getElementById('clsbody');
+        if (!slot || !body) return;
+        if (clsState.gone) { slot.innerHTML = `<p class="sempty">${esc(TEXT.clsGone)}</p>`; return; }
+        if (!clsState.built && clsState.data) {
+            slot.innerHTML = clsHeaderHtml(clsState.data);
+            body.innerHTML = clsBodyHtml(clsState.data);
+            clsState.built = true;
+        } else if (!clsState.built) {
+            body.innerHTML = `<p class="sempty">${esc(TEXT.clsError)}</p>`;
+            return;
+        }
+        renderClsResults();
+        clsApplyFocus();
+    }
+    function queueClsSearch() {
+        window.clearTimeout(clsState.timer);
+        const input = document.getElementById('cls-q');
+        const has = !!(input && input.value);
+        const clear = document.querySelector('[data-cls-clear]');
+        if (clear) clear.hidden = !has;
+        const modes = document.getElementById('cls-modes');
+        if (modes) modes.hidden = !has;
+        clsState.timer = window.setTimeout(() => fetchClassification(false), 250);
+    }
+
     function render(data) {
         const theme = window.LayoutMapSvg.theme(data.companyColor);
         const ctx = scanContext(data);
@@ -510,14 +659,19 @@
         // lo que se escaneó se sombrea en el croquis con su color (la zona; los anaqueles se suman cuando se sepa en cuáles está)
         const zoneColor = theme.custom ? theme.chrome.badge : '#6C7CF0';
         resetSearch();
-        setBaseFocus(zonePage ? { zones: { [ctx.zone.id]: zoneColor } } : (cat ? { zones: { [ctx.zone.id]: cat.color } } : null));
+        resetClassification();
+        // la página de una clasificación: ?z=&k=&l=; mientras llegan sus datos el croquis solo muestra la zona
+        const classPage = !!ctx.zone && !!ctx.k && !!ctx.l;
+        setBaseFocus(zonePage ? { zones: { [ctx.zone.id]: zoneColor } } : (classPage ? { zones: { [ctx.zone.id]: CLS_NEUTRAL } } : (cat ? { zones: { [ctx.zone.id]: cat.color } } : null)));
         let body;
         if (zonePage) {
             body = zonePageHtml(data, ctx.zone, zoneColor);
+        } else if (classPage) {
+            body = `<div id="catslot"></div>${mapBlockHtml(data)}<div id="clsbody" class="zextra"></div>`;
         } else if (ctx.zone) {
             // una categoría de esa zona: su recorrido, su banner y el croquis; el Layout general queda a un toque (icono de casa y "Distribución")
             body = `${cat ? crumbsHtml(upCrumbs(ctx.zone, cat.name)) : ''}${categoryBanner(data)}<div id="catslot"></div>
-                ${mapBlockHtml(data)}`;
+                ${mapBlockHtml(data)}<div id="clsslot" class="zextra"></div>`;
         } else {
             body = `${categoryBanner(data)}<div id="catslot"></div>
                 <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${versionLine(data)}</p></div>
@@ -531,6 +685,8 @@
         applyPageView();
         enableMapZoom();
         loadZoneCategoryBanner();
+        loadClassificationList();
+        if (classPage) fetchClassification(false);
         applyBrand(theme);
         // "Distribución" en el recorrido regresa al Layout general con la lista de zonas ya abierta
         if (!ctx.zone && window.location.hash === '#distribucion') {
@@ -619,6 +775,30 @@
                 return;
             }
         }
+        // la página de una clasificación: Cuadrícula | Lista, tipo de filtro de la búsqueda de la lista, borrar y "Ver más"
+        const clsView = event.target.closest('[data-cls-view]');
+        if (clsView) {
+            clsState.view = clsView.dataset.clsView;
+            document.querySelectorAll('[data-cls-view]').forEach((b) => b.setAttribute('aria-pressed', String(b === clsView)));
+            renderClsResults();
+            return;
+        }
+        const clsMode = event.target.closest('[data-cls-mode]');
+        if (clsMode) {
+            clsState.mode = clsMode.dataset.clsMode;
+            document.querySelectorAll('[data-cls-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b === clsMode)));
+            fetchClassification(false);
+            return;
+        }
+        if (event.target.closest('[data-cls-clear]')) {
+            const input = document.getElementById('cls-q');
+            input.value = '';
+            clsState.q = '';
+            queueClsSearch();
+            input.focus();
+            return;
+        }
+        if (event.target.closest('[data-cls-more]')) { fetchClassification(true); return; }
         // los iconos que prenden o apagan el croquis, Datos métricos y Distribución
         const pageToggle = event.target.closest('[data-page-toggle]');
         if (pageToggle) {
@@ -656,11 +836,13 @@
     });
 
     document.getElementById('wrap').addEventListener('input', (event) => {
+        if (event.target.id === 'cls-q') { clsState.q = event.target.value; queueClsSearch(); return; }
         if (event.target.id !== 'search-q') return;
         searchState.q = event.target.value;
         queueSearch();
     });
     document.getElementById('wrap').addEventListener('keydown', (event) => {
+        if (event.target.id === 'cls-q' && event.key === 'Enter') { event.preventDefault(); fetchClassification(false); return; }
         if (event.target.id !== 'search-q') return;
         if (event.key === 'Escape') {
             setSearchOpen(false);
