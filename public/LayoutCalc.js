@@ -599,11 +599,13 @@
 
     // Dónde poner el nombre (y los m²) de una zona de rectángulo sin taparle el nombre a otra: primero la esquina que eligió zoneLabelSpot; si ahí cae encima de un nombre ya
     // puesto (taken = recuadros de labelBox), prueba las otras esquinas, luego más abajo dentro de la zona y al final afuera (debajo y arriba). Si nada queda libre se queda con la primera.
-    function placeZoneLabel(z, spot, X, Y, sc, taken, areaText) {
+    // hideName = el nombre no se dibuja (icono Ocultar nombres): los m² (si se ven) ocupan su lugar (areaOnly) y solo ellos cuentan para no encimarse.
+    function placeZoneLabel(z, spot, X, Y, sc, taken, areaText, hideName) {
         const x0 = X(z.x); const x1 = X(z.x + z.l); const y0 = Y(z.y); const y1 = Y(z.y + z.w);
         const bottomTy = y1 - (z.w * sc > 26 ? 17 : 5);
         const topTy = y0 + 12;
         const makeAt = (tx, anchor, ty) => {
+            if (hideName) return { tx, ty, anchor, withArea: false, areaOnly: Boolean(areaText), boxes: areaText ? [labelBox(tx, ty, areaText, 8.5, anchor)] : [] };
             const withArea = Boolean(areaText) && z.w * sc > 26;
             const boxes = [labelBox(tx, ty, z.name, 10, anchor)];
             if (withArea) boxes.push(labelBox(tx, ty + 11, areaText, 8.5, anchor));

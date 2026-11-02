@@ -6351,6 +6351,13 @@ function seedLayoutRotateIconGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(LAYOUT_ROTATE_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutGirar`], 'the Layout rotate icon');
 }
+// El icono Ver y ocultar los nombres de las zonas (iconLayoutNombres) se da igual, una sola vez, a quien ya tiene la pantalla Layout (mismos niveles que la siembra del icono Girar).
+const LAYOUT_NAMES_SEED_KEY = 'seed-layout-names-icon-v1';
+function seedLayoutNamesIconGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(LAYOUT_NAMES_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutNombres`], 'the Layout names icon');
+}
 // El icono Centrar las categorías de la tarjeta (iconLayoutTarjetaCentrar) se quitó: con varias categorías el marco ya se reparte solo y esa opción no cambiaba nada. Una sola vez se borran
 // los accesos que se habían sembrado para ese icono (en todos los niveles), para que no queden hojas sueltas de un icono que ya no existe en el árbol.
 const LAYOUT_CARD_CENTER_CLEANUP_KEY = 'cleanup-layout-card-center-v1';
@@ -10722,6 +10729,7 @@ seedColumnSearchOptionGrants();
 seedLayoutNewIconGrants();
 seedCodigosScreensGrants();
 seedLayoutRotateIconGrants();
+seedLayoutNamesIconGrants();
 cleanupLayoutCardCenterGrants();
 seedTipoCodigoValuesOnce();
 

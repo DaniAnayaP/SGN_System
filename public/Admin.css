@@ -7292,6 +7292,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 /* el icono de m² va junto al de medidas */
 .layout-area-btn{ right: 3rem; }
 .layout-rotate-btn{ right: 5.5rem; }
+.layout-names-btn{ right: 8rem; }
 .layout-rotate-btn.off::after{ display: none; } /* girar no se "apaga": el icono no lleva la raya */
 
 /* simbología: al lado del croquis cuando el cuadro es ancho; debajo cuando es angosto */

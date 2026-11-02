@@ -1723,6 +1723,10 @@
     "layoutTotalesVer": "Put the totals on the sheet",
     "layoutAreaOcultar": "Hide m²",
     "layoutAreaVer": "Show m²",
+    "layoutNombresBtn": "Show and hide the names of the zones",
+    "layoutNombresOcultar": "Hide names",
+    "layoutNombresVer": "Show names",
+    "layoutHojaConNombres": "Zone names",
     "layoutFiltrosBtn": "Layout table filters",
     "layoutFiltroQuitar": "Clear filters",
     "layoutFiltroNota": "Filtering: showing {shown} of {total} rows",
@@ -3500,6 +3504,10 @@
     "layoutSheetContent": {
       "what": "Choose what the downloaded sheet carries: the measures (length of each wall, corner heights and the measure of each zone side), the m² of each zone and the totals (the m² and m³ figures at the bottom: total area, offices, aisles, storage, dead space and volume). When off, that part is not printed and the sketch takes its place. It only changes this download: the screen is not touched, and the preview updates at once.",
       "example": "to stick the Layout at the entrance you turn the measures off and the sheet shows only the zone names; for the construction plan you leave them on."
+    },
+    "layoutNames": {
+      "what": "Shows or hides the name of each zone on the sketch. If the m² are visible they stay, in the place of the name. The downloaded sheet (PDF or image) comes out as you see it and in the download window you can change it for that download only; the public QR view does not change and the tables keep showing the names.",
+      "example": "you hide the names to print the sketch with only the m² of each zone, or to see the walls and racks better without letters on top."
     },
     "layoutRotate": {
       "what": "Rotates the sketch a quarter turn to the right each time you tap it (90°, 180°, 270° and back to the start). Use it to arrange the sketch the way you will print it, for example with the warehouse lying down or standing up. It only turns the drawing: the tables and what is saved do not change, the texts stay upright and the rotation is remembered in this browser. The downloaded sheet comes out with this rotation (you can change it right there for that download only).",

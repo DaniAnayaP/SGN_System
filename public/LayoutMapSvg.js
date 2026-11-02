@@ -116,7 +116,7 @@
         const W = options.width || 700;
         const H = options.height || 460;
         const M = 34;
-        // options.layers = los pasos activos del croquis (contorno, puertas, luz, zonas, espacios); sin él se dibuja todo. options.measures = false quita las medidas y options.area = false los m² de cada zona.
+        // options.layers = los pasos activos del croquis (contorno, puertas, luz, zonas, espacios); sin él se dibuja todo. options.measures = false quita las medidas y options.area = false los m² de cada zona y options.names = false los nombres de las zonas (los m², si se ven, quedan en su lugar).
         const on = (key) => !Array.isArray(options.layers) || options.layers.includes(key);
         // options.focus = lo que se está buscando (al escanear una categoría, una clasificación o un código): { zones: { idDeZona: color }, spaces: { idDeEspacio: color } }.
         // Esas zonas salen sombreadas con su color y esos anaqueles rellenos; todo lo demás se ve tenue. Sin focus el croquis se dibuja como siempre.
@@ -171,17 +171,18 @@
                 // Zona de cualquier forma: se dibuja con sus esquinas y el nombre va en el punto más holgado de adentro.
                 s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<polygon points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" stroke-linejoin="round" ${style}/>`;
                 const a = LC.zoneLabelAnchor(z);
-                put(X(a.x), Y(a.y) - 1, 10, 600, '#14161F', 'middle', esc(z.name));
-                addBox(X(a.x), Y(a.y) - 1, z.name, 10, 'middle');
-                if (options.area !== false) { put(X(a.x), Y(a.y) + 10, 8.5, 0, '#6B7089', 'middle', `${fmt(LC.zoneArea(z))} m²`); addBox(X(a.x), Y(a.y) + 10, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle'); }
+                const areaY = options.names === false ? Y(a.y) - 1 : Y(a.y) + 10;
+                if (options.names !== false) { put(X(a.x), Y(a.y) - 1, 10, 600, '#14161F', 'middle', esc(z.name)); addBox(X(a.x), Y(a.y) - 1, z.name, 10, 'middle'); }
+                if (options.area !== false) { put(X(a.x), areaY, 8.5, 0, '#6B7089', 'middle', `${fmt(LC.zoneArea(z))} m²`); addBox(X(a.x), areaY, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle'); }
             } else {
                 s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(LC.zonePoints(z).map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4" ${style}/>`;
                 const spot = LC.zoneLabelSpot(z, layout.spaces || [], sc);
                 // si el nombre cae encima del de otra zona (zonas chicas o croquis chico) se corre a otra esquina, más abajo o afuera de la zona
-                const place = LC.placeZoneLabel(z, spot, X, Y, sc, labelBoxes, options.area !== false ? `${fmt(z.l * z.w)} m²` : '');
+                const place = LC.placeZoneLabel(z, spot, X, Y, sc, labelBoxes, options.area !== false ? `${fmt(z.l * z.w)} m²` : '', options.names === false);
                 const { tx, ty, anchor } = place;
-                put(tx, ty, 10, 600, '#14161F', anchor, esc(z.name));
+                if (options.names !== false) put(tx, ty, 10, 600, '#14161F', anchor, esc(z.name));
                 if (place.withArea) put(tx, ty + 11, 8.5, 0, '#6B7089', anchor, `${fmt(z.l * z.w)} m²`);
+                if (place.areaOnly) put(tx, ty, 8.5, 0, '#6B7089', anchor, `${fmt(z.l * z.w)} m²`);
                 place.boxes.forEach((b) => labelBoxes.push(b));
             }
             if (focus) {

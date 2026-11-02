@@ -13,7 +13,7 @@ const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios',
 };
 const state = {
-    saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
+    saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
@@ -545,10 +545,9 @@ function renderSvg() {
                     ? `<g class="lzf${z.active === false ? ' lz-off' : ''}${draggable ? ' lz-drag' : ''}" data-zid="${esc(z.id)}">${window.LayoutMapSvg.zonePaint(`ef-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' '))}${title}</g>`
                     : `<polygon class="${cls}" data-zid="${esc(z.id)}" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}">${title}</polygon>`;
                 const a = LC.zoneLabelAnchor(z);
-                putZone('lt', X(a.x), Y(a.y) - 1, 'middle', esc(z.name));
-                if (state.showArea) putZone('lt2', X(a.x), Y(a.y) + 10, 'middle', `${fmt(LC.zoneArea(z))} m²`);
-                addBox(X(a.x), Y(a.y) - 1, z.name, 10, 'middle');
-                if (state.showArea) addBox(X(a.x), Y(a.y) + 10, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle');
+                const areaY = state.showNames ? Y(a.y) + 10 : Y(a.y) - 1;
+                if (state.showNames) { putZone('lt', X(a.x), Y(a.y) - 1, 'middle', esc(z.name)); addBox(X(a.x), Y(a.y) - 1, z.name, 10, 'middle'); }
+                if (state.showArea) { putZone('lt2', X(a.x), areaY, 'middle', `${fmt(LC.zoneArea(z))} m²`); addBox(X(a.x), areaY, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle'); }
                 if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureJobs.push([z.pts, 30]);
             } else if (z.pts.length) {
                 if (z.pts.length > 1) s += `<polyline class="lz-open" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
@@ -561,10 +560,11 @@ function renderSvg() {
             : `<rect class="${cls}" data-zid="${esc(z.id)}" x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4">${title}</rect>`;
         const spot = LC.zoneLabelSpot(z, d.spaces, sc);
         // si el nombre cae encima del de otra zona (zonas chicas o croquis chico) se corre a otra esquina, más abajo o afuera de la zona
-        const place = LC.placeZoneLabel(z, spot, X, Y, sc, labelBoxes, state.showArea ? `${fmt(z.l * z.w)} m²` : '');
+        const place = LC.placeZoneLabel(z, spot, X, Y, sc, labelBoxes, state.showArea ? `${fmt(z.l * z.w)} m²` : '', !state.showNames);
         const { tx, ty, anchor } = place;
-        putZone('lt', tx, ty, anchor, esc(z.name));
+        if (state.showNames) putZone('lt', tx, ty, anchor, esc(z.name));
         if (place.withArea) putZone('lt2', tx, ty + 11, anchor, `${fmt(z.l * z.w)} m²`);
+        if (place.areaOnly) putZone('lt2', tx, ty, anchor, `${fmt(z.l * z.w)} m²`);
         place.boxes.forEach((b) => labelBoxes.push(b));
         if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureJobs.push([LC.zonePoints(z), 30]);
     });
@@ -690,6 +690,23 @@ function updateAreaBtn() {
     btn.setAttribute('aria-label', t(state.showArea ? 'main.layoutAreaOcultar' : 'main.layoutAreaVer'));
 }
 try { state.showArea = localStorage.getItem(AREA_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se ven */ }
+// Icono Ver / ocultar los nombres de las zonas: igual que los de medidas y m² (se recuerda en este navegador, solo lo ve quien lo tiene en el árbol y la hoja que se descarga sale como se ve).
+// Sin nombres, los m² (si se ven) ocupan el lugar del nombre.
+const NAMES_KEY = 'sgn_layout_names';
+function updateNamesBtn() {
+    const btn = $('layout-names-btn');
+    btn.hidden = !(state.perms && state.perms.canToggleNames);
+    btn.setAttribute('aria-pressed', String(state.showNames));
+    btn.classList.toggle('off', !state.showNames);
+    btn.setAttribute('aria-label', t(state.showNames ? 'main.layoutNombresOcultar' : 'main.layoutNombresVer'));
+}
+try { state.showNames = localStorage.getItem(NAMES_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se ven */ }
+$('layout-names-btn').addEventListener('click', () => {
+    state.showNames = !state.showNames;
+    try { localStorage.setItem(NAMES_KEY, state.showNames ? '1' : '0'); } catch (err) { /* no se recuerda */ }
+    updateNamesBtn();
+    if (state.draft) renderSvg();
+});
 // Icono Girar el croquis: da un cuarto de vuelta a la derecha cada vez (0°, 90°, 180°, 270°); se recuerda en este navegador y la hoja que se descarga sale con ese giro.
 const ROTATION_KEY = 'sgn_layout_rotation';
 function updateRotateBtn() {
@@ -717,6 +734,7 @@ function showEditor() {
     updateQrMenu();
     updateMeasuresBtn();
     updateAreaBtn();
+    updateNamesBtn();
     updateRotateBtn();
     $('layout-empty').hidden = true;
     $('layout-plan-width').hidden = true;
@@ -1536,7 +1554,7 @@ async function loadSheetData() {
     return { data, logoRatio: await logoRatioOf(data.logoDataUrl) };
 }
 // Con o sin medidas y m² para lo que se imprime: lo que se eligió en la ventana de descarga (si está abierta) o, si no, lo que se ve en el croquis.
-const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea, totals: true, rotation: state.rotation || 0 };
+const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals: true, rotation: state.rotation || 0 };
 function buildSheetSvgFrom(loaded) {
     const { data, logoRatio } = loaded;
     return window.LayoutSheet.buildSheetSvg({
@@ -1545,7 +1563,7 @@ function buildSheetSvgFrom(loaded) {
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: state.steps.slice(), measures: sheetView().measures, area: sheetView().area, totals: sheetView().totals, rotation: sheetView().rotation },
+        view: { layers: state.steps.slice(), measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, rotation: sheetView().rotation },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {
@@ -1566,6 +1584,7 @@ function ensureSheetModal() {
             <div class="layout-sizebar-row layout-sheet-content" data-help-key="layoutSheetContent"><span class="layout-sizebar-title">${esc(t('main.layoutHojaContenido'))}</span>
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-measures" data-sheet-tgl="measures" aria-pressed="true"><i class="bx bx-ruler" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConMedidas'))}</span></button>
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-area" data-sheet-tgl="area" aria-pressed="true"><i class="bx bx-area" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConM2'))}</span></button>
+                <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-names" data-sheet-tgl="names" aria-pressed="true"><i class="bx bx-rename" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConNombres'))}</span></button>
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-totals" data-sheet-tgl="totals" aria-pressed="true"><i class="bx bx-bar-chart-alt-2" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConTotales'))}</span></button>
                 <button type="button" class="layout-sheet-tgl layout-sheet-rot" id="layout-sheet-rot" data-sheet-rot="1" aria-pressed="false"><i class="bx bx-rotate-right" aria-hidden="true"></i><span>${esc(t('main.layoutGirarBtn'))}</span></button></div>
             <div class="layout-sizebar-info" id="layout-size-info"></div></div>
@@ -1619,12 +1638,12 @@ function ensureSheetModal() {
         renderSheetPreview();
     });
 }
-// Los dos iconos de la ventana (medidas y m²): solo salen si se tiene el icono correspondiente del árbol, igual que en el croquis.
+// Los iconos de la ventana (medidas, m² y nombres): solo salen si se tiene el icono correspondiente del árbol, igual que en el croquis.
 const SHEET_TOTALS_KEY = 'sgn_layout_sheet_totals';
 function syncSheetToggles() {
     if (!sheetDialog || !sheetModalEl) return;
     // Los totales (las cifras de m² y m³ de abajo) no tienen icono propio en el croquis: quien puede descargar la hoja (Códigos QR) puede elegir si los lleva.
-    [['measures', 'canToggleMeasures', 'main.layoutMedidasOcultar', 'main.layoutMedidasVer'], ['area', 'canToggleArea', 'main.layoutAreaOcultar', 'main.layoutAreaVer'], ['totals', 'canUseQr', 'main.layoutTotalesOcultar', 'main.layoutTotalesVer']].forEach(([key, perm, hideKey, showKey]) => {
+    [['measures', 'canToggleMeasures', 'main.layoutMedidasOcultar', 'main.layoutMedidasVer'], ['area', 'canToggleArea', 'main.layoutAreaOcultar', 'main.layoutAreaVer'], ['names', 'canToggleNames', 'main.layoutNombresOcultar', 'main.layoutNombresVer'], ['totals', 'canUseQr', 'main.layoutTotalesOcultar', 'main.layoutTotalesVer']].forEach(([key, perm, hideKey, showKey]) => {
         const btn = sheetModalEl.querySelector(`[data-sheet-tgl="${key}"]`);
         const allowed = !!(state.perms && state.perms[perm]);
         btn.hidden = !allowed;
@@ -1653,7 +1672,7 @@ async function openSheetDialog(kind) {
     // Al abrir, la hoja sale como se ve el croquis (con o sin medidas y m²); aquí mismo se puede cambiar solo para esta descarga.
     let totals = true;
     try { totals = localStorage.getItem(SHEET_TOTALS_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se incluyen */ }
-    sheetDialog = { kind, loaded, view: { measures: state.showMeasures, area: state.showArea, totals, rotation: state.rotation || 0 } };
+    sheetDialog = { kind, loaded, view: { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals, rotation: state.rotation || 0 } };
     syncSheetToggles();
     $('layout-size-w').value = sheetSize.w;
     $('layout-size-h').value = sheetSize.h;

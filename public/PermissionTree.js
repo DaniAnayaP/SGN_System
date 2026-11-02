@@ -1768,6 +1768,7 @@
             iconLayoutFormatoZona: 'bx-palette',
             iconLayoutMedidas: 'bx-ruler',
             iconLayoutArea: 'bx-area',
+            iconLayoutNombres: 'bx-rename',
             iconLayoutFiltros: 'bx-filter-alt',
             iconLayoutImprimirZona: 'bx-printer',
             iconLayoutGirar: 'bx-rotate-right',

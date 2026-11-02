@@ -161,7 +161,7 @@
         const innerW = frameW - 20 * f;
         const innerH = frameH - 20 * f;
         const h700 = Math.max(120, Math.round((700 * innerH) / Math.max(innerW, 1)));
-        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700, layers, measures: view.measures !== false, area: view.area !== false, rotation: view.rotation || 0 }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700, layers, measures: view.measures !== false, area: view.area !== false, names: view.names !== false, rotation: view.rotation || 0 }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
         s += `<svg x="${frameX + 10 * f}" y="${top + 10 * f}" width="${innerW}" height="${innerH}" viewBox="0 0 700 ${h700}" preserveAspectRatio="xMidYMid meet">${mapInner}</svg>`;
         legPos.forEach(({ item: [key, text, zone], x, row }) => {
             if (tiny) return;
@@ -207,7 +207,7 @@
         return `${s}</g></svg>`;
     }
 
-    // data: { companyName, siteName (el Sitio que va arriba del nombre; sin él sale labels.area), logoDataUrl, logoRatio, view: { layers, measures, area, totals, rotation }, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
+    // data: { companyName, siteName (el Sitio que va arriba del nombre; sin él sale labels.area), logoDataUrl, logoRatio, view: { layers, measures, area, names, totals, rotation }, version, updatedAt (Date), printedAt (Date), url, qrRows, kpis, layout, theme }, labels: textos ya traducidos, lang: 'es' | 'en',
     // options: { widthCm, heightCm, cut } (el espacio que se imprime y si se dibuja la línea punteada para recortar).
     function buildSheetSvg(data, labels, lang, options = {}) {
         return documentSvg(options, [42, 29.7], labels, (W, H) => sheetContent(data, labels, lang, W, H));
