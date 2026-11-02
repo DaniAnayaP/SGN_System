@@ -17,7 +17,7 @@
             restRow: 'Sin zona (espacio muerto)', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos',
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
             home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
-            rotate: 'Girar el croquis', measures: 'Medidas', areaBtn: 'm² de las zonas', layers: 'Capas del croquis',
+            rotate: 'Girar el croquis', measures: 'Medidas', areaBtn: 'm² de las zonas', layers: 'Capas del croquis', mapToggle: 'Croquis',
             search: 'Buscar', searchAll: 'Buscar en todo el Layout', searchIn: 'Buscar en {z}', searchClear: 'Borrar', searchTypes: 'Qué buscar', searchType: { all: 'Todo', zone: 'Zonas', cat: 'Categorías', code: 'Códigos' },
             searchMode: 'Tipo de Filtro', searchModes: { startsWith: 'Inicia con', contains: 'Contiene', equals: 'Igual que' },
             searchScopeLabel: 'Buscando en:', searchScopeZone: '{z} (tocar para ampliar)', searchScopeAll: 'Todo el Layout (tocar para limitar a {z})', searchHint: 'Escribe un código, una descripción, una zona o una categoría. Con comas se busca cualquiera de las palabras.',
@@ -36,7 +36,7 @@
             restRow: 'No zone (dead space)', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes',
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
             home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
-            rotate: 'Rotate the sketch', measures: 'Measures', areaBtn: 'Zone m²', layers: 'Sketch layers',
+            rotate: 'Rotate the sketch', measures: 'Measures', areaBtn: 'Zone m²', layers: 'Sketch layers', mapToggle: 'Sketch',
             search: 'Search', searchAll: 'Search the whole Layout', searchIn: 'Search in {z}', searchClear: 'Clear', searchTypes: 'What to look for', searchType: { all: 'All', zone: 'Zones', cat: 'Categories', code: 'Codes' },
             searchMode: 'Filter type', searchModes: { startsWith: 'Starts with', contains: 'Contains', equals: 'Equal to' },
             searchScopeLabel: 'Searching in:', searchScopeZone: '{z} (tap to widen)', searchScopeAll: 'Whole Layout (tap to limit to {z})', searchHint: 'Type a code, a description, a zone or a category. With commas, any of the words matches.',
@@ -207,6 +207,8 @@
         rotate: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>',
         area: '<rect x="4" y="4" width="16" height="16" rx="2"/><text x="12" y="15.2" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">m²</text>',
         search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+        map: '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
+        chart: '<path d="M5 20v-9M12 20V4M19 20v-6"/>',
         code: '<path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/>',
     };
 
@@ -218,12 +220,26 @@
     // value = lo que se dibuja ahora (el croquis base o el de la búsqueda); base = lo que corresponde a la página sin buscar; key = lo ya dibujado, para no redibujar sin necesidad.
     const viewFocus = { value: null, base: null, key: 'null' };
     function setBaseFocus(focus) { viewFocus.base = focus; viewFocus.value = focus; }
+    // Qué bloques de la página se ven: el croquis (con sus capas y los iconos de girar, medidas y m², que solo sirven para él), Datos métricos y Distribución. Cada icono prende o apaga el suyo;
+    // como los demás botones, al escanear de nuevo todo aparece otra vez.
+    const pageView = { map: true, metrics: true, zones: true };
+    function applyPageView() {
+        const wrap = document.getElementById('wrap');
+        wrap.classList.toggle('nomap', !pageView.map);
+        wrap.classList.toggle('nometrics', !pageView.metrics);
+        wrap.classList.toggle('nozones', !pageView.zones);
+        document.querySelectorAll('[data-page-toggle]').forEach((b) => b.setAttribute('aria-pressed', String(pageView[b.dataset.pageToggle])));
+    }
     function mapToolbarHtml() {
         const icon = (name, extra = '') => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}${extra}</svg>`;
         const slash = '<path class="slash" d="M4 20L20 4"/>';
         const pills = LAYER_KEYS.map((key) => `<button type="button" class="lpill" data-map-layer="${key}" aria-pressed="${mapView.layers.includes(key)}"${key === 'contorno' ? ' aria-disabled="true"' : ''}>${esc(TEXT.layer[key])}</button>`).join('');
+        // Datos métricos y Distribución solo están en el Layout general; en una zona o categoría solo se ofrece el del croquis.
+        const general = !searchPageZone();
+        const toggle = (key, label, glyph) => `<button type="button" class="ricon" data-page-toggle="${key}" aria-pressed="${pageView[key]}" aria-label="${esc(label)}" title="${esc(label)}">${icon(glyph, slash)}</button>`;
         return `<div class="maptools-row"><div class="ricons">
             <button type="button" class="ricon" data-map-search aria-expanded="false" aria-controls="search-panel" aria-label="${esc(TEXT.search)}" title="${esc(TEXT.search)}">${icon('search')}</button>
+            ${toggle('map', TEXT.mapToggle, 'map')}${general ? `${toggle('metrics', TEXT.metrics, 'chart')}${holdingZones(view.data).length ? toggle('zones', TEXT.zones, 'layers') : ''}` : ''}
             <button type="button" class="ricon" data-map-rot aria-label="${esc(TEXT.rotate)}" title="${esc(TEXT.rotate)}">${icon('rotate')}</button>
             <button type="button" class="ricon" data-map-meas aria-pressed="${mapView.measures}" aria-label="${esc(TEXT.measures)}" title="${esc(TEXT.measures)}">${icon('ruler', slash)}</button>
             <button type="button" class="ricon" data-map-area aria-pressed="${mapView.area}" aria-label="${esc(TEXT.areaBtn)}" title="${esc(TEXT.areaBtn)}">${icon('area', slash)}</button>
@@ -472,8 +488,8 @@
         const kindOf = (z) => { const info = (data.kpis.zones || []).find((k) => k.id === z.id); return info && info.type ? (TEXT.zone[info.type] || info.type) : TEXT.noZone; };
         const head = `<div class="zhead" aria-hidden="true"><span>${esc(TEXT.colZone)}</span><span>${esc(TEXT.colType)}</span><span></span><span></span></div>`;
         const rows = head + list.map((z) => `<a class="zrow" href="${esc(zoneHref(z))}"><b>${esc(z.name)}</b><span class="zk">${esc(kindOf(z))}</span><span class="zc"><i>${fmt(codes[z.id] || 0)}</i> ${esc(codes[z.id] === 1 ? TEXT.codeWordOne : TEXT.codeWordMany)}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
-        return `<button type="button" class="mbtn" data-zones-toggle aria-expanded="false" aria-controls="zones-list">${iconSvg('layers')}<span class="t"><b>${esc(TEXT.zones)}</b><small>${esc(TEXT.zonesHint.replace('{z}', fmt(list.length)).replace('{c}', fmt(total)))}</small></span><span class="go" aria-hidden="true">›</span></button>
-            <div id="zones-list" class="zlist" hidden>${rows}</div>`;
+        return `<div class="pg-zones"><button type="button" class="mbtn" data-zones-toggle aria-expanded="false" aria-controls="zones-list">${iconSvg('layers')}<span class="t"><b>${esc(TEXT.zones)}</b><small>${esc(TEXT.zonesHint.replace('{z}', fmt(list.length)).replace('{c}', fmt(total)))}</small></span><span class="go" aria-hidden="true">›</span></button>
+            <div id="zones-list" class="zlist" hidden>${rows}</div></div>`;
     }
 
     // La página de una zona (?z=<zona>): su nombre, su tipo y sus metros, y las categorías que guarda; cada una abre su propia página.
@@ -509,10 +525,13 @@
             body = `${categoryBanner(data)}<div id="catslot"></div>
                 <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${versionLine(data)}</p></div>
                 ${mapBlockHtml(data)}
-                <div class="zextra"><a class="mbtn" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
+                <div class="zextra"><a class="mbtn pg-metrics" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
                 ${zonesSectionHtml(data)}</div>`;
         }
+        // venir de "Distribución" en el recorrido debe mostrar su lista aunque se haya ocultado ese bloque
+        if (!ctx.zone && window.location.hash === '#distribucion') pageView.zones = true;
         document.getElementById('wrap').innerHTML = `${brandBar(data)}${body}<div class="footer">${esc(TEXT.footer)}</div>`;
+        applyPageView();
         enableMapZoom();
         loadZoneCategoryBanner();
         applyBrand(theme);
@@ -602,6 +621,14 @@
                 input.focus();
                 return;
             }
+        }
+        // los iconos que prenden o apagan el croquis, Datos métricos y Distribución
+        const pageToggle = event.target.closest('[data-page-toggle]');
+        if (pageToggle) {
+            const key = pageToggle.dataset.pageToggle;
+            pageView[key] = !pageView[key];
+            applyPageView();
+            return;
         }
         // botones del croquis: girar, medidas, m² de las zonas y capas
         const rot = event.target.closest('[data-map-rot]');
