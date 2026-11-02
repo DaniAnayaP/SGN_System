@@ -65,6 +65,18 @@
         .zrow b{ font-size:14.5px; }
         .zc{ color:var(--text-muted); font-size:12.5px; white-space:nowrap; }
         .zc i{ font-style:normal; font-weight:800; color:var(--brand-ink, var(--text-primary)); font-variant-numeric:tabular-nums; font-size:14px; }
+        .maptools-row{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin:12px 16px 0; }
+        .ricons{ display:flex; gap:8px; }
+        .ricon{ width:36px; height:36px; display:grid; place-items:center; padding:0; border:1px solid var(--brand-line, var(--border)); border-radius:999px; background:#fff; color:var(--brand, var(--accent-2)); cursor:pointer; }
+        .ricon svg{ width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+        .ricon .slash{ display:none; }
+        .ricon[aria-pressed="false"] .slash{ display:block; }
+        .ricon[aria-pressed="false"]{ color:var(--text-muted); }
+        .lpills{ display:flex; flex-wrap:wrap; gap:6px; }
+        .lpill{ font:inherit; font-size:12px; padding:5px 12px; border-radius:999px; border:1px solid var(--brand-line, var(--border)); background:#fff; color:var(--brand-ink, var(--text-primary)); cursor:pointer; }
+        .lpill[aria-pressed="true"]{ background:var(--brand, var(--accent-2)); border-color:var(--brand, var(--accent-2)); color:#fff; font-weight:700; }
+        .lpill[aria-disabled="true"]{ cursor:default; }
+        .ricon:focus-visible, .lpill:focus-visible{ outline:2px solid var(--brand, var(--accent-2)); outline-offset:2px; }
         .tablebox{ margin:0 16px; overflow-x:auto; }
         .tablebox table{ width:100%; border-collapse:collapse; font-size:12.5px; }
         .tablebox th{ text-align:left; font-size:11px; color:var(--text-muted); font-weight:700; padding:6px; border-bottom:1.5px solid var(--brand-line, var(--border)); }

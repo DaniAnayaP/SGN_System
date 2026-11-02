@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Vista pública del Layout: lo que abre el QR del Layout, SIN iniciar sesión. Igual que la ficha pública de un artículo (Ficha.html), no usa
 // Dashboard.js: es para quien escanea el QR pegado en la nave. Lee GET /api/public/layout/:token, que solo entrega lo público (paredes, zonas,
-// anaqueles/gabetas/tarimas con su código, puertas y los KPIs; nunca las conexiones de luz ni las columnas) y siempre la versión guardada más reciente.
+// anaqueles/gabetas/tarimas con su código, puertas, conexiones de luz y los KPIs; nunca las columnas) y siempre la versión guardada más reciente.
 // El QR nunca cambia: lo que cambia es lo que este token devuelve cada vez que alguien guarda el Layout.
 // ---------------------------------------------------------------------------
 (function () {
@@ -16,6 +16,8 @@
             metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
             restRow: 'Sin zona (espacio muerto)', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos',
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
+            rotate: 'Girar el croquis', measures: 'Medidas', areaBtn: 'm² de las zonas', layers: 'Capas del croquis',
+            layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Anaqueles y gabetas' },
             zone: { dry: 'Seco', cold: 'Refrigerado', chemical: 'Químicos', finished: 'Producto terminado', dock: 'Andén', office: 'Oficina', aisle: 'Pasillo principal', aisle2: 'Pasillo entre anaqueles' },
         },
         en: {
@@ -27,6 +29,8 @@
             metrics: 'Metric data', metricsHint: '{n} m² of total area and more', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
             restRow: 'No zone (dead space)', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes',
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
+            rotate: 'Rotate the sketch', measures: 'Measures', areaBtn: 'Zone m²', layers: 'Sketch layers',
+            layer: { contorno: 'Outline', puertas: 'Doors', luz: 'Power connections', zonas: 'Zones', espacios: 'Racks and cabinets' },
             zone: { dry: 'Dry', cold: 'Refrigerated', chemical: 'Chemicals', finished: 'Finished goods', dock: 'Dock', office: 'Office', aisle: 'Main aisle', aisle2: 'Aisle between racks' },
         },
     }[LANG];
@@ -168,7 +172,38 @@
     const ICONS = {
         ruler: '<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>',
         layers: '<path d="M12 3l9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/>',
+        rotate: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>',
+        area: '<rect x="4" y="4" width="16" height="16" rx="2"/><text x="12" y="15.2" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">m²</text>',
     };
+
+    // Botones del croquis (los mismos del Layout con sesión): girar, ver/ocultar medidas, ver/ocultar los m² de cada zona y las capas que se dibujan. Cada quien los mueve para verlo
+    // como le conviene; al escanear de nuevo todo vuelve a como se guardó. Contorno siempre se ve; las conexiones de luz salen apagadas hasta que se prende su capa.
+    const LAYER_KEYS = ['contorno', 'puertas', 'luz', 'zonas', 'espacios'];
+    const mapView = { layers: ['contorno', 'puertas', 'zonas', 'espacios'], measures: true, area: true, rotation: 0 };
+    function mapToolbarHtml() {
+        const icon = (name, extra = '') => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}${extra}</svg>`;
+        const slash = '<path class="slash" d="M4 20L20 4"/>';
+        const pills = LAYER_KEYS.map((key) => `<button type="button" class="lpill" data-map-layer="${key}" aria-pressed="${mapView.layers.includes(key)}"${key === 'contorno' ? ' aria-disabled="true"' : ''}>${esc(TEXT.layer[key])}</button>`).join('');
+        return `<div class="maptools-row"><div class="ricons">
+            <button type="button" class="ricon" data-map-rot aria-label="${esc(TEXT.rotate)}" title="${esc(TEXT.rotate)}">${icon('rotate')}</button>
+            <button type="button" class="ricon" data-map-meas aria-pressed="${mapView.measures}" aria-label="${esc(TEXT.measures)}" title="${esc(TEXT.measures)}">${icon('ruler', slash)}</button>
+            <button type="button" class="ricon" data-map-area aria-pressed="${mapView.area}" aria-label="${esc(TEXT.areaBtn)}" title="${esc(TEXT.areaBtn)}">${icon('area', slash)}</button>
+        </div><div class="lpills" role="group" aria-label="${esc(TEXT.layers)}">${pills}</div></div>`;
+    }
+    function mapInnerHtml(data) {
+        const theme = window.LayoutMapSvg.theme(data.companyColor);
+        return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, layers: mapView.layers, measures: mapView.measures, area: mapView.area, rotation: mapView.rotation })}${mapToolsHtml()}`;
+    }
+    // El croquis se vuelve a dibujar con los botones; el contenedor es nuevo para que el zoom empiece limpio y no se acumulen sus escuchas.
+    function redrawMap(data) {
+        const old = document.querySelector('#wrap .map');
+        if (!old) return;
+        const next = document.createElement('div');
+        next.className = 'map';
+        next.innerHTML = mapInnerHtml(data);
+        old.replaceWith(next);
+        enableMapZoom();
+    }
     const iconSvg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
     const brandBar = (data) => {
         const initials = (data.companyName || '').trim().slice(0, 2).toUpperCase() || '··';
@@ -216,7 +251,8 @@
             ${brandBar(data)}
             ${categoryBanner(data)}<div id="catslot"></div>
             <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${versionLine(data)}</p></div>
-            <div class="map">${window.LayoutMapSvg.mapSvg(data.layout, { theme })}${mapToolsHtml()}</div>
+            ${mapToolbarHtml()}
+            <div class="map">${mapInnerHtml(data)}</div>
             <a class="mbtn" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
             ${zonesSectionHtml(data)}
             <div class="footer">${esc(TEXT.footer)}</div>`;
@@ -270,6 +306,26 @@
             document.querySelectorAll('#wrap [data-metric]').forEach((b) => b.setAttribute('aria-pressed', String(b === metric)));
             document.getElementById('metric-detail').innerHTML = metricDetailHtml(view.data, key);
             window.history.replaceState(null, '', `#datos-metricos/${key}`);
+            return;
+        }
+        // botones del croquis: girar, medidas, m² de las zonas y capas
+        const rot = event.target.closest('[data-map-rot]');
+        const meas = event.target.closest('[data-map-meas]');
+        const area = event.target.closest('[data-map-area]');
+        const layer = event.target.closest('[data-map-layer]');
+        if ((rot || meas || area || layer) && view.data) {
+            if (rot) mapView.rotation = (mapView.rotation + 1) % 4;
+            else if (meas) { mapView.measures = !mapView.measures; meas.setAttribute('aria-pressed', String(mapView.measures)); }
+            else if (area) { mapView.area = !mapView.area; area.setAttribute('aria-pressed', String(mapView.area)); }
+            else {
+                const key = layer.dataset.mapLayer;
+                const on = mapView.layers.includes(key);
+                // Contorno siempre se ve y siempre queda al menos una capa prendida
+                if (key === 'contorno' || (on && mapView.layers.length <= 1)) return;
+                mapView.layers = LAYER_KEYS.filter((k) => (k === key ? !on : mapView.layers.includes(k)));
+                layer.setAttribute('aria-pressed', String(!on));
+            }
+            redrawMap(view.data);
             return;
         }
         const toggle = event.target.closest('[data-zones-toggle]');

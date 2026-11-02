@@ -6221,8 +6221,8 @@ function layoutPermissions(req) {
     };
 }
 
-// Lo ÚNICO que sale por la vista pública del QR (sin sesión): paredes, zonas activas, espacios activos con su código, puertas y los KPIs. Nunca las
-// conexiones de luz, las columnas ni el plano de fondo. La hoja que se descarga se arma con este mismo contenido, para que traiga lo mismo que se ve al escanear.
+// Lo ÚNICO que sale por la vista pública del QR (sin sesión): paredes, zonas activas, espacios activos con su código, puertas, conexiones de luz y los KPIs. Nunca las
+// columnas ni el plano de fondo. La hoja que se descarga se arma con este mismo contenido, para que traiga lo mismo que se ve al escanear.
 // El logo del cliente (si lo tiene y no es enorme) para el reporte y la tarjeta que se imprimen; solo viaja en rutas con sesión, nunca en la vista pública.
 function clientLogoDataUrl(clientId) {
     const client = getClientById(clientId);
@@ -6241,7 +6241,8 @@ function buildPublicLayoutPayload(clientId, row) {
         doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, wall: d.wall, dist: d.dist, width: d.width })),
         zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}), ...(Array.isArray(z.categories) && z.categories.length ? { categories: z.categories } : {}) })),
         spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h })),
-        obstacles: [], power: [],
+        // Las conexiones de luz salen en la página pública (con su propia capa, apagada al entrar) porque Daniel pidió esos botones ahí; las columnas y el plano de fondo no.
+        obstacles: [], power: (l.power || []).map((e) => ({ type: e.type, wall: e.wall, dist: e.dist, height: e.height })),
     };
     // Color representativo del cliente (el que se elige al darlo de alta): la hoja y la vista pública se pintan con él. Sin color válido va vacío y todo se ve como siempre.
     const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
