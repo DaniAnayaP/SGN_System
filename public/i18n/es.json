@@ -1712,10 +1712,6 @@
     "layoutMedidasVer": "Ver medidas",
     "layoutAreaBtn": "Ver y ocultar los m² de las zonas",
     "layoutGirarBtn": "Girar el croquis",
-    "layoutCentrarBtn": "Centrar las categorías de la tarjeta",
-    "layoutCardAcomodo": "Acomodo de las categorías",
-    "layoutCardArriba": "Arriba",
-    "layoutCardCentradas": "Centradas",
     "layoutHojaContenido": "Imprimir con",
     "layoutHojaConMedidas": "Medidas",
     "layoutHojaConM2": "m² de las zonas",
@@ -2168,6 +2164,9 @@
     "colArticuloEvidenceTop": "Evidencia Arriba",
     "colArticuloEvidenceBottom": "Evidencia Abajo",
     "colArticuloCategoriaInventario": "Categoría Inventario",
+    "colArticuloClasificacion": "Clasificación",
+    "clasifElegirCategoria": "Elige primero la categoría",
+    "clasifSinOpciones": "Esta categoría no tiene clasificaciones",
     "colArticuloCategoriaCompra": "Categoría Compra",
     "colArticuloCategoriaAlmacenamiento": "Categoría Almacenamiento",
     "colArticuloCategoriaRotacion": "Categoría Rotación",
@@ -3386,6 +3385,10 @@
       "what": "Físico: existe en la nave y se le asignan zonas o anaqueles del Layout. Virtual: no ocupa lugar en la nave, por ejemplo mercancía en tránsito o en consignación.",
       "example": "Medicamentos es físico; En tránsito es virtual."
     },
+    "colArticuloClasificacion": {
+      "what": "La clasificación del código dentro de su Categoría Inventario (por ejemplo Patente o Genérico en Medicamentos). Solo ofrece las que esa categoría tiene asignadas en Catálogos > Categorías de Inventario. Es opcional: un código sin clasificación igual se puede completar y sale en SIN CLASIFICAR en la página del QR. Si cambias la categoría y la clasificación ya no es de esa categoría, se quita sola.",
+      "example": "Categoría Inventario: Medicamentos → Clasificación: Patente."
+    },
     "clsAssignBtn": {
       "what": "Elige qué clasificaciones tiene esta categoría (las que existen en Catálogos > Nuestras Clasificaciones). Al dar de alta un código y elegir esta categoría, el campo Clasificación solo ofrecerá estas. Una clasificación puede estar en varias categorías.",
       "example": "Medicamentos: Patente, Genérico, Antibiótico, Especiales, Perfumería y Oncología."
@@ -3449,10 +3452,6 @@
     "layoutRotate": {
       "what": "Gira el croquis un cuarto de vuelta a la derecha cada vez que lo tocas (90°, 180°, 270° y de nuevo como estaba). Sirve para acomodarlo como lo vas a imprimir, por ejemplo con la nave acostada o parada. Solo gira el dibujo: las tablas y lo guardado no cambian, los textos siguen derechos y el giro se recuerda en este navegador. La hoja que se descarga sale con este giro (ahí mismo se puede cambiar solo para esa descarga).",
       "example": "la nave es larga y la hoja es vertical: giras el croquis un cuarto de vuelta y llena mejor la hoja."
-    },
-    "layoutCardAlign": {
-      "what": "Elige dónde van las categorías dentro del contorno de la tarjeta. Arriba las deja pegadas debajo de CATEGORÍA / BÚSCAME, como siempre. Centradas deja CATEGORÍA / BÚSCAME arriba y centra las categorías en el espacio que queda del contorno; con muchas categorías ya no sobra espacio y se ve igual. Solo cambia cómo se dibuja la tarjeta: el QR de cada categoría y lo guardado no cambian. El PDF y la imagen salen como se ve en la vista previa y la elección se recuerda en este navegador.",
-      "example": "la zona solo tiene Almacén General: con Centradas queda a la mitad del contorno en vez de pegada arriba con todo el espacio vacío debajo."
     },
     "layoutSite": {
       "what": "El nombre del lugar (el sitio). Sale arriba del nombre de la empresa en el encabezado de la hoja del Layout y de las tarjetas que se imprimen. Si lo dejas vacío sale el texto de siempre. Más adelante saldrá de la configuración.",

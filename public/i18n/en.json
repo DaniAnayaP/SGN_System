@@ -1712,10 +1712,6 @@
     "layoutMedidasVer": "Show measures",
     "layoutAreaBtn": "Show and hide the m² of the zones",
     "layoutGirarBtn": "Rotate the sketch",
-    "layoutCentrarBtn": "Center the card categories",
-    "layoutCardAcomodo": "Category layout",
-    "layoutCardArriba": "Top",
-    "layoutCardCentradas": "Centered",
     "layoutHojaContenido": "Print with",
     "layoutHojaConMedidas": "Measures",
     "layoutHojaConM2": "Zone m²",
@@ -2169,6 +2165,9 @@
     "colArticuloEvidenceTop": "Evidence Top",
     "colArticuloEvidenceBottom": "Evidence Bottom",
     "colArticuloCategoriaInventario": "Inventory Category",
+    "colArticuloClasificacion": "Classification",
+    "clasifElegirCategoria": "Pick the category first",
+    "clasifSinOpciones": "This category has no classifications",
     "colArticuloCategoriaCompra": "Purchasing Category",
     "colArticuloCategoriaAlmacenamiento": "Storage Category",
     "colArticuloCategoriaRotacion": "Turnover Category",
@@ -3387,6 +3386,10 @@
       "what": "Physical: it exists in the building and gets Layout zones or racks assigned. Virtual: it takes no room in the building, for example goods in transit or on consignment.",
       "example": "Medicines is physical; In transit is virtual."
     },
+    "colArticuloClasificacion": {
+      "what": "The code's classification inside its Inventory Category (for example Brand or Generic in Medications). It only offers the ones that category has in Catalogs > Inventory Categories. It is optional: a code without a classification can still be completed and shows up under UNCLASSIFIED on the QR page. If you change the category and the classification no longer belongs to it, it is cleared automatically.",
+      "example": "Inventory Category: Medications → Classification: Brand."
+    },
     "clsAssignBtn": {
       "what": "Choose which classifications this category has (the ones in Catalogs > Our Classifications). When you create a code and pick this category, the Classification field will only offer these. A classification can be in several categories.",
       "example": "Medications: Brand, Generic, Antibiotic, Special, Perfumery and Oncology."
@@ -3450,10 +3453,6 @@
     "layoutRotate": {
       "what": "Rotates the sketch a quarter turn to the right each time you tap it (90°, 180°, 270° and back to the start). Use it to arrange the sketch the way you will print it, for example with the warehouse lying down or standing up. It only turns the drawing: the tables and what is saved do not change, the texts stay upright and the rotation is remembered in this browser. The downloaded sheet comes out with this rotation (you can change it right there for that download only).",
       "example": "the warehouse is long and the sheet is portrait: you rotate the sketch a quarter turn and it fills the sheet better."
-    },
-    "layoutCardAlign": {
-      "what": "Choose where the categories go inside the card outline. Top keeps them right under CATEGORY / FIND ME, as always. Centered keeps CATEGORY / FIND ME on top and centers the categories in the space left in the outline; with many categories there is no spare room and it looks the same. It only changes how the card is drawn: each category's QR and what is saved do not change. The PDF and image come out as shown in the preview and the choice is remembered in this browser.",
-      "example": "the zone only has General Warehouse: with Centered it sits in the middle of the outline instead of stuck to the top with all the empty space below."
     },
     "layoutSite": {
       "what": "The name of the place (the site). It appears above the company name in the header of the Layout sheet and of the printed cards. If you leave it empty the usual text is used. Later it will come from settings.",

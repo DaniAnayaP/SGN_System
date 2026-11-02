@@ -61,16 +61,52 @@ const CATEGORY_SELECT_FIELDS = [
     ['colArticuloCategoriaVidautil', 'categoryVidautil', 'vidautil'],
 ];
 let categoryOptions = {};
+// Clasificación del código: por cada Categoría Inventario (su nombre), las clasificaciones activas que tiene ({ id, name }); el campo Clasificación solo ofrece esas.
+let classificationsByInventory = {};
 async function loadCategoryOptions() {
     try {
         const res = await fetch('/api/business/article-categories-active', { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
-        const { options } = await res.json();
+        const { options, classificationsByInventory: byInventory } = await res.json();
         categoryOptions = options || {};
+        classificationsByInventory = byInventory || {};
     } catch (err) {
         console.error('Alta Nuestros Artículos: failed to load category options', err);
         categoryOptions = {};
+        classificationsByInventory = {};
     }
+}
+
+// Clasificación (opcional, no cuenta para completar el código): la lista depende de la Categoría Inventario del código. Siempre se ve la que ya tiene aunque ya no se ofrezca.
+function classificationChoices(categoryName, currentId, currentName) {
+    const list = (classificationsByInventory[categoryName] || []).map((c) => ({ id: c.id, name: c.name }));
+    if (currentId != null && currentName && !list.some((c) => c.id === currentId)) list.unshift({ id: currentId, name: currentName });
+    return list;
+}
+function buildClassificationCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colArticuloClasificacion';
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    select.setAttribute('data-help-key', 'colArticuloClasificacion');
+    const choices = classificationChoices(record.categoryInventario, record.classificationId, record.classificationName);
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = !record.categoryInventario ? Dashboard.t('main.clasifElegirCategoria') : (choices.length ? Dashboard.t('main.articleTypeSelect') : Dashboard.t('main.clasifSinOpciones'));
+    select.appendChild(blank);
+    choices.forEach((c) => {
+        const opt = document.createElement('option');
+        opt.value = String(c.id);
+        opt.textContent = c.name;
+        select.appendChild(opt);
+    });
+    select.value = record.classificationId == null ? '' : String(record.classificationId);
+    const currentName = record.classificationName || '';
+    select.disabled = isPending(record, 'classificationId') || !record.categoryInventario || !choices.length || !Dashboard.canEditField(TABLE_KEY, 'colArticuloClasificacion', currentName);
+    if (select.disabled) select.title = Dashboard.t(isPending(record, 'classificationId') ? 'main.changePending' : (!record.categoryInventario ? 'main.clasifElegirCategoria' : (!choices.length ? 'main.clasifSinOpciones' : 'main.fieldLocked')));
+    select.addEventListener('change', () => ensureCreatedThenPatch(record, { classificationId: select.value === '' ? null : Number(select.value) }));
+    td.appendChild(select);
+    return td;
 }
 
 // A category select always shows the record's CURRENT value even if it's no
@@ -501,7 +537,11 @@ function buildRow(record) {
         buildEvidenceCell(record, 'evidenceRight', 'colArticuloEvidenceRight'),
         buildEvidenceCell(record, 'evidenceTop', 'colArticuloEvidenceTop'),
         buildEvidenceCell(record, 'evidenceBottom', 'colArticuloEvidenceBottom'),
-        ...CATEGORY_SELECT_FIELDS.map(([colId, apiKey, categoryType]) => buildCategorySelectCell(record, colId, apiKey, categoryType)),
+        ...CATEGORY_SELECT_FIELDS.flatMap(([colId, apiKey, categoryType]) => [
+            buildCategorySelectCell(record, colId, apiKey, categoryType),
+            // la Clasificación va justo después de la Categoría Inventario
+            ...(apiKey === 'categoryInventario' ? [buildClassificationCell(record)] : []),
+        ]),
         buildQrCell(record),
         buildActionsCell(record, tr),
     );
@@ -520,7 +560,7 @@ function ensureEmptyState() {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = 41;
+    td.colSpan = 42;
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');
@@ -637,7 +677,40 @@ function buildCategoryPickerFields() {
         });
         field.append(label, select);
         createCategoryGrid.appendChild(field);
+        if (apiKey === 'categoryInventario') createCategoryGrid.appendChild(buildClassificationPickerField(select));
     });
+}
+
+// Clasificación en el formulario: se llena según la Categoría Inventario que se elija arriba y se vuelve a llenar cada vez que esa categoría cambia.
+function buildClassificationPickerField(categorySelect) {
+    const field = document.createElement('div');
+    field.className = 'admin-field';
+    const label = document.createElement('label');
+    label.setAttribute('for', 'new-sku-classificationId');
+    label.textContent = Dashboard.t('main.colArticuloClasificacion');
+    const select = document.createElement('select');
+    select.id = 'new-sku-classificationId';
+    select.name = 'classificationId';
+    select.setAttribute('data-help-key', 'colArticuloClasificacion');
+    const fill = () => {
+        const choices = classificationChoices(categorySelect.value, null, '');
+        select.innerHTML = '';
+        const blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = !categorySelect.value ? Dashboard.t('main.clasifElegirCategoria') : (choices.length ? Dashboard.t('main.articleTypeSelect') : Dashboard.t('main.clasifSinOpciones'));
+        select.appendChild(blank);
+        choices.forEach((c) => {
+            const opt = document.createElement('option');
+            opt.value = String(c.id);
+            opt.textContent = c.name;
+            select.appendChild(opt);
+        });
+        select.disabled = !categorySelect.value || !Dashboard.canEditField(TABLE_KEY, 'colArticuloClasificacion', '');
+    };
+    categorySelect.addEventListener('change', fill);
+    fill();
+    field.append(label, select);
+    return field;
 }
 
 function buildEvidencePickerFields() {
@@ -748,6 +821,8 @@ createForm?.addEventListener('submit', async (event) => {
             const input = createForm.elements.namedItem(apiKey);
             if (input && !input.disabled) patch[apiKey] = input.value;
         });
+        const classificationInput = createForm.elements.namedItem('classificationId');
+        if (classificationInput && !classificationInput.disabled && classificationInput.value) patch.classificationId = Number(classificationInput.value);
         // La respuesta de cada guardado dice si el código ya quedó completo (entonces ya no se ve aquí: pasa a Catálogos > Códigos).
         let lastSaved = null;
         const patchNew = async (body) => {

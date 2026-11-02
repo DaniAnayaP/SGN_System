@@ -2336,6 +2336,11 @@ for (const col of ['category_inventario', 'category_compra', 'category_almacenam
 if (!skuItemColumns.some((c) => c.name === 'editing')) {
     db.exec('ALTER TABLE sku_items ADD COLUMN editing INTEGER NOT NULL DEFAULT 0');
 }
+// Clasificación del código (Patente, Genérico…): el id de una fila de Nuestras Clasificaciones (article_categories, tipo clasificaciones), NO su nombre, para que la dirección de su QR y
+// la relación sigan firmes si la clasificación se renombra. Es opcional (un código sin clasificación sale en "SIN CLASIFICAR") y solo puede ser una de las que tiene la Categoría Inventario del código.
+if (!skuItemColumns.some((c) => c.name === 'classification_id')) {
+    db.exec('ALTER TABLE sku_items ADD COLUMN classification_id INTEGER');
+}
 
 // Almacenes y Sub almacenes (Catálogos, C. Distribución) reusan article_categories: parent_id = centro de costos (almacén) o almacén (sub almacén); kind = physical | virtual
 // (solo sub almacén); locations = zonas y anaqueles del Layout asignados a un sub almacén físico (JSON canónico, ver canonicalWarehouseLocations en server.js).
@@ -4972,7 +4977,16 @@ const SKU_ITEM_PATCHABLE_FIELDS = {
     categoryManejo: { column: 'category_manejo', fieldKey: 'main.colArticuloCategoriaManejo' },
     categoryRiesgo: { column: 'category_riesgo', fieldKey: 'main.colArticuloCategoriaRiesgo' },
     categoryVidautil: { column: 'category_vidautil', fieldKey: 'main.colArticuloCategoriaVidautil' },
+    // Clasificación: opcional, no cuenta para los 24 datos que completan un código (ver isSkuItemComplete en server.js); se guarda el id (ver classification_id arriba).
+    classificationId: { column: 'classification_id', fieldKey: 'main.colArticuloClasificacion', optional: true },
 };
+
+// Cuántos códigos tienen una clasificación (o, con categoryName, los de esa Categoría Inventario que la tienen): impide borrarla o quitársela a su categoría con códigos puestos.
+function countSkuItemsByClassification(clientId, forTestAccount, classificationId, categoryName = null) {
+    const byCategory = categoryName !== null;
+    return db.prepare(`SELECT COUNT(*) AS n FROM sku_items WHERE client_id = ? AND is_test_data = ? AND classification_id = ?${byCategory ? ' AND category_inventario = ?' : ''}`)
+        .get(...[clientId, forTestAccount ? 1 : 0, classificationId, ...(byCategory ? [categoryName] : [])]).n;
+}
 
 // Pasa un código a Edición Código (flag = true) o lo regresa a Códigos (flag = false).
 function setSkuItemEditing(id, clientId, flag, forTestAccount = false) {
@@ -6313,12 +6327,21 @@ function seedLayoutRotateIconGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(LAYOUT_ROTATE_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutGirar`], 'the Layout rotate icon');
 }
-// El icono Centrar las categorías de la tarjeta (iconLayoutTarjetaCentrar) también se da una sola vez a quien ya tiene la pantalla Layout.
-const LAYOUT_CARD_CENTER_SEED_KEY = 'seed-layout-card-center-v1';
-function seedLayoutCardCenterGrants() {
+// El icono Centrar las categorías de la tarjeta (iconLayoutTarjetaCentrar) se quitó: con varias categorías el marco ya se reparte solo y esa opción no cambiaba nada. Una sola vez se borran
+// los accesos que se habían sembrado para ese icono (en todos los niveles), para que no queden hojas sueltas de un icono que ya no existe en el árbol.
+const LAYOUT_CARD_CENTER_CLEANUP_KEY = 'cleanup-layout-card-center-v1';
+function cleanupLayoutCardCenterGrants() {
     const path = TABLE_GRANT_PATHS.layout;
-    if (!path) return;
-    seedLeavesForScreenHolders(LAYOUT_CARD_CENTER_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutTarjetaCentrar`], 'the Layout card-centering icon');
+    if (!path || db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(LAYOUT_CARD_CENTER_CLEANUP_KEY)) return;
+    const leaf = `${path.submenuPrefix}/iconLayoutTarjetaCentrar`;
+    const counts = {};
+    db.transaction(() => {
+        ['job_position_grants', 'user_grants', 'plan_grants', 'client_permission_grants', 'sector_grants'].forEach((table) => {
+            counts[table] = db.prepare(`DELETE FROM ${table} WHERE submenu_id = ?`).run(leaf).changes;
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(LAYOUT_CARD_CENTER_CLEANUP_KEY);
+    })();
+    console.log(`[db] Removed the retired Layout card-centering icon grants (one-time cleanup): ${JSON.stringify(counts)}.`);
 }
 const CODIGOS_SCREENS_SEED_KEY = 'seed-codigos-edicion-screens-v1';
 function seedCodigosScreensGrants() {
@@ -10653,7 +10676,7 @@ seedColumnSearchOptionGrants();
 seedLayoutNewIconGrants();
 seedCodigosScreensGrants();
 seedLayoutRotateIconGrants();
-seedLayoutCardCenterGrants();
+cleanupLayoutCardCenterGrants();
 
 module.exports = {
     db,
@@ -10748,6 +10771,7 @@ module.exports = {
     countZoneCodesByCategory,
     countZoneCodesInCategory,
     countCodesByZone,
+    countSkuItemsByClassification,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     articleCategoryPatchableFields,

@@ -1277,6 +1277,7 @@
             { "id": "colArticuloEvidenceTop", "labelKey": "main.colArticuloEvidenceTop", "permissionOnly": true },
             { "id": "colArticuloEvidenceBottom", "labelKey": "main.colArticuloEvidenceBottom", "permissionOnly": true },
             { "id": "colArticuloCategoriaInventario", "labelKey": "main.colArticuloCategoriaInventario", "permissionOnly": true },
+            { "id": "colArticuloClasificacion", "labelKey": "main.colArticuloClasificacion", "permissionOnly": true },
             { "id": "colArticuloCategoriaCompra", "labelKey": "main.colArticuloCategoriaCompra", "permissionOnly": true },
             { "id": "colArticuloCategoriaAlmacenamiento", "labelKey": "main.colArticuloCategoriaAlmacenamiento", "permissionOnly": true },
             { "id": "colArticuloCategoriaRotacion", "labelKey": "main.colArticuloCategoriaRotacion", "permissionOnly": true },
@@ -1381,7 +1382,6 @@
             { "id": "iconLayoutGirar", "labelKey": "main.layoutGirarBtn", "permissionOnly": true },
             { "id": "iconLayoutCategorias", "labelKey": "main.layoutCategoriasBtn", "permissionOnly": true },
             { "id": "iconLayoutTarjeta", "labelKey": "main.layoutTarjetaBtn", "permissionOnly": true },
-            { "id": "iconLayoutTarjetaCentrar", "labelKey": "main.layoutCentrarBtn", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [

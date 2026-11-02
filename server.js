@@ -158,6 +158,7 @@ const {
     countZoneCodesByCategory,
     countZoneCodesInCategory,
     countCodesByZone,
+    countSkuItemsByClassification,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
     articleCategoryPatchableFields,
@@ -5899,6 +5900,37 @@ const SKU_ITEM_AREA_LABEL = 'C. Distribución';
 const SKU_ITEM_MODULE_LABEL = 'Cadena de Suministro';
 const SKU_ITEM_SCREEN_LABEL = 'Alta Nuestros Artículos';
 
+// --- Clasificación de un código --------------------------------------------------------------------------------------------------
+// Las clasificaciones que ofrece una Categoría Inventario (el código guarda el NOMBRE de su categoría): las que esa categoría tiene en Nuestras Categorías Inventario, del catálogo.
+function inventoryClassificationsFor(clientId, isTest, categoryName) {
+    if (!categoryName) return [];
+    const category = listArticleCategories(clientId, 'inventario', isTest).find((r) => r.name === categoryName);
+    if (!category) return [];
+    const all = new Map(listArticleCategories(clientId, 'clasificaciones', isTest).map((r) => [r.id, r]));
+    return parseClassificationIds(category.classification_ids).map((id) => all.get(id)).filter(Boolean);
+}
+const classificationNameOf = (clientId, isTest, id) => {
+    if (id == null || id === '') return '';
+    const row = getArticleCategoryById(Number(id), clientId, isTest);
+    return row && row.category_type === 'clasificaciones' ? (row.name || '') : '';
+};
+// Revisa classificationId en el PATCH de un código: vacío = sin clasificación; si no, debe ser una de las de su Categoría Inventario (la que trae el mismo PATCH o la que ya tiene).
+function prepareSkuClassificationPatch(req, existing, patch) {
+    if (!Object.prototype.hasOwnProperty.call(patch, 'classificationId')) return { patch };
+    const { clientId, isTestAccount } = req.user;
+    const bad = (message) => ({ error: { status: 400, message } });
+    const raw = patch.classificationId;
+    if (raw === '' || raw == null) return { patch: { ...patch, classificationId: null } };
+    const id = Number(raw);
+    if (!Number.isInteger(id)) return bad('Elige una clasificación de la lista.');
+    const category = Object.prototype.hasOwnProperty.call(patch, 'categoryInventario') ? patch.categoryInventario : existing.category_inventario;
+    if (!category) return bad('Primero elige la Categoría Inventario del código.');
+    const row = inventoryClassificationsFor(clientId, isTestAccount, category).find((r) => r.id === id);
+    if (!row) return bad(`Esa clasificación no es de la categoría "${category}".`);
+    if (row.status !== 'active' && existing.classification_id !== id) return bad(`La clasificación "${row.name}" está inactiva. Elige una activa.`);
+    return { patch: { ...patch, classificationId: id } };
+}
+
 function mapSkuItemRecord(row, pendingByRecord, companyName) {
     if (!row) return row;
     return {
@@ -5929,6 +5961,8 @@ function mapSkuItemRecord(row, pendingByRecord, companyName) {
         categoryManejo: row.category_manejo,
         categoryRiesgo: row.category_riesgo,
         categoryVidautil: row.category_vidautil,
+        classificationId: row.classification_id == null ? null : row.classification_id,
+        classificationName: classificationNameOf(row.client_id, !!row.is_test_data, row.classification_id),
         publicToken: row.public_token,
         // ¿Ya tiene sus 24 datos? Si sí, ya no se ve en Alta Nuestros Artículos y pasa a Catálogos > Códigos (solo lectura). editing = lo mandaron a Operaciones > Edición Código.
         complete: isSkuItemComplete(row),
@@ -5985,7 +6019,8 @@ function isSkuFieldFilled(value) {
     return value !== null && value !== undefined && value !== '' && value !== 0;
 }
 function isSkuItemComplete(row) {
-    return Object.values(SKU_ITEM_PATCHABLE_FIELDS).every(({ column }) => isSkuFieldFilled(row[column]));
+    // los campos opcionales (la Clasificación) no cuentan: un código sin clasificación sigue pudiendo quedar completo
+    return Object.values(SKU_ITEM_PATCHABLE_FIELDS).filter((f) => !f.optional).every(({ column }) => isSkuFieldFilled(row[column]));
 }
 function maybeIssueSkuPublicToken(skuItem, clientId, forTestAccount) {
     if (!skuItem || skuItem.public_token || !isSkuItemComplete(skuItem)) return skuItem;
@@ -6100,9 +6135,22 @@ app.patch('/api/business/sku-items/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
-    const { baseline, overrideConflicts, ...patch } = req.body || {};
-    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, SKU_ITEM_PATCHABLE_FIELDS, 'nuestros-articulos', `#${existing.id}`, {}, { baseline, overrideConflicts });
+    const { baseline, overrideConflicts, ...rawPatch } = req.body || {};
+    const prepared = prepareSkuClassificationPatch(req, existing, rawPatch);
+    if (prepared.error) return res.status(prepared.error.status).json({ message: prepared.error.message });
+    const { clientId: skuClientId, isTestAccount: skuIsTest } = req.user;
+    const sanitizers = { classificationId: (v) => classificationNameOf(skuClientId, skuIsTest, v) };
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, SKU_ITEM_PATCHABLE_FIELDS, 'nuestros-articulos', `#${existing.id}`, sanitizers, { baseline, overrideConflicts });
     let skuItem = updateSkuItem(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
+    // Si cambió la Categoría Inventario y la clasificación que tenía ya no es de esa categoría, se quita sola (y queda en el historial).
+    if (skuItem.classification_id != null && !inventoryClassificationsFor(skuClientId, skuIsTest, skuItem.category_inventario).some((r) => r.id === skuItem.classification_id)) {
+        const oldName = classificationNameOf(skuClientId, skuIsTest, skuItem.classification_id);
+        skuItem = updateSkuItem(req.params.id, req.user.clientId, { classificationId: null }, req.user.isTestAccount);
+        logTableChange({
+            clientId: skuClientId, tableKey: 'nuestros-articulos', recordId: skuItem.id, recordLabel: `#${skuItem.id}`, action: 'update',
+            fieldKey: 'main.colArticuloClasificacion', oldValue: oldName, newValue: '', changedBy: changedByLabel(req),
+        });
+    }
     skuItem = maybeIssueSkuPublicToken(skuItem, req.user.clientId, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
     res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
@@ -6216,8 +6264,6 @@ function layoutPermissions(req) {
         // Las categorías de las zonas se capturan con el icono Categorías de la zona y su tarjeta con QR se baja con el icono Tarjeta de categorías (hojas <pantalla>/iconLayoutCategorias e iconLayoutTarjeta).
         canEditCategories: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutCategorias'),
         canUseCard: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTarjeta'),
-        // Elegir "Arriba / Centradas" para las categorías de la tarjeta (solo cambia cómo se dibuja la tarjeta) usa el icono Centrar categorías (hoja <pantalla>/iconLayoutTarjetaCentrar).
-        canCenterCard: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTarjetaCentrar'),
     };
 }
 
@@ -6718,6 +6764,14 @@ function prepareClassificationPatch(req, categoryType, existing, patch) {
         if (!row) return bad('Una de las clasificaciones ya no existe. Vuelve a elegirla.');
         if (row.status !== 'active' && !current.has(id)) return bad(`La clasificación "${row.name || `CLA-${String(row.record_number).padStart(3, '0')}`}" está inactiva. Elige una activa.`);
     }
+    // Una clasificación que ya tienen códigos de esta categoría no se le puede quitar: esos códigos quedarían con una clasificación que su categoría no ofrece.
+    if (existing.name) {
+        for (const id of current) {
+            if (ids.includes(id)) continue;
+            const n = countSkuItemsByClassification(clientId, isTestAccount, id, existing.name);
+            if (n) return { error: { status: 409, message: `Hay ${n === 1 ? 'un código' : `${n} códigos`} de "${existing.name}" con la clasificación "${(byId.get(id) || {}).name || ''}". Cámbialos primero en Alta o Edición Código.` } };
+        }
+    }
     const ordered = all.filter((r) => ids.includes(r.id)).map((r) => r.id);
     const nameOf = (value) => parseClassificationIds(value).map((id) => (byId.get(id) || {}).name).filter(Boolean).join(', ');
     return { patch: { ...patch, classificationIds: ordered.length ? JSON.stringify(ordered) : '' }, sanitizers: { classificationIds: nameOf } };
@@ -6821,6 +6875,8 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, (r
     // Una clasificación que alguna categoría de Inventario ya tiene no se borra (se deja Inactiva): esas categorías la perderían.
     if (req.params.categoryType === 'clasificaciones') {
         const users = listArticleCategories(req.user.clientId, 'inventario', req.user.isTestAccount).filter((r) => parseClassificationIds(r.classification_ids).includes(existing.id));
+        const codes = countSkuItemsByClassification(req.user.clientId, req.user.isTestAccount, existing.id);
+        if (codes) return res.status(409).json({ message: `Hay ${codes === 1 ? 'un código' : `${codes} códigos`} con esta clasificación. Cámbialos primero o márcala como Inactiva.` });
         if (users.length) return res.status(409).json({ message: `Esta clasificación está asignada a ${users.length === 1 ? 'una categoría' : `${users.length} categorías`} de Inventario (${users.slice(0, 3).map((r) => r.name || `INV-${String(r.record_number).padStart(3, '0')}`).join(', ')}). Quítala de ahí primero o márcala como Inactiva.` });
     }
     if (WAREHOUSE_TYPES.has(req.params.categoryType)
@@ -6846,7 +6902,14 @@ app.get('/api/business/article-categories-active', requireAuth, (req, res) => {
     Object.keys(ARTICLE_CATEGORY_TYPES).forEach((categoryType) => {
         options[categoryType] = listActiveArticleCategoryNames(req.user.clientId, categoryType, req.user.isTestAccount);
     });
-    res.json({ options });
+    // Para el campo Clasificación del código: por cada Categoría Inventario (su nombre, que es lo que guarda el código), las clasificaciones activas que tiene.
+    const classificationsByInventory = {};
+    listArticleCategories(req.user.clientId, 'inventario', req.user.isTestAccount).forEach((cat) => {
+        if (!cat.name) return;
+        classificationsByInventory[cat.name] = inventoryClassificationsFor(req.user.clientId, req.user.isTestAccount, cat.name)
+            .filter((c) => c.status === 'active').map((c) => ({ id: c.id, name: c.name }));
+    });
+    res.json({ options, classificationsByInventory });
 });
 
 // Lo que necesitan las pantallas Almacenes y Sub almacenes para sus listas: centros de costos, almacenes y las zonas / anaqueles del Layout guardado.
