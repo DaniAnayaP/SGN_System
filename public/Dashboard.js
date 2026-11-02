@@ -12571,7 +12571,7 @@ async function getEvidenceDownloadUrl({ tableKey, recordId, fieldKey }) {
 // permission-driven and applies automatically the moment a cell has a value:
 // pass both to opt a cell into locking, omit them and it never locks (so
 // older/simpler callers keep working unchanged).
-function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, onCommit, disabled = false, disabledText, tableKey, colKey, pending = false } = {}) {
+function attachInlineEdit(td, { value = '', inputType = 'text', step = '0.01', formatDisplay, onCommit, disabled = false, disabledText, tableKey, colKey, pending = false } = {}) {
     let current = value;
     let isDisabled = disabled;
     let isPending = pending;
@@ -12637,7 +12637,7 @@ function attachInlineEdit(td, { value = '', inputType = 'text', formatDisplay, o
         input.type = inputType;
         input.className = 'editable-cell-input';
         input.value = current;
-        if (inputType === 'number') { input.step = '0.01'; input.min = '0'; }
+        if (inputType === 'number') { input.step = step; input.min = '0'; }
         td.appendChild(input);
         input.focus();
         input.select();

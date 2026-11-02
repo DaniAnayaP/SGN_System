@@ -41,8 +41,15 @@
     // COLUMNS (las 18 de siempre) y las mismas funciones de siempre; lo nuevo es ALL_COLUMNS, planRow y rowsFromMatrix(matrix, { full: true }).
     const SKU_COLUMN = { key: 'sku', es: 'SKU', en: 'SKU', kind: 'sku', aliases: ['registro unico', 'sku del sistema', 'codigo sku'] };
     const CLASSIFICATION_COLUMN = { key: 'classificationId', es: 'Clasificación', en: 'Classification', col: 'colArticuloClasificacion', kind: 'classification', aliases: ['clasificacion del articulo'] };
+    // Tipo de almacenamiento y datos de estiba del código (para Capacidad Almacenamiento). El tipo es una lista fija (se guarda la clave); los tres números son enteros.
+    const STORAGE_LABELS = { original: 'Por UDM original', almacenamiento: 'Por UDM de almacenamiento', compra: 'Por UDM de compra', empaque: 'Por UDM de empaque', pallet: 'Por UDM de pallets' };
+    const STORAGE_NOUNS = { original: ['original'], almacenamiento: ['almacenamiento'], compra: ['compra'], empaque: ['empaque'], pallet: ['pallet', 'pallets', 'tarima', 'tarimas'] };
+    const STORAGE_COLUMN = { key: 'storageType', es: 'Tipo de almacenamiento', en: 'Storage Type', col: 'colArticuloTipoAlmacenamiento', kind: 'storagetype', aliases: ['tipo almacenamiento', 'almacenamiento por', 'storage type'] };
+    const UNITS_PER_LAYER_COLUMN = { key: 'unitsPerLayer', es: 'Cantidad por cama (TI)', en: 'Units per Layer (TI)', col: 'colArticuloCantidadCama', kind: 'number', integer: true, aliases: ['cantidad por cama', 'cantidad cama', 'ti', 'units per layer'] };
+    const LAYERS_PER_PALLET_COLUMN = { key: 'layersPerPallet', es: 'Camas por pallet (HI)', en: 'Layers per Pallet (HI)', col: 'colArticuloCamasPallet', kind: 'number', integer: true, aliases: ['camas por pallet', 'camas por pallets', 'camas x pallets', 'camas x pallet', 'hi', 'layers per pallet'] };
+    const MAX_STACK_COLUMN = { key: 'maxStack', es: 'Máxima estiba', en: 'Max Stacking', col: 'colArticuloMaxEstiba', kind: 'number', integer: true, aliases: ['maxima estiba', 'estiba maxima', 'estiba', 'max stacking'] };
     const TIPO_CODIGO_COLUMN = { key: 'categoryTipoCodigo', es: 'Tipo Código', en: 'Code Type', col: 'colArticuloCategoriaTipoCodigo', kind: 'category', type: 'tipocodigo', aliases: ['tipo de codigo', 'tipo codigo'] };
-    const ALL_COLUMNS = [SKU_COLUMN, ...COLUMNS, TIPO_CODIGO_COLUMN, CLASSIFICATION_COLUMN];
+    const ALL_COLUMNS = [SKU_COLUMN, ...COLUMNS, TIPO_CODIGO_COLUMN, STORAGE_COLUMN, UNITS_PER_LAYER_COLUMN, LAYERS_PER_PALLET_COLUMN, MAX_STACK_COLUMN, CLASSIFICATION_COLUMN];
     const BY_KEY_ALL = Object.fromEntries(ALL_COLUMNS.map((c) => [c.key, c]));
     const indexFor = (cols) => {
         const map = new Map();
@@ -120,6 +127,9 @@
     }
 
     const stripKey = (v) => norm(String(v == null ? '' : v).replace(/-/g, ' '));
+    // texto normalizado -> clave del tipo de almacenamiento: «Por UDM de pallets», «UDM pallets», «pallets», «tarima»… todo se reconoce
+    const STORAGE_TYPES = {};
+    Object.entries(STORAGE_NOUNS).forEach(([key, nouns]) => nouns.forEach((noun) => ['', 'udm ', 'udm de ', 'por udm ', 'por udm de ', 'por '].forEach((prefix) => { STORAGE_TYPES[stripKey(prefix + noun)] = key; })));
     const parseNumber = (raw) => {
         const s = String(raw).trim().replace(',', '.');
         if (!/^\d+(\.\d+)?$/.test(s)) return NaN;
@@ -226,9 +236,10 @@
             if (c.kind === 'text' && value.length > MAX_TEXT) return fail(c.key, 'tooLong', { label: c.es, labelEn: c.en, max: MAX_TEXT });
             if (c.kind === 'udm' && !matchName(value, ctx.udm)) return fail(c.key, 'udmUnknown', { value, options: (ctx.udm || []).slice(0, 8).join(', ') });
             if (c.kind === 'type' && !TYPES[stripKey(value)]) return fail(c.key, 'typeUnknown');
+            if (c.kind === 'storagetype' && !STORAGE_TYPES[stripKey(value)]) return fail(c.key, 'storageUnknown');
             if (c.kind === 'number') {
                 const n = parseNumber(value);
-                if (!Number.isFinite(n) || n <= 0 || n > MAX_NUMBER) return fail(c.key, 'number', { label: c.es, labelEn: c.en, unit: c.unit });
+                if (!Number.isFinite(n) || n <= 0 || n > MAX_NUMBER || (c.integer && !Number.isInteger(n))) return fail(c.key, c.integer ? 'integer' : 'number', { label: c.es, labelEn: c.en, unit: c.unit });
             }
             if (c.kind === 'category' && !matchName(value, (ctx.categories || {})[c.type])) return fail(c.key, 'categoryUnknown', { label: c.es, labelEn: c.en, value });
         }
@@ -240,6 +251,7 @@
             if (!value) continue;
             if (c.kind === 'udm') incoming[c.key] = matchName(value, ctx.udm);
             else if (c.kind === 'type') incoming[c.key] = TYPES[stripKey(value)];
+            else if (c.kind === 'storagetype') incoming[c.key] = STORAGE_TYPES[stripKey(value)];
             else if (c.kind === 'number') incoming[c.key] = parseNumber(value);
             else if (c.kind === 'category') incoming[c.key] = matchName(value, (ctx.categories || {})[c.type]);
             else if (c.kind === 'classification') incoming[c.key] = matchName(value, ((ctx.classifications || {}).all) || []) || value;
@@ -277,6 +289,8 @@
         tooLong: (p) => `${p.label}: es demasiado largo (máximo ${p.max} letras).`,
         udmUnknown: (p) => `UDM Principal: «${p.value}» no está en el catálogo. Opciones: ${p.options}.`,
         typeUnknown: () => 'Tipo de Artículo: escribe «Artículo Terminado» o «Materia Prima».',
+        storageUnknown: () => 'Tipo de almacenamiento: escribe «Por UDM original», «Por UDM de almacenamiento», «Por UDM de compra», «Por UDM de empaque» o «Por UDM de pallets».',
+        integer: (p) => `${p.label}: escribe solo un número entero, sin decimales (por ejemplo 30).`,
         number: (p) => `${p.label}: escribe solo el número, en ${p.unit === 'kg' ? 'kilos (por ejemplo 0.5)' : 'centímetros (por ejemplo 12)'}.`,
         categoryUnknown: (p) => `${p.label}: «${p.value}» no está en el catálogo.`,
         skuFormat: () => 'SKU: escribe solo el número del SKU (por ejemplo 000123).',
@@ -288,5 +302,5 @@
     };
     const message = (err) => (err ? (MESSAGES_ES[err.code] || (() => err.code))(err.params || {}) : '');
 
-    return { MAX_ROWS, COLUMNS, BY_KEY, ALL_COLUMNS, BY_KEY_ALL, TYPE_LABELS, norm, mapHeaders, rowsFromMatrix, parseDelimited, validateRow, normalizeRow, planRow, message };
+    return { MAX_ROWS, COLUMNS, BY_KEY, ALL_COLUMNS, BY_KEY_ALL, TYPE_LABELS, STORAGE_LABELS, norm, mapHeaders, rowsFromMatrix, parseDelimited, validateRow, normalizeRow, planRow, message };
 }));

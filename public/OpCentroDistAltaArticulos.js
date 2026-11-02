@@ -405,6 +405,22 @@ function buildArticleTypeCell(record) {
     return td;
 }
 
+// Tipo de almacenamiento: a qué UDM corresponden las medidas del código y su capacidad (lista fija; opcional).
+const STORAGE_TYPE_KEYS = ['original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
+function buildStorageTypeCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colArticuloTipoAlmacenamiento';
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    select.innerHTML = `<option value="">${Dashboard.t('main.articleTypeSelect')}</option>${STORAGE_TYPE_KEYS.map((k) => `<option value="${k}">${Dashboard.t(`main.storageType_${k}`)}</option>`).join('')}`;
+    select.value = record.storageType || '';
+    select.disabled = isPending(record, 'storageType') || !Dashboard.canEditField(TABLE_KEY, 'colArticuloTipoAlmacenamiento', record.storageType || '');
+    if (select.disabled) select.title = Dashboard.t(isPending(record, 'storageType') ? 'main.changePending' : 'main.fieldLocked');
+    select.addEventListener('change', () => ensureCreatedThenPatch(record, { storageType: select.value }));
+    td.appendChild(select);
+    return td;
+}
+
 function buildActionsCell(record, tr) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
@@ -515,6 +531,26 @@ function buildRow(record) {
         cells[colId] = td;
     });
 
+    // Datos de estiba (enteros; 0 = sin capturar)
+    [
+        ['colArticuloCantidadCama', 'unitsPerLayer'],
+        ['colArticuloCamasPallet', 'layersPerPallet'],
+        ['colArticuloMaxEstiba', 'maxStack'],
+    ].forEach(([colId, key]) => {
+        const td = document.createElement('td');
+        td.dataset.col = colId;
+        Dashboard.attachInlineEdit(td, {
+            value: record[key] || '',
+            inputType: 'number',
+            step: '1',
+            tableKey: TABLE_KEY,
+            colKey: colId,
+            pending: isPending(record, key),
+            onCommit: (val) => ensureCreatedThenPatch(record, { [key]: Math.max(0, Math.round(Number(val)) || 0) }),
+        });
+        cells[colId] = td;
+    });
+
     const tr = document.createElement('tr');
     tr.dataset.recordId = record.id != null ? String(record.id) : '';
     tr.append(
@@ -532,6 +568,10 @@ function buildRow(record) {
         cells.colArticuloAncho,
         cells.colArticuloPesoArticulo,
         cells.colArticuloPesoEmpaque,
+        buildStorageTypeCell(record),
+        cells.colArticuloCantidadCama,
+        cells.colArticuloCamasPallet,
+        cells.colArticuloMaxEstiba,
         buildEvidenceCell(record, 'evidenceFront', 'colArticuloEvidenceFront'),
         buildEvidenceCell(record, 'evidenceBack', 'colArticuloEvidenceBack'),
         buildEvidenceCell(record, 'evidenceLeft', 'colArticuloEvidenceLeft'),
@@ -561,7 +601,7 @@ function ensureEmptyState() {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = 43;
+    td.colSpan = 47;
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');

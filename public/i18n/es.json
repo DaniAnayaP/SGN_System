@@ -265,6 +265,7 @@
     "classNuestrasUnidades": "Nuestras Unidades",
     "classArticuloDatosGenerales": "Datos Generales",
     "classArticuloDimensiones": "Dimensiones Artículo Principal",
+    "classArticuloAlmacenamiento": "Almacenamiento Artículo",
     "classArticuloEvidencias": "Evidencias",
     "classArticuloCategorias": "Categorías Artículo",
     "catCentroDistCategoriasInventario": "Nuestras Categorías Inventarios",
@@ -2189,6 +2190,15 @@
     "colArticuloCategoriaRiesgo": "Categoría Riesgo",
     "colArticuloCategoriaVidautil": "Categoría Vida Útil",
     "colArticuloCategoriaTipoCodigo": "Tipo Código",
+    "colArticuloTipoAlmacenamiento": "Tipo de almacenamiento",
+    "colArticuloCantidadCama": "Cantidad por cama (TI)",
+    "colArticuloCamasPallet": "Camas por pallet (HI)",
+    "colArticuloMaxEstiba": "Máxima estiba",
+    "storageType_original": "Por UDM original",
+    "storageType_almacenamiento": "Por UDM de almacenamiento",
+    "storageType_compra": "Por UDM de compra",
+    "storageType_empaque": "Por UDM de empaque",
+    "storageType_pallet": "Por UDM de pallets",
     "colArticuloQr": "Código QR",
     "colCotRegistroUnico": "Registro Único",
     "colCotFolio": "Folio",
@@ -2324,6 +2334,8 @@
     "tplInstType": "Artículo Terminado o Materia Prima.",
     "tplInstNumberCm": "Solo el número, en centímetros (por ejemplo 12). Sin letras.",
     "tplInstNumberKg": "Solo el número, en kilos (por ejemplo 0.5). Sin letras.",
+    "tplInstStorage": "Una de estas: Por UDM original, Por UDM de almacenamiento, Por UDM de compra, Por UDM de empaque o Por UDM de pallets.",
+    "tplInstInteger": "Solo un número entero, sin decimales (por ejemplo 30). Sin letras.",
     "tplInstCategory": "Un nombre del catálogo: {list}.",
     "tplErr_upcRequired": "UPC: es obligatorio.",
     "tplErr_upcFormat": "UPC: escribe solo números, de 8 a 14 dígitos.",
@@ -2334,6 +2346,8 @@
     "tplErr_typeUnknown": "Tipo de Artículo: escribe «Artículo Terminado» o «Materia Prima».",
     "tplErr_number_cm": "{label}: escribe solo el número, en centímetros (por ejemplo 12).",
     "tplErr_number_kg": "{label}: escribe solo el número, en kilos (por ejemplo 0.5).",
+    "tplErr_integer": "{label}: escribe solo un número entero, sin decimales (por ejemplo 30).",
+    "tplErr_storageUnknown": "Tipo de almacenamiento: elige Por UDM original, Por UDM de almacenamiento, Por UDM de compra, Por UDM de empaque o Por UDM de pallets.",
     "tplErr_categoryUnknown": "{label}: «{value}» no está en el catálogo.",
     "tplErr_serverError": "No se pudo guardar esta fila. Inténtalo de nuevo.",
     "tplStepCols": "Elige las columnas que se cargan",
@@ -3454,6 +3468,22 @@
     "whKind": {
       "what": "Físico: existe en la nave y se le asignan zonas o anaqueles del Layout. Virtual: no ocupa lugar en la nave, por ejemplo mercancía en tránsito o en consignación.",
       "example": "Medicamentos es físico; En tránsito es virtual."
+    },
+    "colArticuloTipoAlmacenamiento": {
+      "what": "A qué unidad de medida (UDM) corresponden las medidas del código (Alto, Largo y Ancho) y su capacidad de almacenamiento: la UDM original, la de almacenamiento, la de compra, la de empaque o la de pallets. Es opcional: un código sin tipo de almacenamiento sigue pudiendo quedar completo.",
+      "example": "Un atado que se guarda en tarima completa: Por UDM de pallets; su Largo y Ancho son los de la tarima."
+    },
+    "colArticuloCantidadCama": {
+      "what": "Cuántas unidades caben en cada cama (capa) de una tarima de este código. Con las camas por pallet da lo que lleva una tarima y se usa para calcular la capacidad de almacenamiento. Número entero; es opcional.",
+      "example": "30 atados por cama."
+    },
+    "colArticuloCamasPallet": {
+      "what": "Cuántas camas (capas) lleva cada tarima de este código. Multiplicada por la cantidad por cama da lo que lleva una tarima. Número entero; es opcional.",
+      "example": "Una tarima de 3 camas con 16 por cama lleva 48."
+    },
+    "colArticuloMaxEstiba": {
+      "what": "Cuántas tarimas de este código se pueden apilar una sobre otra (la estiba máxima). Número entero; es opcional.",
+      "example": "Máxima estiba 6: se apilan hasta 6 tarimas."
     },
     "colArticuloClasificacion": {
       "what": "La clasificación del código dentro de su Categoría Inventario (por ejemplo Patente o Genérico en Medicamentos). Solo ofrece las que esa categoría tiene asignadas en Catálogos > Categorías de Inventario. Es opcional: un código sin clasificación igual se puede completar y sale en SIN CLASIFICAR en la página del QR. Si cambias la categoría y la clasificación ya no es de esa categoría, se quita sola.",

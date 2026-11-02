@@ -5951,6 +5951,10 @@ function mapSkuItemRecord(row, pendingByRecord, companyName) {
         width: row.width,
         articleWeight: row.article_weight,
         packageWeight: row.package_weight,
+        storageType: row.storage_type,
+        unitsPerLayer: row.units_per_layer,
+        layersPerPallet: row.layers_per_pallet,
+        maxStack: row.max_stack,
         evidenceFront: row.evidence_front,
         evidenceBack: row.evidence_back,
         evidenceLeft: row.evidence_left,
@@ -6213,11 +6217,24 @@ app.post('/api/business/sku-items/:id/finish-edit', requireAuth, (req, res) => {
     res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name) });
 });
 
+// Estiba y tipo de almacenamiento del código: enteros de 0 a 100000 (0 = sin capturar) y una de las 5 claves de la lista ('' = sin elegir).
+const SKU_STORAGE_TYPES = ['original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
+function validateSkuStackingPatch(patch) {
+    for (const [key, label] of [['unitsPerLayer', 'Cantidad por cama (TI)'], ['layersPerPallet', 'Camas por pallet (HI)'], ['maxStack', 'Máxima estiba']]) {
+        if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+        if (!Number.isInteger(patch[key]) || patch[key] < 0 || patch[key] > 100000) return `${label}: escribe un número entero, sin decimales, de 0 a 100000.`;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'storageType') && patch.storageType !== '' && !SKU_STORAGE_TYPES.includes(patch.storageType)) return 'Tipo de almacenamiento: elige una opción de la lista.';
+    return '';
+}
+
 app.patch('/api/business/sku-items/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
     const { baseline, overrideConflicts, ...rawPatch } = req.body || {};
+    const stackingError = validateSkuStackingPatch(rawPatch);
+    if (stackingError) return res.status(400).json({ message: stackingError });
     const prepared = prepareSkuClassificationPatch(req, existing, rawPatch);
     if (prepared.error) return res.status(prepared.error.status).json({ message: prepared.error.message });
     const { clientId: skuClientId, isTestAccount: skuIsTest } = req.user;

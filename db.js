@@ -2331,6 +2331,12 @@ for (const col of ['category_inventario', 'category_compra', 'category_almacenam
         db.exec(`ALTER TABLE sku_items ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
     }
 }
+// Datos de estiba y tipo de almacenamiento del código (para Capacidad Almacenamiento): cuántas unidades lleva cada cama de una tarima, cuántas camas lleva cada tarima y cuántas tarimas se
+// pueden apilar; 0 = sin capturar. storage_type dice a qué UDM corresponden sus medidas y su capacidad (original, almacenamiento, compra, empaque o pallet; '' = sin elegir).
+for (const col of ['units_per_layer', 'layers_per_pallet', 'max_stack']) {
+    if (!skuItemColumns.some((c) => c.name === col)) db.exec(`ALTER TABLE sku_items ADD COLUMN ${col} INTEGER NOT NULL DEFAULT 0`);
+}
+if (!skuItemColumns.some((c) => c.name === 'storage_type')) db.exec("ALTER TABLE sku_items ADD COLUMN storage_type TEXT NOT NULL DEFAULT ''");
 // Un código ya completo se ve en Catálogos > Códigos (solo lectura). Al elegir Editar pasa a Operaciones > Edición Código (editing = 1), donde se corrige, y al terminar
 // la edición regresa a Códigos. Alta Nuestros Artículos solo muestra los incompletos que no están en edición.
 if (!skuItemColumns.some((c) => c.name === 'editing')) {
@@ -4985,6 +4991,11 @@ const SKU_ITEM_PATCHABLE_FIELDS = {
     categoryVidautil: { column: 'category_vidautil', fieldKey: 'main.colArticuloCategoriaVidautil' },
     // Tipo Código (Terminado, Unidosis…): opcional, no cuenta para los 24 datos que completan un código (ver isSkuItemComplete en server.js); se guarda el NOMBRE, como las demás categorías.
     categoryTipoCodigo: { column: 'category_tipocodigo', fieldKey: 'main.colArticuloCategoriaTipoCodigo', optional: true },
+    // Estiba y tipo de almacenamiento: opcionales, no cuentan para los 24 datos que completan un código (ver isSkuItemComplete en server.js).
+    storageType: { column: 'storage_type', fieldKey: 'main.colArticuloTipoAlmacenamiento', optional: true },
+    unitsPerLayer: { column: 'units_per_layer', fieldKey: 'main.colArticuloCantidadCama', optional: true },
+    layersPerPallet: { column: 'layers_per_pallet', fieldKey: 'main.colArticuloCamasPallet', optional: true },
+    maxStack: { column: 'max_stack', fieldKey: 'main.colArticuloMaxEstiba', optional: true },
     // Clasificación: opcional, no cuenta para los 24 datos que completan un código (ver isSkuItemComplete en server.js); se guarda el id (ver classification_id arriba).
     classificationId: { column: 'classification_id', fieldKey: 'main.colArticuloClasificacion', optional: true },
 };

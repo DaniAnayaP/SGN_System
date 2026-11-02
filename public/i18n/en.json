@@ -318,6 +318,7 @@
     "classArticuloQr": "QR Code",
     "classArticuloDatosGenerales": "General Data",
     "classArticuloDimensiones": "Main Article Dimensions",
+    "classArticuloAlmacenamiento": "Article Storage",
     "classArticuloEvidencias": "Evidence",
     "opTransVolIngresos": "Income",
     "opTransVolGastos": "Expenses",
@@ -2190,6 +2191,15 @@
     "colArticuloCategoriaRiesgo": "Risk Category",
     "colArticuloCategoriaVidautil": "Shelf Life Category",
     "colArticuloCategoriaTipoCodigo": "Code Type",
+    "colArticuloTipoAlmacenamiento": "Storage Type",
+    "colArticuloCantidadCama": "Units per Layer (TI)",
+    "colArticuloCamasPallet": "Layers per Pallet (HI)",
+    "colArticuloMaxEstiba": "Max Stacking",
+    "storageType_original": "By original UOM",
+    "storageType_almacenamiento": "By storage UOM",
+    "storageType_compra": "By purchase UOM",
+    "storageType_empaque": "By packaging UOM",
+    "storageType_pallet": "By pallet UOM",
     "colArticuloQr": "QR Code",
     "colCotRegistroUnico": "Unique Registration",
     "colCotFolio": "Folio",
@@ -2325,6 +2335,8 @@
     "tplInstType": "Artículo Terminado (finished article) or Materia Prima (raw material).",
     "tplInstNumberCm": "Only the number, in centimeters (for example 12). No letters.",
     "tplInstNumberKg": "Only the number, in kilos (for example 0.5). No letters.",
+    "tplInstStorage": "One of these (type it in Spanish): Por UDM original, Por UDM de almacenamiento, Por UDM de compra, Por UDM de empaque or Por UDM de pallets.",
+    "tplInstInteger": "Only a whole number, no decimals (for example 30). No letters.",
     "tplInstCategory": "A name from the catalog: {list}.",
     "tplErr_upcRequired": "UPC: it is required.",
     "tplErr_upcFormat": "UPC: type numbers only, 8 to 14 digits.",
@@ -2335,6 +2347,8 @@
     "tplErr_typeUnknown": "Article Type: type \"Artículo Terminado\" or \"Materia Prima\".",
     "tplErr_number_cm": "{label}: type only the number, in centimeters (for example 12).",
     "tplErr_number_kg": "{label}: type only the number, in kilos (for example 0.5).",
+    "tplErr_integer": "{label}: type only a whole number, no decimals (for example 30).",
+    "tplErr_storageUnknown": "Storage type: choose Por UDM original, Por UDM de almacenamiento, Por UDM de compra, Por UDM de empaque or Por UDM de pallets.",
     "tplErr_categoryUnknown": "{label}: \"{value}\" is not in the catalog.",
     "tplErr_serverError": "This row could not be saved. Try again.",
     "tplStepCols": "Choose the columns to load",
@@ -3455,6 +3469,22 @@
     "whKind": {
       "what": "Physical: it exists in the building and gets Layout zones or racks assigned. Virtual: it takes no room in the building, for example goods in transit or on consignment.",
       "example": "Medicines is physical; In transit is virtual."
+    },
+    "colArticuloTipoAlmacenamiento": {
+      "what": "Which unit of measure (UOM) the code's measures (Height, Length and Width) and its storage capacity refer to: the original, storage, purchase, packaging or pallet UOM. It is optional: a code without a storage type can still be complete.",
+      "example": "A bundle stored on a whole pallet: By pallet UOM; its Length and Width are the pallet's."
+    },
+    "colArticuloCantidadCama": {
+      "what": "How many units fit in each layer of a pallet of this code. Together with the layers per pallet it gives what a pallet holds and it is used to work out the storage capacity. Whole number; optional.",
+      "example": "30 bundles per layer."
+    },
+    "colArticuloCamasPallet": {
+      "what": "How many layers each pallet of this code has. Multiplied by the units per layer it gives what a pallet holds. Whole number; optional.",
+      "example": "A pallet of 3 layers with 16 per layer holds 48."
+    },
+    "colArticuloMaxEstiba": {
+      "what": "How many pallets of this code can be stacked on top of each other (the maximum stacking). Whole number; optional.",
+      "example": "Max stacking 6: up to 6 pallets are stacked."
     },
     "colArticuloClasificacion": {
       "what": "The code's classification inside its Inventory Category (for example Brand or Generic in Medications). It only offers the ones that category has in Catalogs > Inventory Categories. It is optional: a code without a classification can still be completed and shows up under UNCLASSIFIED on the QR page. If you change the category and the classification no longer belongs to it, it is cleared automatically.",

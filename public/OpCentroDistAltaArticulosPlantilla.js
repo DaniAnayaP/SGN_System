@@ -61,6 +61,8 @@
         if (c.key === 'upc') return [t('main.tplInstUpc'), '7501003126410'];
         if (c.kind === 'udm') return [t('main.tplInstUdm', { list: options(ctx && ctx.udm) }), ((ctx && ctx.udm) || [])[0] || ''];
         if (c.kind === 'type') return [t('main.tplInstType'), 'Artículo Terminado'];
+        if (c.kind === 'storagetype') return [t('main.tplInstStorage'), 'Por UDM de pallets'];
+        if (c.integer) return [t('main.tplInstInteger'), { unitsPerLayer: '30', layersPerPallet: '1', maxStack: '6' }[c.key]];
         if (c.kind === 'number') return [t(c.unit === 'kg' ? 'main.tplInstNumberKg' : 'main.tplInstNumberCm'), { height: '4', length: '11', width: '6', articleWeight: '0.045', packageWeight: '0.060' }[c.key]];
         if (c.kind === 'category') return [t('main.tplInstCategory', { list: options(((ctx && ctx.categories) || {})[c.type]) }), (((ctx && ctx.categories) || {})[c.type] || [])[0] || ''];
         if (c.kind === 'classification') return [t('main.tplInstClass', { list: options(ctx && ctx.classifications && ctx.classifications.all) }), ((ctx && ctx.classifications && ctx.classifications.all) || [])[0] || ''];
@@ -135,7 +137,7 @@
                         <div class="tpl-seg" role="group"><button type="button" id="tpl-f-all" aria-pressed="true">${esc(t('main.tplAll'))}</button><button type="button" id="tpl-f-bad" aria-pressed="false">${esc(t('main.tplOnlyErrors'))}</button></div></div>
                     </div>
                     <div class="tpl-scroll" data-help-key="tplReview"><table class="tpl-table"><thead><tr><th>${esc(t('main.tplColRow'))}</th><th>${esc(t('main.tplColState'))}</th>${head}<th>${esc(t('main.tplColWhat'))}</th><th></th></tr></thead><tbody id="tpl-body"></tbody></table></div>
-                    <datalist id="tpl-dl-udm"></datalist><datalist id="tpl-dl-class"></datalist><datalist id="tpl-dl-type"><option value="Artículo Terminado"></option><option value="Materia Prima"></option></datalist>
+                    <datalist id="tpl-dl-udm"></datalist><datalist id="tpl-dl-class"></datalist><datalist id="tpl-dl-type"><option value="Artículo Terminado"></option><option value="Materia Prima"></option></datalist><datalist id="tpl-dl-storage">${Object.values(window.SkuTemplate.STORAGE_LABELS).map((l) => `<option value="${l}"></option>`).join('')}</datalist>
                     ${CAT_COLS.map((c) => `<datalist id="tpl-dl-${c.type}"></datalist>`).join('')}
                 </section>
             </div>
@@ -298,7 +300,7 @@
 
     // ---- tabla de revisión -------------------------------------------------------------------------------------------------------------
     function cellInput(c, r, i) {
-        const list = c.kind === 'udm' ? ' list="tpl-dl-udm"' : (c.kind === 'type' ? ' list="tpl-dl-type"' : (c.kind === 'category' ? ` list="tpl-dl-${c.type}"` : (c.kind === 'classification' ? ' list="tpl-dl-class"' : '')));
+        const list = c.kind === 'udm' ? ' list="tpl-dl-udm"' : (c.kind === 'type' ? ' list="tpl-dl-type"' : (c.kind === 'storagetype' ? ' list="tpl-dl-storage"' : (c.kind === 'category' ? ` list="tpl-dl-${c.type}"` : (c.kind === 'classification' ? ' list="tpl-dl-class"' : ''))));
         return `<td class="tpl-c-${c.kind || 'plain'}${c.kind === 'category' ? ' tpl-cat' : ''}" data-k="${c.key}"><input type="text" data-i="${i}" data-k="${c.key}" value="${esc(r.v[c.key])}" aria-label="${esc(header(c))} ${r.n}"${list}></td>`;
     }
     function buildTable() {
