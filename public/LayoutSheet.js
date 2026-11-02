@@ -181,9 +181,21 @@
             s += `<text x="${x + 30 * f}" y="${ly + 16 * f}" font-size="${16 * f}" fill="#3F435D">${esc(text)}</text>`;
         });
         s += `<line x1="${m}" y1="${lineY}" x2="${W - m}" y2="${lineY}" stroke="${C.cardBorder}" stroke-width="${2 * f}"/>`;
-        s += `<text x="${m}" y="${H - 57 * f}" font-size="${19 * f}" fill="#3F435D">${esc(labels.printed)} <tspan font-weight="700" fill="${C.ink}">${esc(dateFmt(data.printedAt))}</tspan>${tiny ? '' : `. ${esc(labels.snapshot)}`}</text>`;
-        s += `<text x="${m}" y="${H - 27 * f}" font-size="${17 * f}" fill="#6B7089">${esc(labels.updated)} ${esc(dateFmt(data.updatedAt))} (UTC ${utc(data.updatedAt)})</text>`;
-        s += `<text x="${W - m}" y="${H - 41 * f}" font-size="${34 * f}" font-weight="700" fill="${C.ink}" text-anchor="end">${esc(labels.version)} ${data.version}</text>`;
+        // Pie: lo impreso y la última actualización a la izquierda y la versión (grande) a la derecha. Los textos largos se achican para no pasar por debajo de la versión; si ni así caben
+        // (hoja muy angosta), la aclaración de «foto de ese momento» se suelta y se deja la fecha. El ancho de cada letra se calcula como 0.52 veces su tamaño (Poppins mide cerca de 0.46 en promedio; sobra un poco para las negritas).
+        const CHAR_W = 0.52;
+        const verText = `${labels.version} ${data.version}`;
+        const footAvail = W - 2 * m - verText.length * 34 * f * CHAR_W - 26 * f;
+        const printedHead = `${labels.printed} ${dateFmt(data.printedAt)}`;
+        const updatedText = `${labels.updated} ${dateFmt(data.updatedAt)} (UTC ${utc(data.updatedAt)})`;
+        const footFit = (text, size, min) => { const need = text.length * CHAR_W; return footAvail >= need * size ? size : (footAvail / need >= min ? footAvail / need : 0); };
+        let printedTail = tiny ? '' : `. ${labels.snapshot}`;
+        let printedSize = footFit(printedHead + printedTail, 19 * f, 11 * f);
+        if (!printedSize) { printedTail = ''; printedSize = Math.max(Math.min(19 * f, footAvail / (printedHead.length * CHAR_W)), 8 * f); }
+        const updatedSize = Math.max(Math.min(17 * f, footAvail / (updatedText.length * CHAR_W)), 8 * f);
+        s += `<text x="${m}" y="${H - 57 * f}" font-size="${printedSize}" fill="#3F435D">${esc(labels.printed)} <tspan font-weight="700" fill="${C.ink}">${esc(dateFmt(data.printedAt))}</tspan>${printedTail ? esc(printedTail) : ''}</text>`;
+        s += `<text x="${m}" y="${H - 27 * f}" font-size="${updatedSize}" fill="#6B7089">${esc(updatedText)}</text>`;
+        s += `<text x="${W - m}" y="${H - 41 * f}" font-size="${34 * f}" font-weight="700" fill="${C.ink}" text-anchor="end">${esc(verText)}</text>`;
         return s;
     }
 
