@@ -62,6 +62,8 @@
         let hitSpaces = null;
         let spaceList = [];
         let zoneMeshes = [];
+        let hiddenAssets = new Set(); // ids de los espacios que NO se dibujan (los eligió quien ve el 3D)
+        let lastLayout = null;
         const textureCache = new Map();
 
         const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -181,6 +183,7 @@
         function update(layout, opts) {
             if (opts && typeof opts.labels === 'boolean') labelsOn = opts.labels;
             if (opts && opts.layers) LAYER_NAMES.forEach((n) => { if (typeof opts.layers[n] === 'boolean') layerOn[n] = opts.layers[n]; });
+            lastLayout = layout;
             Object.keys(group).forEach((n) => clearGroup(group[n]));
             outline.visible = false;
             hitSpaces = null;
@@ -290,7 +293,7 @@
                     [x0, y0, z0, x0, y1, z0], [x1, y0, z0, x1, y1, z0], [x1, y0, z1, x1, y1, z1], [x0, y0, z1, x0, y1, z1]].forEach((e) => edges.push(...e));
             };
             (layout.spaces || []).forEach((s) => {
-                if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0)) return;
+                if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id)) return;
                 const cx = PX(s.x + s.l / 2); const cz = PZ(s.y + s.d / 2);
                 const lv = Math.max(1, s.levels || 1);
                 if (s.type === 'pallet') {
@@ -332,6 +335,11 @@
 
         function setLabels(on) { labelsOn = !!on; applyVisibility(); }
         function setLayer(name, on) { if (LAYER_NAMES.includes(name)) { layerOn[name] = !!on; applyVisibility(); } }
+        // Elegir qué activos se ven: ids = los que se ocultan. rebuild = false cuando enseguida se llama a update (así no se arma dos veces).
+        function setHiddenAssets(ids, rebuild) {
+            hiddenAssets = new Set(ids || []);
+            if (rebuild !== false && lastLayout) update(lastLayout);
+        }
         function setView(name) { go(viewTarget(name), true); }
         function zoom(factor) { st.r = clamp(st.r / factor, 3, bounds.diag * 6); applyCam(); }
 
@@ -441,7 +449,7 @@
             renderer.dispose();
             canvas.remove();
         }
-        return { update, setLabels, setLayer, setView, zoom, resize, destroy, canvas, layers: LAYER_NAMES.slice() };
+        return { update, setLabels, setLayer, setHiddenAssets, setView, zoom, resize, destroy, canvas, layers: LAYER_NAMES.slice() };
     }
 
     root.LayoutScene3D = { create, LAYERS: LAYER_NAMES.slice() };

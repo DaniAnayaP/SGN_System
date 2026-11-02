@@ -1778,6 +1778,14 @@
     "layout3dCapaAssets": "Activos (anaqueles, tarimas y gabinetes)",
     "layout3dCapaVer": "Ver: {name}",
     "layout3dCapaOcultar": "Ocultar: {name}",
+    "layout3dActivosElegir": "Elegir qué activos ver",
+    "layout3dActivosTitulo": "Activos visibles",
+    "layout3dActivosConteo": "{n} de {t} activos visibles",
+    "layout3dTodos": "Todos",
+    "layout3dNinguno": "Ninguno",
+    "layout3dCerrar": "Cerrar",
+    "layout3dActivosBuscar": "Buscar por código, tipo o zona",
+    "layout3dSinResultados": "Ningún activo coincide.",
     "layoutVer2D": "Ver el croquis en 2D",
     "layoutVer3D": "Ver el Layout en 3D",
     "layout3dGeneral": "Vista general",
@@ -3694,6 +3702,10 @@
     "layoutView3d": {
       "what": "Cambia entre el croquis plano (2D) y el Layout levantado en 3D con las mismas medidas, alturas y niveles. En 3D arrastras para girar, con Shift o clic derecho lo mueves y tocas un anaquel o una zona para ver sus datos. Lo que cambias en el panel se ve en el 3D al momento. El 3D no guarda nada: solo es para ver.",
       "example": "quieres revisar si las tarimas tienen el alto correcto: pasas a 3D y, si se ven como torres, corriges su alto en Huella-Espacio."
+    },
+    "layout3dAssetsPick": {
+      "what": "Abre una lista para elegir CUÁLES activos se ven en el 3D (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Marca o desmarca uno por uno, una zona completa con la casilla de la zona, o usa Todos y Ninguno (actúan sobre lo que muestra la lista; con el buscador vacío, sobre todos). El buscador entiende los mismos signos de todos los filtros: coma para otra búsqueda, $ antes y @ después. El icono queda marcado cuando hay activos ocultos. Solo cambia lo que ves; no modifica el Layout.",
+      "example": "quieres ver solo R-07 y T-03 para revisar sus alturas: pulsas Ninguno, buscas R-07 y marcas el anaquel, luego buscas T-03 y marcas la tarima."
     },
     "layout3dLayers": {
       "what": "Muestra u oculta una capa del 3D, una por icono: Paredes, Puertas, Conexiones de luz, Columnas, Zonas y Activos (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Lo que ocultas deja de verse y de poder tocarse; los rótulos de esa capa también se van. Se recuerda en este navegador.",

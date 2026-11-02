@@ -1778,6 +1778,14 @@
     "layout3dCapaAssets": "Assets (racks, pallets and cabinets)",
     "layout3dCapaVer": "Show: {name}",
     "layout3dCapaOcultar": "Hide: {name}",
+    "layout3dActivosElegir": "Choose which assets to show",
+    "layout3dActivosTitulo": "Visible assets",
+    "layout3dActivosConteo": "{n} of {t} assets visible",
+    "layout3dTodos": "All",
+    "layout3dNinguno": "None",
+    "layout3dCerrar": "Close",
+    "layout3dActivosBuscar": "Search by code, type or zone",
+    "layout3dSinResultados": "No asset matches.",
     "layoutVer2D": "View the sketch in 2D",
     "layoutVer3D": "View the Layout in 3D",
     "layout3dGeneral": "Overview",
@@ -3695,6 +3703,10 @@
     "layoutView3d": {
       "what": "Switches between the flat sketch (2D) and the Layout built in 3D with the same measures, heights and levels. In 3D you drag to rotate, move it with Shift or right click, and tap a rack or a zone to see its data. Whatever you change in the panel shows up in the 3D right away. The 3D saves nothing: it is only for viewing.",
       "example": "you want to check that the pallets have the right height: switch to 3D and, if they look like towers, fix their height in Footprint-Space."
+    },
+    "layout3dAssetsPick": {
+      "what": "Opens a list to choose WHICH assets show in the 3D (racks, racks with pallets, cabinets and pallets). Tick or untick one by one, a whole zone with the zone's checkbox, or use All and None (they act on what the list shows; with an empty search, on all of them). The search understands the same signs as every filter: comma for another search, $ before and @ after. The icon stays marked while some assets are hidden. It only changes what you see; it does not modify the Layout.",
+      "example": "you want to see only R-07 and T-03 to check their heights: press None, search R-07 and tick the rack, then search T-03 and tick the pallet."
     },
     "layout3dLayers": {
       "what": "Shows or hides one layer of the 3D, one per icon: Walls, Doors, Power connections, Columns, Zones and Assets (racks, racks with pallets, cabinets and pallets). A hidden layer stops being seen and being tappable; that layer's labels go too. It is remembered in this browser.",

@@ -1468,6 +1468,7 @@ window.addEventListener('pointerup', () => {
 // la primera vez que se pide el 3D. Los iconos del croquis que solo sirven en 2D (medidas, m², nombres, girar y zoom) se esconden mientras se ve el 3D, que trae sus propios controles.
 let scene3d = null;
 let scene3dLoading = null;
+let picker3d = null; // el selector de activos del 3D (LayoutAssetPicker.js)
 let scene3dTimer = 0;
 let scene3dLabels = true;
 // Las capas del 3D que se están viendo (se recuerdan en este navegador): paredes, puertas, luz, columnas, zonas y activos.
@@ -1496,7 +1497,14 @@ function ensureScene3d() {
         scene3dLoading = (async () => {
             await loadScriptOnce('vendor/three/three.min.js');
             await loadScriptOnce('LayoutScene3D.js');
+            await loadScriptOnce('LayoutAssetPicker.js');
             scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, onSelect: show3dInfo });
+            picker3d = window.LayoutAssetPicker.create($('layout-3d-picker'), {
+                texts: { title: t('main.layout3dActivosTitulo'), count: t('main.layout3dActivosConteo'), all: t('main.layout3dTodos'), none: t('main.layout3dNinguno'), close: t('main.layout3dCerrar'), search: t('main.layout3dActivosBuscar'), noResults: t('main.layout3dSinResultados'), noZone: t('main.layoutSinZona') },
+                typeLabel: (type) => typeLabel('space', type),
+                onChange: (hidden) => { scene3d.setHiddenAssets(hidden); updateViewBtns(); },
+                onToggle: () => updateViewBtns(),
+            });
             return scene3d;
         })().catch((err) => { scene3dLoading = null; throw err; });
     }
@@ -1518,7 +1526,14 @@ function show3dInfo(sel) {
     }
 }
 function refreshScene3d() {
-    if (scene3d && state.view3d && state.draft) scene3d.update(state.draft, { labels: scene3dLabels, layers: scene3dLayers });
+    if (!(scene3d && state.view3d && state.draft)) return;
+    // el selector se actualiza con el borrador (lo que se ocultó y ya no existe se olvida) y la escena se arma una sola vez
+    if (picker3d) {
+        picker3d.setData({ spaces: state.draft.spaces.filter((s) => s.active !== false), zones: state.draft.zones.filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name })) });
+        scene3d.setHiddenAssets(picker3d.getHidden(), false);
+    }
+    scene3d.update(state.draft, { labels: scene3dLabels, layers: scene3dLayers });
+    updateViewBtns();
 }
 function scheduleScene3d() {
     if (!state.view3d) return;
@@ -1541,6 +1556,16 @@ function updateViewBtns() {
     [['layout-3d-zoom-in', 'main.layout3dAcercar'], ['layout-3d-zoom-out', 'main.layout3dAlejar']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
     // Capas del 3D: un grupo de iconos con su propia hoja del árbol; solo se ve quien la tiene.
     $('layout-3d-layers').hidden = !(state.perms && state.perms.canToggle3dLayers);
+    // Elegir qué activos se ven: se marca cuando hay alguno oculto y no sirve con la capa de activos apagada
+    const pickBtn = $('layout-3d-assets-pick');
+    const hiddenCount = picker3d ? picker3d.getHidden().size : 0;
+    const pickTotal = picker3d ? picker3d.total() : 0;
+    pickBtn.disabled = scene3dLayers.assets === false;
+    pickBtn.setAttribute('aria-pressed', String(hiddenCount > 0));
+    pickBtn.setAttribute('aria-expanded', String(!!(picker3d && picker3d.isOpen())));
+    pickBtn.setAttribute('aria-label', t('main.layout3dActivosElegir') + (hiddenCount ? ` (${pickTotal - hiddenCount}/${pickTotal})` : ''));
+    pickBtn.title = pickBtn.getAttribute('aria-label');
+    if (picker3d && (!state.view3d || scene3dLayers.assets === false) && picker3d.isOpen()) picker3d.hide();
     document.querySelectorAll('[data-3d-layer]').forEach((btn) => {
         const name = btn.getAttribute('data-3d-layer');
         const on = scene3dLayers[name] !== false;
@@ -1589,6 +1614,7 @@ document.querySelectorAll('[data-3d-layer]').forEach((btn) => btn.addEventListen
     updateViewBtns();
     if (scene3d) scene3d.setLayer(name, scene3dLayers[name]);
 }));
+$('layout-3d-assets-pick').addEventListener('click', () => { if (picker3d) picker3d.toggle(); });
 $('layout-3d-labels').addEventListener('click', () => {
     scene3dLabels = !scene3dLabels;
     updateViewBtns();

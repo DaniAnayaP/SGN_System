@@ -18,8 +18,11 @@
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
             home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
             rotate: 'Girar el croquis', measures: 'Medidas', areaBtn: 'm² de las zonas', layers: 'Capas del croquis', mapToggle: 'Croquis',
+                        opts2d: 'Opciones del croquis plano', opts3d: 'Opciones del 3D', groupLayers: 'Capas', groupTools: 'Herramientas', group3dView: 'Vista', showLabel: 'Mostrar:', viewMode: 'Cómo ver el croquis',
+            rotateShort: 'Girar', labels3d: 'Rótulos', pickShort: 'Elegir activos', layerAssets: 'Activos',
             view2d: 'Ver el croquis en 2D', view3d: 'Ver el Layout en 3D', v3General: 'Vista general', v3Plan: 'Planta', v3Front: 'Frente', layerWalls: 'Paredes', loading3d: 'Cargando la vista 3D…',
             error3d: 'No se pudo abrir la vista 3D en este navegador.', level1: '1 nivel', levelsN: '{n} niveles',
+            pickAssets: 'Elegir qué activos ver', apTitle: 'Activos visibles', apCount: '{n} de {t} activos visibles', apAll: 'Todos', apNone: 'Ninguno', apSearch: 'Buscar por código, tipo o zona', apNoResults: 'Ningún activo coincide.', apClose: 'Cerrar',
             search: 'Buscar', searchAll: 'Buscar en todo el Layout', searchIn: 'Buscar en {z}', searchClear: 'Borrar', searchTypes: 'Buscar en', searchFieldsAll: 'Todos', searchSelected: '{n} elegidos', searchField: { zone: 'Zona', furniture: 'Mobiliario', place: 'Ubicación', sku: 'SKU', desc: 'Descripción', cat: 'Categoría' },
             searchClose: 'Cerrar', groupMap: 'Croquis', namesBtn: 'Nombres de las zonas', spaceType: { rack: 'Anaquel', rackpal: 'Rack', cabinet: 'Gabeta', pallet: 'Tarima en piso' },
             searchMode: 'Tipo de Filtro', searchModes: { startsWith: 'Inicia con', contains: 'Contiene', equals: 'Igual que' },
@@ -46,8 +49,11 @@
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
             home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
             rotate: 'Rotate the sketch', measures: 'Measures', areaBtn: 'Zone m²', layers: 'Sketch layers', mapToggle: 'Sketch',
+                        opts2d: 'Flat sketch options', opts3d: '3D options', groupLayers: 'Layers', groupTools: 'Tools', group3dView: 'View', showLabel: 'Show:', viewMode: 'How to view the sketch',
+            rotateShort: 'Rotate', labels3d: 'Labels', pickShort: 'Choose assets', layerAssets: 'Assets',
             view2d: 'View the sketch in 2D', view3d: 'View the Layout in 3D', v3General: 'Overview', v3Plan: 'Top view', v3Front: 'Front view', layerWalls: 'Walls', loading3d: 'Loading the 3D view…',
             error3d: 'The 3D view could not be opened in this browser.', level1: '1 level', levelsN: '{n} levels',
+            pickAssets: 'Choose which assets to show', apTitle: 'Visible assets', apCount: '{n} of {t} assets visible', apAll: 'All', apNone: 'None', apSearch: 'Search by code, type or zone', apNoResults: 'No asset matches.', apClose: 'Close',
             search: 'Search', searchAll: 'Search the whole Layout', searchIn: 'Search in {z}', searchClear: 'Clear', searchTypes: 'Search in', searchFieldsAll: 'All', searchSelected: '{n} selected', searchField: { zone: 'Zone', furniture: 'Furniture', place: 'Location', sku: 'SKU', desc: 'Description', cat: 'Category' },
             searchClose: 'Close', groupMap: 'Sketch', namesBtn: 'Zone names', spaceType: { rack: 'Rack (shelf)', rackpal: 'Pallet rack', cabinet: 'Cabinet', pallet: 'Floor pallet' },
             searchMode: 'Filter type', searchModes: { startsWith: 'Starts with', contains: 'Contains', equals: 'Equal to' },
@@ -235,6 +241,9 @@
         names: '<text x="12" y="16" font-size="11" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">Aa</text>',
         sliders: '<path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.2"/><circle cx="9.5" cy="17" r="2.2"/>',
         cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        minus: '<path d="M5 12h14"/>',
+        list: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6l1.4 1.4L7 5M3.5 12l1.4 1.4L7 11M3.5 18l1.4 1.4L7 17"/>',
     };
 
     // Botones del croquis (los mismos del Layout con sesión): girar, ver/ocultar medidas, ver/ocultar los m² de cada zona y las capas que se dibujan. Cada quien los mueve para verlo
@@ -256,30 +265,47 @@
         wrap.classList.toggle('mode3d', mapView.mode3d);
         document.querySelectorAll('[data-page-toggle]').forEach((b) => b.setAttribute('aria-pressed', String(pageView[b.dataset.pageToggle])));
     }
-    function mapToolbarHtml() {
-        const icon = (name, extra = '') => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}${extra}</svg>`;
+    // Arriba: la búsqueda chica con el selector 2D | 3D al lado; los bloques de la página que se muestran (Croquis, Datos métricos, Distribución); y debajo un cuadro con las opciones SOLO del modo elegido, con su nombre
+    // escrito (Capas y Herramientas en 2D; Vista, Capas y Herramientas en 3D). Cada quien los mueve para verlo como le conviene; al escanear de nuevo todo vuelve a como se guardó. Contorno siempre se ve; las conexiones de luz
+    // salen apagadas hasta que se prende su capa.
+    function mapPanelHtml() {
+        const toolIcon = (name, extra) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}${extra || ''}</svg>`;
         const slash = '<path class="slash" d="M4 20L20 4"/>';
-        const pills = LAYER_KEYS.map((key) => `<button type="button" class="lpill" data-map-layer="${key}" aria-pressed="${mapView.layers.includes(key)}"${key === 'contorno' ? ' aria-disabled="true"' : ''}>${esc(TEXT.layer[key])}</button>`).join('');
-        // En 3D hay una pastilla más: las paredes (en 2D no existen). Las demás capas son las mismas del croquis.
-        const wallsPill = `<button type="button" class="lpill only3d" data-map-walls aria-pressed="${mapView.walls}">${esc(TEXT.layerWalls)}</button>`;
+        const pill = (attrs, label, on, fixed) => `<button type="button" class="lpill" ${attrs} aria-pressed="${on}"${fixed ? ' aria-disabled="true"' : ''}>${esc(label)}</button>`;
+        const tool = (attrs, glyph, label, pressed, withSlash, title) => `<button type="button" class="mtool" ${attrs}${pressed === undefined ? '' : ` aria-pressed="${pressed}"`} aria-label="${esc(title || label)}" title="${esc(title || label)}"><span class="ic">${toolIcon(glyph, withSlash ? slash : '')}</span><span>${esc(label)}</span></button>`;
+        if (!mapView.mode3d) {
+            const layerPills = LAYER_KEYS.map((key) => pill(`data-map-layer="${key}"`, TEXT.layer[key], mapView.layers.includes(key), key === 'contorno')).join('');
+            return `<div class="mptitle"><i>2D</i>${esc(TEXT.opts2d)}</div>
+                <div class="mgl">${esc(TEXT.groupLayers)}</div><div class="mpills" role="group" aria-label="${esc(TEXT.layers)}">${layerPills}</div>
+                <div class="mgl">${esc(TEXT.groupTools)}</div><div class="mtools">${tool('data-map-rot', 'rotate', TEXT.rotateShort, undefined, false, TEXT.rotate)}${tool('data-map-meas', 'ruler', TEXT.measures, mapView.measures, true)}${tool('data-map-area', 'area', TEXT.areaBtn, mapView.area, true)}${tool('data-map-names', 'names', TEXT.namesBtn.split(' ')[0], mapView.names, true, TEXT.namesBtn)}</div>`;
+        }
+        const views = [['general', TEXT.v3General], ['planta', TEXT.v3Plan], ['frente', TEXT.v3Front]].map(([key, label], i) => `<button type="button" class="lpill" data-m3d-view="${key}" aria-pressed="${i === 0}">${esc(label)}</button>`).join('');
+        const layer3 = (key, label) => pill(`data-map-layer="${key}"`, label, mapView.layers.includes(key));
+        const layerPills = [pill('data-map-walls', TEXT.layerWalls, mapView.walls), layer3('puertas', TEXT.layer.puertas), layer3('luz', TEXT.layer.luz), layer3('zonas', TEXT.layer.zonas), layer3('espacios', TEXT.layerAssets)].join('');
+        return `<div class="mptitle"><i>3D</i>${esc(TEXT.opts3d)}</div>
+            <div class="mgl">${esc(TEXT.group3dView)}</div><div class="mpills">${views}</div>
+            <div class="mgl">${esc(TEXT.groupLayers)}</div><div class="mpills" role="group" aria-label="${esc(TEXT.layers)}">${layerPills}</div>
+            <div class="mgl">${esc(TEXT.groupTools)}</div><div class="mtools">${tool('data-m3d-pick aria-expanded="false"', 'list', TEXT.pickShort, undefined, false, TEXT.pickAssets)}${tool('data-map-names', 'names', TEXT.labels3d, mapView.names, true)}${tool('data-m3d-zoom="in"', 'plus', TEXT.zoomIn)}${tool('data-m3d-zoom="out"', 'minus', TEXT.zoomOut)}</div>
+            <div class="m3d-picker" id="m3d-picker" hidden></div>`;
+    }
+    function renderMapPanel() {
+        const panel = document.getElementById('map-panel');
+        if (panel) panel.innerHTML = mapPanelHtml();
+    }
+    function mapToolbarHtml() {
+        const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
         // Datos métricos y Distribución solo están en el Layout general; en una zona o categoría solo se ofrece el del croquis.
         const general = !searchPageZone();
-        const toggle = (key, label, glyph) => `<button type="button" class="ricon" data-page-toggle="${key}" aria-pressed="${pageView[key]}" aria-label="${esc(label)}" title="${esc(label)}">${icon(glyph, slash)}</button>`;
-        // Arriba, una barra «Buscar» de ancho completo (así no queda un hueco en blanco cuando el grupo Croquis salta de línea) y, abajo, el grupo «Croquis» (los tres que muestran u ocultan bloques y los del dibujo).
-        // Al ocultar el croquis se van los del dibujo (clase draw) y quedan los tres de bloques. La barra abre y cierra el buscador (con el buscador abierto dice «Cerrar»).
-        return `<div class="maptools-row"><div class="tgroups">
-            <button type="button" class="sbar" data-map-search aria-expanded="false" aria-controls="search-panel" aria-label="${esc(TEXT.search)}" title="${esc(TEXT.search)}">${icon('search')}<span class="t">${esc(general ? TEXT.searchAll : fill(TEXT.searchIn, { z: searchPageZone().name }))}</span><span class="go off">${esc(TEXT.search)}</span><span class="go on">${esc(TEXT.searchClose)}</span></button>
-            <div class="tgrp tmap"><span class="tgl">${esc(TEXT.groupMap)}</span>
-            ${toggle('map', TEXT.mapToggle, 'map')}${general ? `${toggle('metrics', TEXT.metrics, 'chart')}${listedZones(view.data).length ? toggle('zones', TEXT.zones, 'layers') : ''}` : ''}
-            <span class="tsep draw"></span>
-            <button type="button" class="ricon draw" data-map-mode="2d" aria-pressed="${!mapView.mode3d}" aria-label="${esc(TEXT.view2d)}" title="${esc(TEXT.view2d)}">${icon('map')}</button>
-            <button type="button" class="ricon draw" data-map-mode="3d" aria-pressed="${mapView.mode3d}" aria-label="${esc(TEXT.view3d)}" title="${esc(TEXT.view3d)}">${icon('cube')}</button>
-            <button type="button" class="ricon draw no3d" data-map-rot aria-label="${esc(TEXT.rotate)}" title="${esc(TEXT.rotate)}">${icon('rotate')}</button>
-            <button type="button" class="ricon draw no3d" data-map-meas aria-pressed="${mapView.measures}" aria-label="${esc(TEXT.measures)}" title="${esc(TEXT.measures)}">${icon('ruler', slash)}</button>
-            <button type="button" class="ricon draw no3d" data-map-area aria-pressed="${mapView.area}" aria-label="${esc(TEXT.areaBtn)}" title="${esc(TEXT.areaBtn)}">${icon('area', slash)}</button>
-            <button type="button" class="ricon draw" data-map-names aria-pressed="${mapView.names}" aria-label="${esc(TEXT.namesBtn)}" title="${esc(TEXT.namesBtn)}">${icon('names', slash)}</button>
-            </div>
-        </div><div class="lpills" role="group" aria-label="${esc(TEXT.layers)}">${pills}${wallsPill}</div></div>${searchPanelHtml()}`;
+        const blocks = [['map', TEXT.mapToggle]].concat(general ? [['metrics', TEXT.metrics]].concat(listedZones(view.data).length ? [['zones', TEXT.zones]] : []) : []);
+        const chips = blocks.map(([key, label]) => `<button type="button" class="cchip" data-page-toggle="${key}" aria-pressed="${pageView[key]}">${esc(label)}</button>`).join('');
+        const scope = general ? TEXT.searchAll : fill(TEXT.searchIn, { z: searchPageZone().name });
+        // La barra Buscar abre y cierra el buscador (con el buscador abierto dice «Cerrar»).
+        return `<div class="toprow">
+            <button type="button" class="sbar" data-map-search aria-expanded="false" aria-controls="search-panel" aria-label="${esc(scope)}" title="${esc(scope)}">${icon('search')}<span class="t">${esc(scope)}</span><span class="go off">${esc(TEXT.search)}</span><span class="go on">${esc(TEXT.searchClose)}</span></button>
+            <div class="seg" role="group" aria-label="${esc(TEXT.viewMode)}"><button type="button" data-map-mode="2d" aria-pressed="${!mapView.mode3d}" title="${esc(TEXT.view2d)}">2D</button><button type="button" data-map-mode="3d" aria-pressed="${mapView.mode3d}" title="${esc(TEXT.view3d)}">3D</button></div>
+        </div>
+        <div class="showrow"><span>${esc(TEXT.showLabel)}</span>${chips}</div>
+        <div class="mpanel" id="map-panel">${mapPanelHtml()}</div>${searchPanelHtml()}`;
     }
     function mapInnerHtml(data) {
         if (mapView.mode3d) return map3dHtml();
@@ -307,6 +333,8 @@
     // ---- Vista 3D (los iconos Ver 2D y Ver 3D de la barra): ocupa el lugar del croquis, se arma con lo mismo que el croquis (LayoutScene3D.js) y respeta sus capas. three.js (unos 600 KB) se carga solo
     // la primera vez que alguien pide el 3D. Mientras se ve el 3D, la búsqueda sigue funcionando pero no sombrea el dibujo.
     let scene3d = null;
+    let picker3d = null; // el selector de activos del 3D (LayoutAssetPicker.js); lo que se ocultó se recuerda mientras no se recargue la página
+    const m3dHidden = new Set();
     const lazyScripts = {};
     function loadScriptOnce(src) {
         if (!lazyScripts[src]) {
@@ -321,9 +349,7 @@
         return lazyScripts[src];
     }
     function map3dHtml() {
-        const views = [['general', TEXT.v3General], ['planta', TEXT.v3Plan], ['frente', TEXT.v3Front]].map(([key, label], i) => `<button type="button" class="lpill" data-m3d-view="${key}" aria-pressed="${i === 0}">${esc(label)}</button>`).join('');
-        const zoomBtn = (key, label, path) => `<button type="button" class="ricon" data-m3d-zoom="${key}" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="0 0 24 24" aria-hidden="true">${path}</svg></button>`;
-        return `<div class="m3d-bar">${views}<span class="m3d-gap"></span>${zoomBtn('in', TEXT.zoomIn, '<path d="M12 5v14M5 12h14"/>')}${zoomBtn('out', TEXT.zoomOut, '<path d="M5 12h14"/>')}</div><div class="m3d-stage" id="m3d-stage"><div class="m3d-msg" id="m3d-msg"></div></div><div class="m3d-info" id="m3d-info" hidden></div>`;
+        return `<div class="m3d-stage" id="m3d-stage"><div class="m3d-msg" id="m3d-msg"></div></div><div class="m3d-info" id="m3d-info" hidden></div>`;
     }
     function layers3d() {
         return { walls: mapView.walls, doors: mapView.layers.includes('puertas'), power: mapView.layers.includes('luz'), zones: mapView.layers.includes('zonas'), assets: mapView.layers.includes('espacios'), columns: true };
@@ -333,9 +359,13 @@
         const layers = layers3d();
         Object.keys(layers).forEach((name) => scene3d.setLayer(name, layers[name]));
         scene3d.setLabels(mapView.names);
+        const pick = document.querySelector('[data-m3d-pick]');
+        if (pick) pick.disabled = !layers.assets;
+        if (picker3d && !layers.assets && picker3d.isOpen()) picker3d.hide();
     }
     function destroy3d() {
         if (scene3d) { scene3d.destroy(); scene3d = null; }
+        picker3d = null;
     }
     function show3dInfo(sel) {
         const box = document.getElementById('m3d-info');
@@ -362,11 +392,29 @@
         try {
             await loadScriptOnce('/vendor/three/three.min.js');
             await loadScriptOnce('/LayoutScene3D.js');
+            await loadScriptOnce('/LayoutAssetPicker.js');
             if (document.getElementById('m3d-stage') !== stage || !mapView.mode3d) return; // mientras cargaba se cambió de pantalla o se volvió al 2D
             destroy3d();
             scene3d = window.LayoutScene3D.create(stage, { labels: mapView.names, layers: layers3d(), onSelect: show3dInfo });
             msg.hidden = true;
+            picker3d = window.LayoutAssetPicker.create(document.getElementById('m3d-picker'), {
+                texts: { title: TEXT.apTitle, count: TEXT.apCount, all: TEXT.apAll, none: TEXT.apNone, close: TEXT.apClose, search: TEXT.apSearch, noResults: TEXT.apNoResults, noZone: TEXT.noZone },
+                typeLabel: (type) => TEXT.spaceType[type] || type,
+                hidden: [...m3dHidden],
+                onChange: (hidden) => {
+                    m3dHidden.clear();
+                    hidden.forEach((id) => m3dHidden.add(id));
+                    scene3d.setHiddenAssets(hidden);
+                    const btn = document.querySelector('[data-m3d-pick]');
+                    if (btn) btn.classList.toggle('filtered', hidden.size > 0);
+                },
+                onToggle: (open) => { const btn = document.querySelector('[data-m3d-pick]'); if (btn) btn.setAttribute('aria-expanded', String(open)); },
+            });
+            { const pickBtn = document.querySelector('[data-m3d-pick]'); if (pickBtn) pickBtn.classList.toggle('filtered', m3dHidden.size > 0); }
+            picker3d.setData({ spaces: data.layout.spaces || [], zones: (data.layout.zones || []).map((z) => ({ id: z.id, name: z.name })) });
+            scene3d.setHiddenAssets(picker3d.getHidden(), false);
             scene3d.update(data.layout, { labels: mapView.names, layers: layers3d() });
+            sync3d();
         } catch (err) {
             console.error('Layout público: la vista 3D no se pudo abrir', err);
             msg.textContent = TEXT.error3d;
@@ -1014,6 +1062,7 @@
                 mapView.mode3d = on;
                 destroy3d();
                 applyPageView();
+                renderMapPanel();
                 document.querySelectorAll('[data-map-mode]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.mapMode === '3d') === on)));
                 replaceMap(view.data);
             }
@@ -1027,6 +1076,8 @@
             document.querySelectorAll('[data-m3d-view]').forEach((b) => b.setAttribute('aria-pressed', String(b === view3dBtn)));
             return;
         }
+        const pick3dBtn = event.target.closest('[data-m3d-pick]');
+        if (pick3dBtn) { if (picker3d) picker3d.toggle(); return; }
         const zoom3dBtn = event.target.closest('[data-m3d-zoom]');
         if (zoom3dBtn) { if (scene3d) scene3d.zoom(zoom3dBtn.dataset.m3dZoom === 'in' ? 1.3 : 1 / 1.3); return; }
         // botones del croquis: girar, medidas, m² de las zonas y capas
