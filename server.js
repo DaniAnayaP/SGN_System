@@ -6690,7 +6690,9 @@ app.get('/api/public/layout/:token', publicLayoutLimiter, (req, res) => {
 
 // Buscador de la página pública (la lupa): zonas, categorías de las zonas y códigos, mientras se escribe. Sin sesión, con el mismo código aleatorio del QR y un tope por IP (más alto que el de
 // las demás rutas públicas porque se pide al ir escribiendo). Los códigos son solo los que ya tienen ficha pública (los completos), con su ficha y el lugar donde están según Relación Código;
-// nunca costos ni datos internos. type = all | zone | cat | code; z = limitar a una zona; mode = startsWith | contains | equals (los mismos tres del "Tipo de Filtro" de las tablas).
+// nunca costos ni datos internos. fields = en qué se busca, separados por coma: zone, furniture (mobiliario: clasificación y tipo del activo de cada Huella-Espacio), place (ubicación: el código del espacio),
+// sku, desc, cat; sin fields (o vacío) se busca en todos; z = limitar a una zona; mode = startsWith | contains | equals (los mismos tres del "Tipo de Filtro" de las tablas). type (all | zone | cat | code) sigue
+// funcionando para las páginas que todavía lo mandan.
 const publicSearchLimiter = rateLimit({ windowMs: 60 * 1000, max: 240, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
 const foldText = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const publicSearchCache = new Map(); // clientId -> { at, codes, places }: se guarda unos segundos para no leer todos los códigos en cada letra
@@ -6701,8 +6703,12 @@ function publicSearchData(clientId) {
         r,
         sku: String(r.record_number).padStart(6, '0'),
         name: r.custom_description || r.known_description || r.unique_description || '',
-        // cada campo se revisa por separado, como la celda de una columna (el código con y sin ceros a la izquierda)
-        fields: [String(r.record_number).padStart(6, '0'), String(r.record_number), r.upc, r.unique_description, r.known_description, r.custom_description, r.category_inventario].map(foldText),
+        // cada campo se revisa por separado, como la celda de una columna (el código con y sin ceros a la izquierda); by = los campos de cada opción del buscador (SKU, Descripción, Categoría)
+        by: {
+            sku: [String(r.record_number).padStart(6, '0'), String(r.record_number), r.upc].map(foldText),
+            desc: [r.unique_description, r.known_description, r.custom_description].map(foldText),
+            cat: [r.category_inventario].map(foldText),
+        },
     }));
     const places = new Map();
     listCodePlacesForSearch(clientId).forEach((p) => { if (!places.has(p.sku_item_id)) places.set(p.sku_item_id, []); places.get(p.sku_item_id).push(p); });
@@ -6712,6 +6718,8 @@ function publicSearchData(clientId) {
     return data;
 }
 const PUBLIC_SEARCH_LIMIT = 10;
+const PUBLIC_SEARCH_FIELDS = ['zone', 'furniture', 'place', 'sku', 'desc', 'cat'];
+const PUBLIC_SEARCH_LEGACY_TYPES = { zone: ['zone'], cat: ['cat'], code: ['sku', 'desc', 'cat'] };
 // Igual que el "Tipo de Filtro" de las tablas (textRuleMatches en Dashboard.js): Inicia con, Contiene o Igual que; lo escrito puede ser varias palabras separadas por coma y se cumple CUALQUIERA de
 // ellas (un "o", nunca un "y"); mayúsculas, acentos y espacios junto a la coma no cuentan. "Igual que" también parte por coma lo que trae el campo.
 const PUBLIC_SEARCH_MODES = ['startsWith', 'contains', 'equals'];
@@ -6726,20 +6734,21 @@ app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
     const terms = foldText(String(req.query.q || '').slice(0, 80)).split(',').map((s) => s.trim()).filter(Boolean).slice(0, 6);
-    const type = ['zone', 'cat', 'code'].includes(req.query.type) ? req.query.type : 'all';
+    const asked = String(req.query.fields || '').split(',').map((s) => s.trim()).filter((f) => PUBLIC_SEARCH_FIELDS.includes(f));
+    const fields = new Set(asked.length ? asked : (PUBLIC_SEARCH_LEGACY_TYPES[req.query.type] || PUBLIC_SEARCH_FIELDS));
     const zones = (row.layout.zones || []).filter((z) => z.active !== false);
     const zoneFilter = zones.some((z) => z.id === String(req.query.z || '')) ? String(req.query.z) : '';
-    const out = { zones: [], categories: [], codes: [], totals: { zones: 0, categories: 0, codes: 0 } };
+    const out = { zones: [], categories: [], codes: [], furniture: [], places: [], totals: { zones: 0, categories: 0, codes: 0, furniture: 0, places: 0 } };
     // Contiene pide al menos 2 letras o números (con 1 saldría casi todo); Inicia con e Igual que sí sirven con 1 (una zona "A", un anaquel "B").
     if (!terms.length || Math.max(...terms.map((t) => t.length)) < (mode === 'contains' ? 2 : 1)) return res.json(out);
     const matches = publicSearchMatcher(mode, terms);
     const inScope = (id) => !zoneFilter || id === zoneFilter;
-    if (type === 'all' || type === 'zone') {
+    if (fields.has('zone')) {
         const found = zones.filter((z) => inScope(z.id) && matches([foldText(z.name)]));
         out.totals.zones = found.length;
         out.zones = found.slice(0, PUBLIC_SEARCH_LIMIT).map((z) => ({ id: z.id, name: z.name, categories: (z.categories || []).length }));
     }
-    if (type === 'all' || type === 'cat') {
+    if (fields.has('cat')) {
         const found = [];
         zones.filter((z) => inScope(z.id)).forEach((z) => (z.categories || []).forEach((c) => {
             if (matches([foldText(c.name), foldText(c.desc)])) found.push({ zoneId: z.id, zoneName: z.name, id: c.id, name: c.name, desc: c.desc || '', color: c.color, icon: c.icon });
@@ -6747,11 +6756,12 @@ app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
         out.totals.categories = found.length;
         out.categories = found.slice(0, PUBLIC_SEARCH_LIMIT);
     }
-    if (type === 'all' || type === 'code') {
+    const codeKeys = ['sku', 'desc', 'cat'].filter((k) => fields.has(k));
+    if (codeKeys.length) {
         const data = publicSearchData(row.clientId);
         const zoneById = new Map(zones.map((z) => [z.id, z]));
         const spaceById = new Map((row.layout.spaces || []).filter((s) => s.active !== false).map((s) => [s.id, s]));
-        const found = data.codes.filter((c) => matches(c.fields) && (!zoneFilter || (data.places.get(c.r.id) || []).some((p) => p.zone_id === zoneFilter)));
+        const found = data.codes.filter((c) => matches(codeKeys.flatMap((k) => c.by[k])) && (!zoneFilter || (data.places.get(c.r.id) || []).some((p) => p.zone_id === zoneFilter)));
         out.totals.codes = found.length;
         out.codes = found.slice(0, PUBLIC_SEARCH_LIMIT).map((c) => {
             const placed = (data.places.get(c.r.id) || []).filter((p) => zoneById.has(p.zone_id));
@@ -6761,6 +6771,26 @@ app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
                 zoneId: placed.length ? placed[0].zone_id : '', spaceIds: [...new Set(placed.map((p) => p.space_id).filter((id) => spaceById.has(id)))],
             };
         });
+    }
+    // Mobiliario (la clasificación y el tipo del activo que cada Huella-Espacio tiene en el paso Activos del Layout) y Ubicación (el código del espacio). Solo nombres: nada interno.
+    if (fields.has('furniture') || fields.has('place')) {
+        const zoneName = new Map(zones.map((z) => [z.id, z.name]));
+        const cls = new Map(listArticleCategories(row.clientId, 'activos-clasificacion', false).map((r) => [r.id, r.name]));
+        const types = new Map(listArticleCategories(row.clientId, 'activos-fijos', false).map((r) => [r.id, r.name]));
+        const spaces = (row.layout.spaces || []).filter((s) => s.active !== false && inScope(s.zoneId || '')).map((s) => ({
+            id: s.id, code: s.code || '', kind: s.type || '', zoneId: zoneName.has(s.zoneId) ? s.zoneId : '', zone: zoneName.get(s.zoneId) || '',
+            cls: cls.get(s.assetClassId) || '', type: types.get(s.assetId) || '',
+        }));
+        if (fields.has('furniture')) {
+            const found = spaces.filter((s) => (s.cls || s.type) && matches([foldText(s.cls), foldText(s.type)]));
+            out.totals.furniture = found.length;
+            out.furniture = found.slice(0, PUBLIC_SEARCH_LIMIT);
+        }
+        if (fields.has('place')) {
+            const found = spaces.filter((s) => s.code && matches([foldText(s.code)]));
+            out.totals.places = found.length;
+            out.places = found.slice(0, PUBLIC_SEARCH_LIMIT);
+        }
     }
     res.json(out);
 });
