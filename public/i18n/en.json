@@ -1777,6 +1777,10 @@
     "layoutHojaConNombres": "Zone names",
     "layoutZoomBtn": "Zoom in and out of the sketch",
     "layoutVista3DBtn": "View the Layout in 3D",
+    "layoutElegirCentroTitulo": "Choose a cost center",
+    "layoutElegirCentroTexto": "A Layout belongs to one cost center at a time. Choose one in the selector above to see or create its Layout.",
+    "layoutCambiarCentroConfirm": "You have unsaved changes in this Layout. If you switch cost center they are discarded. Switch anyway?",
+    "layoutCentroChip": "Layout of {name}",
     "layout3dCapasBtn": "Show or hide the 3D layers",
     "layout3dCapaWalls": "Walls",
     "layout3dCapaDoors": "Doors",
@@ -3711,6 +3715,10 @@
     "layoutView3d": {
       "what": "Switches between the flat sketch (2D) and the Layout built in 3D with the same measures, heights and levels. In 3D you drag to rotate, move it with Shift or right click, and tap a rack or a zone to see its data. Whatever you change in the panel shows up in the 3D right away. The 3D saves nothing: it is only for viewing.",
       "example": "you want to check that the pallets have the right height: switch to 3D and, if they look like towers, fix their height in Footprint-Space."
+    },
+    "layoutChooseCenter": {
+      "what": "A Layout belongs to ONE cost center (one site) at a time. This shows up when the cost center selector above has several checked or none. Keep only one checked to see its Layout; if that center has no Layout yet you can create it from scratch or load its plan, and it will be tied to it. Whatever you capture in one center does not show up in the others.",
+      "example": "you have Chihuahua and Puebla: check only Puebla and you see Puebla's Layout (empty until you create it); check only Chihuahua and Chihuahua's comes back."
     },
     "layout3dAssetsPick": {
       "what": "Opens a list to choose WHICH assets show in the 3D (racks, racks with pallets, cabinets and pallets). Tick or untick one by one, a whole zone with the zone's checkbox, or use All and None (they act on what the list shows; with an empty search, on all of them). The search understands the same signs as every filter: comma for another search, $ before and @ after. The icon stays marked while some assets are hidden. It only changes what you see; it does not modify the Layout.",

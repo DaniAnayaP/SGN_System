@@ -10872,6 +10872,19 @@ function persistCostCenterSelection() {
         CC_SELECTION_KEY,
         selectedCostCenterIds === 'all' ? 'all' : JSON.stringify(Array.from(selectedCostCenterIds))
     );
+    // Las pantallas que dependen del centro elegido (el Layout) se enteran de que cambió.
+    document.dispatchEvent(new CustomEvent('sgn:cost-centers-changed'));
+}
+// El centro de costos elegido en el selector de arriba cuando hay EXACTAMENTE uno (o el cliente solo tiene uno); null si hay varios o ninguno. El Layout es de un solo centro a la vez.
+function getSingleSelectedCostCenterId() {
+    const chosen = sidebarCostCenters.filter((cc) => isCostCenterSelected(cc.id));
+    return chosen.length === 1 ? chosen[0].id : null;
+}
+// Deja marcado solo ese centro en el selector (por ejemplo para volver al que se estaba editando).
+function selectOnlyCostCenter(id) {
+    selectedCostCenterIds = new Set([id]);
+    persistCostCenterSelection();
+    renderCostCenterPicker();
 }
 
 // ¿El cliente ya tiene al menos un centro de costos COMPLETO? (null = no se pudo saber). Toda operación va ligada a uno: las pantallas que operan (body con data-requires-site) se bloquean sin él.
@@ -12890,6 +12903,8 @@ function openPlanChangeHistory(plan) {
 
 window.Dashboard = {
     initDashboard,
+    getSingleSelectedCostCenterId,
+    selectOnlyCostCenter,
     t,
     svgifyLogo,
     attachInlineEdit,

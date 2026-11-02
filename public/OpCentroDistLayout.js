@@ -14,7 +14,7 @@ const SECTION_LABEL_KEYS = {
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
-    planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false, view3d: false,
+    planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false, view3d: false, centerId: null, costCenter: null,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
 };
@@ -693,6 +693,7 @@ function refreshLive() {
 
 function showEmpty() {
     updateQrMenu();
+    $('layout-choose-center').hidden = true;
     $('layout-empty').hidden = false;
     $('layout-editor').hidden = true;
     $('layout-plan-width').hidden = true;
@@ -777,6 +778,7 @@ function showEditor() {
     updateRotateBtn();
     updateZoomUi();
     $('layout-empty').hidden = true;
+    $('layout-choose-center').hidden = true;
     $('layout-plan-width').hidden = true;
     $('layout-editor').hidden = false;
     renderPanel();
@@ -797,11 +799,38 @@ async function loadAssetLists() {
     assetLists = { classes, types };
 }
 
+// El Layout es de UN centro de costos: el que está elegido en el selector de arriba. Todas las llamadas al servidor llevan ese centro (el que se cargó, aunque el selector cambie mientras tanto).
+function layoutUrl(url) {
+    return state.centerId ? `${url}${url.includes('?') ? '&' : '?'}costCenterId=${state.centerId}` : url;
+}
+function updateCenterChip() {
+    const chip = $('layout-center-chip');
+    chip.hidden = !state.costCenter;
+    if (state.costCenter) chip.textContent = t('main.layoutCentroChip', { name: state.costCenter.name });
+}
+// Sin un solo centro elegido (varios marcados o ninguno) no hay Layout que mostrar: se pide elegir uno.
+function showChooseCenter() {
+    state.draft = null;
+    state.saved = null;
+    state.costCenter = null;
+    state.loaded = true;
+    updateCenterChip();
+    $('layout-empty').hidden = true;
+    $('layout-editor').hidden = true;
+    $('layout-plan-width').hidden = true;
+    $('layout-choose-center').hidden = false;
+    renderKpis();
+}
 async function loadLayout() {
     await loadAssetLists();
-    const res = await fetch('/api/business/layout', { credentials: 'include' });
+    state.centerId = Dashboard.getSingleSelectedCostCenterId();
+    if (!state.centerId) { showChooseCenter(); return; }
+    const res = await fetch(layoutUrl('/api/business/layout'), { credentials: 'include' });
     if (!res.ok) throw new Error('layout load failed');
     const body = await res.json();
+    state.costCenter = body.costCenter;
+    updateCenterChip();
+    $('layout-choose-center').hidden = true;
     state.perms = body.permissions;
     state.version = body.version;
     state.saved = body.layout;
@@ -812,7 +841,7 @@ async function loadLayout() {
     initEditState();
     if (body.layout && body.hasPlanImage) {
         try {
-            const imgRes = await fetch('/api/business/layout/plan-image', { credentials: 'include' });
+            const imgRes = await fetch(layoutUrl('/api/business/layout/plan-image'), { credentials: 'include' });
             if (imgRes.ok) {
                 const { image } = await imgRes.json();
                 state.planImage = image;
@@ -1356,7 +1385,7 @@ async function openCardDialog(zoneId) {
     const zone = state.draft.zones.find((z) => z.id === zoneId);
     if (!zone) return;
     if (isDirty() || !isSavedRow('zones', zone.id)) { Dashboard.showToast(t('main.layoutTarjetaGuardar'), 'warning'); return; }
-    const res = await fetch('/api/business/layout/categories-qr', { credentials: 'include' });
+    const res = await fetch(layoutUrl('/api/business/layout/categories-qr'), { credentials: 'include' });
     if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return; }
     if (!res.ok) { Dashboard.showToast(t('main.layoutDescargaError'), 'error'); return; }
     ensureCardModal();
@@ -1372,7 +1401,7 @@ async function openClassificationSheetDialog() {
     const zoneId = $('layout-qr-zone').value;
     const categoryId = $('layout-qr-cls-cat').value;
     if (!zoneId || !categoryId) return;
-    const res = await fetch(`/api/business/layout/zone-classifications?zone=${encodeURIComponent(zoneId)}&category=${encodeURIComponent(categoryId)}`, { credentials: 'include' });
+    const res = await fetch(layoutUrl(`/api/business/layout/zone-classifications?zone=${encodeURIComponent(zoneId)}&category=${encodeURIComponent(categoryId)}`), { credentials: 'include' });
     if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return; }
     if (!res.ok) { Dashboard.showToast(t('main.layoutDescargaError'), 'error'); return; }
     const data = await res.json();
@@ -1393,7 +1422,7 @@ async function loadQrCls() {
     const seq = ++qrClsSeq;
     if (!zone) { box.hidden = true; return; }
     try {
-        const res = await fetch(`/api/business/layout/zone-classifications?zone=${encodeURIComponent(zone)}`, { credentials: 'include' });
+        const res = await fetch(layoutUrl(`/api/business/layout/zone-classifications?zone=${encodeURIComponent(zone)}`), { credentials: 'include' });
         if (seq !== qrClsSeq || !res.ok) { if (seq === qrClsSeq) box.hidden = true; return; }
         const data = await res.json();
         const current = select.value;
@@ -1461,6 +1490,24 @@ window.addEventListener('pointerup', () => {
     const moved = drag.moved;
     drag = null;
     if (moved && state.draft) { renderPanel(); refreshLive(); }
+});
+
+// ---- Cambiar de centro de costos en el selector de arriba ---------------------------------------------------------------------------
+document.addEventListener('sgn:cost-centers-changed', async () => {
+    if (!state.loaded) return;
+    const next = Dashboard.getSingleSelectedCostCenterId();
+    if (next === state.centerId) return;
+    if (isDirty() && !(await Dashboard.confirm(t('main.layoutCambiarCentroConfirm')))) {
+        if (state.centerId) Dashboard.selectOnlyCostCenter(state.centerId);
+        return;
+    }
+    try {
+        resetZoom();
+        await loadLayout();
+    } catch (err) {
+        console.error('Layout: no se pudo cambiar de centro de costos', err);
+        Dashboard.showToast(t('admin.loadError'), 'error');
+    }
 });
 
 // ---- Vista 3D (iconos Ver 2D y Ver 3D, hoja iconLayoutVista3D del árbol) ---------------------------------------------------------------
@@ -1727,7 +1774,7 @@ $('layout-save').addEventListener('click', async () => {
     }
     button.disabled = true;
     try {
-        const body = { layout: state.draft, baseVersion: state.version };
+        const body = { layout: state.draft, baseVersion: state.version, costCenterId: state.centerId };
         if (state.planNew) body.planImage = state.planImage;
         const res = await fetch('/api/business/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
         const payload = await res.json().catch(() => ({}));
@@ -1835,7 +1882,7 @@ async function loadQrZone() {
     chips.innerHTML = '';
     fine.textContent = t('main.layoutQrZonaCargando');
     try {
-        const res = await fetch(`/api/business/layout/zone-categories?zone=${encodeURIComponent($('layout-qr-zone').value)}&type=${encodeURIComponent($('layout-qr-type').value)}`, { credentials: 'include' });
+        const res = await fetch(layoutUrl(`/api/business/layout/zone-categories?zone=${encodeURIComponent($('layout-qr-zone').value)}&type=${encodeURIComponent($('layout-qr-type').value)}`), { credentials: 'include' });
         if (seq !== qrZoneSeq) return; // se cambió la zona mientras llegaba: vale la última
         if (res.status === 403) { fine.textContent = t('main.layoutQrSinPermiso'); return; }
         if (!res.ok) throw new Error('zone categories failed');
@@ -2062,7 +2109,7 @@ document.addEventListener('click', (event) => { if (!event.target.closest('#layo
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeQrPop(); });
 
 async function fetchQrData() {
-    const res = await fetch('/api/business/layout/qr', { credentials: 'include' });
+    const res = await fetch(layoutUrl('/api/business/layout/qr'), { credentials: 'include' });
     if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return null; }
     if (res.status === 404) { Dashboard.showToast(t('main.layoutQrSinLayout'), 'warning'); return null; }
     if (!res.ok) throw new Error('layout qr failed');
@@ -2113,7 +2160,7 @@ async function copyQrLink() {
 }
 async function regenerateQr() {
     if (!(await Dashboard.confirm(t('main.layoutRegenerarQrConfirm')))) return;
-    const res = await fetch('/api/business/layout/qr/regenerate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ confirm: true }) });
+    const res = await fetch('/api/business/layout/qr/regenerate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ confirm: true, costCenterId: state.centerId }) });
     if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return; }
     if (!res.ok) throw new Error('layout qr regenerate failed');
     Dashboard.showToast(t('main.layoutQrCambiado'), 'success');

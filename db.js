@@ -2426,6 +2426,29 @@ if (!clientLayoutColumns.some((c) => c.name === 'cost_center_id')) {
     db.exec('ALTER TABLE client_layouts ADD COLUMN cost_center_id INTEGER');
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_client_layouts_public_token ON client_layouts(public_token)');
+// Un Layout por centro de costos: la llave pasa de (cliente) a (cliente, centro). cost_center_id 0 = un Layout de antes que todavía no se liga a su centro (se liga al primero que quede completo).
+if (db.prepare('PRAGMA table_info(client_layouts)').all().filter((c) => c.pk > 0).length < 2) {
+    db.transaction(() => {
+        db.exec(`CREATE TABLE client_layouts_new (
+            client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            cost_center_id  INTEGER NOT NULL DEFAULT 0,
+            data            TEXT NOT NULL DEFAULT '{}',
+            plan_image      TEXT NOT NULL DEFAULT '',
+            version         INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_by      TEXT NOT NULL DEFAULT '',
+            public_token    TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (client_id, cost_center_id)
+        )`);
+        db.exec(`INSERT INTO client_layouts_new (client_id, cost_center_id, data, plan_image, version, created_at, updated_at, updated_by, public_token)
+            SELECT client_id, COALESCE(cost_center_id, 0), data, plan_image, version, created_at, updated_at, updated_by, public_token FROM client_layouts`);
+        db.exec('DROP TABLE client_layouts');
+        db.exec('ALTER TABLE client_layouts_new RENAME TO client_layouts');
+        db.exec('CREATE INDEX IF NOT EXISTS idx_client_layouts_public_token ON client_layouts(public_token)');
+    })();
+    console.log('[db] client_layouts now keyed by (client, cost center).');
+}
 
 // --- Indexes -------------------------------------------------------------
 // Only for FK/lookup columns that actually appear in a WHERE clause below
@@ -4233,7 +4256,7 @@ function linkClientDataToFirstCostCenter(clientId, forTestAccount, costCenterId)
     return db.transaction(() => ({
         warehouses: db.prepare("UPDATE article_categories SET parent_id = ? WHERE client_id = ? AND is_test_data = ? AND category_type = 'almacenes' AND (parent_id IS NULL OR parent_id = 0)").run(costCenterId, clientId, testFlag).changes,
         relations: db.prepare('UPDATE code_relations SET cost_center_id = ? WHERE client_id = ? AND is_test_data = ? AND cost_center_id IS NULL').run(costCenterId, clientId, testFlag).changes,
-        layouts: forTestAccount ? 0 : db.prepare('UPDATE client_layouts SET cost_center_id = ? WHERE client_id = ? AND cost_center_id IS NULL').run(costCenterId, clientId).changes,
+        layouts: forTestAccount ? 0 : db.prepare('UPDATE client_layouts SET cost_center_id = ? WHERE client_id = ? AND cost_center_id = 0').run(costCenterId, clientId).changes,
     }))();
 }
 
@@ -5153,9 +5176,10 @@ function setSkuItemPublicToken(id, clientId, token) {
 
 // --- Layout de la nave -------------------------------------------------------
 const LayoutCalc = require('./public/LayoutCalc.js');
+// Un Layout por centro de costos (la llave es cliente + centro). costCenterId sin indicar = el primer Layout del cliente (para las pantallas que todavía no eligen centro).
 // withPlanImage: el plano pesa; solo se lee cuando de verdad se va a dibujar (GET .../layout/plan-image).
-function getClientLayout(clientId, { withPlanImage = false } = {}) {
-    const row = db.prepare('SELECT data, plan_image, version, created_at, updated_at, updated_by, cost_center_id FROM client_layouts WHERE client_id = ?').get(clientId);
+const LAYOUT_COLUMNS = 'cost_center_id, data, plan_image, version, created_at, updated_at, updated_by';
+function parseLayoutRow(row, withPlanImage) {
     if (!row) return null;
     let layout = null;
     try { layout = JSON.parse(row.data); } catch { layout = null; }
@@ -5166,49 +5190,60 @@ function getClientLayout(clientId, { withPlanImage = false } = {}) {
         hasPlanImage: !!row.plan_image, planImage: withPlanImage ? row.plan_image : undefined, costCenterId: row.cost_center_id || null,
     };
 }
+function getClientLayout(clientId, { withPlanImage = false, costCenterId } = {}) {
+    const row = costCenterId === undefined
+        ? db.prepare(`SELECT ${LAYOUT_COLUMNS} FROM client_layouts WHERE client_id = ? ORDER BY cost_center_id ASC LIMIT 1`).get(clientId)
+        : db.prepare(`SELECT ${LAYOUT_COLUMNS} FROM client_layouts WHERE client_id = ? AND cost_center_id = ?`).get(clientId, costCenterId || 0);
+    return parseLayoutRow(row, withPlanImage);
+}
+// Todos los Layouts del cliente (uno por centro de costos).
+function listClientLayouts(clientId) {
+    return db.prepare(`SELECT ${LAYOUT_COLUMNS} FROM client_layouts WHERE client_id = ? ORDER BY cost_center_id ASC`).all(clientId).map((row) => parseLayoutRow(row, false)).filter(Boolean);
+}
 
-// QR del Layout (ver public_token arriba). ensure: los Layouts guardados antes de que existiera el QR reciben su código la primera vez que se pide.
-function ensureLayoutPublicToken(clientId) {
-    const row = db.prepare('SELECT public_token FROM client_layouts WHERE client_id = ?').get(clientId);
+// QR del Layout (ver public_token arriba): cada Layout (cada centro de costos) tiene el suyo. ensure: los Layouts guardados antes de que existiera el QR reciben su código la primera vez que se pide.
+function ensureLayoutPublicToken(clientId, costCenterId = 0) {
+    const row = db.prepare('SELECT public_token FROM client_layouts WHERE client_id = ? AND cost_center_id = ?').get(clientId, costCenterId || 0);
     if (!row) return '';
     if (row.public_token) return row.public_token;
     const token = generatePublicToken();
-    db.prepare('UPDATE client_layouts SET public_token = ? WHERE client_id = ? AND public_token = ?').run(token, clientId, '');
-    return db.prepare('SELECT public_token FROM client_layouts WHERE client_id = ?').get(clientId).public_token;
+    db.prepare('UPDATE client_layouts SET public_token = ? WHERE client_id = ? AND cost_center_id = ? AND public_token = ?').run(token, clientId, costCenterId || 0, '');
+    return db.prepare('SELECT public_token FROM client_layouts WHERE client_id = ? AND cost_center_id = ?').get(clientId, costCenterId || 0).public_token;
 }
 // Cambiar el QR a propósito: el anterior deja de funcionar al instante (las hojas impresas con él ya no abren nada).
-function regenerateLayoutPublicToken(clientId) {
+function regenerateLayoutPublicToken(clientId, costCenterId = 0) {
     const token = generatePublicToken();
-    const result = db.prepare('UPDATE client_layouts SET public_token = ? WHERE client_id = ?').run(token, clientId);
+    const result = db.prepare('UPDATE client_layouts SET public_token = ? WHERE client_id = ? AND cost_center_id = ?').run(token, clientId, costCenterId || 0);
     return result.changes ? token : '';
 }
 // La ÚNICA búsqueda que usa la vista pública: por el código, nunca por cliente (el visitante no tiene sesión).
 function getLayoutByPublicToken(token) {
     if (typeof token !== 'string' || !/^[0-9a-f]{32}$/.test(token)) return null;
-    const row = db.prepare('SELECT client_id, data, version, updated_at FROM client_layouts WHERE public_token = ?').get(token);
+    const row = db.prepare('SELECT client_id, cost_center_id, data, version, updated_at FROM client_layouts WHERE public_token = ?').get(token);
     if (!row) return null;
     let layout = null;
     try { layout = JSON.parse(row.data); } catch { layout = null; }
     if (!layout || typeof layout !== 'object') return null;
-    return { clientId: row.client_id, layout: LayoutCalc.normalize(layout), version: row.version, updatedAt: row.updated_at };
+    return { clientId: row.client_id, costCenterId: row.cost_center_id || null, layout: LayoutCalc.normalize(layout), version: row.version, updatedAt: row.updated_at };
 }
 
-// Crea o reemplaza el Layout del cliente. expectedVersion = la versión que la persona tenía abierta (0 = todavía no había Layout): si ya cambió, no se
+// Crea o reemplaza el Layout de un centro de costos del cliente. expectedVersion = la versión que la persona tenía abierta (0 = todavía no había Layout): si ya cambió, no se
 // pisa y se avisa. planImage: undefined = dejar el plano como está, '' = quitarlo, texto = plano nuevo.
-function saveClientLayout({ clientId, layout, planImage, expectedVersion, updatedBy, costCenterId = null }) {
+function saveClientLayout({ clientId, layout, planImage, expectedVersion, updatedBy, costCenterId = 0 }) {
+    const center = costCenterId || 0;
     const run = db.transaction(() => {
-        const current = db.prepare('SELECT version FROM client_layouts WHERE client_id = ?').get(clientId);
+        const current = db.prepare('SELECT version FROM client_layouts WHERE client_id = ? AND cost_center_id = ?').get(clientId, center);
         const currentVersion = current ? current.version : 0;
         if (currentVersion !== expectedVersion) return { conflict: true, currentVersion };
         const data = JSON.stringify(layout);
         if (!current) {
-            db.prepare('INSERT INTO client_layouts (client_id, data, plan_image, version, updated_by, public_token, cost_center_id) VALUES (?, ?, ?, 1, ?, ?, ?)').run(clientId, data, planImage || '', updatedBy || '', generatePublicToken(), costCenterId);
+            db.prepare('INSERT INTO client_layouts (client_id, cost_center_id, data, plan_image, version, updated_by, public_token) VALUES (?, ?, ?, ?, 1, ?, ?)').run(clientId, center, data, planImage || '', updatedBy || '', generatePublicToken());
             return { conflict: false, version: 1 };
         }
         if (planImage === undefined) {
-            db.prepare("UPDATE client_layouts SET data = ?, version = version + 1, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?").run(data, updatedBy || '', clientId);
+            db.prepare("UPDATE client_layouts SET data = ?, version = version + 1, updated_at = datetime('now'), updated_by = ? WHERE client_id = ? AND cost_center_id = ?").run(data, updatedBy || '', clientId, center);
         } else {
-            db.prepare("UPDATE client_layouts SET data = ?, plan_image = ?, version = version + 1, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?").run(data, planImage, updatedBy || '', clientId);
+            db.prepare("UPDATE client_layouts SET data = ?, plan_image = ?, version = version + 1, updated_at = datetime('now'), updated_by = ? WHERE client_id = ? AND cost_center_id = ?").run(data, planImage, updatedBy || '', clientId, center);
         }
         return { conflict: false, version: currentVersion + 1 };
     });
@@ -11024,6 +11059,7 @@ module.exports = {
     getSkuItemByPublicToken,
     setSkuItemPublicToken,
     getClientLayout,
+    listClientLayouts,
     saveClientLayout,
     ensureLayoutPublicToken,
     regenerateLayoutPublicToken,

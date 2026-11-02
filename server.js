@@ -155,6 +155,7 @@ const {
     getSkuItemByPublicToken,
     setSkuItemPublicToken,
     getClientLayout,
+    listClientLayouts,
     saveClientLayout,
     ensureLayoutPublicToken,
     regenerateLayoutPublicToken,
@@ -6515,18 +6516,41 @@ function layoutSummary(layout, section) {
     return `${(layout.spaces || []).length} espacios`;
 }
 
+// El Layout es de UN centro de costos (el que se eligió en el selector de arriba): costCenterId viene en la dirección o en el cuerpo. Sin él (una pantalla de antes) se usa el primer Layout del cliente.
+function layoutCenter(req) {
+    const raw = req.query?.costCenterId ?? req.body?.costCenterId;
+    if (raw === undefined || raw === null || raw === '') return { id: undefined, costCenter: null };
+    const id = Number(raw);
+    const costCenter = Number.isInteger(id) && id > 0 ? getCostCenterById(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!costCenter) return { error: { status: 404, body: { message: 'Ese centro de costos no existe.' } } };
+    return { id, costCenter };
+}
+// El Layout guardado de ese centro; si no hay (o el centro no existe) ya contesta el error y devuelve null.
+function layoutRowForRequest(req, res) {
+    const center = layoutCenter(req);
+    if (center.error) { res.status(center.error.status).json(center.error.body); return null; }
+    const row = getClientLayout(req.user.clientId, { costCenterId: center.id });
+    if (!row) { res.status(404).json({ message: 'Todavía no hay un Layout guardado.' }); return null; }
+    return row;
+}
 app.get('/api/business/layout', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const row = getClientLayout(req.user.clientId);
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    const row = getClientLayout(req.user.clientId, { costCenterId: center.id });
+    const costCenter = center.costCenter || (row && row.costCenterId ? getCostCenterById(row.costCenterId, req.user.clientId, req.user.isTestAccount) : null);
     res.json({
         layout: row ? row.layout : null, version: row ? row.version : 0, updatedAt: row ? row.updatedAt : '', updatedBy: row ? row.updatedBy : '',
-        hasPlanImage: row ? row.hasPlanImage : false, permissions: layoutPermissions(req), costCenterId: row ? row.costCenterId : null,
+        hasPlanImage: row ? row.hasPlanImage : false, permissions: layoutPermissions(req), costCenterId: row ? row.costCenterId : (center.id || null),
+        costCenter: costCenter ? { id: costCenter.id, code: costCenter.code, name: costCenter.name } : null,
     });
 });
 
 app.get('/api/business/layout/plan-image', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const row = getClientLayout(req.user.clientId, { withPlanImage: true });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    const row = getClientLayout(req.user.clientId, { withPlanImage: true, costCenterId: center.id });
     if (!row || !row.planImage) return res.status(404).json({ message: 'Plan not found.' });
     res.json({ image: row.planImage });
 });
@@ -6546,7 +6570,19 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     }
     if (planImage && !(next.plan && next.plan.widthM > 0)) return res.status(400).json({ message: 'Falta el ancho real del plano.' });
 
-    const existing = getClientLayout(req.user.clientId);
+    // El Layout es del centro de costos elegido (el de la pantalla); ese centro tiene que estar completo y activo. Sin centro (una pantalla de antes) se usa el del Layout que ya había o el primero completo.
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    const completeCenters = listCompleteCostCenterIds(req.user.clientId, !!req.user.isTestAccount);
+    let targetCenterId = center.id;
+    if (targetCenterId === undefined) {
+        const any = getClientLayout(req.user.clientId);
+        targetCenterId = any ? (any.costCenterId || 0) : (completeCenters[0] || 0);
+    }
+    if (!completeCenters.includes(targetCenterId)) {
+        return res.status(409).json({ code: 'COST_CENTER_REQUIRED', message: 'Ese centro de costos todavía no está completo: termina de llenarlo en Nuestros Centros Costos.' });
+    }
+    const existing = getClientLayout(req.user.clientId, { costCenterId: targetCenterId });
     const expectedVersion = Number(body.baseVersion) || 0;
     if ((existing ? existing.version : 0) !== expectedVersion) {
         return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: existing ? existing.version : 0 });
@@ -6613,9 +6649,7 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     }
     if (!changed.length && planImage === undefined && existing) return res.json({ version: existing.version, changed: [] });
 
-    // Un Layout nuevo nace ligado al primer centro de costos completo del cliente (el Layout es uno por cliente; las cuentas de práctica no lo ligan).
-    const costCenterId = req.user.isTestAccount ? null : (listCompleteCostCenterIds(req.user.clientId, false)[0] || null);
-    const result = saveClientLayout({ clientId: req.user.clientId, layout: next, planImage, expectedVersion, updatedBy: changedByLabel(req), costCenterId });
+    const result = saveClientLayout({ clientId: req.user.clientId, layout: next, planImage, expectedVersion, updatedBy: changedByLabel(req), costCenterId: targetCenterId });
     if (result.conflict) return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: result.currentVersion });
 
     const actor = { actorUserId: req.user.sub, actorLabel: changedByLabel(req) };
@@ -6623,7 +6657,7 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         const before = existing ? layoutSummary(existing.layout, section) : '';
         const after = layoutSummary(next, section);
         logTableChange({
-            clientId: req.user.clientId, tableKey: LAYOUT_TABLE_KEY, recordId: 1, recordLabel: 'Layout',
+            clientId: req.user.clientId, tableKey: LAYOUT_TABLE_KEY, recordId: targetCenterId || 1, recordLabel: 'Layout',
             action: creating ? 'create' : 'update', fieldKey: LayoutCalc.SECTIONS[section], oldValue: before, newValue: after, changedBy: changedByLabel(req),
         });
         notifyDataChange({ clientId: req.user.clientId, tableKey: LAYOUT_TABLE_KEY, recordLabel: 'Layout', fieldKey: LayoutCalc.SECTIONS[section], oldValue: before, newValue: after, ...actor });
@@ -6637,9 +6671,9 @@ app.get('/api/business/layout/qr', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const perms = layoutPermissions(req);
     if (!perms.canUseQr) return res.status(403).json({ message: 'No tienes permiso para usar el QR del Layout.' });
-    const row = getClientLayout(req.user.clientId);
-    if (!row) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
-    const token = ensureLayoutPublicToken(req.user.clientId);
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0);
     const url = `${req.protocol}://${req.get('host')}/q/${token}`;
     const qr = QRCode.create(url, { errorCorrectionLevel: 'M' });
     const size = qr.modules.size;
@@ -6655,9 +6689,9 @@ app.get('/api/business/layout/qr', requireAuth, (req, res) => {
 app.get('/api/business/layout/categories-qr', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!layoutPermissions(req).canUseCard) return res.status(403).json({ message: 'No tienes permiso para usar la tarjeta de categorías.' });
-    const row = getClientLayout(req.user.clientId);
-    if (!row) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
-    const token = ensureLayoutPublicToken(req.user.clientId);
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0);
     const base = `${req.protocol}://${req.get('host')}/q/${token}`;
     const zones = (row.layout.zones || []).filter((z) => z.active !== false && Array.isArray(z.categories) && z.categories.length).map((z) => ({
         id: z.id, name: z.name,
@@ -6695,14 +6729,14 @@ app.get('/api/business/layout/zone-categories', requireAuth, (req, res) => {
     if (!layoutPermissions(req).canPrintZone) return res.status(403).json({ message: 'No tienes permiso para imprimir por zona.' });
     const type = String(req.query.type || 'inventario');
     if (!ZONE_CATEGORY_COLUMNS[type]) return res.status(400).json({ message: 'Esa categoría no existe.' });
-    const row = getClientLayout(req.user.clientId);
-    if (!row) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
     const zone = (row.layout.zones || []).find((z) => z.id === String(req.query.zone || '') && z.active !== false);
     if (!zone) return res.status(404).json({ message: 'Esa zona no está en el Layout guardado.' });
     const isTest = !!req.user.isTestAccount;
     const byName = new Map();
     listArticleCategories(req.user.clientId, type, isTest).forEach((c) => { if (!byName.has(c.name) || c.status === 'active') byName.set(c.name, c); });
-    const base = `${req.protocol}://${req.get('host')}/q/${ensureLayoutPublicToken(req.user.clientId)}`;
+    const base = `${req.protocol}://${req.get('host')}/q/${ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0)}`;
     let without = 0;
     let total = 0;
     const categories = [];
@@ -6731,8 +6765,8 @@ app.get('/api/business/layout/zone-categories', requireAuth, (req, res) => {
 app.get('/api/business/layout/zone-classifications', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!layoutPermissions(req).canPrintZone) return res.status(403).json({ message: 'No tienes permiso para imprimir por zona.' });
-    const row = getClientLayout(req.user.clientId);
-    if (!row) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
     const zone = (row.layout.zones || []).find((z) => z.id === String(req.query.zone || '') && z.active !== false);
     if (!zone) return res.status(404).json({ message: 'Esa zona no está en el Layout guardado.' });
     const isTest = !!req.user.isTestAccount;
@@ -6744,7 +6778,7 @@ app.get('/api/business/layout/zone-classifications', requireAuth, (req, res) => 
     if (!req.query.category) return res.json({ categories: withItems.map(({ c, items }) => ({ id: c.id, name: c.name, count: items.length })) });
     const found = withItems.find((x) => String(x.c.id) === String(req.query.category));
     if (!found) return res.status(404).json({ message: 'Esa categoría no tiene clasificaciones.' });
-    const base = `${req.protocol}://${req.get('host')}/q/${ensureLayoutPublicToken(req.user.clientId)}`;
+    const base = `${req.protocol}://${req.get('host')}/q/${ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0)}`;
     const items = found.items.map((r) => {
         const url = `${base}?z=${encodeURIComponent(zone.id)}&k=${encodeURIComponent(`inventario.${found.c.id}`)}&l=${r.id}`;
         return { id: r.id, name: r.name, desc: r.description || '', seed: r.record_number, url, qrRows: layoutQrRows(url) };
@@ -6763,10 +6797,11 @@ app.post('/api/business/layout/qr/regenerate', requireAuth, requireCostCenter, (
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!layoutPermissions(req).canRegenerateQr) return res.status(403).json({ message: 'No tienes permiso para cambiar el QR del Layout.' });
     if (!req.body || req.body.confirm !== true) return res.status(400).json({ message: 'Falta confirmar el cambio del QR.' });
-    if (!getClientLayout(req.user.clientId)) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
-    if (!regenerateLayoutPublicToken(req.user.clientId)) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    if (!regenerateLayoutPublicToken(req.user.clientId, row.costCenterId || 0)) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
     logTableChange({
-        clientId: req.user.clientId, tableKey: LAYOUT_TABLE_KEY, recordId: 1, recordLabel: 'Layout', action: 'update',
+        clientId: req.user.clientId, tableKey: LAYOUT_TABLE_KEY, recordId: row.costCenterId || 1, recordLabel: 'Layout', action: 'update',
         fieldKey: 'colLayoutQr', oldValue: 'QR anterior', newValue: 'QR nuevo', changedBy: changedByLabel(req),
     });
     notifyDataChange({ clientId: req.user.clientId, tableKey: LAYOUT_TABLE_KEY, recordLabel: 'Layout', fieldKey: 'colLayoutQr', oldValue: 'QR anterior', newValue: 'QR nuevo', actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
@@ -7335,8 +7370,7 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, re
     // Una clasificación o un tipo de activo que algún espacio del Layout ya usa no se borra (se deja Inactivo): esos espacios perderían su activo.
     if (req.params.categoryType === 'activos-clasificacion' || req.params.categoryType === 'activos-fijos') {
         const field = req.params.categoryType === 'activos-clasificacion' ? 'assetClassId' : 'assetId';
-        const layoutRow = getClientLayout(req.user.clientId);
-        const used = ((layoutRow && layoutRow.layout.spaces) || []).filter((s) => s[field] === existing.id);
+        const used = listClientLayouts(req.user.clientId).flatMap((l) => l.layout.spaces || []).filter((s) => s[field] === existing.id);
         if (used.length) {
             const codes = used.slice(0, 3).map((s) => s.code).filter(Boolean).join(', ');
             return res.status(409).json({ message: `Hay ${used.length === 1 ? 'un espacio' : `${used.length} espacios`} del Layout con este activo${codes ? ` (${codes}${used.length > 3 ? '…' : ''})` : ''}. Cámbialos primero en Layout > Activos o márcalo como Inactivo.` });
