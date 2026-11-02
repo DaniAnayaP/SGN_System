@@ -586,6 +586,10 @@
         return { right: best.right, bottom: best.bottom };
     }
 
+    // Contorno blanco de los textos del croquis (nombres, m², medidas): 8 copias del texto en blanco, corridas 1.5 hacia cada lado y dibujadas debajo del texto de color. Solo usan el relleno,
+    // que se pinta igual en todos los navegadores (el trazo con paint-order se veía distinto, o no se veía, en algunos celulares). La página del QR, el reporte y el editor usan estos mismos pasos.
+    const HALO_STEPS = [[-1.5, 0], [1.5, 0], [0, -1.5], [0, 1.5], [-1.1, -1.1], [1.1, -1.1], [-1.1, 1.1], [1.1, 1.1]];
+
     // Recuadro aproximado [x0, y0, x1, y1] que ocupa un texto del croquis (para que nombres, m² y medidas no se encimen).
     function labelBox(x, baseline, text, size, anchor) {
         const w = String(text).length * size * 0.58 + 3;
@@ -675,7 +679,7 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout,
-        normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, labelBox, placeZoneLabel, coveredArea,
+        normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
 }));

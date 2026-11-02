@@ -512,6 +512,18 @@ function renderSvg() {
     // rectángulos llevan el nombre en el punto más holgado de adentro. La medida real de cada lado se escribe adentro de la zona.
     let zoneLabels = '';
     let measureLabels = '';
+    // Contorno blanco de los textos (igual que en la página del QR y el reporte, ver LayoutCalc.HALO_STEPS): cada texto lleva 8 copias en blanco corridas hacia los lados, y TODOS los contornos se
+    // dibujan antes que TODOS los textos, así ningún contorno borra el nombre de otra zona y no se depende de paint-order, que algunos celulares aplican mal.
+    let zoneHalos = '';
+    let measureHalos = '';
+    let outerHalos = '';
+    let outerLabels = '';
+    const textWithHalo = (cls, x, y, anchor, text) => ({
+        halo: LC.HALO_STEPS.map(([dx, dy]) => `<text class="${cls} lh" x="${(Number(x) + dx).toFixed(1)}" y="${(Number(y) + dy).toFixed(1)}" text-anchor="${anchor}">${text}</text>`).join(''),
+        main: `<text class="${cls} lx" x="${x}" y="${y}" text-anchor="${anchor}">${text}</text>`,
+    });
+    const putZone = (cls, x, y, anchor, text) => { const l = textWithHalo(cls, x, y, anchor, text); zoneHalos += l.halo; zoneLabels += l.main; };
+    const putOuter = (cls, x, y, anchor, text) => { const l = textWithHalo(cls, x, y, anchor, text); outerHalos += l.halo; outerLabels += l.main; };
     const draggable = canEdit('zonas');
     // Recuadros (aprox.) que ocupan los nombres y los m² de las zonas: una medida de lado que caería encima se omite (su contorno blanco borraba el nombre de la zona).
     const labelBoxes = [];
@@ -522,7 +534,7 @@ function renderSvg() {
         const cym = Y(m.my) + m.ny * 9 + 3;
         const w = String(fmt(m.len)).length * 4.9 + 2;
         return !labelBoxes.some(([bx0, by0, bx1, by1]) => cxm - w / 2 < bx1 && cxm + w / 2 > bx0 && cym - 10 < by1 && cym + 3 > by0);
-    }).map((m) => `<text class="lm" x="${(X(m.mx) + m.nx * 9).toFixed(1)}" y="${(Y(m.my) + m.ny * 9 + 3).toFixed(1)}" text-anchor="middle">${fmt(m.len)}</text>`).join('');
+    }).map((m) => { const l = textWithHalo('lm', (X(m.mx) + m.nx * 9).toFixed(1), (Y(m.my) + m.ny * 9 + 3).toFixed(1), 'middle', fmt(m.len)); measureHalos += l.halo; return l.main; }).join('');
     (on('zonas') ? d.zones : []).forEach((z) => {
         const typeText = z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona');
         const cls = `lz ${z.type ? (ZONE_CLASS[z.type] || 'lz-dock') : 'lz-none'}${z.active === false ? ' lz-off' : ''}${state.open.zones[z.id] ? ' lz-warn' : ''}${draggable ? ' lz-drag' : ''}`;
@@ -533,7 +545,8 @@ function renderSvg() {
                     ? `<g class="lzf${z.active === false ? ' lz-off' : ''}${draggable ? ' lz-drag' : ''}" data-zid="${esc(z.id)}">${window.LayoutMapSvg.zonePaint(`ef-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' '))}${title}</g>`
                     : `<polygon class="${cls}" data-zid="${esc(z.id)}" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}">${title}</polygon>`;
                 const a = LC.zoneLabelAnchor(z);
-                zoneLabels += `<text class="lt" x="${X(a.x)}" y="${Y(a.y) - 1}" text-anchor="middle">${esc(z.name)}</text>${state.showArea ? `<text class="lt2" x="${X(a.x)}" y="${Y(a.y) + 10}" text-anchor="middle">${fmt(LC.zoneArea(z))} m²</text>` : ''}`;
+                putZone('lt', X(a.x), Y(a.y) - 1, 'middle', esc(z.name));
+                if (state.showArea) putZone('lt2', X(a.x), Y(a.y) + 10, 'middle', `${fmt(LC.zoneArea(z))} m²`);
                 addBox(X(a.x), Y(a.y) - 1, z.name, 10, 'middle');
                 if (state.showArea) addBox(X(a.x), Y(a.y) + 10, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle');
                 if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureJobs.push([z.pts, 30]);
@@ -550,8 +563,8 @@ function renderSvg() {
         // si el nombre cae encima del de otra zona (zonas chicas o croquis chico) se corre a otra esquina, más abajo o afuera de la zona
         const place = LC.placeZoneLabel(z, spot, X, Y, sc, labelBoxes, state.showArea ? `${fmt(z.l * z.w)} m²` : '');
         const { tx, ty, anchor } = place;
-        zoneLabels += `<text class="lt" x="${tx}" y="${ty}" text-anchor="${anchor}">${esc(z.name)}</text>`;
-        if (place.withArea) zoneLabels += `<text class="lt2" x="${tx}" y="${ty + 11}" text-anchor="${anchor}">${fmt(z.l * z.w)} m²</text>`;
+        putZone('lt', tx, ty, anchor, esc(z.name));
+        if (place.withArea) putZone('lt2', tx, ty + 11, anchor, `${fmt(z.l * z.w)} m²`);
         place.boxes.forEach((b) => labelBoxes.push(b));
         if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureJobs.push([LC.zonePoints(z), 30]);
     });
@@ -565,7 +578,8 @@ function renderSvg() {
         s += `<rect class="ls ls-${sp.type}${sp.active === false ? ' lz-off' : ''}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2"><title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title></rect>`;
         if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
     });
-    s += zoneLabels + (state.showMeasures ? measureLabels : '');
+    const halosAt = s.length; // aquí entran después los contornos de las etiquetas de las paredes: debajo de TODOS los textos
+    s += zoneHalos + (state.showMeasures ? measureHalos : '') + zoneLabels + (state.showMeasures ? measureLabels : '');
     (on('puertas') ? d.doors : []).forEach((door) => {
         const w = LC.wallSegment(d.vertices, door.wall);
         const a = { x: w.p[0] + w.ux * door.dist, y: w.p[1] + w.uy * door.dist };
@@ -575,7 +589,7 @@ function renderSvg() {
     (on('luz') ? d.power : []).forEach((e) => {
         const w = LC.wallSegment(d.vertices, e.wall);
         const a = { x: w.p[0] + w.ux * e.dist, y: w.p[1] + w.uy * e.dist };
-        s += `<circle class="le" cx="${X(a.x)}" cy="${Y(a.y)}" r="6"><title>${esc(typeLabel('power', e.type))}</title></circle><text class="lt" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">⚡</text>`;
+        s += `<circle class="le" cx="${X(a.x)}" cy="${Y(a.y)}" r="6"><title>${esc(typeLabel('power', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">⚡</text>`;
     });
     const cx = (x0 + x1) / 2;
     const cy = (y0 + y1) / 2;
@@ -586,11 +600,16 @@ function renderSvg() {
         const nx = w.uy;
         const ny = -w.ux;
         const out = ((mx - cx) * nx + (my - cy) * ny) >= 0 ? 1 : -1;
-        if (state.showMeasures) s += `<text class="lt2" text-anchor="middle" x="${X(mx) + nx * out * 15}" y="${Y(my) + ny * out * 15 + 3}">P${i} · ${fmt(w.length)} m</text>`;
+        if (state.showMeasures) putOuter('lt2', X(mx) + nx * out * 15, Y(my) + ny * out * 15 + 3, 'middle', `P${i} · ${fmt(w.length)} m`);
     }
-    d.vertices.forEach((p, i) => { s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" class="lv"/>${state.showMeasures ? `<text class="lt2" x="${X(p[0]) + (p[0] <= cx ? -8 : 8)}" y="${Y(p[1]) + (p[1] <= cy ? -7 : 14)}" text-anchor="${p[0] <= cx ? 'end' : 'start'}">${i + 1} · ${fmt(p[2])} m</text>` : ''}`; });
+    d.vertices.forEach((p, i) => {
+        s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" class="lv"/>`;
+        if (state.showMeasures) putOuter('lt2', X(p[0]) + (p[0] <= cx ? -8 : 8), Y(p[1]) + (p[1] <= cy ? -7 : 14), p[0] <= cx ? 'end' : 'start', `${i + 1} · ${fmt(p[2])} m`);
+    });
     const bar = 5 * sc;
-    s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" class="lscale"/><text class="lt2" x="${M + bar + 6}" y="${H - 8}">5 m</text>`;
+    s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" class="lscale"/>`;
+    putOuter('lt2', M + bar + 6, H - 8, 'start', '5 m');
+    s = `${s.slice(0, halosAt)}${outerHalos}${s.slice(halosAt)}${outerLabels}`;
     $('layout-svg').innerHTML = s;
 }
 

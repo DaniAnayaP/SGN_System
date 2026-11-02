@@ -7111,6 +7111,9 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lt{ font: 600 10px var(--font-family, system-ui, sans-serif); fill: var(--color-text-primary); paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; }
 .lt2{ font: 500 8.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-secondary); paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; }
 .lt3{ font: 600 7.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-secondary); pointer-events: none; }
+/* Croquis del editor: el contorno blanco ya no es un trazo sino 8 copias del texto con el color de la superficie (.lh) debajo del texto (.lx), igual que en la página del QR. */
+.lt.lx, .lt2.lx, .lm.lx{ paint-order: normal; stroke: none; }
+.lt.lh, .lt2.lh, .lm.lh{ fill: var(--color-surface); paint-order: normal; stroke: none; pointer-events: none; }
 .lscale{ stroke: var(--color-text-secondary); stroke-width: 2; }
 
 /* Layout: menú "QR y descarga". */
