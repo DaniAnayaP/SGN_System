@@ -1707,6 +1707,7 @@
     "layoutTarjetaCategoria": "CATEGORÍA",
     "layoutTarjetaRevisame": "BÚSCAME",
     "layoutClsRevisame": "REVÍSAME",
+    "layoutVisualizaciones": "Visualizaciones",
     "layoutClsIcono": "ÍCONO",
     "layoutClsVerCatalogo": "Ver catálogo",
     "layoutClsTitulo": "Categorías de {name}",
@@ -3645,6 +3646,10 @@
     "layoutQrZoneType": {
       "what": "De cuál de las 7 categorías de los códigos se hace la lista: Inventario, Compra, Almacenamiento, Rotación, Manejo especial, Riesgo o Vida útil. Cada código aparece en la categoría que tiene escrita en Alta Artículos. Los códigos sin esa categoría no salen.",
       "example": "con Categoría Inventario la lista dice Medicamentos, Material de curación y Soluciones."
+    },
+    "layoutViews": {
+      "what": "Los botones para cambiar cómo se ve el croquis: ver u ocultar las medidas, los m² de las zonas y los nombres, girarlo y acercarlo o alejarlo. Solo cambian lo que ves; no modifican el Layout.",
+      "example": "ocultas los nombres de las zonas para ver mejor las medidas, o acercas el croquis para revisar una esquina."
     },
     "layoutQrCls": {
       "what": "Baja la hoja de las clasificaciones de una categoría de Inventario (PDF o imagen), con su icono, su color y un QR por cada una. Cada QR abre, en la zona elegida, la lista de códigos de esa clasificación. No depende de los códigos: los QR no cambian nunca y al escanearlos siempre se ve lo actual. Las clasificaciones de cada categoría se relacionan en Nuestras Categorías Inventarios.",

@@ -1707,6 +1707,7 @@
     "layoutTarjetaCategoria": "CATEGORY",
     "layoutTarjetaRevisame": "FIND ME",
     "layoutClsRevisame": "CHECK ME",
+    "layoutVisualizaciones": "Views",
     "layoutClsIcono": "ICON",
     "layoutClsVerCatalogo": "View catalog",
     "layoutClsTitulo": "Categories of {name}",
@@ -3646,6 +3647,10 @@
     "layoutQrZoneType": {
       "what": "Which of the 7 code categories the list is made from: Inventory, Purchasing, Storage, Rotation, Special handling, Risk or Shelf life. Each code appears under the category written for it in Item Registration. Codes without that category are left out.",
       "example": "with Inventory Category the list says Medications, Wound care and Solutions."
+    },
+    "layoutViews": {
+      "what": "The buttons that change how the sketch looks: show or hide measures, zone areas and names, rotate it and zoom in or out. They only change what you see; they do not modify the Layout.",
+      "example": "you hide the zone names to read the measures better, or zoom in to check a corner."
     },
     "layoutQrCls": {
       "what": "Downloads the sheet with the classifications of an Inventory category (PDF or image), with their icon, color and one QR each. Each QR opens, in the chosen zone, the list of codes of that classification. It does not depend on codes: the QRs never change and scanning always shows what is current. Each category's classifications are linked in Our Inventory Categories.",
