@@ -3722,7 +3722,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'activos-fijos': CATEGORY_BUTTON_NOTIFY,
     'activos-clasificacion': CATEGORY_BUTTON_NOTIFY,
     'layout': { create: 'colLayoutCrearDesdeCero' },
-    'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth' },
+    'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];

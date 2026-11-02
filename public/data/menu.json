@@ -1491,7 +1491,8 @@
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
                 { "id": "colRelDeleteAuth", "labelKey": "main.colRelDeleteAuth", "permissionOnly": true },
-                { "id": "colRelCreateAuth", "labelKey": "main.colRelCreateAuth", "permissionOnly": true }
+                { "id": "colRelCreateAuth", "labelKey": "main.colRelCreateAuth", "permissionOnly": true },
+                { "id": "colRelTemplateAuth", "labelKey": "main.colRelTemplateAuth", "permissionOnly": true }
               ]
             }
           ],

@@ -175,14 +175,15 @@ function renderNewRecordButton() {
     const toolbar = wrapper?.previousElementSibling;
     if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
     if (toolbar.querySelector('.data-table-new-record-btn')) return;
-    // Sin la hoja "Nueva Relación" del árbol el botón no sale (el servidor también lo rechaza).
-    if (!Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '')) return;
+    // Sin la hoja "Nueva Relación" del árbol el botón no sale (el servidor también lo rechaza); "Cargar por plantilla" tiene su propia hoja.
+    if (!Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '')) { if (window.RelTemplateUi) window.RelTemplateUi.mount(toolbar, null, refreshTable); return; }
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'data-table-new-record-btn';
     btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="main.newRelation">${esc(t('main.newRelation'))}</span>`;
     btn.addEventListener('click', () => openDialog(null));
     toolbar.prepend(btn);
+    if (window.RelTemplateUi) window.RelTemplateUi.mount(toolbar, btn, refreshTable);
 }
 
 // ---- ventana "Nueva relación" --------------------------------------------------------------------------------------------------------

@@ -7712,6 +7712,53 @@ app.post('/api/business/code-relations', requireAuth, requireCostCenter, (req, r
     res.status(201).json({ relation: mapCodeRelation(row, null, client?.company_name, ctx) });
 });
 
+// Cargar por plantilla (Web): cada fila ya trae los ids de su lugar (la ventana convirtió los nombres) y aquí pasa por la MISMA revisión que una relación hecha a mano (permisos por dato,
+// validateCodeRelationState: cascada, Layout del centro, espacio libre, sin repetir). Lo que no pasa no se carga y regresa con su motivo; lo demás se da de alta. Hasta CODE_RELATION_IMPORT_MAX por petición.
+const CODE_RELATION_IMPORT_MAX = 500;
+app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const grants = req.user.isClientAdmin ? null : getUserEffectiveGrants(req.user.sub);
+    if (grants && !canCreateColumn(grants, CODE_RELATION_TABLE_KEY, 'colRelTemplateAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para cargar relaciones por plantilla.' });
+    }
+    const input = req.body && req.body.rows;
+    if (!Array.isArray(input) || !input.length) return res.status(400).json({ message: 'No hay filas para cargar.' });
+    if (input.length > CODE_RELATION_IMPORT_MAX) return res.status(400).json({ message: `El máximo es ${CODE_RELATION_IMPORT_MAX} filas por petición. Manda el archivo en tandas más chicas.` });
+    const ctx = codeRelationContext(req);
+    const sanitizers = codeRelationSanitizers(ctx, req);
+    const changedBy = changedByLabel(req);
+    const created = [];
+    const failed = [];
+    input.forEach((raw, index) => {
+        const n = Number.isInteger(raw && raw.n) ? raw.n : index + 2;
+        const fail = (message) => failed.push({ index, n, message });
+        const norm = normalizeCodeRelationInput(raw && typeof raw.values === 'object' && raw.values ? raw.values : {});
+        if (norm.error) { fail(norm.error); return; }
+        const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, ...norm.values };
+        if (grants) {
+            const denied = Object.entries(CODE_RELATION_COLS).find(([key, colKey]) => state[key] !== null && state[key] !== '' && !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, CODE_RELATION_TABLE_KEY, colKey)));
+            if (denied) { fail('No tienes permiso para llenar uno de los datos de esta relación.'); return; }
+        }
+        const check = validateCodeRelationState(req, state, 0, null, ctx);
+        if (check.error) { fail(check.error.message); return; }
+        try {
+            const row = createCodeRelation({ clientId, isTestData: isTestAccount, values: state });
+            logTableChange({ clientId, tableKey: CODE_RELATION_TABLE_KEY, recordId: row.id, recordLabel: `#${row.id}`, action: 'create', changedBy });
+            Object.entries(CODE_RELATION_PATCHABLE_FIELDS).forEach(([key, { fieldKey }]) => {
+                if (state[key] === null || state[key] === '') return;
+                logTableChange({ clientId, tableKey: CODE_RELATION_TABLE_KEY, recordId: row.id, recordLabel: `#${row.id}`, action: 'update', fieldKey, oldValue: '', newValue: sanitizers[key](state[key]), changedBy });
+            });
+            created.push({ index, n, id: row.id });
+        } catch (error) {
+            console.error('Relación Código: no se pudo guardar una fila de la plantilla', error);
+            fail('No se pudo guardar esta fila. Inténtalo de nuevo.');
+        }
+    });
+    if (created.length) notifyButtonAction(req, CODE_RELATION_TABLE_KEY, 'import', `${created.length} relaciones`);
+    res.json({ created, failed });
+});
+
 app.patch('/api/business/code-relations/:id', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
