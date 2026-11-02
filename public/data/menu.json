@@ -1520,6 +1520,7 @@
             { "id": "colLayoutLuz", "labelKey": "main.colLayoutLuz", "permissionOnly": true },
             { "id": "colLayoutZonas", "labelKey": "main.colLayoutZonas", "permissionOnly": true },
             { "id": "colLayoutEspacios", "labelKey": "main.colLayoutEspacios", "permissionOnly": true },
+            { "id": "colLayoutActivos", "labelKey": "main.colLayoutActivos", "permissionOnly": true },
             { "id": "colLayoutQr", "labelKey": "main.colLayoutQr", "permissionOnly": true },
             { "id": "iconLayoutFormatoZona", "labelKey": "main.layoutFormatoZonaBtn", "permissionOnly": true },
             { "id": "iconLayoutMedidas", "labelKey": "main.layoutMedidasBtn", "permissionOnly": true },

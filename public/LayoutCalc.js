@@ -36,6 +36,7 @@
         luz: 'colLayoutLuz',
         zonas: 'colLayoutZonas',
         espacios: 'colLayoutEspacios',
+        activos: 'colLayoutActivos',
     };
     const LIMITS = { vertices: 60, doors: 100, power: 300, obstacles: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
@@ -546,11 +547,17 @@
             const levels = Math.round(Number(s && s.levels));
             // Espacios por nivel (el hueco dentro de un nivel): solo se guarda si hay más de uno.
             const slots = Math.round(Number(s && s.slots));
+            // Paso Activos: la clasificación (Mobiliario operativo, Mobiliario almacenamiento…) y el tipo (rack, estante, escritorio…) del activo de este espacio; son ids de los catálogos del cliente.
+            // Sin elegir, el espacio se guarda sin esos campos.
+            const assetClassId = Math.round(Number(s && s.assetClassId));
+            const assetId = Math.round(Number(s && s.assetId));
             return {
                 id: idOf(s && s.id, spaceIds, label), type, code, zoneId,
                 x: meters(s && s.x, label, -LIMITS.maxM), y: meters(s && s.y, label, -LIMITS.maxM), l: meters(s && s.l, label), d: meters(s && s.d, label), h: meters(s && s.h, label),
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
                 ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
+                ...(Number.isFinite(assetClassId) && assetClassId > 0 ? { assetClassId } : {}),
+                ...(Number.isFinite(assetId) && assetId > 0 ? { assetId } : {}),
                 drawers: text(s && s.drawers, label, false), active: !(s && s.active === false),
             };
         });
@@ -668,7 +675,9 @@
         if (section === 'puertas') return layout.doors;
         if (section === 'luz') return layout.power;
         if (section === 'zonas') return layout.zones;
-        if (section === 'espacios') return layout.spaces;
+        // Los espacios sin su clasificación y su tipo de activo (esos viven en el paso Activos y tienen su propio permiso); en Activos, solo los espacios que ya tienen alguno.
+        if (section === 'espacios') return (layout.spaces || []).map(({ assetClassId, assetId, ...rest }) => rest);
+        if (section === 'activos') return (layout.spaces || []).filter((s) => s.assetClassId || s.assetId).map((s) => ({ id: s.id, assetClassId: s.assetClassId || 0, assetId: s.assetId || 0 }));
         return null;
     }
     function sectionHasData(layout, section) {

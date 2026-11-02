@@ -8,9 +8,9 @@
 // Envuelto en una función: este script comparte el ámbito global con Dashboard.js, que ya declara nombres como SECTION_LABEL_KEYS.
 (function () {
 const LC = window.LayoutCalc;
-const SECTION_ORDER = ['contorno', 'puertas', 'luz', 'zonas', 'espacios'];
+const SECTION_ORDER = ['contorno', 'puertas', 'luz', 'zonas', 'espacios', 'activos'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios',
+    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos',
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -20,6 +20,8 @@ const state = {
 };
 let view = null;
 let drag = null;
+// Las dos listas del paso Activos (catálogos del cliente): clasificaciones (Mobiliario operativo…) y tipos (rack, estante…); [{ id, name, status }].
+let assetLists = { classes: [], types: [] };
 // Zoom del croquis (ver más abajo): s = aumento (1 = se ve todo), x/y = esquina de lo que se ve, en las medidas del dibujo (700 × 460).
 const MAP_W = 700;
 const MAP_H = 460;
@@ -448,6 +450,15 @@ function stepHtml(step) {
         });
         return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUsoZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
     }
+    if (step === 'activos') {
+        // Cada renglón es una Huella-Espacio; sus tres primeras columnas vienen del paso Huella-Espacio y aquí no se capturan. Se eligen la clasificación y el tipo del activo (dos listas independientes).
+        const choices = (list, selected) => list.filter((r) => r.status === 'active' || r.id === selected);
+        const assetOptions = (list, selected) => `<option value="">${esc(t('main.layoutActivoElegir'))}</option>${choices(list, selected).map((r) => `<option value="${r.id}"${r.id === selected ? ' selected' : ''}>${esc(r.name || t('main.whNoName'))}${r.status === 'active' ? '' : ` (${esc(t('admin.statusInactivo'))})`}</option>`).join('')}`;
+        const pick = (i, key, help, list, selected) => `<td><select data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="${help}"${dis ? ' disabled' : ''}>${assetOptions(list, selected || 0)}</select></td>`;
+        const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
+        const rows = d.spaces.map((s, i) => `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${esc(typeLabel('space', s.type))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}</tr>`);
+        return d.spaces.length ? table(['main.layoutCodigo', 'main.layoutZona', 'main.layoutTipo', 'main.layoutActivoClase', 'main.layoutActivoTipo'], rows) : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+    }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
         const saved = isSavedRow('spaces', s.id);
@@ -577,7 +588,7 @@ function renderSvg() {
     measureJobs.forEach(([pts, minPx]) => { measureLabels += measureText(pts, minPx); });
     s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     (on('contorno') ? d.obstacles : []).forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
-    (on('espacios') ? d.spaces : []).forEach((sp) => {
+    ((on('espacios') || on('activos')) ? d.spaces : []).forEach((sp) => {
         const w = Math.max(sp.l * sc, 4);
         const h = Math.max(sp.d * sc, 4);
         s += `<rect class="ls ls-${sp.type}${sp.active === false ? ' lz-off' : ''}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2"><title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title></rect>`;
@@ -752,7 +763,21 @@ function showEditor() {
 }
 
 // ---- cargar el Layout guardado -----------------------------------------------------------------------------------------
+// Las clasificaciones y los tipos de activo del cliente (catálogos Nuestras Clasificaciones de Activos y Nuestros Activos Fijos). Si no se pueden leer, el paso Activos sale sin opciones.
+async function loadAssetLists() {
+    const read = async (type) => {
+        try {
+            const r = await fetch(`/api/business/article-categories/${type}`, { credentials: 'include' });
+            if (!r.ok) return [];
+            return ((await r.json()).categories || []).map((c) => ({ id: c.id, name: c.name, status: c.status })).filter((c) => c.name || c.status === 'active');
+        } catch (err) { console.error('Layout: no se pudo leer la lista de activos', err); return []; }
+    };
+    const [classes, types] = await Promise.all([read('activos-clasificacion'), read('activos-fijos')]);
+    assetLists = { classes, types };
+}
+
 async function loadLayout() {
+    await loadAssetLists();
     const res = await fetch('/api/business/layout', { credentials: 'include' });
     if (!res.ok) throw new Error('layout load failed');
     const body = await res.json();
@@ -921,6 +946,9 @@ function onEdit(event) {
             const dy = key === 'oy' ? value - o[1] : 0;
             row.pts = row.pts.map((p) => [round2(p[0] + dx), round2(p[1] + dy)]);
             syncZoneBox(row);
+        } else if (key === 'assetClassId' || key === 'assetId') {
+            const n = parseInt(el.value, 10);
+            if (n > 0) row[key] = n; else delete row[key]; // sin elegir = el espacio se guarda sin ese campo
         } else if (key === 'planM2') {
             if (value > 0) row.planM2 = value; else delete row.planM2;
         } else if (key === 'use') {
@@ -948,6 +976,7 @@ $('layout-panel').addEventListener('click', (event) => {
         pressStep(stepBtn.dataset.step);
         renderPanel();
         refreshLive();
+        if (stepBtn.dataset.step === 'activos') loadAssetLists().then(() => { if (state.focus === 'activos') renderPanel(); });
         return;
     }
     const cmode = event.target.closest('[data-cmode]');
@@ -1664,7 +1693,7 @@ function buildSheetSvgFrom(loaded) {
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: state.steps.slice(), measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, rotation: sheetView().rotation },
+        view: { layers: [...new Set(state.steps.map((s) => (s === 'activos' ? 'espacios' : s)))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, rotation: sheetView().rotation },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {

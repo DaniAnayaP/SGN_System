@@ -1616,6 +1616,12 @@
     "layoutStepLuz": "Conexiones de luz",
     "layoutStepZonas": "Zonas",
     "layoutStepEspacios": "Huella-Espacio",
+    "layoutStepActivos": "Activos",
+    "colLayoutActivos": "Activos",
+    "layoutActivoClase": "Clasificación del activo",
+    "layoutActivoTipo": "Tipo de activo",
+    "layoutActivoElegir": "Elige…",
+    "layoutActivosSinEspacios": "Todavía no hay Huella-Espacio.",
     "layoutAltura": "Altura libre (m)",
     "layoutAlturaEsquina": "Altura (m)",
     "layoutAlturaTodas": "Misma altura en todas las esquinas (m)",
@@ -3367,6 +3373,18 @@
     "layoutSec_zonas": {
       "what": "Las zonas de la nave: almacenamiento, andenes, oficinas y pasillos. De aquí salen los m² de oficinas y de pasillos.",
       "example": "defines la Zona A, de producto seco, de 22 por 11 metros."
+    },
+    "layoutSec_activos": {
+      "what": "A cada Huella-Espacio le eliges dos cosas: la clasificación de su activo (Mobiliario operativo, Mobiliario almacenamiento…) y su tipo (rack, estante, escritorio…). Las dos listas las administra el cliente en Catálogos. La clasificación dice con qué métrica cuenta el espacio: m² de mobiliario o m³ de almacenamiento.",
+      "example": "R-01 es Mobiliario almacenamiento y de tipo Rack; R-02 también es un Rack, pero de Mobiliario operativo."
+    },
+    "layoutAssetClass": {
+      "what": "La clasificación del activo de este espacio. Viene de Catálogos > Clasificaciones de Activos y dice con qué métrica cuenta: m² (mobiliario) o m³ (almacenamiento). Se puede dejar sin elegir.",
+      "example": "Mobiliario almacenamiento para un rack donde se guarda inventario."
+    },
+    "layoutAssetType": {
+      "what": "El tipo de activo de este espacio: rack, gabinete, refrigerador, estante, escritorio, mesa… Viene de Catálogos > Activos Fijos y es independiente de la clasificación. Se puede dejar sin elegir.",
+      "example": "Rack, Estante o Escritorio."
     },
     "layoutSec_espacios": {
       "what": "Los anaqueles, gabetas y tarimas, con su código, su lugar y sus medidas. De aquí salen los m² y m³ de almacenamiento.",

@@ -6335,7 +6335,7 @@ app.get('/api/public/ficha/:token', (req, res) => {
 const LayoutCalc = require('./public/LayoutCalc.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
-const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Anaqueles, gabetas y tarimas' };
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 
 function layoutPermissions(req) {
@@ -6413,6 +6413,7 @@ function layoutSummary(layout, section) {
     if (section === 'puertas') return `${(layout.doors || []).length} puertas`;
     if (section === 'luz') return `${(layout.power || []).length} conexiones de luz`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
+    if (section === 'activos') return `${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} espacios con activo`;
     return `${(layout.spaces || []).length} espacios`;
 }
 
@@ -6453,6 +6454,21 @@ app.put('/api/business/layout', requireAuth, (req, res) => {
         return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: existing ? existing.version : 0 });
     }
 
+    // Cada espacio con clasificación o tipo de activo debe apuntar a uno de los catálogos del cliente (activo, o el mismo que ya tenía guardado).
+    {
+        const catalogs = [['assetClassId', 'activos-clasificacion', 'la clasificación', 'a', 'la'], ['assetId', 'activos-fijos', 'el tipo de activo', 'o', 'lo']];
+        const prev = new Map(((existing && existing.layout.spaces) || []).map((s) => [s.id, s]));
+        for (const [field, type, label, end, pronoun] of catalogs) {
+            const rows = new Map(listArticleCategories(req.user.clientId, type, req.user.isTestAccount).map((r) => [r.id, r]));
+            for (const s of next.spaces || []) {
+                if (!s[field]) continue;
+                const row = rows.get(s[field]);
+                if (!row) return res.status(400).json({ message: `El espacio ${s.code || ''}: ${label} que elegiste ya no existe. Vuelve a elegir${pronoun}.`, section: 'activos' });
+                const before = prev.get(s.id);
+                if (row.status !== 'active' && !(before && before[field] === s[field])) return res.status(400).json({ message: `El espacio ${s.code || ''}: ${label} «${row.name}» está inactiv${end}. Elige un${end} activ${end}.`, section: 'activos' });
+            }
+        }
+    }
     const perms = layoutPermissions(req);
     const creating = !existing;
     if (creating) {
@@ -7150,6 +7166,16 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, (r
         const grants = getUserEffectiveGrants(req.user.sub);
         if (!canDeleteColumn(grants, config.tableKey, 'colCatDeleteAuth')) {
             return res.status(403).json({ message: 'No tienes permiso para eliminar categorías.' });
+        }
+    }
+    // Una clasificación o un tipo de activo que algún espacio del Layout ya usa no se borra (se deja Inactivo): esos espacios perderían su activo.
+    if (req.params.categoryType === 'activos-clasificacion' || req.params.categoryType === 'activos-fijos') {
+        const field = req.params.categoryType === 'activos-clasificacion' ? 'assetClassId' : 'assetId';
+        const layoutRow = getClientLayout(req.user.clientId);
+        const used = ((layoutRow && layoutRow.layout.spaces) || []).filter((s) => s[field] === existing.id);
+        if (used.length) {
+            const codes = used.slice(0, 3).map((s) => s.code).filter(Boolean).join(', ');
+            return res.status(409).json({ message: `Hay ${used.length === 1 ? 'un espacio' : `${used.length} espacios`} del Layout con este activo${codes ? ` (${codes}${used.length > 3 ? '…' : ''})` : ''}. Cámbialos primero en Layout > Activos o márcalo como Inactivo.` });
         }
     }
     // Un almacén con sub almacenes no se borra (se deja Inactivo): los sub almacenes quedarían sin almacén.

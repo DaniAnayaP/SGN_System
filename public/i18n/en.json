@@ -1616,6 +1616,12 @@
     "layoutStepLuz": "Power connections",
     "layoutStepZonas": "Zones",
     "layoutStepEspacios": "Footprint-Space",
+    "layoutStepActivos": "Assets",
+    "colLayoutActivos": "Assets",
+    "layoutActivoClase": "Asset Classification",
+    "layoutActivoTipo": "Asset Type",
+    "layoutActivoElegir": "Choose…",
+    "layoutActivosSinEspacios": "There is no Footprint-Space yet.",
     "layoutAltura": "Clear height (m)",
     "layoutAlturaEsquina": "Height (m)",
     "layoutAlturaTodas": "Same height at every corner (m)",
@@ -3368,6 +3374,18 @@
     "layoutSec_zonas": {
       "what": "The zones of the warehouse: storage, docks, offices and aisles. The office and aisle m² come from here.",
       "example": "you define Zone A, dry goods, 22 by 11 meters."
+    },
+    "layoutSec_activos": {
+      "what": "For each Footprint-Space you choose two things: the classification of its asset (Operational furniture, Storage furniture…) and its type (rack, shelf, desk…). Both lists are managed by the client in Catalogs. The classification says which metric the space counts in: furniture m² or storage m³.",
+      "example": "R-01 is Storage furniture of type Rack; R-02 is also a Rack, but Operational furniture."
+    },
+    "layoutAssetClass": {
+      "what": "The classification of this space's asset. It comes from Catalogs > Asset Classifications and says which metric it counts in: m² (furniture) or m³ (storage). It can be left empty.",
+      "example": "Storage furniture for a rack where inventory is kept."
+    },
+    "layoutAssetType": {
+      "what": "The type of this space's asset: rack, cabinet, refrigerator, shelf, desk, table… It comes from Catalogs > Fixed Assets and is independent of the classification. It can be left empty.",
+      "example": "Rack, Shelf or Desk."
     },
     "layoutSec_espacios": {
       "what": "The racks, cabinets and pallets, with their code, place and size. The storage m² and m³ come from here.",
