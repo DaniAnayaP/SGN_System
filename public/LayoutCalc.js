@@ -551,8 +551,11 @@
             // Sin elegir, el espacio se guarda sin esos campos.
             const assetClassId = Math.round(Number(s && s.assetClassId));
             const assetId = Math.round(Number(s && s.assetId));
+            // El nombre de la Huella-Espacio (paso Huella-Espacio): opcional; sin él se guarda sin ese campo.
+            const name = text(s && s.name, label, false);
             return {
                 id: idOf(s && s.id, spaceIds, label), type, code, zoneId,
+                ...(name ? { name } : {}),
                 x: meters(s && s.x, label, -LIMITS.maxM), y: meters(s && s.y, label, -LIMITS.maxM), l: meters(s && s.l, label), d: meters(s && s.d, label), h: meters(s && s.h, label),
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
                 ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
@@ -675,12 +678,18 @@
         if (section === 'puertas') return layout.doors;
         if (section === 'luz') return layout.power;
         if (section === 'zonas') return layout.zones;
-        // Los espacios sin su clasificación y su tipo de activo (esos viven en el paso Activos y tienen su propio permiso); en Activos, solo los espacios que ya tienen alguno.
-        if (section === 'espacios') return (layout.spaces || []).map(({ assetClassId, assetId, ...rest }) => rest);
-        if (section === 'activos') return (layout.spaces || []).filter((s) => s.assetClassId || s.assetId).map((s) => ({ id: s.id, assetClassId: s.assetClassId || 0, assetId: s.assetId || 0 }));
+        // Los espacios sin lo del paso Activos (la clasificación y el tipo de activo, y sus niveles, espacios por nivel y cajones; todo eso tiene su propio permiso). En Activos, solo los espacios que ya tienen
+        // algo de eso: así agregar un espacio nuevo en Huella-Espacio (con 1 nivel) no cuenta como cambio de Activos.
+        if (section === 'espacios') return (layout.spaces || []).map(({ assetClassId, assetId, levels, slots, drawers, ...rest }) => rest);
+        if (section === 'activos') {
+            return (layout.spaces || []).filter((s) => s.assetClassId || s.assetId || (s.levels || 1) > 1 || (s.slots || 1) > 1 || s.drawers)
+                .map((s) => ({ id: s.id, assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '' }));
+        }
         return null;
     }
     function sectionHasData(layout, section) {
+        // Activos cuenta como llenado cuando algún espacio ya tiene su clasificación o su tipo de activo (los niveles de antes no cuentan).
+        if (section === 'activos') return (layout && layout.spaces || []).some((s) => s.assetClassId || s.assetId);
         const data = sectionData(layout, section);
         if (!data) return false;
         if (section === 'contorno') return (data.vertices || []).length > 0;

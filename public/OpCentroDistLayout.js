@@ -451,20 +451,21 @@ function stepHtml(step) {
         return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUsoZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
     }
     if (step === 'activos') {
-        // Cada renglón es una Huella-Espacio; sus tres primeras columnas vienen del paso Huella-Espacio y aquí no se capturan. Se eligen la clasificación y el tipo del activo (dos listas independientes).
+        // Cada renglón es una Huella-Espacio; sus tres primeras columnas (código, nombre y zona) vienen del paso Huella-Espacio y aquí no se capturan. Se eligen la clasificación y el tipo del activo (dos listas
+        // independientes) y, de ese activo, cuántos niveles tiene, cuántos espacios hay por nivel y los cajones (filas × columnas).
         const choices = (list, selected) => list.filter((r) => r.status === 'active' || r.id === selected);
         const assetOptions = (list, selected) => `<option value="">${esc(t('main.layoutActivoElegir'))}</option>${choices(list, selected).map((r) => `<option value="${r.id}"${r.id === selected ? ' selected' : ''}>${esc(r.name || t('main.whNoName'))}${r.status === 'active' ? '' : ` (${esc(t('admin.statusInactivo'))})`}</option>`).join('')}`;
         const pick = (i, key, help, list, selected) => `<td><select data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="${help}"${dis ? ' disabled' : ''}>${assetOptions(list, selected || 0)}</select></td>`;
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
-        const rows = d.spaces.map((s, i) => `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${esc(typeLabel('space', s.type))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}</tr>`);
-        return d.spaces.length ? table(['main.layoutCodigo', 'main.layoutZona', 'main.layoutTipo', 'main.layoutActivoClase', 'main.layoutActivoTipo'], rows) : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        const rows = d.spaces.map((s, i) => `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(s.name || '—')}</td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}</tr>`);
+        return d.spaces.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones'], rows) : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
         const saved = isSavedRow('spaces', s.id);
-        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellSelect('spaces', i, 'type', optionsHtml('space', LC.SPACE_TYPES, s.type), dis)}${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('spaces', i, 'x', s.x, dis)}${cellNum('spaces', i, 'y', s.y, dis)}${cellNum('spaces', i, 'l', s.l, dis)}${cellNum('spaces', i, 'd', s.d, dis)}${cellNum('spaces', i, 'h', s.h, dis)}${cellNum('spaces', i, 'levels', s.levels, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('spaces', i, s.active, dis) : removeCell('spaces', i, dis)}</tr>`;
+        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('spaces', i, 'name', s.name || '', dis)}${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('spaces', i, 'x', s.x, dis)}${cellNum('spaces', i, 'y', s.y, dis)}${cellNum('spaces', i, 'l', s.l, dis)}${cellNum('spaces', i, 'd', s.d, dis)}${cellNum('spaces', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('spaces', i, s.active, dis) : removeCell('spaces', i, dis)}</tr>`;
     });
-    return `${table(['main.layoutTipo', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', 'main.layoutHuellaVolumen', ''], rows)}${addButton('spaces', 'main.layoutAgregarEspacio', dis)}`;
+    return `${table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaVolumen', ''], rows)}${addButton('spaces', 'main.layoutAgregarEspacio', dis)}`;
 }
 
 // Los pasos son capas del croquis: se pueden tener activos varios a la vez y el croquis muestra siempre la nave más lo de los pasos activos. Abajo solo sale el formulario del
@@ -917,7 +918,7 @@ const ROW_FACTORY = {
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
-    spaces: () => ({ id: uid('s'), type: 'rack', code: nextCode('rack'), zoneId: state.draft.zones.length ? state.draft.zones[0].id : '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, levels: 4, drawers: '', active: true }),
+    spaces: () => ({ id: uid('s'), type: 'rack', code: nextCode('rack'), zoneId: state.draft.zones.length ? state.draft.zones[0].id : '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, levels: 1, drawers: '', active: true }),
 };
 const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', zones: 'zonas', spaces: 'espacios' };
 
@@ -965,6 +966,8 @@ function onEdit(event) {
             if (n > 0) row[key] = n; else delete row[key]; // sin elegir = el espacio se guarda sin ese campo
         } else if (key === 'planM2') {
             if (value > 0) row.planM2 = value; else delete row.planM2;
+        } else if (list === 'spaces' && key === 'name') {
+            if (String(value).trim()) row.name = String(value); else delete row.name; // sin nombre = la huella se guarda sin ese campo
         } else if (key === 'use') {
             if (value) row.use = value; else delete row.use; // sin definir = la zona se guarda sin ese campo
         } else if (key === 'slots') {

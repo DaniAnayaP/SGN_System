@@ -6813,7 +6813,7 @@ app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
         const cls = new Map(listArticleCategories(row.clientId, 'activos-clasificacion', false).map((r) => [r.id, r.name]));
         const types = new Map(listArticleCategories(row.clientId, 'activos-fijos', false).map((r) => [r.id, r.name]));
         const spaces = (row.layout.spaces || []).filter((s) => s.active !== false && inScope(s.zoneId || '')).map((s) => ({
-            id: s.id, code: s.code || '', kind: s.type || '', zoneId: zoneName.has(s.zoneId) ? s.zoneId : '', zone: zoneName.get(s.zoneId) || '',
+            id: s.id, code: s.code || '', name: s.name || '', kind: s.type || '', zoneId: zoneName.has(s.zoneId) ? s.zoneId : '', zone: zoneName.get(s.zoneId) || '',
             cls: cls.get(s.assetClassId) || '', type: types.get(s.assetId) || '',
         }));
         if (fields.has('furniture')) {
@@ -6822,7 +6822,7 @@ app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
             out.furniture = found.slice(0, PUBLIC_SEARCH_LIMIT);
         }
         if (fields.has('place')) {
-            const found = spaces.filter((s) => s.code && matches([foldText(s.code)]));
+            const found = spaces.filter((s) => s.code && matches([foldText(s.code), foldText(s.name)]));
             out.totals.places = found.length;
             out.places = found.slice(0, PUBLIC_SEARCH_LIMIT);
         }
