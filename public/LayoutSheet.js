@@ -312,7 +312,11 @@
         s += `<rect x="${m}" y="${frameTop}" width="${W - 2 * m}" height="${frameH}" rx="${8 * f}" fill="none" stroke="#C9CCDA" stroke-width="${1.4 * f}"/>`;
         for (let c = 0; c < (single ? 0 : cols); c += 1) {
             const x0 = m + pad + c * (colW + gap);
-            s += `<text x="${x0}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="#3F435D">${esc(labels.cardCategory)}</text><text x="${x0 + colW}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="${brand}" text-anchor="end">${esc(labels.cardReview)}</text>`;
+            // Con labels.cardIcon (hoja de clasificaciones) el encabezado lleva también «Ícono», centrado sobre el cuadro de cada icono, y «Categoría» arranca donde empieza el nombre.
+            const showIcon = !!labels.cardIcon && !asColumns && !single;
+            const isz0 = Math.min(40 * f, rowH * 0.36);
+            if (showIcon) s += `<text x="${x0 + 14 * f + isz0 / 2}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="#3F435D" text-anchor="middle">${esc(labels.cardIcon)}</text>`;
+            s += `<text x="${showIcon ? x0 + 14 * f + isz0 + 12 * f : x0}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="#3F435D">${esc(labels.cardCategory)}</text><text x="${x0 + colW}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="${brand}" text-anchor="end">${esc(labels.cardReview)}</text>`;
             s += `<line x1="${x0}" y1="${top}" x2="${x0 + colW}" y2="${top}" stroke="#D9DBE5" stroke-width="${f}"/>`;
         }
         (single ? [] : card.categories).forEach((cat, i) => {
@@ -343,7 +347,9 @@
             }
             // filas parejas: cada categoría usa su parte completa del marco, con un fondo suave de su color; el nombre a la izquierda y el QR grande a la derecha
             const isz = Math.min(40 * f, rowH * 0.36);
-            const qs = Math.min(rowH - 14 * f, colW * 0.4);
+            // Con texto debajo del QR (cat.qrCaption, p. ej. «Ver catálogo») el QR cede el alto del texto.
+            const capH = cat.qrCaption ? 10 * f : 0;
+            const qs = Math.min(rowH - 14 * f - capH, colW * 0.4);
             s += `<defs><linearGradient id="${tint}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${esc(cat.color)}" stop-opacity="0.22"/><stop offset="1" stop-color="${esc(cat.color)}" stop-opacity="0.05"/></linearGradient></defs>`;
             s += `<rect x="${x0}" y="${y + 3 * f}" width="${colW}" height="${rowH - 6 * f}" rx="${8 * f}" fill="url(#${tint})"/>`;
             s += `<rect x="${x0}" y="${y + f}" width="${4 * f}" height="${rowH - 2 * f}" fill="${esc(cat.color)}"/>`;
@@ -353,7 +359,9 @@
             const nameMax = (colW - (tx - x0) - qs - 16 * f) / Math.max(cat.name.length, 1) * 1.45;
             s += `<text x="${tx}" y="${y + rowH / 2 - 1 * f}" font-size="${Math.min(17 * f, nameMax)}" font-weight="700" fill="${ink}">${esc(cat.name)}</text>`;
             if (cat.desc) s += `<text x="${tx}" y="${y + rowH / 2 + 12 * f}" font-size="${7.6 * f}" fill="#3F435D">${esc(cat.desc)}</text>`;
-            s += qrPath(cat.qrRows, x0 + colW - qs - 6 * f, y + (rowH - qs) / 2, qs, '#FFFFFF', 0);
+            const qy = y + (rowH - qs - capH) / 2;
+            s += qrPath(cat.qrRows, x0 + colW - qs - 6 * f, qy, qs, '#FFFFFF', 0);
+            if (cat.qrCaption) s += `<text x="${x0 + colW - qs / 2 - 6 * f}" y="${qy + qs + 8 * f}" font-size="${6.4 * f}" fill="${brand}" text-anchor="middle">${esc(cat.qrCaption)}</text>`;
             s += `<line x1="${x0}" y1="${y + rowH}" x2="${x0 + colW}" y2="${y + rowH}" stroke="#D9DBE5" stroke-width="${f}"/>`;
         });
         if (single) {

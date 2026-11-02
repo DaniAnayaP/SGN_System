@@ -6626,6 +6626,39 @@ app.get('/api/business/layout/zone-categories', requireAuth, (req, res) => {
     });
 });
 
+// Hoja de clasificaciones: las clasificaciones de UNA categoría de Inventario (las que se relacionan en Nuestras Categorías Inventarios), cada una con su QR a la página de esa clasificación en una zona.
+// No depende de los códigos: el QR lleva la dirección fija del Layout + el id de la zona + la categoría y la clasificación del CATÁLOGO por su número (REGLA DE LOS QR IMPRESOS: no cambian nunca),
+// y lo que se ve al escanear se lee en ese momento (GET /api/public/layout/:token/classification). Sin `category` devuelve solo la lista de categorías que ya tienen clasificaciones.
+app.get('/api/business/layout/zone-classifications', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canPrintZone) return res.status(403).json({ message: 'No tienes permiso para imprimir por zona.' });
+    const row = getClientLayout(req.user.clientId);
+    if (!row) return res.status(404).json({ message: 'Todavía no hay un Layout guardado.' });
+    const zone = (row.layout.zones || []).find((z) => z.id === String(req.query.zone || '') && z.active !== false);
+    if (!zone) return res.status(404).json({ message: 'Esa zona no está en el Layout guardado.' });
+    const isTest = !!req.user.isTestAccount;
+    const catalog = new Map(listArticleCategories(req.user.clientId, 'clasificaciones', isTest).map((r) => [r.id, r]));
+    const withItems = listArticleCategories(req.user.clientId, 'inventario', isTest)
+        .map((c) => ({ c, items: parseClassificationIds(c.classification_ids).map((id) => catalog.get(id)).filter(Boolean) }))
+        .filter((x) => x.items.length);
+    res.set('Cache-Control', 'no-store');
+    if (!req.query.category) return res.json({ categories: withItems.map(({ c, items }) => ({ id: c.id, name: c.name, count: items.length })) });
+    const found = withItems.find((x) => String(x.c.id) === String(req.query.category));
+    if (!found) return res.status(404).json({ message: 'Esa categoría no tiene clasificaciones.' });
+    const base = `${req.protocol}://${req.get('host')}/q/${ensureLayoutPublicToken(req.user.clientId)}`;
+    const items = found.items.map((r) => {
+        const url = `${base}?z=${encodeURIComponent(zone.id)}&k=${encodeURIComponent(`inventario.${found.c.id}`)}&l=${r.id}`;
+        return { id: r.id, name: r.name, desc: r.description || '', seed: r.record_number, url, qrRows: layoutQrRows(url) };
+    });
+    const client = getClientById(req.user.clientId);
+    const seedColor = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
+    res.json({
+        zone: { id: zone.id, name: zone.name }, category: { id: found.c.id, name: found.c.name }, items,
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', companyColor: /^#[0-9a-fA-F]{6}$/.test(seedColor) ? seedColor.toLowerCase() : '', logoDataUrl: clientLogoDataUrl(req.user.clientId),
+        version: row.version, updatedAt: row.updatedAt,
+    });
+});
+
 // Cambiar el QR a propósito (por ejemplo si lo fotografiaron fuera de la empresa): el anterior deja de funcionar y hay que volver a imprimir.
 app.post('/api/business/layout/qr/regenerate', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });

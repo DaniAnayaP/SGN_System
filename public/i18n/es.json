@@ -1706,6 +1706,14 @@
     "layoutTarjetaTitulo": "Categorías de",
     "layoutTarjetaCategoria": "CATEGORÍA",
     "layoutTarjetaRevisame": "BÚSCAME",
+    "layoutClsRevisame": "REVÍSAME",
+    "layoutClsIcono": "ÍCONO",
+    "layoutClsVerCatalogo": "Ver catálogo",
+    "layoutClsTitulo": "Categorías de {name}",
+    "layoutClsHojaDe": "Hoja de clasificaciones de {name} · {zone}",
+    "layoutQrClsLabel": "Hoja de clasificaciones de",
+    "layoutQrClsBtn": "Hoja de clasificaciones",
+    "layoutQrClsSub": "Un QR por cada clasificación, para esta zona",
     "layoutTarjetaPie": "Escanea el QR para ver fotos y ubicación",
     "layoutHojaTamano": "Tamaño de la hoja",
     "layoutHojaAncho": "Ancho (cm)",
@@ -3637,6 +3645,10 @@
     "layoutQrZoneType": {
       "what": "De cuál de las 7 categorías de los códigos se hace la lista: Inventario, Compra, Almacenamiento, Rotación, Manejo especial, Riesgo o Vida útil. Cada código aparece en la categoría que tiene escrita en Alta Artículos. Los códigos sin esa categoría no salen.",
       "example": "con Categoría Inventario la lista dice Medicamentos, Material de curación y Soluciones."
+    },
+    "layoutQrCls": {
+      "what": "Baja la hoja de las clasificaciones de una categoría de Inventario (PDF o imagen), con su icono, su color y un QR por cada una. Cada QR abre, en la zona elegida, la lista de códigos de esa clasificación. No depende de los códigos: los QR no cambian nunca y al escanearlos siempre se ve lo actual. Las clasificaciones de cada categoría se relacionan en Nuestras Categorías Inventarios.",
+      "example": "eliges MEDICAMENTOS y la Zona 1: sale la hoja con Patente, Genérico, Antibiótico…, cada uno con su QR."
     },
     "layoutQrZoneSheet": {
       "what": "Baja la hoja de la zona (PDF o imagen) con la lista de categorías, cuántos códigos hay de cada una y un QR por categoría. Los QR no cambian nunca: al escanear uno siempre se ve lo actual, aunque la hoja se haya impreso hace meses. La lista sale de lo guardado en Relación Código.",

@@ -1262,10 +1262,12 @@ try {
     const raw = JSON.parse(localStorage.getItem(CARD_SIZE_KEY) || 'null');
     if (raw && raw.w >= 6 && raw.w <= 120 && raw.h >= 6 && raw.h <= 120) { cardSize.w = raw.w; cardSize.h = raw.h; cardSize.cut = raw.cut !== false; }
 } catch (err) { /* sin almacenamiento */ }
-let cardState = null; // { zoneId, zoneName, data }
+let cardState = null; // { zoneId, zoneName, data, cls (true en la hoja de clasificaciones) }
 let cardModalEl = null;
 function cardLabels() {
-    return { cardArea: t('main.layoutTarjetaArea'), cardCategory: t('main.layoutTarjetaCategoria'), cardReview: t('main.layoutTarjetaRevisame'), cardFooter: t('main.layoutTarjetaPie'), cardEmpty: t('main.layoutCatVacia'), cutCaption: t('main.layoutHojaRecorte') };
+    const base = { cardArea: t('main.layoutTarjetaArea'), cardCategory: t('main.layoutTarjetaCategoria'), cardReview: t('main.layoutTarjetaRevisame'), cardFooter: t('main.layoutTarjetaPie'), cardEmpty: t('main.layoutCatVacia'), cutCaption: t('main.layoutHojaRecorte') };
+    // La hoja de clasificaciones (cardState.cls) lleva su propio encabezado de columnas.
+    return cardState && cardState.cls ? { ...base, cardReview: t('main.layoutClsRevisame'), cardIcon: t('main.layoutClsIcono') } : base;
 }
 function cardSvg() {
     const data = cardState.data;
@@ -1317,7 +1319,7 @@ function ensureCardModal() {
             try {
                 const svg = cardSvg();
                 const blob = pdf ? await window.LayoutSheet.renderPdf(svg) : await window.LayoutSheet.renderPng(svg);
-                window.LayoutSheet.saveBlob(blob, `Categorias_${slug(cardState.zoneName)}_${new Date().toISOString().slice(0, 10)}.${pdf ? 'pdf' : 'png'}`);
+                window.LayoutSheet.saveBlob(blob, `${cardState.cls ? 'Clasificaciones' : 'Categorias'}_${slug(cardState.zoneName)}_${new Date().toISOString().slice(0, 10)}.${pdf ? 'pdf' : 'png'}`);
                 Dashboard.showToast(t('main.layoutDescargaLista'), 'success');
             } catch (err) {
                 console.error('Layout: la tarjeta no se pudo descargar', err);
@@ -1354,6 +1356,44 @@ async function openCardDialog(zoneId) {
     $('layout-card-title').textContent = t('main.layoutTarjetaDe').replace('{name}', zone.name);
     cardModalEl.hidden = false;
     renderCardPreview();
+}
+// La hoja de clasificaciones: las clasificaciones de una categoría de Inventario con su icono, color y QR (el QR lleva el Layout + la zona + la categoría + la clasificación, por número). Usa la misma
+// ventana de la tarjeta (tamaño libre, línea de recorte, PDF o imagen). El título es «Categorías de {categoría}».
+async function openClassificationSheetDialog() {
+    const zoneId = $('layout-qr-zone').value;
+    const categoryId = $('layout-qr-cls-cat').value;
+    if (!zoneId || !categoryId) return;
+    const res = await fetch(`/api/business/layout/zone-classifications?zone=${encodeURIComponent(zoneId)}&category=${encodeURIComponent(categoryId)}`, { credentials: 'include' });
+    if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return; }
+    if (!res.ok) { Dashboard.showToast(t('main.layoutDescargaError'), 'error'); return; }
+    const data = await res.json();
+    ensureCardModal();
+    const categories = data.items.map((c) => ({ name: c.name, desc: c.desc, ...LC.categoryLook(c.seed), qrRows: c.qrRows, qrCaption: t('main.layoutClsVerCatalogo') }));
+    const title = t('main.layoutClsTitulo').replace('{name}', data.category.name);
+    cardState = { zoneId: data.zone.id, zoneName: title, cls: true, logoRatio: await logoRatioOf(data.logoDataUrl), data: { companyName: data.companyName, siteName: data.siteName, companyColor: data.companyColor, logoDataUrl: data.logoDataUrl, zones: [{ id: data.zone.id, categories }] } };
+    $('layout-card-title').textContent = t('main.layoutClsHojaDe').replace('{name}', data.category.name).replace('{zone}', data.zone.name);
+    cardModalEl.hidden = false;
+    renderCardPreview();
+}
+// Las categorías de Inventario que ya tienen clasificaciones (no dependen de los códigos de la zona): se llena la lista de la hoja de clasificaciones y se muestra solo si hay alguna.
+let qrClsSeq = 0;
+async function loadQrCls() {
+    const box = $('layout-qr-cls');
+    const select = $('layout-qr-cls-cat');
+    const zone = $('layout-qr-zone').value;
+    const seq = ++qrClsSeq;
+    if (!zone) { box.hidden = true; return; }
+    try {
+        const res = await fetch(`/api/business/layout/zone-classifications?zone=${encodeURIComponent(zone)}`, { credentials: 'include' });
+        if (seq !== qrClsSeq || !res.ok) { if (seq === qrClsSeq) box.hidden = true; return; }
+        const data = await res.json();
+        const current = select.value;
+        select.innerHTML = data.categories.map((c) => `<option value="${c.id}">${esc(c.name)} (${c.count})</option>`).join('');
+        if (data.categories.some((c) => String(c.id) === current)) select.value = current;
+        box.hidden = !data.categories.length;
+    } catch (err) {
+        if (seq === qrClsSeq) box.hidden = true;
+    }
 }
 function closeCardDialog() {
     if (cardModalEl) cardModalEl.hidden = true;
@@ -1615,6 +1655,7 @@ function codesText(n) {
 }
 async function loadQrZone() {
     const zones = qrZoneOptions();
+    loadQrCls();
     const chips = $('layout-qr-chips');
     const fine = $('layout-qr-fine');
     const buttons = ['layout-qr-zone-pdf', 'layout-qr-zone-png'].map($);
@@ -1917,6 +1958,7 @@ $('layout-qr-pop').addEventListener('click', async (event) => {
     try {
         const kind = item.dataset.qr;
         if (kind === 'zone-pdf' || kind === 'zone-png') await openZoneSheetDialog();
+        else if (kind === 'zone-cls') await openClassificationSheetDialog();
         else if (kind === 'pdf' || kind === 'png') await openSheetDialog(kind);
         else if (kind === 'link') await copyQrLink();
         else if (kind === 'regen') await regenerateQr();
