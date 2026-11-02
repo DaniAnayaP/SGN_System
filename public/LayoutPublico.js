@@ -239,7 +239,7 @@
         const toggle = (key, label, glyph) => `<button type="button" class="ricon" data-page-toggle="${key}" aria-pressed="${pageView[key]}" aria-label="${esc(label)}" title="${esc(label)}">${icon(glyph, slash)}</button>`;
         return `<div class="maptools-row"><div class="ricons">
             <button type="button" class="ricon" data-map-search aria-expanded="false" aria-controls="search-panel" aria-label="${esc(TEXT.search)}" title="${esc(TEXT.search)}">${icon('search')}</button>
-            ${toggle('map', TEXT.mapToggle, 'map')}${general ? `${toggle('metrics', TEXT.metrics, 'chart')}${holdingZones(view.data).length ? toggle('zones', TEXT.zones, 'layers') : ''}` : ''}
+            ${toggle('map', TEXT.mapToggle, 'map')}${general ? `${toggle('metrics', TEXT.metrics, 'chart')}${listedZones(view.data).length ? toggle('zones', TEXT.zones, 'layers') : ''}` : ''}
             <button type="button" class="ricon" data-map-rot aria-label="${esc(TEXT.rotate)}" title="${esc(TEXT.rotate)}">${icon('rotate')}</button>
             <button type="button" class="ricon" data-map-meas aria-pressed="${mapView.measures}" aria-label="${esc(TEXT.measures)}" title="${esc(TEXT.measures)}">${icon('ruler', slash)}</button>
             <button type="button" class="ricon" data-map-area aria-pressed="${mapView.area}" aria-label="${esc(TEXT.areaBtn)}" title="${esc(TEXT.areaBtn)}">${icon('area', slash)}</button>
@@ -472,15 +472,12 @@
         }
     }
 
-    // Las zonas que guardan algo (categorías o códigos), en orden natural (Zona 2 antes que Zona 10); lo demás (recepción, oficinas, pasillos…) se ve en Datos métricos.
-    function holdingZones(data) {
-        const codes = data.zoneCodes || {};
-        return (data.layout.zones || [])
-            .filter((z) => (Array.isArray(z.categories) && z.categories.length) || codes[z.id] > 0)
-            .sort((a, b) => String(a.name).localeCompare(String(b.name), LANG, { numeric: true }));
+    // Todas las zonas del croquis (las mismas que se ven dibujadas), en orden natural (Zona 2 antes que Zona 10); cada una con su tipo y los códigos que ya guarda.
+    function listedZones(data) {
+        return (data.layout.zones || []).slice().sort((a, b) => String(a.name).localeCompare(String(b.name), LANG, { numeric: true }));
     }
     function zonesSectionHtml(data) {
-        const list = holdingZones(data);
+        const list = listedZones(data);
         if (!list.length) return '';
         const codes = data.zoneCodes || {};
         const total = list.reduce((acc, z) => acc + (codes[z.id] || 0), 0);
