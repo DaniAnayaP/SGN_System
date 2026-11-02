@@ -19,7 +19,7 @@
             home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
             rotate: 'Girar el croquis', measures: 'Medidas', areaBtn: 'm² de las zonas', layers: 'Capas del croquis', mapToggle: 'Croquis',
             search: 'Buscar', searchAll: 'Buscar en todo el Layout', searchIn: 'Buscar en {z}', searchClear: 'Borrar', searchTypes: 'Buscar en', searchFieldsAll: 'Todos', searchSelected: '{n} elegidos', searchField: { zone: 'Zona', furniture: 'Mobiliario', place: 'Ubicación', sku: 'SKU', desc: 'Descripción', cat: 'Categoría' },
-            groupAlways: 'Siempre', groupMap: 'Croquis', namesBtn: 'Nombres de las zonas', spaceType: { rack: 'Anaquel', rackpal: 'Rack', cabinet: 'Gabeta', pallet: 'Tarima en piso' },
+            searchClose: 'Cerrar', groupMap: 'Croquis', namesBtn: 'Nombres de las zonas', spaceType: { rack: 'Anaquel', rackpal: 'Rack', cabinet: 'Gabeta', pallet: 'Tarima en piso' },
             searchMode: 'Tipo de Filtro', searchModes: { startsWith: 'Inicia con', contains: 'Contiene', equals: 'Igual que' },
             searchSigns: 'Signos de búsqueda', searchSign: { before: 'Antes', after: 'Después', comma: 'Otra búsqueda' }, searchSignOff: 'No aplica con este tipo de filtro',
             searchSignHelp: { before: 'Otra palabra ANTES · rack$cajón', after: 'Otra palabra DESPUÉS · rack@cajón', comma: 'Sirve cualquiera de las dos · rack, estante' },
@@ -45,7 +45,7 @@
             home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
             rotate: 'Rotate the sketch', measures: 'Measures', areaBtn: 'Zone m²', layers: 'Sketch layers', mapToggle: 'Sketch',
             search: 'Search', searchAll: 'Search the whole Layout', searchIn: 'Search in {z}', searchClear: 'Clear', searchTypes: 'Search in', searchFieldsAll: 'All', searchSelected: '{n} selected', searchField: { zone: 'Zone', furniture: 'Furniture', place: 'Location', sku: 'SKU', desc: 'Description', cat: 'Category' },
-            groupAlways: 'Always', groupMap: 'Sketch', namesBtn: 'Zone names', spaceType: { rack: 'Rack (shelf)', rackpal: 'Pallet rack', cabinet: 'Cabinet', pallet: 'Floor pallet' },
+            searchClose: 'Close', groupMap: 'Sketch', namesBtn: 'Zone names', spaceType: { rack: 'Rack (shelf)', rackpal: 'Pallet rack', cabinet: 'Cabinet', pallet: 'Floor pallet' },
             searchMode: 'Filter type', searchModes: { startsWith: 'Starts with', contains: 'Contains', equals: 'Equal to' },
             searchSigns: 'Search signs', searchSign: { before: 'Before', after: 'After', comma: 'Another search' }, searchSignOff: 'Not available with this filter type',
             searchSignHelp: { before: 'Another word BEFORE · rack$drawer', after: 'Another word AFTER · rack@drawer', comma: 'Either one matches · rack, shelf' },
@@ -257,9 +257,10 @@
         // Datos métricos y Distribución solo están en el Layout general; en una zona o categoría solo se ofrece el del croquis.
         const general = !searchPageZone();
         const toggle = (key, label, glyph) => `<button type="button" class="ricon" data-page-toggle="${key}" aria-pressed="${pageView[key]}" aria-label="${esc(label)}" title="${esc(label)}">${icon(glyph, slash)}</button>`;
-        // Dos grupos: «Siempre» (solo la lupa) y «Croquis» (los tres que muestran u ocultan bloques y los del dibujo). Al ocultar el croquis se van los del dibujo (clase draw) y quedan los tres de bloques.
+        // Arriba, una barra «Buscar» de ancho completo (así no queda un hueco en blanco cuando el grupo Croquis salta de línea) y, abajo, el grupo «Croquis» (los tres que muestran u ocultan bloques y los del dibujo).
+        // Al ocultar el croquis se van los del dibujo (clase draw) y quedan los tres de bloques. La barra abre y cierra el buscador (con el buscador abierto dice «Cerrar»).
         return `<div class="maptools-row"><div class="tgroups">
-            <div class="tgrp"><span class="tgl">${esc(TEXT.groupAlways)}</span><button type="button" class="ricon" data-map-search aria-expanded="false" aria-controls="search-panel" aria-label="${esc(TEXT.search)}" title="${esc(TEXT.search)}">${icon('search')}</button></div>
+            <button type="button" class="sbar" data-map-search aria-expanded="false" aria-controls="search-panel" aria-label="${esc(TEXT.search)}" title="${esc(TEXT.search)}">${icon('search')}<span class="t">${esc(general ? TEXT.searchAll : fill(TEXT.searchIn, { z: searchPageZone().name }))}</span><span class="go off">${esc(TEXT.search)}</span><span class="go on">${esc(TEXT.searchClose)}</span></button>
             <div class="tgrp tmap"><span class="tgl">${esc(TEXT.groupMap)}</span>
             ${toggle('map', TEXT.mapToggle, 'map')}${general ? `${toggle('metrics', TEXT.metrics, 'chart')}${listedZones(view.data).length ? toggle('zones', TEXT.zones, 'layers') : ''}` : ''}
             <span class="tsep draw"></span>

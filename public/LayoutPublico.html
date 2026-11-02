@@ -132,7 +132,15 @@
         mark.aux{ background:transparent; box-shadow:0 0 0 1px var(--brand-line, #f1df7c); }
         .searching .zextra{ display:none; }
         .nomap .map, .nomap .lpills, .nomap .draw{ display:none; }
-        /* los botones de arriba en dos grupos: Siempre (la lupa) y Croquis (todo lo demás; al ocultar el croquis se van los del dibujo) */
+        /* arriba: la barra Buscar de ancho completo y el grupo Croquis (todo lo demás; al ocultar el croquis se van los del dibujo) */
+        .sbar{ flex:1 1 100%; display:flex; align-items:center; gap:10px; min-width:0; padding:10px 14px; border:1.5px solid var(--brand, var(--accent-2)); border-radius:14px; background:#fff; color:var(--text-muted); font:inherit; font-size:14px; text-align:left; cursor:pointer; }
+        .sbar svg{ width:18px; height:18px; stroke:var(--brand, var(--accent-2)); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+        .sbar .t{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .sbar .go{ flex:none; font-size:11.5px; font-weight:700; color:var(--brand, var(--accent-2)); white-space:nowrap; }
+        .sbar .go.on, .sbar[aria-expanded="true"] .go.off{ display:none; }
+        .sbar[aria-expanded="true"] .go.on{ display:inline; }
+        .sbar[aria-expanded="true"]{ background:var(--brand-soft, #eef0fd); box-shadow:0 0 0 1.5px var(--brand, var(--accent-2)); }
+        .sbar:focus-visible{ outline:2px solid var(--brand, var(--accent-2)); outline-offset:2px; }
         .tgroups{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; }
         .tgrp{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:4px 8px 4px 12px; border:1px solid var(--brand-line, var(--border)); border-radius:24px; background:#fff; }
         .tgrp.tmap{ background:var(--brand-soft, #eef0fd); border-color:var(--brand, var(--accent-2)); }
