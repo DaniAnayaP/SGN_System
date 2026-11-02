@@ -16,6 +16,7 @@
             metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
             restRow: 'Sin zona (espacio muerto)', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos',
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
+            home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
             rotate: 'Girar el croquis', measures: 'Medidas', areaBtn: 'm² de las zonas', layers: 'Capas del croquis',
             layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Anaqueles y gabetas' },
             zone: { dry: 'Seco', cold: 'Refrigerado', chemical: 'Químicos', finished: 'Producto terminado', dock: 'Andén', office: 'Oficina', aisle: 'Pasillo principal', aisle2: 'Pasillo entre anaqueles' },
@@ -29,6 +30,7 @@
             metrics: 'Metric data', metricsHint: '{n} m² of total area and more', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
             restRow: 'No zone (dead space)', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes',
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
+            home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
             rotate: 'Rotate the sketch', measures: 'Measures', areaBtn: 'Zone m²', layers: 'Sketch layers',
             layer: { contorno: 'Outline', puertas: 'Doors', luz: 'Power connections', zonas: 'Zones', espacios: 'Racks and cabinets' },
             zone: { dry: 'Dry', cold: 'Refrigerated', chemical: 'Chemicals', finished: 'Finished goods', dock: 'Dock', office: 'Office', aisle: 'Main aisle', aisle2: 'Aisle between racks' },
@@ -50,6 +52,19 @@
     function renderState(message) {
         document.getElementById('wrap').innerHTML = `<div class="state">${esc(message)}</div>`;
     }
+
+    // Dónde está quien escanea: ?z=<zona> es la página de esa zona; ?z=&c= (a mano) o ?z=&k= (del catálogo) es una categoría de esa zona. Sin ?z es el Layout general.
+    function scanContext(data) {
+        const params = new URLSearchParams(window.location.search);
+        const zone = (data.layout.zones || []).find((z) => z.id === params.get('z')) || null;
+        return { zone, c: zone ? params.get('c') : null, k: zone ? params.get('k') : null };
+    }
+    // El recorrido de arriba: cada nivel se toca para subir (Distribución = el Layout general con la lista de zonas abierta).
+    const zoneHref = (zone) => `${window.location.pathname}?z=${encodeURIComponent(zone.id)}`;
+    function crumbsHtml(parts) {
+        return `<nav class="crumbs" aria-label="${esc(TEXT.here)}">${parts.map(([label, href], i) => `${href ? `<a href="${esc(href)}">${esc(label)}</a>` : `<b>${esc(label)}</b>`}${i < parts.length - 1 ? '<span aria-hidden="true">›</span>' : ''}`).join('')}</nav>`;
+    }
+    const upCrumbs = (zone, last) => [[TEXT.zones, `${window.location.pathname}#distribucion`], ...(last ? [[zone.name, zoneHref(zone)], [last]] : [[zone.name]])];
 
     // El QR de una categoría trae ?z=<zona>&c=<categoría>: arriba se muestra esa categoría (sus códigos llegan después).
     function categoryBanner(data) {
@@ -75,7 +90,13 @@
             const cat = await res.json();
             const look = window.LayoutCalc.categoryLook(cat.seed);
             const count = cat.codes === 1 ? TEXT.codesOne : TEXT.codesMany.replace('{n}', fmt(cat.codes));
-            slot.innerHTML = `<div class="catbanner" style="border-left-color:${esc(look.color)}"><span class="catmark" style="background:${esc(look.color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">${window.LayoutMapSvg.categoryGlyph(look.icon, '#FFFFFF', 2)}</svg></span><div><div class="cattitle">${esc(cat.name)}</div><div class="catsub">${esc(cat.zoneName)} · ${esc(count)}</div>${cat.codes ? '' : `<p class="catnote">${esc(TEXT.noCodes)}</p>`}</div></div>`;
+            const zoneObj = view.data && (view.data.layout.zones || []).find((z) => z.id === params.get('z'));
+            if (zoneObj) {
+                // el croquis sombrea la zona de esa categoría con su color
+                viewFocus.value = { zones: { [zoneObj.id]: look.color } };
+                redrawMap(view.data);
+            }
+            slot.innerHTML = `${zoneObj ? crumbsHtml(upCrumbs(zoneObj, cat.name)) : ''}<div class="catbanner" style="border-left-color:${esc(look.color)}"><span class="catmark" style="background:${esc(look.color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">${window.LayoutMapSvg.categoryGlyph(look.icon, '#FFFFFF', 2)}</svg></span><div><div class="cattitle">${esc(cat.name)}</div><div class="catsub">${esc(cat.zoneName)} · ${esc(count)}</div>${cat.codes ? '' : `<p class="catnote">${esc(TEXT.noCodes)}</p>`}</div></div>`;
         } catch (err) {
             console.error('Layout público: no se pudo leer la categoría', err);
         }
@@ -172,6 +193,7 @@
     const ICONS = {
         ruler: '<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>',
         layers: '<path d="M12 3l9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/>',
+        home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
         rotate: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>',
         area: '<rect x="4" y="4" width="16" height="16" rx="2"/><text x="12" y="15.2" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">m²</text>',
     };
@@ -180,6 +202,8 @@
     // como le conviene; al escanear de nuevo todo vuelve a como se guardó. Contorno siempre se ve; las conexiones de luz salen apagadas hasta que se prende su capa.
     const LAYER_KEYS = ['contorno', 'puertas', 'luz', 'zonas', 'espacios'];
     const mapView = { layers: ['contorno', 'puertas', 'zonas', 'espacios'], measures: true, area: true, rotation: 0 };
+    // Lo que se está buscando en el croquis ({ zones: { id: color } }): la zona de la categoría que se escaneó sale sombreada y el resto tenue.
+    const viewFocus = { value: null };
     function mapToolbarHtml() {
         const icon = (name, extra = '') => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}${extra}</svg>`;
         const slash = '<path class="slash" d="M4 20L20 4"/>';
@@ -192,7 +216,7 @@
     }
     function mapInnerHtml(data) {
         const theme = window.LayoutMapSvg.theme(data.companyColor);
-        return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, layers: mapView.layers, measures: mapView.measures, area: mapView.area, rotation: mapView.rotation })}${mapToolsHtml()}`;
+        return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, layers: mapView.layers, measures: mapView.measures, area: mapView.area, rotation: mapView.rotation, focus: viewFocus.value })}${mapToolsHtml()}`;
     }
     // El croquis se vuelve a dibujar con los botones; el contenedor es nuevo para que el zoom empiece limpio y no se acumulen sus escuchas.
     function redrawMap(data) {
@@ -208,9 +232,11 @@
     const brandBar = (data) => {
         const initials = (data.companyName || '').trim().slice(0, 2).toUpperCase() || '··';
         const mark = data.hasLogo ? `<img class="brand-logo" src="/api/public/layout/${encodeURIComponent(publicToken())}/logo" alt="">` : `<span class="brand-mark">${esc(initials)}</span>`;
+        // Fuera del Layout general (una zona, una categoría…) el icono de casa regresa al Layout general desde cualquier nivel.
+        const home = scanContext(data).zone ? `<a class="hbtn" href="${esc(window.location.pathname)}" aria-label="${esc(TEXT.home)}" title="${esc(TEXT.home)}">${iconSvg('home')}</a>` : '';
         // Con Sitio guardado, lo fuerte va arriba (el Sitio) y lo débil abajo (el nombre de la empresa), igual que en el reporte y la tarjeta.
-        if (data.siteName) return `<div class="brand">${mark}<div class="brand-names"><span class="brand-site">${esc(data.siteName)}</span><span class="brand-name weak">${esc(data.companyName)}</span></div></div>`;
-        return `<div class="brand">${mark}<span class="brand-name">${esc(data.companyName)}</span></div>`;
+        if (data.siteName) return `<div class="brand">${mark}<div class="brand-names"><span class="brand-site">${esc(data.siteName)}</span><span class="brand-name weak">${esc(data.companyName)}</span></div>${home}</div>`;
+        return `<div class="brand">${mark}<span class="brand-name">${esc(data.companyName)}</span>${home}</div>`;
     };
     // El título de la página es el Sitio (p. ej. CEDIS CHIHUAHUA); sin Sitio guardado queda "Layout de la nave" como siempre.
     const pageTitle = (data) => data.siteName || TEXT.title;
@@ -239,26 +265,56 @@
         if (!list.length) return '';
         const codes = data.zoneCodes || {};
         const total = list.reduce((acc, z) => acc + (codes[z.id] || 0), 0);
-        const rows = list.map((z) => `<div class="zrow"><b>${esc(z.name)}</b><span class="zc"><i>${fmt(codes[z.id] || 0)}</i> ${esc(codes[z.id] === 1 ? TEXT.codeWordOne : TEXT.codeWordMany)}</span></div>`).join('');
+        const rows = list.map((z) => `<a class="zrow" href="${esc(zoneHref(z))}"><b>${esc(z.name)}</b><span class="zc"><i>${fmt(codes[z.id] || 0)}</i> ${esc(codes[z.id] === 1 ? TEXT.codeWordOne : TEXT.codeWordMany)}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
         return `<button type="button" class="mbtn" data-zones-toggle aria-expanded="false" aria-controls="zones-list">${iconSvg('layers')}<span class="t"><b>${esc(TEXT.zones)}</b><small>${esc(TEXT.zonesHint.replace('{z}', fmt(list.length)).replace('{c}', fmt(total)))}</small></span><span class="go" aria-hidden="true">›</span></button>
             <div id="zones-list" class="zlist" hidden>${rows}</div>`;
     }
 
+    // La página de una zona (?z=<zona>): su nombre, su tipo y sus metros, y las categorías que guarda; cada una abre su propia página.
+    function zonePageHtml(data, zone, color) {
+        const info = (data.kpis.zones || []).find((z) => z.id === zone.id);
+        const cats = Array.isArray(zone.categories) ? zone.categories : [];
+        const kind = info && info.type ? (TEXT.zone[info.type] || info.type) : TEXT.noZone;
+        const rows = cats.map((c) => `<a class="crow" href="${esc(`${zoneHref(zone)}&c=${encodeURIComponent(c.id)}`)}"><span class="cmark sm" style="background:${esc(c.color)}"><svg viewBox="0 0 24 24" aria-hidden="true">${window.LayoutMapSvg.categoryGlyph(c.icon, '#FFFFFF', 2)}</svg></span><span class="ctx"><b>${esc(c.name)}</b>${c.desc ? `<small>${esc(c.desc)}</small>` : ''}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
+        return `${crumbsHtml(upCrumbs(zone))}
+            <div class="catbanner" style="border-left-color:${esc(color)}"><span class="catmark" style="background:${esc(color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS.layers}</g></svg></span><div><div class="cattitle">${esc(zone.name)}</div><div class="catsub">${esc(kind)}${info ? ` · ${esc(fmt(info.area))} m²` : ''}</div></div></div>
+            ${mapToolbarHtml()}<div class="map">${mapInnerHtml(data)}</div>
+            <h2>${esc(TEXT.categories)}</h2>${rows || `<p class="emptynote">${esc(TEXT.noCats)}</p>`}`;
+    }
+
     function render(data) {
         const theme = window.LayoutMapSvg.theme(data.companyColor);
+        const ctx = scanContext(data);
         document.title = pageTitle(data);
-        document.getElementById('wrap').innerHTML = `
-            ${brandBar(data)}
-            ${categoryBanner(data)}<div id="catslot"></div>
-            <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${versionLine(data)}</p></div>
-            ${mapToolbarHtml()}
-            <div class="map">${mapInnerHtml(data)}</div>
-            <a class="mbtn" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
-            ${zonesSectionHtml(data)}
-            <div class="footer">${esc(TEXT.footer)}</div>`;
+        const cat = ctx.zone && ctx.c ? (ctx.zone.categories || []).find((c) => c.id === ctx.c) : null;
+        const zonePage = !!ctx.zone && !ctx.c && !ctx.k;
+        // lo que se escaneó se sombrea en el croquis con su color (la zona; los anaqueles se suman cuando se sepa en cuáles está)
+        const zoneColor = theme.custom ? theme.chrome.badge : '#6C7CF0';
+        viewFocus.value = zonePage ? { zones: { [ctx.zone.id]: zoneColor } } : (cat ? { zones: { [ctx.zone.id]: cat.color } } : null);
+        let body;
+        if (zonePage) {
+            body = zonePageHtml(data, ctx.zone, zoneColor);
+        } else if (ctx.zone) {
+            // una categoría de esa zona: su recorrido, su banner y el croquis; el Layout general queda a un toque (icono de casa y "Distribución")
+            body = `${cat ? crumbsHtml(upCrumbs(ctx.zone, cat.name)) : ''}${categoryBanner(data)}<div id="catslot"></div>
+                ${mapToolbarHtml()}<div class="map">${mapInnerHtml(data)}</div>`;
+        } else {
+            body = `${categoryBanner(data)}<div id="catslot"></div>
+                <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${versionLine(data)}</p></div>
+                ${mapToolbarHtml()}
+                <div class="map">${mapInnerHtml(data)}</div>
+                <a class="mbtn" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
+                ${zonesSectionHtml(data)}`;
+        }
+        document.getElementById('wrap').innerHTML = `${brandBar(data)}${body}<div class="footer">${esc(TEXT.footer)}</div>`;
         enableMapZoom();
         loadZoneCategoryBanner();
         applyBrand(theme);
+        // "Distribución" en el recorrido regresa al Layout general con la lista de zonas ya abierta
+        if (!ctx.zone && window.location.hash === '#distribucion') {
+            const toggle = document.querySelector('[data-zones-toggle]');
+            if (toggle) { toggle.setAttribute('aria-expanded', 'true'); document.getElementById('zones-list').hidden = false; toggle.scrollIntoView({ block: 'start' }); }
+        }
     }
 
     // Datos métricos: las cifras de siempre; al tocar una, abajo salen solo las zonas que la forman (LayoutCalc.metricRows), con sus metros y la suma.
@@ -296,7 +352,7 @@
         const m = /^#datos-metricos(?:\/([a-z]+))?$/.exec(window.location.hash);
         if (m) renderMetrics(data, window.LayoutCalc.METRIC_KEYS.includes(m[1]) ? m[1] : 'total');
         else render(data);
-        window.scrollTo(0, 0);
+        if (window.location.hash !== '#distribucion') window.scrollTo(0, 0);
     }
     window.addEventListener('hashchange', route);
     document.getElementById('wrap').addEventListener('click', (event) => {

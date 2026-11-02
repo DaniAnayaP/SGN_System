@@ -118,6 +118,12 @@
         const M = 34;
         // options.layers = los pasos activos del croquis (contorno, puertas, luz, zonas, espacios); sin él se dibuja todo. options.measures = false quita las medidas y options.area = false los m² de cada zona.
         const on = (key) => !Array.isArray(options.layers) || options.layers.includes(key);
+        // options.focus = lo que se está buscando (al escanear una categoría, una clasificación o un código): { zones: { idDeZona: color }, spaces: { idDeEspacio: color } }.
+        // Esas zonas salen sombreadas con su color y esos anaqueles rellenos; todo lo demás se ve tenue. Sin focus el croquis se dibuja como siempre.
+        const focus = options.focus && typeof options.focus === 'object' ? options.focus : null;
+        const focusZones = (focus && focus.zones) || {};
+        const focusSpaces = (focus && focus.spaces) || {};
+        const hasFocusSpaces = Object.keys(focusSpaces).length > 0;
         const xs = layout.vertices.map((p) => p[0]);
         const ys = layout.vertices.map((p) => p[1]);
         const x0 = Math.min(...xs); const x1 = Math.max(...xs); const y0 = Math.min(...ys); const y1 = Math.max(...ys);
@@ -136,6 +142,8 @@
         (on('zonas') ? (layout.zones || []) : []).forEach((z) => {
             const c = z.type ? (T.types[z.type] || T.types.dock) : T.types.none;
             const style = `fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`;
+            const shapeFrom = s.length;
+            const labelsFrom = zoneLabels.length;
             if (LC.hasPoints(z)) {
                 // Zona de cualquier forma: se dibuja con sus esquinas y el nombre va en el punto más holgado de adentro.
                 s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<polygon points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" stroke-linejoin="round" ${style}/>`;
@@ -150,6 +158,16 @@
                 const anchor = spot.right ? 'end' : 'start';
                 zoneLabels += `<text x="${tx}" y="${ty}" font-size="10" font-weight="600" fill="#14161F" text-anchor="${anchor}" ${halo}>${esc(z.name)}</text>`;
                 if (options.area !== false && z.w * sc > 26) zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`;
+            }
+            if (focus) {
+                if (focusZones[z.id]) {
+                    // la zona buscada: se sombrea con su color encima de su relleno
+                    const pts = (LC.hasPoints(z) ? z.pts : LC.zonePoints(z)).map((p) => `${X(p[0])},${Y(p[1])}`).join(' ');
+                    s += `<polygon points="${pts}" fill="${esc(focusZones[z.id])}" fill-opacity="0.5" stroke="${esc(focusZones[z.id])}" stroke-width="3" stroke-linejoin="round"/>`;
+                } else {
+                    s = `${s.slice(0, shapeFrom)}<g opacity="0.28">${s.slice(shapeFrom)}</g>`;
+                    zoneLabels = `${zoneLabels.slice(0, labelsFrom)}<g opacity="0.4">${zoneLabels.slice(labelsFrom)}</g>`;
+                }
             }
         });
         // La medida real de cada lado va escrita: afuera en las paredes de la nave y adentro en cada zona (solo si el lado se ve de largo suficiente).
@@ -170,8 +188,10 @@
         (on('espacios') ? (layout.spaces || []) : []).forEach((sp) => {
             const w = Math.max(sp.l * sc, 4);
             const h = Math.max(sp.d * sc, 4);
-            s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="#FFFFFF" stroke="${T.chrome.line}" stroke-width="1"/>`;
-            if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="600" fill="${T.chrome.cardInk}" text-anchor="middle">${esc(sp.code)}</text>`;
+            const hit = focusSpaces[sp.id];
+            const dim = hasFocusSpaces && !hit;
+            s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="${hit ? esc(hit) : '#FFFFFF'}" stroke="${hit ? esc(hit) : T.chrome.line}" stroke-width="${hit ? 2.2 : 1}"${dim ? ' opacity="0.3"' : ''}/>`;
+            if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="${hit ? 800 : 600}" fill="${hit ? '#FFFFFF' : T.chrome.cardInk}" text-anchor="middle"${dim ? ' opacity="0.4"' : ''}>${esc(sp.code)}</text>`;
         });
         s += zoneLabels + measureLabels;
         (on('puertas') ? (layout.doors || []) : []).forEach((d) => {
