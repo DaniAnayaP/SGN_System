@@ -6901,6 +6901,35 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 @media (min-width: 1100px){
     .layout-studio{
         grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        align-items: stretch;
+    }
+    /* El formulario no crece hacia abajo con cada renglón: el panel mide a lo sumo lo que la ventana, los pasos se quedan arriba y solo se desliza el paso de abajo (con su barra);
+       el croquis se estira a la misma altura y su dibujo queda centrado, así abajo del croquis no sobra un hueco. */
+    .layout-panel{
+        max-height: calc(100vh - 9rem);
+    }
+    .layout-panel .layout-steps{
+        flex: none;
+    }
+    .layout-panel .layout-section{
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        padding-right: 0.4rem;
+        scrollbar-width: thin;
+    }
+    .layout-canvas{
+        display: flex;
+        flex-direction: column;
+    }
+    .layout-canvas .layout-canvas-body{
+        flex: 1 1 auto;
+    }
+    .layout-canvas .layout-map{
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
 }
 .layout-panel, .layout-canvas{
@@ -6977,6 +7006,18 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 }
 .layout-scroll{
     overflow-x: auto;
+}
+/* Las tablas del panel no crecen hacia abajo con cada renglón: miden a lo sumo unos 9 renglones y de ahí se deslizan dentro de su caja (con su barra), con el encabezado fijo arriba.
+   Con pocos renglones la caja se queda del tamaño de la tabla. */
+.layout-panel .layout-scroll{
+    flex: none;
+    max-height: 20rem;
+}
+.layout-panel .layout-scroll .layout-table thead th{
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-surface);
 }
 .layout-table{
     border-collapse: collapse;

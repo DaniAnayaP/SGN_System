@@ -484,7 +484,12 @@ function pressStep(step) {
     const next = [...state.focusStack].reverse().find(stepOn) || state.steps[0];
     focusStep(next);
 }
+// El panel se dibuja completo en cada cambio: se recuerda cuánto se había deslizado el paso y cada tabla (para volver ahí), o se baja hasta el final cuando se acaba de agregar un renglón (para verlo).
+let panelScrollStep = '';
+let panelScrollEnd = false;
+const panelScrollers = () => Array.from(document.querySelectorAll('#layout-panel .layout-section, #layout-panel .layout-scroll'));
 function renderPanel() {
+    const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
     const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
     const level = sectionLevel(s);
@@ -494,6 +499,9 @@ function renderPanel() {
         ${stepHtml(s)}
     </div>`;
     $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${tabs}</div>${section}`;
+    panelScrollers().forEach((el, i) => { el.scrollTop = panelScrollEnd ? el.scrollHeight : (keepTops[i] || 0); });
+    panelScrollEnd = false;
+    panelScrollStep = state.focus;
     bindLayoutFilters();
 }
 
@@ -988,7 +996,7 @@ $('layout-panel').addEventListener('click', (event) => {
     const cmode = event.target.closest('[data-cmode]');
     if (cmode) { state.contornoMode = cmode.dataset.cmode; renderPanel(); return; }
     const sadd = event.target.closest('[data-sadd]');
-    if (sadd) { addSide(sadd.dataset.sadd); renderPanel(); refreshLive(); return; }
+    if (sadd) { addSide(sadd.dataset.sadd); panelScrollEnd = true; renderPanel(); refreshLive(); return; }
     const sdel = event.target.closest('[data-sdel]');
     if (sdel) {
         const v = sdel.dataset.sdel;
@@ -1069,6 +1077,7 @@ $('layout-panel').addEventListener('click', (event) => {
         state.draft.zones.push(z);
         state.open.zones[z.id] = true;
         state.zoneOpen = z.id;
+        panelScrollEnd = true;
         renderPanel();
         refreshLive();
         return;
@@ -1079,6 +1088,7 @@ $('layout-panel').addEventListener('click', (event) => {
         if (list === 'zones') clearLayoutFilters();
         state.draft[list].push(ROW_FACTORY[list]());
         if (list === 'vertices') state.open.contorno = false;
+        panelScrollEnd = true;
         renderPanel();
         refreshLive();
         return;
