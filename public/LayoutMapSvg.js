@@ -139,9 +139,11 @@
         // El nombre y los m² de cada zona van al final (encima de anaqueles y paredes), con un contorno blanco, y en la esquina que no tape ningún espacio.
         // El contorno blanco va en una capa APARTE (un texto duplicado solo con trazo) y TODOS los contornos se dibujan antes que TODOS los textos: así ningún contorno puede borrar el
         // nombre de otra zona y no se depende de paint-order, que algunos navegadores de celular aplican mal a textos chicos.
+        // El contorno son 8 copias del texto en blanco, corridas 1.5 hacia cada lado: solo usan el relleno, que se pinta igual en todos los navegadores (el trazo de un texto sin relleno no se veía en el celular).
+        const HALO_STEPS = [[-1.5, 0], [1.5, 0], [0, -1.5], [0, 1.5], [-1.1, -1.1], [1.1, -1.1], [-1.1, 1.1], [1.1, 1.1]];
         const labelText = (x, y, size, weight, fill, anchor, text) => {
-            const attrs = `x="${x}" y="${y}" font-size="${size}"${weight ? ` font-weight="${weight}"` : ''} text-anchor="${anchor}"`;
-            return { halo: `<text ${attrs} fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">${text}</text>`, main: `<text ${attrs} fill="${fill}">${text}</text>` };
+            const attrs = (dx, dy) => `x="${(Number(x) + dx).toFixed(1)}" y="${(Number(y) + dy).toFixed(1)}" font-size="${size}"${weight ? ` font-weight="${weight}"` : ''} text-anchor="${anchor}"`;
+            return { halo: HALO_STEPS.map(([dx, dy]) => `<text ${attrs(dx, dy)} fill="#FFFFFF">${text}</text>`).join(''), main: `<text ${attrs(0, 0)} fill="${fill}">${text}</text>` };
         };
         let zoneLabels = '';
         let zoneHalos = '';
