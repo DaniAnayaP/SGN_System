@@ -287,7 +287,10 @@
         const headH = 14 * f;
         const perCol = Math.ceil(n / cols) || 1;
         const frameH = bottom - areaTop;
-        const rowH = Math.min(78 * f, (frameH - headH - 2 * pad) / perCol);
+        // Con dos o más categorías el marco se reparte entre ellas: con 2, mitades; con 3, tercios; con 4, cuartos… y cada una usa su parte completa (antes cada fila tenía un alto fijo y
+        // abajo sobraba espacio). En una hoja ancha con 2 categorías cada una es una columna: el nombre arriba y su QR grande debajo.
+        const rowH = n > 1 ? (frameH - headH - 2 * pad) / perCol : Math.min(78 * f, (frameH - headH - 2 * pad) / perCol);
+        const asColumns = n > 1 && wide && perCol === 1;
         const frameTop = areaTop;
         // card.align === 'center': CATEGORÍA / BÚSCAME se queda arriba y los renglones se centran en lo que queda libre del contorno (con muchas categorías no queda espacio y no se nota).
         const shiftY = card.align === 'center' ? Math.max(0, (frameH - 2 * pad - headH - perCol * rowH) / 2) : 0;
@@ -305,16 +308,39 @@
             const row = i % perCol;
             const x0 = m + pad + col * (colW + gap);
             const y = top + shiftY + row * rowH;
-            const isz = Math.min(34 * f, rowH * 0.56);
-            const qs = Math.min(rowH - 10 * f, 76 * f);
+            const tint = `rtint${String(cat.color).replace(/[^0-9a-fA-F]/g, '')}`;
+            if (asColumns) {
+                // una columna por categoría: el nombre arriba sobre su color suave y el QR centrado debajo, tan grande como alcance
+                const panelH = Math.min(rowH * 0.34, 58 * f);
+                s += `<defs><linearGradient id="${tint}c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${esc(cat.color)}" stop-opacity="0.26"/><stop offset="1" stop-color="${esc(cat.color)}" stop-opacity="0.07"/></linearGradient></defs>`;
+                s += `<rect x="${x0}" y="${y + 4 * f}" width="${colW}" height="${panelH}" rx="${9 * f}" fill="url(#${tint}c)"/>`;
+                const csz = Math.min(30 * f, panelH * 0.62);
+                const cName = Math.min(17 * f, ((colW - csz - 30 * f) / Math.max(cat.name.length, 1)) * 1.75, panelH * 0.3);
+                const blockW = csz + 10 * f + Math.min(colW - csz - 24 * f, cat.name.length * cName * 0.62);
+                const bx = x0 + (colW - blockW) / 2;
+                const cy = y + 4 * f + panelH / 2;
+                s += `<rect x="${bx}" y="${cy - csz / 2}" width="${csz}" height="${csz}" rx="${csz * 0.24}" fill="${esc(cat.color)}"/><g transform="translate(${bx + csz * 0.2},${cy - csz * 0.3}) scale(${(csz * 0.6) / 24})">${window.LayoutMapSvg.categoryGlyph(cat.icon, '#FFFFFF', 2.2)}</g>`;
+                s += `<text x="${bx + csz + 10 * f}" y="${cy + (cat.desc ? -1 * f : cName * 0.32)}" font-size="${cName}" font-weight="700" fill="${ink}">${esc(cat.name)}</text>`;
+                if (cat.desc) s += `<text x="${bx + csz + 10 * f}" y="${cy + 10 * f}" font-size="${7.6 * f}" fill="#3F435D">${esc(cat.desc)}</text>`;
+                const qTop = y + 4 * f + panelH + 8 * f;
+                const rest = y + rowH - 6 * f - qTop;
+                const cqs = Math.min(rest, colW * 0.62);
+                s += qrPath(cat.qrRows, x0 + (colW - cqs) / 2, qTop + (rest - cqs) / 2, cqs, '#FFFFFF', 0);
+                return;
+            }
+            // filas parejas: cada categoría usa su parte completa del marco, con un fondo suave de su color; el nombre a la izquierda y el QR grande a la derecha
+            const isz = Math.min(40 * f, rowH * 0.36);
+            const qs = Math.min(rowH - 14 * f, colW * 0.4);
+            s += `<defs><linearGradient id="${tint}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${esc(cat.color)}" stop-opacity="0.22"/><stop offset="1" stop-color="${esc(cat.color)}" stop-opacity="0.05"/></linearGradient></defs>`;
+            s += `<rect x="${x0}" y="${y + 3 * f}" width="${colW}" height="${rowH - 6 * f}" rx="${8 * f}" fill="url(#${tint})"/>`;
             s += `<rect x="${x0}" y="${y + f}" width="${4 * f}" height="${rowH - 2 * f}" fill="${esc(cat.color)}"/>`;
             s += `<rect x="${x0 + 14 * f}" y="${y + rowH / 2 - isz / 2}" width="${isz}" height="${isz}" rx="${isz * 0.24}" fill="${esc(cat.color)}"/>`;
             s += `<g transform="translate(${x0 + 14 * f + isz * 0.2},${y + rowH / 2 - isz * 0.3}) scale(${(isz * 0.6) / 24})">${window.LayoutMapSvg.categoryGlyph(cat.icon, '#FFFFFF', 2.2)}</g>`;
             const tx = x0 + 14 * f + isz + 12 * f;
-            const nameMax = (colW - (tx - x0) - qs - 12 * f) / Math.max(cat.name.length, 1) * 1.7;
-            s += `<text x="${tx}" y="${y + rowH / 2 - 1 * f}" font-size="${Math.min(13.5 * f, nameMax)}" font-weight="700" fill="${ink}">${esc(cat.name)}</text>`;
+            const nameMax = (colW - (tx - x0) - qs - 16 * f) / Math.max(cat.name.length, 1) * 1.45;
+            s += `<text x="${tx}" y="${y + rowH / 2 - 1 * f}" font-size="${Math.min(17 * f, nameMax)}" font-weight="700" fill="${ink}">${esc(cat.name)}</text>`;
             if (cat.desc) s += `<text x="${tx}" y="${y + rowH / 2 + 12 * f}" font-size="${7.6 * f}" fill="#3F435D">${esc(cat.desc)}</text>`;
-            s += qrPath(cat.qrRows, x0 + colW - qs, y + (rowH - qs) / 2, qs, '#FFFFFF', 0);
+            s += qrPath(cat.qrRows, x0 + colW - qs - 6 * f, y + (rowH - qs) / 2, qs, '#FFFFFF', 0);
             s += `<line x1="${x0}" y1="${y + rowH}" x2="${x0 + colW}" y2="${y + rowH}" stroke="#D9DBE5" stroke-width="${f}"/>`;
         });
         if (single) {
