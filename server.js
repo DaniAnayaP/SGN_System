@@ -6088,7 +6088,7 @@ app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
     }
     const input = req.body && req.body.rows;
     if (!Array.isArray(input) || !input.length) return res.status(400).json({ message: 'No hay filas para cargar.' });
-    if (input.length > SkuTemplate.MAX_ROWS) return res.status(400).json({ message: `El máximo es ${SkuTemplate.MAX_ROWS} filas por carga. Parte el archivo en varios.` });
+    if (input.length > SkuTemplate.MAX_ROWS) return res.status(400).json({ message: `El máximo es ${SkuTemplate.MAX_ROWS} filas por petición. Manda el archivo en tandas más chicas.` });
     const rows = input.map((r, i) => ({ n: Number.isInteger(r && r.n) ? r.n : i + 2, v: r && typeof r.v === 'object' && r.v ? r.v : {} }));
     const allowUpdate = !!(req.body && req.body.update === true);
     const selected = Array.isArray(req.body && req.body.columns) ? new Set(req.body.columns.filter((k) => SkuTemplate.BY_KEY_ALL[k])) : null;

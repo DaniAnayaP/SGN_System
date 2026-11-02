@@ -2292,6 +2292,10 @@
     "tplLoadOne": "Load 1 article",
     "tplLoadN": "Load {n} articles",
     "tplLoading": "Loading…",
+    "tplLoadingProgress": "Loading {done} of {total}…",
+    "tplInterrupted": "The load stopped before reaching this row. Load it again with this Excel.",
+    "tplShowing": "Showing {shown} of {total} rows (rows with errors are always shown).",
+    "tplShowMore": "Show {n} more",
     "tplLoadError": "Could not load. Try again.",
     "tplReadError": "The file could not be read. Use an .xlsx or .csv of up to 5 MB, or paste the cells.",
     "tplNoXlsxSupport": "This browser cannot read .xlsx files. Paste the cells from Excel.",
@@ -3387,7 +3391,7 @@
       "example": "you fill it in on your computer with the supplier data."
     },
     "tplUpload": {
-      "what": "Uploads the .xlsx (or .csv) file with the rows. The first sheet and the headers it recognizes are read; up to 500 rows per load.",
+      "what": "Uploads the .xlsx (or .csv) file with the rows. The first sheet and the headers it recognizes are read; it can have any number of rows (they load in parts).",
       "example": "you choose articles-november.xlsx."
     },
     "tplPaste": {

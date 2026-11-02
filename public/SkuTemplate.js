@@ -6,7 +6,7 @@
     if (typeof module === 'object' && module.exports) module.exports = factory();
     else root.SkuTemplate = factory();
 }(typeof self !== 'undefined' ? self : this, function () {
-    const MAX_ROWS = 500;
+    const MAX_ROWS = 500; // filas por petición al servidor (la ventana de la Web parte los archivos más grandes en tandas; la App todavía lo usa como tope por archivo)
     const TYPES = { 'articulo terminado': 'articulo-terminado', 'materia prima': 'materia-prima' };
     const TYPE_LABELS = { 'articulo-terminado': 'Artículo Terminado', 'materia-prima': 'Materia Prima' };
     const MAX_TEXT = 200;

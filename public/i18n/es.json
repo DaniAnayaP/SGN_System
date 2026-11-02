@@ -2291,6 +2291,10 @@
     "tplLoadOne": "Cargar 1 artículo",
     "tplLoadN": "Cargar {n} artículos",
     "tplLoading": "Cargando…",
+    "tplLoadingProgress": "Cargando {done} de {total}…",
+    "tplInterrupted": "La carga se interrumpió antes de llegar a esta fila. Cárgala otra vez con este Excel.",
+    "tplShowing": "Se muestran {shown} de {total} filas (las que tienen error siempre se muestran).",
+    "tplShowMore": "Mostrar {n} más",
     "tplLoadError": "No se pudo cargar. Inténtalo de nuevo.",
     "tplReadError": "No se pudo leer el archivo. Usa un .xlsx o .csv de hasta 5 MB, o pega las celdas.",
     "tplNoXlsxSupport": "Este navegador no puede leer archivos .xlsx. Pega las celdas desde Excel.",
@@ -3386,7 +3390,7 @@
       "example": "la llenas en tu computadora con los datos del proveedor."
     },
     "tplUpload": {
-      "what": "Sube el archivo .xlsx (o .csv) con las filas. Se lee la primera hoja y los encabezados que reconoce; hasta 500 filas por carga.",
+      "what": "Sube el archivo .xlsx (o .csv) con las filas. Se lee la primera hoja y los encabezados que reconoce; puede traer las filas que sean (se cargan por partes).",
       "example": "eliges articulos-noviembre.xlsx."
     },
     "tplPaste": {

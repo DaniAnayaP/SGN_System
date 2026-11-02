@@ -38,6 +38,11 @@
     let mode = 'file';
     let busy = false;
     let result = null;
+    // Sin límite de filas por archivo: la tabla de revisión dibuja de a PAGE filas (las que tienen error siempre se dibujan) y la carga viaja al servidor en tandas de BATCH (su límite por petición).
+    const PAGE = 300;
+    const BATCH = T.MAX_ROWS;
+    let shown = PAGE;
+    let progress = null; // { done, total } mientras se carga
 
     // ---- botón en la barra de la tabla -------------------------------------------------------------------------------------------------
     function mount(toolbar, newButton, done) {
@@ -137,6 +142,7 @@
                         <div class="tpl-seg" role="group"><button type="button" id="tpl-f-all" aria-pressed="true">${esc(t('main.tplAll'))}</button><button type="button" id="tpl-f-bad" aria-pressed="false">${esc(t('main.tplOnlyErrors'))}</button></div></div>
                     </div>
                     <div class="tpl-scroll" data-help-key="tplReview"><table class="tpl-table"><thead><tr><th>${esc(t('main.tplColRow'))}</th><th>${esc(t('main.tplColState'))}</th>${head}<th>${esc(t('main.tplColWhat'))}</th><th></th></tr></thead><tbody id="tpl-body"></tbody></table></div>
+                    <div class="tpl-more" id="tpl-more" hidden><span class="tpl-muted" id="tpl-more-text"></span><button type="button" class="btn btn-secondary tpl-small" id="tpl-more-btn"></button></div>
                     <datalist id="tpl-dl-udm"></datalist><datalist id="tpl-dl-class"></datalist><datalist id="tpl-dl-type"><option value="Artículo Terminado"></option><option value="Materia Prima"></option></datalist><datalist id="tpl-dl-storage">${Object.values(window.SkuTemplate.STORAGE_LABELS).map((l) => `<option value="${l}"></option>`).join('')}</datalist>
                     ${CAT_COLS.map((c) => `<datalist id="tpl-dl-${c.type}"></datalist>`).join('')}
                 </section>
@@ -157,6 +163,7 @@
             if (event.target.closest('#tpl-f-bad')) { setFilter(true); return; }
             if (event.target.closest('#tpl-next')) { goToNextError(); return; }
             if (event.target.closest('#tpl-go')) { onGo(); return; }
+            if (event.target.closest('#tpl-more-btn')) { shown += PAGE; buildTable(); refresh(); return; }
             const rm = event.target.closest('[data-rm]');
             if (rm) { const r = rows[Number(rm.dataset.rm)]; r.out = !r.out; refresh(); }
         });
@@ -269,7 +276,6 @@
         const res = T.rowsFromMatrix(matrix, { full: true });
         if (res.error === 'empty') { setInfo(t('main.tplNoRows'), true); return; }
         if (res.error === 'columns') { setInfo(t('main.tplNoColumns'), true); return; }
-        if (res.rows.length > T.MAX_ROWS) { setInfo(t('main.tplTooMany', { n: res.rows.length, max: T.MAX_ROWS }), true); return; }
         if (!res.rows.length) { setInfo(t('main.tplNoRows'), true); return; }
         rows = res.rows.map((r) => ({ n: r.n, v: r.v, out: false, err: null, plan: null, fixed: false, show: true }));
         usedKeys = new Set(res.usedKeys);
@@ -277,6 +283,8 @@
         selected = new Set(res.usedKeys.filter((k) => !KEY_KEYS.includes(k)));
         const ignored = (res.ignored || []).length ? ` · ${t('main.tplIgnored', { list: res.ignored.slice(0, 6).join(', ') })}` : '';
         setInfo(`${t('main.tplFileInfo', { rows: rows.length, cols: usedKeys.size })}${ignored}`, false);
+        shown = PAGE;
+        validateAll();
         buildPicker();
         buildTable();
         setFilterButtons(false);
@@ -304,9 +312,22 @@
         return `<td class="tpl-c-${c.kind || 'plain'}${c.kind === 'category' ? ' tpl-cat' : ''}" data-k="${c.key}"><input type="text" data-i="${i}" data-k="${c.key}" value="${esc(r.v[c.key])}" aria-label="${esc(header(c))} ${r.n}"${list}></td>`;
     }
     function buildTable() {
-        $('tpl-body').innerHTML = rows.map((r, i) => `<tr data-i="${i}"><td>${r.n}</td><td><span class="tpl-tag"></span></td>${COLS.map((c) => cellInput(c, r, i)).join('')}<td class="tpl-what"></td><td><button type="button" class="btn btn-secondary tpl-small" data-rm="${i}"></button></td></tr>`).join('');
-        rows.forEach((r, i) => { r.tr = $('tpl-body').children[i]; });
+        const draw = rows.map((r, i) => ({ r, i })).filter(({ r, i }) => i < shown || r.err);
+        $('tpl-body').innerHTML = draw.map(({ r, i }) => `<tr data-i="${i}"><td>${r.n}</td><td><span class="tpl-tag"></span></td>${COLS.map((c) => cellInput(c, r, i)).join('')}<td class="tpl-what"></td><td><button type="button" class="btn btn-secondary tpl-small" data-rm="${i}"></button></td></tr>`).join('');
+        rows.forEach((r) => { r.tr = null; });
+        draw.forEach(({ r }, k) => { r.tr = $('tpl-body').children[k]; });
         applyColumns();
+        updateMore();
+    }
+    // «Mostrando X de N filas» y el botón para ver más (solo si hay filas sin dibujar)
+    function updateMore() {
+        const drawn = rows.filter((r) => r.tr).length;
+        const left = rows.length - drawn;
+        $('tpl-more').hidden = left <= 0;
+        if (left > 0) {
+            $('tpl-more-text').textContent = t('main.tplShowing', { shown: drawn, total: rows.length });
+            $('tpl-more-btn').textContent = t('main.tplShowMore', { n: Math.min(PAGE, left) });
+        }
     }
     function validateAll() {
         const accepted = new Map();
@@ -371,7 +392,7 @@
         tr.hidden = filterBad && !r.show;
     }
     let filterBad = false;
-    function paintAll() { rows.forEach(paintRow); }
+    function paintAll() { rows.forEach((r) => { if (r.tr) paintRow(r); }); }
     function counts() {
         const c = { create: 0, upd: 0, same: 0, done: 0, bad: 0, gone: 0 };
         rows.forEach((r) => {
@@ -398,7 +419,7 @@
         put('tpl-c-gone', c.gone, 'main.tplRemoved');
         $('tpl-next').disabled = c.bad === 0;
         const go = $('tpl-go');
-        go.textContent = busy ? t('main.tplLoading') : t(c.ok === 1 ? 'main.tplLoadOne' : 'main.tplLoadN', { n: c.ok });
+        go.textContent = busy ? (progress ? t('main.tplLoadingProgress', { done: progress.done, total: progress.total }) : t('main.tplLoading')) : t(c.ok === 1 ? 'main.tplLoadOne' : 'main.tplLoadN', { n: c.ok });
         go.disabled = busy || c.ok === 0 || !!result;
         go.hidden = !!result && result.done;
         const skipped = rows.length - c.ok;
@@ -418,6 +439,7 @@
     function goToNextError() {
         const r = rows.find((x) => x.err && !x.out);
         if (!r) return;
+        if (!r.tr) { buildTable(); paintAll(); }
         r.tr.hidden = false;
         const input = r.tr.querySelector(`input[data-k="${errField(r)}"]`);
         if (input) { input.scrollIntoView({ block: 'nearest', inline: 'center' }); input.focus(); input.select(); }
@@ -437,32 +459,49 @@
         const good = rows.filter((r) => !r.out && !r.err && r.plan && (r.plan.action === 'create' || r.plan.action === 'update'));
         if (!good.length || busy) return;
         busy = true;
+        progress = { done: 0, total: good.length };
         updateCounts();
-        try {
-            const res = await fetch(`${API}/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ update: true, columns: [...selected], rows: good.map((r) => ({ n: r.n, v: r.v })) }) });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                Dashboard.showToast(json.message || t('main.tplLoadError'), res.status === 403 ? 'warning' : 'error');
-                busy = false;
+        const created = [];
+        const updated = [];
+        const serverFailed = new Map(); // lo que el servidor no aceptó (por ejemplo un UPC que alguien más dio de alta mientras se revisaba, o un permiso que falta)
+        let interrupted = '';
+        const stop = (message, status) => { Dashboard.showToast(message, status === 403 ? 'warning' : 'error'); busy = false; progress = null; updateCounts(); };
+        // las filas se mandan en tandas (el servidor recibe hasta BATCH por petición): el archivo puede traer las que sean
+        for (let from = 0; from < good.length; from += BATCH) {
+            const chunk = good.slice(from, from + BATCH);
+            try {
+                const res = await fetch(`${API}/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ update: true, columns: [...selected], rows: chunk.map((r) => ({ n: r.n, v: r.v })) }) });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    if (from === 0) { stop(json.message || t('main.tplLoadError'), res.status); return; }
+                    interrupted = json.message || t('main.tplLoadError');
+                    break;
+                }
+                created.push(...(json.created || []));
+                updated.push(...(json.updated || []));
+                (json.failed || []).forEach((f) => serverFailed.set(chunk[f.index].n, f));
+                progress.done = from + chunk.length;
                 updateCounts();
-                return;
+            } catch (err) {
+                console.error('Plantilla: no se pudo cargar', err);
+                if (from === 0) { stop(t('main.tplLoadError')); return; }
+                interrupted = t('main.tplLoadError');
+                break;
             }
-            // lo que el servidor no aceptó (por ejemplo un UPC que alguien más dio de alta mientras se revisaba, o un permiso que falta) se suma a lo que no se cargó
-            const serverFailed = new Map((json.failed || []).map((f) => [good[f.index].n, f]));
-            result = { done: true, created: json.created || [], updated: json.updated || [], notLoaded: [] };
-            rows.forEach((r) => {
-                if (serverFailed.has(r.n)) result.notLoaded.push({ r, reason: serverFailed.get(r.n).message });
-                else { const reason = reasonNotLoaded(r); if (reason) result.notLoaded.push({ r, reason }); }
-            });
-            busy = false;
-            showResult();
-            if (onLoaded) await onLoaded();
-        } catch (err) {
-            console.error('Plantilla: no se pudo cargar', err);
-            Dashboard.showToast(t('main.tplLoadError'), 'error');
-            busy = false;
-            updateCounts();
         }
+        // si la carga se cortó a la mitad, las filas que ya no se mandaron salen en el Excel de las que no se cargaron, con su motivo
+        const unsent = new Set(good.slice(progress.done).map((r) => r.n));
+        result = { done: true, created, updated, notLoaded: [] };
+        rows.forEach((r) => {
+            if (serverFailed.has(r.n)) result.notLoaded.push({ r, reason: serverFailed.get(r.n).message });
+            else if (unsent.has(r.n)) result.notLoaded.push({ r, reason: t('main.tplInterrupted') });
+            else { const reason = reasonNotLoaded(r); if (reason) result.notLoaded.push({ r, reason }); }
+        });
+        busy = false;
+        progress = null;
+        if (interrupted) Dashboard.showToast(interrupted, 'error');
+        showResult();
+        if (onLoaded) await onLoaded();
     }
     function showResult() {
         const { created, updated } = result;
