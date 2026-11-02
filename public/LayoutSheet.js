@@ -213,7 +213,7 @@
         return documentSvg(options, [42, 29.7], labels, (W, H) => sheetContent(data, labels, lang, W, H));
     }
 
-    // La tarjeta de categorías de una zona: card = { companyName, siteName (el Sitio, arriba del nombre; sin él sale labels.cardArea), logoDataUrl, logoRatio, theme, zoneName, align ('center' = categorías centradas en el contorno; si no, arriba), categories: [{ name, desc, icon, color, qrRows }] }. Una columna de renglones
+    // La tarjeta de categorías de una zona: card = { companyName, siteName (el Sitio, arriba del nombre; sin él sale labels.cardArea), logoDataUrl, logoRatio, theme, zoneName, categories: [{ name, desc, icon, color, qrRows }] }. Una columna de renglones
     // (icono, nombre, descripción y QR de cada categoría) y, si el espacio es ancho, dos columnas. Con 10.5 × 14.8 cm queda como la tarjeta impresa.
     function cardContent(card, labels, W, H) {
         const th = card.theme || window.LayoutMapSvg.DEFAULT_THEME;
@@ -290,10 +290,10 @@
         // Con dos o más categorías el marco se reparte entre ellas: con 2, mitades; con 3, tercios; con 4, cuartos… y cada una usa su parte completa (antes cada fila tenía un alto fijo y
         // abajo sobraba espacio). En una hoja ancha con 2 categorías cada una es una columna: el nombre arriba y su QR grande debajo.
         const rowH = n > 1 ? (frameH - headH - 2 * pad) / perCol : Math.min(78 * f, (frameH - headH - 2 * pad) / perCol);
-        const asColumns = n > 1 && wide && perCol === 1;
+        // Celdas (nombre arriba sobre su color suave y el QR debajo, centrado): con 2 o 3 categorías en una tarjeta vertical y con 2 en una ancha (una columna cada una). Con más categorías el
+        // alto de cada parte ya no alcanza para ese acomodo (el QR quedaría demasiado chico) y se usan filas parejas: el nombre a la izquierda y el QR a la derecha.
+        const asColumns = n > 1 && (wide ? perCol === 1 : n <= 3);
         const frameTop = areaTop;
-        // card.align === 'center': CATEGORÍA / BÚSCAME se queda arriba y los renglones se centran en lo que queda libre del contorno (con muchas categorías no queda espacio y no se nota).
-        const shiftY = card.align === 'center' ? Math.max(0, (frameH - 2 * pad - headH - perCol * rowH) / 2) : 0;
         const blockTop = frameTop + pad;
         const headY = blockTop + 8 * f;
         const top = blockTop + headH;
@@ -307,7 +307,7 @@
             const col = Math.floor(i / perCol);
             const row = i % perCol;
             const x0 = m + pad + col * (colW + gap);
-            const y = top + shiftY + row * rowH;
+            const y = top + row * rowH;
             const tint = `rtint${String(cat.color).replace(/[^0-9a-fA-F]/g, '')}`;
             if (asColumns) {
                 // una columna por categoría: el nombre arriba sobre su color suave y el QR centrado debajo, tan grande como alcance
@@ -326,6 +326,7 @@
                 const rest = y + rowH - 6 * f - qTop;
                 const cqs = Math.min(rest, colW * 0.62);
                 s += qrPath(cat.qrRows, x0 + (colW - cqs) / 2, qTop + (rest - cqs) / 2, cqs, '#FFFFFF', 0);
+                if (row < perCol - 1) s += `<line x1="${x0}" y1="${y + rowH}" x2="${x0 + colW}" y2="${y + rowH}" stroke="#D9DBE5" stroke-width="${f}"/>`;
                 return;
             }
             // filas parejas: cada categoría usa su parte completa del marco, con un fondo suave de su color; el nombre a la izquierda y el QR grande a la derecha

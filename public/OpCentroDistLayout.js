@@ -1158,11 +1158,6 @@ try {
     const raw = JSON.parse(localStorage.getItem(CARD_SIZE_KEY) || 'null');
     if (raw && raw.w >= 6 && raw.w <= 120 && raw.h >= 6 && raw.h <= 120) { cardSize.w = raw.w; cardSize.h = raw.h; cardSize.cut = raw.cut !== false; }
 } catch (err) { /* sin almacenamiento */ }
-// Acomodo de las categorías dentro del contorno de la tarjeta: 'top' (como siempre) o 'center'; se recuerda en este navegador y solo se ofrece con el icono Centrar categorías.
-const CARD_ALIGN_KEY = 'sgn_layout_card_align';
-let cardAlign = 'top';
-try { if (localStorage.getItem(CARD_ALIGN_KEY) === 'center') cardAlign = 'center'; } catch (err) { /* sin almacenamiento */ }
-const effectiveCardAlign = () => (state.perms && state.perms.canCenterCard && cardAlign === 'center' ? 'center' : 'top');
 let cardState = null; // { zoneId, zoneName, data }
 let cardModalEl = null;
 function cardLabels() {
@@ -1172,7 +1167,7 @@ function cardSvg() {
     const data = cardState.data;
     const zone = (data.zones || []).find((z) => z.id === cardState.zoneId);
     return window.LayoutSheet.buildCardSvg({
-        companyName: data.companyName, siteName: data.siteName || '', logoDataUrl: data.logoDataUrl, logoRatio: cardState.logoRatio, theme: window.LayoutMapSvg.theme(data.companyColor), zoneName: cardState.zoneName, categories: zone ? zone.categories : [], align: effectiveCardAlign(),
+        companyName: data.companyName, siteName: data.siteName || '', logoDataUrl: data.logoDataUrl, logoRatio: cardState.logoRatio, theme: window.LayoutMapSvg.theme(data.companyColor), zoneName: cardState.zoneName, categories: zone ? zone.categories : [],
     }, cardLabels(), { widthCm: cardSize.w, heightCm: cardSize.h, cut: cardSize.cut });
 }
 function renderCardPreview() {
@@ -1185,9 +1180,6 @@ function renderCardPreview() {
         const p = window.LayoutSheet.PRESETS.find((x) => x[0] === b.dataset.cpre);
         b.setAttribute('aria-pressed', String(!!p && Math.abs(p[1] - cardSize.w) < 0.05 && Math.abs(p[2] - cardSize.h) < 0.05));
     });
-    // El acomodo solo se ofrece con el icono Centrar categorías (sin él la tarjeta sale con las categorías arriba, como siempre).
-    $('layout-card-align').hidden = !(state.perms && state.perms.canCenterCard);
-    document.querySelectorAll('#layout-card-modal [data-calign]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.calign === effectiveCardAlign())));
 }
 function saveCardSize() {
     try { localStorage.setItem(CARD_SIZE_KEY, JSON.stringify({ w: cardSize.w, h: cardSize.h, cut: cardSize.cut })); } catch (err) { /* no se recuerda */ }
@@ -1204,7 +1196,6 @@ function ensureCardModal() {
         <div class="layout-sizebar layout-card-bar" data-help-key="layoutSheetSize"><div class="layout-sizebar-row"><span class="layout-sizebar-title">${esc(t('main.layoutHojaTamano'))}</span><div class="layout-presets" role="group">${presets}</div></div>
             <div class="layout-sizebar-row"><label>${esc(t('main.layoutHojaAncho'))}<input type="number" id="layout-card-w" min="6" max="120" step="0.1" value="${cardSize.w}"></label><label>${esc(t('main.layoutHojaLargo'))}<input type="number" id="layout-card-h" min="6" max="120" step="0.1" value="${cardSize.h}"></label><button type="button" class="btn btn-secondary" id="layout-card-swap">${esc(t('main.layoutHojaGirar'))}</button><label class="layout-check"><input type="checkbox" id="layout-card-cut"${cardSize.cut ? ' checked' : ''}> ${esc(t('main.layoutHojaLinea'))}</label></div>
             <div class="layout-sizebar-info" id="layout-card-info"></div></div>
-        <div class="layout-sizebar layout-card-bar" id="layout-card-align" data-help-key="layoutCardAlign" hidden><div class="layout-sizebar-row"><span class="layout-sizebar-title">${esc(t('main.layoutCardAcomodo'))}</span><div class="layout-presets" role="group"><button type="button" class="layout-pre" data-calign="top" aria-pressed="false">${esc(t('main.layoutCardArriba'))}</button><button type="button" class="layout-pre" data-calign="center" aria-pressed="false">${esc(t('main.layoutCardCentradas'))}</button></div></div></div>
         <div class="layout-sheet-preview layout-card-preview" id="layout-card-preview"></div>
         <div class="layout-fmt-footer"><button type="button" class="btn" id="layout-card-pdf" data-help-key="layoutQrPdf">${esc(t('main.layoutDescargarPdf'))}</button><button type="button" class="btn btn-secondary" id="layout-card-png" data-help-key="layoutQrPng">${esc(t('main.layoutDescargarPng'))}</button><span class="layout-fmt-spacer"></span><button type="button" class="btn btn-secondary" id="layout-card-close">${esc(t('main.layoutFormatoCerrar'))}</button></div>
     </div>`;
@@ -1217,9 +1208,6 @@ function ensureCardModal() {
             cardSize.w = p[1]; cardSize.h = p[2];
         } else if (event.target.closest('#layout-card-swap')) {
             [cardSize.w, cardSize.h] = [cardSize.h, cardSize.w];
-        } else if (event.target.closest('[data-calign]')) {
-            cardAlign = event.target.closest('[data-calign]').dataset.calign === 'center' ? 'center' : 'top';
-            try { localStorage.setItem(CARD_ALIGN_KEY, cardAlign); } catch (err) { /* no se recuerda */ }
         } else if (event.target.closest('#layout-card-pdf') || event.target.closest('#layout-card-png')) {
             const pdf = !!event.target.closest('#layout-card-pdf');
             try {
