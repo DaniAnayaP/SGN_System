@@ -172,7 +172,10 @@
     const iconSvg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
     const brandBar = (data) => {
         const initials = (data.companyName || '').trim().slice(0, 2).toUpperCase() || '··';
-        return `<div class="brand">${data.hasLogo ? `<img class="brand-logo" src="/api/public/layout/${encodeURIComponent(publicToken())}/logo" alt="">` : `<span class="brand-mark">${esc(initials)}</span>`}<span class="brand-name">${esc(data.companyName)}</span></div>`;
+        const mark = data.hasLogo ? `<img class="brand-logo" src="/api/public/layout/${encodeURIComponent(publicToken())}/logo" alt="">` : `<span class="brand-mark">${esc(initials)}</span>`;
+        // Con Sitio guardado, lo fuerte va arriba (el Sitio) y lo débil abajo (el nombre de la empresa), igual que en el reporte y la tarjeta.
+        if (data.siteName) return `<div class="brand">${mark}<div class="brand-names"><span class="brand-site">${esc(data.siteName)}</span><span class="brand-name weak">${esc(data.companyName)}</span></div></div>`;
+        return `<div class="brand">${mark}<span class="brand-name">${esc(data.companyName)}</span></div>`;
     };
     // El título de la página es el Sitio (p. ej. CEDIS CHIHUAHUA); sin Sitio guardado queda "Layout de la nave" como siempre.
     const pageTitle = (data) => data.siteName || TEXT.title;
@@ -212,7 +215,7 @@
         document.getElementById('wrap').innerHTML = `
             ${brandBar(data)}
             ${categoryBanner(data)}<div id="catslot"></div>
-            <div class="info"><h1>${esc(pageTitle(data))}</h1><p class="sub">${data.siteName ? `${esc(TEXT.title)} · ` : ''}${versionLine(data)}</p></div>
+            <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${versionLine(data)}</p></div>
             <div class="map">${window.LayoutMapSvg.mapSvg(data.layout, { theme })}${mapToolsHtml()}</div>
             <a class="mbtn" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
             ${zonesSectionHtml(data)}
