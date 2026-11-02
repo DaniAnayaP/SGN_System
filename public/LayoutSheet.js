@@ -272,6 +272,9 @@
         const titleSize = Math.min(17 * f, ((W - 2 * m) / Math.max(titleText.length, 1)) * 1.75);
         s += `<text x="${W / 2}" y="${m + 62 * f}" font-size="${titleSize}" font-weight="700" fill="${ink}" text-anchor="middle">${esc(titleText)}</text>`;
         const cols = wide && n > 1 ? 2 : 1;
+        // Una sola categoría en una tarjeta de forma vertical: en vez de una fila arriba y un hueco enorme abajo, el nombre va arriba (sobre un fondo suave de su color) y el QR grande
+        // abajo, repartidos en el marco. Con dos o más categorías, o en una hoja ancha, la tarjeta sigue como siempre.
+        const single = n === 1 && !wide;
         const gap = 18 * f;
         // El espacio de las categorías lleva su contorno (un marco con las esquinas redondeadas) y todo va adentro, con un poco de aire.
         const pad = 10 * f;
@@ -291,12 +294,12 @@
         const headY = blockTop + 8 * f;
         const top = blockTop + headH;
         s += `<rect x="${m}" y="${frameTop}" width="${W - 2 * m}" height="${frameH}" rx="${8 * f}" fill="none" stroke="#C9CCDA" stroke-width="${1.4 * f}"/>`;
-        for (let c = 0; c < cols; c += 1) {
+        for (let c = 0; c < (single ? 0 : cols); c += 1) {
             const x0 = m + pad + c * (colW + gap);
             s += `<text x="${x0}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="#3F435D">${esc(labels.cardCategory)}</text><text x="${x0 + colW}" y="${headY}" font-size="${8 * f}" font-weight="700" fill="${brand}" text-anchor="end">${esc(labels.cardReview)}</text>`;
             s += `<line x1="${x0}" y1="${top}" x2="${x0 + colW}" y2="${top}" stroke="#D9DBE5" stroke-width="${f}"/>`;
         }
-        card.categories.forEach((cat, i) => {
+        (single ? [] : card.categories).forEach((cat, i) => {
             const col = Math.floor(i / perCol);
             const row = i % perCol;
             const x0 = m + pad + col * (colW + gap);
@@ -313,6 +316,35 @@
             s += qrPath(cat.qrRows, x0 + colW - qs, y + (rowH - qs) / 2, qs, '#FFFFFF', 0);
             s += `<line x1="${x0}" y1="${y + rowH}" x2="${x0 + colW}" y2="${y + rowH}" stroke="#D9DBE5" stroke-width="${f}"/>`;
         });
+        if (single) {
+            const cat = card.categories[0];
+            const fx = m + pad;
+            const fw = W - 2 * m - 2 * pad;
+            const fy0 = frameTop + pad;
+            const fy1 = frameTop + frameH - pad;
+            const split = fy0 + (fy1 - fy0) * 0.38;
+            s += `<text x="${fx}" y="${fy0 + 8 * f}" font-size="${8 * f}" font-weight="700" fill="#3F435D">${esc(labels.cardCategory)}</text>`;
+            // el nombre va sobre un fondo suave, difuminado, del color de la categoría
+            const gid = `ctint${String(cat.color).replace(/[^0-9a-fA-F]/g, '')}`;
+            const panelY = fy0 + 16 * f;
+            const panelH = split - panelY - 4 * f;
+            s += `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${esc(cat.color)}" stop-opacity="0.26"/><stop offset="1" stop-color="${esc(cat.color)}" stop-opacity="0.07"/></linearGradient></defs>`;
+            s += `<rect x="${fx}" y="${panelY}" width="${fw}" height="${panelH}" rx="${10 * f}" fill="url(#${gid})"/>`;
+            const isz = Math.min(44 * f, panelH * 0.42);
+            const nameSize = Math.min(19 * f, ((fw - 16 * f) / Math.max(cat.name.length, 1)) * 1.75);
+            const blockH = isz + 8 * f + nameSize + (cat.desc ? 14 * f : 0);
+            const by = panelY + (panelH - blockH) / 2;
+            s += `<rect x="${W / 2 - isz / 2}" y="${by}" width="${isz}" height="${isz}" rx="${isz * 0.24}" fill="${esc(cat.color)}"/>`;
+            s += `<g transform="translate(${W / 2 - isz / 2 + isz * 0.2},${by + isz * 0.2}) scale(${(isz * 0.6) / 24})">${window.LayoutMapSvg.categoryGlyph(cat.icon, '#FFFFFF', 2.2)}</g>`;
+            const nameY = by + isz + 8 * f + nameSize * 0.85;
+            s += `<text x="${W / 2}" y="${nameY}" font-size="${nameSize}" font-weight="700" fill="${ink}" text-anchor="middle">${esc(cat.name)}</text>`;
+            if (cat.desc) s += `<text x="${W / 2}" y="${nameY + 14 * f}" font-size="${8.4 * f}" fill="#3F435D" text-anchor="middle">${esc(cat.desc)}</text>`;
+            // el QR grande, abajo, con BÚSCAME encima
+            const qs = Math.min(fw * 0.88, (fy1 - split - 14 * f) * 0.96);
+            const qy = fy1 - qs - 2 * f;
+            s += `<text x="${W / 2}" y="${qy - 8 * f}" font-size="${9 * f}" font-weight="700" fill="${brand}" text-anchor="middle">${esc(labels.cardReview)}</text>`;
+            s += qrPath(cat.qrRows, W / 2 - qs / 2, qy, qs, '#FFFFFF', 0);
+        }
         if (!n) s += `<text x="${W / 2}" y="${frameTop + frameH / 2 + 4 * f}" font-size="${11 * f}" fill="#8E94AB" text-anchor="middle">${esc(labels.cardEmpty)}</text>`;
         s += `<text x="${W / 2}" y="${H - m - 6 * f}" font-size="${7.6 * f}" fill="${brand}" text-anchor="middle">${esc(labels.cardFooter)}</text>`;
         return s;
