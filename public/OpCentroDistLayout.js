@@ -1416,8 +1416,11 @@ function qrZoneOptions() {
     const zones = ((state.saved && state.saved.zones) || []).filter((z) => z.active !== false);
     const select = $('layout-qr-zone');
     const current = select.value;
-    select.innerHTML = zones.map((z) => `<option value="${esc(z.id)}">${esc(z.name)}${z.type ? ` · ${esc(typeLabel('zone', z.type))}` : ''}</option>`).join('');
+    // La lista solo lleva el nombre de la zona; su tipo sale aparte, en su propio campo (Tipo de zona), como en las tablas.
+    select.innerHTML = zones.map((z) => `<option value="${esc(z.id)}">${esc(z.name)}</option>`).join('');
     if (zones.some((z) => z.id === current)) select.value = current;
+    const picked = zones.find((z) => z.id === select.value);
+    $('layout-qr-zone-kind').value = picked ? (picked.type ? typeLabel('zone', picked.type) : t('main.layoutSinZona')) : '';
     const typeSelect = $('layout-qr-type');
     if (!typeSelect.options.length) typeSelect.innerHTML = ZONE_CATEGORY_TYPES.map(([key, label]) => `<option value="${key}">${esc(t(`main.${label}`))}</option>`).join('');
     return zones;

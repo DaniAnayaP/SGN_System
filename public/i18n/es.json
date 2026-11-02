@@ -3460,7 +3460,11 @@
     },
     "layoutQrZonePick": {
       "what": "La zona de la que se arma la hoja. Salen las zonas del Layout ya guardado.",
-      "example": "eliges Zona 2 · Refrigerado."
+      "example": "eliges Zona 2 y a un lado, en Tipo de zona, ves que es Refrigerado."
+    },
+    "layoutQrZoneKind": {
+      "what": "El tipo de la zona que elegiste (seco, refrigerado, pasillo, andén…). Solo se lee: se cambia en la tabla de zonas del Layout.",
+      "example": "eliges Zona 2 y aquí aparece Refrigerado."
     },
     "layoutQrZoneType": {
       "what": "De cuál de las 7 categorías de los códigos se hace la lista: Inventario, Compra, Almacenamiento, Rotación, Manejo especial, Riesgo o Vida útil. Cada código aparece en la categoría que tiene escrita en Alta Artículos. Los códigos sin esa categoría no salen.",

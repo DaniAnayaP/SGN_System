@@ -3461,7 +3461,11 @@
     },
     "layoutQrZonePick": {
       "what": "The zone the sheet is made for. The zones of the saved Layout are listed.",
-      "example": "you pick Zone 2 · Refrigerated."
+      "example": "you pick Zone 2 and, next to it under Zone type, you see it is Refrigerated."
+    },
+    "layoutQrZoneKind": {
+      "what": "The type of the zone you picked (dry, refrigerated, aisle, dock…). Read only: it is changed in the Layout zones table.",
+      "example": "you pick Zone 2 and Refrigerated appears here."
     },
     "layoutQrZoneType": {
       "what": "Which of the 7 code categories the list is made from: Inventory, Purchasing, Storage, Rotation, Special handling, Risk or Shelf life. Each code appears under the category written for it in Item Registration. Codes without that category are left out.",

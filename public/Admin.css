@@ -7166,7 +7166,8 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-qr-pop .layout-seg-btn{ display: inline-block; flex-direction: row; padding: 0.25rem 0.9rem; }
 .layout-qr-fields{ display: flex; flex-direction: column; gap: 0.5rem; padding: 0.3rem 0.4rem; }
 .layout-qr-fields label{ display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.7rem; color: var(--color-text-secondary); }
-.layout-qr-fields select{ font: inherit; font-size: 0.8rem; padding: 0.35rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); }
+.layout-qr-fields select, .layout-qr-fields input[readonly]{ font: inherit; font-size: 0.8rem; padding: 0.35rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); }
+.layout-qr-fields input[readonly]{ cursor: default; background: var(--color-bg, var(--color-surface)); }
 .layout-qr-chips{ display: flex; flex-direction: column; gap: 0.3rem; padding: 0.2rem 0.4rem; max-height: 11rem; overflow-y: auto; }
 .layout-qr-chip{ display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; border: 1px solid var(--color-border); border-radius: 0.5rem; padding: 0.25rem 0.55rem; font-size: 0.76rem; }
 .layout-qr-chip i{ width: 0.75rem; height: 0.75rem; border-radius: 0.25rem; display: inline-block; }
