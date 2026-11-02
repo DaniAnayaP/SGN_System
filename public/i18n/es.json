@@ -1848,6 +1848,7 @@
     "layoutType_zone_aisle": "Pasillo principal",
     "layoutType_zone_aisle2": "Pasillo entre anaqueles",
     "layoutType_space_rack": "Anaquel",
+    "layoutType_space_rackpal": "Rack",
     "layoutType_space_cabinet": "Gabeta",
     "layoutType_space_pallet": "Tarima en piso",
     "layoutType_door_dock": "Andén",

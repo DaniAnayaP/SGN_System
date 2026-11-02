@@ -1848,6 +1848,7 @@
     "layoutType_zone_aisle": "Main aisle",
     "layoutType_zone_aisle2": "Aisle between racks",
     "layoutType_space_rack": "Rack",
+    "layoutType_space_rackpal": "Pallet rack",
     "layoutType_space_cabinet": "Cabinet",
     "layoutType_space_pallet": "Floor pallet",
     "layoutType_door_dock": "Dock",

@@ -14,7 +14,7 @@
     // Para qué se usa una zona (es aparte del tipo: una zona Seca puede ser de almacenamiento o de operaciones): almacenamiento, operaciones o instalaciones (baño, bombas, etc.).
     // Es opcional: una zona sin uso definido se guarda exactamente igual que antes.
     const ZONE_USES = ['storage', 'operations', 'facilities'];
-    const SPACE_TYPES = ['rack', 'cabinet', 'pallet'];
+    const SPACE_TYPES = ['rack', 'rackpal', 'cabinet', 'pallet'];
     // Formato propio de una zona (como Formato de celdas de Excel): color de fondo, rayas o patrón y su color, y estilo y color del borde.
     const FMT_PATTERNS = ['none', 'solid', 'diag1', 'diag2', 'horiz', 'vert', 'grid', 'dots', 'cross'];
     const FMT_LINES = ['none', 'thin', 'mid', 'thick', 'dash', 'dot', 'dashdot', 'double'];
