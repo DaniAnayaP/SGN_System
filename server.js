@@ -6123,14 +6123,15 @@ app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
     const unchanged = [];
     const completeSkipped = [];
     const failed = [];
+    const accept = (plan, n) => { accepted.set(plan.key, n); if (plan.upcKey) accepted.set(plan.upcKey, n); };
     const changedBy = changedByLabel(req);
     const classIdOf = (name, category) => { const found = inventoryClassificationsFor(clientId, isTestAccount, category).find((r) => r.name === name); return found ? found.id : null; };
     const className = (id) => classificationNameOf(clientId, isTestAccount, id);
     rows.forEach((row, index) => {
         const plan = SkuTemplate.planRow(row, ctx);
         if (plan.error) { failed.push({ index, n: row.n, field: plan.error.field, code: plan.error.code, params: plan.error.params, message: SkuTemplate.message(plan.error) }); return; }
-        if (plan.action === 'complete') { accepted.set(plan.key, row.n); completeSkipped.push({ index, n: row.n, sku: plan.item.sku }); return; }
-        if (plan.action === 'same') { accepted.set(plan.key, row.n); unchanged.push({ index, n: row.n, sku: plan.item.sku }); return; }
+        if (plan.action === 'complete') { accept(plan, row.n); completeSkipped.push({ index, n: row.n, sku: plan.item.sku }); return; }
+        if (plan.action === 'same') { accept(plan, row.n); unchanged.push({ index, n: row.n, sku: plan.item.sku }); return; }
         const denied = permissionError(plan);
         if (denied) { failed.push({ index, n: row.n, field: denied.field, code: denied.code, params: denied.params, message: denied.message }); return; }
         try {
@@ -6139,7 +6140,8 @@ app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
                 if (patch.classificationId !== undefined) patch.classificationId = classIdOf(patch.classificationId, patch.categoryInventario);
                 const prepared = prepareSkuClassificationPatch(req, { category_inventario: '', classification_id: null }, patch);
                 if (prepared.error) { failed.push({ index, n: row.n, field: 'classificationId', code: 'serverError', params: {}, message: prepared.error.message }); return; }
-                let item = createSkuItem({ clientId, isTestData: isTestAccount });
+                // con la carga por plantilla el SKU es el que trae la fila (el número de código del cliente); sin «update» (la App) el sistema asigna el siguiente
+                let item = createSkuItem({ clientId, isTestData: isTestAccount, recordNumber: allowUpdate ? plan.sku : 0 });
                 item = updateSkuItem(item.id, clientId, prepared.patch, isTestAccount);
                 logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'create', changedBy });
                 Object.entries(prepared.patch).forEach(([key, value]) => logTableChange({
@@ -6147,7 +6149,8 @@ app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
                     fieldKey: SKU_ITEM_PATCHABLE_FIELDS[key].fieldKey, oldValue: '', newValue: key === 'classificationId' ? className(value) : String(value), changedBy,
                 }));
                 logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'update', fieldKey: 'main.articuloOrigenAlta', oldValue: '', newValue: 'Carga por plantilla', changedBy });
-                accepted.set(plan.key, row.n);
+                accept(plan, row.n);
+                bySku.set(item.record_number, { id: item.id, sku: String(item.record_number).padStart(6, '0'), upc: plan.patch.upc || '', complete: false, v: {} });
                 if (plan.patch.upc) byUpc.set(plan.patch.upc, { id: item.id, sku: String(item.record_number).padStart(6, '0'), upc: plan.patch.upc, complete: false, v: {} });
                 created.push({ index, n: row.n, id: item.id, sku: String(item.record_number).padStart(6, '0') });
                 return;
@@ -6169,9 +6172,10 @@ app.post('/api/business/sku-items/import', requireAuth, (req, res) => {
             }
             maybeIssueSkuPublicToken(item, clientId, isTestAccount);
             logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: existing.id, recordLabel: `#${existing.id}`, action: 'update', fieldKey: 'main.articuloOrigenAlta', oldValue: '', newValue: 'Actualización por plantilla', changedBy });
-            accepted.set(plan.key, row.n);
+            accept(plan, row.n);
             updated.push({ index, n: row.n, id: existing.id, sku: plan.item.sku, applied: Object.keys(result.appliedPatch).length, pending: result.pendingFields.length, rejected: result.rejectedFields.length });
         } catch (error) {
+            if (error && error.code === 'SKU_EXISTS') { failed.push({ index, n: row.n, field: 'sku', code: 'skuExists', params: { sku: String(plan.sku).padStart(6, '0') }, message: SkuTemplate.message({ code: 'skuExists', params: { sku: String(plan.sku).padStart(6, '0') } }) }); return; }
             console.error('Carga por plantilla: no se pudo guardar una fila', error);
             failed.push({ index, n: row.n, field: '', code: 'serverError', params: {}, message: 'No se pudo guardar esta fila. Inténtalo de nuevo.' });
         }

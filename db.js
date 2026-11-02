@@ -4945,8 +4945,12 @@ function getSkuItemById(id, clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM sku_items WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
 
-function createSkuItem({ clientId, isTestData = false }) {
-    const recordNumber = db
+// Sin número, el SKU es el siguiente al más alto. Con número (la carga por plantilla: el SKU es el número de código del cliente) se da de alta con ese mismo SKU, si nadie lo tiene.
+function createSkuItem({ clientId, isTestData = false, recordNumber: wanted = 0 }) {
+    if (wanted && db.prepare('SELECT 1 FROM sku_items WHERE client_id = ? AND is_test_data = ? AND record_number = ?').get(clientId, isTestData ? 1 : 0, wanted)) {
+        throw Object.assign(new Error('sku exists'), { code: 'SKU_EXISTS' });
+    }
+    const recordNumber = wanted || db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM sku_items WHERE client_id = ? AND is_test_data = ?')
         .get(clientId, isTestData ? 1 : 0).n;
     const result = db

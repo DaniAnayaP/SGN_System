@@ -15,7 +15,7 @@
     const X = window.SimpleXlsx;
     const COLS = T.ALL_COLUMNS;
     const CAT_COLS = COLS.filter((c) => c.kind === 'category');
-    const KEY_KEYS = ['sku', 'upc'];
+    const KEY_KEYS = ['sku']; // el SKU es la llave y la única columna obligatoria; el UPC es una columna más (opcional)
 
     const t = (key, params) => {
         let text = Dashboard.t(key);
@@ -74,7 +74,7 @@
         return [t('main.tplInstText'), { uniqueDescription: 'Paracetamol 500 mg tabletas, caja con 20', knownDescription: 'Tempra', customDescription: 'Paracetamol 500 caja' }[c.key] || ''];
     }
     function downloadTemplate() {
-        const required = (c) => (c.key === 'upc' ? t('main.tplYesNew') : t('main.tplNo'));
+        const required = (c) => (c.key === 'sku' ? t('main.tplYes') : t('main.tplNo'));
         const bytes = X.writeXlsx([
             { name: t('main.tplSheetTemplate'), rows: [COLS.map(header)], widths: COLS.map((c) => Math.max(14, header(c).length + 4)), headerRow: true, textColumns: [0, 1] },
             {
@@ -276,6 +276,7 @@
         const res = T.rowsFromMatrix(matrix, { full: true });
         if (res.error === 'empty') { setInfo(t('main.tplNoRows'), true); return; }
         if (res.error === 'columns') { setInfo(t('main.tplNoColumns'), true); return; }
+        if (res.error === 'sku') { setInfo(t('main.tplNeedSku'), true); return; }
         if (!res.rows.length) { setInfo(t('main.tplNoRows'), true); return; }
         rows = res.rows.map((r) => ({ n: r.n, v: r.v, out: false, err: null, plan: null, fixed: false, show: true }));
         usedKeys = new Set(res.usedKeys);
@@ -340,7 +341,7 @@
             if (r.out) { r.plan = null; r.err = null; return; }
             r.plan = T.planRow(r, local);
             r.err = r.plan.error || null;
-            if (!r.err) accepted.set(r.plan.key, r.n);
+            if (!r.err) { accepted.set(r.plan.key, r.n); if (r.plan.upcKey) accepted.set(r.plan.upcKey, r.n); }
         });
     }
     // el dato con error en una columna que no se ve (por ejemplo el UPC cuando el archivo solo trae SKU) se corrige en la llave que sí se ve
@@ -381,10 +382,10 @@
         const remove = t('main.tplRemoveRow');
         if (r.out) set('tpl-tag-grey', t('main.tplStateRemoved'), 'tpl-what-grey', t('main.tplRemovedHint'), t('main.tplRestoreRow'));
         else if (r.err) {
-            const dup = r.err.code === 'upcExists' || r.err.code === 'upcDuplicateFile';
+            const dup = r.err.code === 'upcExists' || r.err.code === 'upcDuplicateFile' || r.err.code === 'skuDuplicateFile' || r.err.code === 'skuExists';
             set('tpl-tag-bad', t(dup ? 'main.tplStateRepeated' : 'main.tplStateInvalid'), 'tpl-what-bad', errText(r.err), remove);
         } else if (plan.action === 'create') {
-            const n = Object.keys(plan.patch).length;
+            const n = Object.keys(plan.patch).length + 1; // + el SKU
             set('tpl-tag-ok', t('main.tplStateNew'), 'tpl-what-ok', n === 1 ? t('main.tplWillCreateOnly') : t('main.tplWillCreate', { n }), remove);
         } else if (plan.action === 'update') set('tpl-tag-info', t('main.tplStateUpdate'), 'tpl-what-info', updateText(plan), remove);
         else if (plan.action === 'same') set('tpl-tag-grey', t('main.tplStateSame'), 'tpl-what-grey', t('main.tplSameMsg'), remove);
