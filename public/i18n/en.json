@@ -2384,6 +2384,10 @@
     "colSubAlmTipo": "Type",
     "colSubAlmUbicacion": "Assigned location",
     "newClassification": "New Classification",
+    "colCatClasificaciones": "Classifications",
+    "clsAssign": "Assign…",
+    "clsAssignTitle": "Classifications of {name}",
+    "clsNone": "There are no classifications yet. Create them in Catalogs > Our Classifications.",
     "newWarehouse": "New Warehouse",
     "newSubWarehouse": "New Sub-warehouse",
     "whChoose": "Choose…",
@@ -3382,6 +3386,14 @@
     "whKind": {
       "what": "Physical: it exists in the building and gets Layout zones or racks assigned. Virtual: it takes no room in the building, for example goods in transit or on consignment.",
       "example": "Medicines is physical; In transit is virtual."
+    },
+    "clsAssignBtn": {
+      "what": "Choose which classifications this category has (the ones in Catalogs > Our Classifications). When you create a code and pick this category, the Classification field will only offer these. A classification can be in several categories.",
+      "example": "Medications: Brand, Generic, Antibiotic, Special, Perfumery and Oncology."
+    },
+    "clsPick": {
+      "what": "Check the classifications the category has. Inactive ones only show if the category already has them, so you can remove them.",
+      "example": "you check Brand and Generic and save: those two stay in the Classifications column."
     },
     "whLocationBtn": {
       "what": "Assigns this sub-warehouse the whole zones or the Layout racks that belong to it. A zone or a rack can belong to only one sub-warehouse.",

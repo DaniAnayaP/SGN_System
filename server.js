@@ -6683,6 +6683,46 @@ function prepareWarehousePatch(req, categoryType, existing, patch) {
     return { patch: out, sanitizers };
 }
 
+// --- Clasificaciones de cada categoría de Inventario ---------------------------------------------------------------------------
+// classification_ids se guarda como texto JSON canónico ([id, id, ...] en el orden del catálogo; '' = ninguna). Cada id es una fila de Nuestras Clasificaciones del mismo cliente.
+function parseClassificationIds(text) {
+    let list;
+    try { list = JSON.parse(text || '[]'); } catch { return []; }
+    return Array.isArray(list) ? list.map(Number).filter((n) => Number.isInteger(n)) : [];
+}
+
+// Contexto que necesitan los registros del catálogo para mostrar nombres: almacenes / sub almacenes (centros de costos, almacenes) o Inventario (nombres de sus clasificaciones).
+function categoryContext(req, categoryType) {
+    const warehouse = warehouseContext(req, categoryType);
+    if (warehouse || categoryType !== 'inventario') return warehouse;
+    const { clientId, isTestAccount } = req.user;
+    return { classifications: new Map(listArticleCategories(clientId, 'clasificaciones', isTestAccount).map((r) => [r.id, { name: r.name, status: r.status }])) };
+}
+
+// Revisa el PATCH de las clasificaciones de una categoría de Inventario: ids que existen en el catálogo (las inactivas solo si ya estaban puestas), sin repetir y en el orden del catálogo.
+function prepareClassificationPatch(req, categoryType, existing, patch) {
+    if (categoryType !== 'inventario' || !Object.prototype.hasOwnProperty.call(patch, 'classificationIds')) return { patch, sanitizers: {} };
+    const { clientId, isTestAccount } = req.user;
+    const bad = (message) => ({ error: { status: 400, message } });
+    const input = patch.classificationIds;
+    let ids = [];
+    if (input !== '' && input != null) {
+        if (!Array.isArray(input) || !input.every((n) => Number.isInteger(Number(n)))) return bad('Las clasificaciones no tienen el formato correcto.');
+        ids = [...new Set(input.map(Number))];
+    }
+    const all = listArticleCategories(clientId, 'clasificaciones', isTestAccount);
+    const byId = new Map(all.map((r) => [r.id, r]));
+    const current = new Set(parseClassificationIds(existing.classification_ids));
+    for (const id of ids) {
+        const row = byId.get(id);
+        if (!row) return bad('Una de las clasificaciones ya no existe. Vuelve a elegirla.');
+        if (row.status !== 'active' && !current.has(id)) return bad(`La clasificación "${row.name || `CLA-${String(row.record_number).padStart(3, '0')}`}" está inactiva. Elige una activa.`);
+    }
+    const ordered = all.filter((r) => ids.includes(r.id)).map((r) => r.id);
+    const nameOf = (value) => parseClassificationIds(value).map((id) => (byId.get(id) || {}).name).filter(Boolean).join(', ');
+    return { patch: { ...patch, classificationIds: ordered.length ? JSON.stringify(ordered) : '' }, sanitizers: { classificationIds: nameOf } };
+}
+
 function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null) {
     if (!row) return row;
     const config = articleCategoryTypeConfig(row.category_type);
@@ -6698,6 +6738,10 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             parentId: row.parent_id, parentName: ctx.warehouses.get(row.parent_id) || '',
             kind: row.kind, locations: row.kind === 'physical' ? parseWarehouseLocations(row.locations) : [],
         } : {}),
+        ...(ctx && row.category_type === 'inventario' ? (() => {
+            const ids = parseClassificationIds(row.classification_ids);
+            return { classificationIds: ids, classifications: ids.map((id) => ({ id, ...(ctx.classifications.get(id) || {}) })).filter((c) => c.name !== undefined) };
+        })() : {}),
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({
             companyName,
@@ -6718,7 +6762,7 @@ app.get('/api/business/article-categories/:categoryType', requireAuth, (req, res
     const client = getClientById(req.user.clientId);
     res.json({
         categories: listArticleCategories(req.user.clientId, req.params.categoryType, req.user.isTestAccount)
-            .map((r) => mapArticleCategoryRecord(r, pendingByRecord, client?.company_name, warehouseContext(req, req.params.categoryType))),
+            .map((r) => mapArticleCategoryRecord(r, pendingByRecord, client?.company_name, categoryContext(req, req.params.categoryType))),
     });
 });
 
@@ -6736,7 +6780,7 @@ app.post('/api/business/article-categories/:categoryType', requireAuth, (req, re
     });
     notifyButtonAction(req, config.tableKey, 'create', `#${category.id}`);
     const client = getClientById(req.user.clientId);
-    res.status(201).json({ category: mapArticleCategoryRecord(category, null, client?.company_name, warehouseContext(req, req.params.categoryType)) });
+    res.status(201).json({ category: mapArticleCategoryRecord(category, null, client?.company_name, categoryContext(req, req.params.categoryType)) });
 });
 
 app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, (req, res) => {
@@ -6746,12 +6790,15 @@ app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, (re
     const existing = getArticleCategoryById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing || existing.category_type !== req.params.categoryType) return res.status(404).json({ message: 'Category not found.' });
     const { baseline, overrideConflicts, ...rawPatch } = req.body || {};
-    const prepared = prepareWarehousePatch(req, req.params.categoryType, existing, rawPatch);
-    if (prepared.error) return res.status(prepared.error.status).json({ message: prepared.error.message });
+    const preparedWarehouse = prepareWarehousePatch(req, req.params.categoryType, existing, rawPatch);
+    if (preparedWarehouse.error) return res.status(preparedWarehouse.error.status).json({ message: preparedWarehouse.error.message });
+    const preparedClassification = prepareClassificationPatch(req, req.params.categoryType, existing, preparedWarehouse.patch);
+    if (preparedClassification.error) return res.status(preparedClassification.error.status).json({ message: preparedClassification.error.message });
+    const prepared = { patch: preparedClassification.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers } };
     const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, articleCategoryPatchableFields(req.params.categoryType), config.tableKey, `#${existing.id}`, prepared.sanitizers, { baseline, overrideConflicts });
     const category = updateArticleCategory(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
-    res.json({ category: mapArticleCategoryRecord(category, null, client?.company_name, warehouseContext(req, req.params.categoryType)), pendingFields, rejectedFields, conflictFields });
+    res.json({ category: mapArticleCategoryRecord(category, null, client?.company_name, categoryContext(req, req.params.categoryType)), pendingFields, rejectedFields, conflictFields });
 });
 
 app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, (req, res) => {
@@ -6770,6 +6817,11 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, (r
     if (req.params.categoryType === 'almacenes'
         && listArticleCategories(req.user.clientId, 'sub-almacenes', req.user.isTestAccount).some((r) => r.parent_id === existing.id)) {
         return res.status(409).json({ message: 'Este almacén tiene sub almacenes. Quítalos primero o márcalo como Inactivo.' });
+    }
+    // Una clasificación que alguna categoría de Inventario ya tiene no se borra (se deja Inactiva): esas categorías la perderían.
+    if (req.params.categoryType === 'clasificaciones') {
+        const users = listArticleCategories(req.user.clientId, 'inventario', req.user.isTestAccount).filter((r) => parseClassificationIds(r.classification_ids).includes(existing.id));
+        if (users.length) return res.status(409).json({ message: `Esta clasificación está asignada a ${users.length === 1 ? 'una categoría' : `${users.length} categorías`} de Inventario (${users.slice(0, 3).map((r) => r.name || `INV-${String(r.record_number).padStart(3, '0')}`).join(', ')}). Quítala de ahí primero o márcala como Inactiva.` });
     }
     if (WAREHOUSE_TYPES.has(req.params.categoryType)
         && listCodeRelationsBy(req.user.clientId, req.user.isTestAccount, req.params.categoryType === 'almacenes' ? 'warehouse_id' : 'sub_warehouse_id', existing.id).length) {

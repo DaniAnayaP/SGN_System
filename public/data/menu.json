@@ -737,6 +737,7 @@
             },
             { "id": "colCatName", "labelKey": "main.colCatName", "permissionOnly": true },
             { "id": "colCatDescription", "labelKey": "main.colCatDescription", "permissionOnly": true },
+            { "id": "colCatClasificaciones", "labelKey": "main.colCatClasificaciones", "permissionOnly": true },
             { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,

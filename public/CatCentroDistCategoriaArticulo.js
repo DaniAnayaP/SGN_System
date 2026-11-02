@@ -41,12 +41,16 @@ const IS_WAREHOUSE = CATEGORY_TYPE === 'almacenes' || CATEGORY_TYPE === 'sub-alm
 const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : 'main.newArticleCategory';
 // Centros de costos, almacenes y las zonas / anaqueles del Layout guardado (GET /api/business/warehouse-options).
 let warehouseOptions = { costCenters: [], warehouses: [], zones: [] };
+// Categorías de Inventario: cada una elige cuáles clasificaciones (catálogo Nuestras Clasificaciones) tiene; aquí van todas las del catálogo con su estatus.
+const IS_INVENTORY = CATEGORY_TYPE === 'inventario';
+let classificationOptions = [];
 
 (async function init() {
     try {
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
         if (IS_WAREHOUSE) await loadWarehouseOptions();
+        if (IS_INVENTORY) await loadClassificationOptions();
         renderNewRecordButton();
         await refreshTable();
     } catch (err) {
@@ -186,6 +190,8 @@ async function deleteCategory(id, tr) {
         const res = await fetch(`${CATEGORY_API_BASE}/${id}`, { method: 'DELETE', credentials: 'include' });
         if (!res.ok) {
             if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
+            // 409 = algo todavía usa este registro (una clasificación asignada a categorías, un almacén con sub almacenes…): el servidor explica qué
+            if (res.status === 409) { const body = await res.json().catch(() => ({})); Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'warning'); return; }
             throw new Error('delete failed');
         }
         tr.remove();
@@ -275,7 +281,7 @@ function applyCategoryFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion']
+        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !haystack.includes(text);
@@ -289,7 +295,7 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear
 // ensureCreatedThenPatch), so clicking this and never touching the row never
 // leaves a blank category behind.
 function createNewCategory() {
-    const draft = { id: null, registroUnico: '', code: '', name: '', description: '', status: '', parentId: null, parentName: '', kind: '', locations: [], pendingFields: [] };
+    const draft = { id: null, registroUnico: '', code: '', name: '', description: '', status: '', parentId: null, parentName: '', kind: '', locations: [], classificationIds: [], classifications: [], pendingFields: [] };
     const tbody = getTbody();
     const emptyRow = tbody.querySelector('td.data-table-empty-cell')?.closest('tr');
     if (emptyRow) emptyRow.remove();
@@ -387,7 +393,114 @@ function buildLocationCell(record) {
     return td;
 }
 
+// --- Clasificaciones de una categoría de Inventario ----------------------------------------------------------------------------------
+async function loadClassificationOptions() {
+    try {
+        const res = await fetch('/api/business/article-categories/clasificaciones', { credentials: 'include' });
+        if (!res.ok) throw new Error('options failed');
+        const { categories } = await res.json();
+        classificationOptions = categories.map((c) => ({ id: c.id, code: c.code, name: c.name, description: c.description, status: c.status }));
+    } catch (err) {
+        console.error('Categorías de Inventario: failed to load classifications', err);
+    }
+}
+
+function describeClassifications(record) {
+    return (record.classifications || []).map((c) => c.name).filter(Boolean).join(', ');
+}
+
+function buildClassificationCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colCatClasificaciones';
+    const summary = describeClassifications(record);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-secondary wh-location-btn';
+    btn.setAttribute('data-help-key', 'clsAssignBtn');
+    btn.textContent = summary || Dashboard.t('main.clsAssign');
+    btn.title = summary || Dashboard.t('main.clsAssign');
+    btn.disabled = isPending(record, 'classificationIds') || !Dashboard.canEditField(TABLE_KEY, 'colCatClasificaciones', summary);
+    if (btn.disabled) btn.title = Dashboard.t(isPending(record, 'classificationIds') ? 'main.changePending' : 'main.fieldLocked');
+    btn.addEventListener('click', () => openClassificationDialog(record));
+    td.appendChild(btn);
+    return td;
+}
+
+let clsModalEl = null;
+let clsState = null; // { record, picked: Set(id) }
+
+function ensureClassificationModal() {
+    if (clsModalEl) return;
+    clsModalEl = document.createElement('div');
+    clsModalEl.className = 'modal-overlay';
+    clsModalEl.id = 'cls-modal';
+    clsModalEl.hidden = true;
+    clsModalEl.innerHTML = `<div class="modal-panel wh-location-dialog" role="dialog" aria-modal="true" aria-labelledby="cls-title">
+        <h3 id="cls-title"></h3>
+        <div class="wh-location-list" id="cls-list"></div>
+        <div class="admin-form-actions"><button type="button" class="btn" id="cls-save">${Dashboard.t('main.whSave')}</button><button type="button" class="btn btn-secondary" id="cls-close">${Dashboard.t('main.whClose')}</button></div>
+    </div>`;
+    document.body.appendChild(clsModalEl);
+    clsModalEl.addEventListener('click', (event) => {
+        if (event.target === clsModalEl || event.target.closest('#cls-close')) { closeClassificationDialog(); return; }
+        if (event.target.closest('#cls-save')) saveClassificationDialog();
+    });
+    clsModalEl.addEventListener('change', (event) => {
+        const box = event.target;
+        if (!(box instanceof HTMLInputElement) || !clsState) return;
+        const id = Number(box.value);
+        if (box.checked) clsState.picked.add(id); else clsState.picked.delete(id);
+    });
+}
+
+function openClassificationDialog(record) {
+    ensureClassificationModal();
+    clsState = { record, picked: new Set(record.classificationIds || []) };
+    document.getElementById('cls-title').textContent = Dashboard.t('main.clsAssignTitle').replace('{name}', record.name || record.code || '');
+    const list = document.getElementById('cls-list');
+    list.innerHTML = '';
+    // las activas, y las inactivas solo si la categoría ya las tiene (se pueden quitar, no agregar)
+    const shown = classificationOptions.filter((c) => c.status === 'active' || clsState.picked.has(c.id));
+    if (!shown.length) {
+        const p = document.createElement('p');
+        p.className = 'wh-muted';
+        p.textContent = Dashboard.t('main.clsNone');
+        list.appendChild(p);
+    }
+    shown.forEach((c) => {
+        const label = document.createElement('label');
+        label.className = 'wh-zone-all';
+        label.setAttribute('data-help-key', 'clsPick');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = String(c.id);
+        cb.checked = clsState.picked.has(c.id);
+        const title = document.createElement('b');
+        title.textContent = c.name || Dashboard.t('main.whNoName');
+        const hint = document.createElement('span');
+        hint.className = 'wh-muted';
+        hint.textContent = [c.description, c.status === 'active' ? '' : `(${Dashboard.t('admin.statusInactivo')})`].filter(Boolean).join(' · ');
+        label.append(cb, title, hint);
+        list.appendChild(label);
+    });
+    clsModalEl.hidden = false;
+}
+
+function closeClassificationDialog() {
+    if (clsModalEl) clsModalEl.hidden = true;
+    clsState = null;
+}
+
+function saveClassificationDialog() {
+    if (!clsState) return;
+    const { record, picked } = clsState;
+    closeClassificationDialog();
+    ensureCreatedThenPatch(record, { classificationIds: Array.from(picked) });
+}
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && clsState) closeClassificationDialog(); });
+
 function buildExtraCells(record) {
+    if (IS_INVENTORY) return [buildClassificationCell(record)];
     if (CATEGORY_TYPE === 'almacenes') {
         return [buildOptionCell(record, 'colAlmCentroCostos', 'parentId', 'whCostCenter',
             warehouseOptions.costCenters.map((c) => ({ value: c.id, label: c.name })), record.parentId, record.parentName,

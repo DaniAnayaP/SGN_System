@@ -2343,6 +2343,8 @@ const articleCategoryColumns = db.prepare('PRAGMA table_info(article_categories)
 if (!articleCategoryColumns.some((c) => c.name === 'parent_id')) db.exec('ALTER TABLE article_categories ADD COLUMN parent_id INTEGER');
 if (!articleCategoryColumns.some((c) => c.name === 'kind')) db.exec("ALTER TABLE article_categories ADD COLUMN kind TEXT NOT NULL DEFAULT ''");
 if (!articleCategoryColumns.some((c) => c.name === 'locations')) db.exec("ALTER TABLE article_categories ADD COLUMN locations TEXT NOT NULL DEFAULT ''");
+// Categorías de Inventario: classification_ids = las clasificaciones (catálogo Nuestras Clasificaciones) que tiene esa categoría, como texto JSON canónico [id, id, ...] ('' = ninguna).
+if (!articleCategoryColumns.some((c) => c.name === 'classification_ids')) db.exec("ALTER TABLE article_categories ADD COLUMN classification_ids TEXT NOT NULL DEFAULT ''");
 
 // Relación Código (Operaciones, C. Distribución): dónde vive un código. Una fila por LUGAR (un mismo artículo puede tener varios): centro de costos > almacén > sub almacén >
 // zona > anaquel > nivel > espacio. Lo que está debajo del almacén es opcional (la fila queda "A medias" hasta completarlo). Zonas y anaqueles son ids del Layout guardado.
@@ -5176,6 +5178,10 @@ const ARTICLE_CATEGORY_PATCHABLE_FIELDS = {
 };
 // Campos propios de cada catálogo que tiene más que nombre/descripción/estatus. parentId = centro de costos (almacén) o almacén (sub almacén).
 const ARTICLE_CATEGORY_EXTRA_FIELDS = {
+    // Cada categoría de Inventario elige cuáles clasificaciones tiene (Patente, Genérico…); el código las ofrece según la categoría que se le puso.
+    inventario: {
+        classificationIds: { column: 'classification_ids', fieldKey: 'main.colCatClasificaciones' },
+    },
     almacenes: {
         parentId: { column: 'parent_id', fieldKey: 'main.colAlmCentroCostos' },
     },
@@ -5188,7 +5194,7 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
 function articleCategoryPatchableFields(categoryType) {
     return { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, ...(ARTICLE_CATEGORY_EXTRA_FIELDS[categoryType] || {}) };
 }
-const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' } };
+const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' } };
 
 function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
     const sets = [];

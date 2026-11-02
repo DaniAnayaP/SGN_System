@@ -2383,6 +2383,10 @@
     "colSubAlmTipo": "Tipo",
     "colSubAlmUbicacion": "Ubicación asignada",
     "newClassification": "Nueva Clasificación",
+    "colCatClasificaciones": "Clasificaciones",
+    "clsAssign": "Asignar…",
+    "clsAssignTitle": "Clasificaciones de {name}",
+    "clsNone": "Todavía no hay clasificaciones. Créalas en Catálogos > Nuestras Clasificaciones.",
     "newWarehouse": "Nuevo Almacén",
     "newSubWarehouse": "Nuevo Sub Almacén",
     "whChoose": "Elige…",
@@ -3381,6 +3385,14 @@
     "whKind": {
       "what": "Físico: existe en la nave y se le asignan zonas o anaqueles del Layout. Virtual: no ocupa lugar en la nave, por ejemplo mercancía en tránsito o en consignación.",
       "example": "Medicamentos es físico; En tránsito es virtual."
+    },
+    "clsAssignBtn": {
+      "what": "Elige qué clasificaciones tiene esta categoría (las que existen en Catálogos > Nuestras Clasificaciones). Al dar de alta un código y elegir esta categoría, el campo Clasificación solo ofrecerá estas. Una clasificación puede estar en varias categorías.",
+      "example": "Medicamentos: Patente, Genérico, Antibiótico, Especiales, Perfumería y Oncología."
+    },
+    "clsPick": {
+      "what": "Marca las clasificaciones que tiene la categoría. Las inactivas solo salen si la categoría ya las tiene, para que las puedas quitar.",
+      "example": "marcas Patente y Genérico y guardas: esas dos quedan en la columna Clasificaciones."
     },
     "whLocationBtn": {
       "what": "Asigna a este sub almacén las zonas completas o los anaqueles del Layout que le pertenecen. Una zona o un anaquel solo puede ser de un sub almacén.",
