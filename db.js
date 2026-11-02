@@ -5151,6 +5151,15 @@ function countZoneCodesByCategory(clientId, forTestAccount, zoneId, categoryType
         FROM code_relations r JOIN sku_items s ON s.id = r.sku_item_id
         WHERE r.client_id = ? AND r.is_test_data = ? AND r.zone_id = ? GROUP BY s.${column}`).all(clientId, forTestAccount ? 1 : 0, zoneId);
 }
+// Buscador de la página pública del QR del Layout: los códigos que ya tienen ficha pública (los completos; nunca los que les faltan datos) y los lugares donde está cada uno.
+function listPublicSkuItemsForSearch(clientId) {
+    return db.prepare("SELECT id, record_number, upc, unique_description, known_description, custom_description, category_inventario, public_token FROM sku_items WHERE client_id = ? AND is_test_data = 0 AND public_token IS NOT NULL AND public_token != '' ORDER BY record_number ASC")
+        .all(clientId);
+}
+function listCodePlacesForSearch(clientId) {
+    return db.prepare("SELECT sku_item_id, zone_id, space_id, level FROM code_relations WHERE client_id = ? AND is_test_data = 0 AND zone_id IS NOT NULL AND zone_id != '' ORDER BY id ASC")
+        .all(clientId);
+}
 // Cuántos códigos distintos tiene Relación Código en cada zona ({ idDeLaZona: n }); alimenta la lista de Zonas de la página pública del QR del Layout.
 function countCodesByZone(clientId, forTestAccount = false) {
     const out = {};
@@ -10771,6 +10780,8 @@ module.exports = {
     countZoneCodesByCategory,
     countZoneCodesInCategory,
     countCodesByZone,
+    listPublicSkuItemsForSearch,
+    listCodePlacesForSearch,
     countSkuItemsByClassification,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,

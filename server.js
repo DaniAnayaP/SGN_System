@@ -158,6 +158,8 @@ const {
     countZoneCodesByCategory,
     countZoneCodesInCategory,
     countCodesByZone,
+    listPublicSkuItemsForSearch,
+    listCodePlacesForSearch,
     countSkuItemsByClassification,
     createArticleCategory,
     ARTICLE_CATEGORY_PATCHABLE_FIELDS,
@@ -6563,6 +6565,83 @@ app.get('/api/public/layout/:token', publicLayoutLimiter, (req, res) => {
     if (!row) return res.status(404).json({ message: 'Layout not found.' });
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json(buildPublicLayoutPayload(row.clientId, row));
+});
+
+// Buscador de la página pública (la lupa): zonas, categorías de las zonas y códigos, mientras se escribe. Sin sesión, con el mismo código aleatorio del QR y un tope por IP (más alto que el de
+// las demás rutas públicas porque se pide al ir escribiendo). Los códigos son solo los que ya tienen ficha pública (los completos), con su ficha y el lugar donde están según Relación Código;
+// nunca costos ni datos internos. type = all | zone | cat | code; z = limitar a una zona; mode = startsWith | contains | equals (los mismos tres del "Tipo de Filtro" de las tablas).
+const publicSearchLimiter = rateLimit({ windowMs: 60 * 1000, max: 240, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
+const foldText = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const publicSearchCache = new Map(); // clientId -> { at, codes, places }: se guarda unos segundos para no leer todos los códigos en cada letra
+function publicSearchData(clientId) {
+    const hit = publicSearchCache.get(clientId);
+    if (hit && Date.now() - hit.at < 20000) return hit;
+    const codes = listPublicSkuItemsForSearch(clientId).map((r) => ({
+        r,
+        sku: String(r.record_number).padStart(6, '0'),
+        name: r.custom_description || r.known_description || r.unique_description || '',
+        // cada campo se revisa por separado, como la celda de una columna (el código con y sin ceros a la izquierda)
+        fields: [String(r.record_number).padStart(6, '0'), String(r.record_number), r.upc, r.unique_description, r.known_description, r.custom_description, r.category_inventario].map(foldText),
+    }));
+    const places = new Map();
+    listCodePlacesForSearch(clientId).forEach((p) => { if (!places.has(p.sku_item_id)) places.set(p.sku_item_id, []); places.get(p.sku_item_id).push(p); });
+    const data = { at: Date.now(), codes, places };
+    publicSearchCache.set(clientId, data);
+    if (publicSearchCache.size > 200) publicSearchCache.delete(publicSearchCache.keys().next().value);
+    return data;
+}
+const PUBLIC_SEARCH_LIMIT = 10;
+// Igual que el "Tipo de Filtro" de las tablas (textRuleMatches en Dashboard.js): Inicia con, Contiene o Igual que; lo escrito puede ser varias palabras separadas por coma y se cumple CUALQUIERA de
+// ellas (un "o", nunca un "y"); mayúsculas, acentos y espacios junto a la coma no cuentan. "Igual que" también parte por coma lo que trae el campo.
+const PUBLIC_SEARCH_MODES = ['startsWith', 'contains', 'equals'];
+const publicSearchMatcher = (mode, terms) => (fields) => fields.some((f) => {
+    if (!f) return false;
+    if (mode === 'equals') { const parts = f.split(',').map((p) => p.trim()); return terms.some((t) => parts.includes(t)); }
+    return terms.some((t) => (mode === 'startsWith' ? f.startsWith(t) : f.includes(t)));
+});
+app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
+    const row = getLayoutByPublicToken(req.params.token);
+    if (!row) return res.status(404).json({ message: 'Layout not found.' });
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
+    const terms = foldText(String(req.query.q || '').slice(0, 80)).split(',').map((s) => s.trim()).filter(Boolean).slice(0, 6);
+    const type = ['zone', 'cat', 'code'].includes(req.query.type) ? req.query.type : 'all';
+    const zones = (row.layout.zones || []).filter((z) => z.active !== false);
+    const zoneFilter = zones.some((z) => z.id === String(req.query.z || '')) ? String(req.query.z) : '';
+    const out = { zones: [], categories: [], codes: [], totals: { zones: 0, categories: 0, codes: 0 } };
+    // Contiene pide al menos 2 letras o números (con 1 saldría casi todo); Inicia con e Igual que sí sirven con 1 (una zona "A", un anaquel "B").
+    if (!terms.length || Math.max(...terms.map((t) => t.length)) < (mode === 'contains' ? 2 : 1)) return res.json(out);
+    const matches = publicSearchMatcher(mode, terms);
+    const inScope = (id) => !zoneFilter || id === zoneFilter;
+    if (type === 'all' || type === 'zone') {
+        const found = zones.filter((z) => inScope(z.id) && matches([foldText(z.name)]));
+        out.totals.zones = found.length;
+        out.zones = found.slice(0, PUBLIC_SEARCH_LIMIT).map((z) => ({ id: z.id, name: z.name, categories: (z.categories || []).length }));
+    }
+    if (type === 'all' || type === 'cat') {
+        const found = [];
+        zones.filter((z) => inScope(z.id)).forEach((z) => (z.categories || []).forEach((c) => {
+            if (matches([foldText(c.name), foldText(c.desc)])) found.push({ zoneId: z.id, zoneName: z.name, id: c.id, name: c.name, desc: c.desc || '', color: c.color, icon: c.icon });
+        }));
+        out.totals.categories = found.length;
+        out.categories = found.slice(0, PUBLIC_SEARCH_LIMIT);
+    }
+    if (type === 'all' || type === 'code') {
+        const data = publicSearchData(row.clientId);
+        const zoneById = new Map(zones.map((z) => [z.id, z]));
+        const spaceById = new Map((row.layout.spaces || []).filter((s) => s.active !== false).map((s) => [s.id, s]));
+        const found = data.codes.filter((c) => matches(c.fields) && (!zoneFilter || (data.places.get(c.r.id) || []).some((p) => p.zone_id === zoneFilter)));
+        out.totals.codes = found.length;
+        out.codes = found.slice(0, PUBLIC_SEARCH_LIMIT).map((c) => {
+            const placed = (data.places.get(c.r.id) || []).filter((p) => zoneById.has(p.zone_id));
+            const where = placed.slice(0, 2).map((p) => [zoneById.get(p.zone_id).name, (spaceById.get(p.space_id) || {}).code, p.level ? `Nivel ${p.level}` : ''].filter(Boolean).join(' › ')).join(' · ');
+            return {
+                sku: c.sku, name: c.name, category: c.r.category_inventario || '', token: c.r.public_token, where,
+                zoneId: placed.length ? placed[0].zone_id : '', spaceIds: [...new Set(placed.map((p) => p.space_id).filter((id) => spaceById.has(id)))],
+            };
+        });
+    }
+    res.json(out);
 });
 
 // --- Nuestras Categorías <Tipo> (Catálogos > Cadena de Suministro > C. -----

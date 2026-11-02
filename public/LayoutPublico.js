@@ -18,6 +18,11 @@
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
             home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
             rotate: 'Girar el croquis', measures: 'Medidas', areaBtn: 'm² de las zonas', layers: 'Capas del croquis',
+            search: 'Buscar', searchAll: 'Buscar en todo el Layout', searchIn: 'Buscar en {z}', searchClear: 'Borrar', searchTypes: 'Qué buscar', searchType: { all: 'Todo', zone: 'Zonas', cat: 'Categorías', code: 'Códigos' },
+            searchMode: 'Tipo de Filtro', searchModes: { startsWith: 'Inicia con', contains: 'Contiene', equals: 'Igual que' },
+            searchScopeLabel: 'Buscando en:', searchScopeZone: '{z} (tocar para ampliar)', searchScopeAll: 'Todo el Layout (tocar para limitar a {z})', searchHint: 'Escribe un código, una descripción, una zona o una categoría. Con comas se busca cualquiera de las palabras.',
+            searchNone: 'No hay resultados para "{q}".', searchNoneZone: 'No hay resultados para "{q}" en {z}.', searchWiden: 'Buscar en todo el Layout', searchBusy: 'Buscando…', searchError: 'No se pudo buscar. Intenta de nuevo.',
+            searchGroup: { zone: 'Zonas', cat: 'Categorías', code: 'Códigos' }, searchOne: '1 resultado', searchMany: '{n} resultados', searchMore: 'Mostrando {n} de {t}. Escribe más para afinar.', searchCats: '{n} categorías', searchCat1: '1 categoría',
             layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Anaqueles y gabetas' },
             zone: { dry: 'Seco', cold: 'Refrigerado', chemical: 'Químicos', finished: 'Producto terminado', dock: 'Andén', office: 'Oficina', aisle: 'Pasillo principal', aisle2: 'Pasillo entre anaqueles' },
         },
@@ -32,6 +37,11 @@
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
             home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
             rotate: 'Rotate the sketch', measures: 'Measures', areaBtn: 'Zone m²', layers: 'Sketch layers',
+            search: 'Search', searchAll: 'Search the whole Layout', searchIn: 'Search in {z}', searchClear: 'Clear', searchTypes: 'What to look for', searchType: { all: 'All', zone: 'Zones', cat: 'Categories', code: 'Codes' },
+            searchMode: 'Filter type', searchModes: { startsWith: 'Starts with', contains: 'Contains', equals: 'Equal to' },
+            searchScopeLabel: 'Searching in:', searchScopeZone: '{z} (tap to widen)', searchScopeAll: 'Whole Layout (tap to limit to {z})', searchHint: 'Type a code, a description, a zone or a category. With commas, any of the words matches.',
+            searchNone: 'No results for "{q}".', searchNoneZone: 'No results for "{q}" in {z}.', searchWiden: 'Search the whole Layout', searchBusy: 'Searching…', searchError: 'The search failed. Try again.',
+            searchGroup: { zone: 'Zones', cat: 'Categories', code: 'Codes' }, searchOne: '1 result', searchMany: '{n} results', searchMore: 'Showing {n} of {t}. Type more to narrow it down.', searchCats: '{n} categories', searchCat1: '1 category',
             layer: { contorno: 'Outline', puertas: 'Doors', luz: 'Power connections', zonas: 'Zones', espacios: 'Racks and cabinets' },
             zone: { dry: 'Dry', cold: 'Refrigerated', chemical: 'Chemicals', finished: 'Finished goods', dock: 'Dock', office: 'Office', aisle: 'Main aisle', aisle2: 'Aisle between racks' },
         },
@@ -93,8 +103,8 @@
             const zoneObj = view.data && (view.data.layout.zones || []).find((z) => z.id === params.get('z'));
             if (zoneObj) {
                 // el croquis sombrea la zona de esa categoría con su color
-                viewFocus.value = { zones: { [zoneObj.id]: look.color } };
-                redrawMap(view.data);
+                setBaseFocus({ zones: { [zoneObj.id]: look.color } });
+                if (searchState.open) applySearchFocus(); else redrawMap(view.data);
             }
             slot.innerHTML = `${zoneObj ? crumbsHtml(upCrumbs(zoneObj, cat.name)) : ''}<div class="catbanner" style="border-left-color:${esc(look.color)}"><span class="catmark" style="background:${esc(look.color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">${window.LayoutMapSvg.categoryGlyph(look.icon, '#FFFFFF', 2)}</svg></span><div><div class="cattitle">${esc(cat.name)}</div><div class="catsub">${esc(cat.zoneName)} · ${esc(count)}</div>${cat.codes ? '' : `<p class="catnote">${esc(TEXT.noCodes)}</p>`}</div></div>`;
         } catch (err) {
@@ -196,6 +206,8 @@
         home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
         rotate: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>',
         area: '<rect x="4" y="4" width="16" height="16" rx="2"/><text x="12" y="15.2" font-size="8" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">m²</text>',
+        search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+        code: '<path d="M4 6v12M8 6v12M12 6v12M16 6v12M20 6v12"/>',
     };
 
     // Botones del croquis (los mismos del Layout con sesión): girar, ver/ocultar medidas, ver/ocultar los m² de cada zona y las capas que se dibujan. Cada quien los mueve para verlo
@@ -203,21 +215,27 @@
     const LAYER_KEYS = ['contorno', 'puertas', 'luz', 'zonas', 'espacios'];
     const mapView = { layers: ['contorno', 'puertas', 'zonas', 'espacios'], measures: true, area: true, rotation: 0 };
     // Lo que se está buscando en el croquis ({ zones: { id: color } }): la zona de la categoría que se escaneó sale sombreada y el resto tenue.
-    const viewFocus = { value: null };
+    // value = lo que se dibuja ahora (el croquis base o el de la búsqueda); base = lo que corresponde a la página sin buscar; key = lo ya dibujado, para no redibujar sin necesidad.
+    const viewFocus = { value: null, base: null, key: 'null' };
+    function setBaseFocus(focus) { viewFocus.base = focus; viewFocus.value = focus; }
     function mapToolbarHtml() {
         const icon = (name, extra = '') => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}${extra}</svg>`;
         const slash = '<path class="slash" d="M4 20L20 4"/>';
         const pills = LAYER_KEYS.map((key) => `<button type="button" class="lpill" data-map-layer="${key}" aria-pressed="${mapView.layers.includes(key)}"${key === 'contorno' ? ' aria-disabled="true"' : ''}>${esc(TEXT.layer[key])}</button>`).join('');
         return `<div class="maptools-row"><div class="ricons">
+            <button type="button" class="ricon" data-map-search aria-expanded="false" aria-controls="search-panel" aria-label="${esc(TEXT.search)}" title="${esc(TEXT.search)}">${icon('search')}</button>
             <button type="button" class="ricon" data-map-rot aria-label="${esc(TEXT.rotate)}" title="${esc(TEXT.rotate)}">${icon('rotate')}</button>
             <button type="button" class="ricon" data-map-meas aria-pressed="${mapView.measures}" aria-label="${esc(TEXT.measures)}" title="${esc(TEXT.measures)}">${icon('ruler', slash)}</button>
             <button type="button" class="ricon" data-map-area aria-pressed="${mapView.area}" aria-label="${esc(TEXT.areaBtn)}" title="${esc(TEXT.areaBtn)}">${icon('area', slash)}</button>
-        </div><div class="lpills" role="group" aria-label="${esc(TEXT.layers)}">${pills}</div></div>`;
+        </div><div class="lpills" role="group" aria-label="${esc(TEXT.layers)}">${pills}</div></div>${searchPanelHtml()}`;
     }
     function mapInnerHtml(data) {
         const theme = window.LayoutMapSvg.theme(data.companyColor);
+        viewFocus.key = JSON.stringify(viewFocus.value);
         return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, layers: mapView.layers, measures: mapView.measures, area: mapView.area, rotation: mapView.rotation, focus: viewFocus.value })}${mapToolsHtml()}`;
     }
+    // Barra de botones + croquis + el lugar donde salen los resultados del buscador (la lupa); igual en el Layout general, en una zona y en una categoría.
+    const mapBlockHtml = (data) => `${mapToolbarHtml()}<div class="map">${mapInnerHtml(data)}</div><div id="sres" class="sres" aria-live="polite"></div>`;
     // El croquis se vuelve a dibujar con los botones; el contenedor es nuevo para que el zoom empiece limpio y no se acumulen sus escuchas.
     function redrawMap(data) {
         const old = document.querySelector('#wrap .map');
@@ -228,7 +246,192 @@
         old.replaceWith(next);
         enableMapZoom();
     }
-    const iconSvg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+
+    // ---- Buscador (la lupa) ----------------------------------------------------------------------------------------------------------------------------------------------------
+    // Al tocar la lupa se abre el buscador; conforme se escribe se piden a /api/public/layout/:token/search las zonas, categorías y códigos que coinciden y el croquis se sombrea con
+    // ellos (las zonas con su color, los anaqueles donde está cada código en rojo). Dentro de una zona busca solo ahí, con un toque para ampliar a todo el Layout. Al cerrarlo todo vuelve.
+    const SEARCH_TYPES = ['all', 'zone', 'cat', 'code'];
+    const SEARCH_RED = '#C0392B';
+    // mode = el "Tipo de Filtro" de las tablas: Inicia con, Contiene (el de siempre) o Igual que.
+    const SEARCH_MODES = ['startsWith', 'contains', 'equals'];
+    const searchState = { open: false, q: '', type: 'all', mode: 'contains', scope: false, timer: null, ctl: null, seq: 0, busy: false, error: false, results: null };
+    const foldText = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const fill = (text, vars) => Object.keys(vars).reduce((acc, k) => acc.split(`{${k}}`).join(vars[k]), text);
+    // Lo escrito son una o varias palabras separadas por coma (cualquiera de ellas sirve), sin acentos ni mayúsculas; igual que en las tablas.
+    const searchTerms = (raw) => foldText(raw).split(',').map((s) => s.trim()).filter(Boolean).slice(0, 6);
+    // Contiene pide al menos 2 letras o números; Inicia con e Igual que sirven con 1 (lo mismo que valida el servidor).
+    const searchReady = (terms) => terms.length > 0 && Math.max(...terms.map((t) => t.length)) >= (searchState.mode === 'contains' ? 2 : 1);
+    // Marca lo que cumple, como en las tablas: cada aparición de cualquier palabra (Contiene) o solo el arranque (Inicia con); con Igual que no se marca.
+    function highlight(text, terms) {
+        const t = String(text == null ? '' : text);
+        if (!terms || !terms.length || searchState.mode === 'equals') return esc(t);
+        const folded = foldText(t);
+        const sorted = terms.slice().sort((a, b) => b.length - a.length);
+        let out = '';
+        let at = 0;
+        while (at < t.length) {
+            let hit = -1;
+            let len = 0;
+            sorted.forEach((term) => {
+                const i = searchState.mode === 'startsWith' ? (folded.startsWith(term, at) && at === 0 ? 0 : -1) : folded.indexOf(term, at);
+                if (i >= 0 && (hit < 0 || i < hit)) { hit = i; len = term.length; }
+            });
+            if (hit < 0) break;
+            out += `${esc(t.slice(at, hit))}<mark>${esc(t.slice(hit, hit + len))}</mark>`;
+            at = hit + len;
+            if (searchState.mode === 'startsWith') break;
+        }
+        return out + esc(t.slice(at));
+    }
+    const searchEl = (id) => document.getElementById(id);
+    // La zona donde se está parado (página de una zona o de una categoría) y si la búsqueda está limitada a ella.
+    const searchPageZone = () => (view.data ? scanContext(view.data).zone : null);
+    const searchScopeZone = () => (searchState.scope ? searchPageZone() : null);
+    const zoneBrandColor = () => { const th = window.LayoutMapSvg.theme(view.data.companyColor); return th.custom ? th.chrome.badge : '#6C7CF0'; };
+
+    function searchPanelHtml() {
+        const zone = searchPageZone();
+        const chips = SEARCH_TYPES.map((k) => `<button type="button" class="lpill" data-search-type="${k}" aria-pressed="${searchState.type === k}">${esc(TEXT.searchType[k])}</button>`).join('');
+        const modes = SEARCH_MODES.map((k) => `<button type="button" class="lpill" data-search-mode="${k}" aria-pressed="${searchState.mode === k}">${esc(TEXT.searchModes[k])}</button>`).join('');
+        return `<div class="spanel" id="search-panel" hidden>
+            <div class="sbox" id="search-box"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.search}</svg><input id="search-q" type="search" inputmode="search" enterkeyhint="search" maxlength="60" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(TEXT.searchAll)}" aria-label="${esc(TEXT.search)}"><button type="button" class="sx" data-search-clear aria-label="${esc(TEXT.searchClear)}" title="${esc(TEXT.searchClear)}" hidden>×</button></div>
+            <div class="schips" role="group" aria-label="${esc(TEXT.searchTypes)}">${chips}</div>
+            <div class="schips" role="group" aria-label="${esc(TEXT.searchMode)}">${modes}</div>
+            ${zone ? `<div class="sscope"><span>${esc(TEXT.searchScopeLabel)}</span><button type="button" id="search-scope" data-search-scope></button></div>` : ''}
+        </div>`;
+    }
+    // El texto de la caja y del botón de alcance sigue a lo que se está buscando.
+    function drawSearchScope() {
+        const zone = searchPageZone();
+        const input = searchEl('search-q');
+        const scoped = searchScopeZone();
+        if (input) input.placeholder = scoped ? fill(TEXT.searchIn, { z: scoped.name }) : TEXT.searchAll;
+        const btn = searchEl('search-scope');
+        if (btn && zone) btn.textContent = scoped ? fill(TEXT.searchScopeZone, { z: zone.name }) : fill(TEXT.searchScopeAll, { z: zone.name });
+    }
+    // Qué se sombrea en el croquis según los resultados: zonas (color de la marca), categorías (su color, encima), la zona de cada código y los anaqueles donde está (rojo).
+    function searchFocusFrom(res) {
+        if (!res) return null;
+        const zones = {};
+        const spaces = {};
+        const brand = zoneBrandColor();
+        (res.zones || []).forEach((z) => { zones[z.id] = brand; });
+        (res.categories || []).forEach((c) => { zones[c.zoneId] = c.color || brand; });
+        (res.codes || []).forEach((c) => {
+            if (c.zoneId && !zones[c.zoneId]) zones[c.zoneId] = brand;
+            (c.spaceIds || []).forEach((id) => { spaces[id] = SEARCH_RED; });
+        });
+        return Object.keys(zones).length || Object.keys(spaces).length ? { zones, spaces } : null;
+    }
+    // Solo se vuelve a dibujar el croquis cuando lo sombreado cambió (cada redibujo reinicia el zoom).
+    function applySearchFocus() {
+        if (!view.data) return;
+        const next = searchState.open ? (searchFocusFrom(searchState.results) || viewFocus.base) : viewFocus.base;
+        if (JSON.stringify(next) === viewFocus.key) return;
+        viewFocus.value = next;
+        redrawMap(view.data);
+    }
+    function resultRow(href, color, glyphSvg, title, sub, q) {
+        return `<a class="res" href="${esc(href)}"><span class="m" style="background:${esc(color)}"><svg viewBox="0 0 24 24" aria-hidden="true">${glyphSvg}</svg></span><span class="t"><b>${highlight(title, q)}</b>${sub ? `<small>${sub}</small>` : ''}</span><span class="go" aria-hidden="true">›</span></a>`;
+    }
+    function renderSearchResults() {
+        const box = searchEl('sres');
+        if (!box) return;
+        if (!searchState.open) { box.innerHTML = ''; return; }
+        const raw = searchState.q.trim();
+        const q = searchTerms(raw);
+        if (!searchReady(q)) { box.innerHTML = `<p class="shint">${esc(TEXT.searchHint)}</p>`; return; }
+        if (searchState.error) { box.innerHTML = `<p class="sempty">${esc(TEXT.searchError)}</p>`; return; }
+        const res = searchState.results;
+        if (!res) { box.innerHTML = searchState.busy ? `<p class="shint">${esc(TEXT.searchBusy)}</p>` : ''; return; }
+        const scoped = searchScopeZone();
+        const zoneBase = (z) => `${window.location.pathname}?z=${encodeURIComponent(z)}`;
+        const groups = [];
+        if (res.zones.length) groups.push(['zone', res.totals.zones, res.zones.map((z) => resultRow(zoneBase(z.id), zoneBrandColor(), ICONS.layers, z.name, esc(z.categories === 1 ? TEXT.searchCat1 : fill(TEXT.searchCats, { n: fmt(z.categories) })), q)).join('')]);
+        if (res.categories.length) groups.push(['cat', res.totals.categories, res.categories.map((c) => resultRow(`${zoneBase(c.zoneId)}&c=${encodeURIComponent(c.id)}`, c.color, window.LayoutMapSvg.categoryGlyph(c.icon, '#FFFFFF', 2), c.name, `${esc(c.zoneName)}${c.desc ? ` · ${highlight(c.desc, q)}` : ''}`, q)).join('')]);
+        if (res.codes.length) groups.push(['code', res.totals.codes, res.codes.map((c) => resultRow(`/Ficha.html?token=${encodeURIComponent(c.token)}`, SEARCH_RED, `<g fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round">${ICONS.code}</g>`, `${c.sku} · ${c.name}`, [c.where ? `<b class="where">${esc(c.where)}</b>` : '', c.category ? esc(c.category) : ''].filter(Boolean).join(' · '), q)).join('')]);
+        if (!groups.length) {
+            box.innerHTML = `<p class="sempty">${esc(scoped ? fill(TEXT.searchNoneZone, { q: raw, z: scoped.name }) : fill(TEXT.searchNone, { q: raw }))}${scoped ? ` <button type="button" class="slink" data-search-widen>${esc(TEXT.searchWiden)}</button>` : ''}</p>`;
+            return;
+        }
+        box.innerHTML = groups.map(([kind, total, rows]) => {
+            const shown = (res[kind === 'zone' ? 'zones' : kind === 'cat' ? 'categories' : 'codes'] || []).length;
+            return `<div class="sgrp"><span>${esc(TEXT.searchGroup[kind])}</span><small>${esc(total === 1 ? TEXT.searchOne : fill(TEXT.searchMany, { n: fmt(total) }))}</small></div>${rows}${total > shown ? `<p class="smore">${esc(fill(TEXT.searchMore, { n: fmt(shown), t: fmt(total) }))}</p>` : ''}`;
+        }).join('');
+    }
+    async function runSearch() {
+        window.clearTimeout(searchState.timer);
+        if (searchState.ctl) searchState.ctl.abort();
+        const my = ++searchState.seq;
+        const raw = searchState.q.trim();
+        if (!searchReady(searchTerms(raw))) {
+            searchState.results = null; searchState.busy = false; searchState.error = false;
+            renderSearchResults(); applySearchFocus();
+            return;
+        }
+        searchState.busy = true;
+        const ctl = new AbortController();
+        searchState.ctl = ctl;
+        const zone = searchScopeZone();
+        const url = `/api/public/layout/${encodeURIComponent(publicToken())}/search?q=${encodeURIComponent(raw)}&type=${searchState.type}&mode=${searchState.mode}${zone ? `&z=${encodeURIComponent(zone.id)}` : ''}`;
+        try {
+            const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+            if (!res.ok) throw new Error('layout search failed');
+            const body = await res.json();
+            if (my !== searchState.seq) return;
+            searchState.results = body; searchState.error = false;
+        } catch (err) {
+            if (my !== searchState.seq || (err && err.name === 'AbortError')) return;
+            console.error('Layout público: no se pudo buscar', err);
+            searchState.results = null; searchState.error = true;
+        }
+        searchState.busy = false;
+        renderSearchResults(); applySearchFocus();
+    }
+    function queueSearch() {
+        window.clearTimeout(searchState.timer);
+        const clear = document.querySelector('[data-search-clear]');
+        if (clear) clear.hidden = !searchState.q;
+        // se muestra de inmediato lo de la caja vacía o muy corta; lo demás espera un momento a que termine de teclear
+        if (!searchReady(searchTerms(searchState.q))) { runSearch(); return; }
+        searchState.timer = window.setTimeout(runSearch, 250);
+    }
+    // Lo que queda al cambiar de pantalla o cerrar: sin búsqueda, sin petición pendiente y con el croquis como estaba.
+    function resetSearch() {
+        window.clearTimeout(searchState.timer);
+        if (searchState.ctl) searchState.ctl.abort();
+        searchState.seq += 1;
+        Object.assign(searchState, { open: false, q: '', type: 'all', mode: 'contains', scope: false, busy: false, error: false, results: null });
+        document.getElementById('wrap').classList.remove('searching');
+    }
+    function setSearchOpen(open) {
+        if (!view.data) return;
+        if (!open) {
+            resetSearch();
+            const panel = searchEl('search-panel');
+            if (panel) panel.hidden = true;
+            const btn = document.querySelector('[data-map-search]');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+            const input = searchEl('search-q');
+            if (input) input.value = '';
+            document.querySelectorAll('[data-search-type]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.searchType === 'all')));
+            document.querySelectorAll('[data-search-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.searchMode === 'contains')));
+            const clear = document.querySelector('[data-search-clear]');
+            if (clear) clear.hidden = true;
+            renderSearchResults();
+            applySearchFocus();
+            return;
+        }
+        searchState.open = true;
+        searchState.scope = !!searchPageZone();
+        document.getElementById('wrap').classList.add('searching');
+        searchEl('search-panel').hidden = false;
+        document.querySelector('[data-map-search]').setAttribute('aria-expanded', 'true');
+        drawSearchScope();
+        renderSearchResults();
+        searchEl('search-q').focus();
+    }
+    const iconSvg =(name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
     const brandBar = (data) => {
         const initials = (data.companyName || '').trim().slice(0, 2).toUpperCase() || '··';
         const mark = data.hasLogo ? `<img class="brand-logo" src="/api/public/layout/${encodeURIComponent(publicToken())}/logo" alt="">` : `<span class="brand-mark">${esc(initials)}</span>`;
@@ -278,8 +481,8 @@
         const rows = cats.map((c) => `<a class="crow" href="${esc(`${zoneHref(zone)}&c=${encodeURIComponent(c.id)}`)}"><span class="cmark sm" style="background:${esc(c.color)}"><svg viewBox="0 0 24 24" aria-hidden="true">${window.LayoutMapSvg.categoryGlyph(c.icon, '#FFFFFF', 2)}</svg></span><span class="ctx"><b>${esc(c.name)}</b>${c.desc ? `<small>${esc(c.desc)}</small>` : ''}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
         return `${crumbsHtml(upCrumbs(zone))}
             <div class="catbanner" style="border-left-color:${esc(color)}"><span class="catmark" style="background:${esc(color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS.layers}</g></svg></span><div><div class="cattitle">${esc(zone.name)}</div><div class="catsub">${esc(kind)}${info ? ` · ${esc(fmt(info.area))} m²` : ''}</div></div></div>
-            ${mapToolbarHtml()}<div class="map">${mapInnerHtml(data)}</div>
-            <h2>${esc(TEXT.categories)}</h2>${rows || `<p class="emptynote">${esc(TEXT.noCats)}</p>`}`;
+            ${mapBlockHtml(data)}
+            <div class="zextra"><h2>${esc(TEXT.categories)}</h2>${rows || `<p class="emptynote">${esc(TEXT.noCats)}</p>`}</div>`;
     }
 
     function render(data) {
@@ -290,21 +493,21 @@
         const zonePage = !!ctx.zone && !ctx.c && !ctx.k;
         // lo que se escaneó se sombrea en el croquis con su color (la zona; los anaqueles se suman cuando se sepa en cuáles está)
         const zoneColor = theme.custom ? theme.chrome.badge : '#6C7CF0';
-        viewFocus.value = zonePage ? { zones: { [ctx.zone.id]: zoneColor } } : (cat ? { zones: { [ctx.zone.id]: cat.color } } : null);
+        resetSearch();
+        setBaseFocus(zonePage ? { zones: { [ctx.zone.id]: zoneColor } } : (cat ? { zones: { [ctx.zone.id]: cat.color } } : null));
         let body;
         if (zonePage) {
             body = zonePageHtml(data, ctx.zone, zoneColor);
         } else if (ctx.zone) {
             // una categoría de esa zona: su recorrido, su banner y el croquis; el Layout general queda a un toque (icono de casa y "Distribución")
             body = `${cat ? crumbsHtml(upCrumbs(ctx.zone, cat.name)) : ''}${categoryBanner(data)}<div id="catslot"></div>
-                ${mapToolbarHtml()}<div class="map">${mapInnerHtml(data)}</div>`;
+                ${mapBlockHtml(data)}`;
         } else {
             body = `${categoryBanner(data)}<div id="catslot"></div>
                 <div class="info"><h1>${esc(TEXT.title)}</h1><p class="sub">${versionLine(data)}</p></div>
-                ${mapToolbarHtml()}
-                <div class="map">${mapInnerHtml(data)}</div>
-                <a class="mbtn" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
-                ${zonesSectionHtml(data)}`;
+                ${mapBlockHtml(data)}
+                <div class="zextra"><a class="mbtn" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
+                ${zonesSectionHtml(data)}</div>`;
         }
         document.getElementById('wrap').innerHTML = `${brandBar(data)}${body}<div class="footer">${esc(TEXT.footer)}</div>`;
         enableMapZoom();
@@ -332,6 +535,7 @@
     function renderMetrics(data, key) {
         const theme = window.LayoutMapSvg.theme(data.companyColor);
         const k = data.kpis;
+        resetSearch();
         document.title = `${TEXT.metrics} · ${pageTitle(data)}`;
         const cards = window.LayoutCalc.METRIC_KEYS.map((metric) => `<button type="button" class="kpi" data-metric="${metric}" aria-pressed="${metric === key}"><b>${fmt(k[metric])} ${metric === 'volume' ? 'm³' : 'm²'}</b><span>${esc(TEXT[METRIC_LABELS[metric]])}</span></button>`).join('');
         document.getElementById('wrap').innerHTML = `
@@ -364,6 +568,38 @@
             window.history.replaceState(null, '', `#datos-metricos/${key}`);
             return;
         }
+        // la lupa y lo que lleva adentro: tipo de resultado, alcance (esta zona o todo el Layout) y borrar
+        if (view.data) {
+            if (event.target.closest('[data-map-search]')) { setSearchOpen(!searchState.open); return; }
+            const type = event.target.closest('[data-search-type]');
+            if (type) {
+                searchState.type = type.dataset.searchType;
+                document.querySelectorAll('[data-search-type]').forEach((b) => b.setAttribute('aria-pressed', String(b === type)));
+                runSearch();
+                return;
+            }
+            const mode = event.target.closest('[data-search-mode]');
+            if (mode) {
+                searchState.mode = mode.dataset.searchMode;
+                document.querySelectorAll('[data-search-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b === mode)));
+                runSearch();
+                return;
+            }
+            if (event.target.closest('[data-search-scope]') || event.target.closest('[data-search-widen]')) {
+                searchState.scope = event.target.closest('[data-search-widen]') ? false : !searchState.scope;
+                drawSearchScope();
+                runSearch();
+                return;
+            }
+            if (event.target.closest('[data-search-clear]')) {
+                const input = searchEl('search-q');
+                input.value = '';
+                searchState.q = '';
+                queueSearch();
+                input.focus();
+                return;
+            }
+        }
         // botones del croquis: girar, medidas, m² de las zonas y capas
         const rot = event.target.closest('[data-map-rot]');
         const meas = event.target.closest('[data-map-meas]');
@@ -389,6 +625,23 @@
             const open = toggle.getAttribute('aria-expanded') !== 'true';
             toggle.setAttribute('aria-expanded', String(open));
             document.getElementById('zones-list').hidden = !open;
+        }
+    });
+
+    document.getElementById('wrap').addEventListener('input', (event) => {
+        if (event.target.id !== 'search-q') return;
+        searchState.q = event.target.value;
+        queueSearch();
+    });
+    document.getElementById('wrap').addEventListener('keydown', (event) => {
+        if (event.target.id !== 'search-q') return;
+        if (event.key === 'Escape') {
+            setSearchOpen(false);
+            const btn = document.querySelector('[data-map-search]');
+            if (btn) btn.focus();
+        } else if (event.key === 'Enter') {
+            event.preventDefault();
+            runSearch();
         }
     });
 
