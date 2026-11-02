@@ -77,6 +77,7 @@ const {
     listCompleteCostCenterIds,
     hasCompleteCostCenter,
     linkClientDataToFirstCostCenter,
+    updateGeoEntry,
     listCountries,
     listStates,
     listMunicipalities,
@@ -4754,67 +4755,70 @@ app.post('/api/business/geo/countries', requireAuth, requireClientAdmin, (req, r
     if (!name) return res.status(400).json({ message: 'name is required.' });
     res.status(201).json({ item: createCountry(name) });
 });
-// Códigos cortos del localizador (Estado 4 letras, Localidad 3): al agregar uno nuevo el código es obligatorio; uno que ya existe sin código lo recibe aquí mismo; uno con código no se cambia.
-function geoShortCodeError(error) {
-    const messages = { invalid: 'The code has the wrong length or letters.', locked: 'That entry already has a code and it cannot change.', duplicate: 'Another entry in the same place already uses that code.', notfound: 'Not found.' };
-    return messages[error] || 'Could not save the code.';
+// Códigos cortos del localizador (Estado 4 letras, Localidad 3): al agregar uno nuevo el código es obligatorio; uno que ya existe sin código lo recibe aquí mismo. Mientras ningún centro de costos use un
+// Estado o una Localidad (de ningún cliente: el catálogo es de todos), su nombre y su código se pueden corregir; en cuanto uno lo usa queda fijo, porque los localizadores ya lo llevan escrito.
+const GEO_ERRORS = {
+    invalid: [400, 'GEO_CODE_INVALID', 'The code has the wrong length or letters.'],
+    locked: [409, 'GEO_CODE_LOCKED', 'That entry already has a code and it cannot change.'],
+    duplicate: [409, 'GEO_CODE_DUPLICATE', 'Another entry in the same place already uses that code.'],
+    notfound: [404, 'GEO_NOT_FOUND', 'Not found.'],
+    inuse: [409, 'GEO_IN_USE', 'A cost center already uses it, so it cannot change.'],
+    nameduplicate: [409, 'GEO_NAME_DUPLICATE', 'Another entry in the same place already has that name.'],
+    name: [400, 'GEO_NAME_REQUIRED', 'The name cannot be empty.'],
+};
+function sendGeoError(res, error) {
+    const [status, code, message] = GEO_ERRORS[error] || [400, 'GEO_ERROR', 'Could not save.'];
+    return res.status(status).json({ code, message });
 }
-app.post('/api/business/geo/states', requireAuth, requireClientAdmin, (req, res) => {
-    const countryId = Number(req.body?.countryId) || 0;
-    const name = (req.body?.name || '').trim();
-    if (!countryId || !name) return res.status(400).json({ message: 'countryId and name are required.' });
-    const code = normalizeShortCode(req.body?.code, SHORT_CODE_LENGTH.state);
-    if (!code) return res.status(400).json({ message: 'The state code must be 4 letters (A-Z).' });
-    let item;
-    try {
-        item = createState(countryId, name, code);
-    } catch (err) {
-        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({ message: geoShortCodeError('duplicate') });
-        throw err;
-    }
-    if (!item.code) {
-        const set = setGeoShortCode('state', item.id, code);
-        if (set.error) return res.status(409).json({ message: geoShortCodeError(set.error) });
-        item = set.item;
-    }
-    res.status(201).json({ item });
-});
-app.patch('/api/business/geo/states/:id/code', requireAuth, requireClientAdmin, (req, res) => {
-    const set = setGeoShortCode('state', Number(req.params.id) || 0, req.body?.code);
-    if (set.error) return res.status(set.error === 'notfound' ? 404 : (set.error === 'invalid' ? 400 : 409)).json({ message: geoShortCodeError(set.error) });
-    res.json({ item: set.item });
-});
+function createGeoRoute(kind, parentField, createFn, length) {
+    return (req, res) => {
+        const parentId = Number(req.body?.[parentField]) || 0;
+        const name = (req.body?.name || '').trim();
+        if (!parentId || !name) return res.status(400).json({ message: `${parentField} and name are required.` });
+        const code = normalizeShortCode(req.body?.code, length);
+        if (!code) return sendGeoError(res, 'invalid');
+        let item;
+        try {
+            item = createFn(parentId, name, code);
+        } catch (err) {
+            if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return sendGeoError(res, 'duplicate');
+            throw err;
+        }
+        if (!item.code) {
+            const set = setGeoShortCode(kind, item.id, code);
+            if (set.error) return sendGeoError(res, set.error);
+            item = set.item;
+        }
+        res.status(201).json({ item });
+    };
+}
+function setGeoCodeRoute(kind) {
+    return (req, res) => {
+        const set = setGeoShortCode(kind, Number(req.params.id) || 0, req.body?.code);
+        if (set.error) return sendGeoError(res, set.error);
+        res.json({ item: set.item });
+    };
+}
+function patchGeoEntryRoute(kind) {
+    return (req, res) => {
+        const body = req.body || {};
+        const result = updateGeoEntry(kind, Number(req.params.id) || 0, { name: body.name, code: body.code });
+        if (result.error) return sendGeoError(res, result.error);
+        res.json({ item: result.item });
+    };
+}
+app.post('/api/business/geo/states', requireAuth, requireClientAdmin, createGeoRoute('state', 'countryId', createState, SHORT_CODE_LENGTH.state));
+app.patch('/api/business/geo/states/:id/code', requireAuth, requireClientAdmin, setGeoCodeRoute('state'));
+app.patch('/api/business/geo/states/:id', requireAuth, requireClientAdmin, patchGeoEntryRoute('state'));
 app.post('/api/business/geo/municipalities', requireAuth, requireClientAdmin, (req, res) => {
     const stateId = Number(req.body?.stateId) || 0;
     const name = (req.body?.name || '').trim();
     if (!stateId || !name) return res.status(400).json({ message: 'stateId and name are required.' });
     res.status(201).json({ item: createMunicipality(stateId, name) });
 });
-app.post('/api/business/geo/localities', requireAuth, requireClientAdmin, (req, res) => {
-    const stateId = Number(req.body?.stateId) || 0;
-    const name = (req.body?.name || '').trim();
-    if (!stateId || !name) return res.status(400).json({ message: 'stateId and name are required.' });
-    const code = normalizeShortCode(req.body?.code, SHORT_CODE_LENGTH.locality);
-    if (!code) return res.status(400).json({ message: 'The locality code must be 3 letters (A-Z).' });
-    let item;
-    try {
-        item = createLocality(stateId, name, code);
-    } catch (err) {
-        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({ message: geoShortCodeError('duplicate') });
-        throw err;
-    }
-    if (!item.code) {
-        const set = setGeoShortCode('locality', item.id, code);
-        if (set.error) return res.status(409).json({ message: geoShortCodeError(set.error) });
-        item = set.item;
-    }
-    res.status(201).json({ item });
-});
-app.patch('/api/business/geo/localities/:id/code', requireAuth, requireClientAdmin, (req, res) => {
-    const set = setGeoShortCode('locality', Number(req.params.id) || 0, req.body?.code);
-    if (set.error) return res.status(set.error === 'notfound' ? 404 : (set.error === 'invalid' ? 400 : 409)).json({ message: geoShortCodeError(set.error) });
-    res.json({ item: set.item });
-});
+app.post('/api/business/geo/localities', requireAuth, requireClientAdmin, createGeoRoute('locality', 'stateId', createLocality, SHORT_CODE_LENGTH.locality));
+app.patch('/api/business/geo/localities/:id/code', requireAuth, requireClientAdmin, setGeoCodeRoute('locality'));
+app.patch('/api/business/geo/localities/:id', requireAuth, requireClientAdmin, patchGeoEntryRoute('locality'));
 app.post('/api/business/geo/streets', requireAuth, requireClientAdmin, (req, res) => {
     const localityId = Number(req.body?.localityId) || 0;
     const name = (req.body?.name || '').trim();

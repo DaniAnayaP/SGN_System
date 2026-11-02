@@ -275,6 +275,7 @@ const cascadeLevels = {
         // código corto del localizador: 4 letras (se pone al agregar o, si falta, aquí abajo; ya puesto no se cambia)
         codeLength: 4, addCode: document.getElementById('cc-state-add-code'), codeRow: document.getElementById('cc-state-code-row'),
         codeInput: document.getElementById('cc-state-code'), codeSave: document.getElementById('cc-state-code-save'), codeUrl: (id) => `/api/business/geo/states/${id}/code`,
+        nameInput: document.getElementById('cc-state-name'), patchUrl: (id) => `/api/business/geo/states/${id}`,
     },
     municipality: {
         select: document.getElementById('cc-municipality'), addToggle: document.getElementById('cc-municipality-add-toggle'),
@@ -295,6 +296,7 @@ const cascadeLevels = {
         titleKey: 'business.ccAddNewLocality',
         codeLength: 3, addCode: document.getElementById('cc-locality-add-code'), codeRow: document.getElementById('cc-locality-code-row'),
         codeInput: document.getElementById('cc-locality-code'), codeSave: document.getElementById('cc-locality-code-save'), codeUrl: (id) => `/api/business/geo/localities/${id}/code`,
+        nameInput: document.getElementById('cc-locality-name'), patchUrl: (id) => `/api/business/geo/localities/${id}`,
     },
     street: {
         select: document.getElementById('cc-street'), addToggle: document.getElementById('cc-street-add-toggle'),
@@ -318,16 +320,32 @@ function bindShortCodeInput(input, length) {
         if (input.value !== clean) input.value = clean;
     });
 }
-// La fila del código del nivel (Estado, Localidad) según lo elegido: con código se ve fijo, sin código se escribe y se guarda; sin elegir nada se esconde.
+// Lo que dicen los errores del servidor (traen un código, no un texto en español).
+function geoErrorText(levelKey, err) {
+    const level = cascadeLevels[levelKey];
+    const keys = {
+        GEO_CODE_DUPLICATE: levelKey === 'state' ? 'business.ccGeoDupState' : 'business.ccGeoDupLocality',
+        GEO_CODE_INVALID: `business.ccGeoCodeInvalid${level.codeLength}`,
+        GEO_IN_USE: 'business.ccGeoInUse',
+        GEO_NAME_DUPLICATE: 'business.ccGeoNameDup',
+        GEO_NAME_REQUIRED: 'admin.requiredFields',
+    };
+    return Dashboard.t(keys[err && err.geoCode] || 'admin.saveError');
+}
+// La fila de corrección del nivel (Estado, Localidad) según lo elegido: mientras ningún centro de costos use ese Estado o Localidad se pueden corregir su nombre y su código; cuando ya lo usa uno queda fijo
+// (solo se puede poner el código si le faltaba); sin elegir nada se esconde.
 function refreshCodeRow(levelKey) {
     const level = cascadeLevels[levelKey];
     if (!level.codeRow) return;
     const item = level.items.find((i) => String(i.id) === String(level.select.value));
     level.codeRow.hidden = !item;
     if (!item) return;
+    const editable = !item.in_use;
+    level.nameInput.value = item.name;
+    level.nameInput.hidden = !editable;
     level.codeInput.value = item.code || '';
-    level.codeInput.disabled = !!item.code;
-    level.codeSave.hidden = !!item.code;
+    level.codeInput.disabled = !editable && !!item.code;
+    level.codeSave.hidden = !editable && !!item.code;
 }
 function levelOptionText(level, item) {
     return level.codeLength && item.code ? `${item.name} · ${item.code}` : item.name;
@@ -410,8 +428,8 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
         updateCodePreview();
     });
     bindShortCodeInput(level.addCode, level.codeLength);
+    // Corregir (o poner) el nombre y el código de lo ya elegido. El catálogo es de todos los clientes: solo se puede mientras ningún centro de costos lo use; si ya lo usa uno, solo se puede poner el código que le faltaba.
     bindShortCodeInput(level.codeInput, level.codeLength);
-    // poner el código que le falta a lo ya elegido (el catálogo es de todos los clientes y un código puesto no se cambia)
     if (level.codeSave) {
         level.codeSave.addEventListener('click', async () => {
             const item = level.items.find((i) => String(i.id) === String(level.select.value));
@@ -421,21 +439,30 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
                 Dashboard.showToast(Dashboard.t(`business.ccGeoCodeInvalid${level.codeLength}`), 'error');
                 return;
             }
+            const editable = !item.in_use;
+            const name = editable ? level.nameInput.value.trim() : item.name;
+            if (!name) {
+                Dashboard.showToast(Dashboard.t('admin.requiredFields'), 'error');
+                level.nameInput.focus();
+                return;
+            }
             level.codeSave.disabled = true;
             try {
-                const res = await fetch(level.codeUrl(item.id), {
-                    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ code }),
+                const res = await fetch(editable ? level.patchUrl(item.id) : level.codeUrl(item.id), {
+                    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(editable ? { name, code } : { code }),
                 });
                 const body = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(body.message || 'save failed');
+                if (!res.ok) { const failure = new Error(body.message || 'save failed'); failure.geoCode = body.code; throw failure; }
+                item.name = body.item.name;
                 item.code = body.item.code;
                 const keep = level.select.value;
                 populateSelect(level.select, level.items, level);
                 level.select.value = keep;
                 refreshCodeRow(levelKey);
+                updateCodePreview();
                 Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
             } catch (err) {
-                Dashboard.showToast(err.message && err.message !== 'save failed' ? err.message : Dashboard.t('admin.saveError'), 'error');
+                Dashboard.showToast(geoErrorText(levelKey, err), 'error');
             } finally {
                 level.codeSave.disabled = false;
             }
@@ -447,7 +474,11 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
     });
     level.addConfirm.addEventListener('click', async () => {
         const name = level.addInput.value.trim();
-        if (!name) return;
+        if (!name) {
+            Dashboard.showToast(Dashboard.t('admin.requiredFields'), 'error');
+            level.addInput.focus();
+            return;
+        }
         const code = level.codeLength ? cleanShortCode(level.addCode.value, level.codeLength) : '';
         if (level.codeLength && code.length !== level.codeLength) {
             Dashboard.showToast(Dashboard.t(`business.ccGeoCodeInvalid${level.codeLength}`), 'error');
@@ -464,7 +495,7 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
                 body: JSON.stringify(level.createBody(name, parentId, code)),
             });
             const body = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(body.message || 'create failed');
+            if (!res.ok) { const failure = new Error(body.message || 'create failed'); failure.geoCode = body.code; throw failure; }
             const { item } = body;
             await loadLevel(levelKey, parentId);
             level.select.value = item.id;
@@ -473,7 +504,7 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
             level.addRow.hidden = true;
             level.select.dispatchEvent(new Event('change'));
         } catch (err) {
-            Dashboard.showToast(err.message && !/^(create|save) failed$/.test(err.message) ? err.message : Dashboard.t('admin.saveError'), 'error');
+            Dashboard.showToast(err.geoCode ? geoErrorText(levelKey, err) : Dashboard.t('admin.saveError'), 'error');
         } finally {
             level.addConfirm.disabled = false;
         }

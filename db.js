@@ -3952,14 +3952,15 @@ function getCostCenterById(id, clientId, forTestAccount = false) {
 function listCountries() {
     return db.prepare('SELECT * FROM geo_countries ORDER BY name ASC').all();
 }
+// in_use = algún centro de costos (de cualquier cliente: el catálogo geográfico es de todos) ya usa ese Estado o esa Localidad; mientras no, su nombre y su código se pueden corregir.
 function listStates(countryId) {
-    return db.prepare('SELECT * FROM geo_states WHERE country_id = ? ORDER BY name ASC').all(countryId);
+    return db.prepare('SELECT s.*, EXISTS(SELECT 1 FROM cost_centers cc WHERE cc.state_id = s.id) AS in_use FROM geo_states s WHERE s.country_id = ? ORDER BY s.name ASC').all(countryId);
 }
 function listMunicipalities(stateId) {
     return db.prepare('SELECT * FROM geo_municipalities WHERE state_id = ? ORDER BY name ASC').all(stateId);
 }
 function listLocalities(stateId) {
-    return db.prepare('SELECT * FROM geo_localities WHERE state_id = ? ORDER BY name ASC').all(stateId);
+    return db.prepare('SELECT l.*, EXISTS(SELECT 1 FROM cost_centers cc WHERE cc.locality_id = l.id) AS in_use FROM geo_localities l WHERE l.state_id = ? ORDER BY l.name ASC').all(stateId);
 }
 function listStreets(localityId) {
     return db.prepare('SELECT * FROM geo_streets WHERE locality_id = ? ORDER BY name ASC').all(localityId);
@@ -4003,6 +4004,28 @@ function setGeoShortCode(kind, id, rawCode) {
         throw err;
     }
     return { item: db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) };
+}
+// Corrige el nombre y el código de un Estado o una Localidad que NINGÚN centro de costos usa todavía. Devuelve { item } o { error: 'notfound' | 'inuse' | 'name' | 'invalid' | 'duplicate' | 'nameduplicate' }.
+function updateGeoEntry(kind, id, { name, code }) {
+    const isState = kind === 'state';
+    const table = isState ? 'geo_states' : 'geo_localities';
+    const row = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+    if (!row) return { error: 'notfound' };
+    if (db.prepare(`SELECT 1 FROM cost_centers WHERE ${isState ? 'state_id' : 'locality_id'} = ? LIMIT 1`).get(id)) return { error: 'inuse' };
+    const nextName = name === undefined ? row.name : String(name || '').trim();
+    if (!nextName) return { error: 'name' };
+    let nextCode = row.code;
+    if (code !== undefined) {
+        nextCode = normalizeShortCode(code, isState ? SHORT_CODE_LENGTH.state : SHORT_CODE_LENGTH.locality);
+        if (!nextCode) return { error: 'invalid' };
+    }
+    try {
+        db.prepare(`UPDATE ${table} SET name = ?, code = ? WHERE id = ?`).run(nextName, nextCode, id);
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return { error: /code/.test(err.message) ? 'duplicate' : 'nameduplicate' };
+        throw err;
+    }
+    return { item: { ...db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id), in_use: 0 } };
 }
 function createState(countryId, name, code = '') {
     const trimmed = (name || '').trim();
@@ -11109,6 +11132,7 @@ module.exports = {
     listCompleteCostCenterIds,
     hasCompleteCostCenter,
     linkClientDataToFirstCostCenter,
+    updateGeoEntry,
     listCountries,
     listStates,
     listMunicipalities,

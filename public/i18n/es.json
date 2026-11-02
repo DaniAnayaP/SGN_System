@@ -1169,7 +1169,12 @@
     "ccShortCode3": "Código · 3 letras",
     "ccShortCode4": "Código · 4 letras",
     "ccShortCode5": "Código · 5 letras",
-    "ccSaveCode": "Guardar código",
+    "ccSaveCode": "Guardar",
+    "ccEntryName": "Nombre",
+    "ccGeoDupState": "Ese código ya lo usa otro estado de este país. Escribe otro.",
+    "ccGeoDupLocality": "Ese código ya lo usa otra localidad de este estado. Si es la que buscas, elígela en la lista; si no, escribe otro código.",
+    "ccGeoInUse": "Ya hay un centro de costos que lo usa, así que ya no se puede cambiar.",
+    "ccGeoNameDup": "Ya existe uno con ese nombre en este mismo lugar.",
     "ccGeoCodeInvalid3": "El código son 3 letras.",
     "ccGeoCodeInvalid4": "El código son 4 letras.",
     "ccSiteCodeInvalid": "El código del sitio son 5 letras.",
@@ -3696,7 +3701,7 @@
       "example": "para el CEDIS de Chihuahua escribes CDCHI, y el localizador del producto empieza con CHIST.CHIH.CEN.CDCHI."
     },
     "ccGeoCode": {
-      "what": "El código corto del Estado (4 letras) o de la Localidad (3 letras). Se escribe una sola vez y ya no se cambia, porque el catálogo es de todos los clientes y los localizadores lo llevan escrito.",
+      "what": "El código corto del Estado (4 letras) o de la Localidad (3 letras). Mientras ningún centro de costos use ese Estado o esa Localidad puedes corregir su nombre y su código (elígelo en la lista y cambia lo que haga falta); cuando ya lo usa uno queda fijo, porque el catálogo es de todos los clientes y los localizadores lo llevan escrito.",
       "example": "Chihuahua se guarda como CHIH y la localidad Centro como CEN."
     },
     "layoutView3d": {

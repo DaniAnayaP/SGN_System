@@ -576,22 +576,34 @@ body.dark-mode .admin-error{
     flex: 0 0 8.4rem;
     font-size: 0.75rem;
 }
-/* En pantallas angostas el nombre se quedaba en una rendija entre el código y el botón: el nombre va solo en su renglón y abajo van el código y Agregar */
-@media (max-width: 560px){
-    .cc-add-new-row:has(.cc-code-input){
-        flex-wrap: wrap;
-    }
-    .cc-add-new-row:has(.cc-code-input) > input:first-child{
-        flex: 1 1 100%;
-    }
-    .cc-add-new-row:has(.cc-code-input) .cc-code-input{
-        flex: 1 1 0;
-    }
+/* El nombre se quedaba en una rendija entre el código y el botón (la ventana es angosta, sobre todo con dos columnas): en los renglones con código el nombre va solo en su renglón y abajo van el código y Agregar */
+.cc-add-new-row:has(.cc-code-input){
+    flex-wrap: wrap;
+}
+.cc-add-new-row:has(.cc-code-input) > input:first-child{
+    flex: 1 1 100%;
+}
+.cc-add-new-row:has(.cc-code-input) .cc-code-input{
+    flex: 1 1 0;
 }
 .cc-code-row{
     display: flex;
+    flex-wrap: wrap;
     gap: 0.4rem;
     margin-top: 0.4rem;
+}
+.cc-code-row .cc-name-input{
+    flex: 1 1 100%;
+    min-width: 0;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.4rem;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 0.82rem;
+}
+.cc-code-row .cc-name-input[hidden]{
+    display: none;
 }
 .cc-code-row[hidden]{
     display: none;

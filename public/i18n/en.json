@@ -1170,7 +1170,12 @@
     "ccShortCode3": "Code · 3 letters",
     "ccShortCode4": "Code · 4 letters",
     "ccShortCode5": "Code · 5 letters",
-    "ccSaveCode": "Save code",
+    "ccSaveCode": "Save",
+    "ccEntryName": "Name",
+    "ccGeoDupState": "Another state in this country already uses that code. Type another one.",
+    "ccGeoDupLocality": "Another locality in this state already uses that code. If it is the one you want, pick it from the list; otherwise type another code.",
+    "ccGeoInUse": "A cost center already uses it, so it can no longer be changed.",
+    "ccGeoNameDup": "One with that name already exists in the same place.",
     "ccGeoCodeInvalid3": "The code is 3 letters.",
     "ccGeoCodeInvalid4": "The code is 4 letters.",
     "ccSiteCodeInvalid": "The site code is 5 letters.",
@@ -3697,7 +3702,7 @@
       "example": "for the Chihuahua DC you type CDCHI, and the product locator starts with CHIST.CHIH.CEN.CDCHI."
     },
     "ccGeoCode": {
-      "what": "The short code of the State (4 letters) or the Locality (3 letters). It is typed once and never changes, because the catalog is shared by every client and locators carry it.",
+      "what": "The short code of the State (4 letters) or the Locality (3 letters). While no cost center uses that State or Locality you can fix its name and code (pick it from the list and change what is needed); once one uses it, it is fixed, because the catalog is shared by every client and locators carry it.",
       "example": "Chihuahua is saved as CHIH and the locality Centro as CEN."
     },
     "layoutView3d": {
