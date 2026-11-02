@@ -139,6 +139,13 @@
         // El nombre y los m² de cada zona van al final (encima de anaqueles y paredes), con un contorno blanco, y en la esquina que no tape ningún espacio.
         const halo = 'stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round" paint-order="stroke"';
         let zoneLabels = '';
+        // Recuadros (aprox.) que ocupan los nombres y los m² de las zonas: una medida de lado que caería encima se omite para que no tape el nombre (tenía un contorno blanco que lo borraba).
+        const labelBoxes = [];
+        const addBox = (x, baseline, text, size, anchor) => {
+            const w = String(text).length * size * 0.58 + 3;
+            const x0 = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x;
+            labelBoxes.push([x0, baseline - size, x0 + w, baseline + 3]);
+        };
         (on('zonas') ? (layout.zones || []) : []).forEach((z) => {
             const c = z.type ? (T.types[z.type] || T.types.dock) : T.types.none;
             const style = `fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`;
@@ -149,7 +156,8 @@
                 s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<polygon points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" stroke-linejoin="round" ${style}/>`;
                 const a = LC.zoneLabelAnchor(z);
                 zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) - 1}" font-size="10" font-weight="600" fill="#14161F" text-anchor="middle" ${halo}>${esc(z.name)}</text>`;
-                if (options.area !== false) zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) + 10}" font-size="8.5" fill="#6B7089" text-anchor="middle" ${halo}>${fmt(LC.zoneArea(z))} m²</text>`;
+                addBox(X(a.x), Y(a.y) - 1, z.name, 10, 'middle');
+                if (options.area !== false) { zoneLabels += `<text x="${X(a.x)}" y="${Y(a.y) + 10}" font-size="8.5" fill="#6B7089" text-anchor="middle" ${halo}>${fmt(LC.zoneArea(z))} m²</text>`; addBox(X(a.x), Y(a.y) + 10, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle'); }
             } else {
                 s += z.fmt ? zonePaint(`zf-${z.id}`, z.fmt).markup(LC.zonePoints(z).map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')) : `<rect x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4" ${style}/>`;
                 const spot = LC.zoneLabelSpot(z, layout.spaces || [], sc);
@@ -157,7 +165,8 @@
                 const ty = spot.bottom ? Y(z.y + z.w) - (z.w * sc > 26 ? 17 : 5) : Y(z.y) + 12;
                 const anchor = spot.right ? 'end' : 'start';
                 zoneLabels += `<text x="${tx}" y="${ty}" font-size="10" font-weight="600" fill="#14161F" text-anchor="${anchor}" ${halo}>${esc(z.name)}</text>`;
-                if (options.area !== false && z.w * sc > 26) zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`;
+                addBox(tx, ty, z.name, 10, anchor);
+                if (options.area !== false && z.w * sc > 26) { zoneLabels += `<text x="${tx}" y="${ty + 11}" font-size="8.5" fill="#6B7089" text-anchor="${anchor}" ${halo}>${fmt(z.l * z.w)} m²</text>`; addBox(tx, ty + 11, `${fmt(z.l * z.w)} m²`, 8.5, anchor); }
             }
             if (focus) {
                 if (focusZones[z.id]) {
@@ -177,7 +186,14 @@
                 if (m.len * sc < minPx) return;
                 if (!outward && LC.onPolygonEdge(m.mx, m.my, layout.vertices)) return;
                 const off = outward ? 11 : 8;
-                measureLabels += `<text x="${(X(m.mx) + m.nx * off).toFixed(1)}" y="${(Y(m.my) + m.ny * off + 2.5).toFixed(1)}" font-size="7.5" font-weight="600" fill="#C0392B" text-anchor="middle" ${halo}>${fmt(m.len)}</text>`;
+                const cx = X(m.mx) + m.nx * off;
+                const cy = Y(m.my) + m.ny * off + 2.5;
+                // una medida de adentro que caería sobre el nombre o los m² de una zona se omite (el nombre manda)
+                if (!outward) {
+                    const w = String(fmt(m.len)).length * 4.4 + 2;
+                    if (labelBoxes.some(([bx0, by0, bx1, by1]) => cx - w / 2 < bx1 && cx + w / 2 > bx0 && cy - 9 < by1 && cy + 3 > by0)) return;
+                }
+                measureLabels += `<text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" font-size="7.5" font-weight="600" fill="#C0392B" text-anchor="middle" ${halo}>${fmt(m.len)}</text>`;
             });
         };
         if (options.measures !== false) {
