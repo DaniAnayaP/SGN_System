@@ -7438,6 +7438,23 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-canvas svg.can-zoom{ touch-action: pan-y; } /* con un dedo sigue moviéndose la página; con dos dedos se hace zoom */
 .layout-canvas svg.zoomed{ cursor: grab; touch-action: none; }
 .layout-rotate-btn.off::after{ display: none; } /* girar no se "apaga": el icono no lleva la raya */
+/* Ver 2D / Ver 3D: el que se está viendo queda marcado */
+.layout-view-btn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); border-color: var(--color-text-primary); }
+.layout-views.is-3d .layout-only2d{ display: none !important; }
+/* Vista 3D (ver LayoutScene3D.js): ocupa el lugar del croquis y conserva su proporción */
+.layout-map3d{ position: relative; display: flex; flex-direction: column; gap: 0.5rem; width: 100%; padding: 0.4rem; }
+.layout-map3d[hidden]{ display: none; }
+.layout-3d-bar{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.layout-3d-view{ font: inherit; font-size: 0.74rem; font-weight: 600; padding: 0.3rem 0.8rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; }
+.layout-3d-view.on{ background: var(--color-text-primary); color: var(--color-surface); border-color: var(--color-text-primary); }
+.layout-3d-sep{ width: 1px; height: 1.4rem; background: var(--color-border); }
+.layout-3d-stage{ position: relative; width: 100%; aspect-ratio: 700 / 460; min-height: 16rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-bg, var(--color-surface)); overflow: hidden; }
+.layout-3d-canvas{ display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.layout-3d-canvas:active{ cursor: grabbing; }
+.layout-3d-msg{ position: absolute; inset: 0; display: grid; place-items: center; padding: 1rem; text-align: center; font-size: 0.8rem; color: var(--color-text-secondary); z-index: 1; }
+.layout-3d-msg[hidden]{ display: none; }
+.layout-3d-info{ padding: 0.5rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); font-size: 0.78rem; line-height: 1.4; }
+.layout-3d-info[hidden]{ display: none; }
 
 /* simbología: al lado del croquis cuando el cuadro es ancho; debajo cuando es angosto */
 .layout-canvas{ container-type: inline-size; }

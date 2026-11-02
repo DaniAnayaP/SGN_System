@@ -6422,6 +6422,8 @@ function layoutPermissions(req) {
         canToggleNames: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutNombres'),
         // Acercar y alejar el croquis (botones, rueda, dos dedos) es otro icono con su hoja (iconLayoutZoom).
         canZoom: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutZoom'),
+        // Ver el Layout en 3D (y volver al 2D) es otro icono con su hoja (iconLayoutVista3D).
+        canView3D: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutVista3D'),
         // "QR y descarga" por Zona (la hoja con las categorías de los códigos que hay en la zona) se usa con el icono Imprimir por zona (hoja <pantalla>/iconLayoutImprimirZona).
         canPrintZone: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutImprimirZona'),
         // Girar el croquis (en pantalla y en la hoja que se descarga) usa el icono Girar (hoja <pantalla>/iconLayoutGirar del árbol).

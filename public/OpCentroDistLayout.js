@@ -14,7 +14,7 @@ const SECTION_LABEL_KEYS = {
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
-    planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false,
+    planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false, view3d: false,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
 };
@@ -641,6 +641,7 @@ function renderSvg() {
     s = `${s.slice(0, halosAt)}${outerHalos}${s.slice(halosAt)}${outerLabels}`;
     $('layout-svg').innerHTML = s;
     applyZoom(); // cada redibujo conserva el aumento y el lugar donde se estaba viendo
+    scheduleScene3d(); // si se está viendo en 3D, la escena se vuelve a armar con el borrador
 }
 
 function renderSummary() {
@@ -769,6 +770,7 @@ $('layout-area-btn').addEventListener('click', () => {
 });
 function showEditor() {
     updateQrMenu();
+    updateViewBtns();
     updateMeasuresBtn();
     updateAreaBtn();
     updateNamesBtn();
@@ -1460,6 +1462,117 @@ window.addEventListener('pointerup', () => {
     drag = null;
     if (moved && state.draft) { renderPanel(); refreshLive(); }
 });
+
+// ---- Vista 3D (iconos Ver 2D y Ver 3D, hoja iconLayoutVista3D del árbol) ---------------------------------------------------------------
+// El 3D ocupa el lugar del croquis y se arma con el borrador que se está editando (LayoutScene3D.js), así lo que se cambia en el panel se ve al momento. three.js (unos 600 KB) se carga solo
+// la primera vez que se pide el 3D. Los iconos del croquis que solo sirven en 2D (medidas, m², nombres, girar y zoom) se esconden mientras se ve el 3D, que trae sus propios controles.
+let scene3d = null;
+let scene3dLoading = null;
+let scene3dTimer = 0;
+let scene3dLabels = true;
+const lazyScripts = {};
+const can3d = () => !!(state.perms && state.perms.canView3D);
+function loadScriptOnce(src) {
+    if (!lazyScripts[src]) {
+        lazyScripts[src] = new Promise((resolve, reject) => {
+            const el = document.createElement('script');
+            el.src = src;
+            el.onload = resolve;
+            el.onerror = () => { delete lazyScripts[src]; reject(new Error(src)); };
+            document.head.appendChild(el);
+        });
+    }
+    return lazyScripts[src];
+}
+function ensureScene3d() {
+    if (scene3d) return Promise.resolve(scene3d);
+    if (!scene3dLoading) {
+        scene3dLoading = (async () => {
+            await loadScriptOnce('vendor/three/three.min.js');
+            await loadScriptOnce('LayoutScene3D.js');
+            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, onSelect: show3dInfo });
+            return scene3d;
+        })().catch((err) => { scene3dLoading = null; throw err; });
+    }
+    return scene3dLoading;
+}
+function show3dInfo(sel) {
+    const box = $('layout-3d-info');
+    if (!sel || !state.draft) { box.hidden = true; return; }
+    box.hidden = false;
+    if (sel.kind === 'space') {
+        const s = sel.space;
+        const zone = state.draft.zones.find((z) => z.id === s.zoneId);
+        const levels = (s.levels || 1) === 1 ? t('main.layout3dNivel1') : t('main.layout3dNivelesN', { n: s.levels });
+        box.innerHTML = `<b>${esc(s.code)}</b> · ${esc(typeLabel('space', s.type))}${zone ? ` · ${esc(zone.name)}` : ''} · ${fmt(s.l)} × ${fmt(s.d)} × ${fmt(s.h)} m · ${esc(levels)}`;
+    } else {
+        const z = sel.zone;
+        const spaces = state.draft.spaces.filter((s) => s.zoneId === z.id).length;
+        box.innerHTML = `<b>${esc(z.name)}</b> · ${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}${z.use ? ` · ${esc(typeLabel('use', z.use))}` : ''} · ${fmt(LC.zoneArea(z))} m² · ${esc(t('main.layout3dEspaciosN', { n: spaces }))}`;
+    }
+}
+function refreshScene3d() {
+    if (scene3d && state.view3d && state.draft) scene3d.update(state.draft, { labels: scene3dLabels });
+}
+function scheduleScene3d() {
+    if (!state.view3d) return;
+    clearTimeout(scene3dTimer);
+    scene3dTimer = setTimeout(refreshScene3d, 150);
+}
+function updateViewBtns() {
+    const allowed = can3d();
+    if (!allowed) state.view3d = false; // sin permiso (o sin el icono) siempre se ve el croquis de siempre
+    [['layout-view2d-btn', 'main.layoutVer2D', !state.view3d], ['layout-view3d-btn', 'main.layoutVer3D', state.view3d]].forEach(([id, key, on]) => {
+        const btn = $(id);
+        btn.hidden = !allowed;
+        btn.setAttribute('aria-pressed', String(on));
+        btn.setAttribute('aria-label', t(key));
+        btn.title = t(key);
+    });
+    $('layout-svg').toggleAttribute('hidden', state.view3d); // un <svg> no tiene la propiedad hidden: va el atributo (el CSS ya lo esconde)
+    $('layout-map3d').hidden = !state.view3d;
+    $('layout-views').classList.toggle('is-3d', state.view3d);
+    [['layout-3d-zoom-in', 'main.layout3dAcercar'], ['layout-3d-zoom-out', 'main.layout3dAlejar']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
+    const labelsBtn = $('layout-3d-labels');
+    labelsBtn.setAttribute('aria-pressed', String(scene3dLabels));
+    labelsBtn.classList.toggle('off', !scene3dLabels);
+    labelsBtn.setAttribute('aria-label', t(scene3dLabels ? 'main.layout3dRotulosOcultar' : 'main.layout3dRotulosVer'));
+    labelsBtn.title = labelsBtn.getAttribute('aria-label');
+}
+async function setView3d(on) {
+    if (on && !can3d()) return;
+    state.view3d = on;
+    updateViewBtns();
+    if (!on) return;
+    const msg = $('layout-3d-msg');
+    msg.textContent = t('main.layout3dCargando');
+    msg.hidden = false;
+    try {
+        const sc = await ensureScene3d();
+        msg.hidden = true;
+        if (!state.view3d) return;
+        sc.resize();
+        refreshScene3d();
+    } catch (err) {
+        console.error('La vista 3D no se pudo abrir:', err);
+        msg.textContent = t('main.layout3dError');
+        msg.hidden = false;
+    }
+}
+$('layout-view2d-btn').addEventListener('click', () => setView3d(false));
+$('layout-view3d-btn').addEventListener('click', () => setView3d(true));
+document.querySelectorAll('.layout-3d-view').forEach((btn) => btn.addEventListener('click', () => {
+    if (!scene3d) return;
+    document.querySelectorAll('.layout-3d-view').forEach((b) => b.classList.toggle('on', b === btn));
+    scene3d.setView(btn.getAttribute('data-view'));
+}));
+$('layout-3d-labels').addEventListener('click', () => {
+    scene3dLabels = !scene3dLabels;
+    updateViewBtns();
+    if (scene3d) scene3d.setLabels(scene3dLabels);
+});
+$('layout-3d-zoom-in').addEventListener('click', () => { if (scene3d) scene3d.zoom(1.3); });
+$('layout-3d-zoom-out').addEventListener('click', () => { if (scene3d) scene3d.zoom(1 / 1.3); });
 
 // ---- zoom del croquis ---------------------------------------------------------------------------------------------------------
 // Acercar y alejar el croquis con los botones (+, − y ver todo), Ctrl + rueda, doble clic o toque, dos dedos y, ya acercado, arrastrando el fondo (las zonas se siguen moviendo con su arrastre de

@@ -1768,6 +1768,21 @@
     "layoutNombresVer": "Show names",
     "layoutHojaConNombres": "Zone names",
     "layoutZoomBtn": "Zoom in and out of the sketch",
+    "layoutVista3DBtn": "View the Layout in 3D",
+    "layoutVer2D": "View the sketch in 2D",
+    "layoutVer3D": "View the Layout in 3D",
+    "layout3dGeneral": "Overview",
+    "layout3dPlanta": "Top view",
+    "layout3dFrente": "Front view",
+    "layout3dRotulosVer": "Show the labels",
+    "layout3dRotulosOcultar": "Hide the labels",
+    "layout3dAcercar": "Zoom the 3D in",
+    "layout3dAlejar": "Zoom the 3D out",
+    "layout3dCargando": "Loading the 3D view…",
+    "layout3dError": "The 3D view could not be opened in this browser.",
+    "layout3dNivel1": "1 level",
+    "layout3dNivelesN": "{n} levels",
+    "layout3dEspaciosN": "{n} spaces",
     "layoutZoomAcercar": "Zoom in",
     "layoutZoomAlejar": "Zoom out",
     "layoutZoomTodo": "Show the whole sketch",
@@ -3665,6 +3680,26 @@
     "ccGeoCode": {
       "what": "The short code of the State (4 letters) or the Locality (3 letters). It is typed once and never changes, because the catalog is shared by every client and locators carry it.",
       "example": "Chihuahua is saved as CHIH and the locality Centro as CEN."
+    },
+    "layoutView3d": {
+      "what": "Switches between the flat sketch (2D) and the Layout built in 3D with the same measures, heights and levels. In 3D you drag to rotate, move it with Shift or right click, and tap a rack or a zone to see its data. Whatever you change in the panel shows up in the 3D right away. The 3D saves nothing: it is only for viewing.",
+      "example": "you want to check that the pallets have the right height: switch to 3D and, if they look like towers, fix their height in Footprint-Space."
+    },
+    "layout3dViews": {
+      "what": "Places the 3D camera: Overview (diagonal), Top view (from above, like the sketch) or Front view (from the side, to see heights).",
+      "example": "to compare the racks' height with the walls', use Front view."
+    },
+    "layout3dLabels": {
+      "what": "Shows or hides the 3D labels: each zone's name and each space's code.",
+      "example": "if many spaces are close together and their codes overlap, hide them to see the shape better."
+    },
+    "layout3dZoom": {
+      "what": "Zooms the 3D in or out. Also with Ctrl and the mouse wheel, or two fingers on a phone.",
+      "example": "zoom in to see a rack up close and tap it to see its measures."
+    },
+    "layout3dStage": {
+      "what": "The Layout in 3D. Drag to rotate, Shift or right click to move, Ctrl and wheel (or two fingers) to zoom. Tap a space or a zone to see its name, measures and levels.",
+      "example": "tap rack R-07 and below the drawing you get its type, zone, measures and how many levels it has."
     },
     "layoutViews": {
       "what": "The buttons that change how the sketch looks: show or hide measures, zone areas and names, rotate it and zoom in or out. They only change what you see; they do not modify the Layout.",

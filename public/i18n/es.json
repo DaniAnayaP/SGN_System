@@ -1768,6 +1768,21 @@
     "layoutNombresVer": "Ver nombres",
     "layoutHojaConNombres": "Nombres de las zonas",
     "layoutZoomBtn": "Acercar y alejar el croquis",
+    "layoutVista3DBtn": "Ver el Layout en 3D",
+    "layoutVer2D": "Ver el croquis en 2D",
+    "layoutVer3D": "Ver el Layout en 3D",
+    "layout3dGeneral": "Vista general",
+    "layout3dPlanta": "Planta",
+    "layout3dFrente": "Frente",
+    "layout3dRotulosVer": "Ver los rótulos",
+    "layout3dRotulosOcultar": "Ocultar los rótulos",
+    "layout3dAcercar": "Acercar el 3D",
+    "layout3dAlejar": "Alejar el 3D",
+    "layout3dCargando": "Cargando la vista 3D…",
+    "layout3dError": "No se pudo abrir la vista 3D en este navegador.",
+    "layout3dNivel1": "1 nivel",
+    "layout3dNivelesN": "{n} niveles",
+    "layout3dEspaciosN": "{n} espacios",
     "layoutZoomAcercar": "Acercar el croquis",
     "layoutZoomAlejar": "Alejar el croquis",
     "layoutZoomTodo": "Ver todo el croquis",
@@ -3664,6 +3679,26 @@
     "ccGeoCode": {
       "what": "El código corto del Estado (4 letras) o de la Localidad (3 letras). Se escribe una sola vez y ya no se cambia, porque el catálogo es de todos los clientes y los localizadores lo llevan escrito.",
       "example": "Chihuahua se guarda como CHIH y la localidad Centro como CEN."
+    },
+    "layoutView3d": {
+      "what": "Cambia entre el croquis plano (2D) y el Layout levantado en 3D con las mismas medidas, alturas y niveles. En 3D arrastras para girar, con Shift o clic derecho lo mueves y tocas un anaquel o una zona para ver sus datos. Lo que cambias en el panel se ve en el 3D al momento. El 3D no guarda nada: solo es para ver.",
+      "example": "quieres revisar si las tarimas tienen el alto correcto: pasas a 3D y, si se ven como torres, corriges su alto en Huella-Espacio."
+    },
+    "layout3dViews": {
+      "what": "Acomoda la cámara del 3D: Vista general (en diagonal), Planta (desde arriba, como el croquis) o Frente (de lado, para ver las alturas).",
+      "example": "para comparar la altura de los anaqueles con la de las paredes, usa Frente."
+    },
+    "layout3dLabels": {
+      "what": "Muestra u oculta los rótulos del 3D: el nombre de cada zona y el código de cada espacio.",
+      "example": "si hay muchos espacios juntos y los códigos se encimen, ocúltalos para ver mejor la forma."
+    },
+    "layout3dZoom": {
+      "what": "Acerca o aleja el 3D. También con Ctrl y la rueda del mouse, o con dos dedos en el celular.",
+      "example": "acerca para ver un anaquel de cerca y toca su código para ver sus medidas."
+    },
+    "layout3dStage": {
+      "what": "El Layout en 3D. Arrastra para girar, Shift o clic derecho para mover, Ctrl y rueda (o dos dedos) para acercar. Toca un espacio o una zona para ver su nombre, medidas y niveles.",
+      "example": "toca el anaquel R-07 y debajo del dibujo sale su tipo, su zona, sus medidas y cuántos niveles tiene."
     },
     "layoutViews": {
       "what": "Los botones para cambiar cómo se ve el croquis: ver u ocultar las medidas, los m² de las zonas y los nombres, girarlo y acercarlo o alejarlo. Solo cambian lo que ves; no modifican el Layout.",

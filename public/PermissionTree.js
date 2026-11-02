@@ -1773,6 +1773,7 @@
             iconLayoutFiltros: 'bx-filter-alt',
             iconLayoutImprimirZona: 'bx-printer',
             iconLayoutGirar: 'bx-rotate-right',
+            iconLayoutVista3D: 'bx-cube-alt',
             iconLayoutCategorias: 'bx-purchase-tag-alt',
             iconLayoutTarjeta: 'bx-id-card',
         };

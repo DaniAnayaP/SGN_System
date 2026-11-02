@@ -1530,6 +1530,7 @@
             { "id": "iconLayoutFiltros", "labelKey": "main.layoutFiltrosBtn", "permissionOnly": true },
             { "id": "iconLayoutImprimirZona", "labelKey": "main.layoutImprimirZonaBtn", "permissionOnly": true },
             { "id": "iconLayoutGirar", "labelKey": "main.layoutGirarBtn", "permissionOnly": true },
+            { "id": "iconLayoutVista3D", "labelKey": "main.layoutVista3DBtn", "permissionOnly": true },
             { "id": "iconLayoutCategorias", "labelKey": "main.layoutCategoriasBtn", "permissionOnly": true },
             { "id": "iconLayoutTarjeta", "labelKey": "main.layoutTarjetaBtn", "permissionOnly": true },
             {
