@@ -15,7 +15,7 @@
     const POWER_COLOR = { panel: 0x6b6f7c, outlet110: 0xf1c232, outlet220: 0xe8892b, 'three-phase': 0xd93a2f };
     const WOOD = 0xb98a52;
     const MAX_SPACE_LABELS = 300;
-    const LAYER_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'assets'];
+    const LAYER_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets'];
 
     function wallSegment(vertices, wall) {
         const n = vertices.length;
@@ -44,7 +44,7 @@
         scene.add(sun);
         // Un grupo por capa: así cada una se muestra u oculta sola.
         const group = {};
-        ['floor', 'walls', 'doors', 'power', 'columns', 'zones', 'assets', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
+        ['floor', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
         const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a }));
         outline.visible = false;
         scene.add(outline);
@@ -75,6 +75,7 @@
             group.power.visible = layerOn.power;
             group.columns.visible = layerOn.columns;
             group.zones.visible = layerOn.zones;
+            group.footprints.visible = layerOn.footprints;
             group.assets.visible = layerOn.assets;
             group.zoneLabels.visible = labelsOn && layerOn.zones;
             group.spaceLabels.visible = labelsOn && layerOn.assets;
@@ -284,12 +285,13 @@
                 if (!inactive) addLabel(group.zoneLabels, z.name, PX(ax), 0.12 + 0.004 * i, PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
             });
 
-            // huellas con color propio: una losa delgada con su color debajo de sus activos (el lugar en el piso)
+            // huellas (el lugar en el piso, capa «Huella-Espacio»): una losa delgada, blanca o con su color, debajo de sus activos
             (layout.footprints || []).forEach((f) => {
-                if (f.active === false || !(f.l > 0) || !(f.d > 0) || !/^#[0-9a-fA-F]{6}$/.test((f.fmt && f.fmt.fill) || '') || f.fmt.pattern === 'none') return;
-                const slab = new THREE.Mesh(new THREE.BoxGeometry(f.l, 0.02, f.d), new THREE.MeshLambertMaterial({ color: new THREE.Color(f.fmt.fill) }));
+                if (f.active === false || !(f.l > 0) || !(f.d > 0)) return;
+                const paint = f.fmt && f.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(f.fmt.fill || '') ? f.fmt.fill : '#ffffff';
+                const slab = new THREE.Mesh(new THREE.BoxGeometry(f.l, 0.02, f.d), new THREE.MeshLambertMaterial({ color: new THREE.Color(paint) }));
                 slab.position.set(PX(f.x + f.l / 2), 0.085, PZ(f.y + f.d / 2));
-                group.assets.add(slab);
+                group.footprints.add(slab);
             });
 
             // activos: anaqueles (postes y repisas por nivel), anaqueles con tarimas, gabinetes y tarimas

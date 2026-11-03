@@ -1810,6 +1810,7 @@
     "layout3dCapaPower": "Conexiones de luz",
     "layout3dCapaColumns": "Columnas",
     "layout3dCapaZones": "Zonas",
+    "layout3dCapaFootprints": "Huellas (lugar en el piso)",
     "layout3dCapaAssets": "Activos (anaqueles, tarimas y gabinetes)",
     "layout3dCapaVer": "Ver: {name}",
     "layout3dCapaOcultar": "Ocultar: {name}",
@@ -3956,8 +3957,8 @@
       "example": "quieres ver solo R-07 y T-03 para revisar sus alturas: pulsas Ninguno, buscas R-07 y marcas el anaquel, luego buscas T-03 y marcas la tarima."
     },
     "layout3dLayers": {
-      "what": "Muestra u oculta una capa del 3D desde la lista Capas: Paredes, Puertas, Conexiones de luz, Columnas, Zonas y Activos (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Lo que ocultas deja de verse y de poder tocarse; los rótulos de esa capa también se van. Se recuerda en este navegador.",
-      "example": "ocultas las paredes para ver todo el piso desde un lado, o los activos para ver cómo quedaron las zonas."
+      "what": "En 3D, las capas siguen los mismos pasos que el croquis: cuando enciendes un paso (Contorno, Puertas, Zonas, Huella-Espacio, Energía Eléctrica, Activos) se ve su capa y cuando lo apagas se oculta. La lista Capas es un filtro más: sirve para esconder una capa (Paredes, Puertas, Conexiones de luz, Columnas, Zonas, Huellas o Activos) aunque su paso esté encendido. Lo que ocultas deja de verse y de poder tocarse; los rótulos de esa capa también se van. La lista se recuerda en este navegador.",
+      "example": "enciendes Zonas y se ven las zonas en el 3D; apagas Zonas y se ocultan; con Huella-Espacio y Activos ves las huellas en el piso y los anaqueles encima."
     },
     "layout3dViews": {
       "what": "Acomoda la cámara del 3D: Vista general (en diagonal), Planta (desde arriba, como el croquis) o Frente (de lado, para ver las alturas).",

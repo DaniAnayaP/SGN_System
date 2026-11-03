@@ -1941,9 +1941,18 @@ let scene3dTimer = 0;
 let scene3dLabels = true;
 // Las capas del 3D que se están viendo (se recuerdan en este navegador): paredes, puertas, luz, columnas, zonas y activos.
 const LAYERS3D_KEY = 'sgn_layout_3d_layers';
-const LAYER3D_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'assets'];
-const LAYER3D_LABEL_KEYS = { walls: 'main.layout3dCapaWalls', doors: 'main.layout3dCapaDoors', power: 'main.layout3dCapaPower', columns: 'main.layout3dCapaColumns', zones: 'main.layout3dCapaZones', assets: 'main.layout3dCapaAssets' };
-const scene3dLayers = { walls: true, doors: true, power: true, columns: true, zones: true, assets: true };
+const LAYER3D_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets'];
+const LAYER3D_LABEL_KEYS = { walls: 'main.layout3dCapaWalls', doors: 'main.layout3dCapaDoors', power: 'main.layout3dCapaPower', columns: 'main.layout3dCapaColumns', zones: 'main.layout3dCapaZones', footprints: 'main.layout3dCapaFootprints', assets: 'main.layout3dCapaAssets' };
+const scene3dLayers = { walls: true, doors: true, power: true, columns: true, zones: true, footprints: true, assets: true };
+// El 3D sigue los PASOS igual que el croquis: cada paso encendido muestra su capa y apagarlo la oculta (Contorno = paredes y columnas, Puertas, Zonas, Huella-Espacio = huellas, Energía Eléctrica = luz, Activos y
+// Posiciones = activos). La lista Capas es un filtro más: sirve para esconder algo aunque su paso esté encendido.
+function effective3dLayers() {
+    const on = (name) => scene3dLayers[name] !== false;
+    return {
+        walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas') && on('doors'), zones: stepOn('zonas') && on('zones'),
+        footprints: stepOn('espacios') && on('footprints'), power: stepOn('luz') && on('power'), assets: (stepOn('activos') || stepOn('posiciones')) && on('assets'),
+    };
+}
 try { Object.assign(scene3dLayers, JSON.parse(localStorage.getItem(LAYERS3D_KEY) || '{}')); } catch (err) { /* sin almacenamiento: se ven todas */ }
 const lazyScripts = {};
 const can3d = () => !!(state.perms && state.perms.canView3D);
@@ -2000,7 +2009,7 @@ function refreshScene3d() {
         picker3d.setData({ spaces: state.draft.spaces.filter((s) => s.active !== false), zones: state.draft.zones.filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name })) });
         scene3d.setHiddenAssets(picker3d.getHidden(), false);
     }
-    scene3d.update(state.draft, { labels: scene3dLabels, layers: scene3dLayers });
+    scene3d.update(state.draft, { labels: scene3dLabels, layers: effective3dLayers() });
     updateViewBtns();
 }
 function scheduleScene3d() {
@@ -2032,12 +2041,12 @@ function updateViewBtns() {
     const pickBtn = $('layout-3d-assets-pick');
     const hiddenCount = picker3d ? picker3d.getHidden().size : 0;
     const pickTotal = picker3d ? picker3d.total() : 0;
-    pickBtn.disabled = scene3dLayers.assets === false;
+    pickBtn.disabled = effective3dLayers().assets === false;
     pickBtn.setAttribute('aria-pressed', String(hiddenCount > 0));
     pickBtn.setAttribute('aria-expanded', String(!!(picker3d && picker3d.isOpen())));
     pickBtn.setAttribute('aria-label', t('main.layout3dActivosElegir') + (hiddenCount ? ` (${pickTotal - hiddenCount}/${pickTotal})` : ''));
     pickBtn.title = pickBtn.getAttribute('aria-label');
-    if (picker3d && (!state.view3d || scene3dLayers.assets === false) && picker3d.isOpen()) picker3d.hide();
+    if (picker3d && (!state.view3d || effective3dLayers().assets === false) && picker3d.isOpen()) picker3d.hide();
     document.querySelectorAll('[data-3d-layer]').forEach((btn) => {
         const name = btn.getAttribute('data-3d-layer');
         const on = scene3dLayers[name] !== false;
@@ -2110,7 +2119,7 @@ document.querySelectorAll('[data-3d-layer]').forEach((btn) => btn.addEventListen
     scene3dLayers[name] = scene3dLayers[name] === false;
     try { localStorage.setItem(LAYERS3D_KEY, JSON.stringify(scene3dLayers)); } catch (err) { /* no se recuerda */ }
     updateViewBtns();
-    if (scene3d) scene3d.setLayer(name, scene3dLayers[name]);
+    if (scene3d) { const eff = effective3dLayers(); LAYER3D_NAMES.forEach((n) => scene3d.setLayer(n, eff[n])); }
 }));
 $('layout-3d-assets-pick').addEventListener('click', () => { if (picker3d) picker3d.toggle(); });
 $('layout-3d-labels').addEventListener('click', () => {

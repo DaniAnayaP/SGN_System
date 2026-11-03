@@ -1810,6 +1810,7 @@
     "layout3dCapaPower": "Power connections",
     "layout3dCapaColumns": "Columns",
     "layout3dCapaZones": "Zones",
+    "layout3dCapaFootprints": "Footprints (place on the floor)",
     "layout3dCapaAssets": "Assets (racks, pallets and cabinets)",
     "layout3dCapaVer": "Show: {name}",
     "layout3dCapaOcultar": "Hide: {name}",
@@ -3957,8 +3958,8 @@
       "example": "you want to see only R-07 and T-03 to check their heights: press None, search R-07 and tick the rack, then search T-03 and tick the pallet."
     },
     "layout3dLayers": {
-      "what": "Shows or hides a 3D layer from the Layers list: Walls, Doors, Power connections, Columns, Zones and Assets (racks, racks with pallets, cabinets and pallets). What you hide is no longer seen or touchable; the labels of that layer go away too. It is remembered in this browser.",
-      "example": "you hide the walls to see the whole floor from the side, or the assets to see how the zones turned out."
+      "what": "In 3D the layers follow the same steps as the map: when you turn a step on (Outline, Doors, Zones, Footprint-Space, Electrical Power, Assets) its layer is shown and when you turn it off it is hidden. The Layers list is one more filter: it lets you hide a layer (Walls, Doors, Power connections, Columns, Zones, Footprints or Assets) even if its step is on. What you hide is no longer seen or touchable; the labels of that layer go away too. The list is remembered in this browser.",
+      "example": "you turn Zones on and the zones appear in 3D; you turn Zones off and they hide; with Footprint-Space and Assets you see the footprints on the floor and the racks on top."
     },
     "layout3dViews": {
       "what": "Places the 3D camera: Overview (diagonal), Top view (from above, like the sketch) or Front view (from the side, to see heights).",
