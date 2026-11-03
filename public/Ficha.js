@@ -104,6 +104,13 @@ function render(data) {
             tag.className = `loc-tag ${loc.located ? 'ok' : 'partial'}`;
             tag.textContent = loc.virtual ? 'Virtual' : (loc.located ? 'Ubicado' : 'A medias');
             item.append(route, tag);
+            // el Localizador completo (7 piezas), cuando el lugar ya está completo
+            if (loc.locator) {
+                const code = document.createElement('span');
+                code.className = 'loc-locator';
+                code.textContent = loc.locator;
+                item.appendChild(code);
+            }
             where.appendChild(item);
         });
         wrap.appendChild(where);

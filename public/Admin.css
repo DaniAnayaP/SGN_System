@@ -7735,6 +7735,8 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .vf-field b{ font-size: 0.86rem; font-weight: 600; overflow-wrap: anywhere; }
 .vf-loc{ display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; justify-content: space-between; border: 1px solid var(--color-border); border-radius: 0.7rem; padding: 0.6rem 0.8rem; }
 .vf-loc-tags{ display: flex; gap: 0.4rem; }
+.vf-locator{ margin-top: 0.4rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+.rel-locator{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; white-space: nowrap; }
 
 /* La barra desplazadora empieza en la ruta hacia abajo: la barra de arriba y la ruta no se mueven; solo baja el contenido (.page-scroll, que Dashboard.js arma al crear la ruta). */
 body.sgn-scroll-shell{ height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }

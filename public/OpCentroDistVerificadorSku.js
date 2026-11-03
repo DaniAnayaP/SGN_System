@@ -82,14 +82,16 @@
     const TYPE_KEYS = { 'articulo-terminado': 'main.articleTypeFinished', 'materia-prima': 'main.articleTypeRawMaterial' };
 
     function locationHtml(loc) {
-        const steps = [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.spaceCode, loc.level ? t('main.relLevelN', { n: loc.level }) : '', loc.slot ? t('main.relSlotN', { n: loc.slot }) : '', loc.row && loc.bayRows > 1 ? t('main.relRowN', { n: loc.row }) : '', loc.depth && loc.bayDepth > 1 ? t('main.relDepthN', { n: loc.depth }) : ''];
-        const labels = [t('main.colRelCentroCostos'), t('main.colRelAlmacen'), t('main.colRelSubAlmacen'), t('main.colRelZona'), t('main.colRelEstante'), t('main.colRelNivel'), t('main.colRelEspacio'), t('main.colRelFila'), t('main.colRelProfundidad')];
+        const steps = [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.footprintCode, loc.spaceCode, loc.level ? t('main.relLevelN', { n: loc.level }) : '', loc.slot ? t('main.relSlotN', { n: loc.slot }) : '', loc.row && loc.bayRows > 1 ? t('main.relRowN', { n: loc.row }) : '', loc.depth && loc.bayDepth > 1 ? t('main.relDepthN', { n: loc.depth }) : ''];
+        const labels = [t('main.colRelCentroCostos'), t('main.colRelAlmacen'), t('main.colRelSubAlmacen'), t('main.colRelZona'), t('main.colRelHuella'), t('main.colRelEstante'), t('main.colRelNivel'), t('main.colRelEspacio'), t('main.colRelFila'), t('main.colRelProfundidad')];
         const path = steps.map((value, i) => `${i ? '<span class="rel-arrow">›</span>' : ''}<span class="rel-step${value ? ' rel-step-on' : ''}">${esc(value || labels[i])}</span>`).join('');
         const classKey = ['activo', 'cuarentena', 'aclaracion', 'consigna'].includes(loc.classification) ? loc.classification : 'activo';
         const classTag = `<span class="rel-tag rel-class-${classKey}">${esc(t(`main.relClass_${classKey}`))}</span>`;
         const kind = loc.subKind === 'virtual' ? `<span class="rel-tag rel-tag-partial">${esc(t('main.whVirtual'))}</span>` : '';
         const tag = `<span class="rel-tag ${loc.status === 'located' ? 'rel-tag-ok' : 'rel-tag-partial'}">${esc(t(loc.status === 'located' ? 'main.relStatusLocated' : 'main.relStatusPartial'))}</span>`;
-        return `<div class="vf-loc"><div class="rel-path">${path}</div><div class="vf-loc-tags">${kind}${classTag}${tag}</div></div>`;
+        // El Localizador completo (las 7 piezas) siempre que el lugar ya está completo
+        const locator = loc.locator ? `<div class="vf-locator" data-help-key="vfLocator">${esc(loc.locator)}</div>` : '';
+        return `<div class="vf-loc"><div class="rel-path">${path}${locator}</div><div class="vf-loc-tags">${kind}${classTag}${tag}</div></div>`;
     }
 
     // "Dónde está" sigue al selector de centros de costos de arriba: solo los lugares de los centros marcados (uno sin centro se ve siempre). Lo que queda fuera se avisa, sin enseñarlo.

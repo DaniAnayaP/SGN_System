@@ -105,7 +105,7 @@ function buildRow(r) {
         cell('colCatRegistroUnico', r.registroUnico, 'col-system'),
         cell('colRelSku', r.sku), cell('colRelUpc', r.upc), cell('colRelDescripcion', r.description),
         cell('colRelCentroCostos', r.centroCostos), cell('colRelAlmacen', r.warehouseName), cell('colRelSubAlmacen', r.subWarehouseName),
-        cell('colRelZona', r.zoneName), cell('colRelEstante', r.spaceCode), cell('colRelNivel', r.level), cell('colRelEspacio', r.slot), cell('colRelFila', r.row), cell('colRelProfundidad', r.depth),
+        cell('colRelZona', r.zoneName), cell('colRelHuella', r.footprintCode), cell('colRelEstante', r.spaceCode), cell('colRelNivel', r.level), cell('colRelEspacio', r.slot), cell('colRelFila', r.row), cell('colRelProfundidad', r.depth), cell('colRelLocalizador', r.locator, 'rel-locator'),
         classCell(r),
         statusCell(r),
     );
@@ -190,7 +190,7 @@ function applyFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colRelSku', 'colRelUpc', 'colRelDescripcion', 'colRelCentroCostos', 'colRelAlmacen', 'colRelSubAlmacen', 'colRelZona', 'colRelEstante', 'colRelClasificacion']
+        const haystack = ['colRelSku', 'colRelUpc', 'colRelDescripcion', 'colRelCentroCostos', 'colRelAlmacen', 'colRelSubAlmacen', 'colRelZona', 'colRelHuella', 'colRelEstante', 'colRelLocalizador', 'colRelClasificacion']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);

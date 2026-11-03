@@ -2,7 +2,7 @@
 // Relación Código: "Cargar por plantilla". Muchas relaciones a la vez: se baja una plantilla de Excel (Código SKU, Centro de Costos, Almacén, Sub almacén, Zona, Estante, Nivel y Espacio, con una hoja
 // de Opciones con los nombres que existen), se llena y se sube (o se pegan las filas copiadas de Excel). Una fila = un lugar de un código (un código en varios lugares lleva varias filas).
 // Una fila crea una relación nueva o COMPLETA la relación «A medias» que el código ya tiene (la que quedó con centro, almacén y sub almacén pero sin lugar), así que cargar primero los códigos
-// y después sus lugares no deja filas repetidas. El Localizador (Z006.A005.N003.F001.P001 = zona 6, anaquel 5, nivel 3, fila 1, profundidad 1) reúne zona, estante, nivel y espacio en una celda.
+// y después sus lugares no deja filas repetidas. El Localizador (siempre con las 7 piezas: Z006.H005.A005.N003.C001.F001.P001 = zona 6, huella 5, activo A5, nivel 3, columna 1, fila 1, profundidad 1) reúne todo el lugar en una celda.
 // Antes de cargar la ventana revisa CADA fila con la regla de public/RelTemplate.js: cada dato con error sale en rojo con su motivo y se corrige ahí mismo; una fila se puede quitar; las que no se
 // cargan bajan en un Excel con su motivo. El servidor vuelve a revisar cada fila como si fuera una relación hecha a mano. Con un solo centro de costos marcado arriba, las filas sin centro se cargan en él.
 // OpCentroDistRelacionCodigo.js llama a window.RelTemplateUi.mount(...) al armar su botón "+ Nueva Relación".
@@ -56,29 +56,34 @@
     }
 
     // ---- plantilla para bajar ---------------------------------------------------------------------------------------------------------
-    const EXAMPLE = { sku: '195201', locator: 'Z001.A001.N002.C003.F001.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos', zone: 'Zona 1', rack: 'R-01', level: '2', slot: '3', row: '1', depth: '1', classification: 'Producto Activo' };
+    const EXAMPLE = { sku: '195201', locator: 'Z001.H001.A001.N002.C003.F001.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos', zone: 'Zona 1', footprint: 'R-01', rack: 'R-01', level: '2', slot: '3', row: '1', depth: '1', classification: 'Producto Activo' };
     // la fila de ejemplo de la plantilla usa el Localizador (las columnas Zona a Espacio son la otra forma de decir lo mismo y no se llenan junto con él)
-    const EXAMPLE_ROW = { sku: '195201', locator: 'Z001.A001.N002.C003.F001.P001', classification: 'Producto Activo', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos' };
+    const EXAMPLE_ROW = { sku: '195201', locator: 'Z001.H001.A001.N002.C003.F001.P001', classification: 'Producto Activo', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos' };
     const LETTER = { rack: 'A', rackpal: 'R', cabinet: 'G', pallet: 'T' }; // el mismo mapa de RelTemplate.ASSET_TYPES al revés: tipo de espacio del Layout -> letra del Localizador
     const pad3 = (n) => String(n).padStart(3, '0');
     const zoneNo = (name) => { const m = String(name || '').match(/(\d+)\s*$/); return m ? Number(m[1]) : null; };
     const spaceNo = (code) => { const m = String(code || '').match(/(\d+)\s*$/); return m ? Number(m[1]) : null; };
     function optionsSheet() {
-        const rowsOut = [[t('main.colRelCentroCostos'), t('main.colRelAlmacen'), t('main.colRelSubAlmacen'), t('main.colRelZona'), t('main.colRelEstante'), t('main.relTplLevels'), t('main.relTplSlots'), t('main.relTplLocatorShort')]];
+        const rowsOut = [[t('main.colRelCentroCostos'), t('main.colRelAlmacen'), t('main.colRelSubAlmacen'), t('main.colRelZona'), t('main.colRelHuella'), t('main.colRelEstante'), t('main.relTplLevels'), t('main.relTplSlots'), t('main.relTplLocatorShort')]];
         ctx.options.warehouses.filter((w) => w.status === 'active').forEach((w) => {
             const center = ctx.options.costCenters.find((c) => c.id === w.parentId);
             if (!center) return;
             const subs = ctx.options.subWarehouses.filter((s) => s.parentId === w.id && s.status === 'active');
-            if (!subs.length) rowsOut.push([center.name, w.name, '', '', '', '', '', '']);
+            if (!subs.length) rowsOut.push([center.name, w.name, '', '', '', '', '', '', '']);
             subs.forEach((s) => {
-                if (s.kind !== 'physical') { rowsOut.push([center.name, w.name, s.name, '', '', '', '', '']); return; }
+                if (s.kind !== 'physical') { rowsOut.push([center.name, w.name, s.name, '', '', '', '', '', '']); return; }
                 const zones = (ctx.options.zonesByCenter[center.id] || []).filter((z) => (s.locations || []).some((e) => e.zoneId === z.id));
-                if (!zones.length) rowsOut.push([center.name, w.name, s.name, '', '', '', '', '']);
+                if (!zones.length) rowsOut.push([center.name, w.name, s.name, '', '', '', '', '', '']);
                 zones.forEach((z) => {
                     const entry = s.locations.find((e) => e.zoneId === z.id);
                     const racks = z.spaces.filter((sp) => !entry.spaceIds.length || entry.spaceIds.includes(sp.id));
-                    if (!racks.length) rowsOut.push([center.name, w.name, s.name, z.name, '', '', '', '']);
-                    racks.forEach((sp) => rowsOut.push([center.name, w.name, s.name, z.name, sp.code, sp.levels || 1, sp.slots || 1, zoneNo(z.name) && LETTER[sp.type] && spaceNo(sp.code) ? `Z${pad3(zoneNo(z.name))}.${LETTER[sp.type]}${pad3(spaceNo(sp.code))}` : '']));
+                    if (!racks.length) rowsOut.push([center.name, w.name, s.name, z.name, '', '', '', '', '']);
+                    // por cada activo: su huella y las tres primeras piezas del Localizador (zona, huella y activo); el nivel, la columna, la fila y la profundidad se completan en el Excel
+                    racks.forEach((sp) => {
+                        const fp = (z.footprints || []).find((f) => f.id === sp.footprintId);
+                        const base = zoneNo(z.name) && fp && spaceNo(fp.code) && LETTER[sp.type] && spaceNo(sp.code) ? `Z${pad3(zoneNo(z.name))}.H${pad3(spaceNo(fp.code))}.${LETTER[sp.type]}${pad3(spaceNo(sp.code))}` : '';
+                        rowsOut.push([center.name, w.name, s.name, z.name, fp ? fp.code : '', sp.code, sp.levels || 1, sp.slots || 1, base]);
+                    });
                 });
             });
         });
@@ -100,7 +105,7 @@
                 ],
                 widths: [24, 16, 100, 26], headerRow: true,
             },
-            { name: t('main.relTplSheetOptions'), rows: optionsSheet(), widths: [32, 28, 28, 22, 14, 10, 18, 22], headerRow: true },
+            { name: t('main.relTplSheetOptions'), rows: optionsSheet(), widths: [32, 28, 28, 22, 14, 14, 10, 18, 26], headerRow: true },
         ]);
         saveBlob(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${t('main.relTplFileName')}.xlsx`);
     }
@@ -467,7 +472,7 @@
         const bytes = X.writeXlsx([{
             name: t('main.tplSheetNotLoaded'),
             rows: [[t('main.tplColRow'), ...COLS.map(header), t('main.tplColReason')], ...result.notLoaded.map(({ r, reason }) => [r.n, ...COLS.map((c) => r.v[c.key] || ''), reason])],
-            widths: [8, ...COLS.map((c) => Math.max(14, header(c).length + 4)), 70], headerRow: true, textColumns: [1, 2, 3, 4, 5, 6, 7, 8],
+            widths: [8, ...COLS.map((c) => Math.max(14, header(c).length + 4)), 70], headerRow: true, textColumns: COLS.map((c, i) => i + 1),
         }]);
         saveBlob(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${t('main.tplErrorsFileName')}.xlsx`);
     }

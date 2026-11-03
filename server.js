@@ -6438,8 +6438,8 @@ app.get('/api/public/ficha/:token', (req, res) => {
                 locations: (() => {
                     const ctx = codeRelationContextFor(skuItem.client_id, !!skuItem.is_test_data);
                     return listCodeRelations(skuItem.client_id, !!skuItem.is_test_data).filter((r) => r.sku_item_id === skuItem.id).map((r) => mapCodeRelation(r, null, '', ctx)).map((loc) => ({
-                        route: [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.spaceCode, loc.level ? `Nivel ${loc.level}` : '', loc.slot ? `Columna ${loc.slot}` : '', loc.row && loc.bayRows > 1 ? `Fila ${loc.row}` : '', loc.depth && loc.bayDepth > 1 ? `Profundidad ${loc.depth}` : ''].filter(Boolean),
-                        virtual: loc.subKind === 'virtual', located: loc.status === 'located',
+                        route: [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.footprintCode, loc.spaceCode, loc.level ? `Nivel ${loc.level}` : '', loc.slot ? `Columna ${loc.slot}` : '', loc.row && loc.bayRows > 1 ? `Fila ${loc.row}` : '', loc.depth && loc.bayDepth > 1 ? `Profundidad ${loc.depth}` : ''].filter(Boolean),
+                        locator: loc.locator, virtual: loc.subKind === 'virtual', located: loc.status === 'located',
                     }));
                 })(),
                 photos,
@@ -6456,6 +6456,8 @@ app.get('/api/public/ficha/:token', (req, res) => {
 // pantalla; llenarla por primera vez pide "Ver y Operar" o "Modificar" en su columna, y cambiar lo que ya tiene pide "Modificar" (igual que cualquier
 // columna, ver canEditField en Dashboard.js). Crear el Layout pide además el botón Crear desde cero o Cargar plano.
 const LayoutCalc = require('./public/LayoutCalc.js');
+// El Localizador completo de 7 piezas de cada relación se arma con las mismas reglas que lee la plantilla (public/RelTemplate.js).
+const RelTemplate = require('./public/RelTemplate.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
 const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones' };
@@ -7119,7 +7121,8 @@ const SUB_WAREHOUSE_KIND_LABELS = { physical: 'Físico', virtual: 'Virtual' };
 function layoutIndexOf(row) {
     const zones = ((row && row.layout.zones) || []).filter((z) => z.active !== false);
     const spaces = ((row && row.layout.spaces) || []).filter((s) => s.active !== false);
-    return { zones, spaces, zoneById: new Map(zones.map((z) => [z.id, z])), spaceById: new Map(spaces.map((s) => [s.id, s])) };
+    const footprints = ((row && row.layout.footprints) || []).filter((f) => f.active !== false);
+    return { zones, spaces, footprints, zoneById: new Map(zones.map((z) => [z.id, z])), spaceById: new Map(spaces.map((s) => [s.id, s])), footprintById: new Map(footprints.map((f) => [f.id, f])) };
 }
 // El Layout es de un centro de costos: costCenterId sin indicar = el primer Layout del cliente (las pantallas que todavía no eligen centro).
 function warehouseLayoutIndex(clientId, costCenterId) {
@@ -7555,6 +7558,7 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
     const layout = ctx.layoutFor(row.cost_center_id);
     const zone = layout.zoneById.get(row.zone_id);
     const space = layout.spaceById.get(row.space_id);
+    const footprint = space ? layout.footprintById.get(space.footprintId) : null;
     // Ubicado = un sub almacén virtual (no tiene dónde más) o el camino físico completo hasta el hueco (anaquel, nivel y columna) y, si ese hueco tiene más de una fila o más de una profundidad, cuál fila y cuál profundidad; lo demás queda A medias.
     const bay = row.space_id && row.level && row.slot ? LayoutCalc.bayOf(space, row.level, row.slot) : { rows: 1, depth: 1 };
     const located = !!row.sub_warehouse_id && ((sub && sub.kind === 'virtual') || (row.space_id && row.level && row.slot && (row.row_no || bay.rows <= 1) && (row.depth || bay.depth <= 1)));
@@ -7570,6 +7574,9 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
         subWarehouseId: row.sub_warehouse_id, subWarehouseName: sub ? sub.name : '', subKind: sub ? sub.kind : '',
         zoneId: row.zone_id, zoneName: zone ? zone.name : '',
         spaceId: row.space_id, spaceCode: space ? space.code : '',
+        footprintId: footprint ? footprint.id : '', footprintCode: footprint ? footprint.code : '',
+        // El Localizador completo (las 7 piezas) solo existe cuando el lugar está completo.
+        locator: located && space && footprint && zone ? RelTemplate.formatLocator({ zoneName: zone.name, footprintCode: footprint.code, spaceType: space.type, spaceCode: space.code, level: row.level, slot: row.slot, row: row.row_no, depth: row.depth }) : '',
         level: row.level, slot: row.slot, row: row.row_no, depth: row.depth, bayRows: bay.rows, bayDepth: bay.depth,
         classification: row.classification || 'activo', classificationName: CODE_RELATION_CLASSES[row.classification || 'activo'] || '',
         status: located ? 'located' : 'partial',
@@ -7707,7 +7714,8 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
         const idx = layoutIndexOf(row);
         return idx.zones.map((z) => ({
             id: z.id, name: z.name,
-            spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, levels: s.levels || 1, slots: s.slots || 1, bays: s.bays || [] })),
+            footprints: idx.footprints.filter((f) => f.zoneId === z.id).map((f) => ({ id: f.id, code: f.code })),
+            spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, footprintId: s.footprintId, levels: s.levels || 1, slots: s.slots || 1, bays: s.bays || [] })),
         }));
     };
     const zonesByCenter = {};
