@@ -7106,7 +7106,7 @@ function temperatureTarget(token, spaceId) {
     const target = cleaningTarget(token, spaceId);
     return target && target.space.type === 'cold' ? target : null;
 }
-const publicTemperatureRecord = (r) => ({ id: r.id, name: r.person_name, temperature: r.temperature, checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo });
+const publicTemperatureRecord = (r) => ({ id: r.id, name: r.person_name, temperature: r.temperature, humidity: r.humidity, checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo });
 app.get('/t/:token/:spaceId', publicLayoutLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(self)' });
     res.sendFile(path.join(PUBLIC_DIR, 'TemperaturaPublica.html'));
@@ -7132,10 +7132,17 @@ app.post('/api/public/temperature/:token/:spaceId/reading', publicCleaningLimite
     const raw = req.body && req.body.temperature;
     const temperature = typeof raw === 'number' ? raw : Number.NaN;
     if (!Number.isFinite(temperature) || temperature < TEMPERATURE_MIN || temperature > TEMPERATURE_MAX) return res.status(400).json({ message: 'La temperatura no es válida.', code: 'TEMP' });
+    // La humedad (%) la pide la página del QR junto con la temperatura; aquí es opcional (una página vieja que no la mande sigue sirviendo), pero si llega debe ser un número de 0 a 100.
+    const rawHum = req.body && req.body.humidity;
+    let humidity = null;
+    if (rawHum !== undefined && rawHum !== null) {
+        if (typeof rawHum !== 'number' || !Number.isFinite(rawHum) || rawHum < 0 || rawHum > 100) return res.status(400).json({ message: 'La humedad no es válida.', code: 'HUM' });
+        humidity = Math.round(rawHum * 10) / 10;
+    }
     const photo = parseCleaningPhoto(req.body && req.body.photo);
     if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
     const { row, space, footprint, zone, locator } = target;
-    const saved = addTemperatureRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature: Math.round(temperature * 10) / 10, photo });
+    const saved = addTemperatureRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature: Math.round(temperature * 10) / 10, humidity, photo });
     res.set('Cache-Control', 'no-store');
     res.status(201).json(publicTemperatureRecord(saved));
 });
@@ -7166,7 +7173,7 @@ app.get('/api/business/temperatures', requireAuth, (req, res) => {
             return {
                 id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
                 zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, locator: r.locator,
-                name: r.person_name, temperature: r.temperature, checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo, source: r.source,
+                name: r.person_name, temperature: r.temperature, humidity: r.humidity, checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo, source: r.source,
                 system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: TEMPERATURE_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.checked_at }),
             };
         }),

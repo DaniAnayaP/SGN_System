@@ -2606,6 +2606,7 @@
     "colTmpQuien": "Who checked",
     "colTmpMomento": "Reading time",
     "colTmpTemperatura": "Temperature (°C)",
+    "colTmpHumedad": "Humidity (%)",
     "colTmpFoto": "Photo",
     "colTmpOrigen": "Origin",
     "colTmpDeleteAuth": "Authorization to Delete",

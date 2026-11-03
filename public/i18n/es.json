@@ -2605,6 +2605,7 @@
     "colTmpQuien": "Quién revisó",
     "colTmpMomento": "Hora de la lectura",
     "colTmpTemperatura": "Temperatura (°C)",
+    "colTmpHumedad": "Humedad (%)",
     "colTmpFoto": "Foto",
     "colTmpOrigen": "Origen",
     "colTmpDeleteAuth": "Autorización para Eliminar",

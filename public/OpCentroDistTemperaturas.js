@@ -15,7 +15,7 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
-const SEARCH_COLUMNS = ['colSysCentroCostos', 'colTmpZona', 'colTmpHuella', 'colTmpActivo', 'colTmpLocalizador', 'colTmpQuien', 'colTmpTemperatura', 'colTmpOrigen'];
+const SEARCH_COLUMNS = ['colSysCentroCostos', 'colTmpZona', 'colTmpHuella', 'colTmpActivo', 'colTmpLocalizador', 'colTmpQuien', 'colTmpTemperatura', 'colTmpHumedad', 'colTmpOrigen'];
 
 const t = (key, params) => {
     let text = Dashboard.t(key);
@@ -54,6 +54,12 @@ function timeCell(col, iso) {
 }
 function temperatureCell(col, value) {
     const td = cell(col, Number.isFinite(Number(value)) ? Number(value).toFixed(1) : '');
+    td.classList.add('tmp-value');
+    return td;
+}
+// La humedad (%) que marcaba; las lecturas de antes de agregarla quedan sin ese dato.
+function humidityCell(col, value) {
+    const td = cell(col, value === null || value === undefined || !Number.isFinite(Number(value)) ? '' : Number(value).toFixed(1));
     td.classList.add('tmp-value');
     return td;
 }
@@ -103,7 +109,7 @@ function buildRow(r) {
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, system[key], 'col-system')),
         cell('colCatRegistroUnico', `TMP-${r.id}`, 'col-system'),
         cell('colTmpZona', r.zoneName), cell('colTmpHuella', footprintText(r)), cell('colTmpActivo', assetText(r)), cell('colTmpLocalizador', r.locator, 'rel-locator'), cell('colTmpQuien', r.name),
-        timeCell('colTmpMomento', r.checkedAt), temperatureCell('colTmpTemperatura', r.temperature), photoCell('colTmpFoto', r),
+        timeCell('colTmpMomento', r.checkedAt), temperatureCell('colTmpTemperatura', r.temperature), humidityCell('colTmpHumedad', r.humidity), photoCell('colTmpFoto', r),
         cell('colTmpOrigen', t(r.source === 'qr' ? 'main.tmpOrigenQr' : 'main.tmpOrigenUsuario')),
     );
     tr.appendChild(actionsCell(r, tr));
@@ -221,7 +227,7 @@ function openViewer(r) {
         viewerEl.addEventListener('click', (event) => { if (event.target === viewerEl) viewerEl.hidden = true; });
         document.addEventListener('keydown', (event) => { if (event.key === 'Escape') viewerEl.hidden = true; });
     }
-    viewerEl.querySelector('#tmp-viewer-title').textContent = `${r.spaceCode || ''} · ${Number(r.temperature).toFixed(1)} °C · ${r.name || ''}`;
+    viewerEl.querySelector('#tmp-viewer-title').textContent = `${r.spaceCode || ''} · ${Number(r.temperature).toFixed(1)} °C${r.humidity === null || r.humidity === undefined ? '' : ` · ${Number(r.humidity).toFixed(1)} %`} · ${r.name || ''}`;
     viewerEl.querySelector('#tmp-viewer-img').src = `${API}/${r.id}/photo`;
     viewerEl.hidden = false;
 }

@@ -5309,12 +5309,14 @@ db.exec(`
         data       BLOB NOT NULL
     );
 `);
+// La humedad (%) que marcaba el refrigerador: se agregó después (las lecturas anteriores quedan sin ese dato).
+if (!db.prepare('PRAGMA table_info(temperature_records)').all().some((c) => c.name === 'humidity')) db.exec('ALTER TABLE temperature_records ADD COLUMN humidity REAL');
 const TEMPERATURE_SELECT = `SELECT r.*, EXISTS(SELECT 1 FROM temperature_photos p WHERE p.record_id = r.id) AS has_photo FROM temperature_records r`;
 // Guarda una lectura: la hora la pone el servidor y la foto se guarda en la misma operación.
-function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, photo, source = 'qr' }) {
+function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, photo, source = 'qr' }) {
     return db.transaction(() => {
-        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, checked_at, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, source);
+        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, humidity, checked_at, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, humidity === undefined ? null : humidity, source);
         db.prepare('INSERT INTO temperature_photos (record_id, mime, data) VALUES (?, ?, ?)').run(info.lastInsertRowid, photo.mime, photo.data);
         return db.prepare(`${TEMPERATURE_SELECT} WHERE r.id = ?`).get(info.lastInsertRowid);
     })();

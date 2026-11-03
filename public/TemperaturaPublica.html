@@ -41,6 +41,8 @@
         .cam span{ position:relative; z-index:1; padding:0 18px; }
         .shot{ width:100%; border-radius:14px; display:block; aspect-ratio:4/3; object-fit:cover; background:var(--line); }
         .big{ font:700 44px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; font-variant-numeric:tabular-nums; margin:2px 0; }
+        .hum-row{ grid-template-columns:1fr auto; }
+        .big2{ font:600 24px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; font-variant-numeric:tabular-nums; color:var(--muted); margin:-6px 0 2px; }
         .sum{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
         .sum div{ border:1px solid var(--line); border-radius:14px; padding:8px 12px; }
         .sum small{ display:block; color:var(--muted); font-size:11px; }
@@ -77,7 +79,7 @@ const TEXT = {
         use: 'Guardar la lectura', cancel: 'Cancelar', cameraHint: 'Apunta al termómetro o a la pantalla del refrigerador y toma la foto', cameraOpening: 'Abriendo la cámara…',
         cameraDenied: 'No se pudo abrir la cámara. Permite el acceso a la cámara en tu navegador y vuelve a intentar.', cameraInsecure: 'Esta página necesita una conexión segura (https) para usar la cámara.',
         done: 'Listo', saved: 'Guardado', when: 'Hora', newOne: 'Nueva lectura', recordsTitle: 'Registros', readOnly: 'Solo lectura', noRecords: 'Todavía no hay lecturas de este refrigerador.',
-        needName: 'Escribe tu nombre para empezar.', needTemp: 'Escribe la temperatura que marca (por ejemplo 4.5 o -18).', badTemp: 'Esa temperatura no es válida: usa un número entre -100 y 100.', saving: 'Guardando…',
+        needName: 'Escribe tu nombre para empezar.', needTemp: 'Escribe la temperatura que marca (por ejemplo 4.5 o -18).', badTemp: 'Esa temperatura no es válida: usa un número entre -100 y 100.', needHum: 'Escribe la humedad que marca (por ejemplo 55).', badHum: 'Esa humedad no es válida: usa un número entre 0 y 100.', humidity: 'Humedad que marca', saving: 'Guardando…',
         errPhoto: 'La foto no se pudo guardar. Intenta de nuevo.', errGeneric: 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.', close: 'Cerrar', reading: 'Lectura',
     },
     en: {
@@ -86,7 +88,7 @@ const TEXT = {
         use: 'Save the reading', cancel: 'Cancel', cameraHint: 'Point at the thermometer or the refrigerator display and take the photo', cameraOpening: 'Opening the camera…',
         cameraDenied: 'The camera could not be opened. Allow camera access in your browser and try again.', cameraInsecure: 'This page needs a secure connection (https) to use the camera.',
         done: 'Done', saved: 'Saved', when: 'Time', newOne: 'New reading', recordsTitle: 'Records', readOnly: 'Read-only', noRecords: 'There are no readings of this refrigerator yet.',
-        needName: 'Type your name to start.', needTemp: 'Type the temperature shown (for example 4.5 or -18).', badTemp: 'That temperature is not valid: use a number between -100 and 100.', saving: 'Saving…',
+        needName: 'Type your name to start.', needTemp: 'Type the temperature shown (for example 4.5 or -18).', badTemp: 'That temperature is not valid: use a number between -100 and 100.', needHum: 'Type the humidity shown (for example 55).', badHum: 'That humidity is not valid: use a number between 0 and 100.', humidity: 'Humidity shown', saving: 'Saving…',
         errPhoto: 'The photo could not be saved. Try again.', errGeneric: 'It could not be saved. Check your connection and try again.', close: 'Close', reading: 'Reading',
     },
 }[LANG];
@@ -108,7 +110,7 @@ const store = {
 };
 let info = null;          // lo que contesta el servidor: activo y registros
 let stream = null;
-let draft = { name: '', temp: '' }; // lo que se escribió antes de la foto (se conserva si se repite la foto)
+let draft = { name: '', temp: '', hum: '' }; // lo que se escribió antes de la foto (se conserva si se repite la foto)
 let draftPhoto = '';      // la foto tomada que todavía no se confirma
 let lastResult = null;    // la lectura que se acaba de guardar
 let note = '';
@@ -116,6 +118,15 @@ let note = '';
 const fmtTime = (iso) => new Date(iso).toLocaleTimeString(LANG === 'en' ? 'en-US' : 'es-MX', { hour: '2-digit', minute: '2-digit' });
 const fmtDate = (iso) => new Date(iso).toLocaleDateString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short' });
 const fmtTemp = (v) => `${Number(v).toFixed(1)} °C`;
+const fmtHum = (v) => `${Number(v).toFixed(1).replace(/\.0$/, '')} %`;
+// La humedad se escribe con punto o con coma, de 0 a 100.
+function parseHum(text) {
+    const clean = String(text || '').replace(',', '.').replace(/\s+/g, '').replace(/%/g, '');
+    if (!clean) return { empty: true };
+    if (!/^\d{1,3}(\.\d{1,2})?$/.test(clean)) return { bad: true };
+    const n = Number(clean);
+    return n >= 0 && n <= 100 ? { value: Math.round(n * 10) / 10 } : { bad: true };
+}
 // La temperatura se escribe con punto o con coma; el signo menos se pone con el botón ± (algunos teclados de celular no lo traen).
 function parseTemp(text) {
     const clean = String(text || '').replace(',', '.').replace(/\s+/g, '').replace(/[−–]/g, '-').replace(/°c?/i, '');
@@ -137,6 +148,7 @@ function viewHome() {
     show(`<div class="card"><h1>${esc(TEXT.title)}</h1>${placeHtml()}${errBox()}
         <div><label for="person">${esc(TEXT.yourName)}</label><input type="text" id="person" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(name)}"></div>
         <div><label for="temp">${esc(TEXT.temperature)}</label><div class="temp-row"><button type="button" class="sign" id="sign" aria-label="${esc(TEXT.toggleSign)}" title="${esc(TEXT.toggleSign)}">±</button><input type="text" id="temp" inputmode="decimal" autocomplete="off" maxlength="7" placeholder="${esc(TEXT.tempPlaceholder)}" value="${esc(draft.temp)}"><span class="unit">°C</span></div></div>
+        <div><label for="hum">${esc(TEXT.humidity)}</label><div class="temp-row hum-row"><input type="text" id="hum" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="0" value="${esc(draft.hum)}"><span class="unit">%</span></div></div>
         <button type="button" class="btn" id="go-photo">${esc(TEXT.take)}</button>
         <button type="button" class="link" id="go-records">${esc(TEXT.records)}</button></div>`);
     $('sign').addEventListener('click', () => {
@@ -148,10 +160,13 @@ function viewHome() {
     $('go-photo').addEventListener('click', () => {
         const personName = $('person').value.replace(/\s+/g, ' ').trim();
         const reading = parseTemp($('temp').value);
-        draft = { name: personName, temp: $('temp').value.trim() };
+        const humidity = parseHum($('hum').value);
+        draft = { name: personName, temp: $('temp').value.trim(), hum: $('hum').value.trim() };
         if (!personName) { note = TEXT.needName; viewHome(); $('person').focus(); return; }
         if (reading.empty) { note = TEXT.needTemp; viewHome(); $('temp').focus(); return; }
         if (reading.bad) { note = TEXT.badTemp; viewHome(); $('temp').focus(); return; }
+        if (humidity.empty) { note = TEXT.needHum; viewHome(); $('hum').focus(); return; }
+        if (humidity.bad) { note = TEXT.badHum; viewHome(); $('hum').focus(); return; }
         note = '';
         store.set(KEY_NAME, personName);
         viewCamera();
@@ -162,7 +177,7 @@ function viewHome() {
 async function viewCamera() {
     draftPhoto = '';
     show(`<div class="card"><h1>${esc(TEXT.photoTitle)}</h1>${placeHtml()}${errBox()}
-        <div class="muted">${esc(draft.name)} · ${esc(TEXT.reading)} ${esc(fmtTemp(parseTemp(draft.temp).value))}</div>
+        <div class="muted">${esc(draft.name)} · ${esc(TEXT.reading)} ${esc(fmtTemp(parseTemp(draft.temp).value))} · ${esc(fmtHum(parseHum(draft.hum).value))}</div>
         <div class="cam" id="cam"><video id="video" playsinline muted autoplay></video><span id="cam-msg">${esc(TEXT.cameraOpening)}</span></div>
         <button type="button" class="btn" id="shoot" disabled>${esc(TEXT.shoot)}</button>
         <button type="button" class="link" id="cam-cancel">${esc(TEXT.cancel)}</button></div>`);
@@ -207,6 +222,7 @@ function capture(video) {
 function viewConfirm() {
     show(`<div class="card"><h1>${esc(TEXT.photoTitle)}</h1>${placeHtml()}${errBox()}
         <div class="big">${esc(fmtTemp(parseTemp(draft.temp).value))}</div>
+        <div class="big2">${esc(fmtHum(parseHum(draft.hum).value))}</div>
         <img class="shot" id="preview" alt="">
         <button type="button" class="btn" id="use">${esc(TEXT.use)}</button>
         <button type="button" class="btn alt" id="retake">${esc(TEXT.retake)}</button></div>`);
@@ -217,18 +233,18 @@ function viewConfirm() {
         try {
             await sendReading();
         } catch (err) {
-            note = err && err.code === 'PHOTO' ? TEXT.errPhoto : (err && err.code === 'TEMP' ? TEXT.badTemp : TEXT.errGeneric);
+            note = err && err.code === 'PHOTO' ? TEXT.errPhoto : (err && err.code === 'TEMP' ? TEXT.badTemp : (err && err.code === 'HUM' ? TEXT.badHum : TEXT.errGeneric));
             viewConfirm();
         }
     });
 }
 
 async function sendReading() {
-    const res = await fetch(`${API}/reading`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: draft.name, temperature: parseTemp(draft.temp).value, photo: draftPhoto }) });
+    const res = await fetch(`${API}/reading`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: draft.name, temperature: parseTemp(draft.temp).value, humidity: parseHum(draft.hum).value, photo: draftPhoto }) });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) { const e = new Error(json.message || 'error'); e.code = json.code || String(res.status); throw e; }
     lastResult = json;
-    draft = { name: draft.name, temp: '' };
+    draft = { name: draft.name, temp: '', hum: '' };
     draftPhoto = '';
     note = '';
     await refresh();
@@ -239,6 +255,7 @@ function viewDone() {
     const r = lastResult;
     show(`<div class="card"><h1>${esc(TEXT.done)} <span class="tag">${esc(TEXT.saved)}</span></h1>${placeHtml()}
         <div class="big">${esc(fmtTemp(r.temperature))}</div>
+        ${r.humidity === null || r.humidity === undefined ? '' : `<div class="big2">${esc(fmtHum(r.humidity))}</div>`}
         <div class="sum"><div><small>${esc(TEXT.yourName)}</small><b>${esc(r.name)}</b></div><div><small>${esc(TEXT.when)}</small><b>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</b></div></div>
         <button type="button" class="btn alt" id="go-records">${esc(TEXT.records)}</button>
         <button type="button" class="link" id="again">${esc(TEXT.newOne)}</button></div>`);
@@ -247,7 +264,7 @@ function viewDone() {
 }
 
 function viewRecords() {
-    const rows = info.records.map((r) => `<div class="item">${r.hasPhoto ? `<img data-view="${r.id}" alt="${esc(TEXT.photoTitle)}" loading="lazy" src="${API}/photo/${r.id}">` : '<i></i>'}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</small></div><span class="tag">${esc(fmtTemp(r.temperature))}</span></div>`).join('');
+    const rows = info.records.map((r) => `<div class="item">${r.hasPhoto ? `<img data-view="${r.id}" alt="${esc(TEXT.photoTitle)}" loading="lazy" src="${API}/photo/${r.id}">` : '<i></i>'}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</small></div><span class="tag">${esc(fmtTemp(r.temperature))}${r.humidity === null || r.humidity === undefined ? '' : ` · ${esc(fmtHum(r.humidity))}`}</span></div>`).join('');
     show(`<div class="card"><h1>${esc(TEXT.recordsTitle)}</h1>${placeHtml()}<span class="muted">${esc(TEXT.readOnly)}</span>
         <div class="list">${rows || `<div class="muted">${esc(TEXT.noRecords)}</div>`}</div>
         <button type="button" class="link" id="back">${esc(TEXT.back)}</button></div>`);
