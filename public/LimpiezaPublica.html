@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>Limpieza</title>
+    <link rel="icon" href="/icons/icon-512.png">
+    <style>
+        :root{
+            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14);
+        }
+        @media (prefers-color-scheme: dark){
+            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); }
+        }
+        *{ box-sizing:border-box; }
+        html,body{ margin:0; min-height:100%; }
+        body{ background:var(--bg); color:var(--ink); font:400 15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:14px 14px 36px; display:flex; justify-content:center; }
+        main{ width:100%; max-width:420px; display:flex; flex-direction:column; gap:12px; }
+        .site{ display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--muted); }
+        .site b{ color:var(--ink); font-weight:600; }
+        .card{ background:var(--surface); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:16px; display:flex; flex-direction:column; gap:12px; }
+        h1{ font-size:20px; margin:0; }
+        .chip{ display:inline-flex; align-items:center; gap:6px; width:max-content; max-width:100%; font-weight:600; font-size:14px; padding:4px 12px; border:1px solid var(--line); border-radius:999px; }
+        .loc{ font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); margin-top:-6px; overflow-wrap:anywhere; }
+        label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+        input[type=text]{ width:100%; font:500 16px system-ui,sans-serif; padding:11px 14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--ink); }
+        input[type=text]:focus-visible, button:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+        .btn{ font:600 16px system-ui,sans-serif; padding:14px 16px; border-radius:16px; border:0; background:var(--ink); color:var(--surface); cursor:pointer; width:100%; }
+        .btn.alt{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+        .btn.ok{ background:var(--ok); color:#fff; }
+        .btn[disabled]{ opacity:.55; cursor:default; }
+        .link{ background:none; border:0; color:var(--accent); font:600 14px system-ui,sans-serif; padding:8px; cursor:pointer; text-align:center; }
+        .timer{ font:700 44px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; letter-spacing:.02em; font-variant-numeric:tabular-nums; margin:2px 0; }
+        .cam{ position:relative; border-radius:18px; overflow:hidden; background:#241a2a; aspect-ratio:3/4; display:grid; place-items:center; color:#e9d9ee; text-align:center; font-size:13px; }
+        .cam video, .cam img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+        .cam::after{ content:""; position:absolute; inset:14px; border:2px dashed rgba(255,255,255,.35); border-radius:12px; pointer-events:none; }
+        .cam span{ position:relative; z-index:1; padding:0 18px; }
+        .shot{ width:100%; border-radius:14px; display:block; aspect-ratio:4/3; object-fit:cover; background:var(--line); }
+        .sum{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .sum div{ border:1px solid var(--line); border-radius:14px; padding:8px 12px; }
+        .sum small{ display:block; color:var(--muted); font-size:11px; }
+        .sum b{ font-size:16px; }
+        .sum .wide{ grid-column:1 / 3; }
+        .tag{ display:inline-block; font-weight:600; font-size:12px; padding:2px 10px; border-radius:999px; border:1px solid var(--ok); color:var(--ok); }
+        .list{ display:flex; flex-direction:column; gap:8px; }
+        .item{ display:grid; grid-template-columns:56px 56px 1fr auto; gap:8px; align-items:center; border:1px solid var(--line); border-radius:14px; padding:8px; }
+        .item img, .item i{ width:56px; height:56px; border-radius:10px; object-fit:cover; background:var(--line); display:block; cursor:zoom-in; }
+        .item b{ font-size:14px; display:block; } .item small{ color:var(--muted); font-size:12px; }
+        .err{ color:var(--warn); font-size:14px; border:1px solid var(--warn); border-radius:14px; padding:10px 12px; }
+        .muted{ color:var(--muted); font-size:13px; }
+        #viewer{ position:fixed; inset:0; background:rgba(0,0,0,.88); display:grid; place-items:center; z-index:10; padding:12px; }
+        #viewer[hidden]{ display:none; }
+        #viewer img{ max-width:100%; max-height:88vh; border-radius:12px; }
+        #viewer button{ position:absolute; top:10px; right:12px; background:rgba(255,255,255,.18); color:#fff; border:0; border-radius:999px; font:600 14px system-ui; padding:8px 14px; cursor:pointer; }
+        @media (prefers-reduced-motion: no-preference){ .card{ animation:rise .25s ease-out; } @keyframes rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } } }
+    </style>
+</head>
+<body>
+<main>
+    <div class="site"><b id="site-name"></b><span id="company-name"></span></div>
+    <div id="view"></div>
+</main>
+<div id="viewer" hidden><button type="button" id="viewer-close"></button><img alt=""></div>
+<canvas id="snap" hidden></canvas>
+<script>
+(function () {
+'use strict';
+const LANG = (navigator.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
+const TEXT = {
+    es: {
+        title: 'Limpieza', loading: 'Cargando…', notFound: 'Este QR ya no corresponde a ningún activo.', yourName: 'Tu nombre', namePlaceholder: 'Quién limpia',
+        start: 'Iniciar limpieza: tomar foto antes', records: 'Ver registros', back: 'Volver', beforeTitle: 'Foto antes', afterTitle: 'Foto después', take: 'Tomar foto', retake: 'Repetir', use: 'Usar esta foto',
+        cancel: 'Cancelar', cameraHint: 'Apunta a lo que vas a limpiar y toma la foto', cameraAfterHint: 'Toma la foto de cómo quedó', cameraOpening: 'Abriendo la cámara…',
+        cameraDenied: 'No se pudo abrir la cámara. Permite el acceso a la cámara en tu navegador y vuelve a intentar.', cameraInsecure: 'Esta página necesita una conexión segura (https) para usar la cámara.',
+        running: 'Limpiando…', finish: 'Terminar: tomar foto después', photoBefore: 'Foto antes', forget: 'No es mi limpieza (olvidar en este teléfono)', done: 'Listo', saved: 'Guardado',
+        startLabel: 'Inicio', endLabel: 'Fin', took: 'Tiempo que se tardó', newOne: 'Nueva limpieza', recordsTitle: 'Registros', readOnly: 'Solo lectura', noRecords: 'Todavía no hay limpiezas de este activo.',
+        inProgress: 'En curso', needName: 'Escribe tu nombre para empezar.', saving: 'Guardando…', errPhoto: 'La foto no se pudo guardar. Intenta de nuevo.', errGeneric: 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.',
+        alreadyDone: 'Esa limpieza ya se había terminado.', close: 'Cerrar', before: 'Antes', after: 'Después', min: 'min', s: 's', h: 'h',
+    },
+    en: {
+        title: 'Cleaning', loading: 'Loading…', notFound: 'This QR no longer matches any asset.', yourName: 'Your name', namePlaceholder: 'Who is cleaning',
+        start: 'Start cleaning: take the before photo', records: 'View records', back: 'Back', beforeTitle: 'Before photo', afterTitle: 'After photo', take: 'Take photo', retake: 'Retake', use: 'Use this photo',
+        cancel: 'Cancel', cameraHint: 'Point at what you are going to clean and take the photo', cameraAfterHint: 'Take the photo of how it looks now', cameraOpening: 'Opening the camera…',
+        cameraDenied: 'The camera could not be opened. Allow camera access in your browser and try again.', cameraInsecure: 'This page needs a secure connection (https) to use the camera.',
+        running: 'Cleaning…', finish: 'Finish: take the after photo', photoBefore: 'Before photo', forget: 'This is not my cleaning (forget on this phone)', done: 'Done', saved: 'Saved',
+        startLabel: 'Start', endLabel: 'End', took: 'Time it took', newOne: 'New cleaning', recordsTitle: 'Records', readOnly: 'Read-only', noRecords: 'There are no cleanings of this asset yet.',
+        inProgress: 'In progress', needName: 'Type your name to start.', saving: 'Saving…', errPhoto: 'The photo could not be saved. Try again.', errGeneric: 'It could not be saved. Check your connection and try again.',
+        alreadyDone: 'That cleaning was already finished.', close: 'Close', before: 'Before', after: 'After', min: 'min', s: 's', h: 'h',
+    },
+}[LANG];
+document.documentElement.lang = LANG;
+document.title = TEXT.title;
+document.getElementById('viewer-close').textContent = TEXT.close;
+
+// La dirección fija del QR: /l/<código del Layout>/<id del activo>
+const parts = location.pathname.split('/').filter(Boolean);
+const TOKEN = parts[1] || '';
+const SPACE = parts[2] || '';
+const API = `/api/public/cleaning/${encodeURIComponent(TOKEN)}/${encodeURIComponent(SPACE)}`;
+const KEY_RUN = `sgn_clean_${TOKEN}_${SPACE}`;
+const KEY_NAME = 'sgn_clean_name';
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const store = {
+    get(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* sin almacenamiento */ } },
+    del(key) { try { localStorage.removeItem(key); } catch (e) { /* sin almacenamiento */ } },
+};
+let info = null;          // lo que contesta el servidor: activo, registros, hora del servidor
+let skew = 0;             // diferencia entre el reloj del servidor y el del teléfono (el tiempo lo cuenta el servidor)
+let running = store.get(KEY_RUN); // { id, key, startedAt, name } si este teléfono tiene una limpieza empezada
+let stream = null;
+let tick = null;
+let draftPhoto = '';      // la foto tomada que todavía no se confirma
+let lastResult = null;    // la limpieza que se acaba de terminar
+let note = '';
+
+const nowMs = () => Date.now() + skew;
+const fmtTime = (iso) => new Date(iso).toLocaleTimeString(LANG === 'en' ? 'en-US' : 'es-MX', { hour: '2-digit', minute: '2-digit' });
+const fmtDate = (iso) => new Date(iso).toLocaleDateString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short' });
+function fmtDuration(totalSeconds) {
+    const s = Math.max(0, Math.round(totalSeconds));
+    const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const r = s % 60;
+    if (h) return `${h} ${TEXT.h} ${m} ${TEXT.min}`;
+    if (m) return `${m} ${TEXT.min} ${r} ${TEXT.s}`;
+    return `${r} ${TEXT.s}`;
+}
+const clock = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); const p = (n) => String(n).padStart(2, '0'); return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`; };
+
+function stopCamera() { if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; } }
+function stopTick() { if (tick) { clearInterval(tick); tick = null; } }
+function show(html) { stopTick(); $('view').innerHTML = html; }
+const placeHtml = () => `<span class="chip">${esc(info.space.code)} · ${esc(typeName(info.space.type))}</span>${info.space.locator ? `<div class="loc">${esc(info.space.locator)}${info.space.zoneName ? ` · ${esc(info.space.zoneName)}` : ''}</div>` : ''}`;
+const TYPE_NAMES = { es: { rack: 'Anaquel', rackpal: 'Rack', cabinet: 'Gabeta', pallet: 'Tarima en piso', cold: 'Frío' }, en: { rack: 'Rack (shelf)', rackpal: 'Pallet rack', cabinet: 'Cabinet', pallet: 'Floor pallet', cold: 'Cold' } }[LANG];
+const typeName = (type) => TYPE_NAMES[type] || type;
+const errBox = () => (note ? `<div class="err" role="alert">${esc(note)}</div>` : '');
+
+// ---- pantallas ----------------------------------------------------------------------------------------------------------------------
+function viewHome() {
+    const savedName = (store.get(KEY_NAME) || '');
+    show(`<div class="card"><h1>${esc(TEXT.title)}</h1>${placeHtml()}${errBox()}
+        <div><label for="person">${esc(TEXT.yourName)}</label><input type="text" id="person" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(savedName)}"></div>
+        <button type="button" class="btn" id="go-start">${esc(TEXT.start)}</button>
+        <button type="button" class="link" id="go-records">${esc(TEXT.records)}</button></div>`);
+    $('go-start').addEventListener('click', () => {
+        const name = $('person').value.replace(/\s+/g, ' ').trim();
+        if (!name) { note = TEXT.needName; viewHome(); $('person').focus(); return; }
+        note = '';
+        store.set(KEY_NAME, name);
+        viewCamera('before', name);
+    });
+    $('go-records').addEventListener('click', () => { note = ''; viewRecords(); });
+}
+
+async function viewCamera(kind, name) {
+    draftPhoto = '';
+    const hint = kind === 'before' ? TEXT.cameraHint : TEXT.cameraAfterHint;
+    show(`<div class="card"><h1>${esc(kind === 'before' ? TEXT.beforeTitle : TEXT.afterTitle)}</h1>${placeHtml()}${errBox()}
+        <div class="cam" id="cam"><video id="video" playsinline muted autoplay></video><span id="cam-msg">${esc(TEXT.cameraOpening)}</span></div>
+        <button type="button" class="btn" id="shoot" disabled>${esc(TEXT.take)}</button>
+        <button type="button" class="link" id="cam-cancel">${esc(TEXT.cancel)}</button></div>`);
+    $('cam-cancel').addEventListener('click', () => { stopCamera(); note = ''; if (kind === 'before') viewHome(); else viewRunning(); });
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('cam-msg').textContent = TEXT.cameraInsecure; return; }
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+        const video = $('video');
+        video.srcObject = stream;
+        await video.play();
+        $('cam-msg').textContent = hint;
+        $('shoot').disabled = false;
+    } catch (err) {
+        $('cam-msg').textContent = TEXT.cameraDenied;
+        return;
+    }
+    $('shoot').addEventListener('click', () => {
+        const video = $('video');
+        const photo = capture(video);
+        stopCamera();
+        if (!photo) { note = TEXT.errPhoto; viewCamera(kind, name); return; }
+        draftPhoto = photo;
+        viewConfirm(kind, name);
+    });
+}
+
+// La foto se toma de la imagen en vivo y se reduce (máx. 1024 px de lado, JPEG): así pesa poco aunque la cámara sea de 12 megapíxeles.
+function capture(video) {
+    const w = video.videoWidth; const h = video.videoHeight;
+    if (!w || !h) return '';
+    const scale = Math.min(1, 1024 / Math.max(w, h));
+    const canvas = $('snap');
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    for (const q of [0.72, 0.6, 0.5, 0.4]) {
+        const url = canvas.toDataURL('image/jpeg', q);
+        if (url.length * 0.75 < 420 * 1024) return url;
+    }
+    return '';
+}
+
+function viewConfirm(kind, name) {
+    show(`<div class="card"><h1>${esc(kind === 'before' ? TEXT.beforeTitle : TEXT.afterTitle)}</h1>${placeHtml()}${errBox()}
+        <img class="shot" id="preview" alt="">
+        <button type="button" class="btn" id="use">${esc(TEXT.use)}</button>
+        <button type="button" class="btn alt" id="retake">${esc(TEXT.retake)}</button></div>`);
+    $('preview').src = draftPhoto;
+    $('retake').addEventListener('click', () => { note = ''; viewCamera(kind, name); });
+    $('use').addEventListener('click', async () => {
+        $('use').disabled = true; $('retake').disabled = true; $('use').textContent = TEXT.saving;
+        try {
+            if (kind === 'before') await sendStart(name); else await sendFinish();
+        } catch (err) {
+            note = err && err.code === 'PHOTO' ? TEXT.errPhoto : (err && err.code === 'DONE' ? TEXT.alreadyDone : TEXT.errGeneric);
+            if (err && err.code === 'DONE') { store.del(KEY_RUN); running = null; }
+            viewConfirm(kind, name);
+        }
+    });
+}
+
+async function post(path, body) {
+    const res = await fetch(`${API}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(json.message || 'error'); e.code = json.code || String(res.status); throw e; }
+    return json;
+}
+async function sendStart(name) {
+    const out = await post('start', { name, photo: draftPhoto });
+    skew = new Date(out.now).getTime() - Date.now();
+    running = { id: out.id, key: out.key, startedAt: out.startedAt, name };
+    store.set(KEY_RUN, running);
+    draftPhoto = '';
+    note = '';
+    viewRunning();
+}
+async function sendFinish() {
+    const out = await post('finish', { id: running.id, key: running.key, photo: draftPhoto });
+    store.del(KEY_RUN);
+    lastResult = out;
+    running = null;
+    draftPhoto = '';
+    note = '';
+    await refresh();
+    viewDone();
+}
+
+function viewRunning() {
+    if (!running) { viewHome(); return; }
+    show(`<div class="card"><h1>${esc(TEXT.running)}</h1>${placeHtml()}${errBox()}
+        <div class="muted">${esc(running.name)} · ${esc(TEXT.startLabel)} ${esc(fmtTime(running.startedAt))}</div>
+        <div class="timer" id="timer">00:00:00</div>
+        <button type="button" class="btn ok" id="finish">${esc(TEXT.finish)}</button>
+        <button type="button" class="link" id="forget">${esc(TEXT.forget)}</button></div>`);
+    const paint = () => { $('timer').textContent = clock(nowMs() - new Date(running.startedAt).getTime()); };
+    paint();
+    tick = setInterval(paint, 1000);
+    $('finish').addEventListener('click', () => { note = ''; viewCamera('after', running.name); });
+    $('forget').addEventListener('click', () => { store.del(KEY_RUN); running = null; note = ''; viewHome(); });
+}
+
+function viewDone() {
+    const r = lastResult;
+    show(`<div class="card"><h1>${esc(TEXT.done)} <span class="tag">${esc(TEXT.saved)}</span></h1>${placeHtml()}
+        <div class="sum"><div><small>${esc(TEXT.startLabel)}</small><b>${esc(fmtTime(r.startedAt))}</b></div><div><small>${esc(TEXT.endLabel)}</small><b>${esc(fmtTime(r.finishedAt))}</b></div>
+        <div class="wide"><small>${esc(TEXT.took)}</small><b>${esc(fmtDuration(r.seconds))}</b></div></div>
+        <button type="button" class="btn alt" id="go-records">${esc(TEXT.records)}</button>
+        <button type="button" class="link" id="again">${esc(TEXT.newOne)}</button></div>`);
+    $('go-records').addEventListener('click', viewRecords);
+    $('again').addEventListener('click', () => { lastResult = null; viewHome(); });
+}
+
+function viewRecords() {
+    const photo = (r, kind) => (kind === 'before' ? r.hasBefore : r.hasAfter) ? `<img data-view="${r.id}:${kind}" alt="${esc(kind === 'before' ? TEXT.before : TEXT.after)}" loading="lazy" src="${API}/photo/${r.id}/${kind}">` : '<i></i>';
+    const rows = info.records.map((r) => `<div class="item">${photo(r, 'before')}${photo(r, 'after')}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.startedAt))} · ${esc(fmtTime(r.startedAt))}${r.finishedAt ? ` → ${esc(fmtTime(r.finishedAt))}` : ''}</small></div>${r.finishedAt ? `<span class="tag">${esc(fmtDuration(r.seconds))}</span>` : `<span class="chip">${esc(TEXT.inProgress)}</span>`}</div>`).join('');
+    show(`<div class="card"><h1>${esc(TEXT.recordsTitle)}</h1>${placeHtml()}<span class="muted">${esc(TEXT.readOnly)}</span>
+        <div class="list">${rows || `<div class="muted">${esc(TEXT.noRecords)}</div>`}</div>
+        <button type="button" class="link" id="back">${esc(TEXT.back)}</button></div>`);
+    $('back').addEventListener('click', () => { if (running) viewRunning(); else viewHome(); });
+    $('view').querySelectorAll('[data-view]').forEach((img) => img.addEventListener('click', () => { $('viewer').querySelector('img').src = img.src; $('viewer').hidden = false; }));
+}
+$('viewer-close').addEventListener('click', () => { $('viewer').hidden = true; });
+$('viewer').addEventListener('click', (event) => { if (event.target === $('viewer')) $('viewer').hidden = true; });
+
+async function refresh() {
+    const res = await fetch(API, { cache: 'no-store' });
+    if (!res.ok) { const e = new Error('not found'); e.status = res.status; throw e; }
+    info = await res.json();
+    skew = new Date(info.now).getTime() - Date.now();
+    $('site-name').textContent = info.siteName || '';
+    $('company-name').textContent = info.companyName || '';
+}
+
+(async function init() {
+    show(`<div class="card"><div class="muted">${esc(TEXT.loading)}</div></div>`);
+    try { await refresh(); } catch (err) { show(`<div class="card"><div class="err" role="alert">${esc(TEXT.notFound)}</div></div>`); return; }
+    // si este teléfono tenía una limpieza empezada de ese activo y el servidor la ve todavía abierta, se sigue desde ahí
+    if (running) {
+        const open = info.records.find((r) => r.id === running.id);
+        if (open && !open.finishedAt) { viewRunning(); return; }
+        store.del(KEY_RUN); running = null;
+    }
+    viewHome();
+})();
+window.addEventListener('pagehide', stopCamera);
+})();
+</script>
+</body>
+</html>

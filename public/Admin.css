@@ -7548,6 +7548,13 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-opt-item i{ flex: none; font-size: 1rem; color: var(--color-text-secondary); }
 .layout-opt-item .layout-opt-check{ color: var(--color-text-primary); visibility: hidden; }
 .layout-opt-item[aria-pressed="true"] .layout-opt-check{ visibility: visible; }
+/* Operaciones > Limpieza: las fotos de cada registro (miniatura que abre el visor) */
+.lim-photo{ display: inline-block; padding: 0; border: 1px solid var(--color-border); border-radius: 0.4rem; background: var(--color-surface); cursor: zoom-in; overflow: hidden; line-height: 0; }
+.lim-photo img{ width: 44px; height: 34px; object-fit: cover; display: block; }
+.lim-viewer{ max-width: min(92vw, 720px); }
+.lim-viewer img{ display: block; max-width: 100%; max-height: 70vh; margin: 0.6rem auto 0; border-radius: 0.6rem; }
+.lim-viewer-tabs{ display: flex; gap: 0.4rem; }
+.lim-viewer-tabs .layout-seg-btn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); }
 /* Opción A: «Textos» y «Capas» son botones redondos en la fila de iconos y su lista FLOTA encima de lo que haya debajo (no alarga el panel), centrada bajo la fila */
 .layout-views-icons{ position: relative; }
 .layout-opt-icon{ position: static; width: auto; max-width: none; }

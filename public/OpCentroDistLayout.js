@@ -2312,13 +2312,17 @@ document.addEventListener('dashboard:language-changed', () => {
 function updateQrMenu() {
     const canLayout = !!(state.perms && state.perms.canUseQr);
     const canZone = !!(state.perms && state.perms.canPrintZone);
-    const show = !!((canLayout || canZone) && state.saved && !state.creating);
+    const canClean = !!(state.perms && state.perms.canUseCleaningQr);
+    const show = !!((canLayout || canZone || canClean) && state.saved && !state.creating);
     $('layout-qrmenu').hidden = !show;
     $('layout-qr-regen').hidden = !(state.perms && state.perms.canRegenerateQr);
-    // "Por: Layout | Zona" solo sale si se puede usar de las dos formas; con una sola, el menú abre directo en esa.
-    $('layout-qr-by').hidden = !(canLayout && canZone);
-    if (!qrBy || (qrBy === 'layout' && !canLayout)) qrBy = canLayout ? 'layout' : 'zone';
-    if (qrBy === 'zone' && !canZone) qrBy = 'layout';
+    // "Por: Layout | Zona | Limpieza" solo sale si se puede usar de más de una forma; con una sola, el menú abre directo en esa.
+    $('layout-qr-by-layout').hidden = !canLayout;
+    $('layout-qr-by-zone').hidden = !canZone;
+    $('layout-qr-by-clean').hidden = !canClean;
+    $('layout-qr-by').hidden = [canLayout, canZone, canClean].filter(Boolean).length < 2;
+    const first = canLayout ? 'layout' : (canZone ? 'zone' : 'clean');
+    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean)) qrBy = first;
     renderQrBy();
     if (!show) closeQrPop();
 }
@@ -2332,14 +2336,56 @@ let qrZoneData = null; // lo último que respondió el servidor para la zona y l
 let qrZoneSeq = 0;
 const ZONE_CATEGORY_TYPES = [['inventario', 'colArticuloCategoriaInventario'], ['compra', 'colArticuloCategoriaCompra'], ['almacenamiento', 'colArticuloCategoriaAlmacenamiento'], ['rotacion', 'colArticuloCategoriaRotacion'], ['manejo', 'colArticuloCategoriaManejo'], ['riesgo', 'colArticuloCategoriaRiesgo'], ['vidautil', 'colArticuloCategoriaVidautil'], ['tipocodigo', 'colArticuloCategoriaTipoCodigo']];
 function renderQrBy() {
-    const zone = qrBy === 'zone';
-    $('layout-qr-by-layout').classList.toggle('active', !zone);
-    $('layout-qr-by-layout').setAttribute('aria-pressed', String(!zone));
-    $('layout-qr-by-zone').classList.toggle('active', zone);
-    $('layout-qr-by-zone').setAttribute('aria-pressed', String(zone));
-    $('layout-qr-pane-layout').hidden = zone;
-    $('layout-qr-pane-zone').hidden = !zone;
-    if (zone && !$('layout-qr-pop').hidden) loadQrZone(); // con el menú cerrado no se pide nada; se lee al abrirlo
+    ['layout', 'zone', 'clean'].forEach((k) => {
+        const on = qrBy === k;
+        $(`layout-qr-by-${k}`).classList.toggle('active', on);
+        $(`layout-qr-by-${k}`).setAttribute('aria-pressed', String(on));
+        $(`layout-qr-pane-${k}`).hidden = !on;
+    });
+    if (qrBy === 'zone' && !$('layout-qr-pop').hidden) loadQrZone(); // con el menú cerrado no se pide nada; se lee al abrirlo
+    if (qrBy === 'clean') cleanZoneOptions();
+}
+// ---- QR de limpieza (uno por activo) ---------------------------------------------------------------------------------------------
+// Cada ACTIVO tiene su QR (la dirección fija /l/<código del Layout>/<id del activo>: no cambia nunca aunque el activo cambie de nombre, de zona o de código). Se imprime una hoja con un QR por activo de la zona
+// elegida (o de todas) y se pega en el anaquel, la tarima o el refrigerador. Se arma con lo guardado (GET /api/business/layout/cleaning-qr). Quien lo escanea no necesita sesión: ver la pantalla Limpieza.
+function cleanZoneOptions() {
+    const zones = ((state.saved && state.saved.zones) || []).filter((z) => z.active !== false);
+    const select = $('layout-qr-clean-zone');
+    const current = select.value;
+    select.innerHTML = `<option value="">${esc(t('main.layoutQrLimpiezaTodas'))}</option>${zones.map((z) => `<option value="${esc(z.id)}">${esc(z.name)}</option>`).join('')}`;
+    if (current && zones.some((z) => z.id === current)) select.value = current;
+    const n = ((state.saved && state.saved.spaces) || []).filter((s) => s.active !== false && (!select.value || s.zoneId === select.value)).length;
+    $('layout-qr-clean-fine').textContent = n ? t('main.layoutQrLimpiezaCuantos', { n: fmt(n) }) : t('main.layoutQrLimpiezaVacio');
+    $('layout-qr-clean-print').disabled = !n;
+}
+function qrSvgOf(rows) {
+    const n = rows.length;
+    let d = '';
+    rows.forEach((row, y) => { for (let x = 0; x < n; x++) { if (row[x] !== '1') continue; let len = 1; while (x + len < n && row[x + len] === '1') len++; d += `M${x + 4},${y + 4}h${len}v1h-${len}z`; x += len - 1; } });
+    return `<svg viewBox="0 0 ${n + 8} ${n + 8}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg"><rect width="${n + 8}" height="${n + 8}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+}
+async function printCleaningQr() {
+    const zone = $('layout-qr-clean-zone').value;
+    const base = layoutUrl('/api/business/layout/cleaning-qr');
+    const res = await fetch(zone ? `${base}${base.includes('?') ? '&' : '?'}zone=${encodeURIComponent(zone)}` : base, { credentials: 'include' });
+    if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return; }
+    if (!res.ok) throw new Error('cleaning qr failed');
+    const data = await res.json();
+    if (!data.spaces.length) { Dashboard.showToast(t('main.layoutQrLimpiezaVacio'), 'warning'); return; }
+    const cards = data.spaces.map((s) => `<div class="c"><small>${esc(data.siteName || data.companyName)}</small><b class="t">${esc(t('main.layoutQrLimpiezaTitulo'))}</b><b class="k">${esc(s.code)}</b><span class="y">${esc(typeLabel('space', s.type))}${s.zoneName ? ` · ${esc(s.zoneName)}` : ''}</span>${qrSvgOf(s.qrRows)}<span class="l">${esc(s.locator)}</span><small>${esc(t('main.layoutQrLimpiezaEscanea'))}</small></div>`).join('');
+    const doc = `<!doctype html><html lang="${esc(Dashboard.getLanguage ? Dashboard.getLanguage() : 'es')}"><head><meta charset="utf-8"><title>${esc(t('main.layoutQrLimpiezaTitulo'))}</title><style>
+        @page{ size: letter; margin: 10mm; } *{ box-sizing: border-box; } body{ margin: 0; font-family: system-ui, Arial, sans-serif; color: #1a1a1a; }
+        .g{ display: grid; grid-template-columns: repeat(3, 62mm); gap: 6mm 5mm; justify-content: center; }
+        .c{ height: 80mm; border: 0.3mm dashed #777; border-radius: 3mm; padding: 3mm; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1mm; break-inside: avoid; }
+        .c small{ font-size: 7pt; color: #555; } .t{ font-size: 9pt; letter-spacing: .12em; } .k{ font-size: 18pt; line-height: 1; } .y{ font-size: 8pt; color: #333; }
+        .c svg{ width: 40mm; height: 40mm; margin: 1mm 0; } .l{ font: 600 7.5pt ui-monospace, Menlo, monospace; color: #333; overflow-wrap: anywhere; }
+        </style></head><body><div class="g">${cards}</div></body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { Dashboard.showToast(t('main.layoutQrLimpiezaBloqueado'), 'warning'); return; }
+    w.document.open();
+    w.document.write(doc);
+    w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch (err) { /* el usuario puede imprimir desde la ventana */ } }, 400);
 }
 function qrZoneOptions() {
     const zones = ((state.saved && state.saved.zones) || []).filter((z) => z.active !== false);
@@ -2592,6 +2638,7 @@ $('layout-qr-btn').addEventListener('click', (event) => {
     if (open && qrBy === 'zone') loadQrZone(); // la lista de la zona se lee otra vez cada vez que se abre: refleja lo último guardado
 });
 $('layout-qr-zone').addEventListener('change', loadQrZone);
+$('layout-qr-clean-zone').addEventListener('change', cleanZoneOptions);
 $('layout-qr-type').addEventListener('change', loadQrZone);
 document.addEventListener('click', (event) => { if (!event.target.closest('#layout-qrmenu')) closeQrPop(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeQrPop(); });
@@ -2665,6 +2712,7 @@ $('layout-qr-pop').addEventListener('click', async (event) => {
         else if (kind === 'zone-cls') await openClassificationSheetDialog();
         else if (kind === 'pdf' || kind === 'png') await openSheetDialog(kind);
         else if (kind === 'link') await copyQrLink();
+        else if (kind === 'clean-print') await printCleaningQr();
         else if (kind === 'regen') await regenerateQr();
     } catch (err) {
         console.error('Layout: acción de QR falló', err);

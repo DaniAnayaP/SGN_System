@@ -161,6 +161,7 @@ const {
     ensureLayoutPublicToken,
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
+    startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,
@@ -647,6 +648,7 @@ const CSRF_EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/register', '/ap
 function requireCsrf(req, res, next) {
     if (CSRF_SAFE_METHODS.has(req.method)) return next();
     if (CSRF_EXEMPT_PATHS.has(req.path)) return next();
+    if (req.path.startsWith('/api/public/')) return next(); // vista pública (QR): sin sesión no hay nada que falsificar
     if (!req.cookies?.sgn_session) return next();
     const cookieToken = req.cookies?.[CSRF_COOKIE];
     const headerToken = req.headers[CSRF_HEADER];
@@ -6504,6 +6506,8 @@ function layoutPermissions(req) {
         // Las categorías de las zonas se capturan con el icono Categorías de la zona y su tarjeta con QR se baja con el icono Tarjeta de categorías (hojas <pantalla>/iconLayoutCategorias e iconLayoutTarjeta).
         canEditCategories: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutCategorias'),
         canUseCard: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTarjeta'),
+        // Imprimir los QR de limpieza (uno por activo) usa el icono QR de limpieza (hoja <pantalla>/iconLayoutQrLimpieza).
+        canUseCleaningQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrLimpieza'),
     };
 }
 
@@ -6919,6 +6923,156 @@ app.get('/api/public/layout/:token', publicLayoutLimiter, (req, res) => {
     if (!row) return res.status(404).json({ message: 'Layout not found.' });
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json(buildPublicLayoutPayload(row.clientId, row));
+});
+
+// --- Limpieza (Operaciones > C. Distribución) ----------------------------------------------------------------------------------------------------
+// Cada ACTIVO del Layout tiene su QR (la dirección fija /l/<código del Layout>/<id del activo>: nunca cambia). Quien lo escanea NO necesita sesión: escribe su nombre, toma la foto de «antes» con la cámara en vivo (empieza
+// el tiempo, que cuenta el SERVIDOR) y al terminar toma la de «después». Solo puede ver las últimas limpiezas de ESE activo (solo lectura). La base de registros (con usuario) es Operaciones > Limpieza.
+const CLEANING_TABLE_KEY = 'limpieza';
+const CLEANING_SCREEN_LABEL = 'Limpieza';
+const CLEANING_PHOTO_MAX_BYTES = 450 * 1024;
+const CLEANING_SPACE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const publicCleaningLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
+const sqlUtcIso = (s) => (s ? `${String(s).replace(' ', 'T')}Z` : null);
+// El activo (activo) de un Layout por su código público: con su huella, su zona y su localizador (Z006.H003.A003).
+function cleaningTarget(token, spaceId) {
+    if (!CLEANING_SPACE_ID_RE.test(String(spaceId || ''))) return null;
+    const row = getLayoutByPublicToken(token);
+    if (!row) return null;
+    const layout = row.layout;
+    const space = (layout.spaces || []).find((s) => s.id === spaceId && s.active !== false);
+    if (!space) return null;
+    const footprint = (layout.footprints || []).find((f) => f.id === space.footprintId) || null;
+    const zone = (layout.zones || []).find((z) => z.id === space.zoneId) || null;
+    const locator = zone && footprint ? [zone.code, footprint.code, space.code].join('.') : '';
+    return { row, space, footprint, zone, locator };
+}
+// La foto llega como data URL (jpeg, png o webp) ya reducida en el teléfono: se revisa el tipo, que los primeros bytes sean de una imagen de verdad y que no pase de ~450 KB.
+function parseCleaningPhoto(raw) {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(typeof raw === 'string' ? raw : '');
+    if (!m) return null;
+    const data = Buffer.from(m[2], 'base64');
+    if (!data.length || data.length > CLEANING_PHOTO_MAX_BYTES) return null;
+    const ok = (m[1] === 'image/jpeg' && data[0] === 0xff && data[1] === 0xd8) || (m[1] === 'image/png' && data[0] === 0x89 && data[1] === 0x50) || (m[1] === 'image/webp' && data.subarray(0, 4).toString() === 'RIFF');
+    return ok ? { mime: m[1], data } : null;
+}
+const publicCleaningRecord = (r) => ({ id: r.id, name: r.person_name, startedAt: sqlUtcIso(r.started_at), finishedAt: sqlUtcIso(r.finished_at), seconds: r.seconds, hasBefore: !!r.has_before, hasAfter: !!r.has_after });
+app.get('/l/:token/:spaceId', publicLayoutLimiter, (req, res) => {
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(self)' });
+    res.sendFile(path.join(PUBLIC_DIR, 'LimpiezaPublica.html'));
+});
+app.get('/api/public/cleaning/:token/:spaceId', publicLayoutLimiter, (req, res) => {
+    const target = cleaningTarget(req.params.token, req.params.spaceId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const { row, space, footprint, zone, locator } = target;
+    const client = getClientById(row.clientId);
+    const records = listCleaningRecords(row.clientId, { costCenterId: row.costCenterId || 0, spaceId: space.id, limit: 20 });
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json({
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
+        space: { id: space.id, code: space.code, type: space.type, locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '' },
+        records: records.map(publicCleaningRecord), now: new Date().toISOString(),
+    });
+});
+app.post('/api/public/cleaning/:token/:spaceId/start', publicCleaningLimiter, (req, res) => {
+    const target = cleaningTarget(req.params.token, req.params.spaceId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const personName = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!personName) return res.status(400).json({ message: 'Falta el nombre de quien limpia.', code: 'NAME' });
+    const photo = parseCleaningPhoto(req.body && req.body.photo);
+    if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
+    const { row, space, footprint, zone, locator } = target;
+    const started = startCleaningRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, photo });
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json({ id: started.id, key: started.key, startedAt: sqlUtcIso(started.startedAt), now: new Date().toISOString() });
+});
+app.post('/api/public/cleaning/:token/:spaceId/finish', publicCleaningLimiter, (req, res) => {
+    const target = cleaningTarget(req.params.token, req.params.spaceId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const id = Number(req.body && req.body.id);
+    const key = String((req.body && req.body.key) || '');
+    const photo = parseCleaningPhoto(req.body && req.body.photo);
+    if (!Number.isInteger(id) || id < 1 || !/^[0-9a-f]{32}$/.test(key)) return res.status(400).json({ message: 'Datos no válidos.' });
+    if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
+    const done = finishCleaningRecord({ clientId: target.row.clientId, costCenterId: target.row.costCenterId || 0, spaceId: target.space.id, id, key, photo });
+    if (done.error === 'notfound' || done.error === 'key') return res.status(404).json({ message: 'Not found.' });
+    if (done.error === 'done') return res.status(409).json({ message: 'Esa limpieza ya se terminó.', code: 'DONE' });
+    res.set('Cache-Control', 'no-store');
+    res.json(publicCleaningRecord(done.record));
+});
+app.get('/api/public/cleaning/:token/:spaceId/photo/:id/:kind', publicLayoutLimiter, (req, res) => {
+    const target = cleaningTarget(req.params.token, req.params.spaceId);
+    const id = Number(req.params.id);
+    if (!target || !Number.isInteger(id) || !['before', 'after'].includes(req.params.kind)) return res.status(404).end();
+    const rec = getCleaningRecord(id, target.row.clientId);
+    if (!rec || rec.space_id !== target.space.id || rec.cost_center_id !== (target.row.costCenterId || 0)) return res.status(404).end();
+    const photo = getCleaningPhoto(id, req.params.kind);
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
+});
+// La base de registros (Operaciones > Limpieza, con usuario): TODAS las limpiezas de todos los activos y centros de costos del cliente, con las columnas de Control Interno por fila.
+app.get('/api/business/cleanings', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const centers = new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c]));
+    const LIMIT = 5000;
+    const rows = listCleaningRecords(clientId, { limit: LIMIT });
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        truncated: rows.length >= LIMIT, max: LIMIT, canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), CLEANING_TABLE_KEY, 'colLimDeleteAuth'),
+        cleanings: rows.map((r) => {
+            const cc = centers.get(r.cost_center_id);
+            return {
+                id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
+                zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, locator: r.locator,
+                name: r.person_name, startedAt: sqlUtcIso(r.started_at), finishedAt: sqlUtcIso(r.finished_at), seconds: r.seconds, hasBefore: !!r.has_before, hasAfter: !!r.has_after, source: r.source,
+                system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: CLEANING_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.started_at }),
+            };
+        }),
+    });
+});
+app.get('/api/business/cleanings/:id/photo/:kind', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).end();
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || !['before', 'after'].includes(req.params.kind) || !getCleaningRecord(id, req.user.clientId)) return res.status(404).end();
+    const photo = getCleaningPhoto(id, req.params.kind);
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
+});
+// Eliminar una limpieza pide el permiso Eliminar de su columna en el árbol (el administrador del cliente no depende de hojas); queda el aviso del cambio.
+app.delete('/api/business/cleanings/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getCleaningRecord(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    if (!req.user.isClientAdmin && !canDeleteColumn(getUserEffectiveGrants(req.user.sub), CLEANING_TABLE_KEY, 'colLimDeleteAuth')) return res.status(403).json({ message: 'No tienes permiso para eliminar registros de limpieza.' });
+    deleteCleaningRecord(id, req.user.clientId);
+    try { notifyDataChange({ clientId: req.user.clientId, tableKey: CLEANING_TABLE_KEY, recordLabel: `Limpieza ${rec.space_code}`, fieldKey: 'colLimDeleteAuth', oldValue: `${rec.person_name} (${rec.started_at} UTC)`, newValue: 'Eliminado', actorUserId: req.user.sub, actorLabel: changedByLabel(req) }); } catch (err) { console.error('cleaning delete notice failed', err); }
+    res.json({ ok: true });
+});
+// Hoja de QR de limpieza: un QR por activo (de una zona o de todas) con su dirección fija; la hoja se imprime desde el Layout.
+app.get('/api/business/layout/cleaning-qr', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canUseCleaningQr) return res.status(403).json({ message: 'No tienes permiso para usar los QR de limpieza.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0);
+    const base = `${req.protocol}://${req.get('host')}/l/${token}`;
+    const layout = row.layout;
+    const zoneId = String(req.query.zone || '');
+    const zones = (layout.zones || []).filter((z) => z.active !== false);
+    const spaces = (layout.spaces || []).filter((s) => s.active !== false && (!zoneId || s.zoneId === zoneId)).slice(0, 600).map((s) => {
+        const fp = (layout.footprints || []).find((f) => f.id === s.footprintId);
+        const zone = zones.find((z) => z.id === s.zoneId);
+        const url = `${base}/${s.id}`;
+        return { id: s.id, code: s.code, type: s.type, zoneId: s.zoneId || '', zoneName: zone ? zone.name : '', locator: zone && fp ? [zone.code, fp.code, s.code].join('.') : '', url, qrRows: layoutQrRows(url) };
+    });
+    const client = getClientById(req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
 });
 
 // Buscador de la página pública (la lupa): zonas, categorías de las zonas y códigos, mientras se escribe. Sin sesión, con el mismo código aleatorio del QR y un tope por IP (más alto que el de

@@ -422,6 +422,7 @@
                                 <div class="layout-seg" role="group" data-help-key="layoutQrBy">
                                     <button type="button" class="layout-seg-btn active" id="layout-qr-by-layout" data-qrby="layout" aria-pressed="true" data-i18n="main.layoutQrPorLayout">Layout</button>
                                     <button type="button" class="layout-seg-btn" id="layout-qr-by-zone" data-qrby="zone" aria-pressed="false" data-i18n="main.layoutQrPorZona">Zone</button>
+                                    <button type="button" class="layout-seg-btn" id="layout-qr-by-clean" data-qrby="clean" aria-pressed="false" data-i18n="main.layoutQrPorLimpieza">Cleaning</button>
                                 </div>
                             </div>
                             <div class="layout-qr-pane" id="layout-qr-pane-layout" role="menu">
@@ -429,6 +430,11 @@
                                 <button type="button" role="menuitem" data-qr="png" data-help-key="layoutQrPng"><b data-i18n="main.layoutDescargarPng">Download PNG image</b><span data-i18n="main.layoutDescargarPngSub">The same sheet as an image, to send in a message</span></button>
                                 <button type="button" role="menuitem" data-qr="link" data-help-key="layoutQrLink"><b data-i18n="main.layoutCopiarEnlace">Copy the QR link</b><span data-i18n="main.layoutCopiarEnlaceSub">It is the same one the QR carries</span></button>
                                 <button type="button" role="menuitem" data-qr="regen" id="layout-qr-regen" data-help-key="layoutQrRegen" hidden><b data-i18n="main.layoutRegenerarQr">Change the QR</b><span data-i18n="main.layoutRegenerarQrSub">The current QR will stop working</span></button>
+                            </div>
+                            <div class="layout-qr-pane" id="layout-qr-pane-clean" hidden>
+                                <div class="layout-qr-fields"><label data-help-key="layoutQrClean"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-clean-zone"></select></label></div>
+                                <p class="layout-qr-fine" id="layout-qr-clean-fine"></p>
+                                <button type="button" data-qr="clean-print" id="layout-qr-clean-print" data-help-key="layoutQrClean"><b data-i18n="main.layoutQrLimpiezaImprimir">Print the QR codes</b><span data-i18n="main.layoutQrLimpiezaImprimirSub">One QR per asset, ready to cut and stick</span></button>
                             </div>
                             <div class="layout-qr-pane" id="layout-qr-pane-zone" hidden>
                                 <div class="layout-qr-fields">

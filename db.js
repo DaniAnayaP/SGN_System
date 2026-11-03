@@ -5207,6 +5207,80 @@ function listClientLayouts(clientId) {
     return db.prepare(`SELECT ${LAYOUT_COLUMNS} FROM client_layouts WHERE client_id = ? ORDER BY cost_center_id ASC`).all(clientId).map((row) => parseLayoutRow(row, false)).filter(Boolean);
 }
 
+// --- Limpieza (Operaciones, C. Distribución) -------------------------------------------------------------------------------------------------------
+// Una fila por limpieza de un ACTIVO del Layout. El QR de cada activo la abre SIN sesión: quién la hizo (el nombre que escribe), la hora de inicio y de fin (UTC; la hora la pone el servidor, nunca el teléfono) y dos
+// fotos (antes y después) tomadas con la cámara en vivo. Lo del lugar (código del activo, zona, huella, localizador) se guarda tal como estaba al momento: el Layout puede cambiar después. finish_key es el
+// secreto con el que el MISMO teléfono termina SU limpieza (nadie más puede cerrarla). Las fotos viven aparte para que la lista no las cargue.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS cleaning_records (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        cost_center_id  INTEGER NOT NULL DEFAULT 0,
+        space_id        TEXT NOT NULL,
+        space_code      TEXT NOT NULL DEFAULT '',
+        space_type      TEXT NOT NULL DEFAULT '',
+        zone_name       TEXT NOT NULL DEFAULT '',
+        footprint_code  TEXT NOT NULL DEFAULT '',
+        locator         TEXT NOT NULL DEFAULT '',
+        person_name     TEXT NOT NULL DEFAULT '',
+        started_at      TEXT NOT NULL,
+        finished_at     TEXT,
+        finish_key      TEXT NOT NULL,
+        source          TEXT NOT NULL DEFAULT 'qr',
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_cleaning_space ON cleaning_records(client_id, cost_center_id, space_id, started_at);
+    CREATE TABLE IF NOT EXISTS cleaning_photos (
+        record_id  INTEGER NOT NULL REFERENCES cleaning_records(id) ON DELETE CASCADE,
+        kind       TEXT NOT NULL,
+        mime       TEXT NOT NULL,
+        data       BLOB NOT NULL,
+        PRIMARY KEY (record_id, kind)
+    );
+`);
+const CLEANING_SELECT = `SELECT r.*, CASE WHEN r.finished_at IS NULL THEN NULL ELSE CAST(strftime('%s', r.finished_at) AS INTEGER) - CAST(strftime('%s', r.started_at) AS INTEGER) END AS seconds,
+    EXISTS(SELECT 1 FROM cleaning_photos p WHERE p.record_id = r.id AND p.kind = 'before') AS has_before, EXISTS(SELECT 1 FROM cleaning_photos p WHERE p.record_id = r.id AND p.kind = 'after') AS has_after FROM cleaning_records r`;
+// Empieza una limpieza: la hora la pone el servidor y la foto de «antes» se guarda en la misma operación. Devuelve el id y la clave con la que ese teléfono la termina.
+function startCleaningRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, photo, source = 'qr' }) {
+    const key = generatePublicToken();
+    return db.transaction(() => {
+        const info = db.prepare(`INSERT INTO cleaning_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, started_at, finish_key, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', key, source);
+        db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'before', ?, ?)").run(info.lastInsertRowid, photo.mime, photo.data);
+        const row = db.prepare('SELECT started_at FROM cleaning_records WHERE id = ?').get(info.lastInsertRowid);
+        return { id: Number(info.lastInsertRowid), key, startedAt: row.started_at };
+    })();
+}
+// Termina SU limpieza: debe coincidir cliente, centro, activo y clave, y no estar terminada. La foto de «después» y la hora de fin se guardan juntas.
+function finishCleaningRecord({ clientId, costCenterId, spaceId, id, key, photo }) {
+    return db.transaction(() => {
+        const row = db.prepare('SELECT id, finish_key, finished_at FROM cleaning_records WHERE id = ? AND client_id = ? AND cost_center_id = ? AND space_id = ?').get(id, clientId, costCenterId || 0, spaceId);
+        if (!row) return { error: 'notfound' };
+        if (row.finish_key !== key) return { error: 'key' };
+        if (row.finished_at) return { error: 'done' };
+        db.prepare("UPDATE cleaning_records SET finished_at = datetime('now') WHERE id = ?").run(id);
+        db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'after', ?, ?)").run(id, photo.mime, photo.data);
+        return { ok: true, record: db.prepare(`${CLEANING_SELECT} WHERE r.id = ?`).get(id) };
+    })();
+}
+function listCleaningRecords(clientId, { costCenterId, spaceId, limit } = {}) {
+    const where = ['r.client_id = ?'];
+    const args = [clientId];
+    if (costCenterId !== undefined) { where.push('r.cost_center_id = ?'); args.push(costCenterId || 0); }
+    if (spaceId) { where.push('r.space_id = ?'); args.push(spaceId); }
+    const cap = limit ? ` LIMIT ${Math.max(1, Math.min(Number(limit) || 50, 5000))}` : '';
+    return db.prepare(`${CLEANING_SELECT} WHERE ${where.join(' AND ')} ORDER BY r.started_at DESC, r.id DESC${cap}`).all(...args);
+}
+function getCleaningRecord(id, clientId) {
+    return db.prepare(`${CLEANING_SELECT} WHERE r.id = ? AND r.client_id = ?`).get(id, clientId);
+}
+function getCleaningPhoto(recordId, kind) {
+    return db.prepare('SELECT mime, data FROM cleaning_photos WHERE record_id = ? AND kind = ?').get(recordId, kind);
+}
+function deleteCleaningRecord(id, clientId) {
+    return db.prepare('DELETE FROM cleaning_records WHERE id = ? AND client_id = ?').run(id, clientId).changes > 0;
+}
+
 // QR del Layout (ver public_token arriba): cada Layout (cada centro de costos) tiene el suyo. ensure: los Layouts guardados antes de que existiera el QR reciben su código la primera vez que se pide.
 function ensureLayoutPublicToken(clientId, costCenterId = 0) {
     const row = db.prepare('SELECT public_token FROM client_layouts WHERE client_id = ? AND cost_center_id = ?').get(clientId, costCenterId || 0);
@@ -11073,6 +11147,12 @@ module.exports = {
     ensureLayoutPublicToken,
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
+    startCleaningRecord,
+    finishCleaningRecord,
+    listCleaningRecords,
+    getCleaningRecord,
+    getCleaningPhoto,
+    deleteCleaningRecord,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,
