@@ -7508,6 +7508,9 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-views.is-3d .layout-only2d{ display: none !important; }
 .layout-views:not(.is-3d) .layout-only3d{ display: none !important; }
 /* Visualizaciones: interruptor 2D | 3D (como el de Layout | Zona del QR) y, debajo, solo las opciones de la vista elegida */
+/* el título VISUALIZACIONES y el interruptor 2D | 3D van en la misma fila (si no caben, el interruptor baja) */
+.layout-views-head{ display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; width: 100%; }
+.layout-views-head .layout-mode-btn{ min-width: 2.2rem; padding: 0.22rem 0.6rem; font-size: 0.72rem; }
 .layout-mode{ display: inline-flex; gap: 0.2rem; padding: 0.2rem; border: 1px solid var(--color-border); border-radius: 999px; }
 .layout-mode[hidden]{ display: none; }
 .layout-mode-btn{ font: inherit; font-size: 0.78rem; font-weight: 600; min-width: 3rem; border: 0; background: transparent; color: var(--color-text-secondary); padding: 0.28rem 0.9rem; border-radius: 999px; cursor: pointer; }
@@ -7560,8 +7563,10 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     .layout-canvas-body{ flex-direction: row; align-items: stretch; }
     .layout-canvas-body .layout-map{ flex: 1 1 auto; }
     /* el título "Simbología" se queda arriba de la columna; la lista queda centrada (arriba y abajo y a los lados) en el espacio que queda debajo */
-    .layout-canvas-body .layout-legend{ flex: 0 0 11rem; flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; align-items: center; gap: 0.9rem; padding: 1rem 0.9rem; border-top: 0; border-left: 1px solid var(--color-border); font-size: 0.74rem; }
+    .layout-canvas-body .layout-legend{ flex: 0 0 14.5rem; flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; align-items: center; gap: 0.9rem; padding: 1rem 0.9rem; border-top: 0; border-left: 1px solid var(--color-border); font-size: 0.74rem; }
     .layout-canvas-body .layout-views{ width: 100%; }
+    .layout-canvas-body .layout-views-head{ justify-content: space-between; padding-bottom: 0.55rem; border-bottom: 1px solid var(--color-border); }
+    .layout-canvas-body .layout-views-head .layout-legend-title{ width: auto; padding: 0; border: 0; text-align: left; }
     .layout-canvas-body .layout-views-icons .layout-measures-btn{ width: 1.9rem; height: 1.9rem; }
     .layout-canvas-body .layout-legend-title{ display: block; width: 100%; padding-bottom: 0.55rem; border-bottom: 1px solid var(--color-border); text-align: center; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-secondary); }
     .layout-canvas-body .layout-legend-list{ display: flex; flex-direction: column; gap: 0.75rem; margin-block: auto; }
