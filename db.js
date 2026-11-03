@@ -2388,6 +2388,8 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_code_relations_client ON code_relations(client_id, is_test_data);
     CREATE INDEX IF NOT EXISTS idx_code_relations_sku ON code_relations(sku_item_id);
 `);
+// Profundidad (del frente al fondo de un anaquel): nivel > fila > profundidad. Vacía = la relación no dice en cuál; en un anaquel de profundidad 1 (lo normal) no hace falta.
+if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'depth')) db.exec('ALTER TABLE code_relations ADD COLUMN depth INTEGER');
 
 // public_token: set once (see maybeIssuePublicToken in server.js) the
 // instant an artículo's own 24 fields are all filled in -- the opaque id a
@@ -5420,6 +5422,7 @@ const CODE_RELATION_PATCHABLE_FIELDS = {
     spaceId: { column: 'space_id', fieldKey: 'main.colRelEstante' },
     level: { column: 'level', fieldKey: 'main.colRelNivel' },
     slot: { column: 'slot', fieldKey: 'main.colRelEspacio' },
+    depth: { column: 'depth', fieldKey: 'main.colRelProfundidad' },
 };
 const CODE_RELATION_SELECT = `SELECT r.*, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.record_number AS sku_number
     FROM code_relations r LEFT JOIN sku_items s ON s.id = r.sku_item_id`;
@@ -5436,11 +5439,11 @@ function createCodeRelation({ clientId, isTestData = false, values }) {
     const recordNumber = db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM code_relations WHERE client_id = ? AND is_test_data = ?')
         .get(clientId, isTestData ? 1 : 0).n;
-    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, is_test_data)
-        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @isTestData)`).run({
+    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, depth, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @depth, @isTestData)`).run({
         clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0,
         skuItemId: values.skuItemId, costCenterId: values.costCenterId ?? null, warehouseId: values.warehouseId ?? null, subWarehouseId: values.subWarehouseId ?? null,
-        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null,
+        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null, depth: values.depth ?? null,
     });
     return getCodeRelationById(result.lastInsertRowid, clientId, isTestData);
 }
@@ -5468,17 +5471,17 @@ function listCodeRelationsBy(clientId, forTestAccount, column, value) {
     return db.prepare(`SELECT * FROM code_relations WHERE client_id = ? AND is_test_data = ? AND ${column} = ?`).all(clientId, forTestAccount ? 1 : 0, value);
 }
 
-// ¿Ya hay otro código exactamente en ese espacio (anaquel + nivel + espacio)? Devuelve la fila (con su SKU) o undefined.
-function findCodeRelationInSlot(clientId, forTestAccount, spaceId, level, slot, exceptId = 0) {
-    return db.prepare(`${CODE_RELATION_SELECT} WHERE r.client_id = ? AND r.is_test_data = ? AND r.space_id = ? AND r.level = ? AND r.slot = ? AND r.id != ?`)
-        .get(clientId, forTestAccount ? 1 : 0, spaceId, level, slot, exceptId);
+// ¿Ya hay otro código exactamente en ese espacio (anaquel + nivel + fila + profundidad; una profundidad vacía cuenta como 1)? Devuelve la fila (con su SKU) o undefined.
+function findCodeRelationInSlot(clientId, forTestAccount, spaceId, level, slot, exceptId = 0, depth = null) {
+    return db.prepare(`${CODE_RELATION_SELECT} WHERE r.client_id = ? AND r.is_test_data = ? AND r.space_id = ? AND r.level = ? AND r.slot = ? AND COALESCE(r.depth, 1) = ? AND r.id != ?`)
+        .get(clientId, forTestAccount ? 1 : 0, spaceId, level, slot, depth || 1, exceptId);
 }
 
 // ¿Ya existe esta misma relación completa para el mismo código?
 function findCodeRelationDuplicate(clientId, forTestAccount, v, exceptId = 0) {
     return db.prepare(`SELECT id FROM code_relations WHERE client_id = @clientId AND is_test_data = @isTest AND sku_item_id = @skuItemId AND cost_center_id IS @costCenterId AND warehouse_id IS @warehouseId
-        AND sub_warehouse_id IS @subWarehouseId AND zone_id = @zoneId AND space_id = @spaceId AND level IS @level AND slot IS @slot AND id != @exceptId`)
-        .get({ clientId, isTest: forTestAccount ? 1 : 0, skuItemId: v.skuItemId, costCenterId: v.costCenterId ?? null, warehouseId: v.warehouseId ?? null, subWarehouseId: v.subWarehouseId ?? null, zoneId: v.zoneId || '', spaceId: v.spaceId || '', level: v.level ?? null, slot: v.slot ?? null, exceptId });
+        AND sub_warehouse_id IS @subWarehouseId AND zone_id = @zoneId AND space_id = @spaceId AND level IS @level AND slot IS @slot AND depth IS @depth AND id != @exceptId`)
+        .get({ clientId, isTest: forTestAccount ? 1 : 0, skuItemId: v.skuItemId, costCenterId: v.costCenterId ?? null, warehouseId: v.warehouseId ?? null, subWarehouseId: v.subWarehouseId ?? null, zoneId: v.zoneId || '', spaceId: v.spaceId || '', level: v.level ?? null, slot: v.slot ?? null, depth: v.depth ?? null, exceptId });
 }
 
 // Búsqueda de artículos por SKU (con ceros), UPC o descripción para el selector de código.

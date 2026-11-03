@@ -1908,6 +1908,7 @@ body.help-mode-active *{
 .relapp-input:disabled{ opacity: 0.55; }
 .relapp-list-search{ margin: 0.5rem 0 0.4rem; }
 .relapp-two{ display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.relapp-three{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.6rem; }
 .relapp-code{ display: flex; gap: 0.5rem; }
 .relapp-code .relapp-input{ flex: 1; }
 .relapp-scan{ flex: none; width: 3rem; border: 1px solid var(--home-border); background: var(--home-surface); color: var(--home-accent); border-radius: 0.7rem; font-size: 1.4rem; cursor: pointer; }

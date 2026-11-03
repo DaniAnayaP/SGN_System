@@ -144,7 +144,7 @@ let editing = null;     // la relación abierta (null = nueva)
 let st = null;          // lo que se va eligiendo: { sku, centro, alm, sub, zona, est, niv, esp }
 let pendingCount = 0;   // cuántas hay guardadas en este celular esperando señal
 
-const blankState = () => ({ sku: null, centro: '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '' });
+const blankState = () => ({ sku: null, centro: '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '', prof: '' });
 const readCache = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 const writeCache = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* sin espacio: se pide otra vez con señal */ } };
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -268,7 +268,7 @@ function openForm(record) {
     st = record
         ? {
             sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc },
-            centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', est: record.spaceId || '', niv: record.level || '', esp: record.slot || '',
+            centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', est: record.spaceId || '', niv: record.level || '', esp: record.slot || '', prof: record.depth || '',
         }
         : blankState();
     view = 'form';
@@ -276,7 +276,7 @@ function openForm(record) {
 }
 
 function cutBelow(key) {
-    const order = ['centro', 'alm', 'sub', 'zona', 'est', 'niv', 'esp'];
+    const order = ['centro', 'alm', 'sub', 'zona', 'est', 'niv', 'esp', 'prof'];
     for (let i = order.indexOf(key) + 1; i < order.length; i += 1) st[order[i]] = '';
 }
 
@@ -292,8 +292,9 @@ function derived() {
     const racks = zone ? zone.spaces.filter((s) => !entry.spaceIds.length || entry.spaceIds.includes(s.id)) : [];
     return { sub, physical, zones, zone, racks, rack: byId(racks, st.est) };
 }
-function occupiedBy(spaceId, level, slot) {
-    const hit = options.occupied.find((o) => o.spaceId === spaceId && o.level === level && o.slot === slot && !(editing && o.id === editing.id));
+// Un espacio es anaquel + nivel + fila + profundidad (sin profundidad cuenta como la 1).
+function occupiedBy(spaceId, level, slot, depth) {
+    const hit = options.occupied.find((o) => o.spaceId === spaceId && o.level === level && o.slot === slot && (o.depth || 1) === (depth || 1) && !(editing && o.id === editing.id));
     return hit ? hit.sku : '';
 }
 function selectField(id, labelKey, helpKey) {
@@ -322,7 +323,7 @@ function renderForm() {
         ${selectField('rel-sub', 'main.colRelSubAlmacen', 'relSubWarehouse')}
         ${selectField('rel-zona', 'main.colRelZona', 'relZone')}
         ${selectField('rel-est', 'main.colRelEstante', 'relRack')}
-        <div class="relapp-two">${selectField('rel-niv', 'main.colRelNivel', 'relLevel')}${selectField('rel-esp', 'main.colRelEspacio', 'relSlot')}</div>
+        <div class="relapp-three">${selectField('rel-niv', 'main.colRelNivel', 'relLevel')}${selectField('rel-esp', 'main.colRelEspacio', 'relSlot')}${selectField('rel-prof', 'main.colRelProfundidad', 'relDepth')}</div>
         <div class="relapp-rack"><div class="relapp-rack-head"><b id="rel-rack-title"></b><span id="rel-rack-sub"></span></div><div class="relapp-frame" id="rel-frame"></div></div>
         <div class="relapp-field"><label>${esc(t('main.relPath'))}</label><div class="relapp-path" id="rel-path" data-help-key="relPath"></div></div>
         <p class="relapp-msg" id="rel-msg"></p>
@@ -336,7 +337,7 @@ function renderForm() {
         refreshForm();
     });
     bind('rel-centro', 'centro', true); bind('rel-alm', 'alm', true); bind('rel-sub', 'sub', true);
-    bind('rel-zona', 'zona'); bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true);
+    bind('rel-zona', 'zona'); bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-prof', 'prof', true);
     document.getElementById('rel-code').addEventListener('input', () => { st.sku = null; searchCodes(); refreshForm(true); });
     document.getElementById('rel-results').addEventListener('click', (event) => {
         const pick = event.target.closest('[data-id]');
@@ -344,7 +345,13 @@ function renderForm() {
     });
     document.getElementById('rel-frame').addEventListener('click', (event) => {
         const cell = event.target.closest('.relapp-cell[data-n]');
-        if (cell) { st.niv = Number(cell.dataset.n); st.esp = Number(cell.dataset.e); refreshForm(); }
+        if (cell) {
+            st.niv = Number(cell.dataset.n);
+            st.esp = Number(cell.dataset.e);
+            const rack = derived().rack;
+            st.prof = rack && rack.depth > 1 ? (range(rack.depth).find((dd) => !occupiedBy(rack.id, st.niv, st.esp, dd)) || '') : '';
+            refreshForm();
+        }
     });
     document.getElementById('rel-save').addEventListener('click', save);
     const scan = document.getElementById('rel-scan');
@@ -389,6 +396,9 @@ function refreshForm(keepInput) {
     fillSelect('rel-est', d.racks.map((r) => ({ value: r.id, label: r.code })), d.zone ? t('main.relChooseRack') : t('main.relFirstZone'), st.est, !d.racks.length);
     fillSelect('rel-niv', d.rack ? range(d.rack.levels).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relLevelShort') : '—', st.niv, !d.rack);
     fillSelect('rel-esp', d.rack && st.niv ? range(d.rack.slots).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relSlotShort') : '—', st.esp, !(d.rack && st.niv));
+    const deep = !!(d.rack && d.rack.depth > 1);
+    const freeDepths = deep && st.niv && st.esp ? range(d.rack.depth).filter((dd) => !occupiedBy(d.rack.id, Number(st.niv), Number(st.esp), dd) || dd === Number(st.prof)) : [];
+    fillSelect('rel-prof', freeDepths.map((n) => ({ value: n, label: n })), deep ? t('main.relDepthShort') : '—', st.prof, !freeDepths.length);
     drawRack(d.rack);
     drawPath(d);
     const ready = !!(st.sku && st.centro && st.alm);
@@ -396,7 +406,7 @@ function refreshForm(keepInput) {
     const missing = [];
     if (!st.sku) missing.push(t('main.relMissingCode'));
     if (!st.centro) missing.push(t('main.relMissingCost')); else if (!st.alm) missing.push(t('main.relMissingWarehouse'));
-    const located = (d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp);
+    const located = (d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.prof || !deep));
     document.getElementById('rel-msg').textContent = ready ? t(located ? 'main.relReady' : 'main.relReadyPartial') : t('main.relMissing', { x: missing.join(' / ') });
 }
 
@@ -411,12 +421,13 @@ function drawRack(rack) {
         return;
     }
     title.textContent = t('main.relRackTitle', { code: rack.code });
-    sub.textContent = t('main.relRackSub', { levels: rack.levels, slots: rack.slots });
+    sub.textContent = t('main.relRackSub', { levels: rack.levels, slots: rack.slots, depth: rack.depth || 1 });
     let html = '';
     for (let n = rack.levels; n >= 1; n -= 1) {
         html += `<div class="relapp-lv" style="--cols:${rack.slots}"><span class="relapp-ln">${n}</span>`;
         for (let e = 1; e <= rack.slots; e += 1) {
-            const occ = occupiedBy(rack.id, n, e);
+            const occs = range(rack.depth || 1).map((dd) => occupiedBy(rack.id, n, e, dd));
+            const occ = occs.every(Boolean) ? occs[0] : '';
             const sel = Number(st.niv) === n && Number(st.esp) === e;
             html += occ
                 ? `<button type="button" class="relapp-cell occ" disabled>${esc(occ.slice(-3))}</button>`
@@ -431,6 +442,7 @@ function drawPath(d) {
         [t('main.colRelCentroCostos'), (byId(options.costCenters, st.centro) || {}).name], [t('main.colRelAlmacen'), (byId(options.warehouses, st.alm) || {}).name],
         [t('main.colRelSubAlmacen'), d.sub && d.sub.name], [t('main.colRelZona'), d.zone && d.zone.name], [t('main.colRelEstante'), d.rack && d.rack.code],
         [t('main.colRelNivel'), st.niv ? t('main.relLevelN', { n: st.niv }) : ''], [t('main.colRelEspacio'), st.esp ? t('main.relSlotN', { n: st.esp }) : ''],
+        [t('main.colRelProfundidad'), st.prof ? t('main.relDepthN', { n: st.prof }) : ''],
     ];
     document.getElementById('rel-path').innerHTML = parts.map(([label, value], i) => `${i ? '<span class="relapp-arrow">›</span>' : ''}<span class="relapp-step${value ? ' on' : ''}">${esc(value || label)}</span>`).join('');
 }
@@ -439,7 +451,7 @@ function drawPath(d) {
 async function save() {
     const values = {
         skuItemId: st.sku ? st.sku.id : null, costCenterId: st.centro || null, warehouseId: st.alm || null, subWarehouseId: st.sub || null,
-        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null,
+        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, depth: st.prof || null,
     };
     const isEdit = !!(editing && editing.id && !editing.local);
     let method = 'POST';
@@ -447,7 +459,7 @@ async function save() {
     let body = values;
     let baseline = null;
     if (isEdit) {
-        const before = { skuItemId: editing.skuItemId, costCenterId: editing.costCenterId, warehouseId: editing.warehouseId, subWarehouseId: editing.subWarehouseId, zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot };
+        const before = { skuItemId: editing.skuItemId, costCenterId: editing.costCenterId, warehouseId: editing.warehouseId, subWarehouseId: editing.subWarehouseId, zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, depth: editing.depth };
         body = {};
         baseline = {};
         Object.keys(values).forEach((key) => { if (String(values[key] ?? '') !== String(before[key] ?? '')) { body[key] = values[key]; baseline[key] = before[key]; } });
@@ -467,10 +479,10 @@ async function save() {
                 id: isEdit ? editing.id : null, local: true, skuItemId: st.sku.id, sku: st.sku.sku, upc: st.sku.upc, description: st.sku.description,
                 costCenterId: st.centro || null, centroCostos: (byId(options.costCenters, st.centro) || {}).name || '', warehouseId: st.alm || null, warehouseName: (byId(options.warehouses, st.alm) || {}).name || '',
                 subWarehouseId: st.sub || null, subWarehouseName: d.sub ? d.sub.name : '', zoneId: st.zona || '', zoneName: d.zone ? d.zone.name : '', spaceId: st.est || '', spaceCode: d.rack ? d.rack.code : '',
-                level: st.niv || null, slot: st.esp || null, status: ((d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp)) ? 'located' : 'partial',
+                level: st.niv || null, slot: st.esp || null, depth: st.prof || null, status: ((d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.prof || !(d.rack && d.rack.depth > 1)))) ? 'located' : 'partial',
             };
             relations = isEdit ? relations.map((r) => (r.id === editing.id ? { ...r, ...local } : r)) : [local, ...relations];
-            if (local.spaceId && local.level && local.slot) options.occupied.push({ id: local.id || 0, spaceId: local.spaceId, level: local.level, slot: local.slot, sku: local.sku });
+            if (local.spaceId && local.level && local.slot) options.occupied.push({ id: local.id || 0, spaceId: local.spaceId, level: local.level, slot: local.slot, depth: local.depth || 1, sku: local.sku });
             await refreshPending();
             showToast(t('home.cargaSavedOffline'));
             view = 'list';

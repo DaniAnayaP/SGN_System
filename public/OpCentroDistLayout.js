@@ -458,8 +458,8 @@ function stepHtml(step) {
         const assetOptions = (list, selected) => `<option value="">${esc(t('main.layoutActivoElegir'))}</option>${choices(list, selected).map((r) => `<option value="${r.id}"${r.id === selected ? ' selected' : ''}>${esc(r.name || t('main.whNoName'))}${r.status === 'active' ? '' : ` (${esc(t('admin.statusInactivo'))})`}</option>`).join('')}`;
         const pick = (i, key, help, list, selected) => `<td><select data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="${help}"${dis ? ' disabled' : ''}>${assetOptions(list, selected || 0)}</select></td>`;
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
-        const rows = d.spaces.map((s, i) => `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(s.name || '—')}</td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}</tr>`);
-        return d.spaces.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones'], rows, 'layout-activos') : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        const rows = d.spaces.map((s, i) => `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(s.name || '—')}</td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellNum('spaces', i, 'depth', s.depth || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}</tr>`);
+        return d.spaces.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutProfundidad', 'main.layoutCajones'], rows, 'layout-activos') : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
@@ -1008,6 +1008,9 @@ function onEdit(event) {
         } else if (key === 'slots') {
             const n = Math.max(1, Math.round(value) || 1);
             if (n > 1) row.slots = Math.min(n, LC.LIMITS.slots); else delete row.slots;
+        } else if (key === 'depth') {
+            const n = Math.max(1, Math.round(value) || 1);
+            if (n > 1) row.depth = Math.min(n, LC.LIMITS.depth); else delete row.depth;
         } else row[key] = (key === 'wall' || key === 'levels') ? Math.max(1, Math.round(value) || 1) : value;
         if (list === 'spaces' && key === 'type' && /^[RGT]-\d+$/i.test(row.code) && !isSavedRow('spaces', row.id)) {
             // un código sin guardar y con forma automática (R-01) sigue al tipo

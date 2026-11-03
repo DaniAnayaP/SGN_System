@@ -56,7 +56,7 @@
     }
 
     // ---- plantilla para bajar ---------------------------------------------------------------------------------------------------------
-    const EXAMPLE = { sku: '195201', locator: 'Z001.A001.N002.F003.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos', zone: 'Zona 1', rack: 'R-01', level: '2', slot: '3' };
+    const EXAMPLE = { sku: '195201', locator: 'Z001.A001.N002.F003.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos', zone: 'Zona 1', rack: 'R-01', level: '2', slot: '3', depth: '1' };
     // la fila de ejemplo de la plantilla usa el Localizador (las columnas Zona a Espacio son la otra forma de decir lo mismo y no se llenan junto con él)
     const EXAMPLE_ROW = { sku: '195201', locator: 'Z001.A001.N002.F003.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos' };
     const LETTER = { rack: 'A', rackpal: 'R', cabinet: 'G', pallet: 'T' }; // el mismo mapa de RelTemplate.ASSET_TYPES al revés: tipo de espacio del Layout -> letra del Localizador
@@ -64,21 +64,21 @@
     const zoneNo = (name) => { const m = String(name || '').match(/(\d+)\s*$/); return m ? Number(m[1]) : null; };
     const spaceNo = (code) => { const m = String(code || '').match(/(\d+)\s*$/); return m ? Number(m[1]) : null; };
     function optionsSheet() {
-        const rowsOut = [[t('main.colRelCentroCostos'), t('main.colRelAlmacen'), t('main.colRelSubAlmacen'), t('main.colRelZona'), t('main.colRelEstante'), t('main.relTplLevels'), t('main.relTplSlots'), t('main.relTplLocatorShort')]];
+        const rowsOut = [[t('main.colRelCentroCostos'), t('main.colRelAlmacen'), t('main.colRelSubAlmacen'), t('main.colRelZona'), t('main.colRelEstante'), t('main.relTplLevels'), t('main.relTplSlots'), t('main.relTplDepths'), t('main.relTplLocatorShort')]];
         ctx.options.warehouses.filter((w) => w.status === 'active').forEach((w) => {
             const center = ctx.options.costCenters.find((c) => c.id === w.parentId);
             if (!center) return;
             const subs = ctx.options.subWarehouses.filter((s) => s.parentId === w.id && s.status === 'active');
-            if (!subs.length) rowsOut.push([center.name, w.name, '', '', '', '', '', '']);
+            if (!subs.length) rowsOut.push([center.name, w.name, '', '', '', '', '', '', '']);
             subs.forEach((s) => {
-                if (s.kind !== 'physical') { rowsOut.push([center.name, w.name, s.name, '', '', '', '', '']); return; }
+                if (s.kind !== 'physical') { rowsOut.push([center.name, w.name, s.name, '', '', '', '', '', '']); return; }
                 const zones = (ctx.options.zonesByCenter[center.id] || []).filter((z) => (s.locations || []).some((e) => e.zoneId === z.id));
-                if (!zones.length) rowsOut.push([center.name, w.name, s.name, '', '', '', '', '']);
+                if (!zones.length) rowsOut.push([center.name, w.name, s.name, '', '', '', '', '', '']);
                 zones.forEach((z) => {
                     const entry = s.locations.find((e) => e.zoneId === z.id);
                     const racks = z.spaces.filter((sp) => !entry.spaceIds.length || entry.spaceIds.includes(sp.id));
-                    if (!racks.length) rowsOut.push([center.name, w.name, s.name, z.name, '', '', '', '']);
-                    racks.forEach((sp) => rowsOut.push([center.name, w.name, s.name, z.name, sp.code, sp.levels || 1, sp.slots || 1, zoneNo(z.name) && LETTER[sp.type] && spaceNo(sp.code) ? `Z${pad3(zoneNo(z.name))}.${LETTER[sp.type]}${pad3(spaceNo(sp.code))}` : '']));
+                    if (!racks.length) rowsOut.push([center.name, w.name, s.name, z.name, '', '', '', '', '']);
+                    racks.forEach((sp) => rowsOut.push([center.name, w.name, s.name, z.name, sp.code, sp.levels || 1, sp.slots || 1, sp.depth || 1, zoneNo(z.name) && LETTER[sp.type] && spaceNo(sp.code) ? `Z${pad3(zoneNo(z.name))}.${LETTER[sp.type]}${pad3(spaceNo(sp.code))}` : '']));
                 });
             });
         });
@@ -100,7 +100,7 @@
                 ],
                 widths: [24, 16, 100, 26], headerRow: true,
             },
-            { name: t('main.relTplSheetOptions'), rows: optionsSheet(), widths: [32, 28, 28, 22, 14, 10, 18, 22], headerRow: true },
+            { name: t('main.relTplSheetOptions'), rows: optionsSheet(), widths: [32, 28, 28, 22, 14, 10, 18, 14, 22], headerRow: true },
         ]);
         saveBlob(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${t('main.relTplFileName')}.xlsx`);
     }
@@ -211,9 +211,9 @@
             const items = skus.skus || [];
             const bySku = new Map(items.map((i) => [Number(i.sku), i]));
             const byUpc = new Map(items.filter((i) => i.upc).map((i) => [i.upc, i]));
-            const placeKey = (r) => [r.skuItemId, r.costCenterId, r.warehouseId, r.subWarehouseId || 0, r.zoneId || '', r.spaceId || '', r.level || 0, r.slot || 0].join('|');
+            const placeKey = (r) => [r.skuItemId, r.costCenterId, r.warehouseId, r.subWarehouseId || 0, r.zoneId || '', r.spaceId || '', r.level || 0, r.slot || 0, r.depth || 0].join('|');
             const existing = new Set((list.relations || []).map(placeKey));
-            const occupied = new Map((options.occupied || []).map((o) => [`${o.spaceId}|${o.level}|${o.slot}`, o.sku]));
+            const occupied = new Map((options.occupied || []).map((o) => [`${o.spaceId}|${o.level}|${o.slot}|${o.depth || 1}`, o.sku]));
             const byItem = new Map();
             (list.relations || []).forEach((r) => { if (!byItem.has(r.skuItemId)) byItem.set(r.skuItemId, []); byItem.get(r.skuItemId).push(r); });
             ctx = { options, bySku, byUpc, existing, occupied, byItem };
@@ -302,7 +302,7 @@
             centers: ctx.options.costCenters || [], selectedIds: selected,
             warehouses: ctx.options.warehouses || [], subWarehouses: ctx.options.subWarehouses || [], zonesByCenter: ctx.options.zonesByCenter || {},
             itemBySku: (n) => ctx.bySku.get(n) || null, itemByUpc: (upc) => ctx.byUpc.get(upc) || null,
-            occupiedBy: (spaceId, level, slot) => ctx.occupied.get(`${spaceId}|${level}|${slot}`) || '',
+            occupiedBy: (spaceId, level, slot, depth) => ctx.occupied.get(`${spaceId}|${level}|${slot}|${depth || 1}`) || '',
             existingKey: (key) => ctx.existing.has(key),
             relationsOf: (itemId) => ctx.byItem.get(itemId) || [],
             priorRowWithKey: (key, row) => { const n = accepted.get(key); return n && n !== row.n ? n : 0; },
@@ -314,7 +314,7 @@
             if (!r.err && (r.plan.action === 'create' || r.plan.action === 'complete')) { accepted.set(r.plan.keys.place, r.n); if (r.plan.keys.slot) accepted.set(r.plan.keys.slot, r.n); if (r.plan.keys.claim) accepted.set(r.plan.keys.claim, r.n); }
         });
     }
-    const routeText = (plan) => [...plan.route, plan.values.level ? t('main.relLevelN', { n: plan.values.level }) : '', plan.values.slot ? t('main.relSlotN', { n: plan.values.slot }) : ''].filter(Boolean).join(' › ');
+    const routeText = (plan) => [...plan.route, plan.values.level ? t('main.relLevelN', { n: plan.values.level }) : '', plan.values.slot ? t('main.relSlotN', { n: plan.values.slot }) : '', plan.values.depth ? t('main.relDepthN', { n: plan.values.depth }) : ''].filter(Boolean).join(' › ');
     function paintRow(r) {
         const tr = r.tr;
         const tag = tr.querySelector('.tpl-tag');

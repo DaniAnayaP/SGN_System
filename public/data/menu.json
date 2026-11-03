@@ -1486,6 +1486,7 @@
             { "id": "colRelEstante", "labelKey": "main.colRelEstante", "permissionOnly": true },
             { "id": "colRelNivel", "labelKey": "main.colRelNivel", "permissionOnly": true },
             { "id": "colRelEspacio", "labelKey": "main.colRelEspacio", "permissionOnly": true },
+            { "id": "colRelProfundidad", "labelKey": "main.colRelProfundidad", "permissionOnly": true },
             { "id": "colRelEstado", "labelKey": "main.colRelEstado", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,

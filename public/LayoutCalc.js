@@ -38,7 +38,7 @@
         espacios: 'colLayoutEspacios',
         activos: 'colLayoutActivos',
     };
-    const LIMITS = { vertices: 60, doors: 100, power: 300, obstacles: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
+    const LIMITS = { vertices: 60, doors: 100, power: 300, obstacles: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -547,6 +547,8 @@
             const levels = Math.round(Number(s && s.levels));
             // Espacios por nivel (el hueco dentro de un nivel): solo se guarda si hay más de uno.
             const slots = Math.round(Number(s && s.slots));
+            // Profundidad (del frente al fondo): cuántos caben uno detrás de otro; igual, solo se guarda si hay más de uno.
+            const depth = Math.round(Number(s && s.depth));
             // Paso Activos: la clasificación (Mobiliario operativo, Mobiliario almacenamiento…) y el tipo (rack, estante, escritorio…) del activo de este espacio; son ids de los catálogos del cliente.
             // Sin elegir, el espacio se guarda sin esos campos.
             const assetClassId = Math.round(Number(s && s.assetClassId));
@@ -559,6 +561,7 @@
                 x: meters(s && s.x, label, -LIMITS.maxM), y: meters(s && s.y, label, -LIMITS.maxM), l: meters(s && s.l, label), d: meters(s && s.d, label), h: meters(s && s.h, label),
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
                 ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
+                ...(Number.isFinite(depth) && depth > 1 ? { depth: Math.min(depth, LIMITS.depth) } : {}),
                 ...(Number.isFinite(assetClassId) && assetClassId > 0 ? { assetClassId } : {}),
                 ...(Number.isFinite(assetId) && assetId > 0 ? { assetId } : {}),
                 drawers: text(s && s.drawers, label, false), active: !(s && s.active === false),
@@ -680,10 +683,10 @@
         if (section === 'zonas') return layout.zones;
         // Los espacios sin lo del paso Activos (la clasificación y el tipo de activo, y sus niveles, espacios por nivel y cajones; todo eso tiene su propio permiso). En Activos, solo los espacios que ya tienen
         // algo de eso: así agregar un espacio nuevo en Huella-Espacio (con 1 nivel) no cuenta como cambio de Activos.
-        if (section === 'espacios') return (layout.spaces || []).map(({ assetClassId, assetId, levels, slots, drawers, ...rest }) => rest);
+        if (section === 'espacios') return (layout.spaces || []).map(({ assetClassId, assetId, levels, slots, depth, drawers, ...rest }) => rest);
         if (section === 'activos') {
-            return (layout.spaces || []).filter((s) => s.assetClassId || s.assetId || (s.levels || 1) > 1 || (s.slots || 1) > 1 || s.drawers)
-                .map((s) => ({ id: s.id, assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '' }));
+            return (layout.spaces || []).filter((s) => s.assetClassId || s.assetId || (s.levels || 1) > 1 || (s.slots || 1) > 1 || (s.depth || 1) > 1 || s.drawers)
+                .map((s) => ({ id: s.id, assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, depth: s.depth || 1, drawers: s.drawers || '' }));
         }
         return null;
     }
