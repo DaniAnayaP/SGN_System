@@ -7729,10 +7729,37 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
     const sanitizers = codeRelationSanitizers(ctx, req);
     const changedBy = changedByLabel(req);
     const created = [];
+    const updated = [];
     const failed = [];
     input.forEach((raw, index) => {
         const n = Number.isInteger(raw && raw.n) ? raw.n : index + 2;
         const fail = (message) => failed.push({ index, n, message });
+        // Una fila con relationId COMPLETA la relación «A medias» de ese código (le pone zona, estante, nivel y espacio): se revisa como un cambio hecho a mano en la tabla (permisos y historial incluidos).
+        if (raw && raw.relationId != null) {
+            const existing = getCodeRelationById(raw.relationId, clientId, isTestAccount);
+            if (!existing) { fail('Esa relación ya no existe.'); return; }
+            if (existing.zone_id || existing.space_id || existing.level || existing.slot) { fail('Esa relación ya tiene lugar: no se completa otra vez.'); return; }
+            const placeNorm = normalizeCodeRelationInput(Object.fromEntries(['zoneId', 'spaceId', 'level', 'slot'].map((k) => [k, raw.values ? raw.values[k] : null])));
+            if (placeNorm.error) { fail(placeNorm.error); return; }
+            const place = placeNorm.values;
+            const state = {
+                skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
+                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, ...place,
+            };
+            const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
+            if (check.error) { fail(check.error.message); return; }
+            const changedKeys = Object.keys(place).filter((key) => String(existing[CODE_RELATION_PATCHABLE_FIELDS[key].column] ?? '') !== String(place[key] ?? ''));
+            if (grants && changedKeys.some((key) => codeRelationPatchOutcome(grants, existing, key) !== 'apply')) { fail('No tienes permiso para llenar uno de los datos de esta relación.'); return; }
+            try {
+                const result = checkAndLogFieldChanges(req, existing, place, CODE_RELATION_PATCHABLE_FIELDS, CODE_RELATION_TABLE_KEY, `#${existing.id}`, sanitizers, {});
+                updateCodeRelation(existing.id, clientId, result.appliedPatch, isTestAccount);
+                updated.push({ index, n, id: existing.id });
+            } catch (error) {
+                console.error('Relación Código: no se pudo completar una fila de la plantilla', error);
+                fail('No se pudo guardar esta fila. Inténtalo de nuevo.');
+            }
+            return;
+        }
         const norm = normalizeCodeRelationInput(raw && typeof raw.values === 'object' && raw.values ? raw.values : {});
         if (norm.error) { fail(norm.error); return; }
         const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, ...norm.values };
@@ -7755,8 +7782,8 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
             fail('No se pudo guardar esta fila. Inténtalo de nuevo.');
         }
     });
-    if (created.length) notifyButtonAction(req, CODE_RELATION_TABLE_KEY, 'import', `${created.length} relaciones`);
-    res.json({ created, failed });
+    if (created.length || updated.length) notifyButtonAction(req, CODE_RELATION_TABLE_KEY, 'import', `${created.length} nuevas, ${updated.length} completadas`);
+    res.json({ created, updated, failed });
 });
 
 app.patch('/api/business/code-relations/:id', requireAuth, requireCostCenter, (req, res) => {
