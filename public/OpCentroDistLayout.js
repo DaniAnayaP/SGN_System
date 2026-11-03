@@ -10,7 +10,7 @@
 const LC = window.LayoutCalc;
 const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'espacios', 'luz', 'activos', 'posiciones'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones',
+    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -103,7 +103,7 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-zonas', 'layout-espacios', 'layout-activos', 'layout-posiciones'];
+const FILTER_TABLE_IDS = ['layout-zonas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-localizadores'];
 function bindLayoutFilters(root = document.getElementById('layout-panel')) {
     if (!window.Dashboard || !Dashboard.bindExternalColumnFilters || !root) return;
     root.querySelectorAll('table[data-filter-table]').forEach((tbl) => {
@@ -424,7 +424,22 @@ function applyFootprintMarks() {
         if (tall) tall.classList.toggle('layout-missing', !!(fpIssues.get(f.id) || {}).tall);
     });
 }
+// Paso «Localizadores» (solo lectura): los localizadores que va creando este Layout con lo que se tiene capturado AHORA (también lo que todavía no se guarda): zona, huella, activo y cada posición completa. Para verlos
+// todos, con su almacén y sub almacén, está la pantalla Catálogos > Localizadores (la flechita del paso).
+const LOCATOR_PANEL_MAX = 400;
+function locatorsStepHtml() {
+    const { rows, truncated } = LC.locatorRows(state.draft, { max: LOCATOR_PANEL_MAX });
+    if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutLocalizadoresVacio'))}</p>`;
+    const zoneText = (r) => (r.zoneCode ? (r.zoneName ? `${r.zoneName} (${r.zoneCode})` : r.zoneCode) : '—');
+    const footprintText = (r) => (r.footprintCode ? (r.footprintName ? `${r.footprintCode} · ${r.footprintName}` : r.footprintCode) : '—');
+    const assetText = (r) => (r.spaceCode ? `${r.spaceCode} · ${typeLabel('space', r.spaceType || 'rack')}` : '—');
+    const num = (n) => (n ? String(n) : '—');
+    const body = rows.map((r) => `<tr><td class="layout-calc">${esc(zoneText(r))}</td><td class="layout-calc">${esc(footprintText(r))}</td><td class="layout-calc">${esc(assetText(r))}</td><td class="layout-calc">${num(r.level)}</td><td class="layout-calc">${num(r.slot)}</td><td class="layout-calc">${num(r.row)}</td><td class="layout-calc">${num(r.depth)}</td><td class="layout-calc"><b>${esc(r.locator || '—')}</b></td><td class="layout-calc">${esc(t(`main.locAlcance_${r.scope}`))}</td><td class="layout-calc"><span class="rel-tag ${r.complete ? 'rel-tag-ok' : 'rel-tag-partial'}">${esc(t(r.complete ? 'main.locEstadoCompleto' : 'main.locEstadoAMedias'))}</span></td></tr>`);
+    const note = truncated ? `<p class="layout-muted">${esc(t('main.layoutLocalizadoresCorte', { n: LOCATOR_PANEL_MAX }))}</p>` : '';
+    return `${table(['main.colLocZona', 'main.colLocHuella', 'main.colLocActivo', 'main.colLocNivel', 'main.colLocColumna', 'main.colLocFila', 'main.colLocProfundidad', 'main.colLocLocalizador', 'main.colLocAlcance', 'main.colLocEstado'], body, 'layout-localizadores')}${note}`;
+}
 function stepHtml(step) {
+    if (step === 'localizadores') return locatorsStepHtml();
     const d = state.draft;
     const dis = !canEdit(step);
     if (step === 'contorno') {
@@ -560,15 +575,17 @@ function renderPanel() {
     const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
     const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
-    const level = sectionLevel(s);
-    const locked = !canEdit(s);
+    const isLocators = s === 'localizadores'; // este paso no edita nada: no lleva candado
+    const level = isLocators ? '' : sectionLevel(s);
+    const locked = !isLocators && !canEdit(s);
     const section = `<div class="layout-section" data-help-key="layoutSec_${s}">
         <div class="layout-section-head"><h3>${esc(t(SECTION_LABEL_KEYS[s]))}</h3>${locked ? `<span class="layout-lock" data-help-key="layoutLocked"><i class="bx bx-lock-alt" aria-hidden="true"></i> ${esc(t(level === 'solo-ver' ? 'main.layoutSoloVer' : 'main.layoutYaLlena'))}</span>` : ''}<div class="layout-head-actions"></div></div>
         <div class="layout-section-body">${stepHtml(s)}</div>
     </div>`;
-    // «Localizadores»: el último paso de la barra no edita nada, lleva a la lista de todos los localizadores que crea este Layout (Catálogos > Localizadores, solo lectura). Solo sale a quien tiene esa pantalla en el árbol.
+    // «Localizadores»: el último paso de la barra no edita nada. Al tocarlo se ve la lista de los localizadores de este Layout aquí abajo, como los demás pasos; la flechita de su lado abre la pantalla Catálogos >
+    // Localizadores (solo lectura, con todos los centros). Solo sale a quien tiene esa pantalla en el árbol.
     const locatorsLink = Dashboard.hasScreenGrant('supply-chain', 'sc-area-distribution-center', 'cat-catalogos/cat-catalogos-centro-dist-localizadores')
-        ? `<a class="layout-step layout-step-link" href="CatCentroDistLocalizadores.html" data-help-key="layoutLocalizadores">${esc(t('main.layoutStepLocalizadores'))}<i class="bx bx-link-external" aria-hidden="true"></i></a>`
+        ? `<span class="layout-step layout-step-split${stepOn('localizadores') ? ' active' : ''}${state.focus === 'localizadores' ? ' focus' : ''}"><button type="button" class="layout-step-main" aria-pressed="${stepOn('localizadores')}" aria-current="${state.focus === 'localizadores'}" data-step="localizadores" data-help-key="layoutLocalizadores">${esc(t('main.layoutStepLocalizadores'))}</button><a class="layout-step-arrow" href="CatCentroDistLocalizadores.html" data-help-key="layoutLocalizadoresLink" aria-label="${esc(t('main.layoutLocalizadoresIr'))}" title="${esc(t('main.layoutLocalizadoresIr'))}"><i class="bx bx-link-external" aria-hidden="true"></i></a></span>`
         : '';
     $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${tabs}${locatorsLink}</div>${section}`;
     // Los botones de agregar del paso suben a la fila del título, pegados a la derecha (siguen siendo los mismos botones: el clic se atiende igual).
@@ -2009,6 +2026,8 @@ function updateViewBtns() {
     [['layout-3d-zoom-in', 'main.layout3dAcercar'], ['layout-3d-zoom-out', 'main.layout3dAlejar']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
     // Capas del 3D: un grupo de iconos con su propia hoja del árbol; solo se ve quien la tiene.
     $('layout-3d-layers').hidden = !(state.perms && state.perms.canToggle3dLayers);
+    $('layout-capas').hidden = !(state.perms && state.perms.canToggle3dLayers);
+    [['layout-capas-btn', 'main.layoutCapasBtn'], ['layout-texts-btn', 'main.layoutTextos']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
     // Elegir qué activos se ven: se marca cuando hay alguno oculto y no sirve con la capa de activos apagada
     const pickBtn = $('layout-3d-assets-pick');
     const hiddenCount = picker3d ? picker3d.getHidden().size : 0;

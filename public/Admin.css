@@ -7036,8 +7036,13 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     color: var(--color-text-secondary);
     cursor: pointer;
 }
-.layout-step-link{ display: inline-flex; align-items: center; gap: 0.35rem; text-decoration: none; }
-.layout-step-link i{ font-size: 0.9rem; }
+/* El paso Localizadores: un solo capuchón con el nombre (se elige como los demás pasos) y, pegada, la flechita que abre la pantalla completa */
+.layout-step-split{ display: inline-flex; align-items: stretch; padding: 0; overflow: hidden; cursor: default; }
+.layout-step-main{ font: inherit; font-weight: inherit; color: inherit; background: transparent; border: 0; padding: 0.3rem 0.6rem 0.3rem 0.8rem; cursor: pointer; }
+.layout-step-arrow{ display: inline-flex; align-items: center; padding: 0 0.6rem 0 0.5rem; border-left: 1px solid var(--color-border); color: inherit; text-decoration: none; }
+.layout-step-split.active .layout-step-arrow{ border-left-color: rgba(255, 255, 255, 0.55); }
+.layout-step-arrow i{ font-size: 0.95rem; }
+.layout-step-arrow:hover{ opacity: 0.75; }
 .layout-step.active{
     background: var(--color-accent);
     color: var(--color-accent-text);
@@ -7543,6 +7548,11 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-opt-item i{ flex: none; font-size: 1rem; color: var(--color-text-secondary); }
 .layout-opt-item .layout-opt-check{ color: var(--color-text-primary); visibility: hidden; }
 .layout-opt-item[aria-pressed="true"] .layout-opt-check{ visibility: visible; }
+/* Opción A: «Textos» y «Capas» son botones redondos en la fila de iconos y su lista FLOTA encima de lo que haya debajo (no alarga el panel), centrada bajo la fila */
+.layout-views-icons{ position: relative; }
+.layout-opt-icon{ position: static; width: auto; max-width: none; }
+.layout-opt-icon > .layout-measures-btn[aria-expanded="true"]{ background: var(--color-text-primary); color: var(--color-surface); border-color: var(--color-text-primary); }
+.layout-opt-pop{ position: absolute; z-index: 30; top: calc(100% + 0.4rem); left: 50%; transform: translateX(-50%); width: 13.5rem; margin-top: 0; padding: 0.4rem; border-radius: 0.8rem; box-shadow: 0 10px 26px rgba(60, 20, 70, 0.22); }
 /* Vista 3D (ver LayoutScene3D.js): ocupa el lugar del croquis y conserva su proporción */
 .layout-map3d{ position: relative; display: flex; flex-direction: column; gap: 0.5rem; width: 100%; padding: 0.4rem; }
 .layout-map3d[hidden]{ display: none; }

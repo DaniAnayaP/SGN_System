@@ -2559,6 +2559,9 @@
     "locEstadoAMedias": "Partial",
     "locTruncated": "Showing the first {n} locators; filter by cost center to see the rest.",
     "layoutStepLocalizadores": "Locators",
+    "layoutLocalizadoresIr": "Open the Locators screen",
+    "layoutLocalizadoresVacio": "There are no locators yet: they appear when you create zones, footprints and assets.",
+    "layoutLocalizadoresCorte": "Showing the first {n} locators; to see them all use the arrow above (Locators screen).",
     "colRelTemplateAuth": "Authorization to Load by Template",
     "relTplTitle": "Load relations by template",
     "relTplFileName": "Code_Relation_Template",
@@ -3978,12 +3981,20 @@
       "example": "you switch to 3D, open Layers and hide the walls to see the whole floor; you go back to 2D and there you see the Texts list."
     },
     "layoutTextos": {
-      "what": "A single button with a list to show or hide the texts of the drawing. In 2D: the zone names, the m² of each zone and the side measures; in 3D: the labels. Each row with a check mark is visible; tap it to hide it and tap it again to show it. You only see the rows you have in the tree. It is remembered in this browser and the sheet you download comes out as you see it.",
+      "what": "A round button (Aa) that opens a list, floating on top of everything else, to show or hide the texts of the drawing. In 2D: the zone names, the m² of each zone and the side measures; in 3D: the labels. Each row with a check mark is visible; tap it to hide it and tap it again to show it. You only see the rows you have in the tree. It is remembered in this browser and the sheet you download comes out as you see it.",
       "example": "you open Texts, remove the check on \"Side measures\" and the map is left with just the zone names and m²."
     },
     "layoutLocalizadores": {
-      "what": "Takes you to the list of ALL the locators this Layout creates, complete or partial: one per zone, per footprint, per asset and per complete position (Z006.H003.A003.N004.C001.F001.P001), with their company, cost center, warehouse and sub-warehouse. It is view-only: a locator is changed here, in the Layout, and the list updates by itself when you save. It only shows if you have the Locators screen in the tree.",
-      "example": "you finish placing the racks of Zone 6, tap Locators and see the new locators of that zone right away."
+      "what": "The Locators step: when you tap it the list of the locators this Layout is creating appears below (one per zone, footprint, asset and complete position), view-only. The arrow next to it takes you straight to the Catalogs > Locators screen, with all the cost centers. It only shows if you have that screen in the tree.",
+      "example": "you tap Locators and see the list of this Layout; you tap the arrow and the full screen opens."
+    },
+    "layoutSec_localizadores": {
+      "what": "The locators this Layout is creating, complete or partial, with what you have entered right now (also what is not saved yet): one per zone, per footprint, per asset and per complete 7-piece position. It is view-only: a locator is changed in the other steps. The arrow next to the name opens the Locators screen, with all the cost centers, the warehouse and the sub-warehouse.",
+      "example": "you finish placing the racks of Zone 6, tap Locators and see the new locators right away; if you want the full screen, you tap the arrow."
+    },
+    "layoutLocalizadoresLink": {
+      "what": "Opens the Catalogs > Locators screen (view-only) with all the locators of all the cost centers, their warehouse and sub-warehouse, filters and history. It is the quick access to go straight there, without the menu.",
+      "example": "you want to look up a locator of another cost center: you tap the arrow and filter there."
     },
     "layoutQrCls": {
       "what": "Downloads the sheet with the classifications of an Inventory category (PDF or image), with their icon, color and one QR each. Each QR opens, in the chosen zone, the list of codes of that classification. It does not depend on codes: the QRs never change and scanning always shows what is current. Each category's classifications are linked in Our Inventory Categories.",

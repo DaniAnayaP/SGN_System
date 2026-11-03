@@ -2558,6 +2558,9 @@
     "locEstadoAMedias": "A medias",
     "locTruncated": "Se muestran los primeros {n} localizadores; filtra por centro de costos para ver los demás.",
     "layoutStepLocalizadores": "Localizadores",
+    "layoutLocalizadoresIr": "Abrir la pantalla Localizadores",
+    "layoutLocalizadoresVacio": "Todavía no hay localizadores: salen cuando creas zonas, huellas y activos.",
+    "layoutLocalizadoresCorte": "Se muestran los primeros {n} localizadores; para ver todos usa la flechita de arriba (pantalla Localizadores).",
     "colRelTemplateAuth": "Autorización para Cargar por Plantilla",
     "relTplTitle": "Cargar relaciones por plantilla",
     "relTplFileName": "Plantilla_Relacion_Codigo",
@@ -3977,12 +3980,20 @@
       "example": "pasas a 3D, abres Capas y ocultas las paredes para ver todo el piso; regresas a 2D y ahí sí ves la lista de Textos."
     },
     "layoutTextos": {
-      "what": "Un solo botón con una lista para mostrar u ocultar los textos del dibujo. En 2D: los nombres de las zonas, los m² de cada zona y las medidas de los lados; en 3D: los rótulos. Cada renglón con palomita está visible; tócalo para ocultarlo y vuélvelo a tocar para verlo. Solo ves los renglones que tienes en el árbol. Se recuerda en este navegador y la hoja que se descarga sale como lo ves.",
+      "what": "Un botón redondo (Aa) que abre una lista, flotando encima de lo demás, para mostrar u ocultar los textos del dibujo. En 2D: los nombres de las zonas, los m² de cada zona y las medidas de los lados; en 3D: los rótulos. Cada renglón con palomita está visible; tócalo para ocultarlo y vuélvelo a tocar para verlo. Solo ves los renglones que tienes en el árbol. Se recuerda en este navegador y la hoja que se descarga sale como lo ves.",
       "example": "abres Textos, quitas la palomita de «Medidas de los lados» y el croquis queda solo con los nombres y los m² de las zonas."
     },
     "layoutLocalizadores": {
-      "what": "Lleva a la lista de TODOS los localizadores que este Layout va creando, completos o a medias: uno por zona, por huella, por activo y por cada posición completa (Z006.H003.A003.N004.C001.F001.P001), con su compañía, centro de costos, almacén y sub almacén. Es solo de consulta: un localizador se modifica aquí, en el Layout, y la lista se actualiza sola al guardar. Solo sale si tienes la pantalla Localizadores en el árbol.",
-      "example": "terminas de acomodar los anaqueles de la Zona 6, tocas Localizadores y ves de una vez los localizadores nuevos de esa zona."
+      "what": "El paso Localizadores: al tocarlo se ve aquí abajo la lista de los localizadores que va creando este Layout (uno por zona, huella, activo y cada posición completa), solo de consulta. Con la flechita de su lado vas directo a la pantalla Catálogos > Localizadores, con todos los centros de costos. Solo sale si tienes esa pantalla en el árbol.",
+      "example": "tocas Localizadores y ves la lista de este Layout; tocas la flechita y se abre la pantalla completa."
+    },
+    "layoutSec_localizadores": {
+      "what": "Los localizadores que va creando este Layout, completos o a medias, con lo que tienes capturado ahora (también lo que todavía no guardas): uno por zona, por huella, por activo y por cada posición completa de 7 piezas. Es solo de consulta: un localizador se modifica en los demás pasos. La flechita de al lado del nombre abre la pantalla Localizadores, con todos los centros de costos, el almacén y el sub almacén.",
+      "example": "terminas de acomodar los anaqueles de la Zona 6, tocas Localizadores y ves de una vez los localizadores nuevos; si quieres ir directo a la pantalla completa, tocas la flechita."
+    },
+    "layoutLocalizadoresLink": {
+      "what": "Abre la pantalla Catálogos > Localizadores (solo lectura) con todos los localizadores de todos los centros de costos, su almacén y su sub almacén, filtros e historial. Es el acceso rápido para ir directo, sin pasar por el menú.",
+      "example": "quieres buscar un localizador de otro centro de costos: tocas la flechita y filtras ahí."
     },
     "layoutQrCls": {
       "what": "Baja la hoja de las clasificaciones de una categoría de Inventario (PDF o imagen), con su icono, su color y un QR por cada una. Cada QR abre, en la zona elegida, la lista de códigos de esa clasificación. No depende de los códigos: los QR no cambian nunca y al escanearlos siempre se ve lo actual. Las clasificaciones de cada categoría se relacionan en Nuestras Categorías Inventarios.",
