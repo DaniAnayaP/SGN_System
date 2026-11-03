@@ -1655,6 +1655,12 @@
     "layoutAgregarActivo": "+ Add asset",
     "layoutActivoElegirHuella": "Choose the footprint…",
     "layoutActivoSinHuella": "Choose the footprint of asset {n}: an asset always goes inside a footprint.",
+    "layoutHuellaSinZona": "Outside every zone",
+    "layoutHuellaNoCabe": "does not fit",
+    "layoutHuellaFueraTitulo": "Check this footprint: it does not fit in its zone or it is taller than the warehouse",
+    "layoutVio_nozone": "Footprint {code} is outside every zone: place it inside a zone to be able to save.",
+    "layoutVio_out": "Footprint {code} does not fit inside its zone {zone}: change its place or its size, or make the zone bigger, to be able to save.",
+    "layoutVio_tall": "Footprint {code} is {h} m tall and the warehouse only {maxH} m: lower its height to be able to save.",
     "layoutAltura": "Clear height (m)",
     "layoutAlturaEsquina": "Height (m)",
     "layoutAlturaTodas": "Same height at every corner (m)",
@@ -1927,7 +1933,7 @@
     "layoutDifiere": "Differs {n}",
     "layoutPorDibujar": "To be drawn",
     "layoutEliminar": "Delete",
-    "layoutEliminarZonaConfirm": "Delete the zone \"{name}\"? Its spaces will be left without a zone. It is deleted when you save and cannot be undone.",
+    "layoutEliminarZonaConfirm": "Delete the zone \"{name}\"? Its footprints will be left without a zone and you will not be able to save until you move them to another zone or delete them. It is deleted when you save and cannot be undone.",
     "layoutEliminarEspacioConfirm": "Delete the space \"{name}\"? It is deleted when you save and cannot be undone.",
     "layoutPuertaNueva": "New door",
     "layoutColumna": "Column",
@@ -3597,6 +3603,10 @@
       "what": "The classification of this space's asset. It comes from Catalogs > Asset Classifications and says which metric it counts in: m² (furniture) or m³ (storage). It can be left empty.",
       "example": "Storage furniture for a rack where inventory is kept."
     },
+    "layoutHuellaZona": {
+      "what": "The zone of the footprint. It is not chosen: it comes from where you place it on the map. A footprint must always be INSIDE a zone and fit completely: if it falls outside every zone it says \"Outside every zone\" and if it goes past the limits of its zone it says \"does not fit\" (in red, with a dotted red outline on the map; its height also turns red if it is taller than the warehouse). A new footprint, or one you changed, in red cannot be saved until it is fixed; the ones that were already like that before are only marked, so you place them when you can.",
+      "example": "a 3 × 1.1 m footprint placed at the edge of Zone 6 so that 40 cm stick out says \"Zone 6 · does not fit\"; you move it inside and it turns normal."
+    },
     "layoutSpaceLetter": {
       "what": "What the asset is: Rack (A), Pallet rack (R), Cabinet (G) or Floor pallet (T). The letter is the Locator's and the system adds the number: it is consecutive per zone and per type, so the code (A001, A002…) is never typed or repeated. If you change the type of an asset that is already saved, it takes the new letter with the same number if it is free.",
       "example": "you pick Cabinet on the first asset of Zone 6: the system names it G001; the next rack you add in that zone will be A001."
@@ -3606,8 +3616,8 @@
       "example": "Rack, Shelf or Desk."
     },
     "layoutSec_espacios": {
-      "what": "The footprints: the place on the floor. The zone of each footprint and its code are set by the system and cannot be edited: the zone comes from where you place it on the map (the zone that contains its center; outside all of them it has no zone) and the code is consecutive PER ZONE (H001, H002… of each zone; every zone has its own H001). What you can change is the Name, to identify it, the position and the size. The storage m² and m³ come from here. Adding a footprint creates its first asset by itself; if there is more than one on top, you add them in the Assets step and the footprint is shared between them.",
-      "example": "you add a footprint and place it inside Zone 6: it is H001 of Zone 6; another one placed in Zone 2 is also H001, but of Zone 2."
+      "what": "The footprints: the place on the floor. The zone of each footprint and its code are set by the system and cannot be edited: the zone comes from where you place it on the map (the zone that contains its center) and the code is consecutive PER ZONE (H001, H002… of each zone; every zone has its own H001). A footprint must always be INSIDE a zone and fit completely, and not be taller than the warehouse: otherwise it is marked in red and cannot be saved. What you can change is the Name, to identify it, the position and the size. The storage m² and m³ come from here. Adding a footprint creates its first asset by itself; if there is more than one on top, you add them in the Assets step and the footprint is shared between them.",
+      "example": "you add a footprint and place it inside Zone 6: it is H001 of Zone 6; if you place it with a corner outside the zone, it is marked in red and you cannot save until you move it in."
     },
     "layoutLocked": {
       "what": "This section cannot be changed with your current access.",

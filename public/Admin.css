@@ -7156,9 +7156,12 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     color: var(--color-text-secondary);
     padding: 0.2rem 0.4rem;
 }
-.layout-table select.layout-missing{
+.layout-table select.layout-missing, .layout-table input.layout-missing{
     border-color: #c0392b;
     box-shadow: 0 0 0 1px #c0392b;
+}
+.layout-table td.layout-bad{
+    color: #c0392b;
 }
 .layout-off td input, .layout-off td select, .layout-off td.layout-calc{
     opacity: 0.55;
@@ -7389,6 +7392,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lz-open{ fill: none; stroke: var(--color-report-calc-text); stroke-width: 2; stroke-dasharray: 5 4; }
 .lz-drag{ cursor: grab; touch-action: none; }
 .lz-drag:active{ cursor: grabbing; }
+.lbad{ fill: none; stroke: #c0392b; stroke-width: 2; stroke-dasharray: 5 3; pointer-events: none; }
 .lm{ font: 600 8.5px var(--font-family, system-ui, sans-serif); fill: #c0392b; paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 .layout-seg{
     display: inline-flex;

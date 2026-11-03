@@ -6625,6 +6625,11 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: existing ? existing.version : 0 });
     }
 
+    // Una huella siempre va dentro de una zona y debe caber completa: lo nuevo o lo que cambió (la huella o su zona) y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar (solo se marca en pantalla).
+    {
+        const fresh = LayoutCalc.newFootprintViolations(next, existing ? existing.layout : null);
+        if (fresh.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: fresh.map((v) => v.message), section: 'espacios' });
+    }
     // Cada espacio con clasificación o tipo de activo debe apuntar a uno de los catálogos del cliente (activo, o el mismo que ya tenía guardado).
     {
         const catalogs = [['assetClassId', 'activos-clasificacion', 'la clasificación', 'a', 'la'], ['assetId', 'activos-fijos', 'el tipo de activo', 'o', 'lo']];

@@ -503,6 +503,57 @@
         return { ...layout, spaces };
     }
 
+    // ---- La huella dentro de su zona ---------------------------------------------------------------------------------------------------------
+    // Una huella siempre va DENTRO de una zona y debe caber completa (su rectángulo entero adentro de la zona, de cualquier forma) y no ser más alta que la nave. Se mira sobre un Layout ya normalizado: la zona de
+    // cada huella es la que sale de dónde está (deriveFootprintZones). Tres faltas: nozone (el centro cae fuera de toda zona), out (se sale de los límites de su zona) y tall (más alta que la nave).
+    // Lo que ya estaba mal antes de esta regla solo se marca; lo NUEVO o lo que cambió (la huella o su zona) no se deja guardar (ver newFootprintViolations).
+    const crossesProperly = (p, q, r, s) => {
+        const o = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+        const d1 = o(p, q, r); const d2 = o(p, q, s); const d3 = o(r, s, p); const d4 = o(r, s, q);
+        return ((d1 > 1e-9 && d2 < -1e-9) || (d1 < -1e-9 && d2 > 1e-9)) && ((d3 > 1e-9 && d4 < -1e-9) || (d3 < -1e-9 && d4 > 1e-9));
+    };
+    // El rectángulo (x, y, l, d) cabe entero en el polígono: sus cuatro esquinas adentro, ninguna esquina del polígono metida dentro del rectángulo y ningún lado del uno cruza un lado del otro. Pegado a la pared cuenta como adentro.
+    function rectInsidePolygon(pts, x, y, l, d) {
+        const e = 0.001;
+        const x0 = x + e; const y0 = y + e; const x1 = x + l - e; const y1 = y + d - e;
+        if (!(x1 > x0 && y1 > y0)) return pointInPolygon(x + l / 2, y + d / 2, pts);
+        const corners = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+        if (!corners.every((c) => pointInPolygon(c[0], c[1], pts))) return false;
+        if (pts.some((p) => p[0] > x0 && p[0] < x1 && p[1] > y0 && p[1] < y1)) return false;
+        for (let i = 0; i < pts.length; i++) {
+            const a = pts[i]; const b = pts[(i + 1) % pts.length];
+            for (let k = 0; k < 4; k++) if (crossesProperly(a, b, corners[k], corners[(k + 1) % 4])) return false;
+        }
+        return true;
+    }
+    function footprintViolations(layout) {
+        const out = [];
+        if (!layout || !Array.isArray(layout.footprints)) return out;
+        const byId = new Map((layout.zones || []).map((z) => [z.id, z]));
+        const heights = (layout.vertices || []).map((p) => Number(p[2]) || 0);
+        const maxH = heights.length ? Math.max(...heights) : 0;
+        layout.footprints.forEach((f) => {
+            const z = f.zoneId ? byId.get(f.zoneId) : null;
+            const base = { id: f.id, code: f.code };
+            const geo = JSON.stringify([f.x, f.y, f.l, f.d, f.h]);
+            if (!z) {
+                out.push({ ...base, kind: 'nozone', sig: geo, message: `La huella ${f.code} queda fuera de toda zona: acomódala dentro de una zona.` });
+            } else {
+                const pts = zonePoints(z);
+                if (!(pts && pts.length >= 3 && rectInsidePolygon(pts, f.x, f.y, f.l, f.d))) {
+                    out.push({ ...base, kind: 'out', zoneId: z.id, zoneName: z.name, sig: geo + JSON.stringify([z.id, pts]), message: `La huella ${f.code} no cabe dentro de su zona ${z.name}: cambia su lugar o sus medidas, o agranda la zona.` });
+                }
+            }
+            if (maxH > 0 && f.h > maxH + 0.001) out.push({ ...base, kind: 'tall', h: f.h, maxH, sig: geo + JSON.stringify(maxH), message: `La huella ${f.code} mide ${f.h} m de alto y la nave solo ${maxH} m.` });
+        });
+        return out;
+    }
+    // Las faltas que hay en next y que antes no estaban igual: huella nueva, que se movió o cambió de medidas, o cuya zona cambió. Esas no se dejan guardar; lo que ya estaba mal y no se tocó solo se marca.
+    function newFootprintViolations(next, previous) {
+        const before = previous ? footprintViolations(previous) : [];
+        return footprintViolations(next).filter((v) => !before.some((p) => p.id === v.id && p.kind === v.kind && p.sig === v.sig));
+    }
+
     function emptyLayout() {
         return {
             mode: 'scratch', heightM: 9,
@@ -998,7 +1049,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

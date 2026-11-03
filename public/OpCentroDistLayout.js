@@ -401,6 +401,29 @@ function onCategoryEdit(el) {
 function footprintZoneName(f) {
     return (state.draft.zones.find((z) => z.id === f.zoneId) || {}).name || '—';
 }
+// Una huella siempre va dentro de una zona y debe caber completa: las que no cumplen se marcan en rojo (la zona, su altura si pasa la de la nave y un contorno punteado en el croquis). fpIssues: id de la huella ->
+// { nozone | out | tall }. Se vuelve a calcular con cada cambio del borrador (renderPanel y refreshLive).
+let fpIssues = new Map();
+function computeFootprintIssues() {
+    fpIssues = new Map();
+    if (!state.draft) return;
+    LC.footprintViolations(state.draft).forEach((v) => { const m = fpIssues.get(v.id) || {}; m[v.kind] = v; fpIssues.set(v.id, m); });
+}
+function footprintZoneView(f) {
+    const issue = fpIssues.get(f.id) || {};
+    if (issue.nozone) return { text: t('main.layoutHuellaSinZona'), bad: true };
+    if (issue.out) return { text: `${footprintZoneName(f)} · ${t('main.layoutHuellaNoCabe')}`, bad: true };
+    return { text: footprintZoneName(f), bad: false };
+}
+function applyFootprintMarks() {
+    state.draft.footprints.forEach((f, i) => {
+        const view = footprintZoneView(f);
+        const zoneCell = document.querySelector(`[data-fp-zone="${i}"]`);
+        if (zoneCell) { zoneCell.textContent = view.text; zoneCell.classList.toggle('layout-bad', view.bad); }
+        const tall = document.querySelector(`[data-l="footprints"][data-i="${i}"][data-k="h"]`);
+        if (tall) tall.classList.toggle('layout-missing', !!(fpIssues.get(f.id) || {}).tall);
+    });
+}
 function stepHtml(step) {
     const d = state.draft;
     const dis = !canEdit(step);
@@ -504,7 +527,8 @@ function stepHtml(step) {
     // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una se crea sola su primer activo (con el mismo código); más activos sobre la misma huella se agregan en el paso Activos.
     const rows = d.footprints.map((s, i) => {
         const saved = isSavedRow('footprints', s.id);
-        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('footprints', i, 'name', s.name || '', dis)}<td class="layout-calc"><b data-fp-code="${i}">${esc(s.code)}</b></td><td class="layout-calc" data-fp-zone="${i}">${esc(footprintZoneName(s))}</td>${cellNum('footprints', i, 'x', s.x, dis)}${cellNum('footprints', i, 'y', s.y, dis)}${cellNum('footprints', i, 'l', s.l, dis)}${cellNum('footprints', i, 'd', s.d, dis)}${cellNum('footprints', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('footprints', i, s.active, dis, spaceFmtButton(s, i, dis)) : removeCell('footprints', i, dis, spaceFmtButton(s, i, dis))}</tr>`;
+        const view = footprintZoneView(s);
+        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('footprints', i, 'name', s.name || '', dis)}<td class="layout-calc"><b data-fp-code="${i}">${esc(s.code)}</b></td><td class="layout-calc${view.bad ? ' layout-bad' : ''}" data-fp-zone="${i}" data-help-key="layoutHuellaZona">${esc(view.text)}</td>${cellNum('footprints', i, 'x', s.x, dis)}${cellNum('footprints', i, 'y', s.y, dis)}${cellNum('footprints', i, 'l', s.l, dis)}${cellNum('footprints', i, 'd', s.d, dis)}${cellNum('footprints', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('footprints', i, s.active, dis, spaceFmtButton(s, i, dis)) : removeCell('footprints', i, dis, spaceFmtButton(s, i, dis))}</tr>`;
     });
     return `${table(['main.layoutNombre', 'main.layoutCodigoHuella', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaVolumen', ''], rows, 'layout-espacios')}${addButton('footprints', 'main.layoutAgregarEspacio', dis, true)}`;
 }
@@ -532,7 +556,7 @@ let panelScrollEnd = false;
 const panelScrollers = () => Array.from(document.querySelectorAll('#layout-panel .layout-section-body, #layout-panel .layout-scroll'));
 function renderPanel() {
     // el panel también se dibuja con lo que sale de la huella (zona de cada activo, si está activo): se saca antes de dibujarlo, no solo en refreshLive
-    if (state.draft) { syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; }
+    if (state.draft) { syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; computeFootprintIssues(); }
     const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
     const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
@@ -551,6 +575,7 @@ function renderPanel() {
     panelScrollStep = state.focus;
     bindLayoutFilters();
     markSelectedRow();
+    if (state.draft) applyFootprintMarks();
 }
 
 // ---- resaltado de lo elegido ------------------------------------------------------------------------------------------
@@ -750,6 +775,9 @@ function renderSvg() {
         const spaceInk = sp.fmt ? window.LayoutMapSvg.inkFor(sp.fmt) : '';
         if (w >= 26 && h >= 9) s += `<text class="lt3"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
     });
+    if (on('espacios') || on('activos') || on('posiciones')) {
+        d.footprints.forEach((f) => { if (fpIssues.has(f.id)) s += `<rect class="lbad" x="${X(f.x) - 2}" y="${Y(f.y) - 2}" width="${Math.max(f.l * sc, 4) + 4}" height="${Math.max(f.d * sc, 4) + 4}" rx="3"><title>${esc(f.code)} · ${esc(t('main.layoutHuellaFueraTitulo'))}</title></rect>`; });
+    }
     const halosAt = s.length; // aquí entran después los contornos de las etiquetas de las paredes: debajo de TODOS los textos
     s += zoneHalos + (state.showMeasures ? measureHalos : '') + zoneLabels + (state.showMeasures ? measureLabels : '');
     (on('puertas') ? d.doors : []).forEach((door) => {
@@ -807,12 +835,12 @@ function refreshLive() {
     // el lugar en el piso, la zona, el alto y el formato de cada activo salen de su huella (LayoutCalc.deriveSpaces): se vuelven a sacar con cada cambio
     syncHuellas();
     state.draft.spaces = LC.deriveSpaces(state.draft).spaces;
+    computeFootprintIssues();
     state.draft.footprints.forEach((f, i) => {
-        const zoneCell = document.querySelector(`[data-fp-zone="${i}"]`);
-        if (zoneCell) zoneCell.textContent = footprintZoneName(f);
         const codeCell = document.querySelector(`[data-fp-code="${i}"]`);
         if (codeCell) codeCell.textContent = f.code;
     });
+    applyFootprintMarks();
     state.draft.zones.forEach((z, i) => { const cell = document.querySelector(`[data-zone-code="${i}"]`); if (cell) cell.textContent = z.code; });
     state.draft.spaces.forEach((s, i) => { const cell = document.querySelector(`[data-sp-code="${i}"]`); if (cell) cell.textContent = s.code; });
     state.draft.heightM = Math.round((state.draft.vertices.reduce((acc, p) => acc + (Number(p[2]) || 0), 0) / Math.max(state.draft.vertices.length, 1)) * 100) / 100;
@@ -1098,7 +1126,8 @@ const ROW_FACTORY = {
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, code: '', type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
-    footprints: () => ({ id: uid('f'), code: '', zoneId: '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, active: true }),
+    // una huella nueva no puede ser más alta que la nave: mide 4.5 m de alto o, si la nave es más baja, lo que mide la nave
+    footprints: () => ({ id: uid('f'), code: '', zoneId: '', x: 1, y: 1, l: 3, d: 1.1, h: Math.min(4.5, Math.max(...state.draft.vertices.map((p) => Number(p[2]) || 0)) || 4.5), active: true }),
     // un activo siempre va dentro de una huella: nace sin huella y hay que elegirla (no se puede guardar hasta entonces)
     spaces: () => ({ id: uid('s'), footprintId: '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
@@ -2038,6 +2067,17 @@ $('layout-save').addEventListener('click', async () => {
         Dashboard.showToast(t('main.layoutActivoSinHuella').replace('{n}', String(loose + 1)), 'warning');
         const pick = document.querySelector(`[data-l="spaces"][data-i="${loose}"][data-k="footprintId"]`);
         if (pick) { pick.scrollIntoView({ block: 'center' }); pick.focus(); }
+        return;
+    }
+    const fresh = LC.newFootprintViolations(state.draft, state.saved);
+    if (fresh.length) {
+        const v = fresh[0];
+        showStep('espacios');
+        renderPanel();
+        Dashboard.showToast(t(`main.layoutVio_${v.kind}`, { code: v.code, zone: v.zoneName || '', h: v.h, maxH: v.maxH }), 'warning');
+        const at = state.draft.footprints.findIndex((f) => f.id === v.id);
+        const box = document.querySelector(`[data-l="footprints"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'h' : 'x'}"]`);
+        if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
         return;
     }
     button.disabled = true;

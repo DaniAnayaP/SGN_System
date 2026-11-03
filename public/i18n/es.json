@@ -1655,6 +1655,12 @@
     "layoutAgregarActivo": "+ Agregar activo",
     "layoutActivoElegirHuella": "Elige la huella…",
     "layoutActivoSinHuella": "Elige la huella del activo {n}: un activo siempre va dentro de una huella.",
+    "layoutHuellaSinZona": "Fuera de toda zona",
+    "layoutHuellaNoCabe": "no cabe",
+    "layoutHuellaFueraTitulo": "Revisa esta huella: no cabe en su zona o pasa la altura de la nave",
+    "layoutVio_nozone": "La huella {code} queda fuera de toda zona: acomódala dentro de una zona para poder guardar.",
+    "layoutVio_out": "La huella {code} no cabe dentro de su zona {zone}: cambia su lugar o sus medidas, o agranda la zona, para poder guardar.",
+    "layoutVio_tall": "La huella {code} mide {h} m de alto y la nave solo {maxH} m: baja su alto para poder guardar.",
     "layoutAltura": "Altura libre (m)",
     "layoutAlturaEsquina": "Altura (m)",
     "layoutAlturaTodas": "Misma altura en todas las esquinas (m)",
@@ -1927,7 +1933,7 @@
     "layoutDifiere": "Difiere {n}",
     "layoutPorDibujar": "Por dibujar",
     "layoutEliminar": "Eliminar",
-    "layoutEliminarZonaConfirm": "¿Eliminar la zona \"{name}\"? Los espacios que tenga quedarán sin zona. Se borra al guardar y no se puede deshacer.",
+    "layoutEliminarZonaConfirm": "¿Eliminar la zona \"{name}\"? Las huellas que tenga quedarán sin zona y no podrás guardar hasta moverlas a otra zona o eliminarlas. Se borra al guardar y no se puede deshacer.",
     "layoutEliminarEspacioConfirm": "¿Eliminar el espacio \"{name}\"? Se borra al guardar y no se puede deshacer.",
     "layoutPuertaNueva": "Puerta nueva",
     "layoutColumna": "Columna",
@@ -3596,6 +3602,10 @@
       "what": "La clasificación del activo de este espacio. Viene de Catálogos > Clasificaciones de Activos y dice con qué métrica cuenta: m² (mobiliario) o m³ (almacenamiento). Se puede dejar sin elegir.",
       "example": "Mobiliario almacenamiento para un rack donde se guarda inventario."
     },
+    "layoutHuellaZona": {
+      "what": "La zona de la huella. No se elige: sale de dónde la acomodas en el croquis. Una huella siempre debe quedar DENTRO de una zona y caber completa: si cae fuera de toda zona dice «Fuera de toda zona» y si se sale de los límites de su zona dice «no cabe» (en rojo, con un contorno rojo punteado en el croquis; su altura también se pone roja si pasa la de la nave). Una huella nueva, o que cambiaste, en rojo no se puede guardar hasta corregirla; las que ya estaban así antes solo se marcan, para que las acomodes cuando puedas.",
+      "example": "una huella de 3 × 1.1 m puesta al borde de la Zona 6 de modo que 40 cm quedan afuera dice «Zona 6 · no cabe»; la mueves hacia adentro y se pone normal."
+    },
     "layoutSpaceLetter": {
       "what": "Qué es el activo: Anaquel (A), Rack (R), Gabeta (G) o Tarima en piso (T). La letra es la del Localizador y el sistema pone el número: es consecutivo por zona y por tipo, así que el código (A001, A002…) no se escribe ni se repite. Si cambias el tipo de un activo ya guardado, toma la letra nueva con su mismo número si está libre.",
       "example": "eliges Gabeta en el primer activo de la Zona 6: el sistema le pone G001; el siguiente anaquel que agregues en esa zona será A001."
@@ -3605,8 +3615,8 @@
       "example": "Rack, Estante o Escritorio."
     },
     "layoutSec_espacios": {
-      "what": "Las huellas: el lugar en el piso. La zona de cada huella y su código los pone el sistema y no se editan: la zona sale de dónde la acomodas en el croquis (la zona que contiene su centro; fuera de todas queda sin zona) y el código es consecutivo POR ZONA (H001, H002… de cada zona; cada zona tiene su H001). Lo que sí puedes cambiar es el Nombre, para identificarla, la posición y las medidas. De aquí salen los m² y m³ de almacenamiento. Al agregar una huella se crea sola su primer activo; si encima hay más de uno, los agregas en el paso Activos y la huella se reparte entre ellos.",
-      "example": "agregas una huella y la acomodas dentro de la Zona 6: sale como H001 de la Zona 6; otra que acomodes en la Zona 2 también sale como H001, pero de la Zona 2."
+      "what": "Las huellas: el lugar en el piso. La zona de cada huella y su código los pone el sistema y no se editan: la zona sale de dónde la acomodas en el croquis (la zona que contiene su centro) y el código es consecutivo POR ZONA (H001, H002… de cada zona; cada zona tiene su H001). Una huella siempre debe quedar DENTRO de una zona y caber completa, y no ser más alta que la nave: si no, se marca en rojo y no se puede guardar. Lo que sí puedes cambiar es el Nombre, para identificarla, la posición y las medidas. De aquí salen los m² y m³ de almacenamiento. Al agregar una huella se crea sola su primer activo; si encima hay más de uno, los agregas en el paso Activos y la huella se reparte entre ellos.",
+      "example": "agregas una huella y la acomodas dentro de la Zona 6: sale como H001 de la Zona 6; si la acomodas con una esquina fuera de la zona, se marca en rojo y no te deja guardar hasta meterla."
     },
     "layoutLocked": {
       "what": "Esta sección no se puede cambiar con tus accesos actuales.",
