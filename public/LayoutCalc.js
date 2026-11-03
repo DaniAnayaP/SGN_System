@@ -86,7 +86,7 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        return deriveSpaces(assignHuellaCodes(deriveFootprintZones(migrateFootprints({ ...layout, vertices, heightM: round2(meanHeight(vertices)) }))));
+        return assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints({ ...layout, vertices, heightM: round2(meanHeight(vertices)) }))))));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -370,6 +370,105 @@
         });
         return changed ? { ...layout, footprints: out } : layout;
     }
+    // El objeto con su código justo detrás del nombre (el mismo orden en el que lo deja la validación, para que comparar una zona migrada con la que se guarda no la vea distinta).
+    function withCodeAfterName(obj, code) {
+        if ('code' in obj) return { ...obj, code };
+        const { id, name, ...rest } = obj;
+        return { id, name, code, ...rest };
+    }
+    // El código de una ZONA es Z001, Z002… y lo pone el sistema: consecutivo en el orden en que se crean, sin repetirse (de ahí sale la Z del Localizador). Una zona que ya tiene su Z### lo conserva; las de antes
+    // reclaman el número con que termina su nombre (Zona 6 -> Z006) si está libre y, si no (Recepción, Oficinas…), reciben el siguiente después del más alto, en el orden de la lista. Es idempotente.
+    const zoneCodeOf = (n) => `Z${String(n).padStart(3, '0')}`;
+    const isZoneCode = (c) => /^Z\d{1,4}$/i.test(String(c == null ? '' : c).trim()) && Number(String(c).trim().slice(1)) >= 1;
+    function assignZoneCodes(layout, { byName = true } = {}) {
+        if (!layout || !Array.isArray(layout.zones)) return layout;
+        let changed = false;
+        const out = layout.zones.slice();
+        const used = new Set();
+        const kept = new Set();
+        out.forEach((z, i) => {
+            if (!isZoneCode(z.code)) return;
+            const code = zoneCodeOf(Number(String(z.code).trim().slice(1)));
+            if (used.has(code)) return;
+            used.add(code);
+            kept.add(i);
+            if (code !== z.code) { out[i] = withCodeAfterName(z, code); changed = true; }
+        });
+        const pending = [];
+        out.forEach((z, i) => {
+            if (kept.has(i)) return;
+            const m = byName ? String(z.name == null ? '' : z.name).match(/(\d+)\s*$/) : null;
+            const n = m ? Number(m[1]) : 0;
+            const code = n >= 1 && n <= 9999 ? zoneCodeOf(n) : '';
+            if (code && !used.has(code)) { used.add(code); out[i] = withCodeAfterName(out[i], code); changed = true; } else pending.push(i);
+        });
+        let next = Math.max(0, ...Array.from(used).map((c) => Number(c.slice(1)))) + 1;
+        pending.forEach((i) => { while (used.has(zoneCodeOf(next))) next += 1; const code = zoneCodeOf(next); used.add(code); out[i] = withCodeAfterName(out[i], code); changed = true; });
+        return changed ? { ...layout, zones: out } : layout;
+    }
+    // El código de un ACTIVO es su letra y un número: A anaquel, R rack, G gabeta, T tarima en piso (la letra la da su tipo) y el consecutivo es POR ZONA Y POR TIPO (A001, A002… de cada zona; ese mismo código
+    // es la pieza del activo en el Localizador). Lo pone el sistema. Los de antes (R-05) conservan su número con la letra de su tipo (A005) si está libre en su zona y tipo; los que chocan reciben el siguiente
+    // después del más alto. Hace falta que los activos ya traigan la zona de su huella (deriveSpaces). Es idempotente.
+    const ASSET_LETTER = { rack: 'A', rackpal: 'R', cabinet: 'G', pallet: 'T' };
+    const spaceCodeOf = (type, n) => `${ASSET_LETTER[type] || 'A'}${String(n).padStart(3, '0')}`;
+    const isSpaceCode = (c, type) => { const m = /^([A-Za-z])(\d{1,4})$/.exec(String(c == null ? '' : c).trim()); return !!m && m[1].toUpperCase() === (ASSET_LETTER[type] || 'A') && Number(m[2]) >= 1; };
+    function assignSpaceCodes(layout) {
+        if (!layout || !Array.isArray(layout.spaces)) return layout;
+        let changed = false;
+        const out = layout.spaces.slice();
+        const groups = new Map();
+        out.forEach((s, i) => { const key = `${s.zoneId || ''}|${s.type || 'rack'}`; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(i); });
+        groups.forEach((indexes) => {
+            const type = out[indexes[0]].type || 'rack';
+            const used = new Set();
+            const kept = new Set();
+            indexes.forEach((i) => {
+                if (!isSpaceCode(out[i].code, type)) return;
+                const code = spaceCodeOf(type, Number(String(out[i].code).trim().slice(1)));
+                if (used.has(code)) return;
+                used.add(code);
+                kept.add(i);
+                if (code !== out[i].code) { out[i] = { ...out[i], code }; changed = true; }
+            });
+            const pending = [];
+            indexes.forEach((i) => {
+                if (kept.has(i)) return;
+                const m = String(out[i].code == null ? '' : out[i].code).match(/(\d+)\s*$/);
+                const n = m ? Number(m[1]) : 0;
+                const code = n >= 1 && n <= 9999 ? spaceCodeOf(type, n) : '';
+                if (code && !used.has(code)) { used.add(code); out[i] = { ...out[i], code }; changed = true; } else pending.push(i);
+            });
+            let next = Math.max(0, ...Array.from(used).map((c) => Number(c.slice(1)))) + 1;
+            pending.forEach((i) => { while (used.has(spaceCodeOf(type, next))) next += 1; const code = spaceCodeOf(type, next); used.add(code); out[i] = { ...out[i], code }; changed = true; });
+        });
+        return changed ? { ...layout, spaces: out } : layout;
+    }
+    // Al guardar: los códigos de las zonas, las huellas y los activos no se editan. Lo que ya existía conserva el suyo; lo nuevo, o lo que se movió a otra zona (llega como si fuera nuevo), lo recibe del sistema.
+    // Un activo al que se le cambió el tipo toma la letra de su tipo nuevo con su mismo número si está libre.
+    function lockCodes(next, previous) {
+        if (!next) return next;
+        let out = next;
+        if (Array.isArray(out.zones)) {
+            const before = new Map(((previous && previous.zones) || []).map((z) => [z.id, z.code]));
+            // una zona nueva NO toma el número de su nombre (Zona 9 no es Z009): recibe el siguiente consecutivo; eso solo lo hacen las de antes, al leerlas
+            out = assignZoneCodes({ ...out, zones: out.zones.map((z) => { const code = before.has(z.id) ? before.get(z.id) : ''; return code === z.code ? z : withCodeAfterName(z, code); }) }, { byName: false });
+        }
+        out = lockHuellaCodes(out, previous);
+        if (Array.isArray(out.spaces)) {
+            const before = new Map(((previous && previous.spaces) || []).map((s) => [s.id, s]));
+            const spaces = out.spaces.map((s) => {
+                const was = before.get(s.id);
+                let code = '';
+                if (was && (was.zoneId || '') === (s.zoneId || '')) {
+                    if ((was.type || 'rack') === (s.type || 'rack')) code = was.code;
+                    else { const m = /(\d+)\s*$/.exec(String(was.code)); code = m ? spaceCodeOf(s.type, Number(m[1])) : ''; }
+                }
+                return code === s.code ? s : { ...s, code };
+            });
+            out = assignSpaceCodes({ ...out, spaces });
+        }
+        return out;
+    }
     // Al guardar: los códigos no se editan. Una huella que ya existía y sigue en su zona conserva el suyo; una nueva, o una que se movió a otra zona (llega como si fuera nueva), recibe el siguiente de su zona.
     function lockHuellaCodes(next, previous) {
         if (!next || !Array.isArray(next.footprints)) return next;
@@ -620,6 +719,8 @@
             const label = `Zona ${i + 1}`;
             const id = idOf(z && z.id, zoneIds, label);
             const name = text(z && z.name, label, true);
+            // El código (Z001…) lo pone el sistema (assignZoneCodes, justo después de armar las zonas): lo que mande el cliente solo se usa de punto de partida.
+            const code = text(z && z.code, label, false);
             // type '' = zona sin asignar todavía; una zona de antes sin tipo se queda como seca, como siempre.
             const type = z && z.type === '' ? '' : oneOf(z && z.type, ZONE_TYPES, 'dry');
             const planM2 = z && z.planM2 != null && z.planM2 !== '' ? meters(z.planM2, label) : 0;
@@ -648,13 +749,15 @@
                 const py = pts.map((p) => p[1]);
                 const x = pts.length ? Math.min(...px) : 0;
                 const y = pts.length ? Math.min(...py) : 0;
-                return { id, name, type, x: round2(x), y: round2(y), l: round2((pts.length ? Math.max(...px) : 0) - x), w: round2((pts.length ? Math.max(...py) : 0) - y), pts, ...extra, active };
+                return { id, name, code, type, x: round2(x), y: round2(y), l: round2((pts.length ? Math.max(...px) : 0) - x), w: round2((pts.length ? Math.max(...py) : 0) - y), pts, ...extra, active };
             }
             return {
-                id, name, type,
+                id, name, code, type,
                 x: meters(z && z.x, label, -LIMITS.maxM), y: meters(z && z.y, label, -LIMITS.maxM), l: meters(z && z.l, label), w: meters(z && z.w, label), ...extra, active,
             };
         });
+
+        out.zones = assignZoneCodes(out).zones;
 
         // Huellas (paso Huella-Espacio): el lugar en el piso. Cada una puede tener uno o varios activos (ver migrateFootprints).
         const footprintIds = new Set();
@@ -678,15 +781,10 @@
 
         // Activos (paso Activos): lo que hay encima de una huella. Su lugar en el piso, su zona, su alto, su nombre y su formato salen de la huella (deriveSpaces).
         const spaceIds = new Set();
-        const codes = new Set();
         out.spaces = list(src.spaces, LIMITS.spaces, 'Activos').map((s, i) => {
             const label = `Activo ${i + 1}`;
-            const code = text(s && s.code, label, true);
-            if (code) {
-                const key = code.toLowerCase();
-                if (codes.has(key)) errors.push(`${label}: el código "${code}" está repetido`);
-                codes.add(key);
-            }
+            // El código (A001…) lo pone el sistema según el tipo del activo, consecutivo por zona y tipo (assignSpaceCodes, justo después): lo que mande el cliente solo se usa de punto de partida.
+            const code = text(s && s.code, label, false);
             const footprintId = typeof (s && s.footprintId) === 'string' && footprintIds.has(s.footprintId) ? s.footprintId : '';
             if (!footprintId) errors.push(`${label}: la huella no existe`);
             const type = oneOf(s && s.type, SPACE_TYPES, 'rack');
@@ -711,7 +809,7 @@
             };
         });
         out.footprints = assignHuellaCodes(deriveFootprintZones(out)).footprints;
-        out.spaces = deriveSpaces(out).spaces;
+        out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces(out).spaces }).spaces;
 
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
         out.plan = plan ? { widthM: meters(plan.widthM, 'Plano', 0.1) } : null;
@@ -879,7 +977,7 @@
                 const first = !seen.has(s.footprintId);
                 seen.add(s.footprintId);
                 const f = byId.get(s.footprintId);
-                const plain = first && f && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off;
+                const plain = first && f && (s.type || 'rack') === 'rack' && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off;
                 return !plain;
             }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off }));
         }
@@ -898,7 +996,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, lockHuellaCodes, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

@@ -6618,8 +6618,8 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         return res.status(409).json({ code: 'COST_CENTER_REQUIRED', message: 'Ese centro de costos todavía no está completo: termina de llenarlo en Nuestros Centros Costos.' });
     }
     const existing = getClientLayout(req.user.clientId, { costCenterId: targetCenterId });
-    // Los códigos de las huellas (H001… por zona) los pone el sistema: una huella que ya existía conserva el suyo y una nueva recibe el siguiente de su zona.
-    next = LayoutCalc.lockHuellaCodes(next, existing ? existing.layout : null);
+    // Los códigos de las zonas (Z001…), de las huellas (H001… por zona) y de los activos (A001… por zona y tipo) los pone el sistema: lo que ya existía conserva el suyo y lo nuevo recibe el siguiente.
+    next = LayoutCalc.lockCodes(next, existing ? existing.layout : null);
     const expectedVersion = Number(body.baseVersion) || 0;
     if ((existing ? existing.version : 0) !== expectedVersion) {
         return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: existing ? existing.version : 0 });
@@ -7579,7 +7579,7 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
         spaceId: row.space_id, spaceCode: space ? space.code : '',
         footprintId: footprint ? footprint.id : '', footprintCode: footprint ? footprint.code : '',
         // El Localizador completo (las 7 piezas) solo existe cuando el lugar está completo.
-        locator: located && space && footprint && zone ? RelTemplate.formatLocator({ zoneName: zone.name, footprintCode: footprint.code, spaceType: space.type, spaceCode: space.code, level: row.level, slot: row.slot, row: row.row_no, depth: row.depth }) : '',
+        locator: located && space && footprint && zone ? RelTemplate.formatLocator({ zoneName: zone.name, zoneCode: zone.code, footprintCode: footprint.code, spaceType: space.type, spaceCode: space.code, level: row.level, slot: row.slot, row: row.row_no, depth: row.depth }) : '',
         level: row.level, slot: row.slot, row: row.row_no, depth: row.depth, bayRows: bay.rows, bayDepth: bay.depth,
         classification: row.classification || 'activo', classificationName: CODE_RELATION_CLASSES[row.classification || 'activo'] || '',
         status: located ? 'located' : 'partial',
@@ -7718,7 +7718,7 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
     const zonesOf = (row) => {
         const idx = layoutIndexOf(row);
         return idx.zones.map((z) => ({
-            id: z.id, name: z.name,
+            id: z.id, name: z.name, code: z.code,
             footprints: idx.footprints.filter((f) => f.zoneId === z.id).map((f) => ({ id: f.id, code: f.code })),
             spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, footprintId: s.footprintId, levels: s.levels || 1, slots: s.slots || 1, bays: s.bays || [] })),
         }));

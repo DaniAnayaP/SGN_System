@@ -1650,6 +1650,8 @@
     "layoutActivosSinEspacios": "Todavía no hay huellas. Agrégalas en Huella-Espacio y aquí se ponen sus activos.",
     "layoutHuellaCol": "Huella",
     "layoutCodigoHuella": "Código de huella",
+    "layoutCodigoZona": "Código de zona",
+    "layoutActivoLetra": "Tipo (letra del Localizador)",
     "layoutAgregarActivo": "+ Agregar activo",
     "layoutAltura": "Altura libre (m)",
     "layoutAlturaEsquina": "Altura (m)",
@@ -3581,16 +3583,20 @@
       "example": "un contacto de 220 V en la pared 3, a 20 metros de la esquina y a 1.2 metros del piso."
     },
     "layoutSec_zonas": {
-      "what": "Las zonas de la nave: almacenamiento, andenes, oficinas y pasillos. De aquí salen los m² de oficinas y de pasillos.",
-      "example": "defines la Zona A, de producto seco, de 22 por 11 metros."
+      "what": "Las zonas de la nave: almacenamiento, andenes, oficinas y pasillos. De aquí salen los m² de oficinas y de pasillos. El código de cada zona (Z001, Z002…) lo pone el sistema, consecutivo en el orden en que las creas, y no se edita: es la Z del Localizador. Lo que sí puedes cambiar es el Nombre.",
+      "example": "defines la Zona A, de producto seco, de 22 por 11 metros: el sistema le pone Z001 y la siguiente que crees será Z002."
     },
     "layoutSec_activos": {
-      "what": "Cada renglón es un activo: lo que hay encima de una huella. Una huella puede tener varios (por ejemplo dos racks sobre la misma tarima); con uno solo no escribes nada, porque al agregar la huella se crea su primer activo con el siguiente código libre (R-01, R-02…). El código del activo es el que da el número del Localizador (A-05 es A005); el de la huella (H001…) se pone en Huella-Espacio. Aquí eliges en qué huella está, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
-      "example": "la huella H002 tiene dos activos, R-01 y R-02; los dos son Rack de Mobiliario almacenamiento y la huella se reparte entre ellos."
+      "what": "Cada renglón es un activo: lo que hay encima de una huella. Una huella puede tener varios (por ejemplo dos racks sobre la misma tarima); con uno solo no escribes nada, porque al agregar la huella se crea su primer activo. El código del activo lo pone el sistema y no se edita: la letra la da su tipo (A anaquel, R rack, G gabeta, T tarima en piso) y el número es consecutivo por zona y por tipo (A001, A002… de cada zona); es la pieza del activo en el Localizador. Aquí eliges el tipo, en qué huella está, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo de activo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
+      "example": "la huella H002 de la Zona 6 tiene dos anaqueles: el sistema les pone A001 y A002; si agregas una gabeta a esa misma huella, será G001."
     },
     "layoutAssetClass": {
       "what": "La clasificación del activo de este espacio. Viene de Catálogos > Clasificaciones de Activos y dice con qué métrica cuenta: m² (mobiliario) o m³ (almacenamiento). Se puede dejar sin elegir.",
       "example": "Mobiliario almacenamiento para un rack donde se guarda inventario."
+    },
+    "layoutSpaceLetter": {
+      "what": "Qué es el activo: Anaquel (A), Rack (R), Gabeta (G) o Tarima en piso (T). La letra es la del Localizador y el sistema pone el número: es consecutivo por zona y por tipo, así que el código (A001, A002…) no se escribe ni se repite. Si cambias el tipo de un activo ya guardado, toma la letra nueva con su mismo número si está libre.",
+      "example": "eliges Gabeta en el primer activo de la Zona 6: el sistema le pone G001; el siguiente anaquel que agregues en esa zona será A001."
     },
     "layoutAssetType": {
       "what": "El tipo de activo de este espacio: rack, gabinete, refrigerador, estante, escritorio, mesa… Viene de Catálogos > Activos Fijos y es independiente de la clasificación. Se puede dejar sin elegir.",

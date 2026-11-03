@@ -87,6 +87,8 @@
         return m ? Number(m[1]) : NaN;
     };
     // el número que cierra un nombre o un código: "Zona 6" -> 6, "R-05" -> 5 (NaN si no trae)
+    // El número de la zona en el Localizador: el de su código (Z006 -> 6); una zona sin código (opciones viejas guardadas en el celular) usa el número con que termina su nombre.
+    const zoneNo = (z) => trailingNumber(z && z.code ? z.code : (z && z.name));
     const trailingNumber = (text) => { const m = String(text == null ? '' : text).match(/(\d+)\s*$/); return m ? Number(m[1]) : NaN; };
 
     // El Localizador va SIEMPRE completo, con las 7 piezas: Z006.H005.A005.N003.C001.F001.P001 = Zona 6 · Huella 5 · Activo A5 · Nivel 3 · Columna 1 · Fila 1 · Profundidad 1. El hueco es nivel × columna;
@@ -120,7 +122,7 @@
     }
     // El Localizador completo de un lugar de una relación; vacío si todavía no se puede armar (sin lugar completo, o una zona, huella o activo cuyo nombre o código no termina en número).
     function formatLocator(p) {
-        const z = trailingNumber(p.zoneName);
+        const z = trailingNumber(p.zoneCode ? p.zoneCode : p.zoneName);
         const h = trailingNumber(p.footprintCode);
         const a = trailingNumber(p.spaceCode);
         const letter = LETTER_OF_TYPE[p.spaceType];
@@ -239,7 +241,7 @@
             let rowGiven = null;
             let depthGiven = null;
             if (loc) {
-                const zones = assigned.filter((z) => trailingNumber(z.name) === loc.zone);
+                const zones = assigned.filter((z) => zoneNo(z) === loc.zone);
                 if (!zones.length) return err('locator', 'locatorZone', { value: locRaw, zone: loc.zone, sub: sub.name });
                 if (zones.length > 1) return err('locator', 'locatorAmbiguous', { value: locRaw });
                 zone = zones[0];
@@ -259,7 +261,7 @@
                 depthGiven = loc.depth;
             } else {
                 if (!zoneRaw) return err('zone', 'zoneMissing');
-                zone = assigned.find((z) => norm(z.name) === norm(zoneRaw)) || null;
+                zone = assigned.find((z) => norm(z.name) === norm(zoneRaw) || (z.code && norm(z.code) === norm(zoneRaw))) || null;
                 if (!zone) return err('zone', 'zoneNotFound', { value: zoneRaw, sub: sub.name });
                 const entry = entries.find((e) => e.zoneId === zone.id);
                 // la huella es opcional en las columnas (el activo ya dice en cuál está); si se pone, el activo tiene que estar encima de ella

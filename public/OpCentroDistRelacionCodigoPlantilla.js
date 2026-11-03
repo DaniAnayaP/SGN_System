@@ -81,7 +81,7 @@
                     // por cada activo: su huella y las tres primeras piezas del Localizador (zona, huella y activo); el nivel, la columna, la fila y la profundidad se completan en el Excel
                     racks.forEach((sp) => {
                         const fp = (z.footprints || []).find((f) => f.id === sp.footprintId);
-                        const base = zoneNo(z.name) && fp && spaceNo(fp.code) && LETTER[sp.type] && spaceNo(sp.code) ? `Z${pad3(zoneNo(z.name))}.H${pad3(spaceNo(fp.code))}.${LETTER[sp.type]}${pad3(spaceNo(sp.code))}` : '';
+                        const base = zoneNo(z.code || z.name) && fp && spaceNo(fp.code) && LETTER[sp.type] && spaceNo(sp.code) ? `Z${pad3(zoneNo(z.code || z.name))}.H${pad3(spaceNo(fp.code))}.${LETTER[sp.type]}${pad3(spaceNo(sp.code))}` : '';
                         rowsOut.push([center.name, w.name, s.name, z.name, fp ? fp.code : '', sp.code, sp.levels || 1, sp.slots || 1, base]);
                     });
                 });

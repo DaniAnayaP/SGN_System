@@ -453,9 +453,9 @@ function stepHtml(step) {
             // Uso de la zona (aparte del tipo): almacenamiento, operaciones o instalaciones. Se puede dejar sin definir.
             const useOptions = `<option value=""${z.use ? '' : ' selected'}>${esc(t('main.layoutUsoSinDefinir'))}</option>${optionsHtml('use', LC.ZONE_USES, z.use)}`;
             const useBox = `<td><select data-l="zones" data-i="${i}" data-k="use" data-help-key="layoutZoneUse"${dis ? ' disabled' : ''}>${useOptions}</select></td>`;
-            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${useBox}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + catButton + shapeButton) : removeCell('zones', i, dis, fmtButton + catButton + shapeButton)}</tr>`;
+            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}<td class="layout-calc"><b data-zone-code="${i}">${esc(z.code || '')}</b></td>${cellSelect('zones', i, 'type', typeOptions, dis)}${useBox}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + catButton + shapeButton) : removeCell('zones', i, dis, fmtButton + catButton + shapeButton)}</tr>`;
         });
-        return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUsoZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis, true)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis, true)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
+        return `${table(['main.layoutNombre', 'main.layoutCodigoZona', 'main.layoutTipo', 'main.layoutUsoZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis, true)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis, true)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
     }
     if (step === 'posiciones') {
         // Cada renglón es un HUECO (un nivel × una columna) de un activo de Huella-Espacio: salen solos con los niveles y las columnas de Activos. Dentro de cada hueco se anota cuántas filas y cuántas profundidades
@@ -493,11 +493,12 @@ function stepHtml(step) {
         const pick = (i, key, help, list, selected) => `<td><select data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="${help}"${dis ? ' disabled' : ''}>${assetOptions(list, selected || 0)}</select></td>`;
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
         const footprintOptions = (selected) => d.footprints.map((f) => `<option value="${esc(f.id)}"${f.id === selected ? ' selected' : ''}>${esc(f.code)} · ${esc(footprintZoneName(f))}</option>`).join('');
+        const letterOptions = (selected) => LC.SPACE_TYPES.map((id) => `<option value="${id}"${id === (selected || 'rack') ? ' selected' : ''}>${esc(LC.ASSET_LETTER[id])} · ${esc(typeLabel('space', id))}</option>`).join('');
         const rows = d.spaces.map((s, i) => {
             const saved = isSavedRow('spaces', s.id);
-            return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'footprintId', footprintOptions(s.footprintId), dis)}<td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis) : removeCell('spaces', i, dis)}</tr>`;
+            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td>${cellSelect('spaces', i, 'footprintId', footprintOptions(s.footprintId), dis)}<td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis) : removeCell('spaces', i, dis)}</tr>`;
         });
-        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', ''], rows, 'layout-activos')}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutActivoLetra', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', ''], rows, 'layout-activos')}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una se crea sola su primer activo (con el mismo código); más activos sobre la misma huella se agregan en el paso Activos.
@@ -812,6 +813,8 @@ function refreshLive() {
         const codeCell = document.querySelector(`[data-fp-code="${i}"]`);
         if (codeCell) codeCell.textContent = f.code;
     });
+    state.draft.zones.forEach((z, i) => { const cell = document.querySelector(`[data-zone-code="${i}"]`); if (cell) cell.textContent = z.code; });
+    state.draft.spaces.forEach((s, i) => { const cell = document.querySelector(`[data-sp-code="${i}"]`); if (cell) cell.textContent = s.code; });
     state.draft.heightM = Math.round((state.draft.vertices.reduce((acc, p) => acc + (Number(p[2]) || 0), 0) / Math.max(state.draft.vertices.length, 1)) * 100) / 100;
     renderKpis();
     renderSvg();
@@ -1089,39 +1092,29 @@ $('layout-plan-width-ok').addEventListener('click', () => {
 $('layout-from-scratch').addEventListener('click', newDraftFromScratch);
 
 // ---- edición -----------------------------------------------------------------------------------------------------------
-const SPACE_PREFIX = { rack: 'R', cabinet: 'G', pallet: 'T' };
-function nextCode(type, list = 'spaces') {
-    const prefix = SPACE_PREFIX[type] || 'E';
-    const used = new Set((state.draft[list] || []).map((s) => s.code.toLowerCase()));
-    for (let n = 1; n < 10000; n++) {
-        const code = `${prefix}-${String(n).padStart(2, '0')}`;
-        if (!used.has(code.toLowerCase())) return code;
-    }
-    return `${prefix}-${uid('')}`;
-}
 const ROW_FACTORY = {
     vertices: () => { const last = state.draft.vertices[state.draft.vertices.length - 1] || [0, 0, 9]; return [last[0], last[1], last[2]]; },
     doors: () => ({ id: uid('d'), name: t('main.layoutPuertaNueva'), type: 'dock', wall: 1, dist: 0, width: 1.2, height: 2.1 }),
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), x: 1, y: 1, l: 0.6, w: 0.6 }),
-    zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
+    zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, code: '', type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
     footprints: () => ({ id: uid('f'), code: '', zoneId: '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, active: true }),
-    spaces: () => ({ id: uid('s'), footprintId: state.draft.footprints.length ? state.draft.footprints[0].id : '', type: 'rack', code: nextCode('rack', 'spaces'), levels: 1, drawers: '' }),
+    spaces: () => ({ id: uid('s'), footprintId: state.draft.footprints.length ? state.draft.footprints[0].id : '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
 const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
-// La zona de una huella sale de dónde está en el croquis y su código (H001…) es consecutivo por zona: los pone el sistema, no se editan. Las huellas ya guardadas que siguen en su zona conservan su código; las
-// nuevas (todavía sin guardar) y las que se mueven a otra zona lo reciben del sistema cada vez que se acomodan, así siempre es el siguiente de la zona donde quedan.
+// Los códigos los pone el sistema y no se editan: el de la zona (Z001…, consecutivo), el de la huella (H001… por zona, y su zona sale de dónde está en el croquis) y el del activo (letra de su tipo + número
+// consecutivo por zona y tipo: A001, G001…). Lo que ya estaba guardado y sigue igual conserva su código; lo nuevo (todavía sin guardar) y lo que cambió de zona o de tipo lo recibe cada vez que se acomoda,
+// así siempre es el que le toca, el mismo que le pondrá el servidor al guardar.
 function syncHuellas() {
     const d = state.draft;
-    const saved = new Map(((state.saved && state.saved.footprints) || []).map((f) => [f.id, f]));
-    const placed = LC.deriveFootprintZones(d).footprints;
-    // una guardada que sigue en su zona conserva su código; una nueva, o una que se movió a otra zona, lo recibe del sistema (el siguiente de su zona)
-    const coded = placed.map((f) => { const was = saved.get(f.id); const code = was && (was.zoneId || '') === (f.zoneId || '') ? was.code : ''; return code === f.code ? f : { ...f, code }; });
-    d.footprints = LC.assignHuellaCodes({ ...d, footprints: coded }).footprints;
+    const next = LC.lockCodes(LC.deriveSpaces(LC.deriveFootprintZones(d)), state.saved);
+    d.zones = next.zones;
+    d.footprints = next.footprints;
+    d.spaces = next.spaces;
 }
-// El primer activo de una huella nueva: lleva el siguiente código de activo libre (R-01, R-02…); el de la huella es el H###.
+// El primer activo de una huella nueva: un anaquel; su código (A001…) lo pone el sistema según el tipo, la zona y el consecutivo.
 function defaultActivoFor(fp) {
-    return { id: uid('s'), footprintId: fp.id, type: 'rack', code: nextCode('rack', 'spaces'), levels: 1, drawers: '' };
+    return { id: uid('s'), footprintId: fp.id, type: 'rack', code: '', levels: 1, drawers: '' };
 }
 
 function onEdit(event) {
@@ -1195,12 +1188,6 @@ function onEdit(event) {
             if (n > 1) row.slots = Math.min(n, LC.LIMITS.slots); else delete row.slots;
 
         } else row[key] = (key === 'wall' || key === 'levels') ? Math.max(1, Math.round(value) || 1) : value;
-        if (list === 'spaces' && key === 'type' && /^[RGT]-\d+$/i.test(row.code) && !isSavedRow('spaces', row.id)) {
-            // un código sin guardar y con forma automática (R-01) sigue al tipo
-            row.code = nextCode(row.type);
-            const codeInput = document.querySelector(`[data-l="spaces"][data-i="${el.getAttribute('data-i')}"][data-k="code"]`);
-            if (codeInput) codeInput.value = row.code;
-        }
     }
     // Al cambiar el nombre de una zona, el selector de zona de los espacios debe mostrar el nombre nuevo (solo al terminar de escribir).
     if (event.type === 'change' && list === 'zones' && el.getAttribute('data-k') === 'name') renderPanel();
