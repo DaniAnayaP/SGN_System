@@ -610,16 +610,21 @@ function ensureEmptyState() {
     tbody.appendChild(tr);
 }
 
+// Con más de mil códigos, dibujar todas las filas de un golpe congelaba la pantalla: se dibujan por tandas (ver Dashboard.renderTableRowsInChunks) y una recarga que llega a la mitad cancela la anterior.
+let skuRowsLoadToken = 0;
 async function refreshTable() {
     const tbody = getTbody();
     if (tbody.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+    const token = ++skuRowsLoadToken;
     try {
         const res = await fetch(`/api/business/sku-items?scope=${SKU_SCOPE}`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { skuItems } = await res.json();
+        if (token !== skuRowsLoadToken) return; // llegó otra recarga después de esta
         tbody.innerHTML = '';
         if (!skuItems.length) { ensureEmptyState(); return; }
-        skuItems.forEach((record) => tbody.appendChild(buildRow(record)));
+        const finished = await Dashboard.renderTableRowsInChunks({ tableKey: TABLE_KEY, tbody, records: skuItems, buildRow, isStale: () => token !== skuRowsLoadToken });
+        if (!finished) return;
         applySkuItemFilters();
     } catch (err) {
         console.error('Alta Nuestros Artículos: failed to load records', err);

@@ -3261,6 +3261,11 @@ function refreshDataTableColumnWidths(tableId) {
     if (!state) return;
     let changed = false;
     const sampleRows = state.table.tBodies[0] ? Array.from(state.table.tBodies[0].rows).slice(0, DATA_TABLE_WIDTH_SAMPLE_ROWS) : [];
+    // Cada lectura de scrollWidth obliga al navegador a calcular el diseño de toda la tabla. Una tabla que se llena por tandas (ver renderTableRowsInChunks) avisaba aquí en cada tanda, y las columnas
+    // que siguen en el ancho mínimo (las que no traen datos) se volvían a medir cada vez con las mismas filas: si todas las filas de la muestra ya se midieron, no hay nada nuevo que medir.
+    if (!state.widthMeasuredRows) state.widthMeasuredRows = new WeakSet();
+    if (!sampleRows.length || sampleRows.every((tr) => state.widthMeasuredRows.has(tr))) return;
+    sampleRows.forEach((tr) => state.widthMeasuredRows.add(tr));
     state.columnKeys.forEach((key) => {
         if (state.config.widths[key] !== DATA_TABLE_COL_MIN_WIDTH) return;
         // table-layout:fixed is already applied by the time this runs, so
@@ -12932,8 +12937,43 @@ function openPlanChangeHistory(plan) {
     });
 }
 
+// Dibuja las filas de una tabla por tandas, cediéndole el control al navegador entre una y otra: con más de mil filas dibujarlas de un golpe congelaba la pantalla (y el navegador avisaba que la página
+// no respondía). Así la tabla se ve y se usa mientras termina de llenarse, con "Cargando filas… X de N" en su barra. isStale() cancela la carga cuando ya llegó otra más nueva; devuelve false si se
+// canceló y true si terminó. Los nombres llevan "Table" porque Dashboard.js y las pantallas comparten un solo ámbito global (ver sidebarCostCenters).
+const TABLE_ROW_CHUNK = 150;
+const tableChunkYield = () => (window.scheduler && window.scheduler.yield ? window.scheduler.yield() : new Promise((resolve) => setTimeout(resolve, 0)));
+async function renderTableRowsInChunks({ tableKey, tbody, records, buildRow, isStale = () => false }) {
+    const toolbar = document.querySelector(`[data-table-id="${tableKey}"]`)?.previousElementSibling;
+    const setProgress = (done, total) => {
+        if (!toolbar) return;
+        let el = toolbar.querySelector('.rel-loading-rows');
+        if (done == null) { if (el) el.remove(); return; }
+        if (!el) {
+            el = document.createElement('span');
+            el.className = 'rel-loading-rows tpl-muted';
+            el.setAttribute('aria-live', 'polite');
+            toolbar.prepend(el);
+        }
+        el.textContent = t('main.relLoadingRows', { done, total });
+    };
+    for (let from = 0; from < records.length; from += TABLE_ROW_CHUNK) {
+        if (isStale()) return false;
+        const fragment = document.createDocumentFragment();
+        records.slice(from, from + TABLE_ROW_CHUNK).forEach((record) => fragment.appendChild(buildRow(record)));
+        tbody.appendChild(fragment);
+        if (from + TABLE_ROW_CHUNK < records.length) {
+            setProgress(Math.min(from + TABLE_ROW_CHUNK, records.length), records.length);
+            await tableChunkYield();
+        }
+    }
+    if (isStale()) return false;
+    setProgress(null);
+    return true;
+}
+
 window.Dashboard = {
     initDashboard,
+    renderTableRowsInChunks,
     getSingleSelectedCostCenterId,
     getSelectedCostCenterIds,
     selectOnlyCostCenter,
