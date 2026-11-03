@@ -17,6 +17,8 @@ const state = {
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false, view3d: false, centerId: null, costCenter: null,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
+    // lo que se enfocó con la búsqueda (zona o huella) y lo que se ocultó de ello: ver «buscar una zona o una huella»
+    find: null, findHide: {},
     // lo que se eligió en la tabla y se resalta en el croquis: { kind: 'zone' | 'space' | 'bay', id, n, c, step } (por id, no por número de renglón, para que no se mueva al quitar o agregar renglones)
     hl: null,
 };
@@ -350,6 +352,7 @@ function initEditState() {
     state.zoneOpen = null;
     state.contornoMode = 'sides';
     state.hl = null;
+    clearFind();
 }
 // La primera figura que se dejó sin cerrar (no se puede guardar así).
 function firstOpenShape() {
@@ -597,6 +600,7 @@ function renderPanel() {
     bindLayoutFilters();
     markSelectedRow();
     if (state.draft) applyFootprintMarks();
+    applyFindToTables();
 }
 
 // ---- resaltado de lo elegido ------------------------------------------------------------------------------------------
@@ -721,12 +725,193 @@ window.addEventListener('pointerup', (event) => {
 });
 
 // ---- croquis -----------------------------------------------------------------------------------------------------------
+// ---- buscar una zona o una huella (enfoque) ----------------------------------------------------------------------------------------
+// La barra de búsqueda de Visualizaciones enfoca el croquis (2D y 3D), las tablas y el resumen en UNA zona o UNA huella: solo se ve lo que hay adentro (el resto de la nave se oculta por completo) y unos botones quitan
+// lo que no se quiere ver (Huellas, Activos, Textos, Medidas). Es solo de pantalla: no cambia lo guardado ni los reportes ni los QR. state.find = { kind: 'zone' | 'footprint', id }; state.findHide = { huellas, activos, textos,
+// medidas } (true = oculto). Las tablas no pierden renglones: los que no son de lo enfocado solo se esconden (clase layout-find-out), por eso sus números de renglón no cambian.
+const canFind = () => !!(state.perms && state.perms.canFind);
+function clearFind() { state.find = null; state.findHide = {}; }
+// Lo enfocado, con lo que hace falta para escribirlo; null si ya no existe (se borró).
+function findEntity() {
+    const f = state.find;
+    const d = state.draft;
+    if (!f || !d) return null;
+    if (f.kind === 'zone') { const z = d.zones.find((x) => x.id === f.id); return z ? { kind: 'zone', id: z.id, code: z.code || '', name: z.name || '' } : null; }
+    const p = d.footprints.find((x) => x.id === f.id);
+    return p ? { kind: 'footprint', id: p.id, code: p.code || '', name: p.code || '', zoneId: p.zoneId || '' } : null;
+}
+// La zona de lo enfocado (la zona misma o la de la huella): es la fila que deja el resumen de abajo.
+function findZoneId() {
+    const e = findEntity();
+    return e ? (e.kind === 'zone' ? e.id : e.zoneId) : '';
+}
+// El Layout que se dibuja con el enfoque: solo la zona (con sus huellas y activos) o solo la huella (con sus activos), sin paredes, puertas, luz ni columnas, y con un contorno rectangular
+// justo alrededor para que el croquis y el 3D se acerquen a lo enfocado. Sin enfoque (o si lo enfocado ya no existe) devuelve el mismo Layout.
+function findLayout(d) {
+    const f = state.find;
+    if (!f || !d) return d;
+    if (!findEntity()) { clearFind(); return d; }
+    let zones = [];
+    let footprints;
+    let spaces;
+    if (f.kind === 'zone') {
+        zones = d.zones.filter((z) => z.id === f.id);
+        footprints = d.footprints.filter((p) => p.zoneId === f.id);
+        spaces = d.spaces.filter((s) => s.zoneId === f.id);
+    } else {
+        footprints = d.footprints.filter((p) => p.id === f.id);
+        spaces = d.spaces.filter((s) => s.footprintId === f.id);
+    }
+    const pts = [];
+    zones.forEach((z) => LC.zonePoints(z).forEach((p) => pts.push(p)));
+    footprints.forEach((p) => { pts.push([p.x, p.y], [p.x + p.l, p.y + p.d]); });
+    spaces.forEach((s) => { pts.push([s.x, s.y], [s.x + s.l, s.y + s.d]); });
+    const ok = pts.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    if (!ok.length) return d;
+    const x0 = Math.min(...ok.map((p) => p[0]));
+    const x1 = Math.max(...ok.map((p) => p[0]));
+    const y0 = Math.min(...ok.map((p) => p[1]));
+    const y1 = Math.max(...ok.map((p) => p[1]));
+    const pad = Math.max(0.5, Math.max(x1 - x0, y1 - y0) * 0.06);
+    const h = Number(d.heightM) > 0 ? d.heightM : 4;
+    return { ...d, vertices: [[x0 - pad, y0 - pad, h], [x1 + pad, y0 - pad, h], [x1 + pad, y1 + pad, h], [x0 - pad, y1 + pad, h]], zones, footprints, spaces, obstacles: [], doors: [], power: [], plan: null };
+}
+// ¿Este renglón de una tabla es de lo enfocado? Los activos todavía sin huella y las huellas sin zona (recién agregados) siempre se ven, para no perderlos.
+function inFind(entity) {
+    const f = state.find;
+    const d = state.draft;
+    if (!f || !d || !entity) return true;
+    if (entity.kind === 'zone') return f.kind === 'zone' && entity.id === f.id;
+    if (entity.kind === 'footprint') {
+        const p = d.footprints.find((x) => x.id === entity.id);
+        if (!p) return true;
+        return f.kind === 'zone' ? (!p.zoneId || p.zoneId === f.id) : p.id === f.id;
+    }
+    const s = d.spaces.find((x) => x.id === entity.id);
+    if (!s) return true;
+    if (!s.footprintId) return true;
+    return f.kind === 'zone' ? s.zoneId === f.id : s.footprintId === f.id;
+}
+function applyFindToTables() {
+    const d = state.draft;
+    document.querySelectorAll(HL_ROW_SELECTOR).forEach((tr) => {
+        const e = state.find && d ? rowEntity(tr) : null;
+        tr.classList.toggle('layout-find-out', !!e && !inFind(e));
+    });
+}
+// La lista que sale al escribir: zonas y huellas que coinciden (con el mismo motor de búsqueda de todo el sistema: coma, $ y @).
+function findCandidates(query) {
+    const d = state.draft;
+    if (!d) return [];
+    const zoneName = (id) => { const z = d.zones.find((x) => x.id === id); return z ? z.name : ''; };
+    const items = [
+        ...d.zones.map((z) => ({ kind: 'zone', id: z.id, title: z.name || z.code, sub: `${t('main.layoutFindZona')} · ${z.code || ''}`, hay: `${z.code || ''} ${z.name || ''}` })),
+        ...d.footprints.map((p) => ({ kind: 'footprint', id: p.id, title: p.code, sub: `${t('main.layoutFindHuella')} · ${zoneName(p.zoneId)}`, hay: `${p.code || ''} ${zoneName(p.zoneId)}` })),
+    ];
+    const text = String(query || '').trim();
+    const match = text ? SearchSyntax.compile('contains', text) : null;
+    return items.filter((i) => !match || match(i.hay)).slice(0, 40);
+}
+let findItems = [];
+let findActive = -1;
+function renderFindList() {
+    const list = $('layout-find-list');
+    findItems = findCandidates($('layout-find-input').value);
+    findActive = findItems.length ? 0 : -1;
+    list.innerHTML = findItems.length
+        ? findItems.map((i, n) => `<button type="button" class="layout-find-item" role="option" id="layout-find-opt-${n}" data-find-pick="${n}" aria-selected="${n === findActive}"><b>${esc(i.title)}</b><span>${esc(i.sub)}</span></button>`).join('')
+        : `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
+    list.hidden = false;
+    $('layout-find-input').setAttribute('aria-expanded', 'true');
+}
+function closeFindList() {
+    $('layout-find-list').hidden = true;
+    $('layout-find-input').setAttribute('aria-expanded', 'false');
+}
+function moveFindActive(step) {
+    if (!findItems.length) return;
+    findActive = (findActive + step + findItems.length) % findItems.length;
+    document.querySelectorAll('#layout-find-list [data-find-pick]').forEach((b, n) => b.setAttribute('aria-selected', String(n === findActive)));
+    const cur = $(`layout-find-opt-${findActive}`);
+    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+}
+// El chip de lo enfocado (con su ✕) y los botones para ocultar; solo sale con un enfoque puesto y con el icono Buscar en el árbol.
+function renderFindBox() {
+    const box = $('layout-find');
+    box.hidden = !(canFind() && state.draft);
+    $('layout-find-input').setAttribute('aria-label', t('main.layoutBuscarBtn'));
+    const target = $('layout-find-state');
+    const e = box.hidden ? null : findEntity();
+    if (!e) { target.innerHTML = ''; return; }
+    const d = state.draft;
+    const hide = state.findHide || {};
+    const nFp = e.kind === 'zone' ? d.footprints.filter((p) => p.zoneId === e.id && p.active !== false).length : 0;
+    const nSp = d.spaces.filter((s) => s.active !== false && (e.kind === 'zone' ? s.zoneId === e.id : s.footprintId === e.id)).length;
+    const toggles = [];
+    if (e.kind === 'zone') toggles.push(['huellas', 'main.layoutFindHuellas', nFp]);
+    toggles.push(['activos', 'main.layoutFindActivos', nSp], ['textos', 'main.layoutFindTextos', null]);
+    if (e.kind === 'zone') toggles.push(['medidas', 'main.layoutFindMedidas', null]);
+    target.innerHTML = `<button type="button" class="layout-find-chip" data-find-clear data-help-key="layoutFindChip" aria-label="${esc(t('main.layoutFindQuitar'))}" title="${esc(t('main.layoutFindQuitar'))}">${esc(t('main.layoutFindEnfocado', { name: e.name }))}<span class="bx bx-x layout-find-x" aria-hidden="true"></span></button>
+        <div class="layout-find-hide-title">${esc(t('main.layoutFindOcultar'))}</div>
+        <div class="layout-find-hide" role="group" data-help-key="layoutFindHide">${toggles.map(([key, label, n]) => {
+        const name = t(label);
+        const title = t(hide[key] ? 'main.layoutFindVerX' : 'main.layoutFindOcultarX', { name });
+        return `<button type="button" class="layout-find-toggle" data-find-hide="${key}" data-help-key="layoutFindHide" aria-pressed="${!hide[key]}" aria-label="${esc(title)}" title="${esc(title)}">${esc(name)}${n === null ? '' : ` <span class="layout-find-n">${n}</span>`}</button>`;
+    }).join('')}</div>`;
+}
+// Poner o quitar el enfoque (reset = true cuando cambió lo enfocado: el croquis y el 3D se acomodan a lo nuevo).
+let find3dReframe = false;
+function applyFind(reset) {
+    if (!state.draft) return;
+    if (reset) { resetZoom(); find3dReframe = true; }
+    renderFindBox();
+    renderSvg();
+    renderSummary();
+    applyFindToTables();
+    updateViewBtns();
+}
+function pickFind(n) {
+    const item = findItems[n];
+    if (!item) return;
+    state.find = { kind: item.kind, id: item.id };
+    state.findHide = {};
+    $('layout-find-input').value = '';
+    closeFindList();
+    applyFind(true);
+}
+$('layout-find-input').addEventListener('input', renderFindList);
+$('layout-find-input').addEventListener('focus', renderFindList);
+$('layout-find-input').addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown') { event.preventDefault(); if ($('layout-find-list').hidden) renderFindList(); else moveFindActive(1); } else if (event.key === 'ArrowUp') { event.preventDefault(); moveFindActive(-1); } else if (event.key === 'Enter') { event.preventDefault(); if (!$('layout-find-list').hidden && findActive >= 0) pickFind(findActive); } else if (event.key === 'Escape') closeFindList();
+});
+$('layout-find').addEventListener('click', (event) => {
+    const pick = event.target.closest('[data-find-pick]');
+    if (pick) { pickFind(Number(pick.getAttribute('data-find-pick'))); return; }
+    if (event.target.closest('[data-find-clear]')) { clearFind(); applyFind(true); return; }
+    const tg = event.target.closest('[data-find-hide]');
+    if (tg) {
+        const key = tg.getAttribute('data-find-hide');
+        state.findHide = { ...state.findHide, [key]: !state.findHide[key] };
+        applyFind(false);
+    }
+});
+document.addEventListener('click', (event) => { if (!event.target.closest('.layout-find-field, .layout-find-list')) closeFindList(); });
+
 const ZONE_CLASS = { dry: 'lz-dry', cold: 'lz-cold', chemical: 'lz-chem', finished: 'lz-fin', dock: 'lz-dock', office: 'lz-office', aisle: 'lz-aisle', aisle2: 'lz-aisle2' };
 function renderSvg() {
     // El croquis puede estar girado (icono Girar): todo se dibuja desde una copia girada del borrador; lo guardado y las tablas no se tocan.
     const rot = state.rotation || 0;
-    const d = rot ? LC.rotateLayout(state.draft, rot) : state.draft;
+    const full = rot ? LC.rotateLayout(state.draft, rot) : state.draft;
+    // Con un enfoque (buscar una zona o una huella) solo se dibuja lo que hay adentro: sin paredes, puertas, luz ni columnas, y con los botones de ocultar de la búsqueda (ver findLayout).
+    const d = findLayout(full);
+    const finding = d !== full;
+    const hide = state.findHide || {};
+    const sN = state.showNames && !(finding && hide.textos);
+    const sA = state.showArea && !(finding && hide.textos);
+    const sM = state.showMeasures && !(finding && hide.medidas);
     const on = stepOn;
+    const showFp = finding ? (!hide.huellas && (on('espacios') || state.find.kind === 'footprint')) : on('espacios');
+    const showSp = finding ? (!hide.activos && (on('activos') || on('posiciones'))) : (on('activos') || on('posiciones'));
     const W = 700;
     const H = 460;
     const M = 36;
@@ -763,7 +948,7 @@ function renderSvg() {
     });
     const putZone = (cls, x, y, anchor, text) => { const l = textWithHalo(cls, x, y, anchor, text); zoneHalos += l.halo; zoneLabels += l.main; };
     const putOuter = (cls, x, y, anchor, text) => { const l = textWithHalo(cls, x, y, anchor, text); outerHalos += l.halo; outerLabels += l.main; };
-    const draggable = canEdit('zonas');
+    const draggable = canEdit('zonas') && !finding;
     // Recuadros (aprox.) que ocupan los nombres y los m² de las zonas: una medida de lado que caería encima se omite (su contorno blanco borraba el nombre de la zona).
     const labelBoxes = [];
     const addBox = (x, baseline, text, size, anchor) => { labelBoxes.push(LC.labelBox(x, baseline, text, size, anchor)); };
@@ -774,7 +959,7 @@ function renderSvg() {
         const w = String(fmt(m.len)).length * 4.9 + 2;
         return !labelBoxes.some(([bx0, by0, bx1, by1]) => cxm - w / 2 < bx1 && cxm + w / 2 > bx0 && cym - 10 < by1 && cym + 3 > by0);
     }).map((m) => { const l = textWithHalo('lm', (X(m.mx) + m.nx * 9).toFixed(1), (Y(m.my) + m.ny * 9 + 3).toFixed(1), 'middle', fmt(m.len)); measureHalos += l.halo; return l.main; }).join('');
-    (on('zonas') ? d.zones : []).forEach((z) => {
+    (on('zonas') || finding ? d.zones : []).forEach((z) => {
         const typeText = z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona');
         const cls = `lz ${z.type ? (ZONE_CLASS[z.type] || 'lz-dock') : 'lz-none'}${z.active === false ? ' lz-off' : ''}${state.open.zones[z.id] ? ' lz-warn' : ''}${draggable ? ' lz-drag' : ''}`;
         const title = `<title>${esc(z.name)} · ${esc(typeText)}</title>`;
@@ -784,9 +969,9 @@ function renderSvg() {
                     ? `<g class="lzf${z.active === false ? ' lz-off' : ''}${draggable ? ' lz-drag' : ''}" data-zid="${esc(z.id)}">${window.LayoutMapSvg.zonePaint(`ef-${z.id}`, z.fmt).markup(z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' '))}${title}</g>`
                     : `<polygon class="${cls}" data-zid="${esc(z.id)}" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}">${title}</polygon>`;
                 const a = LC.zoneLabelAnchor(z);
-                const areaY = state.showNames ? Y(a.y) + 10 : Y(a.y) - 1;
-                if (state.showNames) { putZone('lt', X(a.x), Y(a.y) - 1, 'middle', esc(z.name)); addBox(X(a.x), Y(a.y) - 1, z.name, 10, 'middle'); }
-                if (state.showArea) { putZone('lt2', X(a.x), areaY, 'middle', `${fmt(LC.zoneArea(z))} m²`); addBox(X(a.x), areaY, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle'); }
+                const areaY = sN ? Y(a.y) + 10 : Y(a.y) - 1;
+                if (sN) { putZone('lt', X(a.x), Y(a.y) - 1, 'middle', esc(z.name)); addBox(X(a.x), Y(a.y) - 1, z.name, 10, 'middle'); }
+                if (sA) { putZone('lt2', X(a.x), areaY, 'middle', `${fmt(LC.zoneArea(z))} m²`); addBox(X(a.x), areaY, `${fmt(LC.zoneArea(z))} m²`, 8.5, 'middle'); }
                 if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureJobs.push([z.pts, 30]);
             } else if (z.pts.length) {
                 if (z.pts.length > 1) s += `<polyline class="lz-open" points="${z.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
@@ -799,9 +984,9 @@ function renderSvg() {
             : `<rect class="${cls}" data-zid="${esc(z.id)}" x="${X(z.x)}" y="${Y(z.y)}" width="${z.l * sc}" height="${z.w * sc}" rx="4">${title}</rect>`;
         const spot = LC.zoneLabelSpot(z, d.spaces, sc);
         // si el nombre cae encima del de otra zona (zonas chicas o croquis chico) se corre a otra esquina, más abajo o afuera de la zona
-        const place = LC.placeZoneLabel(z, spot, X, Y, sc, labelBoxes, state.showArea ? `${fmt(z.l * z.w)} m²` : '', !state.showNames);
+        const place = LC.placeZoneLabel(z, spot, X, Y, sc, labelBoxes, sA ? `${fmt(z.l * z.w)} m²` : '', !sN);
         const { tx, ty, anchor } = place;
-        if (state.showNames) putZone('lt', tx, ty, anchor, esc(z.name));
+        if (sN) putZone('lt', tx, ty, anchor, esc(z.name));
         if (place.withArea) putZone('lt2', tx, ty + 11, anchor, `${fmt(z.l * z.w)} m²`);
         if (place.areaOnly) putZone('lt2', tx, ty, anchor, `${fmt(z.l * z.w)} m²`);
         place.boxes.forEach((b) => labelBoxes.push(b));
@@ -809,19 +994,19 @@ function renderSvg() {
     });
     // las medidas de adentro se calculan al final, cuando ya se conocen los nombres de TODAS las zonas
     measureJobs.forEach(([pts, minPx]) => { measureLabels += measureText(pts, minPx); });
-    s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
+    if (!finding) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     (on('contorno') ? d.obstacles : []).forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
     // Huella-Espacio y Activos son capas aparte: la HUELLA (el lugar en el piso) se dibuja con su paso y va primero, blanca con borde gris o con su color; el ACTIVO va encima con el suyo, un poco más chico, con su propio color (arena si no le han puesto uno): así se distinguen aunque midan lo mismo.
-    if (on('espacios') || on('activos') || on('posiciones')) {
+    if (showFp || showSp) {
         const rectPts = (px, py, w, h) => `${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`;
-        (on('espacios') ? d.footprints : []).forEach((f) => {
+        (showFp ? d.footprints : []).forEach((f) => {
             const w = Math.max(f.l * sc, 4);
             const h = Math.max(f.d * sc, 4);
             const off = f.active === false ? ' lz-off' : '';
             if (f.fmt) s += `<g class="lhbf${off}" data-fid="${esc(f.id)}">${window.LayoutMapSvg.zonePaint(`hf-${f.id}`, f.fmt).markup(rectPts(X(f.x), Y(f.y), w, h))}</g>`;
             else s += `<rect class="lhb${off}" data-fid="${esc(f.id)}" x="${X(f.x)}" y="${Y(f.y)}" width="${w}" height="${h}" rx="2"/>`;
         });
-        ((on('activos') || on('posiciones')) ? d.spaces : []).forEach((sp) => {
+        (showSp ? d.spaces : []).forEach((sp) => {
             const w = Math.max(sp.l * sc, 4);
             const h = Math.max(sp.d * sc, 4);
             const inset = Math.max(1.5, Math.min(4, Math.min(w, h) * 0.16));
@@ -838,14 +1023,14 @@ function renderSvg() {
                 s += `<rect class="ls ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" data-fid="${esc(sp.footprintId)}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" rx="2">${spaceTitle}</rect>`;
             }
             const spaceInk = window.LayoutMapSvg.inkFor(sp.fmt || LC.FMT_ASSET_DEFAULT);
-            if (w >= 26 && h >= 9) s += `<text class="lt3"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
+            if (w >= 26 && h >= 9 && !(finding && hide.textos)) s += `<text class="lt3"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
         });
     }
-    if (on('espacios') || on('activos') || on('posiciones')) {
+    if (showFp || showSp) {
         d.footprints.forEach((f) => { if (fpIssues.has(f.id)) s += `<rect class="lbad" x="${X(f.x) - 2}" y="${Y(f.y) - 2}" width="${Math.max(f.l * sc, 4) + 4}" height="${Math.max(f.d * sc, 4) + 4}" rx="3"><title>${esc(f.code)} · ${esc(t('main.layoutHuellaFueraTitulo'))}</title></rect>`; });
     }
     const halosAt = s.length; // aquí entran después los contornos de las etiquetas de las paredes: debajo de TODOS los textos
-    s += zoneHalos + (state.showMeasures ? measureHalos : '') + zoneLabels + (state.showMeasures ? measureLabels : '');
+    s += zoneHalos + (sM ? measureHalos : '') + zoneLabels + (sM ? measureLabels : '');
     (on('puertas') ? d.doors : []).forEach((door) => {
         const w = LC.wallSegment(d.vertices, door.wall);
         const a = { x: w.p[0] + w.ux * door.dist, y: w.p[1] + w.uy * door.dist };
@@ -859,18 +1044,18 @@ function renderSvg() {
     });
     const cx = (x0 + x1) / 2;
     const cy = (y0 + y1) / 2;
-    for (let i = 1; i <= d.vertices.length; i++) {
+    for (let i = 1; i <= (finding ? 0 : d.vertices.length); i++) {
         const w = LC.wallSegment(d.vertices, i);
         const mx = (w.p[0] + w.q[0]) / 2;
         const my = (w.p[1] + w.q[1]) / 2;
         const nx = w.uy;
         const ny = -w.ux;
         const out = ((mx - cx) * nx + (my - cy) * ny) >= 0 ? 1 : -1;
-        if (state.showMeasures) putOuter('lt2', X(mx) + nx * out * 15, Y(my) + ny * out * 15 + 3, 'middle', `P${i} · ${fmt(w.length)} m`);
+        if (sM) putOuter('lt2', X(mx) + nx * out * 15, Y(my) + ny * out * 15 + 3, 'middle', `P${i} · ${fmt(w.length)} m`);
     }
-    d.vertices.forEach((p, i) => {
+    (finding ? [] : d.vertices).forEach((p, i) => {
         s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" class="lv"/>`;
-        if (state.showMeasures) putOuter('lt2', X(p[0]) + (p[0] <= cx ? -8 : 8), Y(p[1]) + (p[1] <= cy ? -7 : 14), p[0] <= cx ? 'end' : 'start', `${i + 1} · ${fmt(p[2])} m`);
+        if (sM) putOuter('lt2', X(p[0]) + (p[0] <= cx ? -8 : 8), Y(p[1]) + (p[1] <= cy ? -7 : 14), p[0] <= cx ? 'end' : 'start', `${i + 1} · ${fmt(p[2])} m`);
     });
     const bar = 5 * sc;
     s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" class="lscale"/>`;
@@ -884,7 +1069,7 @@ function renderSvg() {
 
 function renderSummary() {
     const k = LC.computeKpis(state.draft);
-    const rows = k.zones.map((z) => `<tr><td>${esc(z.name)}</td><td>${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}</td><td>${esc(z.use ? typeLabel('use', z.use) : '—')}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
+    const rows = k.zones.filter((z) => !state.find || z.id === findZoneId()).map((z) => `<tr><td>${esc(z.name)}</td><td>${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}</td><td>${esc(z.use ? typeLabel('use', z.use) : '—')}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
     // Tabla del sistema: encabezado sombreado y, para quien tiene el icono Filtros en el árbol, el embudo de filtros de todas las tablas en cada encabezado (se vuelve a enganchar en cada dibujo y conserva los filtros).
     const filterable = !!(state.perms && state.perms.canFilterTables);
     const heads = ['main.layoutZona', 'main.layoutTipoZona', 'main.layoutUsoZona', 'main.layoutSuperficie', 'main.layoutEspacios', 'main.layoutHuella', 'main.layoutOcupacion', 'main.layoutVolumen'];
@@ -913,6 +1098,8 @@ function refreshLive() {
     renderKpis();
     renderSvg();
     renderSummary();
+    renderFindBox();
+    applyFindToTables();
     // "Misma altura en todas": muestra la altura común, o queda vacía si las esquinas ya tienen alturas distintas (sin tocarla mientras se escribe en ella).
     const sameBox = document.querySelector('[data-l="allHeights"]');
     if (sameBox && document.activeElement !== sameBox) {
@@ -1869,7 +2056,7 @@ function translateFrom(start, z, dx, dy) {
 }
 $('layout-svg').addEventListener('pointerdown', (event) => {
     const el = event.target.closest('[data-zid]');
-    if (!el || !state.draft || !canEdit('zonas')) return;
+    if (!el || !state.draft || !canEdit('zonas') || state.find) return; // con un enfoque no se arrastran zonas (el croquis se acomoda a lo enfocado)
     const z = state.draft.zones.find((r) => r.id === el.getAttribute('data-zid'));
     if (!z) return;
     drag = { id: z.id, px: event.clientX, py: event.clientY, start: clone(z), moved: false };
@@ -1949,6 +2136,12 @@ const scene3dLayers = { walls: true, doors: true, power: true, columns: true, zo
 // Posiciones = activos). La lista Capas ya NO repite los pasos: solo lleva lo que no es un paso, Paredes y Columnas, para esconderlos aunque Contorno esté encendido (por ejemplo para ver todo el piso).
 function effective3dLayers() {
     const on = (name) => scene3dLayers[name] !== false;
+    // con un enfoque solo cuenta lo enfocado: sin paredes, columnas, puertas ni luz, y con los botones de ocultar de la búsqueda
+    const f = state.find;
+    if (f) {
+        const hide = state.findHide || {};
+        return { walls: false, columns: false, doors: false, power: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
+    }
     return {
         walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas'), zones: stepOn('zonas'),
         footprints: stepOn('espacios'), power: stepOn('luz'), assets: stepOn('activos') || stepOn('posiciones'),
@@ -2006,11 +2199,17 @@ function show3dInfo(sel) {
 function refreshScene3d() {
     if (!(scene3d && state.view3d && state.draft)) return;
     // el selector se actualiza con el borrador (lo que se ocultó y ya no existe se olvida) y la escena se arma una sola vez
+    const shown = findLayout(state.draft); // con un enfoque, el 3D solo trae lo enfocado
     if (picker3d) {
-        picker3d.setData({ spaces: state.draft.spaces.filter((s) => s.active !== false), zones: state.draft.zones.filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name })) });
+        picker3d.setData({ spaces: shown.spaces.filter((s) => s.active !== false), zones: shown.zones.filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name })) });
         scene3d.setHiddenAssets(picker3d.getHidden(), false);
     }
-    scene3d.update(state.draft, { labels: scene3dLabels, layers: effective3dLayers() });
+    scene3d.update(shown, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers() });
+    if (find3dReframe) {
+        find3dReframe = false;
+        scene3d.setView('general');
+        document.querySelectorAll('.layout-3d-view').forEach((b) => b.classList.toggle('on', b.getAttribute('data-view') === 'general'));
+    }
     applyHighlight3d();
     updateViewBtns();
 }

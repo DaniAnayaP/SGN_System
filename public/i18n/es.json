@@ -1807,6 +1807,20 @@
     "layoutCambiarCentroConfirm": "Tienes cambios sin guardar en este Layout. Si cambias de centro de costos se descartan. ¿Cambiar de todos modos?",
     "layoutCentroChip": "Layout de {name}",
     "layout3dCapasBtn": "Mostrar u ocultar las capas del 3D",
+    "layoutBuscarBtn": "Buscar una zona o una huella",
+    "layoutBuscarPlaceholder": "Buscar zona o huella",
+    "layoutFindZona": "zona",
+    "layoutFindHuella": "huella",
+    "layoutFindEnfocado": "Enfocado: {name}",
+    "layoutFindQuitar": "Quitar el enfoque y ver toda la nave",
+    "layoutFindOcultar": "Ocultar",
+    "layoutFindHuellas": "Huellas",
+    "layoutFindActivos": "Activos",
+    "layoutFindTextos": "Textos",
+    "layoutFindMedidas": "Medidas",
+    "layoutFindOcultarX": "Ocultar {name}",
+    "layoutFindVerX": "Ver {name}",
+    "layoutFindSin": "Sin resultados",
     "layout3dCapaWalls": "Paredes",
     "layout3dCapaDoors": "Puertas",
     "layout3dCapaPower": "Conexiones de luz",
@@ -4017,6 +4031,18 @@
     "layout3dAssetsPick": {
       "what": "Abre una lista para elegir CUÁLES activos se ven en el 3D (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Marca o desmarca uno por uno, una zona completa con la casilla de la zona, o usa Todos y Ninguno (actúan sobre lo que muestra la lista; con el buscador vacío, sobre todos). El buscador entiende los mismos signos de todos los filtros: coma para otra búsqueda, $ antes y @ después. El icono queda marcado cuando hay activos ocultos. Solo cambia lo que ves; no modifica el Layout.",
       "example": "quieres ver solo R-07 y T-03 para revisar sus alturas: pulsas Ninguno, buscas R-07 y marcas el anaquel, luego buscas T-03 y marcas la tarima."
+    },
+    "layoutFind": {
+      "what": "Busca una zona o una huella, por su código o su nombre, y el croquis, el 3D, las tablas y el resumen se quedan solo con lo que hay adentro; el resto de la nave se oculta. Las tablas no pierden renglones: los que no son de lo enfocado solo se esconden. Es solo de pantalla: no cambia lo guardado ni lo que se imprime.",
+      "example": "escribes «Zona 6» y eliges la zona: el croquis se acerca y solo se ven sus huellas y activos; escribes «H005» y solo se ven sus activos."
+    },
+    "layoutFindChip": {
+      "what": "Dice qué zona o huella estás viendo. Al tocarlo se quita el enfoque y vuelve a verse toda la nave.",
+      "example": "tocas «Enfocado: Zona 6» y regresas a ver todas las zonas."
+    },
+    "layoutFindHide": {
+      "what": "Botones para ir ocultando lo que no quieres ver de lo enfocado: Huellas, Activos, Textos (nombres, m² y códigos) y Medidas. Un toque lo quita del dibujo; otro toque lo regresa. El número dice cuántos hay.",
+      "example": "quitas Activos y solo quedan las huellas de la zona; quitas Textos y desaparecen los nombres."
     },
     "layout3dLayers": {
       "what": "En 3D, las capas siguen los mismos pasos que el croquis: cuando enciendes un paso (Contorno, Puertas, Zonas, Huella-Espacio, Energía Eléctrica, Activos) se ve su capa y cuando lo apagas se oculta. La lista Capas solo trae lo que no tiene un paso propio: Paredes y Columnas, para esconderlas aunque Contorno esté encendido. Lo que ocultas deja de verse y de poder tocarse. La lista se recuerda en este navegador.",

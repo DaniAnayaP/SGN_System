@@ -1807,6 +1807,20 @@
     "layoutCambiarCentroConfirm": "You have unsaved changes in this Layout. If you switch cost center they are discarded. Switch anyway?",
     "layoutCentroChip": "Layout of {name}",
     "layout3dCapasBtn": "Show or hide the 3D layers",
+    "layoutBuscarBtn": "Search a zone or a footprint",
+    "layoutBuscarPlaceholder": "Search zone or footprint",
+    "layoutFindZona": "zone",
+    "layoutFindHuella": "footprint",
+    "layoutFindEnfocado": "Focused: {name}",
+    "layoutFindQuitar": "Remove the focus and see the whole warehouse",
+    "layoutFindOcultar": "Hide",
+    "layoutFindHuellas": "Footprints",
+    "layoutFindActivos": "Assets",
+    "layoutFindTextos": "Texts",
+    "layoutFindMedidas": "Measures",
+    "layoutFindOcultarX": "Hide {name}",
+    "layoutFindVerX": "Show {name}",
+    "layoutFindSin": "No results",
     "layout3dCapaWalls": "Walls",
     "layout3dCapaDoors": "Doors",
     "layout3dCapaPower": "Power connections",
@@ -4018,6 +4032,18 @@
     "layout3dAssetsPick": {
       "what": "Opens a list to choose WHICH assets show in the 3D (racks, racks with pallets, cabinets and pallets). Tick or untick one by one, a whole zone with the zone's checkbox, or use All and None (they act on what the list shows; with an empty search, on all of them). The search understands the same signs as every filter: comma for another search, $ before and @ after. The icon stays marked while some assets are hidden. It only changes what you see; it does not modify the Layout.",
       "example": "you want to see only R-07 and T-03 to check their heights: press None, search R-07 and tick the rack, then search T-03 and tick the pallet."
+    },
+    "layoutFind": {
+      "what": "Search a zone or a footprint, by its code or its name, and the map, the 3D view, the tables and the summary keep only what is inside it; the rest of the warehouse is hidden. The tables do not lose rows: the ones that are not part of the focus are just tucked away. It is screen-only: it changes nothing that is saved or printed.",
+      "example": "you type “Zone 6” and pick the zone: the map zooms in and only its footprints and assets show; you type “H005” and only its assets show."
+    },
+    "layoutFindChip": {
+      "what": "Says which zone or footprint you are looking at. Touching it removes the focus and the whole warehouse is shown again.",
+      "example": "you touch “Focused: Zone 6” and go back to seeing all the zones."
+    },
+    "layoutFindHide": {
+      "what": "Buttons to hide what you do not want to see of what is focused: Footprints, Assets, Texts (names, m² and codes) and Measures. One touch removes it from the drawing; another brings it back. The number says how many there are.",
+      "example": "you remove Assets and only the footprints of the zone remain; you remove Texts and the names disappear."
     },
     "layout3dLayers": {
       "what": "In 3D the layers follow the same steps as the map: when you turn a step on (Outline, Doors, Zones, Footprint-Space, Electrical Power, Assets) its layer is shown and when you turn it off it is hidden. The Layers list only has what does not have a step of its own: Walls and Columns, to hide them even if Outline is on. What you hide is no longer seen or touchable. The list is remembered in this browser.",

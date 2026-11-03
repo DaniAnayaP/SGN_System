@@ -485,6 +485,14 @@
                                             <button type="button" class="layout-mode-btn" id="layout-view3d-btn" aria-pressed="false" hidden>3D</button>
                                         </div>
                                     </div>
+                                    <div class="layout-find" id="layout-find" data-help-key="layoutFind" hidden>
+                                        <div class="layout-find-field">
+                                            <span class="bx bx-search layout-find-ico" aria-hidden="true"></span>
+                                            <input type="search" id="layout-find-input" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="layout-find-list" aria-autocomplete="list" data-help-key="layoutFind" data-i18n-placeholder="main.layoutBuscarPlaceholder" data-i18n-aria-label="main.layoutBuscarBtn" placeholder="Search zone or footprint">
+                                        </div>
+                                        <div class="layout-find-list" id="layout-find-list" role="listbox" hidden></div>
+                                        <div class="layout-find-state" id="layout-find-state"></div>
+                                    </div>
                                     <div class="layout-vopts layout-only3d">
                                         <div class="layout-3d-views" role="group" data-help-key="layout3dViews">
                                             <button type="button" class="layout-3d-view on" data-view="general" data-help-key="layout3dViews" data-i18n="main.layout3dGeneral">Overview</button>

@@ -6500,6 +6500,8 @@ function layoutPermissions(req) {
         canView3D: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutVista3D'),
         // Mostrar u ocultar las capas del 3D (paredes, puertas, luz, columnas, zonas y activos) son iconos de un mismo grupo, con su hoja (iconLayout3dCapas).
         canToggle3dLayers: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayout3dCapas'),
+        // Buscar una zona o una huella (la barra de Visualizaciones que enfoca el croquis, el 3D, las tablas y el resumen) usa el icono Buscar (hoja <pantalla>/iconLayoutBuscar).
+        canFind: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutBuscar'),
         // "QR y descarga" por Zona (la hoja con las categorías de los códigos que hay en la zona) se usa con el icono Imprimir por zona (hoja <pantalla>/iconLayoutImprimirZona).
         canPrintZone: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutImprimirZona'),
         // Girar el croquis (en pantalla y en la hoja que se descarga) usa el icono Girar (hoja <pantalla>/iconLayoutGirar del árbol).
