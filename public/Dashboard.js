@@ -62,6 +62,22 @@
     };
 })();
 
+// --- Mensaje de sesión terminada en el idioma de la interfaz -------------------------------------------------------------------
+// La sesión dura 8 horas: al vencerse, el navegador borra la cookie y el servidor contesta 401 "Not authenticated." (o "Invalid or expired session."). Casi todas las pantallas muestran el
+// mensaje del servidor tal cual, así que salía en inglés aunque la interfaz estuviera en español. Aquí se cambia, para esos dos mensajes, por el texto de main.sessionExpired (mismo
+// status 401, y se agrega code: 'SESSION_EXPIRED'); las demás respuestas pasan intactas.
+(function installSessionMessagePatch() {
+    const SESSION_MESSAGES = new Set(['Not authenticated.', 'Invalid or expired session.']);
+    const previous = window.fetch.bind(window);
+    window.fetch = async function (...args) {
+        const res = await previous(...args);
+        if (res.status !== 401) return res;
+        const body = await res.clone().json().catch(() => null);
+        if (!body || !SESSION_MESSAGES.has(body.message)) return res;
+        return new Response(JSON.stringify({ ...body, code: body.code || 'SESSION_EXPIRED', message: t('main.sessionExpired') }), { status: 401, statusText: res.statusText, headers: { 'Content-Type': 'application/json' } });
+    };
+})();
+
 // --- Toast notifications (Éxito/Error/Info/Advertencia) --------------------
 // Dashboard.showToast(message, type, { title, duration }) -- a lightweight
 // replacement for the ad-hoc alert()/inline-error-text patterns scattered
