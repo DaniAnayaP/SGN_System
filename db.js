@@ -5241,18 +5241,19 @@ db.exec(`
 const CLEANING_SELECT = `SELECT r.*, CASE WHEN r.finished_at IS NULL THEN NULL ELSE CAST(strftime('%s', r.finished_at) AS INTEGER) - CAST(strftime('%s', r.started_at) AS INTEGER) END AS seconds,
     EXISTS(SELECT 1 FROM cleaning_photos p WHERE p.record_id = r.id AND p.kind = 'before') AS has_before, EXISTS(SELECT 1 FROM cleaning_photos p WHERE p.record_id = r.id AND p.kind = 'after') AS has_after FROM cleaning_records r`;
 // Empieza una limpieza: la hora la pone el servidor y la foto de «antes» se guarda en la misma operación. Devuelve el id y la clave con la que ese teléfono la termina.
-function startCleaningRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, photo, source = 'qr' }) {
+function startCleaningRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, photo, thumb, source = 'qr' }) {
     const key = generatePublicToken();
     return db.transaction(() => {
         const info = db.prepare(`INSERT INTO cleaning_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, started_at, finish_key, source)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', key, source);
         db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'before', ?, ?)").run(info.lastInsertRowid, photo.mime, photo.data);
+        if (thumb) db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'before_thumb', ?, ?)").run(info.lastInsertRowid, thumb.mime, thumb.data);
         const row = db.prepare('SELECT started_at FROM cleaning_records WHERE id = ?').get(info.lastInsertRowid);
         return { id: Number(info.lastInsertRowid), key, startedAt: row.started_at };
     })();
 }
 // Termina SU limpieza: debe coincidir cliente, centro, activo y clave, y no estar terminada. La foto de «después» y la hora de fin se guardan juntas.
-function finishCleaningRecord({ clientId, costCenterId, spaceId, id, key, photo }) {
+function finishCleaningRecord({ clientId, costCenterId, spaceId, id, key, photo, thumb }) {
     return db.transaction(() => {
         const row = db.prepare('SELECT id, finish_key, finished_at FROM cleaning_records WHERE id = ? AND client_id = ? AND cost_center_id = ? AND space_id = ?').get(id, clientId, costCenterId || 0, spaceId);
         if (!row) return { error: 'notfound' };
@@ -5260,6 +5261,7 @@ function finishCleaningRecord({ clientId, costCenterId, spaceId, id, key, photo 
         if (row.finished_at) return { error: 'done' };
         db.prepare("UPDATE cleaning_records SET finished_at = datetime('now') WHERE id = ?").run(id);
         db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'after', ?, ?)").run(id, photo.mime, photo.data);
+        if (thumb) db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'after_thumb', ?, ?)").run(id, thumb.mime, thumb.data);
         return { ok: true, record: db.prepare(`${CLEANING_SELECT} WHERE r.id = ?`).get(id) };
     })();
 }
@@ -5311,13 +5313,15 @@ db.exec(`
 `);
 // La humedad (%) que marcaba el refrigerador: se agregó después (las lecturas anteriores quedan sin ese dato).
 if (!db.prepare('PRAGMA table_info(temperature_records)').all().some((c) => c.name === 'humidity')) db.exec('ALTER TABLE temperature_records ADD COLUMN humidity REAL');
+// La miniatura de la foto (la manda el teléfono, unos 160 px): las tablas y listas la usan en vez de la foto completa. Las lecturas anteriores no la tienen y se sigue mostrando la completa.
+if (!db.prepare('PRAGMA table_info(temperature_photos)').all().some((c) => c.name === 'thumb')) { db.exec('ALTER TABLE temperature_photos ADD COLUMN thumb_mime TEXT'); db.exec('ALTER TABLE temperature_photos ADD COLUMN thumb BLOB'); }
 const TEMPERATURE_SELECT = `SELECT r.*, EXISTS(SELECT 1 FROM temperature_photos p WHERE p.record_id = r.id) AS has_photo FROM temperature_records r`;
 // Guarda una lectura: la hora la pone el servidor y la foto se guarda en la misma operación.
-function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, photo, source = 'qr' }) {
+function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, photo, thumb, source = 'qr' }) {
     return db.transaction(() => {
         const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, humidity, checked_at, source)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, humidity === undefined ? null : humidity, source);
-        db.prepare('INSERT INTO temperature_photos (record_id, mime, data) VALUES (?, ?, ?)').run(info.lastInsertRowid, photo.mime, photo.data);
+        db.prepare('INSERT INTO temperature_photos (record_id, mime, data, thumb_mime, thumb) VALUES (?, ?, ?, ?, ?)').run(info.lastInsertRowid, photo.mime, photo.data, thumb ? thumb.mime : null, thumb ? thumb.data : null);
         return db.prepare(`${TEMPERATURE_SELECT} WHERE r.id = ?`).get(info.lastInsertRowid);
     })();
 }
@@ -5332,7 +5336,12 @@ function listTemperatureRecords(clientId, { costCenterId, spaceId, limit } = {})
 function getTemperatureRecord(id, clientId) {
     return db.prepare(`${TEMPERATURE_SELECT} WHERE r.id = ? AND r.client_id = ?`).get(id, clientId);
 }
-function getTemperaturePhoto(recordId) {
+// small = true: la miniatura (si esa foto la tiene, sin leer la foto completa); si no, la foto completa.
+function getTemperaturePhoto(recordId, small = false) {
+    if (small) {
+        const th = db.prepare('SELECT thumb_mime AS mime, thumb AS data FROM temperature_photos WHERE record_id = ? AND thumb IS NOT NULL').get(recordId);
+        if (th) return th;
+    }
     return db.prepare('SELECT mime, data FROM temperature_photos WHERE record_id = ?').get(recordId);
 }
 function deleteTemperatureRecord(id, clientId) {

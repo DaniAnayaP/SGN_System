@@ -113,6 +113,7 @@ let skew = 0;             // diferencia entre el reloj del servidor y el del tel
 let running = store.get(KEY_RUN); // { id, key, startedAt, name } si este teléfono tiene una limpieza empezada
 let stream = null;
 let tick = null;
+let draftThumb = '';
 let draftPhoto = '';      // la foto tomada que todavía no se confirma
 let lastResult = null;    // la limpieza que se acaba de terminar
 let note = '';
@@ -180,10 +181,21 @@ async function viewCamera(kind, name) {
         stopCamera();
         if (!photo) { note = TEXT.errPhoto; viewCamera(kind, name); return; }
         draftPhoto = photo;
+        draftThumb = lastThumb;
         viewConfirm(kind, name);
     });
 }
 
+// La miniatura (160 px de lado mayor) que viaja junto a la foto: las tablas y listas usan esa y no la foto completa.
+let lastThumb = '';
+function thumbOf(canvas) {
+    const k = Math.min(1, 160 / Math.max(canvas.width, canvas.height));
+    const small = document.createElement('canvas');
+    small.width = Math.max(1, Math.round(canvas.width * k));
+    small.height = Math.max(1, Math.round(canvas.height * k));
+    small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
+    return small.toDataURL('image/jpeg', 0.6);
+}
 // La foto se toma de la imagen en vivo y se reduce (máx. 1024 px de lado, JPEG): así pesa poco aunque la cámara sea de 12 megapíxeles.
 function capture(video) {
     const w = video.videoWidth; const h = video.videoHeight;
@@ -195,7 +207,7 @@ function capture(video) {
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     for (const q of [0.72, 0.6, 0.5, 0.4]) {
         const url = canvas.toDataURL('image/jpeg', q);
-        if (url.length * 0.75 < 420 * 1024) return url;
+        if (url.length * 0.75 < 420 * 1024) { lastThumb = thumbOf(canvas); return url; }
     }
     return '';
 }
@@ -226,7 +238,7 @@ async function post(path, body) {
     return json;
 }
 async function sendStart(name) {
-    const out = await post('start', { name, photo: draftPhoto });
+    const out = await post('start', { name, photo: draftPhoto, thumb: draftThumb });
     skew = new Date(out.now).getTime() - Date.now();
     running = { id: out.id, key: out.key, startedAt: out.startedAt, name };
     store.set(KEY_RUN, running);
@@ -235,7 +247,7 @@ async function sendStart(name) {
     viewRunning();
 }
 async function sendFinish() {
-    const out = await post('finish', { id: running.id, key: running.key, photo: draftPhoto });
+    const out = await post('finish', { id: running.id, key: running.key, photo: draftPhoto, thumb: draftThumb });
     store.del(KEY_RUN);
     lastResult = out;
     running = null;
@@ -271,13 +283,13 @@ function viewDone() {
 }
 
 function viewRecords() {
-    const photo = (r, kind) => (kind === 'before' ? r.hasBefore : r.hasAfter) ? `<img data-view="${r.id}:${kind}" alt="${esc(kind === 'before' ? TEXT.before : TEXT.after)}" loading="lazy" src="${API}/photo/${r.id}/${kind}">` : '<i></i>';
+    const photo = (r, kind) => (kind === 'before' ? r.hasBefore : r.hasAfter) ? `<img data-view="${r.id}:${kind}" alt="${esc(kind === 'before' ? TEXT.before : TEXT.after)}" loading="lazy" src="${API}/photo/${r.id}/${kind}?thumb=1">` : '<i></i>';
     const rows = info.records.map((r) => `<div class="item">${photo(r, 'before')}${photo(r, 'after')}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.startedAt))} · ${esc(fmtTime(r.startedAt))}${r.finishedAt ? ` → ${esc(fmtTime(r.finishedAt))}` : ''}</small></div>${r.finishedAt ? `<span class="tag">${esc(fmtDuration(r.seconds))}</span>` : `<span class="chip">${esc(TEXT.inProgress)}</span>`}</div>`).join('');
     show(`<div class="card"><h1>${esc(TEXT.recordsTitle)}</h1>${placeHtml()}<span class="muted">${esc(TEXT.readOnly)}</span>
         <div class="list">${rows || `<div class="muted">${esc(TEXT.noRecords)}</div>`}</div>
         <button type="button" class="link" id="back">${esc(TEXT.back)}</button></div>`);
     $('back').addEventListener('click', () => { if (running) viewRunning(); else viewHome(); });
-    $('view').querySelectorAll('[data-view]').forEach((img) => img.addEventListener('click', () => { $('viewer').querySelector('img').src = img.src; $('viewer').hidden = false; }));
+    $('view').querySelectorAll('[data-view]').forEach((img) => img.addEventListener('click', () => { $('viewer').querySelector('img').src = img.src.replace('?thumb=1', '');  $('viewer').hidden = false; }));
 }
 $('viewer-close').addEventListener('click', () => { $('viewer').hidden = true; });
 $('viewer').addEventListener('click', (event) => { if (event.target === $('viewer')) $('viewer').hidden = true; });

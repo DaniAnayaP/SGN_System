@@ -70,7 +70,7 @@ function photoCell(col, r, kind, has) {
     const img = document.createElement('img');
     img.loading = 'lazy';
     img.alt = '';
-    img.src = `${API}/${r.id}/photo/${kind}`;
+    img.src = `${API}/${r.id}/photo/${kind}?thumb=1`; // la miniatura; el visor abre la foto completa
     btn.appendChild(img);
     btn.addEventListener('click', () => openViewer(r, kind));
     td.appendChild(btn);

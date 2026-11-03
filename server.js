@@ -6974,6 +6974,17 @@ function parseCleaningPhoto(raw) {
     const ok = (m[1] === 'image/jpeg' && data[0] === 0xff && data[1] === 0xd8) || (m[1] === 'image/png' && data[0] === 0x89 && data[1] === 0x50) || (m[1] === 'image/webp' && data.subarray(0, 4).toString() === 'RIFF');
     return ok ? { mime: m[1], data } : null;
 }
+// La miniatura que manda el teléfono junto a la foto (unos 160 px): opcional y chica (hasta ~40 KB); si no es una imagen de verdad se ignora (no se rechaza la foto).
+function parseThumb(raw) {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(typeof raw === 'string' ? raw : '');
+    if (!m) return null;
+    const data = Buffer.from(m[2], 'base64');
+    if (!data.length || data.length > 40 * 1024) return null;
+    const ok = (m[1] === 'image/jpeg' && data[0] === 0xff && data[1] === 0xd8) || (m[1] === 'image/png' && data[0] === 0x89 && data[1] === 0x50) || (m[1] === 'image/webp' && data.subarray(0, 4).toString() === 'RIFF');
+    return ok ? { mime: m[1], data } : null;
+}
+// Con ?thumb=1 se manda la miniatura de esa foto (si la tiene); si no, la foto completa.
+const cleaningPhotoFor = (id, req) => (req.query.thumb === '1' && getCleaningPhoto(id, `${req.params.kind}_thumb`)) || getCleaningPhoto(id, req.params.kind);
 const publicCleaningRecord = (r) => ({ id: r.id, name: r.person_name, startedAt: sqlUtcIso(r.started_at), finishedAt: sqlUtcIso(r.finished_at), seconds: r.seconds, hasBefore: !!r.has_before, hasAfter: !!r.has_after });
 app.get('/l/:token/:spaceId', publicLayoutLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(self)' });
@@ -7000,7 +7011,7 @@ app.post('/api/public/cleaning/:token/:spaceId/start', publicCleaningLimiter, (r
     const photo = parseCleaningPhoto(req.body && req.body.photo);
     if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
     const { row, space, footprint, zone, locator } = target;
-    const started = startCleaningRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, photo });
+    const started = startCleaningRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, photo, thumb: parseThumb(req.body && req.body.thumb) });
     res.set('Cache-Control', 'no-store');
     res.status(201).json({ id: started.id, key: started.key, startedAt: sqlUtcIso(started.startedAt), now: new Date().toISOString() });
 });
@@ -7012,7 +7023,7 @@ app.post('/api/public/cleaning/:token/:spaceId/finish', publicCleaningLimiter, (
     const photo = parseCleaningPhoto(req.body && req.body.photo);
     if (!Number.isInteger(id) || id < 1 || !/^[0-9a-f]{32}$/.test(key)) return res.status(400).json({ message: 'Datos no válidos.' });
     if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
-    const done = finishCleaningRecord({ clientId: target.row.clientId, costCenterId: target.row.costCenterId || 0, spaceId: target.space.id, id, key, photo });
+    const done = finishCleaningRecord({ clientId: target.row.clientId, costCenterId: target.row.costCenterId || 0, spaceId: target.space.id, id, key, photo, thumb: parseThumb(req.body && req.body.thumb) });
     if (done.error === 'notfound' || done.error === 'key') return res.status(404).json({ message: 'Not found.' });
     if (done.error === 'done') return res.status(409).json({ message: 'Esa limpieza ya se terminó.', code: 'DONE' });
     res.set('Cache-Control', 'no-store');
@@ -7024,7 +7035,7 @@ app.get('/api/public/cleaning/:token/:spaceId/photo/:id/:kind', publicLayoutLimi
     if (!target || !Number.isInteger(id) || !['before', 'after'].includes(req.params.kind)) return res.status(404).end();
     const rec = getCleaningRecord(id, target.row.clientId);
     if (!rec || rec.space_id !== target.space.id || rec.cost_center_id !== (target.row.costCenterId || 0)) return res.status(404).end();
-    const photo = getCleaningPhoto(id, req.params.kind);
+    const photo = cleaningPhotoFor(id, req);
     if (!photo) return res.status(404).end();
     res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
     res.send(photo.data);
@@ -7055,7 +7066,7 @@ app.get('/api/business/cleanings/:id/photo/:kind', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).end();
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || !['before', 'after'].includes(req.params.kind) || !getCleaningRecord(id, req.user.clientId)) return res.status(404).end();
-    const photo = getCleaningPhoto(id, req.params.kind);
+    const photo = cleaningPhotoFor(id, req);
     if (!photo) return res.status(404).end();
     res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' });
     res.send(photo.data);
@@ -7142,7 +7153,7 @@ app.post('/api/public/temperature/:token/:spaceId/reading', publicCleaningLimite
     const photo = parseCleaningPhoto(req.body && req.body.photo);
     if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
     const { row, space, footprint, zone, locator } = target;
-    const saved = addTemperatureRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature: Math.round(temperature * 10) / 10, humidity, photo });
+    const saved = addTemperatureRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature: Math.round(temperature * 10) / 10, humidity, photo, thumb: parseThumb(req.body && req.body.thumb) });
     res.set('Cache-Control', 'no-store');
     res.status(201).json(publicTemperatureRecord(saved));
 });
@@ -7152,7 +7163,7 @@ app.get('/api/public/temperature/:token/:spaceId/photo/:id', publicLayoutLimiter
     if (!target || !Number.isInteger(id)) return res.status(404).end();
     const rec = getTemperatureRecord(id, target.row.clientId);
     if (!rec || rec.space_id !== target.space.id || rec.cost_center_id !== (target.row.costCenterId || 0)) return res.status(404).end();
-    const photo = getTemperaturePhoto(id);
+    const photo = getTemperaturePhoto(id, req.query.thumb === '1');
     if (!photo) return res.status(404).end();
     res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
     res.send(photo.data);
@@ -7183,7 +7194,7 @@ app.get('/api/business/temperatures/:id/photo', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).end();
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || !getTemperatureRecord(id, req.user.clientId)) return res.status(404).end();
-    const photo = getTemperaturePhoto(id);
+    const photo = getTemperaturePhoto(id, req.query.thumb === '1');
     if (!photo) return res.status(404).end();
     res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' });
     res.send(photo.data);

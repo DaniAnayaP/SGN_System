@@ -111,6 +111,7 @@ const store = {
 let info = null;          // lo que contesta el servidor: activo y registros
 let stream = null;
 let draft = { name: '', temp: '', hum: '' }; // lo que se escribió antes de la foto (se conserva si se repite la foto)
+let draftThumb = '';
 let draftPhoto = '';      // la foto tomada que todavía no se confirma
 let lastResult = null;    // la lectura que se acaba de guardar
 let note = '';
@@ -199,10 +200,21 @@ async function viewCamera() {
         stopCamera();
         if (!photo) { note = TEXT.errPhoto; viewCamera(); return; }
         draftPhoto = photo;
+        draftThumb = lastThumb;
         viewConfirm();
     });
 }
 
+// La miniatura (160 px de lado mayor) que viaja junto a la foto: las tablas y listas usan esa y no la foto completa.
+let lastThumb = '';
+function thumbOf(canvas) {
+    const k = Math.min(1, 160 / Math.max(canvas.width, canvas.height));
+    const small = document.createElement('canvas');
+    small.width = Math.max(1, Math.round(canvas.width * k));
+    small.height = Math.max(1, Math.round(canvas.height * k));
+    small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
+    return small.toDataURL('image/jpeg', 0.6);
+}
 // La foto se toma de la imagen en vivo y se reduce (máx. 1024 px de lado, JPEG): así pesa poco aunque la cámara sea de 12 megapíxeles.
 function capture(video) {
     const w = video.videoWidth; const h = video.videoHeight;
@@ -214,7 +226,7 @@ function capture(video) {
     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
     for (const q of [0.72, 0.6, 0.5, 0.4]) {
         const url = canvas.toDataURL('image/jpeg', q);
-        if (url.length * 0.75 < 420 * 1024) return url;
+        if (url.length * 0.75 < 420 * 1024) { lastThumb = thumbOf(canvas); return url; }
     }
     return '';
 }
@@ -240,7 +252,7 @@ function viewConfirm() {
 }
 
 async function sendReading() {
-    const res = await fetch(`${API}/reading`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: draft.name, temperature: parseTemp(draft.temp).value, humidity: parseHum(draft.hum).value, photo: draftPhoto }) });
+    const res = await fetch(`${API}/reading`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: draft.name, temperature: parseTemp(draft.temp).value, humidity: parseHum(draft.hum).value, photo: draftPhoto, thumb: draftThumb }) });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) { const e = new Error(json.message || 'error'); e.code = json.code || String(res.status); throw e; }
     lastResult = json;
@@ -264,12 +276,12 @@ function viewDone() {
 }
 
 function viewRecords() {
-    const rows = info.records.map((r) => `<div class="item">${r.hasPhoto ? `<img data-view="${r.id}" alt="${esc(TEXT.photoTitle)}" loading="lazy" src="${API}/photo/${r.id}">` : '<i></i>'}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</small></div><span class="tag">${esc(fmtTemp(r.temperature))}${r.humidity === null || r.humidity === undefined ? '' : ` · ${esc(fmtHum(r.humidity))}`}</span></div>`).join('');
+    const rows = info.records.map((r) => `<div class="item">${r.hasPhoto ? `<img data-view="${r.id}" alt="${esc(TEXT.photoTitle)}" loading="lazy" src="${API}/photo/${r.id}?thumb=1">` : '<i></i>'}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</small></div><span class="tag">${esc(fmtTemp(r.temperature))}${r.humidity === null || r.humidity === undefined ? '' : ` · ${esc(fmtHum(r.humidity))}`}</span></div>`).join('');
     show(`<div class="card"><h1>${esc(TEXT.recordsTitle)}</h1>${placeHtml()}<span class="muted">${esc(TEXT.readOnly)}</span>
         <div class="list">${rows || `<div class="muted">${esc(TEXT.noRecords)}</div>`}</div>
         <button type="button" class="link" id="back">${esc(TEXT.back)}</button></div>`);
     $('back').addEventListener('click', () => { note = ''; viewHome(); });
-    $('view').querySelectorAll('[data-view]').forEach((img) => img.addEventListener('click', () => { $('viewer').querySelector('img').src = img.src; $('viewer').hidden = false; }));
+    $('view').querySelectorAll('[data-view]').forEach((img) => img.addEventListener('click', () => { $('viewer').querySelector('img').src = img.src.replace('?thumb=1', '');  $('viewer').hidden = false; }));
 }
 $('viewer-close').addEventListener('click', () => { $('viewer').hidden = true; });
 $('viewer').addEventListener('click', (event) => { if (event.target === $('viewer')) $('viewer').hidden = true; });
