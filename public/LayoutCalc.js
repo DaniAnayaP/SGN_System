@@ -554,6 +554,55 @@
         return footprintViolations(next).filter((v) => !before.some((p) => p.id === v.id && p.kind === v.kind && p.sig === v.sig));
     }
 
+    // ---- Lista de localizadores --------------------------------------------------------------------------------------------------------------
+    // Todos los localizadores que el Layout va creando, completos o a medias: una fila por zona (Z006), por huella (Z006.H003), por activo (Z006.H003.A003) y por cada POSICIÓN completa (Z006.H003.A003.N004.C001.F001.P001,
+    // las 7 piezas). Solo cuenta lo activo. Los códigos de la zona, la huella y el activo ya son las piezas del Localizador, así que se arma uniéndolos; una huella que no está en ninguna zona (de antes de la regla) no
+    // tiene localizador. Salen en orden de lectura (la zona, sus huellas, los activos de cada una y sus posiciones). max = tope de filas (las posiciones pueden ser muchísimas): con el tope, truncated = true.
+    function locatorRows(layout, { max = 60000 } = {}) {
+        const rows = [];
+        let truncated = false;
+        if (!layout) return { rows, truncated };
+        const pad = (n) => String(n).padStart(3, '0');
+        const zones = (layout.zones || []).filter((z) => z.active !== false);
+        const footprints = (layout.footprints || []).filter((f) => f.active !== false);
+        const spaces = (layout.spaces || []).filter((s) => s.active !== false);
+        const zoneIds = new Set(zones.map((z) => z.id));
+        // lo que está en una zona apagada no sale (como la zona); una huella sin zona (o con una que ya no existe) va al final, sin localizador
+        const offZoneIds = new Set((layout.zones || []).filter((z) => z.active === false).map((z) => z.id));
+        const fpByZone = new Map();
+        footprints.forEach((f) => { if (offZoneIds.has(f.zoneId)) return; const key = zoneIds.has(f.zoneId) ? f.zoneId : ''; if (!fpByZone.has(key)) fpByZone.set(key, []); fpByZone.get(key).push(f); });
+        const spByFp = new Map();
+        spaces.forEach((s) => { if (!spByFp.has(s.footprintId)) spByFp.set(s.footprintId, []); spByFp.get(s.footprintId).push(s); });
+        const push = (row) => { if (rows.length >= max) { truncated = true; return false; } rows.push(row); return true; };
+        const groups = [...zones.map((z) => ({ zone: z, fps: fpByZone.get(z.id) || [] })), { zone: null, fps: fpByZone.get('') || [] }];
+        for (const { zone, fps } of groups) {
+            const z = zone ? { zoneId: zone.id, zoneCode: zone.code || '', zoneName: zone.name || '' } : { zoneId: '', zoneCode: '', zoneName: '' };
+            if (zone && !push({ scope: 'zone', complete: false, locator: z.zoneCode, ...z })) return { rows, truncated };
+            for (const f of fps) {
+                const fp = { footprintId: f.id, footprintCode: f.code || '', footprintName: f.name || '' };
+                const upTo = (...parts) => (zone && z.zoneCode ? [z.zoneCode, ...parts].join('.') : '');
+                if (!push({ scope: 'footprint', complete: false, locator: upTo(fp.footprintCode), ...z, ...fp })) return { rows, truncated };
+                for (const s of (spByFp.get(f.id) || [])) {
+                    const sp = { spaceId: s.id, spaceCode: s.code || '', spaceType: s.type || 'rack' };
+                    if (!push({ scope: 'asset', complete: false, locator: upTo(fp.footprintCode, sp.spaceCode), ...z, ...fp, ...sp })) return { rows, truncated };
+                    if (!zone) continue; // sin zona no hay localizador completo: no se listan sus posiciones
+                    for (let n = 1; n <= (s.levels || 1); n++) {
+                        for (let c = 1; c <= (s.slots || 1); c++) {
+                            const bay = bayOf(s, n, c);
+                            for (let r = 1; r <= bay.rows; r++) {
+                                for (let p = 1; p <= bay.depth; p++) {
+                                    const locator = upTo(fp.footprintCode, sp.spaceCode, `N${pad(n)}`, `C${pad(c)}`, `F${pad(r)}`, `P${pad(p)}`);
+                                    if (!push({ scope: 'position', complete: true, locator, ...z, ...fp, ...sp, level: n, slot: c, row: r, depth: p })) return { rows, truncated };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return { rows, truncated };
+    }
+
     function emptyLayout() {
         return {
             mode: 'scratch', heightM: 9,
@@ -1049,7 +1098,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, locatorRows, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

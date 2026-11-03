@@ -7713,6 +7713,47 @@ app.get('/api/business/code-relations', requireAuth, (req, res) => {
 
 // Todo lo que necesita la ventana "Nueva relación": centros de costos completos, almacenes, sub almacenes (con sus ubicaciones), las zonas y anaqueles del Layout de cada centro (zonesByCenter) y los espacios que ya están ocupados.
 // "zones" (las del primer Layout) se sigue mandando solo para las copias viejas de la App que todavía no conocen zonesByCenter.
+// --- Localizadores (Catálogos > Cadena de Suministro > C. Distribución) ---------------------------------------------------
+// La lista de SOLO LECTURA de todos los localizadores que el Layout de cada centro de costos va creando, completos o a medias (una fila por zona, huella, activo y posición completa). Un localizador se modifica únicamente
+// desde el Layout: aquí no hay Editar ni Nuevo. Almacén y sub almacén salen de lo que cada sub almacén físico tiene asignado (zona completa o anaqueles). Las columnas de Control Interno son las del centro (se mandan una sola
+// vez por centro, no en cada fila, porque las filas pueden ser decenas de miles).
+const LOCATOR_SCREEN_LABEL = 'Localizadores';
+const LOCATOR_ROWS_MAX = 60000;
+app.get('/api/business/locators', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId } = req.user;
+    const client = getClientById(clientId);
+    const ctx = codeRelationContext(req);
+    const subs = [...ctx.warehouses.values()].filter((r) => r.category_type === 'sub-almacenes' && r.kind === 'physical' && r.status === 'active');
+    const centers = {};
+    const locators = [];
+    let truncated = false;
+    for (const layoutRow of listClientLayouts(clientId)) {
+        const cc = ctx.costCenters.get(layoutRow.costCenterId);
+        if (!cc) continue;
+        const homes = subs
+            .map((s) => ({ wh: ctx.warehouses.get(s.parent_id), sub: s, entries: parseWarehouseLocations(s.locations) }))
+            .filter((h) => h.wh && h.wh.parent_id === cc.id);
+        const built = LayoutCalc.locatorRows(layoutRow.layout, { max: LOCATOR_ROWS_MAX - locators.length });
+        if (built.truncated) truncated = true;
+        centers[cc.id] = {
+            name: cc.name, company: client ? client.company_name : '',
+            system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: LOCATOR_SCREEN_LABEL, centroCostos: cc.name, createdAt: layoutRow.updatedAt }),
+        };
+        for (const r of built.rows) {
+            const at = homes.filter((h) => r.zoneId && h.entries.some((e) => e.zoneId === r.zoneId && (!r.spaceId || !e.spaceIds.length || e.spaceIds.includes(r.spaceId))));
+            locators.push({
+                cc: cc.id, scope: r.scope, complete: r.complete, locator: r.locator,
+                zoneCode: r.zoneCode, zoneName: r.zoneName, footprintId: r.footprintId || '', footprintCode: r.footprintCode || '', footprintName: r.footprintName || '',
+                spaceCode: r.spaceCode || '', spaceType: r.spaceType || '', level: r.level || 0, slot: r.slot || 0, row: r.row || 0, depth: r.depth || 0,
+                warehouse: [...new Set(at.map((h) => h.wh.name))].join(', '), subWarehouse: [...new Set(at.map((h) => h.sub.name))].join(', '),
+            });
+        }
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json({ centers, locators, truncated, max: LOCATOR_ROWS_MAX });
+});
+
 app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;

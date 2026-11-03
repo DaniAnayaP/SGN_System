@@ -7036,6 +7036,8 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     color: var(--color-text-secondary);
     cursor: pointer;
 }
+.layout-step-link{ display: inline-flex; align-items: center; gap: 0.35rem; text-decoration: none; }
+.layout-step-link i{ font-size: 0.9rem; }
 .layout-step.active{
     background: var(--color-accent);
     color: var(--color-accent-text);

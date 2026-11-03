@@ -566,7 +566,11 @@ function renderPanel() {
         <div class="layout-section-head"><h3>${esc(t(SECTION_LABEL_KEYS[s]))}</h3>${locked ? `<span class="layout-lock" data-help-key="layoutLocked"><i class="bx bx-lock-alt" aria-hidden="true"></i> ${esc(t(level === 'solo-ver' ? 'main.layoutSoloVer' : 'main.layoutYaLlena'))}</span>` : ''}<div class="layout-head-actions"></div></div>
         <div class="layout-section-body">${stepHtml(s)}</div>
     </div>`;
-    $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${tabs}</div>${section}`;
+    // «Localizadores»: el último paso de la barra no edita nada, lleva a la lista de todos los localizadores que crea este Layout (Catálogos > Localizadores, solo lectura). Solo sale a quien tiene esa pantalla en el árbol.
+    const locatorsLink = Dashboard.hasScreenGrant('supply-chain', 'sc-area-distribution-center', 'cat-catalogos/cat-catalogos-centro-dist-localizadores')
+        ? `<a class="layout-step layout-step-link" href="CatCentroDistLocalizadores.html" data-help-key="layoutLocalizadores">${esc(t('main.layoutStepLocalizadores'))}<i class="bx bx-link-external" aria-hidden="true"></i></a>`
+        : '';
+    $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${tabs}${locatorsLink}</div>${section}`;
     // Los botones de agregar del paso suben a la fila del título, pegados a la derecha (siguen siendo los mismos botones: el clic se atiende igual).
     const headActions = document.querySelector('#layout-panel .layout-head-actions');
     if (headActions) document.querySelectorAll('#layout-panel [data-main-add]').forEach((btn) => headActions.appendChild(btn));

@@ -1284,6 +1284,57 @@
           ]
         },
         {
+          "id": "cat-catalogos-centro-dist-localizadores", "labelKey": "menu.catCentroDistLocalizadores", "abbrKeys": ["menu.catCentroDistLocalizadoresAbbr1", "menu.catCentroDistLocalizadoresAbbr2"], "icon": "bx-current-location", "href": "CatCentroDistLocalizadores.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colLocCompania", "labelKey": "main.colLocCompania", "permissionOnly": true },
+            { "id": "colLocCentroCostos", "labelKey": "main.colLocCentroCostos", "permissionOnly": true },
+            { "id": "colLocAlmacen", "labelKey": "main.colLocAlmacen", "permissionOnly": true },
+            { "id": "colLocSubAlmacen", "labelKey": "main.colLocSubAlmacen", "permissionOnly": true },
+            { "id": "colLocZona", "labelKey": "main.colLocZona", "permissionOnly": true },
+            { "id": "colLocHuella", "labelKey": "main.colLocHuella", "permissionOnly": true },
+            { "id": "colLocActivo", "labelKey": "main.colLocActivo", "permissionOnly": true },
+            { "id": "colLocNivel", "labelKey": "main.colLocNivel", "permissionOnly": true },
+            { "id": "colLocColumna", "labelKey": "main.colLocColumna", "permissionOnly": true },
+            { "id": "colLocFila", "labelKey": "main.colLocFila", "permissionOnly": true },
+            { "id": "colLocProfundidad", "labelKey": "main.colLocProfundidad", "permissionOnly": true },
+            { "id": "colLocLocalizador", "labelKey": "main.colLocLocalizador", "permissionOnly": true },
+            { "id": "colLocAlcance", "labelKey": "main.colLocAlcance", "permissionOnly": true },
+            { "id": "colLocEstado", "labelKey": "main.colLocEstado", "permissionOnly": true }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
+        },
+        {
           "id": "cat-catalogos-centro-dist-activos-fijos", "labelKey": "menu.catCentroDistActivosFijos", "abbrKeys": ["menu.catCentroDistActivosFijosAbbr1", "menu.catCentroDistActivosFijosAbbr2"], "icon": "bx-cabinet", "href": "CatCentroDistActivosFijos.html",
           "submenu": [
             {
