@@ -2368,6 +2368,7 @@ function cleanZoneOptions() {
     const n = ((state.saved && state.saved.spaces) || []).filter((s) => s.active !== false && (!select.value || s.zoneId === select.value)).length;
     $('layout-qr-clean-fine').textContent = n ? t('main.layoutQrLimpiezaCuantos', { n: fmt(n) }) : t('main.layoutQrLimpiezaVacio');
     $('layout-qr-clean-print').disabled = !n;
+    $('layout-qr-clean-download').disabled = !n;
 }
 // ---- QR de temperaturas (uno por refrigerador) -------------------------------------------------------------------------------------
 // Cada REFRIGERADOR (activo de tipo Frío) tiene su QR (la dirección fija /t/<código del Layout>/<id del activo>: no cambia nunca). Se imprime una hoja con un QR por refrigerador de la zona elegida (o de todas)
@@ -2382,30 +2383,43 @@ function tempZoneOptions() {
     const n = ((state.saved && state.saved.spaces) || []).filter((s) => isColdSpace(s) && (!select.value || s.zoneId === select.value)).length;
     $('layout-qr-temp-fine').textContent = n ? t('main.layoutQrTemperaturasCuantos', { n: fmt(n) }) : t('main.layoutQrTemperaturasVacio');
     $('layout-qr-temp-print').disabled = !n;
+    $('layout-qr-temp-download').disabled = !n;
 }
-// Hoja de QR por activo (Limpieza y Temperaturas): cada QR va en la MISMA tarjeta del Layout (LayoutSheet.buildCardSvg): encabezado con el logo (o las iniciales), el Sitio y la empresa, el título, un marco con el
-// nombre del activo sobre un fondo suave, el QR grande con su llamada arriba y el localizador al pie, todo con el color de la empresa. Se imprimen cuatro por hoja carta, cada una con su línea punteada para recortar.
+// Tarjetas de QR por activo (Limpieza y Temperaturas): cada QR va en la MISMA tarjeta del Layout (LayoutSheet.buildCardSvg): encabezado con el logo (o las iniciales), el Sitio y la empresa, el título, un marco con el
+// nombre del activo sobre un fondo suave, el QR grande con su llamada arriba y el localizador al pie, todo con el color de la empresa. Salen igual que en el Layout: una ventana donde se elige el tamaño de la tarjeta (las
+// mismas medidas rápidas, ancho y largo libres y la línea para recortar) y se baja en PDF (una tarjeta por página, de todos los activos) o en imagen (la de la vista previa); o se imprimen cuatro por hoja carta.
 const ASSET_QR_KINDS = {
-    clean: { path: '/api/business/layout/cleaning-qr', title: 'main.layoutQrLimpiezaTitulo', scan: 'main.layoutQrLimpiezaEscanea', empty: 'main.layoutQrLimpiezaVacio', icon: 'sparkle', color: '#2A9D8F', zone: 'layout-qr-clean-zone' },
-    temp: { path: '/api/business/layout/temperature-qr', title: 'main.layoutQrTemperaturasTitulo', scan: 'main.layoutQrTemperaturasEscanea', empty: 'main.layoutQrTemperaturasVacio', icon: 'thermometer', color: '#2F8FD1', zone: 'layout-qr-temp-zone' },
+    clean: { path: '/api/business/layout/cleaning-qr', title: 'main.layoutQrLimpiezaTitulo', scan: 'main.layoutQrLimpiezaEscanea', empty: 'main.layoutQrLimpiezaVacio', icon: 'sparkle', color: '#2A9D8F', zone: 'layout-qr-clean-zone', name: 'menu.opCentroDistLimpieza', file: 'QR-Limpieza' },
+    temp: { path: '/api/business/layout/temperature-qr', title: 'main.layoutQrTemperaturasTitulo', scan: 'main.layoutQrTemperaturasEscanea', empty: 'main.layoutQrTemperaturasVacio', icon: 'thermometer', color: '#2F8FD1', zone: 'layout-qr-temp-zone', name: 'menu.opCentroDistTemperaturas', file: 'QR-Temperaturas' },
 };
-async function printAssetQrCards(kind) {
+// Lo guardado que manda el servidor (los activos de la zona elegida con su QR, el color y el logo del cliente) y lo que hace falta para dibujar sus tarjetas.
+async function loadAssetQr(kind) {
     const k = ASSET_QR_KINDS[kind];
     const zone = $(k.zone).value;
     const base = layoutUrl(k.path);
     const res = await fetch(zone ? `${base}${base.includes('?') ? '&' : '?'}zone=${encodeURIComponent(zone)}` : base, { credentials: 'include' });
-    if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return; }
+    if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return null; }
     if (!res.ok) throw new Error('asset qr failed');
     const data = await res.json();
-    if (!data.spaces.length) { Dashboard.showToast(t(k.empty), 'warning'); return; }
-    const logoRatio = await logoRatioOf(data.logoDataUrl);
-    const theme = window.LayoutMapSvg.theme(data.companyColor);
-    const labels = { cardArea: t('main.layoutTarjetaArea'), cardCategory: t('main.colLimActivo').toUpperCase(), cardReview: t(k.scan), cardEmpty: '', cutCaption: '' };
-    const cards = data.spaces.map((s) => `<div class="c">${window.LayoutSheet.buildCardSvg({
-        companyName: data.companyName, siteName: data.siteName || '', logoDataUrl: data.logoDataUrl, logoRatio, theme, zoneName: t(k.title),
+    if (!data.spaces.length) { Dashboard.showToast(t(k.empty), 'warning'); return null; }
+    return {
+        k, data, logoRatio: await logoRatioOf(data.logoDataUrl), theme: window.LayoutMapSvg.theme(data.companyColor),
+        labels: { cardArea: t('main.layoutTarjetaArea'), cardCategory: t('main.colLimActivo').toUpperCase(), cardReview: t(k.scan), cardEmpty: '', cutCaption: t('main.layoutHojaRecorte') },
+    };
+}
+function assetCardSvg(ctx, s, options) {
+    const { k, data } = ctx;
+    return window.LayoutSheet.buildCardSvg({
+        companyName: data.companyName, siteName: data.siteName || '', logoDataUrl: data.logoDataUrl, logoRatio: ctx.logoRatio, theme: ctx.theme, zoneName: t(k.title),
         categories: [{ name: s.code, desc: [typeLabel('space', s.type), s.zoneName].filter(Boolean).join(' · '), icon: k.icon, color: k.color, qrRows: s.qrRows }],
-    }, { ...labels, cardFooter: s.locator }, { widthCm: 10.5, heightCm: 14.8, cut: false })}</div>`).join('');
-    const doc = `<!doctype html><html lang="${esc(Dashboard.getLanguage ? Dashboard.getLanguage() : 'es')}"><head><meta charset="utf-8"><title>${esc(t(k.title))}</title><style>
+    }, { ...ctx.labels, cardFooter: s.locator }, options);
+}
+// Imprimir: cuatro tarjetas por hoja carta, cada una con su línea punteada para recortar.
+async function printAssetQrCards(kind) {
+    const ctx = await loadAssetQr(kind);
+    if (!ctx) return;
+    const cards = ctx.data.spaces.map((s) => `<div class="c">${assetCardSvg(ctx, s, { widthCm: 10.5, heightCm: 14.8, cut: false })}</div>`).join('');
+    const doc = `<!doctype html><html lang="${esc(Dashboard.getLanguage ? Dashboard.getLanguage() : 'es')}"><head><meta charset="utf-8"><title>${esc(t(ctx.k.title))}</title><style>
         @page{ size: letter; margin: 8mm; } *{ box-sizing: border-box; } body{ margin: 0; }
         .g{ display: grid; grid-template-columns: repeat(2, 9.2cm); gap: 3mm; justify-content: center; }
         .c{ width: 9.2cm; height: 12.97cm; border: 0.3mm dashed #777; break-inside: avoid; } .c svg{ display: block; width: 100%; height: 100%; }
@@ -2416,6 +2430,109 @@ async function printAssetQrCards(kind) {
     w.document.write(doc);
     w.document.close();
     setTimeout(() => { try { w.focus(); w.print(); } catch (err) { /* el usuario puede imprimir desde la ventana */ } }, 400);
+}
+// La ventana de tamaño (la misma de la tarjeta de categorías del Layout: se recuerda la última medida en este navegador).
+let assetQr = null; // { ctx, index }
+let assetQrModalEl = null;
+const assetQrOptions = () => ({ widthCm: cardSize.w, heightCm: cardSize.h, cut: cardSize.cut });
+function renderAssetQrPreview() {
+    if (!assetQr) return;
+    const { ctx, index } = assetQr;
+    $('layout-aq-preview').innerHTML = assetCardSvg(ctx, ctx.data.spaces[index], assetQrOptions());
+    const page = window.LayoutSheet.pageFor(cardSize.w, cardSize.h, cardSize.cut);
+    const archivo = page.small ? `${t(`main.layoutHojaPag_${page.name}`)} (${fmt(page.w, 1)} × ${fmt(page.h, 1)} cm)` : t('main.layoutHojaMismo').replace('{w}', fmt(cardSize.w, 1)).replace('{h}', fmt(cardSize.h, 1));
+    $('layout-aq-info').innerHTML = `<span>${esc(t('main.layoutHojaEspacio'))}: <b>${fmt(cardSize.w, 1)} × ${fmt(cardSize.h, 1)} cm</b></span><span>${esc(t('main.layoutHojaArchivo'))}: <b>${esc(archivo)}</b></span><span>${esc(t(ctx.data.spaces.length === 1 ? 'main.layoutQrAssetNotaUno' : 'main.layoutQrAssetNota', { n: fmt(ctx.data.spaces.length) }))}</span>`;
+    document.querySelectorAll('#layout-aq-modal [data-cpre]').forEach((b) => {
+        const p = window.LayoutSheet.PRESETS.find((x) => x[0] === b.dataset.cpre);
+        b.setAttribute('aria-pressed', String(!!p && Math.abs(p[1] - cardSize.w) < 0.05 && Math.abs(p[2] - cardSize.h) < 0.05));
+    });
+}
+function closeAssetQrDialog() {
+    if (assetQrModalEl) assetQrModalEl.hidden = true;
+    assetQr = null;
+}
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && assetQr) closeAssetQrDialog(); });
+function ensureAssetQrModal() {
+    if (assetQrModalEl) return;
+    assetQrModalEl = document.createElement('div');
+    assetQrModalEl.className = 'modal-overlay';
+    assetQrModalEl.id = 'layout-aq-modal';
+    assetQrModalEl.hidden = true;
+    const presets = window.LayoutSheet.PRESETS.map(([id]) => `<button type="button" class="layout-pre" data-cpre="${id}" aria-pressed="false">${esc(t(`main.layoutHojaPre_${id}`))}</button>`).join('');
+    assetQrModalEl.innerHTML = `<div class="modal-panel layout-card-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-aq-title">
+        <h3 id="layout-aq-title"></h3>
+        <div class="layout-sizebar layout-card-bar" data-help-key="layoutSheetSize"><div class="layout-sizebar-row"><span class="layout-sizebar-title">${esc(t('main.layoutHojaTamano'))}</span><div class="layout-presets" role="group">${presets}</div></div>
+            <div class="layout-sizebar-row"><label>${esc(t('main.layoutHojaAncho'))}<input type="number" id="layout-aq-w" min="6" max="120" step="0.1" value="${cardSize.w}"></label><label>${esc(t('main.layoutHojaLargo'))}<input type="number" id="layout-aq-h" min="6" max="120" step="0.1" value="${cardSize.h}"></label><button type="button" class="btn btn-secondary" id="layout-aq-swap">${esc(t('main.layoutHojaGirar'))}</button><label class="layout-check"><input type="checkbox" id="layout-aq-cut"${cardSize.cut ? ' checked' : ''}> ${esc(t('main.layoutHojaLinea'))}</label></div>
+            <div class="layout-sizebar-row"><label>${esc(t('main.layoutQrAssetActivo'))}<select id="layout-aq-asset"></select></label></div>
+            <div class="layout-sizebar-info" id="layout-aq-info"></div></div>
+        <div class="layout-sheet-preview layout-card-preview" id="layout-aq-preview"></div>
+        <div class="layout-fmt-footer"><button type="button" class="btn" id="layout-aq-pdf" data-help-key="layoutQrPdf">${esc(t('main.layoutDescargarPdf'))}</button><button type="button" class="btn btn-secondary" id="layout-aq-png" data-help-key="layoutQrPng">${esc(t('main.layoutDescargarPng'))}</button><span class="layout-fmt-spacer"></span><button type="button" class="btn btn-secondary" id="layout-aq-close">${esc(t('main.layoutFormatoCerrar'))}</button></div>
+    </div>`;
+    document.body.appendChild(assetQrModalEl);
+    assetQrModalEl.addEventListener('click', async (event) => {
+        if (event.target === assetQrModalEl || event.target.closest('#layout-aq-close')) { closeAssetQrDialog(); return; }
+        const pre = event.target.closest('[data-cpre]');
+        if (pre) {
+            const p = window.LayoutSheet.PRESETS.find((x) => x[0] === pre.dataset.cpre);
+            cardSize.w = p[1]; cardSize.h = p[2];
+        } else if (event.target.closest('#layout-aq-swap')) {
+            [cardSize.w, cardSize.h] = [cardSize.h, cardSize.w];
+        } else if (event.target.closest('#layout-aq-pdf') || event.target.closest('#layout-aq-png')) {
+            const pdf = !!event.target.closest('#layout-aq-pdf');
+            const btn = pdf ? $('layout-aq-pdf') : $('layout-aq-png');
+            const label = btn.textContent;
+            const { ctx, index } = assetQr;
+            const day = new Date().toISOString().slice(0, 10);
+            btn.disabled = true;
+            btn.textContent = t('main.layoutQrAssetPreparando');
+            try {
+                if (pdf) {
+                    const blob = await window.LayoutSheet.renderPdfPages(ctx.data.spaces.map((s) => assetCardSvg(ctx, s, assetQrOptions())));
+                    window.LayoutSheet.saveBlob(blob, `${ctx.k.file}_${slug(ctx.data.siteName || ctx.data.companyName)}_${day}.pdf`);
+                } else {
+                    const s = ctx.data.spaces[index];
+                    window.LayoutSheet.saveBlob(await window.LayoutSheet.renderPng(assetCardSvg(ctx, s, assetQrOptions())), `${ctx.k.file}_${slug(s.code)}_${day}.png`);
+                }
+                Dashboard.showToast(t('main.layoutDescargaLista'), 'success');
+            } catch (err) {
+                console.error('Layout: las tarjetas de QR no se pudieron descargar', err);
+                Dashboard.showToast(t('main.layoutDescargaError'), 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = label;
+            }
+            return;
+        } else return;
+        $('layout-aq-w').value = cardSize.w;
+        $('layout-aq-h').value = cardSize.h;
+        saveCardSize();
+        renderAssetQrPreview();
+    });
+    assetQrModalEl.addEventListener('input', (event) => {
+        if (event.target.id === 'layout-aq-w' || event.target.id === 'layout-aq-h') {
+            const v = parseFloat(event.target.value);
+            if (!(v >= 6 && v <= 120)) return;
+            if (event.target.id === 'layout-aq-w') cardSize.w = v; else cardSize.h = v;
+        } else if (event.target.id === 'layout-aq-cut') cardSize.cut = event.target.checked;
+        else return;
+        saveCardSize();
+        renderAssetQrPreview();
+    });
+    assetQrModalEl.addEventListener('change', (event) => {
+        if (event.target.id !== 'layout-aq-asset' || !assetQr) return;
+        assetQr.index = Math.max(0, Number(event.target.value) || 0);
+        renderAssetQrPreview();
+    });
+}
+async function openAssetQrDialog(kind) {
+    const ctx = await loadAssetQr(kind);
+    if (!ctx) return;
+    ensureAssetQrModal();
+    assetQr = { ctx, index: 0 };
+    $('layout-aq-title').textContent = t('main.layoutQrAssetTitulo', { name: t(ctx.k.name) });
+    $('layout-aq-asset').innerHTML = ctx.data.spaces.map((s, i) => `<option value="${i}">${esc(s.code)}${s.zoneName ? ` · ${esc(s.zoneName)}` : ''}</option>`).join('');
+    assetQrModalEl.hidden = false;
+    renderAssetQrPreview();
 }
 function qrZoneOptions() {
     const zones = ((state.saved && state.saved.zones) || []).filter((z) => z.active !== false);
@@ -2744,6 +2861,8 @@ $('layout-qr-pop').addEventListener('click', async (event) => {
         else if (kind === 'pdf' || kind === 'png') await openSheetDialog(kind);
         else if (kind === 'link') await copyQrLink();
         else if (kind === 'clean-print') await printAssetQrCards('clean');
+        else if (kind === 'clean-download') await openAssetQrDialog('clean');
+        else if (kind === 'temp-download') await openAssetQrDialog('temp');
         else if (kind === 'temp-print') await printAssetQrCards('temp');
         else if (kind === 'regen') await regenerateQr();
     } catch (err) {

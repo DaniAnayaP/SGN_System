@@ -472,6 +472,44 @@
         const [wCm, hCm] = pageCm(svg);
         return jpegToPdf(jpeg, canvas.width, canvas.height, (wCm / 2.54) * 72, (hCm / 2.54) * 72);
     }
+    // Un PDF de varias páginas: una imagen JPEG por página, cada una del tamaño de su hoja (para bajar muchas tarjetas de una vez). pages = [{ jpeg, pxW, pxH, wPt, hPt }].
+    function jpegsToPdf(pages) {
+        const enc = new TextEncoder();
+        const parts = [];
+        const offsets = [];
+        let pos = 0;
+        const push = (data) => { const b = typeof data === 'string' ? enc.encode(data) : data; parts.push(b); pos += b.length; };
+        const r2 = (n) => Math.round(n * 100) / 100;
+        push('%PDF-1.4\n');
+        offsets[1] = pos; push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+        offsets[2] = pos; push(`2 0 obj\n<< /Type /Pages /Kids [${pages.map((_, i) => `${3 + 3 * i} 0 R`).join(' ')}] /Count ${pages.length} >>\nendobj\n`);
+        pages.forEach((p, i) => {
+            const pageNo = 3 + 3 * i; const imgNo = 4 + 3 * i; const contNo = 5 + 3 * i;
+            const W = r2(p.wPt); const H = r2(p.hPt);
+            offsets[pageNo] = pos; push(`${pageNo} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im${i} ${imgNo} 0 R >> >> /Contents ${contNo} 0 R >>\nendobj\n`);
+            offsets[imgNo] = pos; push(`${imgNo} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${p.pxW} /Height ${p.pxH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.jpeg.length} >>\nstream\n`);
+            push(p.jpeg); push('\nendstream\nendobj\n');
+            const content = `q ${W} 0 0 ${H} 0 0 cm /Im${i} Do Q`;
+            offsets[contNo] = pos; push(`${contNo} 0 obj\n<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n`);
+        });
+        const total = 3 + 3 * pages.length;
+        const xrefPos = pos;
+        let xref = `xref\n0 ${total}\n0000000000 65535 f \n`;
+        for (let i = 1; i < total; i++) xref += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+        push(`${xref}trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`);
+        return new Blob(parts, { type: 'application/pdf' });
+    }
+    // Cada SVG (una tarjeta) es una página del PDF, del tamaño que le toca; se pintan de una en una para no llenar la memoria.
+    async function renderPdfPages(svgs) {
+        const pages = [];
+        for (const svg of svgs) {
+            const canvas = await svgToCanvas(svg, pxFor(svg));
+            const jpeg = new Uint8Array(await (await canvasToBlob(canvas, 'image/jpeg', 0.9)).arrayBuffer());
+            const [wCm, hCm] = pageCm(svg);
+            pages.push({ jpeg, pxW: canvas.width, pxH: canvas.height, wPt: (wCm / 2.54) * 72, hPt: (hCm / 2.54) * 72 });
+        }
+        return jpegsToPdf(pages);
+    }
     function saveBlob(blob, filename) {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -482,5 +520,5 @@
         setTimeout(() => URL.revokeObjectURL(a.href), 8000);
     }
 
-    window.LayoutSheet = { buildSheetSvg, buildCardSvg, renderPng, renderPdf, saveBlob, jpegToPdf, pageFor, PRESETS, PAGES, LIMITS, PX_CM, qrPath, svgToCanvas, canvasToBlob, pageCm, clamp };
+    window.LayoutSheet = { buildSheetSvg, buildCardSvg, renderPng, renderPdf, renderPdfPages, jpegsToPdf, saveBlob, jpegToPdf, pageFor, PRESETS, PAGES, LIMITS, PX_CM, qrPath, svgToCanvas, canvasToBlob, pageCm, clamp };
 }());

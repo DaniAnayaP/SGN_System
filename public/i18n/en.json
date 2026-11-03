@@ -1851,7 +1851,7 @@
     "layoutQrPorLimpieza": "Cleaning",
     "layoutQrLimpiezaTodas": "All zones",
     "layoutQrLimpiezaImprimir": "Print the QR codes",
-    "layoutQrLimpiezaImprimirSub": "One QR per asset, ready to cut and stick",
+    "layoutQrLimpiezaImprimirSub": "Four per Letter page, ready to cut and stick",
     "layoutQrLimpiezaCuantos": "{n} QR codes will be printed (one per asset).",
     "layoutQrLimpiezaVacio": "There are no saved assets in that zone.",
     "layoutQrLimpiezaTitulo": "CLEANING",
@@ -2564,12 +2564,19 @@
     "colLimDeleteAuth": "Authorization to Delete",
     "layoutQrPorTemperaturas": "Temperatures",
     "layoutQrTemperaturasImprimir": "Print the QR codes",
-    "layoutQrTemperaturasImprimirSub": "One QR per refrigerator, ready to cut and stick",
+    "layoutQrTemperaturasImprimirSub": "Four per Letter page, ready to cut and stick",
     "layoutQrTemperaturasCuantos": "{n} QR codes will be printed (one per refrigerator).",
     "layoutQrTemperaturasVacio": "There are no refrigerators (Cold-type assets) saved in that zone.",
     "layoutQrTemperaturasTitulo": "TEMPERATURES",
     "layoutQrTemperaturasEscanea": "SCAN ME TO RECORD THE TEMPERATURE",
     "layoutQrTemperaturasBtn": "Temperature QR (one per refrigerator)",
+    "layoutQrAssetDescargar": "Download PDF or image",
+    "layoutQrAssetDescargarSub": "Choose the card size; the PDF has one per asset",
+    "layoutQrAssetTitulo": "QR cards · {name}",
+    "layoutQrAssetActivo": "Asset in the preview",
+    "layoutQrAssetNota": "The PDF has {n} cards, one per page; the image is the one in the preview.",
+    "layoutQrAssetNotaUno": "The PDF has 1 card (one page); the image is the one in the preview.",
+    "layoutQrAssetPreparando": "Preparing…",
     "colTmpZona": "Zone",
     "colTmpHuella": "Footprint",
     "colTmpActivo": "Asset",
@@ -4053,11 +4060,11 @@
       "example": "you want to look up a locator of another cost center: you tap the arrow and filter there."
     },
     "layoutQrTemp": {
-      "what": "Prints the temperature QR codes: one per refrigerator (the Cold-type assets), for the zone you choose or all of them. Each QR is stuck on its refrigerator and, when scanned, the person checking types their name and the temperature shown and takes the photo of the reading at that moment (the time is set by the system). The readings are seen in Operations > Temperatures.",
+      "what": "Prints the temperature QR codes: one per refrigerator (the Cold-type assets), for the zone you choose or all of them. Each QR is stuck on its refrigerator and, when scanned, the person checking types their name and the temperature shown and takes the photo of the reading at that moment (the time is set by the system). The readings are seen in Operations > Temperatures. They can also be downloaded as a PDF (one card per page) or as an image, in the size you choose, like in the Layout.",
       "example": "you choose Zone 2 and the QR of each refrigerator F001, F002… is printed; you stick them on and whoever checks scans each one, types 4.5 °C and takes the photo of the thermometer."
     },
     "layoutQrClean": {
-      "what": "Prints the cleaning QR codes: one per asset (a rack, a cabinet, a pallet, a refrigerator…), of the zone you choose or of all of them. Each QR is stuck on its asset and, when scanned, whoever cleans opens the cleaning screen of THAT asset: types a name, takes the \"before\" photo with the camera and the timer starts; when finished takes the \"after\" photo. No user needed. The QR codes never change even if the asset changes name, zone or code. The records are seen in Operations > Cleaning.",
+      "what": "Prints the cleaning QR codes: one per asset (a rack, a cabinet, a pallet, a refrigerator…), of the zone you choose or of all of them. Each QR is stuck on its asset and, when scanned, whoever cleans opens the cleaning screen of THAT asset: types a name, takes the \"before\" photo with the camera and the timer starts; when finished takes the \"after\" photo. No user needed. The QR codes never change even if the asset changes name, zone or code. The records are seen in Operations > Cleaning. They can also be downloaded as a PDF (one card per page) or as an image, in the size you choose, like in the Layout.",
       "example": "you choose Zone 6 and all its racks are printed with their QR; you stick them and the cleaning staff scans each one."
     },
     "layoutQrCls": {
