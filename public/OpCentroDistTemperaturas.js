@@ -15,7 +15,7 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
-const SEARCH_COLUMNS = ['colSysCentroCostos', 'colTmpZona', 'colTmpHuella', 'colTmpActivo', 'colTmpLocalizador', 'colTmpQuien', 'colTmpTemperatura', 'colTmpHumedad', 'colTmpOrigen'];
+const SEARCH_COLUMNS = ['colSysCentroCostos', 'colTmpZona', 'colTmpHuella', 'colTmpActivo', 'colTmpLocalizador', 'colTmpQuien', 'colTmpTemperatura', 'colTmpHumedad', 'colTmpEstado', 'colTmpOrigen'];
 
 const t = (key, params) => {
     let text = Dashboard.t(key);
@@ -52,15 +52,37 @@ function timeCell(col, iso) {
     td.title = `UTC ${iso.replace('T', ' ').replace('Z', '')}`;
     return td;
 }
-function temperatureCell(col, value) {
+// out = 'low' | 'high': la lectura salió del rango del refrigerador (se ve en rojo).
+function temperatureCell(col, value, out) {
     const td = cell(col, Number.isFinite(Number(value)) ? Number(value).toFixed(1) : '');
     td.classList.add('tmp-value');
+    if (out === 'low' || out === 'high') td.classList.add('tmp-out');
     return td;
 }
 // La humedad (%) que marcaba; las lecturas de antes de agregarla quedan sin ese dato.
-function humidityCell(col, value) {
+function humidityCell(col, value, out) {
     const td = cell(col, value === null || value === undefined || !Number.isFinite(Number(value)) ? '' : Number(value).toFixed(1));
     td.classList.add('tmp-value');
+    if (out === 'low' || out === 'high') td.classList.add('tmp-out');
+    return td;
+}
+// El estado de la lectura contra el rango del refrigerador (el que traía cuando se tomó): En rango, Fuera de rango (con qué falló al pasar el cursor) o Sin rango.
+function statusCell(col, r) {
+    const st = r.status || {};
+    const lim = r.limits || {};
+    const td = document.createElement('td');
+    td.dataset.col = col;
+    const tag = document.createElement('span');
+    tag.className = 'rel-tag';
+    const why = [];
+    if (st.temp === 'low') why.push(t('main.tmpAlertaTempBaja', { min: lim.tempMin }));
+    if (st.temp === 'high') why.push(t('main.tmpAlertaTempAlta', { max: lim.tempMax }));
+    if (st.hum === 'low') why.push(t('main.tmpAlertaHumBaja', { min: lim.humMin }));
+    if (st.hum === 'high') why.push(t('main.tmpAlertaHumAlta', { max: lim.humMax }));
+    if (why.length) { tag.classList.add('rel-class-cuarentena'); tag.textContent = t('main.tmpEstadoFuera'); tag.title = why.join(' · '); }
+    else if (st.temp === 'ok' || st.hum === 'ok') { tag.classList.add('rel-tag-ok'); tag.textContent = t('main.tmpEstadoOk'); }
+    else { tag.textContent = t('main.tmpEstadoSin'); }
+    td.appendChild(tag);
     return td;
 }
 function photoCell(col, r) {
@@ -109,7 +131,7 @@ function buildRow(r) {
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, system[key], 'col-system')),
         cell('colCatRegistroUnico', `TMP-${r.id}`, 'col-system'),
         cell('colTmpZona', r.zoneName), cell('colTmpHuella', footprintText(r)), cell('colTmpActivo', assetText(r)), cell('colTmpLocalizador', r.locator, 'rel-locator'), cell('colTmpQuien', r.name),
-        timeCell('colTmpMomento', r.checkedAt), temperatureCell('colTmpTemperatura', r.temperature), humidityCell('colTmpHumedad', r.humidity), photoCell('colTmpFoto', r),
+        timeCell('colTmpMomento', r.checkedAt), temperatureCell('colTmpTemperatura', r.temperature, r.status && r.status.temp), humidityCell('colTmpHumedad', r.humidity, r.status && r.status.hum), statusCell('colTmpEstado', r), photoCell('colTmpFoto', r),
         cell('colTmpOrigen', t(r.source === 'qr' ? 'main.tmpOrigenQr' : 'main.tmpOrigenUsuario')),
     );
     tr.appendChild(actionsCell(r, tr));

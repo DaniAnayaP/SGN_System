@@ -42,6 +42,8 @@
         .shot{ width:100%; border-radius:14px; display:block; aspect-ratio:4/3; object-fit:cover; background:var(--line); }
         .big{ font:700 44px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; font-variant-numeric:tabular-nums; margin:2px 0; }
         .hum-row{ grid-template-columns:1fr auto; }
+        .tag.out{ border-color:var(--warn); color:var(--warn); background:transparent; }
+        .err b{ display:block; margin-bottom:2px; }
         .big2{ font:600 24px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; font-variant-numeric:tabular-nums; color:var(--muted); margin:-6px 0 2px; }
         .sum{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
         .sum div{ border:1px solid var(--line); border-radius:14px; padding:8px 12px; }
@@ -79,7 +81,7 @@ const TEXT = {
         use: 'Guardar la lectura', cancel: 'Cancelar', cameraHint: 'Apunta al termómetro o a la pantalla del refrigerador y toma la foto', cameraOpening: 'Abriendo la cámara…',
         cameraDenied: 'No se pudo abrir la cámara. Permite el acceso a la cámara en tu navegador y vuelve a intentar.', cameraInsecure: 'Esta página necesita una conexión segura (https) para usar la cámara.',
         done: 'Listo', saved: 'Guardado', when: 'Hora', newOne: 'Nueva lectura', recordsTitle: 'Registros', readOnly: 'Solo lectura', noRecords: 'Todavía no hay lecturas de este refrigerador.',
-        needName: 'Escribe tu nombre para empezar.', needTemp: 'Escribe la temperatura que marca (por ejemplo 4.5 o -18).', badTemp: 'Esa temperatura no es válida: usa un número entre -100 y 100.', needHum: 'Escribe la humedad que marca (por ejemplo 55).', badHum: 'Esa humedad no es válida: usa un número entre 0 y 100.', humidity: 'Humedad que marca', saving: 'Guardando…',
+        needName: 'Escribe tu nombre para empezar.', needTemp: 'Escribe la temperatura que marca (por ejemplo 4.5 o -18).', badTemp: 'Esa temperatura no es válida: usa un número entre -100 y 100.', outTitle: 'Fuera de rango', outSaved: 'Se guardará con la alerta.', tempLow: 'La temperatura está por debajo del mínimo ({n} °C).', tempHigh: 'La temperatura está por encima del máximo ({n} °C).', humLow: 'La humedad está por debajo del mínimo ({n} %).', humHigh: 'La humedad está por encima del máximo ({n} %).', needHum: 'Escribe la humedad que marca (por ejemplo 55).', badHum: 'Esa humedad no es válida: usa un número entre 0 y 100.', humidity: 'Humedad que marca', saving: 'Guardando…',
         errPhoto: 'La foto no se pudo guardar. Intenta de nuevo.', errGeneric: 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.', close: 'Cerrar', reading: 'Lectura',
     },
     en: {
@@ -88,7 +90,7 @@ const TEXT = {
         use: 'Save the reading', cancel: 'Cancel', cameraHint: 'Point at the thermometer or the refrigerator display and take the photo', cameraOpening: 'Opening the camera…',
         cameraDenied: 'The camera could not be opened. Allow camera access in your browser and try again.', cameraInsecure: 'This page needs a secure connection (https) to use the camera.',
         done: 'Done', saved: 'Saved', when: 'Time', newOne: 'New reading', recordsTitle: 'Records', readOnly: 'Read-only', noRecords: 'There are no readings of this refrigerator yet.',
-        needName: 'Type your name to start.', needTemp: 'Type the temperature shown (for example 4.5 or -18).', badTemp: 'That temperature is not valid: use a number between -100 and 100.', needHum: 'Type the humidity shown (for example 55).', badHum: 'That humidity is not valid: use a number between 0 and 100.', humidity: 'Humidity shown', saving: 'Saving…',
+        needName: 'Type your name to start.', needTemp: 'Type the temperature shown (for example 4.5 or -18).', badTemp: 'That temperature is not valid: use a number between -100 and 100.', outTitle: 'Out of range', outSaved: 'It will be saved with the alert.', tempLow: 'The temperature is below the minimum ({n} °C).', tempHigh: 'The temperature is above the maximum ({n} °C).', humLow: 'The humidity is below the minimum ({n} %).', humHigh: 'The humidity is above the maximum ({n} %).', needHum: 'Type the humidity shown (for example 55).', badHum: 'That humidity is not valid: use a number between 0 and 100.', humidity: 'Humidity shown', saving: 'Saving…',
         errPhoto: 'The photo could not be saved. Try again.', errGeneric: 'It could not be saved. Check your connection and try again.', close: 'Close', reading: 'Reading',
     },
 }[LANG];
@@ -120,6 +122,16 @@ const fmtTime = (iso) => new Date(iso).toLocaleTimeString(LANG === 'en' ? 'en-US
 const fmtDate = (iso) => new Date(iso).toLocaleDateString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short' });
 const fmtTemp = (v) => `${Number(v).toFixed(1)} °C`;
 const fmtHum = (v) => `${Number(v).toFixed(1).replace(/\.0$/, '')} %`;
+// Fuera de rango: una lectura contra el rango del refrigerador (cada límite es opcional). Devuelve los avisos que corresponden.
+function outOfRange(temp, hum, lim) {
+    const l = lim || {};
+    const msgs = [];
+    const fill = (text, n) => text.replace('{n}', String(n));
+    if (typeof temp === 'number') { if (l.tempMin != null && temp < l.tempMin) msgs.push(fill(TEXT.tempLow, l.tempMin)); else if (l.tempMax != null && temp > l.tempMax) msgs.push(fill(TEXT.tempHigh, l.tempMax)); }
+    if (typeof hum === 'number') { if (l.humMin != null && hum < l.humMin) msgs.push(fill(TEXT.humLow, l.humMin)); else if (l.humMax != null && hum > l.humMax) msgs.push(fill(TEXT.humHigh, l.humMax)); }
+    return msgs;
+}
+const alertBox = (msgs, saved) => (msgs.length ? `<div class="err" role="alert"><b>${esc(TEXT.outTitle)}</b>${msgs.map((m) => `<br>${esc(m)}`).join('')}${saved ? '' : `<br>${esc(TEXT.outSaved)}`}</div>` : '');
 // La humedad se escribe con punto o con coma, de 0 a 100.
 function parseHum(text) {
     const clean = String(text || '').replace(',', '.').replace(/\s+/g, '').replace(/%/g, '');
@@ -235,6 +247,7 @@ function viewConfirm() {
     show(`<div class="card"><h1>${esc(TEXT.photoTitle)}</h1>${placeHtml()}${errBox()}
         <div class="big">${esc(fmtTemp(parseTemp(draft.temp).value))}</div>
         <div class="big2">${esc(fmtHum(parseHum(draft.hum).value))}</div>
+        ${alertBox(outOfRange(parseTemp(draft.temp).value, parseHum(draft.hum).value, info.space.limits), false)}
         <img class="shot" id="preview" alt="">
         <button type="button" class="btn" id="use">${esc(TEXT.use)}</button>
         <button type="button" class="btn alt" id="retake">${esc(TEXT.retake)}</button></div>`);
@@ -268,6 +281,7 @@ function viewDone() {
     show(`<div class="card"><h1>${esc(TEXT.done)} <span class="tag">${esc(TEXT.saved)}</span></h1>${placeHtml()}
         <div class="big">${esc(fmtTemp(r.temperature))}</div>
         ${r.humidity === null || r.humidity === undefined ? '' : `<div class="big2">${esc(fmtHum(r.humidity))}</div>`}
+        ${alertBox(outOfRange(r.temperature, r.humidity, r.limits), true)}
         <div class="sum"><div><small>${esc(TEXT.yourName)}</small><b>${esc(r.name)}</b></div><div><small>${esc(TEXT.when)}</small><b>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</b></div></div>
         <button type="button" class="btn alt" id="go-records">${esc(TEXT.records)}</button>
         <button type="button" class="link" id="again">${esc(TEXT.newOne)}</button></div>`);
@@ -276,7 +290,7 @@ function viewDone() {
 }
 
 function viewRecords() {
-    const rows = info.records.map((r) => `<div class="item">${r.hasPhoto ? `<img data-view="${r.id}" alt="${esc(TEXT.photoTitle)}" loading="lazy" src="${API}/photo/${r.id}?thumb=1">` : '<i></i>'}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</small></div><span class="tag">${esc(fmtTemp(r.temperature))}${r.humidity === null || r.humidity === undefined ? '' : ` · ${esc(fmtHum(r.humidity))}`}</span></div>`).join('');
+    const rows = info.records.map((r) => `<div class="item">${r.hasPhoto ? `<img data-view="${r.id}" alt="${esc(TEXT.photoTitle)}" loading="lazy" src="${API}/photo/${r.id}?thumb=1">` : '<i></i>'}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</small></div><span class="tag${r.status && (r.status.temp === 'low' || r.status.temp === 'high' || r.status.hum === 'low' || r.status.hum === 'high') ? ' out' : ''}">${esc(fmtTemp(r.temperature))}${r.humidity === null || r.humidity === undefined ? '' : ` · ${esc(fmtHum(r.humidity))}`}</span></div>`).join('');
     show(`<div class="card"><h1>${esc(TEXT.recordsTitle)}</h1>${placeHtml()}<span class="muted">${esc(TEXT.readOnly)}</span>
         <div class="list">${rows || `<div class="muted">${esc(TEXT.noRecords)}</div>`}</div>
         <button type="button" class="link" id="back">${esc(TEXT.back)}</button></div>`);

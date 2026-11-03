@@ -7117,7 +7117,20 @@ function temperatureTarget(token, spaceId) {
     const target = cleaningTarget(token, spaceId);
     return target && target.space.type === 'cold' ? target : null;
 }
-const publicTemperatureRecord = (r) => ({ id: r.id, name: r.person_name, temperature: r.temperature, humidity: r.humidity, checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo });
+// Alerta de una lectura: cada medida se juzga con el rango que traía el refrigerador al momento de la lectura: 'low' (por debajo del mínimo), 'high' (por encima del máximo), 'ok', o null si esa medida no tenía rango.
+function temperatureStatus(r) {
+    const judge = (v, lo, hi) => {
+        if (v === null || v === undefined || (lo == null && hi == null)) return null;
+        if (lo != null && v < lo) return 'low';
+        if (hi != null && v > hi) return 'high';
+        return 'ok';
+    };
+    return { temp: judge(r.temperature, r.temp_min, r.temp_max), hum: judge(r.humidity, r.hum_min, r.hum_max) };
+}
+const temperatureLimits = (r) => ({ tempMin: r.temp_min, tempMax: r.temp_max, humMin: r.hum_min, humMax: r.hum_max });
+// El rango que hoy tiene el refrigerador en el Layout (solo los que tienen valor).
+const spaceLimits = (s) => { const o = {}; ['tempMin', 'tempMax', 'humMin', 'humMax'].forEach((k) => { if (s[k] !== undefined && s[k] !== null) o[k] = s[k]; }); return o; };
+const publicTemperatureRecord = (r) => ({ id: r.id, name: r.person_name, temperature: r.temperature, humidity: r.humidity, limits: temperatureLimits(r), status: temperatureStatus(r), checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo });
 app.get('/t/:token/:spaceId', publicLayoutLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(self)' });
     res.sendFile(path.join(PUBLIC_DIR, 'TemperaturaPublica.html'));
@@ -7131,7 +7144,7 @@ app.get('/api/public/temperature/:token/:spaceId', publicLayoutLimiter, (req, re
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json({
         companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
-        space: { id: space.id, code: space.code, type: space.type, locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '' },
+        space: { id: space.id, code: space.code, type: space.type, locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', limits: spaceLimits(space) },
         records: records.map(publicTemperatureRecord), now: new Date().toISOString(),
     });
 });
@@ -7153,7 +7166,7 @@ app.post('/api/public/temperature/:token/:spaceId/reading', publicCleaningLimite
     const photo = parseCleaningPhoto(req.body && req.body.photo);
     if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
     const { row, space, footprint, zone, locator } = target;
-    const saved = addTemperatureRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature: Math.round(temperature * 10) / 10, humidity, photo, thumb: parseThumb(req.body && req.body.thumb) });
+    const saved = addTemperatureRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature: Math.round(temperature * 10) / 10, humidity, limits: spaceLimits(space), photo, thumb: parseThumb(req.body && req.body.thumb) });
     res.set('Cache-Control', 'no-store');
     res.status(201).json(publicTemperatureRecord(saved));
 });
@@ -7184,7 +7197,7 @@ app.get('/api/business/temperatures', requireAuth, (req, res) => {
             return {
                 id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
                 zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, locator: r.locator,
-                name: r.person_name, temperature: r.temperature, humidity: r.humidity, checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo, source: r.source,
+                name: r.person_name, temperature: r.temperature, humidity: r.humidity, limits: temperatureLimits(r), status: temperatureStatus(r), checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo, source: r.source,
                 system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: TEMPERATURE_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.checked_at }),
             };
         }),

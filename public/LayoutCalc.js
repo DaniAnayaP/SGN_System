@@ -940,6 +940,8 @@
 
         // Activos (paso Activos): lo que hay encima de una huella. Su lugar en el piso, su zona, su alto, su nombre y su formato salen de la huella (deriveSpaces).
         const spaceIds = new Set();
+        // Rango del refrigerador (solo activos de tipo Frío): temperatura (°C) y humedad (%), mínima y máxima, cada una opcional. Las lecturas de Temperaturas que salen de ese rango se marcan como alerta.
+        const rangeVal = (v, lo, hi) => { if (v === null || v === undefined || v === '') return null; const n = Number(v); return Number.isFinite(n) && n >= lo && n <= hi ? Math.round(n * 10) / 10 : null; };
         out.spaces = list(src.spaces, LIMITS.spaces, 'Activos').map((s, i) => {
             const label = `Activo ${i + 1}`;
             // El código (A001…) lo pone el sistema según el tipo del activo, consecutivo por zona y tipo (assignSpaceCodes, justo después): lo que mande el cliente solo se usa de punto de partida.
@@ -957,6 +959,12 @@
             const assetClassId = Math.round(Number(s && s.assetClassId));
             const assetId = Math.round(Number(s && s.assetId));
             const assetFmt = sanitizeFmt(s && s.fmt);
+            const tempMin = type === 'cold' ? rangeVal(s && s.tempMin, -100, 100) : null;
+            const tempMax = type === 'cold' ? rangeVal(s && s.tempMax, -100, 100) : null;
+            const humMin = type === 'cold' ? rangeVal(s && s.humMin, 0, 100) : null;
+            const humMax = type === 'cold' ? rangeVal(s && s.humMax, 0, 100) : null;
+            if (tempMin !== null && tempMax !== null && tempMin > tempMax) errors.push(`${label}: la temperatura mínima no puede ser mayor que la máxima`);
+            if (humMin !== null && humMax !== null && humMin > humMax) errors.push(`${label}: la humedad mínima no puede ser mayor que la máxima`);
             return {
                 id: idOf(s && s.id, spaceIds, label), footprintId, type, code,
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
@@ -967,6 +975,7 @@
                 drawers: text(s && s.drawers, label, false),
                 ...(s && s.off === true ? { off: true } : {}),
                 ...(assetFmt ? { fmt: assetFmt } : {}),
+                ...(tempMin !== null ? { tempMin } : {}), ...(tempMax !== null ? { tempMax } : {}), ...(humMin !== null ? { humMin } : {}), ...(humMax !== null ? { humMax } : {}),
             };
         });
         out.footprints = assignHuellaCodes(deriveFootprintZones(out)).footprints;
@@ -1142,7 +1151,7 @@
                 const f = byId.get(s.footprintId);
                 const plain = first && f && (s.type || 'rack') === 'rack' && !s.fmt && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off;
                 return !plain;
-            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}) }));
+            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax'].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
         }
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
         if (section === 'posiciones') return (layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays }));

@@ -1597,6 +1597,7 @@
             { "id": "colTmpMomento", "labelKey": "main.colTmpMomento", "permissionOnly": true },
             { "id": "colTmpTemperatura", "labelKey": "main.colTmpTemperatura", "permissionOnly": true },
             { "id": "colTmpHumedad", "labelKey": "main.colTmpHumedad", "permissionOnly": true },
+            { "id": "colTmpEstado", "labelKey": "main.colTmpEstado", "permissionOnly": true },
             { "id": "colTmpFoto", "labelKey": "main.colTmpFoto", "permissionOnly": true },
             { "id": "colTmpOrigen", "labelKey": "main.colTmpOrigen", "permissionOnly": true },
             {

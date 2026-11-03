@@ -2606,6 +2606,18 @@
     "colTmpMomento": "Hora de la lectura",
     "colTmpTemperatura": "Temperatura (°C)",
     "colTmpHumedad": "Humedad (%)",
+    "layoutRangoTempMin": "Mín. °C",
+    "layoutRangoTempMax": "Máx. °C",
+    "layoutRangoHumMin": "Mín. %",
+    "layoutRangoHumMax": "Máx. %",
+    "colTmpEstado": "Estado",
+    "tmpEstadoOk": "En rango",
+    "tmpEstadoFuera": "Fuera de rango",
+    "tmpEstadoSin": "Sin rango",
+    "tmpAlertaTempBaja": "Temperatura por debajo del mínimo ({min} °C)",
+    "tmpAlertaTempAlta": "Temperatura por encima del máximo ({max} °C)",
+    "tmpAlertaHumBaja": "Humedad por debajo del mínimo ({min} %)",
+    "tmpAlertaHumAlta": "Humedad por encima del máximo ({max} %)",
     "colTmpFoto": "Foto",
     "colTmpOrigen": "Origen",
     "colTmpDeleteAuth": "Autorización para Eliminar",
@@ -3726,7 +3738,7 @@
       "example": "defines la Zona A, de producto seco, de 22 por 11 metros: el sistema le pone Z001 y la siguiente que crees será Z002."
     },
     "layoutSec_activos": {
-      "what": "Cada renglón es un activo: lo que hay encima de una huella. Un activo siempre va DENTRO de una huella: «+ Agregar activo» crea el renglón con la huella vacía (en rojo) y no se puede guardar hasta que elijas en cuál va; una huella puede tener varios (por ejemplo dos racks sobre la misma tarima) y con uno solo no escribes nada, porque al agregar la huella ya se crea su primer activo. El código del activo lo pone el sistema y no se edita: la letra la da su tipo (A anaquel, R rack, G gabeta, T tarima en piso, F frío) y el número es consecutivo por zona y por tipo (A001, A002… de cada zona); es la pieza del activo en el Localizador. Aquí eliges el tipo, la huella, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo de activo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
+      "what": "Cada renglón es un activo: lo que hay encima de una huella. Un activo siempre va DENTRO de una huella: «+ Agregar activo» crea el renglón con la huella vacía (en rojo) y no se puede guardar hasta que elijas en cuál va; una huella puede tener varios (por ejemplo dos racks sobre la misma tarima) y cada activo se da de alta aquí: al agregar una huella se crea solo la huella, sin activos. En los refrigeradores (tipo Frío) también capturas su rango de temperatura y de humedad (mínimo y máximo, opcionales), con el que se marcan las alertas de Temperaturas. El código del activo lo pone el sistema y no se edita: la letra la da su tipo (A anaquel, R rack, G gabeta, T tarima en piso, F frío) y el número es consecutivo por zona y por tipo (A001, A002… de cada zona); es la pieza del activo en el Localizador. Aquí eliges el tipo, la huella, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo de activo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
       "example": "agregas un activo, eliges la huella H002 de la Zona 6 y el sistema le pone A001 (o A002 si ya había un anaquel en esa zona); si no eliges la huella, no te deja guardar."
     },
     "layoutAssetClass": {
@@ -4040,6 +4052,10 @@
     "layout3dAssetsPick": {
       "what": "Abre una lista para elegir CUÁLES activos se ven en el 3D (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Marca o desmarca uno por uno, una zona completa con la casilla de la zona, o usa Todos y Ninguno (actúan sobre lo que muestra la lista; con el buscador vacío, sobre todos). El buscador entiende los mismos signos de todos los filtros: coma para otra búsqueda, $ antes y @ después. El icono queda marcado cuando hay activos ocultos. Solo cambia lo que ves; no modifica el Layout.",
       "example": "quieres ver solo R-07 y T-03 para revisar sus alturas: pulsas Ninguno, buscas R-07 y marcas el anaquel, luego buscas T-03 y marcas la tarima."
+    },
+    "layoutRango": {
+      "what": "Los límites del refrigerador (solo activos de tipo Frío): la temperatura mínima y máxima en °C y la humedad mínima y máxima en %. Cada uno es opcional (vacío = sin ese límite). Las lecturas de Temperaturas que salgan de este rango se marcan en rojo en el QR al guardar y en la base de registros (columna Estado). Cada lectura se juzga con el rango que tenía el refrigerador cuando se tomó.",
+      "example": "a un refrigerador de medicamentos le pones mín. 2 y máx. 8 °C: una lectura de 10 °C se marca fuera de rango."
     },
     "layoutRenumerar": {
       "what": "Renumera los códigos de los activos: en cada zona y tipo quedan consecutivos desde 001 (A001, A002… F001, F002…), en el orden de su número de ahora. Los códigos guardados no se mueven solos, por eso es un botón. Se ve en la tabla y se aplica al guardar. Los QR, los localizadores y las relaciones siguen funcionando porque usan el activo, no su código; lo ya impreso con el código anterior ya no coincidirá.",

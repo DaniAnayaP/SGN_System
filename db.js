@@ -5313,14 +5313,18 @@ db.exec(`
 `);
 // La humedad (%) que marcaba el refrigerador: se agregó después (las lecturas anteriores quedan sin ese dato).
 if (!db.prepare('PRAGMA table_info(temperature_records)').all().some((c) => c.name === 'humidity')) db.exec('ALTER TABLE temperature_records ADD COLUMN humidity REAL');
+// El rango del refrigerador al momento de la lectura (se copia del Layout: si después lo cambian, las lecturas de antes se siguen juzgando con el suyo). Sin rango = sin alerta.
+for (const col of ['temp_min', 'temp_max', 'hum_min', 'hum_max']) {
+    if (!db.prepare('PRAGMA table_info(temperature_records)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE temperature_records ADD COLUMN ${col} REAL`);
+}
 // La miniatura de la foto (la manda el teléfono, unos 160 px): las tablas y listas la usan en vez de la foto completa. Las lecturas anteriores no la tienen y se sigue mostrando la completa.
 if (!db.prepare('PRAGMA table_info(temperature_photos)').all().some((c) => c.name === 'thumb')) { db.exec('ALTER TABLE temperature_photos ADD COLUMN thumb_mime TEXT'); db.exec('ALTER TABLE temperature_photos ADD COLUMN thumb BLOB'); }
 const TEMPERATURE_SELECT = `SELECT r.*, EXISTS(SELECT 1 FROM temperature_photos p WHERE p.record_id = r.id) AS has_photo FROM temperature_records r`;
 // Guarda una lectura: la hora la pone el servidor y la foto se guarda en la misma operación.
-function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, photo, thumb, source = 'qr' }) {
+function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, limits, photo, thumb, source = 'qr' }) {
     return db.transaction(() => {
-        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, humidity, checked_at, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, humidity === undefined ? null : humidity, source);
+        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, humidity, temp_min, temp_max, hum_min, hum_max, checked_at, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, humidity === undefined ? null : humidity, limits && limits.tempMin !== undefined ? limits.tempMin : null, limits && limits.tempMax !== undefined ? limits.tempMax : null, limits && limits.humMin !== undefined ? limits.humMin : null, limits && limits.humMax !== undefined ? limits.humMax : null, source);
         db.prepare('INSERT INTO temperature_photos (record_id, mime, data, thumb_mime, thumb) VALUES (?, ?, ?, ?, ?)').run(info.lastInsertRowid, photo.mime, photo.data, thumb ? thumb.mime : null, thumb ? thumb.data : null);
         return db.prepare(`${TEMPERATURE_SELECT} WHERE r.id = ?`).get(info.lastInsertRowid);
     })();

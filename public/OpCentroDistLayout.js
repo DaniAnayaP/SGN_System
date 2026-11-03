@@ -92,6 +92,13 @@ function renderKpis() {
 function cellNum(list, i, key, value, disabled, step = '0.1') {
     return `<td><input type="number" step="${step}" data-l="${list}" data-i="${i}" data-k="${key}" value="${value}"${disabled ? ' disabled' : ''}></td>`;
 }
+// El rango del refrigerador (temperatura °C y humedad %, mínimo y máximo): solo los activos de tipo Frío lo capturan y cada valor es opcional (vacío = sin límite). Las lecturas de Temperaturas fuera de
+// ese rango se marcan como alerta.
+const RANGE_KEYS = ['tempMin', 'tempMax', 'humMin', 'humMax'];
+function rangeCells(s, i, disabled) {
+    if (s.type !== 'cold') return RANGE_KEYS.map(() => '<td class="layout-calc">—</td>').join('');
+    return RANGE_KEYS.map((key) => `<td><input type="number" step="0.1" ${key.startsWith('temp') ? 'min="-100" max="100"' : 'min="0" max="100"'} data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="layoutRango" value="${s[key] === undefined || s[key] === null ? '' : s[key]}"${disabled ? ' disabled' : ''}></td>`).join('');
+}
 function cellText(list, i, key, value, disabled) {
     return `<td><input type="text" maxlength="${LC.LIMITS.text}" data-l="${list}" data-i="${i}" data-k="${key}" value="${esc(value)}"${disabled ? ' disabled' : ''}></td>`;
 }
@@ -540,9 +547,9 @@ function stepHtml(step) {
         const letterOptions = (selected) => LC.SPACE_TYPES.map((id) => `<option value="${id}"${id === (selected || 'rack') ? ' selected' : ''}>${esc(LC.ASSET_LETTER[id])} · ${esc(typeLabel('space', id))}</option>`).join('');
         const rows = d.spaces.map((s, i) => {
             const saved = isSavedRow('spaces', s.id);
-            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptions(s.footprintId)}</select></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
+            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptions(s.footprintId)}</select></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${rangeCells(s, i, dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
         });
-        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutActivoLetra', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', ''], rows, 'layout-activos')}${state.perms && state.perms.canRenumber && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutActivoLetra', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', 'main.layoutRangoTempMin', 'main.layoutRangoTempMax', 'main.layoutRangoHumMin', 'main.layoutRangoHumMax', ''], rows, 'layout-activos')}${state.perms && state.perms.canRenumber && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una se crea solo la huella (sin activos); los activos que se pongan encima se dan de alta después, en el paso Activos.
@@ -1585,6 +1592,11 @@ function onEdit(event) {
         } else if (key === 'assetClassId' || key === 'assetId') {
             const n = parseInt(el.value, 10);
             if (n > 0) row[key] = n; else delete row[key]; // sin elegir = el espacio se guarda sin ese campo
+        } else if (RANGE_KEYS.includes(key)) {
+            // el rango del refrigerador: vacío = sin ese límite
+            const raw = String(el.value).trim();
+            const n = parseFloat(raw);
+            if (raw !== '' && Number.isFinite(n)) row[key] = n; else delete row[key];
         } else if (key === 'planM2') {
             if (value > 0) row.planM2 = value; else delete row.planM2;
         } else if (list === 'footprints' && key === 'name') {

@@ -7551,6 +7551,8 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 /* Operaciones > Limpieza: las fotos de cada registro (miniatura que abre el visor) */
 .lim-photo{ display: inline-block; padding: 0; border: 1px solid var(--color-border); border-radius: 0.4rem; background: var(--color-surface); cursor: zoom-in; overflow: hidden; line-height: 0; }
 .lim-photo img{ width: 44px; height: 34px; object-fit: cover; display: block; }
+/* Temperaturas: la lectura fuera del rango del refrigerador se ve en rojo */
+.tmp-out{ color: #9A2A1F; font-weight: 700; background: rgba(214, 90, 74, 0.12); }
 .lim-viewer{ max-width: min(92vw, 720px); }
 .lim-viewer img{ display: block; max-width: 100%; max-height: 70vh; margin: 0.6rem auto 0; border-radius: 0.6rem; }
 .lim-viewer-tabs{ display: flex; gap: 0.4rem; }
