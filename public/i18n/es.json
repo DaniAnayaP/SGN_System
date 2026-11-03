@@ -1570,7 +1570,7 @@
     "colMaterialApoyoFuncionalidad": "Acceso a Funcionalidad Pantallas",
     "colLayoutContorno": "Contorno de la nave",
     "colLayoutPuertas": "Puertas",
-    "colLayoutLuz": "Conexiones de luz",
+    "colLayoutLuz": "Energía Eléctrica",
     "colLayoutZonas": "Zonas",
     "colLayoutEspacios": "Huella-Espacio",
     "colLayoutQr": "Códigos QR",
@@ -1639,7 +1639,7 @@
     "layoutDescartarConfirm": "¿Descartar los cambios sin guardar?",
     "layoutStepContorno": "Contorno",
     "layoutStepPuertas": "Puertas",
-    "layoutStepLuz": "Conexiones de luz",
+    "layoutStepLuz": "Energía Eléctrica",
     "layoutStepZonas": "Zonas",
     "layoutStepEspacios": "Huella-Espacio",
     "layoutStepActivos": "Activos",
@@ -3583,7 +3583,7 @@
     },
     "layoutSteps": {
       "what": "Los pasos para armar el Layout, como capas. Toca un paso para verlo en el croquis y editarlo: abajo solo sale lo del paso que tocaste. Puedes dejar varios activos a la vez y el croquis muestra la nave más todos ellos. Para ocultar un paso, tócalo otra vez cuando sea el que estás editando.",
-      "example": "tocas Puertas y luego Conexiones de luz: ves ambas en el croquis y abajo editas solo la luz; tocas Puertas otra vez para editar las puertas."
+      "example": "tocas Puertas y luego Energía Eléctrica: ves ambas en el croquis y abajo editas solo la luz; tocas Puertas otra vez para editar las puertas."
     },
     "layoutSec_contorno": {
       "what": "Las esquinas de la nave en metros, con la altura de cada una, y las columnas u obstáculos. De aquí salen los m² totales y, con las alturas, los m³.",
@@ -3594,7 +3594,7 @@
       "example": "el andén de recepción está en la pared 1, a 6 metros de la esquina, y mide 3.5 de ancho."
     },
     "layoutSec_luz": {
-      "what": "Los tableros y contactos de luz de la nave: en qué pared están, a qué distancia de la esquina y a qué altura del piso.",
+      "what": "La energía eléctrica de la nave: los tableros y contactos de luz, en qué pared están, a qué distancia de la esquina y a qué altura del piso. Este paso va después de Huella-Espacio y antes de Activos porque un activo que lleva luz (un refrigerador, por ejemplo) debe quedar cerca de una conexión eléctrica.",
       "example": "un contacto de 220 V en la pared 3, a 20 metros de la esquina y a 1.2 metros del piso."
     },
     "layoutSec_zonas": {
@@ -4042,8 +4042,8 @@
       "example": "la nave empieza en 0, 0."
     },
     "layoutCanvas": {
-      "what": "El croquis de la nave, que se dibuja solo con los datos que capturas: paredes, zonas, anaqueles, puertas y conexiones de luz. Al tocar un renglón de Zonas, Huella-Espacio, Activos o Posiciones, lo que ese renglón es se resalta aquí con un contorno naranja (lo demás se atenúa) y el renglón queda marcado en la tabla; de una posición se marca su anaquel y se escribe el nivel y la columna.",
-      "example": "cambias el ancho de una zona y el croquis se actualiza al instante; tocas el renglón R-03 y el anaquel R-03 se marca en el croquis."
+      "what": "El croquis de la nave, que se dibuja solo con los datos que capturas: paredes, zonas, anaqueles, puertas y conexiones de luz. Al tocar un renglón de Zonas, Huella-Espacio, Activos o Posiciones, lo que ese renglón es se resalta aquí con un contorno delgado, punteado y que va girando (así se siguen viendo las medidas y qué tan pegado está a lo demás) y el renglón queda marcado en la tabla; de una posición se marca su anaquel y se escribe el nivel y la columna. Si tocas la figura en el croquis (sin arrastrarla), se resalta con el contorno grueso naranja y se marca su renglón; vuelve a tocarla para regresar al punteado.",
+      "example": "cambias el ancho de una zona y el croquis se actualiza al instante; tocas el renglón R-03 y el anaquel R-03 se marca con su contorno punteado; tocas el anaquel en el croquis y se marca grueso para ubicarlo de un vistazo."
     },
     "layoutSave": {
       "what": "Guarda el Layout con todos los cambios. Mientras no guardes, solo los ves tú.",

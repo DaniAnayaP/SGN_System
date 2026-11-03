@@ -33,9 +33,9 @@
     const SECTIONS = {
         contorno: 'colLayoutContorno',
         puertas: 'colLayoutPuertas',
-        luz: 'colLayoutLuz',
         zonas: 'colLayoutZonas',
         espacios: 'colLayoutEspacios',
+        luz: 'colLayoutLuz',
         activos: 'colLayoutActivos',
         posiciones: 'colLayoutPosiciones',
     };

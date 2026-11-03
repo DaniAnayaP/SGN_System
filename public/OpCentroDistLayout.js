@@ -8,7 +8,7 @@
 // Envuelto en una función: este script comparte el ámbito global con Dashboard.js, que ya declara nombres como SECTION_LABEL_KEYS.
 (function () {
 const LC = window.LayoutCalc;
-const SECTION_ORDER = ['contorno', 'puertas', 'luz', 'zonas', 'espacios', 'activos', 'posiciones'];
+const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'espacios', 'luz', 'activos', 'posiciones'];
 const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones',
 };
@@ -611,7 +611,7 @@ function applyHighlight(reveal) {
     const svg = $('layout-svg');
     svg.querySelectorAll('.hl-shape, .hl-tag').forEach((n) => n.remove());
     svg.querySelectorAll('.hl-on').forEach((n) => n.classList.remove('hl-on'));
-    svg.classList.remove('has-hl');
+    svg.classList.remove('has-hl', 'hl-soft-mode');
     const h = state.hl;
     if (!h || h.step !== state.focus || !state.draft) return;
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
@@ -620,14 +620,16 @@ function applyHighlight(reveal) {
     if (!shapes.length) return;
     els.forEach((el) => el.classList.add('hl-on'));
     svg.classList.add('has-hl');
+    svg.classList.toggle('hl-soft-mode', !h.strong);
     const boxes = shapes.map((s) => s.getBBox());
     const x0 = Math.min(...boxes.map((b) => b.x));
     const y0 = Math.min(...boxes.map((b) => b.y));
     const x1 = Math.max(...boxes.map((b) => b.x + b.width));
     const y1 = Math.max(...boxes.map((b) => b.y + b.height));
     const box = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
-    // dos contornos encimados (uno ancho del color de la hoja y otro naranja) para que se vea sobre cualquier color de zona, en claro y en oscuro
-    ['hl-under', 'hl-ring'].forEach((cls) => {
+    // Al tocar un renglón: un contorno delgado, punteado y girando (con el grosor de las líneas del dibujo), así se siguen viendo las medidas y qué tan pegada está la figura a las otras. Al tocar la figura en el
+    // croquis (strong): dos contornos encimados (uno ancho del color de la hoja y otro naranja) para que se vea sobre cualquier color de zona, en claro y en oscuro.
+    (h.strong ? ['hl-under', 'hl-ring'] : ['hl-soft']).forEach((cls) => {
         let ring;
         if (h.kind === 'footprint') {
             ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -668,6 +670,33 @@ function selectRowFrom(target) {
     markSelectedRow();
     applyHighlight(true);
 }
+// Tocar una figura del croquis (sin arrastrarla) la elige: se marca su renglón en la tabla y la figura se resalta con el contorno grueso de siempre; volver a tocarla la regresa al contorno punteado. Solo cuenta
+// el paso que se está editando: en Zonas las zonas, en Huella-Espacio las huellas y en Activos los activos.
+function selectFromMap(target) {
+    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid]') : null;
+    if (!el || !state.draft) return;
+    let next = null;
+    if (state.focus === 'zonas' && el.getAttribute('data-zid')) next = { kind: 'zone', id: el.getAttribute('data-zid') };
+    else if (state.focus === 'espacios' && el.getAttribute('data-fid')) next = { kind: 'footprint', id: el.getAttribute('data-fid') };
+    else if (state.focus === 'activos' && el.getAttribute('data-sid')) next = { kind: 'space', id: el.getAttribute('data-sid') };
+    if (!next) return;
+    next.step = state.focus;
+    next.strong = !(sameHighlight(state.hl, next) && state.hl.strong);
+    state.hl = next;
+    markSelectedRow();
+    const row = highlightedRow();
+    if (row) row.scrollIntoView({ block: 'nearest' });
+    applyHighlight(true);
+}
+let mapTap = null;
+$('layout-svg').addEventListener('pointerdown', (event) => { mapTap = { x: event.clientX, y: event.clientY, target: event.target }; });
+window.addEventListener('pointerup', (event) => {
+    const tap = mapTap;
+    mapTap = null;
+    if (!tap || !state.draft) return;
+    if (Math.abs(event.clientX - tap.x) + Math.abs(event.clientY - tap.y) > 6) return; // arrastró una zona o recorrió el croquis: no es un toque
+    selectFromMap(tap.target);
+});
 
 // ---- croquis -----------------------------------------------------------------------------------------------------------
 const ZONE_CLASS = { dry: 'lz-dry', cold: 'lz-cold', chemical: 'lz-chem', finished: 'lz-fin', dock: 'lz-dock', office: 'lz-office', aisle: 'lz-aisle', aisle2: 'lz-aisle2' };

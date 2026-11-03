@@ -1570,7 +1570,7 @@
     "colMaterialApoyoFuncionalidad": "Screen Functionality Access",
     "colLayoutContorno": "Warehouse outline",
     "colLayoutPuertas": "Doors",
-    "colLayoutLuz": "Power connections",
+    "colLayoutLuz": "Electrical Power",
     "colLayoutZonas": "Zones",
     "colLayoutEspacios": "Footprint-Space",
     "colLayoutQr": "QR codes",
@@ -1639,7 +1639,7 @@
     "layoutDescartarConfirm": "Discard the unsaved changes?",
     "layoutStepContorno": "Outline",
     "layoutStepPuertas": "Doors",
-    "layoutStepLuz": "Power connections",
+    "layoutStepLuz": "Electrical Power",
     "layoutStepZonas": "Zones",
     "layoutStepEspacios": "Footprint-Space",
     "layoutStepActivos": "Assets",
@@ -3584,7 +3584,7 @@
     },
     "layoutSteps": {
       "what": "The steps to build the Layout, like layers. Tap a step to see it on the sketch and edit it: only the step you tapped shows below. You can keep several on at once and the sketch shows the outline plus all of them. To hide a step, tap it again while it is the one you are editing.",
-      "example": "you tap Doors and then Power connections: you see both on the sketch and edit only the power below; you tap Doors again to edit the doors."
+      "example": "you tap Doors and then Electrical Power: you see both on the sketch and edit only the power below; you tap Doors again to edit the doors."
     },
     "layoutSec_contorno": {
       "what": "The corners of the warehouse in meters, with the height of each one, and the columns or obstacles. The total m² come from here and, with the heights, the m³.",
@@ -3595,7 +3595,7 @@
       "example": "the receiving dock is on wall 1, 6 meters from the corner, and is 3.5 wide."
     },
     "layoutSec_luz": {
-      "what": "The electrical panels and outlets of the warehouse: which wall, how far from the corner and how high from the floor.",
+      "what": "The electrical power of the warehouse: the panels and outlets, which wall they are on, how far from the corner and how high from the floor. This step comes after Footprint-Space and before Assets because an asset that needs power (a refrigerator, for example) must be placed near an electrical connection.",
       "example": "a 220 V outlet on wall 3, 20 meters from the corner and 1.2 meters from the floor."
     },
     "layoutSec_zonas": {
@@ -4043,8 +4043,8 @@
       "example": "the warehouse starts at 0, 0."
     },
     "layoutCanvas": {
-      "what": "The map of the warehouse, drawn by itself from the data you enter: walls, zones, racks, doors and power connections. When you touch a line of Zones, Footprint-Space, Assets or Positions, what that line is gets highlighted here with an orange outline (the rest fades) and the line stays marked in the table; for a position its rack is marked and the level and column are written.",
-      "example": "you change the width of a zone and the map updates instantly; you touch line R-03 and rack R-03 is marked on the map."
+      "what": "The map of the warehouse, drawn by itself from the data you enter: walls, zones, racks, doors and power connections. When you touch a line of Zones, Footprint-Space, Assets or Positions, what that line is gets highlighted here with a thin, dotted, rotating outline (so the measures and how close it is to the rest stay visible) and the line stays marked in the table; for a position its rack is marked and the level and column are written. If you touch the shape on the map (without dragging it), it is highlighted with the thick orange outline and its line is marked; touch it again to go back to the dotted one.",
+      "example": "you change the width of a zone and the map updates instantly; you touch line R-03 and rack R-03 is marked with its dotted outline; you touch the rack on the map and it is marked thick so you can find it at a glance."
     },
     "layoutSave": {
       "what": "Saves the Layout with all the changes. Until you save, only you can see them.",
