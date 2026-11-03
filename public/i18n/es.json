@@ -4082,7 +4082,7 @@
       "example": "acerca para ver un anaquel de cerca y toca su código para ver sus medidas."
     },
     "layout3dStage": {
-      "what": "El Layout en 3D. Arrastra para girar, Shift o clic derecho para mover, Ctrl y rueda (o dos dedos) para acercar. Toca un espacio o una zona para ver su nombre, medidas y niveles.",
+      "what": "El Layout en 3D. Arrastra para girar, Shift o clic derecho para mover, Ctrl y rueda (o dos dedos) para acercar. Toca un activo, una huella o una zona para ver su nombre, medidas y niveles; además, en el paso que estás editando (Zonas, Huella-Espacio o Activos) se marca su renglón en la tabla y se baja hasta él, como al tocarlo en el croquis.",
       "example": "toca el anaquel R-07 y debajo del dibujo sale su tipo, su zona, sus medidas y cuántos niveles tiene."
     },
     "layoutViews": {

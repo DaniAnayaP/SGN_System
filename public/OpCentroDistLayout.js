@@ -708,7 +708,10 @@ function selectFromMap(target) {
     if (state.focus === 'zonas' && el.getAttribute('data-zid')) next = { kind: 'zone', id: el.getAttribute('data-zid') };
     else if (state.focus === 'espacios' && el.getAttribute('data-fid')) next = { kind: 'footprint', id: el.getAttribute('data-fid') };
     else if (state.focus === 'activos' && el.getAttribute('data-sid')) next = { kind: 'space', id: el.getAttribute('data-sid') };
-    if (!next) return;
+    if (next) selectEntity(next);
+}
+// Elegir una zona, huella o activo: se marca su renglón en la tabla (y se baja hasta él) y su figura se resalta en el croquis y en el 3D; volver a elegirla pasa del contorno grueso al punteado.
+function selectEntity(next) {
     next.step = state.focus;
     next.strong = !(sameHighlight(state.hl, next) && state.hl.strong);
     state.hl = next;
@@ -716,6 +719,20 @@ function selectFromMap(target) {
     const row = highlightedRow();
     if (row) row.scrollIntoView({ block: 'nearest' });
     applyHighlight(true);
+}
+// Tocar una figura en el 3D hace lo mismo que en el croquis: solo cuenta lo del paso que se está editando (en Zonas la zona, en Huella-Espacio la huella y en Activos el activo). Como en el 3D los activos tapan
+// el piso, tocar un activo en el paso Zonas elige la zona donde está y en Huella-Espacio la huella que lo lleva.
+function selectFrom3d(sel) {
+    if (!sel || !state.draft) return;
+    let next = null;
+    if (state.focus === 'zonas') {
+        const zoneId = sel.kind === 'zone' ? sel.zone.id : (sel.kind === 'space' ? sel.space.zoneId : (sel.kind === 'footprint' ? sel.footprint.zoneId : ''));
+        if (zoneId) next = { kind: 'zone', id: zoneId };
+    } else if (state.focus === 'espacios') {
+        const footprintId = sel.kind === 'footprint' ? sel.footprint.id : (sel.kind === 'space' ? sel.space.footprintId : '');
+        if (footprintId) next = { kind: 'footprint', id: footprintId };
+    } else if (state.focus === 'activos' && sel.kind === 'space') next = { kind: 'space', id: sel.space.id };
+    if (next) selectEntity(next);
 }
 let mapTap = null;
 $('layout-svg').addEventListener('pointerdown', (event) => { mapTap = { x: event.clientX, y: event.clientY, target: event.target }; });
@@ -2274,7 +2291,7 @@ function ensureScene3d() {
             await loadScriptOnce('vendor/three/three.min.js');
             await loadScriptOnce('LayoutScene3D.js');
             await loadScriptOnce('LayoutAssetPicker.js');
-            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, onSelect: show3dInfo });
+            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, onSelect: (sel) => { show3dInfo(sel); selectFrom3d(sel); } });
             picker3d = window.LayoutAssetPicker.create($('layout-3d-picker'), {
                 texts: { title: t('main.layout3dActivosTitulo'), count: t('main.layout3dActivosConteo'), all: t('main.layout3dTodos'), none: t('main.layout3dNinguno'), close: t('main.layout3dCerrar'), search: t('main.layout3dActivosBuscar'), noResults: t('main.layout3dSinResultados'), noZone: t('main.layoutSinZona') },
                 typeLabel: (type) => typeLabel('space', type),
@@ -2290,6 +2307,12 @@ function show3dInfo(sel) {
     const box = $('layout-3d-info');
     if (!sel || !state.draft) { box.hidden = true; return; }
     box.hidden = false;
+    if (sel.kind === 'footprint') {
+        const p = sel.footprint;
+        const zone = state.draft.zones.find((z) => z.id === p.zoneId);
+        box.innerHTML = `<b>${esc(p.code)}</b> · ${esc(t('main.layoutFindHuella'))}${zone ? ` · ${esc(zone.name)}` : ''} · ${fmt(p.l)} × ${fmt(p.d)} × ${fmt(p.h)} m`;
+        return;
+    }
     if (sel.kind === 'space') {
         const s = sel.space;
         const zone = state.draft.zones.find((z) => z.id === s.zoneId);

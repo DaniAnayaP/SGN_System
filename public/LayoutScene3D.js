@@ -70,6 +70,7 @@
         let hitSpaces = null;
         let spaceList = [];
         let zoneMeshes = [];
+        let fpMeshes = []; // las losas de las huellas (se pueden tocar)
         let hiddenAssets = new Set(); // ids de los espacios que NO se dibujan (los eligió quien ve el 3D)
         let lastLayout = null;
         let center = null; // el centro de la nave en el plano (el origen del 3D), para ubicar lo resaltado
@@ -240,6 +241,7 @@
             hitSpaces = null;
             spaceList = [];
             zoneMeshes = [];
+            fpMeshes = [];
             center = null;
             const V =layout && Array.isArray(layout.vertices) ? layout.vertices.filter((p) => Array.isArray(p) && p.length >= 2) : [];
             if (V.length < 3) { applyVisibility(); return; }
@@ -345,7 +347,9 @@
                 const dimFp = !!focusSet && !focusSet.footprints.has(f.id);
                 const slab = new THREE.Mesh(new THREE.BoxGeometry(f.l, 0.02, f.d), new THREE.MeshLambertMaterial({ color: new THREE.Color(paint), transparent: dimFp, opacity: dimFp ? 0.25 : 1 }));
                 slab.position.set(PX(f.x + f.l / 2), 0.085, PZ(f.y + f.d / 2));
+                slab.userData = { kind: 'footprint', footprint: f };
                 group.footprints.add(slab);
+                fpMeshes.push(slab);
             });
 
             // activos: anaqueles (postes y repisas por nivel), anaqueles con tarimas, gabinetes y tarimas
@@ -454,13 +458,16 @@
                 const e2 = spaceList[hit.instanceId];
                 payload = { kind: 'space', space: e2.s };
                 box = { x: e2.x, y: e2.s.h / 2, z: e2.z, sx: e2.s.l, sy: e2.s.h, sz: e2.s.d };
-            } else if (layerOn.zones) {
-                hit = raycaster.intersectObjects(zoneMeshes)[0];
-                if (hit) {
-                    const b = new THREE.Box3().setFromObject(hit.object);
+            } else {
+                // sin activo debajo del toque: la losa de una huella y, si no, la de una zona (una capa oculta no se puede tocar)
+                const fh = layerOn.footprints && fpMeshes.length ? raycaster.intersectObjects(fpMeshes)[0] : null;
+                const zh = !fh && layerOn.zones ? raycaster.intersectObjects(zoneMeshes)[0] : null;
+                const found = fh || zh;
+                if (found) {
+                    const b = new THREE.Box3().setFromObject(found.object);
                     const c = b.getCenter(new THREE.Vector3());
                     const sz = b.getSize(new THREE.Vector3());
-                    payload = { kind: 'zone', zone: hit.object.userData.zone };
+                    payload = fh ? { kind: 'footprint', footprint: found.object.userData.footprint } : { kind: 'zone', zone: found.object.userData.zone };
                     box = { x: c.x, y: c.y, z: c.z, sx: sz.x, sy: Math.max(sz.y, 0.1), sz: sz.z };
                 }
             }

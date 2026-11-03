@@ -4083,7 +4083,7 @@
       "example": "zoom in to see a rack up close and tap it to see its measures."
     },
     "layout3dStage": {
-      "what": "The Layout in 3D. Drag to rotate, Shift or right click to move, Ctrl and wheel (or two fingers) to zoom. Tap a space or a zone to see its name, measures and levels.",
+      "what": "The Layout in 3D. Drag to rotate, Shift or right click to move, Ctrl and wheel (or two fingers) to zoom. Tap an asset, a footprint or a zone to see its name, measures and levels; also, in the step you are editing (Zones, Footprint-Space or Assets) its row is marked in the table and scrolled into view, like when you tap it on the map.",
       "example": "tap rack R-07 and below the drawing you get its type, zone, measures and how many levels it has."
     },
     "layoutViews": {
