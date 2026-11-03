@@ -2636,20 +2636,22 @@
     "relChooseWarehouse": "Elige un almacén",
     "relChooseSub": "Elige un sub almacén",
     "relChooseZone": "Elige una zona",
-    "relChooseRack": "Elige un estante",
+    "relChooseRack": "Elige un activo",
     "relLevelShort": "Nivel",
     "relSlotShort": "Columna",
     "relFirstCost": "Primero el centro de costos",
     "relFirstWarehouse": "Primero el almacén",
     "relFirstSub": "Primero el sub almacén",
     "relFirstZone": "Primero la zona",
+    "relFirstFootprint": "Primero la huella",
+    "relChooseFootprint": "Elige una huella",
     "relSubVirtual": "Sub almacén virtual: sin ubicación física",
     "relSubNoKind": "Este sub almacén aún no es Físico ni Virtual",
     "relNoZonesForSub": "Este sub almacén no tiene zonas asignadas",
-    "relRackTitle": "Estante {code}",
+    "relRackTitle": "Activo {code}",
     "relRackSub": "{levels} niveles · {slots} columnas",
-    "relRackEmpty": "Aquí aparece el estante, con sus niveles y columnas.",
-    "relRackPick": "Elige zona y estante para verlo de frente",
+    "relRackEmpty": "Aquí aparece el activo, con sus niveles y columnas.",
+    "relRackPick": "Elige zona, huella y activo para verlo de frente",
     "relFree": "Libre",
     "relOccupied": "Ocupado por otro código",
     "relSelected": "El que eliges",
@@ -3952,6 +3954,10 @@
     "vfLocator": {
       "what": "El Localizador completo de este lugar, siempre con las 7 piezas: zona, huella, activo, nivel, columna, fila y profundidad. Es el mismo que se usa en la plantilla de Relación Código y se puede copiar tal cual.",
       "example": "Z006.H005.A005.N003.C001.F001.P001 es la zona 6, la huella 5, el activo A5, el nivel 3, la columna 1, la fila 1 y la profundidad 1."
+    },
+    "relFootprint": {
+      "what": "La huella (el lugar en el piso) de esa zona donde está lo que vas a ubicar. Solo salen las huellas que tienen activos en este sub almacén. Si la zona tiene una sola huella, o la huella un solo activo, se eligen solas.",
+      "example": "en la Zona 6 eliges la huella R-05 y su activo A-05 queda elegido."
     },
     "layoutFmtReset": {
       "what": "Quita el formato propio de esta zona: vuelve a verse con el color de su tipo.",

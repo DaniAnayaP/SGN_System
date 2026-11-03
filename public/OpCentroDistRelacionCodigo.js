@@ -246,7 +246,7 @@ function centerChoices() {
     if (editing && editing.costCenterId && !list.some((c) => c.id === editing.costCenterId)) list.push({ id: editing.costCenterId, name: editing.centroCostos });
     return list;
 }
-const blankState = () => ({ sku: null, centro: opts && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '', fila: '', prof: '', clas: 'activo' });
+const blankState = () => ({ sku: null, centro: opts && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', hue: '', est: '', niv: '', esp: '', fila: '', prof: '', clas: 'activo' });
 const $m = (id) => document.getElementById(id);
 const byId = (list, id) => (list || []).find((x) => String(x.id) === String(id));
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
@@ -271,7 +271,7 @@ function ensureModal() {
                 ${field('rel-clas', 'main.colRelClasificacion', 'relClass')}
                 ${field('rel-centro', 'main.colRelCentroCostos', 'relCostCenter')}
                 <div class="rel-two">${field('rel-alm', 'main.colRelAlmacen', 'relWarehouse')}${field('rel-sub', 'main.colRelSubAlmacen', 'relSubWarehouse')}</div>
-                ${field('rel-zona', 'main.colRelZona', 'relZone')}
+                <div class="rel-two">${field('rel-zona', 'main.colRelZona', 'relZone')}${field('rel-hue', 'main.colRelHuella', 'relFootprint')}</div>
                 <div class="rel-two">
                     ${field('rel-est', 'main.colRelEstante', 'relRack')}
                     <div class="rel-four">${field('rel-niv', 'main.colRelNivel', 'relLevel')}${field('rel-esp', 'main.colRelEspacio', 'relSlot')}${field('rel-fila', 'main.colRelFila', 'relRow')}${field('rel-prof', 'main.colRelProfundidad', 'relDepth')}</div>
@@ -328,7 +328,15 @@ function ensureModal() {
         renderForm();
     });
     bind('rel-centro', 'centro', true); bind('rel-alm', 'alm', true); bind('rel-sub', 'sub', true);
-    bind('rel-zona', 'zona'); bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-fila', 'fila', true); bind('rel-prof', 'prof', true);
+    // Al elegir la zona o la huella, lo que solo tiene una opción (la única huella de la zona, el único activo de la huella) se elige solo: en el caso normal huella y activo son lo mismo.
+    const autoPick = () => {
+        let d = derived();
+        if (d.zone && !st.hue && d.footprints.length === 1) { st.hue = d.footprints[0].id; d = derived(); }
+        if (d.footprint && !st.est && d.racks.length === 1) st.est = d.racks[0].id;
+    };
+    $m('rel-zona').addEventListener('change', (event) => { st.zona = event.target.value; cutBelow('zona'); autoPick(); renderForm(); });
+    $m('rel-hue').addEventListener('change', (event) => { st.hue = event.target.value; cutBelow('hue'); autoPick(); renderForm(); });
+    bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-fila', 'fila', true); bind('rel-prof', 'prof', true);
     $m('rel-clas').addEventListener('change', (event) => { st.clas = event.target.value; renderForm(); });
     $m('rel-code').addEventListener('input', () => {
         st.sku = null;
@@ -339,7 +347,7 @@ function ensureModal() {
 }
 
 function cutBelow(key) {
-    const order = ['centro', 'alm', 'sub', 'zona', 'est', 'niv', 'esp', 'fila', 'prof'];
+    const order = ['centro', 'alm', 'sub', 'zona', 'hue', 'est', 'niv', 'esp', 'fila', 'prof'];
     for (let i = order.indexOf(key) + 1; i < order.length; i += 1) st[order[i]] = '';
 }
 
@@ -375,9 +383,13 @@ function derived() {
     const zones = ((opts.zonesByCenter && opts.zonesByCenter[st.centro]) || []).filter((z) => zoneEntries.some((e) => e.zoneId === z.id));
     const zone = byId(zones, st.zona);
     const entry = zone ? zoneEntries.find((e) => e.zoneId === zone.id) : null;
-    const racks = zone ? zone.spaces.filter((s) => !entry.spaceIds.length || entry.spaceIds.includes(s.id)) : [];
+    // Zona > Huella > Activo: se ofrecen las huellas que tienen algún activo de ese sub almacén, y los activos de la huella elegida.
+    const allowed = zone ? zone.spaces.filter((s) => !entry.spaceIds.length || entry.spaceIds.includes(s.id)) : [];
+    const footprints = zone ? (zone.footprints || []).filter((f) => allowed.some((s) => s.footprintId === f.id)) : [];
+    const footprint = byId(footprints, st.hue);
+    const racks = footprint ? allowed.filter((s) => s.footprintId === footprint.id) : [];
     const rack = byId(racks, st.est);
-    return { sub, physical, zones, zone, racks, rack };
+    return { sub, physical, zones, zone, footprints, footprint, racks, rack };
 }
 
 // Un espacio es anaquel + nivel + columna + fila + profundidad (sin fila o sin profundidad cuenta como la 1).
@@ -407,7 +419,8 @@ function renderForm() {
     const d = derived();
     const zonePlaceholder = !st.sub ? t('main.relFirstSub') : (d.sub && d.sub.kind === 'virtual' ? t('main.relSubVirtual') : (d.physical && !d.zones.length ? t('main.relNoZonesForSub') : (d.physical ? t('main.relChooseZone') : t('main.relSubNoKind'))));
     fillSelect('rel-zona', d.zones.map((z) => ({ value: z.id, label: z.name })), zonePlaceholder, st.zona, !d.zones.length);
-    fillSelect('rel-est', d.racks.map((r) => ({ value: r.id, label: r.code })), d.zone ? t('main.relChooseRack') : t('main.relFirstZone'), st.est, !d.racks.length);
+    fillSelect('rel-hue', d.footprints.map((f) => ({ value: f.id, label: f.code })), d.zone ? t('main.relChooseFootprint') : t('main.relFirstZone'), st.hue, !d.footprints.length);
+    fillSelect('rel-est', d.racks.map((r) => ({ value: r.id, label: r.code })), d.footprint ? t('main.relChooseRack') : t('main.relFirstFootprint'), st.est, !d.racks.length);
     fillSelect('rel-niv', d.rack ? range(d.rack.levels).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relLevelShort') : '—', st.niv, !d.rack);
     fillSelect('rel-esp', d.rack && st.niv ? range(d.rack.slots).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relSlotShort') : '—', st.esp, !(d.rack && st.niv));
     // Dentro del hueco (nivel × columna) están sus filas y sus profundidades: solo se piden si tiene más de una, y se ofrecen las que están libres (más las de esta misma relación, que occupiedBy no cuenta).
@@ -464,6 +477,7 @@ function drawPath(d) {
         [t('main.colRelAlmacen'), (byId(opts.warehouses, st.alm) || {}).name],
         [t('main.colRelSubAlmacen'), d.sub && d.sub.name],
         [t('main.colRelZona'), d.zone && d.zone.name],
+        [t('main.colRelHuella'), d.footprint && d.footprint.code],
         [t('main.colRelEstante'), d.rack && d.rack.code],
         [t('main.colRelNivel'), st.niv ? t('main.relLevelN', { n: st.niv }) : ''],
         [t('main.colRelEspacio'), st.esp ? t('main.relSlotN', { n: st.esp }) : ''],
@@ -489,7 +503,7 @@ async function openDialog(record) {
     st = record
         ? {
             sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc, uom: '' },
-            centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', est: record.spaceId || '',
+            centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', hue: record.footprintId || '', est: record.spaceId || '',
             niv: record.level || '', esp: record.slot || '', fila: record.row || '', prof: record.depth || '', clas: record.classification || 'activo',
         }
         : blankState();

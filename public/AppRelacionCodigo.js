@@ -164,7 +164,7 @@ function centerChoices() {
     }
     return list;
 }
-const blankState = () => ({ sku: null, centro: options && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '', fila: '', prof: '', clas: 'activo' });
+const blankState = () => ({ sku: null, centro: options && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', hue: '', est: '', niv: '', esp: '', fila: '', prof: '', clas: 'activo' });
 const readCache = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 const writeCache = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* sin espacio: se pide otra vez con señal */ } };
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -210,7 +210,7 @@ function render() {
 }
 
 function routeText(r) {
-    return [r.warehouseName, r.subWarehouseName, r.zoneName, r.spaceCode, r.level ? t('main.relLevelN', { n: r.level }) : '', r.slot ? t('main.relSlotN', { n: r.slot }) : ''].filter(Boolean).join(' › ');
+    return [r.warehouseName, r.subWarehouseName, r.zoneName, r.footprintCode && r.footprintCode !== r.spaceCode ? r.footprintCode : '', r.spaceCode, r.level ? t('main.relLevelN', { n: r.level }) : '', r.slot ? t('main.relSlotN', { n: r.slot }) : ''].filter(Boolean).join(' › ');
 }
 
 function renderRejectedBanner() {
@@ -274,7 +274,7 @@ function renderRows() {
         row.className = 'home-carga-active-row';
         const located = r.status === 'located';
         row.innerHTML = `<span class="home-carga-active-row-icon"><i class="bx bx-map-pin" aria-hidden="true"></i></span>
-            <span class="home-carga-active-row-label"><p>${esc(r.sku)} · ${esc(r.description || r.upc)}</p><span>${esc(routeText(r) || r.centroCostos)}</span></span>
+            <span class="home-carga-active-row-label"><p>${esc(r.sku)} · ${esc(r.description || r.upc)}</p><span>${esc(routeText(r) || r.centroCostos)}</span>${r.locator ? `<span class="relapp-locator">${esc(r.locator)}</span>` : ''}</span>
             ${r.local ? `<span class="home-carga-offline-badge" title="${esc(t('home.cargaSavedOffline'))}"><i class="bx bx-cloud-upload" aria-hidden="true"></i></span>` : ''}
             <span class="relapp-tag ${located ? 'ok' : 'partial'}">${esc(t(located ? 'main.relStatusLocated' : 'main.relStatusPartial'))}</span>`;
         row.addEventListener('click', () => openForm(r));
@@ -289,7 +289,7 @@ function openForm(record) {
     st = record
         ? {
             sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc },
-            centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', est: record.spaceId || '', niv: record.level || '', esp: record.slot || '', fila: record.row || '', prof: record.depth || '', clas: record.classification || 'activo',
+            centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', hue: record.footprintId || '', est: record.spaceId || '', niv: record.level || '', esp: record.slot || '', fila: record.row || '', prof: record.depth || '', clas: record.classification || 'activo',
         }
         : blankState();
     view = 'form';
@@ -297,7 +297,7 @@ function openForm(record) {
 }
 
 function cutBelow(key) {
-    const order = ['centro', 'alm', 'sub', 'zona', 'est', 'niv', 'esp', 'fila', 'prof'];
+    const order = ['centro', 'alm', 'sub', 'zona', 'hue', 'est', 'niv', 'esp', 'fila', 'prof'];
     for (let i = order.indexOf(key) + 1; i < order.length; i += 1) st[order[i]] = '';
 }
 
@@ -310,8 +310,14 @@ function derived() {
     const zones = centerZones.filter((z) => entries.some((e) => e.zoneId === z.id));
     const zone = byId(zones, st.zona);
     const entry = zone ? entries.find((e) => e.zoneId === zone.id) : null;
-    const racks = zone ? zone.spaces.filter((s) => !entry.spaceIds.length || entry.spaceIds.includes(s.id)) : [];
-    return { sub, physical, zones, zone, racks, rack: byId(racks, st.est) };
+    // Zona > Huella > Activo: se ofrecen las huellas que tienen algún activo de ese sub almacén y los activos de la huella elegida. Una copia vieja de las opciones (sin huellas, guardada en el celular antes de este
+    // cambio) se sigue usando como antes, Zona > Activo, hasta que haya señal y se bajen las nuevas.
+    const allowed = zone ? zone.spaces.filter((s) => !entry.spaceIds.length || entry.spaceIds.includes(s.id)) : [];
+    const legacy = !!zone && !Array.isArray(zone.footprints);
+    const footprints = zone && !legacy ? zone.footprints.filter((f) => allowed.some((s) => s.footprintId === f.id)) : [];
+    const footprint = byId(footprints, st.hue);
+    const racks = legacy ? allowed : (footprint ? allowed.filter((s) => s.footprintId === footprint.id) : []);
+    return { sub, physical, zones, zone, legacy, footprints, footprint, racks, rack: byId(racks, st.est) };
 }
 // Un espacio es anaquel + nivel + columna + fila + profundidad (sin fila o sin profundidad cuenta como la 1).
 function bayInfo(rack, level, column) {
@@ -348,6 +354,7 @@ function renderForm() {
         ${selectField('rel-alm', 'main.colRelAlmacen', 'relWarehouse')}
         ${selectField('rel-sub', 'main.colRelSubAlmacen', 'relSubWarehouse')}
         ${selectField('rel-zona', 'main.colRelZona', 'relZone')}
+        ${selectField('rel-hue', 'main.colRelHuella', 'relFootprint')}
         ${selectField('rel-est', 'main.colRelEstante', 'relRack')}
         <div class="relapp-four">${selectField('rel-niv', 'main.colRelNivel', 'relLevel')}${selectField('rel-esp', 'main.colRelEspacio', 'relSlot')}${selectField('rel-fila', 'main.colRelFila', 'relRow')}${selectField('rel-prof', 'main.colRelProfundidad', 'relDepth')}</div>
         <div class="relapp-rack"><div class="relapp-rack-head"><b id="rel-rack-title"></b><span id="rel-rack-sub"></span></div><div class="relapp-frame" id="rel-frame"></div></div>
@@ -363,7 +370,15 @@ function renderForm() {
         refreshForm();
     });
     bind('rel-centro', 'centro', true); bind('rel-alm', 'alm', true); bind('rel-sub', 'sub', true);
-    bind('rel-zona', 'zona'); bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-fila', 'fila', true); bind('rel-prof', 'prof', true);
+    // Al elegir la zona o la huella, lo que solo tiene una opción (la única huella de la zona, el único activo de la huella) se elige solo: en el caso normal huella y activo son lo mismo.
+    const autoPick = () => {
+        let d = derived();
+        if (d.zone && !d.legacy && !st.hue && d.footprints.length === 1) { st.hue = d.footprints[0].id; d = derived(); }
+        if (d.footprint && !st.est && d.racks.length === 1) st.est = d.racks[0].id;
+    };
+    document.getElementById('rel-zona').addEventListener('change', (event) => { st.zona = event.target.value; cutBelow('zona'); autoPick(); refreshForm(); });
+    document.getElementById('rel-hue').addEventListener('change', (event) => { st.hue = event.target.value; cutBelow('hue'); autoPick(); refreshForm(); });
+    bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-fila', 'fila', true); bind('rel-prof', 'prof', true);
     document.getElementById('rel-clas').addEventListener('change', (event) => { st.clas = event.target.value; });
     document.getElementById('rel-code').addEventListener('input', () => { st.sku = null; searchCodes(); refreshForm(true); });
     document.getElementById('rel-results').addEventListener('click', (event) => {
@@ -425,7 +440,9 @@ function refreshForm(keepInput) {
     const d = derived();
     const zonePlaceholder = !st.sub ? t('main.relFirstSub') : (d.sub && d.sub.kind === 'virtual' ? t('main.relSubVirtual') : (d.physical && !d.zones.length ? t('main.relNoZonesForSub') : (d.physical ? t('main.relChooseZone') : t('main.relSubNoKind'))));
     fillSelect('rel-zona', d.zones.map((z) => ({ value: z.id, label: z.name })), zonePlaceholder, st.zona, !d.zones.length);
-    fillSelect('rel-est', d.racks.map((r) => ({ value: r.id, label: r.code })), d.zone ? t('main.relChooseRack') : t('main.relFirstZone'), st.est, !d.racks.length);
+    fillSelect('rel-hue', d.footprints.map((f) => ({ value: f.id, label: f.code })), d.zone ? t('main.relChooseFootprint') : t('main.relFirstZone'), st.hue, !d.footprints.length);
+    document.getElementById('rel-hue').closest('.relapp-field').hidden = d.legacy;
+    fillSelect('rel-est', d.racks.map((r) => ({ value: r.id, label: r.code })), (d.footprint || d.legacy) ? t('main.relChooseRack') : t('main.relFirstFootprint'), st.est, !d.racks.length);
     fillSelect('rel-niv', d.rack ? range(d.rack.levels).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relLevelShort') : '—', st.niv, !d.rack);
     fillSelect('rel-esp', d.rack && st.niv ? range(d.rack.slots).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relSlotShort') : '—', st.esp, !(d.rack && st.niv));
     const hasBay = !!(d.rack && st.niv && st.esp);
@@ -478,7 +495,7 @@ function drawRack(rack) {
 function drawPath(d) {
     const parts = [
         [t('main.colRelCentroCostos'), (byId(options.costCenters, st.centro) || {}).name], [t('main.colRelAlmacen'), (byId(options.warehouses, st.alm) || {}).name],
-        [t('main.colRelSubAlmacen'), d.sub && d.sub.name], [t('main.colRelZona'), d.zone && d.zone.name], [t('main.colRelEstante'), d.rack && d.rack.code],
+        [t('main.colRelSubAlmacen'), d.sub && d.sub.name], [t('main.colRelZona'), d.zone && d.zone.name], [t('main.colRelHuella'), d.footprint && d.footprint.code], [t('main.colRelEstante'), d.rack && d.rack.code],
         [t('main.colRelNivel'), st.niv ? t('main.relLevelN', { n: st.niv }) : ''], [t('main.colRelEspacio'), st.esp ? t('main.relSlotN', { n: st.esp }) : ''],
         [t('main.colRelFila'), st.fila ? t('main.relRowN', { n: st.fila }) : ''],
         [t('main.colRelProfundidad'), st.prof ? t('main.relDepthN', { n: st.prof }) : ''],
@@ -518,7 +535,7 @@ async function save() {
             const local = {
                 id: isEdit ? editing.id : null, local: true, skuItemId: st.sku.id, sku: st.sku.sku, upc: st.sku.upc, description: st.sku.description,
                 costCenterId: st.centro || null, centroCostos: (byId(options.costCenters, st.centro) || {}).name || '', warehouseId: st.alm || null, warehouseName: (byId(options.warehouses, st.alm) || {}).name || '',
-                subWarehouseId: st.sub || null, subWarehouseName: d.sub ? d.sub.name : '', zoneId: st.zona || '', zoneName: d.zone ? d.zone.name : '', spaceId: st.est || '', spaceCode: d.rack ? d.rack.code : '',
+                subWarehouseId: st.sub || null, subWarehouseName: d.sub ? d.sub.name : '', zoneId: st.zona || '', zoneName: d.zone ? d.zone.name : '', spaceId: st.est || '', spaceCode: d.rack ? d.rack.code : '', footprintId: d.footprint ? d.footprint.id : '', footprintCode: d.footprint ? d.footprint.code : '', locator: '',
                 level: st.niv || null, slot: st.esp || null, row: st.fila || null, depth: st.prof || null, classification: st.clas || 'activo', status: ((d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.fila || lbay.rows <= 1) && (st.prof || lbay.depth <= 1))) ? 'located' : 'partial',
             };
             relations = isEdit ? relations.map((r) => (r.id === editing.id ? { ...r, ...local } : r)) : [local, ...relations];

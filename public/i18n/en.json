@@ -2637,20 +2637,22 @@
     "relChooseWarehouse": "Choose a warehouse",
     "relChooseSub": "Choose a sub-warehouse",
     "relChooseZone": "Choose a zone",
-    "relChooseRack": "Choose a rack",
+    "relChooseRack": "Choose an asset",
     "relLevelShort": "Level",
     "relSlotShort": "Column",
     "relFirstCost": "Cost center first",
     "relFirstWarehouse": "Warehouse first",
     "relFirstSub": "Sub-warehouse first",
     "relFirstZone": "Zone first",
+    "relFirstFootprint": "Footprint first",
+    "relChooseFootprint": "Choose a footprint",
     "relSubVirtual": "Virtual sub-warehouse: no physical location",
     "relSubNoKind": "This sub-warehouse is not Physical or Virtual yet",
     "relNoZonesForSub": "This sub-warehouse has no zones assigned",
-    "relRackTitle": "Rack {code}",
+    "relRackTitle": "Asset {code}",
     "relRackSub": "{levels} levels · {slots} columns",
-    "relRackEmpty": "The rack appears here, with its levels and columns.",
-    "relRackPick": "Choose a zone and a rack to see it from the front",
+    "relRackEmpty": "The asset appears here, with its levels and columns.",
+    "relRackPick": "Choose a zone, a footprint and an asset to see it from the front",
     "relFree": "Free",
     "relOccupied": "Taken by another code",
     "relSelected": "Your choice",
@@ -3953,6 +3955,10 @@
     "vfLocator": {
       "what": "The complete Locator of this place, always with the 7 pieces: zone, footprint, asset, level, column, row and depth. It is the same one used in the Code Relation template and can be copied as it is.",
       "example": "Z006.H005.A005.N003.C001.F001.P001 is zone 6, footprint 5, asset A5, level 3, column 1, row 1 and depth 1."
+    },
+    "relFootprint": {
+      "what": "The footprint (the place on the floor) of that zone where what you are about to place is. Only footprints that have assets in this sub-warehouse appear. If the zone has a single footprint, or the footprint a single asset, they are chosen by themselves.",
+      "example": "in Zone 6 you choose footprint R-05 and its asset A-05 is chosen."
     },
     "layoutFmtReset": {
       "what": "Removes this zone's own format: it goes back to its type color.",
