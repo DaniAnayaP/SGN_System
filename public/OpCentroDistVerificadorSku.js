@@ -82,8 +82,8 @@
     const TYPE_KEYS = { 'articulo-terminado': 'main.articleTypeFinished', 'materia-prima': 'main.articleTypeRawMaterial' };
 
     function locationHtml(loc) {
-        const steps = [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.spaceCode, loc.level ? t('main.relLevelN', { n: loc.level }) : '', loc.slot ? t('main.relSlotN', { n: loc.slot }) : '', loc.depth && loc.spaceDepth > 1 ? t('main.relDepthN', { n: loc.depth }) : ''];
-        const labels = [t('main.colRelCentroCostos'), t('main.colRelAlmacen'), t('main.colRelSubAlmacen'), t('main.colRelZona'), t('main.colRelEstante'), t('main.colRelNivel'), t('main.colRelEspacio'), t('main.colRelProfundidad')];
+        const steps = [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.spaceCode, loc.level ? t('main.relLevelN', { n: loc.level }) : '', loc.slot ? t('main.relSlotN', { n: loc.slot }) : '', loc.row && loc.bayRows > 1 ? t('main.relRowN', { n: loc.row }) : '', loc.depth && loc.bayDepth > 1 ? t('main.relDepthN', { n: loc.depth }) : ''];
+        const labels = [t('main.colRelCentroCostos'), t('main.colRelAlmacen'), t('main.colRelSubAlmacen'), t('main.colRelZona'), t('main.colRelEstante'), t('main.colRelNivel'), t('main.colRelEspacio'), t('main.colRelFila'), t('main.colRelProfundidad')];
         const path = steps.map((value, i) => `${i ? '<span class="rel-arrow">›</span>' : ''}<span class="rel-step${value ? ' rel-step-on' : ''}">${esc(value || labels[i])}</span>`).join('');
         const kind = loc.subKind === 'virtual' ? `<span class="rel-tag rel-tag-partial">${esc(t('main.whVirtual'))}</span>` : '';
         const tag = `<span class="rel-tag ${loc.status === 'located' ? 'rel-tag-ok' : 'rel-tag-partial'}">${esc(t(loc.status === 'located' ? 'main.relStatusLocated' : 'main.relStatusPartial'))}</span>`;

@@ -20,7 +20,8 @@
         { key: 'zone', es: 'Zona', en: 'Zone', col: 'colRelZona', aliases: ['zone'] },
         { key: 'rack', es: 'Estante', en: 'Rack', col: 'colRelEstante', aliases: ['anaquel', 'estanteria', 'rack'] },
         { key: 'level', es: 'Nivel', en: 'Level', col: 'colRelNivel', aliases: ['level'] },
-        { key: 'slot', es: 'Fila', en: 'Row', col: 'colRelEspacio', aliases: ['espacio', 'slot', 'row'] },
+        { key: 'slot', es: 'Columna', en: 'Column', col: 'colRelEspacio', aliases: ['espacio', 'slot', 'column', 'col'] },
+        { key: 'row', es: 'Fila', en: 'Row', col: 'colRelFila', aliases: ['row'] },
         { key: 'depth', es: 'Profundidad', en: 'Depth', col: 'colRelProfundidad', aliases: ['prof', 'fondo', 'depth'] },
     ];
     const BY_KEY = Object.fromEntries(COLUMNS.map((c) => [c.key, c]));
@@ -79,13 +80,14 @@
     // el número que cierra un nombre o un código: "Zona 6" -> 6, "R-05" -> 5 (NaN si no trae)
     const trailingNumber = (text) => { const m = String(text == null ? '' : text).match(/(\d+)\s*$/); return m ? Number(m[1]) : NaN; };
 
-    // Localizador corto (dentro de un mismo sitio): Z006.A005.N003.F001.P001 = Zona 6 · Anaquel 5 · Nivel 3 · Fila 1 · Profundidad 1.
+    // Localizador corto (dentro de un mismo sitio): Z006.A005.N003.C002.F001.P001 = Zona 6 · Anaquel 5 · Nivel 3 · Columna 2 · Fila 1 · Profundidad 1. El hueco es nivel × columna; dentro de él están la fila y la profundidad.
+    // La columna (C) es opcional si el estante tiene una sola (así Z006.A005.N003.F001.P001 sigue valiendo).
     // La letra del activo dice qué tipo de espacio del Layout es: A anaquel, R rack, G gabeta, T tarima en piso; el número es el del código del espacio (R-05 -> A005).
     const ASSET_TYPES = { A: 'rack', R: 'rackpal', G: 'cabinet', T: 'pallet' };
     function parseLocator(raw) {
         const parts = String(raw).split('.').map((s) => s.trim()).filter(Boolean);
-        const out = { zone: null, asset: null, level: null, slot: null, depth: null };
-        if (!parts.length || parts.length > 5) return { error: 'locatorFormat' };
+        const out = { zone: null, asset: null, level: null, column: null, row: null, depth: null };
+        if (!parts.length || parts.length > 6) return { error: 'locatorFormat' };
         for (const part of parts) {
             const m = part.match(/^([A-Za-z])\s*(\d+)$/);
             if (!m) return { error: 'locatorFormat' };
@@ -94,7 +96,8 @@
             if (!(n >= 1)) return { error: 'locatorFormat' };
             if (letter === 'Z') { if (out.zone !== null) return { error: 'locatorFormat' }; out.zone = n; }
             else if (letter === 'N') { if (out.level !== null) return { error: 'locatorFormat' }; out.level = n; }
-            else if (letter === 'F') { if (out.slot !== null) return { error: 'locatorFormat' }; out.slot = n; }
+            else if (letter === 'C') { if (out.column !== null) return { error: 'locatorFormat' }; out.column = n; }
+            else if (letter === 'F') { if (out.row !== null) return { error: 'locatorFormat' }; out.row = n; }
             else if (letter === 'P') { if (out.depth !== null) return { error: 'locatorFormat' }; out.depth = n; }
             else { if (out.asset) return { error: 'locatorFormat' }; out.asset = { letter, num: n }; }
         }
@@ -106,9 +109,9 @@
     //   itemBySku(n) / itemByUpc(upc) -> { id, sku, ... } | null,
     //   centers: [{ id, code, name }] (completos), selectedIds: null (todos) | [ids] (los marcados arriba),
     //   warehouses: [{ id, name, parentId, status }], subWarehouses: [{ id, name, parentId, status, kind, locations: [{ zoneId, spaceIds }] }],
-    //   zonesByCenter: { centro: [{ id, name, spaces: [{ id, code, type, levels, slots, depth }] }] },
+    //   zonesByCenter: { centro: [{ id, name, spaces: [{ id, code, type, levels, slots, bays: [{ n, c, rows?, depth? }] }] }] },
     //   relationsOf(itemId) -> las relaciones que ese código ya tiene [{ id, costCenterId, warehouseId, subWarehouseId, zoneId, spaceId, level, slot }],
-    //   occupiedBy(spaceId, level, fila, profundidad) -> SKU que lo ocupa ('' = libre), existingKey(key) -> ya existe esa misma relación,
+    //   occupiedBy(spaceId, nivel, columna, fila, profundidad) -> SKU que lo ocupa ('' = libre), existingKey(key) -> ya existe esa misma relación,
     //   priorRowWithKey(key, row) -> número de otra fila anterior del archivo con lo mismo (0 = ninguna)
     // }
     // Regresa { error: { field, code, params } } o { action: 'create' | 'complete' | 'same', values, relationId?, keys, located, route }.
@@ -128,14 +131,15 @@
         const rackRaw = text('rack');
         const levelRaw = text('level');
         const slotRaw = text('slot');
+        const rowRaw = text('row');
         const depthRaw = text('depth');
         let loc = null;
         if (locRaw) {
-            if (zoneRaw || rackRaw || levelRaw || slotRaw || depthRaw) return err('locator', 'locatorAndColumns');
+            if (zoneRaw || rackRaw || levelRaw || slotRaw || rowRaw || depthRaw) return err('locator', 'locatorAndColumns');
             loc = parseLocator(locRaw);
             if (loc.error) return err('locator', loc.error, { value: locRaw });
         }
-        const hasPlace = !!(locRaw || zoneRaw || rackRaw || levelRaw || slotRaw || depthRaw);
+        const hasPlace = !!(locRaw || zoneRaw || rackRaw || levelRaw || slotRaw || rowRaw || depthRaw);
         const claimed = (rel) => ctx.priorRowWithKey(`upd|${rel.id}`, row) > 0;
         const partialOf = (rel) => !rel.zoneId && !rel.spaceId && !rel.level && !rel.slot && !!rel.subWarehouseId;
 
@@ -185,84 +189,100 @@
             if (sub.status !== 'active') return err('sub', 'subInactive', { value: sub.name });
         } else return err('warehouse', 'warehouseMissing');
 
-        // ---- el lugar: zona > estante > nivel > espacio (por columnas o por Localizador)
+        // ---- el lugar: zona > estante > nivel > columna > fila > profundidad (por columnas o por Localizador). El hueco es nivel × columna; dentro del hueco están las filas y las profundidades (Layout > Posiciones).
         let zone = null;
         let rack = null;
         let level = null;
         let slot = null;
+        let rowNo = null;
         let depth = null;
+        let bay = { rows: 1, depth: 1 };
+        const bayOfRack = (r, n, c) => { const b = ((r && r.bays) || []).find((x) => x.n === n && x.c === c) || {}; return { rows: b.rows || 1, depth: b.depth || 1 }; };
         if (hasPlace) {
             if (sub.kind !== 'physical') return err(loc ? 'locator' : 'zone', 'subNotPhysical', { sub: sub.name });
             const entries = sub.locations || [];
             const assigned = (ctx.zonesByCenter[center.id] || []).filter((z) => entries.some((e) => e.zoneId === z.id));
+            const F = (field) => (loc ? 'locator' : field); // en qué dato se marca el error
+            let levelGiven = null;
+            let columnGiven = null;
+            let rowGiven = null;
+            let depthGiven = null;
             if (loc) {
                 const zones = assigned.filter((z) => trailingNumber(z.name) === loc.zone);
                 if (!zones.length) return err('locator', 'locatorZone', { value: locRaw, zone: loc.zone, sub: sub.name });
                 if (zones.length > 1) return err('locator', 'locatorAmbiguous', { value: locRaw });
                 zone = zones[0];
                 const entry = entries.find((e) => e.zoneId === zone.id);
-                const racks = zone.spaces.filter((s) => !entry.spaceIds.length || entry.spaceIds.includes(s.id));
                 if (loc.asset) {
                     const type = ASSET_TYPES[loc.asset.letter];
                     if (!type) return err('locator', 'locatorAsset', { value: locRaw, letter: loc.asset.letter });
-                    const found = racks.filter((s) => s.type === type && trailingNumber(s.code) === loc.asset.num);
+                    const found = zone.spaces.filter((sp) => !entry.spaceIds.length || entry.spaceIds.includes(sp.id)).filter((sp) => sp.type === type && trailingNumber(sp.code) === loc.asset.num);
                     if (!found.length) return err('locator', 'locatorRack', { value: locRaw, zone: zone.name });
                     if (found.length > 1) return err('locator', 'locatorAmbiguous', { value: locRaw });
                     rack = found[0];
-                    if (loc.level !== null) {
-                        level = loc.level;
-                        if (level > (rack.levels || 1)) return err('locator', 'levelRange', { value: `N${String(level).padStart(3, '0')}`, max: rack.levels || 1, rack: rack.code });
-                        if (loc.slot !== null) {
-                            slot = loc.slot;
-                            if (slot > (rack.slots || 1)) return err('locator', 'slotRange', { value: `F${String(slot).padStart(3, '0')}`, max: rack.slots || 1, rack: rack.code });
-                            if (loc.depth !== null) {
-                                depth = loc.depth;
-                                if (depth > (rack.depth || 1)) return err('locator', 'depthRange', { value: `P${String(depth).padStart(3, '0')}`, max: rack.depth || 1, rack: rack.code });
-                            }
-                        } else if (loc.depth !== null) return err('locator', 'slotMissing');
-                    } else if (loc.slot !== null || loc.depth !== null) return err('locator', 'levelMissing');
-                } else if (loc.level !== null || loc.slot !== null || loc.depth !== null) return err('locator', 'rackMissing');
+                }
+                levelGiven = loc.level;
+                columnGiven = loc.column;
+                rowGiven = loc.row;
+                depthGiven = loc.depth;
             } else {
                 if (!zoneRaw) return err('zone', 'zoneMissing');
                 zone = assigned.find((z) => norm(z.name) === norm(zoneRaw)) || null;
                 if (!zone) return err('zone', 'zoneNotFound', { value: zoneRaw, sub: sub.name });
                 const entry = entries.find((e) => e.zoneId === zone.id);
-                if (!rackRaw && (levelRaw || slotRaw || depthRaw)) return err('rack', 'rackMissing');
                 if (rackRaw) {
                     const rk = norm(rackRaw);
-                    rack = zone.spaces.filter((s) => !entry.spaceIds.length || entry.spaceIds.includes(s.id)).find((s) => norm(s.code) === rk) || null;
+                    rack = zone.spaces.filter((sp) => !entry.spaceIds.length || entry.spaceIds.includes(sp.id)).find((sp) => norm(sp.code) === rk) || null;
                     if (!rack) return err('rack', 'rackNotFound', { value: rackRaw, zone: zone.name });
-                    if (!levelRaw && (slotRaw || depthRaw)) return err('level', 'levelMissing');
-                    if (levelRaw) {
-                        level = intOf(levelRaw);
-                        if (!Number.isInteger(level) || level < 1 || level > (rack.levels || 1)) return err('level', 'levelRange', { value: levelRaw, max: rack.levels || 1, rack: rack.code });
-                        if (slotRaw) {
-                            slot = intOf(slotRaw);
-                            if (!Number.isInteger(slot) || slot < 1 || slot > (rack.slots || 1)) return err('slot', 'slotRange', { value: slotRaw, max: rack.slots || 1, rack: rack.code });
-                        }
-                        if (depthRaw && !slotRaw) return err('slot', 'slotMissing');
-                        if (depthRaw) {
-                            depth = intOf(depthRaw);
-                            if (!Number.isInteger(depth) || depth < 1 || depth > (rack.depth || 1)) return err('depth', 'depthRange', { value: depthRaw, max: rack.depth || 1, rack: rack.code });
-                        }
+                }
+                const asNum = (raw) => (raw === '' ? null : intOf(raw));
+                levelGiven = asNum(levelRaw);
+                columnGiven = asNum(slotRaw);
+                rowGiven = asNum(rowRaw);
+                depthGiven = asNum(depthRaw);
+            }
+            const given = (n) => n !== null; // NaN también cuenta como «dicho» (texto que no es un número): falla el rango
+            if (!rack) {
+                if (given(levelGiven) || given(columnGiven) || given(rowGiven) || given(depthGiven)) return err(F('rack'), 'rackMissing');
+            } else if (!given(levelGiven)) {
+                if (given(columnGiven) || given(rowGiven) || given(depthGiven)) return err(F('level'), 'levelMissing');
+            } else {
+                const levels = rack.levels || 1;
+                const slots = rack.slots || 1;
+                if (!(levelGiven >= 1 && levelGiven <= levels)) return err(F('level'), 'levelRange', { value: loc ? `N${String(levelGiven).padStart(3, '0')}` : levelRaw, max: levels, rack: rack.code });
+                level = levelGiven;
+                if (given(columnGiven)) {
+                    if (!(columnGiven >= 1 && columnGiven <= slots)) return err(F('slot'), 'slotRange', { value: loc ? `C${String(columnGiven).padStart(3, '0')}` : slotRaw, max: slots, rack: rack.code });
+                    slot = columnGiven;
+                } else if (slots <= 1) slot = 1; // un estante de una sola columna no necesita que se diga
+                else if (loc || given(rowGiven) || given(depthGiven)) return err(F('slot'), loc ? 'columnNeeded' : 'slotMissing', { rack: rack.code, max: slots });
+                if (slot !== null) {
+                    bay = bayOfRack(rack, level, slot);
+                    if (given(rowGiven)) {
+                        if (!(rowGiven >= 1 && rowGiven <= bay.rows)) return err(F('row'), 'rowRange', { value: loc ? `F${String(rowGiven).padStart(3, '0')}` : rowRaw, max: bay.rows, rack: rack.code });
+                        rowNo = rowGiven;
+                    }
+                    if (given(depthGiven)) {
+                        if (!(depthGiven >= 1 && depthGiven <= bay.depth)) return err(F('depth'), 'depthRange', { value: loc ? `P${String(depthGiven).padStart(3, '0')}` : depthRaw, max: bay.depth, rack: rack.code });
+                        depth = depthGiven;
                     }
                 }
             }
         }
 
-        // En un anaquel de profundidad 1 la profundidad (P001) está implícita y no se guarda; si es más hondo hay que decir en cuál (si no, la relación queda A medias).
-        const rackDepth = rack ? (rack.depth || 1) : 1;
-        if (depth !== null && rackDepth <= 1) depth = null;
-        const key = [item.id, center.id, wh.id, sub ? sub.id : 0, zone ? zone.id : '', rack ? rack.id : '', level || 0, slot || 0, depth || 0].join('|');
-        const located = !!sub && (sub.kind === 'virtual' || !!(rack && level && slot && (depth || rackDepth <= 1)));
+        // La fila y la profundidad de un hueco de una sola fila / una sola profundidad están implícitas y no se guardan; si tiene más de una hay que decir cuál (si no, la relación queda A medias).
+        if (rowNo !== null && bay.rows <= 1) rowNo = null;
+        if (depth !== null && bay.depth <= 1) depth = null;
+        const key = [item.id, center.id, wh.id, sub ? sub.id : 0, zone ? zone.id : '', rack ? rack.id : '', level || 0, slot || 0, rowNo || 0, depth || 0].join('|');
+        const located = !!sub && (sub.kind === 'virtual' || !!(rack && level && slot && (rowNo || bay.rows <= 1) && (depth || bay.depth <= 1)));
         const values = {
             skuItemId: item.id, costCenterId: center.id, warehouseId: wh.id, subWarehouseId: sub ? sub.id : null,
-            zoneId: zone ? zone.id : '', spaceId: rack ? rack.id : '', level, slot, depth,
+            zoneId: zone ? zone.id : '', spaceId: rack ? rack.id : '', level, slot, row: rowNo, depth,
         };
         const route = [center.name, wh.name, sub ? sub.name : '', zone ? zone.name : '', rack ? rack.code : ''].filter(Boolean);
-        const base = { values, route, keys: { place: `rel|${key}`, slot: rack && level && slot ? `slot|${rack.id}|${level}|${slot}|${depth || 1}` : '', claim: target ? `upd|${target.id}` : '' }, located, item };
+        const base = { values, route, keys: { place: `rel|${key}`, slot: rack && level && slot ? `slot|${rack.id}|${level}|${slot}|${rowNo || 1}|${depth || 1}` : '', claim: target ? `upd|${target.id}` : '' }, located, item };
         if (base.keys.slot) {
-            const occupant = ctx.occupiedBy(rack.id, level, slot, depth || 1);
+            const occupant = ctx.occupiedBy(rack.id, level, slot, rowNo || 1, depth || 1);
             if (occupant && !ctx.existingKey(key)) return err(loc ? 'locator' : 'slot', 'occupied', { sku: occupant });
         }
         if (ctx.existingKey(key)) return { action: 'same', ...base };

@@ -8,9 +8,9 @@
 // Envuelto en una función: este script comparte el ámbito global con Dashboard.js, que ya declara nombres como SECTION_LABEL_KEYS.
 (function () {
 const LC = window.LayoutCalc;
-const SECTION_ORDER = ['contorno', 'puertas', 'luz', 'zonas', 'espacios', 'activos'];
+const SECTION_ORDER = ['contorno', 'puertas', 'luz', 'zonas', 'espacios', 'activos', 'posiciones'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos',
+    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones',
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -101,7 +101,7 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-zonas', 'layout-espacios', 'layout-activos'];
+const FILTER_TABLE_IDS = ['layout-zonas', 'layout-espacios', 'layout-activos', 'layout-posiciones'];
 function bindLayoutFilters(root = document.getElementById('layout-panel')) {
     if (!window.Dashboard || !Dashboard.bindExternalColumnFilters || !root) return;
     root.querySelectorAll('table[data-filter-table]').forEach((tbl) => {
@@ -451,6 +451,34 @@ function stepHtml(step) {
         });
         return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUsoZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis, true)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis, true)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
     }
+    if (step === 'posiciones') {
+        // Cada renglón es un HUECO (un nivel × una columna) de un activo de Huella-Espacio: salen solos con los niveles y las columnas de Activos. Dentro de cada hueco se anota cuántas filas y cuántas profundidades
+        // tiene, su altura desde el piso y sus medidas (largo, ancho y alto, en metros). Lo que no se cambia queda como lo de por defecto (las medidas salen calculadas con las del activo) y no se guarda aparte.
+        const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
+        const shown = (v) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '');
+        const bayNum = (i, n, c, key, value, edited, step) => `<td><input type="number" min="0" step="${step}" data-l="bay" data-i="${i}" data-n="${n}" data-c="${c}" data-k="${key}" value="${value}"${edited ? ' class="layout-edited"' : ''}${dis ? ' disabled' : ''}></td>`;
+        const POSITION_ROWS_MAX = 1500;
+        let count = 0;
+        const rows = [];
+        d.spaces.forEach((s, i) => {
+            if (s.active === false) return;
+            const levels = s.levels || 1;
+            const slots = s.slots || 1;
+            for (let n = 1; n <= levels; n += 1) {
+                for (let c = 1; c <= slots; c += 1) {
+                    if (count >= POSITION_ROWS_MAX) return;
+                    count += 1;
+                    const bay = LC.bayOf(s, n, c);
+                    const m = LC.bayMeasures(s, n, c);
+                    const st = bay.stored;
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td><td class="layout-calc">${c}</td>${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}${bayNum(i, n, c, 'floorH', shown(m.floorH), st.floorH !== undefined, '0.01')}${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01')}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01')}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01')}<td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}">${bay.rows * bay.depth}</span></td></tr>`);
+                }
+            }
+        });
+        if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutPosSinActivos'))}</p>`;
+        const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosColumna', 'main.layoutPosFilas', 'main.layoutPosProfundidad', 'main.layoutPosAltura', 'main.layoutPosLargo', 'main.layoutPosAncho', 'main.layoutPosAlto', 'main.layoutPosCapacidad'];
+        return `${table(heads, rows, 'layout-posiciones')}${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
+    }
     if (step === 'activos') {
         // Cada renglón es una Huella-Espacio; sus tres primeras columnas (código, nombre y zona) vienen del paso Huella-Espacio y aquí no se capturan. Se eligen la clasificación y el tipo del activo (dos listas
         // independientes) y, de ese activo, cuántos niveles tiene, cuántos espacios hay por nivel y los cajones (filas × columnas).
@@ -458,8 +486,8 @@ function stepHtml(step) {
         const assetOptions = (list, selected) => `<option value="">${esc(t('main.layoutActivoElegir'))}</option>${choices(list, selected).map((r) => `<option value="${r.id}"${r.id === selected ? ' selected' : ''}>${esc(r.name || t('main.whNoName'))}${r.status === 'active' ? '' : ` (${esc(t('admin.statusInactivo'))})`}</option>`).join('')}`;
         const pick = (i, key, help, list, selected) => `<td><select data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="${help}"${dis ? ' disabled' : ''}>${assetOptions(list, selected || 0)}</select></td>`;
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
-        const rows = d.spaces.map((s, i) => `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(s.name || '—')}</td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellNum('spaces', i, 'depth', s.depth || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}</tr>`);
-        return d.spaces.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutProfundidad', 'main.layoutCajones'], rows, 'layout-activos') : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        const rows = d.spaces.map((s, i) => `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(s.name || '—')}</td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}</tr>`);
+        return d.spaces.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones'], rows, 'layout-activos') : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
@@ -601,7 +629,7 @@ function renderSvg() {
     measureJobs.forEach(([pts, minPx]) => { measureLabels += measureText(pts, minPx); });
     s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     (on('contorno') ? d.obstacles : []).forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
-    ((on('espacios') || on('activos')) ? d.spaces : []).forEach((sp) => {
+    ((on('espacios') || on('activos') || on('posiciones')) ? d.spaces : []).forEach((sp) => {
         const w = Math.max(sp.l * sc, 4);
         const h = Math.max(sp.d * sc, 4);
         s += `<rect class="ls ls-${sp.type}${sp.active === false ? ' lz-off' : ''}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2"><title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title></rect>`;
@@ -955,7 +983,7 @@ const ROW_FACTORY = {
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
     spaces: () => ({ id: uid('s'), type: 'rack', code: nextCode('rack'), zoneId: state.draft.zones.length ? state.draft.zones[0].id : '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, levels: 1, drawers: '', active: true }),
 };
-const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', zones: 'zonas', spaces: 'espacios' };
+const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', zones: 'zonas', spaces: 'espacios', bay: 'posiciones' };
 
 function onEdit(event) {
     const el = event.target;
@@ -983,6 +1011,24 @@ function onEdit(event) {
                 if (box) box.value = value;
             });
         }
+    } else if (list === 'bay') {
+        // Un hueco (nivel × columna) de un activo: solo se guarda lo que se cambió; lo que vuelve a ser como lo de por defecto (1 fila, 1 profundidad) se quita.
+        const space = state.draft.spaces[Number(el.getAttribute('data-i'))];
+        const n = Number(el.getAttribute('data-n'));
+        const c = Number(el.getAttribute('data-c'));
+        const bayKey = el.getAttribute('data-k');
+        if (!space.bays) space.bays = [];
+        let bay = space.bays.find((b) => b.n === n && b.c === c);
+        if (!bay) { bay = { n, c }; space.bays.push(bay); }
+        if (bayKey === 'rows' || bayKey === 'depth') {
+            const v = Math.max(1, Math.round(value) || 1);
+            if (v > 1) bay[bayKey] = Math.min(v, bayKey === 'rows' ? LC.LIMITS.slots : LC.LIMITS.depth); else delete bay[bayKey];
+        } else if (value > 0) bay[bayKey] = value; else delete bay[bayKey];
+        if (Object.keys(bay).length <= 2) space.bays = space.bays.filter((b) => b !== bay);
+        if (!space.bays.length) delete space.bays;
+        const shownBay = LC.bayOf(space, n, c);
+        const cap = document.querySelector(`[data-bay-cap="${el.getAttribute('data-i')}|${n}|${c}"]`);
+        if (cap) cap.textContent = String(shownBay.rows * shownBay.depth);
     } else if (list === 'vertices') {
         state.draft.vertices[Number(el.getAttribute('data-i'))][Number(el.getAttribute('data-k'))] = value;
         state.open.contorno = false;
@@ -1008,9 +1054,7 @@ function onEdit(event) {
         } else if (key === 'slots') {
             const n = Math.max(1, Math.round(value) || 1);
             if (n > 1) row.slots = Math.min(n, LC.LIMITS.slots); else delete row.slots;
-        } else if (key === 'depth') {
-            const n = Math.max(1, Math.round(value) || 1);
-            if (n > 1) row.depth = Math.min(n, LC.LIMITS.depth); else delete row.depth;
+
         } else row[key] = (key === 'wall' || key === 'levels') ? Math.max(1, Math.round(value) || 1) : value;
         if (list === 'spaces' && key === 'type' && /^[RGT]-\d+$/i.test(row.code) && !isSavedRow('spaces', row.id)) {
             // un código sin guardar y con forma automática (R-01) sigue al tipo
@@ -1969,7 +2013,7 @@ function buildSheetSvgFrom(loaded) {
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: [...new Set(state.steps.map((s) => (s === 'activos' ? 'espacios' : s)))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, rotation: sheetView().rotation },
+        view: { layers: [...new Set(state.steps.map((s) => (s === 'activos' || s === 'posiciones' ? 'espacios' : s)))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, rotation: sheetView().rotation },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {

@@ -6438,7 +6438,7 @@ app.get('/api/public/ficha/:token', (req, res) => {
                 locations: (() => {
                     const ctx = codeRelationContextFor(skuItem.client_id, !!skuItem.is_test_data);
                     return listCodeRelations(skuItem.client_id, !!skuItem.is_test_data).filter((r) => r.sku_item_id === skuItem.id).map((r) => mapCodeRelation(r, null, '', ctx)).map((loc) => ({
-                        route: [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.spaceCode, loc.level ? `Nivel ${loc.level}` : '', loc.slot ? `Fila ${loc.slot}` : '', loc.depth && loc.spaceDepth > 1 ? `Profundidad ${loc.depth}` : ''].filter(Boolean),
+                        route: [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.spaceCode, loc.level ? `Nivel ${loc.level}` : '', loc.slot ? `Columna ${loc.slot}` : '', loc.row && loc.bayRows > 1 ? `Fila ${loc.row}` : '', loc.depth && loc.bayDepth > 1 ? `Profundidad ${loc.depth}` : ''].filter(Boolean),
                         virtual: loc.subKind === 'virtual', located: loc.status === 'located',
                     }));
                 })(),
@@ -6458,7 +6458,7 @@ app.get('/api/public/ficha/:token', (req, res) => {
 const LayoutCalc = require('./public/LayoutCalc.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
-const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos' };
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 
 function layoutPermissions(req) {
@@ -6541,6 +6541,7 @@ function layoutSummary(layout, section) {
     if (section === 'luz') return `${(layout.power || []).length} conexiones de luz`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
     if (section === 'activos') return `${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} espacios con activo`;
+    if (section === 'posiciones') return `${(layout.spaces || []).reduce((n, s) => n + (s.bays || []).length, 0)} huecos con datos propios`;
     return `${(layout.spaces || []).length} espacios`;
 }
 
@@ -7503,9 +7504,9 @@ const CODE_RELATION_MODULE_LABEL = 'Cadena de Suministro';
 const CODE_RELATION_SCREEN_LABEL = 'Relación Código';
 const CODE_RELATION_COLS = {
     skuItemId: 'colRelSku', costCenterId: 'colRelCentroCostos', warehouseId: 'colRelAlmacen', subWarehouseId: 'colRelSubAlmacen',
-    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio', depth: 'colRelProfundidad',
+    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio', row: 'colRelFila', depth: 'colRelProfundidad',
 };
-const CODE_RELATION_INT_KEYS = ['skuItemId', 'costCenterId', 'warehouseId', 'subWarehouseId', 'level', 'slot', 'depth'];
+const CODE_RELATION_INT_KEYS = ['skuItemId', 'costCenterId', 'warehouseId', 'subWarehouseId', 'level', 'slot', 'row', 'depth'];
 const CODE_RELATION_TEXT_KEYS = ['zoneId', 'spaceId'];
 const padSku = (n) => String(n || 0).padStart(6, '0');
 
@@ -7541,9 +7542,9 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
     const layout = ctx.layoutFor(row.cost_center_id);
     const zone = layout.zoneById.get(row.zone_id);
     const space = layout.spaceById.get(row.space_id);
-    // Ubicado = un sub almacén virtual (no tiene dónde más) o el camino físico completo hasta el espacio (anaquel, nivel, fila y, si el anaquel es más hondo que 1, su profundidad); lo demás queda A medias.
-    const spaceDepth = (space && space.depth) || 1;
-    const located = !!row.sub_warehouse_id && ((sub && sub.kind === 'virtual') || (row.space_id && row.level && row.slot && (row.depth || spaceDepth <= 1)));
+    // Ubicado = un sub almacén virtual (no tiene dónde más) o el camino físico completo hasta el hueco (anaquel, nivel y columna) y, si ese hueco tiene más de una fila o más de una profundidad, cuál fila y cuál profundidad; lo demás queda A medias.
+    const bay = row.space_id && row.level && row.slot ? LayoutCalc.bayOf(space, row.level, row.slot) : { rows: 1, depth: 1 };
+    const located = !!row.sub_warehouse_id && ((sub && sub.kind === 'virtual') || (row.space_id && row.level && row.slot && (row.row_no || bay.rows <= 1) && (row.depth || bay.depth <= 1)));
     return {
         id: row.id,
         registroUnico: row.db_id,
@@ -7556,7 +7557,7 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
         subWarehouseId: row.sub_warehouse_id, subWarehouseName: sub ? sub.name : '', subKind: sub ? sub.kind : '',
         zoneId: row.zone_id, zoneName: zone ? zone.name : '',
         spaceId: row.space_id, spaceCode: space ? space.code : '',
-        level: row.level, slot: row.slot, depth: row.depth, spaceDepth,
+        level: row.level, slot: row.slot, row: row.row_no, depth: row.depth, bayRows: bay.rows, bayDepth: bay.depth,
         status: located ? 'located' : 'partial',
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({
@@ -7578,6 +7579,7 @@ function codeRelationSanitizers(ctx, req) {
         spaceId: (v) => { const s = ctx.anyLayout((l) => l.spaceById.get(v)); return s ? s.code : (v || ''); },
         level: (v) => (v == null ? '' : String(v)),
         slot: (v) => (v == null ? '' : String(v)),
+        row: (v) => (v == null ? '' : String(v)),
         depth: (v) => (v == null ? '' : String(v)),
     };
 }
@@ -7619,8 +7621,9 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     const hasSpace = !!state.spaceId;
     const hasLevel = state.level != null;
     const hasSlot = state.slot != null;
+    const hasRow = state.row != null;
     const hasDepth = state.depth != null;
-    if (!hasSub && (hasZone || hasSpace || hasLevel || hasSlot || hasDepth)) return bad('Falta el sub almacén.');
+    if (!hasSub && (hasZone || hasSpace || hasLevel || hasSlot || hasRow || hasDepth)) return bad('Falta el sub almacén.');
     let sub = null;
     if (hasSub) {
         sub = ctx.warehouses.get(state.subWarehouseId);
@@ -7628,9 +7631,9 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
         if (sub.parent_id !== state.warehouseId) return bad('Ese sub almacén no pertenece a ese almacén.');
         if (sub.status !== 'active' && !(existing && existing.sub_warehouse_id === sub.id)) return bad('Ese sub almacén está inactivo. Elige uno activo.');
     }
-    if (!hasZone && (hasSpace || hasLevel || hasSlot || hasDepth)) return bad('Falta la zona.');
+    if (!hasZone && (hasSpace || hasLevel || hasSlot || hasRow || hasDepth)) return bad('Falta la zona.');
     if (hasZone) {
-        if (!sub || sub.kind !== 'physical') return bad('Este sub almacén no es físico: no lleva zona, anaquel, nivel, fila ni profundidad.');
+        if (!sub || sub.kind !== 'physical') return bad('Este sub almacén no es físico: no lleva zona, anaquel, nivel, columna, fila ni profundidad.');
         const entry = parseWarehouseLocations(sub.locations).find((e) => e.zoneId === state.zoneId);
         if (!entry || !layout.zoneById.has(state.zoneId)) return bad('Esa zona no está asignada a ese sub almacén.');
         if (hasSpace) {
@@ -7639,14 +7642,19 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
             if (entry.spaceIds.length && !entry.spaceIds.includes(state.spaceId)) return bad('Ese anaquel no está asignado a ese sub almacén.');
             if (hasLevel) {
                 if (state.level < 1 || state.level > (space.levels || 1)) return bad('Ese nivel no existe en ese anaquel.');
-                if (hasSlot && (state.slot < 1 || state.slot > (space.slots || 1))) return bad('Esa fila no existe en ese nivel.');
-                if (hasDepth && !hasSlot) return bad('Falta la fila.');
-                if (hasDepth && (state.depth < 1 || state.depth > (space.depth || 1))) return bad('Esa profundidad no existe en ese anaquel.');
-            } else if (hasSlot || hasDepth) return bad('Falta el nivel.');
-        } else if (hasLevel || hasSlot || hasDepth) return bad('Falta el anaquel.');
+                if (hasSlot && (state.slot < 1 || state.slot > (space.slots || 1))) return bad('Esa columna no existe en ese nivel.');
+                if ((hasRow || hasDepth) && !hasSlot) return bad('Falta la columna.');
+                if (hasRow || hasDepth) {
+                    // dentro del hueco (nivel × columna) están sus filas y sus profundidades (Layout > Posiciones)
+                    const bay = LayoutCalc.bayOf(space, state.level, state.slot);
+                    if (hasRow && (state.row < 1 || state.row > bay.rows)) return bad('Esa fila no existe en ese hueco.');
+                    if (hasDepth && (state.depth < 1 || state.depth > bay.depth)) return bad('Esa profundidad no existe en ese hueco.');
+                }
+            } else if (hasSlot || hasRow || hasDepth) return bad('Falta el nivel.');
+        } else if (hasLevel || hasSlot || hasRow || hasDepth) return bad('Falta el anaquel.');
     }
     if (hasSpace && hasLevel && hasSlot) {
-        const occupant = findCodeRelationInSlot(clientId, isTestAccount, state.spaceId, state.level, state.slot, selfId || 0, state.depth);
+        const occupant = findCodeRelationInSlot(clientId, isTestAccount, state.spaceId, state.level, state.slot, selfId || 0, state.row, state.depth);
         if (occupant) return bad(`Ese espacio ya lo ocupa el código ${padSku(occupant.sku_number)}. Elige otro espacio.`, 409);
     }
     if (findCodeRelationDuplicate(clientId, isTestAccount, state, selfId || 0)) return bad('Este código ya tiene esa misma ubicación.', 409);
@@ -7683,7 +7691,7 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
         const idx = layoutIndexOf(row);
         return idx.zones.map((z) => ({
             id: z.id, name: z.name,
-            spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, levels: s.levels || 1, slots: s.slots || 1, depth: s.depth || 1 })),
+            spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, levels: s.levels || 1, slots: s.slots || 1, bays: s.bays || [] })),
         }));
     };
     const zonesByCenter = {};
@@ -7695,7 +7703,7 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
         subWarehouses: sub.map((r) => ({ id: r.id, name: r.name, parentId: r.parent_id, status: r.status, kind: r.kind, locations: r.kind === 'physical' ? parseWarehouseLocations(r.locations) : [] })),
         zonesByCenter,
         zones: layouts.length ? zonesOf(layouts[0]) : [],
-        occupied: listCodeRelations(clientId, isTestAccount).filter((r) => r.space_id && r.level && r.slot).map((r) => ({ id: r.id, spaceId: r.space_id, level: r.level, slot: r.slot, depth: r.depth || 1, sku: padSku(r.sku_number) })),
+        occupied: listCodeRelations(clientId, isTestAccount).filter((r) => r.space_id && r.level && r.slot).map((r) => ({ id: r.id, spaceId: r.space_id, level: r.level, slot: r.slot, row: r.row_no || 1, depth: r.depth || 1, sku: padSku(r.sku_number) })),
     });
 });
 
@@ -7722,7 +7730,7 @@ app.post('/api/business/code-relations', requireAuth, requireCostCenter, (req, r
     }
     const norm = normalizeCodeRelationInput(req.body || {});
     if (norm.error) return res.status(400).json({ message: norm.error });
-    const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, depth: null, ...norm.values };
+    const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, row: null, depth: null, ...norm.values };
     // Llenar un dato vacío pide su propia hoja (Ver y Operar o Modificar), igual que al llenar una celda de otra tabla.
     if (grants) {
         const missing = Object.entries(CODE_RELATION_COLS)
@@ -7771,13 +7779,13 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
         if (raw && raw.relationId != null) {
             const existing = getCodeRelationById(raw.relationId, clientId, isTestAccount);
             if (!existing) { fail('Esa relación ya no existe.'); return; }
-            if (existing.zone_id || existing.space_id || existing.level || existing.slot || existing.depth) { fail('Esa relación ya tiene lugar: no se completa otra vez.'); return; }
-            const placeNorm = normalizeCodeRelationInput(Object.fromEntries(['zoneId', 'spaceId', 'level', 'slot', 'depth'].map((k) => [k, raw.values ? raw.values[k] : null])));
+            if (existing.zone_id || existing.space_id || existing.level || existing.slot || existing.row_no || existing.depth) { fail('Esa relación ya tiene lugar: no se completa otra vez.'); return; }
+            const placeNorm = normalizeCodeRelationInput(Object.fromEntries(['zoneId', 'spaceId', 'level', 'slot', 'row', 'depth'].map((k) => [k, raw.values ? raw.values[k] : null])));
             if (placeNorm.error) { fail(placeNorm.error); return; }
             const place = placeNorm.values;
             const state = {
                 skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
-                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, depth: existing.depth, ...place,
+                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, row: existing.row_no, depth: existing.depth, ...place,
             };
             const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
             if (check.error) { fail(check.error.message); return; }
@@ -7795,7 +7803,7 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
         }
         const norm = normalizeCodeRelationInput(raw && typeof raw.values === 'object' && raw.values ? raw.values : {});
         if (norm.error) { fail(norm.error); return; }
-        const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, depth: null, ...norm.values };
+        const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, row: null, depth: null, ...norm.values };
         if (grants) {
             const denied = Object.entries(CODE_RELATION_COLS).find(([key, colKey]) => state[key] !== null && state[key] !== '' && !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, CODE_RELATION_TABLE_KEY, colKey)));
             if (denied) { fail('No tienes permiso para llenar uno de los datos de esta relación.'); return; }
@@ -7830,7 +7838,7 @@ app.patch('/api/business/code-relations/:id', requireAuth, requireCostCenter, (r
     const ctx = codeRelationContext(req);
     const state = {
         skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
-        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, depth: existing.depth, ...norm.values,
+        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, row: existing.row_no, depth: existing.depth, ...norm.values,
     };
     const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
     if (check.error) return res.status(check.error.status).json({ message: check.error.message });

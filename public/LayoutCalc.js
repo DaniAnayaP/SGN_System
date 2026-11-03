@@ -37,6 +37,7 @@
         zonas: 'colLayoutZonas',
         espacios: 'colLayoutEspacios',
         activos: 'colLayoutActivos',
+        posiciones: 'colLayoutPosiciones',
     };
     const LIMITS = { vertices: 60, doors: 100, power: 300, obstacles: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
@@ -545,10 +546,10 @@
             const zoneId = typeof (s && s.zoneId) === 'string' && zoneIds.has(s.zoneId) ? s.zoneId : '';
             const type = oneOf(s && s.type, SPACE_TYPES, 'rack');
             const levels = Math.round(Number(s && s.levels));
-            // Espacios por nivel (el hueco dentro de un nivel): solo se guarda si hay más de uno.
+            // Columnas por nivel (antes «espacios por nivel»: las columnas de almacenamiento, de izquierda a derecha): solo se guarda si hay más de una.
             const slots = Math.round(Number(s && s.slots));
-            // Profundidad (del frente al fondo): cuántos caben uno detrás de otro; igual, solo se guarda si hay más de uno.
-            const depth = Math.round(Number(s && s.depth));
+            // Huecos (paso Posiciones): cada hueco = un nivel × una columna de este activo; lleva cuántas filas y cuántas profundidades tiene y sus medidas. Solo se guarda lo que se cambió.
+            const bays = sanitizeBays(s && s.bays, Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1, Number.isFinite(slots) && slots > 1 ? Math.min(slots, LIMITS.slots) : 1);
             // Paso Activos: la clasificación (Mobiliario operativo, Mobiliario almacenamiento…) y el tipo (rack, estante, escritorio…) del activo de este espacio; son ids de los catálogos del cliente.
             // Sin elegir, el espacio se guarda sin esos campos.
             const assetClassId = Math.round(Number(s && s.assetClassId));
@@ -561,7 +562,7 @@
                 x: meters(s && s.x, label, -LIMITS.maxM), y: meters(s && s.y, label, -LIMITS.maxM), l: meters(s && s.l, label), d: meters(s && s.d, label), h: meters(s && s.h, label),
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
                 ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
-                ...(Number.isFinite(depth) && depth > 1 ? { depth: Math.min(depth, LIMITS.depth) } : {}),
+                ...(bays.length ? { bays } : {}),
                 ...(Number.isFinite(assetClassId) && assetClassId > 0 ? { assetClassId } : {}),
                 ...(Number.isFinite(assetId) && assetId > 0 ? { assetId } : {}),
                 drawers: text(s && s.drawers, label, false), active: !(s && s.active === false),
@@ -675,6 +676,47 @@
         };
     }
 
+    // Huecos guardados de un activo: [{ n: nivel, c: columna, rows?, depth?, floorH?, l?, w?, h? }] (solo lo cambiado; lo demás es lo de por defecto). Se descartan los que ya no caben en sus niveles y columnas.
+    function sanitizeBays(raw, levels, slots) {
+        const out = new Map();
+        (Array.isArray(raw) ? raw : []).forEach((b) => {
+            const n = Math.round(Number(b && b.n));
+            const c = Math.round(Number(b && b.c));
+            if (!(n >= 1 && n <= levels && c >= 1 && c <= slots)) return;
+            const bay = { n, c };
+            const rows = Math.round(Number(b.rows));
+            if (rows > 1) bay.rows = Math.min(rows, LIMITS.slots);
+            const depth = Math.round(Number(b.depth));
+            if (depth > 1) bay.depth = Math.min(depth, LIMITS.depth);
+            ['floorH', 'l', 'w', 'h'].forEach((k) => {
+                const v = Number(b[k]);
+                if (Number.isFinite(v) && v > 0 && v <= LIMITS.maxM) bay[k] = Math.round(v * 1000) / 1000;
+            });
+            if (Object.keys(bay).length > 2) out.set(`${n}|${c}`, bay);
+        });
+        return [...out.values()].sort((a, b) => a.n - b.n || a.c - b.c);
+    }
+    // Cuántas filas y cuántas profundidades tiene el hueco (nivel × columna) de un activo: lo guardado o 1.
+    function bayOf(space, level, column) {
+        const stored = ((space && space.bays) || []).find((b) => b.n === Number(level) && b.c === Number(column)) || {};
+        return { rows: stored.rows || 1, depth: stored.depth || 1, stored };
+    }
+    // Lo que muestra Posiciones de un hueco: lo guardado o, si no se cambió, lo que sale del activo (alto = alto del activo entre sus niveles; altura desde el piso = los niveles de abajo; largo = su largo entre sus columnas;
+    // ancho = su fondo). Todo en metros.
+    function bayMeasures(space, level, column) {
+        const stored = bayOf(space, level, column).stored;
+        const levels = (space && space.levels) || 1;
+        const slots = (space && space.slots) || 1;
+        const round = (v) => Math.round(v * 1000) / 1000;
+        const high = space && space.h > 0 ? space.h / levels : 0;
+        return {
+            floorH: stored.floorH !== undefined ? stored.floorH : round((Number(level) - 1) * high),
+            l: stored.l !== undefined ? stored.l : round(((space && space.l) || 0) / slots),
+            w: stored.w !== undefined ? stored.w : round((space && space.d) || 0),
+            h: stored.h !== undefined ? stored.h : round(high),
+        };
+    }
+
     function sectionData(layout, section) {
         if (!layout) return null;
         if (section === 'contorno') return { vertices: layout.vertices, obstacles: layout.obstacles, siteName: layout.siteName || '' };
@@ -683,11 +725,13 @@
         if (section === 'zonas') return layout.zones;
         // Los espacios sin lo del paso Activos (la clasificación y el tipo de activo, y sus niveles, espacios por nivel y cajones; todo eso tiene su propio permiso). En Activos, solo los espacios que ya tienen
         // algo de eso: así agregar un espacio nuevo en Huella-Espacio (con 1 nivel) no cuenta como cambio de Activos.
-        if (section === 'espacios') return (layout.spaces || []).map(({ assetClassId, assetId, levels, slots, depth, drawers, ...rest }) => rest);
+        if (section === 'espacios') return (layout.spaces || []).map(({ assetClassId, assetId, levels, slots, bays, drawers, ...rest }) => rest);
         if (section === 'activos') {
-            return (layout.spaces || []).filter((s) => s.assetClassId || s.assetId || (s.levels || 1) > 1 || (s.slots || 1) > 1 || (s.depth || 1) > 1 || s.drawers)
-                .map((s) => ({ id: s.id, assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, depth: s.depth || 1, drawers: s.drawers || '' }));
+            return (layout.spaces || []).filter((s) => s.assetClassId || s.assetId || (s.levels || 1) > 1 || (s.slots || 1) > 1 || s.drawers)
+                .map((s) => ({ id: s.id, assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '' }));
         }
+        // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
+        if (section === 'posiciones') return (layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays }));
         return null;
     }
     function sectionHasData(layout, section) {
@@ -700,7 +744,7 @@
     }
 
     return {
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
