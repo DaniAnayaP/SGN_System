@@ -112,6 +112,9 @@
         bottle: 'M10 3h4v3l2 3v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9l2-3z M8 13h8',
         cross: 'M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6z',
         tag: 'M3 12l9-9h7v7l-9 9z M15 7h.01',
+        // solo para las tarjetas de QR de Temperaturas y Limpieza (no están en la lista de iconos de las categorías)
+        thermometer: 'M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z M11.5 9v8',
+        sparkle: 'M11 3l1.8 5.2L18 10l-5.2 1.8L11 17l-1.8-5.2L4 10l5.2-1.8z M18 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z',
     };
     // El icono como trazos listos para poner dentro de un <g> o un <svg viewBox="0 0 24 24">.
     const categoryGlyph = (name, stroke = 'currentColor', width = 1.9) => `<g fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round">${(CATEGORY_ICON_PATHS[name] || CATEGORY_ICON_PATHS.tag).split(' M').map((d, i) => `<path d="${i ? 'M' : ''}${d}"/>`).join('')}</g>`;

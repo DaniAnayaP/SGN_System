@@ -423,6 +423,7 @@
                                     <button type="button" class="layout-seg-btn active" id="layout-qr-by-layout" data-qrby="layout" aria-pressed="true" data-i18n="main.layoutQrPorLayout">Layout</button>
                                     <button type="button" class="layout-seg-btn" id="layout-qr-by-zone" data-qrby="zone" aria-pressed="false" data-i18n="main.layoutQrPorZona">Zone</button>
                                     <button type="button" class="layout-seg-btn" id="layout-qr-by-clean" data-qrby="clean" aria-pressed="false" data-i18n="main.layoutQrPorLimpieza">Cleaning</button>
+                                    <button type="button" class="layout-seg-btn" id="layout-qr-by-temp" data-qrby="temp" aria-pressed="false" data-i18n="main.layoutQrPorTemperaturas">Temperatures</button>
                                 </div>
                             </div>
                             <div class="layout-qr-pane" id="layout-qr-pane-layout" role="menu">
@@ -435,6 +436,11 @@
                                 <div class="layout-qr-fields"><label data-help-key="layoutQrClean"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-clean-zone"></select></label></div>
                                 <p class="layout-qr-fine" id="layout-qr-clean-fine"></p>
                                 <button type="button" data-qr="clean-print" id="layout-qr-clean-print" data-help-key="layoutQrClean"><b data-i18n="main.layoutQrLimpiezaImprimir">Print the QR codes</b><span data-i18n="main.layoutQrLimpiezaImprimirSub">One QR per asset, ready to cut and stick</span></button>
+                            </div>
+                            <div class="layout-qr-pane" id="layout-qr-pane-temp" hidden>
+                                <div class="layout-qr-fields"><label data-help-key="layoutQrTemp"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-temp-zone"></select></label></div>
+                                <p class="layout-qr-fine" id="layout-qr-temp-fine"></p>
+                                <button type="button" data-qr="temp-print" id="layout-qr-temp-print" data-help-key="layoutQrTemp"><b data-i18n="main.layoutQrTemperaturasImprimir">Print the QR codes</b><span data-i18n="main.layoutQrTemperaturasImprimirSub">One QR per refrigerator, ready to cut and stick</span></button>
                             </div>
                             <div class="layout-qr-pane" id="layout-qr-pane-zone" hidden>
                                 <div class="layout-qr-fields">

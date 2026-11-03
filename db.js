@@ -5281,6 +5281,62 @@ function deleteCleaningRecord(id, clientId) {
     return db.prepare('DELETE FROM cleaning_records WHERE id = ? AND client_id = ?').run(id, clientId).changes > 0;
 }
 
+// --- Temperaturas (Operaciones, C. Distribución) -------------------------------------------------------------------------------------------------
+// Una fila por lectura de temperatura de un REFRIGERADOR (activo de tipo Frío) del Layout. El QR de cada refrigerador la abre SIN sesión: quién la tomó (el nombre que escribe), la temperatura que marcaba (°C),
+// la hora (UTC; la pone el servidor, nunca el teléfono) y la foto de la lectura tomada con la cámara en vivo. Lo del lugar (código del activo, zona, huella, localizador) se guarda tal como estaba al momento:
+// el Layout puede cambiar después. La foto vive aparte para que la lista no la cargue.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS temperature_records (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        cost_center_id  INTEGER NOT NULL DEFAULT 0,
+        space_id        TEXT NOT NULL,
+        space_code      TEXT NOT NULL DEFAULT '',
+        space_type      TEXT NOT NULL DEFAULT '',
+        zone_name       TEXT NOT NULL DEFAULT '',
+        footprint_code  TEXT NOT NULL DEFAULT '',
+        locator         TEXT NOT NULL DEFAULT '',
+        person_name     TEXT NOT NULL DEFAULT '',
+        temperature     REAL NOT NULL,
+        checked_at      TEXT NOT NULL,
+        source          TEXT NOT NULL DEFAULT 'qr',
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_temperature_space ON temperature_records(client_id, cost_center_id, space_id, checked_at);
+    CREATE TABLE IF NOT EXISTS temperature_photos (
+        record_id  INTEGER PRIMARY KEY REFERENCES temperature_records(id) ON DELETE CASCADE,
+        mime       TEXT NOT NULL,
+        data       BLOB NOT NULL
+    );
+`);
+const TEMPERATURE_SELECT = `SELECT r.*, EXISTS(SELECT 1 FROM temperature_photos p WHERE p.record_id = r.id) AS has_photo FROM temperature_records r`;
+// Guarda una lectura: la hora la pone el servidor y la foto se guarda en la misma operación.
+function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, photo, source = 'qr' }) {
+    return db.transaction(() => {
+        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, checked_at, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, source);
+        db.prepare('INSERT INTO temperature_photos (record_id, mime, data) VALUES (?, ?, ?)').run(info.lastInsertRowid, photo.mime, photo.data);
+        return db.prepare(`${TEMPERATURE_SELECT} WHERE r.id = ?`).get(info.lastInsertRowid);
+    })();
+}
+function listTemperatureRecords(clientId, { costCenterId, spaceId, limit } = {}) {
+    const where = ['r.client_id = ?'];
+    const args = [clientId];
+    if (costCenterId !== undefined) { where.push('r.cost_center_id = ?'); args.push(costCenterId || 0); }
+    if (spaceId) { where.push('r.space_id = ?'); args.push(spaceId); }
+    const cap = limit ? ` LIMIT ${Math.max(1, Math.min(Number(limit) || 50, 5000))}` : '';
+    return db.prepare(`${TEMPERATURE_SELECT} WHERE ${where.join(' AND ')} ORDER BY r.checked_at DESC, r.id DESC${cap}`).all(...args);
+}
+function getTemperatureRecord(id, clientId) {
+    return db.prepare(`${TEMPERATURE_SELECT} WHERE r.id = ? AND r.client_id = ?`).get(id, clientId);
+}
+function getTemperaturePhoto(recordId) {
+    return db.prepare('SELECT mime, data FROM temperature_photos WHERE record_id = ?').get(recordId);
+}
+function deleteTemperatureRecord(id, clientId) {
+    return db.prepare('DELETE FROM temperature_records WHERE id = ? AND client_id = ?').run(id, clientId).changes > 0;
+}
+
 // QR del Layout (ver public_token arriba): cada Layout (cada centro de costos) tiene el suyo. ensure: los Layouts guardados antes de que existiera el QR reciben su código la primera vez que se pide.
 function ensureLayoutPublicToken(clientId, costCenterId = 0) {
     const row = db.prepare('SELECT public_token FROM client_layouts WHERE client_id = ? AND cost_center_id = ?').get(clientId, costCenterId || 0);
@@ -11153,6 +11209,11 @@ module.exports = {
     getCleaningRecord,
     getCleaningPhoto,
     deleteCleaningRecord,
+    addTemperatureRecord,
+    listTemperatureRecords,
+    getTemperatureRecord,
+    getTemperaturePhoto,
+    deleteTemperatureRecord,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,

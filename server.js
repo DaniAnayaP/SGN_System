@@ -162,6 +162,7 @@ const {
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord,
+    addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,
@@ -6508,12 +6509,20 @@ function layoutPermissions(req) {
         canUseCard: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTarjeta'),
         // Imprimir los QR de limpieza (uno por activo) usa el icono QR de limpieza (hoja <pantalla>/iconLayoutQrLimpieza).
         canUseCleaningQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrLimpieza'),
+        // Imprimir los QR de temperaturas (uno por refrigerador, los activos de tipo Frío) usa el icono QR de temperaturas (hoja <pantalla>/iconLayoutQrTemperaturas).
+        canUseTemperatureQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrTemperaturas'),
     };
 }
 
 // Lo ÚNICO que sale por la vista pública del QR (sin sesión): paredes, zonas activas, espacios activos con su código, puertas, conexiones de luz y los KPIs. Nunca las
 // columnas ni el plano de fondo. La hoja que se descarga se arma con este mismo contenido, para que traiga lo mismo que se ve al escanear.
 // El logo del cliente (si lo tiene y no es enorme) para el reporte y la tarjeta que se imprimen; solo viaja en rutas con sesión, nunca en la vista pública.
+// El color y el logo del cliente para las tarjetas de QR que se imprimen (las mismas que las del Layout); solo viajan en rutas con sesión.
+function qrBranding(clientId) {
+    const client = getClientById(clientId);
+    const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
+    return { companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', logoDataUrl: clientLogoDataUrl(clientId) };
+}
 function clientLogoDataUrl(clientId) {
     const client = getClientById(clientId);
     const logo = client && client.logo_data_url;
@@ -7072,7 +7081,128 @@ app.get('/api/business/layout/cleaning-qr', requireAuth, (req, res) => {
     });
     const client = getClientById(req.user.clientId);
     res.set('Cache-Control', 'no-store');
-    res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
+    res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', ...qrBranding(req.user.clientId), zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
+});
+
+// --- Temperaturas (Operaciones > C. Distribución) ------------------------------------------------------------------------------------------------
+// Cada REFRIGERADOR (activo de tipo Frío) del Layout tiene su QR de temperaturas (la dirección fija /t/<código del Layout>/<id del activo>: nunca cambia). Quien lo escanea NO necesita sesión: escribe su nombre,
+// la temperatura que marca y toma la foto de la lectura con la cámara en vivo; la hora la pone el SERVIDOR. Solo puede ver las últimas lecturas de ESE refrigerador (solo lectura). La base de registros (con
+// usuario) es Operaciones > Temperaturas.
+const TEMPERATURE_TABLE_KEY = 'temperaturas';
+const TEMPERATURE_SCREEN_LABEL = 'Temperaturas';
+const TEMPERATURE_MIN = -100;
+const TEMPERATURE_MAX = 100;
+// El refrigerador por su código público: solo cuentan los activos de tipo Frío; con su huella, su zona y su localizador (Z006.H003.F001).
+function temperatureTarget(token, spaceId) {
+    const target = cleaningTarget(token, spaceId);
+    return target && target.space.type === 'cold' ? target : null;
+}
+const publicTemperatureRecord = (r) => ({ id: r.id, name: r.person_name, temperature: r.temperature, checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo });
+app.get('/t/:token/:spaceId', publicLayoutLimiter, (req, res) => {
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(self)' });
+    res.sendFile(path.join(PUBLIC_DIR, 'TemperaturaPublica.html'));
+});
+app.get('/api/public/temperature/:token/:spaceId', publicLayoutLimiter, (req, res) => {
+    const target = temperatureTarget(req.params.token, req.params.spaceId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const { row, space, footprint, zone, locator } = target;
+    const client = getClientById(row.clientId);
+    const records = listTemperatureRecords(row.clientId, { costCenterId: row.costCenterId || 0, spaceId: space.id, limit: 20 });
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json({
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
+        space: { id: space.id, code: space.code, type: space.type, locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '' },
+        records: records.map(publicTemperatureRecord), now: new Date().toISOString(),
+    });
+});
+app.post('/api/public/temperature/:token/:spaceId/reading', publicCleaningLimiter, (req, res) => {
+    const target = temperatureTarget(req.params.token, req.params.spaceId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const personName = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!personName) return res.status(400).json({ message: 'Falta el nombre de quien revisa.', code: 'NAME' });
+    const raw = req.body && req.body.temperature;
+    const temperature = typeof raw === 'number' ? raw : Number.NaN;
+    if (!Number.isFinite(temperature) || temperature < TEMPERATURE_MIN || temperature > TEMPERATURE_MAX) return res.status(400).json({ message: 'La temperatura no es válida.', code: 'TEMP' });
+    const photo = parseCleaningPhoto(req.body && req.body.photo);
+    if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
+    const { row, space, footprint, zone, locator } = target;
+    const saved = addTemperatureRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature: Math.round(temperature * 10) / 10, photo });
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json(publicTemperatureRecord(saved));
+});
+app.get('/api/public/temperature/:token/:spaceId/photo/:id', publicLayoutLimiter, (req, res) => {
+    const target = temperatureTarget(req.params.token, req.params.spaceId);
+    const id = Number(req.params.id);
+    if (!target || !Number.isInteger(id)) return res.status(404).end();
+    const rec = getTemperatureRecord(id, target.row.clientId);
+    if (!rec || rec.space_id !== target.space.id || rec.cost_center_id !== (target.row.costCenterId || 0)) return res.status(404).end();
+    const photo = getTemperaturePhoto(id);
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
+});
+// La base de registros (Operaciones > Temperaturas, con usuario): TODAS las lecturas de todos los refrigeradores y centros de costos del cliente, con las columnas de Control Interno por fila.
+app.get('/api/business/temperatures', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const centers = new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c]));
+    const LIMIT = 5000;
+    const rows = listTemperatureRecords(clientId, { limit: LIMIT });
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        truncated: rows.length >= LIMIT, max: LIMIT, canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), TEMPERATURE_TABLE_KEY, 'colTmpDeleteAuth'),
+        temperatures: rows.map((r) => {
+            const cc = centers.get(r.cost_center_id);
+            return {
+                id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
+                zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, locator: r.locator,
+                name: r.person_name, temperature: r.temperature, checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo, source: r.source,
+                system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: TEMPERATURE_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.checked_at }),
+            };
+        }),
+    });
+});
+app.get('/api/business/temperatures/:id/photo', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).end();
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || !getTemperatureRecord(id, req.user.clientId)) return res.status(404).end();
+    const photo = getTemperaturePhoto(id);
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
+});
+// Eliminar una lectura pide el permiso Eliminar de su columna en el árbol (el administrador del cliente no depende de hojas); queda el aviso del cambio.
+app.delete('/api/business/temperatures/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getTemperatureRecord(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    if (!req.user.isClientAdmin && !canDeleteColumn(getUserEffectiveGrants(req.user.sub), TEMPERATURE_TABLE_KEY, 'colTmpDeleteAuth')) return res.status(403).json({ message: 'No tienes permiso para eliminar registros de temperaturas.' });
+    deleteTemperatureRecord(id, req.user.clientId);
+    try { notifyDataChange({ clientId: req.user.clientId, tableKey: TEMPERATURE_TABLE_KEY, recordLabel: `Temperatura ${rec.space_code}`, fieldKey: 'colTmpDeleteAuth', oldValue: `${rec.temperature} °C ${rec.person_name} (${rec.checked_at} UTC)`, newValue: 'Eliminado', actorUserId: req.user.sub, actorLabel: changedByLabel(req) }); } catch (err) { console.error('temperature delete notice failed', err); }
+    res.json({ ok: true });
+});
+// Hoja de QR de temperaturas: un QR por refrigerador (de una zona o de todas) con su dirección fija; la hoja se imprime desde el Layout.
+app.get('/api/business/layout/temperature-qr', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canUseTemperatureQr) return res.status(403).json({ message: 'No tienes permiso para usar los QR de temperaturas.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0);
+    const base = `${req.protocol}://${req.get('host')}/t/${token}`;
+    const layout = row.layout;
+    const zoneId = String(req.query.zone || '');
+    const zones = (layout.zones || []).filter((z) => z.active !== false);
+    const spaces = (layout.spaces || []).filter((s) => s.active !== false && s.type === 'cold' && (!zoneId || s.zoneId === zoneId)).slice(0, 600).map((s) => {
+        const fp = (layout.footprints || []).find((f) => f.id === s.footprintId);
+        const zone = zones.find((z) => z.id === s.zoneId);
+        const url = `${base}/${s.id}`;
+        return { id: s.id, code: s.code, type: s.type, zoneId: s.zoneId || '', zoneName: zone ? zone.name : '', locator: zone && fp ? [zone.code, fp.code, s.code].join('.') : '', url, qrRows: layoutQrRows(url) };
+    });
+    const client = getClientById(req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', ...qrBranding(req.user.clientId), zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
 });
 
 // Buscador de la página pública (la lupa): zonas, categorías de las zonas y códigos, mientras se escribe. Sin sesión, con el mismo código aleatorio del QR y un tope por IP (más alto que el de

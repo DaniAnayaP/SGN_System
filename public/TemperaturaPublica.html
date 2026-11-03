@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>Temperaturas</title>
+    <link rel="icon" href="/icons/icon-512.png">
+    <style>
+        :root{
+            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14);
+        }
+        @media (prefers-color-scheme: dark){
+            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); }
+        }
+        *{ box-sizing:border-box; }
+        html,body{ margin:0; min-height:100%; }
+        body{ background:var(--bg); color:var(--ink); font:400 15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:14px 14px 36px; display:flex; justify-content:center; }
+        main{ width:100%; max-width:420px; display:flex; flex-direction:column; gap:12px; }
+        .site{ display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--muted); }
+        .site b{ color:var(--ink); font-weight:600; }
+        .card{ background:var(--surface); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:16px; display:flex; flex-direction:column; gap:12px; }
+        h1{ font-size:20px; margin:0; }
+        .chip{ display:inline-flex; align-items:center; gap:6px; width:max-content; max-width:100%; font-weight:600; font-size:14px; padding:4px 12px; border:1px solid var(--line); border-radius:999px; }
+        .loc{ font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); margin-top:-6px; overflow-wrap:anywhere; }
+        label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+        input[type=text]{ width:100%; font:500 16px system-ui,sans-serif; padding:11px 14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--ink); }
+        input[type=text]:focus-visible, button:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+        .temp-row{ display:grid; grid-template-columns:52px 1fr auto; gap:8px; align-items:center; }
+        .temp-row input{ font:700 28px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; font-variant-numeric:tabular-nums; }
+        .temp-row .sign{ font:700 22px system-ui,sans-serif; height:100%; min-height:52px; border-radius:14px; border:1px solid var(--line); background:transparent; color:var(--ink); cursor:pointer; }
+        .temp-row .unit{ font:600 20px system-ui,sans-serif; color:var(--muted); }
+        .btn{ font:600 16px system-ui,sans-serif; padding:14px 16px; border-radius:16px; border:0; background:var(--ink); color:var(--surface); cursor:pointer; width:100%; }
+        .btn.alt{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+        .btn[disabled]{ opacity:.55; cursor:default; }
+        .link{ background:none; border:0; color:var(--accent); font:600 14px system-ui,sans-serif; padding:8px; cursor:pointer; text-align:center; }
+        .cam{ position:relative; border-radius:18px; overflow:hidden; background:#241a2a; aspect-ratio:3/4; display:grid; place-items:center; color:#e9d9ee; text-align:center; font-size:13px; }
+        .cam video, .cam img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+        .cam::after{ content:""; position:absolute; inset:14px; border:2px dashed rgba(255,255,255,.35); border-radius:12px; pointer-events:none; }
+        .cam span{ position:relative; z-index:1; padding:0 18px; }
+        .shot{ width:100%; border-radius:14px; display:block; aspect-ratio:4/3; object-fit:cover; background:var(--line); }
+        .big{ font:700 44px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; font-variant-numeric:tabular-nums; margin:2px 0; }
+        .sum{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .sum div{ border:1px solid var(--line); border-radius:14px; padding:8px 12px; }
+        .sum small{ display:block; color:var(--muted); font-size:11px; }
+        .sum b{ font-size:16px; }
+        .tag{ display:inline-block; font-weight:600; font-size:12px; padding:2px 10px; border-radius:999px; border:1px solid var(--ok); color:var(--ok); white-space:nowrap; }
+        .list{ display:flex; flex-direction:column; gap:8px; }
+        .item{ display:grid; grid-template-columns:56px 1fr auto; gap:8px; align-items:center; border:1px solid var(--line); border-radius:14px; padding:8px; }
+        .item img, .item i{ width:56px; height:56px; border-radius:10px; object-fit:cover; background:var(--line); display:block; cursor:zoom-in; }
+        .item b{ font-size:14px; display:block; } .item small{ color:var(--muted); font-size:12px; }
+        .err{ color:var(--warn); font-size:14px; border:1px solid var(--warn); border-radius:14px; padding:10px 12px; }
+        .muted{ color:var(--muted); font-size:13px; }
+        #viewer{ position:fixed; inset:0; background:rgba(0,0,0,.88); display:grid; place-items:center; z-index:10; padding:12px; }
+        #viewer[hidden]{ display:none; }
+        #viewer img{ max-width:100%; max-height:88vh; border-radius:12px; }
+        #viewer button{ position:absolute; top:10px; right:12px; background:rgba(255,255,255,.18); color:#fff; border:0; border-radius:999px; font:600 14px system-ui; padding:8px 14px; cursor:pointer; }
+        @media (prefers-reduced-motion: no-preference){ .card{ animation:rise .25s ease-out; } @keyframes rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } } }
+    </style>
+</head>
+<body>
+<main>
+    <div class="site"><b id="site-name"></b><span id="company-name"></span></div>
+    <div id="view"></div>
+</main>
+<div id="viewer" hidden><button type="button" id="viewer-close"></button><img alt=""></div>
+<canvas id="snap" hidden></canvas>
+<script>
+(function () {
+'use strict';
+const LANG = (navigator.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
+const TEXT = {
+    es: {
+        title: 'Temperaturas', loading: 'Cargando…', notFound: 'Este QR ya no corresponde a ningún refrigerador.', yourName: 'Tu nombre', namePlaceholder: 'Quién revisa', temperature: 'Temperatura que marca',
+        tempPlaceholder: '0.0', toggleSign: 'Cambiar entre arriba y abajo de cero', take: 'Tomar foto de la lectura', records: 'Ver registros', back: 'Volver', photoTitle: 'Foto de la lectura', shoot: 'Tomar foto', retake: 'Repetir',
+        use: 'Guardar la lectura', cancel: 'Cancelar', cameraHint: 'Apunta al termómetro o a la pantalla del refrigerador y toma la foto', cameraOpening: 'Abriendo la cámara…',
+        cameraDenied: 'No se pudo abrir la cámara. Permite el acceso a la cámara en tu navegador y vuelve a intentar.', cameraInsecure: 'Esta página necesita una conexión segura (https) para usar la cámara.',
+        done: 'Listo', saved: 'Guardado', when: 'Hora', newOne: 'Nueva lectura', recordsTitle: 'Registros', readOnly: 'Solo lectura', noRecords: 'Todavía no hay lecturas de este refrigerador.',
+        needName: 'Escribe tu nombre para empezar.', needTemp: 'Escribe la temperatura que marca (por ejemplo 4.5 o -18).', badTemp: 'Esa temperatura no es válida: usa un número entre -100 y 100.', saving: 'Guardando…',
+        errPhoto: 'La foto no se pudo guardar. Intenta de nuevo.', errGeneric: 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.', close: 'Cerrar', reading: 'Lectura',
+    },
+    en: {
+        title: 'Temperatures', loading: 'Loading…', notFound: 'This QR no longer matches any refrigerator.', yourName: 'Your name', namePlaceholder: 'Who is checking', temperature: 'Temperature shown',
+        tempPlaceholder: '0.0', toggleSign: 'Switch between above and below zero', take: 'Take a photo of the reading', records: 'View records', back: 'Back', photoTitle: 'Photo of the reading', shoot: 'Take photo', retake: 'Retake',
+        use: 'Save the reading', cancel: 'Cancel', cameraHint: 'Point at the thermometer or the refrigerator display and take the photo', cameraOpening: 'Opening the camera…',
+        cameraDenied: 'The camera could not be opened. Allow camera access in your browser and try again.', cameraInsecure: 'This page needs a secure connection (https) to use the camera.',
+        done: 'Done', saved: 'Saved', when: 'Time', newOne: 'New reading', recordsTitle: 'Records', readOnly: 'Read-only', noRecords: 'There are no readings of this refrigerator yet.',
+        needName: 'Type your name to start.', needTemp: 'Type the temperature shown (for example 4.5 or -18).', badTemp: 'That temperature is not valid: use a number between -100 and 100.', saving: 'Saving…',
+        errPhoto: 'The photo could not be saved. Try again.', errGeneric: 'It could not be saved. Check your connection and try again.', close: 'Close', reading: 'Reading',
+    },
+}[LANG];
+document.documentElement.lang = LANG;
+document.title = TEXT.title;
+document.getElementById('viewer-close').textContent = TEXT.close;
+
+// La dirección fija del QR: /t/<código del Layout>/<id del activo>
+const parts = location.pathname.split('/').filter(Boolean);
+const TOKEN = parts[1] || '';
+const SPACE = parts[2] || '';
+const API = `/api/public/temperature/${encodeURIComponent(TOKEN)}/${encodeURIComponent(SPACE)}`;
+const KEY_NAME = 'sgn_temp_name';
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const store = {
+    get(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* sin almacenamiento */ } },
+};
+let info = null;          // lo que contesta el servidor: activo y registros
+let stream = null;
+let draft = { name: '', temp: '' }; // lo que se escribió antes de la foto (se conserva si se repite la foto)
+let draftPhoto = '';      // la foto tomada que todavía no se confirma
+let lastResult = null;    // la lectura que se acaba de guardar
+let note = '';
+
+const fmtTime = (iso) => new Date(iso).toLocaleTimeString(LANG === 'en' ? 'en-US' : 'es-MX', { hour: '2-digit', minute: '2-digit' });
+const fmtDate = (iso) => new Date(iso).toLocaleDateString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short' });
+const fmtTemp = (v) => `${Number(v).toFixed(1)} °C`;
+// La temperatura se escribe con punto o con coma; el signo menos se pone con el botón ± (algunos teclados de celular no lo traen).
+function parseTemp(text) {
+    const clean = String(text || '').replace(',', '.').replace(/\s+/g, '').replace(/[−–]/g, '-').replace(/°c?/i, '');
+    if (!clean) return { empty: true };
+    if (!/^-?\d{1,3}(\.\d{1,2})?$/.test(clean)) return { bad: true };
+    const n = Number(clean);
+    return n >= -100 && n <= 100 ? { value: Math.round(n * 10) / 10 } : { bad: true };
+}
+
+function stopCamera() { if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; } }
+function show(html) { $('view').innerHTML = html; }
+const TYPE_NAMES = { es: { cold: 'Frío' }, en: { cold: 'Cold' } }[LANG];
+const placeHtml = () => `<span class="chip">${esc(info.space.code)} · ${esc(TYPE_NAMES[info.space.type] || info.space.type)}</span>${info.space.locator ? `<div class="loc">${esc(info.space.locator)}${info.space.zoneName ? ` · ${esc(info.space.zoneName)}` : ''}</div>` : ''}`;
+const errBox = () => (note ? `<div class="err" role="alert">${esc(note)}</div>` : '');
+
+// ---- pantallas ----------------------------------------------------------------------------------------------------------------------
+function viewHome() {
+    const name = draft.name || store.get(KEY_NAME) || '';
+    show(`<div class="card"><h1>${esc(TEXT.title)}</h1>${placeHtml()}${errBox()}
+        <div><label for="person">${esc(TEXT.yourName)}</label><input type="text" id="person" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(name)}"></div>
+        <div><label for="temp">${esc(TEXT.temperature)}</label><div class="temp-row"><button type="button" class="sign" id="sign" aria-label="${esc(TEXT.toggleSign)}" title="${esc(TEXT.toggleSign)}">±</button><input type="text" id="temp" inputmode="decimal" autocomplete="off" maxlength="7" placeholder="${esc(TEXT.tempPlaceholder)}" value="${esc(draft.temp)}"><span class="unit">°C</span></div></div>
+        <button type="button" class="btn" id="go-photo">${esc(TEXT.take)}</button>
+        <button type="button" class="link" id="go-records">${esc(TEXT.records)}</button></div>`);
+    $('sign').addEventListener('click', () => {
+        const input = $('temp');
+        const v = input.value.trim();
+        input.value = v.startsWith('-') ? v.slice(1) : `-${v}`;
+        input.focus();
+    });
+    $('go-photo').addEventListener('click', () => {
+        const personName = $('person').value.replace(/\s+/g, ' ').trim();
+        const reading = parseTemp($('temp').value);
+        draft = { name: personName, temp: $('temp').value.trim() };
+        if (!personName) { note = TEXT.needName; viewHome(); $('person').focus(); return; }
+        if (reading.empty) { note = TEXT.needTemp; viewHome(); $('temp').focus(); return; }
+        if (reading.bad) { note = TEXT.badTemp; viewHome(); $('temp').focus(); return; }
+        note = '';
+        store.set(KEY_NAME, personName);
+        viewCamera();
+    });
+    $('go-records').addEventListener('click', () => { note = ''; viewRecords(); });
+}
+
+async function viewCamera() {
+    draftPhoto = '';
+    show(`<div class="card"><h1>${esc(TEXT.photoTitle)}</h1>${placeHtml()}${errBox()}
+        <div class="muted">${esc(draft.name)} · ${esc(TEXT.reading)} ${esc(fmtTemp(parseTemp(draft.temp).value))}</div>
+        <div class="cam" id="cam"><video id="video" playsinline muted autoplay></video><span id="cam-msg">${esc(TEXT.cameraOpening)}</span></div>
+        <button type="button" class="btn" id="shoot" disabled>${esc(TEXT.shoot)}</button>
+        <button type="button" class="link" id="cam-cancel">${esc(TEXT.cancel)}</button></div>`);
+    $('cam-cancel').addEventListener('click', () => { stopCamera(); note = ''; viewHome(); });
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('cam-msg').textContent = TEXT.cameraInsecure; return; }
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+        const video = $('video');
+        video.srcObject = stream;
+        await video.play();
+        $('cam-msg').textContent = TEXT.cameraHint;
+        $('shoot').disabled = false;
+    } catch (err) {
+        $('cam-msg').textContent = TEXT.cameraDenied;
+        return;
+    }
+    $('shoot').addEventListener('click', () => {
+        const photo = capture($('video'));
+        stopCamera();
+        if (!photo) { note = TEXT.errPhoto; viewCamera(); return; }
+        draftPhoto = photo;
+        viewConfirm();
+    });
+}
+
+// La foto se toma de la imagen en vivo y se reduce (máx. 1024 px de lado, JPEG): así pesa poco aunque la cámara sea de 12 megapíxeles.
+function capture(video) {
+    const w = video.videoWidth; const h = video.videoHeight;
+    if (!w || !h) return '';
+    const scale = Math.min(1, 1024 / Math.max(w, h));
+    const canvas = $('snap');
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    for (const q of [0.72, 0.6, 0.5, 0.4]) {
+        const url = canvas.toDataURL('image/jpeg', q);
+        if (url.length * 0.75 < 420 * 1024) return url;
+    }
+    return '';
+}
+
+function viewConfirm() {
+    show(`<div class="card"><h1>${esc(TEXT.photoTitle)}</h1>${placeHtml()}${errBox()}
+        <div class="big">${esc(fmtTemp(parseTemp(draft.temp).value))}</div>
+        <img class="shot" id="preview" alt="">
+        <button type="button" class="btn" id="use">${esc(TEXT.use)}</button>
+        <button type="button" class="btn alt" id="retake">${esc(TEXT.retake)}</button></div>`);
+    $('preview').src = draftPhoto;
+    $('retake').addEventListener('click', () => { note = ''; viewCamera(); });
+    $('use').addEventListener('click', async () => {
+        $('use').disabled = true; $('retake').disabled = true; $('use').textContent = TEXT.saving;
+        try {
+            await sendReading();
+        } catch (err) {
+            note = err && err.code === 'PHOTO' ? TEXT.errPhoto : (err && err.code === 'TEMP' ? TEXT.badTemp : TEXT.errGeneric);
+            viewConfirm();
+        }
+    });
+}
+
+async function sendReading() {
+    const res = await fetch(`${API}/reading`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: draft.name, temperature: parseTemp(draft.temp).value, photo: draftPhoto }) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(json.message || 'error'); e.code = json.code || String(res.status); throw e; }
+    lastResult = json;
+    draft = { name: draft.name, temp: '' };
+    draftPhoto = '';
+    note = '';
+    await refresh();
+    viewDone();
+}
+
+function viewDone() {
+    const r = lastResult;
+    show(`<div class="card"><h1>${esc(TEXT.done)} <span class="tag">${esc(TEXT.saved)}</span></h1>${placeHtml()}
+        <div class="big">${esc(fmtTemp(r.temperature))}</div>
+        <div class="sum"><div><small>${esc(TEXT.yourName)}</small><b>${esc(r.name)}</b></div><div><small>${esc(TEXT.when)}</small><b>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</b></div></div>
+        <button type="button" class="btn alt" id="go-records">${esc(TEXT.records)}</button>
+        <button type="button" class="link" id="again">${esc(TEXT.newOne)}</button></div>`);
+    $('go-records').addEventListener('click', viewRecords);
+    $('again').addEventListener('click', () => { lastResult = null; viewHome(); });
+}
+
+function viewRecords() {
+    const rows = info.records.map((r) => `<div class="item">${r.hasPhoto ? `<img data-view="${r.id}" alt="${esc(TEXT.photoTitle)}" loading="lazy" src="${API}/photo/${r.id}">` : '<i></i>'}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</small></div><span class="tag">${esc(fmtTemp(r.temperature))}</span></div>`).join('');
+    show(`<div class="card"><h1>${esc(TEXT.recordsTitle)}</h1>${placeHtml()}<span class="muted">${esc(TEXT.readOnly)}</span>
+        <div class="list">${rows || `<div class="muted">${esc(TEXT.noRecords)}</div>`}</div>
+        <button type="button" class="link" id="back">${esc(TEXT.back)}</button></div>`);
+    $('back').addEventListener('click', () => { note = ''; viewHome(); });
+    $('view').querySelectorAll('[data-view]').forEach((img) => img.addEventListener('click', () => { $('viewer').querySelector('img').src = img.src; $('viewer').hidden = false; }));
+}
+$('viewer-close').addEventListener('click', () => { $('viewer').hidden = true; });
+$('viewer').addEventListener('click', (event) => { if (event.target === $('viewer')) $('viewer').hidden = true; });
+
+async function refresh() {
+    const res = await fetch(API, { cache: 'no-store' });
+    if (!res.ok) { const e = new Error('not found'); e.status = res.status; throw e; }
+    info = await res.json();
+    $('site-name').textContent = info.siteName || '';
+    $('company-name').textContent = info.companyName || '';
+}
+
+(async function init() {
+    show(`<div class="card"><div class="muted">${esc(TEXT.loading)}</div></div>`);
+    try { await refresh(); } catch (err) { show(`<div class="card"><div class="err" role="alert">${esc(TEXT.notFound)}</div></div>`); return; }
+    viewHome();
+})();
+window.addEventListener('pagehide', stopCamera);
+})();
+</script>
+</body>
+</html>

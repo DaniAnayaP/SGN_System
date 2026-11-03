@@ -2321,16 +2321,18 @@ function updateQrMenu() {
     const canLayout = !!(state.perms && state.perms.canUseQr);
     const canZone = !!(state.perms && state.perms.canPrintZone);
     const canClean = !!(state.perms && state.perms.canUseCleaningQr);
-    const show = !!((canLayout || canZone || canClean) && state.saved && !state.creating);
+    const canTemp = !!(state.perms && state.perms.canUseTemperatureQr);
+    const show = !!((canLayout || canZone || canClean || canTemp) && state.saved && !state.creating);
     $('layout-qrmenu').hidden = !show;
     $('layout-qr-regen').hidden = !(state.perms && state.perms.canRegenerateQr);
-    // "Por: Layout | Zona | Limpieza" solo sale si se puede usar de más de una forma; con una sola, el menú abre directo en esa.
+    // "Por: Layout | Zona | Limpieza | Temperaturas" solo sale si se puede usar de más de una forma; con una sola, el menú abre directo en esa.
     $('layout-qr-by-layout').hidden = !canLayout;
     $('layout-qr-by-zone').hidden = !canZone;
     $('layout-qr-by-clean').hidden = !canClean;
-    $('layout-qr-by').hidden = [canLayout, canZone, canClean].filter(Boolean).length < 2;
-    const first = canLayout ? 'layout' : (canZone ? 'zone' : 'clean');
-    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean)) qrBy = first;
+    $('layout-qr-by-temp').hidden = !canTemp;
+    $('layout-qr-by').hidden = [canLayout, canZone, canClean, canTemp].filter(Boolean).length < 2;
+    const first = canLayout ? 'layout' : (canZone ? 'zone' : (canClean ? 'clean' : 'temp'));
+    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean) || (qrBy === 'temp' && !canTemp)) qrBy = first;
     renderQrBy();
     if (!show) closeQrPop();
 }
@@ -2344,7 +2346,7 @@ let qrZoneData = null; // lo último que respondió el servidor para la zona y l
 let qrZoneSeq = 0;
 const ZONE_CATEGORY_TYPES = [['inventario', 'colArticuloCategoriaInventario'], ['compra', 'colArticuloCategoriaCompra'], ['almacenamiento', 'colArticuloCategoriaAlmacenamiento'], ['rotacion', 'colArticuloCategoriaRotacion'], ['manejo', 'colArticuloCategoriaManejo'], ['riesgo', 'colArticuloCategoriaRiesgo'], ['vidautil', 'colArticuloCategoriaVidautil'], ['tipocodigo', 'colArticuloCategoriaTipoCodigo']];
 function renderQrBy() {
-    ['layout', 'zone', 'clean'].forEach((k) => {
+    ['layout', 'zone', 'clean', 'temp'].forEach((k) => {
         const on = qrBy === k;
         $(`layout-qr-by-${k}`).classList.toggle('active', on);
         $(`layout-qr-by-${k}`).setAttribute('aria-pressed', String(on));
@@ -2352,6 +2354,7 @@ function renderQrBy() {
     });
     if (qrBy === 'zone' && !$('layout-qr-pop').hidden) loadQrZone(); // con el menú cerrado no se pide nada; se lee al abrirlo
     if (qrBy === 'clean') cleanZoneOptions();
+    if (qrBy === 'temp') tempZoneOptions();
 }
 // ---- QR de limpieza (uno por activo) ---------------------------------------------------------------------------------------------
 // Cada ACTIVO tiene su QR (la dirección fija /l/<código del Layout>/<id del activo>: no cambia nunca aunque el activo cambie de nombre, de zona o de código). Se imprime una hoja con un QR por activo de la zona
@@ -2366,27 +2369,46 @@ function cleanZoneOptions() {
     $('layout-qr-clean-fine').textContent = n ? t('main.layoutQrLimpiezaCuantos', { n: fmt(n) }) : t('main.layoutQrLimpiezaVacio');
     $('layout-qr-clean-print').disabled = !n;
 }
-function qrSvgOf(rows) {
-    const n = rows.length;
-    let d = '';
-    rows.forEach((row, y) => { for (let x = 0; x < n; x++) { if (row[x] !== '1') continue; let len = 1; while (x + len < n && row[x + len] === '1') len++; d += `M${x + 4},${y + 4}h${len}v1h-${len}z`; x += len - 1; } });
-    return `<svg viewBox="0 0 ${n + 8} ${n + 8}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg"><rect width="${n + 8}" height="${n + 8}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+// ---- QR de temperaturas (uno por refrigerador) -------------------------------------------------------------------------------------
+// Cada REFRIGERADOR (activo de tipo Frío) tiene su QR (la dirección fija /t/<código del Layout>/<id del activo>: no cambia nunca). Se imprime una hoja con un QR por refrigerador de la zona elegida (o de todas)
+// y se pega en el refrigerador. Se arma con lo guardado (GET /api/business/layout/temperature-qr). Quien lo escanea no necesita sesión: ver la pantalla Temperaturas.
+const isColdSpace = (s) => s.active !== false && s.type === 'cold';
+function tempZoneOptions() {
+    const zones = ((state.saved && state.saved.zones) || []).filter((z) => z.active !== false);
+    const select = $('layout-qr-temp-zone');
+    const current = select.value;
+    select.innerHTML = `<option value="">${esc(t('main.layoutQrLimpiezaTodas'))}</option>${zones.map((z) => `<option value="${esc(z.id)}">${esc(z.name)}</option>`).join('')}`;
+    if (current && zones.some((z) => z.id === current)) select.value = current;
+    const n = ((state.saved && state.saved.spaces) || []).filter((s) => isColdSpace(s) && (!select.value || s.zoneId === select.value)).length;
+    $('layout-qr-temp-fine').textContent = n ? t('main.layoutQrTemperaturasCuantos', { n: fmt(n) }) : t('main.layoutQrTemperaturasVacio');
+    $('layout-qr-temp-print').disabled = !n;
 }
-async function printCleaningQr() {
-    const zone = $('layout-qr-clean-zone').value;
-    const base = layoutUrl('/api/business/layout/cleaning-qr');
+// Hoja de QR por activo (Limpieza y Temperaturas): cada QR va en la MISMA tarjeta del Layout (LayoutSheet.buildCardSvg): encabezado con el logo (o las iniciales), el Sitio y la empresa, el título, un marco con el
+// nombre del activo sobre un fondo suave, el QR grande con su llamada arriba y el localizador al pie, todo con el color de la empresa. Se imprimen cuatro por hoja carta, cada una con su línea punteada para recortar.
+const ASSET_QR_KINDS = {
+    clean: { path: '/api/business/layout/cleaning-qr', title: 'main.layoutQrLimpiezaTitulo', scan: 'main.layoutQrLimpiezaEscanea', empty: 'main.layoutQrLimpiezaVacio', icon: 'sparkle', color: '#2A9D8F', zone: 'layout-qr-clean-zone' },
+    temp: { path: '/api/business/layout/temperature-qr', title: 'main.layoutQrTemperaturasTitulo', scan: 'main.layoutQrTemperaturasEscanea', empty: 'main.layoutQrTemperaturasVacio', icon: 'thermometer', color: '#2F8FD1', zone: 'layout-qr-temp-zone' },
+};
+async function printAssetQrCards(kind) {
+    const k = ASSET_QR_KINDS[kind];
+    const zone = $(k.zone).value;
+    const base = layoutUrl(k.path);
     const res = await fetch(zone ? `${base}${base.includes('?') ? '&' : '?'}zone=${encodeURIComponent(zone)}` : base, { credentials: 'include' });
     if (res.status === 403) { Dashboard.showToast(t('main.layoutQrSinPermiso'), 'warning'); return; }
-    if (!res.ok) throw new Error('cleaning qr failed');
+    if (!res.ok) throw new Error('asset qr failed');
     const data = await res.json();
-    if (!data.spaces.length) { Dashboard.showToast(t('main.layoutQrLimpiezaVacio'), 'warning'); return; }
-    const cards = data.spaces.map((s) => `<div class="c"><small>${esc(data.siteName || data.companyName)}</small><b class="t">${esc(t('main.layoutQrLimpiezaTitulo'))}</b><b class="k">${esc(s.code)}</b><span class="y">${esc(typeLabel('space', s.type))}${s.zoneName ? ` · ${esc(s.zoneName)}` : ''}</span>${qrSvgOf(s.qrRows)}<span class="l">${esc(s.locator)}</span><small>${esc(t('main.layoutQrLimpiezaEscanea'))}</small></div>`).join('');
-    const doc = `<!doctype html><html lang="${esc(Dashboard.getLanguage ? Dashboard.getLanguage() : 'es')}"><head><meta charset="utf-8"><title>${esc(t('main.layoutQrLimpiezaTitulo'))}</title><style>
-        @page{ size: letter; margin: 10mm; } *{ box-sizing: border-box; } body{ margin: 0; font-family: system-ui, Arial, sans-serif; color: #1a1a1a; }
-        .g{ display: grid; grid-template-columns: repeat(3, 62mm); gap: 6mm 5mm; justify-content: center; }
-        .c{ height: 80mm; border: 0.3mm dashed #777; border-radius: 3mm; padding: 3mm; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1mm; break-inside: avoid; }
-        .c small{ font-size: 7pt; color: #555; } .t{ font-size: 9pt; letter-spacing: .12em; } .k{ font-size: 18pt; line-height: 1; } .y{ font-size: 8pt; color: #333; }
-        .c svg{ width: 40mm; height: 40mm; margin: 1mm 0; } .l{ font: 600 7.5pt ui-monospace, Menlo, monospace; color: #333; overflow-wrap: anywhere; }
+    if (!data.spaces.length) { Dashboard.showToast(t(k.empty), 'warning'); return; }
+    const logoRatio = await logoRatioOf(data.logoDataUrl);
+    const theme = window.LayoutMapSvg.theme(data.companyColor);
+    const labels = { cardArea: t('main.layoutTarjetaArea'), cardCategory: t('main.colLimActivo').toUpperCase(), cardReview: t(k.scan), cardEmpty: '', cutCaption: '' };
+    const cards = data.spaces.map((s) => `<div class="c">${window.LayoutSheet.buildCardSvg({
+        companyName: data.companyName, siteName: data.siteName || '', logoDataUrl: data.logoDataUrl, logoRatio, theme, zoneName: t(k.title),
+        categories: [{ name: s.code, desc: [typeLabel('space', s.type), s.zoneName].filter(Boolean).join(' · '), icon: k.icon, color: k.color, qrRows: s.qrRows }],
+    }, { ...labels, cardFooter: s.locator }, { widthCm: 10.5, heightCm: 14.8, cut: false })}</div>`).join('');
+    const doc = `<!doctype html><html lang="${esc(Dashboard.getLanguage ? Dashboard.getLanguage() : 'es')}"><head><meta charset="utf-8"><title>${esc(t(k.title))}</title><style>
+        @page{ size: letter; margin: 8mm; } *{ box-sizing: border-box; } body{ margin: 0; }
+        .g{ display: grid; grid-template-columns: repeat(2, 9.2cm); gap: 3mm; justify-content: center; }
+        .c{ width: 9.2cm; height: 12.97cm; border: 0.3mm dashed #777; break-inside: avoid; } .c svg{ display: block; width: 100%; height: 100%; }
         </style></head><body><div class="g">${cards}</div></body></html>`;
     const w = window.open('', '_blank');
     if (!w) { Dashboard.showToast(t('main.layoutQrLimpiezaBloqueado'), 'warning'); return; }
@@ -2647,6 +2669,7 @@ $('layout-qr-btn').addEventListener('click', (event) => {
 });
 $('layout-qr-zone').addEventListener('change', loadQrZone);
 $('layout-qr-clean-zone').addEventListener('change', cleanZoneOptions);
+$('layout-qr-temp-zone').addEventListener('change', tempZoneOptions);
 $('layout-qr-type').addEventListener('change', loadQrZone);
 document.addEventListener('click', (event) => { if (!event.target.closest('#layout-qrmenu')) closeQrPop(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeQrPop(); });
@@ -2720,7 +2743,8 @@ $('layout-qr-pop').addEventListener('click', async (event) => {
         else if (kind === 'zone-cls') await openClassificationSheetDialog();
         else if (kind === 'pdf' || kind === 'png') await openSheetDialog(kind);
         else if (kind === 'link') await copyQrLink();
-        else if (kind === 'clean-print') await printCleaningQr();
+        else if (kind === 'clean-print') await printAssetQrCards('clean');
+        else if (kind === 'temp-print') await printAssetQrCards('temp');
         else if (kind === 'regen') await regenerateQr();
     } catch (err) {
         console.error('Layout: acción de QR falló', err);
