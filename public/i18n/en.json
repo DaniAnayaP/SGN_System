@@ -1649,6 +1649,7 @@
     "layoutActivoElegir": "Choose…",
     "layoutActivosSinEspacios": "There are no footprints yet. Add them in Footprint-Space and their assets go here.",
     "layoutHuellaCol": "Footprint",
+    "layoutCodigoHuella": "Footprint code",
     "layoutAgregarActivo": "+ Add asset",
     "layoutAltura": "Clear height (m)",
     "layoutAlturaEsquina": "Height (m)",
@@ -3585,8 +3586,8 @@
       "example": "you define Zone A, dry goods, 22 by 11 meters."
     },
     "layoutSec_activos": {
-      "what": "Each line is an asset: what stands on a footprint. A footprint can have several (for example two racks on the same pallet); with just one you write nothing, because adding the footprint creates its first asset with the same code. The asset code gives the number in the Locator (A-05 is A005). Here you choose which footprint it is on, the classification (Operational furniture, Storage furniture…), the type (rack, shelf, desk…), its levels, its columns and its drawers. Both lists are managed by the client in Catalogs. The zone comes from the footprint.",
-      "example": "footprint T-02 has two assets, R-01 and R-02; both are Racks of Storage furniture and the footprint is shared between them."
+      "what": "Each line is an asset: what stands on a footprint. A footprint can have several (for example two racks on the same pallet); with just one you write nothing, because adding the footprint creates its first asset with the next free code (R-01, R-02…). The asset code gives the number in the Locator (A-05 is A005); the footprint one (H001…) is set in Footprint-Space. Here you choose which footprint it is on, the classification (Operational furniture, Storage furniture…), the type (rack, shelf, desk…), its levels, its columns and its drawers. Both lists are managed by the client in Catalogs. The zone comes from the footprint.",
+      "example": "footprint H002 has two assets, R-01 and R-02; both are Racks of Storage furniture and the footprint is shared between them."
     },
     "layoutAssetClass": {
       "what": "The classification of this space's asset. It comes from Catalogs > Asset Classifications and says which metric it counts in: m² (furniture) or m³ (storage). It can be left empty.",
@@ -3597,8 +3598,8 @@
       "example": "Rack, Shelf or Desk."
     },
     "layoutSec_espacios": {
-      "what": "The footprints: the place on the floor (code, zone, position and size). The storage m² and m³ come from here. Adding a footprint creates its first asset by itself; if there is more than one on top, you add them in the Assets step and the footprint is shared between them.",
-      "example": "you register footprint R-01, 3 by 1.1 meters and 4.5 high; in Assets its asset R-01 already appears."
+      "what": "The footprints: the place on the floor (code, zone, position and size). The storage m² and m³ come from here. The footprint code is H001, H002… (it gives the H of the Locator): it is assigned by itself when you add it and can be changed. Adding a footprint creates its first asset by itself; if there is more than one on top, you add them in the Assets step and the footprint is shared between them.",
+      "example": "you register footprint H001, 3 by 1.1 meters and 4.5 high; in Assets its first asset already appears, with its own code (R-01)."
     },
     "layoutLocked": {
       "what": "This section cannot be changed with your current access.",

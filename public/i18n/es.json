@@ -1649,6 +1649,7 @@
     "layoutActivoElegir": "Elige…",
     "layoutActivosSinEspacios": "Todavía no hay huellas. Agrégalas en Huella-Espacio y aquí se ponen sus activos.",
     "layoutHuellaCol": "Huella",
+    "layoutCodigoHuella": "Código de huella",
     "layoutAgregarActivo": "+ Agregar activo",
     "layoutAltura": "Altura libre (m)",
     "layoutAlturaEsquina": "Altura (m)",
@@ -3584,8 +3585,8 @@
       "example": "defines la Zona A, de producto seco, de 22 por 11 metros."
     },
     "layoutSec_activos": {
-      "what": "Cada renglón es un activo: lo que hay encima de una huella. Una huella puede tener varios (por ejemplo dos racks sobre la misma tarima); con uno solo no escribes nada, porque al agregar la huella se crea su primer activo con el mismo código. El código del activo es el que da el número del Localizador (A-05 es A005). Aquí eliges en qué huella está, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
-      "example": "la huella T-02 tiene dos activos, R-01 y R-02; los dos son Rack de Mobiliario almacenamiento y la huella se reparte entre ellos."
+      "what": "Cada renglón es un activo: lo que hay encima de una huella. Una huella puede tener varios (por ejemplo dos racks sobre la misma tarima); con uno solo no escribes nada, porque al agregar la huella se crea su primer activo con el siguiente código libre (R-01, R-02…). El código del activo es el que da el número del Localizador (A-05 es A005); el de la huella (H001…) se pone en Huella-Espacio. Aquí eliges en qué huella está, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
+      "example": "la huella H002 tiene dos activos, R-01 y R-02; los dos son Rack de Mobiliario almacenamiento y la huella se reparte entre ellos."
     },
     "layoutAssetClass": {
       "what": "La clasificación del activo de este espacio. Viene de Catálogos > Clasificaciones de Activos y dice con qué métrica cuenta: m² (mobiliario) o m³ (almacenamiento). Se puede dejar sin elegir.",
@@ -3596,8 +3597,8 @@
       "example": "Rack, Estante o Escritorio."
     },
     "layoutSec_espacios": {
-      "what": "Las huellas: el lugar en el piso (código, zona, posición y medidas). De aquí salen los m² y m³ de almacenamiento. Al agregar una huella se crea sola su primer activo; si encima hay más de uno, los agregas en el paso Activos y la huella se reparte entre ellos.",
-      "example": "registras la huella R-01 de 3 por 1.1 metros y 4.5 de alto; en Activos ya aparece su activo R-01."
+      "what": "Las huellas: el lugar en el piso (código, zona, posición y medidas). De aquí salen los m² y m³ de almacenamiento. El código de la huella es H001, H002… (de ahí sale la H del Localizador): se asigna solo al agregarla y se puede cambiar. Al agregar una huella se crea sola su primer activo; si encima hay más de uno, los agregas en el paso Activos y la huella se reparte entre ellos.",
+      "example": "registras la huella H001 de 3 por 1.1 metros y 4.5 de alto; en Activos ya aparece su primer activo, con su propio código (R-01)."
     },
     "layoutLocked": {
       "what": "Esta sección no se puede cambiar con tus accesos actuales.",

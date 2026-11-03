@@ -502,7 +502,7 @@ function stepHtml(step) {
         const saved = isSavedRow('footprints', s.id);
         return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('footprints', i, 'name', s.name || '', dis)}${cellText('footprints', i, 'code', s.code, dis)}${cellSelect('footprints', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('footprints', i, 'x', s.x, dis)}${cellNum('footprints', i, 'y', s.y, dis)}${cellNum('footprints', i, 'l', s.l, dis)}${cellNum('footprints', i, 'd', s.d, dis)}${cellNum('footprints', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('footprints', i, s.active, dis, spaceFmtButton(s, i, dis)) : removeCell('footprints', i, dis, spaceFmtButton(s, i, dis))}</tr>`;
     });
-    return `${table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaVolumen', ''], rows, 'layout-espacios')}${addButton('footprints', 'main.layoutAgregarEspacio', dis, true)}`;
+    return `${table(['main.layoutNombre', 'main.layoutCodigoHuella', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaVolumen', ''], rows, 'layout-espacios')}${addButton('footprints', 'main.layoutAgregarEspacio', dis, true)}`;
 }
 
 // Los pasos son capas del croquis: se pueden tener activos varios a la vez y el croquis muestra siempre la nave más lo de los pasos activos. Abajo solo sale el formulario del
@@ -1095,14 +1095,18 @@ const ROW_FACTORY = {
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
-    footprints: () => ({ id: uid('f'), code: nextCode('rack', 'footprints'), zoneId: state.draft.zones.length ? state.draft.zones[0].id : '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, active: true }),
+    footprints: () => ({ id: uid('f'), code: nextHuellaCode(), zoneId: state.draft.zones.length ? state.draft.zones[0].id : '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, active: true }),
     spaces: () => ({ id: uid('s'), footprintId: state.draft.footprints.length ? state.draft.footprints[0].id : '', type: 'rack', code: nextCode('rack', 'spaces'), levels: 1, drawers: '' }),
 };
 const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
-// El primer activo de una huella nueva: lleva el código de la huella (si ya lo usa otro activo, el siguiente libre).
+// El código de una huella nueva: el siguiente después del más alto (H001, H002…); no se reusan los huecos de las que se quitaron. Se asigna al crearla y se puede cambiar.
+function nextHuellaCode() {
+    const highest = state.draft.footprints.reduce((max, f) => { const m = /^H(\d+)$/i.exec(String(f.code).trim()); return m ? Math.max(max, Number(m[1])) : max; }, 0);
+    return `H${String(highest + 1).padStart(3, '0')}`;
+}
+// El primer activo de una huella nueva: lleva el siguiente código de activo libre (R-01, R-02…); el de la huella es el H###.
 function defaultActivoFor(fp) {
-    const taken = state.draft.spaces.some((s) => s.code.toLowerCase() === fp.code.toLowerCase());
-    return { id: uid('s'), footprintId: fp.id, type: 'rack', code: taken ? nextCode('rack', 'spaces') : fp.code, levels: 1, drawers: '' };
+    return { id: uid('s'), footprintId: fp.id, type: 'rack', code: nextCode('rack', 'spaces'), levels: 1, drawers: '' };
 }
 
 function onEdit(event) {
@@ -1155,7 +1159,6 @@ function onEdit(event) {
     } else {
         const row = state.draft[list][Number(el.getAttribute('data-i'))];
         const key = el.getAttribute('data-k');
-        const before = row[key];
         if (list === 'zones' && (key === 'ox' || key === 'oy')) {
             // una zona de forma libre se mueve completa desde su primera esquina
             const o = row.pts[0] || [row.x, row.y];
@@ -1177,11 +1180,6 @@ function onEdit(event) {
             if (n > 1) row.slots = Math.min(n, LC.LIMITS.slots); else delete row.slots;
 
         } else row[key] = (key === 'wall' || key === 'levels') ? Math.max(1, Math.round(value) || 1) : value;
-        // Una huella con un solo activo que lleva su mismo código: al cambiar el código de la huella cambia también el del activo (así el número del Localizador sigue igual en los dos).
-        if (list === 'footprints' && key === 'code') {
-            const mine = state.draft.spaces.filter((s) => s.footprintId === row.id);
-            if (mine.length === 1 && mine[0].code === before && !state.draft.spaces.some((s) => s !== mine[0] && s.code.toLowerCase() === String(row.code).toLowerCase())) mine[0].code = row.code;
-        }
         if (list === 'spaces' && key === 'type' && /^[RGT]-\d+$/i.test(row.code) && !isSavedRow('spaces', row.id)) {
             // un código sin guardar y con forma automática (R-01) sigue al tipo
             row.code = nextCode(row.type);
