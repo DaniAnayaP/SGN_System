@@ -444,7 +444,7 @@
         return changed ? { ...layout, spaces: out } : layout;
     }
     // Al guardar: los códigos de las zonas, las huellas y los activos no se editan. Lo que ya existía conserva el suyo; lo nuevo, o lo que se movió a otra zona (llega como si fuera nuevo), lo recibe del sistema.
-    // Un activo al que se le cambió el tipo toma la letra de su tipo nuevo con su mismo número si está libre.
+    // Un activo al que se le cambió el tipo recibe el siguiente consecutivo de su tipo nuevo en su zona (un anaquel A020 que pasa a Frío es F001, no F020); si regresa a su tipo guardado, recupera su código.
     function lockCodes(next, previous) {
         if (!next) return next;
         let out = next;
@@ -459,10 +459,7 @@
             const spaces = out.spaces.map((s) => {
                 const was = before.get(s.id);
                 let code = '';
-                if (was && (was.zoneId || '') === (s.zoneId || '')) {
-                    if ((was.type || 'rack') === (s.type || 'rack')) code = was.code;
-                    else { const m = /(\d+)\s*$/.exec(String(was.code)); code = m ? spaceCodeOf(s.type, Number(m[1])) : ''; }
-                }
+                if (was && (was.zoneId || '') === (s.zoneId || '') && (was.type || 'rack') === (s.type || 'rack')) code = was.code;
                 return code === s.code ? s : { ...s, code };
             });
             out = assignSpaceCodes({ ...out, spaces });
