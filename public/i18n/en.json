@@ -2966,6 +2966,7 @@
     "articuloScanManual": "Type it in instead",
     "relappSearch": "Search by SKU, UPC, description or location",
     "relappEmpty": "There are no relations yet.",
+    "relappEmptyCenters": "There are no relations in the selected cost centers.",
     "siteRequiredTitle": "A complete cost center is needed first",
     "siteRequiredBody": "Every operation is tied to a cost center. Ask whoever manages your account to create it in the web version (Our Cost Centers), with all its data and codes.",
     "relappScan": "Scan the barcode",

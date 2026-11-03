@@ -144,7 +144,27 @@ let editing = null;     // la relación abierta (null = nueva)
 let st = null;          // lo que se va eligiendo: { sku, centro, alm, sub, zona, est, niv, esp }
 let pendingCount = 0;   // cuántas hay guardadas en este celular esperando señal
 
-const blankState = () => ({ sku: null, centro: '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '', fila: '', prof: '', clas: 'activo' });
+// Los centros de costos marcados en el selector de la pantalla de inicio de la App. Se guarda en el celular con la misma clave que usa la Web: null = todos; si no, la lista de ids.
+function selectedCenterIds() {
+    try {
+        const raw = localStorage.getItem('costCenterSelection');
+        if (!raw || raw === 'all') return null;
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.map(String) : null;
+    } catch { return null; }
+}
+// Una relación sin centro se ve siempre, para poder asignárselo.
+const centerShown = (id) => { const sel = selectedCenterIds(); return !sel || !id || sel.includes(String(id)); };
+// Los centros que se pueden elegir en el formulario: los completos que están marcados (más el de la relación que se edita, aunque ya no esté marcado). Con uno solo, la relación nueva arranca en él.
+function centerChoices() {
+    const sel = selectedCenterIds();
+    const list = options.costCenters.filter((c) => !sel || sel.includes(String(c.id)));
+    if (editing && editing.costCenterId && !list.some((c) => String(c.id) === String(editing.costCenterId))) {
+        list.push({ id: editing.costCenterId, name: (byId(options.costCenters, editing.costCenterId) || {}).name || editing.centroCostos || '' });
+    }
+    return list;
+}
+const blankState = () => ({ sku: null, centro: options && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '', fila: '', prof: '', clas: 'activo' });
 const readCache = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 const writeCache = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* sin espacio: se pide otra vez con señal */ } };
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -239,11 +259,12 @@ function renderRows() {
     if (!holder) return;
     holder.innerHTML = '';
     const q = searchText.trim().toLowerCase();
-    const shown = relations.filter((r) => !q || [r.sku, r.upc, r.description, routeText(r)].join(' ').toLowerCase().includes(q));
+    const inCenters = relations.filter((r) => centerShown(r.costCenterId));
+    const shown = inCenters.filter((r) => !q || [r.sku, r.upc, r.description, routeText(r)].join(' ').toLowerCase().includes(q));
     if (!shown.length) {
         const empty = document.createElement('p');
         empty.className = 'home-carga-empty-note';
-        empty.textContent = t('home.relappEmpty');
+        empty.textContent = t(relations.length && !inCenters.length ? 'home.relappEmptyCenters' : 'home.relappEmpty');
         holder.appendChild(empty);
         return;
     }
@@ -396,7 +417,7 @@ function refreshForm(keepInput) {
         ? `<b>${esc(st.sku.sku)} · ${esc(st.sku.description)}</b><span>${esc(st.sku.upc ? `UPC ${st.sku.upc}` : '')}</span>`
         : `<span>${esc(t('main.relPickCode'))}</span>`;
     document.getElementById('rel-clas').innerHTML = ['activo', 'cuarentena', 'aclaracion', 'consigna'].map((k) => `<option value="${k}"${st.clas === k ? ' selected' : ''}>${esc(t(`main.relClass_${k}`))}</option>`).join('');
-    fillSelect('rel-centro', options.costCenters.map((c) => ({ value: c.id, label: c.name })), t('main.relChooseCost'), st.centro, false);
+    fillSelect('rel-centro', centerChoices().map((c) => ({ value: c.id, label: c.name })), t('main.relChooseCost'), st.centro, false);
     const whs = options.warehouses.filter((w) => w.parentId === st.centro && (w.status === 'active' || w.id === keepWh));
     fillSelect('rel-alm', whs.map((w) => ({ value: w.id, label: w.name })), st.centro ? t('main.relChooseWarehouse') : t('main.relFirstCost'), st.alm, !st.centro || !whs.length);
     const subs = options.subWarehouses.filter((s) => s.parentId === st.alm && (s.status === 'active' || s.id === keepSub));
