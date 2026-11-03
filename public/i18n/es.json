@@ -1653,6 +1653,8 @@
     "layoutCodigoZona": "Código de zona",
     "layoutActivoLetra": "Tipo (letra del Localizador)",
     "layoutAgregarActivo": "+ Agregar activo",
+    "layoutActivoElegirHuella": "Elige la huella…",
+    "layoutActivoSinHuella": "Elige la huella del activo {n}: un activo siempre va dentro de una huella.",
     "layoutAltura": "Altura libre (m)",
     "layoutAlturaEsquina": "Altura (m)",
     "layoutAlturaTodas": "Misma altura en todas las esquinas (m)",
@@ -3587,8 +3589,8 @@
       "example": "defines la Zona A, de producto seco, de 22 por 11 metros: el sistema le pone Z001 y la siguiente que crees será Z002."
     },
     "layoutSec_activos": {
-      "what": "Cada renglón es un activo: lo que hay encima de una huella. Una huella puede tener varios (por ejemplo dos racks sobre la misma tarima); con uno solo no escribes nada, porque al agregar la huella se crea su primer activo. El código del activo lo pone el sistema y no se edita: la letra la da su tipo (A anaquel, R rack, G gabeta, T tarima en piso) y el número es consecutivo por zona y por tipo (A001, A002… de cada zona); es la pieza del activo en el Localizador. Aquí eliges el tipo, en qué huella está, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo de activo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
-      "example": "la huella H002 de la Zona 6 tiene dos anaqueles: el sistema les pone A001 y A002; si agregas una gabeta a esa misma huella, será G001."
+      "what": "Cada renglón es un activo: lo que hay encima de una huella. Un activo siempre va DENTRO de una huella: «+ Agregar activo» crea el renglón con la huella vacía (en rojo) y no se puede guardar hasta que elijas en cuál va; una huella puede tener varios (por ejemplo dos racks sobre la misma tarima) y con uno solo no escribes nada, porque al agregar la huella ya se crea su primer activo. El código del activo lo pone el sistema y no se edita: la letra la da su tipo (A anaquel, R rack, G gabeta, T tarima en piso) y el número es consecutivo por zona y por tipo (A001, A002… de cada zona); es la pieza del activo en el Localizador. Aquí eliges el tipo, la huella, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo de activo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
+      "example": "agregas un activo, eliges la huella H002 de la Zona 6 y el sistema le pone A001 (o A002 si ya había un anaquel en esa zona); si no eliges la huella, no te deja guardar."
     },
     "layoutAssetClass": {
       "what": "La clasificación del activo de este espacio. Viene de Catálogos > Clasificaciones de Activos y dice con qué métrica cuenta: m² (mobiliario) o m³ (almacenamiento). Se puede dejar sin elegir.",

@@ -1653,6 +1653,8 @@
     "layoutCodigoZona": "Zone code",
     "layoutActivoLetra": "Type (Locator letter)",
     "layoutAgregarActivo": "+ Add asset",
+    "layoutActivoElegirHuella": "Choose the footprint…",
+    "layoutActivoSinHuella": "Choose the footprint of asset {n}: an asset always goes inside a footprint.",
     "layoutAltura": "Clear height (m)",
     "layoutAlturaEsquina": "Height (m)",
     "layoutAlturaTodas": "Same height at every corner (m)",
@@ -3588,8 +3590,8 @@
       "example": "you define Zone A, dry product, 22 by 11 meters: the system names it Z001 and the next one you create will be Z002."
     },
     "layoutSec_activos": {
-      "what": "Each row is an asset: what sits on top of a footprint. A footprint can have several (for example two racks on the same pallet); with just one you type nothing, because adding the footprint creates its first asset. The asset code is set by the system and cannot be edited: the letter comes from its type (A rack, R pallet rack, G cabinet, T floor pallet) and the number is consecutive per zone and per type (A001, A002… of each zone); it is the asset piece of the Locator. Here you choose the type, which footprint it is on, the classification (Operating furniture, Storage furniture…), the asset type (rack, shelf, desk…), its levels, its columns and its drawers. The two lists are managed by the client in Catalogs. The zone comes from the footprint.",
-      "example": "footprint H002 of Zone 6 has two racks: the system names them A001 and A002; if you add a cabinet to that same footprint, it will be G001."
+      "what": "Each row is an asset: what sits on top of a footprint. An asset always goes INSIDE a footprint: \"+ Add asset\" creates the row with the footprint empty (in red) and you cannot save until you choose which one it is on; a footprint can have several (for example two racks on the same pallet) and with just one you type nothing, because adding the footprint already creates its first asset. The asset code is set by the system and cannot be edited: the letter comes from its type (A rack, R pallet rack, G cabinet, T floor pallet) and the number is consecutive per zone and per type (A001, A002… of each zone); it is the asset piece of the Locator. Here you choose the type, the footprint, the classification (Operating furniture, Storage furniture…), the asset type (rack, shelf, desk…), its levels, its columns and its drawers. The two lists are managed by the client in Catalogs. The zone comes from the footprint.",
+      "example": "you add an asset, choose footprint H002 of Zone 6 and the system names it A001 (or A002 if that zone already had a rack); if you do not choose the footprint, it will not let you save."
     },
     "layoutAssetClass": {
       "what": "The classification of this space's asset. It comes from Catalogs > Asset Classifications and says which metric it counts in: m² (furniture) or m³ (storage). It can be left empty.",

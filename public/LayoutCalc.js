@@ -484,6 +484,8 @@
         layout.spaces.forEach((s) => { if (!mates.has(s.footprintId)) mates.set(s.footprintId, []); mates.get(s.footprintId).push(s); });
         const spaces = layout.spaces.map((s) => {
             const f = byId.get(s.footprintId);
+            // un activo recién agregado todavía sin huella (hay que elegirla): sin lugar en el piso ni medidas, así no suma ni se dibuja hasta que lo ligan a su huella
+            if (!f && !s.footprintId) return { ...s, zoneId: '', x: 0, y: 0, l: 0, d: 0, h: 0, active: false };
             if (!f) return s;
             const group = mates.get(f.id);
             const n = group.length;
@@ -786,7 +788,7 @@
             // El código (A001…) lo pone el sistema según el tipo del activo, consecutivo por zona y tipo (assignSpaceCodes, justo después): lo que mande el cliente solo se usa de punto de partida.
             const code = text(s && s.code, label, false);
             const footprintId = typeof (s && s.footprintId) === 'string' && footprintIds.has(s.footprintId) ? s.footprintId : '';
-            if (!footprintId) errors.push(`${label}: la huella no existe`);
+            if (!footprintId) errors.push(`${label}: elige la huella donde va (un activo siempre va dentro de una huella)`);
             const type = oneOf(s && s.type, SPACE_TYPES, 'rack');
             const levels = Math.round(Number(s && s.levels));
             // Columnas por nivel (antes «espacios por nivel»: las columnas de almacenamiento, de izquierda a derecha): solo se guarda si hay más de una.

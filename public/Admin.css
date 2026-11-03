@@ -7156,6 +7156,10 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     color: var(--color-text-secondary);
     padding: 0.2rem 0.4rem;
 }
+.layout-table select.layout-missing{
+    border-color: #c0392b;
+    box-shadow: 0 0 0 1px #c0392b;
+}
 .layout-off td input, .layout-off td select, .layout-off td.layout-calc{
     opacity: 0.55;
 }

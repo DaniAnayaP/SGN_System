@@ -492,11 +492,11 @@ function stepHtml(step) {
         const assetOptions = (list, selected) => `<option value="">${esc(t('main.layoutActivoElegir'))}</option>${choices(list, selected).map((r) => `<option value="${r.id}"${r.id === selected ? ' selected' : ''}>${esc(r.name || t('main.whNoName'))}${r.status === 'active' ? '' : ` (${esc(t('admin.statusInactivo'))})`}</option>`).join('')}`;
         const pick = (i, key, help, list, selected) => `<td><select data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="${help}"${dis ? ' disabled' : ''}>${assetOptions(list, selected || 0)}</select></td>`;
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
-        const footprintOptions = (selected) => d.footprints.map((f) => `<option value="${esc(f.id)}"${f.id === selected ? ' selected' : ''}>${esc(f.code)} · ${esc(footprintZoneName(f))}</option>`).join('');
+        const footprintOptions = (selected) => `${selected ? '' : `<option value="" selected>${esc(t('main.layoutActivoElegirHuella'))}</option>`}${d.footprints.map((f) => `<option value="${esc(f.id)}"${f.id === selected ? ' selected' : ''}>${esc(f.code)} · ${esc(footprintZoneName(f))}</option>`).join('')}`;
         const letterOptions = (selected) => LC.SPACE_TYPES.map((id) => `<option value="${id}"${id === (selected || 'rack') ? ' selected' : ''}>${esc(LC.ASSET_LETTER[id])} · ${esc(typeLabel('space', id))}</option>`).join('');
         const rows = d.spaces.map((s, i) => {
             const saved = isSavedRow('spaces', s.id);
-            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td>${cellSelect('spaces', i, 'footprintId', footprintOptions(s.footprintId), dis)}<td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis) : removeCell('spaces', i, dis)}</tr>`;
+            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptions(s.footprintId)}</select></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis) : removeCell('spaces', i, dis)}</tr>`;
         });
         return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutActivoLetra', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', ''], rows, 'layout-activos')}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
@@ -1099,7 +1099,8 @@ const ROW_FACTORY = {
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, code: '', type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
     footprints: () => ({ id: uid('f'), code: '', zoneId: '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, active: true }),
-    spaces: () => ({ id: uid('s'), footprintId: state.draft.footprints.length ? state.draft.footprints[0].id : '', type: 'rack', code: '', levels: 1, drawers: '' }),
+    // un activo siempre va dentro de una huella: nace sin huella y hay que elegirla (no se puede guardar hasta entonces)
+    spaces: () => ({ id: uid('s'), footprintId: '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
 const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
 // Los códigos los pone el sistema y no se editan: el de la zona (Z001…, consecutivo), el de la huella (H001… por zona, y su zona sale de dónde está en el croquis) y el del activo (letra de su tipo + número
@@ -2028,6 +2029,15 @@ $('layout-save').addEventListener('click', async () => {
     if (openShape) {
         if (openShape.kind === 'contorno') { showStep('contorno'); Dashboard.showToast(t('main.layoutNoCierraContorno'), 'warning'); } else { showStep('zonas'); state.zoneOpen = openShape.zone.id; Dashboard.showToast(t('main.layoutNoCierraZona').replace('{name}', openShape.zone.name), 'warning'); }
         renderPanel();
+        return;
+    }
+    const loose = state.draft.spaces.findIndex((s) => !s.footprintId);
+    if (loose >= 0) {
+        showStep('activos');
+        renderPanel();
+        Dashboard.showToast(t('main.layoutActivoSinHuella').replace('{n}', String(loose + 1)), 'warning');
+        const pick = document.querySelector(`[data-l="spaces"][data-i="${loose}"][data-k="footprintId"]`);
+        if (pick) { pick.scrollIntoView({ block: 'center' }); pick.focus(); }
         return;
     }
     button.disabled = true;
