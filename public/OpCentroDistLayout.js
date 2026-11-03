@@ -483,21 +483,26 @@ function stepHtml(step) {
         return `${table(heads, rows, 'layout-posiciones')}${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
     if (step === 'activos') {
-        // Cada renglón es una Huella-Espacio; sus tres primeras columnas (código, nombre y zona) vienen del paso Huella-Espacio y aquí no se capturan. Se eligen la clasificación y el tipo del activo (dos listas
-        // independientes) y, de ese activo, cuántos niveles tiene, cuántos espacios hay por nivel y los cajones (filas × columnas).
+        // Cada renglón es un ACTIVO: lo que hay encima de una huella (una huella puede tener varios). Tiene su propio código (de ahí sale el número del activo en el Localizador) y se elige en qué huella está; la zona
+        // sale de esa huella y aquí no se captura. Del activo se eligen la clasificación y el tipo (dos listas independientes) y cuántos niveles tiene, cuántas columnas hay por nivel y los cajones (filas × columnas).
         const choices = (list, selected) => list.filter((r) => r.status === 'active' || r.id === selected);
         const assetOptions = (list, selected) => `<option value="">${esc(t('main.layoutActivoElegir'))}</option>${choices(list, selected).map((r) => `<option value="${r.id}"${r.id === selected ? ' selected' : ''}>${esc(r.name || t('main.whNoName'))}${r.status === 'active' ? '' : ` (${esc(t('admin.statusInactivo'))})`}</option>`).join('')}`;
         const pick = (i, key, help, list, selected) => `<td><select data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="${help}"${dis ? ' disabled' : ''}>${assetOptions(list, selected || 0)}</select></td>`;
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
-        const rows = d.spaces.map((s, i) => `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(s.name || '—')}</td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}</tr>`);
-        return d.spaces.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones'], rows, 'layout-activos') : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        const footprintOptions = (selected) => d.footprints.map((f) => `<option value="${esc(f.id)}"${f.id === selected ? ' selected' : ''}>${esc(f.code)}</option>`).join('');
+        const rows = d.spaces.map((s, i) => {
+            const saved = isSavedRow('spaces', s.id);
+            return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'footprintId', footprintOptions(s.footprintId), dis)}<td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis) : removeCell('spaces', i, dis)}</tr>`;
+        });
+        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', ''], rows, 'layout-activos')}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
-    const rows = d.spaces.map((s, i) => {
-        const saved = isSavedRow('spaces', s.id);
-        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('spaces', i, 'name', s.name || '', dis)}${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('spaces', i, 'x', s.x, dis)}${cellNum('spaces', i, 'y', s.y, dis)}${cellNum('spaces', i, 'l', s.l, dis)}${cellNum('spaces', i, 'd', s.d, dis)}${cellNum('spaces', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('spaces', i, s.active, dis, spaceFmtButton(s, i, dis)) : removeCell('spaces', i, dis, spaceFmtButton(s, i, dis))}</tr>`;
+    // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una se crea sola su primer activo (con el mismo código); más activos sobre la misma huella se agregan en el paso Activos.
+    const rows = d.footprints.map((s, i) => {
+        const saved = isSavedRow('footprints', s.id);
+        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('footprints', i, 'name', s.name || '', dis)}${cellText('footprints', i, 'code', s.code, dis)}${cellSelect('footprints', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('footprints', i, 'x', s.x, dis)}${cellNum('footprints', i, 'y', s.y, dis)}${cellNum('footprints', i, 'l', s.l, dis)}${cellNum('footprints', i, 'd', s.d, dis)}${cellNum('footprints', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('footprints', i, s.active, dis, spaceFmtButton(s, i, dis)) : removeCell('footprints', i, dis, spaceFmtButton(s, i, dis))}</tr>`;
     });
-    return `${table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaVolumen', ''], rows, 'layout-espacios')}${addButton('spaces', 'main.layoutAgregarEspacio', dis, true)}`;
+    return `${table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaVolumen', ''], rows, 'layout-espacios')}${addButton('footprints', 'main.layoutAgregarEspacio', dis, true)}`;
 }
 
 // Los pasos son capas del croquis: se pueden tener activos varios a la vez y el croquis muestra siempre la nave más lo de los pasos activos. Abajo solo sale el formulario del
@@ -522,6 +527,8 @@ let panelScrollStep = '';
 let panelScrollEnd = false;
 const panelScrollers = () => Array.from(document.querySelectorAll('#layout-panel .layout-section-body, #layout-panel .layout-scroll'));
 function renderPanel() {
+    // el panel también se dibuja con lo que sale de la huella (zona de cada activo, si está activo): se saca antes de dibujarlo, no solo en refreshLive
+    if (state.draft) state.draft.spaces = LC.deriveSpaces(state.draft).spaces;
     const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
     const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
@@ -553,6 +560,7 @@ function rowEntity(tr) {
     const list = ctl.getAttribute('data-l');
     const i = Number(ctl.getAttribute('data-i'));
     if (list === 'zones' && state.draft.zones[i]) return { kind: 'zone', id: state.draft.zones[i].id };
+    if (list === 'footprints' && state.draft.footprints[i]) return { kind: 'footprint', id: state.draft.footprints[i].id };
     if (list === 'spaces' && state.draft.spaces[i]) return { kind: 'space', id: state.draft.spaces[i].id };
     if (list === 'bay' && state.draft.spaces[i]) return { kind: 'bay', id: state.draft.spaces[i].id, n: Number(ctl.getAttribute('data-n')), c: Number(ctl.getAttribute('data-c')) };
     return null;
@@ -577,19 +585,31 @@ function applyHighlight(reveal) {
     svg.classList.remove('has-hl');
     const h = state.hl;
     if (!h || h.step !== state.focus || !state.draft) return;
-    const el = svg.querySelector(h.kind === 'zone' ? `[data-zid="${CSS.escape(h.id)}"]` : `[data-sid="${CSS.escape(h.id)}"]`);
-    const shape = el && (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'));
-    if (!shape) return;
-    el.classList.add('hl-on');
+    // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
+    const els = Array.from(svg.querySelectorAll(h.kind === 'zone' ? `[data-zid="${CSS.escape(h.id)}"]` : (h.kind === 'footprint' ? `[data-fid="${CSS.escape(h.id)}"]` : `[data-sid="${CSS.escape(h.id)}"]`)));
+    const shapes = els.map((el) => (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'))).filter(Boolean);
+    if (!shapes.length) return;
+    els.forEach((el) => el.classList.add('hl-on'));
     svg.classList.add('has-hl');
+    const boxes = shapes.map((s) => s.getBBox());
+    const x0 = Math.min(...boxes.map((b) => b.x));
+    const y0 = Math.min(...boxes.map((b) => b.y));
+    const x1 = Math.max(...boxes.map((b) => b.x + b.width));
+    const y1 = Math.max(...boxes.map((b) => b.y + b.height));
+    const box = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
     // dos contornos encimados (uno ancho del color de la hoja y otro naranja) para que se vea sobre cualquier color de zona, en claro y en oscuro
     ['hl-under', 'hl-ring'].forEach((cls) => {
-        const ring = shape.cloneNode(false);
-        ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'id'].forEach((a) => ring.removeAttribute(a));
+        let ring;
+        if (h.kind === 'footprint') {
+            ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            ring.setAttribute('x', box.x); ring.setAttribute('y', box.y); ring.setAttribute('width', box.width); ring.setAttribute('height', box.height);
+        } else {
+            ring = shapes[0].cloneNode(false);
+            ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'data-fid', 'id'].forEach((a) => ring.removeAttribute(a));
+        }
         ring.setAttribute('class', `hl-shape ${cls}`);
         svg.appendChild(ring);
     });
-    const box = shape.getBBox();
     if (h.kind === 'bay') {
         const tag = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         tag.setAttribute('class', 'hl-tag');
@@ -719,9 +739,9 @@ function renderSvg() {
         if (sp.fmt) {
             // con formato propio (color, rayas o borde de la huella) se pinta con él; el contorno del resaltado sigue funcionando porque el grupo lleva el mismo data-sid
             const px = X(sp.x); const py = Y(sp.y);
-            s += `<g class="lsf ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}">${window.LayoutMapSvg.zonePaint(`sf-${sp.id}`, sp.fmt).markup(`${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`)}${spaceTitle}</g>`;
+            s += `<g class="lsf ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" data-fid="${esc(sp.footprintId)}">${window.LayoutMapSvg.zonePaint(`sf-${sp.id}`, sp.fmt).markup(`${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`)}${spaceTitle}</g>`;
         } else {
-            s += `<rect class="ls ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2">${spaceTitle}</rect>`;
+            s += `<rect class="ls ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" data-fid="${esc(sp.footprintId)}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2">${spaceTitle}</rect>`;
         }
         const spaceInk = sp.fmt ? window.LayoutMapSvg.inkFor(sp.fmt) : '';
         if (w >= 26 && h >= 9) s += `<text class="lt3"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
@@ -780,6 +800,8 @@ function renderSummary() {
 
 // Cada vez que cambia el borrador: KPIs, croquis, resumen y estado del botón Guardar. El formulario NO se redibuja (así no se pierde el cursor al teclear).
 function refreshLive() {
+    // el lugar en el piso, la zona, el alto y el formato de cada activo salen de su huella (LayoutCalc.deriveSpaces): se vuelven a sacar con cada cambio
+    state.draft.spaces = LC.deriveSpaces(state.draft).spaces;
     state.draft.heightM = Math.round((state.draft.vertices.reduce((acc, p) => acc + (Number(p[2]) || 0), 0) / Math.max(state.draft.vertices.length, 1)) * 100) / 100;
     renderKpis();
     renderSvg();
@@ -808,7 +830,7 @@ function refreshLive() {
         const key = box.getAttribute('data-sides-status');
         box.innerHTML = sidesStatusHtml(key, !canEdit(key === 'contorno' ? 'contorno' : 'zonas'));
     });
-    state.draft.spaces.forEach((s, i) => { const c = document.querySelector(`[data-space-calc="${i}"]`); if (c) c.textContent = `${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³`; });
+    state.draft.footprints.forEach((s, i) => { const c = document.querySelector(`[data-space-calc="${i}"]`); if (c) c.textContent = `${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³`; });
 }
 
 function showEmpty() {
@@ -1058,9 +1080,9 @@ $('layout-from-scratch').addEventListener('click', newDraftFromScratch);
 
 // ---- edición -----------------------------------------------------------------------------------------------------------
 const SPACE_PREFIX = { rack: 'R', cabinet: 'G', pallet: 'T' };
-function nextCode(type) {
+function nextCode(type, list = 'spaces') {
     const prefix = SPACE_PREFIX[type] || 'E';
-    const used = new Set(state.draft.spaces.map((s) => s.code.toLowerCase()));
+    const used = new Set((state.draft[list] || []).map((s) => s.code.toLowerCase()));
     for (let n = 1; n < 10000; n++) {
         const code = `${prefix}-${String(n).padStart(2, '0')}`;
         if (!used.has(code.toLowerCase())) return code;
@@ -1073,9 +1095,15 @@ const ROW_FACTORY = {
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
-    spaces: () => ({ id: uid('s'), type: 'rack', code: nextCode('rack'), zoneId: state.draft.zones.length ? state.draft.zones[0].id : '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, levels: 1, drawers: '', active: true }),
+    footprints: () => ({ id: uid('f'), code: nextCode('rack', 'footprints'), zoneId: state.draft.zones.length ? state.draft.zones[0].id : '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, active: true }),
+    spaces: () => ({ id: uid('s'), footprintId: state.draft.footprints.length ? state.draft.footprints[0].id : '', type: 'rack', code: nextCode('rack', 'spaces'), levels: 1, drawers: '' }),
 };
-const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', zones: 'zonas', spaces: 'espacios', bay: 'posiciones' };
+const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
+// El primer activo de una huella nueva: lleva el código de la huella (si ya lo usa otro activo, el siguiente libre).
+function defaultActivoFor(fp) {
+    const taken = state.draft.spaces.some((s) => s.code.toLowerCase() === fp.code.toLowerCase());
+    return { id: uid('s'), footprintId: fp.id, type: 'rack', code: taken ? nextCode('rack', 'spaces') : fp.code, levels: 1, drawers: '' };
+}
 
 function onEdit(event) {
     const el = event.target;
@@ -1127,6 +1155,7 @@ function onEdit(event) {
     } else {
         const row = state.draft[list][Number(el.getAttribute('data-i'))];
         const key = el.getAttribute('data-k');
+        const before = row[key];
         if (list === 'zones' && (key === 'ox' || key === 'oy')) {
             // una zona de forma libre se mueve completa desde su primera esquina
             const o = row.pts[0] || [row.x, row.y];
@@ -1139,7 +1168,7 @@ function onEdit(event) {
             if (n > 0) row[key] = n; else delete row[key]; // sin elegir = el espacio se guarda sin ese campo
         } else if (key === 'planM2') {
             if (value > 0) row.planM2 = value; else delete row.planM2;
-        } else if (list === 'spaces' && key === 'name') {
+        } else if (list === 'footprints' && key === 'name') {
             if (String(value).trim()) row.name = String(value); else delete row.name; // sin nombre = la huella se guarda sin ese campo
         } else if (key === 'use') {
             if (value) row.use = value; else delete row.use; // sin definir = la zona se guarda sin ese campo
@@ -1148,6 +1177,11 @@ function onEdit(event) {
             if (n > 1) row.slots = Math.min(n, LC.LIMITS.slots); else delete row.slots;
 
         } else row[key] = (key === 'wall' || key === 'levels') ? Math.max(1, Math.round(value) || 1) : value;
+        // Una huella con un solo activo que lleva su mismo código: al cambiar el código de la huella cambia también el del activo (así el número del Localizador sigue igual en los dos).
+        if (list === 'footprints' && key === 'code') {
+            const mine = state.draft.spaces.filter((s) => s.footprintId === row.id);
+            if (mine.length === 1 && mine[0].code === before && !state.draft.spaces.some((s) => s !== mine[0] && s.code.toLowerCase() === String(row.code).toLowerCase())) mine[0].code = row.code;
+        }
         if (list === 'spaces' && key === 'type' && /^[RGT]-\d+$/i.test(row.code) && !isSavedRow('spaces', row.id)) {
             // un código sin guardar y con forma automática (R-01) sigue al tipo
             row.code = nextCode(row.type);
@@ -1157,6 +1191,8 @@ function onEdit(event) {
     }
     // Al cambiar el nombre de una zona, el selector de zona de los espacios debe mostrar el nombre nuevo (solo al terminar de escribir).
     if (event.type === 'change' && list === 'zones' && el.getAttribute('data-k') === 'name') renderPanel();
+    // Al pasar un activo a otra huella cambia su zona (que se ve en el renglón).
+    if (event.type === 'change' && list === 'spaces' && el.getAttribute('data-k') === 'footprintId') renderPanel();
     refreshLive();
 }
 $('layout-panel').addEventListener('focusin', (event) => selectRowFrom(event.target));
@@ -1267,7 +1303,12 @@ $('layout-panel').addEventListener('click', (event) => {
     if (add) {
         const list = add.dataset.add;
         if (list === 'zones') clearLayoutFilters();
-        state.draft[list].push(ROW_FACTORY[list]());
+        if (list === 'footprints') {
+            // una huella nueva trae su primer activo
+            const fp = ROW_FACTORY.footprints();
+            state.draft.footprints.push(fp);
+            state.draft.spaces.push(defaultActivoFor(fp));
+        } else state.draft[list].push(ROW_FACTORY[list]());
         if (list === 'vertices') state.open.contorno = false;
         panelScrollEnd = true;
         renderPanel();
@@ -1278,6 +1319,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (del) {
         const [list, index] = del.dataset.del.split(':');
         const removed = state.draft[list].splice(Number(index), 1)[0];
+        // quitar una huella quita también sus activos
+        if (list === 'footprints' && removed) state.draft.spaces = state.draft.spaces.filter((s) => s.footprintId !== removed.id);
         if (list === 'zones' && removed) { delete state.open.zones[removed.id]; if (state.zoneOpen === removed.id) state.zoneOpen = null; if (state.catsOpen === removed.id) state.catsOpen = null; }
         if (list === 'vertices') {
             state.open.contorno = false;
@@ -1300,9 +1343,10 @@ $('layout-panel').addEventListener('click', (event) => {
             const current = state.draft[list].findIndex((r) => r.id === row.id);
             if (current < 0) return;
             state.draft[list].splice(current, 1);
+            if (list === 'footprints') state.draft.spaces = state.draft.spaces.filter((s) => s.footprintId !== row.id);
             if (list === 'zones') { delete state.open.zones[row.id]; if (state.zoneOpen === row.id) state.zoneOpen = null; if (state.catsOpen === row.id) state.catsOpen = null; }
             // Los espacios de una zona eliminada quedan sin zona (así también los deja el servidor al guardar).
-            if (list === 'zones') state.draft.spaces.forEach((s) => { if (s.zoneId === row.id) s.zoneId = ''; });
+            if (list === 'zones') state.draft.footprints.forEach((f) => { if (f.zoneId === row.id) f.zoneId = ''; });
             renderPanel();
             refreshLive();
         });
@@ -1312,7 +1356,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (toggle) {
         const [list, index] = toggle.dataset.toggle.split(':');
         const row = state.draft[list][Number(index)];
-        row.active = row.active === false;
+        // un activo se apaga solo a él (off); una huella, con sus activos (active)
+        if (list === 'spaces') { if (row.off) delete row.off; else row.off = true; } else row.active = row.active === false;
         renderPanel();
         refreshLive();
     }
@@ -1347,25 +1392,32 @@ function spaceFmtButton(s, i, dis) {
     if (!(state.perms && state.perms.canFormatSpaces)) return '';
     return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${s.fmt ? ' on' : ''}" data-fmtspace="${i}" data-help-key="layoutSpaceFmt" aria-label="${esc(t('main.layoutFormatoHuella'))} ${esc(s.code)}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i>${s.fmt ? `<span class="layout-fmt-dot" style="background:${esc(s.fmt.fill)};border-color:${esc(s.fmt.bcolor)}"></span>` : ''}</button>`;
 }
-// A qué huellas se aplica lo que se elige en la ventana: solo a esa, a las de su zona o a las del mismo tipo de activo (una huella sin zona o sin tipo no tiene ese grupo y se queda sola).
+// El tipo de activo de una huella para agrupar: el del primer activo que tiene uno elegido (0 = ninguno).
+function firstAssetId(fp) {
+    const a = state.draft.spaces.find((s) => s.footprintId === fp.id && s.assetId);
+    return a ? a.assetId : 0;
+}
+// A qué huellas se aplica lo que se elige en la ventana: solo a esa, a las de su zona o a las que tienen un activo del mismo tipo (una huella sin zona o sin tipo no tiene ese grupo y se queda sola).
 function spaceTargets(sp, scope) {
-    const all = state.draft.spaces;
+    const all = state.draft.footprints;
     if (scope === 'zone' && sp.zoneId) return all.filter((x) => x.zoneId === sp.zoneId);
-    if (scope === 'type' && sp.assetId) return all.filter((x) => x.assetId === sp.assetId);
+    const type = firstAssetId(sp);
+    if (scope === 'type' && type) return all.filter((x) => state.draft.spaces.some((s) => s.footprintId === x.id && s.assetId === type));
     return [sp];
 }
 function renderFmtScope() {
     const box = $('layout-fmt-scope');
-    const sp = fmtDialog && fmtDialog.kind === 'space' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : null;
+    const sp = fmtDialog && fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : null;
     box.hidden = !sp;
     if (!sp) return;
     const zoneName = (state.draft.zones.find((z) => z.id === sp.zoneId) || {}).name || '';
-    const typeRow = assetLists.types.find((r) => r.id === sp.assetId);
-    const typeName = typeRow ? (typeRow.name || t('main.whNoName')) : `#${sp.assetId}`;
+    const type = firstAssetId(sp);
+    const typeRow = assetLists.types.find((r) => r.id === type);
+    const typeName = typeRow ? (typeRow.name || t('main.whNoName')) : `#${type}`;
     const options = [
         ['one', t('main.layoutAplicarUna'), sp.code, false],
         ['zone', t('main.layoutAplicarZona'), sp.zoneId ? t('main.layoutAplicarZonaSub').replace('{zone}', zoneName).replace('{n}', String(spaceTargets(sp, 'zone').length)) : t('main.layoutAplicarSinZona'), !sp.zoneId],
-        ['type', t('main.layoutAplicarTipo'), sp.assetId ? t('main.layoutAplicarTipoSub').replace('{type}', typeName).replace('{n}', String(spaceTargets(sp, 'type').length)) : t('main.layoutAplicarSinTipo'), !sp.assetId],
+        ['type', t('main.layoutAplicarTipo'), type ? t('main.layoutAplicarTipoSub').replace('{type}', typeName).replace('{n}', String(spaceTargets(sp, 'type').length)) : t('main.layoutAplicarSinTipo'), !type],
     ];
     box.innerHTML = `<legend>${esc(t('main.layoutAplicarA'))}</legend>${options.map(([value, title, sub, disabled]) => `<label class="layout-fmt-opt${disabled ? ' off' : ''}" data-help-key="layoutFmtScope"><input type="radio" name="layout-fmt-scope" value="${value}"${fmtDialog.scope === value ? ' checked' : ''}${disabled ? ' disabled' : ''}><b>${esc(title)}</b><span>${esc(sub)}</span></label>`).join('')}`;
 }
@@ -1388,7 +1440,7 @@ function renderFmtBody() {
     const isSpace = fmtDialog.kind === 'space';
     const shape = isSpace ? '60,45 170,45 170,105 60,105' : '30,20 200,20 200,70 130,70 130,130 30,130';
     const zone = isSpace ? null : state.draft.zones.find((z) => z.id === fmtDialog.targetId);
-    const space = isSpace ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : null;
+    const space = isSpace ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : null;
     const ink = isSpace ? window.LayoutMapSvg.inkFor(d) : '';
     const label = isSpace
         ? `<text class="lt3" x="115" y="78" text-anchor="middle"${ink ? ` style="fill:${ink}"` : ''}>${esc(space ? space.code : '')}</text>`
@@ -1429,7 +1481,7 @@ function ensureFmtModal() {
         if (event.target.closest('#layout-fmt-cancel')) { closeFmtDialog(); return; }
         if (event.target.closest('#layout-fmt-reset')) {
             if (fmtDialog.kind === 'space') {
-                const sp = state.draft.spaces.find((r) => r.id === fmtDialog.targetId);
+                const sp = state.draft.footprints.find((r) => r.id === fmtDialog.targetId);
                 if (sp) spaceTargets(sp, fmtDialog.scope).forEach((x) => { delete x.fmt; });
             } else {
                 const z = state.draft.zones.find((r) => r.id === fmtDialog.targetId);
@@ -1442,7 +1494,7 @@ function ensureFmtModal() {
         }
         if (event.target.closest('#layout-fmt-ok')) {
             if (fmtDialog.kind === 'space') {
-                const sp = state.draft.spaces.find((r) => r.id === fmtDialog.targetId);
+                const sp = state.draft.footprints.find((r) => r.id === fmtDialog.targetId);
                 // Con formato propio (aunque no se haya cambiado nada) se puede copiar a las demás del grupo; sin formato y sin cambios no hay nada que aplicar.
                 if (sp && (sp.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) spaceTargets(sp, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
             } else {
@@ -1480,7 +1532,7 @@ function openFmtDialog(zoneIndex) {
     renderFmtBody();
 }
 function openSpaceFmtDialog(spaceIndex) {
-    const sp = state.draft.spaces[spaceIndex];
+    const sp = state.draft.footprints[spaceIndex];
     if (!sp) return;
     ensureFmtModal();
     const base = sp.fmt ? pickFmt(sp.fmt) : window.LayoutMapSvg.defaultSpaceFmt();

@@ -86,7 +86,7 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        return { ...layout, vertices, heightM: round2(meanHeight(vertices)) };
+        return deriveSpaces(migrateFootprints({ ...layout, vertices, heightM: round2(meanHeight(vertices)) }));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -279,11 +279,63 @@
         return { fill: hex(raw.fill, '#ffffff'), pattern: oneOf(raw.pattern, FMT_PATTERNS, 'solid'), pcolor: hex(raw.pcolor, '#6b7089'), line: oneOf(raw.line, FMT_LINES, 'thin'), bcolor: hex(raw.bcolor, '#6b7089') };
     }
 
+    // ---- Huella y Activo ---------------------------------------------------------------------------------------------------------------------
+    // Una HUELLA es el lugar en el piso (código, zona, x, y, largo, fondo, alto, formato) y puede tener uno o varios ACTIVOS encima (el rack, el estante…). Las huellas viven en layout.footprints; los
+    // activos siguen en layout.spaces (con footprintId) porque todo lo demás (relaciones de códigos, QR, 3D, Verificador) ya los conoce por ahí. De la huella se DERIVAN en cada activo su zona, su
+    // lugar en el piso, su alto, su nombre y su formato: con un solo activo es la huella entera; con varios, la huella se reparte en partes iguales a lo largo de su lado más largo.
+    // El Layout de antes guardaba cada huella y su activo como UN espacio: aquí cada espacio viejo pasa a ser una huella (id h-<id del espacio>) con un activo (el mismo id y código que tenía el
+    // espacio, así las relaciones de códigos siguen apuntando al mismo lugar). Una huella que estaba desactivada sigue desactivada.
+    function migrateFootprints(layout) {
+        if (!layout || !Array.isArray(layout.spaces)) return layout;
+        const hasList = Array.isArray(layout.footprints);
+        const footprints = hasList ? layout.footprints.slice() : [];
+        let changed = !hasList;
+        // También se aceptan activos sueltos (sin huella) que traen su lugar en el piso, como los mandaría una pantalla vieja o una integración: cada uno pasa a ser su propia huella.
+        const spaces = layout.spaces.map((s) => {
+            if (!s || typeof s !== 'object' || s.footprintId) return s;
+            if (hasList && !('l' in s) && !('d' in s)) return s; // sin lugar en el piso no hay de dónde sacar la huella: la validación lo avisa
+            changed = true;
+            const id = `h-${s.id}`.slice(0, 40);
+            // mismo orden de campos que deja sanitizeLayout: así comparar una huella migrada con la que se guarda no la ve distinta
+            const fp = { id, code: s.code, zoneId: s.zoneId || '', ...(s.name ? { name: s.name } : {}), x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, ...(s.fmt ? { fmt: s.fmt } : {}), active: s.active !== false };
+            // si esa huella ya estaba (el mismo espacio de antes), lo que trae el activo suelto manda, como mandaba el espacio
+            const at = footprints.findIndex((f) => f.id === id);
+            if (at >= 0) footprints[at] = fp; else footprints.push(fp);
+            const { name, zoneId, x, y, l, d, h, fmt, active, ...rest } = s;
+            return { ...rest, footprintId: id };
+        });
+        return changed ? { ...layout, footprints, spaces } : layout;
+    }
+    // Pone en cada activo lo que viene de su huella (ver arriba). Es idempotente: se puede llamar cuantas veces haga falta. active del activo = no está apagado él (off) ni su huella.
+    function deriveSpaces(layout) {
+        if (!layout || !Array.isArray(layout.footprints) || !Array.isArray(layout.spaces)) return layout;
+        const byId = new Map(layout.footprints.map((f) => [f.id, f]));
+        const mates = new Map();
+        layout.spaces.forEach((s) => { if (!mates.has(s.footprintId)) mates.set(s.footprintId, []); mates.get(s.footprintId).push(s); });
+        const spaces = layout.spaces.map((s) => {
+            const f = byId.get(s.footprintId);
+            if (!f) return s;
+            const group = mates.get(f.id);
+            const n = group.length;
+            const i = group.indexOf(s);
+            let { x, y, l, d } = f;
+            if (n > 1) {
+                if ((f.l || 0) >= (f.d || 0)) { const w = round2(f.l / n); x = round2(f.x + w * i); l = i === n - 1 ? round2(f.l - w * (n - 1)) : w; }
+                else { const w = round2(f.d / n); y = round2(f.y + w * i); d = i === n - 1 ? round2(f.d - w * (n - 1)) : w; }
+            }
+            const out = { ...s, zoneId: f.zoneId || '', x, y, l, d, h: f.h, active: s.off !== true && f.active !== false };
+            if (f.name) out.name = f.name; else delete out.name;
+            if (f.fmt) out.fmt = f.fmt; else delete out.fmt;
+            return out;
+        });
+        return { ...layout, spaces };
+    }
+
     function emptyLayout() {
         return {
             mode: 'scratch', heightM: 9,
             vertices: [[0, 0, 9], [30, 0, 9], [30, 20, 9], [0, 20, 9]],
-            doors: [], power: [], obstacles: [], zones: [], spaces: [],
+            doors: [], power: [], obstacles: [], zones: [], footprints: [], spaces: [],
             plan: null,
         };
     }
@@ -416,7 +468,7 @@
     // ---- validación (la usa el servidor antes de guardar; la pantalla solo la usa para avisar) --------------------------
     function sanitizeLayout(input) {
         const errors = [];
-        const src = input && typeof input === 'object' ? input : {};
+        const src = migrateFootprints(input && typeof input === 'object' ? input : {});
         const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
         const meters = (v, label, min = 0) => {
             const n = Number(v);
@@ -533,17 +585,44 @@
             };
         });
 
+        // Huellas (paso Huella-Espacio): el lugar en el piso. Cada una puede tener uno o varios activos (ver migrateFootprints).
+        const footprintIds = new Set();
+        const footprintCodes = new Set();
+        out.footprints = list(src.footprints, LIMITS.spaces, 'Huellas').map((f, i) => {
+            const label = `Huella ${i + 1}`;
+            const code = text(f && f.code, label, true);
+            if (code) {
+                const key = code.toLowerCase();
+                if (footprintCodes.has(key)) errors.push(`${label}: el código "${code}" está repetido`);
+                footprintCodes.add(key);
+            }
+            const zoneId = typeof (f && f.zoneId) === 'string' && zoneIds.has(f.zoneId) ? f.zoneId : '';
+            // El nombre de la Huella-Espacio: opcional; sin él se guarda sin ese campo.
+            const name = text(f && f.name, label, false);
+            // Formato propio de la huella (color, rayas y borde, como el de las zonas): sin él la huella se ve blanca.
+            const fmt = sanitizeFmt(f && f.fmt);
+            return {
+                id: idOf(f && f.id, footprintIds, label), code, zoneId,
+                ...(name ? { name } : {}),
+                x: meters(f && f.x, label, -LIMITS.maxM), y: meters(f && f.y, label, -LIMITS.maxM), l: meters(f && f.l, label), d: meters(f && f.d, label), h: meters(f && f.h, label),
+                ...(fmt ? { fmt } : {}),
+                active: !(f && f.active === false),
+            };
+        });
+
+        // Activos (paso Activos): lo que hay encima de una huella. Su lugar en el piso, su zona, su alto, su nombre y su formato salen de la huella (deriveSpaces).
         const spaceIds = new Set();
         const codes = new Set();
-        out.spaces = list(src.spaces, LIMITS.spaces, 'Espacios').map((s, i) => {
-            const label = `Espacio ${i + 1}`;
+        out.spaces = list(src.spaces, LIMITS.spaces, 'Activos').map((s, i) => {
+            const label = `Activo ${i + 1}`;
             const code = text(s && s.code, label, true);
             if (code) {
                 const key = code.toLowerCase();
                 if (codes.has(key)) errors.push(`${label}: el código "${code}" está repetido`);
                 codes.add(key);
             }
-            const zoneId = typeof (s && s.zoneId) === 'string' && zoneIds.has(s.zoneId) ? s.zoneId : '';
+            const footprintId = typeof (s && s.footprintId) === 'string' && footprintIds.has(s.footprintId) ? s.footprintId : '';
+            if (!footprintId) errors.push(`${label}: la huella no existe`);
             const type = oneOf(s && s.type, SPACE_TYPES, 'rack');
             const levels = Math.round(Number(s && s.levels));
             // Columnas por nivel (antes «espacios por nivel»: las columnas de almacenamiento, de izquierda a derecha): solo se guarda si hay más de una.
@@ -554,23 +633,18 @@
             // Sin elegir, el espacio se guarda sin esos campos.
             const assetClassId = Math.round(Number(s && s.assetClassId));
             const assetId = Math.round(Number(s && s.assetId));
-            // El nombre de la Huella-Espacio (paso Huella-Espacio): opcional; sin él se guarda sin ese campo.
-            const name = text(s && s.name, label, false);
-            // Formato propio de la huella (color, rayas y borde, como el de las zonas): sin él la huella se ve blanca.
-            const fmt = sanitizeFmt(s && s.fmt);
             return {
-                id: idOf(s && s.id, spaceIds, label), type, code, zoneId,
-                ...(name ? { name } : {}),
-                x: meters(s && s.x, label, -LIMITS.maxM), y: meters(s && s.y, label, -LIMITS.maxM), l: meters(s && s.l, label), d: meters(s && s.d, label), h: meters(s && s.h, label),
+                id: idOf(s && s.id, spaceIds, label), footprintId, type, code,
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
                 ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
                 ...(bays.length ? { bays } : {}),
-                ...(fmt ? { fmt } : {}),
                 ...(Number.isFinite(assetClassId) && assetClassId > 0 ? { assetClassId } : {}),
                 ...(Number.isFinite(assetId) && assetId > 0 ? { assetId } : {}),
-                drawers: text(s && s.drawers, label, false), active: !(s && s.active === false),
+                drawers: text(s && s.drawers, label, false),
+                ...(s && s.off === true ? { off: true } : {}),
             };
         });
+        out.spaces = deriveSpaces(out).spaces;
 
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
         out.plan = plan ? { widthM: meters(plan.widthM, 'Plano', 0.1) } : null;
@@ -665,6 +739,7 @@
             vertices: (layout.vertices || []).map((p) => [...turn(p), p[2]]),
             obstacles: (layout.obstacles || []).map((o) => ({ ...o, ...box(o, 'l', 'w') })),
             spaces: (layout.spaces || []).map((s) => ({ ...s, ...box(s, 'l', 'd') })),
+            footprints: (layout.footprints || []).map((f) => ({ ...f, ...box(f, 'l', 'd') })),
             zones: (layout.zones || []).map((z) => {
                 if (Array.isArray(z.pts)) {
                     const pts = z.pts.map(turn);
@@ -728,10 +803,18 @@
         if (section === 'zonas') return layout.zones;
         // Los espacios sin lo del paso Activos (la clasificación y el tipo de activo, y sus niveles, espacios por nivel y cajones; todo eso tiene su propio permiso). En Activos, solo los espacios que ya tienen
         // algo de eso: así agregar un espacio nuevo en Huella-Espacio (con 1 nivel) no cuenta como cambio de Activos.
-        if (section === 'espacios') return (layout.spaces || []).map(({ assetClassId, assetId, levels, slots, bays, drawers, ...rest }) => rest);
+        if (section === 'espacios') return layout.footprints || [];
+        // Un activo "de fábrica" (el primero de su huella, con el código de la huella y sin nada más) no cuenta como Activos: agregar una huella nueva en Huella-Espacio crea el suyo solo.
         if (section === 'activos') {
-            return (layout.spaces || []).filter((s) => s.assetClassId || s.assetId || (s.levels || 1) > 1 || (s.slots || 1) > 1 || s.drawers)
-                .map((s) => ({ id: s.id, assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '' }));
+            const byId = new Map((layout.footprints || []).map((f) => [f.id, f]));
+            const seen = new Set();
+            return (layout.spaces || []).filter((s) => {
+                const first = !seen.has(s.footprintId);
+                seen.add(s.footprintId);
+                const f = byId.get(s.footprintId);
+                const plain = first && f && s.code === f.code && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off;
+                return !plain;
+            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off }));
         }
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
         if (section === 'posiciones') return (layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays }));
@@ -748,7 +831,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

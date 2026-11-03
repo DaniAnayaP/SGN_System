@@ -6542,11 +6542,11 @@ function layoutSummary(layout, section) {
     if (section === 'puertas') return `${(layout.doors || []).length} puertas`;
     if (section === 'luz') return `${(layout.power || []).length} conexiones de luz`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
-    if (section === 'activos') return `${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} espacios con activo`;
+    if (section === 'activos') return `${(layout.spaces || []).length} activos, ${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} con clasificación o tipo`;
     if (section === 'posiciones') return `${(layout.spaces || []).reduce((n, s) => n + (s.bays || []).length, 0)} huecos con datos propios`;
     // el formato propio de las huellas (color, rayas, borde) cuenta como parte de Huella-Espacio: sin esto un cambio de color dejaba el mismo texto en el historial
-    const painted = (layout.spaces || []).filter((s) => s.fmt).length;
-    return `${(layout.spaces || []).length} espacios${painted ? `, ${painted} con formato propio` : ''}`;
+    const painted = (layout.footprints || []).filter((f) => f.fmt).length;
+    return `${(layout.footprints || []).length} huellas${painted ? `, ${painted} con formato propio` : ''}`;
 }
 
 // El Layout es de UN centro de costos (el que se eligió en el selector de arriba): costCenterId viene en la dirección o en el cuerpo. Sin él (una pantalla de antes) se usa el primer Layout del cliente.
@@ -6647,7 +6647,7 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     // Al eliminar una zona sus espacios quedan sin zona: ese efecto no cuenta como modificar los espacios (quien puede eliminar la zona no necesita editar los anaqueles).
     const removedZoneIds = existing ? (existing.layout.zones || []).filter((z) => !(next.zones || []).some((n) => n.id === z.id)).map((z) => z.id) : [];
     const compareBase = existing && removedZoneIds.length
-        ? { ...existing.layout, spaces: (existing.layout.spaces || []).map((s) => (removedZoneIds.includes(s.zoneId) ? { ...s, zoneId: '' } : s)) }
+        ? { ...existing.layout, footprints: (existing.layout.footprints || []).map((f) => (removedZoneIds.includes(f.zoneId) ? { ...f, zoneId: '' } : f)) }
         : (existing ? existing.layout : null);
     const changed = [];
     for (const section of Object.keys(LayoutCalc.SECTIONS)) {
@@ -6664,7 +6664,7 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     if (existing) {
         const removedCount = (key) => (existing.layout[key] || []).filter((row) => !(next[key] || []).some((n) => n.id === row.id)).length;
         if (removedCount('zones') && !perms.canDeleteZones) return res.status(403).json({ message: 'No tienes permiso para eliminar zonas.', section: 'zonas' });
-        if (removedCount('spaces') && !perms.canDeleteSpaces) return res.status(403).json({ message: 'No tienes permiso para eliminar espacios.', section: 'espacios' });
+        if ((removedCount('footprints') || removedCount('spaces')) && !perms.canDeleteSpaces) return res.status(403).json({ message: 'No tienes permiso para eliminar espacios.', section: 'espacios' });
     }
     // El formato de las zonas (color, rayas, borde) solo lo cambia quien tiene el icono Formato de zona.
     // Las categorías de las zonas solo las cambia quien tiene el icono Categorías de la zona.
@@ -6682,8 +6682,8 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     }
     // El formato de las huellas (color, rayas, borde) solo lo cambia quien tiene el icono Formato de huella.
     if (!perms.canFormatSpaces) {
-        const beforeSpaces = new Map(((existing && existing.layout.spaces) || []).map((s) => [s.id, JSON.stringify(s.fmt || null)]));
-        if ((next.spaces || []).some((s) => JSON.stringify(s.fmt || null) !== (beforeSpaces.has(s.id) ? beforeSpaces.get(s.id) : 'null'))) {
+        const beforeSpaces = new Map(((existing && existing.layout.footprints) || []).map((f) => [f.id, JSON.stringify(f.fmt || null)]));
+        if ((next.footprints || []).some((f) => JSON.stringify(f.fmt || null) !== (beforeSpaces.has(f.id) ? beforeSpaces.get(f.id) : 'null'))) {
             return res.status(403).json({ message: 'No tienes permiso para cambiar el formato de las huellas.', section: 'espacios' });
         }
     }
