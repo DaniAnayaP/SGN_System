@@ -556,6 +556,8 @@
             const assetId = Math.round(Number(s && s.assetId));
             // El nombre de la Huella-Espacio (paso Huella-Espacio): opcional; sin él se guarda sin ese campo.
             const name = text(s && s.name, label, false);
+            // Formato propio de la huella (color, rayas y borde, como el de las zonas): sin él la huella se ve blanca.
+            const fmt = sanitizeFmt(s && s.fmt);
             return {
                 id: idOf(s && s.id, spaceIds, label), type, code, zoneId,
                 ...(name ? { name } : {}),
@@ -563,6 +565,7 @@
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
                 ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
                 ...(bays.length ? { bays } : {}),
+                ...(fmt ? { fmt } : {}),
                 ...(Number.isFinite(assetClassId) && assetClassId > 0 ? { assetClassId } : {}),
                 ...(Number.isFinite(assetId) && assetId > 0 ? { assetId } : {}),
                 drawers: text(s && s.drawers, label, false), active: !(s && s.active === false),

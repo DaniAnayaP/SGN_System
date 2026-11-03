@@ -1836,6 +1836,16 @@
     "layoutZonaCodigos": "{n} codes in this zone",
     "layoutZonaCodigosUno": "1 code in this zone",
     "layoutFormatoZonaBtn": "Zone format (color, stripes and border)",
+    "layoutFormatoHuellaBtn": "Footprint format (color, stripes and border)",
+    "layoutFormatoHuella": "Footprint format",
+    "layoutAplicarA": "Apply to",
+    "layoutAplicarUna": "Only this footprint",
+    "layoutAplicarZona": "The rest of its zone",
+    "layoutAplicarZonaSub": "All the footprints of {zone} ({n})",
+    "layoutAplicarSinZona": "This footprint has no zone.",
+    "layoutAplicarTipo": "Those of the same asset type",
+    "layoutAplicarTipoSub": "All of type {type} ({n}), in whatever zone they are",
+    "layoutAplicarSinTipo": "This footprint has no asset type (it is chosen in the Assets step).",
     "layoutFormatoZona": "Zone format",
     "layoutFormatoRelleno": "Fill",
     "layoutFormatoBorde": "Border",
@@ -3922,6 +3932,14 @@
     "layoutFmtLine": {
       "what": "Line style of the zone border: solid (thin, medium or thick), dashed, dotted, dash-dot, double or none.",
       "example": "a dashed border for a temporary zone."
+    },
+    "layoutSpaceFmt": {
+      "what": "Opens the color window of this footprint (Fill and Border, with preview). Without its own format the footprint looks white; the small square next to the icon is the color it already has. It shows on the map, on the QR page, on the downloaded sheet and in the 3D view.",
+      "example": "you paint rack R-02 blue with stripes and its row shows a blue square."
+    },
+    "layoutFmtScope": {
+      "what": "Which footprints get what you choose: only this one, the rest of its zone, or those of the same asset type (the one chosen in the Assets step). What the others already had is replaced. With its own format you can open the window and accept without changing anything to copy it to the rest of the group; Remove format also applies to the chosen group.",
+      "example": "you choose «Those of the same asset type» with type Rack and every rack gets the same color."
     },
     "layoutFmtReset": {
       "what": "Removes this zone's own format: it goes back to its type color.",

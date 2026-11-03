@@ -91,6 +91,14 @@
         const fill = String(c[0]).indexOf('url(') === 0 ? '#ffffff' : String(c[0]).toLowerCase();
         return { fill, pattern, pcolor: String(c[1]).toLowerCase(), line: c[2] ? 'dash' : 'thin', bcolor: String(c[1]).toLowerCase() };
     }
+    // El formato con el que se ve hoy una huella (blanca con borde gris), para empezar a editarlo desde ahí.
+    function defaultSpaceFmt() { return { fill: '#ffffff', pattern: 'solid', pcolor: '#6b7089', line: 'thin', bcolor: '#6b7089' }; }
+    // Color de la letra que se lee sobre ese relleno: blanca si es oscuro, casi negra si es claro; vacío si el relleno es transparente (se queda con el color de siempre).
+    function inkFor(fmt) {
+        if (!fmt || fmt.pattern === 'none' || !/^#[0-9a-fA-F]{6}$/.test(fmt.fill || '')) return '';
+        const lin = (i) => { const c = parseInt(fmt.fill.slice(i, i + 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+        return 0.2126 * lin(1) + 0.7152 * lin(3) + 0.0722 * lin(5) < 0.4 ? '#FFFFFF' : '#1F2433';
+    }
     const CATEGORY_ICON_PATHS = {
         shield: 'M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z M9 12l2 2 4-4',
         pill: 'M8.5 15.5l7-7a3.5 3.5 0 0 0-5-5l-7 7a3.5 3.5 0 0 0 5 5z M9 9l6 6',
@@ -227,8 +235,14 @@
             const h = Math.max(sp.d * sc, 4);
             const hit = focusSpaces[sp.id];
             const dim = hasFocusSpaces && !hit;
-            s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="${hit ? esc(hit) : '#FFFFFF'}" stroke="${hit ? esc(hit) : T.chrome.line}" stroke-width="${hit ? 2.2 : 1}"${dim ? ' opacity="0.3"' : ''}/>`;
-            if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="${hit ? 800 : 600}" fill="${hit ? '#FFFFFF' : T.chrome.cardInk}" text-anchor="middle"${dim ? ' opacity="0.4"' : ''}>${esc(sp.code)}</text>`;
+            // Con formato propio (color, rayas o borde de la huella) se pinta con él; una huella que se está buscando (focus) sigue con el color de la búsqueda.
+            if (sp.fmt && !hit) {
+                const px = X(sp.x); const py = Y(sp.y);
+                s += `<g${dim ? ' opacity="0.3"' : ''}>${zonePaint(`sf-${sp.id}`, sp.fmt).markup(`${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`)}</g>`;
+            } else {
+                s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="${hit ? esc(hit) : '#FFFFFF'}" stroke="${hit ? esc(hit) : T.chrome.line}" stroke-width="${hit ? 2.2 : 1}"${dim ? ' opacity="0.3"' : ''}/>`;
+            }
+            if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="${hit ? 800 : 600}" fill="${hit ? '#FFFFFF' : (sp.fmt && inkFor(sp.fmt)) || T.chrome.cardInk}" text-anchor="middle"${dim ? ' opacity="0.4"' : ''}>${esc(sp.code)}</text>`;
         });
         s += zoneHalos + measureHalos + zoneLabels + measureLabels;
         (on('puertas') ? (layout.doors || []) : []).forEach((d) => {
@@ -250,5 +264,5 @@
         return `${s}</svg>`;
     }
 
-    window.LayoutMapSvg = { mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, CATEGORY_ICON_PATHS, categoryGlyph };
+    window.LayoutMapSvg = { mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
 }());

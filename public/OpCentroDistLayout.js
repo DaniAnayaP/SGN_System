@@ -495,7 +495,7 @@ function stepHtml(step) {
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     const rows = d.spaces.map((s, i) => {
         const saved = isSavedRow('spaces', s.id);
-        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('spaces', i, 'name', s.name || '', dis)}${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('spaces', i, 'x', s.x, dis)}${cellNum('spaces', i, 'y', s.y, dis)}${cellNum('spaces', i, 'l', s.l, dis)}${cellNum('spaces', i, 'd', s.d, dis)}${cellNum('spaces', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('spaces', i, s.active, dis) : removeCell('spaces', i, dis)}</tr>`;
+        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('spaces', i, 'name', s.name || '', dis)}${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('spaces', i, 'x', s.x, dis)}${cellNum('spaces', i, 'y', s.y, dis)}${cellNum('spaces', i, 'l', s.l, dis)}${cellNum('spaces', i, 'd', s.d, dis)}${cellNum('spaces', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('spaces', i, s.active, dis, spaceFmtButton(s, i, dis)) : removeCell('spaces', i, dis, spaceFmtButton(s, i, dis))}</tr>`;
     });
     return `${table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaVolumen', ''], rows, 'layout-espacios')}${addButton('spaces', 'main.layoutAgregarEspacio', dis, true)}`;
 }
@@ -714,8 +714,17 @@ function renderSvg() {
     ((on('espacios') || on('activos') || on('posiciones')) ? d.spaces : []).forEach((sp) => {
         const w = Math.max(sp.l * sc, 4);
         const h = Math.max(sp.d * sc, 4);
-        s += `<rect class="ls ls-${sp.type}${sp.active === false ? ' lz-off' : ''}" data-sid="${esc(sp.id)}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2"><title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title></rect>`;
-        if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
+        const spaceTitle = `<title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title>`;
+        const spaceOff = sp.active === false ? ' lz-off' : '';
+        if (sp.fmt) {
+            // con formato propio (color, rayas o borde de la huella) se pinta con él; el contorno del resaltado sigue funcionando porque el grupo lleva el mismo data-sid
+            const px = X(sp.x); const py = Y(sp.y);
+            s += `<g class="lsf ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}">${window.LayoutMapSvg.zonePaint(`sf-${sp.id}`, sp.fmt).markup(`${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`)}${spaceTitle}</g>`;
+        } else {
+            s += `<rect class="ls ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2">${spaceTitle}</rect>`;
+        }
+        const spaceInk = sp.fmt ? window.LayoutMapSvg.inkFor(sp.fmt) : '';
+        if (w >= 26 && h >= 9) s += `<text class="lt3"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
     });
     const halosAt = s.length; // aquí entran después los contornos de las etiquetas de las paredes: debajo de TODOS los textos
     s += zoneHalos + (state.showMeasures ? measureHalos : '') + zoneLabels + (state.showMeasures ? measureLabels : '');
@@ -1221,6 +1230,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (cardOpen) { openCardDialog(cardOpen.dataset.cardOpen); return; }
     const fmtZone = event.target.closest('[data-fmtzone]');
     if (fmtZone) { openFmtDialog(Number(fmtZone.dataset.fmtzone)); return; }
+    const fmtSpace = event.target.closest('[data-fmtspace]');
+    if (fmtSpace) { openSpaceFmtDialog(Number(fmtSpace.dataset.fmtspace)); return; }
     const freeShape = event.target.closest('[data-freeshape]');
     if (freeShape) {
         // Un rectángulo pasa a forma libre con sus 4 esquinas; de ahí se cambian sus lados.
@@ -1307,14 +1318,14 @@ $('layout-panel').addEventListener('click', (event) => {
     }
 });
 
-// ---- formato de la zona (color, rayas y borde, como Formato de celdas de Excel) -------------------------------------------------------
-// El icono de paleta de cada zona abre esta ventana: pestaña Relleno (color de fondo, rayas o patrón y su color) y pestaña Borde (estilo de línea y color), con vista previa.
-// Los colores se eligen con la misma ventana "Colores" de los árboles (ColorDialog.js). Nada cambia en la zona hasta pulsar Aceptar. Sin formato propio, la zona usa el
-// color de su tipo; "Quitar formato" la regresa ahí.
+// ---- formato de la zona y de la huella (color, rayas y borde, como Formato de celdas de Excel) -----------------------------------------------
+// El icono de paleta de cada zona (paso Zonas) y de cada huella (paso Huella-Espacio) abre esta ventana: pestaña Relleno (color de fondo, rayas o patrón y su color) y pestaña Borde (estilo de línea y color), con
+// vista previa. Los colores se eligen con la misma ventana "Colores" de los árboles (ColorDialog.js). Nada cambia hasta pulsar Aceptar. Sin formato propio, la zona usa el color de su tipo y la huella
+// queda blanca; "Quitar formato" la regresa ahí. En una huella hay además "Aplicar a": solo esa, las demás de su zona o las del mismo tipo de activo (así pintar 40 racks no es hacerlo 40 veces).
 const FMT_PATTERNS = ['none', 'solid', 'diag1', 'diag2', 'horiz', 'vert', 'grid', 'dots', 'cross'];
 const FMT_LINES = ['none', 'thin', 'mid', 'thick', 'dash', 'dot', 'dashdot', 'double'];
 const FMT_LINE_SAMPLE = { none: [0, ''], thin: [1.2, ''], mid: [2.4, ''], thick: [4, ''], dash: [2, '8 5'], dot: [2.4, '1.5 4'], dashdot: [2, '9 4 2 4'] };
-let fmtDialog = null; // { zoneId, draft, start, tab, hadFmt }
+let fmtDialog = null; // { kind: 'zone' | 'space', targetId, draft, start, tab, name, scope: 'one' | 'zone' | 'type' (solo huellas) }
 let fmtModalEl = null;
 const pickFmt = (o) => ({ fill: o.fill, pattern: o.pattern, pcolor: o.pcolor, line: o.line, bcolor: o.bcolor });
 
@@ -1330,6 +1341,33 @@ function fmtLineSample(id) {
 }
 function fmtColorButton(key, hex, disabled) {
     return `<button type="button" class="layout-fmt-color" data-fcolor="${key}" data-help-key="layoutFmtColor"${disabled ? ' disabled' : ''}><span class="layout-fmt-swatch" style="background:${esc(hex)}"></span>${esc(t('main.layoutElegirColor'))}</button><span class="layout-muted">${esc(hex.toUpperCase())}</span>`;
+}
+// El icono de paleta de cada renglón de Huella-Espacio (solo con la hoja del icono en el árbol); el cuadrito de color aparece cuando la huella ya tiene el suyo.
+function spaceFmtButton(s, i, dis) {
+    if (!(state.perms && state.perms.canFormatSpaces)) return '';
+    return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${s.fmt ? ' on' : ''}" data-fmtspace="${i}" data-help-key="layoutSpaceFmt" aria-label="${esc(t('main.layoutFormatoHuella'))} ${esc(s.code)}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i>${s.fmt ? `<span class="layout-fmt-dot" style="background:${esc(s.fmt.fill)};border-color:${esc(s.fmt.bcolor)}"></span>` : ''}</button>`;
+}
+// A qué huellas se aplica lo que se elige en la ventana: solo a esa, a las de su zona o a las del mismo tipo de activo (una huella sin zona o sin tipo no tiene ese grupo y se queda sola).
+function spaceTargets(sp, scope) {
+    const all = state.draft.spaces;
+    if (scope === 'zone' && sp.zoneId) return all.filter((x) => x.zoneId === sp.zoneId);
+    if (scope === 'type' && sp.assetId) return all.filter((x) => x.assetId === sp.assetId);
+    return [sp];
+}
+function renderFmtScope() {
+    const box = $('layout-fmt-scope');
+    const sp = fmtDialog && fmtDialog.kind === 'space' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : null;
+    box.hidden = !sp;
+    if (!sp) return;
+    const zoneName = (state.draft.zones.find((z) => z.id === sp.zoneId) || {}).name || '';
+    const typeRow = assetLists.types.find((r) => r.id === sp.assetId);
+    const typeName = typeRow ? (typeRow.name || t('main.whNoName')) : `#${sp.assetId}`;
+    const options = [
+        ['one', t('main.layoutAplicarUna'), sp.code, false],
+        ['zone', t('main.layoutAplicarZona'), sp.zoneId ? t('main.layoutAplicarZonaSub').replace('{zone}', zoneName).replace('{n}', String(spaceTargets(sp, 'zone').length)) : t('main.layoutAplicarSinZona'), !sp.zoneId],
+        ['type', t('main.layoutAplicarTipo'), sp.assetId ? t('main.layoutAplicarTipoSub').replace('{type}', typeName).replace('{n}', String(spaceTargets(sp, 'type').length)) : t('main.layoutAplicarSinTipo'), !sp.assetId],
+    ];
+    box.innerHTML = `<legend>${esc(t('main.layoutAplicarA'))}</legend>${options.map(([value, title, sub, disabled]) => `<label class="layout-fmt-opt${disabled ? ' off' : ''}" data-help-key="layoutFmtScope"><input type="radio" name="layout-fmt-scope" value="${value}"${fmtDialog.scope === value ? ' checked' : ''}${disabled ? ' disabled' : ''}><b>${esc(title)}</b><span>${esc(sub)}</span></label>`).join('')}`;
 }
 function renderFmtBody() {
     const d = fmtDialog.draft;
@@ -1347,9 +1385,15 @@ function renderFmtBody() {
             <h4>${esc(t('main.layoutColorBorde'))}</h4><div class="layout-fmt-row">${fmtColorButton('bcolor', d.bcolor, d.line === 'none')}</div></div>`;
     }
     const paint = window.LayoutMapSvg.zonePaint('fpv', d);
-    const shape = '30,20 200,20 200,70 130,70 130,130 30,130';
-    const zone = state.draft.zones.find((z) => z.id === fmtDialog.zoneId);
-    const preview = `<div class="layout-fmt-preview"><h4>${esc(t('main.layoutVistaPrevia'))}</h4><svg viewBox="0 0 230 150" role="img" aria-label="${esc(t('main.layoutVistaPrevia'))}">${paint.markup(shape)}<text class="lt" x="80" y="92" text-anchor="middle">${esc(fmtDialog.name || (zone && zone.name) || '')}</text></svg></div>`;
+    const isSpace = fmtDialog.kind === 'space';
+    const shape = isSpace ? '60,45 170,45 170,105 60,105' : '30,20 200,20 200,70 130,70 130,130 30,130';
+    const zone = isSpace ? null : state.draft.zones.find((z) => z.id === fmtDialog.targetId);
+    const space = isSpace ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : null;
+    const ink = isSpace ? window.LayoutMapSvg.inkFor(d) : '';
+    const label = isSpace
+        ? `<text class="lt3" x="115" y="78" text-anchor="middle"${ink ? ` style="fill:${ink}"` : ''}>${esc(space ? space.code : '')}</text>`
+        : `<text class="lt" x="80" y="92" text-anchor="middle">${esc(fmtDialog.name || (zone && zone.name) || '')}</text>`;
+    const preview = `<div class="layout-fmt-preview"><h4>${esc(t('main.layoutVistaPrevia'))}</h4><svg viewBox="0 0 230 150" role="img" aria-label="${esc(t('main.layoutVistaPrevia'))}">${paint.markup(shape)}${label}</svg></div>`;
     $('layout-fmt-body').innerHTML = `${left}${preview}`;
     document.querySelectorAll('[data-ftab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.ftab === fmtDialog.tab)));
 }
@@ -1360,9 +1404,10 @@ function ensureFmtModal() {
     fmtModalEl.hidden = true;
     fmtModalEl.innerHTML = `<div class="modal-panel layout-fmt-dialog" role="dialog" aria-modal="true" aria-labelledby="layout-fmt-title">
         <h3 id="layout-fmt-title">${esc(t('main.layoutFormatoZona'))}</h3>
-        <div class="layout-fl"><label>${esc(t('main.layoutNombre'))}<input type="text" id="layout-fmt-name" maxlength="${LC.LIMITS.text}"></label></div>
+        <div class="layout-fl" id="layout-fmt-namefield"><label>${esc(t('main.layoutNombre'))}<input type="text" id="layout-fmt-name" maxlength="${LC.LIMITS.text}"></label></div>
         <div class="layout-fmt-tabs" role="tablist"><button type="button" role="tab" data-ftab="fill" aria-selected="true">${esc(t('main.layoutFormatoRelleno'))}</button><button type="button" role="tab" data-ftab="border" aria-selected="false">${esc(t('main.layoutFormatoBorde'))}</button></div>
         <div class="layout-fmt-body" id="layout-fmt-body"></div>
+        <fieldset class="layout-fmt-scope" id="layout-fmt-scope" hidden></fieldset>
         <div class="layout-fmt-footer"><button type="button" class="btn btn-secondary" id="layout-fmt-reset" data-help-key="layoutFmtReset">${esc(t('main.layoutQuitarFormato'))}</button><span class="layout-fmt-spacer"></span><button type="button" class="btn btn-secondary" id="layout-fmt-cancel">${esc(t('main.layoutFormatoCancelar'))}</button><button type="button" class="btn" id="layout-fmt-ok">${esc(t('main.layoutFormatoAceptar'))}</button></div>
     </div>`;
     document.body.appendChild(fmtModalEl);
@@ -1383,25 +1428,39 @@ function ensureFmtModal() {
         }
         if (event.target.closest('#layout-fmt-cancel')) { closeFmtDialog(); return; }
         if (event.target.closest('#layout-fmt-reset')) {
-            const z = state.draft.zones.find((r) => r.id === fmtDialog.zoneId);
-            if (z) { delete z.fmt; const nm = ($('layout-fmt-name').value || '').trim(); if (nm) z.name = nm; }
+            if (fmtDialog.kind === 'space') {
+                const sp = state.draft.spaces.find((r) => r.id === fmtDialog.targetId);
+                if (sp) spaceTargets(sp, fmtDialog.scope).forEach((x) => { delete x.fmt; });
+            } else {
+                const z = state.draft.zones.find((r) => r.id === fmtDialog.targetId);
+                if (z) { delete z.fmt; const nm = ($('layout-fmt-name').value || '').trim(); if (nm) z.name = nm; }
+            }
             closeFmtDialog();
             renderPanel();
             refreshLive();
             return;
         }
         if (event.target.closest('#layout-fmt-ok')) {
-            const z = state.draft.zones.find((r) => r.id === fmtDialog.zoneId);
-            if (z) {
-                const nm = ($('layout-fmt-name').value || '').trim();
-                if (nm) z.name = nm;
-                // si no cambió nada de lo que traía (o de lo que ya se veía por su tipo), la zona no recibe formato propio
-                if (z.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start)) z.fmt = { ...fmtDialog.draft };
+            if (fmtDialog.kind === 'space') {
+                const sp = state.draft.spaces.find((r) => r.id === fmtDialog.targetId);
+                // Con formato propio (aunque no se haya cambiado nada) se puede copiar a las demás del grupo; sin formato y sin cambios no hay nada que aplicar.
+                if (sp && (sp.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) spaceTargets(sp, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
+            } else {
+                const z = state.draft.zones.find((r) => r.id === fmtDialog.targetId);
+                if (z) {
+                    const nm = ($('layout-fmt-name').value || '').trim();
+                    if (nm) z.name = nm;
+                    // si no cambió nada de lo que traía (o de lo que ya se veía por su tipo), la zona no recibe formato propio
+                    if (z.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start)) z.fmt = { ...fmtDialog.draft };
+                }
             }
             closeFmtDialog();
             renderPanel();
             refreshLive();
         }
+    });
+    fmtModalEl.addEventListener('change', (event) => {
+        if (event.target.name === 'layout-fmt-scope' && fmtDialog) fmtDialog.scope = event.target.value;
     });
     fmtModalEl.addEventListener('input', (event) => {
         if (event.target.id === 'layout-fmt-name' && fmtDialog) { fmtDialog.name = event.target.value; renderFmtBody(); }
@@ -1412,9 +1471,24 @@ function openFmtDialog(zoneIndex) {
     if (!z) return;
     ensureFmtModal();
     const base = z.fmt ? pickFmt(z.fmt) : window.LayoutMapSvg.defaultFmt(z.type);
-    fmtDialog = { zoneId: z.id, draft: { ...base }, start: { ...base }, tab: 'fill', name: z.name };
+    fmtDialog = { kind: 'zone', targetId: z.id, draft: { ...base }, start: { ...base }, tab: 'fill', name: z.name };
+    $('layout-fmt-title').textContent = t('main.layoutFormatoZona');
+    $('layout-fmt-namefield').hidden = false;
     $('layout-fmt-name').value = z.name;
     fmtModalEl.hidden = false;
+    renderFmtScope();
+    renderFmtBody();
+}
+function openSpaceFmtDialog(spaceIndex) {
+    const sp = state.draft.spaces[spaceIndex];
+    if (!sp) return;
+    ensureFmtModal();
+    const base = sp.fmt ? pickFmt(sp.fmt) : window.LayoutMapSvg.defaultSpaceFmt();
+    fmtDialog = { kind: 'space', targetId: sp.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
+    $('layout-fmt-title').textContent = `${t('main.layoutFormatoHuella')} ${sp.code}`;
+    $('layout-fmt-namefield').hidden = true;
+    fmtModalEl.hidden = false;
+    renderFmtScope();
     renderFmtBody();
 }
 function closeFmtDialog() {

@@ -296,15 +296,17 @@
                 if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id)) return;
                 const cx = PX(s.x + s.l / 2); const cz = PZ(s.y + s.d / 2);
                 const lv = Math.max(1, s.levels || 1);
+                // el color que se le puso en Formato de huella (sin relleno o sin color propio se queda con el de su tipo)
+                const own = s.fmt && s.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(s.fmt.fill || '') ? parseInt(s.fmt.fill.slice(1), 16) : null;
                 if (s.type === 'pallet') {
-                    blk.push({ x: cx, y: 0.07, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: WOOD });
+                    blk.push({ x: cx, y: 0.07, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: own !== null ? own : WOOD });
                     const loadH = (s.h - 0.14) / lv;
                     for (let k = 0; k < lv; k++) edgeBox(cx, 0.14 + k * loadH + loadH / 2, cz, s.l - 0.04, loadH - 0.04, s.d - 0.04);
                 } else if (s.type === 'cabinet') {
-                    blk.push({ x: cx, y: s.h / 2, z: cz, sx: s.l, sy: s.h, sz: s.d, c: 0x7f8c8d });
+                    blk.push({ x: cx, y: s.h / 2, z: cz, sx: s.l, sy: s.h, sz: s.d, c: own !== null ? own : 0x7f8c8d });
                 } else {
                     const upC = s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86;
-                    const deckC = s.type === 'rackpal' ? 0xe8892b : 0x93a0ba;
+                    const deckC = own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba);
                     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([ix, iz]) => upr.push({ x: cx + ix * Math.max(0, s.l / 2 - 0.03), y: s.h / 2, z: cz + iz * Math.max(0, s.d / 2 - 0.03), sx: 0.06, sy: s.h, sz: 0.06, c: upC }));
                     const pitch = (s.h - 0.3) / lv;
                     for (let k = 0; k < lv; k++) dck.push({ x: cx, y: 0.15 + k * pitch, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC });

@@ -6478,6 +6478,8 @@ function layoutPermissions(req) {
         canDeleteSpaces: admin || canDeleteColumn(grants, LAYOUT_TABLE_KEY, 'colLayoutEspacios'),
         // Cambiar el color, las rayas o el borde de una zona pide además el icono Formato de zona (hoja <pantalla>/iconLayoutFormatoZona del árbol).
         canFormatZones: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoZona'),
+        // Lo mismo para el color, las rayas y el borde de una huella-espacio: el icono Formato de huella (hoja <pantalla>/iconLayoutFormatoHuella del árbol).
+        canFormatSpaces: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoHuella'),
         // Ver u ocultar las medidas del croquis es solo de pantalla, pero también es un icono con su propia hoja en el árbol (iconLayoutMedidas).
         canToggleMeasures: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutMedidas'),
         // Ver u ocultar los m² de cada zona en el croquis (y en la hoja que se descarga) es otro icono con su hoja (iconLayoutArea); los filtros de las tablas del panel, otro (iconLayoutFiltros).
@@ -6520,7 +6522,7 @@ function buildPublicLayoutPayload(clientId, row) {
         vertices: l.vertices,
         doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, wall: d.wall, dist: d.dist, width: d.width, height: d.height })),
         zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}), ...(Array.isArray(z.categories) && z.categories.length ? { categories: z.categories } : {}) })),
-        spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels })),
+        spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels, ...(s.fmt ? { fmt: s.fmt } : {}) })),
         // Las conexiones de luz salen en la página pública (con su propia capa, apagada al entrar) porque Daniel pidió esos botones ahí; las columnas y el plano de fondo no.
         obstacles: [], power: (l.power || []).map((e) => ({ type: e.type, wall: e.wall, dist: e.dist, height: e.height })),
     };
@@ -6542,7 +6544,9 @@ function layoutSummary(layout, section) {
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
     if (section === 'activos') return `${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} espacios con activo`;
     if (section === 'posiciones') return `${(layout.spaces || []).reduce((n, s) => n + (s.bays || []).length, 0)} huecos con datos propios`;
-    return `${(layout.spaces || []).length} espacios`;
+    // el formato propio de las huellas (color, rayas, borde) cuenta como parte de Huella-Espacio: sin esto un cambio de color dejaba el mismo texto en el historial
+    const painted = (layout.spaces || []).filter((s) => s.fmt).length;
+    return `${(layout.spaces || []).length} espacios${painted ? `, ${painted} con formato propio` : ''}`;
 }
 
 // El Layout es de UN centro de costos (el que se eligió en el selector de arriba): costCenterId viene en la dirección o en el cuerpo. Sin él (una pantalla de antes) se usa el primer Layout del cliente.
@@ -6674,6 +6678,13 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         const before = new Map(((existing && existing.layout.zones) || []).map((z) => [z.id, JSON.stringify(z.fmt || null)]));
         if ((next.zones || []).some((z) => JSON.stringify(z.fmt || null) !== (before.has(z.id) ? before.get(z.id) : 'null'))) {
             return res.status(403).json({ message: 'No tienes permiso para cambiar el formato de las zonas.', section: 'zonas' });
+        }
+    }
+    // El formato de las huellas (color, rayas, borde) solo lo cambia quien tiene el icono Formato de huella.
+    if (!perms.canFormatSpaces) {
+        const beforeSpaces = new Map(((existing && existing.layout.spaces) || []).map((s) => [s.id, JSON.stringify(s.fmt || null)]));
+        if ((next.spaces || []).some((s) => JSON.stringify(s.fmt || null) !== (beforeSpaces.has(s.id) ? beforeSpaces.get(s.id) : 'null'))) {
+            return res.status(403).json({ message: 'No tienes permiso para cambiar el formato de las huellas.', section: 'espacios' });
         }
     }
     if (!changed.length && planImage === undefined && existing) return res.json({ version: existing.version, changed: [] });
