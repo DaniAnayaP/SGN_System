@@ -2566,6 +2566,7 @@
     "relTplErr_locatorAsset": "The letter \"{letter}\" of the Locator is not a known asset: use A shelf, R rack, G cabinet or T floor pallet.",
     "relTplErr_locatorRack": "There is no such asset in the zone \"{zone}\" (or it is not assigned to that sub-warehouse): \"{value}\".",
     "sessionExpired": "Your session has ended (it lasts 8 hours). Reload the page and sign in again.",
+    "relLoadingRows": "Loading rows… {done} of {total}",
     "colRelCreateAuth": "Authorization to Create",
     "colRelDeleteAuth": "Authorization to Delete",
     "newRelation": "New Relation",

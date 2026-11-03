@@ -2565,6 +2565,7 @@
     "relTplErr_locatorAsset": "La letra «{letter}» del Localizador no es un activo conocido: usa A anaquel, R rack, G gabeta o T tarima en piso.",
     "relTplErr_locatorRack": "No hay ese activo en la zona «{zone}» (o no está asignado a ese sub almacén): «{value}».",
     "sessionExpired": "Tu sesión terminó (dura 8 horas). Recarga la página e inicia sesión otra vez.",
+    "relLoadingRows": "Cargando filas… {done} de {total}",
     "colRelCreateAuth": "Autorización para Crear",
     "colRelDeleteAuth": "Autorización para Eliminar",
     "newRelation": "Nueva Relación",

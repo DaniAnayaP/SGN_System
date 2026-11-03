@@ -3072,11 +3072,16 @@ function applyRowColumnState(tr, tableId) {
     if (!state) return;
     const visualOrder = getVisualColumnOrder(state.config);
     const cellByKey = new Map();
-    Array.from(tr.children).forEach((td) => { if (td.dataset.col) cellByKey.set(td.dataset.col, td); });
+    const children = Array.from(tr.children);
+    children.forEach((td) => { if (td.dataset.col) cellByKey.set(td.dataset.col, td); });
+    // Si las celdas ya están en el orden visual (lo normal: nadie reordenó las columnas), no hace falta mover ninguna: cada appendChild de una celda ya puesta es trabajo de más y con
+    // miles de filas era buena parte de la espera. Solo se mueven cuando de verdad hay otro orden.
+    const present = visualOrder.filter((key) => cellByKey.has(key));
+    const inOrder = children.length === present.length && children.every((td, i) => td.dataset.col === present[i]);
     visualOrder.forEach((key) => {
         const td = cellByKey.get(key);
         if (!td) return;
-        tr.appendChild(td);
+        if (!inOrder) tr.appendChild(td);
         applyPinStyle(td, key, state);
     });
 }
@@ -3247,10 +3252,15 @@ function resetDataTableColumnLayout(tableId) {
 // is never overwritten) anything still sitting exactly at that floor fixes
 // it. Safe to call repeatedly: once a column moves off the floor this
 // becomes a no-op for it.
+// Cuántas filas se miden para saber qué tan ancha es cada columna. Medir TODAS (con 1,200 filas = 30,000 celdas, cada lectura de scrollWidth obliga al navegador a calcular el diseño) congelaba la
+// pantalla varios segundos; las primeras filas dan el ancho de la columna igual de bien (el usuario puede ajustarlo a mano).
+const DATA_TABLE_WIDTH_SAMPLE_ROWS = 80;
+
 function refreshDataTableColumnWidths(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
     let changed = false;
+    const sampleRows = state.table.tBodies[0] ? Array.from(state.table.tBodies[0].rows).slice(0, DATA_TABLE_WIDTH_SAMPLE_ROWS) : [];
     state.columnKeys.forEach((key) => {
         if (state.config.widths[key] !== DATA_TABLE_COL_MIN_WIDTH) return;
         // table-layout:fixed is already applied by the time this runs, so
@@ -3260,8 +3270,9 @@ function refreshDataTableColumnWidths(tableId) {
         // content size even while the cell's own box is clipped by that
         // fixed width (overflow: hidden doesn't shrink scrollWidth).
         let needed = 0;
-        state.table.querySelectorAll(`tbody > tr > td[data-col="${key}"]`).forEach((td) => {
-            if (td.scrollWidth > needed) needed = td.scrollWidth;
+        sampleRows.forEach((tr) => {
+            const td = tr.querySelector(`td[data-col="${key}"]`);
+            if (td && td.scrollWidth > needed) needed = td.scrollWidth;
         });
         if (needed > DATA_TABLE_COL_MIN_WIDTH) {
             state.config.widths[key] = needed + 4; // small buffer for padding/rounding

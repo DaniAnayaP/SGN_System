@@ -31,6 +31,7 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
+const compression = require('compression');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 
@@ -509,6 +510,10 @@ const app = express();
 // error on every single request. `1` trusts exactly one hop (Railway's own
 // proxy), not arbitrary client-supplied headers.
 app.set('trust proxy', 1);
+
+// Compresión de las respuestas (gzip o brotli, lo que acepte el navegador): sin ella el script principal (Dashboard.js, ~720 KB), los textos (~250 KB) y las listas de las tablas (~1 MB
+// con 1,200 filas) viajaban completos en cada pantalla. Solo comprime lo que vale la pena (texto, JSON, JS, CSS, SVG); imágenes, PDFs y Excel ya vienen comprimidos y pasan igual.
+app.use(compression());
 
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
 const IS_PROD = process.env.NODE_ENV === 'production';

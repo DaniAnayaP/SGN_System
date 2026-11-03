@@ -119,20 +119,53 @@ function ensureEmptyState() {
     tbody.appendChild(tr);
 }
 
+// Las filas se dibujan por tandas (ROW_CHUNK) cediéndole el control al navegador entre una y otra: con 1,200 filas dibujarlas todas de un golpe congelaba la pantalla varios segundos (y el navegador
+// avisaba que la página no respondía). Así la tabla se puede ver y usar mientras termina de llenarse, y una recarga que llega a la mitad cancela la anterior (renderToken).
+const ROW_CHUNK = 150;
+let renderToken = 0;
+const nextTurn = () => (window.scheduler && window.scheduler.yield ? window.scheduler.yield() : new Promise((resolve) => setTimeout(resolve, 0)));
+function setLoadingRows(done, total) {
+    const toolbar = document.querySelector(`[data-table-id="${TABLE_KEY}"]`)?.previousElementSibling;
+    if (!toolbar) return;
+    let el = toolbar.querySelector('.rel-loading-rows');
+    if (done == null) { if (el) el.remove(); return; }
+    if (!el) {
+        el = document.createElement('span');
+        el.className = 'rel-loading-rows tpl-muted';
+        el.setAttribute('aria-live', 'polite');
+        toolbar.prepend(el);
+    }
+    el.textContent = t('main.relLoadingRows', { done, total });
+}
+
 async function refreshTable() {
     const tbody = getTbody();
+    const token = ++renderToken;
     try {
         const res = await fetch(API, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const body = await res.json();
+        if (token !== renderToken) return; // llegó otra recarga después de esta
         // Solo las relaciones de los centros de costos marcados arriba (una sin centro se ve siempre, para poder asignárselo).
         const selected = Dashboard.getSelectedCostCenterIds();
         const relations = body.relations.filter((r) => !selected || !r.costCenterId || selected.includes(r.costCenterId));
         tbody.innerHTML = '';
-        if (!relations.length) { ensureEmptyState(); return; }
-        relations.forEach((r) => tbody.appendChild(buildRow(r)));
+        if (!relations.length) { setLoadingRows(null); ensureEmptyState(); return; }
+        for (let from = 0; from < relations.length; from += ROW_CHUNK) {
+            if (token !== renderToken) return;
+            const fragment = document.createDocumentFragment();
+            relations.slice(from, from + ROW_CHUNK).forEach((r) => fragment.appendChild(buildRow(r)));
+            tbody.appendChild(fragment);
+            if (from + ROW_CHUNK < relations.length) {
+                setLoadingRows(Math.min(from + ROW_CHUNK, relations.length), relations.length);
+                await nextTurn();
+            }
+        }
+        if (token !== renderToken) return;
+        setLoadingRows(null);
         applyFilters();
     } catch (err) {
+        if (token === renderToken) setLoadingRows(null);
         console.error('Relación Código: failed to load records', err);
     }
 }
