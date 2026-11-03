@@ -1739,6 +1739,13 @@
     "layoutTarjetaRevisame": "BÚSCAME",
     "layoutClsRevisame": "REVÍSAME",
     "layoutVisualizaciones": "Visualizaciones",
+    "layoutTextos": "Textos",
+    "layoutTxtNombres": "Nombres de las zonas",
+    "layoutTxtArea": "m² de las zonas",
+    "layoutTxtMedidas": "Medidas de los lados",
+    "layoutTxtRotulos": "Rótulos del 3D",
+    "layoutCapasBtn": "Capas",
+    "layout3dActivosBtn": "Elegir activos",
     "layoutClsIcono": "ÍCONO",
     "layoutClsVerCatalogo": "Ver catálogo",
     "layoutClsTitulo": "Categorías de {name}",
@@ -3911,7 +3918,7 @@
       "example": "quieres ver solo R-07 y T-03 para revisar sus alturas: pulsas Ninguno, buscas R-07 y marcas el anaquel, luego buscas T-03 y marcas la tarima."
     },
     "layout3dLayers": {
-      "what": "Muestra u oculta una capa del 3D, una por icono: Paredes, Puertas, Conexiones de luz, Columnas, Zonas y Activos (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Lo que ocultas deja de verse y de poder tocarse; los rótulos de esa capa también se van. Se recuerda en este navegador.",
+      "what": "Muestra u oculta una capa del 3D desde la lista Capas: Paredes, Puertas, Conexiones de luz, Columnas, Zonas y Activos (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Lo que ocultas deja de verse y de poder tocarse; los rótulos de esa capa también se van. Se recuerda en este navegador.",
       "example": "ocultas las paredes para ver todo el piso desde un lado, o los activos para ver cómo quedaron las zonas."
     },
     "layout3dViews": {
@@ -3931,8 +3938,12 @@
       "example": "toca el anaquel R-07 y debajo del dibujo sale su tipo, su zona, sus medidas y cuántos niveles tiene."
     },
     "layoutViews": {
-      "what": "Los botones para cambiar cómo se ve el croquis: ver u ocultar las medidas, los m² de las zonas y los nombres, girarlo y acercarlo o alejarlo. Solo cambian lo que ves; no modifican el Layout.",
-      "example": "ocultas los nombres de las zonas para ver mejor las medidas, o acercas el croquis para revisar una esquina."
+      "what": "Los botones para cambiar cómo se ve el Layout. Arriba eliges 2D (el croquis plano) o 3D, y abajo salen solo las opciones de la vista elegida: en 2D, la lista Textos (nombres, m² y medidas), girar y acercar o alejar; en 3D, la cámara, las capas, qué activos se ven, los rótulos y el acercar o alejar. Solo cambian lo que ves; no modifican el Layout.",
+      "example": "pasas a 3D, abres Capas y ocultas las paredes para ver todo el piso; regresas a 2D y ahí sí ves la lista de Textos."
+    },
+    "layoutTextos": {
+      "what": "Un solo botón con una lista para mostrar u ocultar los textos del dibujo. En 2D: los nombres de las zonas, los m² de cada zona y las medidas de los lados; en 3D: los rótulos. Cada renglón con palomita está visible; tócalo para ocultarlo y vuélvelo a tocar para verlo. Solo ves los renglones que tienes en el árbol. Se recuerda en este navegador y la hoja que se descarga sale como lo ves.",
+      "example": "abres Textos, quitas la palomita de «Medidas de los lados» y el croquis queda solo con los nombres y los m² de las zonas."
     },
     "layoutQrCls": {
       "what": "Baja la hoja de las clasificaciones de una categoría de Inventario (PDF o imagen), con su icono, su color y un QR por cada una. Cada QR abre, en la zona elegida, la lista de códigos de esa clasificación. No depende de los códigos: los QR no cambian nunca y al escanearlos siempre se ve lo actual. Las clasificaciones de cada categoría se relacionan en Nuestras Categorías Inventarios.",

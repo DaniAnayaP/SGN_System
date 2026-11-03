@@ -457,25 +457,6 @@
                             <div class="layout-map">
                                 <svg id="layout-svg" viewBox="0 0 700 460" role="img" aria-label="Layout"></svg>
                                 <div class="layout-map3d" id="layout-map3d" hidden>
-                                    <div class="layout-3d-bar">
-                                        <button type="button" class="layout-3d-view on" data-view="general" data-help-key="layout3dViews" data-i18n="main.layout3dGeneral">Overview</button>
-                                        <button type="button" class="layout-3d-view" data-view="planta" data-help-key="layout3dViews" data-i18n="main.layout3dPlanta">Top view</button>
-                                        <button type="button" class="layout-3d-view" data-view="frente" data-help-key="layout3dViews" data-i18n="main.layout3dFrente">Front view</button>
-                                        <span class="layout-3d-sep" aria-hidden="true"></span>
-                                        <div class="layout-3d-layers" id="layout-3d-layers" role="group" hidden>
-                                            <button type="button" class="layout-measures-btn" data-3d-layer="walls" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-building" aria-hidden="true"></i></button>
-                                            <button type="button" class="layout-measures-btn" data-3d-layer="doors" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-door-open" aria-hidden="true"></i></button>
-                                            <button type="button" class="layout-measures-btn" data-3d-layer="power" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-plug" aria-hidden="true"></i></button>
-                                            <button type="button" class="layout-measures-btn" data-3d-layer="columns" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-columns" aria-hidden="true"></i></button>
-                                            <button type="button" class="layout-measures-btn" data-3d-layer="zones" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-layer" aria-hidden="true"></i></button>
-                                            <button type="button" class="layout-measures-btn" data-3d-layer="assets" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-package" aria-hidden="true"></i></button>
-                                            <button type="button" class="layout-measures-btn layout-view-btn" id="layout-3d-assets-pick" data-help-key="layout3dAssetsPick" aria-pressed="false" aria-expanded="false"><i class="bx bx-list-check" aria-hidden="true"></i></button>
-                                            <span class="layout-3d-sep" aria-hidden="true"></span>
-                                        </div>
-                                        <button type="button" class="layout-measures-btn" id="layout-3d-labels" data-help-key="layout3dLabels" aria-pressed="true"><i class="bx bx-rename" aria-hidden="true"></i></button>
-                                        <button type="button" class="layout-measures-btn" id="layout-3d-zoom-in" data-help-key="layout3dZoom"><i class="bx bx-zoom-in" aria-hidden="true"></i></button>
-                                        <button type="button" class="layout-measures-btn" id="layout-3d-zoom-out" data-help-key="layout3dZoom"><i class="bx bx-zoom-out" aria-hidden="true"></i></button>
-                                    </div>
                                     <div class="layout-3d-picker" id="layout-3d-picker" hidden></div>
                                     <div class="layout-3d-stage" id="layout-3d-stage" data-help-key="layout3dStage"><div class="layout-3d-msg" id="layout-3d-msg" hidden></div></div>
                                     <div class="layout-3d-info" id="layout-3d-info" aria-live="polite" hidden></div>
@@ -484,18 +465,49 @@
                             <div class="layout-legend">
                                 <div class="layout-views" id="layout-views" data-help-key="layoutViews">
                                     <div class="layout-legend-title layout-views-title" data-i18n="main.layoutVisualizaciones">Views</div>
+                                    <div class="layout-mode" id="layout-mode" role="group" data-help-key="layoutView3d" hidden>
+                                        <button type="button" class="layout-mode-btn" id="layout-view2d-btn" aria-pressed="true" hidden>2D</button>
+                                        <button type="button" class="layout-mode-btn" id="layout-view3d-btn" aria-pressed="false" hidden>3D</button>
+                                    </div>
+                                    <div class="layout-vopts layout-only3d">
+                                        <div class="layout-3d-views" role="group" data-help-key="layout3dViews">
+                                            <button type="button" class="layout-3d-view on" data-view="general" data-help-key="layout3dViews" data-i18n="main.layout3dGeneral">Overview</button>
+                                            <button type="button" class="layout-3d-view" data-view="planta" data-help-key="layout3dViews" data-i18n="main.layout3dPlanta">Top view</button>
+                                            <button type="button" class="layout-3d-view" data-view="frente" data-help-key="layout3dViews" data-i18n="main.layout3dFrente">Front view</button>
+                                        </div>
+                                        <div class="layout-3d-layers" id="layout-3d-layers" role="group" hidden>
+                                            <div class="layout-opt">
+                                                <button type="button" class="layout-opt-btn" data-opt-menu="layout-capas-list" aria-expanded="false" data-help-key="layout3dLayers"><i class="bx bx-layer" aria-hidden="true"></i><span data-i18n="main.layoutCapasBtn">Layers</span><i class="bx bx-chevron-down layout-opt-chev" aria-hidden="true"></i></button>
+                                                <div class="layout-opt-list" id="layout-capas-list" hidden>
+                                        <button type="button" class="layout-opt-item" data-3d-layer="walls" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><i class="bx bx-building" aria-hidden="true"></i><span data-i18n="main.layout3dCapaWalls">Walls</span></button>
+                                        <button type="button" class="layout-opt-item" data-3d-layer="doors" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><i class="bx bx-door-open" aria-hidden="true"></i><span data-i18n="main.layout3dCapaDoors">Doors</span></button>
+                                        <button type="button" class="layout-opt-item" data-3d-layer="power" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><i class="bx bx-plug" aria-hidden="true"></i><span data-i18n="main.layout3dCapaPower">Power connections</span></button>
+                                        <button type="button" class="layout-opt-item" data-3d-layer="columns" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><i class="bx bx-columns" aria-hidden="true"></i><span data-i18n="main.layout3dCapaColumns">Columns</span></button>
+                                        <button type="button" class="layout-opt-item" data-3d-layer="zones" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><i class="bx bx-layer" aria-hidden="true"></i><span data-i18n="main.layout3dCapaZones">Zones</span></button>
+                                        <button type="button" class="layout-opt-item" data-3d-layer="assets" data-help-key="layout3dLayers" aria-pressed="true"><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><i class="bx bx-package" aria-hidden="true"></i><span data-i18n="main.layout3dCapaAssets">Assets</span></button>
+                                                </div>
+                                            </div>
+                                            <button type="button" class="layout-opt-btn" id="layout-3d-assets-pick" data-help-key="layout3dAssetsPick" aria-pressed="false" aria-expanded="false"><i class="bx bx-list-check" aria-hidden="true"></i><span data-i18n="main.layout3dActivosBtn">Choose assets</span></button>
+                                        </div>
+                                    </div>
+                                    <div class="layout-opt" id="layout-texts" hidden>
+                                        <button type="button" class="layout-opt-btn" id="layout-texts-btn" data-opt-menu="layout-texts-list" aria-expanded="false" data-help-key="layoutTextos"><i class="bx bx-rename" aria-hidden="true"></i><span data-i18n="main.layoutTextos">Texts</span><i class="bx bx-chevron-down layout-opt-chev" aria-hidden="true"></i></button>
+                                        <div class="layout-opt-list" id="layout-texts-list" hidden>
+                                            <button type="button" class="layout-opt-item layout-only2d" id="layout-names-btn" data-help-key="layoutNames" aria-pressed="true" hidden><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><span data-i18n="main.layoutTxtNombres">Zone names</span></button>
+                                            <button type="button" class="layout-opt-item layout-only2d" id="layout-area-btn" data-help-key="layoutArea" aria-pressed="true" hidden><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><span data-i18n="main.layoutTxtArea">Zone m²</span></button>
+                                            <button type="button" class="layout-opt-item layout-only2d" id="layout-measures-btn" data-help-key="layoutMeasures" aria-pressed="true" hidden><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><span data-i18n="main.layoutTxtMedidas">Side measures</span></button>
+                                            <button type="button" class="layout-opt-item layout-only3d" id="layout-3d-labels" data-help-key="layout3dLabels" aria-pressed="true"><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><span data-i18n="main.layoutTxtRotulos">3D labels</span></button>
+                                        </div>
+                                    </div>
                                     <div class="layout-views-icons">
-                            <button type="button" class="layout-measures-btn layout-view-btn" id="layout-view2d-btn" data-help-key="layoutView3d" aria-pressed="true" hidden><i class="bx bx-map-alt" aria-hidden="true"></i></button>
-                            <button type="button" class="layout-measures-btn layout-view-btn" id="layout-view3d-btn" data-help-key="layoutView3d" aria-pressed="false" hidden><i class="bx bx-cube-alt" aria-hidden="true"></i></button>
-                            <button type="button" class="layout-measures-btn layout-only2d" id="layout-measures-btn" data-help-key="layoutMeasures" aria-pressed="true" hidden><i class="bx bx-ruler" aria-hidden="true"></i></button>
-                            <button type="button" class="layout-measures-btn layout-area-btn layout-only2d" id="layout-area-btn" data-help-key="layoutArea" aria-pressed="true" hidden><i class="bx bx-area" aria-hidden="true"></i></button>
-                            <button type="button" class="layout-measures-btn layout-names-btn layout-only2d" id="layout-names-btn" data-help-key="layoutNames" aria-pressed="true" hidden><i class="bx bx-rename" aria-hidden="true"></i></button>
-                            <button type="button" class="layout-measures-btn layout-rotate-btn layout-only2d" id="layout-rotate-btn" data-help-key="layoutRotate" aria-pressed="false" hidden><i class="bx bx-rotate-right" aria-hidden="true"></i></button>
-                            <div class="layout-zoom-tools layout-only2d" id="layout-zoom-tools" hidden>
-                                <button type="button" class="layout-measures-btn" id="layout-zoom-in" data-help-key="layoutZoom"><i class="bx bx-zoom-in" aria-hidden="true"></i></button>
-                                <button type="button" class="layout-measures-btn" id="layout-zoom-out" data-help-key="layoutZoom"><i class="bx bx-zoom-out" aria-hidden="true"></i></button>
-                                <button type="button" class="layout-measures-btn" id="layout-zoom-reset" data-help-key="layoutZoom" hidden><i class="bx bx-fullscreen" aria-hidden="true"></i></button>
-                            </div>
+                                        <button type="button" class="layout-measures-btn layout-rotate-btn layout-only2d" id="layout-rotate-btn" data-help-key="layoutRotate" aria-pressed="false" hidden><i class="bx bx-rotate-right" aria-hidden="true"></i></button>
+                                        <div class="layout-zoom-tools layout-only2d" id="layout-zoom-tools" hidden>
+                                            <button type="button" class="layout-measures-btn" id="layout-zoom-in" data-help-key="layoutZoom"><i class="bx bx-zoom-in" aria-hidden="true"></i></button>
+                                            <button type="button" class="layout-measures-btn" id="layout-zoom-out" data-help-key="layoutZoom"><i class="bx bx-zoom-out" aria-hidden="true"></i></button>
+                                            <button type="button" class="layout-measures-btn" id="layout-zoom-reset" data-help-key="layoutZoom" hidden><i class="bx bx-fullscreen" aria-hidden="true"></i></button>
+                                        </div>
+                                        <button type="button" class="layout-measures-btn layout-only3d" id="layout-3d-zoom-in" data-help-key="layout3dZoom"><i class="bx bx-zoom-in" aria-hidden="true"></i></button>
+                                        <button type="button" class="layout-measures-btn layout-only3d" id="layout-3d-zoom-out" data-help-key="layout3dZoom"><i class="bx bx-zoom-out" aria-hidden="true"></i></button>
                                     </div>
                                 </div>
                                 <div class="layout-legend-title" data-i18n="main.columnLegendTitle">Symbology</div>

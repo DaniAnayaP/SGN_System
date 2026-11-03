@@ -7502,18 +7502,41 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 /* Ver 2D / Ver 3D: el que se está viendo queda marcado */
 .layout-view-btn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); border-color: var(--color-text-primary); }
 .layout-views.is-3d .layout-only2d{ display: none !important; }
+.layout-views:not(.is-3d) .layout-only3d{ display: none !important; }
+/* Visualizaciones: interruptor 2D | 3D (como el de Layout | Zona del QR) y, debajo, solo las opciones de la vista elegida */
+.layout-mode{ display: inline-flex; gap: 0.2rem; padding: 0.2rem; border: 1px solid var(--color-border); border-radius: 999px; }
+.layout-mode[hidden]{ display: none; }
+.layout-mode-btn{ font: inherit; font-size: 0.78rem; font-weight: 600; min-width: 3rem; border: 0; background: transparent; color: var(--color-text-secondary); padding: 0.28rem 0.9rem; border-radius: 999px; cursor: pointer; }
+.layout-mode-btn[hidden]{ display: none; }
+.layout-mode-btn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); }
+.layout-vopts{ display: flex; flex-direction: column; align-items: center; gap: 0.5rem; width: 100%; }
+.layout-3d-views{ display: flex; flex-wrap: wrap; justify-content: center; gap: 0.3rem; }
+/* una lista desplegable (Textos, Capas): un botón y, abierta, sus renglones con una marca cuando están encendidos */
+.layout-opt{ position: relative; width: 100%; max-width: 14rem; }
+.layout-opt[hidden]{ display: none; }
+.layout-opt-btn{ display: flex; align-items: center; justify-content: flex-start; gap: 0.4rem; width: 100%; max-width: 14rem; font: inherit; font-size: 0.74rem; font-weight: 600; padding: 0.35rem 0.7rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; }
+.layout-opt-btn i{ font-size: 1rem; }
+.layout-opt-btn .layout-opt-chev{ margin-left: auto; transition: transform 0.15s; }
+.layout-opt-btn[aria-expanded="true"] .layout-opt-chev{ transform: rotate(180deg); }
+.layout-opt-btn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); border-color: var(--color-text-primary); }
+.layout-opt-btn:disabled{ opacity: 0.4; cursor: default; }
+.layout-opt-list{ display: flex; flex-direction: column; gap: 0.1rem; margin-top: 0.3rem; padding: 0.3rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); }
+.layout-opt-list[hidden]{ display: none; }
+.layout-opt-item{ display: flex; align-items: center; gap: 0.45rem; width: 100%; text-align: left; font: inherit; font-size: 0.74rem; padding: 0.3rem 0.45rem; border: 0; border-radius: 0.4rem; background: transparent; color: var(--color-text-primary); cursor: pointer; }
+.layout-opt-item:hover{ background: var(--color-bg, var(--color-surface)); }
+.layout-opt-item[hidden]{ display: none; }
+.layout-opt-item i{ flex: none; font-size: 1rem; color: var(--color-text-secondary); }
+.layout-opt-item .layout-opt-check{ color: var(--color-text-primary); visibility: hidden; }
+.layout-opt-item[aria-pressed="true"] .layout-opt-check{ visibility: visible; }
 /* Vista 3D (ver LayoutScene3D.js): ocupa el lugar del croquis y conserva su proporción */
 .layout-map3d{ position: relative; display: flex; flex-direction: column; gap: 0.5rem; width: 100%; padding: 0.4rem; }
 .layout-map3d[hidden]{ display: none; }
-.layout-3d-bar{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+
 .layout-3d-view{ font: inherit; font-size: 0.74rem; font-weight: 600; padding: 0.3rem 0.8rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; }
 .layout-3d-view.on{ background: var(--color-text-primary); color: var(--color-surface); border-color: var(--color-text-primary); }
-.layout-3d-sep{ width: 1px; height: 1.4rem; background: var(--color-border); }
-.layout-3d-layers{ display: contents; }
+.layout-3d-layers{ display: flex; flex-direction: column; align-items: center; gap: 0.5rem; width: 100%; }
 .layout-3d-layers[hidden]{ display: none; }
-.layout-3d-bar .layout-measures-btn.off{ color: var(--color-text-secondary); }
 .layout-3d-picker .lap{ max-height: 18rem; }
-.layout-3d-bar .layout-measures-btn:disabled{ opacity: 0.4; cursor: default; }
 .layout-3d-stage{ position: relative; width: 100%; aspect-ratio: 700 / 460; min-height: 16rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-bg, var(--color-surface)); overflow: hidden; }
 .layout-3d-canvas{ display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
 .layout-3d-canvas:active{ cursor: grabbing; }

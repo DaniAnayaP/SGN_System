@@ -1739,6 +1739,13 @@
     "layoutTarjetaRevisame": "FIND ME",
     "layoutClsRevisame": "CHECK ME",
     "layoutVisualizaciones": "Views",
+    "layoutTextos": "Texts",
+    "layoutTxtNombres": "Zone names",
+    "layoutTxtArea": "Zone m²",
+    "layoutTxtMedidas": "Side measures",
+    "layoutTxtRotulos": "3D labels",
+    "layoutCapasBtn": "Layers",
+    "layout3dActivosBtn": "Choose assets",
     "layoutClsIcono": "ICON",
     "layoutClsVerCatalogo": "View catalog",
     "layoutClsTitulo": "Categories of {name}",
@@ -3912,8 +3919,8 @@
       "example": "you want to see only R-07 and T-03 to check their heights: press None, search R-07 and tick the rack, then search T-03 and tick the pallet."
     },
     "layout3dLayers": {
-      "what": "Shows or hides one layer of the 3D, one per icon: Walls, Doors, Power connections, Columns, Zones and Assets (racks, racks with pallets, cabinets and pallets). A hidden layer stops being seen and being tappable; that layer's labels go too. It is remembered in this browser.",
-      "example": "hide the walls to see the whole floor from the side, or the assets to see how the zones ended up."
+      "what": "Shows or hides a 3D layer from the Layers list: Walls, Doors, Power connections, Columns, Zones and Assets (racks, racks with pallets, cabinets and pallets). What you hide is no longer seen or touchable; the labels of that layer go away too. It is remembered in this browser.",
+      "example": "you hide the walls to see the whole floor from the side, or the assets to see how the zones turned out."
     },
     "layout3dViews": {
       "what": "Places the 3D camera: Overview (diagonal), Top view (from above, like the sketch) or Front view (from the side, to see heights).",
@@ -3932,8 +3939,12 @@
       "example": "tap rack R-07 and below the drawing you get its type, zone, measures and how many levels it has."
     },
     "layoutViews": {
-      "what": "The buttons that change how the sketch looks: show or hide measures, zone areas and names, rotate it and zoom in or out. They only change what you see; they do not modify the Layout.",
-      "example": "you hide the zone names to read the measures better, or zoom in to check a corner."
+      "what": "The buttons to change how the Layout looks. At the top you choose 2D (the flat map) or 3D, and below only the options of the chosen view appear: in 2D, the Texts list (names, m² and measures), rotate and zoom; in 3D, the camera, the layers, which assets are shown, the labels and zoom. They only change what you see; they do not modify the Layout.",
+      "example": "you switch to 3D, open Layers and hide the walls to see the whole floor; you go back to 2D and there you see the Texts list."
+    },
+    "layoutTextos": {
+      "what": "A single button with a list to show or hide the texts of the drawing. In 2D: the zone names, the m² of each zone and the side measures; in 3D: the labels. Each row with a check mark is visible; tap it to hide it and tap it again to show it. You only see the rows you have in the tree. It is remembered in this browser and the sheet you download comes out as you see it.",
+      "example": "you open Texts, remove the check on \"Side measures\" and the map is left with just the zone names and m²."
     },
     "layoutQrCls": {
       "what": "Downloads the sheet with the classifications of an Inventory category (PDF or image), with their icon, color and one QR each. Each QR opens, in the chosen zone, the list of codes of that classification. It does not depend on codes: the QRs never change and scanning always shows what is current. Each category's classifications are linked in Our Inventory Categories.",

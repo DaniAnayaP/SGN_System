@@ -959,6 +959,7 @@ function showEditor() {
     updateAreaBtn();
     updateNamesBtn();
     updateRotateBtn();
+    updateTextsMenu();
     updateZoomUi();
     $('layout-empty').hidden = true;
     $('layout-choose-center').hidden = true;
@@ -1888,6 +1889,8 @@ function updateViewBtns() {
     $('layout-svg').toggleAttribute('hidden', state.view3d); // un <svg> no tiene la propiedad hidden: va el atributo (el CSS ya lo esconde)
     $('layout-map3d').hidden = !state.view3d;
     $('layout-views').classList.toggle('is-3d', state.view3d);
+    $('layout-mode').hidden = !allowed; // sin 3D no hay nada que elegir: el interruptor 2D | 3D no sale
+    updateTextsMenu();
     [['layout-3d-zoom-in', 'main.layout3dAcercar'], ['layout-3d-zoom-out', 'main.layout3dAlejar']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
     // Capas del 3D: un grupo de iconos con su propia hoja del árbol; solo se ve quien la tiene.
     $('layout-3d-layers').hidden = !(state.perms && state.perms.canToggle3dLayers);
@@ -1935,6 +1938,32 @@ async function setView3d(on) {
         msg.hidden = false;
     }
 }
+// Textos: UN solo botón con una lista en vez de un icono por cada texto que se puede ocultar. En 2D la lista trae los nombres, los m² y las medidas de las zonas; en 3D, los rótulos. Cada renglón sigue siendo el
+// mismo interruptor de siempre (con su permiso del árbol: solo lo ve quien lo tiene) y, si en la vista elegida no hay ninguno que se vea, el botón no sale.
+function updateTextsMenu() {
+    const ids = state.view3d ? ['layout-3d-labels'] : ['layout-names-btn', 'layout-area-btn', 'layout-measures-btn'];
+    const any = ids.some((id) => !$(id).hidden);
+    $('layout-texts').hidden = !any;
+    if (!any) closeOptMenus();
+}
+// Las listas desplegables de Visualizaciones (Textos y Capas): el botón abre su lista, otro clic o Escape la cierran y tocar afuera también; solo hay una abierta a la vez.
+function closeOptMenus(except) {
+    document.querySelectorAll('[data-opt-menu]').forEach((btn) => {
+        if (btn === except) return;
+        btn.setAttribute('aria-expanded', 'false');
+        const list = $(btn.getAttribute('data-opt-menu'));
+        if (list) list.hidden = true;
+    });
+}
+document.querySelectorAll('[data-opt-menu]').forEach((btn) => btn.addEventListener('click', () => {
+    const list = $(btn.getAttribute('data-opt-menu'));
+    const open = list.hidden;
+    closeOptMenus(btn);
+    list.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+}));
+document.addEventListener('click', (event) => { if (!event.target.closest('.layout-opt')) closeOptMenus(); });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeOptMenus(); });
 $('layout-view2d-btn').addEventListener('click', () => setView3d(false));
 $('layout-view3d-btn').addEventListener('click', () => setView3d(true));
 document.querySelectorAll('.layout-3d-view').forEach((btn) => btn.addEventListener('click', () => {
