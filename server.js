@@ -6482,6 +6482,8 @@ function layoutPermissions(req) {
         canFormatZones: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoZona'),
         // Lo mismo para el color, las rayas y el borde de una huella-espacio: el icono Formato de huella (hoja <pantalla>/iconLayoutFormatoHuella del árbol).
         canFormatSpaces: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoHuella'),
+        // Y el color propio de un activo: el icono Formato de activo (hoja <pantalla>/iconLayoutFormatoActivo del árbol).
+        canFormatAssets: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoActivo'),
         // Ver u ocultar las medidas del croquis es solo de pantalla, pero también es un icono con su propia hoja en el árbol (iconLayoutMedidas).
         canToggleMeasures: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutMedidas'),
         // Ver u ocultar los m² de cada zona en el croquis (y en la hoja que se descarga) es otro icono con su hoja (iconLayoutArea); los filtros de las tablas del panel, otro (iconLayoutFiltros).
@@ -6524,7 +6526,9 @@ function buildPublicLayoutPayload(clientId, row) {
         vertices: l.vertices,
         doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, wall: d.wall, dist: d.dist, width: d.width, height: d.height })),
         zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}), ...(Array.isArray(z.categories) && z.categories.length ? { categories: z.categories } : {}) })),
-        spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels, ...(s.fmt ? { fmt: s.fmt } : {}) })),
+        // La huella (el lugar en el piso, con su color si lo tiene) se dibuja debajo y el activo, con su propio color, encima.
+        footprints: (l.footprints || []).filter((f) => f.active !== false).map((f) => ({ id: f.id, code: f.code, x: f.x, y: f.y, l: f.l, d: f.d, h: f.h, ...(f.fmt ? { fmt: f.fmt } : {}) })),
+        spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, footprintId: s.footprintId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels, ...(s.fmt ? { fmt: s.fmt } : {}) })),
         // Las conexiones de luz salen en la página pública (con su propia capa, apagada al entrar) porque Daniel pidió esos botones ahí; las columnas y el plano de fondo no.
         obstacles: [], power: (l.power || []).map((e) => ({ type: e.type, wall: e.wall, dist: e.dist, height: e.height })),
     };
@@ -6544,7 +6548,7 @@ function layoutSummary(layout, section) {
     if (section === 'puertas') return `${(layout.doors || []).length} puertas`;
     if (section === 'luz') return `${(layout.power || []).length} conexiones de luz`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
-    if (section === 'activos') return `${(layout.spaces || []).length} activos, ${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} con clasificación o tipo`;
+    if (section === 'activos') return `${(layout.spaces || []).length} activos, ${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} con clasificación o tipo, ${(layout.spaces || []).filter((s) => s.fmt).length} con formato propio`;
     if (section === 'posiciones') return `${(layout.spaces || []).reduce((n, s) => n + (s.bays || []).length, 0)} huecos con datos propios`;
     // el formato propio de las huellas (color, rayas, borde) cuenta como parte de Huella-Espacio: sin esto un cambio de color dejaba el mismo texto en el historial
     const painted = (layout.footprints || []).filter((f) => f.fmt).length;
@@ -6695,6 +6699,18 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         if ((next.footprints || []).some((f) => JSON.stringify(f.fmt || null) !== (beforeSpaces.has(f.id) ? beforeSpaces.get(f.id) : 'null'))) {
             return res.status(403).json({ message: 'No tienes permiso para cambiar el formato de las huellas.', section: 'espacios' });
         }
+    }
+    // El color propio del activo solo lo cambia quien tiene el icono Formato de activo.
+    if (!perms.canFormatAssets) {
+        const beforeAssets = new Map(((existing && existing.layout.spaces) || []).map((s) => [s.id, JSON.stringify(s.fmt || null)]));
+        if ((next.spaces || []).some((s) => JSON.stringify(s.fmt || null) !== (beforeAssets.has(s.id) ? beforeAssets.get(s.id) : 'null'))) {
+            return res.status(403).json({ message: 'No tienes permiso para cambiar el formato de los activos.', section: 'activos' });
+        }
+    }
+    // Lo que va adentro de algo no puede llevar el color de lo que lo contiene (huella vs su zona, activo vs su huella): lo nuevo o lo que cambió y choca no se guarda; lo que ya estaba así se deja pasar.
+    {
+        const clashes = LayoutCalc.newColorClashes(next, existing ? existing.layout : null);
+        if (clashes.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: clashes.map((c) => c.message), section: clashes[0].kind === 'asset' ? 'activos' : 'espacios' });
     }
     if (!changed.length && planImage === undefined && existing) return res.json({ version: existing.version, changed: [] });
 

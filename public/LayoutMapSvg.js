@@ -93,6 +93,8 @@
     }
     // El formato con el que se ve hoy una huella (blanca con borde gris), para empezar a editarlo desde ahí.
     function defaultSpaceFmt() { return { fill: '#ffffff', pattern: 'solid', pcolor: '#6b7089', line: 'thin', bcolor: '#6b7089' }; }
+    // El formato con el que se ve hoy un activo sin color propio (arena, distinto del blanco de su huella).
+    function defaultAssetFmt() { return { fill: '#f4e1b8', pattern: 'solid', pcolor: '#9a7b3c', line: 'thin', bcolor: '#9a7b3c' }; }
     // Color de la letra que se lee sobre ese relleno: blanca si es oscuro, casi negra si es claro; vacío si el relleno es transparente (se queda con el color de siempre).
     function inkFor(fmt) {
         if (!fmt || fmt.pattern === 'none' || !/^#[0-9a-fA-F]{6}$/.test(fmt.fill || '')) return '';
@@ -230,19 +232,37 @@
             (on('zonas') ? (layout.zones || []) : []).forEach((z) => { if (Math.min(z.l, z.w) * sc >= 44) measure(LC.zonePoints(z), false, 30); });
         }
         s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${T.chrome.nave}" stroke-width="3" stroke-linejoin="round"/>`;
+        // La HUELLA (el lugar en el piso) va primero, blanca o con su color; el ACTIVO encima, un poco más chico, con su propio color (arena si no tiene): así se distinguen aunque midan lo mismo. Un Layout que todavía
+        // no trae huellas (copias viejas) dibuja los activos enteros como siempre.
+        const fps = on('espacios') ? (layout.footprints || []) : [];
+        const legacy = on('espacios') && !(layout.footprints || []).length;
+        const hitFootprints = new Set((layout.spaces || []).filter((sp) => focusSpaces[sp.id]).map((sp) => sp.footprintId));
+        const quad = (px, py, w, h) => `${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`;
+        fps.forEach((f) => {
+            const w = Math.max(f.l * sc, 4);
+            const h = Math.max(f.d * sc, 4);
+            const dim = hasFocusSpaces && !hitFootprints.has(f.id);
+            if (f.fmt) s += `<g${dim ? ' opacity="0.3"' : ''}>${zonePaint(`hf-${f.id}`, f.fmt).markup(quad(X(f.x), Y(f.y), w, h))}</g>`;
+            else s += `<rect x="${X(f.x)}" y="${Y(f.y)}" width="${w}" height="${h}" rx="2" fill="#FFFFFF" stroke="${T.chrome.line}" stroke-width="1"${dim ? ' opacity="0.3"' : ''}/>`;
+        });
         (on('espacios') ? (layout.spaces || []) : []).forEach((sp) => {
             const w = Math.max(sp.l * sc, 4);
             const h = Math.max(sp.d * sc, 4);
             const hit = focusSpaces[sp.id];
             const dim = hasFocusSpaces && !hit;
-            // Con formato propio (color, rayas o borde de la huella) se pinta con él; una huella que se está buscando (focus) sigue con el color de la búsqueda.
-            if (sp.fmt && !hit) {
-                const px = X(sp.x); const py = Y(sp.y);
-                s += `<g${dim ? ' opacity="0.3"' : ''}>${zonePaint(`sf-${sp.id}`, sp.fmt).markup(`${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`)}</g>`;
+            const inset = legacy ? 0 : Math.max(1.5, Math.min(4, Math.min(w, h) * 0.16));
+            const ax = X(sp.x) + inset;
+            const ay = Y(sp.y) + inset;
+            const aw = Math.max(w - 2 * inset, 2);
+            const ah = Math.max(h - 2 * inset, 2);
+            const own = sp.fmt || (legacy ? null : LC.FMT_ASSET_DEFAULT);
+            // Con formato propio (color, rayas o borde del activo) se pinta con él; un activo que se está buscando (focus) sigue con el color de la búsqueda.
+            if (own && !hit) {
+                s += `<g${dim ? ' opacity="0.3"' : ''}>${zonePaint(`sf-${sp.id}`, own).markup(quad(ax, ay, aw, ah))}</g>`;
             } else {
-                s += `<rect x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2" fill="${hit ? esc(hit) : '#FFFFFF'}" stroke="${hit ? esc(hit) : T.chrome.line}" stroke-width="${hit ? 2.2 : 1}"${dim ? ' opacity="0.3"' : ''}/>`;
+                s += `<rect x="${ax}" y="${ay}" width="${aw}" height="${ah}" rx="2" fill="${hit ? esc(hit) : '#FFFFFF'}" stroke="${hit ? esc(hit) : T.chrome.line}" stroke-width="${hit ? 2.2 : 1}"${dim ? ' opacity="0.3"' : ''}/>`;
             }
-            if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="${hit ? 800 : 600}" fill="${hit ? '#FFFFFF' : (sp.fmt && inkFor(sp.fmt)) || T.chrome.cardInk}" text-anchor="middle"${dim ? ' opacity="0.4"' : ''}>${esc(sp.code)}</text>`;
+            if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="${hit ? 800 : 600}" fill="${hit ? '#FFFFFF' : (own && inkFor(own)) || T.chrome.cardInk}" text-anchor="middle"${dim ? ' opacity="0.4"' : ''}>${esc(sp.code)}</text>`;
         });
         s += zoneHalos + measureHalos + zoneLabels + measureLabels;
         (on('puertas') ? (layout.doors || []) : []).forEach((d) => {
@@ -264,5 +284,5 @@
         return `${s}</svg>`;
     }
 
-    window.LayoutMapSvg = { mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
+    window.LayoutMapSvg = { mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, defaultAssetFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
 }());

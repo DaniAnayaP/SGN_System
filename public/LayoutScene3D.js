@@ -284,6 +284,14 @@
                 if (!inactive) addLabel(group.zoneLabels, z.name, PX(ax), 0.12 + 0.004 * i, PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
             });
 
+            // huellas con color propio: una losa delgada con su color debajo de sus activos (el lugar en el piso)
+            (layout.footprints || []).forEach((f) => {
+                if (f.active === false || !(f.l > 0) || !(f.d > 0) || !/^#[0-9a-fA-F]{6}$/.test((f.fmt && f.fmt.fill) || '') || f.fmt.pattern === 'none') return;
+                const slab = new THREE.Mesh(new THREE.BoxGeometry(f.l, 0.02, f.d), new THREE.MeshLambertMaterial({ color: new THREE.Color(f.fmt.fill) }));
+                slab.position.set(PX(f.x + f.l / 2), 0.085, PZ(f.y + f.d / 2));
+                group.assets.add(slab);
+            });
+
             // activos: anaqueles (postes y repisas por nivel), anaqueles con tarimas, gabinetes y tarimas
             const upr = []; const dck = []; const blk = [];
             const edges = [];
@@ -296,7 +304,7 @@
                 if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id)) return;
                 const cx = PX(s.x + s.l / 2); const cz = PZ(s.y + s.d / 2);
                 const lv = Math.max(1, s.levels || 1);
-                // el color que se le puso en Formato de huella (sin relleno o sin color propio se queda con el de su tipo)
+                // el color que se le puso en Formato de activo (sin relleno o sin color propio se queda con el de su tipo)
                 const own = s.fmt && s.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(s.fmt.fill || '') ? parseInt(s.fmt.fill.slice(1), 16) : null;
                 if (s.type === 'pallet') {
                     blk.push({ x: cx, y: 0.07, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: own !== null ? own : WOOD });

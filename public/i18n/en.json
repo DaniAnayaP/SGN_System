@@ -1860,6 +1860,16 @@
     "layoutZonaCodigosUno": "1 code in this zone",
     "layoutFormatoZonaBtn": "Zone format (color, stripes and border)",
     "layoutFormatoHuellaBtn": "Footprint format (color, stripes and border)",
+    "layoutFormatoActivoBtn": "Asset format (color, stripes and border)",
+    "layoutFormatoActivo": "Asset format",
+    "layoutAplicarUnaActivo": "Only this asset",
+    "layoutAplicarZonaActivo": "The others in its zone",
+    "layoutAplicarZonaSubActivo": "All the assets of {zone} ({n})",
+    "layoutAplicarTipoActivo": "Those of the same type",
+    "layoutAplicarTipoSubActivo": "All the {type} ({n}), in whatever zone they are",
+    "layoutColorChoque_footprint": "Footprint {code} would have the same color as its zone {parent}: choose another one so they are not confused.",
+    "layoutColorChoque_asset": "Asset {code} would have the same color as its footprint {parent}: choose another one so they are not confused.",
+    "layoutLeyendaHuella": "Footprint (place on the floor)",
     "layoutFormatoHuella": "Footprint format",
     "layoutAplicarA": "Apply to",
     "layoutAplicarUna": "Only this footprint",
@@ -4002,6 +4012,10 @@
     "layoutFmtLine": {
       "what": "Line style of the zone border: solid (thin, medium or thick), dashed, dotted, dash-dot, double or none.",
       "example": "a dashed border for a temporary zone."
+    },
+    "layoutAssetFmt": {
+      "what": "Changes the color, stripes and border of the asset (the rack, cabinet or pallet on top of the footprint), like in Zones and Footprint-Space. Without its own color the asset is sand-colored, different from the white of the footprint, so they can be told apart. In \"Apply to\" you choose whether the change is only for this asset, for those of its zone or for those of the same type. Color rule: what goes INSIDE something cannot have the color of what contains it (the asset cannot have the color of its footprint, nor the footprint that of its zone) because it gets confusing; the same color can be used elsewhere.",
+      "example": "you paint the racks of Zone 6 blue with \"Those of the same type\"; if the footprint were already blue, the system asks you to choose a different blue."
     },
     "layoutSpaceFmt": {
       "what": "Opens the color window of this footprint (Fill and Border, with preview). Without its own format the footprint looks white; the small square next to the icon is the color it already has. It shows on the map, on the QR page, on the downloaded sheet and in the 3D view.",

@@ -519,7 +519,7 @@ function stepHtml(step) {
         const letterOptions = (selected) => LC.SPACE_TYPES.map((id) => `<option value="${id}"${id === (selected || 'rack') ? ' selected' : ''}>${esc(LC.ASSET_LETTER[id])} · ${esc(typeLabel('space', id))}</option>`).join('');
         const rows = d.spaces.map((s, i) => {
             const saved = isSavedRow('spaces', s.id);
-            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptions(s.footprintId)}</select></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis) : removeCell('spaces', i, dis)}</tr>`;
+            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptions(s.footprintId)}</select></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
         });
         return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutActivoLetra', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', ''], rows, 'layout-activos')}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
@@ -793,21 +793,36 @@ function renderSvg() {
     measureJobs.forEach(([pts, minPx]) => { measureLabels += measureText(pts, minPx); });
     s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     (on('contorno') ? d.obstacles : []).forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
-    ((on('espacios') || on('activos') || on('posiciones')) ? d.spaces : []).forEach((sp) => {
-        const w = Math.max(sp.l * sc, 4);
-        const h = Math.max(sp.d * sc, 4);
-        const spaceTitle = `<title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title>`;
-        const spaceOff = sp.active === false ? ' lz-off' : '';
-        if (sp.fmt) {
-            // con formato propio (color, rayas o borde de la huella) se pinta con él; el contorno del resaltado sigue funcionando porque el grupo lleva el mismo data-sid
-            const px = X(sp.x); const py = Y(sp.y);
-            s += `<g class="lsf ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" data-fid="${esc(sp.footprintId)}">${window.LayoutMapSvg.zonePaint(`sf-${sp.id}`, sp.fmt).markup(`${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`)}${spaceTitle}</g>`;
-        } else {
-            s += `<rect class="ls ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" data-fid="${esc(sp.footprintId)}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2">${spaceTitle}</rect>`;
-        }
-        const spaceInk = sp.fmt ? window.LayoutMapSvg.inkFor(sp.fmt) : '';
-        if (w >= 26 && h >= 9) s += `<text class="lt3"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
-    });
+    // La HUELLA (el lugar en el piso) se dibuja primero, blanca con borde gris o con su color; el ACTIVO va encima, un poco más chico, con su propio color (arena si no le han puesto uno): así se distinguen aunque midan lo mismo.
+    if (on('espacios') || on('activos') || on('posiciones')) {
+        const rectPts = (px, py, w, h) => `${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`;
+        d.footprints.forEach((f) => {
+            const w = Math.max(f.l * sc, 4);
+            const h = Math.max(f.d * sc, 4);
+            const off = f.active === false ? ' lz-off' : '';
+            if (f.fmt) s += `<g class="lhbf${off}" data-fid="${esc(f.id)}">${window.LayoutMapSvg.zonePaint(`hf-${f.id}`, f.fmt).markup(rectPts(X(f.x), Y(f.y), w, h))}</g>`;
+            else s += `<rect class="lhb${off}" data-fid="${esc(f.id)}" x="${X(f.x)}" y="${Y(f.y)}" width="${w}" height="${h}" rx="2"/>`;
+        });
+        d.spaces.forEach((sp) => {
+            const w = Math.max(sp.l * sc, 4);
+            const h = Math.max(sp.d * sc, 4);
+            const inset = Math.max(1.5, Math.min(4, Math.min(w, h) * 0.16));
+            const ax = X(sp.x) + inset;
+            const ay = Y(sp.y) + inset;
+            const aw = Math.max(w - 2 * inset, 2);
+            const ah = Math.max(h - 2 * inset, 2);
+            const spaceTitle = `<title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title>`;
+            const spaceOff = sp.active === false ? ' lz-off' : '';
+            if (sp.fmt) {
+                // con formato propio (color, rayas o borde del activo) se pinta con él; el contorno del resaltado sigue funcionando porque el grupo lleva el mismo data-sid
+                s += `<g class="lsf ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" data-fid="${esc(sp.footprintId)}">${window.LayoutMapSvg.zonePaint(`sf-${sp.id}`, sp.fmt).markup(rectPts(ax, ay, aw, ah))}${spaceTitle}</g>`;
+            } else {
+                s += `<rect class="ls ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" data-fid="${esc(sp.footprintId)}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" rx="2">${spaceTitle}</rect>`;
+            }
+            const spaceInk = window.LayoutMapSvg.inkFor(sp.fmt || LC.FMT_ASSET_DEFAULT);
+            if (w >= 26 && h >= 9) s += `<text class="lt3"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
+        });
+    }
     if (on('espacios') || on('activos') || on('posiciones')) {
         d.footprints.forEach((f) => { if (fpIssues.has(f.id)) s += `<rect class="lbad" x="${X(f.x) - 2}" y="${Y(f.y) - 2}" width="${Math.max(f.l * sc, 4) + 4}" height="${Math.max(f.d * sc, 4) + 4}" rx="3"><title>${esc(f.code)} · ${esc(t('main.layoutHuellaFueraTitulo'))}</title></rect>`; });
     }
@@ -1330,6 +1345,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (cardOpen) { openCardDialog(cardOpen.dataset.cardOpen); return; }
     const fmtZone = event.target.closest('[data-fmtzone]');
     if (fmtZone) { openFmtDialog(Number(fmtZone.dataset.fmtzone)); return; }
+    const fmtAsset = event.target.closest('[data-fmtasset]');
+    if (fmtAsset) { openAssetFmtDialog(Number(fmtAsset.dataset.fmtasset)); return; }
     const fmtSpace = event.target.closest('[data-fmtspace]');
     if (fmtSpace) { openSpaceFmtDialog(Number(fmtSpace.dataset.fmtspace)); return; }
     const freeShape = event.target.closest('[data-freeshape]');
@@ -1456,6 +1473,32 @@ function spaceFmtButton(s, i, dis) {
     if (!(state.perms && state.perms.canFormatSpaces)) return '';
     return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${s.fmt ? ' on' : ''}" data-fmtspace="${i}" data-help-key="layoutSpaceFmt" aria-label="${esc(t('main.layoutFormatoHuella'))} ${esc(s.code)}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i>${s.fmt ? `<span class="layout-fmt-dot" style="background:${esc(s.fmt.fill)};border-color:${esc(s.fmt.bcolor)}"></span>` : ''}</button>`;
 }
+// El icono de paleta de cada renglón de Activos (solo con la hoja del icono en el árbol): el color propio del activo, aparte del de su huella.
+function assetFmtButton(s, i, dis) {
+    if (!(state.perms && state.perms.canFormatAssets)) return '';
+    return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${s.fmt ? ' on' : ''}" data-fmtasset="${i}" data-help-key="layoutAssetFmt" aria-label="${esc(t('main.layoutFormatoActivo'))} ${esc(s.code)}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i>${s.fmt ? `<span class="layout-fmt-dot" style="background:${esc(s.fmt.fill)};border-color:${esc(s.fmt.bcolor)}"></span>` : ''}</button>`;
+}
+// A qué activos se aplica lo que se elige en la ventana: solo a ese, a los de su zona o a los del mismo tipo (anaquel, rack, gabeta o tarima).
+function assetTargets(a, scope) {
+    const all = state.draft.spaces;
+    if (scope === 'zone' && a.zoneId) return all.filter((x) => x.zoneId === a.zoneId);
+    if (scope === 'type') return all.filter((x) => (x.type || 'rack') === (a.type || 'rack'));
+    return [a];
+}
+// Aplica un cambio de formato y, si deja algo adentro con el color de lo que lo contiene (huella con el de su zona, activo con el de su huella), lo deshace y avisa en la ventana. Lo que ya estaba así antes no cuenta.
+function tryFmtChange(change) {
+    const all = [...state.draft.zones, ...state.draft.footprints, ...state.draft.spaces];
+    const before = new Map(all.map((o) => [o, JSON.stringify(o.fmt || null)]));
+    change();
+    const fresh = LC.newColorClashes(state.draft, state.saved);
+    if (!fresh.length) return true;
+    before.forEach((json, o) => { if (json === 'null') delete o.fmt; else o.fmt = JSON.parse(json); });
+    const c = fresh[0];
+    const box = $('layout-fmt-error');
+    box.textContent = t(`main.layoutColorChoque_${c.kind}`, { code: c.code, parent: c.parentName });
+    box.hidden = false;
+    return false;
+}
 // El tipo de activo de una huella para agrupar: el del primer activo que tiene uno elegido (0 = ninguno).
 function firstAssetId(fp) {
     const a = state.draft.spaces.find((s) => s.footprintId === fp.id && s.assetId);
@@ -1471,6 +1514,19 @@ function spaceTargets(sp, scope) {
 }
 function renderFmtScope() {
     const box = $('layout-fmt-scope');
+    if (fmtDialog && fmtDialog.kind === 'asset') {
+        const a = state.draft.spaces.find((s) => s.id === fmtDialog.targetId);
+        box.hidden = !a;
+        if (!a) return;
+        const zoneName = (state.draft.zones.find((z) => z.id === a.zoneId) || {}).name || '';
+        const options = [
+            ['one', t('main.layoutAplicarUnaActivo'), a.code, false],
+            ['zone', t('main.layoutAplicarZonaActivo'), a.zoneId ? t('main.layoutAplicarZonaSubActivo').replace('{zone}', zoneName).replace('{n}', String(assetTargets(a, 'zone').length)) : t('main.layoutAplicarSinZona'), !a.zoneId],
+            ['type', t('main.layoutAplicarTipoActivo'), t('main.layoutAplicarTipoSubActivo').replace('{type}', typeLabel('space', a.type || 'rack')).replace('{n}', String(assetTargets(a, 'type').length)), false],
+        ];
+        box.innerHTML = `<legend>${esc(t('main.layoutAplicarA'))}</legend>${options.map(([value, title, sub, disabled]) => `<label class="layout-fmt-opt${disabled ? ' off' : ''}" data-help-key="layoutFmtScope"><input type="radio" name="layout-fmt-scope" value="${value}"${fmtDialog.scope === value ? ' checked' : ''}${disabled ? ' disabled' : ''}><b>${esc(title)}</b><span>${esc(sub)}</span></label>`).join('')}`;
+        return;
+    }
     const sp = fmtDialog && fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : null;
     box.hidden = !sp;
     if (!sp) return;
@@ -1487,6 +1543,8 @@ function renderFmtScope() {
 }
 function renderFmtBody() {
     const d = fmtDialog.draft;
+    const clashBox = $('layout-fmt-error');
+    if (clashBox) clashBox.hidden = true;
     let left;
     if (fmtDialog.tab === 'fill') {
         const none = d.pattern === 'none';
@@ -1501,10 +1559,10 @@ function renderFmtBody() {
             <h4>${esc(t('main.layoutColorBorde'))}</h4><div class="layout-fmt-row">${fmtColorButton('bcolor', d.bcolor, d.line === 'none')}</div></div>`;
     }
     const paint = window.LayoutMapSvg.zonePaint('fpv', d);
-    const isSpace = fmtDialog.kind === 'space';
+    const isSpace = fmtDialog.kind !== 'zone';
     const shape = isSpace ? '60,45 170,45 170,105 60,105' : '30,20 200,20 200,70 130,70 130,130 30,130';
     const zone = isSpace ? null : state.draft.zones.find((z) => z.id === fmtDialog.targetId);
-    const space = isSpace ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : null;
+    const space = fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : null);
     const ink = isSpace ? window.LayoutMapSvg.inkFor(d) : '';
     const label = isSpace
         ? `<text class="lt3" x="115" y="78" text-anchor="middle"${ink ? ` style="fill:${ink}"` : ''}>${esc(space ? space.code : '')}</text>`
@@ -1524,6 +1582,7 @@ function ensureFmtModal() {
         <div class="layout-fmt-tabs" role="tablist"><button type="button" role="tab" data-ftab="fill" aria-selected="true">${esc(t('main.layoutFormatoRelleno'))}</button><button type="button" role="tab" data-ftab="border" aria-selected="false">${esc(t('main.layoutFormatoBorde'))}</button></div>
         <div class="layout-fmt-body" id="layout-fmt-body"></div>
         <fieldset class="layout-fmt-scope" id="layout-fmt-scope" hidden></fieldset>
+        <p class="layout-fmt-error" id="layout-fmt-error" role="alert" hidden></p>
         <div class="layout-fmt-footer"><button type="button" class="btn btn-secondary" id="layout-fmt-reset" data-help-key="layoutFmtReset">${esc(t('main.layoutQuitarFormato'))}</button><span class="layout-fmt-spacer"></span><button type="button" class="btn btn-secondary" id="layout-fmt-cancel">${esc(t('main.layoutFormatoCancelar'))}</button><button type="button" class="btn" id="layout-fmt-ok">${esc(t('main.layoutFormatoAceptar'))}</button></div>
     </div>`;
     document.body.appendChild(fmtModalEl);
@@ -1544,7 +1603,10 @@ function ensureFmtModal() {
         }
         if (event.target.closest('#layout-fmt-cancel')) { closeFmtDialog(); return; }
         if (event.target.closest('#layout-fmt-reset')) {
-            if (fmtDialog.kind === 'space') {
+            if (fmtDialog.kind === 'asset') {
+                const a = state.draft.spaces.find((r) => r.id === fmtDialog.targetId);
+                if (a) assetTargets(a, fmtDialog.scope).forEach((x) => { delete x.fmt; });
+            } else if (fmtDialog.kind === 'space') {
                 const sp = state.draft.footprints.find((r) => r.id === fmtDialog.targetId);
                 if (sp) spaceTargets(sp, fmtDialog.scope).forEach((x) => { delete x.fmt; });
             } else {
@@ -1557,19 +1619,27 @@ function ensureFmtModal() {
             return;
         }
         if (event.target.closest('#layout-fmt-ok')) {
-            if (fmtDialog.kind === 'space') {
-                const sp = state.draft.footprints.find((r) => r.id === fmtDialog.targetId);
-                // Con formato propio (aunque no se haya cambiado nada) se puede copiar a las demás del grupo; sin formato y sin cambios no hay nada que aplicar.
-                if (sp && (sp.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) spaceTargets(sp, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
-            } else {
-                const z = state.draft.zones.find((r) => r.id === fmtDialog.targetId);
-                if (z) {
-                    const nm = ($('layout-fmt-name').value || '').trim();
-                    if (nm) z.name = nm;
-                    // si no cambió nada de lo que traía (o de lo que ya se veía por su tipo), la zona no recibe formato propio
-                    if (z.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start)) z.fmt = { ...fmtDialog.draft };
+            // Se aplica y, si deja algo adentro con el color de lo que lo contiene (huella con el de su zona, activo con el de su huella), se deshace y avisa en esta misma ventana (la ventana se queda abierta).
+            const applied = tryFmtChange(() => {
+                if (fmtDialog.kind === 'asset') {
+                    const a = state.draft.spaces.find((r) => r.id === fmtDialog.targetId);
+                    // Con formato propio (aunque no se haya cambiado nada) se puede copiar a los demás del grupo; sin formato y sin cambios no hay nada que aplicar.
+                    if (a && (a.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) assetTargets(a, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
+                } else if (fmtDialog.kind === 'space') {
+                    const sp = state.draft.footprints.find((r) => r.id === fmtDialog.targetId);
+                    // Con formato propio (aunque no se haya cambiado nada) se puede copiar a las demás del grupo; sin formato y sin cambios no hay nada que aplicar.
+                    if (sp && (sp.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) spaceTargets(sp, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
+                } else {
+                    const z = state.draft.zones.find((r) => r.id === fmtDialog.targetId);
+                    if (z) {
+                        const nm = ($('layout-fmt-name').value || '').trim();
+                        if (nm) z.name = nm;
+                        // si no cambió nada de lo que traía (o de lo que ya se veía por su tipo), la zona no recibe formato propio
+                        if (z.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start)) z.fmt = { ...fmtDialog.draft };
+                    }
                 }
-            }
+            });
+            if (!applied) return;
             closeFmtDialog();
             renderPanel();
             refreshLive();
@@ -1602,6 +1672,18 @@ function openSpaceFmtDialog(spaceIndex) {
     const base = sp.fmt ? pickFmt(sp.fmt) : window.LayoutMapSvg.defaultSpaceFmt();
     fmtDialog = { kind: 'space', targetId: sp.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
     $('layout-fmt-title').textContent = `${t('main.layoutFormatoHuella')} ${sp.code}`;
+    $('layout-fmt-namefield').hidden = true;
+    fmtModalEl.hidden = false;
+    renderFmtScope();
+    renderFmtBody();
+}
+function openAssetFmtDialog(index) {
+    const a = state.draft.spaces[index];
+    if (!a) return;
+    ensureFmtModal();
+    const base = a.fmt ? pickFmt(a.fmt) : window.LayoutMapSvg.defaultAssetFmt();
+    fmtDialog = { kind: 'asset', targetId: a.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
+    $('layout-fmt-title').textContent = `${t('main.layoutFormatoActivo')} ${a.code}`;
     $('layout-fmt-namefield').hidden = true;
     fmtModalEl.hidden = false;
     renderFmtScope();
@@ -2140,6 +2222,14 @@ $('layout-save').addEventListener('click', async () => {
         const at = state.draft.footprints.findIndex((f) => f.id === v.id);
         const box = document.querySelector(`[data-l="footprints"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'h' : 'x'}"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
+        return;
+    }
+    const clashed = LC.newColorClashes(state.draft, state.saved);
+    if (clashed.length) {
+        const c = clashed[0];
+        showStep(c.kind === 'asset' ? 'activos' : 'espacios');
+        renderPanel();
+        Dashboard.showToast(t(`main.layoutColorChoque_${c.kind}`, { code: c.code, parent: c.parentName }), 'warning');
         return;
     }
     button.disabled = true;

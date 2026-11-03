@@ -1860,6 +1860,16 @@
     "layoutZonaCodigosUno": "1 código en esta zona",
     "layoutFormatoZonaBtn": "Formato de zona (color, rayas y borde)",
     "layoutFormatoHuellaBtn": "Formato de huella (color, rayas y borde)",
+    "layoutFormatoActivoBtn": "Formato de activo (color, rayas y borde)",
+    "layoutFormatoActivo": "Formato del activo",
+    "layoutAplicarUnaActivo": "Solo este activo",
+    "layoutAplicarZonaActivo": "Los demás de su zona",
+    "layoutAplicarZonaSubActivo": "Todos los activos de {zone} ({n})",
+    "layoutAplicarTipoActivo": "Los del mismo tipo",
+    "layoutAplicarTipoSubActivo": "Todos los {type} ({n}), estén en la zona que estén",
+    "layoutColorChoque_footprint": "La huella {code} llevaría el mismo color que su zona {parent}: elige otro para que no se confundan.",
+    "layoutColorChoque_asset": "El activo {code} llevaría el mismo color que su huella {parent}: elige otro para que no se confundan.",
+    "layoutLeyendaHuella": "Huella (lugar en el piso)",
     "layoutFormatoHuella": "Formato de la huella",
     "layoutAplicarA": "Aplicar a",
     "layoutAplicarUna": "Solo esta huella",
@@ -4001,6 +4011,10 @@
     "layoutFmtLine": {
       "what": "Estilo de la línea del borde de la zona: continua (fina, media o gruesa), guiones, punteada, guion y punto, doble o ninguna.",
       "example": "borde de guiones para una zona provisional."
+    },
+    "layoutAssetFmt": {
+      "what": "Cambia el color, las rayas y el borde del activo (el anaquel, la gabeta o la tarima que está sobre la huella), igual que en Zonas y Huella-Espacio. Sin color propio el activo sale arena, distinto del blanco de la huella, para que se distingan. En «Aplicar a» eliges si el cambio es solo para este activo, para los de su zona o para los del mismo tipo. Regla de colores: lo que va adentro de algo no puede llevar el color de lo que lo contiene (el activo no puede llevar el de su huella, ni la huella el de su zona) porque se confunde; el mismo color sí se puede usar en otro lado.",
+      "example": "pintas de azul los anaqueles de la Zona 6 con «Los del mismo tipo»; si la huella ya fuera azul, el sistema te pide elegir otro azul distinto."
     },
     "layoutSpaceFmt": {
       "what": "Abre la ventana de color de esta huella (Relleno y Borde, con vista previa). Sin formato propio la huella se ve blanca; el cuadrito junto al icono es el color que ya tiene. Se ve en el croquis, en la página del QR, en la hoja que se descarga y en la vista 3D.",

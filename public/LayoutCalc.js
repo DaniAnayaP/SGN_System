@@ -497,7 +497,8 @@
             }
             const out = { ...s, zoneId: f.zoneId || '', x, y, l, d, h: f.h, active: s.off !== true && f.active !== false };
             if (f.name) out.name = f.name; else delete out.name;
-            if (f.fmt) out.fmt = f.fmt; else delete out.fmt;
+            // El color del activo es PROPIO (Formato de activo): ya no hereda el de su huella, que se dibuja aparte, debajo. En un Layout guardado de antes (sin la marca ownAssetFmt) un formato igual al de su huella viene de cuando lo heredaba y no cuenta como propio.
+            if (!layout.ownAssetFmt && s.fmt && f.fmt && sameFmt(s.fmt, f.fmt)) delete out.fmt;
             return out;
         });
         return { ...layout, spaces };
@@ -554,6 +555,47 @@
         return footprintViolations(next).filter((v) => !before.some((p) => p.id === v.id && p.kind === v.kind && p.sig === v.sig));
     }
 
+    // ---- Colores: lo que va ADENTRO de algo no lleva el color de lo que lo contiene ------------------------------------------------------------------------
+    // Criterio de Daniel para todo: la huella no puede llevar el color de su zona ni el activo el de su huella (se confunden); el mismo color sí se puede usar en otro lado (otra zona, otra huella…). Solo se compara el
+    // color de relleno (sin relleno no hay color) y se toman como el mismo los que casi no se distinguen (distancia menor a 24 en la escala 0-255). Si ninguno de los dos tiene color propio no hay choque: los de fábrica
+    // ya son distintos entre sí (zona por tipo, huella blanca y activo arena).
+    const FILL_ZONE_DEFAULT = { dry: '#d9c7ef', cold: '#bfe0f5', chemical: '#f5d0cf', finished: '#d4efd0', dock: '#9cc3ea', office: '#a3ebcb', aisle: '#d5d8e2', aisle2: '#e6e8ef', none: '#e9e9ee' };
+    const FMT_HUELLA_DEFAULT = { fill: '#ffffff', pattern: 'solid', pcolor: '#6b7089', line: 'thin', bcolor: '#6b7089' };
+    const FMT_ASSET_DEFAULT = { fill: '#f4e1b8', pattern: 'solid', pcolor: '#9a7b3c', line: 'thin', bcolor: '#9a7b3c' };
+    const fillOf = (fmt) => (fmt && fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(fmt.fill || '') ? String(fmt.fill).toLowerCase() : '');
+    const sameFmt = (a, b) => ['fill', 'pattern', 'pcolor', 'line', 'bcolor'].every((k) => String((a || {})[k]).toLowerCase() === String((b || {})[k]).toLowerCase());
+    function sameColor(a, b) {
+        const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+        const x = rgb(a); const y = rgb(b);
+        return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < 24;
+    }
+    function colorClashes(layout) {
+        const out = [];
+        if (!layout) return out;
+        const zoneById = new Map((layout.zones || []).map((z) => [z.id, z]));
+        const fpById = new Map((layout.footprints || []).map((f) => [f.id, f]));
+        (layout.footprints || []).forEach((f) => {
+            const z = f.zoneId ? zoneById.get(f.zoneId) : null;
+            if (!z || !(z.fmt || f.fmt)) return;
+            const parent = z.fmt ? fillOf(z.fmt) : FILL_ZONE_DEFAULT[z.type || 'none'];
+            const child = fillOf(f.fmt || FMT_HUELLA_DEFAULT);
+            if (parent && child && sameColor(parent, child)) out.push({ kind: 'footprint', id: f.id, code: f.code, parentId: z.id, parentName: z.name, sig: `${child}|${parent}|${z.id}`, message: `La huella ${f.code} lleva el mismo color que su zona ${z.name}: cambia el color de una de las dos para que no se confundan.` });
+        });
+        (layout.spaces || []).forEach((s) => {
+            const f = s.footprintId ? fpById.get(s.footprintId) : null;
+            if (!f || !(f.fmt || s.fmt)) return;
+            const parent = fillOf(f.fmt || FMT_HUELLA_DEFAULT);
+            const child = fillOf(s.fmt || FMT_ASSET_DEFAULT);
+            if (parent && child && sameColor(parent, child)) out.push({ kind: 'asset', id: s.id, code: s.code, parentId: f.id, parentName: f.code, sig: `${child}|${parent}|${f.id}`, message: `El activo ${s.code} lleva el mismo color que su huella ${f.code}: cambia el color de uno de los dos para que no se confundan.` });
+        });
+        return out;
+    }
+    // Los choques que hay en next y que antes no estaban igual: solo esos no se dejan guardar (lo que ya estaba así antes solo se deja como está).
+    function newColorClashes(next, previous) {
+        const before = previous ? colorClashes(previous) : [];
+        return colorClashes(next).filter((c) => !before.some((p) => p.id === c.id && p.kind === c.kind && p.sig === c.sig));
+    }
+
     // ---- Lista de localizadores --------------------------------------------------------------------------------------------------------------
     // Todos los localizadores que el Layout va creando, completos o a medias: una fila por zona (Z006), por huella (Z006.H003), por activo (Z006.H003.A003) y por cada POSICIÓN completa (Z006.H003.A003.N004.C001.F001.P001,
     // las 7 piezas). Solo cuenta lo activo. Los códigos de la zona, la huella y el activo ya son las piezas del Localizador, así que se arma uniéndolos; una huella que no está en ninguna zona (de antes de la regla) no
@@ -608,7 +650,7 @@
             mode: 'scratch', heightM: 9,
             vertices: [[0, 0, 9], [30, 0, 9], [30, 20, 9], [0, 20, 9]],
             doors: [], power: [], obstacles: [], zones: [], footprints: [], spaces: [],
-            plan: null,
+            plan: null, ownAssetFmt: true,
         };
     }
 
@@ -899,6 +941,7 @@
             // Sin elegir, el espacio se guarda sin esos campos.
             const assetClassId = Math.round(Number(s && s.assetClassId));
             const assetId = Math.round(Number(s && s.assetId));
+            const assetFmt = sanitizeFmt(s && s.fmt);
             return {
                 id: idOf(s && s.id, spaceIds, label), footprintId, type, code,
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
@@ -908,13 +951,16 @@
                 ...(Number.isFinite(assetId) && assetId > 0 ? { assetId } : {}),
                 drawers: text(s && s.drawers, label, false),
                 ...(s && s.off === true ? { off: true } : {}),
+                ...(assetFmt ? { fmt: assetFmt } : {}),
             };
         });
         out.footprints = assignHuellaCodes(deriveFootprintZones(out)).footprints;
-        out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces(out).spaces }).spaces;
+        out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
 
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
         out.plan = plan ? { widthM: meters(plan.widthM, 'Plano', 0.1) } : null;
+        // marca: desde aquí el color de cada activo es suyo aunque se parezca al de su huella (los Layouts de antes, sin marca, todavía traen los heredados)
+        out.ownAssetFmt = true;
         return { ok: errors.length === 0, errors, layout: out };
     }
 
@@ -1079,9 +1125,9 @@
                 const first = !seen.has(s.footprintId);
                 seen.add(s.footprintId);
                 const f = byId.get(s.footprintId);
-                const plain = first && f && (s.type || 'rack') === 'rack' && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off;
+                const plain = first && f && (s.type || 'rack') === 'rack' && !s.fmt && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off;
                 return !plain;
-            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off }));
+            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}) }));
         }
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
         if (section === 'posiciones') return (layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays }));
@@ -1098,7 +1144,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, locatorRows, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
