@@ -3976,8 +3976,8 @@
       "example": "the warehouse starts at 0, 0."
     },
     "layoutCanvas": {
-      "what": "The map of the warehouse, drawn by itself from the data you enter: walls, zones, racks, doors and power connections.",
-      "example": "you change the width of a zone and the map updates instantly."
+      "what": "The map of the warehouse, drawn by itself from the data you enter: walls, zones, racks, doors and power connections. When you touch a line of Zones, Footprint-Space, Assets or Positions, what that line is gets highlighted here with an orange outline (the rest fades) and the line stays marked in the table; for a position its rack is marked and the level and column are written.",
+      "example": "you change the width of a zone and the map updates instantly; you touch line R-03 and rack R-03 is marked on the map."
     },
     "layoutSave": {
       "what": "Saves the Layout with all the changes. Until you save, only you can see them.",

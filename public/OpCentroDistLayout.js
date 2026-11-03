@@ -17,6 +17,8 @@ const state = {
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false, view3d: false, centerId: null, costCenter: null,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
+    // lo que se eligió en la tabla y se resalta en el croquis: { kind: 'zone' | 'space' | 'bay', id, n, c, step } (por id, no por número de renglón, para que no se mueva al quitar o agregar renglones)
+    hl: null,
 };
 let view = null;
 let drag = null;
@@ -347,6 +349,7 @@ function initEditState() {
     state.open = { contorno: false, zones: {} };
     state.zoneOpen = null;
     state.contornoMode = 'sides';
+    state.hl = null;
 }
 // La primera figura que se dejó sin cerrar (no se puede guardar así).
 function firstOpenShape() {
@@ -536,6 +539,85 @@ function renderPanel() {
     panelScrollEnd = false;
     panelScrollStep = state.focus;
     bindLayoutFilters();
+    markSelectedRow();
+}
+
+// ---- resaltado de lo elegido ------------------------------------------------------------------------------------------
+// Al tocar un renglón de las tablas de Zonas, Huella-Espacio, Activos o Posiciones, lo que ese renglón es se marca en el croquis (contorno naranja y lo demás atenuado) y el renglón queda marcado en la
+// tabla: así, al editar, no se confunde de cuál zona, activo, huella o hueco se trata. Una posición es un hueco dentro de un anaquel y el croquis lo ve desde arriba: se marca el anaquel y se escribe el
+// nivel y la columna. Es solo de pantalla (no cambia lo guardado ni la hoja que se descarga) y no hace falta redibujar el croquis: se pone y se quita sobre el dibujo que ya está.
+const HL_ROW_SELECTOR = '#layout-panel .layout-table tbody tr';
+function rowEntity(tr) {
+    const ctl = tr.querySelector('[data-l][data-i]');
+    if (!ctl || !state.draft) return null;
+    const list = ctl.getAttribute('data-l');
+    const i = Number(ctl.getAttribute('data-i'));
+    if (list === 'zones' && state.draft.zones[i]) return { kind: 'zone', id: state.draft.zones[i].id };
+    if (list === 'spaces' && state.draft.spaces[i]) return { kind: 'space', id: state.draft.spaces[i].id };
+    if (list === 'bay' && state.draft.spaces[i]) return { kind: 'bay', id: state.draft.spaces[i].id, n: Number(ctl.getAttribute('data-n')), c: Number(ctl.getAttribute('data-c')) };
+    return null;
+}
+const sameHighlight = (a, b) => !!a && !!b && a.kind === b.kind && a.id === b.id && a.n === b.n && a.c === b.c && a.step === b.step;
+// El renglón de la tabla que corresponde a lo resaltado (por id: el número de renglón cambia al quitar o agregar).
+function highlightedRow() {
+    const h = state.hl;
+    if (!h || h.step !== state.focus || !state.draft) return null;
+    return Array.from(document.querySelectorAll(HL_ROW_SELECTOR)).find((tr) => sameHighlight(rowEntity(tr) && { ...rowEntity(tr), step: state.focus }, h)) || null;
+}
+function markSelectedRow() {
+    document.querySelectorAll('#layout-panel tr.layout-row-sel').forEach((tr) => tr.classList.remove('layout-row-sel'));
+    const tr = highlightedRow();
+    if (tr) tr.classList.add('layout-row-sel');
+}
+// reveal = true cuando se acaba de elegir el renglón: si el croquis está acercado y lo elegido queda fuera de lo que se ve, se recorre para mostrarlo.
+function applyHighlight(reveal) {
+    const svg = $('layout-svg');
+    svg.querySelectorAll('.hl-shape, .hl-tag').forEach((n) => n.remove());
+    svg.querySelectorAll('.hl-on').forEach((n) => n.classList.remove('hl-on'));
+    svg.classList.remove('has-hl');
+    const h = state.hl;
+    if (!h || h.step !== state.focus || !state.draft) return;
+    const el = svg.querySelector(h.kind === 'zone' ? `[data-zid="${CSS.escape(h.id)}"]` : `[data-sid="${CSS.escape(h.id)}"]`);
+    const shape = el && (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'));
+    if (!shape) return;
+    el.classList.add('hl-on');
+    svg.classList.add('has-hl');
+    // dos contornos encimados (uno ancho del color de la hoja y otro naranja) para que se vea sobre cualquier color de zona, en claro y en oscuro
+    ['hl-under', 'hl-ring'].forEach((cls) => {
+        const ring = shape.cloneNode(false);
+        ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'id'].forEach((a) => ring.removeAttribute(a));
+        ring.setAttribute('class', `hl-shape ${cls}`);
+        svg.appendChild(ring);
+    });
+    const box = shape.getBBox();
+    if (h.kind === 'bay') {
+        const tag = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        tag.setAttribute('class', 'hl-tag');
+        tag.setAttribute('text-anchor', 'middle');
+        tag.setAttribute('x', (box.x + box.width / 2).toFixed(1));
+        const above = box.y >= 14;
+        tag.setAttribute('y', (above ? box.y - 5 : box.y + box.height + 12).toFixed(1));
+        tag.textContent = `${t('main.layoutPosNivel')} ${h.n} · ${t('main.layoutPosColumna')} ${h.c}`;
+        svg.appendChild(tag);
+    }
+    if (reveal && zoom.s > 1.001) {
+        const vw = MAP_W / zoom.s;
+        const vh = MAP_H / zoom.s;
+        const inside = box.x >= zoom.x && box.y >= zoom.y && box.x + box.width <= zoom.x + vw && box.y + box.height <= zoom.y + vh;
+        if (!inside) { zoom.x = box.x + box.width / 2 - vw / 2; zoom.y = box.y + box.height / 2 - vh / 2; applyZoom(); }
+    }
+}
+// Elegir un renglón: al entrar a cualquiera de sus campos (tecla o toque) o al tocar cualquier parte del renglón.
+function selectRowFrom(target) {
+    const tr = target && target.closest ? target.closest(HL_ROW_SELECTOR) : null;
+    if (!tr) return;
+    const entity = rowEntity(tr);
+    if (!entity) return;
+    const next = { ...entity, step: state.focus };
+    if (sameHighlight(state.hl, next)) return;
+    state.hl = next;
+    markSelectedRow();
+    applyHighlight(true);
 }
 
 // ---- croquis -----------------------------------------------------------------------------------------------------------
@@ -632,7 +714,7 @@ function renderSvg() {
     ((on('espacios') || on('activos') || on('posiciones')) ? d.spaces : []).forEach((sp) => {
         const w = Math.max(sp.l * sc, 4);
         const h = Math.max(sp.d * sc, 4);
-        s += `<rect class="ls ls-${sp.type}${sp.active === false ? ' lz-off' : ''}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2"><title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title></rect>`;
+        s += `<rect class="ls ls-${sp.type}${sp.active === false ? ' lz-off' : ''}" data-sid="${esc(sp.id)}" x="${X(sp.x)}" y="${Y(sp.y)}" width="${w}" height="${h}" rx="2"><title>${esc(sp.code)} · ${esc(typeLabel('space', sp.type))}</title></rect>`;
         if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
     });
     const halosAt = s.length; // aquí entran después los contornos de las etiquetas de las paredes: debajo de TODOS los textos
@@ -668,6 +750,7 @@ function renderSvg() {
     putOuter('lt2', M + bar + 6, H - 8, 'start', '5 m');
     s = `${s.slice(0, halosAt)}${outerHalos}${s.slice(halosAt)}${outerLabels}`;
     $('layout-svg').innerHTML = s;
+    applyHighlight(false);
     applyZoom(); // cada redibujo conserva el aumento y el lugar donde se estaba viendo
     scheduleScene3d(); // si se está viendo en 3D, la escena se vuelve a armar con el borrador
 }
@@ -1067,6 +1150,8 @@ function onEdit(event) {
     if (event.type === 'change' && list === 'zones' && el.getAttribute('data-k') === 'name') renderPanel();
     refreshLive();
 }
+$('layout-panel').addEventListener('focusin', (event) => selectRowFrom(event.target));
+$('layout-panel').addEventListener('click', (event) => selectRowFrom(event.target));
 $('layout-panel').addEventListener('input', onEdit);
 $('layout-panel').addEventListener('change', onEdit);
 $('layout-panel').addEventListener('click', (event) => {

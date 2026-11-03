@@ -7368,6 +7368,17 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     color: #c0392b;
 }
 
+/* resaltado de lo elegido en la tabla: contorno naranja con un borde ancho del color de la hoja (se ve sobre cualquier zona), lo demás atenuado y el renglón marcado */
+.layout-map svg.has-hl .lz:not(.hl-on), .layout-map svg.has-hl .lzf:not(.hl-on), .layout-map svg.has-hl .ls:not(.hl-on){ opacity: 0.4; }
+.hl-shape{ fill: none; stroke-linejoin: round; stroke-dasharray: none; vector-effect: non-scaling-stroke; pointer-events: none; }
+.hl-under{ stroke: var(--color-surface); stroke-width: 7; }
+.hl-ring{ stroke: #e8590c; stroke-width: 3.5; animation: hl-pulse 0.8s ease-out 1; }
+@keyframes hl-pulse{ from{ stroke-width: 10; opacity: 0.45; } to{ stroke-width: 3.5; opacity: 1; } }
+@media (prefers-reduced-motion: reduce){ .hl-ring{ animation: none; } }
+.hl-tag{ font: 700 9.5px var(--font-family, system-ui, sans-serif); fill: #e8590c; paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+.layout-table tr.layout-row-sel td{ background: rgba(232, 89, 12, 0.1); }
+.layout-table tr.layout-row-sel td:first-child{ box-shadow: inset 3px 0 0 #e8590c; }
+
 /* zonas de cualquier forma, lados y zonas sin asignar */
 .lz-none{ fill: var(--color-surface); fill-opacity: 0.6; stroke: var(--color-text-secondary); stroke-dasharray: 3 3; }
 .lz-warn{ stroke: var(--color-report-calc-text); stroke-width: 2.5; stroke-dasharray: 6 3; }
