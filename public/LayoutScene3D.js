@@ -73,11 +73,15 @@
         let hiddenAssets = new Set(); // ids de los espacios que NO se dibujan (los eligió quien ve el 3D)
         let lastLayout = null;
         let center = null; // el centro de la nave en el plano (el origen del 3D), para ubicar lo resaltado
+        // Con el resto de la nave «tenue» (buscar una zona o una huella): ids de lo enfocado { zones, footprints, spaces } (Set); lo demás se dibuja apagado, sin rótulo ni aristas. null = todo normal.
+        let focusSet = null;
         let hl = null; // lo resaltado: { kind: 'zone' | 'footprint' | 'space' | 'bay', id, strong }
         const textureCache = new Map();
 
         const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
         const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
+        // Un color (0xRRGGBB) mezclado con otro: k = cuánto del otro (0 = el mismo, 1 = el otro). Sirve para ver «tenue» lo que no se enfocó.
+        const mixHex = (c, to, k) => { const r = (c >> 16) & 255; const g = (c >> 8) & 255; const b = c & 255; const R = (to >> 16) & 255; const G = (to >> 8) & 255; const B = to & 255; return (Math.round(r + (R - r) * k) << 16) | (Math.round(g + (G - g) * k) << 8) | Math.round(b + (B - b) * k); };
 
         function applyVisibility() {
             group.walls.visible = layerOn.walls;
@@ -229,6 +233,7 @@
         function update(layout, opts) {
             if (opts && typeof opts.labels === 'boolean') labelsOn = opts.labels;
             if (opts && opts.layers) LAYER_NAMES.forEach((n) => { if (typeof opts.layers[n] === 'boolean') layerOn[n] = opts.layers[n]; });
+            if (opts && 'focus' in opts) focusSet = opts.focus || null;
             lastLayout = layout;
             Object.keys(group).forEach((n) => clearGroup(group[n]));
             outline.visible = false;
@@ -322,21 +327,23 @@
                 geo.rotateX(Math.PI / 2);
                 geo.translate(-CX, 0.05 + 0.004 * i, -CY);
                 const inactive = z.active === false;
-                const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive, opacity: inactive ? 0.35 : 1 }));
+                const dimZone = !!focusSet && !focusSet.zones.has(z.id);
+                const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive || dimZone, opacity: inactive ? 0.35 : (dimZone ? 0.22 : 1) }));
                 mesh.userData = { kind: 'zone', zone: z };
                 group.zones.add(mesh);
                 zoneMeshes.push(mesh);
                 let ax; let ay;
                 try { const a = LCalc && LCalc.zoneLabelAnchor ? LCalc.zoneLabelAnchor(z) : null; if (a) { ax = a.x; ay = a.y; } } catch (err) { /* usa el centro */ }
                 if (ax === undefined) { ax = z.x + z.l / 2; ay = z.y + z.w / 2; }
-                if (!inactive) addLabel(group.zoneLabels, z.name, PX(ax), 0.12 + 0.004 * i, PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
+                if (!inactive && !dimZone) addLabel(group.zoneLabels, z.name, PX(ax), 0.12 + 0.004 * i, PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
             });
 
             // huellas (el lugar en el piso, capa «Huella-Espacio»): una losa delgada, blanca o con su color, debajo de sus activos
             (layout.footprints || []).forEach((f) => {
                 if (f.active === false || !(f.l > 0) || !(f.d > 0)) return;
                 const paint = f.fmt && f.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(f.fmt.fill || '') ? f.fmt.fill : '#ffffff';
-                const slab = new THREE.Mesh(new THREE.BoxGeometry(f.l, 0.02, f.d), new THREE.MeshLambertMaterial({ color: new THREE.Color(paint) }));
+                const dimFp = !!focusSet && !focusSet.footprints.has(f.id);
+                const slab = new THREE.Mesh(new THREE.BoxGeometry(f.l, 0.02, f.d), new THREE.MeshLambertMaterial({ color: new THREE.Color(paint), transparent: dimFp, opacity: dimFp ? 0.25 : 1 }));
                 slab.position.set(PX(f.x + f.l / 2), 0.085, PZ(f.y + f.d / 2));
                 group.footprints.add(slab);
             });
@@ -352,18 +359,20 @@
             (layout.spaces || []).forEach((s) => {
                 if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id)) return;
                 const cx = PX(s.x + s.l / 2); const cz = PZ(s.y + s.d / 2);
+                const dimS = !!focusSet && !focusSet.spaces.has(s.id);
+                const mute = (c) => (dimS ? mixHex(c, 0xe4e7f0, 0.8) : c);
                 const lv = Math.max(1, s.levels || 1);
                 // el color que se le puso en Formato de activo (sin relleno o sin color propio se queda con el de su tipo)
                 const own = s.fmt && s.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(s.fmt.fill || '') ? parseInt(s.fmt.fill.slice(1), 16) : null;
                 if (s.type === 'pallet') {
-                    blk.push({ x: cx, y: 0.07, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: own !== null ? own : WOOD });
+                    blk.push({ x: cx, y: 0.07, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: mute(own !== null ? own : WOOD) });
                     const loadH = (s.h - 0.14) / lv;
-                    for (let k = 0; k < lv; k++) edgeBox(cx, 0.14 + k * loadH + loadH / 2, cz, s.l - 0.04, loadH - 0.04, s.d - 0.04);
+                    if (!dimS) for (let k = 0; k < lv; k++) edgeBox(cx, 0.14 + k * loadH + loadH / 2, cz, s.l - 0.04, loadH - 0.04, s.d - 0.04);
                 } else if (s.type === 'cabinet' || s.type === 'cold') {
-                    blk.push({ x: cx, y: s.h / 2, z: cz, sx: s.l, sy: s.h, sz: s.d, c: own !== null ? own : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d) });
+                    blk.push({ x: cx, y: s.h / 2, z: cz, sx: s.l, sy: s.h, sz: s.d, c: mute(own !== null ? own : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d)) });
                 } else {
-                    const upC = s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86;
-                    const deckC = own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba);
+                    const upC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
+                    const deckC = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
                     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([ix, iz]) => upr.push({ x: cx + ix * Math.max(0, s.l / 2 - 0.03), y: s.h / 2, z: cz + iz * Math.max(0, s.d / 2 - 0.03), sx: 0.06, sy: s.h, sz: 0.06, c: upC }));
                     const pitch = (s.h - 0.3) / lv;
                     for (let k = 0; k < lv; k++) dck.push({ x: cx, y: 0.15 + k * pitch, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC });
@@ -386,7 +395,7 @@
                 hitSpaces.instanceMatrix.needsUpdate = true;
                 group.assets.add(hitSpaces);
             }
-            if (spaceList.length <= MAX_SPACE_LABELS) spaceList.forEach((e) => addLabel(group.spaceLabels, e.s.code, e.x, e.s.h + 0.4, e.z, 0.38, false));
+            if (spaceList.length <= MAX_SPACE_LABELS) spaceList.forEach((e) => { if (!focusSet || focusSet.spaces.has(e.s.id)) addLabel(group.spaceLabels, e.s.code, e.x, e.s.h + 0.4, e.z, 0.38, false); });
 
             applyVisibility();
             if (!placed) { placed = true; go(viewTarget('general'), false); }

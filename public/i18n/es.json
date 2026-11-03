@@ -1825,6 +1825,10 @@
     "layoutFindOcultarX": "Ocultar {name}",
     "layoutFindVerX": "Ver {name}",
     "layoutFindSin": "Sin resultados",
+    "layoutFindResto": "Resto de la nave",
+    "layoutFindRestoOculto": "Oculto",
+    "layoutFindRestoTenue": "Tenue",
+    "layoutFindAdentro": "Lo que hay adentro",
     "layout3dCapaWalls": "Paredes",
     "layout3dCapaDoors": "Puertas",
     "layout3dCapaPower": "Conexiones de luz",
@@ -4043,6 +4047,14 @@
     "layoutFind": {
       "what": "Busca una zona o una huella, por su código o su nombre, y el croquis, el 3D, las tablas y el resumen se quedan solo con lo que hay adentro; el resto de la nave se oculta. Las tablas no pierden renglones: los que no son de lo enfocado solo se esconden. Es solo de pantalla: no cambia lo guardado ni lo que se imprime.",
       "example": "escribes «Zona 6» y eliges la zona: el croquis se acerca y solo se ven sus huellas y activos; escribes «H005» y solo se ven sus activos."
+    },
+    "layoutFindResto": {
+      "what": "Elige qué pasa con lo que NO es de lo enfocado: «Oculto» lo quita por completo y el croquis y el 3D se acercan a lo enfocado; «Tenue» deja toda la nave pero apagada, para no perder dónde está lo enfocado. Se recuerda en este navegador.",
+      "example": "con «Tenue» ves la Zona 6 normal y las demás zonas muy apagadas, para ubicarte dentro de la nave."
+    },
+    "layoutFindItems": {
+      "what": "La lista de lo que hay adentro de lo enfocado (las huellas con sus activos, o los activos de la huella) con un ojito por renglón: un toque lo quita del croquis y del 3D y otro lo regresa. Al ocultar una huella se ocultan también sus activos. Es solo de pantalla.",
+      "example": "quitas el ojito de A003 y solo ese anaquel desaparece del dibujo; los demás se quedan."
     },
     "layoutFindChip": {
       "what": "Dice qué zona o huella estás viendo. Al tocarlo se quita el enfoque y vuelve a verse toda la nave.",
