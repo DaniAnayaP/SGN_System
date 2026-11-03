@@ -144,7 +144,7 @@ let editing = null;     // la relación abierta (null = nueva)
 let st = null;          // lo que se va eligiendo: { sku, centro, alm, sub, zona, est, niv, esp }
 let pendingCount = 0;   // cuántas hay guardadas en este celular esperando señal
 
-const blankState = () => ({ sku: null, centro: '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '', fila: '', prof: '' });
+const blankState = () => ({ sku: null, centro: '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '', fila: '', prof: '', clas: 'activo' });
 const readCache = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 const writeCache = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* sin espacio: se pide otra vez con señal */ } };
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -268,7 +268,7 @@ function openForm(record) {
     st = record
         ? {
             sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc },
-            centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', est: record.spaceId || '', niv: record.level || '', esp: record.slot || '', fila: record.row || '', prof: record.depth || '',
+            centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', est: record.spaceId || '', niv: record.level || '', esp: record.slot || '', fila: record.row || '', prof: record.depth || '', clas: record.classification || 'activo',
         }
         : blankState();
     view = 'form';
@@ -322,6 +322,7 @@ function renderForm() {
             <div id="rel-results" class="relapp-results" hidden></div>
             <div id="rel-art" class="relapp-art"></div>
         </div>
+        ${selectField('rel-clas', 'main.colRelClasificacion', 'relClass')}
         ${selectField('rel-centro', 'main.colRelCentroCostos', 'relCostCenter')}
         ${selectField('rel-alm', 'main.colRelAlmacen', 'relWarehouse')}
         ${selectField('rel-sub', 'main.colRelSubAlmacen', 'relSubWarehouse')}
@@ -342,6 +343,7 @@ function renderForm() {
     });
     bind('rel-centro', 'centro', true); bind('rel-alm', 'alm', true); bind('rel-sub', 'sub', true);
     bind('rel-zona', 'zona'); bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-fila', 'fila', true); bind('rel-prof', 'prof', true);
+    document.getElementById('rel-clas').addEventListener('change', (event) => { st.clas = event.target.value; });
     document.getElementById('rel-code').addEventListener('input', () => { st.sku = null; searchCodes(); refreshForm(true); });
     document.getElementById('rel-results').addEventListener('click', (event) => {
         const pick = event.target.closest('[data-id]');
@@ -393,6 +395,7 @@ function refreshForm(keepInput) {
     document.getElementById('rel-art').innerHTML = st.sku
         ? `<b>${esc(st.sku.sku)} · ${esc(st.sku.description)}</b><span>${esc(st.sku.upc ? `UPC ${st.sku.upc}` : '')}</span>`
         : `<span>${esc(t('main.relPickCode'))}</span>`;
+    document.getElementById('rel-clas').innerHTML = ['activo', 'cuarentena', 'aclaracion', 'consigna'].map((k) => `<option value="${k}"${st.clas === k ? ' selected' : ''}>${esc(t(`main.relClass_${k}`))}</option>`).join('');
     fillSelect('rel-centro', options.costCenters.map((c) => ({ value: c.id, label: c.name })), t('main.relChooseCost'), st.centro, false);
     const whs = options.warehouses.filter((w) => w.parentId === st.centro && (w.status === 'active' || w.id === keepWh));
     fillSelect('rel-alm', whs.map((w) => ({ value: w.id, label: w.name })), st.centro ? t('main.relChooseWarehouse') : t('main.relFirstCost'), st.alm, !st.centro || !whs.length);
@@ -466,7 +469,7 @@ function drawPath(d) {
 async function save() {
     const values = {
         skuItemId: st.sku ? st.sku.id : null, costCenterId: st.centro || null, warehouseId: st.alm || null, subWarehouseId: st.sub || null,
-        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, row: st.fila || null, depth: st.prof || null,
+        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, row: st.fila || null, depth: st.prof || null, classification: st.clas || 'activo',
     };
     const isEdit = !!(editing && editing.id && !editing.local);
     let method = 'POST';
@@ -474,7 +477,7 @@ async function save() {
     let body = values;
     let baseline = null;
     if (isEdit) {
-        const before = { skuItemId: editing.skuItemId, costCenterId: editing.costCenterId, warehouseId: editing.warehouseId, subWarehouseId: editing.subWarehouseId, zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, row: editing.row, depth: editing.depth };
+        const before = { skuItemId: editing.skuItemId, costCenterId: editing.costCenterId, warehouseId: editing.warehouseId, subWarehouseId: editing.subWarehouseId, zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, row: editing.row, depth: editing.depth, classification: editing.classification || 'activo' };
         body = {};
         baseline = {};
         Object.keys(values).forEach((key) => { if (String(values[key] ?? '') !== String(before[key] ?? '')) { body[key] = values[key]; baseline[key] = before[key]; } });
@@ -495,7 +498,7 @@ async function save() {
                 id: isEdit ? editing.id : null, local: true, skuItemId: st.sku.id, sku: st.sku.sku, upc: st.sku.upc, description: st.sku.description,
                 costCenterId: st.centro || null, centroCostos: (byId(options.costCenters, st.centro) || {}).name || '', warehouseId: st.alm || null, warehouseName: (byId(options.warehouses, st.alm) || {}).name || '',
                 subWarehouseId: st.sub || null, subWarehouseName: d.sub ? d.sub.name : '', zoneId: st.zona || '', zoneName: d.zone ? d.zone.name : '', spaceId: st.est || '', spaceCode: d.rack ? d.rack.code : '',
-                level: st.niv || null, slot: st.esp || null, row: st.fila || null, depth: st.prof || null, status: ((d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.fila || lbay.rows <= 1) && (st.prof || lbay.depth <= 1))) ? 'located' : 'partial',
+                level: st.niv || null, slot: st.esp || null, row: st.fila || null, depth: st.prof || null, classification: st.clas || 'activo', status: ((d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.fila || lbay.rows <= 1) && (st.prof || lbay.depth <= 1))) ? 'located' : 'partial',
             };
             relations = isEdit ? relations.map((r) => (r.id === editing.id ? { ...r, ...local } : r)) : [local, ...relations];
             if (local.spaceId && local.level && local.slot) options.occupied.push({ id: local.id || 0, spaceId: local.spaceId, level: local.level, slot: local.slot, row: local.row || 1, depth: local.depth || 1, sku: local.sku });

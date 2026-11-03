@@ -1488,6 +1488,7 @@
             { "id": "colRelEspacio", "labelKey": "main.colRelEspacio", "permissionOnly": true },
             { "id": "colRelFila", "labelKey": "main.colRelFila", "permissionOnly": true },
             { "id": "colRelProfundidad", "labelKey": "main.colRelProfundidad", "permissionOnly": true },
+            { "id": "colRelClasificacion", "labelKey": "main.colRelClasificacion", "permissionOnly": true },
             { "id": "colRelEstado", "labelKey": "main.colRelEstado", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,

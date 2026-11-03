@@ -2392,6 +2392,8 @@ db.exec(`
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'depth')) db.exec('ALTER TABLE code_relations ADD COLUMN depth INTEGER');
 // Lugar de un código: anaquel > nivel > COLUMNA (slot) > FILA (row_no) > profundidad. El hueco es nivel × columna; dentro del hueco están las filas y las profundidades (Layout > Posiciones). Vacías cuentan como 1.
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'row_no')) db.exec('ALTER TABLE code_relations ADD COLUMN row_no INTEGER');
+// Clasificación del producto en ese lugar: activo | cuarentena | aclaracion | consigna (ver CODE_RELATION_CLASSES en server.js). Vive en la relación (no en el sub almacén ni en el código); lo que ya había queda como Producto Activo.
+if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'classification')) db.exec("ALTER TABLE code_relations ADD COLUMN classification TEXT NOT NULL DEFAULT 'activo'");
 
 // public_token: set once (see maybeIssuePublicToken in server.js) the
 // instant an artículo's own 24 fields are all filled in -- the opaque id a
@@ -5426,6 +5428,7 @@ const CODE_RELATION_PATCHABLE_FIELDS = {
     slot: { column: 'slot', fieldKey: 'main.colRelEspacio' },
     row: { column: 'row_no', fieldKey: 'main.colRelFila' },
     depth: { column: 'depth', fieldKey: 'main.colRelProfundidad' },
+    classification: { column: 'classification', fieldKey: 'main.colRelClasificacion' },
 };
 const CODE_RELATION_SELECT = `SELECT r.*, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.record_number AS sku_number
     FROM code_relations r LEFT JOIN sku_items s ON s.id = r.sku_item_id`;
@@ -5442,11 +5445,11 @@ function createCodeRelation({ clientId, isTestData = false, values }) {
     const recordNumber = db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM code_relations WHERE client_id = ? AND is_test_data = ?')
         .get(clientId, isTestData ? 1 : 0).n;
-    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, row_no, depth, is_test_data)
-        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @row, @depth, @isTestData)`).run({
+    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, row_no, depth, classification, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @row, @depth, @classification, @isTestData)`).run({
         clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0,
         skuItemId: values.skuItemId, costCenterId: values.costCenterId ?? null, warehouseId: values.warehouseId ?? null, subWarehouseId: values.subWarehouseId ?? null,
-        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null, row: values.row ?? null, depth: values.depth ?? null,
+        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null, row: values.row ?? null, depth: values.depth ?? null, classification: values.classification || 'activo',
     });
     return getCodeRelationById(result.lastInsertRowid, clientId, isTestData);
 }

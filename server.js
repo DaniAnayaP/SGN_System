@@ -7504,10 +7504,12 @@ const CODE_RELATION_MODULE_LABEL = 'Cadena de Suministro';
 const CODE_RELATION_SCREEN_LABEL = 'Relación Código';
 const CODE_RELATION_COLS = {
     skuItemId: 'colRelSku', costCenterId: 'colRelCentroCostos', warehouseId: 'colRelAlmacen', subWarehouseId: 'colRelSubAlmacen',
-    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio', row: 'colRelFila', depth: 'colRelProfundidad',
+    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio', row: 'colRelFila', depth: 'colRelProfundidad', classification: 'colRelClasificacion',
 };
+// Clasificación del producto en ese lugar. Se guarda la clave; sin decir nada es Producto Activo.
+const CODE_RELATION_CLASSES = { activo: 'Producto Activo', cuarentena: 'Producto Cuarentena', aclaracion: 'Producto Aclaración', consigna: 'Producto en Consigna' };
 const CODE_RELATION_INT_KEYS = ['skuItemId', 'costCenterId', 'warehouseId', 'subWarehouseId', 'level', 'slot', 'row', 'depth'];
-const CODE_RELATION_TEXT_KEYS = ['zoneId', 'spaceId'];
+const CODE_RELATION_TEXT_KEYS = ['zoneId', 'spaceId', 'classification'];
 const padSku = (n) => String(n || 0).padStart(6, '0');
 
 function codeRelationContext(req) {
@@ -7558,6 +7560,7 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
         zoneId: row.zone_id, zoneName: zone ? zone.name : '',
         spaceId: row.space_id, spaceCode: space ? space.code : '',
         level: row.level, slot: row.slot, row: row.row_no, depth: row.depth, bayRows: bay.rows, bayDepth: bay.depth,
+        classification: row.classification || 'activo', classificationName: CODE_RELATION_CLASSES[row.classification || 'activo'] || '',
         status: located ? 'located' : 'partial',
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({
@@ -7581,6 +7584,7 @@ function codeRelationSanitizers(ctx, req) {
         slot: (v) => (v == null ? '' : String(v)),
         row: (v) => (v == null ? '' : String(v)),
         depth: (v) => (v == null ? '' : String(v)),
+        classification: (v) => CODE_RELATION_CLASSES[v] || (v == null ? '' : String(v)),
     };
 }
 
@@ -7609,6 +7613,7 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     const { clientId, isTestAccount } = req.user;
     const bad = (message, status = 400) => ({ error: { status, message } });
     if (!state.skuItemId || !getSkuItemById(state.skuItemId, clientId, isTestAccount)) return bad('Elige un código de Alta Artículos.');
+    if (!CODE_RELATION_CLASSES[state.classification || 'activo']) return bad('La clasificación no es una de las del catálogo (Producto Activo, Cuarentena, Aclaración o en Consigna).');
     if (!state.costCenterId || !ctx.costCenters.has(state.costCenterId)) return bad('Elige un centro de costos.');
     if (!(existing && existing.cost_center_id === state.costCenterId) && !ctx.isCompleteCenter(state.costCenterId)) return bad('Ese centro de costos está incompleto o inactivo. Complétalo primero en Nuestros Centros Costos.');
     const layout = ctx.layoutFor(state.costCenterId);
@@ -7730,11 +7735,11 @@ app.post('/api/business/code-relations', requireAuth, requireCostCenter, (req, r
     }
     const norm = normalizeCodeRelationInput(req.body || {});
     if (norm.error) return res.status(400).json({ message: norm.error });
-    const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, row: null, depth: null, ...norm.values };
+    const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, row: null, depth: null, classification: 'activo', ...norm.values };
     // Llenar un dato vacío pide su propia hoja (Ver y Operar o Modificar), igual que al llenar una celda de otra tabla.
     if (grants) {
         const missing = Object.entries(CODE_RELATION_COLS)
-            .filter(([key, colKey]) => state[key] !== null && state[key] !== '' && !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, CODE_RELATION_TABLE_KEY, colKey)))
+            .filter(([key, colKey]) => state[key] !== null && state[key] !== '' && !(key === 'classification' && state[key] === 'activo') && !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, CODE_RELATION_TABLE_KEY, colKey)))
             .map(([key]) => CODE_RELATION_PATCHABLE_FIELDS[key].fieldKey);
         if (missing.length) return res.status(403).json({ message: 'No tienes permiso para llenar uno de los datos de esta relación.', fields: missing });
     }
@@ -7776,16 +7781,35 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
         const n = Number.isInteger(raw && raw.n) ? raw.n : index + 2;
         const fail = (message) => failed.push({ index, n, message });
         // Una fila con relationId COMPLETA la relación «A medias» de ese código (le pone zona, estante, nivel y espacio): se revisa como un cambio hecho a mano en la tabla (permisos y historial incluidos).
+        if (raw && raw.relationId != null && raw.reclass) {
+            // Solo cambia la clasificación de una relación que ya tiene ese mismo lugar (como cambiar la celda en la tabla: permisos por dato, historial y, si hace falta, autorización).
+            const existing = getCodeRelationById(raw.relationId, clientId, isTestAccount);
+            if (!existing) { fail('Esa relación ya no existe.'); return; }
+            const wanted = raw.values && raw.values.classification;
+            if (!CODE_RELATION_CLASSES[wanted]) { fail('La clasificación no es una de las del catálogo.'); return; }
+            if (grants && codeRelationPatchOutcome(grants, existing, 'classification') !== 'apply') { fail('No tienes permiso para cambiar la clasificación de esta relación.'); return; }
+            try {
+                const result = checkAndLogFieldChanges(req, existing, { classification: wanted }, CODE_RELATION_PATCHABLE_FIELDS, CODE_RELATION_TABLE_KEY, `#${existing.id}`, sanitizers, {});
+                updateCodeRelation(existing.id, clientId, result.appliedPatch, isTestAccount);
+                updated.push({ index, n, id: existing.id, reclassified: true });
+            } catch (error) {
+                console.error('Relación Código: no se pudo reclasificar una fila de la plantilla', error);
+                fail('No se pudo guardar esta fila. Inténtalo de nuevo.');
+            }
+            return;
+        }
         if (raw && raw.relationId != null) {
             const existing = getCodeRelationById(raw.relationId, clientId, isTestAccount);
             if (!existing) { fail('Esa relación ya no existe.'); return; }
             if (existing.zone_id || existing.space_id || existing.level || existing.slot || existing.row_no || existing.depth) { fail('Esa relación ya tiene lugar: no se completa otra vez.'); return; }
-            const placeNorm = normalizeCodeRelationInput(Object.fromEntries(['zoneId', 'spaceId', 'level', 'slot', 'row', 'depth'].map((k) => [k, raw.values ? raw.values[k] : null])));
+            // la clasificación solo viaja si la fila la trae (sin decirla, la relación conserva la que tenía)
+            const placeKeys = ['zoneId', 'spaceId', 'level', 'slot', 'row', 'depth'].concat(raw.values && raw.values.classification ? ['classification'] : []);
+            const placeNorm = normalizeCodeRelationInput(Object.fromEntries(placeKeys.map((k) => [k, raw.values ? raw.values[k] : null])));
             if (placeNorm.error) { fail(placeNorm.error); return; }
             const place = placeNorm.values;
             const state = {
                 skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
-                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, row: existing.row_no, depth: existing.depth, ...place,
+                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, row: existing.row_no, depth: existing.depth, classification: existing.classification || 'activo', ...place,
             };
             const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
             if (check.error) { fail(check.error.message); return; }
@@ -7803,9 +7827,9 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
         }
         const norm = normalizeCodeRelationInput(raw && typeof raw.values === 'object' && raw.values ? raw.values : {});
         if (norm.error) { fail(norm.error); return; }
-        const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, row: null, depth: null, ...norm.values };
+        const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, row: null, depth: null, classification: 'activo', ...norm.values };
         if (grants) {
-            const denied = Object.entries(CODE_RELATION_COLS).find(([key, colKey]) => state[key] !== null && state[key] !== '' && !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, CODE_RELATION_TABLE_KEY, colKey)));
+            const denied = Object.entries(CODE_RELATION_COLS).find(([key, colKey]) => state[key] !== null && state[key] !== '' && !(key === 'classification' && state[key] === 'activo') && !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, CODE_RELATION_TABLE_KEY, colKey)));
             if (denied) { fail('No tienes permiso para llenar uno de los datos de esta relación.'); return; }
         }
         const check = validateCodeRelationState(req, state, 0, null, ctx);
@@ -7823,7 +7847,7 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
             fail('No se pudo guardar esta fila. Inténtalo de nuevo.');
         }
     });
-    if (created.length || updated.length) notifyButtonAction(req, CODE_RELATION_TABLE_KEY, 'import', `${created.length} nuevas, ${updated.length} completadas`);
+    if (created.length || updated.length) notifyButtonAction(req, CODE_RELATION_TABLE_KEY, 'import', `${created.length} nuevas, ${updated.length} completadas o reclasificadas`);
     res.json({ created, updated, failed });
 });
 
@@ -7838,7 +7862,7 @@ app.patch('/api/business/code-relations/:id', requireAuth, requireCostCenter, (r
     const ctx = codeRelationContext(req);
     const state = {
         skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
-        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, row: existing.row_no, depth: existing.depth, ...norm.values,
+        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, row: existing.row_no, depth: existing.depth, classification: existing.classification || 'activo', ...norm.values,
     };
     const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
     if (check.error) return res.status(check.error.status).json({ message: check.error.message });

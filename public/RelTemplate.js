@@ -14,6 +14,7 @@
     const COLUMNS = [
         { key: 'sku', es: 'Código SKU', en: 'SKU Code', col: 'colRelSku', required: true, aliases: ['sku', 'articulo', 'codigo', 'codigo sku', 'registro unico', 'upc', 'codigo de barras'] },
         { key: 'locator', es: 'Localizador', en: 'Locator', col: 'colRelEstante', aliases: ['localizador', 'localizacion', 'ubicacion', 'locator'] },
+        { key: 'classification', es: 'Clasificación', en: 'Classification', col: 'colRelClasificacion', aliases: ['clasificacion del producto', 'tipo de producto', 'classification'] },
         { key: 'center', es: 'Centro de Costos', en: 'Cost Center', col: 'colRelCentroCostos', aliases: ['centro costos', 'centro', 'cost center', 'sitio'] },
         { key: 'warehouse', es: 'Almacén', en: 'Warehouse', col: 'colRelAlmacen', aliases: ['almacen', 'warehouse'] },
         { key: 'sub', es: 'Sub almacén', en: 'Sub-warehouse', col: 'colRelSubAlmacen', aliases: ['sub almacen', 'subalmacen', 'sub warehouse'] },
@@ -25,9 +26,16 @@
         { key: 'depth', es: 'Profundidad', en: 'Depth', col: 'colRelProfundidad', aliases: ['prof', 'fondo', 'depth'] },
     ];
     const BY_KEY = Object.fromEntries(COLUMNS.map((c) => [c.key, c]));
+    // Clasificación del producto en ese lugar (se guarda la clave); se reconoce el nombre completo, el corto y la sigla.
+    const CLASS_NAMES = {
+        activo: ['producto activo', 'activo', 'act'], cuarentena: ['producto cuarentena', 'cuarentena', 'cua'],
+        aclaracion: ['producto aclaracion', 'aclaracion', 'acl'], consigna: ['producto en consigna', 'producto consigna', 'consigna', 'con'],
+    };
 
     // sin mayúsculas, acentos, paréntesis ni signos: "Sub almacén", "sub-almacen" y "SUB ALMACEN" son lo mismo
     const norm = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const CLASS_INDEX = new Map();
+    Object.entries(CLASS_NAMES).forEach(([key, names]) => names.forEach((n) => CLASS_INDEX.set(norm(n), key)));
     const HEADER_INDEX = new Map();
     COLUMNS.forEach((c) => { [c.es, c.en, ...c.aliases].forEach((name) => { if (!HEADER_INDEX.has(norm(name))) HEADER_INDEX.set(norm(name), c.key); }); });
 
@@ -114,7 +122,7 @@
     //   occupiedBy(spaceId, nivel, columna, fila, profundidad) -> SKU que lo ocupa ('' = libre), existingKey(key) -> ya existe esa misma relación,
     //   priorRowWithKey(key, row) -> número de otra fila anterior del archivo con lo mismo (0 = ninguna)
     // }
-    // Regresa { error: { field, code, params } } o { action: 'create' | 'complete' | 'same', values, relationId?, keys, located, route }.
+    // Regresa { error: { field, code, params } } o { action: 'create' | 'complete' | 'reclass' | 'same', values, relationId?, keys, located, route }. existingRelation(key) -> { id, classification } | null.
     function planRow(row, ctx) {
         const v = row.v;
         const err = (field, code, params) => ({ error: { field, code, params: params || {} } });
@@ -125,6 +133,12 @@
         let item = /^\d{1,9}$/.test(skuRaw) ? ctx.itemBySku(Number(skuRaw)) : null;
         if (!item && /^\d{8,14}$/.test(skuRaw)) item = ctx.itemByUpc(skuRaw);
         if (!item) return err('sku', 'skuNotFound', { sku: skuRaw });
+        const clsRaw = text('classification');
+        let cls = null;
+        if (clsRaw) {
+            cls = CLASS_INDEX.get(norm(clsRaw)) || null;
+            if (!cls) return err('classification', 'classNotFound', { value: clsRaw });
+        }
 
         const locRaw = text('locator');
         const zoneRaw = text('zone');
@@ -278,14 +292,22 @@
         const values = {
             skuItemId: item.id, costCenterId: center.id, warehouseId: wh.id, subWarehouseId: sub ? sub.id : null,
             zoneId: zone ? zone.id : '', spaceId: rack ? rack.id : '', level, slot, row: rowNo, depth,
+            classification: cls || (target ? undefined : 'activo'), // al completar una relación sin decir la clasificación, conserva la que tenía
         };
         const route = [center.name, wh.name, sub ? sub.name : '', zone ? zone.name : '', rack ? rack.code : ''].filter(Boolean);
         const base = { values, route, keys: { place: `rel|${key}`, slot: rack && level && slot ? `slot|${rack.id}|${level}|${slot}|${rowNo || 1}|${depth || 1}` : '', claim: target ? `upd|${target.id}` : '' }, located, item };
+        // ¿ese lugar ya es de este código? (existingRelation = su relación, con su clasificación; existingKey = solo que existe)
+        const existingRel = ctx.existingRelation ? ctx.existingRelation(key) : (ctx.existingKey && ctx.existingKey(key) ? {} : null);
         if (base.keys.slot) {
             const occupant = ctx.occupiedBy(rack.id, level, slot, rowNo || 1, depth || 1);
-            if (occupant && !ctx.existingKey(key)) return err(loc ? 'locator' : 'slot', 'occupied', { sku: occupant });
+            if (occupant && !existingRel) return err(loc ? 'locator' : 'slot', 'occupied', { sku: occupant });
         }
-        if (ctx.existingKey(key)) return { action: 'same', ...base };
+        if (existingRel) {
+            // Si la fila trae otra clasificación, solo se cambia esa; si no, no hay nada que cargar.
+            const was = existingRel.classification || 'activo';
+            if (cls && existingRel.id && was !== cls) return { action: 'reclass', relationId: existingRel.id, from: was, to: cls, ...base, values: { ...values, classification: cls } };
+            return { action: 'same', ...base };
+        }
         const dup = ctx.priorRowWithKey(base.keys.place, row);
         if (dup) return err('sku', 'duplicateInFile', { row: dup });
         if (base.keys.slot) {
@@ -295,5 +317,5 @@
         return target ? { action: 'complete', relationId: target.id, ...base } : { action: 'create', ...base };
     }
 
-    return { MAX_ROWS, COLUMNS, BY_KEY, ASSET_TYPES, norm, parseLocator, rowsFromMatrix, planRow };
+    return { MAX_ROWS, COLUMNS, BY_KEY, ASSET_TYPES, CLASS_NAMES, norm, parseLocator, rowsFromMatrix, planRow };
 }));

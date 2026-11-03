@@ -2594,6 +2594,16 @@
     "relTplInst_row": "El número de fila dentro del hueco (nivel × columna). Opcional; si el hueco tiene una sola fila va 1 o se deja vacío.",
     "relTplErr_rowRange": "La fila «{value}» no existe en ese hueco del estante {rack} (tiene {max}).",
     "relTplErr_columnNeeded": "El estante {rack} tiene {max} columnas: el Localizador debe decir cuál (C001, C002…).",
+    "colRelClasificacion": "Clasificación",
+    "relClass_activo": "Producto Activo",
+    "relClass_cuarentena": "Producto Cuarentena",
+    "relClass_aclaracion": "Producto Aclaración",
+    "relClass_consigna": "Producto en Consigna",
+    "relTplInst_classification": "La clasificación del producto en ese lugar: Producto Activo, Producto Cuarentena, Producto Aclaración o Producto en Consigna (también sirve Activo, Cuarentena, Aclaración, Consigna o ACT, CUA, ACL, CON). Opcional: vacía es Producto Activo; en un lugar que el código ya tiene, solo cambia su clasificación.",
+    "relTplErr_classNotFound": "La clasificación «{value}» no existe. Usa Producto Activo, Producto Cuarentena, Producto Aclaración o Producto en Consigna.",
+    "relTplStateReclass": "Reclasifica",
+    "relTplCountReclass": "reclasifican",
+    "relTplWillReclass": "Ese lugar ya es del código: cambia su clasificación de {from} a {to}. {route}.",
     "colRelCreateAuth": "Autorización para Crear",
     "colRelDeleteAuth": "Autorización para Eliminar",
     "newRelation": "Nueva Relación",
@@ -3738,6 +3748,10 @@
     "layoutSec_posiciones": {
       "what": "Cada renglón es un hueco: un nivel × una columna de un activo (el rack con 2 niveles y 3 columnas deja 6 huecos, ya listos). Dentro de cada hueco anotas cuántas filas y cuántas profundidades tiene, su altura desde el piso y sus medidas en metros. Las medidas salen calculadas con las del activo y solo corriges las que cambien; la capacidad es filas × profundidades.",
       "example": "el hueco N2·C3 del R-01 lleva 2 filas y 3 profundidades: capacidad 6."
+    },
+    "relClass": {
+      "what": "Dice qué es el producto en este lugar: Producto Activo (el normal), Producto Cuarentena, Producto Aclaración o Producto en Consigna. Un mismo lugar puede cambiar de clasificación con el tiempo; sigue valiendo un solo código por espacio. Vacío es Producto Activo.",
+      "example": "el lote que llegó en revisión queda en Producto Cuarentena hasta liberarlo."
     },
     "whLocationBtn": {
       "what": "Asigna a este sub almacén las zonas completas o los anaqueles del Layout que le pertenecen. Las zonas salen del Layout del centro de costos de su almacén. Una zona o un anaquel solo puede ser de un sub almacén.",

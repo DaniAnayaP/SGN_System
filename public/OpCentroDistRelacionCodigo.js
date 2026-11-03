@@ -45,6 +45,17 @@ function cell(col, value, extraClass) {
     return td;
 }
 
+function classCell(r) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colRelClasificacion';
+    const key = CLASS_KEYS.includes(r.classification) ? r.classification : 'activo';
+    const tag = document.createElement('span');
+    tag.className = `rel-tag rel-class-${key}`;
+    tag.textContent = t(`main.relClass_${key}`);
+    td.appendChild(tag);
+    return td;
+}
+
 function statusCell(r) {
     const td = document.createElement('td');
     td.dataset.col = 'colRelEstado';
@@ -67,7 +78,8 @@ function iconButton(className, icon, label, helpKey, onClick) {
     return btn;
 }
 
-const EDITABLE_COLS = ['colRelSku', 'colRelCentroCostos', 'colRelAlmacen', 'colRelSubAlmacen', 'colRelZona', 'colRelEstante', 'colRelNivel', 'colRelEspacio', 'colRelFila', 'colRelProfundidad'];
+const EDITABLE_COLS = ['colRelSku', 'colRelCentroCostos', 'colRelAlmacen', 'colRelSubAlmacen', 'colRelZona', 'colRelEstante', 'colRelNivel', 'colRelEspacio', 'colRelFila', 'colRelProfundidad', 'colRelClasificacion'];
+const CLASS_KEYS = ['activo', 'cuarentena', 'aclaracion', 'consigna'];
 function canTouchAnyColumn() {
     return EDITABLE_COLS.some((col) => Dashboard.canEditField(TABLE_KEY, col, '') || Dashboard.canEditField(TABLE_KEY, col, '1'));
 }
@@ -94,6 +106,7 @@ function buildRow(r) {
         cell('colRelSku', r.sku), cell('colRelUpc', r.upc), cell('colRelDescripcion', r.description),
         cell('colRelCentroCostos', r.centroCostos), cell('colRelAlmacen', r.warehouseName), cell('colRelSubAlmacen', r.subWarehouseName),
         cell('colRelZona', r.zoneName), cell('colRelEstante', r.spaceCode), cell('colRelNivel', r.level), cell('colRelEspacio', r.slot), cell('colRelFila', r.row), cell('colRelProfundidad', r.depth),
+        classCell(r),
         statusCell(r),
     );
     tr.appendChild(actionsCell(r, tr));
@@ -177,7 +190,7 @@ function applyFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colRelSku', 'colRelUpc', 'colRelDescripcion', 'colRelCentroCostos', 'colRelAlmacen', 'colRelSubAlmacen', 'colRelZona', 'colRelEstante']
+        const haystack = ['colRelSku', 'colRelUpc', 'colRelDescripcion', 'colRelCentroCostos', 'colRelAlmacen', 'colRelSubAlmacen', 'colRelZona', 'colRelEstante', 'colRelClasificacion']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
@@ -233,7 +246,7 @@ function centerChoices() {
     if (editing && editing.costCenterId && !list.some((c) => c.id === editing.costCenterId)) list.push({ id: editing.costCenterId, name: editing.centroCostos });
     return list;
 }
-const blankState = () => ({ sku: null, centro: opts && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '', fila: '', prof: '' });
+const blankState = () => ({ sku: null, centro: opts && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', est: '', niv: '', esp: '', fila: '', prof: '', clas: 'activo' });
 const $m = (id) => document.getElementById(id);
 const byId = (list, id) => (list || []).find((x) => String(x.id) === String(id));
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
@@ -255,6 +268,7 @@ function ensureModal() {
                     <div class="rel-results" id="rel-results" hidden></div>
                 </div>
                 <div class="rel-art" id="rel-art"></div>
+                ${field('rel-clas', 'main.colRelClasificacion', 'relClass')}
                 ${field('rel-centro', 'main.colRelCentroCostos', 'relCostCenter')}
                 <div class="rel-two">${field('rel-alm', 'main.colRelAlmacen', 'relWarehouse')}${field('rel-sub', 'main.colRelSubAlmacen', 'relSubWarehouse')}</div>
                 ${field('rel-zona', 'main.colRelZona', 'relZone')}
@@ -315,6 +329,7 @@ function ensureModal() {
     });
     bind('rel-centro', 'centro', true); bind('rel-alm', 'alm', true); bind('rel-sub', 'sub', true);
     bind('rel-zona', 'zona'); bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-fila', 'fila', true); bind('rel-prof', 'prof', true);
+    $m('rel-clas').addEventListener('change', (event) => { st.clas = event.target.value; renderForm(); });
     $m('rel-code').addEventListener('input', () => {
         st.sku = null;
         renderForm();
@@ -382,6 +397,8 @@ function renderForm() {
     $m('rel-art').innerHTML = st.sku
         ? `<b>${esc(st.sku.sku)} · ${esc(st.sku.description)}</b><span>${esc([st.sku.upc ? `UPC ${st.sku.upc}` : '', st.sku.uom].filter(Boolean).join(' · '))}</span>`
         : `<span>${esc(t('main.relPickCode'))}</span>`;
+    // la clasificación del producto en este lugar (sin decir nada es Producto Activo)
+    $m('rel-clas').innerHTML = CLASS_KEYS.map((k) => `<option value="${k}"${st.clas === k ? ' selected' : ''}>${esc(t(`main.relClass_${k}`))}</option>`).join('');
     fillSelect('rel-centro', centerChoices().map((c) => ({ value: c.id, label: c.name })), t('main.relChooseCost'), st.centro, false);
     const whs = opts.warehouses.filter((w) => w.parentId === st.centro && (w.status === 'active' || w.id === keepWh));
     fillSelect('rel-alm', whs.map((w) => ({ value: w.id, label: w.name })), st.centro ? t('main.relChooseWarehouse') : t('main.relFirstCost'), st.alm, !st.centro || !whs.length);
@@ -473,7 +490,7 @@ async function openDialog(record) {
         ? {
             sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc, uom: '' },
             centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', est: record.spaceId || '',
-            niv: record.level || '', esp: record.slot || '', fila: record.row || '', prof: record.depth || '',
+            niv: record.level || '', esp: record.slot || '', fila: record.row || '', prof: record.depth || '', clas: record.classification || 'activo',
         }
         : blankState();
     $m('rel-title').textContent = t(record ? 'main.relDialogEdit' : 'main.relDialogNew');
@@ -492,7 +509,7 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && 
 async function save() {
     const values = {
         skuItemId: st.sku ? st.sku.id : null, costCenterId: st.centro || null, warehouseId: st.alm || null, subWarehouseId: st.sub || null,
-        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, row: st.fila || null, depth: st.prof || null,
+        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, row: st.fila || null, depth: st.prof || null, classification: st.clas || 'activo',
     };
     let method = 'POST';
     let url = API;
@@ -500,7 +517,7 @@ async function save() {
     if (editing) {
         const before = {
             skuItemId: editing.skuItemId, costCenterId: editing.costCenterId, warehouseId: editing.warehouseId, subWarehouseId: editing.subWarehouseId,
-            zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, row: editing.row, depth: editing.depth,
+            zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, row: editing.row, depth: editing.depth, classification: editing.classification || 'activo',
         };
         body = {};
         Object.keys(values).forEach((key) => { if (String(values[key] ?? '') !== String(before[key] ?? '')) body[key] = values[key]; });

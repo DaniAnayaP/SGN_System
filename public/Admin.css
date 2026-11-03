@@ -7574,6 +7574,10 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .rel-tag{ font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.05rem 0.55rem; border-radius: 999px; border: 1px solid var(--color-border); white-space: nowrap; }
 .rel-tag-ok{ border-color: #8CCB9D; background: rgba(60, 170, 100, 0.14); color: #1E7E34; }
 .rel-tag-partial{ border-color: #D9A441; background: rgba(217, 164, 65, 0.16); color: #7A5310; }
+.rel-class-activo{ border-color: #8CCB9D; background: rgba(60, 170, 100, 0.14); color: #1E7E34; }
+.rel-class-cuarentena{ border-color: #E08A80; background: rgba(214, 90, 74, 0.14); color: #9A2A1F; }
+.rel-class-aclaracion{ border-color: #D9A441; background: rgba(217, 164, 65, 0.16); color: #7A5310; }
+.rel-class-consigna{ border-color: #7C9CD6; background: rgba(76, 120, 200, 0.14); color: #1D3A63; }
 .rel-dialog{ max-width: 58rem; width: 100%; max-height: calc(100vh - 2rem); overflow: auto; }
 .rel-split{ display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 1.2rem; margin: 0.75rem 0 1rem; }
 @media (max-width: 760px){ .rel-split{ grid-template-columns: minmax(0, 1fr); } }

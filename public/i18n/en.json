@@ -2595,6 +2595,16 @@
     "relTplInst_row": "The row number within the bay (level × column). Optional; if the bay has a single row put 1 or leave it empty.",
     "relTplErr_rowRange": "Row \"{value}\" does not exist in that bay of rack {rack} (it has {max}).",
     "relTplErr_columnNeeded": "Rack {rack} has {max} columns: the Locator must say which one (C001, C002…).",
+    "colRelClasificacion": "Classification",
+    "relClass_activo": "Active Product",
+    "relClass_cuarentena": "Quarantine Product",
+    "relClass_aclaracion": "Clarification Product",
+    "relClass_consigna": "Consignment Product",
+    "relTplInst_classification": "The classification of the product in that place: Active Product, Quarantine Product, Clarification Product or Consignment Product (Active, Quarantine, Clarification, Consignment or ACT, CUA, ACL, CON also work). Optional: empty is Active Product; for a place the code already has, it only changes its classification.",
+    "relTplErr_classNotFound": "The classification \"{value}\" does not exist. Use Active Product, Quarantine Product, Clarification Product or Consignment Product.",
+    "relTplStateReclass": "Reclassifies",
+    "relTplCountReclass": "reclassify",
+    "relTplWillReclass": "That place already belongs to the code: its classification changes from {from} to {to}. {route}.",
     "colRelCreateAuth": "Authorization to Create",
     "colRelDeleteAuth": "Authorization to Delete",
     "newRelation": "New Relation",
@@ -3739,6 +3749,10 @@
     "layoutSec_posiciones": {
       "what": "Each line is a bay: one level × one column of an asset (a rack with 2 levels and 3 columns leaves 6 bays, already listed). Inside each bay you write how many rows and how many depths it has, its height from the floor and its measures in meters. The measures come calculated from the asset's and you only fix the ones that differ; the capacity is rows × depths.",
       "example": "bay N2·C3 of R-01 has 2 rows and 3 depths: capacity 6."
+    },
+    "relClass": {
+      "what": "Says what the product is in this place: Active Product (the normal one), Quarantine Product, Clarification Product or Consignment Product. The same place can change classification over time; only one code per space is still allowed. Empty is Active Product.",
+      "example": "the lot that arrived under review stays as Quarantine Product until it is released."
     },
     "whLocationBtn": {
       "what": "Assigns this sub-warehouse the whole zones or the Layout racks that belong to it. The zones come from the Layout of its warehouse's cost center. A zone or a rack can belong to only one sub-warehouse.",

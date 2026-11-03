@@ -56,9 +56,9 @@
     }
 
     // ---- plantilla para bajar ---------------------------------------------------------------------------------------------------------
-    const EXAMPLE = { sku: '195201', locator: 'Z001.A001.N002.C003.F001.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos', zone: 'Zona 1', rack: 'R-01', level: '2', slot: '3', row: '1', depth: '1' };
+    const EXAMPLE = { sku: '195201', locator: 'Z001.A001.N002.C003.F001.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos', zone: 'Zona 1', rack: 'R-01', level: '2', slot: '3', row: '1', depth: '1', classification: 'Producto Activo' };
     // la fila de ejemplo de la plantilla usa el Localizador (las columnas Zona a Espacio son la otra forma de decir lo mismo y no se llenan junto con él)
-    const EXAMPLE_ROW = { sku: '195201', locator: 'Z001.A001.N002.C003.F001.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos' };
+    const EXAMPLE_ROW = { sku: '195201', locator: 'Z001.A001.N002.C003.F001.P001', classification: 'Producto Activo', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos' };
     const LETTER = { rack: 'A', rackpal: 'R', cabinet: 'G', pallet: 'T' }; // el mismo mapa de RelTemplate.ASSET_TYPES al revés: tipo de espacio del Layout -> letra del Localizador
     const pad3 = (n) => String(n).padStart(3, '0');
     const zoneNo = (name) => { const m = String(name || '').match(/(\d+)\s*$/); return m ? Number(m[1]) : null; };
@@ -141,7 +141,7 @@
                 <section class="tpl-blk" id="tpl-review" hidden>
                     <h4><span class="tpl-n">3</span>${esc(t('main.tplStep3'))}</h4>
                     <div class="tpl-bar">
-                        <div class="tpl-counts" aria-live="polite"><span class="tpl-cnt" id="tpl-c-total"></span><span class="tpl-cnt tpl-cnt-ok" id="tpl-c-new" hidden></span><span class="tpl-cnt tpl-cnt-info" id="tpl-c-upd" hidden></span><span class="tpl-cnt tpl-cnt-gone" id="tpl-c-same" hidden></span><span class="tpl-cnt tpl-cnt-bad" id="tpl-c-bad"></span><span class="tpl-cnt tpl-cnt-gone" id="tpl-c-gone" hidden></span></div>
+                        <div class="tpl-counts" aria-live="polite"><span class="tpl-cnt" id="tpl-c-total"></span><span class="tpl-cnt tpl-cnt-ok" id="tpl-c-new" hidden></span><span class="tpl-cnt tpl-cnt-info" id="tpl-c-upd" hidden></span><span class="tpl-cnt tpl-cnt-info" id="tpl-c-rec" hidden></span><span class="tpl-cnt tpl-cnt-gone" id="tpl-c-same" hidden></span><span class="tpl-cnt tpl-cnt-bad" id="tpl-c-bad"></span><span class="tpl-cnt tpl-cnt-gone" id="tpl-c-gone" hidden></span></div>
                         <div class="tpl-bar-right"><button type="button" class="btn btn-secondary tpl-small" id="tpl-next" data-help-key="tplNext"><i class="bx bx-down-arrow-alt" aria-hidden="true"></i> ${esc(t('main.tplNextError'))}</button>
                         <div class="tpl-seg" role="group"><button type="button" id="tpl-f-all" aria-pressed="true">${esc(t('main.tplAll'))}</button><button type="button" id="tpl-f-bad" aria-pressed="false">${esc(t('main.tplOnlyErrors'))}</button></div></div>
                     </div>
@@ -212,7 +212,7 @@
             const bySku = new Map(items.map((i) => [Number(i.sku), i]));
             const byUpc = new Map(items.filter((i) => i.upc).map((i) => [i.upc, i]));
             const placeKey = (r) => [r.skuItemId, r.costCenterId, r.warehouseId, r.subWarehouseId || 0, r.zoneId || '', r.spaceId || '', r.level || 0, r.slot || 0, r.row || 0, r.depth || 0].join('|');
-            const existing = new Set((list.relations || []).map(placeKey));
+            const existing = new Map((list.relations || []).map((r) => [placeKey(r), { id: r.id, classification: r.classification || 'activo' }]));
             const occupied = new Map((options.occupied || []).map((o) => [`${o.spaceId}|${o.level}|${o.slot}|${o.row || 1}|${o.depth || 1}`, o.sku]));
             const byItem = new Map();
             (list.relations || []).forEach((r) => { if (!byItem.has(r.skuItemId)) byItem.set(r.skuItemId, []); byItem.get(r.skuItemId).push(r); });
@@ -303,7 +303,7 @@
             warehouses: ctx.options.warehouses || [], subWarehouses: ctx.options.subWarehouses || [], zonesByCenter: ctx.options.zonesByCenter || {},
             itemBySku: (n) => ctx.bySku.get(n) || null, itemByUpc: (upc) => ctx.byUpc.get(upc) || null,
             occupiedBy: (spaceId, level, slot, row, depth) => ctx.occupied.get(`${spaceId}|${level}|${slot}|${row || 1}|${depth || 1}`) || '',
-            existingKey: (key) => ctx.existing.has(key),
+            existingRelation: (key) => ctx.existing.get(key) || null,
             relationsOf: (itemId) => ctx.byItem.get(itemId) || [],
             priorRowWithKey: (key, row) => { const n = accepted.get(key); return n && n !== row.n ? n : 0; },
         };
@@ -311,7 +311,7 @@
             if (r.out) { r.plan = null; r.err = null; return; }
             r.plan = R.planRow(r, local);
             r.err = r.plan.error || null;
-            if (!r.err && (r.plan.action === 'create' || r.plan.action === 'complete')) { accepted.set(r.plan.keys.place, r.n); if (r.plan.keys.slot) accepted.set(r.plan.keys.slot, r.n); if (r.plan.keys.claim) accepted.set(r.plan.keys.claim, r.n); }
+            if (!r.err && (r.plan.action === 'create' || r.plan.action === 'complete' || r.plan.action === 'reclass')) { accepted.set(r.plan.keys.place, r.n); if (r.plan.keys.slot) accepted.set(r.plan.keys.slot, r.n); if (r.plan.keys.claim) accepted.set(r.plan.keys.claim, r.n); }
         });
     }
     const routeText = (plan) => [...plan.route, plan.values.level ? t('main.relLevelN', { n: plan.values.level }) : '', plan.values.slot ? t('main.relSlotN', { n: plan.values.slot }) : '', plan.values.row ? t('main.relRowN', { n: plan.values.row }) : '', plan.values.depth ? t('main.relDepthN', { n: plan.values.depth }) : ''].filter(Boolean).join(' › ');
@@ -337,18 +337,20 @@
             const dup = r.err.code === 'occupied' || r.err.code === 'occupiedInFile' || r.err.code === 'duplicateInFile';
             set('tpl-tag-bad', t(dup ? 'main.tplStateRepeated' : 'main.tplStateInvalid'), 'tpl-what-bad', errText(r.err), remove);
         } else if (plan.action === 'same') set('tpl-tag-grey', t('main.relTplStateExists'), 'tpl-what-grey', t('main.relTplExistsMsg'), remove);
+        else if (plan.action === 'reclass') set('tpl-tag-info', t('main.relTplStateReclass'), 'tpl-what-info', t('main.relTplWillReclass', { from: t(`main.relClass_${plan.from}`), to: t(`main.relClass_${plan.to}`), route: routeText(plan) }), remove);
         else if (plan.action === 'complete') set('tpl-tag-info', t('main.relTplStateComplete'), 'tpl-what-info', t('main.relTplWillComplete', { route: routeText(plan) }), remove);
         else set('tpl-tag-ok', t('main.relTplStateNew'), 'tpl-what-ok', t(plan.located ? 'main.relTplWillLocated' : 'main.relTplWillPartial', { route: routeText(plan) }), remove);
         tr.hidden = filterBad && !r.err;
     }
     function paintAll() { rows.forEach((r) => { if (r.tr) paintRow(r); }); }
     function counts() {
-        const c = { create: 0, complete: 0, same: 0, bad: 0, gone: 0 };
+        const c = { create: 0, complete: 0, reclass: 0, same: 0, bad: 0, gone: 0 };
         rows.forEach((r) => {
             if (r.out) c.gone += 1;
             else if (r.err) c.bad += 1;
             else if (r.plan.action === 'create') c.create += 1;
             else if (r.plan.action === 'complete') c.complete += 1;
+            else if (r.plan.action === 'reclass') c.reclass += 1;
             else c.same += 1;
         });
         return c;
@@ -359,7 +361,8 @@
         $('tpl-c-total').textContent = t('main.tplRows', { n: rows.length });
         put('tpl-c-new', c.create, 'main.relTplCountNew');
         put('tpl-c-upd', c.complete, 'main.relTplCountComplete');
-        const ok = c.create + c.complete;
+        put('tpl-c-rec', c.reclass, 'main.relTplCountReclass');
+        const ok = c.create + c.complete + c.reclass;
         put('tpl-c-same', c.same, 'main.relTplCountExists');
         $('tpl-c-bad').innerHTML = `<b>${c.bad}</b> ${esc(t('main.tplWithError'))}`;
         $('tpl-c-bad').hidden = c.bad === 0;
@@ -397,7 +400,7 @@
     }
     async function onGo() {
         if (result && result.done) return;
-        const good = rows.filter((r) => !r.out && !r.err && r.plan && (r.plan.action === 'create' || r.plan.action === 'complete'));
+        const good = rows.filter((r) => !r.out && !r.err && r.plan && (r.plan.action === 'create' || r.plan.action === 'complete' || r.plan.action === 'reclass'));
         if (!good.length || busy) return;
         busy = true;
         progress = { done: 0, total: good.length };
@@ -410,7 +413,7 @@
         for (let from = 0; from < good.length; from += BATCH) {
             const chunk = good.slice(from, from + BATCH);
             try {
-                const res = await fetch(`${API}/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ rows: chunk.map((r) => ({ n: r.n, values: r.plan.values, ...(r.plan.action === 'complete' ? { relationId: r.plan.relationId } : {}) })) }) });
+                const res = await fetch(`${API}/import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ rows: chunk.map((r) => ({ n: r.n, values: r.plan.values, ...(r.plan.action === 'complete' ? { relationId: r.plan.relationId } : {}), ...(r.plan.action === 'reclass' ? { relationId: r.plan.relationId, reclass: true, values: { classification: r.plan.to } } : {}) })) }) });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok) {
                     if (from === 0) { stop(json.message || t('main.tplLoadError'), res.status); return; }
