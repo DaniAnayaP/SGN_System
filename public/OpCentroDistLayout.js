@@ -629,6 +629,7 @@ function markSelectedRow() {
 }
 // reveal = true cuando se acaba de elegir el renglón: si el croquis está acercado y lo elegido queda fuera de lo que se ve, se recorre para mostrarlo.
 function applyHighlight(reveal) {
+    applyHighlight3d();
     const svg = $('layout-svg');
     svg.querySelectorAll('.hl-shape, .hl-tag').forEach((n) => n.remove());
     svg.querySelectorAll('.hl-on').forEach((n) => n.classList.remove('hl-on'));
@@ -1945,12 +1946,12 @@ const LAYER3D_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprint
 const LAYER3D_LABEL_KEYS = { walls: 'main.layout3dCapaWalls', doors: 'main.layout3dCapaDoors', power: 'main.layout3dCapaPower', columns: 'main.layout3dCapaColumns', zones: 'main.layout3dCapaZones', footprints: 'main.layout3dCapaFootprints', assets: 'main.layout3dCapaAssets' };
 const scene3dLayers = { walls: true, doors: true, power: true, columns: true, zones: true, footprints: true, assets: true };
 // El 3D sigue los PASOS igual que el croquis: cada paso encendido muestra su capa y apagarlo la oculta (Contorno = paredes y columnas, Puertas, Zonas, Huella-Espacio = huellas, Energía Eléctrica = luz, Activos y
-// Posiciones = activos). La lista Capas es un filtro más: sirve para esconder algo aunque su paso esté encendido.
+// Posiciones = activos). La lista Capas ya NO repite los pasos: solo lleva lo que no es un paso, Paredes y Columnas, para esconderlos aunque Contorno esté encendido (por ejemplo para ver todo el piso).
 function effective3dLayers() {
     const on = (name) => scene3dLayers[name] !== false;
     return {
-        walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas') && on('doors'), zones: stepOn('zonas') && on('zones'),
-        footprints: stepOn('espacios') && on('footprints'), power: stepOn('luz') && on('power'), assets: (stepOn('activos') || stepOn('posiciones')) && on('assets'),
+        walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas'), zones: stepOn('zonas'),
+        footprints: stepOn('espacios'), power: stepOn('luz'), assets: stepOn('activos') || stepOn('posiciones'),
     };
 }
 try { Object.assign(scene3dLayers, JSON.parse(localStorage.getItem(LAYERS3D_KEY) || '{}')); } catch (err) { /* sin almacenamiento: se ven todas */ }
@@ -2010,7 +2011,14 @@ function refreshScene3d() {
         scene3d.setHiddenAssets(picker3d.getHidden(), false);
     }
     scene3d.update(state.draft, { labels: scene3dLabels, layers: effective3dLayers() });
+    applyHighlight3d();
     updateViewBtns();
+}
+// Lo que se elige en una tabla también se marca en el 3D (contorno naranja, doble al tocar la figura); solo cuenta en el paso que se está editando, igual que en el croquis.
+function applyHighlight3d() {
+    if (!scene3d || !scene3d.highlight) return; // el 3D viejo que quedó en la memoria del navegador aún no la trae
+    const h = state.hl;
+    scene3d.highlight(h && h.step === state.focus && state.draft ? { kind: h.kind, id: h.id, strong: !!h.strong } : null);
 }
 function scheduleScene3d() {
     if (!state.view3d) return;

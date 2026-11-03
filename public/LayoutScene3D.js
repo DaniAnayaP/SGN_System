@@ -48,6 +48,14 @@
         const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a }));
         outline.visible = false;
         scene.add(outline);
+        // Lo elegido en las tablas del editor (highlight): el mismo contorno naranja, siempre a la vista aunque otro activo lo tape; el fuerte lleva un segundo contorno más ancho.
+        const hlLines = [0, 1].map(() => {
+            const l = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a, depthTest: false, transparent: true }));
+            l.visible = false;
+            l.renderOrder = 10;
+            scene.add(l);
+            return l;
+        });
 
         const cam = new THREE.PerspectiveCamera(42, 1, 0.1, 2000);
         const st = { theta: 0.8, phi: 0.95, r: 40, tx: 0, ty: 1, tz: 0 };
@@ -64,6 +72,8 @@
         let zoneMeshes = [];
         let hiddenAssets = new Set(); // ids de los espacios que NO se dibujan (los eligió quien ve el 3D)
         let lastLayout = null;
+        let center = null; // el centro de la nave en el plano (el origen del 3D), para ubicar lo resaltado
+        let hl = null; // lo resaltado: { kind: 'zone' | 'footprint' | 'space' | 'bay', id, strong }
         const textureCache = new Map();
 
         const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -80,6 +90,41 @@
             group.zoneLabels.visible = labelsOn && layerOn.zones;
             group.spaceLabels.visible = labelsOn && layerOn.assets;
             if (!layerOn.assets && !layerOn.zones) outline.visible = false;
+            applyHl();
+            dirty = true;
+        }
+
+        // El cuadro (en el 3D) de lo que se eligió en una tabla. Una capa apagada no se marca, igual que no se puede tocar.
+        function hlBox() {
+            if (!hl || !center || !lastLayout) return null;
+            const PX = (x) => x - center.x;
+            const PZ = (y) => y - center.y;
+            if (hl.kind === 'zone') {
+                const z = (lastLayout.zones || []).find((e) => e.id === hl.id);
+                if (!z || !layerOn.zones) return null;
+                const pts = Array.isArray(z.pts) && z.pts.length >= 3 ? z.pts : [[z.x, z.y], [z.x + z.l, z.y], [z.x + z.l, z.y + z.w], [z.x, z.y + z.w]];
+                const xs = pts.map((p) => p[0]); const ys = pts.map((p) => p[1]);
+                const x0 = Math.min(...xs); const x1 = Math.max(...xs); const y0 = Math.min(...ys); const y1 = Math.max(...ys);
+                return { x: PX((x0 + x1) / 2), y: 0.1, z: PZ((y0 + y1) / 2), sx: x1 - x0, sy: 0.2, sz: y1 - y0 };
+            }
+            if (hl.kind === 'footprint') {
+                const f = (lastLayout.footprints || []).find((e) => e.id === hl.id);
+                if (!f || f.active === false || !(f.l > 0) || !(f.d > 0) || !(layerOn.footprints || layerOn.assets)) return null;
+                const mates = (lastLayout.spaces || []).filter((s) => s.footprintId === f.id && s.active !== false && s.h > 0 && !hiddenAssets.has(s.id));
+                const h = layerOn.assets && mates.length ? Math.max(...mates.map((s) => s.h)) : 0.2;
+                return { x: PX(f.x + f.l / 2), y: h / 2, z: PZ(f.y + f.d / 2), sx: f.l, sy: h, sz: f.d };
+            }
+            const s = (lastLayout.spaces || []).find((e) => e.id === hl.id);
+            if (!s || s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id) || !layerOn.assets) return null;
+            return { x: PX(s.x + s.l / 2), y: s.h / 2, z: PZ(s.y + s.d / 2), sx: s.l, sy: s.h, sz: s.d };
+        }
+        function applyHl() {
+            const box = hlBox();
+            hlLines.forEach((l, i) => {
+                const grow = i === 0 ? 0.06 : 0.2;
+                l.visible = !!box && (i === 0 || hl.strong);
+                if (box) { l.position.set(box.x, box.y, box.z); l.scale.set(box.sx + grow, box.sy + grow, box.sz + grow); }
+            });
             dirty = true;
         }
 
@@ -190,13 +235,15 @@
             hitSpaces = null;
             spaceList = [];
             zoneMeshes = [];
-            const V = layout && Array.isArray(layout.vertices) ? layout.vertices.filter((p) => Array.isArray(p) && p.length >= 2) : [];
+            center = null;
+            const V =layout && Array.isArray(layout.vertices) ? layout.vertices.filter((p) => Array.isArray(p) && p.length >= 2) : [];
             if (V.length < 3) { applyVisibility(); return; }
             const xs = V.map((p) => p[0]);
             const ys = V.map((p) => p[1]);
             const minX = Math.min(...xs); const maxX = Math.max(...xs); const minY = Math.min(...ys); const maxY = Math.max(...ys);
             const CX = (minX + maxX) / 2;
             const CY = (minY + maxY) / 2;
+            center = { x: CX, y: CY };
             const fallbackH = Number(layout.heightM) > 0 ? Number(layout.heightM) : 8;
             const cornerH = V.map((p) => (Number(p[2]) > 0 ? Number(p[2]) : fallbackH));
             const maxH = Math.max(...cornerH);
@@ -352,6 +399,8 @@
             hiddenAssets = new Set(ids || []);
             if (rebuild !== false && lastLayout) update(lastLayout);
         }
+        // Marcar lo que se eligió en una tabla del editor (sel = { kind, id, strong }) o quitar la marca (null).
+        function highlight(sel) { hl = sel && sel.id ? { kind: sel.kind, id: sel.id, strong: !!sel.strong } : null; applyHl(); }
         function setView(name) { go(viewTarget(name), true); }
         function zoom(factor) { st.r = clamp(st.r / factor, 3, bounds.diag * 6); applyCam(); }
 
@@ -461,7 +510,7 @@
             renderer.dispose();
             canvas.remove();
         }
-        return { update, setLabels, setLayer, setHiddenAssets, setView, zoom, resize, destroy, canvas, layers: LAYER_NAMES.slice() };
+        return { update, setLabels, setLayer, setHiddenAssets, highlight, setView, zoom, resize, destroy, canvas, layers: LAYER_NAMES.slice() };
     }
 
     root.LayoutScene3D = { create, LAYERS: LAYER_NAMES.slice() };

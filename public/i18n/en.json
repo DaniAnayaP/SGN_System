@@ -3990,8 +3990,8 @@
       "example": "you want to see only R-07 and T-03 to check their heights: press None, search R-07 and tick the rack, then search T-03 and tick the pallet."
     },
     "layout3dLayers": {
-      "what": "In 3D the layers follow the same steps as the map: when you turn a step on (Outline, Doors, Zones, Footprint-Space, Electrical Power, Assets) its layer is shown and when you turn it off it is hidden. The Layers list is one more filter: it lets you hide a layer (Walls, Doors, Power connections, Columns, Zones, Footprints or Assets) even if its step is on. What you hide is no longer seen or touchable; the labels of that layer go away too. The list is remembered in this browser.",
-      "example": "you turn Zones on and the zones appear in 3D; you turn Zones off and they hide; with Footprint-Space and Assets you see the footprints on the floor and the racks on top."
+      "what": "In 3D the layers follow the same steps as the map: when you turn a step on (Outline, Doors, Zones, Footprint-Space, Electrical Power, Assets) its layer is shown and when you turn it off it is hidden. The Layers list only has what does not have a step of its own: Walls and Columns, to hide them even if Outline is on. What you hide is no longer seen or touchable. The list is remembered in this browser.",
+      "example": "you turn Zones on and the zones appear in 3D; you turn Zones off and they hide; to see the whole floor without obstacles, you remove the check on Walls in the Layers list."
     },
     "layout3dViews": {
       "what": "Places the 3D camera: Overview (diagonal), Top view (from above, like the sketch) or Front view (from the side, to see heights).",
@@ -4134,7 +4134,7 @@
       "example": "the warehouse starts at 0, 0."
     },
     "layoutCanvas": {
-      "what": "The map of the warehouse, drawn by itself from the data you enter: walls, zones, racks, doors and power connections. When you touch a line of Zones, Footprint-Space, Assets or Positions, what that line is gets highlighted here with a thin, dotted, rotating outline (so the measures and how close it is to the rest stay visible) and the line stays marked in the table; for a position its rack is marked and the level and column are written. If you touch the shape on the map (without dragging it), it is highlighted with the thick orange outline and its line is marked; touch it again to go back to the dotted one.",
+      "what": "The map of the warehouse, drawn by itself from the data you enter: walls, zones, racks, doors and power connections. When you touch a line of Zones, Footprint-Space, Assets or Positions, what that line is gets highlighted here with a thin, dotted, rotating outline (so the measures and how close it is to the rest stay visible) and the line stays marked in the table; for a position its rack is marked and the level and column are written. If you touch the shape on the map (without dragging it), it is highlighted with the thick orange outline and its line is marked; touch it again to go back to the dotted one. In 3D, the line you choose is also marked with an orange outline around its shape, and the mark goes away when you change step.",
       "example": "you change the width of a zone and the map updates instantly; you touch line R-03 and rack R-03 is marked with its dotted outline; you touch the rack on the map and it is marked thick so you can find it at a glance."
     },
     "layoutSave": {

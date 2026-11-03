@@ -3989,8 +3989,8 @@
       "example": "quieres ver solo R-07 y T-03 para revisar sus alturas: pulsas Ninguno, buscas R-07 y marcas el anaquel, luego buscas T-03 y marcas la tarima."
     },
     "layout3dLayers": {
-      "what": "En 3D, las capas siguen los mismos pasos que el croquis: cuando enciendes un paso (Contorno, Puertas, Zonas, Huella-Espacio, Energía Eléctrica, Activos) se ve su capa y cuando lo apagas se oculta. La lista Capas es un filtro más: sirve para esconder una capa (Paredes, Puertas, Conexiones de luz, Columnas, Zonas, Huellas o Activos) aunque su paso esté encendido. Lo que ocultas deja de verse y de poder tocarse; los rótulos de esa capa también se van. La lista se recuerda en este navegador.",
-      "example": "enciendes Zonas y se ven las zonas en el 3D; apagas Zonas y se ocultan; con Huella-Espacio y Activos ves las huellas en el piso y los anaqueles encima."
+      "what": "En 3D, las capas siguen los mismos pasos que el croquis: cuando enciendes un paso (Contorno, Puertas, Zonas, Huella-Espacio, Energía Eléctrica, Activos) se ve su capa y cuando lo apagas se oculta. La lista Capas solo trae lo que no tiene un paso propio: Paredes y Columnas, para esconderlas aunque Contorno esté encendido. Lo que ocultas deja de verse y de poder tocarse. La lista se recuerda en este navegador.",
+      "example": "enciendes Zonas y se ven las zonas en el 3D; apagas Zonas y se ocultan; para ver todo el piso sin estorbos, quitas la palomita de Paredes en la lista Capas."
     },
     "layout3dViews": {
       "what": "Acomoda la cámara del 3D: Vista general (en diagonal), Planta (desde arriba, como el croquis) o Frente (de lado, para ver las alturas).",
@@ -4133,7 +4133,7 @@
       "example": "la nave empieza en 0, 0."
     },
     "layoutCanvas": {
-      "what": "El croquis de la nave, que se dibuja solo con los datos que capturas: paredes, zonas, anaqueles, puertas y conexiones de luz. Al tocar un renglón de Zonas, Huella-Espacio, Activos o Posiciones, lo que ese renglón es se resalta aquí con un contorno delgado, punteado y que va girando (así se siguen viendo las medidas y qué tan pegado está a lo demás) y el renglón queda marcado en la tabla; de una posición se marca su anaquel y se escribe el nivel y la columna. Si tocas la figura en el croquis (sin arrastrarla), se resalta con el contorno grueso naranja y se marca su renglón; vuelve a tocarla para regresar al punteado.",
+      "what": "El croquis de la nave, que se dibuja solo con los datos que capturas: paredes, zonas, anaqueles, puertas y conexiones de luz. Al tocar un renglón de Zonas, Huella-Espacio, Activos o Posiciones, lo que ese renglón es se resalta aquí con un contorno delgado, punteado y que va girando (así se siguen viendo las medidas y qué tan pegado está a lo demás) y el renglón queda marcado en la tabla; de una posición se marca su anaquel y se escribe el nivel y la columna. Si tocas la figura en el croquis (sin arrastrarla), se resalta con el contorno grueso naranja y se marca su renglón; vuelve a tocarla para regresar al punteado. En el 3D, el renglón que eliges también se marca con un contorno naranja alrededor de su figura, y la marca se quita al cambiar de paso.",
       "example": "cambias el ancho de una zona y el croquis se actualiza al instante; tocas el renglón R-03 y el anaquel R-03 se marca con su contorno punteado; tocas el anaquel en el croquis y se marca grueso para ubicarlo de un vistazo."
     },
     "layoutSave": {
