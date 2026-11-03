@@ -6595,7 +6595,7 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     const body = req.body || {};
     const checked = LayoutCalc.sanitizeLayout(body.layout);
     if (!checked.ok) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: checked.errors });
-    const next = checked.layout;
+    let next = checked.layout;
 
     let planImage;
     if (body.planImage !== undefined) {
@@ -6618,6 +6618,8 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         return res.status(409).json({ code: 'COST_CENTER_REQUIRED', message: 'Ese centro de costos todavía no está completo: termina de llenarlo en Nuestros Centros Costos.' });
     }
     const existing = getClientLayout(req.user.clientId, { costCenterId: targetCenterId });
+    // Los códigos de las huellas (H001… por zona) los pone el sistema: una huella que ya existía conserva el suyo y una nueva recibe el siguiente de su zona.
+    next = LayoutCalc.lockHuellaCodes(next, existing ? existing.layout : null);
     const expectedVersion = Number(body.baseVersion) || 0;
     if ((existing ? existing.version : 0) !== expectedVersion) {
         return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: existing ? existing.version : 0 });
@@ -7556,8 +7558,9 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
     const wh = ctx.warehouses.get(row.warehouse_id);
     const sub = ctx.warehouses.get(row.sub_warehouse_id);
     const layout = ctx.layoutFor(row.cost_center_id);
-    const zone = layout.zoneById.get(row.zone_id);
     const space = layout.spaceById.get(row.space_id);
+    // La zona de una relación con activo es la de ESE activo hoy (la zona de una huella sale de dónde está en el croquis); la que se guardó solo se usa mientras no hay activo.
+    const zone = space && space.zoneId ? layout.zoneById.get(space.zoneId) : layout.zoneById.get(row.zone_id);
     const footprint = space ? layout.footprintById.get(space.footprintId) : null;
     // Ubicado = un sub almacén virtual (no tiene dónde más) o el camino físico completo hasta el hueco (anaquel, nivel y columna) y, si ese hueco tiene más de una fila o más de una profundidad, cuál fila y cuál profundidad; lo demás queda A medias.
     const bay = row.space_id && row.level && row.slot ? LayoutCalc.bayOf(space, row.level, row.slot) : { rows: 1, depth: 1 };
@@ -7572,7 +7575,7 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
         costCenterId: row.cost_center_id, centroCostos: cc ? cc.name : '',
         warehouseId: row.warehouse_id, warehouseName: wh ? wh.name : '',
         subWarehouseId: row.sub_warehouse_id, subWarehouseName: sub ? sub.name : '', subKind: sub ? sub.kind : '',
-        zoneId: row.zone_id, zoneName: zone ? zone.name : '',
+        zoneId: zone ? zone.id : row.zone_id, zoneName: zone ? zone.name : '',
         spaceId: row.space_id, spaceCode: space ? space.code : '',
         footprintId: footprint ? footprint.id : '', footprintCode: footprint ? footprint.code : '',
         // El Localizador completo (las 7 piezas) solo existe cuando el lugar está completo.
@@ -7635,6 +7638,8 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     if (!state.costCenterId || !ctx.costCenters.has(state.costCenterId)) return bad('Elige un centro de costos.');
     if (!(existing && existing.cost_center_id === state.costCenterId) && !ctx.isCompleteCenter(state.costCenterId)) return bad('Ese centro de costos está incompleto o inactivo. Complétalo primero en Nuestros Centros Costos.');
     const layout = ctx.layoutFor(state.costCenterId);
+    // La zona del lugar es la del activo hoy (la de su huella, que sale de dónde está en el croquis): una relación guardada con otra zona se corrige sola.
+    if (state.spaceId) { const placed = layout.spaceById.get(state.spaceId); if (placed && placed.zoneId) state.zoneId = placed.zoneId; }
     const wh = state.warehouseId ? ctx.warehouses.get(state.warehouseId) : null;
     if (!wh || wh.category_type !== 'almacenes') return bad('Elige un almacén.');
     if (wh.parent_id !== state.costCenterId) return bad('Ese almacén no pertenece a ese centro de costos.');

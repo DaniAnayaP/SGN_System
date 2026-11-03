@@ -86,7 +86,7 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        return deriveSpaces(assignHuellaCodes(migrateFootprints({ ...layout, vertices, heightM: round2(meanHeight(vertices)) })));
+        return deriveSpaces(assignHuellaCodes(deriveFootprintZones(migrateFootprints({ ...layout, vertices, heightM: round2(meanHeight(vertices)) }))));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -306,38 +306,76 @@
         });
         return changed ? { ...layout, footprints, spaces } : layout;
     }
-    // El código de una HUELLA es H001, H002… (de ahí sale la H del Localizador); el del activo es el suyo (R-05, A-05…). Una huella que todavía no lo tiene (las de antes, que llevaban el código de su espacio:
-    // R-05) lo recibe aquí: primero el número de su código de antes (R-05 -> H005) si nadie lo pidió antes y, a las que chocan (R-02 y T-02 pedirían H002) o no traen número, los siguientes libres después del
-    // más alto, en el orden de la lista. Es idempotente: lo que ya es H### se deja como está (solo se escribe con tres cifras: h5 -> H005).
+    // La ZONA de una huella no se elige: sale de dónde está en el croquis. Es la zona más chica que contiene el centro de la huella (si el centro cae en varias, la más específica); si cae fuera de todas, la
+    // huella queda sin zona. Se recalcula siempre (al leer el Layout, al guardarlo y al mover una huella o una zona), así que la zona nunca contradice el dibujo; de ahí sale también la de cada activo.
+    // Una zona desactivada también cuenta (la huella sigue estando adentro): si no, desactivar una zona le cambiaría la zona y el código a todas sus huellas.
+    function zoneOfPoint(zones, x, y) {
+        let best = null;
+        let bestArea = Infinity;
+        (zones || []).forEach((z) => {
+            const pts = zonePoints(z);
+            if (!pts || pts.length < 3 || !pointInPolygon(x, y, pts)) return;
+            const area = zoneArea(z);
+            if (area < bestArea) { best = z; bestArea = area; }
+        });
+        return best ? best.id : '';
+    }
+    function deriveFootprintZones(layout) {
+        if (!layout || !Array.isArray(layout.footprints)) return layout;
+        let changed = false;
+        const footprints = layout.footprints.map((f) => {
+            const id = zoneOfPoint(layout.zones, (Number(f.x) || 0) + (Number(f.l) || 0) / 2, (Number(f.y) || 0) + (Number(f.d) || 0) / 2);
+            if ((f.zoneId || '') === id) return f;
+            changed = true;
+            return { ...f, zoneId: id };
+        });
+        return changed ? { ...layout, footprints } : layout;
+    }
+    // El código de una HUELLA es H001, H002… y lo pone el sistema: consecutivo POR ZONA (cada zona tiene su H001, su H002…) y sin repetirse dentro de su zona; ahí está la H del Localizador, que va siempre
+    // detrás de la zona (Z006.H001…). Una huella que ya tiene su H### y no se repite en su zona lo conserva (se escribe con tres cifras: h5 -> H005); una que todavía no lo tiene (las de antes, que llevaban el
+    // código de su espacio, R-05; o una nueva) reclama el número de su código de antes (R-05 -> H005) si está libre en su zona y, si no, recibe el siguiente después del más alto de su zona, en el orden de la lista.
+    // Hace falta que las zonas de las huellas ya estén calculadas (deriveFootprintZones). Es idempotente.
     const huellaCode = (n) => `H${String(n).padStart(3, '0')}`;
     const isHuellaCode = (c) => /^H\d{1,4}$/i.test(String(c == null ? '' : c).trim()) && Number(String(c).trim().slice(1)) >= 1;
     function assignHuellaCodes(layout) {
         if (!layout || !Array.isArray(layout.footprints)) return layout;
-        const used = new Set();
         let changed = false;
-        const pass1 = layout.footprints.map((f) => {
-            if (isHuellaCode(f.code)) {
-                const code = huellaCode(Number(String(f.code).trim().slice(1)));
+        const out = layout.footprints.slice();
+        const groups = new Map();
+        out.forEach((f, i) => { const key = f.zoneId || ''; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(i); });
+        groups.forEach((indexes) => {
+            const used = new Set();
+            const kept = new Set();
+            // 1) los que ya son H### y no se repiten en su zona (el primero de la lista manda)
+            indexes.forEach((i) => {
+                if (!isHuellaCode(out[i].code)) return;
+                const code = huellaCode(Number(String(out[i].code).trim().slice(1)));
+                if (used.has(code)) return;
                 used.add(code);
-                if (code !== f.code) { changed = true; return { ...f, code }; }
-            }
-            return f;
+                kept.add(i);
+                if (code !== out[i].code) { out[i] = { ...out[i], code }; changed = true; }
+            });
+            // 2) los demás reclaman el número de su código de antes si está libre en la zona
+            const pending = [];
+            indexes.forEach((i) => {
+                if (kept.has(i)) return;
+                const m = String(out[i].code == null ? '' : out[i].code).match(/(\d+)\s*$/);
+                const n = m ? Number(m[1]) : 0;
+                const code = n >= 1 && n <= 9999 ? huellaCode(n) : '';
+                if (code && !used.has(code)) { used.add(code); out[i] = { ...out[i], code }; changed = true; } else pending.push(i);
+            });
+            // 3) los que chocan o no traen número: los siguientes después del más alto de la zona
+            let next = Math.max(0, ...Array.from(used).map((c) => Number(c.slice(1)))) + 1;
+            pending.forEach((i) => { while (used.has(huellaCode(next))) next += 1; const code = huellaCode(next); used.add(code); out[i] = { ...out[i], code }; changed = true; });
         });
-        // las que no son H###: se reclama el número de su código de antes (si está libre)
-        const pending = [];
-        const pass2 = pass1.map((f, i) => {
-            if (isHuellaCode(f.code)) return f;
-            const m = String(f.code == null ? '' : f.code).match(/(\d+)\s*$/);
-            const n = m ? Number(m[1]) : 0;
-            const code = n >= 1 && n <= 9999 ? huellaCode(n) : '';
-            if (code && !used.has(code)) { used.add(code); changed = true; return { ...f, code }; }
-            pending.push(i);
-            return f;
-        });
-        // las que chocan o no traen número: los siguientes después del más alto
-        let next = Math.max(0, ...Array.from(used).map((c) => Number(c.slice(1)))) + 1;
-        pending.forEach((i) => { while (used.has(huellaCode(next))) next += 1; const code = huellaCode(next); used.add(code); pass2[i] = { ...pass2[i], code }; changed = true; });
-        return changed ? { ...layout, footprints: pass2 } : layout;
+        return changed ? { ...layout, footprints: out } : layout;
+    }
+    // Al guardar: los códigos no se editan. Una huella que ya existía y sigue en su zona conserva el suyo; una nueva, o una que se movió a otra zona (llega como si fuera nueva), recibe el siguiente de su zona.
+    function lockHuellaCodes(next, previous) {
+        if (!next || !Array.isArray(next.footprints)) return next;
+        const before = new Map(((previous && previous.footprints) || []).map((f) => [f.id, f]));
+        const footprints = next.footprints.map((f) => { const was = before.get(f.id); const code = was && (was.zoneId || '') === (f.zoneId || '') ? was.code : ''; return code === f.code ? f : { ...f, code }; });
+        return assignHuellaCodes({ ...next, footprints });
     }
     // Pone en cada activo lo que viene de su huella (ver arriba). Es idempotente: se puede llamar cuantas veces haga falta. active del activo = no está apagado él (off) ni su huella.
     function deriveSpaces(layout) {
@@ -501,7 +539,7 @@
     // ---- validación (la usa el servidor antes de guardar; la pantalla solo la usa para avisar) --------------------------
     function sanitizeLayout(input) {
         const errors = [];
-        const src = assignHuellaCodes(migrateFootprints(input && typeof input === 'object' ? input : {}));
+        const src = migrateFootprints(input && typeof input === 'object' ? input : {});
         const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
         const meters = (v, label, min = 0) => {
             const n = Number(v);
@@ -620,17 +658,11 @@
 
         // Huellas (paso Huella-Espacio): el lugar en el piso. Cada una puede tener uno o varios activos (ver migrateFootprints).
         const footprintIds = new Set();
-        const footprintCodes = new Set();
         out.footprints = list(src.footprints, LIMITS.spaces, 'Huellas').map((f, i) => {
             const label = `Huella ${i + 1}`;
-            const code = text(f && f.code, label, true);
-            if (code && !isHuellaCode(code)) errors.push(`${label}: el código debe ser como H001 (una H y un número)`);
-            if (code) {
-                const key = code.toLowerCase();
-                if (footprintCodes.has(key)) errors.push(`${label}: el código "${code}" está repetido`);
-                footprintCodes.add(key);
-            }
-            const zoneId = typeof (f && f.zoneId) === 'string' && zoneIds.has(f.zoneId) ? f.zoneId : '';
+            // El código lo pone el sistema (consecutivo por zona, assignHuellaCodes más abajo) y la zona sale de dónde está la huella (deriveFootprintZones): lo que mande el cliente solo se usa de punto de partida.
+            const code = text(f && f.code, label, false);
+            const zoneId = '';
             // El nombre de la Huella-Espacio: opcional; sin él se guarda sin ese campo.
             const name = text(f && f.name, label, false);
             // Formato propio de la huella (color, rayas y borde, como el de las zonas): sin él la huella se ve blanca.
@@ -678,6 +710,7 @@
                 ...(s && s.off === true ? { off: true } : {}),
             };
         });
+        out.footprints = assignHuellaCodes(deriveFootprintZones(out)).footprints;
         out.spaces = deriveSpaces(out).spaces;
 
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
@@ -837,7 +870,7 @@
         if (section === 'zonas') return layout.zones;
         // Los espacios sin lo del paso Activos (la clasificación y el tipo de activo, y sus niveles, espacios por nivel y cajones; todo eso tiene su propio permiso). En Activos, solo los espacios que ya tienen
         // algo de eso: así agregar un espacio nuevo en Huella-Espacio (con 1 nivel) no cuenta como cambio de Activos.
-        if (section === 'espacios') return layout.footprints || [];
+        if (section === 'espacios') return (layout.footprints || []).map(({ zoneId, ...rest }) => rest);
         // Un activo "de fábrica" (el primero de su huella y sin nada más: ni clasificación, tipo, niveles, columnas ni cajones) no cuenta como Activos: agregar una huella nueva en Huella-Espacio crea el suyo solo.
         if (section === 'activos') {
             const byId = new Map((layout.footprints || []).map((f) => [f.id, f]));
@@ -865,7 +898,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, lockHuellaCodes, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

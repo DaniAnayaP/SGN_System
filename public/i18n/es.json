@@ -3597,8 +3597,8 @@
       "example": "Rack, Estante o Escritorio."
     },
     "layoutSec_espacios": {
-      "what": "Las huellas: el lugar en el piso (código, zona, posición y medidas). De aquí salen los m² y m³ de almacenamiento. El código de la huella es H001, H002… (de ahí sale la H del Localizador): se asigna solo al agregarla y se puede cambiar. Al agregar una huella se crea sola su primer activo; si encima hay más de uno, los agregas en el paso Activos y la huella se reparte entre ellos.",
-      "example": "registras la huella H001 de 3 por 1.1 metros y 4.5 de alto; en Activos ya aparece su primer activo, con su propio código (R-01)."
+      "what": "Las huellas: el lugar en el piso. La zona de cada huella y su código los pone el sistema y no se editan: la zona sale de dónde la acomodas en el croquis (la zona que contiene su centro; fuera de todas queda sin zona) y el código es consecutivo POR ZONA (H001, H002… de cada zona; cada zona tiene su H001). Lo que sí puedes cambiar es el Nombre, para identificarla, la posición y las medidas. De aquí salen los m² y m³ de almacenamiento. Al agregar una huella se crea sola su primer activo; si encima hay más de uno, los agregas en el paso Activos y la huella se reparte entre ellos.",
+      "example": "agregas una huella y la acomodas dentro de la Zona 6: sale como H001 de la Zona 6; otra que acomodes en la Zona 2 también sale como H001, pero de la Zona 2."
     },
     "layoutLocked": {
       "what": "Esta sección no se puede cambiar con tus accesos actuales.",

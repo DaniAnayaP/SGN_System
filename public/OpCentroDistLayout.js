@@ -398,6 +398,9 @@ function onCategoryEdit(el) {
     refreshLive();
 }
 
+function footprintZoneName(f) {
+    return (state.draft.zones.find((z) => z.id === f.zoneId) || {}).name || '—';
+}
 function stepHtml(step) {
     const d = state.draft;
     const dis = !canEdit(step);
@@ -489,7 +492,7 @@ function stepHtml(step) {
         const assetOptions = (list, selected) => `<option value="">${esc(t('main.layoutActivoElegir'))}</option>${choices(list, selected).map((r) => `<option value="${r.id}"${r.id === selected ? ' selected' : ''}>${esc(r.name || t('main.whNoName'))}${r.status === 'active' ? '' : ` (${esc(t('admin.statusInactivo'))})`}</option>`).join('')}`;
         const pick = (i, key, help, list, selected) => `<td><select data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="${help}"${dis ? ' disabled' : ''}>${assetOptions(list, selected || 0)}</select></td>`;
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
-        const footprintOptions = (selected) => d.footprints.map((f) => `<option value="${esc(f.id)}"${f.id === selected ? ' selected' : ''}>${esc(f.code)}</option>`).join('');
+        const footprintOptions = (selected) => d.footprints.map((f) => `<option value="${esc(f.id)}"${f.id === selected ? ' selected' : ''}>${esc(f.code)} · ${esc(footprintZoneName(f))}</option>`).join('');
         const rows = d.spaces.map((s, i) => {
             const saved = isSavedRow('spaces', s.id);
             return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('spaces', i, 'code', s.code, dis)}${cellSelect('spaces', i, 'footprintId', footprintOptions(s.footprintId), dis)}<td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis) : removeCell('spaces', i, dis)}</tr>`;
@@ -500,7 +503,7 @@ function stepHtml(step) {
     // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una se crea sola su primer activo (con el mismo código); más activos sobre la misma huella se agregan en el paso Activos.
     const rows = d.footprints.map((s, i) => {
         const saved = isSavedRow('footprints', s.id);
-        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('footprints', i, 'name', s.name || '', dis)}${cellText('footprints', i, 'code', s.code, dis)}${cellSelect('footprints', i, 'zoneId', zoneOptions(s.zoneId), dis)}${cellNum('footprints', i, 'x', s.x, dis)}${cellNum('footprints', i, 'y', s.y, dis)}${cellNum('footprints', i, 'l', s.l, dis)}${cellNum('footprints', i, 'd', s.d, dis)}${cellNum('footprints', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('footprints', i, s.active, dis, spaceFmtButton(s, i, dis)) : removeCell('footprints', i, dis, spaceFmtButton(s, i, dis))}</tr>`;
+        return `<tr class="${s.active === false ? 'layout-off' : ''}">${cellText('footprints', i, 'name', s.name || '', dis)}<td class="layout-calc"><b data-fp-code="${i}">${esc(s.code)}</b></td><td class="layout-calc" data-fp-zone="${i}">${esc(footprintZoneName(s))}</td>${cellNum('footprints', i, 'x', s.x, dis)}${cellNum('footprints', i, 'y', s.y, dis)}${cellNum('footprints', i, 'l', s.l, dis)}${cellNum('footprints', i, 'd', s.d, dis)}${cellNum('footprints', i, 'h', s.h, dis)}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('footprints', i, s.active, dis, spaceFmtButton(s, i, dis)) : removeCell('footprints', i, dis, spaceFmtButton(s, i, dis))}</tr>`;
     });
     return `${table(['main.layoutNombre', 'main.layoutCodigoHuella', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaVolumen', ''], rows, 'layout-espacios')}${addButton('footprints', 'main.layoutAgregarEspacio', dis, true)}`;
 }
@@ -528,7 +531,7 @@ let panelScrollEnd = false;
 const panelScrollers = () => Array.from(document.querySelectorAll('#layout-panel .layout-section-body, #layout-panel .layout-scroll'));
 function renderPanel() {
     // el panel también se dibuja con lo que sale de la huella (zona de cada activo, si está activo): se saca antes de dibujarlo, no solo en refreshLive
-    if (state.draft) state.draft.spaces = LC.deriveSpaces(state.draft).spaces;
+    if (state.draft) { syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; }
     const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
     const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
@@ -801,7 +804,14 @@ function renderSummary() {
 // Cada vez que cambia el borrador: KPIs, croquis, resumen y estado del botón Guardar. El formulario NO se redibuja (así no se pierde el cursor al teclear).
 function refreshLive() {
     // el lugar en el piso, la zona, el alto y el formato de cada activo salen de su huella (LayoutCalc.deriveSpaces): se vuelven a sacar con cada cambio
+    syncHuellas();
     state.draft.spaces = LC.deriveSpaces(state.draft).spaces;
+    state.draft.footprints.forEach((f, i) => {
+        const zoneCell = document.querySelector(`[data-fp-zone="${i}"]`);
+        if (zoneCell) zoneCell.textContent = footprintZoneName(f);
+        const codeCell = document.querySelector(`[data-fp-code="${i}"]`);
+        if (codeCell) codeCell.textContent = f.code;
+    });
     state.draft.heightM = Math.round((state.draft.vertices.reduce((acc, p) => acc + (Number(p[2]) || 0), 0) / Math.max(state.draft.vertices.length, 1)) * 100) / 100;
     renderKpis();
     renderSvg();
@@ -1095,14 +1105,19 @@ const ROW_FACTORY = {
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
-    footprints: () => ({ id: uid('f'), code: nextHuellaCode(), zoneId: state.draft.zones.length ? state.draft.zones[0].id : '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, active: true }),
+    footprints: () => ({ id: uid('f'), code: '', zoneId: '', x: 1, y: 1, l: 3, d: 1.1, h: 4.5, active: true }),
     spaces: () => ({ id: uid('s'), footprintId: state.draft.footprints.length ? state.draft.footprints[0].id : '', type: 'rack', code: nextCode('rack', 'spaces'), levels: 1, drawers: '' }),
 };
 const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
-// El código de una huella nueva: el siguiente después del más alto (H001, H002…); no se reusan los huecos de las que se quitaron. Se asigna al crearla y se puede cambiar.
-function nextHuellaCode() {
-    const highest = state.draft.footprints.reduce((max, f) => { const m = /^H(\d+)$/i.exec(String(f.code).trim()); return m ? Math.max(max, Number(m[1])) : max; }, 0);
-    return `H${String(highest + 1).padStart(3, '0')}`;
+// La zona de una huella sale de dónde está en el croquis y su código (H001…) es consecutivo por zona: los pone el sistema, no se editan. Las huellas ya guardadas que siguen en su zona conservan su código; las
+// nuevas (todavía sin guardar) y las que se mueven a otra zona lo reciben del sistema cada vez que se acomodan, así siempre es el siguiente de la zona donde quedan.
+function syncHuellas() {
+    const d = state.draft;
+    const saved = new Map(((state.saved && state.saved.footprints) || []).map((f) => [f.id, f]));
+    const placed = LC.deriveFootprintZones(d).footprints;
+    // una guardada que sigue en su zona conserva su código; una nueva, o una que se movió a otra zona, lo recibe del sistema (el siguiente de su zona)
+    const coded = placed.map((f) => { const was = saved.get(f.id); const code = was && (was.zoneId || '') === (f.zoneId || '') ? was.code : ''; return code === f.code ? f : { ...f, code }; });
+    d.footprints = LC.assignHuellaCodes({ ...d, footprints: coded }).footprints;
 }
 // El primer activo de una huella nueva: lleva el siguiente código de activo libre (R-01, R-02…); el de la huella es el H###.
 function defaultActivoFor(fp) {

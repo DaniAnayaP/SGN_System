@@ -3598,8 +3598,8 @@
       "example": "Rack, Shelf or Desk."
     },
     "layoutSec_espacios": {
-      "what": "The footprints: the place on the floor (code, zone, position and size). The storage m² and m³ come from here. The footprint code is H001, H002… (it gives the H of the Locator): it is assigned by itself when you add it and can be changed. Adding a footprint creates its first asset by itself; if there is more than one on top, you add them in the Assets step and the footprint is shared between them.",
-      "example": "you register footprint H001, 3 by 1.1 meters and 4.5 high; in Assets its first asset already appears, with its own code (R-01)."
+      "what": "The footprints: the place on the floor. The zone of each footprint and its code are set by the system and cannot be edited: the zone comes from where you place it on the map (the zone that contains its center; outside all of them it has no zone) and the code is consecutive PER ZONE (H001, H002… of each zone; every zone has its own H001). What you can change is the Name, to identify it, the position and the size. The storage m² and m³ come from here. Adding a footprint creates its first asset by itself; if there is more than one on top, you add them in the Assets step and the footprint is shared between them.",
+      "example": "you add a footprint and place it inside Zone 6: it is H001 of Zone 6; another one placed in Zone 2 is also H001, but of Zone 2."
     },
     "layoutLocked": {
       "what": "This section cannot be changed with your current access.",
