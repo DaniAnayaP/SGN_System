@@ -512,6 +512,12 @@ app.set('trust proxy', 1);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'CHANGE_ME_IN_PRODUCTION';
 const IS_PROD = process.env.NODE_ENV === 'production';
+// Sesión deslizante: el token y la cookie duran 8 h SIN usar el sistema; cada petición con sesión válida que llega cuando el token ya tiene más de 10 min lo renueva (otras 8 h),
+// pero nunca pasa de 24 h desde que se inició sesión (la marca ses del token guarda ese primer momento). Así quien trabaja todo el día no se queda a medias, y una pantalla olvidada
+// abierta no deja la sesión viva más de un día. Lo que no pasa por requireAuth (páginas estáticas, la hoja de inicio de sesión) no renueva nada.
+const SESSION_TTL_SECONDS = 8 * 60 * 60;
+const SESSION_RENEW_AFTER_SECONDS = 10 * 60;
+const SESSION_MAX_SECONDS = 24 * 60 * 60;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 if (IS_PROD && JWT_SECRET === 'CHANGE_ME_IN_PRODUCTION') {
@@ -772,6 +778,21 @@ const registerLimiter = rateLimit({
     message: { message: 'Too many accounts created from this address. Try again later.' },
 });
 
+// Renueva la sesión de cookie con la actividad (ver SESSION_TTL_SECONDS arriba): token nuevo con las mismas reclamaciones, la cookie de sesión y la del token CSRF (el mismo valor,
+// para que el navegador no pierda una antes que la otra) con la vida nueva. Un token de Bearer (sin cookie) no se renueva.
+function maybeRenewSession(req, res, payload) {
+    if (!req.cookies?.sgn_session || !payload.iat) return;
+    const now = Math.floor(Date.now() / 1000);
+    const startedAt = payload.ses || payload.iat;
+    if (now - payload.iat < SESSION_RENEW_AFTER_SECONDS || now - startedAt >= SESSION_MAX_SECONDS) return;
+    const ttl = Math.min(SESSION_TTL_SECONDS, SESSION_MAX_SECONDS - (now - startedAt));
+    const { iat, exp, ...claims } = payload;
+    const options = { httpOnly: true, secure: IS_PROD, sameSite: IS_PROD ? 'none' : 'lax', maxAge: ttl * 1000 };
+    res.cookie('sgn_session', jwt.sign({ ...claims, ses: startedAt }, JWT_SECRET, { expiresIn: ttl }), options);
+    const csrf = req.cookies?.[CSRF_COOKIE];
+    if (csrf) res.cookie(CSRF_COOKIE, csrf, options);
+}
+
 // --- Auth middleware (protects any route that follows it) ------------------
 function requireAuth(req, res, next) {
     const token = req.cookies?.sgn_session || req.headers.authorization?.replace('Bearer ', '');
@@ -785,6 +806,7 @@ function requireAuth(req, res, next) {
         const session = getSessionState(payload.sub);
         if (session.reason) return res.status(401).json({ message: 'Invalid or expired session.', code: 'ACCOUNT_BLOCKED' });
         req.user = { ...payload, ...session.fresh };
+        maybeRenewSession(req, res, payload);
         next();
     } catch {
         return res.status(401).json({ message: 'Invalid or expired session.' });
@@ -945,9 +967,10 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
             isClientAdmin: !!user.is_client_admin,
             isTestAccount: !!user.is_test_account,
             isSaasSuperAdmin: !!user.is_saas_super_admin,
+            ses: Math.floor(Date.now() / 1000), // cuándo se inició la sesión (tope de 24 h de la sesión deslizante)
         },
         JWT_SECRET,
-        { expiresIn: '8h' }
+        { expiresIn: SESSION_TTL_SECONDS }
     );
 
     res.cookie('sgn_session', token, {
@@ -962,7 +985,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         // IS_PROD already guarantees whenever this branch is taken; dev
         // (plain http, not IS_PROD) is untouched.
         sameSite: IS_PROD ? 'none' : 'lax',
-        maxAge: 8 * 60 * 60 * 1000,
+        maxAge: SESSION_TTL_SECONDS * 1000,
     });
     const csrfToken = issueCsrfCookie(res);
 
