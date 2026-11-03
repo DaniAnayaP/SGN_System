@@ -1808,6 +1808,10 @@
     "layoutCentroChip": "Layout de {name}",
     "layout3dCapasBtn": "Mostrar u ocultar las capas del 3D",
     "layoutBuscarBtn": "Buscar una zona o una huella",
+    "layoutRenumerarBtn": "Renumerar códigos",
+    "layoutRenumerarConfirm": "Se renumerarán los códigos de los activos: en cada zona y tipo quedan consecutivos desde 001 (por ejemplo F020 y F021 pasan a F001 y F002). Los QR, los localizadores y las relaciones siguen funcionando, porque usan el activo y no su código; pero lo que ya imprimiste o pegaste con el código anterior ya no coincidirá. Se aplica cuando guardes el Layout. ¿Renumerar?",
+    "layoutRenumerarNada": "Los códigos ya están consecutivos: no hay nada que renumerar.",
+    "layoutRenumerarListo": "Códigos renumerados en la tabla. Guarda el Layout para aplicarlos.",
     "layoutBuscarPlaceholder": "Buscar zona o huella",
     "layoutFindZona": "zona",
     "layoutFindHuella": "huella",
@@ -3737,7 +3741,7 @@
       "example": "Rack, Estante o Escritorio."
     },
     "layoutSec_espacios": {
-      "what": "Las huellas: el lugar en el piso. La zona de cada huella y su código los pone el sistema y no se editan: la zona sale de dónde la acomodas en el croquis (la zona que contiene su centro) y el código es consecutivo POR ZONA (H001, H002… de cada zona; cada zona tiene su H001). Una huella siempre debe quedar DENTRO de una zona y caber completa, y no ser más alta que la nave: si no, se marca en rojo y no se puede guardar. Lo que sí puedes cambiar es el Nombre, para identificarla, la posición y las medidas. De aquí salen los m² y m³ de almacenamiento. Al agregar una huella se crea sola su primer activo; si encima hay más de uno, los agregas en el paso Activos y la huella se reparte entre ellos.",
+      "what": "Las huellas: el lugar en el piso. La zona de cada huella y su código los pone el sistema y no se editan: la zona sale de dónde la acomodas en el croquis (la zona que contiene su centro) y el código es consecutivo POR ZONA (H001, H002… de cada zona; cada zona tiene su H001). Una huella siempre debe quedar DENTRO de una zona y caber completa, y no ser más alta que la nave: si no, se marca en rojo y no se puede guardar. Lo que sí puedes cambiar es el Nombre, para identificarla, la posición y las medidas. De aquí salen los m² y m³ de almacenamiento. Al agregar una huella se crea solo la huella; los activos que pongas encima los das de alta después, en el paso Activos, y la huella se reparte entre ellos.",
       "example": "agregas una huella y la acomodas dentro de la Zona 6: sale como H001 de la Zona 6; si la acomodas con una esquina fuera de la zona, se marca en rojo y no te deja guardar hasta meterla."
     },
     "layoutLocked": {
@@ -4031,6 +4035,10 @@
     "layout3dAssetsPick": {
       "what": "Abre una lista para elegir CUÁLES activos se ven en el 3D (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Marca o desmarca uno por uno, una zona completa con la casilla de la zona, o usa Todos y Ninguno (actúan sobre lo que muestra la lista; con el buscador vacío, sobre todos). El buscador entiende los mismos signos de todos los filtros: coma para otra búsqueda, $ antes y @ después. El icono queda marcado cuando hay activos ocultos. Solo cambia lo que ves; no modifica el Layout.",
       "example": "quieres ver solo R-07 y T-03 para revisar sus alturas: pulsas Ninguno, buscas R-07 y marcas el anaquel, luego buscas T-03 y marcas la tarima."
+    },
+    "layoutRenumerar": {
+      "what": "Renumera los códigos de los activos: en cada zona y tipo quedan consecutivos desde 001 (A001, A002… F001, F002…), en el orden de su número de ahora. Los códigos guardados no se mueven solos, por eso es un botón. Se ve en la tabla y se aplica al guardar. Los QR, los localizadores y las relaciones siguen funcionando porque usan el activo, no su código; lo ya impreso con el código anterior ya no coincidirá.",
+      "example": "los refrigeradores quedaron como F020 y F021: tocas Renumerar códigos y pasan a F001 y F002; guardas el Layout."
     },
     "layoutFind": {
       "what": "Busca una zona o una huella, por su código o su nombre, y el croquis, el 3D, las tablas y el resumen se quedan solo con lo que hay adentro; el resto de la nave se oculta. Las tablas no pierden renglones: los que no son de lo enfocado solo se esconden. Es solo de pantalla: no cambia lo guardado ni lo que se imprime.",

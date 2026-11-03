@@ -1808,6 +1808,10 @@
     "layoutCentroChip": "Layout of {name}",
     "layout3dCapasBtn": "Show or hide the 3D layers",
     "layoutBuscarBtn": "Search a zone or a footprint",
+    "layoutRenumerarBtn": "Renumber codes",
+    "layoutRenumerarConfirm": "The asset codes will be renumbered: in each zone and type they become consecutive from 001 (for example F020 and F021 become F001 and F002). QR codes, locators and code relations keep working, because they use the asset and not its code; but anything you already printed or stuck with the old code will no longer match. It is applied when you save the Layout. Renumber?",
+    "layoutRenumerarNada": "The codes are already consecutive: there is nothing to renumber.",
+    "layoutRenumerarListo": "Codes renumbered in the table. Save the Layout to apply them.",
     "layoutBuscarPlaceholder": "Search zone or footprint",
     "layoutFindZona": "zone",
     "layoutFindHuella": "footprint",
@@ -3738,7 +3742,7 @@
       "example": "Rack, Shelf or Desk."
     },
     "layoutSec_espacios": {
-      "what": "The footprints: the place on the floor. The zone of each footprint and its code are set by the system and cannot be edited: the zone comes from where you place it on the map (the zone that contains its center) and the code is consecutive PER ZONE (H001, H002… of each zone; every zone has its own H001). A footprint must always be INSIDE a zone and fit completely, and not be taller than the warehouse: otherwise it is marked in red and cannot be saved. What you can change is the Name, to identify it, the position and the size. The storage m² and m³ come from here. Adding a footprint creates its first asset by itself; if there is more than one on top, you add them in the Assets step and the footprint is shared between them.",
+      "what": "The footprints: the place on the floor. The zone of each footprint and its code are set by the system and cannot be edited: the zone comes from where you place it on the map (the zone that contains its center) and the code is consecutive PER ZONE (H001, H002… of each zone; every zone has its own H001). A footprint must always be INSIDE a zone and fit completely, and not be taller than the warehouse: otherwise it is marked in red and cannot be saved. What you can change is the Name, to identify it, the position and the size. The storage m² and m³ come from here. Adding a footprint creates only the footprint; the assets you put on top are registered later, in the Assets step, and the footprint is shared between them.",
       "example": "you add a footprint and place it inside Zone 6: it is H001 of Zone 6; if you place it with a corner outside the zone, it is marked in red and you cannot save until you move it in."
     },
     "layoutLocked": {
@@ -4032,6 +4036,10 @@
     "layout3dAssetsPick": {
       "what": "Opens a list to choose WHICH assets show in the 3D (racks, racks with pallets, cabinets and pallets). Tick or untick one by one, a whole zone with the zone's checkbox, or use All and None (they act on what the list shows; with an empty search, on all of them). The search understands the same signs as every filter: comma for another search, $ before and @ after. The icon stays marked while some assets are hidden. It only changes what you see; it does not modify the Layout.",
       "example": "you want to see only R-07 and T-03 to check their heights: press None, search R-07 and tick the rack, then search T-03 and tick the pallet."
+    },
+    "layoutRenumerar": {
+      "what": "Renumbers the asset codes: in each zone and type they become consecutive from 001 (A001, A002… F001, F002…), in the order of their current number. Saved codes do not move on their own, which is why this is a button. It shows in the table and is applied when you save. QR codes, locators and code relations keep working because they use the asset, not its code; anything already printed with the old code will no longer match.",
+      "example": "the refrigerators ended up as F020 and F021: you touch Renumber codes and they become F001 and F002; you save the Layout."
     },
     "layoutFind": {
       "what": "Search a zone or a footprint, by its code or its name, and the map, the 3D view, the tables and the summary keep only what is inside it; the rest of the warehouse is hidden. The tables do not lose rows: the ones that are not part of the focus are just tucked away. It is screen-only: it changes nothing that is saved or printed.",

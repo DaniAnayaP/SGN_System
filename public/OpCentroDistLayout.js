@@ -19,6 +19,8 @@ const state = {
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
     // lo que se enfocó con la búsqueda (zona o huella) y lo que se ocultó de ello: ver «buscar una zona o una huella»
     find: null, findHide: {},
+    // el usuario pidió renumerar los códigos de los activos (se ve en el borrador y se aplica al guardar)
+    renumber: false,
     // lo que se eligió en la tabla y se resalta en el croquis: { kind: 'zone' | 'space' | 'bay', id, n, c, step } (por id, no por número de renglón, para que no se mueva al quitar o agregar renglones)
     hl: null,
 };
@@ -352,6 +354,7 @@ function initEditState() {
     state.zoneOpen = null;
     state.contornoMode = 'sides';
     state.hl = null;
+    state.renumber = false;
     clearFind();
 }
 // La primera figura que se dejó sin cerrar (no se puede guardar así).
@@ -539,10 +542,10 @@ function stepHtml(step) {
             const saved = isSavedRow('spaces', s.id);
             return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptions(s.footprintId)}</select></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
         });
-        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutActivoLetra', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', ''], rows, 'layout-activos')}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutActivoLetra', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', ''], rows, 'layout-activos')}${state.perms && state.perms.canRenumber && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
-    // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una se crea sola su primer activo (con el mismo código); más activos sobre la misma huella se agregan en el paso Activos.
+    // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una se crea solo la huella (sin activos); los activos que se pongan encima se dan de alta después, en el paso Activos.
     const rows = d.footprints.map((s, i) => {
         const saved = isSavedRow('footprints', s.id);
         const view = footprintZoneView(s);
@@ -725,6 +728,19 @@ window.addEventListener('pointerup', (event) => {
 });
 
 // ---- croquis -----------------------------------------------------------------------------------------------------------
+// Renumerar los códigos de los activos: en cada zona y tipo quedan consecutivos desde 001 (por ejemplo F020 y F021 pasan a F001 y F002). Los códigos guardados no se mueven solos: lo pide una persona (icono
+// Renumerar del árbol), se ve en el borrador y se aplica al guardar. Los QR, los localizadores y las relaciones de códigos usan el activo (su identificador), no su código, así que siguen funcionando.
+async function renumberCodes() {
+    if (!state.draft || !(state.perms && state.perms.canRenumber)) return;
+    if (LC.renumberSpaceCodes(state.draft) === state.draft) { Dashboard.showToast(t('main.layoutRenumerarNada'), 'success'); return; }
+    if (!(await Dashboard.confirm(t('main.layoutRenumerarConfirm')))) return;
+    state.renumber = true;
+    renderPanel();
+    refreshLive();
+    Dashboard.showToast(t('main.layoutRenumerarListo'), 'success');
+}
+$('layout-panel').addEventListener('click', (event) => { if (event.target.closest('[data-renumber-codes]')) renumberCodes(); });
+
 // ---- buscar una zona o una huella (enfoque) ----------------------------------------------------------------------------------------
 // La barra de búsqueda de Visualizaciones enfoca el croquis (2D y 3D), las tablas y el resumen en UNA zona o UNA huella: solo se ve lo que hay adentro (el resto de la nave se oculta por completo) y unos botones quitan
 // lo que no se quiere ver (Huellas, Activos, Textos, Medidas). Es solo de pantalla: no cambia lo guardado ni los reportes ni los QR. state.find = { kind: 'zone' | 'footprint', id }; state.findHide = { huellas, activos, textos,
@@ -1394,11 +1410,7 @@ function syncHuellas() {
     const next = LC.lockCodes(LC.deriveSpaces(LC.deriveFootprintZones(d)), state.saved);
     d.zones = next.zones;
     d.footprints = next.footprints;
-    d.spaces = next.spaces;
-}
-// El primer activo de una huella nueva: un anaquel; su código (A001…) lo pone el sistema según el tipo, la zona y el consecutivo.
-function defaultActivoFor(fp) {
-    return { id: uid('s'), footprintId: fp.id, type: 'rack', code: '', levels: 1, drawers: '' };
+    d.spaces = state.renumber ? LC.renumberSpaceCodes(next).spaces : next.spaces; // Renumerar: consecutivos desde 001 por zona y tipo
 }
 
 function onEdit(event) {
@@ -1589,12 +1601,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (add) {
         const list = add.dataset.add;
         if (list === 'zones') clearLayoutFilters();
-        if (list === 'footprints') {
-            // una huella nueva trae su primer activo
-            const fp = ROW_FACTORY.footprints();
-            state.draft.footprints.push(fp);
-            state.draft.spaces.push(defaultActivoFor(fp));
-        } else state.draft[list].push(ROW_FACTORY[list]());
+        // una huella nueva es SOLO la huella (el lugar en el piso): los activos que se pongan encima se dan de alta después, en el paso Activos
+        state.draft[list].push(ROW_FACTORY[list]());
         if (list === 'vertices') state.open.contorno = false;
         panelScrollEnd = true;
         renderPanel();
@@ -2471,6 +2479,7 @@ $('layout-save').addEventListener('click', async () => {
     try {
         const body = { layout: state.draft, baseVersion: state.version, costCenterId: state.centerId };
         if (state.planNew) body.planImage = state.planImage;
+        if (state.renumber) body.renumberCodes = true;
         const res = await fetch('/api/business/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
         const payload = await res.json().catch(() => ({}));
         if (res.status === 409) { Dashboard.showToast(t('main.layoutConflicto'), 'warning'); await loadLayout(); return; }

@@ -6502,6 +6502,8 @@ function layoutPermissions(req) {
         canToggle3dLayers: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayout3dCapas'),
         // Buscar una zona o una huella (la barra de Visualizaciones que enfoca el croquis, el 3D, las tablas y el resumen) usa el icono Buscar (hoja <pantalla>/iconLayoutBuscar).
         canFind: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutBuscar'),
+        // Renumerar los códigos de los activos (en cada zona y tipo, consecutivos desde 001) usa el icono Renumerar (hoja <pantalla>/iconLayoutRenumerar).
+        canRenumber: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutRenumerar'),
         // "QR y descarga" por Zona (la hoja con las categorías de los códigos que hay en la zona) se usa con el icono Imprimir por zona (hoja <pantalla>/iconLayoutImprimirZona).
         canPrintZone: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutImprimirZona'),
         // Girar el croquis (en pantalla y en la hoja que se descarga) usa el icono Girar (hoja <pantalla>/iconLayoutGirar del árbol).
@@ -6665,6 +6667,11 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         }
     }
     const perms = layoutPermissions(req);
+    // Los códigos guardados no se mueven solos: renumerarlos lo pide una persona con el icono Renumerar (se manda renumberCodes al guardar).
+    if (body.renumberCodes === true) {
+        if (!perms.canRenumber) return res.status(403).json({ message: 'No tienes permiso para renumerar los códigos de los activos.' });
+        next = LayoutCalc.renumberSpaceCodes(next);
+    }
     const creating = !existing;
     if (creating) {
         const allowed = next.mode === 'plan' ? perms.canLoadPlan : perms.canCreateFromScratch;

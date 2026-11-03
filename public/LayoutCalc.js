@@ -443,6 +443,24 @@
         });
         return changed ? { ...layout, spaces: out } : layout;
     }
+    // Renumera los códigos de los ACTIVOS: en cada zona y tipo quedan consecutivos desde 001, en el orden de su número de ahora (los que empatan, en el orden de la tabla). Lo pide una persona (icono Renumerar,
+    // que se aplica al guardar): los códigos guardados no se mueven solos. Devuelve el mismo Layout si ya estaban consecutivos.
+    function renumberSpaceCodes(layout) {
+        if (!layout || !Array.isArray(layout.spaces)) return layout;
+        const groups = new Map();
+        layout.spaces.forEach((s, i) => { const key = `${s.zoneId || ''}|${s.type || 'rack'}`; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(i); });
+        const spaces = layout.spaces.slice();
+        let changed = false;
+        groups.forEach((indexes, key) => {
+            const type = key.split('|')[1];
+            const num = (i) => { const m = /(\d+)\s*$/.exec(String(spaces[i].code == null ? '' : spaces[i].code)); return m ? Number(m[1]) : Infinity; };
+            indexes.slice().sort((a, b) => num(a) - num(b) || a - b).forEach((i, n) => {
+                const code = spaceCodeOf(type, n + 1);
+                if (spaces[i].code !== code) { spaces[i] = { ...spaces[i], code }; changed = true; }
+            });
+        });
+        return changed ? { ...layout, spaces } : layout;
+    }
     // Al guardar: los códigos de las zonas, las huellas y los activos no se editan. Lo que ya existía conserva el suyo; lo nuevo, o lo que se movió a otra zona (llega como si fuera nuevo), lo recibe del sistema.
     // Un activo al que se le cambió el tipo recibe el siguiente consecutivo de su tipo nuevo en su zona (un anaquel A020 que pasa a Frío es F001, no F020); si regresa a su tipo guardado, recupera su código.
     function lockCodes(next, previous) {
@@ -1141,7 +1159,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

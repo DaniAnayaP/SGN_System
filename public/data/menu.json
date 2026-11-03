@@ -1701,6 +1701,7 @@
             { "id": "iconLayoutVista3D", "labelKey": "main.layoutVista3DBtn", "permissionOnly": true },
             { "id": "iconLayout3dCapas", "labelKey": "main.layout3dCapasBtn", "permissionOnly": true },
             { "id": "iconLayoutBuscar", "labelKey": "main.layoutBuscarBtn", "permissionOnly": true },
+            { "id": "iconLayoutRenumerar", "labelKey": "main.layoutRenumerarBtn", "permissionOnly": true },
             { "id": "iconLayoutCategorias", "labelKey": "main.layoutCategoriasBtn", "permissionOnly": true },
             { "id": "iconLayoutTarjeta", "labelKey": "main.layoutTarjetaBtn", "permissionOnly": true },
             {
