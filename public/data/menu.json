@@ -1569,7 +1569,7 @@
         },
         { "id": "cat-operaciones-centro-dist-edicion-codigo", "labelKey": "menu.opCentroDistEdicionCodigo", "icon": "bx-edit", "href": "OpCentroDistEdicionCodigo.html" },
         {
-          "id": "cat-operaciones-centro-dist-temperaturas", "labelKey": "menu.opCentroDistTemperaturas", "icon": "bx-thermometer", "href": "OpCentroDistTemperaturas.html",
+          "id": "cat-operaciones-centro-dist-temperaturas", "labelKey": "menu.opCentroDistTemperaturas", "icon": "bx-fridge", "href": "OpCentroDistTemperaturas.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
