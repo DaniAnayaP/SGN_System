@@ -1987,6 +1987,7 @@
     "layoutType_space_rackpal": "Rack",
     "layoutType_space_cabinet": "Gabeta",
     "layoutType_space_pallet": "Tarima en piso",
+    "layoutType_space_cold": "Frío",
     "layoutType_door_dock": "Andén",
     "layoutType_door_staff": "Acceso de personal",
     "layoutType_door_emergency": "Salida de emergencia",
@@ -2631,7 +2632,7 @@
     "relTplErr_locatorDepth": "Todavía no se maneja la profundidad mayor a 1 (P001): «{value}».",
     "relTplErr_locatorZone": "No hay una zona {zone} asignada al sub almacén «{sub}» (el Localizador «{value}»).",
     "relTplErr_locatorAmbiguous": "El Localizador «{value}» coincide con más de un lugar. Usa las columnas Zona, Huella, Activo, Nivel, Columna, Fila y Profundidad.",
-    "relTplErr_locatorAsset": "La letra «{letter}» del Localizador no es un activo conocido: usa A anaquel, R rack, G gabeta o T tarima en piso.",
+    "relTplErr_locatorAsset": "La letra «{letter}» del Localizador no es un activo conocido: usa A anaquel, R rack, G gabeta, T tarima en piso o F frío.",
     "relTplErr_locatorRack": "No hay ese activo en la zona «{zone}» (o no está asignado a ese sub almacén): «{value}».",
     "relTplErr_locatorIncomplete": "Al Localizador «{value}» le faltan piezas ({missing}). Va siempre completo: Z006.H005.A005.N003.C001.F001.P001.",
     "relTplErr_locatorFootprint": "No hay una huella {footprint} en la zona «{zone}» (el Localizador «{value}»).",
@@ -3641,7 +3642,7 @@
       "example": "defines la Zona A, de producto seco, de 22 por 11 metros: el sistema le pone Z001 y la siguiente que crees será Z002."
     },
     "layoutSec_activos": {
-      "what": "Cada renglón es un activo: lo que hay encima de una huella. Un activo siempre va DENTRO de una huella: «+ Agregar activo» crea el renglón con la huella vacía (en rojo) y no se puede guardar hasta que elijas en cuál va; una huella puede tener varios (por ejemplo dos racks sobre la misma tarima) y con uno solo no escribes nada, porque al agregar la huella ya se crea su primer activo. El código del activo lo pone el sistema y no se edita: la letra la da su tipo (A anaquel, R rack, G gabeta, T tarima en piso) y el número es consecutivo por zona y por tipo (A001, A002… de cada zona); es la pieza del activo en el Localizador. Aquí eliges el tipo, la huella, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo de activo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
+      "what": "Cada renglón es un activo: lo que hay encima de una huella. Un activo siempre va DENTRO de una huella: «+ Agregar activo» crea el renglón con la huella vacía (en rojo) y no se puede guardar hasta que elijas en cuál va; una huella puede tener varios (por ejemplo dos racks sobre la misma tarima) y con uno solo no escribes nada, porque al agregar la huella ya se crea su primer activo. El código del activo lo pone el sistema y no se edita: la letra la da su tipo (A anaquel, R rack, G gabeta, T tarima en piso, F frío) y el número es consecutivo por zona y por tipo (A001, A002… de cada zona); es la pieza del activo en el Localizador. Aquí eliges el tipo, la huella, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo de activo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
       "example": "agregas un activo, eliges la huella H002 de la Zona 6 y el sistema le pone A001 (o A002 si ya había un anaquel en esa zona); si no eliges la huella, no te deja guardar."
     },
     "layoutAssetClass": {
@@ -3653,7 +3654,7 @@
       "example": "una huella de 3 × 1.1 m puesta al borde de la Zona 6 de modo que 40 cm quedan afuera dice «Zona 6 · no cabe»; la mueves hacia adentro y se pone normal."
     },
     "layoutSpaceLetter": {
-      "what": "Qué es el activo: Anaquel (A), Rack (R), Gabeta (G) o Tarima en piso (T). La letra es la del Localizador y el sistema pone el número: es consecutivo por zona y por tipo, así que el código (A001, A002…) no se escribe ni se repite. Si cambias el tipo de un activo ya guardado, toma la letra nueva con su mismo número si está libre.",
+      "what": "Qué es el activo: Anaquel (A), Rack (R), Gabeta (G), Tarima en piso (T) o Frío (F: refrigeradores y cámaras frías). La letra es la del Localizador y el sistema pone el número: es consecutivo por zona y por tipo, así que el código (A001, A002…) no se escribe ni se repite. Si cambias el tipo de un activo ya guardado, toma la letra nueva con su mismo número si está libre.",
       "example": "eliges Gabeta en el primer activo de la Zona 6: el sistema le pone G001; el siguiente anaquel que agregues en esa zona será A001."
     },
     "layoutAssetType": {

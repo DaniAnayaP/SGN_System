@@ -1987,6 +1987,7 @@
     "layoutType_space_rackpal": "Pallet rack",
     "layoutType_space_cabinet": "Cabinet",
     "layoutType_space_pallet": "Floor pallet",
+    "layoutType_space_cold": "Cold",
     "layoutType_door_dock": "Dock",
     "layoutType_door_staff": "Staff access",
     "layoutType_door_emergency": "Emergency exit",
@@ -2632,7 +2633,7 @@
     "relTplErr_locatorDepth": "Depth greater than 1 (P001) is not supported yet: \"{value}\".",
     "relTplErr_locatorZone": "There is no zone {zone} assigned to the sub-warehouse \"{sub}\" (the Locator \"{value}\").",
     "relTplErr_locatorAmbiguous": "The Locator «{value}» matches more than one place. Use the Zone, Footprint, Asset, Level, Column, Row and Depth columns.",
-    "relTplErr_locatorAsset": "The letter \"{letter}\" of the Locator is not a known asset: use A shelf, R rack, G cabinet or T floor pallet.",
+    "relTplErr_locatorAsset": "The letter \"{letter}\" of the Locator is not a known asset: use A shelf, R rack, G cabinet, T floor pallet or F cold.",
     "relTplErr_locatorRack": "There is no such asset in the zone \"{zone}\" (or it is not assigned to that sub-warehouse): \"{value}\".",
     "relTplErr_locatorIncomplete": "The Locator «{value}» is missing pieces ({missing}). It is always complete: Z006.H005.A005.N003.C001.F001.P001.",
     "relTplErr_locatorFootprint": "There is no footprint {footprint} in zone «{zone}» (the Locator «{value}»).",
@@ -3642,7 +3643,7 @@
       "example": "you define Zone A, dry product, 22 by 11 meters: the system names it Z001 and the next one you create will be Z002."
     },
     "layoutSec_activos": {
-      "what": "Each row is an asset: what sits on top of a footprint. An asset always goes INSIDE a footprint: \"+ Add asset\" creates the row with the footprint empty (in red) and you cannot save until you choose which one it is on; a footprint can have several (for example two racks on the same pallet) and with just one you type nothing, because adding the footprint already creates its first asset. The asset code is set by the system and cannot be edited: the letter comes from its type (A rack, R pallet rack, G cabinet, T floor pallet) and the number is consecutive per zone and per type (A001, A002… of each zone); it is the asset piece of the Locator. Here you choose the type, the footprint, the classification (Operating furniture, Storage furniture…), the asset type (rack, shelf, desk…), its levels, its columns and its drawers. The two lists are managed by the client in Catalogs. The zone comes from the footprint.",
+      "what": "Each row is an asset: what sits on top of a footprint. An asset always goes INSIDE a footprint: \"+ Add asset\" creates the row with the footprint empty (in red) and you cannot save until you choose which one it is on; a footprint can have several (for example two racks on the same pallet) and with just one you type nothing, because adding the footprint already creates its first asset. The asset code is set by the system and cannot be edited: the letter comes from its type (A rack, R pallet rack, G cabinet, T floor pallet, F cold) and the number is consecutive per zone and per type (A001, A002… of each zone); it is the asset piece of the Locator. Here you choose the type, the footprint, the classification (Operating furniture, Storage furniture…), the asset type (rack, shelf, desk…), its levels, its columns and its drawers. The two lists are managed by the client in Catalogs. The zone comes from the footprint.",
       "example": "you add an asset, choose footprint H002 of Zone 6 and the system names it A001 (or A002 if that zone already had a rack); if you do not choose the footprint, it will not let you save."
     },
     "layoutAssetClass": {
@@ -3654,7 +3655,7 @@
       "example": "a 3 × 1.1 m footprint placed at the edge of Zone 6 so that 40 cm stick out says \"Zone 6 · does not fit\"; you move it inside and it turns normal."
     },
     "layoutSpaceLetter": {
-      "what": "What the asset is: Rack (A), Pallet rack (R), Cabinet (G) or Floor pallet (T). The letter is the Locator's and the system adds the number: it is consecutive per zone and per type, so the code (A001, A002…) is never typed or repeated. If you change the type of an asset that is already saved, it takes the new letter with the same number if it is free.",
+      "what": "What the asset is: Rack (A), Pallet rack (R), Cabinet (G), Floor pallet (T) or Cold (F: refrigerators and cold rooms). The letter is the Locator's and the system adds the number: it is consecutive per zone and per type, so the code (A001, A002…) is never typed or repeated. If you change the type of an asset that is already saved, it takes the new letter with the same number if it is free.",
       "example": "you pick Cabinet on the first asset of Zone 6: the system names it G001; the next rack you add in that zone will be A001."
     },
     "layoutAssetType": {

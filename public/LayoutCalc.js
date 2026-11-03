@@ -14,7 +14,7 @@
     // Para qué se usa una zona (es aparte del tipo: una zona Seca puede ser de almacenamiento o de operaciones): almacenamiento, operaciones o instalaciones (baño, bombas, etc.).
     // Es opcional: una zona sin uso definido se guarda exactamente igual que antes.
     const ZONE_USES = ['storage', 'operations', 'facilities'];
-    const SPACE_TYPES = ['rack', 'rackpal', 'cabinet', 'pallet'];
+    const SPACE_TYPES = ['rack', 'rackpal', 'cabinet', 'pallet', 'cold'];
     // Formato propio de una zona (como Formato de celdas de Excel): color de fondo, rayas o patrón y su color, y estilo y color del borde.
     const FMT_PATTERNS = ['none', 'solid', 'diag1', 'diag2', 'horiz', 'vert', 'grid', 'dots', 'cross'];
     const FMT_LINES = ['none', 'thin', 'mid', 'thick', 'dash', 'dot', 'dashdot', 'double'];
@@ -406,10 +406,10 @@
         pending.forEach((i) => { while (used.has(zoneCodeOf(next))) next += 1; const code = zoneCodeOf(next); used.add(code); out[i] = withCodeAfterName(out[i], code); changed = true; });
         return changed ? { ...layout, zones: out } : layout;
     }
-    // El código de un ACTIVO es su letra y un número: A anaquel, R rack, G gabeta, T tarima en piso (la letra la da su tipo) y el consecutivo es POR ZONA Y POR TIPO (A001, A002… de cada zona; ese mismo código
+    // El código de un ACTIVO es su letra y un número: A anaquel, R rack, G gabeta, T tarima en piso, F frío (la letra la da su tipo) y el consecutivo es POR ZONA Y POR TIPO (A001, A002… de cada zona; ese mismo código
     // es la pieza del activo en el Localizador). Lo pone el sistema. Los de antes (R-05) conservan su número con la letra de su tipo (A005) si está libre en su zona y tipo; los que chocan reciben el siguiente
     // después del más alto. Hace falta que los activos ya traigan la zona de su huella (deriveSpaces). Es idempotente.
-    const ASSET_LETTER = { rack: 'A', rackpal: 'R', cabinet: 'G', pallet: 'T' };
+    const ASSET_LETTER = { rack: 'A', rackpal: 'R', cabinet: 'G', pallet: 'T', cold: 'F' };
     const spaceCodeOf = (type, n) => `${ASSET_LETTER[type] || 'A'}${String(n).padStart(3, '0')}`;
     const isSpaceCode = (c, type) => { const m = /^([A-Za-z])(\d{1,4})$/.exec(String(c == null ? '' : c).trim()); return !!m && m[1].toUpperCase() === (ASSET_LETTER[type] || 'A') && Number(m[2]) >= 1; };
     function assignSpaceCodes(layout) {

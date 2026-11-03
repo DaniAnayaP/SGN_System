@@ -312,8 +312,8 @@
                     blk.push({ x: cx, y: 0.07, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: own !== null ? own : WOOD });
                     const loadH = (s.h - 0.14) / lv;
                     for (let k = 0; k < lv; k++) edgeBox(cx, 0.14 + k * loadH + loadH / 2, cz, s.l - 0.04, loadH - 0.04, s.d - 0.04);
-                } else if (s.type === 'cabinet') {
-                    blk.push({ x: cx, y: s.h / 2, z: cz, sx: s.l, sy: s.h, sz: s.d, c: own !== null ? own : 0x7f8c8d });
+                } else if (s.type === 'cabinet' || s.type === 'cold') {
+                    blk.push({ x: cx, y: s.h / 2, z: cz, sx: s.l, sy: s.h, sz: s.d, c: own !== null ? own : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d) });
                 } else {
                     const upC = s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86;
                     const deckC = own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba);

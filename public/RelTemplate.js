@@ -93,8 +93,8 @@
 
     // El Localizador va SIEMPRE completo, con las 7 piezas: Z006.H005.A005.N003.C001.F001.P001 = Zona 6 · Huella 5 · Activo A5 · Nivel 3 · Columna 1 · Fila 1 · Profundidad 1. El hueco es nivel × columna;
     // dentro de él están la fila y la profundidad. Z = el número con que termina el nombre de la zona; H = el del código de la huella (R-05 -> H005); la letra del activo dice qué tipo de espacio del Layout es
-    // (A anaquel, R rack, G gabeta, T tarima en piso) y su número es el del código del activo (A-05 -> A005). Ya no existe la forma corta sin la H: así el Localizador completo es el mismo en todas partes.
-    const ASSET_TYPES = { A: 'rack', R: 'rackpal', G: 'cabinet', T: 'pallet' };
+    // (A anaquel, R rack, G gabeta, T tarima en piso, F frío) y su número es el del código del activo (A-05 -> A005). Ya no existe la forma corta sin la H: así el Localizador completo es el mismo en todas partes.
+    const ASSET_TYPES = { A: 'rack', R: 'rackpal', G: 'cabinet', T: 'pallet', F: 'cold' };
     const LETTER_OF_TYPE = Object.fromEntries(Object.entries(ASSET_TYPES).map(([letter, type]) => [type, letter]));
     const pad3 = (n) => String(n).padStart(3, '0');
     function parseLocator(raw) {
