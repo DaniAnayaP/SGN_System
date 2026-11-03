@@ -101,7 +101,7 @@
         if (on('puertas')) leg.push(['door', labels.door]);
         if (on('luz') && (data.layout.power || []).length) leg.push(['power', labels.power]);
         if (on('contorno') && (data.layout.obstacles || []).length) leg.push(['column', labels.column]);
-        if (on('espacios')) leg.push(['space', labels.space]);
+        if (on('espacios') || on('huellas') || on('activos')) leg.push(['space', labels.space]);
         if (on('zonas')) {
             leg.push(['dry', labels.dry], ['cold', labels.cold], ['chemical', labels.chemical], ['finished', labels.finished], ['dock', labels.dock], ['office', labels.office], ['aisle', labels.aisle], ['aisle2', labels.aisle2], ['none', labels.none]);
             (data.layout.zones || []).filter((z) => z.fmt).slice(0, 12).forEach((z) => leg.push([`zone:${z.id}`, z.name, z]));

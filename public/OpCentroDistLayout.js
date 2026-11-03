@@ -810,17 +810,17 @@ function renderSvg() {
     measureJobs.forEach(([pts, minPx]) => { measureLabels += measureText(pts, minPx); });
     s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     (on('contorno') ? d.obstacles : []).forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
-    // La HUELLA (el lugar en el piso) se dibuja primero, blanca con borde gris o con su color; el ACTIVO va encima, un poco más chico, con su propio color (arena si no le han puesto uno): así se distinguen aunque midan lo mismo.
+    // Huella-Espacio y Activos son capas aparte: la HUELLA (el lugar en el piso) se dibuja con su paso y va primero, blanca con borde gris o con su color; el ACTIVO va encima con el suyo, un poco más chico, con su propio color (arena si no le han puesto uno): así se distinguen aunque midan lo mismo.
     if (on('espacios') || on('activos') || on('posiciones')) {
         const rectPts = (px, py, w, h) => `${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`;
-        d.footprints.forEach((f) => {
+        (on('espacios') ? d.footprints : []).forEach((f) => {
             const w = Math.max(f.l * sc, 4);
             const h = Math.max(f.d * sc, 4);
             const off = f.active === false ? ' lz-off' : '';
             if (f.fmt) s += `<g class="lhbf${off}" data-fid="${esc(f.id)}">${window.LayoutMapSvg.zonePaint(`hf-${f.id}`, f.fmt).markup(rectPts(X(f.x), Y(f.y), w, h))}</g>`;
             else s += `<rect class="lhb${off}" data-fid="${esc(f.id)}" x="${X(f.x)}" y="${Y(f.y)}" width="${w}" height="${h}" rx="2"/>`;
         });
-        d.spaces.forEach((sp) => {
+        ((on('activos') || on('posiciones')) ? d.spaces : []).forEach((sp) => {
             const w = Math.max(sp.l * sc, 4);
             const h = Math.max(sp.d * sc, 4);
             const inset = Math.max(1.5, Math.min(4, Math.min(w, h) * 0.16));
@@ -2445,7 +2445,7 @@ function buildSheetSvgFrom(loaded) {
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: [...new Set(state.steps.map((s) => (s === 'activos' || s === 'posiciones' ? 'espacios' : s)))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, rotation: sheetView().rotation },
+        view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, rotation: sheetView().rotation },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {

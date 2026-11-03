@@ -234,8 +234,10 @@
         s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${T.chrome.nave}" stroke-width="3" stroke-linejoin="round"/>`;
         // La HUELLA (el lugar en el piso) va primero, blanca o con su color; el ACTIVO encima, un poco más chico, con su propio color (arena si no tiene): así se distinguen aunque midan lo mismo. Un Layout que todavía
         // no trae huellas (copias viejas) dibuja los activos enteros como siempre.
-        const fps = on('espacios') ? (layout.footprints || []) : [];
-        const legacy = on('espacios') && !(layout.footprints || []).length;
+        // Capas: «huellas» solo las huellas, «activos» solo los activos y «espacios» (la vista pública, que no los separa) las dos.
+        const fps = (on('huellas') || on('espacios')) ? (layout.footprints || []) : [];
+        const showAssets = on('activos') || on('espacios');
+        const legacy = showAssets && !(layout.footprints || []).length;
         const hitFootprints = new Set((layout.spaces || []).filter((sp) => focusSpaces[sp.id]).map((sp) => sp.footprintId));
         const quad = (px, py, w, h) => `${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`;
         fps.forEach((f) => {
@@ -245,7 +247,7 @@
             if (f.fmt) s += `<g${dim ? ' opacity="0.3"' : ''}>${zonePaint(`hf-${f.id}`, f.fmt).markup(quad(X(f.x), Y(f.y), w, h))}</g>`;
             else s += `<rect x="${X(f.x)}" y="${Y(f.y)}" width="${w}" height="${h}" rx="2" fill="#FFFFFF" stroke="${T.chrome.line}" stroke-width="1"${dim ? ' opacity="0.3"' : ''}/>`;
         });
-        (on('espacios') ? (layout.spaces || []) : []).forEach((sp) => {
+        (showAssets ? (layout.spaces || []) : []).forEach((sp) => {
             const w = Math.max(sp.l * sc, 4);
             const h = Math.max(sp.d * sc, 4);
             const hit = focusSpaces[sp.id];
