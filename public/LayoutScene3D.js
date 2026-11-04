@@ -15,7 +15,7 @@
     const POWER_COLOR = { panel: 0x6b6f7c, outlet110: 0xf1c232, outlet220: 0xe8892b, 'three-phase': 0xd93a2f };
     const WOOD = 0xb98a52;
     const MAX_SPACE_LABELS = 300;
-    const LAYER_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets'];
+    const LAYER_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects'];
 
     function wallSegment(vertices, wall) {
         const n = vertices.length;
@@ -44,7 +44,7 @@
         scene.add(sun);
         // Un grupo por capa: así cada una se muestra u oculta sola.
         const group = {};
-        ['floor', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
+        ['floor', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
         const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a }));
         outline.visible = false;
         scene.add(outline);
@@ -92,6 +92,7 @@
             group.zones.visible = layerOn.zones;
             group.footprints.visible = layerOn.footprints;
             group.assets.visible = layerOn.assets;
+            group.objects.visible = layerOn.objects;
             group.zoneLabels.visible = labelsOn && layerOn.zones;
             group.spaceLabels.visible = labelsOn && layerOn.assets;
             if (!layerOn.assets && !layerOn.zones) outline.visible = false;
@@ -363,6 +364,37 @@
                 const slab = new THREE.Mesh(new THREE.BoxGeometry(p.l, 0.02, p.w), new THREE.MeshLambertMaterial({ color: p.type === 'between' ? 0xe3e6ef : 0xc4c9db }));
                 slab.position.set(PX(p.x + p.l / 2), transitY + 0.002 * i, PZ(p.y + p.w / 2));
                 group.zones.add(slab);
+            });
+            // objetos (paso Objetos): personas y montacargas a escala, girados hacia donde miran (foto fija del plano)
+            (layout.objects || []).forEach((o) => {
+                const l = Math.max(Number(o.l) || 0.3, 0.1);
+                const w = Math.max(Number(o.w) || 0.3, 0.1);
+                const h = Math.max(Number(o.h) || 1, 0.2);
+                const g = new THREE.Group();
+                if (o.type === 'forklift') {
+                    const body = new THREE.Mesh(new THREE.BoxGeometry(l * 0.72, h * 0.42, w), lam(0xf2c230));
+                    body.position.set(-l * 0.14, h * 0.21 + 0.12, 0);
+                    const mast = new THREE.Mesh(new THREE.BoxGeometry(0.1, h * 0.95, w * 0.8), lam(0x4a4f5e));
+                    mast.position.set(l * 0.22, h * 0.475, 0);
+                    const roof = new THREE.Mesh(new THREE.BoxGeometry(l * 0.34, 0.06, w * 0.9), lam(0x2a2f3d));
+                    roof.position.set(-l * 0.2, h * 0.95, 0);
+                    g.add(body, mast, roof);
+                    [-1, 1].forEach((sgn) => {
+                        const fork = new THREE.Mesh(new THREE.BoxGeometry(l * 0.34, 0.05, 0.1), lam(0x3a3f4d));
+                        fork.position.set(l * 0.38, 0.06, sgn * w * 0.28);
+                        g.add(fork);
+                    });
+                } else {
+                    const bodyH = Math.max(h - 0.3, 0.3);
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(w / 2, w / 2, bodyH, 12), lam(0xe08a2e));
+                    body.position.set(0, bodyH / 2, 0);
+                    const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), lam(0xf7c98b));
+                    head.position.set(0, bodyH + 0.14, 0);
+                    g.add(body, head);
+                }
+                g.position.set(PX(Number(o.x) || 0), 0.08, PZ(Number(o.y) || 0));
+                g.rotation.y = -((Number(o.angle) || 0) * Math.PI) / 180;
+                group.objects.add(g);
             });
             // huellas (el lugar en el piso, capa «Huella-Espacio»): una losa delgada, blanca o con su color, debajo de sus activos
             (layout.footprints || []).forEach((f) => {

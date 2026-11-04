@@ -8,9 +8,9 @@
 // Envuelto en una función: este script comparte el ámbito global con Dashboard.js, que ya declara nombres como SECTION_LABEL_KEYS.
 (function () {
 const LC = window.LayoutCalc;
-const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'transito', 'espacios', 'luz', 'sensores', 'activos', 'posiciones'];
+const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'transito', 'espacios', 'luz', 'sensores', 'objetos', 'activos', 'posiciones'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', transito: 'main.layoutStepTransito', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
+    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -602,6 +602,32 @@ function addAllWalls() {
     renderPanel();
     refreshLive();
 }
+// Objetos: una persona o un montacargas nuevo nace en el centro de la nave (corridos un poco para que no se encimen) con las medidas de partida de lo que transita; se acomoda con X, Y y Giro.
+function addObject(type) {
+    const d = state.draft;
+    d.objects = d.objects || [];
+    const xs = d.vertices.map((p) => p[0]);
+    const ys = d.vertices.map((p) => p[1]);
+    const n = d.objects.length;
+    d.objects.push({
+        id: uid('b'), name: `${typeLabel('object', type)} ${d.objects.filter((o) => o.type === type).length + 1}`, type,
+        x: round2((Math.min(...xs) + Math.max(...xs)) / 2 + (n % 5) * 1.5), y: round2((Math.min(...ys) + Math.max(...ys)) / 2 + Math.floor(n / 5) * 1.5), angle: 0, ...LC.objectDefaultSize(d, type),
+    });
+    panelScrollEnd = true;
+    renderPanel();
+    refreshLive();
+}
+// Cambiar de persona a montacargas (o al revés): si sus medidas todavía son las de partida del tipo anterior, pasan a las del nuevo; el nombre de fábrica también sigue al tipo.
+function setObjectType(row, type) {
+    const prev = row.type;
+    const next = LC.OBJECT_TYPES.includes(type) ? type : 'person';
+    const was = LC.objectDefaultSize(state.draft, prev);
+    const sameSize = Math.abs((row.l || 0) - was.l) < 1e-6 && Math.abs((row.w || 0) - was.w) < 1e-6 && Math.abs((row.h || 0) - was.h) < 1e-6;
+    row.type = next;
+    if (sameSize) Object.assign(row, LC.objectDefaultSize(state.draft, next));
+    const oldLabel = typeLabel('object', prev);
+    if (!row.name || row.name === oldLabel || row.name.indexOf(`${oldLabel} `) === 0) row.name = `${typeLabel('object', next)}${row.name && row.name.length > oldLabel.length ? row.name.slice(oldLabel.length) : ''}`;
+}
 function stepHtml(step) {
     if (step === 'localizadores') return locatorsStepHtml();
     const d = state.draft;
@@ -640,6 +666,14 @@ function stepHtml(step) {
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
         const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wall', wallOptionsHtml(x.wall), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${removeCell('sensors', i, dis)}</tr>`);
         return `${table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutPared', 'main.layoutDistancia', 'main.layoutAlturaPiso', 'main.layoutZona', ''], rows)}${addButton('sensors', 'main.layoutAgregarSensor', dis, true)}`;
+    }
+    if (step === 'objetos') {
+        // Cada renglón es una PERSONA o un MONTACARGAS dibujado en el plano, a escala. Es una foto fija (como el plano de Excel), no sigue a nadie en vivo. X e Y son su centro, en metros; el giro dice hacia dónde mira
+        // (0° = hacia la derecha, 90° = hacia abajo). Las medidas de partida salen de «Cuánto mide lo que transita» (paso Tránsito) y se pueden cambiar en cada uno.
+        const rows = (d.objects || []).map((o, i) => `<tr>${cellText('objects', i, 'name', o.name, dis)}${cellSelect('objects', i, 'type', optionsHtml('object', LC.OBJECT_TYPES, o.type), dis)}${cellNum('objects', i, 'x', o.x, dis)}${cellNum('objects', i, 'y', o.y, dis)}${cellNum('objects', i, 'angle', o.angle || 0, dis, '5')}${cellNum('objects', i, 'l', o.l, dis, '0.05')}${cellNum('objects', i, 'w', o.w, dis, '0.05')}${cellNum('objects', i, 'h', o.h || 0, dis, '0.05')}${removeCell('objects', i, dis)}</tr>`);
+        const addBtn = (type, key) => `<button type="button" class="btn btn-secondary layout-add" data-add-object="${type}" data-main-add="1" data-help-key="layoutObjetoAgregar"${dis ? ' disabled' : ''}>${esc(t(key))}</button>`;
+        const list = rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutGiro', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutObjetosVacio'))}</p>`;
+        return `${addBtn('person', 'main.layoutAgregarPersona')}${addBtn('forklift', 'main.layoutAgregarMontacargas')}${list}`;
     }
     if (step === 'transito') {
         // Cada renglón es un PASILLO: por donde pasan personas, montacargas, carritos y plataformas. Va dentro de una zona (la zona sale de su lugar, como la de las huellas), se conecta con otro que lo toque y nada puede ir adentro.
@@ -1051,7 +1085,7 @@ function findLayout(d) {
     const pad = Math.max(0.5, Math.max(x1 - x0, y1 - y0) * 0.06);
     const h = Number(d.heightM) > 0 ? d.heightM : 4;
     const hid = state.findHideIds || {};
-    return { ...d, vertices: [[x0 - pad, y0 - pad, h], [x1 + pad, y0 - pad, h], [x1 + pad, y1 + pad, h], [x0 - pad, y1 + pad, h]], zones, footprints: footprints.filter((p) => !hid[p.id]), spaces: spaces.filter((s) => !hid[s.id] && !hid[s.footprintId]), obstacles: [], doors: [], power: [], plan: null };
+    return { ...d, vertices: [[x0 - pad, y0 - pad, h], [x1 + pad, y0 - pad, h], [x1 + pad, y1 + pad, h], [x0 - pad, y1 + pad, h]], zones, footprints: footprints.filter((p) => !hid[p.id]), spaces: spaces.filter((s) => !hid[s.id] && !hid[s.footprintId]), obstacles: [], objects: [], doors: [], power: [], plan: null };
 }
 // ¿Este renglón de una tabla es de lo enfocado? Los activos todavía sin huella y las huellas sin zona (recién agregados) siempre se ven, para no perderlos.
 function inFind(entity) {
@@ -1318,10 +1352,12 @@ function renderSvg() {
         const w = Math.max((Number(p.l) || 0) * sc, 3);
         const h = Math.max((Number(p.w) || 0) * sc, 3);
         const bad = trIssues.get(p.id) || {};
-        const title = `<title>${esc(p.code || '')} · ${esc(p.name || '')} · ${esc(typeLabel('transit', p.type))}</title>`;
+        // al pasar el cursor por el pasillo dice qué falta, si algo falta (fuera de toda zona, no cabe en su zona, lo que transita no cabe o algo adentro)
+        const why = [bad.nozone, bad.out, ...(bad.fit || []), ...(bad.blocked || [])].filter(Boolean).map(transitIssueText).join(' · ');
+        const title = `<title>${esc(p.code || '')} · ${esc(p.name || '')} · ${esc(typeLabel('transit', p.type))}${why ? `\n${esc(why)}` : ''}</title>`;
         s += `<rect class="lz ${p.type === 'between' ? 'lz-aisle2' : 'lz-aisle'}" data-tid="${esc(p.id)}" x="${X(p.x)}" y="${Y(p.y)}" width="${w}" height="${h}">${title}</rect>`;
         if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(p.x) + w / 2}" y="${Y(p.y) + h / 2 + 3}" text-anchor="middle">${esc(p.code || '')}</text>`;
-        if (bad.nozone || bad.out || (bad.fit || []).length || (bad.blocked || []).length) s += `<rect class="lbad" x="${X(p.x) - 2}" y="${Y(p.y) - 2}" width="${w + 4}" height="${h + 4}" rx="3"><title>${esc(p.code || '')} · ${esc(t('main.layoutPasilloConFalta'))}</title></rect>`;
+        if (why) s += `<rect class="lbad" x="${X(p.x) - 2}" y="${Y(p.y) - 2}" width="${w + 4}" height="${h + 4}" rx="3"/>`;
     });
     if (!finding || dimmed) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     // El contorno de arriba es solo el marco del terreno (línea punteada). Las PAREDES son obstáculos puestos encima y forman parte de la nave: se dibujan siempre; las columnas, desniveles y otros solo con el paso Contorno.
@@ -1383,6 +1419,16 @@ function renderSvg() {
         const w = LC.wallSegment(d.vertices, e.wall);
         const a = { x: w.p[0] + w.ux * e.dist, y: w.p[1] + w.uy * e.dist };
         s += `<circle class="lsn" cx="${X(a.x)}" cy="${Y(a.y)}" r="6.5"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">°</text><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) - 10}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
+    });
+    // Objetos (paso Objetos): personas y montacargas dibujados a escala y girados hacia donde miran (foto fija del plano).
+    (on('objetos') ? (d.objects || []) : []).forEach((o) => {
+        const along = Math.max((Number(o.l) || 0) * sc, 6);
+        const across = Math.max((Number(o.w) || 0) * sc, 5);
+        const title = `<title>${esc(o.name || typeLabel('object', o.type))} · ${esc(typeLabel('object', o.type))}</title>`;
+        const shape = o.type === 'forklift'
+            ? `<rect class="lob lob-forklift" x="${-along / 2}" y="${-across / 2}" width="${along}" height="${across}" rx="2"/><rect class="lob-cab" x="${-along * 0.36}" y="${-across * 0.3}" width="${along * 0.4}" height="${across * 0.6}" rx="1.5"/><line class="lob-fork" x1="${along / 2}" y1="${-across * 0.28}" x2="${along / 2 + along * 0.35}" y2="${-across * 0.28}"/><line class="lob-fork" x1="${along / 2}" y1="${across * 0.28}" x2="${along / 2 + along * 0.35}" y2="${across * 0.28}"/>`
+            : `<ellipse class="lob lob-person" cx="0" cy="0" rx="${along / 2}" ry="${across / 2}"/><circle class="lob-head" cx="0" cy="0" r="${Math.min(along, across) * 0.3}"/>`;
+        s += `<g class="lobj" data-oid="${esc(o.id)}" transform="translate(${X(o.x)} ${Y(o.y)}) rotate(${Number(o.angle) || 0})">${shape}${title}</g>`;
     });
     const cx = (x0 + x1) / 2;
     const cy = (y0 + y1) / 2;
@@ -1754,7 +1800,7 @@ const ROW_FACTORY = {
     // un activo siempre va dentro de una huella: nace sin huella y hay que elegirla (no se puede guardar hasta entonces)
     spaces: () => ({ id: uid('s'), footprintId: '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
-const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', transit: 'transito', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
+const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', transit: 'transito', objects: 'objetos', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
 // Los códigos los pone el sistema y no se editan: el de la zona (Z001…, consecutivo), el de la huella (H001… por zona, y su zona sale de dónde está en el croquis) y el del activo (letra de su tipo + número
 // consecutivo por zona y tipo: A001, G001…). Lo que ya estaba guardado y sigue igual conserva su código; lo nuevo (todavía sin guardar) y lo que cambió de zona o de tipo lo recibe cada vez que se acomoda,
 // así siempre es el que le toca, el mismo que le pondrá el servidor al guardar.
@@ -1824,7 +1870,9 @@ function onEdit(event) {
     } else {
         const row = state.draft[list][Number(el.getAttribute('data-i'))];
         const key = el.getAttribute('data-k');
-        if (list === 'transit' && key === 'h') {
+        if (list === 'objects' && key === 'type') {
+            setObjectType(row, el.value);
+        } else if (list === 'transit' && key === 'h') {
             // el alto libre es opcional: vacío = no se revisa el alto
             const raw = String(el.value).trim();
             const n = parseFloat(raw);
@@ -1867,6 +1915,8 @@ function onEdit(event) {
     if (event.type === 'change' && list === 'zones' && el.getAttribute('data-k') === 'name') renderPanel();
     // Al cambiar el tipo o la forma de ponerlo de un obstáculo cambian las celdas del renglón (altura del desnivel, lado o X).
     if (event.type === 'change' && list === 'obstacles' && ['kind', 'mode'].includes(el.getAttribute('data-k'))) renderPanel();
+    // Al cambiar de persona a montacargas cambian sus medidas (si eran las de partida) y su nombre.
+    if (event.type === 'change' && list === 'objects' && el.getAttribute('data-k') === 'type') renderPanel();
     // Al pasar un activo a otra huella cambia su zona (que se ve en el renglón).
     if (event.type === 'change' && list === 'spaces' && el.getAttribute('data-k') === 'footprintId') renderPanel();
     refreshLive();
@@ -1978,6 +2028,8 @@ $('layout-panel').addEventListener('click', (event) => {
         return;
     }
     if (event.target.closest('[data-walls-all]')) { addAllWalls(); return; }
+    const addObj = event.target.closest('[data-add-object]');
+    if (addObj) { addObject(addObj.dataset.addObject); return; }
     const add = event.target.closest('[data-add]');
     if (add) {
         const list = add.dataset.add;
@@ -2531,10 +2583,10 @@ function effective3dLayers() {
     const f = state.find;
     const hide = state.findHide || {};
     if (f && !state.findDim) {
-        return { walls: false, columns: false, doors: false, power: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
+        return { walls: false, columns: false, doors: false, power: false, objects: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
     }
     const layers = {
-        walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
+        walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas'), objects: stepOn('objetos'), zones: stepOn('zonas') || stepOn('transito') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), assets: stepOn('activos') || stepOn('posiciones'),
     };
     if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }

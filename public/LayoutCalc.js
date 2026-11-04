@@ -44,10 +44,11 @@
         luz: 'colLayoutLuz',
         sensores: 'colLayoutSensores',
         transito: 'colLayoutTransito',
+        objetos: 'colLayoutObjetos',
         activos: 'colLayoutActivos',
         posiciones: 'colLayoutPosiciones',
     };
-    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
+    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, objects: 500, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -94,7 +95,7 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        return assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], vertices, heightM: round2(meanHeight(vertices)) }))))))))))));
+        return assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], vertices, heightM: round2(meanHeight(vertices)) }))))))))))));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -914,6 +915,26 @@
         return { sum, union, overlap: Math.max(0, sum - union) };
     }
 
+    // ---- Objetos: personas y montacargas dibujados en el plano ---------------------------------------------------------------------------------
+    // Es una foto fija del plano (como el que se hacía en Excel), no un seguimiento en vivo: cada objeto es una persona o un montacargas en un lugar del plano, girado hacia donde mira. x, y = su centro (en metros);
+    // angle = hacia dónde mira, en grados (0 = hacia la derecha, 90 = hacia abajo en el plano); l = largo (en el sentido en que mira), w = ancho y h = alto, en metros, a escala. Las medidas de partida salen de la tabla
+    // «Cuánto mide lo que transita» del paso Tránsito, así el dibujo y la revisión de los pasillos usan las mismas.
+    const OBJECT_TYPES = ['person', 'forklift'];
+    const OBJECT_SIZE_KEY = { person: 'people', forklift: 'forklift' };
+    function objectDefaultSize(layout, type) {
+        const s = transitSizesOf(layout)[OBJECT_SIZE_KEY[type] || 'people'];
+        return { l: s.l > 0 ? s.l : 0.5, w: s.w > 0 ? s.w : 0.5, h: s.h > 0 ? s.h : 1.5 };
+    }
+    // Las cuatro esquinas del objeto ya giradas, en metros.
+    function objectPolygon(o) {
+        const a = ((Number(o.angle) || 0) * Math.PI) / 180;
+        const c = Math.cos(a);
+        const s = Math.sin(a);
+        const hl = (Number(o.l) || 0) / 2;
+        const hw = (Number(o.w) || 0) / 2;
+        return [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]].map(([px, py]) => [round2((Number(o.x) || 0) + px * c - py * s), round2((Number(o.y) || 0) + px * s + py * c)]);
+    }
+
     // ---- El activo dentro de su huella -------------------------------------------------------------------------------------------------------
     // Los activos de una huella van uno junto al otro: ninguno puede salirse de ella ni ser más alto que ella, ni encimarse con otro de la misma huella. Se mira sobre un Layout normalizado (deriveSpaces). Un activo apagado (off) no
     // cuenta. Igual que con las huellas: lo que ya estaba mal antes y no cambió solo se marca; lo NUEVO o lo que cambió (el activo o su huella) no se deja guardar (ver newSpaceViolations). Cuatro faltas: sum (los activos suman más
@@ -1050,7 +1071,7 @@
         return {
             mode: 'scratch', heightM: 9,
             vertices: [[0, 0, 9], [30, 0, 9], [30, 20, 9], [0, 20, 9]],
-            doors: [], power: [], sensors: [], obstacles: defaultWalls([[0, 0], [30, 0], [30, 20], [0, 20]]), wallsMigrated: true, zones: [], footprints: [], spaces: [],
+            doors: [], power: [], sensors: [], objects: [], obstacles: defaultWalls([[0, 0], [30, 0], [30, 20], [0, 20]]), wallsMigrated: true, zones: [], footprints: [], spaces: [],
             plan: null, ownAssetFmt: true,
         };
     }
@@ -1300,6 +1321,20 @@
             return base;
         });
 
+        // Objetos: personas y montacargas dibujados en el plano (foto fija).
+        const objectIds = new Set();
+        out.objects = list(src.objects, LIMITS.objects, 'Objetos').map((p, i) => {
+            const label = `Objeto ${i + 1}`;
+            const ang = Number(p && p.angle);
+            const item = {
+                id: idOf(p && p.id, objectIds, label), name: text(p && p.name, label, false), type: oneOf(p && p.type, OBJECT_TYPES, 'person'),
+                x: meters(p && p.x, label, -LIMITS.maxM), y: meters(p && p.y, label, -LIMITS.maxM),
+                angle: Number.isFinite(ang) ? round2(((ang % 360) + 360) % 360) : 0,
+                l: meters(p && p.l, label), w: meters(p && p.w, label), h: p && p.h != null && p.h !== '' ? meters(p.h, label) : 0,
+            };
+            if (!(item.l > 0 && item.w > 0)) errors.push(`${label}: el largo y el ancho deben ser mayores que 0`);
+            return item;
+        });
         // Tránsito: los pasillos y las medidas de lo que transita por ellos.
         const transitIds = new Set();
         out.transit = list(src.transit, LIMITS.transit, 'Pasillos').map((p, i) => {
@@ -1539,6 +1574,8 @@
             // los obstáculos pegados a un lado del contorno siguen a su lado (que ya viene girado); los de dentro de la nave se giran como cualquier recuadro
             obstacles: (layout.obstacles || []).map((o) => (o.mode === 'contour' ? o : { ...o, ...box(o, 'l', 'w') })),
             transit: (layout.transit || []).map((p) => ({ ...p, ...box(p, 'l', 'w') })),
+            // un objeto gira con el croquis: su centro se mueve y hacia donde mira suma el cuarto de vuelta
+            objects: (layout.objects || []).map((o) => { const r = pt(o.x, o.y); return { ...o, x: round2(r[0]), y: round2(r[1]), angle: ((((Number(o.angle) || 0) + 90 * q) % 360) + 360) % 360 }; }),
             spaces: (layout.spaces || []).map((s) => ({ ...s, ...box(s, 'l', 'd') })),
             footprints: (layout.footprints || []).map((f) => ({ ...f, ...box(f, 'l', 'd') })),
             zones: (layout.zones || []).map((z) => {
@@ -1603,6 +1640,7 @@
         if (section === 'luz') return layout.power;
         // Siempre una lista (un Layout de antes sin sensores cuenta igual que uno sin ninguno); la zona sale de la pared y del croquis, no se captura.
         if (section === 'sensores') return (layout.sensors || []).map(({ zoneId, ...rest }) => rest);
+        if (section === 'objetos') return layout.objects || [];
         // La zona de cada pasillo sale del croquis, no se captura; las medidas de lo que transita van con el paso.
         if (section === 'transito') return { transit: (layout.transit || []).map(({ zoneId, ...rest }) => rest), sizes: transitSizesOf(layout) };
         if (section === 'zonas') return layout.zones;
@@ -1638,7 +1676,7 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume,
-        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex,
+        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

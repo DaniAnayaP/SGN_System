@@ -7431,6 +7431,13 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lz-drag{ cursor: grab; touch-action: none; }
 .lz-drag:active{ cursor: grabbing; }
 .lbad{ fill: none; stroke: #c0392b; stroke-width: 2; stroke-dasharray: 5 3; pointer-events: none; }
+.lob-forklift{ fill: #f2c230; stroke: #7a5c00; stroke-width: 1; }
+.lob-cab{ fill: #c99a00; stroke: #7a5c00; stroke-width: 0.8; }
+.lob-fork{ stroke: #4a3a00; stroke-width: 1.6; stroke-linecap: round; }
+.lob-person{ fill: #e08a2e; stroke: #8a4a0c; stroke-width: 1; }
+.lob-head{ fill: #f7c98b; stroke: #8a4a0c; stroke-width: 0.8; }
+.layout-legend .lg-person{ background: #e08a2e; border-color: #8a4a0c; border-radius: 50%; }
+.layout-legend .lg-forklift{ background: #f2c230; border-color: #7a5c00; }
 .layout-whoset{ display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; min-width: 22rem; }
 .layout-who{ display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.1rem 0.5rem; border: 1px solid var(--color-border); border-radius: 999px; font-size: 0.72rem; cursor: pointer; background: var(--color-surface); white-space: nowrap; }
 .layout-who input{ margin: 0; }

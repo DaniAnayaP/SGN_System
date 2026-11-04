@@ -1740,6 +1740,16 @@
     "layoutVioTr_blocked": "{other} goes into aisle {code}: nothing can be inside an aisle. Move it or make it smaller.",
     "layoutPasilloConFalta": "This aisle has a problem",
     "layoutEnTransitoTitulo": "It goes into an aisle",
+    "layoutStepObjetos": "Objects",
+    "colLayoutObjetos": "Objects",
+    "layoutType_object_person": "Person",
+    "layoutType_object_forklift": "Forklift",
+    "layoutAgregarPersona": "+ Add person",
+    "layoutAgregarMontacargas": "+ Add forklift",
+    "layoutGiro": "Turn (°)",
+    "layoutObjetosVacio": "There are no people or forklifts drawn yet. Add one with the buttons above.",
+    "layoutLeyendaPersona": "Person",
+    "layoutLeyendaMontacargas": "Forklift",
     "layoutTipo": "Type",
     "layoutDistancia": "Distance (m)",
     "layoutAgregarPuerta": "+ Add door",
@@ -4502,6 +4512,14 @@
     "layoutTransitoAltoLibre": {
       "what": "How much free space there is above this aisle, in meters. It is optional: empty means the height is not checked.",
       "example": "a low beam leaves 2 m free: you enter 2 and a 2.2 m tall forklift shows in red."
+    },
+    "layoutSec_objetos": {
+      "what": "The people and forklifts drawn on the plan, to scale, as a still picture of how the warehouse is (it does not follow anyone live). Each one has its place (X and Y are its center, in meters), where it faces (turn in degrees) and its size (length, width and height), which come from «Size of what passes» in the Transit step and can be changed on each one. They show on the sketch and in 3D while this step is on.",
+      "example": "a forklift in the central aisle, 12 m in X and 9.5 m in Y, facing right (turn 0), and a person next to it."
+    },
+    "layoutObjetoAgregar": {
+      "what": "Adds a person or a forklift at the center of the warehouse, with the default sizes. Then you place it with X, Y and Turn.",
+      "example": "you add a forklift and move it to the aisle where it works."
     },
     "layoutOrigin": {
       "what": "Where on the map the first corner is; the sides are drawn from there.",

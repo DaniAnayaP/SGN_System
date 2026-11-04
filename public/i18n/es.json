@@ -1740,6 +1740,16 @@
     "layoutVioTr_blocked": "{other} se mete en el pasillo {code}: nada puede ir dentro de un pasillo. Muévelo o hazlo más chico.",
     "layoutPasilloConFalta": "Este pasillo tiene una falta",
     "layoutEnTransitoTitulo": "Se mete en un pasillo",
+    "layoutStepObjetos": "Objetos",
+    "colLayoutObjetos": "Objetos",
+    "layoutType_object_person": "Persona",
+    "layoutType_object_forklift": "Montacargas",
+    "layoutAgregarPersona": "+ Agregar persona",
+    "layoutAgregarMontacargas": "+ Agregar montacargas",
+    "layoutGiro": "Giro (°)",
+    "layoutObjetosVacio": "Todavía no hay personas ni montacargas dibujados. Agrega uno con los botones de arriba.",
+    "layoutLeyendaPersona": "Persona",
+    "layoutLeyendaMontacargas": "Montacargas",
     "layoutTipo": "Tipo",
     "layoutDistancia": "Distancia (m)",
     "layoutAgregarPuerta": "+ Agregar puerta",
@@ -4501,6 +4511,14 @@
     "layoutTransitoAltoLibre": {
       "what": "Cuánto espacio libre hay hacia arriba en este pasillo, en metros. Es opcional: vacío quiere decir que no se revisa el alto.",
       "example": "una viga baja deja 2 m libres: pones 2 y un montacargas de 2.2 m de alto sale en rojo."
+    },
+    "layoutSec_objetos": {
+      "what": "Las personas y los montacargas dibujados en el plano, a escala, como una foto fija de cómo está la nave (no sigue a nadie en vivo). Cada uno tiene su lugar (X e Y son su centro, en metros), hacia dónde mira (giro en grados) y sus medidas (largo, ancho y alto), que salen de «Cuánto mide lo que transita» del paso Tránsito y puedes cambiar en cada uno. Se ven en el croquis y en el 3D mientras este paso esté encendido.",
+      "example": "un montacargas en el pasillo central, a 12 m en X y 9.5 m en Y, mirando hacia la derecha (giro 0), y una persona junto a él."
+    },
+    "layoutObjetoAgregar": {
+      "what": "Agrega una persona o un montacargas al centro de la nave, con las medidas de partida. Después lo acomodas con X, Y y Giro.",
+      "example": "agregas un montacargas y lo mueves al pasillo donde trabaja."
     },
     "layoutOrigin": {
       "what": "En qué punto del mapa está la primera esquina; desde ahí se dibujan los lados.",
