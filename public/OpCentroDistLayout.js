@@ -878,8 +878,16 @@ function setObjectEquip(row, id) {
     if (prev && (row.name === prev.name || row.name.indexOf(`${prev.name} `) === 0)) row.name = `${next.name}${row.name.slice(prev.name.length)}`;
 }
 // Seguridad: cambiar el tipo de un elemento. La ruta de evacuación lleva un punto de llegada (de fábrica, a 5 m a la derecha de donde sale); los demás tipos no. El código lo vuelve a poner el sistema (letra del tipo nuevo).
+// Una celda de la altura al piso o del tamaño de un elemento de Seguridad: vacía muestra la medida de fábrica de su tipo (en gris) y es la que vale.
+function safetySizeCell(e, i, key, dis) {
+    const def = LC.safetySizeOf(e);
+    const value = e[key] !== undefined && e[key] !== null ? e[key] : '';
+    return `<td><input type="number" step="0.05" min="${key === 'elev' ? 0 : 0.01}" data-l="safety" data-i="${i}" data-k="${key}" value="${value}" placeholder="${def[key]}"${dis ? ' disabled' : ''}></td>`;
+}
 function setSafetyType(row, value) {
     row.type = LC.SAFETY_TYPES.includes(value) ? value : 'extinguisher';
+    // la altura al piso y el tamaño son del tipo: al cambiarlo vuelven a ser los de fábrica del tipo nuevo
+    ['elev', 'l', 'w', 'h'].forEach((k) => { delete row[k]; });
     if (row.type === 'route') {
         if (row.x2 === undefined) row.x2 = round2((Number(row.x) || 0) + 5);
         if (row.y2 === undefined) row.y2 = round2(Number(row.y) || 0);
@@ -943,9 +951,11 @@ function stepHtml(step) {
         const rows = (d.safety || []).map((e, i) => {
             const route = e.type === 'route';
             const end = route ? `${cellNum('safety', i, 'x2', e.x2, dis)}${cellNum('safety', i, 'y2', e.y2, dis)}` : '<td class="layout-calc">—</td><td class="layout-calc">—</td>';
-            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}<td><input type="date" data-l="safety" data-i="${i}" data-k="expires" value="${esc(e.expires || '')}"${dis ? ' disabled' : ''}></td><td><input type="number" step="1" min="1" max="3650" data-l="safety" data-i="${i}" data-k="every" value="${e.every || ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><input type="date" data-l="safety" data-i="${i}" data-k="next" value="${esc(e.next || '')}"${dis ? ' disabled' : ''}><small class="layout-sg-eff" data-sf-next="${i}">${esc(safetyNextNote(e))}</small></td><td class="layout-calc" data-sf-last="${i}">${safetyLastHtml(e)}</td><td class="layout-calc" data-sf-status="${i}">${safetyStatusTag(e)}</td>${removeCell('safety', i, dis)}</tr>`;
+            // la ruta de evacuación es una marca en el piso: no lleva altura ni tamaño
+            const size = route ? '<td class="layout-calc">—</td>'.repeat(4) : ['elev', 'l', 'w', 'h'].map((k) => safetySizeCell(e, i, k, dis)).join('');
+            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}${size}<td><input type="date" data-l="safety" data-i="${i}" data-k="expires" value="${esc(e.expires || '')}"${dis ? ' disabled' : ''}></td><td><input type="number" step="1" min="1" max="3650" data-l="safety" data-i="${i}" data-k="every" value="${e.every || ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><input type="date" data-l="safety" data-i="${i}" data-k="next" value="${esc(e.next || '')}"${dis ? ' disabled' : ''}><small class="layout-sg-eff" data-sf-next="${i}">${esc(safetyNextNote(e))}</small></td><td class="layout-calc" data-sf-last="${i}">${safetyLastHtml(e)}</td><td class="layout-calc" data-sf-status="${i}">${safetyStatusTag(e)}</td>${removeCell('safety', i, dis)}</tr>`;
         });
-        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgUltima', 'main.layoutSgEstado', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutAlturaPiso', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgUltima', 'main.layoutSgEstado', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
         // arriba: los contadores (Vigentes, Por vencer, Vencidos, Sin fecha) y con cuántos días de anticipación sale «Por vencer» (de fábrica 30); abajo, los vencidos
         const bar = `<div class="layout-sg-bar"><div class="layout-sg-counts" data-sf-counts data-help-key="layoutSgConteo">${safetyCountsHtml()}</div><div class="layout-fl"><label data-help-key="layoutSgAvisar">${esc(t('main.layoutSgAvisarCon'))}<input type="number" min="1" max="365" step="1" data-l="safetyWarn" value="${d.safetyWarnDays || LC.SAFETY_WARN_DAYS}"${dis ? ' disabled' : ''}></label></div></div>`;
         return `${addButton('safety', 'main.layoutAgregarSeguridad', dis, true)}${bar}${list}<div class="layout-vio" data-sf-issues hidden></div><div class="layout-due" data-sf-due hidden></div>`;
@@ -2283,6 +2293,11 @@ function onEdit(event) {
         } else if (list === 'safety' && key === 'every') {
             const n = Math.round(parseFloat(el.value));
             if (n >= 1) row.every = Math.min(n, 3650); else delete row.every;
+        } else if (list === 'safety' && ['elev', 'l', 'w', 'h'].includes(key)) {
+            // la altura al piso y el tamaño son opcionales: vacío = la medida de fábrica de su tipo
+            const raw = String(el.value).trim();
+            const n = parseFloat(raw);
+            if (raw !== '' && Number.isFinite(n) && n >= (key === 'elev' ? 0 : 0.01)) row[key] = Math.min(n, key === 'l' || key === 'w' ? LC.LIMITS.maxM : LC.LIMITS.maxHeight); else delete row[key];
         } else if (list === 'safety' && key === 'type') {
             setSafetyType(row, el.value);
         } else if (list === 'transit' && key === 'h') {

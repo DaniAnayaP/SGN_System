@@ -1127,6 +1127,28 @@
     // sistema, con una serie por tipo (cada tipo con su letra), y NO se vuelve a usar aunque se borre un elemento: safetyNext guarda el último número que se dio de cada letra. Todo debe quedar dentro del contorno de la nave.
     const SAFETY_TYPES = ['extinguisher', 'hydrant', 'emergency_door', 'firstaid', 'alarm', 'eyewash', 'assembly', 'route'];
     // El color de cada tipo (rojo del fuego, verde de emergencia, naranja de alarma, azul del agua): el mismo en el croquis, el 3D y la leyenda.
+    // Altura al piso (elev: de dónde arranca el elemento) y tamaño (largo l, ancho w y alto h), en metros, de cada elemento de Seguridad en el 3D. De fábrica cada tipo trae la medida con la que ya se dibujaba; lo que se
+    // captura en su renglón la cambia (vacío = la de fábrica). La ruta de evacuación es una marca en el piso y no lleva.
+    const SAFETY_SIZE_DEFAULTS = {
+        extinguisher: { elev: 0.7, l: 0.2, w: 0.2, h: 0.6 },
+        hydrant: { elev: 0, l: 0.3, w: 0.3, h: 0.95 },
+        emergency_door: { elev: 0, l: 1, w: 0.12, h: 2.1 },
+        firstaid: { elev: 1.36, l: 0.34, w: 0.12, h: 0.28 },
+        alarm: { elev: 1.32, l: 0.16, w: 0.08, h: 0.16 },
+        eyewash: { elev: 0, l: 0.44, w: 0.44, h: 1.1 },
+        assembly: { elev: 0, l: 1.6, w: 1.6, h: 2.5 },
+    };
+    function safetySizeOf(e) {
+        const d = e && SAFETY_SIZE_DEFAULTS[e.type];
+        if (!d) return null;
+        const pick = (k) => {
+            const raw = e[k];
+            if (raw === undefined || raw === null || raw === '') return d[k];
+            const v = Number(raw);
+            return Number.isFinite(v) && (k === 'elev' ? v >= 0 : v > 0) ? v : d[k];
+        };
+        return { elev: pick('elev'), l: pick('l'), w: pick('w'), h: pick('h') };
+    }
     const SAFETY_COLORS = { extinguisher: '#d9443a', hydrant: '#d9443a', emergency_door: '#2e9e5b', firstaid: '#2e9e5b', alarm: '#e8892b', eyewash: '#2f7fc7', assembly: '#2e9e5b', route: '#2e9e5b' };
     function deriveSafetyZones(layout) {
         if (!layout || !Array.isArray(layout.safety)) return layout;
@@ -1684,6 +1706,15 @@
                 x: meters(e && e.x, label, -LIMITS.maxM), y: meters(e && e.y, label, -LIMITS.maxM),
             };
             if (type === 'route') { item.x2 = meters(e && e.x2, label, -LIMITS.maxM); item.y2 = meters(e && e.y2, label, -LIMITS.maxM); }
+            // Altura al piso y tamaño (todo opcional: vacío = la medida de fábrica de su tipo; la ruta de evacuación no lleva).
+            if (type !== 'route') {
+                [['elev', 0, LIMITS.maxHeight, 'la altura del piso'], ['l', 0.01, LIMITS.maxM, 'el largo'], ['w', 0.01, LIMITS.maxM, 'el ancho'], ['h', 0.01, LIMITS.maxHeight, 'el alto']].forEach(([k, min, max, what]) => {
+                    const v = e && e[k];
+                    if (v === undefined || v === null || v === '') return;
+                    const n = Number(v);
+                    if (Number.isFinite(n) && n >= min && n <= max) item[k] = round2(n); else errors.push(`${label}: ${what} no es válido (de ${min} a ${max} m)`);
+                });
+            }
             // Fechas (todas opcionales): caducidad (cuándo deja de servir), cada cuántos días se revisa y próxima revisión. Una fecha es AAAA-MM-DD; lo vacío no se guarda.
             ['expires', 'next'].forEach((k) => {
                 const v = e && e[k];
@@ -2072,7 +2103,7 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
-        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
+        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

@@ -171,9 +171,12 @@
                     const x2 = Number(e.x2) || 0; const y2 = Number(e.y2) || 0;
                     return { x: PX((ex + x2) / 2), y: 0.2, z: PZ((ey + y2) / 2), sx: Math.abs(x2 - ex) + 0.8, sy: 0.4, sz: Math.abs(y2 - ey) + 0.8 };
                 }
-                const H = { extinguisher: 1.4, hydrant: 0.95, emergency_door: 2.4, firstaid: 1.7, alarm: 1.6, eyewash: 1.25, assembly: 2.6 }[e.type] || 1.4;
-                const W = { emergency_door: 1.2, assembly: 1.7 }[e.type] || 0.6;
-                return { x: PX(ex), y: H / 2 + 0.08, z: PZ(ey), sx: W, sy: H, sz: W };
+                // la altura al piso y el tamaño del elemento (los capturados o los de fábrica de su tipo); lo que va en la pared puede mirar hacia cualquier lado, así que el cuadro es cuadrado por el lado más largo
+                const sz = root.LayoutCalc && root.LayoutCalc.safetySizeOf ? root.LayoutCalc.safetySizeOf(e) : null;
+                if (!sz) return null;
+                const W = Math.max(sz.l, sz.w, 0.2) + 0.2;
+                const H = sz.h + (e.type === 'emergency_door' ? 0.35 : 0);
+                return { x: PX(ex), y: 0.08 + sz.elev + H / 2, z: PZ(ey), sx: W, sy: H, sz: W };
             }
             if (hl.kind === 'transit') {
                 const p = (lastLayout.transit || []).find((x) => x.id === hl.id);
@@ -522,56 +525,67 @@
                     dueRing(ex, ey, e);
                     return;
                 }
+                // Cada figura se arma con la altura al piso (elev) y el tamaño (l largo, w ancho, h alto) del elemento: los que capturó la persona o, si no hay, los de fábrica de su tipo (LayoutCalc.safetySizeOf).
+                const sz = LCalc.safetySizeOf(e);
+                const y0 = sz.elev;
+                const rr = Math.max(Math.min(sz.l, sz.w) / 2, 0.02);
                 if (e.type === 'hydrant') {
-                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.78, 14), lam(color));
-                    body.position.y = 0.39;
-                    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 8), lam(0xb83a30));
-                    cap.position.y = 0.8;
-                    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.4, 10), lam(0x8a2a22));
+                    const bodyH = sz.h * 0.82;
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.87, rr, bodyH, 14), lam(color));
+                    body.position.y = y0 + bodyH / 2;
+                    const cap = new THREE.Mesh(new THREE.SphereGeometry(rr * 0.93, 12, 8), lam(0xb83a30));
+                    cap.position.y = y0 + bodyH + rr * 0.1;
+                    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.4, rr * 0.4, rr * 2.7, 10), lam(0x8a2a22));
                     nozzle.rotation.z = Math.PI / 2;
-                    nozzle.position.y = 0.5;
+                    nozzle.position.y = y0 + sz.h * 0.53;
                     g.add(body, cap, nozzle);
                 } else if (e.type === 'emergency_door') {
-                    const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2.1, 0.12), lam(color));
-                    door.position.y = 1.05;
-                    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.06), lam(0x14602f));
-                    sign.position.set(0, 2.25, 0);
+                    const door = new THREE.Mesh(new THREE.BoxGeometry(sz.l, sz.h, sz.w), lam(color));
+                    door.position.y = y0 + sz.h / 2;
+                    const sign = new THREE.Mesh(new THREE.BoxGeometry(sz.l * 0.5, 0.2, 0.06), lam(0x14602f));
+                    sign.position.set(0, y0 + sz.h + 0.15, 0);
                     g.add(door, sign);
                     g.rotation.y = -wallAngleAt(ex, ey);
                 } else if (e.type === 'firstaid') {
-                    const box = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.28, 0.12), lam(color));
-                    box.position.y = 1.5;
-                    const bar1 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.02), lam(0xffffff));
-                    bar1.position.set(0, 1.5, 0.07);
-                    const bar2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.02), lam(0xffffff));
-                    bar2.position.set(0, 1.5, 0.07);
+                    const box = new THREE.Mesh(new THREE.BoxGeometry(sz.l, sz.h, sz.w), lam(color));
+                    box.position.y = y0 + sz.h / 2;
+                    const arm = Math.min(sz.l, sz.h) * 0.64;
+                    const thick = Math.min(sz.l, sz.h) * 0.18;
+                    const bar1 = new THREE.Mesh(new THREE.BoxGeometry(arm, thick, 0.02), lam(0xffffff));
+                    bar1.position.set(0, y0 + sz.h / 2, sz.w / 2 + 0.01);
+                    const bar2 = new THREE.Mesh(new THREE.BoxGeometry(thick, arm, 0.02), lam(0xffffff));
+                    bar2.position.set(0, y0 + sz.h / 2, sz.w / 2 + 0.01);
                     g.add(box, bar1, bar2);
                     g.rotation.y = -wallAngleAt(ex, ey);
                 } else if (e.type === 'alarm') {
-                    const box = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.08), lam(color));
-                    box.position.y = 1.4;
+                    const box = new THREE.Mesh(new THREE.BoxGeometry(sz.l, sz.h, sz.w), lam(color));
+                    box.position.y = y0 + sz.h / 2;
                     g.add(box);
                     g.rotation.y = -wallAngleAt(ex, ey);
                 } else if (e.type === 'eyewash') {
-                    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 10), lam(color));
-                    post.position.y = 0.5;
-                    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.17, 0.09, 14), lam(0x1f5f9e));
-                    bowl.position.y = 1.04;
+                    const postH = Math.max(sz.h - 0.1, 0.1);
+                    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, postH, 10), lam(color));
+                    post.position.y = y0 + postH / 2;
+                    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(sz.l, sz.w) / 2, Math.max(sz.l, sz.w) * 0.386, 0.09, 14), lam(0x1f5f9e));
+                    bowl.position.y = y0 + postH + 0.04;
                     g.add(post, bowl);
                 } else if (e.type === 'assembly') {
-                    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.03, 24), lam(color));
-                    disc.position.y = 0.12;
-                    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.4, 8), lam(0x4a4f5e));
-                    pole.position.y = 1.2;
+                    const disc = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(sz.l, sz.w) / 2, Math.max(sz.l, sz.w) / 2, 0.03, 24), lam(color));
+                    disc.position.y = y0 + 0.12;
+                    const poleH = Math.max(sz.h - 0.1, 0.2);
+                    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, poleH, 8), lam(0x4a4f5e));
+                    pole.position.y = y0 + poleH / 2;
                     const sign = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 0.04), lam(color));
-                    sign.position.y = 2.3;
+                    sign.position.y = y0 + Math.max(sz.h - 0.2, 0.3);
                     g.add(disc, pole, sign);
                 } else {
-                    // extintor: un cilindro rojo con su cabeza, colgado a la altura de la mano
-                    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.5, 12), lam(color));
-                    tank.position.y = 0.95;
-                    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.1, 10), lam(0x2a2f3d));
-                    head.position.y = 1.25;
+                    // extintor: un cilindro rojo con su cabeza, colgado a la altura que se capturó (de fábrica, a la altura de la mano)
+                    const tankH = sz.h * 0.83;
+                    const headH = sz.h - tankH;
+                    const tank = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.9, rr * 0.9, tankH, 12), lam(color));
+                    tank.position.y = y0 + tankH / 2;
+                    const head = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.4, rr * 0.5, headH, 10), lam(0x2a2f3d));
+                    head.position.y = y0 + tankH + headH / 2;
                     g.add(tank, head);
                 }
                 g.position.set(PX(ex), 0.08, PZ(ey));

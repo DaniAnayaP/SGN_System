@@ -6589,7 +6589,7 @@ function buildPublicLayoutPayload(clientId, row) {
         // Los pasillos (Tránsito) se dibujan en la página pública y cuentan en los m² de pasillos; quién transita y las medidas no salen.
         transit: (l.transit || []).map((p) => ({ id: p.id, code: p.code, name: p.name, type: p.type, x: p.x, y: p.y, l: p.l, w: p.w })),
         // Los elementos de Seguridad (extintores, hidrantes, puertas de emergencia…) se dibujan en la página pública con su propia capa; sin zona, sin fechas ni nada más.
-        safety: (l.safety || []).map((e) => ({ id: e.id, code: e.code, name: e.name, type: e.type, x: e.x, y: e.y, ...(e.type === 'route' ? { x2: e.x2, y2: e.y2 } : {}) })),
+        safety: (l.safety || []).map((e) => ({ id: e.id, code: e.code, name: e.name, type: e.type, x: e.x, y: e.y, ...(e.type === 'route' ? { x2: e.x2, y2: e.y2 } : { elev: e.elev, l: e.l, w: e.w, h: e.h }) })),
     };
     // Color representativo del cliente (el que se elige al darlo de alta): la hoja y la vista pública se pintan con él. Sin color válido va vacío y todo se ve como siempre.
     const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
