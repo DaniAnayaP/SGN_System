@@ -3501,8 +3501,8 @@
       "example": "guardas la pantalla que usas todos los días para no buscarla cada vez."
     },
     "uiScale": {
-      "what": "Hace el texto y las tablas más grandes o más chicas en toda la aplicación.",
-      "example": "si te cuesta leer, lo agrandas; si quieres ver más filas de una tabla, lo achicas."
+      "what": "Hace el texto y las tablas más grandes o más chicas en toda la aplicación, solo mientras dure tu sesión.",
+      "example": "si hoy te cuesta leer, lo agrandas; al volver a entrar se abre con el tamaño que elegiste en Configuración > Configuración botones > Tamaño del sistema."
     },
     "uiScaleDefault": {
       "what": "Eliges con qué tamaño se abre tu usuario cada vez que entras al sistema.",

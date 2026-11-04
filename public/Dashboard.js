@@ -9197,6 +9197,23 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
 const UI_SCALE_LEVELS = [70, 80, 90, 100, 110, 120, 130, 140]; // percent, index 0 = level 1
 const UI_SCALE_DEFAULT_LEVEL = 4; // UI_SCALE_LEVELS[3] === 100, "Ideal"
 let currentUiScaleLevel = UI_SCALE_DEFAULT_LEVEL;
+// Dos cosas distintas (2026-11-04, como Departamento: el selector de arriba es para la sesión y el de Configuración botones es con lo que se abre):
+//  - accountUiScaleLevel: con qué tamaño ABRE la cuenta (users.ui_scale); se elige en Configuración botones > Tamaño del Sistema y viaja con la cuenta a cualquier equipo.
+//  - el tamaño de la SESIÓN: el ícono «T» de la barra de arriba lo cambia solo mientras dure esta sesión (sessionStorage de esta pestaña, de esta persona); al volver a entrar se abre con el de la cuenta.
+let accountUiScaleLevel = UI_SCALE_DEFAULT_LEVEL;
+const UI_SCALE_SESSION_KEY = 'uiScaleSession';
+function readSessionUiScale() {
+    try {
+        const raw = JSON.parse(sessionStorage.getItem(UI_SCALE_SESSION_KEY) || 'null');
+        const level = raw && raw.level;
+        // solo vale el de la misma persona (otra cuenta en esta pestaña no hereda el tamaño de la anterior)
+        if (raw && currentUser && String(raw.u) === String(currentUser.sub) && Number.isInteger(level) && level >= 1 && level <= UI_SCALE_LEVELS.length) return level;
+    } catch { /* sin sessionStorage: se abre con el de la cuenta */ }
+    return null;
+}
+function writeSessionUiScale(level) {
+    try { sessionStorage.setItem(UI_SCALE_SESSION_KEY, JSON.stringify({ u: currentUser ? currentUser.sub : null, level })); } catch { /* ignorar */ }
+}
 
 function uiScaleLabelFor(level) {
     return level === UI_SCALE_DEFAULT_LEVEL ? t('main.uiScaleIdeal') : `${UI_SCALE_LEVELS[level - 1]}%`;
@@ -9236,7 +9253,16 @@ async function fetchUiScaleLevel() {
     }
 }
 
+// El ícono «T» de la barra de arriba: cambia el tamaño solo para esta sesión (no toca lo que la cuenta tiene guardado).
+function setSessionUiScale(level) {
+    applyUiScaleLevel(level);
+    writeSessionUiScale(level);
+}
+
+// Configuración botones > Tamaño del Sistema: con qué tamaño ABRE la cuenta. Se guarda en la cuenta y se aplica al momento (y es el de esta sesión también).
 async function saveUiScaleLevel(level) {
+    accountUiScaleLevel = level;
+    writeSessionUiScale(level);
     applyUiScaleLevel(level); // reflect the change immediately, don't wait on the round-trip
     try {
         await fetch('/api/me/ui-scale', {
@@ -9289,10 +9315,10 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
         }
     });
     wrapper.querySelector('#ui-scale-decrease').addEventListener('click', () => {
-        if (currentUiScaleLevel > 1) saveUiScaleLevel(currentUiScaleLevel - 1);
+        if (currentUiScaleLevel > 1) setSessionUiScale(currentUiScaleLevel - 1);
     });
     wrapper.querySelector('#ui-scale-increase').addEventListener('click', () => {
-        if (currentUiScaleLevel < UI_SCALE_LEVELS.length) saveUiScaleLevel(currentUiScaleLevel + 1);
+        if (currentUiScaleLevel < UI_SCALE_LEVELS.length) setSessionUiScale(currentUiScaleLevel + 1);
     });
     if (settingsMenuEl) {
         settingsMenuEl.insertAdjacentElement('beforebegin', wrapper);
@@ -11503,7 +11529,7 @@ function openAreaDefaultPicker() {
     });
 }
 
-// Con qué tamaño se abre el usuario de esta cuenta: los 8 tamaños (el mismo que guarda el ícono de la barra de arriba, por cuenta: users.ui_scale); elegir uno lo aplica al momento y es con el que se abre desde la próxima vez.
+// Con qué tamaño se abre el usuario de esta cuenta: los 8 tamaños (users.ui_scale, por cuenta; el ícono «T» de la barra de arriba ya NO lo guarda, solo cambia la sesión); elegir uno lo aplica al momento y es con el que se abre desde la próxima vez.
 function openUiScaleDefaultPicker() {
     defaultPickerTitle.textContent = t('main.uiScale');
     defaultPickerHint.textContent = '';
@@ -11517,8 +11543,8 @@ function openUiScaleDefaultPicker() {
         });
         const btn = li.querySelector('button');
         btn.setAttribute('role', 'menuitemradio');
-        btn.setAttribute('aria-checked', String(level === currentUiScaleLevel));
-        btn.classList.toggle('active', level === currentUiScaleLevel);
+        btn.setAttribute('aria-checked', String(level === accountUiScaleLevel));
+        btn.classList.toggle('active', level === accountUiScaleLevel);
         defaultPickerList.appendChild(li);
     });
 }
@@ -11703,6 +11729,7 @@ async function performLogout() {
     }
 
     sessionStorage.removeItem('sgn_token');
+    try { sessionStorage.removeItem(UI_SCALE_SESSION_KEY); } catch { /* ignorar */ }
     fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' })
         .catch(() => {})
         .finally(() => window.location.replace('Login.html'));
@@ -12375,7 +12402,9 @@ async function initDashboardInner({ activePage } = {}) {
     currentRole = role;
     await languagePromise;
     const [, uiScaleLevel] = await Promise.all([loadLanguage(getStoredLang()), uiScalePromise]);
-    applyUiScaleLevel(uiScaleLevel);
+    accountUiScaleLevel = uiScaleLevel;
+    const sessionUiScale = readSessionUiScale();
+    applyUiScaleLevel(sessionUiScale != null ? sessionUiScale : uiScaleLevel);
     if (role !== 'admin') {
         // Right after a fresh login (flag set by login.js), the account's
         // saved default Departamento/Área/Centro de Costos overrides

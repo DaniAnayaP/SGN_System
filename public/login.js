@@ -245,6 +245,8 @@ loginForm?.addEventListener('submit', async (event) => {
         // account's saved default Departamento/Área/Centro de Costos instead
         // of whatever's left over in localStorage from a previous session.
         sessionStorage.setItem('applyLoginDefaults', '1');
+        // el tamaño de la sesión anterior (ícono «T») no pasa a la sesión nueva: se abre con el de la cuenta
+        try { sessionStorage.removeItem('uiScaleSession'); } catch { /* ignorar */ }
         // This file is also bundled into the native app (mobile-app/www/) --
         // access-screen.js takes over the whole login UI there and never
         // lets this handler run, but a browser-tested /mobile/Login.html or

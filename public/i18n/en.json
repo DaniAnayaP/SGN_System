@@ -3502,8 +3502,8 @@
       "example": "you save the screen you use every day so you don't have to search for it again."
     },
     "uiScale": {
-      "what": "Makes the text and tables bigger or smaller across the whole application.",
-      "example": "if reading is hard, you make it bigger; if you want to see more rows in a table, you make it smaller."
+      "what": "Makes the text and tables bigger or smaller across the whole application, only for as long as your session lasts.",
+      "example": "if reading is hard today, you make it bigger; when you sign in again it opens with the size you chose in Settings > Button Settings > System size."
     },
     "uiScaleDefault": {
       "what": "You choose the size your user opens with every time you enter the system.",
