@@ -14,7 +14,7 @@
             spaces: 'espacios', noZone: 'Sin zona asignada', zoneWord: 'Zona', noCodes: 'Todavía no hay códigos en esta categoría. Aquí aparecerán con sus fotos y su ubicación.',
             zoomIn: 'Acercar', zoomOut: 'Alejar', zoomReset: 'Ver todo el croquis', codesOne: '1 código en esta zona', codesMany: '{n} códigos en esta zona',
             metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
-            restRow: 'Sin zona (espacio muerto)', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos',
+            restRow: 'Sin zona (espacio muerto)', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos', zonesHintNoCodes: '{z} zonas',
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
             home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
             rotate: 'Girar el croquis', measures: 'Medidas', areaBtn: 'm² de las zonas', layers: 'Capas del croquis', mapToggle: 'Croquis',
@@ -28,13 +28,13 @@
             searchMode: 'Tipo de Filtro', searchModes: { startsWith: 'Inicia con', contains: 'Contiene', equals: 'Igual que' },
             searchSigns: 'Signos de búsqueda', searchSign: { before: 'Antes', after: 'Después', comma: 'Otra búsqueda' }, searchSignOff: 'No aplica con este tipo de filtro',
             searchSignHelp: { before: 'Otra palabra ANTES · rack$cajón', after: 'Otra palabra DESPUÉS · rack@cajón', comma: 'Sirve cualquiera de las dos · rack, estante' },
-            searchScopeLabel: 'Buscando en:', searchScopeZone: '{z} (tocar para ampliar)', searchScopeAll: 'Todo el Layout (tocar para limitar a {z})', searchHint: 'Escribe una zona, un mobiliario, una ubicación, un SKU o una descripción. Con comas se busca cualquiera de las palabras.',
+            searchScopeLabel: 'Buscando en:', searchScopeZone: '{z} (tocar para ampliar)', searchScopeAll: 'Todo el Layout (tocar para limitar a {z})', searchHint: 'Escribe una zona, un mobiliario, una ubicación, un SKU o una descripción. Con comas se busca cualquiera de las palabras.', searchHintNoCodes: 'Escribe una zona, un mobiliario o una ubicación. Con comas se busca cualquiera de las palabras.',
             searchNone: 'No hay resultados para "{q}".', searchNoneZone: 'No hay resultados para "{q}" en {z}.', searchWiden: 'Buscar en todo el Layout', searchBusy: 'Buscando…', searchError: 'No se pudo buscar. Intenta de nuevo.',
             searchGroup: { zone: 'Zonas', furniture: 'Mobiliario', place: 'Ubicación', cat: 'Categorías', code: 'Códigos' }, searchOne: '1 resultado', searchMany: '{n} resultados', searchMore: 'Mostrando {n} de {t}. Escribe más para afinar.', searchCats: '{n} categorías', searchCat1: '1 categoría',
             classifications: 'Clasificaciones', noClassification: 'SIN CLASIFICAR', noClassificationDesc: 'Códigos que todavía no tienen clasificación',
             articlesOne: '1 artículo, ordenados por ubicación', articlesMany: '{n} artículos, ordenados por ubicación', viewGrid: 'Cuadrícula', viewList: 'Lista', viewLabel: 'Vista',
             clsMore: 'Ver más', clsShowing: 'Mostrando {n} de {t}', clsNoLoc: 'Sin ubicación', clsLevel: 'Nivel {n}', clsCode: 'Código {n}',
-            clsError: 'No se pudo cargar la clasificación. Intenta de nuevo.', clsGone: 'Esta clasificación ya no está disponible.', clsEmpty: 'Todavía no hay artículos en esta clasificación en esta zona.',
+            clsError: 'No se pudo cargar la clasificación. Intenta de nuevo.', clsGone: 'Esta clasificación ya no está disponible.', clsLocked: 'Este QR no muestra las clasificaciones.', clsEmpty: 'Todavía no hay artículos en esta clasificación en esta zona.',
             layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Huella-Espacio' },
             zone: { dry: 'Seco', cold: 'Refrigerado', chemical: 'Químicos', finished: 'Producto terminado', dock: 'Andén', office: 'Oficina', aisle: 'Pasillo principal', aisle2: 'Pasillo entre anaqueles' },
         },
@@ -45,7 +45,7 @@
             spaces: 'spaces', noZone: 'No zone assigned', zoneWord: 'Zone', noCodes: 'There are no codes in this category yet. They will appear here with their photos and location.',
             zoomIn: 'Zoom in', zoomOut: 'Zoom out', zoomReset: 'Show the whole map', codesOne: '1 code in this zone', codesMany: '{n} codes in this zone',
             metrics: 'Metric data', metricsHint: '{n} m² of total area and more', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
-            restRow: 'No zone (dead space)', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes',
+            restRow: 'No zone (dead space)', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes', zonesHintNoCodes: '{z} zones',
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
             home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
             rotate: 'Rotate the sketch', measures: 'Measures', areaBtn: 'Zone m²', layers: 'Sketch layers', mapToggle: 'Sketch',
@@ -59,13 +59,13 @@
             searchMode: 'Filter type', searchModes: { startsWith: 'Starts with', contains: 'Contains', equals: 'Equal to' },
             searchSigns: 'Search signs', searchSign: { before: 'Before', after: 'After', comma: 'Another search' }, searchSignOff: 'Not available with this filter type',
             searchSignHelp: { before: 'Another word BEFORE · rack$drawer', after: 'Another word AFTER · rack@drawer', comma: 'Either one matches · rack, shelf' },
-            searchScopeLabel: 'Searching in:', searchScopeZone: '{z} (tap to widen)', searchScopeAll: 'Whole Layout (tap to limit to {z})', searchHint: 'Type a zone, a furniture item, a location, a SKU or a description. With commas, any of the words matches.',
+            searchScopeLabel: 'Searching in:', searchScopeZone: '{z} (tap to widen)', searchScopeAll: 'Whole Layout (tap to limit to {z})', searchHint: 'Type a zone, a furniture item, a location, a SKU or a description. With commas, any of the words matches.', searchHintNoCodes: 'Type a zone, a furniture item or a location. With commas, any of the words matches.',
             searchNone: 'No results for "{q}".', searchNoneZone: 'No results for "{q}" in {z}.', searchWiden: 'Search the whole Layout', searchBusy: 'Searching…', searchError: 'The search failed. Try again.',
             searchGroup: { zone: 'Zones', furniture: 'Furniture', place: 'Location', cat: 'Categories', code: 'Codes' }, searchOne: '1 result', searchMany: '{n} results', searchMore: 'Showing {n} of {t}. Type more to narrow it down.', searchCats: '{n} categories', searchCat1: '1 category',
             classifications: 'Classifications', noClassification: 'UNCLASSIFIED', noClassificationDesc: 'Codes that do not have a classification yet',
             articlesOne: '1 item, sorted by location', articlesMany: '{n} items, sorted by location', viewGrid: 'Grid', viewList: 'List', viewLabel: 'View',
             clsMore: 'Show more', clsShowing: 'Showing {n} of {t}', clsNoLoc: 'No location', clsLevel: 'Level {n}', clsCode: 'Code {n}',
-            clsError: 'The classification could not be loaded. Try again.', clsGone: 'This classification is no longer available.', clsEmpty: 'There are no items in this classification in this zone yet.',
+            clsError: 'The classification could not be loaded. Try again.', clsGone: 'This classification is no longer available.', clsLocked: 'This QR does not show the classifications.', clsEmpty: 'There are no items in this classification in this zone yet.',
             layer: { contorno: 'Outline', puertas: 'Doors', luz: 'Power connections', zonas: 'Zones', espacios: 'Footprint-Space' },
             zone: { dry: 'Dry', cold: 'Refrigerated', chemical: 'Chemicals', finished: 'Finished goods', dock: 'Dock', office: 'Office', aisle: 'Main aisle', aisle2: 'Aisle between racks' },
         },
@@ -123,14 +123,14 @@
             if (!res.ok) return;
             const cat = await res.json();
             const look = window.LayoutCalc.categoryLook(cat.seed);
-            const count = cat.codes === 1 ? TEXT.codesOne : TEXT.codesMany.replace('{n}', fmt(cat.codes));
+            const count = cat.codes === undefined ? '' : cat.codes === 1 ? TEXT.codesOne : TEXT.codesMany.replace('{n}', fmt(cat.codes));
             const zoneObj = view.data && (view.data.layout.zones || []).find((z) => z.id === params.get('z'));
             if (zoneObj) {
                 // el croquis sombrea la zona de esa categoría con su color
                 setBaseFocus({ zones: { [zoneObj.id]: look.color } });
                 if (searchState.open) applySearchFocus(); else redrawMap(view.data);
             }
-            slot.innerHTML = `${zoneObj ? crumbsHtml(upCrumbs(zoneObj, cat.name)) : ''}<div class="catbanner" style="border-left-color:${esc(look.color)}"><span class="catmark" style="background:${esc(look.color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">${window.LayoutMapSvg.categoryGlyph(look.icon, '#FFFFFF', 2)}</svg></span><div><div class="cattitle">${esc(cat.name)}</div><div class="catsub">${esc(cat.zoneName)} · ${esc(count)}</div>${cat.codes ? '' : `<p class="catnote">${esc(TEXT.noCodes)}</p>`}</div></div>`;
+            slot.innerHTML = `${zoneObj ? crumbsHtml(upCrumbs(zoneObj, cat.name)) : ''}<div class="catbanner" style="border-left-color:${esc(look.color)}"><span class="catmark" style="background:${esc(look.color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">${window.LayoutMapSvg.categoryGlyph(look.icon, '#FFFFFF', 2)}</svg></span><div><div class="cattitle">${esc(cat.name)}</div><div class="catsub">${esc(cat.zoneName)}${count ? ` · ${esc(count)}` : ''}</div>${cat.codes === undefined || cat.codes ? '' : `<p class="catnote">${esc(TEXT.noCodes)}</p>`}</div></div>`;
         } catch (err) {
             console.error('Layout público: no se pudo leer la categoría', err);
         }
@@ -249,6 +249,8 @@
     // Botones del croquis (los mismos del Layout con sesión): girar, ver/ocultar medidas, ver/ocultar los m² de cada zona y las capas que se dibujan. Cada quien los mueve para verlo
     // como le conviene; al escanear de nuevo todo vuelve a como se guardó. Contorno siempre se ve; las conexiones de luz salen apagadas hasta que se prende su capa.
     const LAYER_KEYS = ['contorno', 'puertas', 'luz', 'zonas', 'espacios'];
+    // Con «puertas y luz» cerrado esas dos capas no se ofrecen (el servidor ya no manda sus datos).
+    const layerShown = (key) => !(locked('doors') && (key === 'puertas' || key === 'luz'));
     const mapView = { layers: ['contorno', 'puertas', 'zonas', 'espacios'], measures: true, area: true, names: true, rotation: 0, mode3d: false, walls: true };
     // Lo que se está buscando en el croquis ({ zones: { id: color } }): la zona de la categoría que se escaneó sale sombreada y el resto tenue.
     // value = lo que se dibuja ahora (el croquis base o el de la búsqueda); base = lo que corresponde a la página sin buscar; key = lo ya dibujado, para no redibujar sin necesidad.
@@ -274,14 +276,14 @@
         const pill = (attrs, label, on, fixed) => `<button type="button" class="lpill" ${attrs} aria-pressed="${on}"${fixed ? ' aria-disabled="true"' : ''}>${esc(label)}</button>`;
         const tool = (attrs, glyph, label, pressed, withSlash, title) => `<button type="button" class="mtool" ${attrs}${pressed === undefined ? '' : ` aria-pressed="${pressed}"`} aria-label="${esc(title || label)}" title="${esc(title || label)}"><span class="ic">${toolIcon(glyph, withSlash ? slash : '')}</span><span>${esc(label)}</span></button>`;
         if (!mapView.mode3d) {
-            const layerPills = LAYER_KEYS.map((key) => pill(`data-map-layer="${key}"`, TEXT.layer[key], mapView.layers.includes(key), key === 'contorno')).join('');
+            const layerPills = LAYER_KEYS.filter(layerShown).map((key) => pill(`data-map-layer="${key}"`, TEXT.layer[key], mapView.layers.includes(key), key === 'contorno')).join('');
             return `<div class="mptitle"><i>2D</i>${esc(TEXT.opts2d)}</div>
                 <div class="mgl">${esc(TEXT.groupLayers)}</div><div class="mpills" role="group" aria-label="${esc(TEXT.layers)}">${layerPills}</div>
-                <div class="mgl">${esc(TEXT.groupTools)}</div><div class="mtools">${tool('data-map-rot', 'rotate', TEXT.rotateShort, undefined, false, TEXT.rotate)}${tool('data-map-meas', 'ruler', TEXT.measures, mapView.measures, true)}${tool('data-map-area', 'area', TEXT.areaBtn, mapView.area, true)}${tool('data-map-names', 'names', TEXT.namesBtn.split(' ')[0], mapView.names, true, TEXT.namesBtn)}</div>`;
+                <div class="mgl">${esc(TEXT.groupTools)}</div><div class="mtools">${tool('data-map-rot', 'rotate', TEXT.rotateShort, undefined, false, TEXT.rotate)}${locked('metrics') ? '' : tool('data-map-meas', 'ruler', TEXT.measures, mapView.measures, true) + tool('data-map-area', 'area', TEXT.areaBtn, mapView.area, true)}${tool('data-map-names', 'names', TEXT.namesBtn.split(' ')[0], mapView.names, true, TEXT.namesBtn)}</div>`;
         }
         const views = [['general', TEXT.v3General], ['planta', TEXT.v3Plan], ['frente', TEXT.v3Front]].map(([key, label], i) => `<button type="button" class="lpill" data-m3d-view="${key}" aria-pressed="${i === 0}">${esc(label)}</button>`).join('');
         const layer3 = (key, label) => pill(`data-map-layer="${key}"`, label, mapView.layers.includes(key));
-        const layerPills = [pill('data-map-walls', TEXT.layerWalls, mapView.walls), layer3('puertas', TEXT.layer.puertas), layer3('luz', TEXT.layer.luz), layer3('zonas', TEXT.layer.zonas), layer3('espacios', TEXT.layerAssets)].join('');
+        const layerPills = [pill('data-map-walls', TEXT.layerWalls, mapView.walls), ...(locked('doors') ? [] : [layer3('puertas', TEXT.layer.puertas), layer3('luz', TEXT.layer.luz)]), layer3('zonas', TEXT.layer.zonas), layer3('espacios', TEXT.layerAssets)].join('');
         return `<div class="mptitle"><i>3D</i>${esc(TEXT.opts3d)}</div>
             <div class="mgl">${esc(TEXT.group3dView)}</div><div class="mpills">${views}</div>
             <div class="mgl">${esc(TEXT.groupLayers)}</div><div class="mpills" role="group" aria-label="${esc(TEXT.layers)}">${layerPills}</div>
@@ -296,7 +298,7 @@
         const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
         // Datos métricos y Distribución solo están en el Layout general; en una zona o categoría solo se ofrece el del croquis.
         const general = !searchPageZone();
-        const blocks = [['map', TEXT.mapToggle]].concat(general ? [['metrics', TEXT.metrics]].concat(listedZones(view.data).length ? [['zones', TEXT.zones]] : []) : []);
+        const blocks = [['map', TEXT.mapToggle]].concat(general ? (locked('metrics') ? [] : [['metrics', TEXT.metrics]]).concat(listedZones(view.data).length ? [['zones', TEXT.zones]] : []) : []);
         const chips = blocks.map(([key, label]) => `<button type="button" class="cchip" data-page-toggle="${key}" aria-pressed="${pageView[key]}">${esc(label)}</button>`).join('');
         const scope = general ? TEXT.searchAll : fill(TEXT.searchIn, { z: searchPageZone().name });
         // La barra Buscar abre y cierra el buscador (con el buscador abierto dice «Cerrar»).
@@ -429,6 +431,10 @@
     // ellos (las zonas con su color, los anaqueles donde está cada código en rojo). Dentro de una zona busca solo ahí, con un toque para ampliar a todo el Layout. Al cerrarlo todo vuelve.
     // Los campos donde se busca (la lista del menú «Buscar en»): vacío = Todos.
     const SEARCH_FIELDS = ['zone', 'furniture', 'place', 'sku', 'desc', 'cat'];
+    // Un candado cerrado de este QR (los manda el servidor en view.data.locks): lo que el servidor ya no entrega, la página tampoco lo dibuja.
+    const locked = (key) => !!(view.data && view.data.locks && view.data.locks[key] === false);
+    // Con «buscar códigos» cerrado no se ofrecen SKU ni Descripción.
+    const searchFieldKeys = () => SEARCH_FIELDS.filter((k) => !(locked('codes') && (k === 'sku' || k === 'desc')));
     const SEARCH_RED = '#C0392B';
     // mode = el "Tipo de Filtro" de las tablas: Inicia con, Contiene (el de siempre) o Igual que.
     const SEARCH_MODES = ['startsWith', 'contains', 'equals'];
@@ -501,7 +507,7 @@
     function fieldsListHtml() {
         const f = searchState.fields;
         const opt = (key, label, checked, mixed) => `<label class="copt${key === 'all' ? ' all' : ''}${mixed ? ' mixed' : ''}"><input type="checkbox" data-search-field="${key}"${checked ? ' checked' : ''}><span class="box"></span><span>${esc(label)}</span></label>`;
-        return opt('all', TEXT.searchFieldsAll, !f.length, !!f.length) + SEARCH_FIELDS.map((k) => opt(k, TEXT.searchField[k], f.includes(k), false)).join('');
+        return opt('all', TEXT.searchFieldsAll, !f.length, !!f.length) + searchFieldKeys().map((k) => opt(k, TEXT.searchField[k], f.includes(k), false)).join('');
     }
     function drawSearchFields() {
         const list = searchEl('search-fields');
@@ -514,8 +520,8 @@
         else {
             const set = new Set(searchState.fields);
             if (checked) set.add(key); else set.delete(key);
-            searchState.fields = SEARCH_FIELDS.filter((k) => set.has(k));
-            if (searchState.fields.length === SEARCH_FIELDS.length) searchState.fields = [];
+            searchState.fields = searchFieldKeys().filter((k) => set.has(k));
+            if (searchState.fields.length === searchFieldKeys().length) searchState.fields = [];
         }
         drawSearchFields();
         runSearch();
@@ -586,7 +592,7 @@
         if (!searchState.open) { box.innerHTML = ''; return; }
         const raw = searchState.q.trim();
         const q = searchTerms(raw);
-        if (!searchReady(q)) { box.innerHTML = `<p class="shint">${esc(TEXT.searchHint)}</p>`; return; }
+        if (!searchReady(q)) { box.innerHTML = `<p class="shint">${esc(locked('codes') ? TEXT.searchHintNoCodes : TEXT.searchHint)}</p>`; return; }
         if (searchState.error) { box.innerHTML = `<p class="sempty">${esc(TEXT.searchError)}</p>`; return; }
         const res = searchState.results;
         if (!res) { box.innerHTML = searchState.busy ? `<p class="shint">${esc(TEXT.searchBusy)}</p>` : ''; return; }
@@ -722,8 +728,8 @@
         // Tipo de zona de cada una (Seco, Pasillo principal…), el mismo que sale en Datos métricos y en la página de la zona.
         const kindOf = (z) => { const info = (data.kpis.zones || []).find((k) => k.id === z.id); return info && info.type ? (TEXT.zone[info.type] || info.type) : TEXT.noZone; };
         const head = `<div class="zhead" aria-hidden="true"><span>${esc(TEXT.colZone)}</span><span>${esc(TEXT.colType)}</span><span></span><span></span></div>`;
-        const rows = head + list.map((z) => `<a class="zrow" href="${esc(zoneHref(z))}"><b>${esc(z.name)}</b><span class="zk">${esc(kindOf(z))}</span><span class="zc"><i>${fmt(codes[z.id] || 0)}</i> ${esc(codes[z.id] === 1 ? TEXT.codeWordOne : TEXT.codeWordMany)}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
-        return `<div class="pg-zones"><button type="button" class="mbtn" data-zones-toggle aria-expanded="false" aria-controls="zones-list">${iconSvg('layers')}<span class="t"><b>${esc(TEXT.zones)}</b><small>${esc(TEXT.zonesHint.replace('{z}', fmt(list.length)).replace('{c}', fmt(total)))}</small></span><span class="go" aria-hidden="true">›</span></button>
+        const rows = head + list.map((z) => `<a class="zrow" href="${esc(zoneHref(z))}"><b>${esc(z.name)}</b><span class="zk">${esc(kindOf(z))}</span><span class="zc">${locked('counts') ? '' : `<i>${fmt(codes[z.id] || 0)}</i> ${esc(codes[z.id] === 1 ? TEXT.codeWordOne : TEXT.codeWordMany)}`}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
+        return `<div class="pg-zones"><button type="button" class="mbtn" data-zones-toggle aria-expanded="false" aria-controls="zones-list">${iconSvg('layers')}<span class="t"><b>${esc(TEXT.zones)}</b><small>${esc((locked('counts') ? TEXT.zonesHintNoCodes : TEXT.zonesHint).replace('{z}', fmt(list.length)).replace('{c}', fmt(total)))}</small></span><span class="go" aria-hidden="true">›</span></button>
             <div id="zones-list" class="zlist" hidden>${rows}</div></div>`;
     }
 
@@ -734,7 +740,7 @@
         const kind = info && info.type ? (TEXT.zone[info.type] || info.type) : TEXT.noZone;
         const rows = cats.map((c) => `<a class="crow" href="${esc(`${zoneHref(zone)}&c=${encodeURIComponent(c.id)}`)}"><span class="cmark sm" style="background:${esc(c.color)}"><svg viewBox="0 0 24 24" aria-hidden="true">${window.LayoutMapSvg.categoryGlyph(c.icon, '#FFFFFF', 2)}</svg></span><span class="ctx"><b>${esc(c.name)}</b>${c.desc ? `<small>${esc(c.desc)}</small>` : ''}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
         return `${crumbsHtml(upCrumbs(zone))}
-            <div class="catbanner" style="border-left-color:${esc(color)}"><span class="catmark" style="background:${esc(color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS.layers}</g></svg></span><div><div class="cattitle">${esc(zone.name)}</div><div class="catsub">${esc(kind)}${info ? ` · ${esc(fmt(info.area))} m²` : ''}</div></div></div>
+            <div class="catbanner" style="border-left-color:${esc(color)}"><span class="catmark" style="background:${esc(color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS.layers}</g></svg></span><div><div class="cattitle">${esc(zone.name)}</div><div class="catsub">${esc(kind)}${info && info.area != null ? ` · ${esc(fmt(info.area))} m²` : ''}</div></div></div>
             ${mapBlockHtml(data)}
             <div class="zextra"><h2>${esc(TEXT.categories)}</h2>${rows || `<p class="emptynote">${esc(TEXT.noCats)}</p>`}</div>`;
     }
@@ -759,13 +765,13 @@
         const params = new URLSearchParams(window.location.search);
         const slot = document.getElementById('clsslot');
         const k = params.get('k') || '';
-        if (!slot || !params.get('z') || !/^inventario\.\d+$/.test(k) || params.get('l')) return;
+        if (!slot || !params.get('z') || !/^inventario\.\d+$/.test(k) || params.get('l') || locked('classifications')) return;
         try {
             const res = await fetch(`/api/public/layout/${encodeURIComponent(publicToken())}/classifications?z=${encodeURIComponent(params.get('z'))}&k=${encodeURIComponent(k)}`, { cache: 'no-store' });
             if (!res.ok) return;
             const body = await res.json();
             if (!body.items.length) return;
-            const rows = body.items.map((item) => `<a class="cl-opt" href="${esc(clsHref(params.get('z'), k, item.key))}"><span class="cl-dot" style="background:${esc(clsLook(item).color)}"></span><span class="cl-nm">${esc(clsName(item))}</span><span class="cl-ct">${fmt(item.count)}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
+            const rows = body.items.map((item) => `<a class="cl-opt" href="${esc(clsHref(params.get('z'), k, item.key))}"><span class="cl-dot" style="background:${esc(clsLook(item).color)}"></span><span class="cl-nm">${esc(clsName(item))}</span><span class="cl-ct">${item.count === undefined ? '' : fmt(item.count)}</span><span class="go" aria-hidden="true">›</span></a>`).join('');
             slot.innerHTML = `<h2>${esc(TEXT.classifications)}</h2>${rows}`;
         } catch (err) {
             console.error('Layout público: no se pudieron leer las clasificaciones', err);
@@ -776,11 +782,11 @@
         const item = d.classification;
         const look = clsLook(item);
         const desc = item.virtual ? TEXT.noClassificationDesc : item.description;
-        const count = item.count === 1 ? TEXT.articlesOne : fill(TEXT.articlesMany, { n: fmt(item.count) });
+        const count = item.count === undefined ? '' : item.count === 1 ? TEXT.articlesOne : fill(TEXT.articlesMany, { n: fmt(item.count) });
         const categoryHref = `${window.location.pathname}?z=${encodeURIComponent(d.zoneId)}&k=${encodeURIComponent(d.categoryKey)}`;
         const crumbs = crumbsHtml([[TEXT.zones, `${window.location.pathname}#distribucion`], [zone ? zone.name : d.zoneName, zone ? zoneHref(zone) : ''], [d.categoryName, categoryHref], [clsName(item)]]);
-        const banner = `<div class="catbanner" style="border-left-color:${esc(look.color)}"><span class="catmark" style="background:${esc(look.color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">${clsGlyph(look)}</svg></span><div><div class="cattitle">${esc(clsName(item))}</div>${desc ? `<div class="catsub">${esc(desc)}</div>` : ''}<p class="catnote">${esc(count)}</p></div></div>`;
-        const chips = `<div class="cl-chips" role="group" aria-label="${esc(TEXT.classifications)}">${d.siblings.map((s) => `<a class="cl-chip${s.key === item.key ? ' on' : ''}" href="${esc(clsHref(d.zoneId, d.categoryKey, s.key))}"${s.key === item.key ? ' aria-current="true"' : ''}>${esc(clsName(s))} <i>${fmt(s.count)}</i></a>`).join('')}</div>`;
+        const banner = `<div class="catbanner" style="border-left-color:${esc(look.color)}"><span class="catmark" style="background:${esc(look.color)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">${clsGlyph(look)}</svg></span><div><div class="cattitle">${esc(clsName(item))}</div>${desc ? `<div class="catsub">${esc(desc)}</div>` : ''}${count ? `<p class="catnote">${esc(count)}</p>` : ''}</div></div>`;
+        const chips = `<div class="cl-chips" role="group" aria-label="${esc(TEXT.classifications)}">${d.siblings.map((s) => `<a class="cl-chip${s.key === item.key ? ' on' : ''}" href="${esc(clsHref(d.zoneId, d.categoryKey, s.key))}"${s.key === item.key ? ' aria-current="true"' : ''}>${esc(clsName(s))}${s.count === undefined ? '' : ` <i>${fmt(s.count)}</i>`}</a>`).join('')}</div>`;
         return crumbs + banner + chips;
     }
     function clsBodyHtml(d) {
@@ -794,7 +800,7 @@
     }
     function clsItemHtml(item, color, terms) {
         const where = item.loc ? [item.loc.space, item.loc.level ? fill(TEXT.clsLevel, { n: item.loc.level }) : ''].filter(Boolean).join(' · ') + (item.loc.more > 0 ? ` +${item.loc.more}` : '') : TEXT.clsNoLoc;
-        const loc = `<span class="cl-loc${item.loc ? '' : ' none'}">${esc(where)}</span>`;
+        const loc = locked('where') ? '' : `<span class="cl-loc${item.loc ? '' : ' none'}">${esc(where)}</span>`;
         const tag = item.token ? 'a' : 'div';
         const href = item.token ? ` href="/Ficha.html?token=${encodeURIComponent(item.token)}"` : '';
         const name = highlight(item.name, terms, clsState.mode);
@@ -838,7 +844,7 @@
         const url = `/api/public/layout/${encodeURIComponent(publicToken())}/classification?z=${encodeURIComponent(params.get('z'))}&k=${encodeURIComponent(params.get('k'))}&l=${encodeURIComponent(params.get('l'))}&mode=${clsState.mode}&offset=${append ? clsState.items.length : 0}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
         try {
             const res = await fetch(url, { cache: 'no-store', signal: ctl.signal });
-            if (res.status === 404) { clsState.gone = true; throw new Error('classification gone'); }
+            if (res.status === 404 || res.status === 403) { clsState.gone = res.status === 403 ? 'locked' : true; throw new Error('classification gone'); }
             if (!res.ok) throw new Error('classification failed');
             const body = await res.json();
             if (my !== clsState.seq) return;
@@ -854,7 +860,7 @@
         const slot = document.getElementById('catslot');
         const body = document.getElementById('clsbody');
         if (!slot || !body) return;
-        if (clsState.gone) { slot.innerHTML = `<p class="sempty">${esc(TEXT.clsGone)}</p>`; return; }
+        if (clsState.gone) { slot.innerHTML = `<p class="sempty">${esc(clsState.gone === 'locked' ? TEXT.clsLocked : TEXT.clsGone)}</p>`; return; }
         if (!clsState.built && clsState.data) {
             slot.innerHTML = clsHeaderHtml(clsState.data);
             body.innerHTML = clsBodyHtml(clsState.data);
@@ -903,7 +909,7 @@
         } else {
             body = `${categoryBanner(data)}<div id="catslot"></div>
                 ${mapBlockHtml(data)}
-                <div class="zextra"><a class="mbtn pg-metrics" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>
+                <div class="zextra">${locked('metrics') ? '' : `<a class="mbtn pg-metrics" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>`}
                 ${zonesSectionHtml(data)}</div>`;
         }
         // venir de "Distribución" en el recorrido debe mostrar su lista aunque se haya ocultado ese bloque
@@ -956,7 +962,7 @@
     function route() {
         const data = view.data;
         if (!data) return;
-        const m = /^#datos-metricos(?:\/([a-z]+))?$/.exec(window.location.hash);
+        const m = /^#datos-metricos(?:\/([a-z]+))?$/.exec(locked('metrics') ? '' : window.location.hash);
         if (m) renderMetrics(data, window.LayoutCalc.METRIC_KEYS.includes(m[1]) ? m[1] : 'total');
         else render(data);
         if (window.location.hash !== '#distribucion') window.scrollTo(0, 0);
@@ -1145,6 +1151,8 @@
             if (res.status === 404) { renderState(TEXT.notFound); return; }
             if (!res.ok) throw new Error('layout public failed');
             view.data = await res.json();
+            // sin datos métricos no se dibujan las medidas ni los m² de las zonas del croquis
+            if (locked('metrics')) { mapView.measures = false; mapView.area = false; }
             route();
         } catch (err) {
             console.error('Layout público: no se pudo cargar', err);

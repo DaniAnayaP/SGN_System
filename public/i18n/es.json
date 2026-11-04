@@ -2633,6 +2633,16 @@
     "layoutLockNotaLimpieza": "Valen para todos los QR de Limpieza de este Layout, también los ya impresos. Hoy todo está abierto; un candado se cierra al apagarlo.",
     "layoutLockNotaTemp": "Valen para todos los QR de Temperaturas de este Layout, también los ya impresos. Las alertas se siguen guardando aunque no se vean.",
     "layoutLockGuardado": "Candado guardado.",
+    "layoutLockGrupoCodigos": "Códigos y productos",
+    "layoutLockGrupoPlano": "El plano",
+    "layoutLockBuscarCodigos": "Buscar códigos",
+    "layoutLockClasificaciones": "Ver las clasificaciones y sus artículos",
+    "layoutLockFotosArticulos": "Ver las fotos de los artículos",
+    "layoutLockDondeEsta": "Ver dónde está cada código",
+    "layoutLockMetricos": "Ver los datos métricos",
+    "layoutLockPuertasLuz": "Ver puertas y conexiones de luz",
+    "layoutLockConteos": "Ver cuántos códigos tiene cada zona",
+    "layoutLockNotaLayout": "Valen para el QR del Layout, el de una Zona y el de una Categoría, también los ya impresos. Hoy todo está abierto; un candado se cierra al apagarlo.",
     "colTmpFoto": "Foto",
     "colTmpOrigen": "Origen",
     "colTmpDeleteAuth": "Autorización para Eliminar",
@@ -4067,6 +4077,34 @@
     "layout3dAssetsPick": {
       "what": "Abre una lista para elegir CUÁLES activos se ven en el 3D (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Marca o desmarca uno por uno, una zona completa con la casilla de la zona, o usa Todos y Ninguno (actúan sobre lo que muestra la lista; con el buscador vacío, sobre todos). El buscador entiende los mismos signos de todos los filtros: coma para otra búsqueda, $ antes y @ después. El icono queda marcado cuando hay activos ocultos. Solo cambia lo que ves; no modifica el Layout.",
       "example": "quieres ver solo R-07 y T-03 para revisar sus alturas: pulsas Ninguno, buscas R-07 y marcas el anaquel, luego buscas T-03 y marcas la tarima."
+    },
+    "layoutLock_codes": {
+      "what": "Deja que quien escanea el QR del Layout, de una Zona o de una Categoría busque códigos (por SKU, descripción o categoría) en el buscador. Apagado, el buscador solo encuentra zonas, mobiliario y ubicaciones, y en la lista ya no sale ningún código.",
+      "example": "una visita escanea el QR de la nave y escribe «guante»: con el candado abierto ve los códigos; con el candado apagado solo ve el anaquel y la zona."
+    },
+    "layoutLock_classifications": {
+      "what": "Deja ver las clasificaciones de una categoría (QR de una Categoría) y la lista de artículos de cada una. Apagado, la Categoría muestra su nombre pero ya no abre las clasificaciones ni sus artículos.",
+      "example": "el QR de la categoría Medicamentos muestra «Controlados», «Genéricos»…; apagado, solo muestra el nombre de la categoría."
+    },
+    "layoutLock_photos": {
+      "what": "Deja ver las fotos de los artículos en las listas de clasificaciones. Apagado, los artículos salen con un icono en lugar de su foto.",
+      "example": "la lista de la clasificación «Genéricos» sale con la foto de cada caja; apagado, cada artículo sale con un icono."
+    },
+    "layoutLock_where": {
+      "what": "Deja ver dónde está cada código (la ruta Zona › Anaquel › Nivel) en el buscador y en las listas, y los anaqueles que se pintan en el croquis. Apagado, los códigos salen sin su ubicación.",
+      "example": "«000412 · Guante de nitrilo M» sale con «Zona 6 › A005 › Nivel 2»; apagado, sale solo el código y el nombre."
+    },
+    "layoutLock_metrics": {
+      "what": "Deja ver los datos métricos: superficie, volumen y los indicadores por zona, con sus botones de medidas y m² en el croquis. Apagado, la página no muestra ninguna cifra de metros. Ojo: el dibujo del croquis sigue siendo el mismo.",
+      "example": "la página del Layout muestra «Datos métricos · 4,200 m² de superficie total»; apagado, ese bloque ya no aparece."
+    },
+    "layoutLock_doors": {
+      "what": "Deja ver las puertas y las conexiones de luz en el croquis y en el 3D. Apagado, el servidor ya no las manda y sus capas desaparecen.",
+      "example": "el croquis dibuja las puertas de la nave y las tomas de luz; apagado, la nave se ve sin puertas ni luz."
+    },
+    "layoutLock_counts": {
+      "what": "Deja ver cuántos códigos tiene cada zona, cada categoría y cada clasificación. Apagado, se quitan esos números.",
+      "example": "«Zona 6 · 12 códigos» y «Controlados 8»; apagado, solo queda el nombre de la zona y de la clasificación."
     },
     "layoutQrLocks": {
       "what": "Los candados deciden qué ve y qué puede hacer quien escanea un QR sin sesión: ver los registros anteriores, sus fotos y el nombre de quien los hizo, cuántos registros se ven (3, 10 o 20), ver el rango y las alertas (solo Temperaturas) y poder registrar (apagado = el QR solo sirve para consultar). Hay una configuración por tipo de QR y vale para todos los de ese Layout, también los ya impresos; hoy todo está abierto. Los candados los hace cumplir el servidor, no solo la página. Tú, con tu usuario, sigues viendo todo en las pantallas de Limpieza y Temperaturas.",

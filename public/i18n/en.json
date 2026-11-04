@@ -2634,6 +2634,16 @@
     "layoutLockNotaLimpieza": "They apply to all the Cleaning QR codes of this Layout, including the ones already printed. Today everything is open; a lock is closed by turning it off.",
     "layoutLockNotaTemp": "They apply to all the Temperatures QR codes of this Layout, including the ones already printed. Alerts are still saved even if they are not shown.",
     "layoutLockGuardado": "Lock saved.",
+    "layoutLockGrupoCodigos": "Codes and products",
+    "layoutLockGrupoPlano": "The floor plan",
+    "layoutLockBuscarCodigos": "Search codes",
+    "layoutLockClasificaciones": "See the classifications and their articles",
+    "layoutLockFotosArticulos": "See the photos of the articles",
+    "layoutLockDondeEsta": "See where each code is",
+    "layoutLockMetricos": "See the metric data",
+    "layoutLockPuertasLuz": "See doors and power connections",
+    "layoutLockConteos": "See how many codes each zone has",
+    "layoutLockNotaLayout": "They apply to the Layout QR, the Zone QR and the Category QR, including the ones already printed. Today everything is open; a lock is closed by turning it off.",
     "colTmpFoto": "Photo",
     "colTmpOrigen": "Origin",
     "colTmpDeleteAuth": "Authorization to Delete",
@@ -4068,6 +4078,34 @@
     "layout3dAssetsPick": {
       "what": "Opens a list to choose WHICH assets show in the 3D (racks, racks with pallets, cabinets and pallets). Tick or untick one by one, a whole zone with the zone's checkbox, or use All and None (they act on what the list shows; with an empty search, on all of them). The search understands the same signs as every filter: comma for another search, $ before and @ after. The icon stays marked while some assets are hidden. It only changes what you see; it does not modify the Layout.",
       "example": "you want to see only R-07 and T-03 to check their heights: press None, search R-07 and tick the rack, then search T-03 and tick the pallet."
+    },
+    "layoutLock_codes": {
+      "what": "Lets whoever scans the Layout, Zone or Category QR search codes (by SKU, description or category) in the search box. Off, the search only finds zones, furniture and locations, and no code appears in the list.",
+      "example": "a visitor scans the warehouse QR and types “glove”: with the lock open they see the codes; with it off they only see the rack and the zone."
+    },
+    "layoutLock_classifications": {
+      "what": "Lets people see the classifications of a category (Category QR) and the list of articles of each one. Off, the Category shows its name but no longer opens the classifications or their articles.",
+      "example": "the Medicines category QR shows “Controlled”, “Generic”…; off, it only shows the category name."
+    },
+    "layoutLock_photos": {
+      "what": "Lets people see the photos of the articles in the classification lists. Off, the articles show an icon instead of their photo.",
+      "example": "the “Generic” classification list shows the photo of each box; off, each article shows an icon."
+    },
+    "layoutLock_where": {
+      "what": "Lets people see where each code is (the route Zone › Rack › Level) in the search and in the lists, and the racks painted on the map. Off, codes appear without their location.",
+      "example": "“000412 · Nitrile glove M” shows “Zone 6 › A005 › Level 2”; off, it shows only the code and the name."
+    },
+    "layoutLock_metrics": {
+      "what": "Lets people see the metric data: area, volume and the indicators per zone, with the measures and m² buttons on the map. Off, the page shows no figure in meters. Note: the drawing of the map stays the same.",
+      "example": "the Layout page shows “Metric data · 4,200 m² of total area”; off, that block no longer appears."
+    },
+    "layoutLock_doors": {
+      "what": "Lets people see the doors and the power connections on the map and in 3D. Off, the server no longer sends them and their layers disappear.",
+      "example": "the map draws the warehouse doors and power outlets; off, the warehouse shows without doors or power."
+    },
+    "layoutLock_counts": {
+      "what": "Lets people see how many codes each zone, category and classification has. Off, those numbers are removed.",
+      "example": "“Zone 6 · 12 codes” and “Controlled 8”; off, only the name of the zone and of the classification remains."
     },
     "layoutQrLocks": {
       "what": "The locks decide what the person scanning a QR without a session sees and can do: see the previous records, their photos and the name of who made them, how many records are shown (3, 10 or 20), see the range and the alerts (Temperatures only) and allow registering (off = the QR is for viewing only). There is one setting per QR type and it applies to all of that type in this Layout, including the ones already printed; today everything is open. The locks are enforced by the server, not only by the page. You, with your user, still see everything on the Cleaning and Temperatures screens.",

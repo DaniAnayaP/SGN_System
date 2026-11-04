@@ -7638,6 +7638,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-qr-locks{ display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.35rem; padding-top: 0.7rem; border-top: 1px solid var(--color-border); }
 .layout-qr-locks[hidden]{ display: none; }
 .layout-lock-title{ margin: 0; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-secondary); }
+.layout-lock-group{ margin: 0.25rem 0 0; font-size: 0.7rem; font-weight: 600; color: var(--color-text-secondary); }
 /* el menú del QR da a todos sus botones columna y relleno: aquí el interruptor va en renglón (selector más específico) */
 .layout-qr-pop .layout-qr-locks .layout-lock-sw{ display: flex; flex-direction: row; align-items: center; gap: 0.6rem; width: 100%; padding: 0.15rem 0; border: 0; background: transparent; color: var(--color-text-primary); font: inherit; font-size: 0.78rem; text-align: left; cursor: pointer; }
 .layout-qr-pop .layout-qr-locks .layout-lock-sw:hover{ background: transparent; }

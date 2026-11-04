@@ -6936,13 +6936,15 @@ app.get('/api/public/layout/:token/category', publicLayoutLimiter, (req, res) =>
         seed = entry.record_number;
     }
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
-    res.json({ zoneName: zone.name, type: match[1], name, seed, codes: countZoneCodesInCategory(row.clientId, false, zone.id, match[1], name) });
+    // cuántos códigos hay hoy en esa zona solo se manda con el candado de conteos abierto
+    const counted = qrLocksOf('layout', row.clientId, row.costCenterId || 0).counts ? { codes: countZoneCodesInCategory(row.clientId, false, zone.id, match[1], name) } : {};
+    res.json({ zoneName: zone.name, type: match[1], name, seed, ...counted });
 });
 app.get('/api/public/layout/:token', publicLayoutLimiter, (req, res) => {
     const row = getLayoutByPublicToken(req.params.token);
     if (!row) return res.status(404).json({ message: 'Layout not found.' });
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
-    res.json(buildPublicLayoutPayload(row.clientId, row));
+    res.json(lockedLayoutPayload(buildPublicLayoutPayload(row.clientId, row), qrLocksOf('layout', row.clientId, row.costCenterId || 0)));
 });
 
 // --- Limpieza (Operaciones > C. Distribución) ----------------------------------------------------------------------------------------------------
@@ -6994,6 +6996,10 @@ const cleaningPhotoFor = (id, req) => (req.query.thumb === '1' && getCleaningPho
 const QR_LOCK_TYPES = {
     cleaning: { records: true, photos: true, names: true, limit: 20, register: true },
     temperature: { records: true, photos: true, names: true, limit: 20, register: true, range: true },
+    // El QR del Layout, el de una Zona y el de una Categoría abren la MISMA página, así que comparten un solo juego de candados (si cada uno tuviera los suyos bastaría cambiar el final de la dirección para saltárselos).
+    //   codes = buscar códigos (SKU, descripción, categoría) · classifications = ver las clasificaciones y sus artículos · photos = ver las fotos de los artículos · where = ver dónde está cada código
+    //   metrics = ver los datos métricos (m², volumen) · doors = ver puertas y conexiones de luz · counts = ver cuántos códigos hay por zona y por clasificación.
+    layout: { codes: true, classifications: true, photos: true, where: true, metrics: true, doors: true, counts: true },
 };
 const QR_LOCK_LIMITS = [3, 10, 20];
 function qrLocksOf(type, clientId, costCenterId) {
@@ -7017,6 +7023,16 @@ function sanitizeQrLocks(type, body) {
     }
     return out;
 }
+// La página pública del Layout con sus candados: sin puertas ni luz (doors), sin las cifras métricas (metrics) ni cuántos códigos hay por zona (counts) cuando están cerrados. El tipo de cada zona se queda
+// (la lista de Distribución lo usa). Los candados viajan en la respuesta para que la página sepa qué botones no dibujar. La vista con usuario (QR y descarga) NO pasa por aquí: ve todo.
+function lockedLayoutPayload(payload, locks) {
+    const out = { ...payload, locks };
+    if (!locks.doors) out.layout = { ...payload.layout, doors: [], power: [] };
+    if (!locks.metrics) out.kpis = { zones: ((payload.kpis && payload.kpis.zones) || []).map((z) => ({ id: z.id, name: z.name, type: z.type })) };
+    if (!locks.counts) out.zoneCodes = {};
+    return out;
+}
+const layoutLockedReply = (res) => res.status(403).json({ message: 'Este QR no muestra esta parte.', code: 'LOCKED' });
 // Un registro tal como lo ve quien escanea, con los candados: sin nombre (names) ni fotos (photos) cuando están cerrados.
 function lockedCleaningRecord(r, locks) {
     const out = publicCleaningRecord(r);
@@ -7370,6 +7386,7 @@ app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
     const query = publicSearchQuery(req.query.q);
+    const locks = qrLocksOf('layout', row.clientId, row.costCenterId || 0);
     const asked = String(req.query.fields || '').split(',').map((s) => s.trim()).filter((f) => PUBLIC_SEARCH_FIELDS.includes(f));
     const fields = new Set(asked.length ? asked : (PUBLIC_SEARCH_LEGACY_TYPES[req.query.type] || PUBLIC_SEARCH_FIELDS));
     const zones = (row.layout.zones || []).filter((z) => z.active !== false);
@@ -7392,7 +7409,8 @@ app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
         out.totals.categories = found.length;
         out.categories = found.slice(0, PUBLIC_SEARCH_LIMIT);
     }
-    const codeKeys = ['sku', 'desc', 'cat'].filter((k) => fields.has(k));
+    // con «buscar códigos» cerrado el buscador solo encuentra zonas, categorías de la zona, mobiliario y ubicaciones: ningún código
+    const codeKeys = locks.codes ? ['sku', 'desc', 'cat'].filter((k) => fields.has(k)) : [];
     if (codeKeys.length) {
         const data = publicSearchData(row.clientId);
         const zoneById = new Map(zones.map((z) => [z.id, z]));
@@ -7403,8 +7421,8 @@ app.get('/api/public/layout/:token/search', publicSearchLimiter, (req, res) => {
             const placed = (data.places.get(c.r.id) || []).filter((p) => zoneById.has(p.zone_id));
             const where = placed.slice(0, 2).map((p) => [zoneById.get(p.zone_id).name, (spaceById.get(p.space_id) || {}).code, p.level ? `Nivel ${p.level}` : ''].filter(Boolean).join(' › ')).join(' · ');
             return {
-                sku: c.sku, name: c.name, category: c.r.category_inventario || '', token: c.r.public_token, where,
-                zoneId: placed.length ? placed[0].zone_id : '', spaceIds: [...new Set(placed.map((p) => p.space_id).filter((id) => spaceById.has(id)))],
+                sku: c.sku, name: c.name, category: c.r.category_inventario || '', token: c.r.public_token, where: locks.where ? where : '',
+                zoneId: locks.where && placed.length ? placed[0].zone_id : '', spaceIds: locks.where ? [...new Set(placed.map((p) => p.space_id).filter((id) => spaceById.has(id)))] : [],
             };
         });
     }
@@ -7461,10 +7479,12 @@ function publicClassificationContext(row, query) {
 app.get('/api/public/layout/:token/classifications', publicLayoutLimiter, (req, res) => {
     const row = getLayoutByPublicToken(req.params.token);
     if (!row) return res.status(404).json({ message: 'Layout not found.' });
+    const locks = qrLocksOf('layout', row.clientId, row.costCenterId || 0);
+    if (!locks.classifications) return layoutLockedReply(res);
     const ctx = publicClassificationContext(row, req.query);
     if (!ctx) return res.status(404).json({ message: 'Category not found.' });
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
-    res.json({ zoneName: ctx.zone.name, categoryName: ctx.category.name, categorySeed: ctx.category.record_number, items: ctx.items });
+    res.json({ zoneName: ctx.zone.name, categoryName: ctx.category.name, categorySeed: ctx.category.record_number, items: ctx.items.map((i) => (locks.counts ? i : { ...i, count: undefined })) });
 });
 const CLASSIFICATION_PAGE_LIMIT = 30;
 const naturalCompare = (a, b) => String(a).localeCompare(String(b), 'es', { numeric: true });
@@ -7472,6 +7492,8 @@ app.get('/api/public/layout/:token/classification', publicSearchLimiter, async (
     try {
         const row = getLayoutByPublicToken(req.params.token);
         if (!row) return res.status(404).json({ message: 'Layout not found.' });
+        const locks = qrLocksOf('layout', row.clientId, row.costCenterId || 0);
+        if (!locks.classifications) return layoutLockedReply(res);
         const ctx = publicClassificationContext(row, req.query);
         const key = String(req.query.l || '');
         const meta = ctx && ctx.items.find((i) => i.key === key);
@@ -7485,7 +7507,7 @@ app.get('/api/public/layout/:token/classification', publicSearchLimiter, async (
             const sku = String(code.record_number).padStart(6, '0');
             return {
                 code, places, sku, name: code.custom_description || code.known_description || code.unique_description || '',
-                fields: [sku, String(code.record_number), code.upc, code.unique_description, code.known_description, code.custom_description, ...places.map((p) => p.space), ...places.filter((p) => p.level).map((p) => `nivel ${p.level}`)].map(foldText),
+                fields: [sku, String(code.record_number), code.upc, code.unique_description, code.known_description, code.custom_description, ...(locks.where ? [...places.map((p) => p.space), ...places.filter((p) => p.level).map((p) => `nivel ${p.level}`)] : [])].map(foldText),
             };
         });
         const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
@@ -7493,6 +7515,7 @@ app.get('/api/public/layout/:token/classification', publicSearchLimiter, async (
         const filtering = SearchSyntax.ready(mode, query);
         const matches = publicSearchMatcher(mode, query);
         const found = (filtering ? codes.filter((c) => matches(c.fields)) : codes).sort((a, b) => {
+            if (!locks.where) return a.code.record_number - b.code.record_number;
             const pa = a.places[0]; const pb = b.places[0];
             return ((pa && pa.space ? 0 : 1) - (pb && pb.space ? 0 : 1)) || naturalCompare(pa ? pa.space : '', pb ? pb.space : '') || (pa ? pa.level : 0) - (pb ? pb.level : 0) || (pa ? pa.slot : 0) - (pb ? pb.slot : 0) || a.code.record_number - b.code.record_number;
         });
@@ -7500,20 +7523,20 @@ app.get('/api/public/layout/:token/classification', publicSearchLimiter, async (
         const limit = Math.max(1, Math.min(Number(req.query.limit) || CLASSIFICATION_PAGE_LIMIT, 60));
         const page = found.slice(offset, offset + limit);
         const photoOf = async (code) => {
-            if (!code.evidence_front || !isR2Configured()) return '';
+            if (!locks.photos || !code.evidence_front || !isR2Configured()) return '';
             try { return await getDownloadUrl(code.evidence_front); } catch (err) { console.error('Clasificación pública: foto', err.message); return ''; }
         };
         const items = await Promise.all(page.map(async (c) => ({
             sku: c.sku, name: c.name, token: c.code.public_token || '', photo: await photoOf(c.code),
-            loc: c.places[0] && c.places[0].space ? { space: c.places[0].space, level: c.places[0].level, slot: c.places[0].slot, more: c.places.length - 1 } : null,
+            loc: locks.where && c.places[0] && c.places[0].space ? { space: c.places[0].space, level: c.places[0].level, slot: c.places[0].slot, more: c.places.length - 1 } : null,
         })));
         res.json({
             zoneName: row.layout.zones.find((z) => z.id === ctx.zone.id).name, zoneId: ctx.zone.id, categoryName: ctx.category.name, categoryKey: `inventario.${ctx.category.id}`,
-            classification: { key: meta.key, name: meta.name, description: meta.description, seed: meta.seed, virtual: meta.virtual, count: meta.count },
-            siblings: ctx.items.map((i) => ({ key: i.key, name: i.name, seed: i.seed, virtual: i.virtual, count: i.count })),
+            classification: { key: meta.key, name: meta.name, description: meta.description, seed: meta.seed, virtual: meta.virtual, count: locks.counts ? meta.count : undefined },
+            siblings: ctx.items.map((i) => ({ key: i.key, name: i.name, seed: i.seed, virtual: i.virtual, count: locks.counts ? i.count : undefined })),
             total: found.length, offset, items,
             // los anaqueles donde están los códigos que se están viendo (con la búsqueda aplicada): el croquis los rellena
-            spaceIds: [...new Set(found.flatMap((c) => c.places.map((p) => p.spaceId).filter(Boolean)))],
+            spaceIds: locks.where ? [...new Set(found.flatMap((c) => c.places.map((p) => p.spaceId).filter(Boolean)))] : [],
         });
     } catch (err) {
         console.error('Clasificación pública: no se pudo armar', err);

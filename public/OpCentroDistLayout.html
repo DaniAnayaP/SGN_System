@@ -431,6 +431,7 @@
                                 <button type="button" role="menuitem" data-qr="png" data-help-key="layoutQrPng"><b data-i18n="main.layoutDescargarPng">Download PNG image</b><span data-i18n="main.layoutDescargarPngSub">The same sheet as an image, to send in a message</span></button>
                                 <button type="button" role="menuitem" data-qr="link" data-help-key="layoutQrLink"><b data-i18n="main.layoutCopiarEnlace">Copy the QR link</b><span data-i18n="main.layoutCopiarEnlaceSub">It is the same one the QR carries</span></button>
                                 <button type="button" role="menuitem" data-qr="regen" id="layout-qr-regen" data-help-key="layoutQrRegen" hidden><b data-i18n="main.layoutRegenerarQr">Change the QR</b><span data-i18n="main.layoutRegenerarQrSub">The current QR will stop working</span></button>
+                                <div class="layout-qr-locks" id="layout-qr-locks-layout" hidden></div>
                             </div>
                             <div class="layout-qr-pane" id="layout-qr-pane-clean" hidden>
                                 <div class="layout-qr-fields"><label data-help-key="layoutQrClean"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-clean-zone"></select></label></div>
@@ -460,6 +461,7 @@
                                     <div class="layout-qr-fields"><label data-help-key="layoutQrCls"><span data-i18n="main.layoutQrClsLabel">Classification sheet of</span><select id="layout-qr-cls-cat"></select></label></div>
                                     <button type="button" data-qr="zone-cls" id="layout-qr-zone-cls" data-help-key="layoutQrCls"><b data-i18n="main.layoutQrClsBtn">Classification sheet</b><span data-i18n="main.layoutQrClsSub">One QR for each classification, for this zone</span></button>
                                 </div>
+                                <div class="layout-qr-locks" id="layout-qr-locks-zone" hidden></div>
                             </div>
                         </div>
                     </div>
