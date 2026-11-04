@@ -5352,6 +5352,30 @@ function deleteTemperatureRecord(id, clientId) {
     return db.prepare('DELETE FROM temperature_records WHERE id = ? AND client_id = ?').run(id, clientId).changes > 0;
 }
 
+// --- Candados de los QR -------------------------------------------------------------------------------------------------------------------------
+// Lo que ve y puede hacer quien escanea un QR público sin sesión. Una fila por cliente, centro de costos y TIPO de QR (cleaning, temperature…): el valor es un JSON con los candados de ese tipo; lo que no esté
+// escrito se toma del valor de fábrica (todo abierto), que vive en server.js junto con la lista de candados de cada tipo.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS qr_locks (
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        cost_center_id  INTEGER NOT NULL DEFAULT 0,
+        qr_type         TEXT NOT NULL,
+        locks           TEXT NOT NULL,
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_by      INTEGER,
+        PRIMARY KEY (client_id, cost_center_id, qr_type)
+    );
+`);
+function getQrLocksRaw(clientId, costCenterId, qrType) {
+    const row = db.prepare('SELECT locks FROM qr_locks WHERE client_id = ? AND cost_center_id = ? AND qr_type = ?').get(clientId, costCenterId || 0, qrType);
+    if (!row) return {};
+    try { const parsed = JSON.parse(row.locks); return parsed && typeof parsed === 'object' ? parsed : {}; } catch (err) { return {}; }
+}
+function saveQrLocks(clientId, costCenterId, qrType, locks, userId) {
+    db.prepare(`INSERT INTO qr_locks (client_id, cost_center_id, qr_type, locks, updated_at, updated_by) VALUES (?, ?, ?, ?, datetime('now'), ?)
+        ON CONFLICT(client_id, cost_center_id, qr_type) DO UPDATE SET locks = excluded.locks, updated_at = excluded.updated_at, updated_by = excluded.updated_by`).run(clientId, costCenterId || 0, qrType, JSON.stringify(locks), userId || null);
+}
+
 // QR del Layout (ver public_token arriba): cada Layout (cada centro de costos) tiene el suyo. ensure: los Layouts guardados antes de que existiera el QR reciben su código la primera vez que se pide.
 function ensureLayoutPublicToken(clientId, costCenterId = 0) {
     const row = db.prepare('SELECT public_token FROM client_layouts WHERE client_id = ? AND cost_center_id = ?').get(clientId, costCenterId || 0);
@@ -11229,6 +11253,8 @@ module.exports = {
     getTemperatureRecord,
     getTemperaturePhoto,
     deleteTemperatureRecord,
+    getQrLocksRaw,
+    saveQrLocks,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,

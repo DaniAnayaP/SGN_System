@@ -2696,6 +2696,7 @@ function renderQrBy() {
     if (qrBy === 'zone' && !$('layout-qr-pop').hidden) loadQrZone(); // con el menú cerrado no se pide nada; se lee al abrirlo
     if (qrBy === 'clean') cleanZoneOptions();
     if (qrBy === 'temp') tempZoneOptions();
+    if (qrBy === 'clean' || qrBy === 'temp') renderQrLocks(qrBy);
 }
 // ---- QR de limpieza (uno por activo) ---------------------------------------------------------------------------------------------
 // Cada ACTIVO tiene su QR (la dirección fija /l/<código del Layout>/<id del activo>: no cambia nunca aunque el activo cambie de nombre, de zona o de código). Se imprime una hoja con un QR por activo de la zona
@@ -2726,6 +2727,62 @@ function tempZoneOptions() {
     $('layout-qr-temp-print').disabled = !n;
     $('layout-qr-temp-download').disabled = !n;
 }
+// ---- Candados de los QR (lo que ve y puede hacer quien escanea sin sesión) ---------------------------------------------------------------------
+// En las pestañas Limpieza y Temperaturas del menú «QR y descarga», con el icono Candados de los QR del árbol. Hay una configuración por tipo de QR y por centro de costos y vale para todos los QR de ese tipo (los
+// ya impresos también: el QR no cambia, cambia lo que muestra). Cada cambio se guarda al momento; el servidor es el que los hace cumplir (GET /api/business/layout/qr-locks).
+const QR_LOCK_KINDS = { clean: 'cleaning', temp: 'temperature' };
+const qrLocksNow = {};
+function qrLockItems(kind) {
+    const items = [['records', 'main.layoutLockRegistros', 'main.layoutLockRegistrosSub'], ['photos', 'main.layoutLockFotos', ''], ['names', 'main.layoutLockNombres', '']];
+    if (kind === 'temp') items.push(['range', 'main.layoutLockRango', 'main.layoutLockRangoSub']);
+    items.push(['register', 'main.layoutLockRegistrar', 'main.layoutLockRegistrarSub']);
+    return items;
+}
+async function renderQrLocks(kind) {
+    const box = $(`layout-qr-locks-${kind}`);
+    box.hidden = !(state.perms && state.perms.canLockQr);
+    if (box.hidden) return;
+    let data;
+    try {
+        const res = await fetch(layoutUrl(`/api/business/layout/qr-locks?type=${QR_LOCK_KINDS[kind]}`), { credentials: 'include' });
+        if (!res.ok) throw new Error('qr locks failed');
+        data = await res.json();
+    } catch (err) { box.hidden = true; return; }
+    qrLocksNow[kind] = data.locks;
+    const lk = data.locks;
+    const sw = ([key, label, sub]) => `<button type="button" role="switch" class="layout-lock-sw" data-lock="${key}" data-help-key="layoutQrLocks" aria-checked="${!!lk[key]}"><span class="layout-lock-knob" aria-hidden="true"></span><span class="layout-lock-txt">${esc(t(label))}${sub ? `<small>${esc(t(sub))}</small>` : ''}</span></button>`;
+    const limit = `<label class="layout-lock-limit" data-help-key="layoutQrLocks"><span>${esc(t('main.layoutLockLimite'))}</span><select data-lock="limit">${data.limits.map((n) => `<option value="${n}"${lk.limit === n ? ' selected' : ''}>${esc(t('main.layoutLockUltimos', { n }))}</option>`).join('')}</select></label>`;
+    const items = qrLockItems(kind).map(sw);
+    items.splice(3, 0, limit); // después de ver los registros, las fotos y los nombres
+    box.innerHTML = `<h3 class="layout-lock-title">${esc(t('main.layoutLockTitulo'))}</h3>${items.join('')}<p class="layout-qr-fine">${esc(t(kind === 'clean' ? 'main.layoutLockNotaLimpieza' : 'main.layoutLockNotaTemp'))}</p>`;
+}
+async function saveQrLock(kind, key, value, control) {
+    const next = { ...qrLocksNow[kind], [key]: value };
+    control.disabled = true;
+    try {
+        const res = await fetch('/api/business/layout/qr-locks', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ type: QR_LOCK_KINDS[kind], locks: next, costCenterId: state.centerId }) });
+        if (!res.ok) throw new Error('qr locks save failed');
+        qrLocksNow[kind] = (await res.json()).locks;
+        Dashboard.showToast(t('main.layoutLockGuardado'), 'success');
+    } catch (err) {
+        console.error('Layout: no se pudo guardar el candado', err);
+        Dashboard.showToast(t('main.layoutDescargaError'), 'error');
+        renderQrLocks(kind);
+        return;
+    } finally { control.disabled = false; }
+    if (control.getAttribute('role') === 'switch') control.setAttribute('aria-checked', String(!!qrLocksNow[kind][key]));
+}
+Object.keys(QR_LOCK_KINDS).forEach((kind) => {
+    $(`layout-qr-locks-${kind}`).addEventListener('click', (event) => {
+        const sw = event.target.closest('button[data-lock]');
+        if (sw && !sw.disabled) saveQrLock(kind, sw.getAttribute('data-lock'), sw.getAttribute('aria-checked') !== 'true', sw);
+    });
+    $(`layout-qr-locks-${kind}`).addEventListener('change', (event) => {
+        const sel = event.target.closest('select[data-lock]');
+        if (sel) saveQrLock(kind, sel.getAttribute('data-lock'), Number(sel.value), sel);
+    });
+});
+
 // Tarjetas de QR por activo (Limpieza y Temperaturas): cada QR va en la MISMA tarjeta del Layout (LayoutSheet.buildCardSvg): encabezado con el logo (o las iniciales), el Sitio y la empresa, el título, un marco con el
 // nombre del activo sobre un fondo suave, el QR grande con su llamada arriba y el localizador al pie, todo con el color de la empresa. Salen igual que en el Layout: una ventana donde se elige el tamaño de la tarjeta (las
 // mismas medidas rápidas, ancho y largo libres y la línea para recortar) y se baja en PDF (una tarjeta por página, de todos los activos) o en imagen (la de la vista previa); o se imprimen cuatro por hoja carta.

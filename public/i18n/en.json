@@ -2619,6 +2619,21 @@
     "tmpAlertaTempAlta": "Temperature above the maximum ({max} °C)",
     "tmpAlertaHumBaja": "Humidity below the minimum ({min} %)",
     "tmpAlertaHumAlta": "Humidity above the maximum ({max} %)",
+    "layoutLockBtn": "QR locks (what the person scanning sees and does)",
+    "layoutLockTitulo": "Locks · what the person scanning sees and does",
+    "layoutLockRegistros": "See the previous records",
+    "layoutLockRegistrosSub": "The “View records” button of the QR",
+    "layoutLockFotos": "See the photos of the records",
+    "layoutLockNombres": "See the name of who made them",
+    "layoutLockLimite": "How many records are shown",
+    "layoutLockUltimos": "The last {n}",
+    "layoutLockRango": "See the range and the alerts",
+    "layoutLockRangoSub": "The minimums, maximums and the out-of-range warning",
+    "layoutLockRegistrar": "Allow registering with this QR",
+    "layoutLockRegistrarSub": "Off: the QR is for viewing only",
+    "layoutLockNotaLimpieza": "They apply to all the Cleaning QR codes of this Layout, including the ones already printed. Today everything is open; a lock is closed by turning it off.",
+    "layoutLockNotaTemp": "They apply to all the Temperatures QR codes of this Layout, including the ones already printed. Alerts are still saved even if they are not shown.",
+    "layoutLockGuardado": "Lock saved.",
     "colTmpFoto": "Photo",
     "colTmpOrigen": "Origin",
     "colTmpDeleteAuth": "Authorization to Delete",
@@ -4053,6 +4068,10 @@
     "layout3dAssetsPick": {
       "what": "Opens a list to choose WHICH assets show in the 3D (racks, racks with pallets, cabinets and pallets). Tick or untick one by one, a whole zone with the zone's checkbox, or use All and None (they act on what the list shows; with an empty search, on all of them). The search understands the same signs as every filter: comma for another search, $ before and @ after. The icon stays marked while some assets are hidden. It only changes what you see; it does not modify the Layout.",
       "example": "you want to see only R-07 and T-03 to check their heights: press None, search R-07 and tick the rack, then search T-03 and tick the pallet."
+    },
+    "layoutQrLocks": {
+      "what": "The locks decide what the person scanning a QR without a session sees and can do: see the previous records, their photos and the name of who made them, how many records are shown (3, 10 or 20), see the range and the alerts (Temperatures only) and allow registering (off = the QR is for viewing only). There is one setting per QR type and it applies to all of that type in this Layout, including the ones already printed; today everything is open. The locks are enforced by the server, not only by the page. You, with your user, still see everything on the Cleaning and Temperatures screens.",
+      "example": "you turn off “See the photos of the records” in Cleaning and whoever scans no longer sees photos in “View records”, even if the QR was printed months ago."
     },
     "layoutRango": {
       "what": "The refrigerator limits (Cold-type assets only): minimum and maximum temperature in °C and minimum and maximum humidity in %. Each one is optional (empty = no such limit). Temperature readings outside this range are flagged in red on the QR page when saved and in the records table (Status column). Each reading is judged with the range the refrigerator had when it was taken.",

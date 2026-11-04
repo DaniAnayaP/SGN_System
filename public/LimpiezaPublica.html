@@ -48,6 +48,8 @@
         .item{ display:grid; grid-template-columns:56px 56px 1fr auto; gap:8px; align-items:center; border:1px solid var(--line); border-radius:14px; padding:8px; }
         .item img, .item i{ width:56px; height:56px; border-radius:10px; object-fit:cover; background:var(--line); display:block; cursor:zoom-in; }
         .item b{ font-size:14px; display:block; } .item small{ color:var(--muted); font-size:12px; }
+        .item.nophoto{ grid-template-columns:1fr auto; }
+        .msg{ color:var(--muted); font-size:13px; border:1px dashed var(--line); border-radius:14px; padding:10px 12px; text-align:center; }
         .err{ color:var(--warn); font-size:14px; border:1px solid var(--warn); border-radius:14px; padding:10px 12px; }
         .muted{ color:var(--muted); font-size:13px; }
         #viewer{ position:fixed; inset:0; background:rgba(0,0,0,.88); display:grid; place-items:center; z-index:10; padding:12px; }
@@ -77,7 +79,7 @@ const TEXT = {
         running: 'Limpiando…', finish: 'Terminar: tomar foto después', photoBefore: 'Foto antes', forget: 'No es mi limpieza (olvidar en este teléfono)', done: 'Listo', saved: 'Guardado',
         startLabel: 'Inicio', endLabel: 'Fin', took: 'Tiempo que se tardó', newOne: 'Nueva limpieza', recordsTitle: 'Registros', readOnly: 'Solo lectura', noRecords: 'Todavía no hay limpiezas de este activo.',
         inProgress: 'En curso', needName: 'Escribe tu nombre para empezar.', saving: 'Guardando…', errPhoto: 'La foto no se pudo guardar. Intenta de nuevo.', errGeneric: 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.',
-        alreadyDone: 'Esa limpieza ya se había terminado.', close: 'Cerrar', before: 'Antes', after: 'Después', min: 'min', s: 's', h: 'h',
+        alreadyDone: 'Esa limpieza ya se había terminado.', viewOnly: 'Este QR solo sirve para consultar.', anonymous: 'Personal de limpieza', lastN: 'Se ven los últimos {n} registros.', locked: 'Este QR ya no permite registrar.', nothing: 'Este QR no tiene opciones disponibles.', close: 'Cerrar', before: 'Antes', after: 'Después', min: 'min', s: 's', h: 'h',
     },
     en: {
         title: 'Cleaning', loading: 'Loading…', notFound: 'This QR no longer matches any asset.', yourName: 'Your name', namePlaceholder: 'Who is cleaning',
@@ -87,7 +89,7 @@ const TEXT = {
         running: 'Cleaning…', finish: 'Finish: take the after photo', photoBefore: 'Before photo', forget: 'This is not my cleaning (forget on this phone)', done: 'Done', saved: 'Saved',
         startLabel: 'Start', endLabel: 'End', took: 'Time it took', newOne: 'New cleaning', recordsTitle: 'Records', readOnly: 'Read-only', noRecords: 'There are no cleanings of this asset yet.',
         inProgress: 'In progress', needName: 'Type your name to start.', saving: 'Saving…', errPhoto: 'The photo could not be saved. Try again.', errGeneric: 'It could not be saved. Check your connection and try again.',
-        alreadyDone: 'That cleaning was already finished.', close: 'Close', before: 'Before', after: 'After', min: 'min', s: 's', h: 'h',
+        alreadyDone: 'That cleaning was already finished.', viewOnly: 'This QR is for viewing only.', anonymous: 'Cleaning staff', lastN: 'The last {n} records are shown.', locked: 'This QR no longer allows registering.', nothing: 'This QR has no options available.', close: 'Close', before: 'Before', after: 'After', min: 'min', s: 's', h: 'h',
     },
 }[LANG];
 document.documentElement.lang = LANG;
@@ -141,18 +143,21 @@ const errBox = () => (note ? `<div class="err" role="alert">${esc(note)}</div>` 
 // ---- pantallas ----------------------------------------------------------------------------------------------------------------------
 function viewHome() {
     const savedName = (store.get(KEY_NAME) || '');
+    const lk = info.locks || {};
+    const canReg = lk.register !== false;
+    const canSee = lk.records !== false;
     show(`<div class="card"><h1>${esc(TEXT.title)}</h1>${placeHtml()}${errBox()}
-        <div><label for="person">${esc(TEXT.yourName)}</label><input type="text" id="person" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(savedName)}"></div>
-        <button type="button" class="btn" id="go-start">${esc(TEXT.start)}</button>
-        <button type="button" class="link" id="go-records">${esc(TEXT.records)}</button></div>`);
-    $('go-start').addEventListener('click', () => {
+        ${canReg ? `<div><label for="person">${esc(TEXT.yourName)}</label><input type="text" id="person" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(savedName)}"></div>
+        <button type="button" class="btn" id="go-start">${esc(TEXT.start)}</button>` : (canSee ? `<div class="msg">${esc(TEXT.viewOnly)}</div>` : '')}
+        ${canSee ? `<button type="button" class="link" id="go-records">${esc(TEXT.records)}</button>` : (!canReg ? `<div class="msg">${esc(TEXT.nothing)}</div>` : '')}</div>`);
+    if (canReg) $('go-start').addEventListener('click', () => {
         const name = $('person').value.replace(/\s+/g, ' ').trim();
         if (!name) { note = TEXT.needName; viewHome(); $('person').focus(); return; }
         note = '';
         store.set(KEY_NAME, name);
         viewCamera('before', name);
     });
-    $('go-records').addEventListener('click', () => { note = ''; viewRecords(); });
+    if (canSee) $('go-records').addEventListener('click', () => { note = ''; viewRecords(); });
 }
 
 async function viewCamera(kind, name) {
@@ -224,7 +229,7 @@ function viewConfirm(kind, name) {
         try {
             if (kind === 'before') await sendStart(name); else await sendFinish();
         } catch (err) {
-            note = err && err.code === 'PHOTO' ? TEXT.errPhoto : (err && err.code === 'DONE' ? TEXT.alreadyDone : TEXT.errGeneric);
+            note = err && err.code === 'PHOTO' ? TEXT.errPhoto : (err && err.code === 'DONE' ? TEXT.alreadyDone : (err && err.code === 'LOCKED' ? TEXT.locked : TEXT.errGeneric));
             if (err && err.code === 'DONE') { store.del(KEY_RUN); running = null; }
             viewConfirm(kind, name);
         }
@@ -284,9 +289,12 @@ function viewDone() {
 
 function viewRecords() {
     const photo = (r, kind) => (kind === 'before' ? r.hasBefore : r.hasAfter) ? `<img data-view="${r.id}:${kind}" alt="${esc(kind === 'before' ? TEXT.before : TEXT.after)}" loading="lazy" src="${API}/photo/${r.id}/${kind}?thumb=1">` : '<i></i>';
-    const rows = info.records.map((r) => `<div class="item">${photo(r, 'before')}${photo(r, 'after')}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.startedAt))} · ${esc(fmtTime(r.startedAt))}${r.finishedAt ? ` → ${esc(fmtTime(r.finishedAt))}` : ''}</small></div>${r.finishedAt ? `<span class="tag">${esc(fmtDuration(r.seconds))}</span>` : `<span class="chip">${esc(TEXT.inProgress)}</span>`}</div>`).join('');
+    const lk = info.locks || {};
+    const showPhotos = lk.photos !== false;
+    const rows = info.records.map((r) => `<div class="item${showPhotos ? '' : ' nophoto'}">${showPhotos ? photo(r, 'before') + photo(r, 'after') : ''}<div><b>${esc(r.name || TEXT.anonymous)}</b><small>${esc(fmtDate(r.startedAt))} · ${esc(fmtTime(r.startedAt))}${r.finishedAt ? ` → ${esc(fmtTime(r.finishedAt))}` : ''}</small></div>${r.finishedAt ? `<span class="tag">${esc(fmtDuration(r.seconds))}</span>` : `<span class="chip">${esc(TEXT.inProgress)}</span>`}</div>`).join('');
     show(`<div class="card"><h1>${esc(TEXT.recordsTitle)}</h1>${placeHtml()}<span class="muted">${esc(TEXT.readOnly)}</span>
         <div class="list">${rows || `<div class="muted">${esc(TEXT.noRecords)}</div>`}</div>
+        ${lk.limit && lk.limit < 20 && info.records.length >= lk.limit ? `<div class="muted">${esc(TEXT.lastN.replace('{n}', lk.limit))}</div>` : ''}
         <button type="button" class="link" id="back">${esc(TEXT.back)}</button></div>`);
     $('back').addEventListener('click', () => { if (running) viewRunning(); else viewHome(); });
     $('view').querySelectorAll('[data-view]').forEach((img) => img.addEventListener('click', () => { $('viewer').querySelector('img').src = img.src.replace('?thumb=1', '');  $('viewer').hidden = false; }));

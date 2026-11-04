@@ -7634,6 +7634,22 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-find-toggle[aria-pressed="false"]{ border-style: dashed; background: transparent; color: var(--color-text-secondary); text-decoration: line-through; }
 .layout-find-chip:focus-visible, .layout-find-toggle:focus-visible, .layout-find-item:focus-visible{ outline: 2px solid var(--color-accent, var(--color-text-primary)); outline-offset: 2px; }
 .layout-find-out{ display: none; }
+/* Candados de los QR (Layout > QR y descarga): interruptores y selector */
+.layout-qr-locks{ display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.35rem; padding-top: 0.7rem; border-top: 1px solid var(--color-border); }
+.layout-qr-locks[hidden]{ display: none; }
+.layout-lock-title{ margin: 0; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-secondary); }
+/* el menú del QR da a todos sus botones columna y relleno: aquí el interruptor va en renglón (selector más específico) */
+.layout-qr-pop .layout-qr-locks .layout-lock-sw{ display: flex; flex-direction: row; align-items: center; gap: 0.6rem; width: 100%; padding: 0.15rem 0; border: 0; background: transparent; color: var(--color-text-primary); font: inherit; font-size: 0.78rem; text-align: left; cursor: pointer; }
+.layout-qr-pop .layout-qr-locks .layout-lock-sw:hover{ background: transparent; }
+.layout-lock-sw:disabled{ opacity: 0.55; cursor: default; }
+.layout-lock-knob{ flex: none; position: relative; width: 2.1rem; height: 1.15rem; border-radius: 999px; background: var(--color-border); transition: background 0.15s; }
+.layout-lock-knob::after{ content: ""; position: absolute; top: 0.125rem; left: 0.125rem; width: 0.9rem; height: 0.9rem; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); transition: transform 0.15s; }
+.layout-lock-sw[aria-checked="true"] .layout-lock-knob{ background: var(--color-success, #0f8a6b); }
+.layout-lock-sw[aria-checked="true"] .layout-lock-knob::after{ transform: translateX(0.95rem); }
+.layout-lock-txt small{ display: block; font-size: 0.66rem; color: var(--color-text-secondary); }
+.layout-lock-limit{ display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.7rem; color: var(--color-text-secondary); }
+.layout-lock-limit select{ font: inherit; font-size: 0.78rem; padding: 0.3rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); }
+.layout-lock-sw:focus-visible, .layout-lock-limit select:focus-visible{ outline: 2px solid var(--color-accent, var(--color-text-primary)); outline-offset: 2px; }
 .layout-find-seg{ display: inline-flex; gap: 0.15rem; padding: 0.15rem; border: 1px solid var(--color-border); border-radius: 999px; }
 .layout-find-segbtn{ font: inherit; font-size: 0.72rem; font-weight: 600; padding: 0.15rem 0.7rem; border: 0; border-radius: 999px; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
 .layout-find-segbtn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); }

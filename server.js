@@ -162,7 +162,7 @@ const {
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord,
-    addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord,
+    addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     getArticleCategoryById,
@@ -6504,6 +6504,8 @@ function layoutPermissions(req) {
         canFind: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutBuscar'),
         // Renumerar los códigos de los activos (en cada zona y tipo, consecutivos desde 001) usa el icono Renumerar (hoja <pantalla>/iconLayoutRenumerar).
         canRenumber: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutRenumerar'),
+        // Los candados de los QR (lo que ve y puede hacer quien escanea sin sesión) se cambian con el icono Candados de los QR (hoja <pantalla>/iconLayoutCandadosQr).
+        canLockQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutCandadosQr'),
         // "QR y descarga" por Zona (la hoja con las categorías de los códigos que hay en la zona) se usa con el icono Imprimir por zona (hoja <pantalla>/iconLayoutImprimirZona).
         canPrintZone: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutImprimirZona'),
         // Girar el croquis (en pantalla y en la hoja que se descarga) usa el icono Girar (hoja <pantalla>/iconLayoutGirar del árbol).
@@ -6985,6 +6987,43 @@ function parseThumb(raw) {
 }
 // Con ?thumb=1 se manda la miniatura de esa foto (si la tiene); si no, la foto completa.
 const cleaningPhotoFor = (id, req) => (req.query.thumb === '1' && getCleaningPhoto(id, `${req.params.kind}_thumb`)) || getCleaningPhoto(id, req.params.kind);
+// Candados de los QR públicos: lo que ve y puede hacer quien escanea SIN sesión. Hay una configuración por TIPO de QR y por centro de costos (se cambia en Layout > QR y descarga, con el icono Candados de los QR).
+// Cada tipo de QR declara aquí sus candados y su valor de fábrica (todo abierto: así nada cambia hasta que alguien cierra un candado). Para un QR nuevo se agrega su tipo aquí y se hace cumplir en sus rutas
+// públicas con qrLocksOf: los candados se aplican EN EL SERVIDOR (no solo se esconden en la página).
+//   records = ver los registros anteriores · photos = ver sus fotos · names = ver el nombre de quien los hizo · limit = cuántos registros se ven · register = poder registrar con ese QR · range = ver el rango y las alertas.
+const QR_LOCK_TYPES = {
+    cleaning: { records: true, photos: true, names: true, limit: 20, register: true },
+    temperature: { records: true, photos: true, names: true, limit: 20, register: true, range: true },
+};
+const QR_LOCK_LIMITS = [3, 10, 20];
+function qrLocksOf(type, clientId, costCenterId) {
+    const defaults = QR_LOCK_TYPES[type];
+    if (!defaults) return {};
+    const raw = getQrLocksRaw(clientId, costCenterId || 0, type);
+    const out = { ...defaults };
+    Object.keys(defaults).forEach((key) => {
+        if (key === 'limit') { if (QR_LOCK_LIMITS.includes(raw.limit)) out.limit = raw.limit; } else if (typeof raw[key] === 'boolean') out[key] = raw[key];
+    });
+    return out;
+}
+// Lo que llega al guardar: solo los candados del tipo, con su tipo de valor; null si algo no es válido.
+function sanitizeQrLocks(type, body) {
+    const defaults = QR_LOCK_TYPES[type];
+    if (!defaults || !body || typeof body !== 'object') return null;
+    const out = {};
+    for (const key of Object.keys(defaults)) {
+        const v = body[key];
+        if (key === 'limit') { if (!QR_LOCK_LIMITS.includes(v)) return null; out.limit = v; } else { if (typeof v !== 'boolean') return null; out[key] = v; }
+    }
+    return out;
+}
+// Un registro tal como lo ve quien escanea, con los candados: sin nombre (names) ni fotos (photos) cuando están cerrados.
+function lockedCleaningRecord(r, locks) {
+    const out = publicCleaningRecord(r);
+    if (!locks.names) out.name = '';
+    if (!locks.photos) { out.hasBefore = false; out.hasAfter = false; }
+    return out;
+}
 const publicCleaningRecord = (r) => ({ id: r.id, name: r.person_name, startedAt: sqlUtcIso(r.started_at), finishedAt: sqlUtcIso(r.finished_at), seconds: r.seconds, hasBefore: !!r.has_before, hasAfter: !!r.has_after });
 app.get('/l/:token/:spaceId', publicLayoutLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(self)' });
@@ -6995,18 +7034,20 @@ app.get('/api/public/cleaning/:token/:spaceId', publicLayoutLimiter, (req, res) 
     if (!target) return res.status(404).json({ message: 'Not found.' });
     const { row, space, footprint, zone, locator } = target;
     const client = getClientById(row.clientId);
-    const records = listCleaningRecords(row.clientId, { costCenterId: row.costCenterId || 0, spaceId: space.id, limit: 20 });
+    const locks = qrLocksOf('cleaning', row.clientId, row.costCenterId || 0);
+    const records = locks.records ? listCleaningRecords(row.clientId, { costCenterId: row.costCenterId || 0, spaceId: space.id, limit: locks.limit }) : [];
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json({
         companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
         space: { id: space.id, code: space.code, type: space.type, locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '' },
-        records: records.map(publicCleaningRecord), now: new Date().toISOString(),
+        records: records.map((r) => lockedCleaningRecord(r, locks)), locks, now: new Date().toISOString(),
     });
 });
 app.post('/api/public/cleaning/:token/:spaceId/start', publicCleaningLimiter, (req, res) => {
     const target = cleaningTarget(req.params.token, req.params.spaceId);
     if (!target) return res.status(404).json({ message: 'Not found.' });
     const personName = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!qrLocksOf('cleaning', target.row.clientId, target.row.costCenterId || 0).register) return res.status(403).json({ message: 'Este QR solo sirve para consultar.', code: 'LOCKED' });
     if (!personName) return res.status(400).json({ message: 'Falta el nombre de quien limpia.', code: 'NAME' });
     const photo = parseCleaningPhoto(req.body && req.body.photo);
     if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
@@ -7035,6 +7076,7 @@ app.get('/api/public/cleaning/:token/:spaceId/photo/:id/:kind', publicLayoutLimi
     if (!target || !Number.isInteger(id) || !['before', 'after'].includes(req.params.kind)) return res.status(404).end();
     const rec = getCleaningRecord(id, target.row.clientId);
     if (!rec || rec.space_id !== target.space.id || rec.cost_center_id !== (target.row.costCenterId || 0)) return res.status(404).end();
+    if (!qrLocksOf(req.path.includes('/public/cleaning/') ? 'cleaning' : 'temperature', target.row.clientId, target.row.costCenterId || 0).photos) return res.status(404).end();
     const photo = cleaningPhotoFor(id, req);
     if (!photo) return res.status(404).end();
     res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
@@ -7130,6 +7172,15 @@ function temperatureStatus(r) {
 const temperatureLimits = (r) => ({ tempMin: r.temp_min, tempMax: r.temp_max, humMin: r.hum_min, humMax: r.hum_max });
 // El rango que hoy tiene el refrigerador en el Layout (solo los que tienen valor).
 const spaceLimits = (s) => { const o = {}; ['tempMin', 'tempMax', 'humMin', 'humMax'].forEach((k) => { if (s[k] !== undefined && s[k] !== null) o[k] = s[k]; }); return o; };
+// Un registro de temperatura tal como lo ve quien escanea, con los candados: sin rango ni alerta (range), sin nombre (names) ni foto (photos) cuando están cerrados. own = el registro que esa persona acaba de
+// guardar (es suyo: conserva su nombre y su foto; el candado del rango sí se respeta).
+function lockedTemperatureRecord(r, locks, own = false) {
+    const out = publicTemperatureRecord(r);
+    if (!locks.range) { out.limits = {}; out.status = { temp: null, hum: null }; }
+    if (!own && !locks.names) out.name = '';
+    if (!own && !locks.photos) out.hasPhoto = false;
+    return out;
+}
 const publicTemperatureRecord = (r) => ({ id: r.id, name: r.person_name, temperature: r.temperature, humidity: r.humidity, limits: temperatureLimits(r), status: temperatureStatus(r), checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo });
 app.get('/t/:token/:spaceId', publicLayoutLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(self)' });
@@ -7140,18 +7191,20 @@ app.get('/api/public/temperature/:token/:spaceId', publicLayoutLimiter, (req, re
     if (!target) return res.status(404).json({ message: 'Not found.' });
     const { row, space, footprint, zone, locator } = target;
     const client = getClientById(row.clientId);
-    const records = listTemperatureRecords(row.clientId, { costCenterId: row.costCenterId || 0, spaceId: space.id, limit: 20 });
+    const locks = qrLocksOf('temperature', row.clientId, row.costCenterId || 0);
+    const records = locks.records ? listTemperatureRecords(row.clientId, { costCenterId: row.costCenterId || 0, spaceId: space.id, limit: locks.limit }) : [];
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json({
         companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
-        space: { id: space.id, code: space.code, type: space.type, locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', limits: spaceLimits(space) },
-        records: records.map(publicTemperatureRecord), now: new Date().toISOString(),
+        space: { id: space.id, code: space.code, type: space.type, locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', limits: locks.range ? spaceLimits(space) : {} },
+        records: records.map((r) => lockedTemperatureRecord(r, locks)), locks, now: new Date().toISOString(),
     });
 });
 app.post('/api/public/temperature/:token/:spaceId/reading', publicCleaningLimiter, (req, res) => {
     const target = temperatureTarget(req.params.token, req.params.spaceId);
     if (!target) return res.status(404).json({ message: 'Not found.' });
     const personName = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!qrLocksOf('temperature', target.row.clientId, target.row.costCenterId || 0).register) return res.status(403).json({ message: 'Este QR solo sirve para consultar.', code: 'LOCKED' });
     if (!personName) return res.status(400).json({ message: 'Falta el nombre de quien revisa.', code: 'NAME' });
     const raw = req.body && req.body.temperature;
     const temperature = typeof raw === 'number' ? raw : Number.NaN;
@@ -7168,7 +7221,7 @@ app.post('/api/public/temperature/:token/:spaceId/reading', publicCleaningLimite
     const { row, space, footprint, zone, locator } = target;
     const saved = addTemperatureRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature: Math.round(temperature * 10) / 10, humidity, limits: spaceLimits(space), photo, thumb: parseThumb(req.body && req.body.thumb) });
     res.set('Cache-Control', 'no-store');
-    res.status(201).json(publicTemperatureRecord(saved));
+    res.status(201).json(lockedTemperatureRecord(saved, qrLocksOf('temperature', row.clientId, row.costCenterId || 0), true));
 });
 app.get('/api/public/temperature/:token/:spaceId/photo/:id', publicLayoutLimiter, (req, res) => {
     const target = temperatureTarget(req.params.token, req.params.spaceId);
@@ -7176,6 +7229,7 @@ app.get('/api/public/temperature/:token/:spaceId/photo/:id', publicLayoutLimiter
     if (!target || !Number.isInteger(id)) return res.status(404).end();
     const rec = getTemperatureRecord(id, target.row.clientId);
     if (!rec || rec.space_id !== target.space.id || rec.cost_center_id !== (target.row.costCenterId || 0)) return res.status(404).end();
+    if (!qrLocksOf(req.path.includes('/public/cleaning/') ? 'cleaning' : 'temperature', target.row.clientId, target.row.costCenterId || 0).photos) return res.status(404).end();
     const photo = getTemperaturePhoto(id, req.query.thumb === '1');
     if (!photo) return res.status(404).end();
     res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
@@ -7243,6 +7297,30 @@ app.get('/api/business/layout/temperature-qr', requireAuth, (req, res) => {
     const client = getClientById(req.user.clientId);
     res.set('Cache-Control', 'no-store');
     res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', ...qrBranding(req.user.clientId), zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
+});
+
+// Candados de los QR (con usuario): ver y cambiar los de un tipo de QR en el centro de costos elegido. Se guarda el conjunto completo del tipo.
+app.get('/api/business/layout/qr-locks', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canLockQr) return res.status(403).json({ message: 'No tienes permiso para ver los candados de los QR.' });
+    const type = String(req.query.type || '');
+    if (!QR_LOCK_TYPES[type]) return res.status(400).json({ message: 'Ese tipo de QR no existe.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    res.set('Cache-Control', 'no-store');
+    res.json({ type, locks: qrLocksOf(type, req.user.clientId, center.id || 0), limits: QR_LOCK_LIMITS });
+});
+app.put('/api/business/layout/qr-locks', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canLockQr) return res.status(403).json({ message: 'No tienes permiso para cambiar los candados de los QR.' });
+    const type = String((req.body && req.body.type) || '');
+    if (!QR_LOCK_TYPES[type]) return res.status(400).json({ message: 'Ese tipo de QR no existe.' });
+    const locks = sanitizeQrLocks(type, req.body && req.body.locks);
+    if (!locks) return res.status(400).json({ message: 'Los candados no son válidos.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    saveQrLocks(req.user.clientId, center.id || 0, type, locks, req.user.sub);
+    res.json({ type, locks: qrLocksOf(type, req.user.clientId, center.id || 0) });
 });
 
 // Buscador de la página pública (la lupa): zonas, categorías de las zonas y códigos, mientras se escribe. Sin sesión, con el mismo código aleatorio del QR y un tope por IP (más alto que el de

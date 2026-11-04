@@ -2618,6 +2618,21 @@
     "tmpAlertaTempAlta": "Temperatura por encima del máximo ({max} °C)",
     "tmpAlertaHumBaja": "Humedad por debajo del mínimo ({min} %)",
     "tmpAlertaHumAlta": "Humedad por encima del máximo ({max} %)",
+    "layoutLockBtn": "Candados de los QR (qué ve y qué hace quien escanea)",
+    "layoutLockTitulo": "Candados · lo que ve y hace quien escanea",
+    "layoutLockRegistros": "Ver los registros anteriores",
+    "layoutLockRegistrosSub": "El botón «Ver registros» del QR",
+    "layoutLockFotos": "Ver las fotos de los registros",
+    "layoutLockNombres": "Ver el nombre de quien los hizo",
+    "layoutLockLimite": "Cuántos registros se ven",
+    "layoutLockUltimos": "Los últimos {n}",
+    "layoutLockRango": "Ver el rango y las alertas",
+    "layoutLockRangoSub": "Los mínimos, máximos y el aviso de fuera de rango",
+    "layoutLockRegistrar": "Poder registrar con este QR",
+    "layoutLockRegistrarSub": "Apagado: el QR solo sirve para consultar",
+    "layoutLockNotaLimpieza": "Valen para todos los QR de Limpieza de este Layout, también los ya impresos. Hoy todo está abierto; un candado se cierra al apagarlo.",
+    "layoutLockNotaTemp": "Valen para todos los QR de Temperaturas de este Layout, también los ya impresos. Las alertas se siguen guardando aunque no se vean.",
+    "layoutLockGuardado": "Candado guardado.",
     "colTmpFoto": "Foto",
     "colTmpOrigen": "Origen",
     "colTmpDeleteAuth": "Autorización para Eliminar",
@@ -4052,6 +4067,10 @@
     "layout3dAssetsPick": {
       "what": "Abre una lista para elegir CUÁLES activos se ven en el 3D (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Marca o desmarca uno por uno, una zona completa con la casilla de la zona, o usa Todos y Ninguno (actúan sobre lo que muestra la lista; con el buscador vacío, sobre todos). El buscador entiende los mismos signos de todos los filtros: coma para otra búsqueda, $ antes y @ después. El icono queda marcado cuando hay activos ocultos. Solo cambia lo que ves; no modifica el Layout.",
       "example": "quieres ver solo R-07 y T-03 para revisar sus alturas: pulsas Ninguno, buscas R-07 y marcas el anaquel, luego buscas T-03 y marcas la tarima."
+    },
+    "layoutQrLocks": {
+      "what": "Los candados deciden qué ve y qué puede hacer quien escanea un QR sin sesión: ver los registros anteriores, sus fotos y el nombre de quien los hizo, cuántos registros se ven (3, 10 o 20), ver el rango y las alertas (solo Temperaturas) y poder registrar (apagado = el QR solo sirve para consultar). Hay una configuración por tipo de QR y vale para todos los de ese Layout, también los ya impresos; hoy todo está abierto. Los candados los hace cumplir el servidor, no solo la página. Tú, con tu usuario, sigues viendo todo en las pantallas de Limpieza y Temperaturas.",
+      "example": "apagas «Ver las fotos de los registros» en Limpieza y quien escanea ya no ve fotos en «Ver registros», aunque el QR esté impreso desde hace meses."
     },
     "layoutRango": {
       "what": "Los límites del refrigerador (solo activos de tipo Frío): la temperatura mínima y máxima en °C y la humedad mínima y máxima en %. Cada uno es opcional (vacío = sin ese límite). Las lecturas de Temperaturas que salgan de este rango se marcan en rojo en el QR al guardar y en la base de registros (columna Estado). Cada lectura se juzga con el rango que tenía el refrigerador cuando se tomó.",

@@ -54,6 +54,8 @@
         .item{ display:grid; grid-template-columns:56px 1fr auto; gap:8px; align-items:center; border:1px solid var(--line); border-radius:14px; padding:8px; }
         .item img, .item i{ width:56px; height:56px; border-radius:10px; object-fit:cover; background:var(--line); display:block; cursor:zoom-in; }
         .item b{ font-size:14px; display:block; } .item small{ color:var(--muted); font-size:12px; }
+        .item.nophoto{ grid-template-columns:1fr auto; }
+        .msg{ color:var(--muted); font-size:13px; border:1px dashed var(--line); border-radius:14px; padding:10px 12px; text-align:center; }
         .err{ color:var(--warn); font-size:14px; border:1px solid var(--warn); border-radius:14px; padding:10px 12px; }
         .muted{ color:var(--muted); font-size:13px; }
         #viewer{ position:fixed; inset:0; background:rgba(0,0,0,.88); display:grid; place-items:center; z-index:10; padding:12px; }
@@ -81,7 +83,7 @@ const TEXT = {
         use: 'Guardar la lectura', cancel: 'Cancelar', cameraHint: 'Apunta al termómetro o a la pantalla del refrigerador y toma la foto', cameraOpening: 'Abriendo la cámara…',
         cameraDenied: 'No se pudo abrir la cámara. Permite el acceso a la cámara en tu navegador y vuelve a intentar.', cameraInsecure: 'Esta página necesita una conexión segura (https) para usar la cámara.',
         done: 'Listo', saved: 'Guardado', when: 'Hora', newOne: 'Nueva lectura', recordsTitle: 'Registros', readOnly: 'Solo lectura', noRecords: 'Todavía no hay lecturas de este refrigerador.',
-        needName: 'Escribe tu nombre para empezar.', needTemp: 'Escribe la temperatura que marca (por ejemplo 4.5 o -18).', badTemp: 'Esa temperatura no es válida: usa un número entre -100 y 100.', outTitle: 'Fuera de rango', outSaved: 'Se guardará con la alerta.', tempLow: 'La temperatura está por debajo del mínimo ({n} °C).', tempHigh: 'La temperatura está por encima del máximo ({n} °C).', humLow: 'La humedad está por debajo del mínimo ({n} %).', humHigh: 'La humedad está por encima del máximo ({n} %).', needHum: 'Escribe la humedad que marca (por ejemplo 55).', badHum: 'Esa humedad no es válida: usa un número entre 0 y 100.', humidity: 'Humedad que marca', saving: 'Guardando…',
+        needName: 'Escribe tu nombre para empezar.', needTemp: 'Escribe la temperatura que marca (por ejemplo 4.5 o -18).', badTemp: 'Esa temperatura no es válida: usa un número entre -100 y 100.', outTitle: 'Fuera de rango', outSaved: 'Se guardará con la alerta.', tempLow: 'La temperatura está por debajo del mínimo ({n} °C).', tempHigh: 'La temperatura está por encima del máximo ({n} °C).', humLow: 'La humedad está por debajo del mínimo ({n} %).', humHigh: 'La humedad está por encima del máximo ({n} %).', needHum: 'Escribe la humedad que marca (por ejemplo 55).', viewOnly: 'Este QR solo sirve para consultar.', anonymous: 'Personal', lastN: 'Se ven las últimas {n} lecturas.', locked: 'Este QR ya no permite registrar.', nothing: 'Este QR no tiene opciones disponibles.', badHum: 'Esa humedad no es válida: usa un número entre 0 y 100.', humidity: 'Humedad que marca', saving: 'Guardando…',
         errPhoto: 'La foto no se pudo guardar. Intenta de nuevo.', errGeneric: 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.', close: 'Cerrar', reading: 'Lectura',
     },
     en: {
@@ -90,7 +92,7 @@ const TEXT = {
         use: 'Save the reading', cancel: 'Cancel', cameraHint: 'Point at the thermometer or the refrigerator display and take the photo', cameraOpening: 'Opening the camera…',
         cameraDenied: 'The camera could not be opened. Allow camera access in your browser and try again.', cameraInsecure: 'This page needs a secure connection (https) to use the camera.',
         done: 'Done', saved: 'Saved', when: 'Time', newOne: 'New reading', recordsTitle: 'Records', readOnly: 'Read-only', noRecords: 'There are no readings of this refrigerator yet.',
-        needName: 'Type your name to start.', needTemp: 'Type the temperature shown (for example 4.5 or -18).', badTemp: 'That temperature is not valid: use a number between -100 and 100.', outTitle: 'Out of range', outSaved: 'It will be saved with the alert.', tempLow: 'The temperature is below the minimum ({n} °C).', tempHigh: 'The temperature is above the maximum ({n} °C).', humLow: 'The humidity is below the minimum ({n} %).', humHigh: 'The humidity is above the maximum ({n} %).', needHum: 'Type the humidity shown (for example 55).', badHum: 'That humidity is not valid: use a number between 0 and 100.', humidity: 'Humidity shown', saving: 'Saving…',
+        needName: 'Type your name to start.', needTemp: 'Type the temperature shown (for example 4.5 or -18).', badTemp: 'That temperature is not valid: use a number between -100 and 100.', outTitle: 'Out of range', outSaved: 'It will be saved with the alert.', tempLow: 'The temperature is below the minimum ({n} °C).', tempHigh: 'The temperature is above the maximum ({n} °C).', humLow: 'The humidity is below the minimum ({n} %).', humHigh: 'The humidity is above the maximum ({n} %).', needHum: 'Type the humidity shown (for example 55).', viewOnly: 'This QR is for viewing only.', anonymous: 'Staff', lastN: 'The last {n} readings are shown.', locked: 'This QR no longer allows registering.', nothing: 'This QR has no options available.', badHum: 'That humidity is not valid: use a number between 0 and 100.', humidity: 'Humidity shown', saving: 'Saving…',
         errPhoto: 'The photo could not be saved. Try again.', errGeneric: 'It could not be saved. Check your connection and try again.', close: 'Close', reading: 'Reading',
     },
 }[LANG];
@@ -158,19 +160,22 @@ const errBox = () => (note ? `<div class="err" role="alert">${esc(note)}</div>` 
 // ---- pantallas ----------------------------------------------------------------------------------------------------------------------
 function viewHome() {
     const name = draft.name || store.get(KEY_NAME) || '';
+    const lk = info.locks || {};
+    const canReg = lk.register !== false;
+    const canSee = lk.records !== false;
     show(`<div class="card"><h1>${esc(TEXT.title)}</h1>${placeHtml()}${errBox()}
-        <div><label for="person">${esc(TEXT.yourName)}</label><input type="text" id="person" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(name)}"></div>
+        ${canReg ? `<div><label for="person">${esc(TEXT.yourName)}</label><input type="text" id="person" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(name)}"></div>
         <div><label for="temp">${esc(TEXT.temperature)}</label><div class="temp-row"><button type="button" class="sign" id="sign" aria-label="${esc(TEXT.toggleSign)}" title="${esc(TEXT.toggleSign)}">±</button><input type="text" id="temp" inputmode="decimal" autocomplete="off" maxlength="7" placeholder="${esc(TEXT.tempPlaceholder)}" value="${esc(draft.temp)}"><span class="unit">°C</span></div></div>
         <div><label for="hum">${esc(TEXT.humidity)}</label><div class="temp-row hum-row"><input type="text" id="hum" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="0" value="${esc(draft.hum)}"><span class="unit">%</span></div></div>
-        <button type="button" class="btn" id="go-photo">${esc(TEXT.take)}</button>
-        <button type="button" class="link" id="go-records">${esc(TEXT.records)}</button></div>`);
-    $('sign').addEventListener('click', () => {
+        <button type="button" class="btn" id="go-photo">${esc(TEXT.take)}</button>` : (canSee ? `<div class="msg">${esc(TEXT.viewOnly)}</div>` : '')}
+        ${canSee ? `<button type="button" class="link" id="go-records">${esc(TEXT.records)}</button>` : (!canReg ? `<div class="msg">${esc(TEXT.nothing)}</div>` : '')}</div>`);
+    if (canReg) $('sign').addEventListener('click', () => {
         const input = $('temp');
         const v = input.value.trim();
         input.value = v.startsWith('-') ? v.slice(1) : `-${v}`;
         input.focus();
     });
-    $('go-photo').addEventListener('click', () => {
+    if (canReg) $('go-photo').addEventListener('click', () => {
         const personName = $('person').value.replace(/\s+/g, ' ').trim();
         const reading = parseTemp($('temp').value);
         const humidity = parseHum($('hum').value);
@@ -184,7 +189,7 @@ function viewHome() {
         store.set(KEY_NAME, personName);
         viewCamera();
     });
-    $('go-records').addEventListener('click', () => { note = ''; viewRecords(); });
+    if (canSee) $('go-records').addEventListener('click', () => { note = ''; viewRecords(); });
 }
 
 async function viewCamera() {
@@ -258,7 +263,7 @@ function viewConfirm() {
         try {
             await sendReading();
         } catch (err) {
-            note = err && err.code === 'PHOTO' ? TEXT.errPhoto : (err && err.code === 'TEMP' ? TEXT.badTemp : (err && err.code === 'HUM' ? TEXT.badHum : TEXT.errGeneric));
+            note = err && err.code === 'PHOTO' ? TEXT.errPhoto : (err && err.code === 'TEMP' ? TEXT.badTemp : (err && err.code === 'HUM' ? TEXT.badHum : (err && err.code === 'LOCKED' ? TEXT.locked : TEXT.errGeneric)));
             viewConfirm();
         }
     });
@@ -290,9 +295,12 @@ function viewDone() {
 }
 
 function viewRecords() {
-    const rows = info.records.map((r) => `<div class="item">${r.hasPhoto ? `<img data-view="${r.id}" alt="${esc(TEXT.photoTitle)}" loading="lazy" src="${API}/photo/${r.id}?thumb=1">` : '<i></i>'}<div><b>${esc(r.name)}</b><small>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</small></div><span class="tag${r.status && (r.status.temp === 'low' || r.status.temp === 'high' || r.status.hum === 'low' || r.status.hum === 'high') ? ' out' : ''}">${esc(fmtTemp(r.temperature))}${r.humidity === null || r.humidity === undefined ? '' : ` · ${esc(fmtHum(r.humidity))}`}</span></div>`).join('');
+    const lk = info.locks || {};
+    const showPhotos = lk.photos !== false;
+    const rows = info.records.map((r) => `<div class="item${showPhotos ? '' : ' nophoto'}">${!showPhotos ? '' : r.hasPhoto ? `<img data-view="${r.id}" alt="${esc(TEXT.photoTitle)}" loading="lazy" src="${API}/photo/${r.id}?thumb=1">` : '<i></i>'}<div><b>${esc(r.name || TEXT.anonymous)}</b><small>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</small></div><span class="tag${r.status && (r.status.temp === 'low' || r.status.temp === 'high' || r.status.hum === 'low' || r.status.hum === 'high') ? ' out' : ''}">${esc(fmtTemp(r.temperature))}${r.humidity === null || r.humidity === undefined ? '' : ` · ${esc(fmtHum(r.humidity))}`}</span></div>`).join('');
     show(`<div class="card"><h1>${esc(TEXT.recordsTitle)}</h1>${placeHtml()}<span class="muted">${esc(TEXT.readOnly)}</span>
         <div class="list">${rows || `<div class="muted">${esc(TEXT.noRecords)}</div>`}</div>
+        ${lk.limit && lk.limit < 20 && info.records.length >= lk.limit ? `<div class="muted">${esc(TEXT.lastN.replace('{n}', lk.limit))}</div>` : ''}
         <button type="button" class="link" id="back">${esc(TEXT.back)}</button></div>`);
     $('back').addEventListener('click', () => { note = ''; viewHome(); });
     $('view').querySelectorAll('[data-view]').forEach((img) => img.addEventListener('click', () => { $('viewer').querySelector('img').src = img.src.replace('?thumb=1', '');  $('viewer').hidden = false; }));
