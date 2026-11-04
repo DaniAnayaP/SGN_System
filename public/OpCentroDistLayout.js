@@ -707,7 +707,7 @@ function applySafetyMarks() {
 function wallPickHtml(selected) {
     const walls = (state.draft.obstacles || []).filter((o) => o.kind === 'wall');
     const empty = selected && walls.some((o) => o.id === selected) ? '' : `<option value="" selected>${esc(t('main.layoutPuertaElegirPared'))}</option>`;
-    return empty + walls.map((o) => `<option value="${esc(o.id)}"${o.id === selected ? ' selected' : ''}>${esc(o.name)}</option>`).join('');
+    return empty + walls.map((o) => `<option value="${esc(o.id)}"${o.id === selected ? ' selected' : ''}>${esc(o.code ? `${o.code} · ${o.name}` : o.name)}</option>`).join('');
 }
 // Lo que va sobre una pared: puertas, conexiones de luz y sensores. Cada renglón elige su pared y se mide desde su inicio; la pared dice cuánto mide y qué tan alta es.
 const WALL_ITEM_LISTS = ['doors', 'power', 'sensors'];
@@ -806,7 +806,7 @@ function obstacleRowHtml(o, i, dis, wallsOnly = false) {
         ? `${sel('wall', wallOptionsHtml(o.wall), 'layoutObstLado')}${num('dist', o.dist || 0, 'layoutObstDist', 'min="0"')}${num('l', o.l > 0 ? o.l : '', 'layoutObstLargo', `min="0" placeholder="${esc(t('main.layoutTodoElLado'))}"`)}${num('w', o.w || 0, 'layoutObstGrosor', 'min="0"')}`
         : `${num('x', o.x, 'layoutObstXY')}${num('y', o.y, 'layoutObstXY')}${num('l', o.l, 'layoutObstLargo', 'min="0"')}${num('w', o.w, 'layoutObstAncho', 'min="0"')}`;
     const height = o.kind === 'step' ? num('dz', o.dz === undefined ? 0 : o.dz, 'layoutObstAltura') : '<td class="layout-calc">—</td>';
-    if (wallsOnly) return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${removeCell('obstacles', i, dis)}</tr>`;
+    if (wallsOnly) return `<tr><td class="layout-calc"><b data-wall-code="${i}">${esc(o.code || '')}</b></td>${cellText('obstacles', i, 'name', o.name, dis)}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${removeCell('obstacles', i, dis)}</tr>`;
     // en Contorno el Tipo ya no ofrece Pared (las paredes se agregan en su propio paso)
     return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('kind', optionsHtml('obstacle', LC.OBSTACLE_KINDS.filter((k) => k !== 'wall'), o.kind), 'layoutObstTipo')}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${height}${removeCell('obstacles', i, dis)}</tr>`;
 }
@@ -932,7 +932,7 @@ function stepHtml(step) {
         const addWallBtn = `<button type="button" class="btn btn-secondary layout-add" data-add-wall="1" data-main-add="1" data-help-key="layoutParedAgregar"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarPared'))}</button>`;
         const wallsAllBtn = `<button type="button" class="btn btn-secondary layout-add" data-walls-all="1" data-main-add="1" data-help-key="layoutParedTodo"${dis ? ' disabled' : ''}>${esc(t('main.layoutParedTodoContorno'))}</button>`;
         const walls = d.obstacles.map((o, i) => (o.kind === 'wall' ? obstacleRowHtml(o, i, dis, true) : '')).filter(Boolean);
-        const list = walls.length ? table(['main.layoutNombre', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', ''], walls, 'layout-paredes') : `<p class="layout-muted">${esc(t('main.layoutParedesVacio'))}</p>`;
+        const list = walls.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', ''], walls, 'layout-paredes') : `<p class="layout-muted">${esc(t('main.layoutParedesVacio'))}</p>`;
         return `${addWallBtn}${wallsAllBtn}${list}`;
     }
     if (step === 'puertas') {
@@ -1880,6 +1880,8 @@ function refreshLive() {
     state.draft.zones.forEach((z, i) => { const cell = document.querySelector(`[data-zone-code="${i}"]`); if (cell) cell.textContent = z.code; });
     // el código, la zona y los m² de cada pasillo salen de su lugar: se vuelven a sacar con cada cambio
     applyWallItemMarks();
+    // el código de cada pared lo pone el sistema: se vuelve a sacar con cada cambio
+    (state.draft.obstacles || []).forEach((o, i) => { const cell = document.querySelector(`[data-wall-code="${i}"]`); if (cell) cell.textContent = o.code || ''; });
     computeTransitIssues();
     (state.draft.transit || []).forEach((p, i) => {
         const codeCell = document.querySelector(`[data-tr-code="${i}"]`);
@@ -2225,6 +2227,9 @@ function syncHuellas() {
     d.zones = next.zones;
     d.footprints = next.footprints;
     d.sensors = next.sensors;
+    // las paredes: su código (M001…) y el contador de los números ya dados viajan con el Layout (sin él no se guarda ese campo)
+    d.obstacles = next.obstacles || d.obstacles;
+    if (next.wallNext) d.wallNext = next.wallNext; else delete d.wallNext;
     // los elementos de seguridad: su zona y su código (cada tipo con su letra); el contador de los números ya dados viaja con el Layout (sin él no se guarda ese campo)
     d.safety = next.safety || d.safety || [];
     if (next.safetyNext && Object.keys(next.safetyNext).length) d.safetyNext = next.safetyNext; else delete d.safetyNext;
