@@ -29,6 +29,8 @@
     };
     const DOOR_TYPES = ['dock', 'staff', 'emergency'];
     const POWER_TYPES = ['panel', 'outlet110', 'outlet220', 'three-phase'];
+    // Sensores de temperatura y humedad: de las dos (both), solo temperatura (temp) o solo humedad (hum).
+    const SENSOR_TYPES = ['both', 'temp', 'hum'];
     // Cada sección del Layout cuelga de una columna del árbol de accesos (ver menu.json, colLayout*).
     const SECTIONS = {
         contorno: 'colLayoutContorno',
@@ -36,10 +38,11 @@
         zonas: 'colLayoutZonas',
         espacios: 'colLayoutEspacios',
         luz: 'colLayoutLuz',
+        sensores: 'colLayoutSensores',
         activos: 'colLayoutActivos',
         posiciones: 'colLayoutPosiciones',
     };
-    const LIMITS = { vertices: 60, doors: 100, power: 300, obstacles: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
+    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -86,7 +89,7 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        return assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints({ ...layout, vertices, heightM: round2(meanHeight(vertices)) }))))));
+        return assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], vertices, heightM: round2(meanHeight(vertices)) }))))))));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -320,6 +323,60 @@
         });
         return best ? best.id : '';
     }
+    // ---- Sensores de temperatura y humedad ---------------------------------------------------------------------------------------------------
+    // Un sensor se coloca sobre una pared, igual que una conexión de luz: pared, distancia desde su esquina y altura del piso. Su ZONA no se elige: es la zona que toca el punto del sensor, tomado un poco hacia adentro
+    // de la nave (la más específica si cae en varias; sin zona si cae fuera de todas). Su código (S001, S002…) lo pone el sistema, consecutivo en todo el Layout, y no se edita.
+    function sensorPoint(layout, s) {
+        const verts = layout.vertices || [];
+        if (!(s.wall >= 1 && s.wall <= verts.length)) return null;
+        const w = wallSegment(verts, s.wall);
+        const d = Number(s.dist) || 0;
+        const x = w.p[0] + w.ux * d;
+        const y = w.p[1] + w.uy * d;
+        const pts = verts.map((p) => [p[0], p[1]]);
+        const e = 0.05;
+        const a = [x + w.uy * e, y - w.ux * e];
+        const b = [x - w.uy * e, y + w.ux * e];
+        const inside = pointInPolygon(a[0], a[1], pts) ? a : (pointInPolygon(b[0], b[1], pts) ? b : [x, y]);
+        return { x, y, inx: inside[0], iny: inside[1] };
+    }
+    function deriveSensorZones(layout) {
+        if (!layout || !Array.isArray(layout.sensors)) return layout;
+        let changed = false;
+        const sensors = layout.sensors.map((s) => {
+            const p = sensorPoint(layout, s);
+            const id = p ? zoneOfPoint(layout.zones, p.inx, p.iny) : '';
+            if ((s.zoneId || '') === id) return s;
+            changed = true;
+            return { ...s, zoneId: id };
+        });
+        return changed ? { ...layout, sensors } : layout;
+    }
+    const sensorCode = (n) => `S${String(n).padStart(3, '0')}`;
+    const isSensorCode = (c) => /^S\d{3,4}$/.test(String(c == null ? '' : c).trim());
+    // Cada sensor que ya trae un código S### que no se repite lo conserva; el que no, recibe el siguiente después del más alto del Layout.
+    function assignSensorCodes(layout) {
+        if (!layout || !Array.isArray(layout.sensors)) return layout;
+        const used = new Set();
+        const keep = layout.sensors.map((s) => { const c = String(s.code == null ? '' : s.code).trim().toUpperCase(); if (isSensorCode(c) && !used.has(c)) { used.add(c); return c; } return ''; });
+        let next = Math.max(0, ...Array.from(used).map((c) => Number(c.slice(1)))) + 1;
+        let changed = false;
+        const sensors = layout.sensors.map((s, i) => {
+            let code = keep[i];
+            if (!code) { while (used.has(sensorCode(next))) next += 1; code = sensorCode(next); used.add(code); next += 1; }
+            if (code === s.code) return s;
+            changed = true;
+            return { ...s, code };
+        });
+        return changed ? { ...layout, sensors } : layout;
+    }
+    // Al guardar: los códigos de los sensores no se editan. Uno que ya existía conserva el suyo; uno nuevo recibe el siguiente.
+    function lockSensorCodes(next, previous) {
+        if (!next || !Array.isArray(next.sensors)) return next;
+        const before = new Map(((previous && previous.sensors) || []).map((s) => [s.id, s.code]));
+        const sensors = next.sensors.map((s) => { const code = before.has(s.id) ? before.get(s.id) : ''; return code === s.code ? s : { ...s, code }; });
+        return assignSensorCodes({ ...next, sensors });
+    }
     function deriveFootprintZones(layout) {
         if (!layout || !Array.isArray(layout.footprints)) return layout;
         let changed = false;
@@ -472,6 +529,7 @@
             out = assignZoneCodes({ ...out, zones: out.zones.map((z) => { const code = before.has(z.id) ? before.get(z.id) : ''; return code === z.code ? z : withCodeAfterName(z, code); }) }, { byName: false });
         }
         out = lockHuellaCodes(out, previous);
+        out = lockSensorCodes(out, previous);
         if (Array.isArray(out.spaces)) {
             const before = new Map(((previous && previous.spaces) || []).map((s) => [s.id, s]));
             const spaces = out.spaces.map((s) => {
@@ -682,7 +740,7 @@
         return {
             mode: 'scratch', heightM: 9,
             vertices: [[0, 0, 9], [30, 0, 9], [30, 20, 9], [0, 20, 9]],
-            doors: [], power: [], obstacles: [], zones: [], footprints: [], spaces: [],
+            doors: [], power: [], sensors: [], obstacles: [], zones: [], footprints: [], spaces: [],
             plan: null, ownAssetFmt: true,
         };
     }
@@ -885,6 +943,18 @@
             };
         });
 
+        // Sensores de temperatura y humedad (paso Sensores): sobre una pared, como las conexiones de luz. El código (S001…) lo pone el sistema y la zona sale de dónde queda el sensor (más abajo).
+        const sensorIds = new Set();
+        out.sensors = list(src.sensors, LIMITS.sensors, 'Sensores').map((e, i) => {
+            const label = `Sensor ${i + 1}`;
+            const wall = Math.round(Number(e && e.wall));
+            if (!(wall >= 1 && wall <= walls)) errors.push(`${label}: pared no válida`);
+            return {
+                id: idOf(e && e.id, sensorIds, label), code: text(e && e.code, label, false), type: oneOf(e && e.type, SENSOR_TYPES, 'both'), zoneId: '',
+                wall: wall >= 1 && wall <= walls ? wall : 1, dist: meters(e && e.dist, label), height: meters(e && e.height, label),
+            };
+        });
+
         const obstacleIds = new Set();
         out.obstacles = list(src.obstacles, LIMITS.obstacles, 'Columnas y obstáculos').map((o, i) => {
             const label = `Obstáculo ${i + 1}`;
@@ -997,6 +1067,7 @@
             };
         });
         out.footprints = assignHuellaCodes(deriveFootprintZones(out)).footprints;
+        out.sensors = assignSensorCodes(deriveSensorZones(out)).sensors;
         out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
 
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
@@ -1155,6 +1226,8 @@
         if (section === 'contorno') return { vertices: layout.vertices, obstacles: layout.obstacles, siteName: layout.siteName || '' };
         if (section === 'puertas') return layout.doors;
         if (section === 'luz') return layout.power;
+        // Siempre una lista (un Layout de antes sin sensores cuenta igual que uno sin ninguno); la zona sale de la pared y del croquis, no se captura.
+        if (section === 'sensores') return (layout.sensors || []).map(({ zoneId, ...rest }) => rest);
         if (section === 'zonas') return layout.zones;
         // Los espacios sin lo del paso Activos (la clasificación y el tipo de activo, y sus niveles, espacios por nivel y cajones; todo eso tiene su propio permiso). En Activos, solo los espacios que ya tienen
         // algo de eso: así agregar un espacio nuevo en Huella-Espacio (con 1 nivel) no cuenta como cambio de Activos.
@@ -1185,7 +1258,7 @@
     }
 
     return {
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

@@ -1685,6 +1685,7 @@
             { "id": "colLayoutZonas", "labelKey": "main.colLayoutZonas", "permissionOnly": true },
             { "id": "colLayoutEspacios", "labelKey": "main.colLayoutEspacios", "permissionOnly": true },
             { "id": "colLayoutLuz", "labelKey": "main.colLayoutLuz", "permissionOnly": true },
+            { "id": "colLayoutSensores", "labelKey": "main.colLayoutSensores", "permissionOnly": true },
             { "id": "colLayoutActivos", "labelKey": "main.colLayoutActivos", "permissionOnly": true },
             { "id": "colLayoutPosiciones", "labelKey": "main.colLayoutPosiciones", "permissionOnly": true },
             { "id": "colLayoutQr", "labelKey": "main.colLayoutQr", "permissionOnly": true },

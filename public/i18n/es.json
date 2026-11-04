@@ -1576,6 +1576,7 @@
     "colLayoutContorno": "Contorno de la nave",
     "colLayoutPuertas": "Puertas",
     "colLayoutLuz": "Energía Eléctrica",
+    "colLayoutSensores": "Sensores",
     "colLayoutZonas": "Zonas",
     "colLayoutEspacios": "Huella-Espacio",
     "colLayoutQr": "Códigos QR",
@@ -1652,6 +1653,11 @@
     "layoutStepContorno": "Contorno",
     "layoutStepPuertas": "Puertas",
     "layoutStepLuz": "Energía Eléctrica",
+    "layoutStepSensores": "Sensores",
+    "layoutAgregarSensor": "+ Agregar sensor",
+    "layoutType_sensor_both": "Temperatura y humedad",
+    "layoutType_sensor_temp": "Temperatura",
+    "layoutType_sensor_hum": "Humedad",
     "layoutStepZonas": "Zonas",
     "layoutStepEspacios": "Huella-Espacio",
     "layoutStepActivos": "Activos",
@@ -2013,6 +2019,7 @@
     "layoutPlanAnchoInvalido": "Escribe el ancho real del plano en metros.",
     "layoutLeyendaPuerta": "Puerta",
     "layoutLeyendaLuz": "Conexión de luz",
+    "layoutLeyendaSensor": "Sensor de temperatura y humedad",
     "layoutLeyendaColumna": "Columna",
     "layoutLeyendaEspacio": "Anaquel, gabeta o tarima",
     "layoutType_zone_dry": "Seco",
@@ -3766,6 +3773,10 @@
     "layoutSec_puertas": {
       "what": "Las puertas de la nave: en qué pared están, a cuántos metros de la esquina y cuánto miden.",
       "example": "el andén de recepción está en la pared 1, a 6 metros de la esquina, y mide 3.5 de ancho."
+    },
+    "layoutSec_sensores": {
+      "what": "Los sensores de temperatura y humedad de la nave: de qué tipo es cada uno (temperatura, humedad o las dos), en qué pared está, a qué distancia de la esquina y a qué altura del piso, igual que las conexiones de luz. El código (S001, S002…) lo pone el sistema, consecutivo en todo el Layout, y no se edita. La zona sale sola de dónde queda el sensor. De aquí salen el QR de cada sensor y el mapa de calor.",
+      "example": "un sensor de temperatura y humedad en la pared 1, a 4.7 metros de la esquina y a 2.5 metros del piso: queda como S001 en la zona que toca esa parte de la pared."
     },
     "layoutSec_luz": {
       "what": "La energía eléctrica de la nave: los tableros y contactos de luz, en qué pared están, a qué distancia de la esquina y a qué altura del piso. Este paso va después de Huella-Espacio y antes de Activos porque un activo que lleva luz (un refrigerador, por ejemplo) debe quedar cerca de una conexión eléctrica.",

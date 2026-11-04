@@ -8,9 +8,9 @@
 // Envuelto en una función: este script comparte el ámbito global con Dashboard.js, que ya declara nombres como SECTION_LABEL_KEYS.
 (function () {
 const LC = window.LayoutCalc;
-const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'espacios', 'luz', 'activos', 'posiciones'];
+const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'espacios', 'luz', 'sensores', 'activos', 'posiciones'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
+    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -192,6 +192,7 @@ function clampWalls() {
     const walls = state.draft.vertices.length;
     state.draft.doors.forEach((d) => { if (d.wall > walls) d.wall = walls; });
     state.draft.power.forEach((p) => { if (p.wall > walls) p.wall = walls; });
+    (state.draft.sensors || []).forEach((p) => { if (p.wall > walls) p.wall = walls; });
 }
 // x, y, largo y ancho de una zona de cualquier forma son siempre el recuadro que la envuelve.
 function syncZoneBox(z) {
@@ -480,6 +481,12 @@ function stepHtml(step) {
     if (step === 'luz') {
         const rows = d.power.map((x, i) => `<tr>${cellSelect('power', i, 'type', optionsHtml('power', LC.POWER_TYPES, x.type), dis)}${cellSelect('power', i, 'wall', wallOptionsHtml(x.wall), dis)}${cellNum('power', i, 'dist', x.dist, dis)}${cellNum('power', i, 'height', x.height, dis)}${removeCell('power', i, dis)}</tr>`);
         return `${table(['main.layoutTipo', 'main.layoutPared', 'main.layoutDistancia', 'main.layoutAlturaPiso', ''], rows)}${addButton('power', 'main.layoutAgregarConexion', dis, true)}`;
+    }
+    if (step === 'sensores') {
+        // Cada renglón es un SENSOR de temperatura y/o humedad, colocado sobre una pared como las conexiones de luz. El código (S001…) lo pone el sistema y la zona sale de dónde queda el sensor: no se capturan.
+        const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
+        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wall', wallOptionsHtml(x.wall), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${removeCell('sensors', i, dis)}</tr>`);
+        return `${table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutPared', 'main.layoutDistancia', 'main.layoutAlturaPiso', 'main.layoutZona', ''], rows)}${addButton('sensors', 'main.layoutAgregarSensor', dis, true)}`;
     }
     if (step === 'zonas') {
         const rows = d.zones.map((z, i) => {
@@ -1176,6 +1183,11 @@ function renderSvg() {
         const a = { x: w.p[0] + w.ux * e.dist, y: w.p[1] + w.uy * e.dist };
         s += `<circle class="le" cx="${X(a.x)}" cy="${Y(a.y)}" r="6"><title>${esc(typeLabel('power', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">⚡</text>`;
     });
+    (on('sensores') ? (d.sensors || []) : []).forEach((e) => {
+        const w = LC.wallSegment(d.vertices, e.wall);
+        const a = { x: w.p[0] + w.ux * e.dist, y: w.p[1] + w.uy * e.dist };
+        s += `<circle class="lsn" cx="${X(a.x)}" cy="${Y(a.y)}" r="6.5"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">°</text><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) - 10}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
+    });
     const cx = (x0 + x1) / 2;
     const cy = (y0 + y1) / 2;
     for (let i = 1; i <= (finding && !dimmed ? 0 : d.vertices.length); i++) {
@@ -1228,6 +1240,13 @@ function refreshLive() {
     });
     applyFootprintMarks();
     state.draft.zones.forEach((z, i) => { const cell = document.querySelector(`[data-zone-code="${i}"]`); if (cell) cell.textContent = z.code; });
+    // el código y la zona de cada sensor salen de la pared donde se puso: se vuelven a sacar con cada cambio
+    (state.draft.sensors || []).forEach((s, i) => {
+        const codeCell = document.querySelector(`[data-sensor-code="${i}"]`);
+        if (codeCell) codeCell.textContent = s.code || '';
+        const zoneCell = document.querySelector(`[data-sensor-zone="${i}"]`);
+        if (zoneCell) zoneCell.textContent = (state.draft.zones.find((z) => z.id === s.zoneId) || {}).name || '—';
+    });
     state.draft.spaces.forEach((s, i) => { const cell = document.querySelector(`[data-sp-code="${i}"]`); if (cell) cell.textContent = s.code; });
     state.draft.heightM = Math.round((state.draft.vertices.reduce((acc, p) => acc + (Number(p[2]) || 0), 0) / Math.max(state.draft.vertices.length, 1)) * 100) / 100;
     renderKpis();
@@ -1513,6 +1532,7 @@ const ROW_FACTORY = {
     vertices: () => { const last = state.draft.vertices[state.draft.vertices.length - 1] || [0, 0, 9]; return [last[0], last[1], last[2]]; },
     doors: () => ({ id: uid('d'), name: t('main.layoutPuertaNueva'), type: 'dock', wall: 1, dist: 0, width: 1.2, height: 2.1 }),
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
+    sensors: () => ({ id: uid('n'), code: '', type: 'both', zoneId: '', wall: 1, dist: 1, height: 2.5 }),
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, code: '', type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
     // una huella nueva no puede ser más alta que la nave: mide 4.5 m de alto o, si la nave es más baja, lo que mide la nave
@@ -1520,15 +1540,16 @@ const ROW_FACTORY = {
     // un activo siempre va dentro de una huella: nace sin huella y hay que elegirla (no se puede guardar hasta entonces)
     spaces: () => ({ id: uid('s'), footprintId: '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
-const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
+const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
 // Los códigos los pone el sistema y no se editan: el de la zona (Z001…, consecutivo), el de la huella (H001… por zona, y su zona sale de dónde está en el croquis) y el del activo (letra de su tipo + número
 // consecutivo por zona y tipo: A001, G001…). Lo que ya estaba guardado y sigue igual conserva su código; lo nuevo (todavía sin guardar) y lo que cambió de zona o de tipo lo recibe cada vez que se acomoda,
 // así siempre es el que le toca, el mismo que le pondrá el servidor al guardar.
 function syncHuellas() {
     const d = state.draft;
-    const next = LC.lockCodes(LC.deriveSpaces(LC.deriveFootprintZones(d)), state.saved);
+    const next = LC.lockCodes(LC.deriveSensorZones(LC.deriveSpaces(LC.deriveFootprintZones(d))), state.saved);
     d.zones = next.zones;
     d.footprints = next.footprints;
+    d.sensors = next.sensors;
     d.spaces = state.renumber ? LC.renumberSpaceCodes(next).spaces : next.spaces; // Renumerar: consecutivos desde 001 por zona y tipo
 }
 
@@ -1745,6 +1766,7 @@ $('layout-panel').addEventListener('click', (event) => {
             const walls = state.draft.vertices.length;
             state.draft.doors.forEach((d) => { if (d.wall > walls) d.wall = walls; });
             state.draft.power.forEach((p) => { if (p.wall > walls) p.wall = walls; });
+            (state.draft.sensors || []).forEach((p) => { if (p.wall > walls) p.wall = walls; });
         }
         renderPanel();
         refreshLive();

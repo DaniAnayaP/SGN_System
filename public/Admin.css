@@ -7239,6 +7239,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 }
 .layout-legend .lg-door{ background: var(--color-report-base-text); border-color: var(--color-report-base-text); }
 .layout-legend .lg-power{ background: var(--color-report-calc-bg); border-color: var(--color-report-calc-text); }
+.layout-legend .lg-sensor{ background: var(--color-report-calc-bg); border-color: #2B8CA3; }
 .layout-legend .lg-col{ background: var(--color-text-secondary); }
 .layout-legend .lg-space{ background: #f4e1b8; border-color: #9a7b3c; }
 .layout-legend .lg-huella{ background: var(--color-surface); border-color: var(--color-text-secondary); }
@@ -7307,6 +7308,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .ls{ fill: #f4e1b8; stroke: #9a7b3c; stroke-width: 1; }
 .ld{ stroke: var(--color-report-base-text); stroke-width: 7; stroke-linecap: butt; }
 .le{ fill: var(--color-report-calc-bg); stroke: var(--color-report-calc-text); stroke-width: 1.5; }
+.lsn{ fill: var(--color-report-calc-bg); stroke: #2B8CA3; stroke-width: 2; }
 .lv{ fill: var(--color-text-secondary); }
 .lt{ font: 600 10px var(--font-family, system-ui, sans-serif); fill: var(--color-text-primary); paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; }
 .lt2{ font: 500 8.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-secondary); paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; }

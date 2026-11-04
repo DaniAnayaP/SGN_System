@@ -6460,7 +6460,7 @@ const LayoutCalc = require('./public/LayoutCalc.js');
 const RelTemplate = require('./public/RelTemplate.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
-const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Energía Eléctrica', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones' };
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 
 function layoutPermissions(req) {
@@ -6563,6 +6563,7 @@ function layoutSummary(layout, section) {
     }
     if (section === 'puertas') return `${(layout.doors || []).length} puertas`;
     if (section === 'luz') return `${(layout.power || []).length} conexiones de luz`;
+    if (section === 'sensores') return `${(layout.sensors || []).length} sensores`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
     if (section === 'activos') return `${(layout.spaces || []).length} activos, ${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} con clasificación o tipo, ${(layout.spaces || []).filter((s) => s.fmt).length} con formato propio`;
     if (section === 'posiciones') return `${(layout.spaces || []).reduce((n, s) => n + (s.bays || []).length, 0)} huecos con datos propios`;

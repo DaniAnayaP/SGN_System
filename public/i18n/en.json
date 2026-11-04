@@ -1576,6 +1576,7 @@
     "colLayoutContorno": "Warehouse outline",
     "colLayoutPuertas": "Doors",
     "colLayoutLuz": "Electrical Power",
+    "colLayoutSensores": "Sensors",
     "colLayoutZonas": "Zones",
     "colLayoutEspacios": "Footprint-Space",
     "colLayoutQr": "QR codes",
@@ -1652,6 +1653,11 @@
     "layoutStepContorno": "Outline",
     "layoutStepPuertas": "Doors",
     "layoutStepLuz": "Electrical Power",
+    "layoutStepSensores": "Sensors",
+    "layoutAgregarSensor": "+ Add sensor",
+    "layoutType_sensor_both": "Temperature and humidity",
+    "layoutType_sensor_temp": "Temperature",
+    "layoutType_sensor_hum": "Humidity",
     "layoutStepZonas": "Zones",
     "layoutStepEspacios": "Footprint-Space",
     "layoutStepActivos": "Assets",
@@ -2013,6 +2019,7 @@
     "layoutPlanAnchoInvalido": "Enter the real width of the plan in meters.",
     "layoutLeyendaPuerta": "Door",
     "layoutLeyendaLuz": "Power connection",
+    "layoutLeyendaSensor": "Temperature and humidity sensor",
     "layoutLeyendaColumna": "Column",
     "layoutLeyendaEspacio": "Rack, cabinet or pallet",
     "layoutType_zone_dry": "Dry",
@@ -3767,6 +3774,10 @@
     "layoutSec_puertas": {
       "what": "The doors of the warehouse: which wall they are on, how many meters from the corner and how big they are.",
       "example": "the receiving dock is on wall 1, 6 meters from the corner, and is 3.5 wide."
+    },
+    "layoutSec_sensores": {
+      "what": "The temperature and humidity sensors of the warehouse: the type of each one (temperature, humidity or both), which wall it is on, how far from the corner and how high from the floor, just like the power connections. The code (S001, S002…) is set by the system, consecutive across the whole Layout, and cannot be edited. The zone comes by itself from where the sensor is. The QR of each sensor and the heat map come from here.",
+      "example": "a temperature and humidity sensor on wall 1, 4.7 meters from the corner and 2.5 meters from the floor: it becomes S001 in the zone that touches that part of the wall."
     },
     "layoutSec_luz": {
       "what": "The electrical power of the warehouse: the panels and outlets, which wall they are on, how far from the corner and how high from the floor. This step comes after Footprint-Space and before Assets because an asset that needs power (a refrigerator, for example) must be placed near an electrical connection.",
