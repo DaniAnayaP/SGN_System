@@ -1642,6 +1642,13 @@
     "layoutSinPermiso": "You do not have permission to save these changes.",
     "layoutDatosInvalidos": "Check the data:",
     "layoutDescartarConfirm": "Discard the unsaved changes?",
+    "layoutZonaCambiaUna": "On saving, 1 footprint changes zone and code. Its Locator changes and the one already printed would be out of date (the QR codes keep working). Save anyway?",
+    "layoutZonaCambiaVarias": "On saving, {n} footprints change zone and code. Their Locators change and the ones already printed would be out of date (the QR codes keep working). Save anyway?",
+    "layoutZonaCambiaItem": "{from} → {to} · from {fromZone} to {toZone}",
+    "layoutZonaCambiaActivos": " · its assets also change code: {n}",
+    "layoutZonaCambiaSinZona": "no zone",
+    "layoutZonaCambiaGuardar": "Save anyway",
+    "layoutZonaCambiaRegresar": "Go back and fix",
     "layoutStepContorno": "Outline",
     "layoutStepPuertas": "Doors",
     "layoutStepLuz": "Electrical Power",
@@ -3778,8 +3785,8 @@
       "example": "Storage furniture for a rack where inventory is kept."
     },
     "layoutHuellaZona": {
-      "what": "The zone of the footprint. It is not chosen: it comes from where you place it on the map. A footprint must always be INSIDE a zone and fit completely: if it falls outside every zone it says \"Outside every zone\" and if it goes past the limits of its zone it says \"does not fit\" (in red, with a dotted red outline on the map; its height also turns red if it is taller than the warehouse). A new footprint, or one you changed, in red cannot be saved until it is fixed; the ones that were already like that before are only marked, so you place them when you can.",
-      "example": "a 3 × 1.1 m footprint placed at the edge of Zone 6 so that 40 cm stick out says \"Zone 6 · does not fit\"; you move it inside and it turns normal."
+      "what": "The zone of the footprint. It is not chosen: it comes from where you place it on the map. A footprint must always be INSIDE a zone and fit completely: if it falls outside every zone it says \"Outside every zone\" and if it goes past the limits of its zone it says \"does not fit\" (in red, with a dotted red outline on the map; its height also turns red if it is taller than the warehouse). A new footprint, or one you changed, in red cannot be saved until it is fixed; the ones that were already like that before are only marked, so you place them when you can. If, when you move or enlarge a zone (or move the footprint), a footprint that already existed ends up inside ANOTHER zone, it changes zone and takes the next code of that zone, and its Locator changes: on Save a warning shows the list (the Locator before → the one now) so you choose \"Save anyway\" or \"Go back and fix\"; nothing changes without you seeing it.",
+      "example": "a 3 × 1.1 m footprint placed at the edge of Zone 6 so that 40 cm stick out says \"Zone 6 · does not fit\"; you move it inside and it turns normal. If you put Zone 3 on top of footprint H005 of Zone 6, on Save it says \"Z006.H005 → Z007.H001\" and you decide."
     },
     "layoutSpaceLetter": {
       "what": "What the asset is: Rack (A), Pallet rack (R), Cabinet (G), Floor pallet (T) or Cold (F: refrigerators and cold rooms). The letter is the Locator's and the system adds the number: it is consecutive per zone and per type, so the code (A001, A002…) is never typed or repeated. If you change the type of an asset that is already saved, it takes the new letter with the same number if it is free.",

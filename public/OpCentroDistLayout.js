@@ -2608,6 +2608,14 @@ $('layout-save').addEventListener('click', async () => {
         Dashboard.showToast(t(`main.layoutColorChoque_${c.kind}`, { code: c.code, parent: c.parentName }), 'warning');
         return;
     }
+    // Aviso antes de guardar: las huellas que ya existían y cambian de zona (y por eso de Localizador). Nada cambia sin que la persona lo vea y lo acepte.
+    const moved = LC.footprintZoneChanges(state.draft, state.saved);
+    if (moved.length) {
+        const nobody = t('main.layoutZonaCambiaSinZona');
+        const items = moved.map((m) => t('main.layoutZonaCambiaItem', { from: m.from || '—', to: m.to || '—', fromZone: m.fromZone || nobody, toZone: m.toZone || nobody }) + (m.assets ? t('main.layoutZonaCambiaActivos', { n: String(m.assets) }) : ''));
+        const keep = await Dashboard.confirm(t(moved.length === 1 ? 'main.layoutZonaCambiaUna' : 'main.layoutZonaCambiaVarias', { n: String(moved.length) }), { items, accept: t('main.layoutZonaCambiaGuardar'), cancel: t('main.layoutZonaCambiaRegresar') });
+        if (!keep) return;
+    }
     button.disabled = true;
     try {
         const body = { layout: state.draft, baseVersion: state.version, costCenterId: state.centerId };

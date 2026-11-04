@@ -1642,6 +1642,13 @@
     "layoutSinPermiso": "No tienes permiso para guardar estos cambios.",
     "layoutDatosInvalidos": "Revisa los datos:",
     "layoutDescartarConfirm": "¿Descartar los cambios sin guardar?",
+    "layoutZonaCambiaUna": "Al guardar, 1 huella cambia de zona y de código. Su Localizador cambia y el que ya esté impreso quedaría viejo (los QR siguen sirviendo). ¿Guardar así?",
+    "layoutZonaCambiaVarias": "Al guardar, {n} huellas cambian de zona y de código. Sus Localizadores cambian y los que ya estén impresos quedarían viejos (los QR siguen sirviendo). ¿Guardar así?",
+    "layoutZonaCambiaItem": "{from} → {to} · de {fromZone} a {toZone}",
+    "layoutZonaCambiaActivos": " · sus activos también cambian de código: {n}",
+    "layoutZonaCambiaSinZona": "sin zona",
+    "layoutZonaCambiaGuardar": "Guardar así",
+    "layoutZonaCambiaRegresar": "Regresar a corregir",
     "layoutStepContorno": "Contorno",
     "layoutStepPuertas": "Puertas",
     "layoutStepLuz": "Energía Eléctrica",
@@ -3777,8 +3784,8 @@
       "example": "Mobiliario almacenamiento para un rack donde se guarda inventario."
     },
     "layoutHuellaZona": {
-      "what": "La zona de la huella. No se elige: sale de dónde la acomodas en el croquis. Una huella siempre debe quedar DENTRO de una zona y caber completa: si cae fuera de toda zona dice «Fuera de toda zona» y si se sale de los límites de su zona dice «no cabe» (en rojo, con un contorno rojo punteado en el croquis; su altura también se pone roja si pasa la de la nave). Una huella nueva, o que cambiaste, en rojo no se puede guardar hasta corregirla; las que ya estaban así antes solo se marcan, para que las acomodes cuando puedas.",
-      "example": "una huella de 3 × 1.1 m puesta al borde de la Zona 6 de modo que 40 cm quedan afuera dice «Zona 6 · no cabe»; la mueves hacia adentro y se pone normal."
+      "what": "La zona de la huella. No se elige: sale de dónde la acomodas en el croquis. Una huella siempre debe quedar DENTRO de una zona y caber completa: si cae fuera de toda zona dice «Fuera de toda zona» y si se sale de los límites de su zona dice «no cabe» (en rojo, con un contorno rojo punteado en el croquis; su altura también se pone roja si pasa la de la nave). Una huella nueva, o que cambiaste, en rojo no se puede guardar hasta corregirla; las que ya estaban así antes solo se marcan, para que las acomodes cuando puedas. Si al mover o agrandar una zona (o al mover la huella) una huella que ya existía queda dentro de OTRA zona, cambia de zona y toma el siguiente código de esa zona, y su Localizador cambia: al Guardar sale un aviso con la lista (Localizador de antes → el de ahora) para que elijas «Guardar así» o «Regresar a corregir»; nada cambia sin que lo veas.",
+      "example": "una huella de 3 × 1.1 m puesta al borde de la Zona 6 de modo que 40 cm quedan afuera dice «Zona 6 · no cabe»; la mueves hacia adentro y se pone normal. Si pones la Zona 3 encima de la huella H005 de la Zona 6, al Guardar dice «Z006.H005 → Z007.H001» y tú decides."
     },
     "layoutSpaceLetter": {
       "what": "Qué es el activo: Anaquel (A), Rack (R), Gabeta (G), Tarima en piso (T) o Frío (F: refrigeradores y cámaras frías). La letra es la del Localizador y el sistema pone el número: es consecutivo por zona y por tipo, así que el código (A001, A002…) no se escribe ni se repite. Si cambias el tipo de un activo ya guardado, toma la letra nueva con su mismo número si está libre.",

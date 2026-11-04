@@ -569,6 +569,24 @@
         const before = previous ? footprintViolations(previous) : [];
         return footprintViolations(next).filter((v) => !before.some((p) => p.id === v.id && p.kind === v.kind && p.sig === v.sig));
     }
+    // Las huellas que ya existían y ahora caen en OTRA zona, ya sea porque se movió la huella o porque se movió o agrandó una zona (la zona de una huella sale siempre de dónde está en el croquis). Su Localizador
+    // cambia (otra zona y el siguiente código de esa zona) y el texto ya impreso queda viejo, así que el editor le avisa a la persona ANTES de guardar. next es el borrador ya con las zonas y los códigos que
+    // pondrá el servidor. Cada una trae el Localizador de antes y el de ahora (zona.huella), el nombre de las dos zonas y cuántos de sus activos cambian también de código.
+    function footprintZoneChanges(next, previous) {
+        if (!next || !previous || !Array.isArray(next.footprints) || !Array.isArray(previous.footprints)) return [];
+        const was = new Map(previous.footprints.map((f) => [f.id, f]));
+        const oldSpaces = new Map((previous.spaces || []).map((s) => [s.id, s]));
+        const zoneOf = (layout, id) => (layout.zones || []).find((z) => z.id === id) || null;
+        const locator = (zone, f) => [zone && zone.code, f.code].filter(Boolean).join('.');
+        return next.footprints.map((f) => {
+            const before = was.get(f.id);
+            if (!before || (before.zoneId || '') === (f.zoneId || '')) return null;
+            const from = zoneOf(previous, before.zoneId);
+            const to = zoneOf(next, f.zoneId);
+            const assets = (next.spaces || []).filter((s) => s.footprintId === f.id && oldSpaces.has(s.id) && oldSpaces.get(s.id).code !== s.code).length;
+            return { id: f.id, from: locator(from, before), to: locator(to, f), fromZone: from ? from.name : '', toZone: to ? to.name : '', assets };
+        }).filter(Boolean);
+    }
 
     // ---- Colores: lo que va ADENTRO de algo no lleva el color de lo que lo contiene ------------------------------------------------------------------------
     // Criterio de Daniel para todo: la huella no puede llevar el color de su zona ni el activo el de su huella (se confunden); el mismo color sí se puede usar en otro lado (otra zona, otra huella…). Solo se compara el
@@ -1168,7 +1186,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

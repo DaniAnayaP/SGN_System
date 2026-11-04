@@ -230,14 +230,22 @@ function ensureConfirmModal() {
     return modal;
 }
 
-function confirmDialog(message) {
+// Opcional (options): items = una lista debajo del mensaje; accept y cancel = el texto de cada botón. Sin options queda como siempre.
+function confirmDialog(message, options = {}) {
     return new Promise((resolve) => {
         const modal = ensureConfirmModal();
         modal.querySelector('.confirm-modal-message').textContent = message;
+        modal.querySelectorAll('.confirm-modal-list').forEach((el) => el.remove());
+        if (Array.isArray(options.items) && options.items.length) {
+            const list = document.createElement('ul');
+            list.className = 'confirm-modal-list';
+            options.items.forEach((text) => { const li = document.createElement('li'); li.textContent = text; list.appendChild(li); });
+            modal.querySelector('.confirm-modal-message').after(list);
+        }
         const acceptBtn = modal.querySelector('#confirm-modal-accept');
         const cancelBtn = modal.querySelector('#confirm-modal-cancel');
-        acceptBtn.textContent = t('admin.confirmAccept');
-        cancelBtn.textContent = t('admin.cancel');
+        acceptBtn.textContent = options.accept || t('admin.confirmAccept');
+        cancelBtn.textContent = options.cancel || t('admin.cancel');
 
         const done = (result) => {
             modal.hidden = true;
