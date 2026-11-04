@@ -134,6 +134,20 @@
                 const hh = hit.o.kind === 'step' ? Math.max(Math.abs(Number(hit.o.dz) || 0), 0.12) : Math.max(bounds.maxH, 1);
                 return { x: PX((x0 + x1) / 2), y: hh / 2, z: PZ((y0 + y1) / 2), sx: Math.max(x1 - x0, 0.1), sy: hh, sz: Math.max(y1 - y0, 0.1) };
             }
+            // una puerta o una conexión de luz elegida en las tablas de Puertas o Luz: pegada a su pared (los sensores no se dibujan en el 3D)
+            if (hl.kind === 'door' || hl.kind === 'power') {
+                const isDoor = hl.kind === 'door';
+                const e = ((isDoor ? lastLayout.doors : lastLayout.power) || []).find((x) => x.id === hl.id);
+                if (!e || !(isDoor ? layerOn.doors : layerOn.power)) return null;
+                const V = Array.isArray(lastLayout.vertices) ? lastLayout.vertices.filter((p) => Array.isArray(p) && p.length >= 2) : [];
+                const seg = wallSegment(V, Number(e.wall) || 1);
+                if (!seg.length) return null;
+                const w = isDoor ? Math.max(0.3, Number(e.width) || 1) : 0.28;
+                const h = isDoor ? Math.max(0.5, Number(e.height) || 2.1) : 0.28;
+                const along = (Number(e.dist) || 0) + (isDoor ? w / 2 : 0);
+                const thick = isDoor ? 0.2 : 0.16;
+                return { x: PX(seg.p[0] + seg.ux * along), y: isDoor ? h / 2 : Math.max(0.2, Number(e.height) || 0.4), z: PZ(seg.p[1] + seg.uy * along), sx: Math.abs(seg.ux) * w + Math.abs(seg.uy) * thick, sy: h, sz: Math.abs(seg.uy) * w + Math.abs(seg.ux) * thick };
+            }
             // un elemento de seguridad, un pasillo o un objeto elegido en las tablas de Seguridad, Tránsito u Objetos
             if (hl.kind === 'safety') {
                 const e = (lastLayout.safety || []).find((x) => x.id === hl.id);

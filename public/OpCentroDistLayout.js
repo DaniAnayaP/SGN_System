@@ -1054,6 +1054,9 @@ function rowEntity(tr) {
     if (list === 'spaces' && state.draft.spaces[i]) return { kind: 'space', id: state.draft.spaces[i].id };
     // las paredes (paso Paredes) y las columnas, desniveles y otros obstáculos (paso Contorno) también se marcan en el croquis al elegir su renglón
     if (list === 'obstacles' && state.draft.obstacles[i]) return { kind: 'obstacle', id: state.draft.obstacles[i].id };
+    if (list === 'doors' && (state.draft.doors || [])[i]) return { kind: 'door', id: state.draft.doors[i].id };
+    if (list === 'power' && (state.draft.power || [])[i]) return { kind: 'power', id: state.draft.power[i].id };
+    if (list === 'sensors' && (state.draft.sensors || [])[i]) return { kind: 'sensor', id: state.draft.sensors[i].id };
     if (list === 'safety' && (state.draft.safety || [])[i]) return { kind: 'safety', id: state.draft.safety[i].id };
     if (list === 'transit' && (state.draft.transit || [])[i]) return { kind: 'transit', id: state.draft.transit[i].id };
     if (list === 'objects' && (state.draft.objects || [])[i]) return { kind: 'object', id: state.draft.objects[i].id };
@@ -1082,10 +1085,10 @@ function applyHighlight(reveal) {
     const h = state.hl;
     if (!h || h.step !== state.focus || !state.draft) return;
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
-    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', transit: 'data-tid', object: 'data-oid' };
+    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid' };
     const els = Array.from(svg.querySelectorAll(`[${HL_ATTR[h.kind] || 'data-sid'}="${CSS.escape(h.id)}"]`));
-    // un elemento de seguridad o un objeto son figuras sueltas (con símbolo, giro, etiqueta): su contorno sale de un cuadro invisible que se dibuja junto a ellos
-    const shapes = h.kind === 'safety' || h.kind === 'object'
+    // un elemento de seguridad, un objeto, una puerta, una conexión de luz o un sensor son figuras sueltas (línea, símbolo, giro, etiqueta): su contorno sale de un cuadro invisible que se dibuja junto a ellos
+    const shapes = ['safety', 'object', 'door', 'power', 'sensor'].includes(h.kind)
         ? Array.from(svg.querySelectorAll(`[data-hlbox="${h.kind}:${CSS.escape(h.id)}"]`))
         : els.map((el) => (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'))).filter(Boolean);
     if (!shapes.length) return;
@@ -1107,7 +1110,7 @@ function applyHighlight(reveal) {
             ring.setAttribute('x', box.x); ring.setAttribute('y', box.y); ring.setAttribute('width', box.width); ring.setAttribute('height', box.height);
         } else {
             ring = shapes[0].cloneNode(false);
-            ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'data-fid', 'data-obid', 'data-tid', 'data-hlbox', 'id'].forEach((a) => ring.removeAttribute(a));
+            ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'data-fid', 'data-obid', 'data-tid', 'data-hlbox', 'data-did', 'data-pid', 'data-nid', 'id'].forEach((a) => ring.removeAttribute(a));
         }
         // una pared o una columna es delgada: su contorno de resaltado es más grueso para que se vea
         ring.setAttribute('class', `hl-shape ${cls}${h.kind === 'obstacle' ? ' hl-obs' : ''}`);
@@ -1145,7 +1148,7 @@ function selectRowFrom(target) {
 // Tocar una figura del croquis (sin arrastrarla) la elige: se marca su renglón en la tabla y la figura se resalta con el contorno grueso de siempre; volver a tocarla la regresa al contorno punteado. Solo cuenta
 // el paso que se está editando: en Zonas las zonas, en Huella-Espacio las huellas y en Activos los activos.
 function selectFromMap(target) {
-    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-tid], [data-oid]') : null;
+    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-tid], [data-oid], [data-did], [data-pid], [data-nid]') : null;
     if (!el || !state.draft) return;
     let next = null;
     // en Paredes se eligen las paredes y en Contorno las columnas, desniveles y otros obstáculos
@@ -1160,6 +1163,9 @@ function selectFromMap(target) {
     else if (state.focus === 'seguridad' && el.getAttribute('data-sfid')) next = { kind: 'safety', id: el.getAttribute('data-sfid') };
     else if (state.focus === 'transito' && el.getAttribute('data-tid')) next = { kind: 'transit', id: el.getAttribute('data-tid') };
     else if (state.focus === 'objetos' && el.getAttribute('data-oid')) next = { kind: 'object', id: el.getAttribute('data-oid') };
+    else if (state.focus === 'puertas' && el.getAttribute('data-did')) next = { kind: 'door', id: el.getAttribute('data-did') };
+    else if (state.focus === 'luz' && el.getAttribute('data-pid')) next = { kind: 'power', id: el.getAttribute('data-pid') };
+    else if (state.focus === 'sensores' && el.getAttribute('data-nid')) next = { kind: 'sensor', id: el.getAttribute('data-nid') };
     if (next) selectEntity(next);
 }
 // Elegir una zona, huella o activo: se marca su renglón en la tabla (y se baja hasta él) y su figura se resalta en el croquis y en el 3D; volver a elegirla pasa del contorno grueso al punteado.
@@ -1637,17 +1643,20 @@ function renderSvg() {
         const w = LC.wallSegment(d.vertices, door.wall);
         const a = { x: w.p[0] + w.ux * door.dist, y: w.p[1] + w.uy * door.dist };
         const b = { x: a.x + w.ux * door.width, y: a.y + w.uy * door.width };
-        s += `<line class="ld" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"><title>${esc(door.name)}</title></line>`;
+        s += `<line class="ld" data-did="${esc(door.id)}" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"><title>${esc(door.name)}</title></line>`;
+        s += `<rect class="hl-box" data-hlbox="door:${esc(door.id)}" x="${(Math.min(X(a.x), X(b.x)) - 7).toFixed(1)}" y="${(Math.min(Y(a.y), Y(b.y)) - 7).toFixed(1)}" width="${(Math.abs(X(b.x) - X(a.x)) + 14).toFixed(1)}" height="${(Math.abs(Y(b.y) - Y(a.y)) + 14).toFixed(1)}" rx="3"/>`;
     });
     (on('luz') ? d.power : []).forEach((e) => {
         const w = LC.wallSegment(d.vertices, e.wall);
         const a = { x: w.p[0] + w.ux * e.dist, y: w.p[1] + w.uy * e.dist };
-        s += `<circle class="le" cx="${X(a.x)}" cy="${Y(a.y)}" r="6"><title>${esc(typeLabel('power', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">⚡</text>`;
+        s += `<rect class="hl-box" data-hlbox="power:${esc(e.id)}" x="${(X(a.x) - 10).toFixed(1)}" y="${(Y(a.y) - 10).toFixed(1)}" width="20" height="20" rx="3"/>`;
+        s += `<circle class="le" data-pid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="6"><title>${esc(typeLabel('power', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">⚡</text>`;
     });
     (on('sensores') ? (d.sensors || []) : []).forEach((e) => {
         const w = LC.wallSegment(d.vertices, e.wall);
         const a = { x: w.p[0] + w.ux * e.dist, y: w.p[1] + w.uy * e.dist };
-        s += `<circle class="lsn" cx="${X(a.x)}" cy="${Y(a.y)}" r="6.5"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">°</text><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) - 10}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
+        s += `<rect class="hl-box" data-hlbox="sensor:${esc(e.id)}" x="${(X(a.x) - 11).toFixed(1)}" y="${(Y(a.y) - 19).toFixed(1)}" width="22" height="30" rx="3"/>`;
+        s += `<circle class="lsn" data-nid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="6.5"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">°</text><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) - 10}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
     });
     // Objetos (paso Objetos): personas y montacargas dibujados a escala y girados hacia donde miran (foto fija del plano).
     (on('objetos') ? (d.objects || []) : []).forEach((o) => {
