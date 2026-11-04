@@ -272,59 +272,82 @@
         const n = verts.length;
         return { a, b: { x: a.x + seg.ux * width, y: a.y + seg.uy * width }, ux: seg.ux, uy: seg.uy, thick: 0, wallLength: seg.length, wallHeight: (cornerHeightAt(layout, (side - 1) % n) + cornerHeightAt(layout, side % n)) / 2, wall: null, legacy: true };
     }
-    // Las puertas de antes (con el número del lado del contorno, sin pared) pasan a la pared que las cubre en ese lado (una sola vez; con wallId ya no se tocan): su distancia pasa a medirse desde el inicio de esa pared. Si en ese lado
-    // no hay una pared que cubra el lugar de la puerta se queda como estaba y la revisión la marca «sin pared».
+    // Las puertas, conexiones de luz y sensores de antes (con el número del lado del contorno, sin pared) pasan a la pared que los cubre en ese lado (una sola vez; con wallId ya no se tocan): su distancia pasa a medirse desde el inicio
+    // de esa pared. Si en ese lado no hay una pared que cubra el lugar se queda como estaba y la revisión lo marca «sin pared».
     function migrateDoors(layout) {
-        if (!layout || !Array.isArray(layout.doors) || !layout.doors.length) return layout;
+        if (!layout) return layout;
         const verts = Array.isArray(layout.vertices) ? layout.vertices : [];
         const walls = (Array.isArray(layout.obstacles) ? layout.obstacles : []).filter((o) => o && o.kind === 'wall' && o.mode === 'contour');
-        let changed = false;
-        const doors = layout.doors.map((d) => {
-            if (!d || typeof d !== 'object' || d.wallId) return d;
-            const side = Math.round(Number(d.wall));
-            if (!(side >= 1) || verts.length < 3) return d;
-            const seg = wallSegment(verts, side);
-            if (!(seg.length > 0)) return d;
-            const start = Math.max(Number(d.dist) || 0, 0);
-            let from = 0;
-            const hit = walls.find((o) => {
-                if (Math.round(Number(o.wall)) !== side) return false;
-                const ws = Math.min(Math.max(Number(o.dist) || 0, 0), seg.length);
-                const len = Number(o.l) > 0 ? Math.min(Number(o.l), seg.length - ws) : seg.length - ws;
-                if (start < ws - 1e-6 || start > ws + len + 1e-6) return false;
-                from = ws;
-                return true;
+        let out = layout;
+        ['doors', 'power', 'sensors'].forEach((key) => {
+            if (!Array.isArray(layout[key]) || !layout[key].length) return;
+            let changed = false;
+            const items = layout[key].map((d) => {
+                if (!d || typeof d !== 'object' || d.wallId) return d;
+                const side = Math.round(Number(d.wall));
+                if (!(side >= 1) || verts.length < 3) return d;
+                const seg = wallSegment(verts, side);
+                if (!(seg.length > 0)) return d;
+                const start = Math.max(Number(d.dist) || 0, 0);
+                let from = 0;
+                const hit = walls.find((o) => {
+                    if (Math.round(Number(o.wall)) !== side) return false;
+                    const ws = Math.min(Math.max(Number(o.dist) || 0, 0), seg.length);
+                    const len = Number(o.l) > 0 ? Math.min(Number(o.l), seg.length - ws) : seg.length - ws;
+                    if (start < ws - 1e-6 || start > ws + len + 1e-6) return false;
+                    from = ws;
+                    return true;
+                });
+                if (!hit) return d;
+                changed = true;
+                const { wall, ...rest } = d;
+                return { ...rest, wallId: hit.id, dist: round2(start - from) };
             });
-            if (!hit) return d;
-            changed = true;
-            const { wall, ...rest } = d;
-            return { ...rest, wallId: hit.id, dist: round2(start - from) };
-        });
-        return changed ? { ...layout, doors } : layout;
-    }
-    // Lo que está mal en las puertas: «nowall» (no está sobre una pared), «outside» (empieza antes de la pared o se pasa de su largo) y «tall» (más alta que la pared). sig identifica el estado de la puerta y de su pared: lo que ya estaba
-    // mal y no cambió solo se marca; lo NUEVO o lo que cambió (la puerta o su pared) no se deja guardar (ver newDoorViolations).
-    function doorViolations(layout) {
-        const out = [];
-        if (!layout || !Array.isArray(layout.doors)) return out;
-        layout.doors.forEach((d) => {
-            const name = String((d && d.name) || 'Puerta');
-            const g = doorGeometry(layout, d);
-            if (!g || g.legacy) { out.push({ id: d.id, kind: 'nowall', sig: JSON.stringify([d.wallId || '', d.wall || 0, d.dist, d.width]), message: `La puerta «${name}» no está sobre una pared: elige la pared donde va.`, vars: { name } }); return; }
-            const dist = Number(d.dist) || 0;
-            const width = Number(d.width) || 0;
-            const height = Number(d.height) || 0;
-            const wname = (g.wall && g.wall.name) || 'Pared';
-            if (dist < -0.005 || dist + width > g.wallLength + 0.005) out.push({ id: d.id, kind: 'outside', sig: JSON.stringify([d.wallId, dist, width, round2(g.wallLength)]), message: `La puerta «${name}» no cabe en la pared «${wname}» (mide ${round2(g.wallLength)} m): empieza a ${round2(dist)} m y mide ${round2(width)} m.`, vars: { name, wall: wname, len: round2(g.wallLength), dist: round2(dist), width: round2(width) } });
-            if (g.wallHeight > 0 && height > g.wallHeight + 0.005) out.push({ id: d.id, kind: 'tall', sig: JSON.stringify([d.wallId, height, round2(g.wallHeight)]), message: `La puerta «${name}» (${round2(height)} m de alto) es más alta que la pared «${wname}» (${round2(g.wallHeight)} m).`, vars: { name, wall: wname, height: round2(height), wallHeight: round2(g.wallHeight) } });
+            if (changed) out = { ...out, [key]: items };
         });
         return out;
     }
-    const doorKey = (v) => `${v.kind}|${v.id}|${v.sig}`;
-    function newDoorViolations(next, previous) {
-        const before = new Set((previous ? doorViolations(previous) : []).map(doorKey));
-        return doorViolations(next).filter((v) => !before.has(doorKey(v)));
+    // Lo que está mal en lo que va sobre una pared (puertas, conexiones de luz y sensores): «nowall» (no está sobre una pared), «outside» (empieza antes de la pared o se pasa de su largo) y «tall» (más alta que la pared: la puerta,
+    // o la altura del piso de una conexión o un sensor). sig identifica el estado del renglón y de su pared: lo que ya estaba mal y no cambió solo se marca; lo NUEVO o lo que cambió (el renglón o su pared) no se deja guardar
+    // (ver newWallItemViolations). list = 'doors' | 'power' | 'sensors'; section = la sección que lo guarda.
+    const WALL_ITEM_SECTION = { doors: 'puertas', power: 'luz', sensors: 'sensores' };
+    function wallItemViolations(layout, list) {
+        const out = [];
+        if (!layout || !Array.isArray(layout[list])) return out;
+        const isDoor = list === 'doors';
+        layout[list].forEach((d, i) => {
+            const name = isDoor ? String((d && d.name) || 'Puerta') : (list === 'sensors' ? String((d && d.code) || `Sensor ${i + 1}`) : `#${i + 1}`);
+            const noun = isDoor ? `La puerta «${name}»` : (list === 'sensors' ? `El sensor ${name}` : `La conexión de luz ${name}`);
+            const g = doorGeometry(layout, isDoor ? d : { ...d, width: 0 });
+            const base = { id: d.id, list, section: WALL_ITEM_SECTION[list] };
+            if (!g || g.legacy) { out.push({ ...base, kind: 'nowall', sig: JSON.stringify([d.wallId || '', d.wall || 0, d.dist, d.width || 0]), message: `${noun} no está sobre una pared: elige la pared donde va.`, vars: { name } }); return; }
+            const dist = Number(d.dist) || 0;
+            const width = isDoor ? Number(d.width) || 0 : 0;
+            const height = Number(d.height) || 0;
+            const wname = (g.wall && g.wall.name) || 'Pared';
+            if (dist < -0.005 || dist + width > g.wallLength + 0.005) {
+                out.push({ ...base, kind: 'outside', sig: JSON.stringify([d.wallId, dist, width, round2(g.wallLength)]), vars: { name, wall: wname, len: round2(g.wallLength), dist: round2(dist), width: round2(width) },
+                    message: isDoor ? `${noun} no cabe en la pared «${wname}» (mide ${round2(g.wallLength)} m): empieza a ${round2(dist)} m y mide ${round2(width)} m.` : `${noun} no está dentro de la pared «${wname}» (mide ${round2(g.wallLength)} m): está a ${round2(dist)} m de su inicio.` });
+            }
+            if (g.wallHeight > 0 && height > g.wallHeight + 0.005) {
+                out.push({ ...base, kind: 'tall', sig: JSON.stringify([d.wallId, height, round2(g.wallHeight)]), vars: { name, wall: wname, height: round2(height), wallHeight: round2(g.wallHeight) },
+                    message: isDoor ? `${noun} (${round2(height)} m de alto) es más alta que la pared «${wname}» (${round2(g.wallHeight)} m).` : `${noun} está a ${round2(height)} m del piso y la pared «${wname}» solo mide ${round2(g.wallHeight)} m de alto.` });
+            }
+        });
+        return out;
     }
+    const doorViolations = (layout) => wallItemViolations(layout, 'doors');
+    const doorKey = (v) => `${v.list}|${v.kind}|${v.id}|${v.sig}`;
+    // Las faltas nuevas de las tres listas (lo que ya estaba mal antes y no cambió no cuenta).
+    function newWallItemViolations(next, previous) {
+        const out = [];
+        ['doors', 'power', 'sensors'].forEach((list) => {
+            const before = new Set((previous ? wallItemViolations(previous, list) : []).map(doorKey));
+            wallItemViolations(next, list).forEach((v) => { if (!before.has(doorKey(v))) out.push(v); });
+        });
+        return out;
+    }
+    function newDoorViolations(next, previous) { return newWallItemViolations(next, previous).filter((v) => v.list === 'doors'); }
     // Volumen de la nave: lo que cabe bajo el techo menos lo que sube el piso en cada desnivel (superficie por su altura sobre el piso; si es más bajo, la altura es negativa y suma).
     function netVolume(layout) {
         const gross = volumeOf((layout && layout.vertices) || []);
@@ -522,17 +545,19 @@
     // Un sensor se coloca sobre una pared, igual que una conexión de luz: pared, distancia desde su esquina y altura del piso. Su ZONA no se elige: es la zona que toca el punto del sensor, tomado un poco hacia adentro
     // de la nave (la más específica si cae en varias; sin zona si cae fuera de todas). Su código (S001, S002…) lo pone el sistema, consecutivo en todo el Layout, y no se edita.
     function sensorPoint(layout, s) {
+        // el sensor va sobre su pared (por el centro de la pared); un sensor de antes sin pared se ubica sobre su lado del contorno como siempre
+        const g = doorGeometry(layout, { ...s, width: 0 });
+        if (!g) return null;
         const verts = layout.vertices || [];
-        if (!(s.wall >= 1 && s.wall <= verts.length)) return null;
-        const w = wallSegment(verts, s.wall);
-        const d = Number(s.dist) || 0;
-        const x = w.p[0] + w.ux * d;
-        const y = w.p[1] + w.uy * d;
+        const x = g.a.x;
+        const y = g.a.y;
         const pts = verts.map((p) => [p[0], p[1]]);
-        const e = 0.05;
-        const a = [x + w.uy * e, y - w.ux * e];
-        const b = [x - w.uy * e, y + w.ux * e];
-        const inside = pointInPolygon(a[0], a[1], pts) ? a : (pointInPolygon(b[0], b[1], pts) ? b : [x, y]);
+        // hacia qué lado queda el interior de la nave: se mira a 30 cm de la pared (una pared sobre el contorno tiene su grosor y a 5 cm todavía podría caer del lado del contorno); la zona se toma a 5 cm de su centro, de ese lado
+        const at = (k) => [x + g.uy * k, y - g.ux * k];
+        const inFar = pointInPolygon(at(0.3)[0], at(0.3)[1], pts);
+        const inFarB = pointInPolygon(at(-0.3)[0], at(-0.3)[1], pts);
+        const sign = inFar && !inFarB ? 1 : (inFarB && !inFar ? -1 : (pointInPolygon(at(0.05)[0], at(0.05)[1], pts) ? 1 : (pointInPolygon(at(-0.05)[0], at(-0.05)[1], pts) ? -1 : 0)));
+        const inside = sign ? at(0.05 * sign) : [x, y];
         return { x, y, inx: inside[0], iny: inside[1] };
     }
     function deriveSensorZones(layout) {
@@ -1593,11 +1618,12 @@
         out.power = list(src.power, LIMITS.power, 'Conexiones de luz').map((e, i) => {
             const label = `Conexión de luz ${i + 1}`;
             const wall = Math.round(Number(e && e.wall));
-            if (!(wall >= 1 && wall <= walls)) errors.push(`${label}: pared no válida`);
-            return {
-                id: idOf(e && e.id, powerIds, label), type: oneOf(e && e.type, POWER_TYPES, 'outlet110'),
-                wall: wall >= 1 && wall <= walls ? wall : 1, dist: meters(e && e.dist, label), height: meters(e && e.height, label),
-            };
+            // va sobre una pared (wallId); la de antes trae el número del lado (wall) hasta que pasa a una (migrateDoors)
+            const wallId = e && typeof e.wallId === 'string' ? e.wallId.trim().slice(0, 64) : '';
+            if (!wallId && e && e.wall !== undefined && e.wall !== null && !(wall >= 1 && wall <= walls)) errors.push(`${label}: pared no válida`);
+            const item = { id: idOf(e && e.id, powerIds, label), type: oneOf(e && e.type, POWER_TYPES, 'outlet110'), dist: meters(e && e.dist, label), height: meters(e && e.height, label) };
+            if (wallId) return { ...item, wallId };
+            return wall >= 1 && wall <= walls ? { ...item, wall } : { ...item, wallId: '' };
         });
 
         // Sensores de temperatura y humedad (paso Sensores): sobre una pared, como las conexiones de luz. El código (S001…) lo pone el sistema y la zona sale de dónde queda el sensor (más abajo).
@@ -1605,11 +1631,11 @@
         out.sensors = list(src.sensors, LIMITS.sensors, 'Sensores').map((e, i) => {
             const label = `Sensor ${i + 1}`;
             const wall = Math.round(Number(e && e.wall));
-            if (!(wall >= 1 && wall <= walls)) errors.push(`${label}: pared no válida`);
-            return {
-                id: idOf(e && e.id, sensorIds, label), code: text(e && e.code, label, false), type: oneOf(e && e.type, SENSOR_TYPES, 'both'), zoneId: '',
-                wall: wall >= 1 && wall <= walls ? wall : 1, dist: meters(e && e.dist, label), height: meters(e && e.height, label),
-            };
+            const wallId = e && typeof e.wallId === 'string' ? e.wallId.trim().slice(0, 64) : '';
+            if (!wallId && e && e.wall !== undefined && e.wall !== null && !(wall >= 1 && wall <= walls)) errors.push(`${label}: pared no válida`);
+            const item = { id: idOf(e && e.id, sensorIds, label), code: text(e && e.code, label, false), type: oneOf(e && e.type, SENSOR_TYPES, 'both'), zoneId: '', dist: meters(e && e.dist, label), height: meters(e && e.height, label) };
+            if (wallId) return { ...item, wallId };
+            return wall >= 1 && wall <= walls ? { ...item, wall } : { ...item, wallId: '' };
         });
 
         const obstacleIds = new Set();
@@ -1631,6 +1657,8 @@
 
         // La pared de cada puerta tiene que existir (una pared quitada deja a sus puertas «sin pared» en la pantalla; aquí solo se rechaza una referencia a una que no está).
         out.doors.forEach((d) => { if (d.wallId && !out.obstacles.some((o) => o.id === d.wallId && o.kind === 'wall')) errors.push(`Puerta «${d.name}»: la pared que se eligió no existe`); });
+        out.power.forEach((e, i) => { if (e.wallId && !out.obstacles.some((o) => o.id === e.wallId && o.kind === 'wall')) errors.push(`Conexión de luz ${i + 1}: la pared que se eligió no existe`); });
+        out.sensors.forEach((e, i) => { if (e.wallId && !out.obstacles.some((o) => o.id === e.wallId && o.kind === 'wall')) errors.push(`Sensor ${i + 1}: la pared que se eligió no existe`); });
 
         // Objetos: personas y montacargas dibujados en el plano (foto fija).
         const objectIds = new Set();
@@ -1904,6 +1932,15 @@
     // Gira el Layout (SOLO para dibujarlo; lo guardado no cambia) en cuartos de vuelta hacia la derecha: 0, 1 (90°), 2 (180°) o 3 (270°). Se giran las esquinas, las zonas (con sus
     // esquinas si son de forma libre), los espacios y las columnas; las puertas y las conexiones de luz van por número de pared, así que siguen a su pared solas. Los textos del
     // dibujo no se giran: se vuelven a poner derechos sobre la figura ya girada.
+    // Lo que va sobre una pared (puerta, conexión de luz, sensor) se ubica en el Layout sin girar y de ahí se giran sus extremos y hacia dónde va la pared.
+    function rotateOnWall(layout, item, asDoor, pt, turn) {
+        const g = doorGeometry(layout, asDoor);
+        if (!g) return item;
+        const dir = pt(g.ux, g.uy);
+        const a = turn([g.a.x, g.a.y]);
+        const b = turn([g.b.x, g.b.y]);
+        return { ...item, _seg: { ...g, a: { x: a[0], y: a[1] }, b: { x: b[0], y: b[1] }, ux: dir[0], uy: dir[1] } };
+    }
     function rotateLayout(layout, quarters) {
         const q = ((Math.round(Number(quarters)) % 4) + 4) % 4;
         if (!q || !layout) return layout;
@@ -1918,12 +1955,9 @@
             ...layout,
             vertices: (layout.vertices || []).map((p) => [...turn(p), p[2]]),
             // una puerta se ubica sobre su pared en el Layout sin girar y de ahí se giran sus dos extremos y hacia dónde va
-            doors: (layout.doors || []).map((door) => {
-                const g = doorGeometry(layout, door);
-                if (!g) return door;
-                const dir = pt(g.ux, g.uy);
-                return { ...door, _seg: { ...g, a: { x: round2(turn([g.a.x, g.a.y])[0]), y: round2(turn([g.a.x, g.a.y])[1]) }, b: { x: round2(turn([g.b.x, g.b.y])[0]), y: round2(turn([g.b.x, g.b.y])[1]) }, ux: dir[0], uy: dir[1] } };
-            }),
+            doors: (layout.doors || []).map((door) => rotateOnWall(layout, door, door, pt, turn)),
+            power: (layout.power || []).map((e) => rotateOnWall(layout, e, { ...e, width: 0 }, pt, turn)),
+            sensors: (layout.sensors || []).map((e) => rotateOnWall(layout, e, { ...e, width: 0 }, pt, turn)),
             // los obstáculos pegados a un lado del contorno siguen a su lado (que ya viene girado); los de dentro de la nave se giran como cualquier recuadro
             obstacles: (layout.obstacles || []).map((o) => (o.mode === 'contour' ? o : { ...o, ...box(o, 'l', 'w') })),
             transit: (layout.transit || []).map((p) => ({ ...p, ...box(p, 'l', 'w') })),
@@ -2037,7 +2071,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations,
+        OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,

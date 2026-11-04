@@ -2126,7 +2126,15 @@
     "layoutPuertaParedAlto": "Alto de la pared (m)",
     "layoutPuertaElegirPared": "Elige la pared",
     "layoutPuertaSinPared": "Primero agrega una pared (paso Paredes): una puerta siempre va sobre una pared.",
-    "layoutPuertasSinPared": "Se quitó una pared que tenía {n} puerta(s): quedan sin pared, elige otra en el paso Puertas.",
+    "layoutPuertasSinPared": "Se quitó una pared que tenía {n} elemento(s) (puertas, conexiones de luz o sensores): quedan sin pared, elige otra en su paso.",
+    "layoutLuzSinPared": "Primero agrega una pared (paso Paredes): una conexión de luz siempre va sobre una pared.",
+    "layoutSensorSinPared": "Primero agrega una pared (paso Paredes): un sensor siempre va sobre una pared.",
+    "layoutVioPw_nowall": "La conexión de luz {name} no está sobre una pared: elige la pared donde va.",
+    "layoutVioPw_outside": "La conexión de luz {name} no está dentro de la pared «{wall}» (mide {len} m): está a {dist} m de su inicio.",
+    "layoutVioPw_tall": "La conexión de luz {name} está a {height} m del piso y la pared «{wall}» solo mide {wallHeight} m de alto.",
+    "layoutVioSn_nowall": "El sensor {name} no está sobre una pared: elige la pared donde va.",
+    "layoutVioSn_outside": "El sensor {name} no está dentro de la pared «{wall}» (mide {len} m): está a {dist} m de su inicio.",
+    "layoutVioSn_tall": "El sensor {name} está a {height} m del piso y la pared «{wall}» solo mide {wallHeight} m de alto.",
     "layoutPuertasVacio": "Todavía no hay puertas. Una puerta va sobre una pared: agrégala y elige la pared.",
     "layoutVioDr_nowall": "La puerta «{name}» no está sobre una pared: elige la pared donde va.",
     "layoutVioDr_outside": "La puerta «{name}» no cabe en la pared «{wall}» (mide {len} m): empieza a {dist} m y mide {width} m.",
@@ -4011,12 +4019,12 @@
       "example": "el andén de recepción va sobre la «Pared 1» (que mide 30 m): empieza a 6 metros del inicio de la pared, mide 3.5 de ancho y 2.8 de alto."
     },
     "layoutSec_sensores": {
-      "what": "Los sensores de temperatura y humedad de la nave: de qué tipo es cada uno (temperatura, humedad o las dos), en qué pared está, a qué distancia de la esquina y a qué altura del piso, igual que las conexiones de luz. El código (S001, S002…) lo pone el sistema, consecutivo en todo el Layout, y no se edita. La zona sale sola de dónde queda el sensor. De aquí salen el QR de cada sensor y el mapa de calor.",
-      "example": "un sensor de temperatura y humedad en la pared 1, a 4.7 metros de la esquina y a 2.5 metros del piso: queda como S001 en la zona que toca esa parte de la pared."
+      "what": "Los sensores de temperatura y humedad de la nave: de qué tipo es cada uno (temperatura, humedad o las dos), en qué pared está (siempre va sobre una pared, de las del paso Paredes), a qué distancia del inicio de esa pared y a qué altura del piso, igual que las conexiones de luz y las puertas; la pared dice cuánto mide y qué tan alta es, y el sensor no puede pasarse de ninguna de las dos. El código (S001, S002…) lo pone el sistema, consecutivo en todo el Layout, y no se edita. La zona sale sola de dónde queda el sensor. De aquí salen el QR de cada sensor y el mapa de calor.",
+      "example": "un sensor de temperatura y humedad en la «Pared 1», a 4.7 metros de su inicio y a 2.5 metros del piso: queda como S001 en la zona que toca esa parte de la pared."
     },
     "layoutSec_luz": {
-      "what": "La energía eléctrica de la nave: los tableros y contactos de luz, en qué pared están, a qué distancia de la esquina y a qué altura del piso. Este paso va después de Huella-Espacio y antes de Activos porque un activo que lleva luz (un refrigerador, por ejemplo) debe quedar cerca de una conexión eléctrica.",
-      "example": "un contacto de 220 V en la pared 3, a 20 metros de la esquina y a 1.2 metros del piso."
+      "what": "La energía eléctrica de la nave: los tableros y contactos de luz, en qué pared están (siempre van sobre una pared, de las del paso Paredes), a qué distancia del inicio de esa pared y a qué altura del piso; la pared dice cuánto mide y qué tan alta es, y la conexión no puede pasarse de ninguna de las dos. Este paso va después de Huella-Espacio y antes de Activos porque un activo que lleva luz (un refrigerador, por ejemplo) debe quedar cerca de una conexión eléctrica.",
+      "example": "un contacto de 220 V en la «Pared 3», a 20 metros de su inicio y a 1.2 metros del piso."
     },
     "layoutSec_zonas": {
       "what": "Las zonas de la nave: almacenamiento, andenes y oficinas. Los pasillos ya no van aquí: están en el paso Tránsito. De aquí salen los m² de oficinas, andenes y almacenamiento. El código de cada zona (Z001, Z002…) lo pone el sistema, consecutivo en el orden en que las creas, y no se edita: es la Z del Localizador. Lo que sí puedes cambiar es el Nombre.",

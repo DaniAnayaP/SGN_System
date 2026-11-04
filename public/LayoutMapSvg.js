@@ -339,9 +339,11 @@
             if (o.kind === 'step') s += `<polygon points="${obstaclePoly(g)}" fill="#E8D9F2" stroke="#8A5EA8" stroke-width="1.3" stroke-dasharray="4 3" opacity="0.9"/>`;
             else s += `<polygon points="${obstaclePoly(g)}" fill="${o.kind === 'other' ? '#9AA0B5' : '#6B7089'}" stroke="${o.kind === 'other' ? '#9AA0B5' : '#6B7089'}" stroke-width="1.5" opacity="0.8"/>`;
         });
+        // una conexión de luz va sobre su pared (por el centro de la pared)
         (on('luz') ? (layout.power || []) : []).forEach((e) => {
-            const w = LC.wallSegment(layout.vertices, e.wall);
-            s += `<circle cx="${X(w.p[0] + w.ux * e.dist)}" cy="${Y(w.p[1] + w.uy * e.dist)}" r="5.5" fill="#FBF0DE" stroke="#D9A441" stroke-width="1.6"/>`;
+            const g = LC.doorGeometry(layout, { ...e, width: 0 });
+            if (!g) return;
+            s += `<circle cx="${X(g.a.x)}" cy="${Y(g.a.y)}" r="5.5" fill="#FBF0DE" stroke="#D9A441" stroke-width="1.6"/>`;
         });
         // Seguridad (paso Seguridad): primero las rutas de evacuación (debajo) y encima los símbolos con su código.
         if (on('seguridad') && (layout.safety || []).length) {

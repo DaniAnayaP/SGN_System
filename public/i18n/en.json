@@ -2126,7 +2126,15 @@
     "layoutPuertaParedAlto": "Wall height (m)",
     "layoutPuertaElegirPared": "Choose the wall",
     "layoutPuertaSinPared": "First add a wall (Walls step): a door always goes on a wall.",
-    "layoutPuertasSinPared": "A wall that had {n} door(s) was removed: they have no wall now, choose another one in the Doors step.",
+    "layoutPuertasSinPared": "A wall that had {n} item(s) (doors, power connections or sensors) was removed: they have no wall now, choose another one in their step.",
+    "layoutLuzSinPared": "First add a wall (Walls step): a power connection always goes on a wall.",
+    "layoutSensorSinPared": "First add a wall (Walls step): a sensor always goes on a wall.",
+    "layoutVioPw_nowall": "The power connection {name} is not on a wall: choose the wall it goes on.",
+    "layoutVioPw_outside": "The power connection {name} is not inside the wall \"{wall}\" (it is {len} m long): it is {dist} m from its start.",
+    "layoutVioPw_tall": "The power connection {name} is {height} m above the floor and the wall \"{wall}\" is only {wallHeight} m high.",
+    "layoutVioSn_nowall": "The sensor {name} is not on a wall: choose the wall it goes on.",
+    "layoutVioSn_outside": "The sensor {name} is not inside the wall \"{wall}\" (it is {len} m long): it is {dist} m from its start.",
+    "layoutVioSn_tall": "The sensor {name} is {height} m above the floor and the wall \"{wall}\" is only {wallHeight} m high.",
     "layoutPuertasVacio": "There are no doors yet. A door goes on a wall: add it and choose the wall.",
     "layoutVioDr_nowall": "The door \"{name}\" is not on a wall: choose the wall it goes on.",
     "layoutVioDr_outside": "The door \"{name}\" does not fit in the wall \"{wall}\" (it is {len} m long): it starts at {dist} m and is {width} m wide.",
@@ -4012,12 +4020,12 @@
       "example": "the receiving dock goes on \"Wall 1\" (30 m long): it starts 6 meters from the start of the wall, is 3.5 wide and 2.8 high."
     },
     "layoutSec_sensores": {
-      "what": "The temperature and humidity sensors of the warehouse: the type of each one (temperature, humidity or both), which wall it is on, how far from the corner and how high from the floor, just like the power connections. The code (S001, S002…) is set by the system, consecutive across the whole Layout, and cannot be edited. The zone comes by itself from where the sensor is. The QR of each sensor and the heat map come from here.",
-      "example": "a temperature and humidity sensor on wall 1, 4.7 meters from the corner and 2.5 meters from the floor: it becomes S001 in the zone that touches that part of the wall."
+      "what": "The temperature and humidity sensors of the warehouse: the type of each one (temperature, humidity or both), which wall it is on (it always goes on a wall, one from the Walls step), how far from the start of that wall and how high from the floor, just like the power connections and the doors; the wall says how long and how high it is, and the sensor cannot go past either. The code (S001, S002…) is set by the system, consecutive across the whole Layout, and cannot be edited. The zone comes by itself from where the sensor is. The QR of each sensor and the heat map come from here.",
+      "example": "a temperature and humidity sensor on \"Wall 1\", 4.7 meters from its start and 2.5 meters from the floor: it becomes S001 in the zone that touches that part of the wall."
     },
     "layoutSec_luz": {
-      "what": "The electrical power of the warehouse: the panels and outlets, which wall they are on, how far from the corner and how high from the floor. This step comes after Footprint-Space and before Assets because an asset that needs power (a refrigerator, for example) must be placed near an electrical connection.",
-      "example": "a 220 V outlet on wall 3, 20 meters from the corner and 1.2 meters from the floor."
+      "what": "The electrical power of the warehouse: the panels and outlets, which wall they are on (they always go on a wall, one from the Walls step), how far from the start of that wall and how high from the floor; the wall says how long and how high it is, and the connection cannot go past either. This step comes after Footprint-Space and before Assets because an asset that needs power (a refrigerator, for example) must be placed near an electrical connection.",
+      "example": "a 220 V outlet on \"Wall 3\", 20 meters from its start and 1.2 meters from the floor."
     },
     "layoutSec_zonas": {
       "what": "The zones of the warehouse: storage, docks and offices. Aisles are no longer here: they are in the Transit step. The office, dock and storage m² come from here. The code of each zone (Z001, Z002…) is set by the system, consecutive in the order you create them, and cannot be edited: it is the Z of the Locator. What you can change is the Name.",
