@@ -269,7 +269,6 @@
             } catch (err) { /* contorno que no se puede triangular: se dibujan solo las paredes */ }
 
             // paredes: translúcidas (con la altura de cada esquina) y sus aristas
-            const pos = [];
             const lines = [];
             for (let i = 0; i < V.length; i++) {
                 const a = V[i];
@@ -277,13 +276,24 @@
                 const ha = cornerH[i];
                 const hb = cornerH[(i + 1) % V.length];
                 const ax = PX(a[0]); const az = PZ(a[1]); const bx = PX(b[0]); const bz = PZ(b[1]);
-                pos.push(ax, 0, az, bx, 0, bz, bx, hb, bz, ax, 0, az, bx, hb, bz, ax, ha, az);
                 lines.push(ax, ha, az, bx, hb, bz, ax, 0, az, ax, ha, az);
             }
-            const wg = new THREE.BufferGeometry();
-            wg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-            wg.computeVertexNormals();
-            group.walls.add(new THREE.Mesh(wg, new THREE.MeshLambertMaterial({ color: 0x8ea6d4, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false })));
+            // El contorno solo es el marco (las aristas de arriba y las esquinas siguen marcando la forma del techo). Las PAREDES son obstáculos del contorno: cada una sube del piso al techo de su lado (o al promedio si va dentro de la nave).
+            const shapes3 = root.LayoutCalc && root.LayoutCalc.obstacleShapes ? root.LayoutCalc.obstacleShapes(layout) : [];
+            const prism = (pts, h, y0) => {
+                try {
+                    const hh = Math.max(h, 0.02);
+                    const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1]))), { depth: hh, bevelEnabled: false });
+                    geo.rotateX(Math.PI / 2);
+                    geo.translate(-CX, y0 + hh, -CY);
+                    return geo;
+                } catch (err) { return null; }
+            };
+            shapes3.filter(({ o }) => o.kind === 'wall').forEach(({ o, g }) => {
+                const wallH = o.mode === 'contour' ? (cornerH[(Math.max(1, Number(o.wall)) - 1) % V.length] + cornerH[Math.max(1, Number(o.wall)) % V.length]) / 2 : avgH;
+                const geo = prism(g.pts, wallH, 0);
+                if (geo) group.walls.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x6f84b3, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false })));
+            });
             const lg = new THREE.BufferGeometry();
             lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
             group.walls.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x4a5f8f })));
@@ -310,10 +320,16 @@
                 group.power.add(m);
             });
             // columnas y obstáculos: del piso al techo
-            (layout.obstacles || []).forEach((o) => {
-                const m = new THREE.Mesh(new THREE.BoxGeometry(Math.max(o.l, 0.1), avgH, Math.max(o.w, 0.1)), lam(0x3a3f4d));
-                m.position.set(PX(o.x + o.l / 2), avgH / 2, PZ(o.y + o.w / 2));
-                group.columns.add(m);
+            shapes3.filter(({ o }) => o.kind !== 'wall').forEach(({ o, g }) => {
+                if (o.kind === 'step') {
+                    // desnivel: una losa sobre el piso con su altura (si es más baja que el piso, una placa delgada de otro color)
+                    const dz = Number(o.dz) || 0;
+                    const geo = prism(g.pts, dz > 0 ? dz : 0.03, 0);
+                    if (geo) group.columns.add(new THREE.Mesh(geo, lam(dz > 0 ? 0xcdb4e4 : 0x9a74bd)));
+                    return;
+                }
+                const geo = prism(g.pts, avgH, 0);
+                if (geo) group.columns.add(new THREE.Mesh(geo, lam(o.kind === 'other' ? 0x7b8196 : 0x3a3f4d)));
             });
 
             // zonas: losas de color (el que se les puso en Formato de zona, o el de su tipo)

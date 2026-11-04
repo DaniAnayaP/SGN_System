@@ -1686,7 +1686,7 @@
     "layoutEsquina": "Corner",
     "layoutX": "X (m)",
     "layoutY": "Y (m)",
-    "layoutPared": "Wall",
+    "layoutPared": "Side",
     "layoutAgregarEsquina": "+ Add corner",
     "layoutColumnasTitulo": "Outline obstacles (columns, walls, level differences…)",
     "layoutNombre": "Name",
@@ -1701,6 +1701,16 @@
     "layoutVioAct_overlap": "Assets {other} and {code} overlap inside {fcode}: change their position or size to be able to save.",
     "layoutFondo": "Depth (m)",
     "layoutAgregarObstaculo": "+ Add obstacle",
+    "layoutParedTodoContorno": "+ Wall on the whole outline",
+    "layoutParedNombre": "Wall",
+    "layoutUbicacion": "Placement",
+    "layoutLadoOX": "Side or X (m)",
+    "layoutDistOY": "Distance or Y (m)",
+    "layoutGrosorAncho": "Thickness or width (m)",
+    "layoutAlturaDesnivel": "Level difference height (m)",
+    "layoutTodoElLado": "whole side",
+    "layoutLeyendaPared": "Wall",
+    "layoutLeyendaDesnivel": "Level difference",
     "layoutTipo": "Type",
     "layoutDistancia": "Distance (m)",
     "layoutAgregarPuerta": "+ Add door",
@@ -2037,6 +2047,12 @@
     "layoutType_zone_office": "Office",
     "layoutType_zone_aisle": "Main aisle",
     "layoutType_zone_aisle2": "Aisle between racks",
+    "layoutType_obstacle_wall": "Wall",
+    "layoutType_obstacle_column": "Column",
+    "layoutType_obstacle_step": "Level difference",
+    "layoutType_obstacle_other": "Other",
+    "layoutType_obmode_contour": "On the outline",
+    "layoutType_obmode_free": "Inside the warehouse",
     "layoutType_space_rack": "Rack",
     "layoutType_space_rackpal": "Pallet rack",
     "layoutType_space_cabinet": "Cabinet",
@@ -3811,7 +3827,7 @@
       "example": "you tap Doors and then Electrical Power: you see both on the sketch and edit only the power below; you tap Doors again to edit the doors."
     },
     "layoutSec_contorno": {
-      "what": "The corners of the warehouse in meters, with the height of each one, and the obstacles of the outline: columns, walls, floors with a level difference or anything in the way, each one with its name, its place (X, Y) and its length and width. The two add buttons (side and obstacle) are at the top, next to the title, so you do not have to go down to the end of the list. The total m² come from here and, with the heights, the m³.",
+      "what": "The corners of the warehouse in meters, with the height of each one. The outline is only the frame of the terrain: it is not a wall. Walls, columns, level differences and anything in the way go as obstacles placed on top, on a side of the outline or inside the warehouse. The add buttons are at the top, next to the title. The total m² come from here and, with the heights and the level differences, the m³.",
       "example": "a warehouse with a higher roof on one side has 6 meters at two corners and 10 at the other two."
     },
     "layoutSec_puertas": {
@@ -4401,6 +4417,46 @@
     "layoutContornoMode": {
       "what": "How you enter the outline: by sides (which way it goes and how long, as the plan shows it) or by corners (their X and Y meters).",
       "example": "with the plan at hand you use By sides; if you already have coordinates you use By corners."
+    },
+    "layoutObstTipo": {
+      "what": "What this obstacle is: Wall, Column, Level difference (a stretch of floor that is higher or lower) or Other (anything in the way).",
+      "example": "you mark the wall in the middle of the warehouse as Wall and the concrete post as Column."
+    },
+    "layoutObstUbicacion": {
+      "what": "How you place it: On the outline (against a side of the warehouse: you pick the side, how far from the corner it starts, how long it is and how thick) or Inside the warehouse (with X, Y, length and width).",
+      "example": "the wall of a dock goes On the outline; a column in the middle of the warehouse goes Inside the warehouse."
+    },
+    "layoutObstLado": {
+      "what": "The side of the outline the obstacle is against. The number is the same as in the sides table.",
+      "example": "Side 3 is the third side you entered."
+    },
+    "layoutObstDist": {
+      "what": "How many meters from the corner where the side starts the obstacle begins.",
+      "example": "a wall that starts 2 m from the corner: you enter 2."
+    },
+    "layoutObstLargo": {
+      "what": "How long it is. On an obstacle on the outline, empty means the whole side.",
+      "example": "you leave the length empty for a wall that covers the whole side and enter 3 for a 3 m wall."
+    },
+    "layoutObstGrosor": {
+      "what": "The thickness of the obstacle toward the inside of the warehouse, in meters.",
+      "example": "a block wall is 0.2 m thick."
+    },
+    "layoutObstAncho": {
+      "what": "How long the obstacle is the other way (in Y), in meters.",
+      "example": "a square column of 0.6 × 0.6 m: length 0.6 and width 0.6."
+    },
+    "layoutObstXY": {
+      "what": "Where the corner of the obstacle is inside the warehouse, in meters from the origin of the Layout.",
+      "example": "a column at 5 m in X and 6 m in Y."
+    },
+    "layoutObstAltura": {
+      "what": "Only for the Level difference: its height above the floor, in meters. If it is lower than the floor, write it with a minus sign. The m³ of the warehouse change with it: if the floor rises, there is less air.",
+      "example": "a platform 0.3 m higher: you enter 0.3; a pit 0.5 m lower: you enter -0.5."
+    },
+    "layoutParedTodo": {
+      "what": "Adds a wall to each side of the outline that does not have one yet. The ones you already have are not repeated.",
+      "example": "you mark the whole outline as wall and then remove the one of an open dock."
     },
     "layoutOrigin": {
       "what": "Where on the map the first corner is; the sides are drawn from there.",

@@ -91,7 +91,7 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        return assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], vertices, heightM: round2(meanHeight(vertices)) }))))))));
+        return assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], vertices, heightM: round2(meanHeight(vertices)) })))))))));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -138,6 +138,82 @@
     // Una zona es un rectángulo (x, y, largo, ancho) o, si trae pts, un polígono de esquinas [x, y] (cuartos en L, con muescas, etc.). En los dos casos x, y, l y w
     // son el rectángulo que la envuelve, así que lo que solo necesita ese recuadro sigue funcionando. type '' = zona todavía sin asignar (no cuenta como zona).
     const rectPoints = (z) => [[z.x, z.y], [z.x + z.l, z.y], [z.x + z.l, z.y + z.w], [z.x, z.y + z.w]];
+
+    // ---- obstáculos del contorno: paredes, columnas, desniveles y otros --------------------------------------------------
+    // El contorno por sí solo NUNCA es pared: es el marco del terreno. Toda pared (también la de un lado del contorno) es un obstáculo de tipo «pared» puesto encima, igual que el activo sobre su huella.
+    // Cada obstáculo tiene un TIPO (kind) y se pone de una de dos formas (mode): «Sobre el contorno» (contour), pegado a un lado de la nave (wall = número del lado, dist = a cuántos metros de la esquina de inicio,
+    // l = largo a lo largo del lado, 0 = hasta el final del lado, y w = grosor hacia adentro), o «Dentro de la nave» (free), con x, y, l y w. El desnivel (step) lleva además dz: su altura sobre el piso, en metros (negativa si es más bajo).
+    const OBSTACLE_KINDS = ['wall', 'column', 'step', 'other'];
+    const OBSTACLE_MODES = ['contour', 'free'];
+    const WALL_THICKNESS = 0.2; // grosor de una pared nueva, en metros
+    const signedArea = (verts) => {
+        let s = 0;
+        for (let i = 0; i < verts.length; i++) { const p = verts[i]; const q = verts[(i + 1) % verts.length]; s += p[0] * q[1] - q[0] * p[1]; }
+        return s;
+    };
+    // Dónde queda un obstáculo, en metros: sus 4 esquinas y el recuadro que lo envuelve ({ pts, x, y, l, w }); null si no se puede ubicar (lado que no existe).
+    function obstacleGeometry(o, vertices) {
+        if (!o) return null;
+        let pts;
+        if (o.mode === 'contour') {
+            const verts = Array.isArray(vertices) ? vertices : [];
+            if (verts.length < 3) return null;
+            const seg = wallSegment(verts, Math.max(1, Math.round(Number(o.wall)) || 1));
+            if (!(seg.length > 0)) return null;
+            const dist = Math.min(Math.max(Number(o.dist) || 0, 0), seg.length);
+            const rest = seg.length - dist;
+            const len = Number(o.l) > 0 ? Math.min(Number(o.l), rest) : rest;
+            const thick = Math.max(Number(o.w) || 0, 0);
+            // hacia adentro de la nave: a la izquierda del sentido del lado si el contorno va contra las manecillas, a la derecha si va a favor
+            const sign = signedArea(verts) >= 0 ? 1 : -1;
+            const nx = -seg.uy * sign;
+            const ny = seg.ux * sign;
+            const ax = seg.p[0] + seg.ux * dist;
+            const ay = seg.p[1] + seg.uy * dist;
+            const bx = ax + seg.ux * len;
+            const by = ay + seg.uy * len;
+            pts = [[ax, ay], [bx, by], [bx + nx * thick, by + ny * thick], [ax + nx * thick, ay + ny * thick]];
+        } else {
+            const x = Number(o.x) || 0;
+            const y = Number(o.y) || 0;
+            const l = Math.max(Number(o.l) || 0, 0);
+            const w = Math.max(Number(o.w) || 0, 0);
+            pts = [[x, y], [x + l, y], [x + l, y + w], [x, y + w]];
+        }
+        pts = pts.map((p) => [round2(p[0]), round2(p[1])]);
+        const xs = pts.map((p) => p[0]);
+        const ys = pts.map((p) => p[1]);
+        const x = Math.min(...xs);
+        const y = Math.min(...ys);
+        return { pts, x, y, l: round2(Math.max(...xs) - x), w: round2(Math.max(...ys) - y) };
+    }
+    // Los obstáculos del Layout con su lugar ya calculado: [{ o, g }] (los que no se pueden ubicar se omiten).
+    function obstacleShapes(layout) {
+        return ((layout && layout.obstacles) || []).map((o) => ({ o, g: obstacleGeometry(o, layout.vertices) })).filter((r) => r.g);
+    }
+    // Una pared por cada lado del contorno, de todo el lado (l 0): así un Layout de antes se ve igual y la pared se quita en los lados que solo son marco.
+    function defaultWalls(vertices) {
+        return (vertices || []).map((_, i) => ({ id: `wl${i + 1}`, name: `Pared ${i + 1}`, kind: 'wall', mode: 'contour', wall: i + 1, dist: 0, l: 0, w: WALL_THICKNESS }));
+    }
+    // Los Layouts de antes dibujaban todo el contorno como pared y sus obstáculos eran columnas sueltas: al leerlos, cada lado se vuelve un obstáculo pared (una sola vez, wallsMigrated) y cada obstáculo viejo queda
+    // como columna dentro de la nave.
+    function migrateWalls(layout) {
+        // lo que no es una lista (entrada dañada) se deja como llegó: la validación lo reporta
+        if (!layout || (layout.obstacles != null && !Array.isArray(layout.obstacles))) return layout;
+        const obstacles = (layout.obstacles || []).map((raw) => {
+            const o = raw && typeof raw === 'object' ? raw : {};
+            return { ...o, kind: OBSTACLE_KINDS.includes(o.kind) ? o.kind : 'column', mode: o.mode === 'contour' ? 'contour' : 'free' };
+        });
+        if (layout.wallsMigrated) return { ...layout, obstacles };
+        const taken = new Set(obstacles.map((o) => o.id));
+        return { ...layout, obstacles: [...defaultWalls(Array.isArray(layout.vertices) ? layout.vertices : []).filter((w) => !taken.has(w.id)), ...obstacles], wallsMigrated: true };
+    }
+    // Volumen de la nave: lo que cabe bajo el techo menos lo que sube el piso en cada desnivel (superficie por su altura sobre el piso; si es más bajo, la altura es negativa y suma).
+    function netVolume(layout) {
+        const gross = volumeOf((layout && layout.vertices) || []);
+        const raised = obstacleShapes(layout).filter(({ o }) => o.kind === 'step').reduce((acc, { o, g }) => acc + polygonArea(g.pts) * (Number(o.dz) || 0), 0);
+        return Math.max(0, gross - raised);
+    }
     const hasPoints = (z) => !!z && Array.isArray(z.pts) && z.pts.length >= 3;
     const zonePoints = (z) => (hasPoints(z) ? z.pts : rectPoints(z));
     const zoneArea = (z) => (hasPoints(z) ? polygonArea(z.pts) : (z.l || 0) * (z.w || 0));
@@ -812,7 +888,7 @@
         return {
             mode: 'scratch', heightM: 9,
             vertices: [[0, 0, 9], [30, 0, 9], [30, 20, 9], [0, 20, 9]],
-            doors: [], power: [], sensors: [], obstacles: [], zones: [], footprints: [], spaces: [],
+            doors: [], power: [], sensors: [], obstacles: defaultWalls([[0, 0], [30, 0], [30, 20], [0, 20]]), wallsMigrated: true, zones: [], footprints: [], spaces: [],
             plan: null, ownAssetFmt: true,
         };
     }
@@ -907,7 +983,7 @@
         return {
             total: round2(total), offices: round2(offices), aisles: round2(aisles), docks: round2(docks),
             storage: round2(storageZones), footprint: round2(footprint), covered: round2(covered), overlap: round2(overlap), dead: round2(dead), unassigned: round2(unassigned),
-            volume: round2(volumeOf(layout.vertices || [])), storageVolume: round2(storageVolume),
+            volume: round2(netVolume(layout)), storageVolume: round2(storageVolume),
             heightMin: round2(heightRange(layout.vertices || []).min), heightMax: round2(heightRange(layout.vertices || []).max),
             perimeter: round2(perimeter(layout.vertices || [])), zones: perZone,
         };
@@ -945,7 +1021,8 @@
     // ---- validación (la usa el servidor antes de guardar; la pantalla solo la usa para avisar) --------------------------
     function sanitizeLayout(input) {
         const errors = [];
-        const src = migrateFootprints(input && typeof input === 'object' ? input : {});
+        // Una pantalla vieja (sin paredes como obstáculos) manda el Layout como lo conocía: se lee igual que al abrirlo, con una pared por lado, para que no cuente como un cambio del contorno.
+        const src = migrateWalls(migrateFootprints(input && typeof input === 'object' ? input : {}));
         const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
         const meters = (v, label, min = 0) => {
             const n = Number(v);
@@ -977,6 +1054,7 @@
         // Sitio: el lugar que va arriba del nombre de la empresa en el reporte y en la tarjeta (por ejemplo "CEDIS Chihuahua"). Opcional: sin él se guarda exactamente igual que antes.
         const siteName = text(src.siteName, 'Sitio', false);
         if (siteName) out.siteName = siteName;
+        if (src.wallsMigrated) out.wallsMigrated = true;
         // Cada esquina trae su altura [x, y, altura]. Una esquina sin altura (Layout de antes) hereda heightM, la altura única de entonces.
         const legacyHeight = Number(src.heightM);
         out.vertices = list(src.vertices, LIMITS.vertices, 'Esquinas').map((p, i) => {
@@ -1028,9 +1106,20 @@
         });
 
         const obstacleIds = new Set();
-        out.obstacles = list(src.obstacles, LIMITS.obstacles, 'Columnas y obstáculos').map((o, i) => {
+        out.obstacles = list(src.obstacles, LIMITS.obstacles, 'Obstáculos del contorno').map((o, i) => {
             const label = `Obstáculo ${i + 1}`;
-            return { id: idOf(o && o.id, obstacleIds, label), name: text(o && o.name, label, false), x: meters(o && o.x, label, -LIMITS.maxM), y: meters(o && o.y, label, -LIMITS.maxM), l: meters(o && o.l, label), w: meters(o && o.w, label) };
+            const kind = oneOf(o && o.kind, OBSTACLE_KINDS, 'column');
+            const mode = oneOf(o && o.mode, OBSTACLE_MODES, 'free');
+            const base = { id: idOf(o && o.id, obstacleIds, label), name: text(o && o.name, label, false), kind, mode };
+            if (mode === 'contour') {
+                const wall = Math.round(Number(o && o.wall));
+                if (!(wall >= 1 && wall <= walls)) errors.push(`${label}: lado no válido`);
+                Object.assign(base, { wall: wall >= 1 && wall <= walls ? wall : 1, dist: meters(o && o.dist, label), l: meters(o && o.l, label), w: meters(o && o.w, label) });
+            } else {
+                Object.assign(base, { x: meters(o && o.x, label, -LIMITS.maxM), y: meters(o && o.y, label, -LIMITS.maxM), l: meters(o && o.l, label), w: meters(o && o.w, label) });
+            }
+            if (kind === 'step') base.dz = meters(o && o.dz != null && o.dz !== '' ? o.dz : 0, label, -LIMITS.maxHeight);
+            return base;
         });
 
         const zoneIds = new Set();
@@ -1245,7 +1334,8 @@
         return {
             ...layout,
             vertices: (layout.vertices || []).map((p) => [...turn(p), p[2]]),
-            obstacles: (layout.obstacles || []).map((o) => ({ ...o, ...box(o, 'l', 'w') })),
+            // los obstáculos pegados a un lado del contorno siguen a su lado (que ya viene girado); los de dentro de la nave se giran como cualquier recuadro
+            obstacles: (layout.obstacles || []).map((o) => (o.mode === 'contour' ? o : { ...o, ...box(o, 'l', 'w') })),
             spaces: (layout.spaces || []).map((s) => ({ ...s, ...box(s, 'l', 'd') })),
             footprints: (layout.footprints || []).map((f) => ({ ...f, ...box(f, 'l', 'd') })),
             zones: (layout.zones || []).map((z) => {
@@ -1341,6 +1431,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
+        OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

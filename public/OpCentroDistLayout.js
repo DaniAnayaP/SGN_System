@@ -209,6 +209,13 @@ function clampWalls() {
     state.draft.doors.forEach((d) => { if (d.wall > walls) d.wall = walls; });
     state.draft.power.forEach((p) => { if (p.wall > walls) p.wall = walls; });
     (state.draft.sensors || []).forEach((p) => { if (p.wall > walls) p.wall = walls; });
+    clampObstacleSides();
+}
+// Los obstáculos pegados a un lado que ya no existe: la pared de un lado quitado se quita con él (si no, dos paredes quedarían sobre el último lado); los demás pasan al último lado.
+function clampObstacleSides() {
+    const walls = state.draft.vertices.length;
+    state.draft.obstacles = state.draft.obstacles.filter((o) => !(o.mode === 'contour' && o.kind === 'wall' && o.wall > walls));
+    state.draft.obstacles.forEach((o) => { if (o.mode === 'contour' && o.wall > walls) o.wall = walls; });
 }
 // x, y, largo y ancho de una zona de cualquier forma son siempre el recuadro que la envuelve.
 function syncZoneBox(z) {
@@ -488,6 +495,53 @@ function locatorsStepHtml() {
     const note = truncated ? `<p class="layout-muted">${esc(t('main.layoutLocalizadoresCorte', { n: LOCATOR_PANEL_MAX }))}</p>` : '';
     return `${table(['main.colLocZona', 'main.colLocHuella', 'main.colLocActivo', 'main.colLocNivel', 'main.colLocColumna', 'main.colLocFila', 'main.colLocProfundidad', 'main.colLocLocalizador', 'main.colLocAlcance', 'main.colLocEstado'], body, 'layout-localizadores')}${note}`;
 }
+// Un renglón de la tabla de obstáculos del contorno. Las cuatro celdas del lugar cambian con la forma de ponerlo: «Sobre el contorno» = lado, distancia, largo (vacío = todo el lado) y grosor; «Dentro de la nave» = X, Y, largo y ancho.
+// La altura solo la lleva el desnivel (su altura sobre el piso; negativa si es más bajo).
+function obstacleRowHtml(o, i, dis) {
+    const off = dis ? ' disabled' : '';
+    const sel = (key, markup, help) => `<td><select data-l="obstacles" data-i="${i}" data-k="${key}" data-help-key="${help}"${off}>${markup}</select></td>`;
+    const num = (key, value, help, extra = '') => `<td><input type="number" step="0.1" ${extra} data-l="obstacles" data-i="${i}" data-k="${key}" data-help-key="${help}" value="${value}"${off}></td>`;
+    const place = o.mode === 'contour'
+        ? `${sel('wall', wallOptionsHtml(o.wall), 'layoutObstLado')}${num('dist', o.dist || 0, 'layoutObstDist', 'min="0"')}${num('l', o.l > 0 ? o.l : '', 'layoutObstLargo', `min="0" placeholder="${esc(t('main.layoutTodoElLado'))}"`)}${num('w', o.w || 0, 'layoutObstGrosor', 'min="0"')}`
+        : `${num('x', o.x, 'layoutObstXY')}${num('y', o.y, 'layoutObstXY')}${num('l', o.l, 'layoutObstLargo', 'min="0"')}${num('w', o.w, 'layoutObstAncho', 'min="0"')}`;
+    const height = o.kind === 'step' ? num('dz', o.dz === undefined ? 0 : o.dz, 'layoutObstAltura') : '<td class="layout-calc">—</td>';
+    return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('kind', optionsHtml('obstacle', LC.OBSTACLE_KINDS, o.kind), 'layoutObstTipo')}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${height}${removeCell('obstacles', i, dis)}</tr>`;
+}
+// Cambiar el tipo o la forma de ponerlo de un obstáculo: el desnivel trae su altura; al pasar de una forma a otra se conserva dónde queda.
+function setObstacleKindOrMode(row, key, value) {
+    if (key === 'kind') {
+        const prevKind = row.kind;
+        row.kind = LC.OBSTACLE_KINDS.includes(value) ? value : 'column';
+        // el nombre que traía de fábrica (el del tipo anterior) sigue al tipo nuevo; un nombre que escribió la persona no se toca
+        if (!row.name || row.name === typeLabel('obstacle', prevKind)) row.name = typeLabel('obstacle', row.kind);
+        if (row.kind === 'step') { if (row.dz === undefined) row.dz = 0.15; } else delete row.dz;
+        return;
+    }
+    const mode = value === 'contour' ? 'contour' : 'free';
+    if (mode === row.mode) return;
+    const g = LC.obstacleGeometry(row, state.draft.vertices);
+    if (mode === 'contour') {
+        // arranca pegado al lado 1: una pared llega hasta el final del lado; lo demás conserva su medida
+        const isWall = row.kind === 'wall';
+        Object.assign(row, { mode, wall: 1, dist: 0, l: isWall ? 0 : (g ? g.l : 0.6), w: isWall ? LC.WALL_THICKNESS : (g ? g.w : 0.6) });
+        delete row.x; delete row.y;
+    } else {
+        Object.assign(row, { mode, x: g ? g.x : 1, y: g ? g.y : 1, l: g ? g.l : 0.6, w: g ? g.w : 0.6 });
+        delete row.wall; delete row.dist;
+    }
+}
+// «+ Pared en todo el contorno»: agrega una pared de todo el lado a cada lado que todavía no la tiene (no repite las que ya hay).
+function addAllWalls() {
+    const d = state.draft;
+    const have = new Set(d.obstacles.filter((o) => o.kind === 'wall' && o.mode === 'contour' && !(Number(o.l) > 0) && !(Number(o.dist) > 0)).map((o) => Number(o.wall)));
+    d.vertices.forEach((_, i) => {
+        if (have.has(i + 1)) return;
+        d.obstacles.push({ id: uid('w'), name: `${t('main.layoutParedNombre')} ${i + 1}`, kind: 'wall', mode: 'contour', wall: i + 1, dist: 0, l: 0, w: LC.WALL_THICKNESS });
+    });
+    panelScrollEnd = true;
+    renderPanel();
+    refreshLive();
+}
 function stepHtml(step) {
     if (step === 'localizadores') return locatorsStepHtml();
     const d = state.draft;
@@ -499,7 +553,7 @@ function stepHtml(step) {
             const seg = LC.wallSegment(d.vertices, i + 1);
             return `<tr><td class="layout-calc">${esc(t('main.layoutEsquina'))} ${i + 1}</td>${cellNum('vertices', i, '0', p[0], dis)}${cellNum('vertices', i, '1', p[1], dis)}${cellNum('vertices', i, '2', p[2], dis)}<td class="layout-calc" data-wall-len="${i}">${esc(t('main.layoutPared'))} ${i + 1}: ${fmt(seg.length)} m</td>${d.vertices.length > 3 ? removeCell('vertices', i, dis) : '<td></td>'}</tr>`;
         });
-        const obstacles = d.obstacles.map((o, i) => `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${cellNum('obstacles', i, 'x', o.x, dis)}${cellNum('obstacles', i, 'y', o.y, dis)}${cellNum('obstacles', i, 'l', o.l, dis)}${cellNum('obstacles', i, 'w', o.w, dis)}${removeCell('obstacles', i, dis)}</tr>`);
+        const obstacles = d.obstacles.map((o, i) => obstacleRowHtml(o, i, dis));
         const heights = d.vertices.map((p) => p[2]);
         const sameHeight = heights.every((h) => h === heights[0]) ? heights[0] : '';
         const shape = mode === 'sides'
@@ -507,10 +561,11 @@ function stepHtml(step) {
             : `${table(['main.layoutEsquina', 'main.layoutX', 'main.layoutY', 'main.layoutAlturaEsquina', 'main.layoutPared', ''], rows)}${addButton('vertices', 'main.layoutAgregarEsquina', dis, true)}`;
         // Los botones de agregar van arriba, junto al título del paso: «+ Agregar lado» (o esquina) y «+ Agregar obstáculo», para no bajar hasta el final de la lista del contorno.
         const addObstacle = addButton('obstacles', 'main.layoutAgregarObstaculo', dis, true);
-        return `${modeBar}${addObstacle}<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label><label data-help-key="layoutSite">${esc(t('main.layoutSitio'))}<input type="text" maxlength="${LC.LIMITS.text}" data-l="siteName" value="${esc(d.siteName || '')}" placeholder="${esc(t('main.layoutSitioEjemplo'))}"${dis ? ' disabled' : ''}></label></div>
+        const wallsAll = `<button type="button" class="btn btn-secondary layout-add" data-walls-all="1" data-main-add="1" data-help-key="layoutParedTodo"${dis ? ' disabled' : ''}>${esc(t('main.layoutParedTodoContorno'))}</button>`;
+        return `${modeBar}${addObstacle}${wallsAll}<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label><label data-help-key="layoutSite">${esc(t('main.layoutSitio'))}<input type="text" maxlength="${LC.LIMITS.text}" data-l="siteName" value="${esc(d.siteName || '')}" placeholder="${esc(t('main.layoutSitioEjemplo'))}"${dis ? ' disabled' : ''}></label></div>
             ${shape}
             <h4 class="layout-sub">${esc(t('main.layoutColumnasTitulo'))}</h4>
-            ${table(['main.layoutNombre', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', ''], obstacles)}`;
+            ${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', 'main.layoutAlturaDesnivel', ''], obstacles)}`;
     }
     if (step === 'puertas') {
         const rows = d.doors.map((x, i) => `<tr>${cellText('doors', i, 'name', x.name, dis)}${cellSelect('doors', i, 'type', optionsHtml('door', LC.DOOR_TYPES, x.type), dis)}${cellSelect('doors', i, 'wall', wallOptionsHtml(x.wall), dis)}${cellNum('doors', i, 'dist', x.dist, dis)}${cellNum('doors', i, 'width', x.width, dis)}${cellNum('doors', i, 'height', x.height, dis)}${removeCell('doors', i, dis)}</tr>`);
@@ -1174,7 +1229,14 @@ function renderSvg() {
     // las medidas de adentro se calculan al final, cuando ya se conocen los nombres de TODAS las zonas
     measureJobs.forEach(([pts, minPx, zid]) => { measureLabels += measureText(pts, minPx, zid); });
     if (!finding || dimmed) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
-    (on('contorno') ? d.obstacles : []).forEach((o) => { s += `<rect class="lo" x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}"><title>${esc(o.name)}</title></rect>`; });
+    // El contorno de arriba es solo el marco del terreno (línea punteada). Las PAREDES son obstáculos puestos encima y forman parte de la nave: se dibujan siempre; las columnas, desniveles y otros solo con el paso Contorno.
+    const obstacleShapes = LC.obstacleShapes(d);
+    const obstaclePoly = (g) => g.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ');
+    if (!finding || dimmed) obstacleShapes.filter(({ o }) => o.kind === 'wall').forEach(({ o, g }) => { s += `<polygon class="lo lo-wall" style="stroke-width:${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}px" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; });
+    (on('contorno') ? obstacleShapes.filter(({ o }) => o.kind !== 'wall') : []).forEach(({ o, g }) => {
+        const height = o.kind === 'step' ? ` · ${(o.dz || 0) > 0 ? '+' : ''}${fmt(o.dz || 0)} m` : '';
+        s += `<polygon class="lo lo-${o.kind}" points="${obstaclePoly(g)}"><title>${esc(o.name)}${height}</title></polygon>`;
+    });
     // Huella-Espacio y Activos son capas aparte: la HUELLA (el lugar en el piso) se dibuja con su paso y va primero, blanca con borde gris o con su color; el ACTIVO va encima con el suyo, un poco más chico, con su propio color (arena si no le han puesto uno): así se distinguen aunque midan lo mismo.
     if (showFp || showSp) {
         const rectPts = (px, py, w, h) => `${px},${py} ${px + w},${py} ${px + w},${py + h} ${px},${py + h}`;
@@ -1573,7 +1635,7 @@ const ROW_FACTORY = {
     doors: () => ({ id: uid('d'), name: t('main.layoutPuertaNueva'), type: 'dock', wall: 1, dist: 0, width: 1.2, height: 2.1 }),
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     sensors: () => ({ id: uid('n'), code: '', type: 'both', zoneId: '', wall: 1, dist: 1, height: 2.5 }),
-    obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), x: 1, y: 1, l: 0.6, w: 0.6 }),
+    obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), kind: 'column', mode: 'free', x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, code: '', type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
     // una huella nueva no puede ser más alta que la nave: mide 4.5 m de alto o, si la nave es más baja, lo que mide la nave
     footprints: () => ({ id: uid('f'), code: '', zoneId: '', x: 1, y: 1, l: 3, d: 1.1, h: Math.min(4.5, Math.max(...state.draft.vertices.map((p) => Number(p[2]) || 0)) || 4.5), active: true }),
@@ -1643,7 +1705,9 @@ function onEdit(event) {
     } else {
         const row = state.draft[list][Number(el.getAttribute('data-i'))];
         const key = el.getAttribute('data-k');
-        if (list === 'zones' && (key === 'ox' || key === 'oy')) {
+        if (list === 'obstacles' && (key === 'kind' || key === 'mode')) {
+            setObstacleKindOrMode(row, key, el.value);
+        } else if (list === 'zones' && (key === 'ox' || key === 'oy')) {
             // una zona de forma libre se mueve completa desde su primera esquina
             const o = row.pts[0] || [row.x, row.y];
             const dx = key === 'ox' ? value - o[0] : 0;
@@ -1677,6 +1741,8 @@ function onEdit(event) {
     }
     // Al cambiar el nombre de una zona, el selector de zona de los espacios debe mostrar el nombre nuevo (solo al terminar de escribir).
     if (event.type === 'change' && list === 'zones' && el.getAttribute('data-k') === 'name') renderPanel();
+    // Al cambiar el tipo o la forma de ponerlo de un obstáculo cambian las celdas del renglón (altura del desnivel, lado o X).
+    if (event.type === 'change' && list === 'obstacles' && ['kind', 'mode'].includes(el.getAttribute('data-k'))) renderPanel();
     // Al pasar un activo a otra huella cambia su zona (que se ve en el renglón).
     if (event.type === 'change' && list === 'spaces' && el.getAttribute('data-k') === 'footprintId') renderPanel();
     refreshLive();
@@ -1787,6 +1853,7 @@ $('layout-panel').addEventListener('click', (event) => {
         refreshLive();
         return;
     }
+    if (event.target.closest('[data-walls-all]')) { addAllWalls(); return; }
     const add = event.target.closest('[data-add]');
     if (add) {
         const list = add.dataset.add;
@@ -1812,6 +1879,7 @@ $('layout-panel').addEventListener('click', (event) => {
             state.draft.doors.forEach((d) => { if (d.wall > walls) d.wall = walls; });
             state.draft.power.forEach((p) => { if (p.wall > walls) p.wall = walls; });
             (state.draft.sensors || []).forEach((p) => { if (p.wall > walls) p.wall = walls; });
+            clampObstacleSides();
         }
         renderPanel();
         refreshLive();
@@ -3323,7 +3391,7 @@ async function fetchQrData() {
 function sheetLabels() {
     return {
         area: t('main.layoutHojaArea'), title: t('main.layoutHojaTitulo'), height: t('main.layoutHojaAltura'), spaces: t('main.layoutHojaEspacios'),
-        power: t('main.layoutLeyendaLuz'), column: t('main.layoutLeyendaColumna'),
+        power: t('main.layoutLeyendaLuz'), column: t('main.layoutLeyendaColumna'), wall: t('main.layoutLeyendaPared'), step: t('main.layoutLeyendaDesnivel'),
         kpiTotal: t('main.layoutHojaKpiTotal'), kpiOffices: t('main.layoutHojaKpiOficinas'), kpiAisles: t('main.layoutHojaKpiPasillos'),
         kpiDocks: t('main.layoutHojaKpiAndenes'), kpiStorage: t('main.layoutHojaKpiAlmacenamiento'), kpiDead: t('main.layoutHojaKpiMuertos'), kpiVolume: t('main.layoutHojaKpiVolumen'),
         scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), space: t('main.layoutLeyendaEspacio'),

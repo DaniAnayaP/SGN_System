@@ -1686,7 +1686,7 @@
     "layoutEsquina": "Esquina",
     "layoutX": "X (m)",
     "layoutY": "Y (m)",
-    "layoutPared": "Pared",
+    "layoutPared": "Lado",
     "layoutAgregarEsquina": "+ Agregar esquina",
     "layoutColumnasTitulo": "Obstáculos del contorno (columnas, paredes, desniveles…)",
     "layoutNombre": "Nombre",
@@ -1701,6 +1701,16 @@
     "layoutVioAct_overlap": "Los activos {other} y {code} están encimados dentro de {fcode}: cambia su posición o sus medidas para poder guardar.",
     "layoutFondo": "Fondo (m)",
     "layoutAgregarObstaculo": "+ Agregar obstáculo",
+    "layoutParedTodoContorno": "+ Pared en todo el contorno",
+    "layoutParedNombre": "Pared",
+    "layoutUbicacion": "Ubicación",
+    "layoutLadoOX": "Lado o X (m)",
+    "layoutDistOY": "Distancia o Y (m)",
+    "layoutGrosorAncho": "Grosor o ancho (m)",
+    "layoutAlturaDesnivel": "Altura del desnivel (m)",
+    "layoutTodoElLado": "todo el lado",
+    "layoutLeyendaPared": "Pared",
+    "layoutLeyendaDesnivel": "Desnivel",
     "layoutTipo": "Tipo",
     "layoutDistancia": "Distancia (m)",
     "layoutAgregarPuerta": "+ Agregar puerta",
@@ -2037,6 +2047,12 @@
     "layoutType_zone_office": "Oficina",
     "layoutType_zone_aisle": "Pasillo principal",
     "layoutType_zone_aisle2": "Pasillo entre anaqueles",
+    "layoutType_obstacle_wall": "Pared",
+    "layoutType_obstacle_column": "Columna",
+    "layoutType_obstacle_step": "Desnivel",
+    "layoutType_obstacle_other": "Otro",
+    "layoutType_obmode_contour": "Sobre el contorno",
+    "layoutType_obmode_free": "Dentro de la nave",
     "layoutType_space_rack": "Anaquel",
     "layoutType_space_rackpal": "Rack",
     "layoutType_space_cabinet": "Gabeta",
@@ -3810,7 +3826,7 @@
       "example": "tocas Puertas y luego Energía Eléctrica: ves ambas en el croquis y abajo editas solo la luz; tocas Puertas otra vez para editar las puertas."
     },
     "layoutSec_contorno": {
-      "what": "Las esquinas de la nave en metros, con la altura de cada una, y los obstáculos del contorno: columnas, paredes, pisos con desnivel o cualquier cosa que estorbe, cada uno con su nombre, su lugar (X, Y) y su largo y ancho. Los dos botones de agregar (lado y obstáculo) están arriba, junto al título, para no bajar hasta el final de la lista. De aquí salen los m² totales y, con las alturas, los m³.",
+      "what": "Las esquinas de la nave en metros, con la altura de cada una. El contorno es solo el marco del terreno: no es pared. Las paredes, columnas, desniveles y cualquier cosa que estorbe van como obstáculos puestos encima, sobre un lado del contorno o dentro de la nave. Los botones de agregar están arriba, junto al título. De aquí salen los m² totales y, con las alturas y los desniveles, los m³.",
       "example": "una nave con el techo más alto de un lado tiene 6 metros en dos esquinas y 10 en las otras dos."
     },
     "layoutSec_puertas": {
@@ -4400,6 +4416,46 @@
     "layoutContornoMode": {
       "what": "Cómo capturas el contorno: por lados (hacia dónde va y cuánto mide, como lo trae el plano) o por esquinas (sus metros X y Y).",
       "example": "con el plano a la mano usas Por lados; si ya tienes coordenadas usas Por esquinas."
+    },
+    "layoutObstTipo": {
+      "what": "Qué es este obstáculo: Pared, Columna, Desnivel (un tramo del piso más alto o más bajo) u Otro (cualquier cosa que estorbe).",
+      "example": "marcas como Pared el muro de en medio de la nave y como Columna el poste de concreto."
+    },
+    "layoutObstUbicacion": {
+      "what": "Cómo lo ubicas: Sobre el contorno (pegado a un lado de la nave: eliges el lado, a qué distancia de la esquina empieza, cuánto mide y qué grosor tiene) o Dentro de la nave (con X, Y, largo y ancho).",
+      "example": "la pared de un andén va Sobre el contorno; una columna en medio de la nave va Dentro de la nave."
+    },
+    "layoutObstLado": {
+      "what": "El lado del contorno donde va pegado el obstáculo. El número es el mismo de la tabla de lados.",
+      "example": "Lado 3 es el tercer lado que capturaste."
+    },
+    "layoutObstDist": {
+      "what": "A cuántos metros de la esquina donde empieza el lado arranca el obstáculo.",
+      "example": "una pared que empieza a 2 m de la esquina: pones 2."
+    },
+    "layoutObstLargo": {
+      "what": "Cuánto mide a lo largo. En un obstáculo sobre el contorno, vacío quiere decir todo el lado.",
+      "example": "dejas el largo vacío para una pared que cubre el lado completo y pones 3 para una pared de 3 m."
+    },
+    "layoutObstGrosor": {
+      "what": "El grosor del obstáculo hacia adentro de la nave, en metros.",
+      "example": "una pared de block mide 0.2 m de grosor."
+    },
+    "layoutObstAncho": {
+      "what": "Cuánto mide el obstáculo hacia el otro lado (en Y), en metros.",
+      "example": "una columna cuadrada de 0.6 × 0.6 m: largo 0.6 y ancho 0.6."
+    },
+    "layoutObstXY": {
+      "what": "Dónde queda la esquina del obstáculo dentro de la nave, en metros desde el origen del Layout.",
+      "example": "una columna a 5 m en X y 6 m en Y."
+    },
+    "layoutObstAltura": {
+      "what": "Solo para el Desnivel: su altura sobre el piso, en metros. Si es más bajo que el piso se escribe con signo menos. Con ella cambian los m³ de la nave: si el piso sube, hay menos aire.",
+      "example": "una plataforma 0.3 m más alta: pones 0.3; un foso 0.5 m más bajo: pones -0.5."
+    },
+    "layoutParedTodo": {
+      "what": "Agrega una pared a cada lado del contorno que todavía no la tiene. Las que ya tienes no se repiten.",
+      "example": "marcas todo el contorno como pared y después quitas la de un andén abierto."
     },
     "layoutOrigin": {
       "what": "En qué punto del mapa está la primera esquina; desde ahí se dibujan los lados.",

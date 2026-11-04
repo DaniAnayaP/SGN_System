@@ -234,7 +234,12 @@
             measure(layout.vertices, true, 24);
             (on('zonas') ? (layout.zones || []) : []).forEach((z) => { if (Math.min(z.l, z.w) * sc >= 44) measure(LC.zonePoints(z), false, 30); });
         }
-        s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${T.chrome.nave}" stroke-width="3" stroke-linejoin="round"/>`;
+        // El contorno es solo el marco del terreno (línea punteada). Las PAREDES son obstáculos puestos encima y forman parte de la nave: se dibujan siempre; columnas, desniveles y otros, más abajo, solo con el contorno encendido.
+        s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${T.chrome.nave}" stroke-width="2" stroke-dasharray="7 5" stroke-linejoin="round"/>`;
+        const obstacleShapes = LC.obstacleShapes(layout);
+        const obstaclePoly = (g) => g.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ');
+        // una pared muy delgada para la escala del croquis se refuerza con un trazo para que siempre se vea (como mínimo unos 3 px de grueso)
+        obstacleShapes.filter(({ o }) => o.kind === 'wall').forEach(({ g }) => { s += `<polygon points="${obstaclePoly(g)}" fill="${T.chrome.nave}" stroke="${T.chrome.nave}" stroke-width="${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}" stroke-linejoin="miter"/>`; });
         // La HUELLA (el lugar en el piso) va primero, blanca o con su color; el ACTIVO encima, un poco más chico, con su propio color (arena si no tiene): así se distinguen aunque midan lo mismo. Un Layout que todavía
         // no trae huellas (copias viejas) dibuja los activos enteros como siempre.
         // Capas: «huellas» solo las huellas, «activos» solo los activos y «espacios» (la vista pública, que no los separa) las dos.
@@ -277,8 +282,9 @@
             s += `<line x1="${X(ax)}" y1="${Y(ay)}" x2="${X(ax + w.ux * d.width)}" y2="${Y(ay + w.uy * d.width)}" stroke="#1E7E34" stroke-width="7"/>`;
         });
         // Columnas (con el contorno) y conexiones de luz (con su paso): solo las trae el reporte con sesión; la vista pública nunca las lleva.
-        (on('contorno') ? (layout.obstacles || []) : []).forEach((o) => {
-            s += `<rect x="${X(o.x)}" y="${Y(o.y)}" width="${Math.max(o.l * sc, 3)}" height="${Math.max(o.w * sc, 3)}" fill="#6B7089" opacity="0.8"/>`;
+        (on('contorno') ? obstacleShapes.filter(({ o }) => o.kind !== 'wall') : []).forEach(({ o, g }) => {
+            if (o.kind === 'step') s += `<polygon points="${obstaclePoly(g)}" fill="#E8D9F2" stroke="#8A5EA8" stroke-width="1.3" stroke-dasharray="4 3" opacity="0.9"/>`;
+            else s += `<polygon points="${obstaclePoly(g)}" fill="${o.kind === 'other' ? '#9AA0B5' : '#6B7089'}" stroke="${o.kind === 'other' ? '#9AA0B5' : '#6B7089'}" stroke-width="1.5" opacity="0.8"/>`;
         });
         (on('luz') ? (layout.power || []) : []).forEach((e) => {
             const w = LC.wallSegment(layout.vertices, e.wall);

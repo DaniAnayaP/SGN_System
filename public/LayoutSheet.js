@@ -100,7 +100,11 @@
         const leg = [];
         if (on('puertas')) leg.push(['door', labels.door]);
         if (on('luz') && (data.layout.power || []).length) leg.push(['power', labels.power]);
-        if (on('contorno') && (data.layout.obstacles || []).length) leg.push(['column', labels.column]);
+        // La pared se dibuja siempre; columnas y desniveles solo con el contorno encendido (y la leyenda solo nombra lo que se ve).
+        const obstacleKinds = new Set((data.layout.obstacles || []).map((o) => o.kind));
+        if (obstacleKinds.has('wall')) leg.push(['wall', labels.wall]);
+        if (on('contorno') && (obstacleKinds.has('column') || obstacleKinds.has('other'))) leg.push(['column', labels.column]);
+        if (on('contorno') && obstacleKinds.has('step')) leg.push(['step', labels.step]);
         if (on('espacios') || on('huellas') || on('activos')) leg.push(['space', labels.space]);
         if (on('zonas')) {
             leg.push(['dry', labels.dry], ['cold', labels.cold], ['chemical', labels.chemical], ['finished', labels.finished], ['dock', labels.dock], ['office', labels.office], ['aisle', labels.aisle], ['aisle2', labels.aisle2], ['none', labels.none]);
@@ -174,6 +178,8 @@
                 if (key === 'door') paint = 'fill="#1E7E34" stroke="#1E7E34"';
                 else if (key === 'power') paint = 'fill="#FBF0DE" stroke="#D9A441"';
                 else if (key === 'column') paint = 'fill="#6B7089" stroke="#6B7089"';
+                else if (key === 'wall') paint = `fill="${th.chrome.nave}" stroke="${th.chrome.nave}"`;
+                else if (key === 'step') paint = 'fill="#E8D9F2" stroke="#8A5EA8" stroke-dasharray="4 3"';
                 else if (key === 'space') paint = `fill="#FFFFFF" stroke="${C.line}"`;
                 else { const c = th.types[key]; paint = `fill="${c[0]}" stroke="${c[1]}"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`; }
                 s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw}" rx="${4 * f}" ${paint} stroke-width="${1.5 * f}"/>`;

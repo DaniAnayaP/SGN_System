@@ -6547,12 +6547,14 @@ function buildPublicLayoutPayload(clientId, row) {
         footprints: (l.footprints || []).filter((f) => f.active !== false).map((f) => ({ id: f.id, code: f.code, x: f.x, y: f.y, l: f.l, d: f.d, h: f.h, ...(f.fmt ? { fmt: f.fmt } : {}) })),
         spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, footprintId: s.footprintId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels, ...(s.fmt ? { fmt: s.fmt } : {}) })),
         // Las conexiones de luz salen en la página pública (con su propia capa, apagada al entrar) porque Daniel pidió esos botones ahí; las columnas y el plano de fondo no.
-        obstacles: [], power: (l.power || []).map((e) => ({ type: e.type, wall: e.wall, dist: e.dist, height: e.height })),
+        // Las paredes (obstáculos del contorno) van en la página pública porque son parte de la nave; columnas, desniveles y el plano de fondo no.
+        obstacles: (l.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, name: o.name, kind: o.kind, mode: o.mode, wall: o.wall, dist: o.dist, x: o.x, y: o.y, l: o.l, w: o.w })),
+        power: (l.power || []).map((e) => ({ type: e.type, wall: e.wall, dist: e.dist, height: e.height })),
     };
     // Color representativo del cliente (el que se elige al darlo de alta): la hoja y la vista pública se pintan con él. Sin color válido va vacío y todo se ve como siempre.
     const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
     // siteName = el Sitio (título de la página, p. ej. CEDIS CHIHUAHUA); zoneCodes = cuántos códigos hay en cada zona (solo la cuenta, nunca la lista).
-    return { companyName: (client && client.company_name) || '', siteName: l.siteName || '', zoneCodes: countCodesByZone(clientId), hasLogo: !!clientLogoDataUrl(clientId), companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis(pub) };
+    return { companyName: (client && client.company_name) || '', siteName: l.siteName || '', zoneCodes: countCodesByZone(clientId), hasLogo: !!clientLogoDataUrl(clientId), companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis({ ...pub, obstacles: l.obstacles || [] }) };
 }
 
 function layoutSummary(layout, section) {
@@ -6560,7 +6562,8 @@ function layoutSummary(layout, section) {
     if (section === 'contorno') {
         const range = LayoutCalc.heightRange(layout.vertices || []);
         const height = range.min === range.max ? `${range.min}` : `${range.min} a ${range.max}`;
-        return `${(layout.vertices || []).length} esquinas, altura ${height} m, ${(layout.obstacles || []).length} obstáculos`;
+        const wallCount = (layout.obstacles || []).filter((o) => o.kind === 'wall').length;
+        return `${(layout.vertices || []).length} esquinas, altura ${height} m, ${wallCount} paredes, ${(layout.obstacles || []).length - wallCount} obstáculos`;
     }
     if (section === 'puertas') return `${(layout.doors || []).length} puertas`;
     if (section === 'luz') return `${(layout.power || []).length} conexiones de luz`;
