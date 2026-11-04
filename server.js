@@ -6478,7 +6478,7 @@ const LayoutCalc = require('./public/LayoutCalc.js');
 const RelTemplate = require('./public/RelTemplate.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
-const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', paredes: 'Paredes', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones' };
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', paredes: 'Paredes', obstaculos: 'Obstáculos', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 
 function layoutPermissions(req) {
@@ -6584,9 +6584,9 @@ function layoutSummary(layout, section) {
     if (section === 'contorno') {
         const range = LayoutCalc.heightRange(layout.vertices || []);
         const height = range.min === range.max ? `${range.min}` : `${range.min} a ${range.max}`;
-        const wallCount = (layout.obstacles || []).filter((o) => o.kind === 'wall').length;
-        return `${(layout.vertices || []).length} esquinas, altura ${height} m, ${(layout.obstacles || []).length - wallCount} obstáculos`;
+        return `${(layout.vertices || []).length} esquinas, altura ${height} m`;
     }
+    if (section === 'obstaculos') return `${(layout.obstacles || []).filter((o) => o.kind !== 'wall').length} obstáculos`;
     if (section === 'paredes') return `${(layout.obstacles || []).filter((o) => o.kind === 'wall').length} paredes`;
     if (section === 'puertas') return `${(layout.doors || []).length} puertas`;
     if (section === 'luz') return `${(layout.power || []).length} conexiones de luz`;

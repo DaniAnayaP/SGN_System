@@ -104,8 +104,8 @@
         // La pared se dibuja siempre; columnas y desniveles solo con el contorno encendido (y la leyenda solo nombra lo que se ve).
         const obstacleKinds = new Set((data.layout.obstacles || []).map((o) => o.kind));
         if (obstacleKinds.has('wall')) leg.push(['wall', labels.wall]);
-        if (on('contorno') && (obstacleKinds.has('column') || obstacleKinds.has('other'))) leg.push(['column', labels.column]);
-        if (on('contorno') && obstacleKinds.has('step')) leg.push(['step', labels.step]);
+        if (on('obstaculos') && (obstacleKinds.has('column') || obstacleKinds.has('other'))) leg.push(['column', labels.column]);
+        if (on('obstaculos') && obstacleKinds.has('step')) leg.push(['step', labels.step]);
         if (on('espacios') || on('huellas') || on('activos')) leg.push(['space', labels.space]);
         if (on('zonas')) {
             // los pasillos son de Tránsito (su propia capa); solo una zona de pasillo de forma libre que quedó de antes los trae aquí

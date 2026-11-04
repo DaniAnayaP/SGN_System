@@ -334,7 +334,7 @@
             s += `<line x1="${X(ax)}" y1="${Y(ay)}" x2="${X(ax + w.ux * d.width)}" y2="${Y(ay + w.uy * d.width)}" stroke="#1E7E34" stroke-width="7"/>`;
         });
         // Columnas (con el contorno) y conexiones de luz (con su paso): solo las trae el reporte con sesión; la vista pública nunca las lleva.
-        (on('contorno') ? obstacleShapes.filter(({ o }) => o.kind !== 'wall') : []).forEach(({ o, g }) => {
+        (on('obstaculos') ? obstacleShapes.filter(({ o }) => o.kind !== 'wall') : []).forEach(({ o, g }) => {
             if (o.kind === 'step') s += `<polygon points="${obstaclePoly(g)}" fill="#E8D9F2" stroke="#8A5EA8" stroke-width="1.3" stroke-dasharray="4 3" opacity="0.9"/>`;
             else s += `<polygon points="${obstaclePoly(g)}" fill="${o.kind === 'other' ? '#9AA0B5' : '#6B7089'}" stroke="${o.kind === 'other' ? '#9AA0B5' : '#6B7089'}" stroke-width="1.5" opacity="0.8"/>`;
         });

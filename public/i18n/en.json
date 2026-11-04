@@ -1581,6 +1581,7 @@
     "colMaterialApoyoFuncionalidad": "Screen Functionality Access",
     "colLayoutContorno": "Warehouse outline",
     "colLayoutParedes": "Walls",
+    "colLayoutObstaculos": "Obstacles",
     "colLayoutPuertas": "Doors",
     "colLayoutLuz": "Electrical Power",
     "colLayoutSensores": "Sensors",
@@ -1696,6 +1697,8 @@
     "layoutAgregarEsquina": "+ Add corner",
     "layoutColumnasTitulo": "Outline obstacles (columns, level differences…)",
     "layoutStepParedes": "Walls",
+    "layoutStepObstaculos": "Obstacles",
+    "layoutObstaculosVacio": "There are no obstacles yet. Add columns, level differences or other things in the way with the button above.",
     "layoutAgregarPared": "+ Add wall",
     "layoutParedesVacio": "There are no walls yet. Add one with the button above or use «Wall on the whole outline».",
     "layoutNombre": "Name",
@@ -3951,7 +3954,7 @@
       "example": "you tap Doors and then Electrical Power: you see both on the sketch and edit only the power below; you tap Doors again to edit the doors."
     },
     "layoutSec_contorno": {
-      "what": "The corners of the warehouse in meters, with the height of each one. The outline is only the frame of the terrain: it is not a wall. Walls have their own step (Walls); here go the columns, the level differences and anything else in the way, as obstacles placed on top, on a side of the outline or inside the warehouse. The add buttons are at the top, next to the title. The total m² come from here and, with the heights and the level differences, the m³.",
+      "what": "The corners of the warehouse in meters, with the height of each one. The outline is only the frame of the terrain: it is not a wall. Walls and obstacles (columns, level differences and anything else in the way) each have their own step: Walls and Obstacles. The add button for a side or a corner is at the top, next to the title. The total m² come from here and, with the heights and the level differences, the m³.",
       "example": "a warehouse with a higher roof on one side has 6 meters at two corners and 10 at the other two."
     },
     "layoutSec_puertas": {
@@ -4613,6 +4616,10 @@
     "layoutSgAvisar": {
       "what": "How many days ahead an item shows as «Due soon». The default is 30; it applies to all the safety items of this Layout.",
       "example": "with 45, an extinguisher that expires in 40 days already shows as «Due soon»."
+    },
+    "layoutSec_obstaculos": {
+      "what": "The things in the way in the warehouse that are not walls: columns, level differences (a stretch of floor that is higher or lower) and anything else. Each one goes on a side of the outline or inside the warehouse, with its place and sizes; a level difference also has its height. They show on the sketch and in 3D while this step is on, and nothing can go inside an aisle. The add button is at the top, next to the title.",
+      "example": "a 0.6 m column in the middle of the warehouse and a 0.15 m level difference next to the dock."
     },
     "layoutSec_paredes": {
       "what": "The walls of the warehouse. Each one goes on a side of the outline (the whole length or just a stretch, with its thickness) or inside the warehouse, with its place and sizes. Walls go from floor to ceiling in 3D and are always drawn on the sketch. The add buttons are at the top: «Add wall» and «Wall on the whole outline».",

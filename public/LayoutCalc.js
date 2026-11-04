@@ -39,6 +39,7 @@
     const SECTIONS = {
         contorno: 'colLayoutContorno',
         paredes: 'colLayoutParedes',
+        obstaculos: 'colLayoutObstaculos',
         puertas: 'colLayoutPuertas',
         zonas: 'colLayoutZonas',
         espacios: 'colLayoutEspacios',
@@ -1856,9 +1857,10 @@
 
     function sectionData(layout, section) {
         if (!layout) return null;
-        // Las paredes (obstáculos de tipo pared) tienen su propio paso: Contorno lleva el marco y los demás obstáculos (columnas, desniveles y otros); Paredes, las paredes.
-        if (section === 'contorno') return { vertices: layout.vertices, obstacles: (layout.obstacles || []).filter((o) => o.kind !== 'wall'), siteName: layout.siteName || '' };
+        // Las paredes y los demás obstáculos (columnas, desniveles y otros) viven en la misma lista (layout.obstacles) pero cada uno tiene su propio paso: Contorno lleva solo el marco, Paredes las paredes y Obstáculos lo demás.
+        if (section === 'contorno') return { vertices: layout.vertices, siteName: layout.siteName || '' };
         if (section === 'paredes') return (layout.obstacles || []).filter((o) => o.kind === 'wall');
+        if (section === 'obstaculos') return (layout.obstacles || []).filter((o) => o.kind !== 'wall');
         if (section === 'puertas') return layout.doors;
         if (section === 'luz') return layout.power;
         // Siempre una lista (un Layout de antes sin sensores cuenta igual que uno sin ninguno); la zona sale de la pared y del croquis, no se captura.

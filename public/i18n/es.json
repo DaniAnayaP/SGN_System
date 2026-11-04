@@ -1581,6 +1581,7 @@
     "colMaterialApoyoFuncionalidad": "Acceso a Funcionalidad Pantallas",
     "colLayoutContorno": "Contorno de la nave",
     "colLayoutParedes": "Paredes",
+    "colLayoutObstaculos": "Obstáculos",
     "colLayoutPuertas": "Puertas",
     "colLayoutLuz": "Energía Eléctrica",
     "colLayoutSensores": "Sensores",
@@ -1696,6 +1697,8 @@
     "layoutAgregarEsquina": "+ Agregar esquina",
     "layoutColumnasTitulo": "Obstáculos del contorno (columnas, desniveles…)",
     "layoutStepParedes": "Paredes",
+    "layoutStepObstaculos": "Obstáculos",
+    "layoutObstaculosVacio": "Todavía no hay obstáculos. Agrega columnas, desniveles u otras cosas que estorben con el botón de arriba.",
     "layoutAgregarPared": "+ Agregar pared",
     "layoutParedesVacio": "Todavía no hay paredes. Agrega una con el botón de arriba o usa «Pared en todo el contorno».",
     "layoutNombre": "Nombre",
@@ -3950,7 +3953,7 @@
       "example": "tocas Puertas y luego Energía Eléctrica: ves ambas en el croquis y abajo editas solo la luz; tocas Puertas otra vez para editar las puertas."
     },
     "layoutSec_contorno": {
-      "what": "Las esquinas de la nave en metros, con la altura de cada una. El contorno es solo el marco del terreno: no es pared. Las paredes tienen su propio paso (Paredes); aquí van las columnas, los desniveles y cualquier otra cosa que estorbe, como obstáculos puestos encima, sobre un lado del contorno o dentro de la nave. Los botones de agregar están arriba, junto al título. De aquí salen los m² totales y, con las alturas y los desniveles, los m³.",
+      "what": "Las esquinas de la nave en metros, con la altura de cada una. El contorno es solo el marco del terreno: no es pared. Las paredes y los obstáculos (columnas, desniveles y cualquier otra cosa que estorbe) tienen cada uno su propio paso: Paredes y Obstáculos. El botón de agregar un lado o una esquina está arriba, junto al título. De aquí salen los m² totales y, con las alturas y los desniveles, los m³.",
       "example": "una nave con el techo más alto de un lado tiene 6 metros en dos esquinas y 10 en las otras dos."
     },
     "layoutSec_puertas": {
@@ -4612,6 +4615,10 @@
     "layoutSgAvisar": {
       "what": "Con cuántos días de anticipación un elemento sale como «Por vencer». De fábrica son 30; vale para todos los elementos de seguridad de este Layout.",
       "example": "con 45, un extintor que caduca en 40 días ya sale como «Por vencer»."
+    },
+    "layoutSec_obstaculos": {
+      "what": "Las cosas que estorban en la nave y no son pared: columnas, desniveles (un tramo del piso más alto o más bajo) y cualquier otra cosa. Cada una va sobre un lado del contorno o dentro de la nave, con su lugar y medidas; el desnivel lleva además su altura. Se ven en el croquis y en el 3D mientras este paso esté encendido, y nada puede ir dentro de un pasillo. El botón de agregar está arriba, junto al título.",
+      "example": "una columna de 0.6 m en medio de la nave y un desnivel de 0.15 m junto al andén."
     },
     "layoutSec_paredes": {
       "what": "Las paredes de la nave. Cada una va sobre un lado del contorno (a todo lo largo o solo un tramo, con su grosor) o dentro de la nave, con su lugar y medidas. Las paredes suben del piso al techo en el 3D y se dibujan siempre en el croquis. Los botones de agregar están arriba: «Agregar pared» y «Pared en todo el contorno».",
