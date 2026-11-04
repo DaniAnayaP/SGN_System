@@ -594,6 +594,8 @@
     "layoutOrderListNames": "Orden de {name}",
     "layoutClassNames": "Clasificación de «{name}»",
     "giroGateBlockedByStatus": "Este permiso está en el Estatus \"{status}\" — no se puede otorgar hasta que Árbol Maestro lo habilite.",
+    "limitSkippedService": "Algunos accesos de este bloque no están habilitados para servicio y no se marcaron.",
+    "limitServiceNotEnabled": "Este acceso no está habilitado para servicio (Estatus: {status}): no se puede asignar al cliente hasta que el Árbol Maestro lo habilite.",
     "giroGateBlockedByPlatform": "Árbol Maestro no tiene la plataforma {platform} habilitada para este permiso.",
     "giroGateNeedsWebFirst": "Primero otorga el acceso Web de este permiso — App no puede activarse sin Web.",
     "businessSectorStatusActive": "Activo para servicio",

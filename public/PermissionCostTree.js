@@ -213,6 +213,20 @@
         function isLimitLocked(key) {
             return !!limitReasonKey(key);
         }
+        // El texto del candado: 'status' (un Estatus que quien da el permiso no ve), 'service:<estatus>' (el acceso no está habilitado para servicio en el Árbol Maestro,
+        // así que no se puede asignar) o, si no, que está fuera de lo contratado.
+        const SERVICE_STATUS_LABEL_KEYS = { inhabilitado: 'admin.masterTreeStatusInhabilitado', construccion: 'admin.masterTreeStatusConstruccion', mejoras: 'admin.masterTreeStatusMejoras' };
+        function limitReasonText(reason) {
+            if (reason === 'status') return t('main.limitLockedStatus');
+            if (typeof reason === 'string' && reason.indexOf('service:') === 0) {
+                const status = reason.slice(8);
+                return t('admin.limitServiceNotEnabled', { status: SERVICE_STATUS_LABEL_KEYS[status] ? t(SERVICE_STATUS_LABEL_KEYS[status]) : status });
+            }
+            return t('main.limitLockedContract');
+        }
+        function notifyLimit(message) {
+            if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'warning');
+        }
         let planGrantSet = new PlanSet(); // clientTricolor: coverage granted by the client's PLAN (green)
         let clientGrantSet = new Set(); // clientTricolor: already-saved "+ adicionales" sold to THIS client (yellow)
         let pendingAdditions = new Set(); // clientTricolor + interactive: unsaved additions toggled in this session
@@ -494,7 +508,10 @@
                     row.appendChild(label);
                     if (colorSlot && colorSlot.limitReason) {
                         row.classList.add('perm-tree-row-limit-locked');
-                        row.title = t(colorSlot.limitReason === 'status' ? 'main.limitLockedStatus' : 'main.limitLockedContract');
+                        // Se ve, pero no se puede marcar: al intentarlo avisa por qué (por ejemplo, que no está habilitado para servicio).
+                        const lockedText = limitReasonText(colorSlot.limitReason);
+                        row.title = lockedText;
+                        row.addEventListener('click', () => notifyLimit(lockedText));
                     }
                 }
                 // Interactive "+ Adicionales" only: shows what each row would
@@ -564,7 +581,14 @@
                 color,
                 limitReason: color === 'red' ? lockedReason : null,
                 checked: color === 'red' && stageable.length > 0 && stageable.every((k) => pendingAdditions.has(k)),
-                onChange: (checked) => stageable.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
+                onChange: (checked) => {
+                    stageable.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k)));
+                    // «Marcar todo» de un contenedor salta lo que no está habilitado para servicio: se avisa cuántos accesos no se marcaron.
+                    if (checked && grantLimits && stageable.length < leafKeys.length) {
+                        const skipped = leafKeys.filter((k) => { const r = limitReasonKey(k); return typeof r === 'string' && r.indexOf('service:') === 0; }).length;
+                        if (skipped) notifyLimit(t('admin.limitSkippedService', { count: skipped }));
+                    }
+                },
             }];
         }
 

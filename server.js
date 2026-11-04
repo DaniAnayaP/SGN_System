@@ -321,6 +321,8 @@ const {
     getSectorGrants,
     setSectorGrants,
     getMasterPermissionStatuses,
+    resolveMasterNodeStatus,
+    buildMasterStatusOverrideMap,
     setMasterPermissionStatuses,
     getUserVisibleStatuses,
     setUserVisibleStatuses,
@@ -1734,6 +1736,17 @@ app.put('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (
     for (const g of grants) {
         if (isTupleGranted(planGrants, g.sectionId, g.itemId, g.submenuId)) {
             return res.status(400).json({ message: 'Ese permiso ya está incluido en el plan del cliente.' });
+        }
+    }
+    // Lo que no está habilitado para servicio en el Árbol Maestro no se puede asignar al cliente (lo nuevo; lo que ya estaba guardado se queda). El árbol ya lo muestra con aviso; esto es por si llega de otro lado.
+    const serviceKey = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+    const alreadySaved = new Set(getClientPermissionGrants(req.params.id).map(serviceKey));
+    const serviceOverrides = buildMasterStatusOverrideMap(getMasterPermissionStatuses().filter((r) => r.status !== 'habilitado'));
+    for (const g of grants) {
+        if (alreadySaved.has(serviceKey(g))) continue;
+        const status = resolveMasterNodeStatus(g.sectionId, g.itemId, String(g.submenuId || '').replace(/#app$/, '') || null, serviceOverrides);
+        if (status !== 'habilitado') {
+            return res.status(400).json({ code: 'service-not-enabled', status, sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null, message: `Este acceso no está habilitado para servicio (Estatus: ${status}) y no se puede asignar al cliente hasta que el Árbol Maestro lo habilite.` });
         }
     }
     const saved = setClientPermissionGrants(req.params.id, grants, changedByLabel(req));
