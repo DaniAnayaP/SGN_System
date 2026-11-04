@@ -98,7 +98,7 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))));
+        const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateDoors(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], vertices, heightM: round2(meanHeight(vertices)) }))))))))))))));
         // Seguridad: la zona de cada elemento sale de su lugar y su código (E001…) lo pone el sistema.
         return assignSafetyCodes(deriveSafetyZones(normalized));
     }
@@ -216,6 +216,114 @@
         if (layout.wallsMigrated) return { ...layout, obstacles };
         const taken = new Set(obstacles.map((o) => o.id));
         return { ...layout, obstacles: [...defaultWalls(Array.isArray(layout.vertices) ? layout.vertices : []).filter((w) => !taken.has(w.id)), ...obstacles], wallsMigrated: true };
+    }
+    // ---- Puertas sobre paredes ---------------------------------------------------------------------------------------------------------------
+    // Una puerta SIEMPRE va sobre una pared: se elige cuál (wallId = el id de un obstáculo de tipo pared) y se mide desde el INICIO de esa pared: dist = a cuántos metros del inicio empieza, width = ancho y height = alto. La
+    // pared dice cuánto mide (su largo) y qué tan alta es, y la puerta no puede pasarse de ninguna de las dos. En una pared sobre el contorno el inicio es donde empieza (la esquina de su lado más su distancia); en una de
+    // dentro de la nave es su extremo de arriba o de la izquierda. Una puerta de antes (sin wallId, con el número de lado) pasa sola a la pared que la cubre (migrateDoors).
+    const cornerHeightAt = (layout, i) => { const v = ((layout && layout.vertices) || [])[i]; const h = Number(v && v[2]); return h > 0 ? h : (Number(layout && layout.heightM) > 0 ? Number(layout.heightM) : 0); };
+    // El eje de una pared (por el centro de su grosor): dónde empieza, hacia dónde va, cuánto mide, qué tan gruesa y qué tan alta es; null si no se puede ubicar.
+    function wallAxis(layout, o) {
+        if (!o) return null;
+        const verts = (layout && layout.vertices) || [];
+        if (o.mode === 'contour') {
+            if (verts.length < 3) return null;
+            const side = Math.max(1, Math.round(Number(o.wall)) || 1);
+            const seg = wallSegment(verts, side);
+            if (!(seg.length > 0)) return null;
+            const dist = Math.min(Math.max(Number(o.dist) || 0, 0), seg.length);
+            const rest = seg.length - dist;
+            const len = Number(o.l) > 0 ? Math.min(Number(o.l), rest) : rest;
+            const thick = Math.max(Number(o.w) || 0, 0);
+            const sign = signedArea(verts) >= 0 ? 1 : -1;
+            const nx = -seg.uy * sign;
+            const ny = seg.ux * sign;
+            const n = verts.length;
+            const height = (cornerHeightAt(layout, (side - 1) % n) + cornerHeightAt(layout, side % n)) / 2;
+            return { x: seg.p[0] + seg.ux * dist + nx * thick / 2, y: seg.p[1] + seg.uy * dist + ny * thick / 2, ux: seg.ux, uy: seg.uy, length: len, thick, height };
+        }
+        const x = Number(o.x) || 0;
+        const y = Number(o.y) || 0;
+        const l = Math.max(Number(o.l) || 0, 0);
+        const w = Math.max(Number(o.w) || 0, 0);
+        const height = verts.length ? verts.reduce((acc, _, i) => acc + cornerHeightAt(layout, i), 0) / verts.length : 0;
+        return l >= w ? { x, y: y + w / 2, ux: 1, uy: 0, length: l, thick: w, height } : { x: x + l / 2, y, ux: 0, uy: 1, length: w, thick: l, height };
+    }
+    // Dónde queda una puerta: sus dos extremos (a y b, en metros, por el centro de la pared), hacia dónde va la pared, su grosor y lo que mide y de alto la pared; wall = la pared (o null si es una puerta de antes que todavía
+    // no está en una, que se ubica sobre el lado del contorno como se hacía: legacy). null si no se puede ubicar. Un Layout girado (rotateLayout) trae la puerta ya girada en door._seg.
+    function doorGeometry(layout, door) {
+        if (!door) return null;
+        if (door._seg) return door._seg;
+        const dist = Math.max(Number(door.dist) || 0, 0);
+        const width = Math.max(Number(door.width) || 0, 0);
+        const wall = door.wallId ? ((layout && layout.obstacles) || []).find((o) => o && o.id === door.wallId && o.kind === 'wall') : null;
+        if (wall) {
+            const ax = wallAxis(layout, wall);
+            if (!ax) return null;
+            const a = { x: ax.x + ax.ux * dist, y: ax.y + ax.uy * dist };
+            return { a, b: { x: a.x + ax.ux * width, y: a.y + ax.uy * width }, ux: ax.ux, uy: ax.uy, thick: ax.thick, wallLength: ax.length, wallHeight: ax.height, wall, legacy: false };
+        }
+        const verts = (layout && layout.vertices) || [];
+        const side = Math.round(Number(door.wall));
+        if (!(side >= 1) || verts.length < 3) return null;
+        const seg = wallSegment(verts, side);
+        if (!(seg.length > 0)) return null;
+        const a = { x: seg.p[0] + seg.ux * dist, y: seg.p[1] + seg.uy * dist };
+        const n = verts.length;
+        return { a, b: { x: a.x + seg.ux * width, y: a.y + seg.uy * width }, ux: seg.ux, uy: seg.uy, thick: 0, wallLength: seg.length, wallHeight: (cornerHeightAt(layout, (side - 1) % n) + cornerHeightAt(layout, side % n)) / 2, wall: null, legacy: true };
+    }
+    // Las puertas de antes (con el número del lado del contorno, sin pared) pasan a la pared que las cubre en ese lado (una sola vez; con wallId ya no se tocan): su distancia pasa a medirse desde el inicio de esa pared. Si en ese lado
+    // no hay una pared que cubra el lugar de la puerta se queda como estaba y la revisión la marca «sin pared».
+    function migrateDoors(layout) {
+        if (!layout || !Array.isArray(layout.doors) || !layout.doors.length) return layout;
+        const verts = Array.isArray(layout.vertices) ? layout.vertices : [];
+        const walls = (Array.isArray(layout.obstacles) ? layout.obstacles : []).filter((o) => o && o.kind === 'wall' && o.mode === 'contour');
+        let changed = false;
+        const doors = layout.doors.map((d) => {
+            if (!d || typeof d !== 'object' || d.wallId) return d;
+            const side = Math.round(Number(d.wall));
+            if (!(side >= 1) || verts.length < 3) return d;
+            const seg = wallSegment(verts, side);
+            if (!(seg.length > 0)) return d;
+            const start = Math.max(Number(d.dist) || 0, 0);
+            let from = 0;
+            const hit = walls.find((o) => {
+                if (Math.round(Number(o.wall)) !== side) return false;
+                const ws = Math.min(Math.max(Number(o.dist) || 0, 0), seg.length);
+                const len = Number(o.l) > 0 ? Math.min(Number(o.l), seg.length - ws) : seg.length - ws;
+                if (start < ws - 1e-6 || start > ws + len + 1e-6) return false;
+                from = ws;
+                return true;
+            });
+            if (!hit) return d;
+            changed = true;
+            const { wall, ...rest } = d;
+            return { ...rest, wallId: hit.id, dist: round2(start - from) };
+        });
+        return changed ? { ...layout, doors } : layout;
+    }
+    // Lo que está mal en las puertas: «nowall» (no está sobre una pared), «outside» (empieza antes de la pared o se pasa de su largo) y «tall» (más alta que la pared). sig identifica el estado de la puerta y de su pared: lo que ya estaba
+    // mal y no cambió solo se marca; lo NUEVO o lo que cambió (la puerta o su pared) no se deja guardar (ver newDoorViolations).
+    function doorViolations(layout) {
+        const out = [];
+        if (!layout || !Array.isArray(layout.doors)) return out;
+        layout.doors.forEach((d) => {
+            const name = String((d && d.name) || 'Puerta');
+            const g = doorGeometry(layout, d);
+            if (!g || g.legacy) { out.push({ id: d.id, kind: 'nowall', sig: JSON.stringify([d.wallId || '', d.wall || 0, d.dist, d.width]), message: `La puerta «${name}» no está sobre una pared: elige la pared donde va.`, vars: { name } }); return; }
+            const dist = Number(d.dist) || 0;
+            const width = Number(d.width) || 0;
+            const height = Number(d.height) || 0;
+            const wname = (g.wall && g.wall.name) || 'Pared';
+            if (dist < -0.005 || dist + width > g.wallLength + 0.005) out.push({ id: d.id, kind: 'outside', sig: JSON.stringify([d.wallId, dist, width, round2(g.wallLength)]), message: `La puerta «${name}» no cabe en la pared «${wname}» (mide ${round2(g.wallLength)} m): empieza a ${round2(dist)} m y mide ${round2(width)} m.`, vars: { name, wall: wname, len: round2(g.wallLength), dist: round2(dist), width: round2(width) } });
+            if (g.wallHeight > 0 && height > g.wallHeight + 0.005) out.push({ id: d.id, kind: 'tall', sig: JSON.stringify([d.wallId, height, round2(g.wallHeight)]), message: `La puerta «${name}» (${round2(height)} m de alto) es más alta que la pared «${wname}» (${round2(g.wallHeight)} m).`, vars: { name, wall: wname, height: round2(height), wallHeight: round2(g.wallHeight) } });
+        });
+        return out;
+    }
+    const doorKey = (v) => `${v.kind}|${v.id}|${v.sig}`;
+    function newDoorViolations(next, previous) {
+        const before = new Set((previous ? doorViolations(previous) : []).map(doorKey));
+        return doorViolations(next).filter((v) => !before.has(doorKey(v)));
     }
     // Volumen de la nave: lo que cabe bajo el techo menos lo que sube el piso en cada desnivel (superficie por su altura sobre el piso; si es más bajo, la altura es negativa y suma).
     function netVolume(layout) {
@@ -1419,7 +1527,7 @@
     function sanitizeLayout(input) {
         const errors = [];
         // Una pantalla vieja (sin paredes como obstáculos) manda el Layout como lo conocía: se lee igual que al abrirlo, con una pared por lado, para que no cuente como un cambio del contorno.
-        const src = migrateTransit(migrateWalls(migrateFootprints(input && typeof input === 'object' ? input : {})));
+        const src = migrateTransit(migrateDoors(migrateWalls(migrateFootprints(input && typeof input === 'object' ? input : {}))));
         const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
         const meters = (v, label, min = 0) => {
             const n = Number(v);
@@ -1473,11 +1581,12 @@
         out.doors = list(src.doors, LIMITS.doors, 'Puertas').map((d, i) => {
             const label = `Puerta ${i + 1}`;
             const wall = Math.round(Number(d && d.wall));
-            if (!(wall >= 1 && wall <= walls)) errors.push(`${label}: pared no válida`);
-            return {
-                id: idOf(d && d.id, doorIds, label), name: text(d && d.name, label, true), type: oneOf(d && d.type, DOOR_TYPES, 'staff'),
-                wall: wall >= 1 && wall <= walls ? wall : 1, dist: meters(d && d.dist, label), width: meters(d && d.width, label), height: meters(d && d.height, label),
-            };
+            // Una puerta va sobre una pared (wallId); la de antes trae el número del lado (wall) hasta que pasa a una (migrateDoors). Sin ninguna de las dos queda «sin pared» (la revisión la marca).
+            const wallId = d && typeof d.wallId === 'string' ? d.wallId.trim().slice(0, 64) : '';
+            if (!wallId && d && d.wall !== undefined && d.wall !== null && !(wall >= 1 && wall <= walls)) errors.push(`${label}: pared no válida`);
+            const item = { id: idOf(d && d.id, doorIds, label), name: text(d && d.name, label, true), type: oneOf(d && d.type, DOOR_TYPES, 'staff'), dist: meters(d && d.dist, label), width: meters(d && d.width, label), height: meters(d && d.height, label) };
+            if (wallId) return { ...item, wallId };
+            return wall >= 1 && wall <= walls ? { ...item, wall } : { ...item, wallId: '' };
         });
 
         const powerIds = new Set();
@@ -1519,6 +1628,9 @@
             if (kind === 'step') base.dz = meters(o && o.dz != null && o.dz !== '' ? o.dz : 0, label, -LIMITS.maxHeight);
             return base;
         });
+
+        // La pared de cada puerta tiene que existir (una pared quitada deja a sus puertas «sin pared» en la pantalla; aquí solo se rechaza una referencia a una que no está).
+        out.doors.forEach((d) => { if (d.wallId && !out.obstacles.some((o) => o.id === d.wallId && o.kind === 'wall')) errors.push(`Puerta «${d.name}»: la pared que se eligió no existe`); });
 
         // Objetos: personas y montacargas dibujados en el plano (foto fija).
         const objectIds = new Set();
@@ -1805,6 +1917,13 @@
         return {
             ...layout,
             vertices: (layout.vertices || []).map((p) => [...turn(p), p[2]]),
+            // una puerta se ubica sobre su pared en el Layout sin girar y de ahí se giran sus dos extremos y hacia dónde va
+            doors: (layout.doors || []).map((door) => {
+                const g = doorGeometry(layout, door);
+                if (!g) return door;
+                const dir = pt(g.ux, g.uy);
+                return { ...door, _seg: { ...g, a: { x: round2(turn([g.a.x, g.a.y])[0]), y: round2(turn([g.a.x, g.a.y])[1]) }, b: { x: round2(turn([g.b.x, g.b.y])[0]), y: round2(turn([g.b.x, g.b.y])[1]) }, ux: dir[0], uy: dir[1] } };
+            }),
             // los obstáculos pegados a un lado del contorno siguen a su lado (que ya viene girado); los de dentro de la nave se giran como cualquier recuadro
             obstacles: (layout.obstacles || []).map((o) => (o.mode === 'contour' ? o : { ...o, ...box(o, 'l', 'w') })),
             transit: (layout.transit || []).map((p) => ({ ...p, ...box(p, 'l', 'w') })),
@@ -1918,7 +2037,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume,
+        OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,

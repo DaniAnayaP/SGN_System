@@ -328,11 +328,11 @@
             if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="${hit ? 800 : 600}" fill="${hit ? '#FFFFFF' : (own && inkFor(own)) || T.chrome.cardInk}" text-anchor="middle"${dim ? ' opacity="0.4"' : ''}>${esc(sp.code)}</text>`;
         });
         s += zoneHalos + measureHalos + zoneLabels + measureLabels;
+        // Una puerta va sobre su pared: se dibuja por el centro de la pared, a lo largo de ella.
         (on('puertas') ? (layout.doors || []) : []).forEach((d) => {
-            const w = LC.wallSegment(layout.vertices, d.wall);
-            const ax = w.p[0] + w.ux * d.dist;
-            const ay = w.p[1] + w.uy * d.dist;
-            s += `<line x1="${X(ax)}" y1="${Y(ay)}" x2="${X(ax + w.ux * d.width)}" y2="${Y(ay + w.uy * d.width)}" stroke="#1E7E34" stroke-width="7"/>`;
+            const g = LC.doorGeometry(layout, d);
+            if (!g) return;
+            s += `<line x1="${X(g.a.x)}" y1="${Y(g.a.y)}" x2="${X(g.b.x)}" y2="${Y(g.b.y)}" stroke="#1E7E34" stroke-width="7"/>`;
         });
         // Columnas (con el contorno) y conexiones de luz (con su paso): solo las trae el reporte con sesión; la vista pública nunca las lleva.
         (on('obstaculos') ? obstacleShapes.filter(({ o }) => o.kind !== 'wall') : []).forEach(({ o, g }) => {

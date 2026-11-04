@@ -6562,7 +6562,7 @@ function buildPublicLayoutPayload(clientId, row) {
     const pub = {
         heightM: l.heightM,
         vertices: l.vertices,
-        doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, wall: d.wall, dist: d.dist, width: d.width, height: d.height })),
+        doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, ...(d.wallId ? { wallId: d.wallId } : { wall: d.wall }), dist: d.dist, width: d.width, height: d.height })),
         zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}), ...(Array.isArray(z.categories) && z.categories.length ? { categories: z.categories } : {}) })),
         // La huella (el lugar en el piso, con su color si lo tiene) se dibuja debajo y el activo, con su propio color, encima.
         footprints: (l.footprints || []).filter((f) => f.active !== false).map((f) => ({ id: f.id, code: f.code, x: f.x, y: f.y, l: f.l, d: f.d, h: f.h, ...(f.fmt ? { fmt: f.fmt } : {}) })),
@@ -6730,6 +6730,11 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     {
         const freshSafety = LayoutCalc.newSafetyViolations(next, existing ? existing.layout : null);
         if (freshSafety.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSafety.map((v) => v.message), section: 'seguridad' });
+    }
+    // Puertas: cada una va sobre una pared, empieza y termina dentro de ella y no es más alta que ella. Lo nuevo o lo que cambió (la puerta o su pared) y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
+    {
+        const freshDoors = LayoutCalc.newDoorViolations(next, existing ? existing.layout : null);
+        if (freshDoors.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshDoors.map((v) => v.message), section: 'puertas' });
     }
     // Cada espacio con clasificación o tipo de activo debe apuntar a uno de los catálogos del cliente (activo, o el mismo que ya tenía guardado).
     {

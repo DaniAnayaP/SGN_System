@@ -141,13 +141,23 @@
                 const e = ((isDoor ? lastLayout.doors : lastLayout.power) || []).find((x) => x.id === hl.id);
                 if (!e || !(isDoor ? layerOn.doors : layerOn.power)) return null;
                 const V = Array.isArray(lastLayout.vertices) ? lastLayout.vertices.filter((p) => Array.isArray(p) && p.length >= 2) : [];
-                const seg = wallSegment(V, Number(e.wall) || 1);
+                let seg;
+                let along;
+                let thick;
+                if (isDoor) {
+                    // la puerta va sobre su pared (por el centro de la pared)
+                    const dg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(lastLayout, e) : null;
+                    if (!dg) return null;
+                    const w = Math.max(0.3, Number(e.width) || 1);
+                    const h = Math.max(0.5, Number(e.height) || 2.1);
+                    thick = Math.max(0.2, dg.thick + 0.04);
+                    return { x: PX((dg.a.x + dg.b.x) / 2), y: h / 2, z: PZ((dg.a.y + dg.b.y) / 2), sx: Math.abs(dg.ux) * w + Math.abs(dg.uy) * thick, sy: h, sz: Math.abs(dg.uy) * w + Math.abs(dg.ux) * thick };
+                }
+                seg = wallSegment(V, Number(e.wall) || 1);
                 if (!seg.length) return null;
-                const w = isDoor ? Math.max(0.3, Number(e.width) || 1) : 0.28;
-                const h = isDoor ? Math.max(0.5, Number(e.height) || 2.1) : 0.28;
-                const along = (Number(e.dist) || 0) + (isDoor ? w / 2 : 0);
-                const thick = isDoor ? 0.2 : 0.16;
-                return { x: PX(seg.p[0] + seg.ux * along), y: isDoor ? h / 2 : Math.max(0.2, Number(e.height) || 0.4), z: PZ(seg.p[1] + seg.uy * along), sx: Math.abs(seg.ux) * w + Math.abs(seg.uy) * thick, sy: h, sz: Math.abs(seg.uy) * w + Math.abs(seg.ux) * thick };
+                along = Number(e.dist) || 0;
+                thick = 0.16;
+                return { x: PX(seg.p[0] + seg.ux * along), y: Math.max(0.2, Number(e.height) || 0.4), z: PZ(seg.p[1] + seg.uy * along), sx: Math.abs(seg.ux) * 0.28 + Math.abs(seg.uy) * thick, sy: 0.28, sz: Math.abs(seg.uy) * 0.28 + Math.abs(seg.ux) * thick };
             }
             // un elemento de seguridad, un pasillo o un objeto elegido en las tablas de Seguridad, Tránsito u Objetos
             if (hl.kind === 'safety') {
@@ -355,15 +365,15 @@
             group.contour.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x4a5f8f })));
 
             // puertas y conexiones de luz (la pared 1 va de la esquina 1 a la 2; dist es desde la esquina de inicio)
+            // una puerta va sobre su pared: por el centro de la pared, a lo largo de ella y un poco más gruesa que ella
             (layout.doors || []).forEach((d) => {
-                const seg = wallSegment(V, Number(d.wall) || 1);
-                if (!seg.length) return;
+                const dg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(layout, d) : null;
+                if (!dg) return;
                 const w = Math.max(0.3, Number(d.width) || 1);
                 const h = Math.max(0.5, Number(d.height) || 2.1);
-                const along = (Number(d.dist) || 0) + w / 2;
-                const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.2), lam(DOOR_COLOR[d.type] || DOOR_COLOR.staff));
-                m.position.set(PX(seg.p[0] + seg.ux * along), h / 2, PZ(seg.p[1] + seg.uy * along));
-                m.rotation.y = -Math.atan2(seg.uy, seg.ux);
+                const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, Math.max(0.2, dg.thick + 0.04)), lam(DOOR_COLOR[d.type] || DOOR_COLOR.staff));
+                m.position.set(PX((dg.a.x + dg.b.x) / 2), h / 2, PZ((dg.a.y + dg.b.y) / 2));
+                m.rotation.y = -Math.atan2(dg.uy, dg.ux);
                 group.doors.add(m);
             });
             (layout.power || []).forEach((e) => {

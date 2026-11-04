@@ -686,6 +686,53 @@ function applySafetyMarks() {
         box.innerHTML = all.map((v) => `<p>${esc(safetyIssueText(v))}</p>`).join('');
     }
 }
+// Las paredes que hay (las del paso Paredes) para elegir en qué pared va una puerta; sin pared elegida sale «Elige la pared».
+function wallPickHtml(selected) {
+    const walls = (state.draft.obstacles || []).filter((o) => o.kind === 'wall');
+    const empty = selected && walls.some((o) => o.id === selected) ? '' : `<option value="" selected>${esc(t('main.layoutPuertaElegirPared'))}</option>`;
+    return empty + walls.map((o) => `<option value="${esc(o.id)}"${o.id === selected ? ' selected' : ''}>${esc(o.name)}</option>`).join('');
+}
+// Lo que mide y de alto tiene la pared de una puerta (sale de la pared, no se escribe).
+function doorWallCell(door, which) {
+    const g = LC.doorGeometry(state.draft, door);
+    if (!g || g.legacy) return '—';
+    return which === 'len' ? fmt(g.wallLength) : fmt(g.wallHeight);
+}
+// Una puerta cuya pared se quitó (o se cambió a columna) se queda sin pared: la pantalla le pide una.
+function syncDoorWalls() {
+    const ids = new Set((state.draft.obstacles || []).filter((o) => o.kind === 'wall').map((o) => o.id));
+    (state.draft.doors || []).forEach((door) => { if (door.wallId && !ids.has(door.wallId)) door.wallId = ''; });
+}
+// Las faltas de cada puerta (LayoutCalc.doorViolations): sin pared, se pasa del largo de su pared o es más alta que ella. drIssues = id -> { nowall, outside, tall }.
+let drIssues = new Map();
+function computeDoorIssues() {
+    drIssues = new Map();
+    if (!state.draft) return;
+    LC.doorViolations(state.draft).forEach((v) => { const m = drIssues.get(v.id) || {}; m[v.kind] = v; drIssues.set(v.id, m); });
+}
+const doorIssueText = (v) => t(`main.layoutVioDr_${v.kind}`, v.vars || {});
+function applyDoorMarks() {
+    if (!state.draft) return;
+    computeDoorIssues();
+    (state.draft.doors || []).forEach((door, i) => {
+        const bad = drIssues.get(door.id) || {};
+        const mark = (key, on) => { const box = document.querySelector(`[data-l="doors"][data-i="${i}"][data-k="${key}"]`); if (box) box.classList.toggle('layout-missing', !!on); };
+        mark('wallId', bad.nowall);
+        mark('dist', bad.outside);
+        mark('width', bad.outside);
+        mark('height', bad.tall);
+        const lenCell = document.querySelector(`[data-dr-len="${i}"]`);
+        if (lenCell) lenCell.textContent = doorWallCell(door, 'len');
+        const hCell = document.querySelector(`[data-dr-h="${i}"]`);
+        if (hCell) hCell.textContent = doorWallCell(door, 'h');
+    });
+    const box = document.querySelector('[data-dr-issues]');
+    if (box) {
+        const all = LC.doorViolations(state.draft);
+        box.hidden = !all.length;
+        box.innerHTML = all.map((v) => `<p>${esc(doorIssueText(v))}</p>`).join('');
+    }
+}
 function applyActivoMarks() {
     (state.draft.spaces || []).forEach((s, i) => {
         const eff = ownEffective(s);
@@ -852,8 +899,9 @@ function stepHtml(step) {
         return `${addWallBtn}${wallsAllBtn}${list}`;
     }
     if (step === 'puertas') {
-        const rows = d.doors.map((x, i) => `<tr>${cellText('doors', i, 'name', x.name, dis)}${cellSelect('doors', i, 'type', optionsHtml('door', LC.DOOR_TYPES, x.type), dis)}${cellSelect('doors', i, 'wall', wallOptionsHtml(x.wall), dis)}${cellNum('doors', i, 'dist', x.dist, dis)}${cellNum('doors', i, 'width', x.width, dis)}${cellNum('doors', i, 'height', x.height, dis)}${removeCell('doors', i, dis)}</tr>`);
-        return `${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutPared', 'main.layoutDistancia', 'main.layoutAncho', 'main.layoutAlto', ''], rows)}${addButton('doors', 'main.layoutAgregarPuerta', dis, true)}`;
+        // Una puerta SIEMPRE va sobre una pared: se elige cuál (de las del paso Paredes) y se mide desde el inicio de esa pared; la pared dice cuánto mide y qué tan alta es, y la puerta no se puede pasar de ninguna de las dos.
+        const rows = d.doors.map((x, i) => `<tr>${cellText('doors', i, 'name', x.name, dis)}${cellSelect('doors', i, 'type', optionsHtml('door', LC.DOOR_TYPES, x.type), dis)}${cellSelect('doors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('doors', i, 'dist', x.dist, dis)}${cellNum('doors', i, 'width', x.width, dis)}${cellNum('doors', i, 'height', x.height, dis)}<td class="layout-calc" data-dr-len="${i}">${doorWallCell(x, 'len')}</td><td class="layout-calc" data-dr-h="${i}">${doorWallCell(x, 'h')}</td>${removeCell('doors', i, dis)}</tr>`);
+        return `${addButton('doors', 'main.layoutAgregarPuerta', dis, true)}${rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutPuertasVacio'))}</p>`}<div class="layout-vio" data-dr-issues hidden></div>`;
     }
     if (step === 'luz') {
         const rows = d.power.map((x, i) => `<tr>${cellSelect('power', i, 'type', optionsHtml('power', LC.POWER_TYPES, x.type), dis)}${cellSelect('power', i, 'wall', wallOptionsHtml(x.wall), dis)}${cellNum('power', i, 'dist', x.dist, dis)}${cellNum('power', i, 'height', x.height, dis)}${removeCell('power', i, dis)}</tr>`);
@@ -1010,7 +1058,7 @@ const panelScrollers = () => Array.from(document.querySelectorAll('#layout-panel
 function renderPanel() {
     closeWhoPop();
     // el panel también se dibuja con lo que sale de la huella (zona de cada activo, si está activo): se saca antes de dibujarlo, no solo en refreshLive
-    if (state.draft) { syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; computeFootprintIssues(); computeSpaceIssues(); computeTransitIssues(); }
+    if (state.draft) { syncDoorWalls(); syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; computeFootprintIssues(); computeSpaceIssues(); computeTransitIssues(); }
     const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
     const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
@@ -1035,7 +1083,7 @@ function renderPanel() {
     panelScrollStep = state.focus;
     bindLayoutFilters();
     markSelectedRow();
-    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); applyTransitMarks(); applySafetyMarks(); }
+    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); applyTransitMarks(); applySafetyMarks(); applyDoorMarks(); }
     applyFindToTables();
 }
 
@@ -1641,9 +1689,11 @@ function renderSvg() {
     const halosAt = s.length; // aquí entran después los contornos de las etiquetas de las paredes: debajo de TODOS los textos
     s += zoneHalos + (sM ? measureHalos : '') + zoneLabels + (sM ? measureLabels : '');
     (on('puertas') ? d.doors : []).forEach((door) => {
-        const w = LC.wallSegment(d.vertices, door.wall);
-        const a = { x: w.p[0] + w.ux * door.dist, y: w.p[1] + w.uy * door.dist };
-        const b = { x: a.x + w.ux * door.width, y: a.y + w.uy * door.width };
+        const g = LC.doorGeometry(d, door);
+        if (!g) return;
+        const a = g.a;
+        const b = g.b;
+        if (drIssues.has(door.id)) s += `<rect class="lbad" x="${(Math.min(X(a.x), X(b.x)) - 5).toFixed(1)}" y="${(Math.min(Y(a.y), Y(b.y)) - 5).toFixed(1)}" width="${(Math.abs(X(b.x) - X(a.x)) + 10).toFixed(1)}" height="${(Math.abs(Y(b.y) - Y(a.y)) + 10).toFixed(1)}" rx="3"/>`;
         s += `<line class="ld" data-did="${esc(door.id)}" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"><title>${esc(door.name)}</title></line>`;
         s += `<rect class="hl-box" data-hlbox="door:${esc(door.id)}" x="${(Math.min(X(a.x), X(b.x)) - 7).toFixed(1)}" y="${(Math.min(Y(a.y), Y(b.y)) - 7).toFixed(1)}" width="${(Math.abs(X(b.x) - X(a.x)) + 14).toFixed(1)}" height="${(Math.abs(Y(b.y) - Y(a.y)) + 14).toFixed(1)}" rx="3"/>`;
     });
@@ -1752,7 +1802,8 @@ function renderSummary() {
 
 // Cada vez que cambia el borrador: KPIs, croquis, resumen y estado del botón Guardar. El formulario NO se redibuja (así no se pierde el cursor al teclear).
 function refreshLive() {
-    // el lugar en el piso, la zona, el alto y el formato de cada activo salen de su huella (LayoutCalc.deriveSpaces): se vuelven a sacar con cada cambio
+    // una puerta cuya pared ya no existe se queda sin pared; el lugar en el piso, la zona, el alto y el formato de cada activo salen de su huella (LayoutCalc.deriveSpaces): se vuelven a sacar con cada cambio
+    syncDoorWalls();
     syncHuellas();
     state.draft.spaces = LC.deriveSpaces(state.draft).spaces;
     computeFootprintIssues();
@@ -1765,6 +1816,7 @@ function refreshLive() {
     applyActivoMarks();
     state.draft.zones.forEach((z, i) => { const cell = document.querySelector(`[data-zone-code="${i}"]`); if (cell) cell.textContent = z.code; });
     // el código, la zona y los m² de cada pasillo salen de su lugar: se vuelven a sacar con cada cambio
+    applyDoorMarks();
     computeTransitIssues();
     (state.draft.transit || []).forEach((p, i) => {
         const codeCell = document.querySelector(`[data-tr-code="${i}"]`);
@@ -2067,7 +2119,7 @@ $('layout-from-scratch').addEventListener('click', newDraftFromScratch);
 // ---- edición -----------------------------------------------------------------------------------------------------------
 const ROW_FACTORY = {
     vertices: () => { const last = state.draft.vertices[state.draft.vertices.length - 1] || [0, 0, 9]; return [last[0], last[1], last[2]]; },
-    doors: () => ({ id: uid('d'), name: t('main.layoutPuertaNueva'), type: 'dock', wall: 1, dist: 0, width: 1.2, height: 2.1 }),
+    doors: () => { const wall = (state.draft.obstacles || []).find((o) => o.kind === 'wall'); return { id: uid('d'), name: t('main.layoutPuertaNueva'), type: 'dock', wallId: wall ? wall.id : '', dist: 0, width: 1.2, height: 2.1 }; },
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     sensors: () => ({ id: uid('n'), code: '', type: 'both', zoneId: '', wall: 1, dist: 1, height: 2.5 }),
     // un elemento de seguridad nuevo nace como extintor en el centro de la nave (corrido un poco para que no se encimen); se acomoda con X e Y y se le cambia el tipo en la lista
@@ -2354,6 +2406,7 @@ $('layout-panel').addEventListener('click', (event) => {
     const add = event.target.closest('[data-add]');
     if (add) {
         const list = add.dataset.add;
+        if (list === 'doors' && !(state.draft.obstacles || []).some((o) => o.kind === 'wall')) { Dashboard.showToast(t('main.layoutPuertaSinPared'), 'warning'); return; }
         if (list === 'zones') clearLayoutFilters();
         // una huella nueva es SOLO la huella (el lugar en el piso): los activos que se pongan encima se dan de alta después, en el paso Activos
         (state.draft[list] = state.draft[list] || []).push(ROW_FACTORY[list]());
@@ -2367,6 +2420,10 @@ $('layout-panel').addEventListener('click', (event) => {
     if (del) {
         const [list, index] = del.dataset.del.split(':');
         const removed = state.draft[list].splice(Number(index), 1)[0];
+        if (list === 'obstacles' && removed && removed.kind === 'wall') {
+            const orphan = (state.draft.doors || []).filter((door) => door.wallId === removed.id).length;
+            if (orphan) Dashboard.showToast(t('main.layoutPuertasSinPared', { n: orphan }), 'warning');
+        }
         // quitar una huella quita también sus activos
         if (list === 'footprints' && removed) state.draft.spaces = state.draft.spaces.filter((s) => s.footprintId !== removed.id);
         if (list === 'zones' && removed) { delete state.open.zones[removed.id]; if (state.zoneOpen === removed.id) state.zoneOpen = null; if (state.catsOpen === removed.id) state.catsOpen = null; }

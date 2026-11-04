@@ -2120,6 +2120,17 @@
     "layoutEliminarZonaConfirm": "Delete the zone \"{name}\"? Its footprints will be left without a zone and you will not be able to save until you move them to another zone or delete them. It is deleted when you save and cannot be undone.",
     "layoutEliminarEspacioConfirm": "Delete the space \"{name}\"? It is deleted when you save and cannot be undone.",
     "layoutPuertaNueva": "New door",
+    "layoutParedPuerta": "Wall",
+    "layoutDistanciaPared": "Distance from the start of the wall (m)",
+    "layoutPuertaParedLargo": "Wall length (m)",
+    "layoutPuertaParedAlto": "Wall height (m)",
+    "layoutPuertaElegirPared": "Choose the wall",
+    "layoutPuertaSinPared": "First add a wall (Walls step): a door always goes on a wall.",
+    "layoutPuertasSinPared": "A wall that had {n} door(s) was removed: they have no wall now, choose another one in the Doors step.",
+    "layoutPuertasVacio": "There are no doors yet. A door goes on a wall: add it and choose the wall.",
+    "layoutVioDr_nowall": "The door \"{name}\" is not on a wall: choose the wall it goes on.",
+    "layoutVioDr_outside": "The door \"{name}\" does not fit in the wall \"{wall}\" (it is {len} m long): it starts at {dist} m and is {width} m wide.",
+    "layoutVioDr_tall": "The door \"{name}\" ({height} m high) is taller than the wall \"{wall}\" ({wallHeight} m).",
     "layoutColumna": "Column",
     "layoutSoloVer": "You can only view this section",
     "layoutYaLlena": "It already has data: you need the Modify permission to change it",
@@ -3997,8 +4008,8 @@
       "example": "a warehouse with a higher roof on one side has 6 meters at two corners and 10 at the other two."
     },
     "layoutSec_puertas": {
-      "what": "The doors of the warehouse: which wall they are on, how many meters from the corner and how big they are.",
-      "example": "the receiving dock is on wall 1, 6 meters from the corner, and is 3.5 wide."
+      "what": "The doors of the warehouse. A door always goes on a wall: you choose which one (from those you added in the Walls step) and measure it from the start of that wall: how many meters it starts at, how wide and how high it is. The wall says how long and how high it is, and the door cannot go past either. If you remove the wall, its doors have no wall until you choose another one.",
+      "example": "the receiving dock goes on \"Wall 1\" (30 m long): it starts 6 meters from the start of the wall, is 3.5 wide and 2.8 high."
     },
     "layoutSec_sensores": {
       "what": "The temperature and humidity sensors of the warehouse: the type of each one (temperature, humidity or both), which wall it is on, how far from the corner and how high from the floor, just like the power connections. The code (S001, S002…) is set by the system, consecutive across the whole Layout, and cannot be edited. The zone comes by itself from where the sensor is. The QR of each sensor and the heat map come from here.",

@@ -2120,6 +2120,17 @@
     "layoutEliminarZonaConfirm": "¿Eliminar la zona \"{name}\"? Las huellas que tenga quedarán sin zona y no podrás guardar hasta moverlas a otra zona o eliminarlas. Se borra al guardar y no se puede deshacer.",
     "layoutEliminarEspacioConfirm": "¿Eliminar el espacio \"{name}\"? Se borra al guardar y no se puede deshacer.",
     "layoutPuertaNueva": "Puerta nueva",
+    "layoutParedPuerta": "Pared",
+    "layoutDistanciaPared": "Distancia desde el inicio de la pared (m)",
+    "layoutPuertaParedLargo": "Largo de la pared (m)",
+    "layoutPuertaParedAlto": "Alto de la pared (m)",
+    "layoutPuertaElegirPared": "Elige la pared",
+    "layoutPuertaSinPared": "Primero agrega una pared (paso Paredes): una puerta siempre va sobre una pared.",
+    "layoutPuertasSinPared": "Se quitó una pared que tenía {n} puerta(s): quedan sin pared, elige otra en el paso Puertas.",
+    "layoutPuertasVacio": "Todavía no hay puertas. Una puerta va sobre una pared: agrégala y elige la pared.",
+    "layoutVioDr_nowall": "La puerta «{name}» no está sobre una pared: elige la pared donde va.",
+    "layoutVioDr_outside": "La puerta «{name}» no cabe en la pared «{wall}» (mide {len} m): empieza a {dist} m y mide {width} m.",
+    "layoutVioDr_tall": "La puerta «{name}» ({height} m de alto) es más alta que la pared «{wall}» ({wallHeight} m).",
     "layoutColumna": "Columna",
     "layoutSoloVer": "Solo puedes ver esta sección",
     "layoutYaLlena": "Ya tiene datos: para cambiarla necesitas el permiso Modificar",
@@ -3996,8 +4007,8 @@
       "example": "una nave con el techo más alto de un lado tiene 6 metros en dos esquinas y 10 en las otras dos."
     },
     "layoutSec_puertas": {
-      "what": "Las puertas de la nave: en qué pared están, a cuántos metros de la esquina y cuánto miden.",
-      "example": "el andén de recepción está en la pared 1, a 6 metros de la esquina, y mide 3.5 de ancho."
+      "what": "Las puertas de la nave. Una puerta siempre va sobre una pared: eliges cuál (de las que diste de alta en el paso Paredes) y la mides desde el inicio de esa pared: a cuántos metros empieza, cuánto mide de ancho y de alto. La pared dice cuánto mide y qué tan alta es, y la puerta no puede pasarse de ninguna de las dos. Si quitas la pared, sus puertas se quedan sin pared hasta que les elijas otra.",
+      "example": "el andén de recepción va sobre la «Pared 1» (que mide 30 m): empieza a 6 metros del inicio de la pared, mide 3.5 de ancho y 2.8 de alto."
     },
     "layoutSec_sensores": {
       "what": "Los sensores de temperatura y humedad de la nave: de qué tipo es cada uno (temperatura, humedad o las dos), en qué pared está, a qué distancia de la esquina y a qué altura del piso, igual que las conexiones de luz. El código (S001, S002…) lo pone el sistema, consecutivo en todo el Layout, y no se edita. La zona sale sola de dónde queda el sensor. De aquí salen el QR de cada sensor y el mapa de calor.",
