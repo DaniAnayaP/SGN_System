@@ -1688,7 +1688,7 @@
     "layoutY": "Y (m)",
     "layoutPared": "Wall",
     "layoutAgregarEsquina": "+ Add corner",
-    "layoutColumnasTitulo": "Columns and obstacles",
+    "layoutColumnasTitulo": "Outline obstacles (columns, walls, level differences…)",
     "layoutNombre": "Name",
     "layoutLargo": "Length (m)",
     "layoutAncho": "Width (m)",
@@ -3811,7 +3811,7 @@
       "example": "you tap Doors and then Electrical Power: you see both on the sketch and edit only the power below; you tap Doors again to edit the doors."
     },
     "layoutSec_contorno": {
-      "what": "The corners of the warehouse in meters, with the height of each one, and the columns or obstacles. The total m² come from here and, with the heights, the m³.",
+      "what": "The corners of the warehouse in meters, with the height of each one, and the obstacles of the outline: columns, walls, floors with a level difference or anything in the way, each one with its name, its place (X, Y) and its length and width. The two add buttons (side and obstacle) are at the top, next to the title, so you do not have to go down to the end of the list. The total m² come from here and, with the heights, the m³.",
       "example": "a warehouse with a higher roof on one side has 6 meters at two corners and 10 at the other two."
     },
     "layoutSec_puertas": {

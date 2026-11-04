@@ -1688,7 +1688,7 @@
     "layoutY": "Y (m)",
     "layoutPared": "Pared",
     "layoutAgregarEsquina": "+ Agregar esquina",
-    "layoutColumnasTitulo": "Columnas y obstáculos",
+    "layoutColumnasTitulo": "Obstáculos del contorno (columnas, paredes, desniveles…)",
     "layoutNombre": "Nombre",
     "layoutLargo": "Largo (m)",
     "layoutAncho": "Ancho (m)",
@@ -3810,7 +3810,7 @@
       "example": "tocas Puertas y luego Energía Eléctrica: ves ambas en el croquis y abajo editas solo la luz; tocas Puertas otra vez para editar las puertas."
     },
     "layoutSec_contorno": {
-      "what": "Las esquinas de la nave en metros, con la altura de cada una, y las columnas u obstáculos. De aquí salen los m² totales y, con las alturas, los m³.",
+      "what": "Las esquinas de la nave en metros, con la altura de cada una, y los obstáculos del contorno: columnas, paredes, pisos con desnivel o cualquier cosa que estorbe, cada uno con su nombre, su lugar (X, Y) y su largo y ancho. Los dos botones de agregar (lado y obstáculo) están arriba, junto al título, para no bajar hasta el final de la lista. De aquí salen los m² totales y, con las alturas, los m³.",
       "example": "una nave con el techo más alto de un lado tiene 6 metros en dos esquinas y 10 en las otras dos."
     },
     "layoutSec_puertas": {
