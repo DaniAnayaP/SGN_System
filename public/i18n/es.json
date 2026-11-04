@@ -1782,6 +1782,7 @@
     "layoutType_safety_route": "Ruta de evacuación",
     "layoutVioSg_outside": "{code} queda fuera del contorno de la nave: acomódalo dentro.",
     "layoutVioSg_route": "La ruta {code} necesita dos puntos distintos.",
+    "layoutVioSg_tall": "{code} llega a {top} m (altura del piso + alto) y la nave ahí solo mide {height} m de alto: bájalo o hazlo más bajo.",
     "layoutSgCaducidad": "Caducidad",
     "layoutSgCadaDias": "Revisar cada (días)",
     "layoutSgProxima": "Próxima revisión",

@@ -632,7 +632,7 @@ function computeSafetyIssues() {
     if (!state.draft) return;
     LC.safetyViolations(state.draft).forEach((v) => { const m = sfIssues.get(v.id) || {}; m[v.kind] = v; sfIssues.set(v.id, m); });
 }
-const safetyIssueText = (v) => t(`main.layoutVioSg_${v.kind}`, { code: v.code });
+const safetyIssueText = (v) => t(`main.layoutVioSg_${v.kind}`, { code: v.code, ...(v.vars || {}) });
 // El código y la zona de cada elemento salen de su tipo y de su lugar; las cajas de X e Y (y de la llegada de la ruta) se marcan en rojo si algo no cumple y abajo del paso va la lista de lo que falta.
 // La leyenda de los símbolos solo se ve con el paso Seguridad encendido.
 // La simbología de la pantalla solo nombra lo que se ve en el croquis: cada parte aparece cuando su paso está encendido Y ya hay algo agregado (una puerta, un sensor, una columna, una pared…). El contorno sale con el
@@ -668,6 +668,11 @@ function applySafetyMarks() {
         ['x', 'y', 'x2', 'y2'].forEach((key) => {
             const box = document.querySelector(`[data-l="safety"][data-i="${i}"][data-k="${key}"]`);
             if (box) box.classList.toggle('layout-missing', !!(bad.outside || bad.route));
+        });
+        // pasarse de la altura de la nave pone en rojo la altura del piso y el alto
+        ['elev', 'h'].forEach((key) => {
+            const box = document.querySelector(`[data-l="safety"][data-i="${i}"][data-k="${key}"]`);
+            if (box) box.classList.toggle('layout-missing', !!bad.tall);
         });
         const codeCell = document.querySelector(`[data-sf-code="${i}"]`);
         if (codeCell) codeCell.textContent = e.code || '';

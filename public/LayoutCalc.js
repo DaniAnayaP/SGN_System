@@ -1226,7 +1226,27 @@
         if (Object.keys(floors).length) base.safetyNext = cleanSafetyNext(floors); else delete base.safetyNext;
         return assignSafetyCodes(base);
     }
-    // Las faltas de los elementos de un Layout normalizado: outside (un punto, o un extremo de la ruta, queda fuera del contorno de la nave) y route (la ruta necesita dos puntos distintos). sig cambia cuando cambia algo
+    // La altura de la nave en un punto: la del contorno en su punto más cercano (entre las dos esquinas de ese lado se reparte de una a otra).
+    function naveHeightAt(layout, x, y) {
+        const v = (layout && layout.vertices) || [];
+        const n = v.length;
+        if (n < 2) return 0;
+        let best = Infinity;
+        let h = 0;
+        for (let i = 0; i < n; i++) {
+            const a = v[i];
+            const b = v[(i + 1) % n];
+            const dx = b[0] - a[0];
+            const dy = b[1] - a[1];
+            const len2 = dx * dx + dy * dy;
+            const t = len2 > 0 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / len2)) : 0;
+            const d = Math.hypot(x - (a[0] + dx * t), y - (a[1] + dy * t));
+            if (d < best - 1e-9) { best = d; h = cornerHeightAt(layout, i) * (1 - t) + cornerHeightAt(layout, (i + 1) % n) * t; }
+        }
+        return h;
+    }
+    // Las faltas de los elementos de un Layout normalizado: outside (un punto, o un extremo de la ruta, queda fuera del contorno de la nave), route (la ruta necesita dos puntos distintos) y tall (el elemento se pasa de la altura de la nave:
+    // altura del piso + alto, contra lo que mide la nave en ese punto). sig cambia cuando cambia algo
     // de lo que importa (el lugar o el contorno): lo que ya estaba mal y no se tocó solo se marca; lo nuevo no se deja guardar.
     function safetyViolations(layout) {
         const out = [];
@@ -1240,6 +1260,13 @@
             const geo = JSON.stringify([e.x, e.y, isRoute ? e.x2 : 0, isRoute ? e.y2 : 0, poly]);
             if (pts.some(([x, y]) => !inside(Number(x) || 0, Number(y) || 0))) out.push({ id: e.id, code: e.code, kind: 'outside', sig: geo, message: `El elemento de seguridad ${e.code} queda fuera del contorno de la nave: acomódalo dentro.` });
             if (isRoute && Number(e.x) === Number(e.x2) && Number(e.y) === Number(e.y2)) out.push({ id: e.id, code: e.code, kind: 'route', sig: geo, message: `La ruta de evacuación ${e.code} necesita dos puntos distintos.` });
+            // la ruta es una marca en el piso (no lleva altura); lo demás llega hasta su altura del piso + su alto, que no puede pasar de lo que mide la nave ahí
+            const sz = isRoute ? null : safetySizeOf(e);
+            if (sz) {
+                const top = round2(sz.elev + sz.h);
+                const limit = round2(naveHeightAt(layout, Number(e.x) || 0, Number(e.y) || 0));
+                if (limit > 0 && top > limit + 0.005) out.push({ id: e.id, code: e.code, kind: 'tall', sig: JSON.stringify([top, limit]), vars: { top, height: limit }, message: `El elemento de seguridad ${e.code} llega a ${top} m (altura del piso + alto) y la nave ahí solo mide ${limit} m de alto: bájalo o hazlo más bajo.` });
+            }
         });
         return out;
     }
@@ -2103,7 +2130,7 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
-        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
+        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

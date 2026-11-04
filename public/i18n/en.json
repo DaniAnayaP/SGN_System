@@ -1782,6 +1782,7 @@
     "layoutType_safety_route": "Evacuation route",
     "layoutVioSg_outside": "{code} is outside the building outline: move it inside.",
     "layoutVioSg_route": "Route {code} needs two different points.",
+    "layoutVioSg_tall": "{code} reaches {top} m (height from floor + height) and the building there is only {height} m tall: lower it or make it shorter.",
     "layoutSgCaducidad": "Expiry",
     "layoutSgCadaDias": "Check every (days)",
     "layoutSgProxima": "Next check",
