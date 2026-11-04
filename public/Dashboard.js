@@ -1158,10 +1158,13 @@ function getStoredDepartment() {
 
 let selectedDepartment = getStoredDepartment();
 
-// Only the always-visible sections + whichever department is selected (none
-// selected = just the always-visible ones, keeping the sidebar uncluttered
-// until the user picks a department).
+// Only the always-visible sections + whichever department is selected.
+// Sin departamento elegido (y habiendo departamentos entre los que elegir) la barra lateral de una cuenta de un cliente no muestra NINGUNA opción, ni siquiera Inicio, Panel y Tablero (ni, por lo tanto, el buscador): todo cuelga de un departamento
+// y hasta que se elige uno no hay nada que mostrar. Si el cliente no tiene ningún departamento entre los que elegir se deja como estaba (si no, la cuenta se quedaría sin ninguna opción y sin cómo elegir). El personal SaaS no tiene selector de departamento.
 function applyDepartmentFilter(data) {
+    if (currentRole !== 'admin' && !selectedDepartment && availableDepartments.length > 0) {
+        return { ...data, sections: [] };
+    }
     return {
         ...data,
         sections: data.sections.filter(
