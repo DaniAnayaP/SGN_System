@@ -265,6 +265,8 @@ document.addEventListener('dashboard:language-changed', () => render());
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
         state.day = todayStr();
+        // el acceso a la base de registros de temperatura (de donde salen estas lecturas) solo sale a quien tiene esa pantalla en el árbol
+        $('heat-records-link').hidden = !Dashboard.hasScreenGrant('supply-chain', 'sc-area-distribution-center', 'cat-operaciones/cat-operaciones-centro-dist-temperaturas');
         await load();
     } catch (err) {
         console.error('Mapa de calor failed to initialize:', err);

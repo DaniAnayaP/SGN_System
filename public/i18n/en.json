@@ -2684,6 +2684,7 @@
     "heatChooseCenter": "Check only one cost center above to see its heat map.",
     "heatNoLayout": "This cost center does not have a saved Layout yet.",
     "heatDia": "Day",
+    "heatVerRegistros": "Temperature records",
     "heatTemperatura": "Temperature °C",
     "heatHumedad": "Humidity %",
     "heatReproducir": "Play the day",
@@ -4154,6 +4155,10 @@
     "heatChooseCenter": {
       "what": "The heat map belongs to ONE cost center. Check only one in the selector above to see its Layout painted with what its sensors showed.",
       "example": "you check “CEDIS Chihuahua” above and its map appears; if several centers are checked, you are asked to choose one here."
+    },
+    "heatRecordsLink": {
+      "what": "Opens the temperature records database (Operations > Temperatures), where these readings come from: each reading with who took it, the time, the photo and which sensor or refrigerator it comes from. It only shows if you have that screen in your access.",
+      "example": "you see a zone in red at 14:00, tap the link and check there the photo and who captured that reading."
     },
     "heatDay": {
       "what": "The day whose climate you want to see. Readings are stored in UTC and shown here in your time. It starts on today.",

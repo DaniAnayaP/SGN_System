@@ -2683,6 +2683,7 @@
     "heatChooseCenter": "Marca un solo centro de costos arriba para ver su mapa de calor.",
     "heatNoLayout": "Este centro de costos todavía no tiene un Layout guardado.",
     "heatDia": "Día",
+    "heatVerRegistros": "Base de registros de temperatura",
     "heatTemperatura": "Temperatura °C",
     "heatHumedad": "Humedad %",
     "heatReproducir": "Reproducir el día",
@@ -4153,6 +4154,10 @@
     "heatChooseCenter": {
       "what": "El mapa de calor es de UN centro de costos. Marca solo uno en el selector de arriba para ver su Layout pintado con lo que marcaron sus sensores.",
       "example": "marcas «CEDIS Chihuahua» arriba y aparece su mapa; si hay varios centros marcados, aquí se te pide elegir uno."
+    },
+    "heatRecordsLink": {
+      "what": "Abre la base de registros de temperatura (Operaciones > Temperaturas), de donde salen estas lecturas: cada lectura con quién la tomó, la hora, la foto y de qué sensor o refrigerador viene. Solo sale si tienes esa pantalla en tu acceso.",
+      "example": "ves una zona en rojo a las 14:00, tocas el enlace y revisas ahí la foto y quién capturó esa lectura."
     },
     "heatDay": {
       "what": "El día del que quieres ver el clima. Las lecturas se guardan en UTC y aquí se ven en tu hora. Arranca en hoy.",
