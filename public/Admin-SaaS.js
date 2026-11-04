@@ -1234,20 +1234,7 @@ async function openPermisosAdicionalesModal(client) {
         const classOverrides = await fetch(`/api/admin/permission-classifications?level=cliente&entityId=${client.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         // Lo que no está habilitado para servicio en el Árbol Maestro se ve, pero no se puede asignar al cliente: al intentarlo avisa por qué.
         const masterStatuses = await fetch('/api/admin/master-permission-status', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.statuses) || []).catch(() => []);
-        const serviceOverrides = new Map(masterStatuses.filter((r) => r.status !== 'habilitado').map((r) => [`${r.sectionId}::${r.itemId || ''}::${r.submenuId || ''}`, r.status]));
-        const grantLimits = {
-            reason(sectionId, itemId, submenuId) {
-                if (!serviceOverrides.size) return null;
-                // Mismo recorrido del Árbol Maestro (db.js resolveMasterNodeStatus): el más amplio que tenga un Estatus decide; el sufijo #app es del nivel App, no del nodo.
-                const keyOf = (s, i, sm) => `${s}::${i || ''}::${sm || ''}`;
-                let status = serviceOverrides.get(keyOf(sectionId, null, null)) || (itemId ? serviceOverrides.get(keyOf(sectionId, itemId, null)) : null);
-                if (!status && submenuId) {
-                    const parts = String(submenuId).replace(/#app$/, '').split('/');
-                    for (let i = 1; i <= parts.length && !status; i += 1) status = serviceOverrides.get(keyOf(sectionId, itemId, parts.slice(0, i).join('/')));
-                }
-                return status ? `service:${status}` : null;
-            },
-        };
+        const grantLimits = window.PermissionCostTree.serviceLimits(masterStatuses);
         adicionalesTree = window.PermissionCostTree.create(permisosAdicionalesContainer, {
             order, classOverrides, grantLimits, mode: 'clientTricolor', interactive: true, currency: adicionalesCurrency,
             historyEndpoint: '/api/admin/client-permission-change-log', historyParams: { clientId: client.id },

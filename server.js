@@ -2168,6 +2168,19 @@ app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => 
     const { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
+    // Lo que no está habilitado para servicio en el Árbol Maestro no se puede incluir en un plan (lo nuevo; lo que el plan ya traía se queda). El árbol ya lo muestra con candado y aviso; esto es por si llega de otro lado.
+    {
+        const serviceKey = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+        const alreadySaved = new Set(getPlanGrants(req.params.id).map(serviceKey));
+        const serviceOverrides = buildMasterStatusOverrideMap(getMasterPermissionStatuses().filter((r) => r.status !== 'habilitado'));
+        for (const g of grants) {
+            if (alreadySaved.has(serviceKey(g))) continue;
+            const status = resolveMasterNodeStatus(g.sectionId, g.itemId, String(g.submenuId || '').replace(/#app$/, '') || null, serviceOverrides);
+            if (status !== 'habilitado') {
+                return res.status(400).json({ code: 'service-not-enabled', status, sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null, message: `Este acceso no está habilitado para servicio (Estatus: ${status}) y no se puede incluir en el plan hasta que el Árbol Maestro lo habilite.` });
+            }
+        }
+    }
     const saved = setPlanGrants(req.params.id, grants);
     // The old manual module checklist on "Editar plan" is gone — a
     // department/button now turns on for real the moment ANY permission

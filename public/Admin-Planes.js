@@ -594,7 +594,9 @@ async function selectPlanForTree(plan) {
         treeContainer.innerHTML = '';
         const order = await fetch(`/api/admin/permission-order?level=plan&entityId=${plan.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classOverrides = await fetch(`/api/admin/permission-classifications?level=plan&entityId=${plan.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
-        tree = window.PermissionCostTree.create(treeContainer, { mode: 'grantReadonlyCost', currency: costsData.currency || plan.currency || 'MXN', order, classOverrides });
+        // Lo que no está habilitado para servicio en el Árbol Maestro se ve con candado y no se puede incluir en el plan (lo que ya traía se queda): al intentarlo avisa por qué.
+        const masterStatuses = await fetch('/api/admin/master-permission-status', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.statuses) || []).catch(() => []);
+        tree = window.PermissionCostTree.create(treeContainer, { mode: 'grantReadonlyCost', currency: costsData.currency || plan.currency || 'MXN', order, classOverrides, grantLimits: window.PermissionCostTree.serviceLimits(masterStatuses) });
         // sectorGrants (from the same response) tags each leaf this plan's
         // own Sector already covers as "(Default)" -- purely informational,
         // see PermissionCostTree.js's sectorDefaultSet.

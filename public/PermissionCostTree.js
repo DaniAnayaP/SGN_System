@@ -220,7 +220,7 @@
             if (reason === 'status') return t('main.limitLockedStatus');
             if (typeof reason === 'string' && reason.indexOf('service:') === 0) {
                 const status = reason.slice(8);
-                return t('admin.limitServiceNotEnabled', { status: SERVICE_STATUS_LABEL_KEYS[status] ? t(SERVICE_STATUS_LABEL_KEYS[status]) : status });
+                return t(mode === 'clientTricolor' ? 'admin.limitServiceNotEnabled' : 'admin.limitServiceNotEnabledPlan', { status: SERVICE_STATUS_LABEL_KEYS[status] ? t(SERVICE_STATUS_LABEL_KEYS[status]) : status });
             }
             return t('main.limitLockedContract');
         }
@@ -544,6 +544,15 @@
                     }
                 }
                 row.appendChild(labelEl);
+                // El árbol del plan (grantLimits): lo que no está habilitado para servicio se ve con candado y no se puede marcar (setKeys avisa por qué); lo que ya estaba incluido se queda.
+                if (grantLimits && mode !== 'clientTricolor' && costKey != null) {
+                    const [lsId, liId, lsmId] = costKey.split('::');
+                    const lockReason = limitReasonKey(costKey);
+                    if (typeof lockReason === 'string' && lockReason.indexOf('service:') === 0 && !isGranted(grantSet, lsId, liId || null, lsmId || null)) {
+                        row.classList.add('perm-tree-row-limit-locked');
+                        row.title = limitReasonText(lockReason);
+                    }
+                }
                 if (costKey != null) row.appendChild(buildCostSlot(costKey));
                 appendAppToggle(row, appToggle, costKey);
             }
@@ -640,7 +649,17 @@
         // Unchecking a Web key also drops its App-visibility sibling — "App
         // can't stay enabled without Web" applies here too (grantReadonlyCost
         // mode only calls this; costEdit/clientTricolor never do).
+        const isServiceLocked = (k) => { const r = limitReasonKey(k); return typeof r === 'string' && r.indexOf('service:') === 0; };
         function setKeys(keys, checked) {
+            // Árbol del plan (grantLimits): lo NUEVO que no está habilitado para servicio no se marca (lo que ya estaba incluido se puede quitar y volver a poner); se avisa por qué o cuántos se saltaron.
+            if (checked && grantLimits && mode !== 'clientTricolor') {
+                const allowed = keys.filter((k) => grantSet.has(k) || !isServiceLocked(k));
+                if (allowed.length < keys.length) {
+                    notifyLimit(keys.length === 1 ? limitReasonText(limitReasonKey(keys[0])) : t('admin.limitSkippedService', { count: keys.length - allowed.length }));
+                    setTimeout(() => render(), 0); // la casilla que se tocó vuelve a verse desmarcada
+                }
+                keys = allowed;
+            }
             keys.forEach((k) => {
                 if (checked) grantSet.add(k);
                 else { grantSet.delete(k); grantSet.delete(k + APP_SUFFIX); }
@@ -1663,5 +1682,23 @@
         };
     }
 
-    window.PermissionCostTree = { create };
+    // Los límites de «no habilitado para servicio» con los Estatus del Árbol Maestro (GET /api/admin/master-permission-status -> statuses): { reason(sectionId, itemId, submenuId) -> null | 'service:<estatus>' }. Mismo recorrido
+    // del Árbol Maestro (db.js resolveMasterNodeStatus): el más amplio que tenga un Estatus decide; el sufijo #app es del nivel App, no del nodo. Lo usan el árbol de Permisos Adicionales del cliente y el del plan.
+    function serviceLimits(masterStatuses) {
+        const overrides = new Map((masterStatuses || []).filter((r) => r.status !== 'habilitado').map((r) => [`${r.sectionId}::${r.itemId || ''}::${r.submenuId || ''}`, r.status]));
+        return {
+            reason(sectionId, itemId, submenuId) {
+                if (!overrides.size) return null;
+                const keyOf = (s, i, sm) => `${s}::${i || ''}::${sm || ''}`;
+                let status = overrides.get(keyOf(sectionId, null, null)) || (itemId ? overrides.get(keyOf(sectionId, itemId, null)) : null);
+                if (!status && submenuId) {
+                    const parts = String(submenuId).replace(/#app$/, '').split('/');
+                    for (let i = 1; i <= parts.length && !status; i += 1) status = overrides.get(keyOf(sectionId, itemId, parts.slice(0, i).join('/')));
+                }
+                return status ? `service:${status}` : null;
+            },
+        };
+    }
+
+    window.PermissionCostTree = { create, serviceLimits };
 })();

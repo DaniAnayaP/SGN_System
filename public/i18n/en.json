@@ -600,6 +600,7 @@
     "giroGateBlockedByStatus": "This permission is in the \"{status}\" Status — it can't be granted until Árbol Maestro enables it.",
     "limitSkippedService": "Some accesses in this block are not enabled for service and were not selected.",
     "limitServiceNotEnabled": "This access is not enabled for service (Status: {status}): it can't be assigned to the client until the Árbol Maestro enables it.",
+    "limitServiceNotEnabledPlan": "This access is not enabled for service (Status: {status}): it can't be included in the plan until the Árbol Maestro enables it.",
     "giroGateBlockedByPlatform": "Árbol Maestro hasn't enabled the {platform} platform for this permission.",
     "giroGateNeedsWebFirst": "Grant Web access for this permission first — App can't be enabled without Web.",
     "businessSectorStatusActive": "Active for service",
