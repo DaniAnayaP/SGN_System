@@ -6514,6 +6514,7 @@ function layoutPermissions(req) {
         canUseCleaningQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrLimpieza'),
         // Imprimir los QR de temperaturas (uno por refrigerador, los activos de tipo Frío) usa el icono QR de temperaturas (hoja <pantalla>/iconLayoutQrTemperaturas).
         canUseTemperatureQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrTemperaturas'),
+        canUseSensorQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrSensores'),
     };
 }
 
@@ -7001,6 +7002,8 @@ const QR_LOCK_TYPES = {
     // La Ficha de un código (Ficha.html) es de la EMPRESA, no de un centro de costos: su juego de candados vale para todos los centros (se guarda con centro 0).
     //   photos = ver las fotos del artículo · measures = ver medidas y pesos · where = ver dónde está (ruta y Localizador). El nombre de la empresa, la descripción, la unidad y el tipo de artículo siempre se ven.
     ficha: { photos: true, measures: true, where: true },
+    // El QR de un SENSOR del Layout (/s/…): como el de Limpieza, sin rango ni alertas (los sensores no llevan rango).
+    sensor: { records: true, photos: true, names: true, limit: 20, register: true },
 };
 const QR_LOCK_LIMITS = [3, 10, 20];
 function qrLocksOf(type, clientId, costCenterId) {
@@ -7267,7 +7270,7 @@ app.get('/api/business/temperatures', requireAuth, (req, res) => {
             const cc = centers.get(r.cost_center_id);
             return {
                 id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
-                zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, locator: r.locator,
+                zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, sensorCode: r.sensor_code, sensorType: r.sensor_type, locator: r.locator,
                 name: r.person_name, temperature: r.temperature, humidity: r.humidity, limits: temperatureLimits(r), status: temperatureStatus(r), checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo, source: r.source,
                 system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: TEMPERATURE_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.checked_at }),
             };
@@ -7291,7 +7294,7 @@ app.delete('/api/business/temperatures/:id', requireAuth, (req, res) => {
     if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
     if (!req.user.isClientAdmin && !canDeleteColumn(getUserEffectiveGrants(req.user.sub), TEMPERATURE_TABLE_KEY, 'colTmpDeleteAuth')) return res.status(403).json({ message: 'No tienes permiso para eliminar registros de temperaturas.' });
     deleteTemperatureRecord(id, req.user.clientId);
-    try { notifyDataChange({ clientId: req.user.clientId, tableKey: TEMPERATURE_TABLE_KEY, recordLabel: `Temperatura ${rec.space_code}`, fieldKey: 'colTmpDeleteAuth', oldValue: `${rec.temperature} °C ${rec.person_name} (${rec.checked_at} UTC)`, newValue: 'Eliminado', actorUserId: req.user.sub, actorLabel: changedByLabel(req) }); } catch (err) { console.error('temperature delete notice failed', err); }
+    try { notifyDataChange({ clientId: req.user.clientId, tableKey: TEMPERATURE_TABLE_KEY, recordLabel: `Temperatura ${rec.space_code || rec.sensor_code}`, fieldKey: 'colTmpDeleteAuth', oldValue: `${rec.temperature === null ? `${rec.humidity} %` : `${rec.temperature} °C`} ${rec.person_name} (${rec.checked_at} UTC)`, newValue: 'Eliminado', actorUserId: req.user.sub, actorLabel: changedByLabel(req) }); } catch (err) { console.error('temperature delete notice failed', err); }
     res.json({ ok: true });
 });
 // Hoja de QR de temperaturas: un QR por refrigerador (de una zona o de todas) con su dirección fija; la hoja se imprime desde el Layout.
@@ -7310,6 +7313,109 @@ app.get('/api/business/layout/temperature-qr', requireAuth, (req, res) => {
         const zone = zones.find((z) => z.id === s.zoneId);
         const url = `${base}/${s.id}`;
         return { id: s.id, code: s.code, type: s.type, zoneId: s.zoneId || '', zoneName: zone ? zone.name : '', locator: zone && fp ? [zone.code, fp.code, s.code].join('.') : '', url, qrRows: layoutQrRows(url) };
+    });
+    const client = getClientById(req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', ...qrBranding(req.user.clientId), zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
+});
+
+// --- Sensores (Layout > paso Sensores) ------------------------------------------------------------------------------------------------------------
+// Cada SENSOR de temperatura y/o humedad del Layout tiene su QR (la dirección fija /s/<código del Layout>/<id del sensor>: nunca cambia). Quien lo escanea NO necesita sesión: escribe su nombre, lo que marca el sensor
+// (temperatura, humedad o las dos, según su tipo) y toma la foto de la lectura con la cámara en vivo; la hora la pone el SERVIDOR. Las lecturas se guardan en la misma tabla de Temperaturas (con el id del sensor) y
+// alimentan el mapa de calor. Solo puede ver las últimas lecturas de ESE sensor (solo lectura).
+const SENSOR_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+function sensorTarget(token, sensorId) {
+    if (!SENSOR_ID_RE.test(String(sensorId || ''))) return null;
+    const row = getLayoutByPublicToken(token);
+    if (!row) return null;
+    const sensor = (row.layout.sensors || []).find((s) => s.id === sensorId);
+    if (!sensor) return null;
+    const zone = (row.layout.zones || []).find((z) => z.id === sensor.zoneId) || null;
+    return { row, sensor, zone, locator: [zone && zone.code, sensor.code].filter(Boolean).join('.') };
+}
+const publicSensorRecord = (r) => ({ id: r.id, name: r.person_name, temperature: r.temperature, humidity: r.humidity, limits: {}, status: { temp: null, hum: null }, checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo });
+// Un registro como lo ve quien escanea, con los candados: sin nombre (names) ni foto (photos) cuando están cerrados (own = la lectura que esa persona acaba de guardar: conserva las dos).
+function lockedSensorRecord(r, locks, own = false) {
+    const out = publicSensorRecord(r);
+    if (!own && !locks.names) out.name = '';
+    if (!own && !locks.photos) out.hasPhoto = false;
+    return out;
+}
+app.get('/s/:token/:sensorId', publicLayoutLimiter, (req, res) => {
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(self)' });
+    res.sendFile(path.join(PUBLIC_DIR, 'TemperaturaPublica.html'));
+});
+app.get('/api/public/sensor/:token/:sensorId', publicLayoutLimiter, (req, res) => {
+    const target = sensorTarget(req.params.token, req.params.sensorId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const { row, sensor, zone, locator } = target;
+    const client = getClientById(row.clientId);
+    const locks = qrLocksOf('sensor', row.clientId, row.costCenterId || 0);
+    const records = locks.records ? listTemperatureRecords(row.clientId, { costCenterId: row.costCenterId || 0, sensorId: sensor.id, limit: locks.limit }) : [];
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json({
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
+        space: { id: sensor.id, code: sensor.code, type: sensor.type, locator, zoneName: zone ? zone.name : '', footprintCode: '', limits: {} },
+        records: records.map((r) => lockedSensorRecord(r, locks)), locks, now: new Date().toISOString(),
+    });
+});
+app.post('/api/public/sensor/:token/:sensorId/reading', publicCleaningLimiter, (req, res) => {
+    const target = sensorTarget(req.params.token, req.params.sensorId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const { row, sensor, zone, locator } = target;
+    const locks = qrLocksOf('sensor', row.clientId, row.costCenterId || 0);
+    if (!locks.register) return res.status(403).json({ message: 'Este QR solo sirve para consultar.', code: 'LOCKED' });
+    const personName = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!personName) return res.status(400).json({ message: 'Falta el nombre de quien revisa.', code: 'NAME' });
+    // lo que pide el sensor según su tipo: temperatura (°C), humedad (%) o las dos; lo que su tipo no lleva se ignora
+    let temperature = null;
+    if (sensor.type !== 'hum') {
+        const raw = req.body && req.body.temperature;
+        if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < TEMPERATURE_MIN || raw > TEMPERATURE_MAX) return res.status(400).json({ message: 'La temperatura no es válida.', code: 'TEMP' });
+        temperature = Math.round(raw * 10) / 10;
+    }
+    let humidity = null;
+    if (sensor.type !== 'temp') {
+        const rawHum = req.body && req.body.humidity;
+        if (typeof rawHum !== 'number' || !Number.isFinite(rawHum) || rawHum < 0 || rawHum > 100) return res.status(400).json({ message: 'La humedad no es válida.', code: 'HUM' });
+        humidity = Math.round(rawHum * 10) / 10;
+    }
+    const photo = parseCleaningPhoto(req.body && req.body.photo);
+    if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
+    const saved = addTemperatureRecord({
+        clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: '', spaceCode: '', spaceType: '', zoneName: zone ? zone.name : '', footprintCode: '', locator, personName, temperature, humidity, limits: {},
+        photo, thumb: parseThumb(req.body && req.body.thumb), source: 'qr-sensor', sensorId: sensor.id, sensorCode: sensor.code, sensorType: sensor.type,
+    });
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json(lockedSensorRecord(saved, locks, true));
+});
+app.get('/api/public/sensor/:token/:sensorId/photo/:id', publicLayoutLimiter, (req, res) => {
+    const target = sensorTarget(req.params.token, req.params.sensorId);
+    const id = Number(req.params.id);
+    if (!target || !Number.isInteger(id)) return res.status(404).end();
+    const rec = getTemperatureRecord(id, target.row.clientId);
+    if (!rec || rec.sensor_id !== target.sensor.id || rec.cost_center_id !== (target.row.costCenterId || 0)) return res.status(404).end();
+    if (!qrLocksOf('sensor', target.row.clientId, target.row.costCenterId || 0).photos) return res.status(404).end();
+    const photo = getTemperaturePhoto(id, req.query.thumb === '1');
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
+});
+// Hoja de QR de sensores: un QR por sensor (de una zona o de todas) con su dirección fija; la hoja se imprime desde el Layout. Se manda en «spaces» para que sirva el mismo armado de tarjetas de Limpieza y Temperaturas.
+app.get('/api/business/layout/sensor-qr', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canUseSensorQr) return res.status(403).json({ message: 'No tienes permiso para usar los QR de sensores.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0);
+    const base = `${req.protocol}://${req.get('host')}/s/${token}`;
+    const layout = row.layout;
+    const zoneId = String(req.query.zone || '');
+    const zones = (layout.zones || []).filter((z) => z.active !== false);
+    const spaces = (layout.sensors || []).filter((s) => !zoneId || s.zoneId === zoneId).slice(0, 600).map((s) => {
+        const zone = zones.find((z) => z.id === s.zoneId);
+        const url = `${base}/${s.id}`;
+        return { id: s.id, code: s.code, type: s.type, zoneId: s.zoneId || '', zoneName: zone ? zone.name : '', locator: [zone && zone.code, s.code].filter(Boolean).join('.'), url, qrRows: layoutQrRows(url) };
     });
     const client = getClientById(req.user.clientId);
     res.set('Cache-Control', 'no-store');

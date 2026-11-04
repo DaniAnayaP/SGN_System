@@ -5319,21 +5319,63 @@ for (const col of ['temp_min', 'temp_max', 'hum_min', 'hum_max']) {
 }
 // La miniatura de la foto (la manda el teléfono, unos 160 px): las tablas y listas la usan en vez de la foto completa. Las lecturas anteriores no la tienen y se sigue mostrando la completa.
 if (!db.prepare('PRAGMA table_info(temperature_photos)').all().some((c) => c.name === 'thumb')) { db.exec('ALTER TABLE temperature_photos ADD COLUMN thumb_mime TEXT'); db.exec('ALTER TABLE temperature_photos ADD COLUMN thumb BLOB'); }
+// Lecturas de un SENSOR del Layout (paso Sensores): llevan su id, su código y su tipo (both, temp o hum); space_id queda vacío. La temperatura debe poder quedar vacía (un sensor de solo humedad):
+// la tabla nació con temperature NOT NULL, y SQLite no quita eso con ALTER, así que se reconstruye UNA vez (con las llaves foráneas apagadas para que las fotos no se borren en cascada) y se verifica que
+// no se perdió ninguna fila ni foto; si algo falla se deja la tabla como estaba y se registra el error (los sensores de solo humedad no podrán guardar hasta arreglarlo, todo lo demás sigue igual).
+for (const [col, ddl] of [['sensor_id', "TEXT NOT NULL DEFAULT ''"], ['sensor_code', "TEXT NOT NULL DEFAULT ''"], ['sensor_type', "TEXT NOT NULL DEFAULT ''"]]) {
+    if (!db.prepare('PRAGMA table_info(temperature_records)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE temperature_records ADD COLUMN ${col} ${ddl}`);
+}
+{
+    const tempCol = db.prepare('PRAGMA table_info(temperature_records)').all().find((c) => c.name === 'temperature');
+    if (tempCol && tempCol.notnull) {
+        try {
+            const cols = db.prepare('PRAGMA table_info(temperature_records)').all().map((c) => c.name).join(', ');
+            const original = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'temperature_records'").get().sql;
+            const rebuilt = original.replace(/^CREATE TABLE\s+"?temperature_records"?/i, 'CREATE TABLE temperature_records_new').replace(/(\btemperature\s+REAL)\s+NOT NULL/i, '$1');
+            if (rebuilt === original || /temperature\s+REAL\s+NOT NULL/i.test(rebuilt)) throw new Error('no se pudo armar la tabla nueva');
+            const before = { rows: db.prepare('SELECT COUNT(*) AS n FROM temperature_records').get().n, photos: db.prepare('SELECT COUNT(*) AS n FROM temperature_photos').get().n };
+            db.pragma('foreign_keys = OFF');
+            try {
+                db.transaction(() => {
+                    db.exec('DROP TABLE IF EXISTS temperature_records_new');
+                    db.exec(rebuilt);
+                    db.exec(`INSERT INTO temperature_records_new (${cols}) SELECT ${cols} FROM temperature_records`);
+                    const after = db.prepare('SELECT COUNT(*) AS n FROM temperature_records_new').get().n;
+                    if (after !== before.rows) throw new Error(`la copia trae ${after} filas y había ${before.rows}`);
+                    db.exec('DROP TABLE temperature_records');
+                    db.exec('ALTER TABLE temperature_records_new RENAME TO temperature_records');
+                    const photosAfter = db.prepare('SELECT COUNT(*) AS n FROM temperature_photos').get().n;
+                    if (photosAfter !== before.photos) throw new Error(`había ${before.photos} fotos y quedaron ${photosAfter}`);
+                })();
+            } finally { db.pragma('foreign_keys = ON'); }
+            console.log(`[db] temperature_records: la temperatura ahora puede quedar vacía (${before.rows} filas conservadas)`);
+        } catch (err) { console.error('[db] No se pudo reconstruir temperature_records (la temperatura sigue siendo obligatoria):', err.message); }
+    }
+}
+db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_temperature_space ON temperature_records(client_id, cost_center_id, space_id, checked_at);
+    CREATE INDEX IF NOT EXISTS idx_temperature_sensor ON temperature_records(client_id, cost_center_id, sensor_id, checked_at);
+`);
 const TEMPERATURE_SELECT = `SELECT r.*, EXISTS(SELECT 1 FROM temperature_photos p WHERE p.record_id = r.id) AS has_photo FROM temperature_records r`;
 // Guarda una lectura: la hora la pone el servidor y la foto se guarda en la misma operación.
-function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, limits, photo, thumb, source = 'qr' }) {
+function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, limits, photo, thumb, source = 'qr', sensorId = '', sensorCode = '', sensorType = '' }) {
     return db.transaction(() => {
-        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, humidity, temp_min, temp_max, hum_min, hum_max, checked_at, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, humidity === undefined ? null : humidity, limits && limits.tempMin !== undefined ? limits.tempMin : null, limits && limits.tempMax !== undefined ? limits.tempMax : null, limits && limits.humMin !== undefined ? limits.humMin : null, limits && limits.humMax !== undefined ? limits.humMax : null, source);
+        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, humidity, temp_min, temp_max, hum_min, hum_max, checked_at, source, sensor_id, sensor_code, sensor_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, humidity === undefined ? null : humidity, limits && limits.tempMin !== undefined ? limits.tempMin : null, limits && limits.tempMax !== undefined ? limits.tempMax : null, limits && limits.humMin !== undefined ? limits.humMin : null, limits && limits.humMax !== undefined ? limits.humMax : null, source, sensorId || '', sensorCode || '', sensorType || '');
         db.prepare('INSERT INTO temperature_photos (record_id, mime, data, thumb_mime, thumb) VALUES (?, ?, ?, ?, ?)').run(info.lastInsertRowid, photo.mime, photo.data, thumb ? thumb.mime : null, thumb ? thumb.data : null);
         return db.prepare(`${TEMPERATURE_SELECT} WHERE r.id = ?`).get(info.lastInsertRowid);
     })();
 }
-function listTemperatureRecords(clientId, { costCenterId, spaceId, limit } = {}) {
+// sensorId = las de un sensor; sensorOnly = solo las de sensores (para el mapa de calor); since / until = rango de checked_at en UTC ('YYYY-MM-DD HH:MM:SS'), until sin incluir.
+function listTemperatureRecords(clientId, { costCenterId, spaceId, sensorId, sensorOnly, since, until, limit } = {}) {
     const where = ['r.client_id = ?'];
     const args = [clientId];
     if (costCenterId !== undefined) { where.push('r.cost_center_id = ?'); args.push(costCenterId || 0); }
     if (spaceId) { where.push('r.space_id = ?'); args.push(spaceId); }
+    if (sensorId) { where.push('r.sensor_id = ?'); args.push(sensorId); }
+    if (sensorOnly) where.push("r.sensor_id <> ''");
+    if (since) { where.push('r.checked_at >= ?'); args.push(since); }
+    if (until) { where.push('r.checked_at < ?'); args.push(until); }
     const cap = limit ? ` LIMIT ${Math.max(1, Math.min(Number(limit) || 50, 5000))}` : '';
     return db.prepare(`${TEMPERATURE_SELECT} WHERE ${where.join(' AND ')} ORDER BY r.checked_at DESC, r.id DESC${cap}`).all(...args);
 }

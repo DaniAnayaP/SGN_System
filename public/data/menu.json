@@ -1694,6 +1694,7 @@
             { "id": "iconLayoutFormatoActivo", "labelKey": "main.layoutFormatoActivoBtn", "permissionOnly": true },
             { "id": "iconLayoutQrLimpieza", "labelKey": "main.layoutQrLimpiezaBtn", "permissionOnly": true },
             { "id": "iconLayoutQrTemperaturas", "labelKey": "main.layoutQrTemperaturasBtn", "permissionOnly": true },
+            { "id": "iconLayoutQrSensores", "labelKey": "main.layoutQrSensoresBtn", "permissionOnly": true },
             { "id": "iconLayoutCandadosQr", "labelKey": "main.layoutLockBtn", "permissionOnly": true },
             { "id": "iconLayoutMedidas", "labelKey": "main.layoutMedidasBtn", "permissionOnly": true },
             { "id": "iconLayoutArea", "labelKey": "main.layoutAreaBtn", "permissionOnly": true },

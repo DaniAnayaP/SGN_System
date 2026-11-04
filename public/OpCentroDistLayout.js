@@ -2695,7 +2695,8 @@ function updateQrMenu() {
     const canTemp = !!(state.perms && state.perms.canUseTemperatureQr);
     // la pestaña Ficha solo tiene los candados de la Ficha de un código (vale para toda la empresa): sale con el permiso de candados
     const canFicha = !!(state.perms && state.perms.canLockQr);
-    const show = !!((canLayout || canZone || canClean || canTemp || canFicha) && state.saved && !state.creating);
+    const canSensor = !!(state.perms && state.perms.canUseSensorQr);
+    const show = !!((canLayout || canZone || canClean || canTemp || canSensor || canFicha) && state.saved && !state.creating);
     $('layout-qrmenu').hidden = !show;
     $('layout-qr-regen').hidden = !(state.perms && state.perms.canRegenerateQr);
     // "Por: Layout | Zona | Limpieza | Temperaturas" solo sale si se puede usar de más de una forma; con una sola, el menú abre directo en esa.
@@ -2703,10 +2704,11 @@ function updateQrMenu() {
     $('layout-qr-by-zone').hidden = !canZone;
     $('layout-qr-by-clean').hidden = !canClean;
     $('layout-qr-by-temp').hidden = !canTemp;
+    $('layout-qr-by-sensor').hidden = !canSensor;
     $('layout-qr-by-ficha').hidden = !canFicha;
-    $('layout-qr-by').hidden = [canLayout, canZone, canClean, canTemp, canFicha].filter(Boolean).length < 2;
-    const first = canLayout ? 'layout' : (canZone ? 'zone' : (canClean ? 'clean' : (canTemp ? 'temp' : 'ficha')));
-    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean) || (qrBy === 'temp' && !canTemp) || (qrBy === 'ficha' && !canFicha)) qrBy = first;
+    $('layout-qr-by').hidden = [canLayout, canZone, canClean, canTemp, canSensor, canFicha].filter(Boolean).length < 2;
+    const first = canLayout ? 'layout' : (canZone ? 'zone' : (canClean ? 'clean' : (canTemp ? 'temp' : (canSensor ? 'sensor' : 'ficha'))));
+    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean) || (qrBy === 'temp' && !canTemp) || (qrBy === 'sensor' && !canSensor) || (qrBy === 'ficha' && !canFicha)) qrBy = first;
     renderQrBy();
     if (!show) closeQrPop();
 }
@@ -2720,7 +2722,7 @@ let qrZoneData = null; // lo último que respondió el servidor para la zona y l
 let qrZoneSeq = 0;
 const ZONE_CATEGORY_TYPES = [['inventario', 'colArticuloCategoriaInventario'], ['compra', 'colArticuloCategoriaCompra'], ['almacenamiento', 'colArticuloCategoriaAlmacenamiento'], ['rotacion', 'colArticuloCategoriaRotacion'], ['manejo', 'colArticuloCategoriaManejo'], ['riesgo', 'colArticuloCategoriaRiesgo'], ['vidautil', 'colArticuloCategoriaVidautil'], ['tipocodigo', 'colArticuloCategoriaTipoCodigo']];
 function renderQrBy() {
-    ['layout', 'zone', 'clean', 'temp', 'ficha'].forEach((k) => {
+    ['layout', 'zone', 'clean', 'temp', 'sensor', 'ficha'].forEach((k) => {
         const on = qrBy === k;
         $(`layout-qr-by-${k}`).classList.toggle('active', on);
         $(`layout-qr-by-${k}`).setAttribute('aria-pressed', String(on));
@@ -2729,6 +2731,7 @@ function renderQrBy() {
     if (qrBy === 'zone' && !$('layout-qr-pop').hidden) loadQrZone(); // con el menú cerrado no se pide nada; se lee al abrirlo
     if (qrBy === 'clean') cleanZoneOptions();
     if (qrBy === 'temp') tempZoneOptions();
+    if (qrBy === 'sensor') sensorZoneOptions();
     if (QR_LOCK_KINDS[qrBy]) renderQrLocks(qrBy);
 }
 // ---- QR de limpieza (uno por activo) ---------------------------------------------------------------------------------------------
@@ -2760,11 +2763,25 @@ function tempZoneOptions() {
     $('layout-qr-temp-print').disabled = !n;
     $('layout-qr-temp-download').disabled = !n;
 }
+// ---- QR de sensores (uno por sensor del Layout) ------------------------------------------------------------------------------------------------
+// Cada SENSOR (paso Sensores del Layout) tiene su QR (la dirección fija /s/<código del Layout>/<id del sensor>: no cambia nunca). Se imprime una hoja con un QR por sensor de la zona elegida (o de todas) y se pega junto
+// al sensor. Se arma con lo guardado (GET /api/business/layout/sensor-qr). Quien lo escanea no necesita sesión: captura lo que marca el sensor y sus lecturas alimentan el mapa de calor.
+function sensorZoneOptions() {
+    const zones = ((state.saved && state.saved.zones) || []).filter((z) => z.active !== false);
+    const select = $('layout-qr-sensor-zone');
+    const current = select.value;
+    select.innerHTML = `<option value="">${esc(t('main.layoutQrLimpiezaTodas'))}</option>${zones.map((z) => `<option value="${esc(z.id)}">${esc(z.name)}</option>`).join('')}`;
+    if (current && zones.some((z) => z.id === current)) select.value = current;
+    const n = ((state.saved && state.saved.sensors) || []).filter((s) => !select.value || s.zoneId === select.value).length;
+    $('layout-qr-sensor-fine').textContent = n ? t('main.layoutQrSensoresCuantos', { n: fmt(n) }) : t('main.layoutQrSensoresVacio');
+    $('layout-qr-sensor-print').disabled = !n;
+    $('layout-qr-sensor-download').disabled = !n;
+}
 // ---- Candados de los QR (lo que ve y puede hacer quien escanea sin sesión) ---------------------------------------------------------------------
 // En las pestañas Layout, Zona, Limpieza y Temperaturas del menú «QR y descarga», con el icono Candados de los QR del árbol. Hay una configuración por tipo de QR y por centro de costos y vale para todos los QR de ese tipo (los
 // ya impresos también: el QR no cambia, cambia lo que muestra). Cada cambio se guarda al momento; el servidor es el que los hace cumplir (GET /api/business/layout/qr-locks).
 // Las pestañas Layout y Zona muestran el MISMO juego (tipo «layout»): el QR del Layout, el de una Zona y el de una Categoría abren la misma página, y con candados distintos bastaría cambiar el final de la dirección para saltárselos.
-const QR_LOCK_KINDS = { layout: 'layout', zone: 'layout', clean: 'cleaning', temp: 'temperature', ficha: 'ficha' };
+const QR_LOCK_KINDS = { layout: 'layout', zone: 'layout', clean: 'cleaning', temp: 'temperature', sensor: 'sensor', ficha: 'ficha' };
 const qrLocksNow = {};
 // Los candados del QR del Layout, en dos grupos: [clave, texto, ayuda] y el título de cada grupo.
 const LAYOUT_LOCK_GROUPS = [
@@ -2803,7 +2820,7 @@ async function renderQrLocks(kind) {
     const limit = `<label class="layout-lock-limit" data-help-key="layoutQrLocks"><span>${esc(t('main.layoutLockLimite'))}</span><select data-lock="limit">${data.limits.map((n) => `<option value="${n}"${lk.limit === n ? ' selected' : ''}>${esc(t('main.layoutLockUltimos', { n }))}</option>`).join('')}</select></label>`;
     const items = qrLockItems(kind).map(sw);
     items.splice(3, 0, limit); // después de ver los registros, las fotos y los nombres
-    box.innerHTML = `<h3 class="layout-lock-title">${esc(t('main.layoutLockTitulo'))}</h3>${items.join('')}<p class="layout-qr-fine">${esc(t(kind === 'clean' ? 'main.layoutLockNotaLimpieza' : 'main.layoutLockNotaTemp'))}</p>`;
+    box.innerHTML = `<h3 class="layout-lock-title">${esc(t('main.layoutLockTitulo'))}</h3>${items.join('')}<p class="layout-qr-fine">${esc(t(kind === 'clean' ? 'main.layoutLockNotaLimpieza' : (kind === 'sensor' ? 'main.layoutLockNotaSensor' : 'main.layoutLockNotaTemp')))}</p>`;
 }
 async function saveQrLock(kind, key, value, control) {
     const next = { ...qrLocksNow[kind], [key]: value };
@@ -2838,6 +2855,7 @@ Object.keys(QR_LOCK_KINDS).forEach((kind) => {
 const ASSET_QR_KINDS = {
     clean: { path: '/api/business/layout/cleaning-qr', title: 'main.layoutQrLimpiezaTitulo', scan: 'main.layoutQrLimpiezaEscanea', empty: 'main.layoutQrLimpiezaVacio', icon: 'sparkle', color: '#2A9D8F', zone: 'layout-qr-clean-zone', name: 'menu.opCentroDistLimpieza', file: 'QR-Limpieza' },
     temp: { path: '/api/business/layout/temperature-qr', title: 'main.layoutQrTemperaturasTitulo', scan: 'main.layoutQrTemperaturasEscanea', empty: 'main.layoutQrTemperaturasVacio', icon: 'thermometer', color: '#2F8FD1', zone: 'layout-qr-temp-zone', name: 'menu.opCentroDistTemperaturas', file: 'QR-Temperaturas' },
+    sensor: { path: '/api/business/layout/sensor-qr', title: 'main.layoutQrSensoresTitulo', scan: 'main.layoutQrSensoresEscanea', empty: 'main.layoutQrSensoresVacio', icon: 'thermometer', color: '#2B8CA3', zone: 'layout-qr-sensor-zone', name: 'main.colLayoutSensores', file: 'QR-Sensores', category: 'main.layoutQrSensoresCategoria', sensor: true },
 };
 // Lo guardado que manda el servidor (los activos de la zona elegida con su QR, el color y el logo del cliente) y lo que hace falta para dibujar sus tarjetas.
 async function loadAssetQr(kind) {
@@ -2851,14 +2869,14 @@ async function loadAssetQr(kind) {
     if (!data.spaces.length) { Dashboard.showToast(t(k.empty), 'warning'); return null; }
     return {
         k, data, logoRatio: await logoRatioOf(data.logoDataUrl), theme: window.LayoutMapSvg.theme(data.companyColor),
-        labels: { cardArea: t('main.layoutTarjetaArea'), cardCategory: t('main.colLimActivo').toUpperCase(), cardReview: t(k.scan), cardEmpty: '', cutCaption: t('main.layoutHojaRecorte') },
+        labels: { cardArea: t('main.layoutTarjetaArea'), cardCategory: t(k.category || 'main.colLimActivo').toUpperCase(), cardReview: t(k.scan), cardEmpty: '', cutCaption: t('main.layoutHojaRecorte') },
     };
 }
 function assetCardSvg(ctx, s, options) {
     const { k, data } = ctx;
     return window.LayoutSheet.buildCardSvg({
         companyName: data.companyName, siteName: data.siteName || '', logoDataUrl: data.logoDataUrl, logoRatio: ctx.logoRatio, theme: ctx.theme, zoneName: t(k.title),
-        categories: [{ name: s.code, desc: [typeLabel('space', s.type), s.zoneName].filter(Boolean).join(' · '), icon: k.icon, color: k.color, qrRows: s.qrRows }],
+        categories: [{ name: s.code, desc: [k.sensor ? typeLabel('sensor', s.type) : typeLabel('space', s.type), s.zoneName].filter(Boolean).join(' · '), icon: k.icon, color: k.color, qrRows: s.qrRows }],
     }, { ...ctx.labels, cardFooter: s.locator }, options);
 }
 // Imprimir: cuatro tarjetas por hoja carta, cada una con su línea punteada para recortar.
@@ -3234,6 +3252,7 @@ $('layout-qr-btn').addEventListener('click', (event) => {
 $('layout-qr-zone').addEventListener('change', loadQrZone);
 $('layout-qr-clean-zone').addEventListener('change', cleanZoneOptions);
 $('layout-qr-temp-zone').addEventListener('change', tempZoneOptions);
+$('layout-qr-sensor-zone').addEventListener('change', sensorZoneOptions);
 $('layout-qr-type').addEventListener('change', loadQrZone);
 document.addEventListener('click', (event) => { if (!event.target.closest('#layout-qrmenu')) closeQrPop(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeQrPop(); });
@@ -3311,6 +3330,8 @@ $('layout-qr-pop').addEventListener('click', async (event) => {
         else if (kind === 'clean-download') await openAssetQrDialog('clean');
         else if (kind === 'temp-download') await openAssetQrDialog('temp');
         else if (kind === 'temp-print') await printAssetQrCards('temp');
+        else if (kind === 'sensor-download') await openAssetQrDialog('sensor');
+        else if (kind === 'sensor-print') await printAssetQrCards('sensor');
         else if (kind === 'regen') await regenerateQr();
     } catch (err) {
         console.error('Layout: acción de QR falló', err);

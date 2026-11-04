@@ -2606,6 +2606,17 @@
     "layoutQrTemperaturasTitulo": "TEMPERATURES",
     "layoutQrTemperaturasEscanea": "SCAN ME TO RECORD THE TEMPERATURE",
     "layoutQrTemperaturasBtn": "Temperature QR (one per refrigerator)",
+    "layoutQrPorSensores": "Sensors",
+    "layoutQrSensoresImprimir": "Print the QR codes",
+    "layoutQrSensoresImprimirSub": "Four per Letter page, ready to cut and stick next to each sensor",
+    "layoutQrSensoresDescargarSub": "Choose the card size; the PDF has one per sensor",
+    "layoutQrSensoresCuantos": "{n} QR codes will be printed (one per sensor).",
+    "layoutQrSensoresVacio": "There are no sensors saved in that zone. They are added in the Sensors step of the Layout.",
+    "layoutQrSensoresTitulo": "CLIMATE SENSOR",
+    "layoutQrSensoresEscanea": "SCAN ME TO RECORD WHAT THE SENSOR SHOWS",
+    "layoutQrSensoresCategoria": "Sensor",
+    "layoutQrSensoresBtn": "Sensor QR (one per sensor)",
+    "layoutLockNotaSensor": "They apply to all the sensor QR codes of this Layout, including the ones already printed. Today everything is open; a lock is closed by turning it off.",
     "layoutQrAssetDescargar": "Download PDF or image",
     "layoutQrAssetDescargarSub": "Choose the card size; the PDF has one per asset",
     "layoutQrAssetTitulo": "QR cards · {name}",
@@ -2668,6 +2679,7 @@
     "colTmpOrigen": "Origin",
     "colTmpDeleteAuth": "Authorization to Delete",
     "tmpOrigenQr": "QR",
+    "tmpOrigenSensor": "Sensor QR",
     "tmpOrigenUsuario": "User",
     "tmpFotoVer": "View the photo of the reading",
     "tmpCortado": "Showing the first {n} readings; filter by cost center to see the rest.",
@@ -4068,7 +4080,7 @@
       "example": "Zone 1 is Dry and used for Storage; the Restroom is Facilities; the Dock is Operations."
     },
     "layoutQrBy": {
-      "what": "Choose which QR you work on: the whole Layout (the sheet with the map and the QR), a Zone (a sheet with the categories of the codes in that zone, each with its QR), Cleaning (one QR per asset), Temperatures (one QR per refrigerator) or the Sheet (only the locks for what whoever scans the sheet of a code sees). Each tab only shows if you have its access.",
+      "what": "Choose which QR you work on: the whole Layout (the sheet with the map and the QR), a Zone (a sheet with the categories of the codes in that zone, each with its QR), Cleaning (one QR per asset), Temperatures (one QR per refrigerator), Sensors (one QR per Layout sensor) or the Sheet (only the locks for what whoever scans the sheet of a code sees). Each tab only shows if you have its access.",
       "example": "for the rack in Zone 1 you pick Zone; for the office you pick Layout."
     },
     "layoutQrZonePick": {
@@ -4214,6 +4226,10 @@
     "layoutLocalizadoresLink": {
       "what": "Opens the Catalogs > Locators screen (view-only) with all the locators of all the cost centers, their warehouse and sub-warehouse, filters and history. It is the quick access to go straight there, without the menu.",
       "example": "you want to look up a locator of another cost center: you tap the arrow and filter there."
+    },
+    "layoutQrSensor": {
+      "what": "Prints the sensor QR codes: one per sensor of the Layout (the ones you marked in the Sensors step), for the zone you choose or all of them. Each QR is stuck next to its sensor and, when scanned, whoever checks writes their name and what the sensor shows (temperature, humidity or both, depending on its type) and takes a photo of the reading at that moment (the system sets the time). The readings are saved in the same Temperatures database and feed the heat map. The QR never changes, even if you move the sensor.",
+      "example": "you choose Zone 1 and the QR of S001 and S006 is printed; you stick them next to each sensor and whoever checks scans each one, writes 31.8 °C and 46 % and takes a photo of the display."
     },
     "layoutQrTemp": {
       "what": "Prints the temperature QR codes: one per refrigerator (the Cold-type assets), for the zone you choose or all of them. Each QR is stuck on its refrigerator and, when scanned, the person checking types their name and the temperature shown and takes the photo of the reading at that moment (the time is set by the system). The readings are seen in Operations > Temperatures. They can also be downloaded as a PDF (one card per page) or as an image, in the size you choose, like in the Layout.",

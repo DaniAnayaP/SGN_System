@@ -54,7 +54,8 @@ function timeCell(col, iso) {
 }
 // out = 'low' | 'high': la lectura salió del rango del refrigerador (se ve en rojo).
 function temperatureCell(col, value, out) {
-    const td = cell(col, Number.isFinite(Number(value)) ? Number(value).toFixed(1) : '');
+    // un sensor de solo humedad no lleva temperatura: queda vacía (Number(null) daría 0.0)
+    const td = cell(col, value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value).toFixed(1) : '');
     td.classList.add('tmp-value');
     if (out === 'low' || out === 'high') td.classList.add('tmp-out');
     return td;
@@ -103,7 +104,8 @@ function photoCell(col, r) {
     return td;
 }
 const footprintText = (r) => r.footprintCode || '';
-const assetText = (r) => (r.spaceCode ? `${r.spaceCode} · ${t(`main.layoutType_space_${r.spaceType || 'cold'}`)}` : '');
+// La columna Activo también muestra el sensor de las lecturas que vienen del QR de un sensor del Layout (S001 · Temperatura y humedad).
+const assetText = (r) => (r.spaceCode ? `${r.spaceCode} · ${t(`main.layoutType_space_${r.spaceType || 'cold'}`)}` : (r.sensorCode ? `${r.sensorCode} · ${t(`main.layoutType_sensor_${r.sensorType || 'both'}`)}` : ''));
 
 function actionsCell(r, tr) {
     const td = document.createElement('td');
@@ -132,7 +134,7 @@ function buildRow(r) {
         cell('colCatRegistroUnico', `TMP-${r.id}`, 'col-system'),
         cell('colTmpZona', r.zoneName), cell('colTmpHuella', footprintText(r)), cell('colTmpActivo', assetText(r)), cell('colTmpLocalizador', r.locator, 'rel-locator'), cell('colTmpQuien', r.name),
         timeCell('colTmpMomento', r.checkedAt), temperatureCell('colTmpTemperatura', r.temperature, r.status && r.status.temp), humidityCell('colTmpHumedad', r.humidity, r.status && r.status.hum), statusCell('colTmpEstado', r), photoCell('colTmpFoto', r),
-        cell('colTmpOrigen', t(r.source === 'qr' ? 'main.tmpOrigenQr' : 'main.tmpOrigenUsuario')),
+        cell('colTmpOrigen', t(r.source === 'qr' ? 'main.tmpOrigenQr' : (r.source === 'qr-sensor' ? 'main.tmpOrigenSensor' : 'main.tmpOrigenUsuario'))),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
@@ -249,7 +251,7 @@ function openViewer(r) {
         viewerEl.addEventListener('click', (event) => { if (event.target === viewerEl) viewerEl.hidden = true; });
         document.addEventListener('keydown', (event) => { if (event.key === 'Escape') viewerEl.hidden = true; });
     }
-    viewerEl.querySelector('#tmp-viewer-title').textContent = `${r.spaceCode || ''} · ${Number(r.temperature).toFixed(1)} °C${r.humidity === null || r.humidity === undefined ? '' : ` · ${Number(r.humidity).toFixed(1)} %`} · ${r.name || ''}`;
+    viewerEl.querySelector('#tmp-viewer-title').textContent = `${r.spaceCode || r.sensorCode || ''}${r.temperature === null || r.temperature === undefined ? '' : ` · ${Number(r.temperature).toFixed(1)} °C`}${r.humidity === null || r.humidity === undefined ? '' : ` · ${Number(r.humidity).toFixed(1)} %`} · ${r.name || ''}`;
     viewerEl.querySelector('#tmp-viewer-img').src = `${API}/${r.id}/photo`;
     viewerEl.hidden = false;
 }

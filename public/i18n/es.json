@@ -2605,6 +2605,17 @@
     "layoutQrTemperaturasTitulo": "TEMPERATURAS",
     "layoutQrTemperaturasEscanea": "ESCANÉAME PARA REGISTRAR LA TEMPERATURA",
     "layoutQrTemperaturasBtn": "QR de temperaturas (uno por refrigerador)",
+    "layoutQrPorSensores": "Sensores",
+    "layoutQrSensoresImprimir": "Imprimir los QR",
+    "layoutQrSensoresImprimirSub": "Cuatro por hoja carta, listos para recortar y pegar junto a cada sensor",
+    "layoutQrSensoresDescargarSub": "Elige el tamaño de la tarjeta; el PDF trae una por sensor",
+    "layoutQrSensoresCuantos": "Se imprimen {n} QR (uno por sensor).",
+    "layoutQrSensoresVacio": "No hay sensores guardados en esa zona. Se agregan en el paso Sensores del Layout.",
+    "layoutQrSensoresTitulo": "SENSOR DE CLIMA",
+    "layoutQrSensoresEscanea": "ESCANÉAME PARA REGISTRAR LO QUE MARCA EL SENSOR",
+    "layoutQrSensoresCategoria": "Sensor",
+    "layoutQrSensoresBtn": "QR de sensores (uno por sensor)",
+    "layoutLockNotaSensor": "Valen para todos los QR de sensores de este Layout, también los ya impresos. Hoy todo está abierto; un candado se cierra al apagarlo.",
     "layoutQrAssetDescargar": "Descargar PDF o imagen",
     "layoutQrAssetDescargarSub": "Elige el tamaño de la tarjeta; el PDF lleva una por activo",
     "layoutQrAssetTitulo": "Tarjetas de QR · {name}",
@@ -2667,6 +2678,7 @@
     "colTmpOrigen": "Origen",
     "colTmpDeleteAuth": "Autorización para Eliminar",
     "tmpOrigenQr": "QR",
+    "tmpOrigenSensor": "QR del sensor",
     "tmpOrigenUsuario": "Usuario",
     "tmpFotoVer": "Ver la foto de la lectura",
     "tmpCortado": "Se muestran las primeras {n} lecturas; filtra por centro de costos para ver las demás.",
@@ -4067,7 +4079,7 @@
       "example": "la Zona 1 es Seca y es de Almacenamiento; el Baño es de Instalaciones; el Andén es de Operaciones."
     },
     "layoutQrBy": {
-      "what": "Elige sobre qué QR trabajas: el Layout completo (la hoja con el croquis y el QR), una Zona (una hoja con las categorías de los códigos de esa zona, cada una con su QR), Limpieza (un QR por activo), Temperaturas (un QR por refrigerador) o la Ficha (solo los candados de lo que ve quien escanea la Ficha de un código). Cada pestaña sale solo si tienes su acceso.",
+      "what": "Elige sobre qué QR trabajas: el Layout completo (la hoja con el croquis y el QR), una Zona (una hoja con las categorías de los códigos de esa zona, cada una con su QR), Limpieza (un QR por activo), Temperaturas (un QR por refrigerador), Sensores (un QR por sensor del Layout) o la Ficha (solo los candados de lo que ve quien escanea la Ficha de un código). Cada pestaña sale solo si tienes su acceso.",
       "example": "para pegar en el anaquel de la Zona 1 eliges Zona; para la oficina eliges Layout."
     },
     "layoutQrZonePick": {
@@ -4213,6 +4225,10 @@
     "layoutLocalizadoresLink": {
       "what": "Abre la pantalla Catálogos > Localizadores (solo lectura) con todos los localizadores de todos los centros de costos, su almacén y su sub almacén, filtros e historial. Es el acceso rápido para ir directo, sin pasar por el menú.",
       "example": "quieres buscar un localizador de otro centro de costos: tocas la flechita y filtras ahí."
+    },
+    "layoutQrSensor": {
+      "what": "Imprime los QR de los sensores: uno por sensor del Layout (los que marcaste en el paso Sensores), de la zona que elijas o de todas. Cada QR se pega junto a su sensor y, al escanearlo, quien revisa escribe su nombre, lo que marca el sensor (temperatura, humedad o las dos, según su tipo) y toma la foto de la lectura en ese momento (la hora la pone el sistema). Las lecturas se guardan en la misma base de Temperaturas y alimentan el mapa de calor. El QR no cambia nunca, aunque muevas el sensor.",
+      "example": "eliges la Zona 1 y se imprime el QR de S001 y S006; los pegas junto a cada sensor y quien revisa escanea el de cada uno, anota 31.8 °C y 46 % y toma la foto de la pantalla."
     },
     "layoutQrTemp": {
       "what": "Imprime los QR de temperaturas: uno por refrigerador (los activos de tipo Frío), de la zona que elijas o de todas. Cada QR se pega en su refrigerador y, al escanearlo, quien revisa escribe su nombre y la temperatura que marca y toma la foto de la lectura en ese momento (la hora la pone el sistema). Las lecturas se ven en Operaciones > Temperaturas. También se pueden bajar en PDF (una tarjeta por página) o en imagen, con el tamaño que elijas, como en el Layout.",
