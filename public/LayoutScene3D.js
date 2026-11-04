@@ -134,6 +134,32 @@
                 const hh = hit.o.kind === 'step' ? Math.max(Math.abs(Number(hit.o.dz) || 0), 0.12) : Math.max(bounds.maxH, 1);
                 return { x: PX((x0 + x1) / 2), y: hh / 2, z: PZ((y0 + y1) / 2), sx: Math.max(x1 - x0, 0.1), sy: hh, sz: Math.max(y1 - y0, 0.1) };
             }
+            // un elemento de seguridad, un pasillo o un objeto elegido en las tablas de Seguridad, Tránsito u Objetos
+            if (hl.kind === 'safety') {
+                const e = (lastLayout.safety || []).find((x) => x.id === hl.id);
+                if (!e || !layerOn.safety) return null;
+                const ex = Number(e.x) || 0; const ey = Number(e.y) || 0;
+                if (e.type === 'route') {
+                    const x2 = Number(e.x2) || 0; const y2 = Number(e.y2) || 0;
+                    return { x: PX((ex + x2) / 2), y: 0.2, z: PZ((ey + y2) / 2), sx: Math.abs(x2 - ex) + 0.8, sy: 0.4, sz: Math.abs(y2 - ey) + 0.8 };
+                }
+                const H = { extinguisher: 1.4, hydrant: 0.95, emergency_door: 2.4, firstaid: 1.7, alarm: 1.6, eyewash: 1.25, assembly: 2.6 }[e.type] || 1.4;
+                const W = { emergency_door: 1.2, assembly: 1.7 }[e.type] || 0.6;
+                return { x: PX(ex), y: H / 2 + 0.08, z: PZ(ey), sx: W, sy: H, sz: W };
+            }
+            if (hl.kind === 'transit') {
+                const p = (lastLayout.transit || []).find((x) => x.id === hl.id);
+                if (!p || !layerOn.transit || !(p.l > 0) || !(p.w > 0)) return null;
+                return { x: PX(p.x + p.l / 2), y: 0.1, z: PZ(p.y + p.w / 2), sx: p.l, sy: 0.2, sz: p.w };
+            }
+            if (hl.kind === 'object') {
+                const o = (lastLayout.objects || []).find((x) => x.id === hl.id);
+                if (!o || !layerOn.objects) return null;
+                const l = Math.max(Number(o.l) || 0.3, 0.1); const w = Math.max(Number(o.w) || 0.3, 0.1); const h = Math.max(Number(o.h) || 1, 0.2);
+                const ang = ((Number(o.angle) || 0) * Math.PI) / 180;
+                const ext = o.type === 'forklift' ? l * 1.2 : l;
+                return { x: PX(Number(o.x) || 0), y: h / 2 + 0.08, z: PZ(Number(o.y) || 0), sx: Math.abs(Math.cos(ang)) * ext + Math.abs(Math.sin(ang)) * w, sy: h, sz: Math.abs(Math.sin(ang)) * ext + Math.abs(Math.cos(ang)) * w };
+            }
             const s = (lastLayout.spaces || []).find((e) => e.id === hl.id);
             if (!s || s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id) || !layerOn.assets) return null;
             return { x: PX(s.x + s.l / 2), y: s.h / 2, z: PZ(s.y + s.d / 2), sx: s.l, sy: s.h, sz: s.d };

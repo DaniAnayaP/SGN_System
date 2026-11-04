@@ -623,8 +623,32 @@ function computeSafetyIssues() {
 const safetyIssueText = (v) => t(`main.layoutVioSg_${v.kind}`, { code: v.code });
 // El código y la zona de cada elemento salen de su tipo y de su lugar; las cajas de X e Y (y de la llegada de la ruta) se marcan en rojo si algo no cumple y abajo del paso va la lista de lo que falta.
 // La leyenda de los símbolos solo se ve con el paso Seguridad encendido.
+// La simbología de la pantalla solo nombra lo que se ve en el croquis: cada parte aparece cuando su paso está encendido Y ya hay algo agregado (una puerta, un sensor, una columna…). El contorno y las paredes siempre se dibujan,
+// así que salen siempre que haya paredes. Se vuelve a sacar con cada cambio del borrador y al encender o apagar un paso.
+function applyLegend() {
+    const d = state.draft;
+    const some = (list, fn) => !!d && (d[list] || []).some(fn || (() => true));
+    const RULES = {
+        contour: () => true,
+        wall: () => some('obstacles', (o) => o.kind === 'wall'),
+        door: () => stepOn('puertas') && some('doors'),
+        power: () => stepOn('luz') && some('power'),
+        sensor: () => stepOn('sensores') && some('sensors'),
+        column: () => stepOn('obstaculos') && some('obstacles', (o) => o.kind === 'column' || o.kind === 'other'),
+        step: () => stepOn('obstaculos') && some('obstacles', (o) => o.kind === 'step'),
+        footprint: () => (stepOn('espacios') || stepOn('activos') || stepOn('posiciones')) && some('footprints', (f) => f.active !== false),
+        asset: () => (stepOn('activos') || stepOn('posiciones')) && some('spaces', (s) => s.active !== false),
+        object: (type) => stepOn('objetos') && some('objects', (o) => o.type === type),
+        transit: (type) => stepOn('transito') && some('transit', (p) => (type === 'between' ? p.type === 'between' : p.type !== 'between')),
+        safety: (type) => stepOn('seguridad') && some('safety', (e) => e.type === type),
+    };
+    document.querySelectorAll('[data-lg]').forEach((el) => {
+        const rule = RULES[el.getAttribute('data-lg')];
+        el.hidden = !(d && rule && rule(el.getAttribute('data-lg-type')));
+    });
+}
 function applySafetyMarks() {
-    document.querySelectorAll('.lg-sf-item').forEach((el) => { el.hidden = !stepOn('seguridad'); });
+    applyLegend();
     if (!state.draft) return;
     computeSafetyIssues();
     (state.draft.safety || []).forEach((e, i) => {
@@ -1030,6 +1054,9 @@ function rowEntity(tr) {
     if (list === 'spaces' && state.draft.spaces[i]) return { kind: 'space', id: state.draft.spaces[i].id };
     // las paredes (paso Paredes) y las columnas, desniveles y otros obstáculos (paso Contorno) también se marcan en el croquis al elegir su renglón
     if (list === 'obstacles' && state.draft.obstacles[i]) return { kind: 'obstacle', id: state.draft.obstacles[i].id };
+    if (list === 'safety' && (state.draft.safety || [])[i]) return { kind: 'safety', id: state.draft.safety[i].id };
+    if (list === 'transit' && (state.draft.transit || [])[i]) return { kind: 'transit', id: state.draft.transit[i].id };
+    if (list === 'objects' && (state.draft.objects || [])[i]) return { kind: 'object', id: state.draft.objects[i].id };
     if (list === 'bay' && state.draft.spaces[i]) return { kind: 'bay', id: state.draft.spaces[i].id, n: Number(ctl.getAttribute('data-n')), c: Number(ctl.getAttribute('data-c')) };
     return null;
 }
@@ -1055,8 +1082,12 @@ function applyHighlight(reveal) {
     const h = state.hl;
     if (!h || h.step !== state.focus || !state.draft) return;
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
-    const els = Array.from(svg.querySelectorAll(h.kind === 'zone' ? `[data-zid="${CSS.escape(h.id)}"]` : (h.kind === 'footprint' ? `[data-fid="${CSS.escape(h.id)}"]` : (h.kind === 'obstacle' ? `[data-obid="${CSS.escape(h.id)}"]` : `[data-sid="${CSS.escape(h.id)}"]`))));
-    const shapes = els.map((el) => (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'))).filter(Boolean);
+    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', transit: 'data-tid', object: 'data-oid' };
+    const els = Array.from(svg.querySelectorAll(`[${HL_ATTR[h.kind] || 'data-sid'}="${CSS.escape(h.id)}"]`));
+    // un elemento de seguridad o un objeto son figuras sueltas (con símbolo, giro, etiqueta): su contorno sale de un cuadro invisible que se dibuja junto a ellos
+    const shapes = h.kind === 'safety' || h.kind === 'object'
+        ? Array.from(svg.querySelectorAll(`[data-hlbox="${h.kind}:${CSS.escape(h.id)}"]`))
+        : els.map((el) => (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'))).filter(Boolean);
     if (!shapes.length) return;
     els.forEach((el) => el.classList.add('hl-on'));
     svg.classList.add('has-hl');
@@ -1076,7 +1107,7 @@ function applyHighlight(reveal) {
             ring.setAttribute('x', box.x); ring.setAttribute('y', box.y); ring.setAttribute('width', box.width); ring.setAttribute('height', box.height);
         } else {
             ring = shapes[0].cloneNode(false);
-            ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'data-fid', 'id'].forEach((a) => ring.removeAttribute(a));
+            ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'data-fid', 'data-obid', 'data-tid', 'data-hlbox', 'id'].forEach((a) => ring.removeAttribute(a));
         }
         // una pared o una columna es delgada: su contorno de resaltado es más grueso para que se vea
         ring.setAttribute('class', `hl-shape ${cls}${h.kind === 'obstacle' ? ' hl-obs' : ''}`);
@@ -1114,7 +1145,7 @@ function selectRowFrom(target) {
 // Tocar una figura del croquis (sin arrastrarla) la elige: se marca su renglón en la tabla y la figura se resalta con el contorno grueso de siempre; volver a tocarla la regresa al contorno punteado. Solo cuenta
 // el paso que se está editando: en Zonas las zonas, en Huella-Espacio las huellas y en Activos los activos.
 function selectFromMap(target) {
-    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid]') : null;
+    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-tid], [data-oid]') : null;
     if (!el || !state.draft) return;
     let next = null;
     // en Paredes se eligen las paredes y en Contorno las columnas, desniveles y otros obstáculos
@@ -1126,6 +1157,9 @@ function selectFromMap(target) {
     if (state.focus === 'zonas' && el.getAttribute('data-zid')) next = { kind: 'zone', id: el.getAttribute('data-zid') };
     else if (state.focus === 'espacios' && el.getAttribute('data-fid')) next = { kind: 'footprint', id: el.getAttribute('data-fid') };
     else if (state.focus === 'activos' && el.getAttribute('data-sid')) next = { kind: 'space', id: el.getAttribute('data-sid') };
+    else if (state.focus === 'seguridad' && el.getAttribute('data-sfid')) next = { kind: 'safety', id: el.getAttribute('data-sfid') };
+    else if (state.focus === 'transito' && el.getAttribute('data-tid')) next = { kind: 'transit', id: el.getAttribute('data-tid') };
+    else if (state.focus === 'objetos' && el.getAttribute('data-oid')) next = { kind: 'object', id: el.getAttribute('data-oid') };
     if (next) selectEntity(next);
 }
 // Elegir una zona, huella o activo: se marca su renglón en la tabla (y se baja hasta él) y su figura se resalta en el croquis y en el 3D; volver a elegirla pasa del contorno grueso al punteado.
@@ -1626,6 +1660,12 @@ function renderSvg() {
                 ? `<rect class="lob lob-box" x="${-along / 2}" y="${-across / 2}" width="${along}" height="${across}" rx="2"/>`
                 : `<ellipse class="lob lob-person" cx="0" cy="0" rx="${along / 2}" ry="${across / 2}"/><circle class="lob-head" cx="0" cy="0" r="${Math.min(along, across) * 0.3}"/>`);
         s += `<g class="lobj" data-oid="${esc(o.id)}" transform="translate(${X(o.x)} ${Y(o.y)}) rotate(${Number(o.angle) || 0})">${shape}${title}</g>`;
+        // el cuadro (invisible) que usa el resaltado al elegir su renglón: lo que ocupa el objeto ya girado (el montacargas, con sus horquillas)
+        const ang = ((Number(o.angle) || 0) * Math.PI) / 180;
+        const ext = o.type === 'forklift' ? along * 1.35 : along;
+        const bw = Math.abs(Math.cos(ang)) * ext + Math.abs(Math.sin(ang)) * across + 6;
+        const bh = Math.abs(Math.sin(ang)) * ext + Math.abs(Math.cos(ang)) * across + 6;
+        s += `<rect class="hl-box" data-hlbox="object:${esc(o.id)}" x="${(X(o.x) - bw / 2).toFixed(1)}" y="${(Y(o.y) - bh / 2).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="3"/>`;
     });
     // Seguridad (paso Seguridad): extintores, hidrantes, puertas de emergencia… como símbolos de su color con su código; la ruta de evacuación, una línea punteada con flecha. Lo que queda fuera del contorno lleva un aro rojo punteado.
     if (on('seguridad')) {
@@ -1641,6 +1681,9 @@ function renderSvg() {
             const why = bad ? Object.values(bad).map(safetyIssueText).join(' · ') : '';
             const due = LC.safetyStatus(e, today, d.safetyWarnDays, sfLast(e));
             const title = `<title>${esc(e.code || '')} · ${esc(typeLabel('safety', e.type))}${e.name ? ` · ${esc(e.name)}` : ''}${zone ? ` · ${esc(zone)}` : ''}${why ? `\n${esc(why)}` : ''}${due.state !== 'none' ? `\n${esc(safetyStatusText(due))}` : ''}</title>`;
+            // el cuadro (invisible) que usa el resaltado al elegir su renglón: el símbolo, o los dos extremos de la ruta
+            const hb = e.type === 'route' ? [Math.min(px, X(e.x2)) - 8, Math.min(py, Y(e.y2)) - 8, Math.abs(X(e.x2) - px) + 16, Math.abs(Y(e.y2) - py) + 16] : [px - rs - 4, py - rs - 4, 2 * rs + 8, 2 * rs + 8];
+            s += `<rect class="hl-box" data-hlbox="safety:${esc(e.id)}" x="${hb[0].toFixed(1)}" y="${hb[1].toFixed(1)}" width="${hb[2].toFixed(1)}" height="${hb[3].toFixed(1)}" rx="3"/>`;
             if (e.type === 'route') {
                 s += `<g class="lsafe" data-sfid="${esc(e.id)}"><circle cx="${px}" cy="${py}" r="3.4" fill="${LC.SAFETY_COLORS.route}" stroke="#14602F" stroke-width="0.9"/>${title}</g>${SG.safetyLabel(px, py - 7, e.code || '')}`;
                 if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="9"/>`;
