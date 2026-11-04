@@ -1580,6 +1580,7 @@
     "backupsClientSelectPlaceholder": "Select a client...",
     "colMaterialApoyoFuncionalidad": "Screen Functionality Access",
     "colLayoutContorno": "Warehouse outline",
+    "colLayoutParedes": "Walls",
     "colLayoutPuertas": "Doors",
     "colLayoutLuz": "Electrical Power",
     "colLayoutSensores": "Sensors",
@@ -1693,7 +1694,10 @@
     "layoutY": "Y (m)",
     "layoutPared": "Side",
     "layoutAgregarEsquina": "+ Add corner",
-    "layoutColumnasTitulo": "Outline obstacles (columns, walls, level differences…)",
+    "layoutColumnasTitulo": "Outline obstacles (columns, level differences…)",
+    "layoutStepParedes": "Walls",
+    "layoutAgregarPared": "+ Add wall",
+    "layoutParedesVacio": "There are no walls yet. Add one with the button above or use «Wall on the whole outline».",
     "layoutNombre": "Name",
     "layoutLargo": "Length (m)",
     "layoutAncho": "Width (m)",
@@ -3927,7 +3931,7 @@
       "example": "you tap Doors and then Electrical Power: you see both on the sketch and edit only the power below; you tap Doors again to edit the doors."
     },
     "layoutSec_contorno": {
-      "what": "The corners of the warehouse in meters, with the height of each one. The outline is only the frame of the terrain: it is not a wall. Walls, columns, level differences and anything in the way go as obstacles placed on top, on a side of the outline or inside the warehouse. The add buttons are at the top, next to the title. The total m² come from here and, with the heights and the level differences, the m³.",
+      "what": "The corners of the warehouse in meters, with the height of each one. The outline is only the frame of the terrain: it is not a wall. Walls have their own step (Walls); here go the columns, the level differences and anything else in the way, as obstacles placed on top, on a side of the outline or inside the warehouse. The add buttons are at the top, next to the title. The total m² come from here and, with the heights and the level differences, the m³.",
       "example": "a warehouse with a higher roof on one side has 6 meters at two corners and 10 at the other two."
     },
     "layoutSec_puertas": {
@@ -4527,8 +4531,8 @@
       "example": "with the plan at hand you use By sides; if you already have coordinates you use By corners."
     },
     "layoutObstTipo": {
-      "what": "What this obstacle is: Wall, Column, Level difference (a stretch of floor that is higher or lower) or Other (anything in the way).",
-      "example": "you mark the wall in the middle of the warehouse as Wall and the concrete post as Column."
+      "what": "What this obstacle is: Column, Level difference (a stretch of floor that is higher or lower) or Other (anything in the way). Walls are added in the Walls step.",
+      "example": "you mark the concrete post as Column and the stretch of higher floor next to the dock as Level difference."
     },
     "layoutObstUbicacion": {
       "what": "How you place it: On the outline (against a side of the warehouse: you pick the side, how far from the corner it starts, how long it is and how thick) or Inside the warehouse (with X, Y, length and width).",
@@ -4581,6 +4585,14 @@
     "layoutTransitoAltoLibre": {
       "what": "How much free space there is above this aisle, in meters. It is optional: empty means the height is not checked.",
       "example": "a low beam leaves 2 m free: you enter 2 and a 2.2 m tall forklift shows in red."
+    },
+    "layoutSec_paredes": {
+      "what": "The walls of the warehouse. Each one goes on a side of the outline (the whole length or just a stretch, with its thickness) or inside the warehouse, with its place and sizes. Walls go from floor to ceiling in 3D and are always drawn on the sketch. The add buttons are at the top: «Add wall» and «Wall on the whole outline».",
+      "example": "a wall on every side of the warehouse except the open dock side, and a 12 m wall in the middle to separate the refrigerated zone."
+    },
+    "layoutParedAgregar": {
+      "what": "Adds a new wall on side 1 of the outline, along its whole length; then you place it with its side, distance, length and thickness.",
+      "example": "you add a wall and move it to side 3 with a length of 8 m."
     },
     "layoutSec_seguridad": {
       "what": "The safety items of the warehouse placed on the plan: fire extinguishers, hydrants, emergency doors, first-aid kits, alarms or pull stations, showers and eyewashes, assembly points and evacuation routes. Each one is a point (X and Y, in meters; a route also has its end point) with its type and its name or model. The system sets the code: each type with its own letter and count (E001, I001, P001, B001, L001, O001, U001, V001), and a number is never used again even if you delete the item. The zone comes from its place. Everything must be inside the building outline: otherwise it shows in red and can't be saved. They show on the sketch, in 3D, on the public QR page and on the downloaded sheet while this step is on.",

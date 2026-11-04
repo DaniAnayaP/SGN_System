@@ -1580,6 +1580,7 @@
     "backupDownloadError": "No se pudo generar el link de descarga.",
     "colMaterialApoyoFuncionalidad": "Acceso a Funcionalidad Pantallas",
     "colLayoutContorno": "Contorno de la nave",
+    "colLayoutParedes": "Paredes",
     "colLayoutPuertas": "Puertas",
     "colLayoutLuz": "Energía Eléctrica",
     "colLayoutSensores": "Sensores",
@@ -1693,7 +1694,10 @@
     "layoutY": "Y (m)",
     "layoutPared": "Lado",
     "layoutAgregarEsquina": "+ Agregar esquina",
-    "layoutColumnasTitulo": "Obstáculos del contorno (columnas, paredes, desniveles…)",
+    "layoutColumnasTitulo": "Obstáculos del contorno (columnas, desniveles…)",
+    "layoutStepParedes": "Paredes",
+    "layoutAgregarPared": "+ Agregar pared",
+    "layoutParedesVacio": "Todavía no hay paredes. Agrega una con el botón de arriba o usa «Pared en todo el contorno».",
     "layoutNombre": "Nombre",
     "layoutLargo": "Largo (m)",
     "layoutAncho": "Ancho (m)",
@@ -3926,7 +3930,7 @@
       "example": "tocas Puertas y luego Energía Eléctrica: ves ambas en el croquis y abajo editas solo la luz; tocas Puertas otra vez para editar las puertas."
     },
     "layoutSec_contorno": {
-      "what": "Las esquinas de la nave en metros, con la altura de cada una. El contorno es solo el marco del terreno: no es pared. Las paredes, columnas, desniveles y cualquier cosa que estorbe van como obstáculos puestos encima, sobre un lado del contorno o dentro de la nave. Los botones de agregar están arriba, junto al título. De aquí salen los m² totales y, con las alturas y los desniveles, los m³.",
+      "what": "Las esquinas de la nave en metros, con la altura de cada una. El contorno es solo el marco del terreno: no es pared. Las paredes tienen su propio paso (Paredes); aquí van las columnas, los desniveles y cualquier otra cosa que estorbe, como obstáculos puestos encima, sobre un lado del contorno o dentro de la nave. Los botones de agregar están arriba, junto al título. De aquí salen los m² totales y, con las alturas y los desniveles, los m³.",
       "example": "una nave con el techo más alto de un lado tiene 6 metros en dos esquinas y 10 en las otras dos."
     },
     "layoutSec_puertas": {
@@ -4526,8 +4530,8 @@
       "example": "con el plano a la mano usas Por lados; si ya tienes coordenadas usas Por esquinas."
     },
     "layoutObstTipo": {
-      "what": "Qué es este obstáculo: Pared, Columna, Desnivel (un tramo del piso más alto o más bajo) u Otro (cualquier cosa que estorbe).",
-      "example": "marcas como Pared el muro de en medio de la nave y como Columna el poste de concreto."
+      "what": "Qué es este obstáculo: Columna, Desnivel (un tramo del piso más alto o más bajo) u Otro (cualquier cosa que estorbe). Las paredes se agregan en el paso Paredes.",
+      "example": "marcas como Columna el poste de concreto y como Desnivel el tramo de piso más alto junto al andén."
     },
     "layoutObstUbicacion": {
       "what": "Cómo lo ubicas: Sobre el contorno (pegado a un lado de la nave: eliges el lado, a qué distancia de la esquina empieza, cuánto mide y qué grosor tiene) o Dentro de la nave (con X, Y, largo y ancho).",
@@ -4580,6 +4584,14 @@
     "layoutTransitoAltoLibre": {
       "what": "Cuánto espacio libre hay hacia arriba en este pasillo, en metros. Es opcional: vacío quiere decir que no se revisa el alto.",
       "example": "una viga baja deja 2 m libres: pones 2 y un montacargas de 2.2 m de alto sale en rojo."
+    },
+    "layoutSec_paredes": {
+      "what": "Las paredes de la nave. Cada una va sobre un lado del contorno (a todo lo largo o solo un tramo, con su grosor) o dentro de la nave, con su lugar y medidas. Las paredes suben del piso al techo en el 3D y se dibujan siempre en el croquis. Los botones de agregar están arriba: «Agregar pared» y «Pared en todo el contorno».",
+      "example": "una pared en cada lado de la nave, menos el lado del andén abierto, y un muro de 12 m en medio para separar la zona de refrigerados."
+    },
+    "layoutParedAgregar": {
+      "what": "Agrega una pared nueva sobre el lado 1 del contorno, a todo lo largo; después se acomoda con su lado, su distancia, su largo y su grosor.",
+      "example": "agregas una pared y la pasas al lado 3 con un largo de 8 m."
     },
     "layoutSec_seguridad": {
       "what": "Los elementos de seguridad de la nave puestos en el plano: extintores, hidrantes, puertas de emergencia, botiquines, alarmas o pulsadores, regaderas y lavaojos, puntos de reunión y rutas de evacuación. Cada uno es un punto (X e Y, en metros; la ruta lleva además el punto de llegada) con su tipo y su nombre o modelo. El código lo pone el sistema: cada tipo con su letra y su cuenta (E001, I001, P001, B001, L001, O001, U001, V001) y un número no se vuelve a usar aunque borres el elemento. La zona sale sola del lugar. Todo debe quedar dentro del contorno de la nave: si no, sale en rojo y no se deja guardar. Se ven en el croquis, en el 3D, en la página pública del QR y en la hoja que se descarga mientras este paso esté encendido.",

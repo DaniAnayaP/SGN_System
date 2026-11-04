@@ -8,9 +8,9 @@
 // Envuelto en una función: este script comparte el ámbito global con Dashboard.js, que ya declara nombres como SECTION_LABEL_KEYS.
 (function () {
 const LC = window.LayoutCalc;
-const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'transito', 'espacios', 'luz', 'sensores', 'seguridad', 'objetos', 'activos', 'posiciones'];
+const SECTION_ORDER = ['contorno', 'paredes', 'puertas', 'zonas', 'transito', 'espacios', 'luz', 'sensores', 'seguridad', 'objetos', 'activos', 'posiciones'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
+    contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -629,7 +629,8 @@ function locatorsStepHtml() {
 }
 // Un renglón de la tabla de obstáculos del contorno. Las cuatro celdas del lugar cambian con la forma de ponerlo: «Sobre el contorno» = lado, distancia, largo (vacío = todo el lado) y grosor; «Dentro de la nave» = X, Y, largo y ancho.
 // La altura solo la lleva el desnivel (su altura sobre el piso; negativa si es más bajo).
-function obstacleRowHtml(o, i, dis) {
+// wallsOnly = el renglón es de una pared (paso Paredes): sin la columna Tipo (siempre es pared) ni la de altura del desnivel.
+function obstacleRowHtml(o, i, dis, wallsOnly = false) {
     const off = dis ? ' disabled' : '';
     const sel = (key, markup, help) => `<td><select data-l="obstacles" data-i="${i}" data-k="${key}" data-help-key="${help}"${off}>${markup}</select></td>`;
     const num = (key, value, help, extra = '') => `<td><input type="number" step="0.1" ${extra} data-l="obstacles" data-i="${i}" data-k="${key}" data-help-key="${help}" value="${value}"${off}></td>`;
@@ -637,7 +638,9 @@ function obstacleRowHtml(o, i, dis) {
         ? `${sel('wall', wallOptionsHtml(o.wall), 'layoutObstLado')}${num('dist', o.dist || 0, 'layoutObstDist', 'min="0"')}${num('l', o.l > 0 ? o.l : '', 'layoutObstLargo', `min="0" placeholder="${esc(t('main.layoutTodoElLado'))}"`)}${num('w', o.w || 0, 'layoutObstGrosor', 'min="0"')}`
         : `${num('x', o.x, 'layoutObstXY')}${num('y', o.y, 'layoutObstXY')}${num('l', o.l, 'layoutObstLargo', 'min="0"')}${num('w', o.w, 'layoutObstAncho', 'min="0"')}`;
     const height = o.kind === 'step' ? num('dz', o.dz === undefined ? 0 : o.dz, 'layoutObstAltura') : '<td class="layout-calc">—</td>';
-    return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('kind', optionsHtml('obstacle', LC.OBSTACLE_KINDS, o.kind), 'layoutObstTipo')}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${height}${removeCell('obstacles', i, dis)}</tr>`;
+    if (wallsOnly) return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${removeCell('obstacles', i, dis)}</tr>`;
+    // en Contorno el Tipo ya no ofrece Pared (las paredes se agregan en su propio paso)
+    return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('kind', optionsHtml('obstacle', LC.OBSTACLE_KINDS.filter((k) => k !== 'wall'), o.kind), 'layoutObstTipo')}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${height}${removeCell('obstacles', i, dis)}</tr>`;
 }
 // Cambiar el tipo o la forma de ponerlo de un obstáculo: el desnivel trae su altura; al pasar de una forma a otra se conserva dónde queda.
 function setObstacleKindOrMode(row, key, value) {
@@ -661,6 +664,15 @@ function setObstacleKindOrMode(row, key, value) {
         Object.assign(row, { mode, x: g ? g.x : 1, y: g ? g.y : 1, l: g ? g.l : 0.6, w: g ? g.w : 0.6 });
         delete row.wall; delete row.dist;
     }
+}
+// «+ Agregar pared» (paso Paredes): una pared nueva sobre el lado 1, a todo lo largo; se acomoda con su lado, su distancia, su largo y su grosor.
+function addWall() {
+    const d = state.draft;
+    const n = d.obstacles.filter((o) => o.kind === 'wall').length;
+    d.obstacles.push({ id: uid('w'), name: `${t('main.layoutParedNombre')} ${n + 1}`, kind: 'wall', mode: 'contour', wall: 1, dist: 0, l: 0, w: LC.WALL_THICKNESS });
+    panelScrollEnd = true;
+    renderPanel();
+    refreshLive();
 }
 // «+ Pared en todo el contorno»: agrega una pared de todo el lado a cada lado que todavía no la tiene (no repite las que ya hay).
 function addAllWalls() {
@@ -721,7 +733,8 @@ function stepHtml(step) {
             const seg = LC.wallSegment(d.vertices, i + 1);
             return `<tr><td class="layout-calc">${esc(t('main.layoutEsquina'))} ${i + 1}</td>${cellNum('vertices', i, '0', p[0], dis)}${cellNum('vertices', i, '1', p[1], dis)}${cellNum('vertices', i, '2', p[2], dis)}<td class="layout-calc" data-wall-len="${i}">${esc(t('main.layoutPared'))} ${i + 1}: ${fmt(seg.length)} m</td>${d.vertices.length > 3 ? removeCell('vertices', i, dis) : '<td></td>'}</tr>`;
         });
-        const obstacles = d.obstacles.map((o, i) => obstacleRowHtml(o, i, dis));
+        // las paredes tienen su propio paso (Paredes): aquí solo columnas, desniveles y otros obstáculos (cada renglón conserva su lugar en la lista de obstáculos)
+        const obstacles = d.obstacles.map((o, i) => (o.kind === 'wall' ? '' : obstacleRowHtml(o, i, dis))).filter(Boolean);
         const heights = d.vertices.map((p) => p[2]);
         const sameHeight = heights.every((h) => h === heights[0]) ? heights[0] : '';
         const shape = mode === 'sides'
@@ -729,11 +742,18 @@ function stepHtml(step) {
             : `${table(['main.layoutEsquina', 'main.layoutX', 'main.layoutY', 'main.layoutAlturaEsquina', 'main.layoutPared', ''], rows)}${addButton('vertices', 'main.layoutAgregarEsquina', dis, true)}`;
         // Los botones de agregar van arriba, junto al título del paso: «+ Agregar lado» (o esquina) y «+ Agregar obstáculo», para no bajar hasta el final de la lista del contorno.
         const addObstacle = addButton('obstacles', 'main.layoutAgregarObstaculo', dis, true);
-        const wallsAll = `<button type="button" class="btn btn-secondary layout-add" data-walls-all="1" data-main-add="1" data-help-key="layoutParedTodo"${dis ? ' disabled' : ''}>${esc(t('main.layoutParedTodoContorno'))}</button>`;
-        return `${modeBar}${addObstacle}${wallsAll}<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label><label data-help-key="layoutSite">${esc(t('main.layoutSitio'))}<input type="text" maxlength="${LC.LIMITS.text}" data-l="siteName" value="${esc(d.siteName || '')}" placeholder="${esc(t('main.layoutSitioEjemplo'))}"${dis ? ' disabled' : ''}></label></div>
+        return `${modeBar}${addObstacle}<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label><label data-help-key="layoutSite">${esc(t('main.layoutSitio'))}<input type="text" maxlength="${LC.LIMITS.text}" data-l="siteName" value="${esc(d.siteName || '')}" placeholder="${esc(t('main.layoutSitioEjemplo'))}"${dis ? ' disabled' : ''}></label></div>
             ${shape}
             <h4 class="layout-sub">${esc(t('main.layoutColumnasTitulo'))}</h4>
             ${table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', 'main.layoutAlturaDesnivel', ''], obstacles)}`;
+    }
+    if (step === 'paredes') {
+        // Cada renglón es una PARED (un obstáculo de tipo pared): sobre un lado del contorno (todo el lado o un tramo, con su grosor) o dentro de la nave. Es la misma lista de obstáculos de antes, pero las paredes se crean aquí y no en Contorno.
+        const addWallBtn = `<button type="button" class="btn btn-secondary layout-add" data-add-wall="1" data-main-add="1" data-help-key="layoutParedAgregar"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarPared'))}</button>`;
+        const wallsAllBtn = `<button type="button" class="btn btn-secondary layout-add" data-walls-all="1" data-main-add="1" data-help-key="layoutParedTodo"${dis ? ' disabled' : ''}>${esc(t('main.layoutParedTodoContorno'))}</button>`;
+        const walls = d.obstacles.map((o, i) => (o.kind === 'wall' ? obstacleRowHtml(o, i, dis, true) : '')).filter(Boolean);
+        const list = walls.length ? table(['main.layoutNombre', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', ''], walls) : `<p class="layout-muted">${esc(t('main.layoutParedesVacio'))}</p>`;
+        return `${addWallBtn}${wallsAllBtn}${list}`;
     }
     if (step === 'puertas') {
         const rows = d.doors.map((x, i) => `<tr>${cellText('doors', i, 'name', x.name, dis)}${cellSelect('doors', i, 'type', optionsHtml('door', LC.DOOR_TYPES, x.type), dis)}${cellSelect('doors', i, 'wall', wallOptionsHtml(x.wall), dis)}${cellNum('doors', i, 'dist', x.dist, dis)}${cellNum('doors', i, 'width', x.width, dis)}${cellNum('doors', i, 'height', x.height, dis)}${removeCell('doors', i, dis)}</tr>`);
@@ -2163,6 +2183,7 @@ $('layout-panel').addEventListener('click', (event) => {
         return;
     }
     if (event.target.closest('[data-walls-all]')) { addAllWalls(); return; }
+    if (event.target.closest('[data-add-wall]')) { addWall(); return; }
     const whoOpen = event.target.closest('[data-who-open]');
     if (whoOpen) { openWhoPop(Number(whoOpen.dataset.whoOpen), whoOpen); return; }
     const whoDel = event.target.closest('[data-who-del]');
@@ -2725,7 +2746,7 @@ function effective3dLayers() {
         return { walls: false, columns: false, doors: false, power: false, objects: false, transit: false, safety: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
     }
     const layers = {
-        walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
+        walls: (stepOn('contorno') || stepOn('paredes')) && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), assets: stepOn('activos') || stepOn('posiciones'),
     };
     if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }

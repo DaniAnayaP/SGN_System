@@ -1732,6 +1732,7 @@
           "submenu": [
             { "id": "colLayoutKpis", "labelKey": "main.colLayoutKpis", "permissionOnly": true },
             { "id": "colLayoutContorno", "labelKey": "main.colLayoutContorno", "permissionOnly": true },
+            { "id": "colLayoutParedes", "labelKey": "main.colLayoutParedes", "permissionOnly": true },
             { "id": "colLayoutPuertas", "labelKey": "main.colLayoutPuertas", "permissionOnly": true },
             { "id": "colLayoutZonas", "labelKey": "main.colLayoutZonas", "permissionOnly": true },
             { "id": "colLayoutTransito", "labelKey": "main.colLayoutTransito", "permissionOnly": true },

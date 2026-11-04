@@ -38,6 +38,7 @@
     // Cada sección del Layout cuelga de una columna del árbol de accesos (ver menu.json, colLayout*).
     const SECTIONS = {
         contorno: 'colLayoutContorno',
+        paredes: 'colLayoutParedes',
         puertas: 'colLayoutPuertas',
         zonas: 'colLayoutZonas',
         espacios: 'colLayoutEspacios',
@@ -1816,7 +1817,9 @@
 
     function sectionData(layout, section) {
         if (!layout) return null;
-        if (section === 'contorno') return { vertices: layout.vertices, obstacles: layout.obstacles, siteName: layout.siteName || '' };
+        // Las paredes (obstáculos de tipo pared) tienen su propio paso: Contorno lleva el marco y los demás obstáculos (columnas, desniveles y otros); Paredes, las paredes.
+        if (section === 'contorno') return { vertices: layout.vertices, obstacles: (layout.obstacles || []).filter((o) => o.kind !== 'wall'), siteName: layout.siteName || '' };
+        if (section === 'paredes') return (layout.obstacles || []).filter((o) => o.kind === 'wall');
         if (section === 'puertas') return layout.doors;
         if (section === 'luz') return layout.power;
         // Siempre una lista (un Layout de antes sin sensores cuenta igual que uno sin ninguno); la zona sale de la pared y del croquis, no se captura.
