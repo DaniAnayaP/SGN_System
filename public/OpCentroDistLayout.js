@@ -566,23 +566,52 @@ function todayIso() {
     const p = (n) => String(n).padStart(2, '0');
     return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
 }
+// Las últimas revisiones por QR de cada elemento (las manda el servidor con el Layout y NO se guardan con él): { id del elemento: { ok, day, at, by, result } }. Con ellas el estado cuenta una revisión que salió con falla y la
+// próxima revisión se recorre sola (la fecha de la última revisión bien hecha + «Revisar cada»).
+const sfLast = (e) => ((state.safetyLast || {})[e.id]) || null;
 function safetyStatusText(st) {
+    if (st.state === 'fail') return t('main.layoutSgFail');
     if (st.state === 'none') return t('main.layoutSgNone');
     if (st.state === 'ok') return t('main.layoutSgOk');
     if (st.state === 'soon') return st.days === 0 ? t('main.layoutSgSoonHoy') : t(st.days === 1 ? 'main.layoutSgSoonUno' : 'main.layoutSgSoonN', { n: st.days });
     return t(st.days === -1 ? 'main.layoutSgLateUno' : 'main.layoutSgLateN', { n: Math.abs(st.days) });
 }
-const SAFETY_STATUS_CLASS = { ok: 'rel-tag-ok', soon: 'rel-tag-partial', overdue: 'rel-class-cuarentena', none: '' };
+const SAFETY_STATUS_CLASS = { ok: 'rel-tag-ok', soon: 'rel-tag-partial', overdue: 'rel-class-cuarentena', fail: 'rel-class-cuarentena', none: '' };
 // La etiqueta de estado de un elemento (al pasar el cursor, la fecha que decide: caducidad o próxima revisión).
 function safetyStatusTag(e) {
-    const st = LC.safetyStatus(e, todayIso(), state.draft && state.draft.safetyWarnDays);
-    const why = st.date ? ` title="${esc(t(st.which === 'expires' ? 'main.layoutSgCaducidad' : 'main.layoutSgProxima'))}: ${esc(st.date)}"` : '';
+    const st = LC.safetyStatus(e, todayIso(), state.draft && state.draft.safetyWarnDays, sfLast(e));
+    const why = st.date ? ` title="${esc(t(st.which === 'expires' ? 'main.layoutSgCaducidad' : (st.which === 'check' ? 'main.layoutSgUltima' : 'main.layoutSgProxima')))}: ${esc(st.date)}"` : '';
     return `<span class="rel-tag ${SAFETY_STATUS_CLASS[st.state]}"${why}>${esc(safetyStatusText(st))}</span>`;
 }
+function safetyLastHtml(e) {
+    const last = sfLast(e);
+    if (!last || !last.day) return '—';
+    const tag = `<span class="rel-tag ${last.result === 'fail' ? 'rel-class-cuarentena' : 'rel-tag-ok'}">${esc(t(last.result === 'fail' ? 'main.sgResultadoFalla' : 'main.sgResultadoBien'))}</span>`;
+    return `<span title="${esc(last.by || '')}">${esc(last.day)}</span> ${tag}`;
+}
+function safetyNextNote(e) {
+    const eff = LC.safetyNextOf(e, sfLast(e));
+    return eff && eff !== (e.next || '') ? t('main.layoutSgRecorrio', { d: eff }) : '';
+}
+// Las revisiones por QR pueden llegar con la pantalla abierta: se vuelven a pedir (como mucho una vez por minuto) y, si cambiaron, se repinta el estado.
+let sfLastFetchedAt = 0;
+async function refreshSafetyLast() {
+    if (!state.draft || !state.saved || !(state.saved.safety || []).length || Date.now() - sfLastFetchedAt < 60000) return;
+    sfLastFetchedAt = Date.now();
+    try {
+        const res = await fetch(layoutUrl('/api/business/layout/safety-last'), { credentials: 'include' });
+        if (!res.ok) return;
+        const next = (await res.json()).safetyLast || {};
+        if (JSON.stringify(next) === JSON.stringify(state.safetyLast || {})) return;
+        state.safetyLast = next;
+        applySafetyMarks();
+        refreshLive();
+    } catch (err) { /* sin conexión: se queda lo que ya se tenía */ }
+}
 function safetyCountsHtml() {
-    const c = LC.safetyCounts(state.draft, todayIso());
+    const c = LC.safetyCounts({ ...state.draft, safetyLast: state.safetyLast || {} }, todayIso());
     const chip = (cls, key, n) => `<span class="rel-tag ${cls}">${esc(t(key))} · ${n}</span>`;
-    return chip('rel-tag-ok', 'main.layoutSgCntOk', c.ok) + chip('rel-tag-partial', 'main.layoutSgCntSoon', c.soon) + chip('rel-class-cuarentena', 'main.layoutSgCntLate', c.overdue) + chip('', 'main.layoutSgCntNone', c.none);
+    return chip('rel-tag-ok', 'main.layoutSgCntOk', c.ok) + chip('rel-tag-partial', 'main.layoutSgCntSoon', c.soon) + chip('rel-class-cuarentena', 'main.layoutSgCntLate', c.overdue) + chip('rel-class-cuarentena', 'main.layoutSgCntFail', c.fail) + chip('', 'main.layoutSgCntNone', c.none);
 }
 // Seguridad: las faltas de cada elemento (LayoutCalc.safetyViolations): fuera del contorno de la nave, o una ruta con los dos puntos iguales. sfIssues = id -> { outside, route }. Se vuelve a calcular con cada cambio del borrador.
 let sfIssues = new Map();
@@ -610,6 +639,10 @@ function applySafetyMarks() {
         if (zoneCell) zoneCell.textContent = (state.draft.zones.find((z) => z.id === e.zoneId) || {}).name || '—';
         const statusCell = document.querySelector(`[data-sf-status="${i}"]`);
         if (statusCell) statusCell.innerHTML = safetyStatusTag(e);
+        const lastCell = document.querySelector(`[data-sf-last="${i}"]`);
+        if (lastCell) lastCell.innerHTML = safetyLastHtml(e);
+        const nextNote = document.querySelector(`[data-sf-next="${i}"]`);
+        if (nextNote) nextNote.textContent = safetyNextNote(e);
     });
     // los contadores de arriba y la lista de los vencidos de abajo se vuelven a sacar con cada cambio (una fecha, los días de aviso)
     const countsBox = document.querySelector('[data-sf-counts]');
@@ -617,10 +650,11 @@ function applySafetyMarks() {
     const dueBox = document.querySelector('[data-sf-due]');
     if (dueBox) {
         const today = todayIso();
-        const late = (state.draft.safety || []).map((e) => ({ e, st: LC.safetyStatus(e, today, state.draft.safetyWarnDays) })).filter(({ st }) => st.state === 'overdue');
+        const late = (state.draft.safety || []).map((e) => ({ e, st: LC.safetyStatus(e, today, state.draft.safetyWarnDays, sfLast(e)) })).filter(({ st }) => st.state === 'overdue' || st.state === 'fail');
         dueBox.hidden = !late.length;
         dueBox.innerHTML = late.length ? `<p><b>${esc(t('main.layoutSgDueTitulo'))}</b></p>${late.slice(0, 8).map(({ e, st }) => `<p>${esc(e.code || '')} · ${esc(typeLabel('safety', e.type))}${e.name ? ` · ${esc(e.name)}` : ''}: ${esc(safetyStatusText(st))}</p>`).join('')}${late.length > 8 ? `<p>${esc(t('main.layoutSgDueMas', { n: late.length - 8 }))}</p>` : ''}` : '';
     }
+    refreshSafetyLast();
     const box = document.querySelector('[data-sf-issues]');
     if (box) {
         const all = LC.safetyViolations(state.draft);
@@ -814,9 +848,9 @@ function stepHtml(step) {
         const rows = (d.safety || []).map((e, i) => {
             const route = e.type === 'route';
             const end = route ? `${cellNum('safety', i, 'x2', e.x2, dis)}${cellNum('safety', i, 'y2', e.y2, dis)}` : '<td class="layout-calc">—</td><td class="layout-calc">—</td>';
-            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}<td><input type="date" data-l="safety" data-i="${i}" data-k="expires" value="${esc(e.expires || '')}"${dis ? ' disabled' : ''}></td><td><input type="number" step="1" min="1" max="3650" data-l="safety" data-i="${i}" data-k="every" value="${e.every || ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><input type="date" data-l="safety" data-i="${i}" data-k="next" value="${esc(e.next || '')}"${dis ? ' disabled' : ''}></td><td class="layout-calc" data-sf-status="${i}">${safetyStatusTag(e)}</td>${removeCell('safety', i, dis)}</tr>`;
+            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}<td><input type="date" data-l="safety" data-i="${i}" data-k="expires" value="${esc(e.expires || '')}"${dis ? ' disabled' : ''}></td><td><input type="number" step="1" min="1" max="3650" data-l="safety" data-i="${i}" data-k="every" value="${e.every || ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><input type="date" data-l="safety" data-i="${i}" data-k="next" value="${esc(e.next || '')}"${dis ? ' disabled' : ''}><small class="layout-sg-eff" data-sf-next="${i}">${esc(safetyNextNote(e))}</small></td><td class="layout-calc" data-sf-last="${i}">${safetyLastHtml(e)}</td><td class="layout-calc" data-sf-status="${i}">${safetyStatusTag(e)}</td>${removeCell('safety', i, dis)}</tr>`;
         });
-        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgEstado', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgUltima', 'main.layoutSgEstado', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
         // arriba: los contadores (Vigentes, Por vencer, Vencidos, Sin fecha) y con cuántos días de anticipación sale «Por vencer» (de fábrica 30); abajo, los vencidos
         const bar = `<div class="layout-sg-bar"><div class="layout-sg-counts" data-sf-counts data-help-key="layoutSgConteo">${safetyCountsHtml()}</div><div class="layout-fl"><label data-help-key="layoutSgAvisar">${esc(t('main.layoutSgAvisarCon'))}<input type="number" min="1" max="365" step="1" data-l="safetyWarn" value="${d.safetyWarnDays || LC.SAFETY_WARN_DAYS}"${dis ? ' disabled' : ''}></label></div></div>`;
         return `${addButton('safety', 'main.layoutAgregarSeguridad', dis, true)}${bar}${list}<div class="layout-vio" data-sf-issues hidden></div><div class="layout-due" data-sf-due hidden></div>`;
@@ -1605,7 +1639,7 @@ function renderSvg() {
             const py = Y(e.y);
             const zone = (d.zones.find((z) => z.id === e.zoneId) || {}).name;
             const why = bad ? Object.values(bad).map(safetyIssueText).join(' · ') : '';
-            const due = LC.safetyStatus(e, today, d.safetyWarnDays);
+            const due = LC.safetyStatus(e, today, d.safetyWarnDays, sfLast(e));
             const title = `<title>${esc(e.code || '')} · ${esc(typeLabel('safety', e.type))}${e.name ? ` · ${esc(e.name)}` : ''}${zone ? ` · ${esc(zone)}` : ''}${why ? `\n${esc(why)}` : ''}${due.state !== 'none' ? `\n${esc(safetyStatusText(due))}` : ''}</title>`;
             if (e.type === 'route') {
                 s += `<g class="lsafe" data-sfid="${esc(e.id)}"><circle cx="${px}" cy="${py}" r="3.4" fill="${LC.SAFETY_COLORS.route}" stroke="#14602F" stroke-width="0.9"/>${title}</g>${SG.safetyLabel(px, py - 7, e.code || '')}`;
@@ -1615,10 +1649,10 @@ function renderSvg() {
                 if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="${rs + 4}"/>`;
             }
             // por vencer = aro ámbar y vencido = aro rojo (con su palabra debajo), para verlos de lejos
-            if (due.state === 'soon' || due.state === 'overdue') {
-                const col = due.state === 'overdue' ? '#C0392B' : '#E8892B';
+            if (due.state === 'soon' || due.state === 'overdue' || due.state === 'fail') {
+                const col = due.state === 'soon' ? '#E8892B' : '#C0392B';
                 const rr = (e.type === 'route' ? 3.4 : rs) + 5;
-                s += `<circle cx="${px}" cy="${py}" r="${rr}" fill="none" stroke="${col}" stroke-width="2.6" pointer-events="none"/>${SG.safetyLabel(px, py + rr + 8, t(due.state === 'overdue' ? 'main.layoutSgMapLate' : 'main.layoutSgMapSoon'), 'middle', col)}`;
+                s += `<circle cx="${px}" cy="${py}" r="${rr}" fill="none" stroke="${col}" stroke-width="2.6" pointer-events="none"/>${SG.safetyLabel(px, py + rr + 8, t({ soon: 'main.layoutSgMapSoon', overdue: 'main.layoutSgMapLate', fail: 'main.layoutSgMapFail' }[due.state]), 'middle', col)}`;
             }
         });
     }
@@ -1872,6 +1906,8 @@ async function loadLayout() {
     state.perms = body.permissions;
     state.version = body.version;
     state.saved = body.layout;
+    state.safetyLast = body.safetyLast || {};
+    sfLastFetchedAt = Date.now();
     state.creating = false;
     state.planNew = false;
     state.planImage = '';
@@ -2887,7 +2923,7 @@ function refreshScene3d() {
         picker3d.setData({ spaces: shown.spaces.filter((s) => s.active !== false), zones: shown.zones.filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name })) });
         scene3d.setHiddenAssets(picker3d.getHidden(), false);
     }
-    scene3d.update(shown, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), focus: fv3.focus });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), focus: fv3.focus });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');
@@ -3245,7 +3281,8 @@ function updateQrMenu() {
     // la pestaña Ficha solo tiene los candados de la Ficha de un código (vale para toda la empresa): sale con el permiso de candados
     const canFicha = !!(state.perms && state.perms.canLockQr);
     const canSensor = !!(state.perms && state.perms.canUseSensorQr);
-    const show = !!((canLayout || canZone || canClean || canTemp || canSensor || canFicha) && state.saved && !state.creating);
+    const canSafety = !!(state.perms && state.perms.canUseSafetyQr);
+    const show = !!((canLayout || canZone || canClean || canTemp || canSensor || canSafety || canFicha) && state.saved && !state.creating);
     $('layout-qrmenu').hidden = !show;
     $('layout-qr-regen').hidden = !(state.perms && state.perms.canRegenerateQr);
     // "Por: Layout | Zona | Limpieza | Temperaturas" solo sale si se puede usar de más de una forma; con una sola, el menú abre directo en esa.
@@ -3254,10 +3291,11 @@ function updateQrMenu() {
     $('layout-qr-by-clean').hidden = !canClean;
     $('layout-qr-by-temp').hidden = !canTemp;
     $('layout-qr-by-sensor').hidden = !canSensor;
+    $('layout-qr-by-safety').hidden = !canSafety;
     $('layout-qr-by-ficha').hidden = !canFicha;
-    $('layout-qr-by').hidden = [canLayout, canZone, canClean, canTemp, canSensor, canFicha].filter(Boolean).length < 2;
-    const first = canLayout ? 'layout' : (canZone ? 'zone' : (canClean ? 'clean' : (canTemp ? 'temp' : (canSensor ? 'sensor' : 'ficha'))));
-    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean) || (qrBy === 'temp' && !canTemp) || (qrBy === 'sensor' && !canSensor) || (qrBy === 'ficha' && !canFicha)) qrBy = first;
+    $('layout-qr-by').hidden = [canLayout, canZone, canClean, canTemp, canSensor, canSafety, canFicha].filter(Boolean).length < 2;
+    const first = canLayout ? 'layout' : (canZone ? 'zone' : (canClean ? 'clean' : (canTemp ? 'temp' : (canSensor ? 'sensor' : (canSafety ? 'safety' : 'ficha')))));
+    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean) || (qrBy === 'temp' && !canTemp) || (qrBy === 'sensor' && !canSensor) || (qrBy === 'safety' && !canSafety) || (qrBy === 'ficha' && !canFicha)) qrBy = first;
     renderQrBy();
     if (!show) closeQrPop();
 }
@@ -3271,7 +3309,7 @@ let qrZoneData = null; // lo último que respondió el servidor para la zona y l
 let qrZoneSeq = 0;
 const ZONE_CATEGORY_TYPES = [['inventario', 'colArticuloCategoriaInventario'], ['compra', 'colArticuloCategoriaCompra'], ['almacenamiento', 'colArticuloCategoriaAlmacenamiento'], ['rotacion', 'colArticuloCategoriaRotacion'], ['manejo', 'colArticuloCategoriaManejo'], ['riesgo', 'colArticuloCategoriaRiesgo'], ['vidautil', 'colArticuloCategoriaVidautil'], ['tipocodigo', 'colArticuloCategoriaTipoCodigo']];
 function renderQrBy() {
-    ['layout', 'zone', 'clean', 'temp', 'sensor', 'ficha'].forEach((k) => {
+    ['layout', 'zone', 'clean', 'temp', 'sensor', 'safety', 'ficha'].forEach((k) => {
         const on = qrBy === k;
         $(`layout-qr-by-${k}`).classList.toggle('active', on);
         $(`layout-qr-by-${k}`).setAttribute('aria-pressed', String(on));
@@ -3281,6 +3319,7 @@ function renderQrBy() {
     if (qrBy === 'clean') cleanZoneOptions();
     if (qrBy === 'temp') tempZoneOptions();
     if (qrBy === 'sensor') sensorZoneOptions();
+    if (qrBy === 'safety') safetyZoneOptions();
     if (QR_LOCK_KINDS[qrBy]) renderQrLocks(qrBy);
 }
 // ---- QR de limpieza (uno por activo) ---------------------------------------------------------------------------------------------
@@ -3326,11 +3365,26 @@ function sensorZoneOptions() {
     $('layout-qr-sensor-print').disabled = !n;
     $('layout-qr-sensor-download').disabled = !n;
 }
+// ---- QR de seguridad (uno por elemento de Seguridad del Layout) -------------------------------------------------------------------------------
+// Cada ELEMENTO de Seguridad (extintor, hidrante, puerta de emergencia…) tiene su QR (la dirección fija /g/<código del Layout>/<id del elemento>: no cambia nunca). Se imprime una hoja con un QR por elemento de la zona
+// elegida (o de todas) y se pega junto al elemento. Se arma con lo guardado (GET /api/business/layout/safety-qr). Quien lo escanea no necesita sesión: marca si está bien o con falla, deja una nota y toma la foto;
+// las revisiones se ven en Operaciones > Seguridad y mueven solas la próxima revisión del elemento.
+function safetyZoneOptions() {
+    const zones = ((state.saved && state.saved.zones) || []).filter((z) => z.active !== false);
+    const select = $('layout-qr-safety-zone');
+    const current = select.value;
+    select.innerHTML = `<option value="">${esc(t('main.layoutQrLimpiezaTodas'))}</option>${zones.map((z) => `<option value="${esc(z.id)}">${esc(z.name)}</option>`).join('')}`;
+    if (current && zones.some((z) => z.id === current)) select.value = current;
+    const n = ((state.saved && state.saved.safety) || []).filter((e) => !select.value || e.zoneId === select.value).length;
+    $('layout-qr-safety-fine').textContent = n ? t('main.layoutQrSeguridadCuantos', { n: fmt(n) }) : t('main.layoutQrSeguridadVacio');
+    $('layout-qr-safety-print').disabled = !n;
+    $('layout-qr-safety-download').disabled = !n;
+}
 // ---- Candados de los QR (lo que ve y puede hacer quien escanea sin sesión) ---------------------------------------------------------------------
 // En las pestañas Layout, Zona, Limpieza y Temperaturas del menú «QR y descarga», con el icono Candados de los QR del árbol. Hay una configuración por tipo de QR y por centro de costos y vale para todos los QR de ese tipo (los
 // ya impresos también: el QR no cambia, cambia lo que muestra). Cada cambio se guarda al momento; el servidor es el que los hace cumplir (GET /api/business/layout/qr-locks).
 // Las pestañas Layout y Zona muestran el MISMO juego (tipo «layout»): el QR del Layout, el de una Zona y el de una Categoría abren la misma página, y con candados distintos bastaría cambiar el final de la dirección para saltárselos.
-const QR_LOCK_KINDS = { layout: 'layout', zone: 'layout', clean: 'cleaning', temp: 'temperature', sensor: 'sensor', ficha: 'ficha' };
+const QR_LOCK_KINDS = { layout: 'layout', zone: 'layout', clean: 'cleaning', temp: 'temperature', sensor: 'sensor', safety: 'safety', ficha: 'ficha' };
 const qrLocksNow = {};
 // Los candados del QR del Layout, en dos grupos: [clave, texto, ayuda] y el título de cada grupo.
 const LAYOUT_LOCK_GROUPS = [
@@ -3344,7 +3398,9 @@ const QR_LOCK_NOTES = { layout: 'main.layoutLockNotaLayout', ficha: 'main.layout
 function qrLockItems(kind) {
     const items = [['records', 'main.layoutLockRegistros', 'main.layoutLockRegistrosSub'], ['photos', 'main.layoutLockFotos', ''], ['names', 'main.layoutLockNombres', '']];
     if (kind === 'temp') items.push(['range', 'main.layoutLockRango', 'main.layoutLockRangoSub']);
+    if (kind === 'safety') items.push(['notes', 'main.layoutLockNotas', '']);
     items.push(['register', 'main.layoutLockRegistrar', 'main.layoutLockRegistrarSub']);
+    if (kind === 'safety') items.push(['dates', 'main.layoutLockFechas', 'main.layoutLockFechasSub']);
     return items;
 }
 async function renderQrLocks(kind) {
@@ -3368,8 +3424,8 @@ async function renderQrLocks(kind) {
     }
     const limit = `<label class="layout-lock-limit" data-help-key="layoutQrLocks"><span>${esc(t('main.layoutLockLimite'))}</span><select data-lock="limit">${data.limits.map((n) => `<option value="${n}"${lk.limit === n ? ' selected' : ''}>${esc(t('main.layoutLockUltimos', { n }))}</option>`).join('')}</select></label>`;
     const items = qrLockItems(kind).map(sw);
-    items.splice(3, 0, limit); // después de ver los registros, las fotos y los nombres
-    box.innerHTML = `<h3 class="layout-lock-title">${esc(t('main.layoutLockTitulo'))}</h3>${items.join('')}<p class="layout-qr-fine">${esc(t(kind === 'clean' ? 'main.layoutLockNotaLimpieza' : (kind === 'sensor' ? 'main.layoutLockNotaSensor' : 'main.layoutLockNotaTemp')))}</p>`;
+    items.splice(kind === 'safety' ? 4 : 3, 0, limit); // después de ver los registros, las fotos, los nombres (y en Seguridad las notas)
+    box.innerHTML = `<h3 class="layout-lock-title">${esc(t('main.layoutLockTitulo'))}</h3>${items.join('')}<p class="layout-qr-fine">${esc(t(kind === 'clean' ? 'main.layoutLockNotaLimpieza' : (kind === 'sensor' ? 'main.layoutLockNotaSensor' : (kind === 'safety' ? 'main.layoutLockNotaSeguridad' : 'main.layoutLockNotaTemp'))))}</p>`;
 }
 async function saveQrLock(kind, key, value, control) {
     const next = { ...qrLocksNow[kind], [key]: value };
@@ -3404,6 +3460,7 @@ Object.keys(QR_LOCK_KINDS).forEach((kind) => {
 const ASSET_QR_KINDS = {
     clean: { path: '/api/business/layout/cleaning-qr', title: 'main.layoutQrLimpiezaTitulo', scan: 'main.layoutQrLimpiezaEscanea', empty: 'main.layoutQrLimpiezaVacio', icon: 'sparkle', color: '#2A9D8F', zone: 'layout-qr-clean-zone', name: 'menu.opCentroDistLimpieza', file: 'QR-Limpieza' },
     temp: { path: '/api/business/layout/temperature-qr', title: 'main.layoutQrTemperaturasTitulo', scan: 'main.layoutQrTemperaturasEscanea', empty: 'main.layoutQrTemperaturasVacio', icon: 'thermometer', color: '#2F8FD1', zone: 'layout-qr-temp-zone', name: 'menu.opCentroDistTemperaturas', file: 'QR-Temperaturas' },
+    safety: { path: '/api/business/layout/safety-qr', title: 'main.layoutQrSeguridadTitulo', scan: 'main.layoutQrSeguridadEscanea', empty: 'main.layoutQrSeguridadVacio', icon: 'shield', color: '#C0392B', zone: 'layout-qr-safety-zone', name: 'menu.opCentroDistSeguridad', file: 'QR-Seguridad', category: 'main.layoutQrSeguridadCategoria', safety: true },
     sensor: { path: '/api/business/layout/sensor-qr', title: 'main.layoutQrSensoresTitulo', scan: 'main.layoutQrSensoresEscanea', empty: 'main.layoutQrSensoresVacio', icon: 'thermometer', color: '#2B8CA3', zone: 'layout-qr-sensor-zone', name: 'main.colLayoutSensores', file: 'QR-Sensores', category: 'main.layoutQrSensoresCategoria', sensor: true },
 };
 // Lo guardado que manda el servidor (los activos de la zona elegida con su QR, el color y el logo del cliente) y lo que hace falta para dibujar sus tarjetas.
@@ -3425,7 +3482,7 @@ function assetCardSvg(ctx, s, options) {
     const { k, data } = ctx;
     return window.LayoutSheet.buildCardSvg({
         companyName: data.companyName, siteName: data.siteName || '', logoDataUrl: data.logoDataUrl, logoRatio: ctx.logoRatio, theme: ctx.theme, zoneName: t(k.title),
-        categories: [{ name: s.code, desc: [k.sensor ? typeLabel('sensor', s.type) : typeLabel('space', s.type), s.zoneName].filter(Boolean).join(' · '), icon: k.icon, color: k.color, qrRows: s.qrRows }],
+        categories: [{ name: s.code, desc: [k.safety ? typeLabel('safety', s.type) : (k.sensor ? typeLabel('sensor', s.type) : typeLabel('space', s.type)), k.safety ? s.name : '', s.zoneName].filter(Boolean).join(' · '), icon: k.icon, color: k.color, qrRows: s.qrRows }],
     }, { ...ctx.labels, cardFooter: s.locator }, options);
 }
 // Imprimir: cuatro tarjetas por hoja carta, cada una con su línea punteada para recortar.
@@ -3802,6 +3859,7 @@ $('layout-qr-zone').addEventListener('change', loadQrZone);
 $('layout-qr-clean-zone').addEventListener('change', cleanZoneOptions);
 $('layout-qr-temp-zone').addEventListener('change', tempZoneOptions);
 $('layout-qr-sensor-zone').addEventListener('change', sensorZoneOptions);
+$('layout-qr-safety-zone').addEventListener('change', safetyZoneOptions);
 $('layout-qr-type').addEventListener('change', loadQrZone);
 document.addEventListener('click', (event) => { if (!event.target.closest('#layout-qrmenu')) closeQrPop(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeQrPop(); });
@@ -3883,6 +3941,8 @@ $('layout-qr-pop').addEventListener('click', async (event) => {
         else if (kind === 'temp-print') await printAssetQrCards('temp');
         else if (kind === 'sensor-download') await openAssetQrDialog('sensor');
         else if (kind === 'sensor-print') await printAssetQrCards('sensor');
+        else if (kind === 'safety-download') await openAssetQrDialog('safety');
+        else if (kind === 'safety-print') await printAssetQrCards('safety');
         else if (kind === 'regen') await regenerateQr();
     } catch (err) {
         console.error('Layout: acción de QR falló', err);

@@ -3534,6 +3534,7 @@ const TABLE_GRANT_PATHS = {
     // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'temperaturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-temperaturas' },
+    'seguridad': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-seguridad' },
     'usuarios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-users' },
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
     'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
@@ -5453,6 +5454,97 @@ function deleteTemperatureRecord(id, clientId) {
 function updateTemperatureRecord(id, clientId, patch, { editedBy = '' } = {}) {
     updateEditableRecord('temperature_records', TEMPERATURE_PATCHABLE_FIELDS, getTemperatureRecord(id, clientId), patch || {}, editedBy);
     return getTemperatureRecord(id, clientId);
+}
+
+// --- Seguridad: revisiones por QR (Operaciones, C. Distribución) ---------------------------------------------------------------------------------
+// Una fila por revisión de un elemento de Seguridad del Layout (extintor, hidrante, puerta de emergencia…). El QR de cada elemento la abre SIN sesión: quién revisó (el nombre que escribe), si quedó BIEN o CON FALLA, una
+// nota opcional, la hora (UTC; la pone el servidor, nunca el teléfono) y la foto tomada con la cámara en vivo. check_day es el DÍA de la revisión en la zona horaria del cliente (AAAA-MM-DD): de ahí se recorre sola la
+// «próxima revisión» del elemento. Lo del lugar (código, tipo, zona, localizador) se guarda tal como estaba al momento: el Layout puede cambiar después. La foto vive aparte para que la lista no la cargue.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS safety_checks (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        cost_center_id  INTEGER NOT NULL DEFAULT 0,
+        element_id      TEXT NOT NULL,
+        element_code    TEXT NOT NULL DEFAULT '',
+        element_type    TEXT NOT NULL DEFAULT '',
+        element_name    TEXT NOT NULL DEFAULT '',
+        zone_name       TEXT NOT NULL DEFAULT '',
+        locator         TEXT NOT NULL DEFAULT '',
+        person_name     TEXT NOT NULL DEFAULT '',
+        result          TEXT NOT NULL DEFAULT 'ok',
+        note            TEXT NOT NULL DEFAULT '',
+        checked_at      TEXT NOT NULL,
+        check_day       TEXT NOT NULL DEFAULT '',
+        source          TEXT NOT NULL DEFAULT 'qr',
+        edited_at       TEXT,
+        edited_by       TEXT NOT NULL DEFAULT '',
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_safety_element ON safety_checks(client_id, cost_center_id, element_id, id);
+    CREATE TABLE IF NOT EXISTS safety_check_photos (
+        record_id   INTEGER PRIMARY KEY REFERENCES safety_checks(id) ON DELETE CASCADE,
+        mime        TEXT NOT NULL,
+        data        BLOB NOT NULL,
+        thumb_mime  TEXT,
+        thumb       BLOB
+    );
+`);
+const SAFETY_CHECK_SELECT = `SELECT r.*, EXISTS(SELECT 1 FROM safety_check_photos p WHERE p.record_id = r.id) AS has_photo FROM safety_checks r`;
+// El día de HOY (o el de utcDate) como AAAA-MM-DD en la zona horaria del cliente: la misma que usan las columnas de Control Interno de sus registros.
+function clientLocalDay(clientId, utcDate = new Date()) {
+    const row = db.prepare('SELECT time_zone FROM clients WHERE id = ?').get(clientId);
+    const zone = row && isValidTimeZone(row.time_zone) ? row.time_zone : DEFAULT_CLIENT_TIME_ZONE;
+    return wallClockInZone(utcDate, zone).toISOString().slice(0, 10);
+}
+// Guarda una revisión: la hora la pone el servidor y la foto se guarda en la misma operación.
+function addSafetyCheck({ clientId, costCenterId, elementId, elementCode, elementType, elementName, zoneName, locator, personName, result, note, photo, thumb, source = 'qr' }) {
+    return db.transaction(() => {
+        const info = db.prepare(`INSERT INTO safety_checks (client_id, cost_center_id, element_id, element_code, element_type, element_name, zone_name, locator, person_name, result, note, checked_at, check_day, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`).run(clientId, costCenterId || 0, elementId, elementCode || '', elementType || '', elementName || '', zoneName || '', locator || '', personName || '', result === 'fail' ? 'fail' : 'ok', note || '', clientLocalDay(clientId), source);
+        db.prepare('INSERT INTO safety_check_photos (record_id, mime, data, thumb_mime, thumb) VALUES (?, ?, ?, ?, ?)').run(info.lastInsertRowid, photo.mime, photo.data, thumb ? thumb.mime : null, thumb ? thumb.data : null);
+        return db.prepare(`${SAFETY_CHECK_SELECT} WHERE r.id = ?`).get(info.lastInsertRowid);
+    })();
+}
+function listSafetyChecks(clientId, { costCenterId, elementId, limit } = {}) {
+    const where = ['r.client_id = ?'];
+    const args = [clientId];
+    if (costCenterId !== undefined) { where.push('r.cost_center_id = ?'); args.push(costCenterId || 0); }
+    if (elementId) { where.push('r.element_id = ?'); args.push(elementId); }
+    const cap = limit ? ` LIMIT ${Math.max(1, Math.min(Number(limit) || 50, 5000))}` : '';
+    return db.prepare(`${SAFETY_CHECK_SELECT} WHERE ${where.join(' AND ')} ORDER BY r.checked_at DESC, r.id DESC${cap}`).all(...args);
+}
+function getSafetyCheck(id, clientId) {
+    return db.prepare(`${SAFETY_CHECK_SELECT} WHERE r.id = ? AND r.client_id = ?`).get(id, clientId);
+}
+// small = true: la miniatura (si esa foto la tiene, sin leer la foto completa); si no, la foto completa.
+function getSafetyPhoto(recordId, small = false) {
+    if (small) {
+        const th = db.prepare('SELECT thumb_mime AS mime, thumb AS data FROM safety_check_photos WHERE record_id = ? AND thumb IS NOT NULL').get(recordId);
+        if (th) return th;
+    }
+    return db.prepare('SELECT mime, data FROM safety_check_photos WHERE record_id = ?').get(recordId);
+}
+function deleteSafetyCheck(id, clientId) {
+    return db.prepare('DELETE FROM safety_checks WHERE id = ? AND client_id = ?').run(id, clientId).changes > 0;
+}
+// Lo único que se puede corregir de una revisión ya guardada es quién la hizo (igual que en Limpieza): el resultado, la hora, la foto y el lugar son la prueba de lo que pasó.
+const SAFETY_CHECK_PATCHABLE_FIELDS = { name: { column: 'person_name', fieldKey: 'main.colSgQuien' } };
+function updateSafetyCheck(id, clientId, patch, { editedBy = '' } = {}) {
+    updateEditableRecord('safety_checks', SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyCheck(id, clientId), patch || {}, editedBy);
+    return getSafetyCheck(id, clientId);
+}
+// Lo que el Layout necesita de las revisiones para calcular el estado de cada elemento: por elemento, la ÚLTIMA revisión (cualquiera) y el día de la última que salió BIEN.
+// { [elementId]: { ok: 'AAAA-MM-DD' | '', day, at (UTC ISO), by, result } }. Tomar «la última» por id (autonumérico, la hora la pone el servidor) evita depender de la hora.
+function getSafetyLast(clientId, costCenterId) {
+    const out = {};
+    const lastRows = db.prepare(`SELECT s.element_id, s.result, s.check_day, s.checked_at, s.person_name FROM safety_checks s
+        JOIN (SELECT MAX(id) AS mid FROM safety_checks WHERE client_id = ? AND cost_center_id = ? GROUP BY element_id) m ON s.id = m.mid`).all(clientId, costCenterId || 0);
+    for (const r of lastRows) out[r.element_id] = { ok: '', day: r.check_day, at: `${String(r.checked_at).replace(' ', 'T')}Z`, by: r.person_name, result: r.result };
+    const okRows = db.prepare(`SELECT s.element_id, s.check_day FROM safety_checks s
+        JOIN (SELECT MAX(id) AS mid FROM safety_checks WHERE client_id = ? AND cost_center_id = ? AND result = 'ok' GROUP BY element_id) m ON s.id = m.mid`).all(clientId, costCenterId || 0);
+    for (const r of okRows) if (out[r.element_id]) out[r.element_id].ok = r.check_day;
+    return out;
 }
 
 // --- Candados de los QR -------------------------------------------------------------------------------------------------------------------------
@@ -11395,6 +11487,15 @@ module.exports = {
     deleteCleaningRecord,
     updateCleaningRecord,
     CLEANING_PATCHABLE_FIELDS,
+    addSafetyCheck,
+    listSafetyChecks,
+    getSafetyCheck,
+    getSafetyPhoto,
+    deleteSafetyCheck,
+    updateSafetyCheck,
+    getSafetyLast,
+    clientLocalDay,
+    SAFETY_CHECK_PATCHABLE_FIELDS,
     addTemperatureRecord,
     listTemperatureRecords,
     getTemperatureRecord,

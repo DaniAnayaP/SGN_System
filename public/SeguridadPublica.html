@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>Seguridad</title>
+    <link rel="icon" href="/icons/icon-512.png">
+    <style>
+        :root{
+            --bg:#f9efec; --surface:#ffffff; --ink:#2b1a17; --muted:#7c6862; --line:#ead4cf; --accent:#b8402f; --ok:#2e8b57; --soon:#b8730a; --bad:#c0392b; --shadow:0 10px 26px rgba(80,25,15,.14);
+        }
+        @media (prefers-color-scheme: dark){
+            :root{ --bg:#211513; --surface:#2e1d1a; --ink:#f7e9e6; --muted:#c3aaa4; --line:#51352f; --accent:#ee8b7a; --ok:#5cc58a; --soon:#f0b45a; --bad:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); }
+        }
+        *{ box-sizing:border-box; }
+        html,body{ margin:0; min-height:100%; }
+        body{ background:var(--bg); color:var(--ink); font:400 15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:14px 14px 36px; display:flex; justify-content:center; }
+        main{ width:100%; max-width:420px; display:flex; flex-direction:column; gap:12px; }
+        .site{ display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--muted); }
+        .site b{ color:var(--ink); font-weight:600; }
+        .card{ background:var(--surface); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:16px; display:flex; flex-direction:column; gap:12px; }
+        h1{ font-size:20px; margin:0; }
+        .chip{ display:inline-flex; align-items:center; gap:8px; width:max-content; max-width:100%; font-weight:600; font-size:14px; padding:4px 12px; border:1px solid var(--line); border-radius:999px; }
+        .chip i{ width:10px; height:10px; border-radius:50%; display:inline-block; flex:none; }
+        .loc{ font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); margin-top:-6px; overflow-wrap:anywhere; }
+        .nm{ font-size:14px; color:var(--ink); margin-top:-6px; overflow-wrap:anywhere; }
+        label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+        input[type=text], textarea{ width:100%; font:500 16px system-ui,sans-serif; padding:11px 14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--ink); }
+        textarea{ resize:vertical; min-height:70px; font-weight:400; }
+        input[type=text]:focus-visible, textarea:focus-visible, button:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+        .res-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .res{ font:700 17px system-ui,sans-serif; padding:16px 10px; border-radius:16px; border:2px solid var(--line); background:transparent; color:var(--ink); cursor:pointer; }
+        .res[aria-pressed=true].good{ border-color:var(--ok); background:var(--ok); color:#fff; }
+        .res[aria-pressed=true].bad{ border-color:var(--bad); background:var(--bad); color:#fff; }
+        .btn{ font:600 16px system-ui,sans-serif; padding:14px 16px; border-radius:16px; border:0; background:var(--ink); color:var(--surface); cursor:pointer; width:100%; }
+        .btn.alt{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+        .btn[disabled]{ opacity:.55; cursor:default; }
+        .link{ background:none; border:0; color:var(--accent); font:600 14px system-ui,sans-serif; padding:8px; cursor:pointer; text-align:center; }
+        .cam{ position:relative; border-radius:18px; overflow:hidden; background:#2a1a17; aspect-ratio:3/4; display:grid; place-items:center; color:#f2dcd7; text-align:center; font-size:13px; }
+        .cam video, .cam img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+        .cam::after{ content:""; position:absolute; inset:14px; border:2px dashed rgba(255,255,255,.35); border-radius:12px; pointer-events:none; }
+        .cam span{ position:relative; z-index:1; padding:0 18px; }
+        .shot{ width:100%; border-radius:14px; display:block; aspect-ratio:4/3; object-fit:cover; background:var(--line); }
+        .state{ display:flex; flex-direction:column; gap:2px; border:1px solid var(--line); border-radius:14px; padding:10px 12px; }
+        .state b{ font-size:16px; }
+        .state small{ color:var(--muted); font-size:12px; }
+        .state.ok{ border-color:var(--ok); } .state.ok b{ color:var(--ok); }
+        .state.soon{ border-color:var(--soon); } .state.soon b{ color:var(--soon); }
+        .state.overdue, .state.fail{ border-color:var(--bad); } .state.overdue b, .state.fail b{ color:var(--bad); }
+        .dates{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .dates div{ border:1px solid var(--line); border-radius:14px; padding:8px 12px; }
+        .dates small{ display:block; color:var(--muted); font-size:11px; }
+        .dates b{ font-size:14px; }
+        .sum{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        .sum div{ border:1px solid var(--line); border-radius:14px; padding:8px 12px; }
+        .sum small{ display:block; color:var(--muted); font-size:11px; }
+        .sum b{ font-size:16px; }
+        .verdict{ font:700 30px system-ui,sans-serif; text-align:center; margin:2px 0; }
+        .verdict.good{ color:var(--ok); } .verdict.bad{ color:var(--bad); }
+        .tag{ display:inline-block; font-weight:600; font-size:12px; padding:2px 10px; border-radius:999px; border:1px solid var(--ok); color:var(--ok); white-space:nowrap; }
+        .tag.bad{ border-color:var(--bad); color:var(--bad); }
+        .list{ display:flex; flex-direction:column; gap:8px; }
+        .item{ display:grid; grid-template-columns:56px 1fr auto; gap:8px; align-items:center; border:1px solid var(--line); border-radius:14px; padding:8px; }
+        .item img, .item i{ width:56px; height:56px; border-radius:10px; object-fit:cover; background:var(--line); display:block; cursor:zoom-in; }
+        .item b{ font-size:14px; display:block; } .item small{ color:var(--muted); font-size:12px; display:block; overflow-wrap:anywhere; }
+        .item.nophoto{ grid-template-columns:1fr auto; }
+        .msg{ color:var(--muted); font-size:13px; border:1px dashed var(--line); border-radius:14px; padding:10px 12px; text-align:center; }
+        .err{ color:var(--bad); font-size:14px; border:1px solid var(--bad); border-radius:14px; padding:10px 12px; }
+        .muted{ color:var(--muted); font-size:13px; }
+        #viewer{ position:fixed; inset:0; background:rgba(0,0,0,.88); display:grid; place-items:center; z-index:10; padding:12px; }
+        #viewer[hidden]{ display:none; }
+        #viewer img{ max-width:100%; max-height:88vh; border-radius:12px; }
+        #viewer button{ position:absolute; top:10px; right:12px; background:rgba(255,255,255,.18); color:#fff; border:0; border-radius:999px; font:600 14px system-ui; padding:8px 14px; cursor:pointer; }
+        @media (prefers-reduced-motion: no-preference){ .card{ animation:rise .25s ease-out; } @keyframes rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } } }
+    </style>
+</head>
+<body>
+<main>
+    <div class="site"><b id="site-name"></b><span id="company-name"></span></div>
+    <div id="view"></div>
+</main>
+<div id="viewer" hidden><button type="button" id="viewer-close"></button><img alt=""></div>
+<canvas id="snap" hidden></canvas>
+<script>
+(function () {
+'use strict';
+const LANG = (navigator.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
+const TEXT = {
+    es: {
+        title: 'Revisión de seguridad', loading: 'Cargando…', notFound: 'Este QR ya no corresponde a ningún elemento de seguridad.', yourName: 'Tu nombre', namePlaceholder: 'Quién revisa', result: 'Resultado de la revisión',
+        good: 'Bien', bad: 'Con falla', note: 'Nota (opcional)', notePlaceholder: 'Por ejemplo: manómetro en verde, sello intacto', take: 'Tomar foto de la revisión', records: 'Ver revisiones', back: 'Volver', photoTitle: 'Foto de la revisión',
+        shoot: 'Tomar foto', retake: 'Repetir', use: 'Guardar la revisión', cancel: 'Cancelar', cameraHint: 'Apunta al elemento y toma la foto', cameraOpening: 'Abriendo la cámara…',
+        cameraDenied: 'No se pudo abrir la cámara. Permite el acceso a la cámara en tu navegador y vuelve a intentar.', cameraInsecure: 'Esta página necesita una conexión segura (https) para usar la cámara.',
+        done: 'Listo', saved: 'Guardado', when: 'Hora', newOne: 'Nueva revisión', recordsTitle: 'Revisiones', readOnly: 'Solo lectura', noRecords: 'Todavía no hay revisiones de este elemento.',
+        needName: 'Escribe tu nombre para empezar.', needResult: 'Marca si el elemento está bien o con falla.', viewOnly: 'Este QR solo sirve para consultar.', anonymous: 'Personal', lastN: 'Se ven las últimas {n} revisiones.',
+        locked: 'Este QR ya no permite registrar.', nothing: 'Este QR no tiene opciones disponibles.', saving: 'Guardando…', errPhoto: 'La foto no se pudo guardar. Intenta de nuevo.', errGeneric: 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.',
+        close: 'Cerrar', review: 'Revisión', stOk: 'Vigente', stSoon: 'Por vencer', stOverdue: 'Vencido', stFail: 'Con falla', lastResult: 'Último resultado', stNone: 'Sin fechas', inDays: 'Faltan {n} días', today: 'Es hoy', daysAgo: 'Hace {n} días', oneDay: 'Falta 1 día', oneAgo: 'Hace 1 día',
+        failSince: 'La última revisión (del {d}) salió con falla. Queda así hasta que otra salga bien.', expires: 'Caducidad', nextCheck: 'Próxima revisión', lastCheck: 'Última revisión', none: '—', nextMoves: 'La próxima revisión se recorrió al {d}.',
+    },
+    en: {
+        title: 'Safety check', loading: 'Loading…', notFound: 'This QR no longer matches any safety element.', yourName: 'Your name', namePlaceholder: 'Who is checking', result: 'Result of the check',
+        good: 'OK', bad: 'Faulty', note: 'Note (optional)', notePlaceholder: 'For example: gauge in the green, seal intact', take: 'Take a photo of the check', records: 'View checks', back: 'Back', photoTitle: 'Photo of the check',
+        shoot: 'Take photo', retake: 'Retake', use: 'Save the check', cancel: 'Cancel', cameraHint: 'Point at the element and take the photo', cameraOpening: 'Opening the camera…',
+        cameraDenied: 'The camera could not be opened. Allow camera access in your browser and try again.', cameraInsecure: 'This page needs a secure connection (https) to use the camera.',
+        done: 'Done', saved: 'Saved', when: 'Time', newOne: 'New check', recordsTitle: 'Checks', readOnly: 'Read-only', noRecords: 'There are no checks of this element yet.',
+        needName: 'Type your name to start.', needResult: 'Mark whether the element is OK or faulty.', viewOnly: 'This QR is for viewing only.', anonymous: 'Staff', lastN: 'The last {n} checks are shown.',
+        locked: 'This QR no longer allows registering.', nothing: 'This QR has no options available.', saving: 'Saving…', errPhoto: 'The photo could not be saved. Try again.', errGeneric: 'It could not be saved. Check your connection and try again.',
+        close: 'Close', review: 'Check', stOk: 'Valid', stSoon: 'Due soon', stOverdue: 'Overdue', stFail: 'Faulty', lastResult: 'Last result', stNone: 'No dates', inDays: '{n} days left', today: 'It is today', daysAgo: '{n} days ago', oneDay: '1 day left', oneAgo: '1 day ago',
+        failSince: 'The last check (of {d}) was faulty. It stays that way until another one comes out OK.', expires: 'Expiry', nextCheck: 'Next check', lastCheck: 'Last check', none: '—', nextMoves: 'The next check moved to {d}.',
+    },
+}[LANG];
+document.documentElement.lang = LANG;
+document.title = TEXT.title;
+document.getElementById('viewer-close').textContent = TEXT.close;
+
+// La dirección fija del QR: /g/<código del Layout>/<id del elemento>
+const parts = location.pathname.split('/').filter(Boolean);
+const TOKEN = parts[1] || '';
+const ELEMENT = parts[2] || '';
+const API = `/api/public/safety/${encodeURIComponent(TOKEN)}/${encodeURIComponent(ELEMENT)}`;
+const KEY_NAME = 'sgn_safety_name';
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const store = {
+    get(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* sin almacenamiento */ } },
+};
+let info = null;          // lo que contesta el servidor: elemento, fechas y revisiones
+let stream = null;
+let draft = { name: '', result: '', note: '' }; // lo que se escribió antes de la foto (se conserva si se repite la foto)
+let draftThumb = '';
+let draftPhoto = '';      // la foto tomada que todavía no se confirma
+let lastResult = null;    // la revisión que se acaba de guardar
+let note = '';
+
+const TYPE_NAMES = { es: { extinguisher: 'Extintor', hydrant: 'Hidrante', emergency_door: 'Puerta de emergencia', firstaid: 'Botiquín', alarm: 'Alarma / pulsador', eyewash: 'Regadera y lavaojos', assembly: 'Punto de reunión', route: 'Ruta de evacuación' },
+    en: { extinguisher: 'Fire extinguisher', hydrant: 'Hydrant', emergency_door: 'Emergency door', firstaid: 'First-aid kit', alarm: 'Alarm / call point', eyewash: 'Eyewash and shower', assembly: 'Assembly point', route: 'Evacuation route' } }[LANG];
+// El mismo color de cada tipo que en el croquis del Layout.
+const TYPE_COLORS = { extinguisher: '#d9443a', hydrant: '#d9443a', emergency_door: '#2e9e5b', firstaid: '#2e9e5b', alarm: '#e8892b', eyewash: '#2f7fc7', assembly: '#2e9e5b', route: '#2e9e5b' };
+const fmtTime = (iso) => new Date(iso).toLocaleTimeString(LANG === 'en' ? 'en-US' : 'es-MX', { hour: '2-digit', minute: '2-digit' });
+const fmtDate = (iso) => new Date(iso).toLocaleDateString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short' });
+// Un día AAAA-MM-DD (sin hora) se escribe con su mes, sin que la zona horaria de quien ve lo mueva.
+const fmtDay = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? new Date(`${iso}T12:00:00`).toLocaleDateString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : TEXT.none);
+const fill = (text, n) => text.replace('{n}', String(n)).replace('{d}', String(n));
+
+function stopCamera() { if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; } }
+function show(html) { $('view').innerHTML = html; }
+const placeHtml = () => `<span class="chip"><i style="background:${TYPE_COLORS[info.element.type] || '#888'}"></i>${esc(info.element.code)} · ${esc(TYPE_NAMES[info.element.type] || info.element.type)}</span>${info.element.name ? `<div class="nm">${esc(info.element.name)}</div>` : ''}${info.element.locator ? `<div class="loc">${esc(info.element.locator)}${info.element.zoneName ? ` · ${esc(info.element.zoneName)}` : ''}</div>` : ''}`;
+const errBox = () => (note ? `<div class="err" role="alert">${esc(note)}</div>` : '');
+const resultTag = (r) => `<span class="tag${r === 'fail' ? ' bad' : ''}">${esc(r === 'fail' ? TEXT.bad : TEXT.good)}</span>`;
+
+// El estado del elemento con sus fechas (solo si el candado de fechas está abierto: si no, el servidor no manda nada).
+function statusHtml(d) {
+    if (!d) return '';
+    const label = { ok: TEXT.stOk, soon: TEXT.stSoon, overdue: TEXT.stOverdue, fail: TEXT.stFail, none: TEXT.stNone }[d.state] || TEXT.stNone;
+    let detail = '';
+    if (d.state === 'fail') detail = fill(TEXT.failSince, fmtDay(d.date || d.lastDay));
+    else if (typeof d.days === 'number') detail = d.days === 0 ? TEXT.today : d.days === 1 ? TEXT.oneDay : d.days === -1 ? TEXT.oneAgo : d.days > 0 ? fill(TEXT.inDays, d.days) : fill(TEXT.daysAgo, -d.days);
+    return `<div class="state ${esc(d.state)}"><b>${esc(label)}</b>${detail ? `<small>${esc(detail)}</small>` : ''}</div>
+        <div class="dates"><div><small>${esc(TEXT.expires)}</small><b>${esc(fmtDay(d.expires))}</b></div><div><small>${esc(TEXT.nextCheck)}</small><b>${esc(fmtDay(d.next))}</b></div>
+        <div><small>${esc(TEXT.lastCheck)}</small><b>${esc(fmtDay(d.lastDay))}</b></div><div><small>${esc(TEXT.lastResult)}</small><b>${d.lastResult ? esc(d.lastResult === 'fail' ? TEXT.bad : TEXT.good) : esc(TEXT.none)}</b></div></div>`;
+}
+
+// ---- pantallas ----------------------------------------------------------------------------------------------------------------------
+function viewHome() {
+    const name = draft.name || store.get(KEY_NAME) || '';
+    const lk = info.locks || {};
+    const canReg = lk.register !== false;
+    const canSee = lk.records !== false;
+    show(`<div class="card"><h1>${esc(TEXT.title)}</h1>${placeHtml()}${statusHtml(info.dates)}${errBox()}
+        ${canReg ? `<div><label for="person">${esc(TEXT.yourName)}</label><input type="text" id="person" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(name)}"></div>
+        <div><label id="res-label">${esc(TEXT.result)}</label><div class="res-row" role="group" aria-labelledby="res-label"><button type="button" class="res good" id="res-ok" aria-pressed="${draft.result === 'ok'}">${esc(TEXT.good)}</button><button type="button" class="res bad" id="res-fail" aria-pressed="${draft.result === 'fail'}">${esc(TEXT.bad)}</button></div></div>
+        <div><label for="note">${esc(TEXT.note)}</label><textarea id="note" maxlength="300" placeholder="${esc(TEXT.notePlaceholder)}">${esc(draft.note)}</textarea></div>
+        <button type="button" class="btn" id="go-photo">${esc(TEXT.take)}</button>` : (canSee ? `<div class="msg">${esc(TEXT.viewOnly)}</div>` : '')}
+        ${canSee ? `<button type="button" class="link" id="go-records">${esc(TEXT.records)}</button>` : (!canReg ? `<div class="msg">${esc(TEXT.nothing)}</div>` : '')}</div>`);
+    if (canReg) {
+        const pick = (value) => {
+            draft.result = value;
+            $('res-ok').setAttribute('aria-pressed', String(value === 'ok'));
+            $('res-fail').setAttribute('aria-pressed', String(value === 'fail'));
+        };
+        $('res-ok').addEventListener('click', () => pick('ok'));
+        $('res-fail').addEventListener('click', () => pick('fail'));
+        $('go-photo').addEventListener('click', () => {
+            const personName = $('person').value.replace(/\s+/g, ' ').trim();
+            draft = { name: personName, result: draft.result, note: $('note').value.replace(/\s+/g, ' ').trim() };
+            if (!personName) { note = TEXT.needName; viewHome(); $('person').focus(); return; }
+            if (!draft.result) { note = TEXT.needResult; viewHome(); return; }
+            note = '';
+            store.set(KEY_NAME, personName);
+            viewCamera();
+        });
+    }
+    if (canSee) $('go-records').addEventListener('click', () => { note = ''; viewRecords(); });
+}
+
+async function viewCamera() {
+    draftPhoto = '';
+    show(`<div class="card"><h1>${esc(TEXT.photoTitle)}</h1>${placeHtml()}${errBox()}
+        <div class="muted">${esc(draft.name)} · ${esc(TEXT.review)}: ${esc(draft.result === 'fail' ? TEXT.bad : TEXT.good)}</div>
+        <div class="cam" id="cam"><video id="video" playsinline muted autoplay></video><span id="cam-msg">${esc(TEXT.cameraOpening)}</span></div>
+        <button type="button" class="btn" id="shoot" disabled>${esc(TEXT.shoot)}</button>
+        <button type="button" class="link" id="cam-cancel">${esc(TEXT.cancel)}</button></div>`);
+    $('cam-cancel').addEventListener('click', () => { stopCamera(); note = ''; viewHome(); });
+    if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('cam-msg').textContent = TEXT.cameraInsecure; return; }
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+        const video = $('video');
+        video.srcObject = stream;
+        await video.play();
+        $('cam-msg').textContent = TEXT.cameraHint;
+        $('shoot').disabled = false;
+    } catch (err) {
+        $('cam-msg').textContent = TEXT.cameraDenied;
+        return;
+    }
+    $('shoot').addEventListener('click', () => {
+        const photo = capture($('video'));
+        stopCamera();
+        if (!photo) { note = TEXT.errPhoto; viewCamera(); return; }
+        draftPhoto = photo;
+        draftThumb = lastThumb;
+        viewConfirm();
+    });
+}
+
+// La miniatura (160 px de lado mayor) que viaja junto a la foto: las tablas y listas usan esa y no la foto completa.
+let lastThumb = '';
+function thumbOf(canvas) {
+    const k = Math.min(1, 160 / Math.max(canvas.width, canvas.height));
+    const small = document.createElement('canvas');
+    small.width = Math.max(1, Math.round(canvas.width * k));
+    small.height = Math.max(1, Math.round(canvas.height * k));
+    small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
+    return small.toDataURL('image/jpeg', 0.6);
+}
+// La foto se toma de la imagen en vivo y se reduce (máx. 1024 px de lado, JPEG): así pesa poco aunque la cámara sea de 12 megapíxeles.
+function capture(video) {
+    const w = video.videoWidth; const h = video.videoHeight;
+    if (!w || !h) return '';
+    const scale = Math.min(1, 1024 / Math.max(w, h));
+    const canvas = $('snap');
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    for (const q of [0.72, 0.6, 0.5, 0.4]) {
+        const url = canvas.toDataURL('image/jpeg', q);
+        if (url.length * 0.75 < 420 * 1024) { lastThumb = thumbOf(canvas); return url; }
+    }
+    return '';
+}
+
+function viewConfirm() {
+    show(`<div class="card"><h1>${esc(TEXT.photoTitle)}</h1>${placeHtml()}${errBox()}
+        <div class="verdict ${draft.result === 'fail' ? 'bad' : 'good'}">${esc(draft.result === 'fail' ? TEXT.bad : TEXT.good)}</div>
+        ${draft.note ? `<div class="muted">${esc(draft.note)}</div>` : ''}
+        <img class="shot" id="preview" alt="">
+        <button type="button" class="btn" id="use">${esc(TEXT.use)}</button>
+        <button type="button" class="btn alt" id="retake">${esc(TEXT.retake)}</button></div>`);
+    $('preview').src = draftPhoto;
+    $('retake').addEventListener('click', () => { note = ''; viewCamera(); });
+    $('use').addEventListener('click', async () => {
+        $('use').disabled = true; $('retake').disabled = true; $('use').textContent = TEXT.saving;
+        try {
+            await sendCheck();
+        } catch (err) {
+            note = err && err.code === 'PHOTO' ? TEXT.errPhoto : (err && err.code === 'NAME' ? TEXT.needName : (err && err.code === 'RESULT' ? TEXT.needResult : (err && err.code === 'LOCKED' ? TEXT.locked : TEXT.errGeneric)));
+            viewConfirm();
+        }
+    });
+}
+
+async function sendCheck() {
+    const res = await fetch(`${API}/check`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: draft.name, result: draft.result, note: draft.note, photo: draftPhoto, thumb: draftThumb }) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(json.message || 'error'); e.code = json.code || String(res.status); throw e; }
+    lastResult = json;
+    draft = { name: draft.name, result: '', note: '' };
+    draftPhoto = '';
+    note = '';
+    await refresh();
+    viewDone();
+}
+
+function viewDone() {
+    const r = lastResult.record;
+    const d = lastResult.dates;
+    show(`<div class="card"><h1>${esc(TEXT.done)} <span class="tag">${esc(TEXT.saved)}</span></h1>${placeHtml()}
+        <div class="verdict ${r.result === 'fail' ? 'bad' : 'good'}">${esc(r.result === 'fail' ? TEXT.bad : TEXT.good)}</div>
+        ${r.note ? `<div class="muted">${esc(r.note)}</div>` : ''}
+        ${d ? statusHtml(d) : ''}
+        ${d && r.result === 'ok' && d.next ? `<div class="muted">${esc(fill(TEXT.nextMoves, fmtDay(d.next)))}</div>` : ''}
+        <div class="sum"><div><small>${esc(TEXT.yourName)}</small><b>${esc(r.name)}</b></div><div><small>${esc(TEXT.when)}</small><b>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</b></div></div>
+        <button type="button" class="btn alt" id="go-records">${esc(TEXT.records)}</button>
+        <button type="button" class="link" id="again">${esc(TEXT.newOne)}</button></div>`);
+    $('go-records').addEventListener('click', viewRecords);
+    $('again').addEventListener('click', () => { lastResult = null; viewHome(); });
+}
+
+function viewRecords() {
+    const lk = info.locks || {};
+    const showPhotos = lk.photos !== false;
+    const rows = info.records.map((r) => `<div class="item${showPhotos ? '' : ' nophoto'}">${!showPhotos ? '' : r.hasPhoto ? `<img data-view="${r.id}" alt="${esc(TEXT.photoTitle)}" loading="lazy" src="${API}/photo/${r.id}?thumb=1">` : '<i></i>'}<div><b>${esc(r.name || TEXT.anonymous)}</b><small>${esc(fmtDate(r.checkedAt))} · ${esc(fmtTime(r.checkedAt))}</small>${r.note ? `<small>${esc(r.note)}</small>` : ''}</div>${resultTag(r.result)}</div>`).join('');
+    show(`<div class="card"><h1>${esc(TEXT.recordsTitle)}</h1>${placeHtml()}<span class="muted">${esc(TEXT.readOnly)}</span>
+        <div class="list">${rows || `<div class="muted">${esc(TEXT.noRecords)}</div>`}</div>
+        ${lk.limit && lk.limit < 20 && info.records.length >= lk.limit ? `<div class="muted">${esc(TEXT.lastN.replace('{n}', lk.limit))}</div>` : ''}
+        <button type="button" class="link" id="back">${esc(TEXT.back)}</button></div>`);
+    $('back').addEventListener('click', () => { note = ''; viewHome(); });
+    $('view').querySelectorAll('[data-view]').forEach((img) => img.addEventListener('click', () => { $('viewer').querySelector('img').src = img.src.replace('?thumb=1', ''); $('viewer').hidden = false; }));
+}
+$('viewer-close').addEventListener('click', () => { $('viewer').hidden = true; });
+$('viewer').addEventListener('click', (event) => { if (event.target === $('viewer')) $('viewer').hidden = true; });
+
+async function refresh() {
+    const res = await fetch(API, { cache: 'no-store' });
+    if (!res.ok) { const e = new Error('not found'); e.status = res.status; throw e; }
+    info = await res.json();
+    $('site-name').textContent = info.siteName || '';
+    $('company-name').textContent = info.companyName || '';
+}
+
+(async function init() {
+    show(`<div class="card"><div class="muted">${esc(TEXT.loading)}</div></div>`);
+    try { await refresh(); } catch (err) { show(`<div class="card"><div class="err" role="alert">${esc(TEXT.notFound)}</div></div>`); return; }
+    viewHome();
+})();
+window.addEventListener('pagehide', stopCamera);
+})();
+</script>
+</body>
+</html>

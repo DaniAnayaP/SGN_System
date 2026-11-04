@@ -7681,6 +7681,8 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-table input[type="date"]{ min-width: 8.6rem; }
 .layout-sg-bar{ display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem 1.2rem; margin: 0 0 0.7rem; }
 .layout-sg-counts{ display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.layout-sg-eff{ display: block; margin-top: 0.15rem; font-size: 0.7rem; color: var(--color-text-muted, #6b7280); }
+.layout-sg-eff:empty{ display: none; }
 .layout-sg-bar .layout-fl input{ min-width: 4rem; max-width: 6rem; }
 .layout-due{ margin-top: 0.7rem; padding: 0.5rem 0.8rem; border: 1px solid #C0392B; border-radius: 0.5rem; background: rgba(192, 57, 43, 0.08); color: #C0392B; font-size: 0.8rem; }
 .layout-due[hidden]{ display: none; }

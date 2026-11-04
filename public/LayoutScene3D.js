@@ -432,9 +432,9 @@
             const nowDate = new Date();
             const todayIso3d = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}-${String(nowDate.getDate()).padStart(2, '0')}`;
             const dueRing = (ex, ey, e) => {
-                const st = LCalc && LCalc.safetyStatus ? LCalc.safetyStatus(e, todayIso3d, layout.safetyWarnDays) : { state: 'none' };
-                if (st.state !== 'soon' && st.state !== 'overdue') return;
-                const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.74, 28), new THREE.MeshBasicMaterial({ color: st.state === 'overdue' ? 0xc0392b : 0xe8892b, side: THREE.DoubleSide }));
+                const st = LCalc && LCalc.safetyStatus ? LCalc.safetyStatus(e, todayIso3d, layout.safetyWarnDays, layout.safetyLast && layout.safetyLast[e.id]) : { state: 'none' };
+                if (st.state !== 'soon' && st.state !== 'overdue' && st.state !== 'fail') return;
+                const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.74, 28), new THREE.MeshBasicMaterial({ color: st.state === 'soon' ? 0xe8892b : 0xc0392b, side: THREE.DoubleSide }));
                 ring.rotation.x = -Math.PI / 2;
                 ring.position.set(PX(ex), 0.14, PZ(ey));
                 group.safety.add(ring);

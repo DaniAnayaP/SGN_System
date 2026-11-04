@@ -1099,9 +1099,23 @@
         return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
     };
     const isoDayNumber = (iso) => { const [y, m, d] = iso.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / 86400000); };
-    // today = la fecha de HOY como AAAA-MM-DD (quien llama la saca de su reloj: en pantalla, la del lugar de quien ve). Devuelve { state: 'ok' | 'soon' | 'overdue' | 'none', days (los que faltan; negativo si ya pasó), date, which }.
-    function safetyStatus(e, today, warnDays) {
-        const dates = [e && e.expires, e && e.next].filter(isIsoDate);
+    const addDaysIso = (iso, n) => new Date((isoDayNumber(iso) + n) * 86400000).toISOString().slice(0, 10);
+    // Las revisiones que se hacen con el QR del elemento (el servidor las manda en layout.safetyLast, NO se guardan con el Layout): last = { ok: fecha de la última revisión BIEN, day: fecha de la última revisión (bien o con falla),
+    // at: su hora en UTC, by: quién, result: 'ok' | 'fail' }. La PRÓXIMA REVISIÓN que vale: con «Revisar cada» y una revisión bien hecha es la fecha de esa revisión más los días (se recorre sola); sin eso, la que se escribió, y una
+    // escrita que ya se cumplió (revisión bien hecha ese día o después) no queda pendiente.
+    function safetyNextOf(e, last) {
+        const ok = last && isIsoDate(last.ok) ? last.ok : '';
+        const every = Math.round(Number(e && e.every));
+        if (ok && every >= 1) return addDaysIso(ok, every);
+        if (isIsoDate(e && e.next)) return ok && ok >= e.next ? '' : e.next;
+        return '';
+    }
+    // today = la fecha de HOY como AAAA-MM-DD (quien llama la saca de su reloj: en pantalla, la del lugar de quien ve; en el servidor, la de la zona horaria del cliente). Devuelve { state: 'ok' | 'soon' | 'overdue' | 'fail' | 'none',
+    // days (los que faltan; negativo si ya pasó), date, which }. «fail»: la última revisión con el QR salió con falla (hasta que otra salga bien); manda sobre las fechas.
+    function safetyStatus(e, today, warnDays, last) {
+        if (last && last.result === 'fail') return { state: 'fail', days: null, date: isIsoDate(last.day) ? last.day : '', which: 'check' };
+        const next = safetyNextOf(e, last);
+        const dates = [e && e.expires, next].filter(isIsoDate);
         if (!dates.length || !isIsoDate(today)) return { state: 'none', days: null, date: '', which: '' };
         const nearest = dates.slice().sort()[0];
         const days = isoDayNumber(nearest) - isoDayNumber(today);
@@ -1109,8 +1123,8 @@
         return { state: days < 0 ? 'overdue' : (days <= warn ? 'soon' : 'ok'), days, date: nearest, which: nearest === (e && e.expires) ? 'expires' : 'next' };
     }
     function safetyCounts(layout, today) {
-        const out = { ok: 0, soon: 0, overdue: 0, none: 0 };
-        ((layout && layout.safety) || []).forEach((e) => { out[safetyStatus(e, today, layout.safetyWarnDays).state] += 1; });
+        const out = { ok: 0, soon: 0, overdue: 0, fail: 0, none: 0 };
+        ((layout && layout.safety) || []).forEach((e) => { out[safetyStatus(e, today, layout.safetyWarnDays, layout.safetyLast && layout.safetyLast[e.id]).state] += 1; });
         return out;
     }
     const safetyKey = (v) => `${v.id}|${v.kind}|${v.sig}`;
@@ -1905,7 +1919,7 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume,
-        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
+        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

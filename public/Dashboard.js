@@ -12511,6 +12511,7 @@ const TABLE_GRANT_PATHS = {
     'localizadores': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-localizadores' },
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'temperaturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-temperaturas' },
+    'seguridad': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-seguridad' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
     'nuestros-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestros-traslados' },
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
@@ -12542,6 +12543,8 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-centro-dist-limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     // Operaciones > Temperaturas: la base de registros de las lecturas de temperatura de los refrigeradores con QR (con usuario).
     'cat-operaciones-centro-dist-temperaturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-temperaturas' },
+    // Operaciones > Seguridad: la base de registros de las revisiones de los elementos de seguridad con QR (con usuario).
+    'cat-operaciones-centro-dist-seguridad': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-seguridad' },
     'cat-operaciones-centro-dist-edicion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo' },
     // Admin > Mapa de calor: el Layout pintado con la temperatura o la humedad de los sensores, por hora.
     'cat-admin-mapa-calor': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-mapa-calor' },

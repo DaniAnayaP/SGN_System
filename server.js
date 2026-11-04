@@ -163,6 +163,7 @@ const {
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
     addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
+    addSafetyCheck, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     listTransitCatalog,
@@ -506,7 +507,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas' };
+const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -6533,6 +6534,8 @@ function layoutPermissions(req) {
         // Imprimir los QR de temperaturas (uno por refrigerador, los activos de tipo Frío) usa el icono QR de temperaturas (hoja <pantalla>/iconLayoutQrTemperaturas).
         canUseTemperatureQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrTemperaturas'),
         canUseSensorQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrSensores'),
+        // Imprimir los QR de seguridad (uno por elemento: extintor, hidrante, puerta de emergencia…) usa el icono QR de seguridad (hoja <pantalla>/iconLayoutQrSeguridad).
+        canUseSafetyQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrSeguridad'),
     };
 }
 
@@ -6629,6 +6632,8 @@ app.get('/api/business/layout', requireAuth, (req, res) => {
         layout: row ? row.layout : null, version: row ? row.version : 0, updatedAt: row ? row.updatedAt : '', updatedBy: row ? row.updatedBy : '',
         hasPlanImage: row ? row.hasPlanImage : false, permissions: layoutPermissions(req), costCenterId: row ? row.costCenterId : (center.id || null),
         costCenter: costCenter ? { id: costCenter.id, code: costCenter.code, name: costCenter.name } : null,
+        // Las revisiones por QR de los elementos de Seguridad (la última de cada uno y el día de la última que salió bien): con eso la pantalla calcula el estado y la próxima revisión que se recorre sola.
+        safetyLast: row && (row.layout.safety || []).length ? getSafetyLast(req.user.clientId, row.costCenterId || 0) : {},
     });
 });
 
@@ -7078,6 +7083,8 @@ const QR_LOCK_TYPES = {
     ficha: { photos: true, measures: true, where: true },
     // El QR de un SENSOR del Layout (/s/…): como el de Limpieza, sin rango ni alertas (los sensores no llevan rango).
     sensor: { records: true, photos: true, names: true, limit: 20, register: true },
+    // El QR de un ELEMENTO DE SEGURIDAD (/g/…): ver las revisiones anteriores, sus fotos, quién las hizo y sus notas, poder registrar una revisión, y ver las fechas del elemento (caducidad, próxima revisión y su estado).
+    safety: { records: true, photos: true, names: true, notes: true, limit: 20, register: true, dates: true },
 };
 const QR_LOCK_LIMITS = [3, 10, 20];
 function qrLocksOf(type, clientId, costCenterId) {
@@ -7558,6 +7565,179 @@ app.get('/api/business/layout/sensor-qr', requireAuth, (req, res) => {
         const zone = zones.find((z) => z.id === s.zoneId);
         const url = `${base}/${s.id}`;
         return { id: s.id, code: s.code, type: s.type, zoneId: s.zoneId || '', zoneName: zone ? zone.name : '', locator: [zone && zone.code, s.code].filter(Boolean).join('.'), url, qrRows: layoutQrRows(url) };
+    });
+    const client = getClientById(req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', ...qrBranding(req.user.clientId), zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
+});
+
+// --- Seguridad: revisiones por QR (Operaciones > C. Distribución) -------------------------------------------------------------------------------
+// Cada ELEMENTO de Seguridad del Layout (extintor, hidrante, puerta de emergencia, botiquín…) tiene su QR de inspección (la dirección fija /g/<código del Layout>/<id del elemento>: nunca cambia). Quien lo escanea NO necesita
+// sesión: escribe su nombre, marca si el elemento está BIEN o CON FALLA, puede dejar una nota y toma la foto con la cámara en vivo; la hora la pone el SERVIDOR. Una revisión BIEN recorre sola la «próxima revisión» del elemento
+// (la fecha de la revisión más los días de «Revisar cada»); una CON FALLA lo deja marcado con falla hasta que otra salga bien. El Layout NO se toca desde aquí: el estado se calcula con las fechas del Layout y las revisiones.
+// Solo se puede ver las últimas revisiones de ESE elemento (solo lectura). La base de registros (con usuario) es Operaciones > Seguridad.
+const SAFETY_TABLE_KEY = 'seguridad';
+const SAFETY_SCREEN_LABEL = 'Seguridad';
+const SAFETY_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const SAFETY_NOTE_MAX = 300;
+function safetyTarget(token, elementId) {
+    if (!SAFETY_ID_RE.test(String(elementId || ''))) return null;
+    const row = getLayoutByPublicToken(token);
+    if (!row) return null;
+    const element = (row.layout.safety || []).find((e) => e.id === elementId);
+    if (!element) return null;
+    const zone = (row.layout.zones || []).find((z) => z.id === element.zoneId) || null;
+    return { row, element, zone, locator: [zone && zone.code, element.code].filter(Boolean).join('.') };
+}
+const publicSafetyRecord = (r) => ({ id: r.id, name: r.person_name, result: r.result, note: r.note, checkedAt: sqlUtcIso(r.checked_at), day: r.check_day, hasPhoto: !!r.has_photo });
+// Una revisión como la ve quien escanea, con los candados: sin nombre (names), nota (notes) ni foto (photos) cuando están cerrados (own = la que esa persona acaba de guardar: conserva las tres).
+function lockedSafetyRecord(r, locks, own = false) {
+    const out = publicSafetyRecord(r);
+    if (!own && !locks.names) out.name = '';
+    if (!own && !locks.notes) out.note = '';
+    if (!own && !locks.photos) out.hasPhoto = false;
+    return out;
+}
+// Las fechas del elemento tal como las ve quien escanea (solo con el candado «dates»): caducidad, revisar cada, la próxima revisión que vale (la que se recorre sola) y el estado, con el día de hoy en la zona del cliente.
+function safetyDatesFor(row, element) {
+    const last = getSafetyLast(row.clientId, row.costCenterId || 0)[element.id] || null;
+    const st = LayoutCalc.safetyStatus(element, clientLocalDay(row.clientId), row.layout.safetyWarnDays, last);
+    return { expires: element.expires || '', every: element.every || null, next: LayoutCalc.safetyNextOf(element, last), state: st.state, days: st.days, date: st.date, which: st.which, lastDay: last ? last.day : '', lastResult: last ? last.result : '' };
+}
+app.get('/g/:token/:elementId', publicLayoutLimiter, (req, res) => {
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(self)' });
+    res.sendFile(path.join(PUBLIC_DIR, 'SeguridadPublica.html'));
+});
+app.get('/api/public/safety/:token/:elementId', publicLayoutLimiter, (req, res) => {
+    const target = safetyTarget(req.params.token, req.params.elementId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const { row, element, zone, locator } = target;
+    const client = getClientById(row.clientId);
+    const locks = qrLocksOf('safety', row.clientId, row.costCenterId || 0);
+    const records = locks.records ? listSafetyChecks(row.clientId, { costCenterId: row.costCenterId || 0, elementId: element.id, limit: locks.limit }) : [];
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json({
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
+        element: { id: element.id, code: element.code, type: element.type, name: element.name || '', locator, zoneName: zone ? zone.name : '' },
+        dates: locks.dates ? safetyDatesFor(row, element) : null,
+        records: records.map((r) => lockedSafetyRecord(r, locks)), locks, now: new Date().toISOString(),
+    });
+});
+app.post('/api/public/safety/:token/:elementId/check', publicCleaningLimiter, (req, res) => {
+    const target = safetyTarget(req.params.token, req.params.elementId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const { row, element, zone, locator } = target;
+    const locks = qrLocksOf('safety', row.clientId, row.costCenterId || 0);
+    if (!locks.register) return res.status(403).json({ message: 'Este QR solo sirve para consultar.', code: 'LOCKED' });
+    const personName = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!personName) return res.status(400).json({ message: 'Falta el nombre de quien revisa.', code: 'NAME' });
+    const result = req.body && req.body.result;
+    if (result !== 'ok' && result !== 'fail') return res.status(400).json({ message: 'Falta marcar si el elemento está bien o con falla.', code: 'RESULT' });
+    const rawNote = req.body && req.body.note;
+    if (rawNote !== undefined && rawNote !== null && typeof rawNote !== 'string') return res.status(400).json({ message: 'La nota no es válida.', code: 'NOTE' });
+    const note = String(rawNote || '').replace(/\s+/g, ' ').trim().slice(0, SAFETY_NOTE_MAX);
+    const photo = parseCleaningPhoto(req.body && req.body.photo);
+    if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
+    const saved = addSafetyCheck({
+        clientId: row.clientId, costCenterId: row.costCenterId || 0, elementId: element.id, elementCode: element.code, elementType: element.type, elementName: element.name || '',
+        zoneName: zone ? zone.name : '', locator, personName, result, note, photo, thumb: parseThumb(req.body && req.body.thumb),
+    });
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json({ record: lockedSafetyRecord(saved, locks, true), dates: locks.dates ? safetyDatesFor(row, element) : null });
+});
+app.get('/api/public/safety/:token/:elementId/photo/:id', publicLayoutLimiter, (req, res) => {
+    const target = safetyTarget(req.params.token, req.params.elementId);
+    const id = Number(req.params.id);
+    if (!target || !Number.isInteger(id)) return res.status(404).end();
+    const rec = getSafetyCheck(id, target.row.clientId);
+    if (!rec || rec.element_id !== target.element.id || rec.cost_center_id !== (target.row.costCenterId || 0)) return res.status(404).end();
+    if (!qrLocksOf('safety', target.row.clientId, target.row.costCenterId || 0).photos) return res.status(404).end();
+    const photo = getSafetyPhoto(id, req.query.thumb === '1');
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
+});
+// La base de registros (Operaciones > Seguridad, con usuario): TODAS las revisiones de todos los elementos y centros de costos del cliente, con las columnas de Control Interno por fila.
+function safetyCheckRowOf(r, centers, client) {
+    const cc = centers.get(r.cost_center_id);
+    return {
+        id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
+        zoneName: r.zone_name, elementCode: r.element_code, elementType: r.element_type, elementName: r.element_name, locator: r.locator,
+        name: r.person_name, result: r.result, note: r.note, checkedAt: sqlUtcIso(r.checked_at), day: r.check_day, hasPhoto: !!r.has_photo, source: r.source,
+        editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
+        system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: SAFETY_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.checked_at }),
+    };
+}
+app.get('/api/business/safety-checks', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const centers = new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c]));
+    const LIMIT = 5000;
+    const rows = listSafetyChecks(clientId, { limit: LIMIT });
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        truncated: rows.length >= LIMIT, max: LIMIT, canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), SAFETY_TABLE_KEY, 'colSgDeleteAuth'),
+        editable: editableColumnsOf(req, SAFETY_TABLE_KEY, [['name', 'colSgQuien']]),
+        checks: rows.map((r) => safetyCheckRowOf(r, centers, client)),
+    });
+});
+// Corregir quién hizo una revisión: misma tubería de cambios que Limpieza y Temperaturas (checkAndLogFieldChanges). El resultado, la hora, la nota, la foto y el lugar no se corrigen: son la prueba de lo que pasó.
+app.patch('/api/business/safety-checks/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSafetyCheck(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    const prepared = prepareRecordEdit(req.body, rec, ['name']);
+    if (prepared.error) return res.status(400).json({ message: prepared.error, code: prepared.code });
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, recordForDiff(rec), prepared.patch, SAFETY_CHECK_PATCHABLE_FIELDS, SAFETY_TABLE_KEY, `Seguridad ${rec.element_code} · SEG-${rec.id}`);
+    const updated = updateSafetyCheck(id, req.user.clientId, appliedPatch, { editedBy: changedByLabel(req) });
+    const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
+    res.json({ check: safetyCheckRowOf(updated, centers, getClientById(req.user.clientId)), pendingFields, rejectedFields });
+});
+app.get('/api/business/safety-checks/:id/photo', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).end();
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || !getSafetyCheck(id, req.user.clientId)) return res.status(404).end();
+    const photo = getSafetyPhoto(id, req.query.thumb === '1');
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
+});
+// Eliminar una revisión pide el permiso Eliminar de su columna en el árbol (el administrador del cliente no depende de hojas); queda el aviso del cambio. Al borrarla, el estado del elemento vuelve a calcularse con las que quedan.
+app.delete('/api/business/safety-checks/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSafetyCheck(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    if (!req.user.isClientAdmin && !canDeleteColumn(getUserEffectiveGrants(req.user.sub), SAFETY_TABLE_KEY, 'colSgDeleteAuth')) return res.status(403).json({ message: 'No tienes permiso para eliminar registros de seguridad.' });
+    deleteSafetyCheck(id, req.user.clientId);
+    try { notifyDataChange({ clientId: req.user.clientId, tableKey: SAFETY_TABLE_KEY, recordLabel: `Seguridad ${rec.element_code}`, fieldKey: 'colSgDeleteAuth', oldValue: `${rec.result === 'fail' ? 'Con falla' : 'Bien'} ${rec.person_name} (${rec.checked_at} UTC)`, newValue: 'Eliminado', actorUserId: req.user.sub, actorLabel: changedByLabel(req) }); } catch (err) { console.error('safety delete notice failed', err); }
+    res.json({ ok: true });
+});
+// Solo las últimas revisiones de cada elemento de Seguridad: la pantalla del Layout las vuelve a pedir de vez en cuando para no quedarse con datos viejos mientras está abierta (las revisiones llegan por el QR, sin sesión).
+app.get('/api/business/layout/safety-last', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ safetyLast: (row.layout.safety || []).length ? getSafetyLast(req.user.clientId, row.costCenterId || 0) : {} });
+});
+// Hoja de QR de seguridad: un QR por elemento (de una zona o de todas) con su dirección fija; la hoja se imprime desde el Layout. Se manda en «spaces» para que sirva el mismo armado de tarjetas de las demás hojas.
+app.get('/api/business/layout/safety-qr', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canUseSafetyQr) return res.status(403).json({ message: 'No tienes permiso para usar los QR de seguridad.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0);
+    const base = `${req.protocol}://${req.get('host')}/g/${token}`;
+    const layout = row.layout;
+    const zoneId = String(req.query.zone || '');
+    const zones = (layout.zones || []).filter((z) => z.active !== false);
+    const spaces = (layout.safety || []).filter((e) => !zoneId || e.zoneId === zoneId).slice(0, 600).map((e) => {
+        const zone = zones.find((z) => z.id === e.zoneId);
+        const url = `${base}/${e.id}`;
+        return { id: e.id, code: e.code, type: e.type, name: e.name || '', zoneId: e.zoneId || '', zoneName: zone ? zone.name : '', locator: [zone && zone.code, e.code].filter(Boolean).join('.'), url, qrRows: layoutQrRows(url) };
     });
     const client = getClientById(req.user.clientId);
     res.set('Cache-Control', 'no-store');
@@ -9911,6 +10091,7 @@ const PENDING_CHANGE_APPLIERS = {
     // Corregir un registro de Limpieza / Temperaturas: quien autoriza el cambio aplica el valor y el registro queda marcado como corregido por quien lo pidió.
     'limpieza': (recordId, clientId, patch, extra) => updateCleaningRecord(recordId, clientId, patch, extra),
     'temperaturas': (recordId, clientId, patch, extra) => updateTemperatureRecord(recordId, clientId, patch, extra),
+    'seguridad': (recordId, clientId, patch, extra) => updateSafetyCheck(recordId, clientId, patch, extra),
 };
 const PENDING_CHANGE_SANITIZERS = {
     'registro-combustible': {
