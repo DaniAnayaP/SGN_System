@@ -12542,6 +12542,8 @@ const SCREEN_GRANT_PATHS = {
     // Operaciones > Temperaturas: la base de registros de las lecturas de temperatura de los refrigeradores con QR (con usuario).
     'cat-operaciones-centro-dist-temperaturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-temperaturas' },
     'cat-operaciones-centro-dist-edicion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo' },
+    // Admin > Mapa de calor: el Layout pintado con la temperatura o la humedad de los sensores, por hora.
+    'cat-admin-mapa-calor': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-mapa-calor' },
 };
 
 function hasScreenAccess(activePage) {

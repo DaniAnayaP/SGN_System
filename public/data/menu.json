@@ -1725,6 +1725,15 @@
             { "id": "colVerificadorEscaner", "labelKey": "main.colVerificadorEscaner", "permissionOnly": true }
           ]
         }
+      ],
+      "cat-admin": [
+        {
+          "id": "cat-admin-mapa-calor", "labelKey": "menu.adminMapaCalor", "icon": "bx-sun", "href": "AdminMapaCalor.html",
+          "submenu": [
+            { "id": "iconMapaCalorMetrica", "labelKey": "main.mapaCalorMetricaBtn", "permissionOnly": true },
+            { "id": "iconMapaCalorReproducir", "labelKey": "main.mapaCalorReproducirBtn", "permissionOnly": true }
+          ]
+        }
       ]
     },
     "human-resources/hr-area-personnel-admin": {

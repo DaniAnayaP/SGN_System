@@ -7422,6 +7422,40 @@ app.get('/api/business/layout/sensor-qr', requireAuth, (req, res) => {
     res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', ...qrBranding(req.user.clientId), zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
 });
 
+// --- Mapa de calor (Admin) --------------------------------------------------------------------------------------------------------------------------
+// La pantalla Admin > Mapa de calor dibuja el Layout de UN centro de costos con cada zona pintada según lo que marcaron sus sensores a la hora elegida. El servidor manda el Layout (lo que hace falta para dibujarlo: contorno, zonas
+// y los sensores con su zona) y las lecturas de sensores de un rango de tiempo (hasta 48 h; las horas van en UTC); la hora local, el promedio por zona y los colores los saca la pantalla.
+const CLIMATE_MAP_MAX_MS = 48 * 3600 * 1000;
+const CLIMATE_MAP_ROW_LIMIT = 5000;
+app.get('/api/business/climate-map', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const from = new Date(String(req.query.from || ''));
+    const to = new Date(String(req.query.to || ''));
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to <= from || to - from > CLIMATE_MAP_MAX_MS) return res.status(400).json({ message: 'El rango de tiempo no es válido.' });
+    const sqlTime = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
+    const admin = !!req.user.isClientAdmin;
+    const grants = admin ? [] : getUserEffectiveGrants(req.user.sub);
+    const pub = buildPublicLayoutPayload(req.user.clientId, row);
+    const rows = listTemperatureRecords(req.user.clientId, { costCenterId: row.costCenterId || 0, sensorOnly: true, since: sqlTime(from), until: sqlTime(to), limit: CLIMATE_MAP_ROW_LIMIT });
+    const center = layoutCenter(req).costCenter;
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        companyName: pub.companyName, siteName: pub.siteName, companyColor: pub.companyColor, costCenter: center ? { id: center.id, name: center.name } : null,
+        layout: {
+            vertices: pub.layout.vertices, zones: pub.layout.zones.map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}) })),
+            sensors: (row.layout.sensors || []).map((s) => ({ id: s.id, code: s.code, type: s.type, wall: s.wall, dist: s.dist, height: s.height, zoneId: s.zoneId || '' })),
+        },
+        readings: rows.map((r) => ({ sensorId: r.sensor_id, sensorCode: r.sensor_code, type: r.sensor_type, temperature: r.temperature, humidity: r.humidity, at: sqlUtcIso(r.checked_at), name: r.person_name })),
+        truncated: rows.length >= CLIMATE_MAP_ROW_LIMIT,
+        permissions: {
+            canMetric: admin || hasTableIconGrant(grants, 'mapa-calor', 'iconMapaCalorMetrica'),
+            canPlay: admin || hasTableIconGrant(grants, 'mapa-calor', 'iconMapaCalorReproducir'),
+        },
+    });
+});
+
 // Candados de los QR (con usuario): ver y cambiar los de un tipo de QR en el centro de costos elegido. Se guarda el conjunto completo del tipo.
 app.get('/api/business/layout/qr-locks', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });

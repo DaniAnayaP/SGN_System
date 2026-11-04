@@ -253,6 +253,7 @@
     "opCentroDistEdicionCodigo": "Edición Código",
     "opCentroDistLimpieza": "Limpieza",
     "opCentroDistTemperaturas": "Temperaturas",
+    "adminMapaCalor": "Mapa de calor",
     "opCentroDistAltaArticulosAbbr1": "Alta Artículos (Sku)",
     "opCentroDistAltaArticulosAbbr2": "Alta Artículos",
     "opCentroDistAltaArticulosAbbr3": "Alta Art.",
@@ -2677,6 +2678,29 @@
     "colTmpFoto": "Foto",
     "colTmpOrigen": "Origen",
     "colTmpDeleteAuth": "Autorización para Eliminar",
+    "mapaCalorMetricaBtn": "Mapa de calor: botón Temperatura | Humedad",
+    "mapaCalorReproducirBtn": "Mapa de calor: botón Reproducir el día",
+    "heatChooseCenter": "Marca un solo centro de costos arriba para ver su mapa de calor.",
+    "heatNoLayout": "Este centro de costos todavía no tiene un Layout guardado.",
+    "heatDia": "Día",
+    "heatTemperatura": "Temperatura °C",
+    "heatHumedad": "Humedad %",
+    "heatReproducir": "Reproducir el día",
+    "heatPausa": "Pausar",
+    "heatHora": "Hora",
+    "heatCentro": "Centro: {name}",
+    "heatSinSensor": "sin sensor",
+    "heatSinLecturaCorto": "sin lectura",
+    "heatZonaSinSensor": "sin sensor, queda en gris",
+    "heatZonaSinLectura": "sin lectura a esta hora",
+    "heatPromedio": "promedio de {codes}",
+    "heatDeUno": "de {code}",
+    "heatLaHora": "A las {hour}",
+    "heatSinZonas": "Este Layout todavía no tiene zonas.",
+    "heatEscala": "Escala de colores de {min} a {max} {unit}",
+    "heatNotaSinSensores": "Este Layout no tiene sensores todavía. Se agregan en el paso Sensores del Layout.",
+    "heatNotaSinLecturas": "No hay lecturas de sensores este día.",
+    "heatNotaCortado": "Hay más lecturas de las que se pueden mostrar; se ven las más recientes.",
     "tmpOrigenQr": "QR",
     "tmpOrigenSensor": "QR del sensor",
     "tmpOrigenUsuario": "Usuario",
@@ -4125,6 +4149,34 @@
     "layoutLockFicha_where": {
       "what": "Deja ver dónde está el código (la ruta y el Localizador) en la Ficha. Apagado, la sección «Dónde está» no sale. Vale para la Ficha de todos los códigos de la empresa.",
       "example": "la Ficha dice «Dónde está: Zona 6 › A005 › Nivel 2»; apagado, no dice nada de la ubicación."
+    },
+    "heatChooseCenter": {
+      "what": "El mapa de calor es de UN centro de costos. Marca solo uno en el selector de arriba para ver su Layout pintado con lo que marcaron sus sensores.",
+      "example": "marcas «CEDIS Chihuahua» arriba y aparece su mapa; si hay varios centros marcados, aquí se te pide elegir uno."
+    },
+    "heatDay": {
+      "what": "El día del que quieres ver el clima. Las lecturas se guardan en UTC y aquí se ven en tu hora. Arranca en hoy.",
+      "example": "eliges el 3 de noviembre para ver cómo se calentó la nave ese día."
+    },
+    "heatMetric": {
+      "what": "Qué se pinta en el mapa: la Temperatura (°C, de 0 a 40) o la Humedad (%, de 0 a 100). La escala es fija para poder comparar un día con otro. Los sensores de un solo tipo (por ejemplo, solo humedad) solo aparecen en lo que miden.",
+      "example": "tocas Humedad y las zonas se pintan con la humedad que marcaron sus sensores."
+    },
+    "heatPlay": {
+      "what": "Reproduce el día hora por hora para ver cómo se calienta y se enfría cada zona. Se detiene al final del día o al tocarlo otra vez.",
+      "example": "empiezas a las 08:00 y el mapa va cambiando de color hasta las 23:00."
+    },
+    "heatHour": {
+      "what": "La hora que ves en el mapa. Los puntos verdes de abajo son las horas en que sí hay lecturas de lo que estás viendo. En cada hora se usa la última lectura de cada sensor.",
+      "example": "arrastras hasta las 14:00 y cada zona muestra el promedio de lo que marcaron sus sensores a esa hora."
+    },
+    "heatMap": {
+      "what": "El Layout del centro de costos con cada zona pintada con el promedio de lo que marcaron sus sensores a esa hora (azul = frío, rojo = caliente). Cada círculo es un sensor, con su propio valor. Una zona en gris con línea punteada no tiene sensores o no tiene lectura a esa hora: no se inventa ningún dato.",
+      "example": "la zona Refrigerado en azul con 5.6 °C, el Andén en naranja con 34.4 °C y la Oficina en gris porque no tiene sensor."
+    },
+    "heatZones": {
+      "what": "La lista de las zonas con su valor a la hora elegida: de cuántos sensores sale el promedio y qué marcó cada uno, a qué hora y quién lo capturó.",
+      "example": "Zona 1 · 31.2 °C, promedio de S001 y S006; debajo, S001 31.8 °C a las 14:10 por Ana."
     },
     "layoutLock_codes": {
       "what": "Deja que quien escanea el QR del Layout, de una Zona o de una Categoría busque códigos (por SKU, descripción o categoría) en el buscador. Apagado, el buscador solo encuentra zonas, mobiliario y ubicaciones, y en la lista ya no sale ningún código.",

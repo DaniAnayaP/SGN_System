@@ -253,6 +253,7 @@
     "opCentroDistEdicionCodigo": "Code Editing",
     "opCentroDistLimpieza": "Cleaning",
     "opCentroDistTemperaturas": "Temperatures",
+    "adminMapaCalor": "Heat map",
     "opCentroDistAltaArticulosAbbr1": "Sku Registration",
     "opCentroDistAltaArticulosAbbr2": "New Sku",
     "opCentroDistAltaArticulosAbbr3": "Sku Reg.",
@@ -2678,6 +2679,29 @@
     "colTmpFoto": "Photo",
     "colTmpOrigen": "Origin",
     "colTmpDeleteAuth": "Authorization to Delete",
+    "mapaCalorMetricaBtn": "Heat map: Temperature | Humidity button",
+    "mapaCalorReproducirBtn": "Heat map: Play the day button",
+    "heatChooseCenter": "Check only one cost center above to see its heat map.",
+    "heatNoLayout": "This cost center does not have a saved Layout yet.",
+    "heatDia": "Day",
+    "heatTemperatura": "Temperature °C",
+    "heatHumedad": "Humidity %",
+    "heatReproducir": "Play the day",
+    "heatPausa": "Pause",
+    "heatHora": "Hour",
+    "heatCentro": "Center: {name}",
+    "heatSinSensor": "no sensor",
+    "heatSinLecturaCorto": "no reading",
+    "heatZonaSinSensor": "no sensor, stays gray",
+    "heatZonaSinLectura": "no reading at this hour",
+    "heatPromedio": "average of {codes}",
+    "heatDeUno": "from {code}",
+    "heatLaHora": "At {hour}",
+    "heatSinZonas": "This Layout does not have zones yet.",
+    "heatEscala": "Color scale from {min} to {max} {unit}",
+    "heatNotaSinSensores": "This Layout does not have sensors yet. They are added in the Sensors step of the Layout.",
+    "heatNotaSinLecturas": "There are no sensor readings on this day.",
+    "heatNotaCortado": "There are more readings than can be shown; the most recent ones are displayed.",
     "tmpOrigenQr": "QR",
     "tmpOrigenSensor": "Sensor QR",
     "tmpOrigenUsuario": "User",
@@ -4126,6 +4150,34 @@
     "layoutLockFicha_where": {
       "what": "Lets people see where the code is (the route and the Locator) on the sheet. Off, the “Where it is” section does not appear. It applies to the sheet of every code of the company.",
       "example": "the sheet says “Where it is: Zone 6 › A005 › Level 2”; off, it says nothing about the location."
+    },
+    "heatChooseCenter": {
+      "what": "The heat map belongs to ONE cost center. Check only one in the selector above to see its Layout painted with what its sensors showed.",
+      "example": "you check “CEDIS Chihuahua” above and its map appears; if several centers are checked, you are asked to choose one here."
+    },
+    "heatDay": {
+      "what": "The day whose climate you want to see. Readings are stored in UTC and shown here in your time. It starts on today.",
+      "example": "you choose November 3 to see how the warehouse warmed up that day."
+    },
+    "heatMetric": {
+      "what": "What is painted on the map: Temperature (°C, 0 to 40) or Humidity (%, 0 to 100). The scale is fixed so one day can be compared with another. Single-type sensors (for example, humidity only) only appear in what they measure.",
+      "example": "you tap Humidity and the zones are painted with the humidity their sensors showed."
+    },
+    "heatPlay": {
+      "what": "Plays the day hour by hour to see how each zone warms up and cools down. It stops at the end of the day or when tapped again.",
+      "example": "you start at 08:00 and the map changes color until 23:00."
+    },
+    "heatHour": {
+      "what": "The hour you see on the map. The green dots below are the hours that have readings of what you are viewing. In each hour the last reading of each sensor is used.",
+      "example": "you drag to 14:00 and each zone shows the average of what its sensors showed at that hour."
+    },
+    "heatMap": {
+      "what": "The cost center's Layout with each zone painted with the average of what its sensors showed at that hour (blue = cold, red = hot). Each circle is a sensor, with its own value. A gray zone with a dotted line has no sensors or no reading at that hour: no data is made up.",
+      "example": "the Refrigerated zone in blue with 5.6 °C, the Dock in orange with 34.4 °C and the Office in gray because it has no sensor."
+    },
+    "heatZones": {
+      "what": "The list of zones with their value at the chosen hour: how many sensors the average comes from and what each one showed, at what time and who captured it.",
+      "example": "Zone 1 · 31.2 °C, average of S001 and S006; below, S001 31.8 °C at 14:10 by Ana."
     },
     "layoutLock_codes": {
       "what": "Lets whoever scans the Layout, Zone or Category QR search codes (by SKU, description or category) in the search box. Off, the search only finds zones, furniture and locations, and no code appears in the list.",
