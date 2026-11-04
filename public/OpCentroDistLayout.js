@@ -623,14 +623,14 @@ function computeSafetyIssues() {
 const safetyIssueText = (v) => t(`main.layoutVioSg_${v.kind}`, { code: v.code });
 // El código y la zona de cada elemento salen de su tipo y de su lugar; las cajas de X e Y (y de la llegada de la ruta) se marcan en rojo si algo no cumple y abajo del paso va la lista de lo que falta.
 // La leyenda de los símbolos solo se ve con el paso Seguridad encendido.
-// La simbología de la pantalla solo nombra lo que se ve en el croquis: cada parte aparece cuando su paso está encendido Y ya hay algo agregado (una puerta, un sensor, una columna…). El contorno y las paredes siempre se dibujan,
-// así que salen siempre que haya paredes. Se vuelve a sacar con cada cambio del borrador y al encender o apagar un paso.
+// La simbología de la pantalla solo nombra lo que se ve en el croquis: cada parte aparece cuando su paso está encendido Y ya hay algo agregado (una puerta, un sensor, una columna, una pared…). El contorno sale con el
+// paso Contorno. Se vuelve a sacar con cada cambio del borrador y al encender o apagar un paso.
 function applyLegend() {
     const d = state.draft;
     const some = (list, fn) => !!d && (d[list] || []).some(fn || (() => true));
     const RULES = {
-        contour: () => true,
-        wall: () => some('obstacles', (o) => o.kind === 'wall'),
+        contour: () => stepOn('contorno'),
+        wall: () => stepOn('paredes') && some('obstacles', (o) => o.kind === 'wall'),
         door: () => stepOn('puertas') && some('doors'),
         power: () => stepOn('luz') && some('power'),
         sensor: () => stepOn('sensores') && some('sensors'),
@@ -1591,14 +1591,15 @@ function renderSvg() {
         if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(p.x) + w / 2}" y="${Y(p.y) + h / 2 + 3}" text-anchor="middle">${esc(p.code || '')}</text>`;
         if (why) s += `<rect class="lbad" x="${X(p.x) - 2}" y="${Y(p.y) - 2}" width="${w + 4}" height="${h + 4}" rx="3"/>`;
     });
-    // El contorno de arriba es solo el marco del terreno (línea punteada). Las PAREDES son obstáculos puestos encima y forman parte de la nave: se dibujan siempre; las columnas, desniveles y otros solo con el paso Contorno.
+    // El contorno de arriba es solo el marco del terreno (línea punteada) y sale con el paso Contorno; las PAREDES son obstáculos puestos encima y salen con el paso Paredes: son capas independientes (las columnas,
+    // desniveles y otros salen con el paso Obstáculos).
     // Un resplandor azul claro del contorno debajo de las paredes: así, donde la pared está sobre el contorno, se ven sus orillas azules y la pared (oscura) se distingue del marco.
-    if (!finding || dimmed) s += `<polygon class="lw-halo" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
+    if (on('contorno') && (!finding || dimmed)) s += `<polygon class="lw-halo" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     const obstacleShapes = LC.obstacleShapes(d);
     const obstaclePoly = (g) => g.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ');
-    if (!finding || dimmed) obstacleShapes.filter(({ o }) => o.kind === 'wall').forEach(({ o, g }) => { s += `<polygon class="lo lo-wall" data-obid="${esc(o.id)}" style="stroke-width:${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}px" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; });
+    if (on('paredes') && (!finding || dimmed)) obstacleShapes.filter(({ o }) => o.kind === 'wall').forEach(({ o, g }) => { s += `<polygon class="lo lo-wall" data-obid="${esc(o.id)}" style="stroke-width:${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}px" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; });
     // El contorno (línea azul punteada y fina) va ENCIMA de las paredes: así se distingue de ellas aunque estén sobre el mismo lado, y donde no hay pared se ve solo.
-    if (!finding || dimmed) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
+    if (on('contorno') && (!finding || dimmed)) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     (on('obstaculos') ? obstacleShapes.filter(({ o }) => o.kind !== 'wall') : []).forEach(({ o, g }) => {
         const height = o.kind === 'step' ? ` · ${(o.dz || 0) > 0 ? '+' : ''}${fmt(o.dz || 0)} m` : '';
         s += `<polygon class="lo lo-${o.kind}" data-obid="${esc(o.id)}" points="${obstaclePoly(g)}"><title>${esc(o.name)}${height}</title></polygon>`;
@@ -3933,7 +3934,7 @@ function sheetLabels() {
         power: t('main.layoutLeyendaLuz'), column: t('main.layoutLeyendaColumna'), wall: t('main.layoutLeyendaPared'), step: t('main.layoutLeyendaDesnivel'),
         kpiTotal: t('main.layoutHojaKpiTotal'), kpiOffices: t('main.layoutHojaKpiOficinas'), kpiAisles: t('main.layoutHojaKpiPasillos'),
         kpiDocks: t('main.layoutHojaKpiAndenes'), kpiStorage: t('main.layoutHojaKpiAlmacenamiento'), kpiDead: t('main.layoutHojaKpiMuertos'), kpiVolume: t('main.layoutHojaKpiVolumen'),
-        scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), space: t('main.layoutLeyendaEspacio'),
+        scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), space: t('main.layoutLeyendaEspacio'), footprint: t('main.layoutLeyendaHuella'),
         dry: typeLabel('zone', 'dry'), cold: typeLabel('zone', 'cold'), chemical: typeLabel('zone', 'chemical'), finished: typeLabel('zone', 'finished'),
         aisle: typeLabel('zone', 'aisle'), aisle2: typeLabel('zone', 'aisle2'), dock: typeLabel('zone', 'dock'), office: typeLabel('zone', 'office'), none: t('main.layoutSinZona'),
         ...Object.fromEntries(LC.SAFETY_TYPES.map((tp) => [`safety_${tp}`, typeLabel('safety', tp)])),

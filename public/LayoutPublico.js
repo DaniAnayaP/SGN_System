@@ -315,7 +315,7 @@
         if (mapView.mode3d) return map3dHtml();
         const theme = window.LayoutMapSvg.theme(data.companyColor);
         viewFocus.key = JSON.stringify(viewFocus.value);
-        return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, layers: mapView.layers, measures: mapView.measures, area: mapView.area, names: mapView.names, rotation: mapView.rotation, focus: viewFocus.value })}${mapToolsHtml()}`;
+        return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, layers: [...mapView.layers, 'paredes'], measures: mapView.measures, area: mapView.area, names: mapView.names, rotation: mapView.rotation, focus: viewFocus.value })}${mapToolsHtml()}`;
     }
     // Barra de botones + croquis + el lugar donde salen los resultados del buscador (la lupa); igual en el Layout general, en una zona y en una categoría.
     const mapBlockHtml = (data) => `${mapToolbarHtml()}<div class="map">${mapInnerHtml(data)}</div><div id="sres" class="sres" aria-live="polite"></div>`;

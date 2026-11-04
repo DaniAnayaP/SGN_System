@@ -96,21 +96,24 @@
         // pie
         const lineY = H - 91 * f;
         // leyenda: los tipos de zona (con los mismos colores del mapa) y, después, cada zona con formato propio con su nombre y su muestra; se acomoda en los renglones que haga falta
-        // La leyenda solo nombra lo que se ve en el croquis.
+        // La leyenda solo nombra lo que se ve en el croquis Y ya está agregado (igual que la simbología de la pantalla): una puerta, una conexión de luz, una columna, una huella, un activo, un pasillo, un tipo de zona o de
+        // seguridad que no hay no sale aunque su paso esté encendido.
         const leg = [];
-        leg.push(['contour', labels.contour || labels.area]);
-        if (on('puertas')) leg.push(['door', labels.door]);
+        if (on('contorno')) leg.push(['contour', labels.contour || labels.area]);
+        if (on('puertas') && (data.layout.doors || []).length) leg.push(['door', labels.door]);
         if (on('luz') && (data.layout.power || []).length) leg.push(['power', labels.power]);
-        // La pared se dibuja siempre; columnas y desniveles solo con el contorno encendido (y la leyenda solo nombra lo que se ve).
+        // La pared sale con su paso (Paredes) y columnas y desniveles con el suyo (Obstáculos); la leyenda solo nombra lo que se ve.
         const obstacleKinds = new Set((data.layout.obstacles || []).map((o) => o.kind));
-        if (obstacleKinds.has('wall')) leg.push(['wall', labels.wall]);
+        if (on('paredes') && obstacleKinds.has('wall')) leg.push(['wall', labels.wall]);
         if (on('obstaculos') && (obstacleKinds.has('column') || obstacleKinds.has('other'))) leg.push(['column', labels.column]);
         if (on('obstaculos') && obstacleKinds.has('step')) leg.push(['step', labels.step]);
-        if (on('espacios') || on('huellas') || on('activos')) leg.push(['space', labels.space]);
+        // La huella (el lugar en el piso, blanca) y el activo (arena de fábrica, o su color propio) se nombran por separado, como en la pantalla.
+        if ((on('huellas') || on('espacios')) && (data.layout.footprints || []).length) leg.push(['footprint', labels.footprint || labels.space]);
+        if ((on('activos') || on('espacios')) && (data.layout.spaces || []).length) leg.push(['space', labels.space]);
         if (on('zonas')) {
-            // los pasillos son de Tránsito (su propia capa); solo una zona de pasillo de forma libre que quedó de antes los trae aquí
-            const aisleZones = (data.layout.zones || []).some((z) => z.type === 'aisle' || z.type === 'aisle2');
-            leg.push(['dry', labels.dry], ['cold', labels.cold], ['chemical', labels.chemical], ['finished', labels.finished], ['dock', labels.dock], ['office', labels.office], ...(aisleZones ? [['aisle', labels.aisle], ['aisle2', labels.aisle2]] : []), ['none', labels.none]);
+            // solo los tipos de zona que hay. Los pasillos son de Tránsito (su propia capa); solo una zona de pasillo de forma libre que quedó de antes los trae aquí
+            const zoneTypes = new Set((data.layout.zones || []).map((z) => z.type || 'none'));
+            ['dry', 'cold', 'chemical', 'finished', 'dock', 'office', 'aisle', 'aisle2', 'none'].forEach((tp) => { if (zoneTypes.has(tp)) leg.push([tp, labels[tp]]); });
             (data.layout.zones || []).filter((z) => z.fmt).slice(0, 12).forEach((z) => leg.push([`zone:${z.id}`, z.name, z]));
         }
         // Seguridad: la leyenda nombra solo los tipos que hay en el croquis (cada uno con su propio símbolo).
@@ -119,8 +122,9 @@
             ((window.LayoutCalc && window.LayoutCalc.SAFETY_TYPES) || []).filter((tp) => present.has(tp)).forEach((tp) => leg.push([`safety:${tp}`, labels[`safety_${tp}`] || tp]));
         }
         if (on('transito') && (data.layout.transit || []).length) {
-            if (!leg.some((i) => i[0] === 'aisle')) leg.push(['aisle', labels.aisle]);
-            if (!leg.some((i) => i[0] === 'aisle2')) leg.push(['aisle2', labels.aisle2]);
+            const transit = data.layout.transit || [];
+            if (transit.some((p) => p.type !== 'between') && !leg.some((i) => i[0] === 'aisle')) leg.push(['aisle', labels.aisle]);
+            if (transit.some((p) => p.type === 'between') && !leg.some((i) => i[0] === 'aisle2')) leg.push(['aisle2', labels.aisle2]);
         }
         const legPos = [];
         let legX = m;
@@ -201,7 +205,8 @@
                 else if (key === 'column') paint = 'fill="#6B7089" stroke="#6B7089"';
                 else if (key === 'wall') paint = `fill="${th.chrome.nave}" stroke="${th.chrome.nave}"`;
                 else if (key === 'step') paint = 'fill="#E8D9F2" stroke="#8A5EA8" stroke-dasharray="4 3"';
-                else if (key === 'space') paint = `fill="#FFFFFF" stroke="${C.line}"`;
+                else if (key === 'footprint') paint = `fill="#FFFFFF" stroke="${C.line}"`;
+                else if (key === 'space') paint = 'fill="#F4E1B8" stroke="#9A7B3C"';
                 else { const c = th.types[key]; paint = `fill="${c[0]}" stroke="${c[1]}"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`; }
                 s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw}" rx="${4 * f}" ${paint} stroke-width="${1.5 * f}"/>`;
             }

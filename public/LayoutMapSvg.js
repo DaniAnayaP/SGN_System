@@ -283,15 +283,16 @@
             const ty = (T.types && T.types[p.type === 'between' ? 'aisle2' : 'aisle']) || ['#D5D8E2', '#8E93A8', ''];
             s += `<rect x="${X(p.x)}" y="${Y(p.y)}" width="${Math.max((Number(p.l) || 0) * sc, 2)}" height="${Math.max((Number(p.w) || 0) * sc, 2)}" fill="${ty[0]}" stroke="${ty[1]}" stroke-width="1"${ty[2] ? ` stroke-dasharray="${ty[2]}"` : ''}/>`;
         });
-        // El contorno es solo el marco del terreno (línea punteada). Las PAREDES son obstáculos puestos encima y forman parte de la nave: se dibujan siempre; columnas, desniveles y otros, más abajo, solo con el contorno encendido.
+        // El contorno es solo el marco del terreno (línea punteada) y sale con la capa «contorno»; las PAREDES son obstáculos puestos encima y salen con la capa «paredes»: son capas independientes (columnas, desniveles y otros,
+        // más abajo, con «obstaculos»). Sin capas elegidas (la vista pública) todo se dibuja.
         // Un resplandor azul claro del contorno debajo de las paredes: donde la pared está sobre el contorno se ven sus orillas azules y la pared se distingue del marco.
-        s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${CONTOUR_COLOR}" stroke-opacity="0.28" stroke-width="7" stroke-linejoin="round"/>`;
+        if (on('contorno')) s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${CONTOUR_COLOR}" stroke-opacity="0.28" stroke-width="7" stroke-linejoin="round"/>`;
         const obstacleShapes = LC.obstacleShapes(layout);
         const obstaclePoly = (g) => g.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ');
         // una pared muy delgada para la escala del croquis se refuerza con un trazo para que siempre se vea (como mínimo unos 3 px de grueso)
-        obstacleShapes.filter(({ o }) => o.kind === 'wall').forEach(({ g }) => { s += `<polygon points="${obstaclePoly(g)}" fill="${T.chrome.nave}" stroke="${T.chrome.nave}" stroke-width="${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}" stroke-linejoin="miter"/>`; });
+        (on('paredes') ? obstacleShapes.filter(({ o }) => o.kind === 'wall') : []).forEach(({ g }) => { s += `<polygon points="${obstaclePoly(g)}" fill="${T.chrome.nave}" stroke="${T.chrome.nave}" stroke-width="${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}" stroke-linejoin="miter"/>`; });
         // El contorno (línea azul punteada y fina) va ENCIMA de las paredes: se distingue de ellas aunque estén sobre el mismo lado.
-        s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${CONTOUR_COLOR}" stroke-width="1.6" stroke-dasharray="7 5" stroke-linejoin="round"/>`;
+        if (on('contorno')) s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${CONTOUR_COLOR}" stroke-width="1.6" stroke-dasharray="7 5" stroke-linejoin="round"/>`;
         // La HUELLA (el lugar en el piso) va primero, blanca o con su color; el ACTIVO encima, un poco más chico, con su propio color (arena si no tiene): así se distinguen aunque midan lo mismo. Un Layout que todavía
         // no trae huellas (copias viejas) dibuja los activos enteros como siempre.
         // Capas: «huellas» solo las huellas, «activos» solo los activos y «espacios» (la vista pública, que no los separa) las dos.
