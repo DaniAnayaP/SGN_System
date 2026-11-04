@@ -257,6 +257,7 @@ const {
     publishButtonActionNotice,
     publishIconUpdateNotice,
     hasTableIconGrant,
+    hasColumnGrant,
     publishAccessChangeNotice,
     userIdsOfJobPosition,
     canCreateColumn,
@@ -6500,7 +6501,8 @@ function layoutPermissions(req) {
     const grants = admin ? [] : getUserEffectiveGrants(req.user.sub);
     const level = (col) => (admin ? 'editar' : getColumnGrantLevel(grants, LAYOUT_TABLE_KEY, col));
     const sections = {};
-    Object.entries(LayoutCalc.SECTIONS).forEach(([key, col]) => { sections[key] = level(col); });
+    // Un paso del que la cuenta no tiene NINGÚN permiso en el árbol sale como 'none' (la pantalla no lo muestra); con solo Ver, 'solo-ver'.
+    Object.entries(LayoutCalc.SECTIONS).forEach(([key, col]) => { sections[key] = admin || hasColumnGrant(grants, LAYOUT_TABLE_KEY, col) ? level(col) : 'none'; });
     const canButton = (col) => admin || canCreateColumn(grants, LAYOUT_TABLE_KEY, col);
     // El QR (ver y descargar la hoja) pide "Ver y Operar" en la columna Códigos QR; cambiarlo a propósito pide "Modificar".
     const qrLevel = level('colLayoutQr');

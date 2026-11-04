@@ -49,6 +49,18 @@ function uid(prefix) {
 
 // ---- permisos ---------------------------------------------------------------------------------------------------------
 function sectionLevel(section) { return state.perms ? state.perms.sections[section] : 'solo-ver'; }
+// Un paso del que la cuenta no tiene NINGÚN permiso en el árbol ('none') no se ve; los demás (con solo Ver, Ver y Operar o Modificar) sí.
+const stepVisible = (section) => sectionLevel(section) !== 'none';
+function ensureVisibleSteps() {
+    const visible = SECTION_ORDER.filter(stepVisible);
+    if (!visible.length) return; // sin ningún paso permitido no hay nada que elegir: se deja como estaba
+    const keep = (s) => s === 'localizadores' || visible.includes(s);
+    state.steps = state.steps.filter(keep);
+    state.focusStack = state.focusStack.filter(keep);
+    if (!state.steps.length) state.steps = [visible[0]];
+    if (!state.steps.includes(state.focus)) state.focus = state.steps[state.steps.length - 1];
+    if (!state.focusStack.length) state.focusStack = [state.focus];
+}
 // Igual que canEditField: "Modificar" siempre; "Ver y Operar" solo mientras esa sección no tenga datos ya guardados.
 function canEdit(section) {
     const level = sectionLevel(section);
@@ -1071,7 +1083,8 @@ function renderPanel() {
     // el panel también se dibuja con lo que sale de la huella (zona de cada activo, si está activo): se saca antes de dibujarlo, no solo en refreshLive
     if (state.draft) { syncWallItems(); syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; computeFootprintIssues(); computeSpaceIssues(); computeTransitIssues(); }
     const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
-    const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
+    ensureVisibleSteps();
+    const tabs = SECTION_ORDER.filter(stepVisible).map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
     const isLocators = s === 'localizadores'; // este paso no edita nada: no lleva candado
     const level = isLocators ? '' : sectionLevel(s);

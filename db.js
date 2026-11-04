@@ -3672,6 +3672,15 @@ function getColumnGrantLevel(grants, tableKey, colKey, pathOverride) {
     return 'solo-ver';
 }
 
+// ¿La cuenta tiene ALGÚN permiso de esa columna (Ver, Ver y Operar o Modificar)? getColumnGrantLevel contesta «solo-ver» también cuando no hay ninguno (es el nivel mínimo para quien ya ve la pantalla); esto distingue
+// «tiene Ver» de «no tiene nada de esa columna», para esconder lo que la cuenta no tiene en el árbol.
+function hasColumnGrant(grants, tableKey, colKey, pathOverride) {
+    const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
+    if (!path) return false;
+    const base = columnSubmenuBase(path, colKey);
+    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && ['solo-ver', 'ver-y-operar', 'editar'].some((level) => g.submenuId === `${base}/${level}`));
+}
+
 function canAuthorizeColumn(grants, tableKey, colKey, pathOverride) {
     const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
     if (!path) return false;
@@ -11450,6 +11459,7 @@ module.exports = {
     publishButtonActionNotice,
     publishIconUpdateNotice,
     hasTableIconGrant,
+    hasColumnGrant,
     publishAccessChangeNotice,
     userIdsOfJobPosition,
     canCreateColumn,
