@@ -7677,6 +7677,14 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .rec-edit-panel .tpl-muted{ margin: 0; }
 .rec-edit-panel #rec-edit-help{ margin: 0 0 0.9rem; line-height: 1.35; }
 .rec-edit-tag{ margin-left: 0.4rem; }
+/* Seguridad: fechas, estado, contadores y la lista de vencidos */
+.layout-table input[type="date"]{ min-width: 8.6rem; }
+.layout-sg-bar{ display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem 1.2rem; margin: 0 0 0.7rem; }
+.layout-sg-counts{ display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.layout-sg-bar .layout-fl input{ min-width: 4rem; max-width: 6rem; }
+.layout-due{ margin-top: 0.7rem; padding: 0.5rem 0.8rem; border: 1px solid #C0392B; border-radius: 0.5rem; background: rgba(192, 57, 43, 0.08); color: #C0392B; font-size: 0.8rem; }
+.layout-due[hidden]{ display: none; }
+.layout-due p{ margin: 0.1rem 0; }
 /* Opción A: «Textos» y «Capas» son botones redondos en la fila de iconos y su lista FLOTA encima de lo que haya debajo (no alarga el panel), centrada bajo la fila */
 .layout-views-icons{ position: relative; }
 .layout-opt-icon{ position: static; width: auto; max-width: none; }

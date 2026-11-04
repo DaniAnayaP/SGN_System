@@ -1777,6 +1777,26 @@
     "layoutType_safety_route": "Ruta de evacuación",
     "layoutVioSg_outside": "{code} queda fuera del contorno de la nave: acomódalo dentro.",
     "layoutVioSg_route": "La ruta {code} necesita dos puntos distintos.",
+    "layoutSgCaducidad": "Caducidad",
+    "layoutSgCadaDias": "Revisar cada (días)",
+    "layoutSgProxima": "Próxima revisión",
+    "layoutSgEstado": "Estado",
+    "layoutSgOk": "Vigente",
+    "layoutSgNone": "Sin fecha",
+    "layoutSgSoonHoy": "Por vencer · hoy",
+    "layoutSgSoonUno": "Por vencer · 1 día",
+    "layoutSgSoonN": "Por vencer · {n} días",
+    "layoutSgLateUno": "Vencido · hace 1 día",
+    "layoutSgLateN": "Vencido · hace {n} días",
+    "layoutSgCntOk": "Vigentes",
+    "layoutSgCntSoon": "Por vencer",
+    "layoutSgCntLate": "Vencidos",
+    "layoutSgCntNone": "Sin fecha",
+    "layoutSgAvisarCon": "Por vencer: avisar con (días)",
+    "layoutSgMapSoon": "por vencer",
+    "layoutSgMapLate": "vencido",
+    "layoutSgDueTitulo": "Vencidos (atiéndelos o actualiza la fecha):",
+    "layoutSgDueMas": "…y {n} más.",
     "layoutLeyendaPersona": "Persona",
     "layoutLeyendaMontacargas": "Montacargas",
     "layoutTipo": "Tipo",
@@ -4585,6 +4605,14 @@
       "what": "Cuánto espacio libre hay hacia arriba en este pasillo, en metros. Es opcional: vacío quiere decir que no se revisa el alto.",
       "example": "una viga baja deja 2 m libres: pones 2 y un montacargas de 2.2 m de alto sale en rojo."
     },
+    "layoutSgConteo": {
+      "what": "Cuántos elementos de seguridad hay en cada estado, contando la fecha más cercana de cada uno (su caducidad o su próxima revisión) contra hoy: Vigentes, Por vencer (faltan los días de aviso o menos), Vencidos (la fecha ya pasó) y Sin fecha.",
+      "example": "ves «Por vencer · 2» y «Vencidos · 1»: hay tres elementos que atender."
+    },
+    "layoutSgAvisar": {
+      "what": "Con cuántos días de anticipación un elemento sale como «Por vencer». De fábrica son 30; vale para todos los elementos de seguridad de este Layout.",
+      "example": "con 45, un extintor que caduca en 40 días ya sale como «Por vencer»."
+    },
     "layoutSec_paredes": {
       "what": "Las paredes de la nave. Cada una va sobre un lado del contorno (a todo lo largo o solo un tramo, con su grosor) o dentro de la nave, con su lugar y medidas. Las paredes suben del piso al techo en el 3D y se dibujan siempre en el croquis. Los botones de agregar están arriba: «Agregar pared» y «Pared en todo el contorno».",
       "example": "una pared en cada lado de la nave, menos el lado del andén abierto, y un muro de 12 m en medio para separar la zona de refrigerados."
@@ -4594,7 +4622,7 @@
       "example": "agregas una pared y la pasas al lado 3 con un largo de 8 m."
     },
     "layoutSec_seguridad": {
-      "what": "Los elementos de seguridad de la nave puestos en el plano: extintores, hidrantes, puertas de emergencia, botiquines, alarmas o pulsadores, regaderas y lavaojos, puntos de reunión y rutas de evacuación. Cada uno es un punto (X e Y, en metros; la ruta lleva además el punto de llegada) con su tipo y su nombre o modelo. El código lo pone el sistema: cada tipo con su letra y su cuenta (E001, I001, P001, B001, L001, O001, U001, V001) y un número no se vuelve a usar aunque borres el elemento. La zona sale sola del lugar. Todo debe quedar dentro del contorno de la nave: si no, sale en rojo y no se deja guardar. Se ven en el croquis, en el 3D, en la página pública del QR y en la hoja que se descarga mientras este paso esté encendido.",
+      "what": "Los elementos de seguridad de la nave puestos en el plano: extintores, hidrantes, puertas de emergencia, botiquines, alarmas o pulsadores, regaderas y lavaojos, puntos de reunión y rutas de evacuación. Cada uno es un punto (X e Y, en metros; la ruta lleva además el punto de llegada) con su tipo y su nombre o modelo. El código lo pone el sistema: cada tipo con su letra y su cuenta (E001, I001, P001, B001, L001, O001, U001, V001) y un número no se vuelve a usar aunque borres el elemento. La zona sale sola del lugar. Todo debe quedar dentro del contorno de la nave: si no, sale en rojo y no se deja guardar. Cada elemento puede llevar su caducidad, cada cuántos días se revisa y su próxima revisión: el estado (Vigente, Por vencer, Vencido o Sin fecha) sale de la fecha más cercana contra hoy, arriba se cuentan y en el croquis los que están por vencer llevan un aro ámbar y los vencidos uno rojo. Eso no bloquea el guardado. Se ven en el croquis, en el 3D, en la página pública del QR y en la hoja que se descarga mientras este paso esté encendido.",
       "example": "un extintor PQS de 6 kg a 5 m en X y 5 m en Y (E001), la puerta de emergencia de la salida oeste en el lado izquierdo de la nave (P001) y una ruta de evacuación que va del pasillo central hasta esa puerta (V001)."
     },
     "layoutSec_objetos": {

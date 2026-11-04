@@ -428,6 +428,17 @@
                 }
                 return best;
             };
+            // por vencer (ámbar) o vencido (rojo): un aro plano en el piso alrededor del elemento (el estado sale de la fecha más cercana contra hoy)
+            const nowDate = new Date();
+            const todayIso3d = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}-${String(nowDate.getDate()).padStart(2, '0')}`;
+            const dueRing = (ex, ey, e) => {
+                const st = LCalc && LCalc.safetyStatus ? LCalc.safetyStatus(e, todayIso3d, layout.safetyWarnDays) : { state: 'none' };
+                if (st.state !== 'soon' && st.state !== 'overdue') return;
+                const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.74, 28), new THREE.MeshBasicMaterial({ color: st.state === 'overdue' ? 0xc0392b : 0xe8892b, side: THREE.DoubleSide }));
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.set(PX(ex), 0.14, PZ(ey));
+                group.safety.add(ring);
+            };
             (layout.safety || []).forEach((e) => {
                 const color = SAFETY_COLOR[e.type] || 0xd9443a;
                 const ex = Number(e.x) || 0;
@@ -454,6 +465,7 @@
                     g.add(tip);
                     g.position.set(PX(ex), 0, PZ(ey));
                     group.safety.add(g);
+                    dueRing(ex, ey, e);
                     return;
                 }
                 if (e.type === 'hydrant') {
@@ -510,6 +522,7 @@
                 }
                 g.position.set(PX(ex), 0.08, PZ(ey));
                 group.safety.add(g);
+                dueRing(ex, ey, e);
             });
             // huellas (el lugar en el piso, capa «Huella-Espacio»): una losa delgada, blanca o con su color, debajo de sus activos
             (layout.footprints || []).forEach((f) => {

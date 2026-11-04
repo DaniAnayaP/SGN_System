@@ -161,9 +161,9 @@
         return `<line x1="${k(x1)}" y1="${k(y1)}" x2="${k(bx)}" y2="${k(by)}" stroke="${color}" stroke-width="${k(w)}" stroke-dasharray="${k(w * 3.2)} ${k(w * 1.8)}" stroke-linecap="round"/><polygon points="${k(x2)},${k(y2)} ${k(bx - uy * hw)},${k(by + ux * hw)} ${k(bx + uy * hw)},${k(by - ux * hw)}" fill="${color}"/>`;
     }
     // El código de un elemento, en letra chica con un contorno blanco para que se lea encima de zonas y huellas.
-    function safetyLabel(x, y, txt, anchor) {
+    function safetyLabel(x, y, txt, anchor, color) {
         const a = `x="${Math.round(x * 100) / 100}" y="${Math.round(y * 100) / 100}" font-size="7.5" font-weight="700" text-anchor="${anchor || 'middle'}"`;
-        return `<text ${a} fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">${esc(txt)}</text><text ${a} fill="#2A1B30">${esc(txt)}</text>`;
+        return `<text ${a} fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">${esc(txt)}</text><text ${a} fill="${color || '#2A1B30'}">${esc(txt)}</text>`;
     }
 
     function mapSvg(layout, options = {}) {

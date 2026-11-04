@@ -1087,6 +1087,31 @@
         });
         return out;
     }
+    // ---- Fechas de Seguridad: estado de cada elemento -----------------------------------------------------------------------------------------------
+    // Cada elemento puede traer su caducidad (expires), cada cuántos días se revisa (every) y su próxima revisión (next), todo opcional. El ESTADO sale de la fecha más cercana contra HOY: vencida si ya pasó, «por vencer» si
+    // faltan safetyWarnDays días o menos (de fábrica 30; hoy cuenta como por vencer) y vigente si falta más. Sin fechas no hay estado. No bloquea nada: un extintor vencido es un aviso para atenderlo, no un error del plano.
+    const SAFETY_WARN_DAYS = 30;
+    const isIsoDate = (v) => {
+        if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+        const [y, m, d] = v.split('-').map(Number);
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+    };
+    const isoDayNumber = (iso) => { const [y, m, d] = iso.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / 86400000); };
+    // today = la fecha de HOY como AAAA-MM-DD (quien llama la saca de su reloj: en pantalla, la del lugar de quien ve). Devuelve { state: 'ok' | 'soon' | 'overdue' | 'none', days (los que faltan; negativo si ya pasó), date, which }.
+    function safetyStatus(e, today, warnDays) {
+        const dates = [e && e.expires, e && e.next].filter(isIsoDate);
+        if (!dates.length || !isIsoDate(today)) return { state: 'none', days: null, date: '', which: '' };
+        const nearest = dates.slice().sort()[0];
+        const days = isoDayNumber(nearest) - isoDayNumber(today);
+        const warn = Math.max(1, Math.round(Number(warnDays)) || SAFETY_WARN_DAYS);
+        return { state: days < 0 ? 'overdue' : (days <= warn ? 'soon' : 'ok'), days, date: nearest, which: nearest === (e && e.expires) ? 'expires' : 'next' };
+    }
+    function safetyCounts(layout, today) {
+        const out = { ok: 0, soon: 0, overdue: 0, none: 0 };
+        ((layout && layout.safety) || []).forEach((e) => { out[safetyStatus(e, today, layout.safetyWarnDays).state] += 1; });
+        return out;
+    }
     const safetyKey = (v) => `${v.id}|${v.kind}|${v.sig}`;
     // Las faltas que hay en next y que antes no estaban igual (elemento nuevo o cambiado).
     function newSafetyViolations(next, previous) {
@@ -1504,10 +1529,24 @@
                 x: meters(e && e.x, label, -LIMITS.maxM), y: meters(e && e.y, label, -LIMITS.maxM),
             };
             if (type === 'route') { item.x2 = meters(e && e.x2, label, -LIMITS.maxM); item.y2 = meters(e && e.y2, label, -LIMITS.maxM); }
+            // Fechas (todas opcionales): caducidad (cuándo deja de servir), cada cuántos días se revisa y próxima revisión. Una fecha es AAAA-MM-DD; lo vacío no se guarda.
+            ['expires', 'next'].forEach((k) => {
+                const v = e && e[k];
+                if (v === undefined || v === null || v === '') return;
+                if (isIsoDate(v)) item[k] = v; else errors.push(`${label}: fecha no válida`);
+            });
+            const every = e && e.every;
+            if (every !== undefined && every !== null && every !== '') {
+                const days = Math.round(Number(every));
+                if (Number.isFinite(days) && days >= 1 && days <= 3650) item.every = days; else errors.push(`${label}: «Revisar cada» debe ser de 1 a 3650 días`);
+            }
             return item;
         });
         // el último número de código que se dio (para no volver a usar uno borrado); lo que manda el servidor es lo guardado, esto solo lo conserva
         out.safetyNext = cleanSafetyNext(src.safetyNext);
+        // con cuántos días de anticipación un elemento sale «Por vencer» (de fábrica 30; solo se guarda si es otro número)
+        const warnDays = Math.round(Number(src.safetyWarnDays));
+        if (Number.isFinite(warnDays) && warnDays >= 1 && warnDays <= 365 && warnDays !== SAFETY_WARN_DAYS) out.safetyWarnDays = warnDays;
         // Tránsito: los pasillos y las medidas de lo que transita por ellos.
         const transitIds = new Set();
         out.transit = list(src.transit, LIMITS.transit, 'Pasillos').map((p, i) => {
@@ -1826,7 +1865,8 @@
         if (section === 'sensores') return (layout.sensors || []).map(({ zoneId, ...rest }) => rest);
         if (section === 'objetos') return layout.objects || [];
         // La zona de cada elemento sale de su lugar en el croquis, no se captura.
-        if (section === 'seguridad') return (layout.safety || []).map(({ zoneId, ...rest }) => rest);
+        // Los elementos (sin la zona, que sale del croquis) y los días de aviso de «Por vencer».
+        if (section === 'seguridad') return { safety: (layout.safety || []).map(({ zoneId, ...rest }) => rest), warnDays: layout.safetyWarnDays || SAFETY_WARN_DAYS };
         // La zona de cada pasillo sale del croquis, no se captura; las medidas de lo que transita van con el paso.
         if (section === 'transito') return { transit: (layout.transit || []).map(({ zoneId, ...rest }) => rest) };
         if (section === 'zonas') return layout.zones;
@@ -1856,13 +1896,14 @@
         if (!data) return false;
         if (section === 'contorno') return (data.vertices || []).length > 0;
         if (section === 'transito') return (data.transit || []).length > 0;
+        if (section === 'seguridad') return (data.safety || []).length > 0;
         return (data || []).length > 0;
     }
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume,
-        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
+        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

@@ -560,6 +560,30 @@ function openWhoPop(i, anchor) {
 }
 document.addEventListener('click', (event) => { if (!event.target.closest('#layout-who-pop, [data-who-open]')) closeWhoPop(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeWhoPop(); });
+// Seguridad, fechas: el estado de cada elemento (Vigente / Por vencer / Vencido / Sin fecha) sale de la fecha más cercana contra HOY (la fecha de quien ve la pantalla); no bloquea nada. todayIso = hoy como AAAA-MM-DD.
+function todayIso() {
+    const now = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}
+function safetyStatusText(st) {
+    if (st.state === 'none') return t('main.layoutSgNone');
+    if (st.state === 'ok') return t('main.layoutSgOk');
+    if (st.state === 'soon') return st.days === 0 ? t('main.layoutSgSoonHoy') : t(st.days === 1 ? 'main.layoutSgSoonUno' : 'main.layoutSgSoonN', { n: st.days });
+    return t(st.days === -1 ? 'main.layoutSgLateUno' : 'main.layoutSgLateN', { n: Math.abs(st.days) });
+}
+const SAFETY_STATUS_CLASS = { ok: 'rel-tag-ok', soon: 'rel-tag-partial', overdue: 'rel-class-cuarentena', none: '' };
+// La etiqueta de estado de un elemento (al pasar el cursor, la fecha que decide: caducidad o próxima revisión).
+function safetyStatusTag(e) {
+    const st = LC.safetyStatus(e, todayIso(), state.draft && state.draft.safetyWarnDays);
+    const why = st.date ? ` title="${esc(t(st.which === 'expires' ? 'main.layoutSgCaducidad' : 'main.layoutSgProxima'))}: ${esc(st.date)}"` : '';
+    return `<span class="rel-tag ${SAFETY_STATUS_CLASS[st.state]}"${why}>${esc(safetyStatusText(st))}</span>`;
+}
+function safetyCountsHtml() {
+    const c = LC.safetyCounts(state.draft, todayIso());
+    const chip = (cls, key, n) => `<span class="rel-tag ${cls}">${esc(t(key))} · ${n}</span>`;
+    return chip('rel-tag-ok', 'main.layoutSgCntOk', c.ok) + chip('rel-tag-partial', 'main.layoutSgCntSoon', c.soon) + chip('rel-class-cuarentena', 'main.layoutSgCntLate', c.overdue) + chip('', 'main.layoutSgCntNone', c.none);
+}
 // Seguridad: las faltas de cada elemento (LayoutCalc.safetyViolations): fuera del contorno de la nave, o una ruta con los dos puntos iguales. sfIssues = id -> { outside, route }. Se vuelve a calcular con cada cambio del borrador.
 let sfIssues = new Map();
 function computeSafetyIssues() {
@@ -584,7 +608,19 @@ function applySafetyMarks() {
         if (codeCell) codeCell.textContent = e.code || '';
         const zoneCell = document.querySelector(`[data-sf-zone="${i}"]`);
         if (zoneCell) zoneCell.textContent = (state.draft.zones.find((z) => z.id === e.zoneId) || {}).name || '—';
+        const statusCell = document.querySelector(`[data-sf-status="${i}"]`);
+        if (statusCell) statusCell.innerHTML = safetyStatusTag(e);
     });
+    // los contadores de arriba y la lista de los vencidos de abajo se vuelven a sacar con cada cambio (una fecha, los días de aviso)
+    const countsBox = document.querySelector('[data-sf-counts]');
+    if (countsBox) countsBox.innerHTML = safetyCountsHtml();
+    const dueBox = document.querySelector('[data-sf-due]');
+    if (dueBox) {
+        const today = todayIso();
+        const late = (state.draft.safety || []).map((e) => ({ e, st: LC.safetyStatus(e, today, state.draft.safetyWarnDays) })).filter(({ st }) => st.state === 'overdue');
+        dueBox.hidden = !late.length;
+        dueBox.innerHTML = late.length ? `<p><b>${esc(t('main.layoutSgDueTitulo'))}</b></p>${late.slice(0, 8).map(({ e, st }) => `<p>${esc(e.code || '')} · ${esc(typeLabel('safety', e.type))}${e.name ? ` · ${esc(e.name)}` : ''}: ${esc(safetyStatusText(st))}</p>`).join('')}${late.length > 8 ? `<p>${esc(t('main.layoutSgDueMas', { n: late.length - 8 }))}</p>` : ''}` : '';
+    }
     const box = document.querySelector('[data-sf-issues]');
     if (box) {
         const all = LC.safetyViolations(state.draft);
@@ -776,10 +812,12 @@ function stepHtml(step) {
         const rows = (d.safety || []).map((e, i) => {
             const route = e.type === 'route';
             const end = route ? `${cellNum('safety', i, 'x2', e.x2, dis)}${cellNum('safety', i, 'y2', e.y2, dis)}` : '<td class="layout-calc">—</td><td class="layout-calc">—</td>';
-            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}${removeCell('safety', i, dis)}</tr>`;
+            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}<td><input type="date" data-l="safety" data-i="${i}" data-k="expires" value="${esc(e.expires || '')}"${dis ? ' disabled' : ''}></td><td><input type="number" step="1" min="1" max="3650" data-l="safety" data-i="${i}" data-k="every" value="${e.every || ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><input type="date" data-l="safety" data-i="${i}" data-k="next" value="${esc(e.next || '')}"${dis ? ' disabled' : ''}></td><td class="layout-calc" data-sf-status="${i}">${safetyStatusTag(e)}</td>${removeCell('safety', i, dis)}</tr>`;
         });
-        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
-        return `${addButton('safety', 'main.layoutAgregarSeguridad', dis, true)}${list}<div class="layout-vio" data-sf-issues hidden></div>`;
+        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgEstado', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
+        // arriba: los contadores (Vigentes, Por vencer, Vencidos, Sin fecha) y con cuántos días de anticipación sale «Por vencer» (de fábrica 30); abajo, los vencidos
+        const bar = `<div class="layout-sg-bar"><div class="layout-sg-counts" data-sf-counts data-help-key="layoutSgConteo">${safetyCountsHtml()}</div><div class="layout-fl"><label data-help-key="layoutSgAvisar">${esc(t('main.layoutSgAvisarCon'))}<input type="number" min="1" max="365" step="1" data-l="safetyWarn" value="${d.safetyWarnDays || LC.SAFETY_WARN_DAYS}"${dis ? ' disabled' : ''}></label></div></div>`;
+        return `${addButton('safety', 'main.layoutAgregarSeguridad', dis, true)}${bar}${list}<div class="layout-vio" data-sf-issues hidden></div><div class="layout-due" data-sf-due hidden></div>`;
     }
     if (step === 'objetos') {
         // Cada renglón es una PERSONA o un MONTACARGAS dibujado en el plano, a escala. Es una foto fija (como el plano de Excel), no sigue a nadie en vivo. X e Y son su centro, en metros; el giro dice hacia dónde mira
@@ -1557,6 +1595,7 @@ function renderSvg() {
     if (on('seguridad')) {
         const SG = window.LayoutMapSvg;
         const rs = Math.max(5, Math.min(8, sc * 0.45));
+        const today = todayIso();
         (d.safety || []).filter((e) => e.type === 'route').forEach((e) => { s += SG.safetyRoute(X(e.x), Y(e.y), X(e.x2), Y(e.y2), 2.4); });
         (d.safety || []).forEach((e) => {
             const bad = sfIssues.get(e.id);
@@ -1564,13 +1603,20 @@ function renderSvg() {
             const py = Y(e.y);
             const zone = (d.zones.find((z) => z.id === e.zoneId) || {}).name;
             const why = bad ? Object.values(bad).map(safetyIssueText).join(' · ') : '';
-            const title = `<title>${esc(e.code || '')} · ${esc(typeLabel('safety', e.type))}${e.name ? ` · ${esc(e.name)}` : ''}${zone ? ` · ${esc(zone)}` : ''}${why ? `\n${esc(why)}` : ''}</title>`;
+            const due = LC.safetyStatus(e, today, d.safetyWarnDays);
+            const title = `<title>${esc(e.code || '')} · ${esc(typeLabel('safety', e.type))}${e.name ? ` · ${esc(e.name)}` : ''}${zone ? ` · ${esc(zone)}` : ''}${why ? `\n${esc(why)}` : ''}${due.state !== 'none' ? `\n${esc(safetyStatusText(due))}` : ''}</title>`;
             if (e.type === 'route') {
                 s += `<g class="lsafe" data-sfid="${esc(e.id)}"><circle cx="${px}" cy="${py}" r="3.4" fill="${LC.SAFETY_COLORS.route}" stroke="#14602F" stroke-width="0.9"/>${title}</g>${SG.safetyLabel(px, py - 7, e.code || '')}`;
                 if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="9"/>`;
             } else {
                 s += `<g class="lsafe" data-sfid="${esc(e.id)}">${SG.safetyGlyph(e.type, px, py, rs)}${title}</g>${SG.safetyLabel(px, py - rs - 3, e.code || '')}`;
                 if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="${rs + 4}"/>`;
+            }
+            // por vencer = aro ámbar y vencido = aro rojo (con su palabra debajo), para verlos de lejos
+            if (due.state === 'soon' || due.state === 'overdue') {
+                const col = due.state === 'overdue' ? '#C0392B' : '#E8892B';
+                const rr = (e.type === 'route' ? 3.4 : rs) + 5;
+                s += `<circle cx="${px}" cy="${py}" r="${rr}" fill="none" stroke="${col}" stroke-width="2.6" pointer-events="none"/>${SG.safetyLabel(px, py + rr + 8, t(due.state === 'overdue' ? 'main.layoutSgMapLate' : 'main.layoutSgMapSoon'), 'middle', col)}`;
             }
         });
     }
@@ -1995,6 +2041,10 @@ function onEdit(event) {
         // El Sitio (arriba del nombre de la empresa en el reporte y la tarjeta): sin texto se guarda sin ese campo.
         const site = String(value).trim();
         if (site) state.draft.siteName = site; else delete state.draft.siteName;
+    } else if (list === 'safetyWarn') {
+        // los días de aviso de «Por vencer»: de fábrica 30 (solo se guarda si es otro número, de 1 a 365)
+        const n = Math.round(value);
+        if (n >= 1 && n <= 365 && n !== LC.SAFETY_WARN_DAYS) state.draft.safetyWarnDays = n; else delete state.draft.safetyWarnDays;
     } else if (list === 'allHeights') {
         // Misma altura en todas las esquinas: se escribe una vez y se copia a cada renglón (los renglones ya dibujados se actualizan sin redibujar el formulario).
         if (value > 0) {
@@ -2035,6 +2085,13 @@ function onEdit(event) {
         const key = el.getAttribute('data-k');
         if (list === 'objects' && key === 'equipId') {
             setObjectEquip(row, el.value);
+        } else if (list === 'safety' && (key === 'expires' || key === 'next')) {
+            // las fechas son opcionales: vacío = el elemento se guarda sin ella
+            const raw = String(el.value).trim();
+            if (raw) row[key] = raw; else delete row[key];
+        } else if (list === 'safety' && key === 'every') {
+            const n = Math.round(parseFloat(el.value));
+            if (n >= 1) row.every = Math.min(n, 3650); else delete row.every;
         } else if (list === 'safety' && key === 'type') {
             setSafetyType(row, el.value);
         } else if (list === 'transit' && key === 'h') {
