@@ -142,7 +142,12 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-zonas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-localizadores', 'layout-paredes'];
+const FILTER_TABLE_IDS = ['layout-zonas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-localizadores', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-objetos', 'layout-transito'];
+// Qué tabla con filtro corresponde a cada lista que se agrega: al agregar un renglón se quitan sus filtros para que el nuevo siempre se vea.
+const FILTER_OF_LIST = { obstacles: 'layout-obstaculos', doors: 'layout-puertas', power: 'layout-luz', sensors: 'layout-sensores', safety: 'layout-seguridad', transit: 'layout-transito', objects: 'layout-objetos', vertices: 'layout-contorno-esquinas', contornoLados: 'layout-contorno-lados' };
+function clearFilterOf(list) {
+    if (window.Dashboard && Dashboard.clearExternalColumnFilters && FILTER_OF_LIST[list]) Dashboard.clearExternalColumnFilters(FILTER_OF_LIST[list]);
+}
 function bindLayoutFilters(root = document.getElementById('layout-panel')) {
     if (!window.Dashboard || !Dashboard.bindExternalColumnFilters || !root) return;
     root.querySelectorAll('table[data-filter-table]').forEach((tbl) => {
@@ -286,7 +291,7 @@ function sidesBlockHtml(key, dis) {
         : `<td><input type="number" step="0.1" min="0.1" max="89.9" ${attr}="tilt:${idx(i)}" data-help-key="layoutSideTilt" value="${Math.round(sideTilt(s) * 100) / 100}"${dis ? ' disabled' : ''}></td>`);
     const rows = sh.sides.map((s, i) => `<tr><td class="layout-calc">${esc(t('main.layoutLado'))} ${i + 1}</td><td><select ${attr}="dir:${idx(i)}" data-help-key="layoutSideDir"${dis ? ' disabled' : ''}>${dirOptions(sideDirKey(s))}</select></td>${tiltCell(s, i)}<td><input type="number" step="0.01" min="0" ${attr}="len:${idx(i)}" data-help-key="layoutSideLen" value="${s[1]}"${dis ? ' disabled' : ''}></td>${isC ? `<td><input type="number" step="0.1" min="0" ${attr}="h:${idx(i)}" value="${sh.heights[i] != null ? sh.heights[i] : ''}"${dis ? ' disabled' : ''}></td>` : ''}<td><div class="layout-rowbtns"><button type="button" class="layout-x" data-sins="${esc(key)}:${i}" data-help-key="layoutSideInsert" aria-label="${esc(t('main.layoutInsertarLado'))}"${dis ? ' disabled' : ''}>+</button><button type="button" class="layout-x" data-sdel="${esc(key)}:${i}" data-help-key="layoutRemoveRow" aria-label="${esc(t('main.layoutQuitar'))}"${dis ? ' disabled' : ''}>✕</button></div></td></tr>`);
     const head = isC ? ['main.layoutLado', 'main.layoutHaciaDonde', 'main.layoutInclinacion', 'main.layoutMide', 'main.layoutAlturaEsquina', ''] : ['main.layoutLado', 'main.layoutHaciaDonde', 'main.layoutInclinacion', 'main.layoutMide', ''];
-    return `<div class="layout-fl"><label>${esc(t('main.layoutEmpiezaX'))}<input type="number" step="0.05" ${attr}="ox${sfx}" data-help-key="layoutOrigin" value="${sh.origin[0]}"${dis ? ' disabled' : ''}></label><label>${esc(t('main.layoutEmpiezaY'))}<input type="number" step="0.05" ${attr}="oy${sfx}" data-help-key="layoutOrigin" value="${sh.origin[1]}"${dis ? ' disabled' : ''}></label></div>${table(head, rows)}<div class="layout-sidesbar"><button type="button" class="btn btn-secondary layout-add" data-sadd="${esc(key)}"${isC ? ' data-main-add="1"' : ''} data-help-key="layoutSideAdd"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarLado'))}</button><span data-sides-status="${esc(key)}">${sidesStatusHtml(key, dis)}</span></div>`;
+    return `<div class="layout-fl"><label>${esc(t('main.layoutEmpiezaX'))}<input type="number" step="0.05" ${attr}="ox${sfx}" data-help-key="layoutOrigin" value="${sh.origin[0]}"${dis ? ' disabled' : ''}></label><label>${esc(t('main.layoutEmpiezaY'))}<input type="number" step="0.05" ${attr}="oy${sfx}" data-help-key="layoutOrigin" value="${sh.origin[1]}"${dis ? ' disabled' : ''}></label></div>${table(head, rows, isC ? 'layout-contorno-lados' : undefined)}<div class="layout-sidesbar"><button type="button" class="btn btn-secondary layout-add" data-sadd="${esc(key)}"${isC ? ' data-main-add="1"' : ''} data-help-key="layoutSideAdd"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarLado'))}</button><span data-sides-status="${esc(key)}">${sidesStatusHtml(key, dis)}</span></div>`;
 }
 function zoneSidesPanelHtml(dis) {
     const z = state.draft.zones.find((r) => r.id === state.zoneOpen);
@@ -863,6 +868,7 @@ function addObject(kind) {
     const item = LC.transitCatalogOf(d).find((c) => c.status === 'active' && c.kind === kind);
     if (!item) { Dashboard.showToast(t('main.layoutObjetoSinCatalogo'), 'warning'); return; }
     d.objects = d.objects || [];
+    clearFilterOf('objects');
     const xs = d.vertices.map((p) => p[0]);
     const ys = d.vertices.map((p) => p[1]);
     const n = d.objects.length;
@@ -915,7 +921,7 @@ function stepHtml(step) {
         const sameHeight = heights.every((h) => h === heights[0]) ? heights[0] : '';
         const shape = mode === 'sides'
             ? sidesBlockHtml('contorno', dis)
-            : `${table(['main.layoutEsquina', 'main.layoutX', 'main.layoutY', 'main.layoutAlturaEsquina', 'main.layoutPared', ''], rows)}${addButton('vertices', 'main.layoutAgregarEsquina', dis, true)}`;
+            : `${table(['main.layoutEsquina', 'main.layoutX', 'main.layoutY', 'main.layoutAlturaEsquina', 'main.layoutPared', ''], rows, 'layout-contorno-esquinas')}${addButton('vertices', 'main.layoutAgregarEsquina', dis, true)}`;
         // El botón de agregar un lado (o una esquina) va arriba, junto al título del paso. Las paredes y los obstáculos tienen sus propios pasos.
         return `${modeBar}<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label><label data-help-key="layoutSite">${esc(t('main.layoutSitio'))}<input type="text" maxlength="${LC.LIMITS.text}" data-l="siteName" value="${esc(d.siteName || '')}" placeholder="${esc(t('main.layoutSitioEjemplo'))}"${dis ? ' disabled' : ''}></label></div>
             ${shape}`;
@@ -924,7 +930,7 @@ function stepHtml(step) {
         // Cada renglón es un OBSTÁCULO que no es pared: una columna, un desnivel (un tramo del piso más alto o más bajo) u otra cosa que estorbe. Va sobre un lado del contorno o dentro de la nave. Las paredes tienen su propio paso.
         // Es la misma lista de obstáculos de antes (cada renglón conserva su lugar en ella).
         const rows = d.obstacles.map((o, i) => (o.kind === 'wall' ? '' : obstacleRowHtml(o, i, dis))).filter(Boolean);
-        const list = rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', 'main.layoutAlturaDesnivel', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutObstaculosVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', 'main.layoutAlturaDesnivel', ''], rows, 'layout-obstaculos') : `<p class="layout-muted">${esc(t('main.layoutObstaculosVacio'))}</p>`;
         return `${addButton('obstacles', 'main.layoutAgregarObstaculo', dis, true)}${list}`;
     }
     if (step === 'paredes') {
@@ -938,18 +944,18 @@ function stepHtml(step) {
     if (step === 'puertas') {
         // Una puerta SIEMPRE va sobre una pared: se elige cuál (de las del paso Paredes) y se mide desde el inicio de esa pared; la pared dice cuánto mide y qué tan alta es, y la puerta no se puede pasar de ninguna de las dos.
         const rows = d.doors.map((x, i) => `<tr>${cellText('doors', i, 'name', x.name, dis)}${cellSelect('doors', i, 'type', optionsHtml('door', LC.DOOR_TYPES, x.type), dis)}${cellSelect('doors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('doors', i, 'dist', x.dist, dis)}${cellNum('doors', i, 'width', x.width, dis)}${cellNum('doors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="doors:${i}">${wallInfoCell('doors', x, 'len')}</td><td class="layout-calc" data-wi-h="doors:${i}">${wallInfoCell('doors', x, 'h')}</td>${removeCell('doors', i, dis)}</tr>`);
-        return `${addButton('doors', 'main.layoutAgregarPuerta', dis, true)}${rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutPuertasVacio'))}</p>`}<div class="layout-vio" data-wi-issues="doors" hidden></div>`;
+        return `${addButton('doors', 'main.layoutAgregarPuerta', dis, true)}${rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', ''], rows, 'layout-puertas') : `<p class="layout-muted">${esc(t('main.layoutPuertasVacio'))}</p>`}<div class="layout-vio" data-wi-issues="doors" hidden></div>`;
     }
     if (step === 'luz') {
         // Una conexión de luz SIEMPRE va sobre una pared (igual que una puerta): se elige cuál y se mide desde el inicio de esa pared; la pared dice cuánto mide y qué tan alta es.
         const rows = d.power.map((x, i) => `<tr>${cellSelect('power', i, 'type', optionsHtml('power', LC.POWER_TYPES, x.type), dis)}${cellSelect('power', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('power', i, 'dist', x.dist, dis)}${cellNum('power', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="power:${i}">${wallInfoCell('power', x, 'len')}</td><td class="layout-calc" data-wi-h="power:${i}">${wallInfoCell('power', x, 'h')}</td>${removeCell('power', i, dis)}</tr>`);
-        return `${table(['main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', ''], rows)}${addButton('power', 'main.layoutAgregarConexion', dis, true)}<div class="layout-vio" data-wi-issues="power" hidden></div>`;
+        return `${table(['main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', ''], rows, 'layout-luz')}${addButton('power', 'main.layoutAgregarConexion', dis, true)}<div class="layout-vio" data-wi-issues="power" hidden></div>`;
     }
     if (step === 'sensores') {
         // Cada renglón es un SENSOR de temperatura y/o humedad, colocado sobre una pared como las conexiones de luz. El código (S001…) lo pone el sistema y la zona sale de dónde queda el sensor: no se capturan.
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
         const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td><td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${removeCell('sensors', i, dis)}</tr>`);
-        return `${table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutZona', ''], rows)}${addButton('sensors', 'main.layoutAgregarSensor', dis, true)}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
+        return `${table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutZona', ''], rows, 'layout-sensores')}${addButton('sensors', 'main.layoutAgregarSensor', dis, true)}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
     }
     if (step === 'seguridad') {
         // Cada renglón es un ELEMENTO de seguridad (extintor, hidrante, puerta de emergencia, botiquín, alarma o pulsador, regadera y lavaojos, punto de reunión o ruta de evacuación): un punto puesto en el plano con X e Y, en metros.
@@ -962,7 +968,7 @@ function stepHtml(step) {
             const size = route ? '<td class="layout-calc">—</td>'.repeat(4) : ['elev', 'l', 'w', 'h'].map((k) => safetySizeCell(e, i, k, dis)).join('');
             return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}${size}<td><input type="date" data-l="safety" data-i="${i}" data-k="expires" value="${esc(e.expires || '')}"${dis ? ' disabled' : ''}></td><td><input type="number" step="1" min="1" max="3650" data-l="safety" data-i="${i}" data-k="every" value="${e.every || ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><input type="date" data-l="safety" data-i="${i}" data-k="next" value="${esc(e.next || '')}"${dis ? ' disabled' : ''}><small class="layout-sg-eff" data-sf-next="${i}">${esc(safetyNextNote(e))}</small></td><td class="layout-calc" data-sf-last="${i}">${safetyLastHtml(e)}</td><td class="layout-calc" data-sf-status="${i}">${safetyStatusTag(e)}</td>${removeCell('safety', i, dis)}</tr>`;
         });
-        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutAlturaPiso', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgUltima', 'main.layoutSgEstado', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutAlturaPiso', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgUltima', 'main.layoutSgEstado', ''], rows, 'layout-seguridad') : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
         // arriba: los contadores (Vigentes, Por vencer, Vencidos, Sin fecha) y con cuántos días de anticipación sale «Por vencer» (de fábrica 30); abajo, los vencidos
         const bar = `<div class="layout-sg-bar"><div class="layout-sg-counts" data-sf-counts data-help-key="layoutSgConteo">${safetyCountsHtml()}</div><div class="layout-fl"><label data-help-key="layoutSgAvisar">${esc(t('main.layoutSgAvisarCon'))}<input type="number" min="1" max="365" step="1" data-l="safetyWarn" value="${d.safetyWarnDays || LC.SAFETY_WARN_DAYS}"${dis ? ' disabled' : ''}></label></div></div>`;
         return `${addButton('safety', 'main.layoutAgregarSeguridad', dis, true)}${bar}${list}<div class="layout-vio" data-sf-issues hidden></div><div class="layout-due" data-sf-due hidden></div>`;
@@ -974,7 +980,7 @@ function stepHtml(step) {
         const equipOptions = (o) => `${o.equipId ? '' : '<option value="" selected>—</option>'}${catalog.filter((c) => c.status === 'active' || Number(c.id) === Number(o.equipId)).map((c) => `<option value="${c.id}"${Number(c.id) === Number(o.equipId) ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}`;
         const rows = (d.objects || []).map((o, i) => `<tr>${cellText('objects', i, 'name', o.name, dis)}${cellSelect('objects', i, 'equipId', equipOptions(o), dis)}${cellNum('objects', i, 'x', o.x, dis)}${cellNum('objects', i, 'y', o.y, dis)}${cellNum('objects', i, 'angle', o.angle || 0, dis, '5')}<td class="layout-calc">${fmt(o.l)}</td><td class="layout-calc">${fmt(o.w)}</td><td class="layout-calc">${fmt(o.h || 0)}</td>${removeCell('objects', i, dis)}</tr>`);
         const addBtn = (type, key) => `<button type="button" class="btn btn-secondary layout-add" data-add-object="${type}" data-main-add="1" data-help-key="layoutObjetoAgregar"${dis ? ' disabled' : ''}>${esc(t(key))}</button>`;
-        const list = rows.length ? table(['main.layoutNombre', 'main.layoutEquipoPersona', 'main.layoutX', 'main.layoutY', 'main.layoutGiro', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutObjetosVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutNombre', 'main.layoutEquipoPersona', 'main.layoutX', 'main.layoutY', 'main.layoutGiro', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', ''], rows, 'layout-objetos') : `<p class="layout-muted">${esc(t('main.layoutObjetosVacio'))}</p>`;
         return `${addBtn('person', 'main.layoutAgregarPersona')}${addBtn('forklift', 'main.layoutAgregarMontacargas')}${list}`;
     }
     if (step === 'transito') {
@@ -989,7 +995,7 @@ function stepHtml(step) {
         });
 
         const issues = `<div class="layout-vio" data-tr-issues hidden></div>`;
-        const list = rows.length ? table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutTipo', 'main.layoutQuienTransita', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAltoLibre', 'main.layoutSuperficie', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutTransitoVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutTipo', 'main.layoutQuienTransita', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAltoLibre', 'main.layoutSuperficie', ''], rows, 'layout-transito') : `<p class="layout-muted">${esc(t('main.layoutTransitoVacio'))}</p>`;
         return `${addButton('transit', 'main.layoutAgregarPasillo', dis, true)}${list}${issues}`;
     }
     if (step === 'zonas') {
@@ -2379,7 +2385,7 @@ $('layout-panel').addEventListener('click', (event) => {
     const cmode = event.target.closest('[data-cmode]');
     if (cmode) { state.contornoMode = cmode.dataset.cmode; renderPanel(); return; }
     const sadd = event.target.closest('[data-sadd]');
-    if (sadd) { addSide(sadd.dataset.sadd); panelScrollEnd = true; renderPanel(); refreshLive(); return; }
+    if (sadd) { if (sadd.dataset.sadd === 'contorno') clearFilterOf('contornoLados'); addSide(sadd.dataset.sadd); panelScrollEnd = true; renderPanel(); refreshLive(); return; }
     const sdel = event.target.closest('[data-sdel]');
     if (sdel) {
         const v = sdel.dataset.sdel;
@@ -2393,15 +2399,16 @@ $('layout-panel').addEventListener('click', (event) => {
     if (sins) {
         const v = sins.dataset.sins;
         const at = v.lastIndexOf(':');
+        if (v.slice(0, at) === 'contorno') clearFilterOf('contornoLados');
         insertSide(v.slice(0, at), Number(v.slice(at + 1)));
         renderPanel();
         refreshLive();
         return;
     }
     const sclose = event.target.closest('[data-sclose]');
-    if (sclose) { closeSides(sclose.dataset.sclose); renderPanel(); refreshLive(); return; }
+    if (sclose) { if (sclose.dataset.sclose === 'contorno') clearFilterOf('contornoLados'); closeSides(sclose.dataset.sclose); renderPanel(); refreshLive(); return; }
     const sline = event.target.closest('[data-sline]');
-    if (sline) { closeLine(sline.dataset.sline); renderPanel(); refreshLive(); return; }
+    if (sline) { if (sline.dataset.sline === 'contorno') clearFilterOf('contornoLados'); closeLine(sline.dataset.sline); renderPanel(); refreshLive(); return; }
     const catsZone = event.target.closest('[data-catszone]');
     if (catsZone) { const id = catsZone.dataset.catszone; state.catsOpen = state.catsOpen === id ? null : id; state.catEdit = null; renderPanel(); return; }
     const catAdd = event.target.closest('[data-cat-add]');
@@ -2483,6 +2490,7 @@ $('layout-panel').addEventListener('click', (event) => {
         const noWallMsg = { doors: 'main.layoutPuertaSinPared', power: 'main.layoutLuzSinPared', sensors: 'main.layoutSensorSinPared' }[list];
         if (noWallMsg && !(state.draft.obstacles || []).some((o) => o.kind === 'wall')) { Dashboard.showToast(t(noWallMsg), 'warning'); return; }
         if (list === 'zones') clearLayoutFilters();
+        clearFilterOf(list);
         // una huella nueva es SOLO la huella (el lugar en el piso): los activos que se pongan encima se dan de alta después, en el paso Activos
         (state.draft[list] = state.draft[list] || []).push(ROW_FACTORY[list]());
         if (list === 'vertices') state.open.contorno = false;
