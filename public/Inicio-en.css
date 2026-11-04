@@ -967,7 +967,6 @@
         margin-top: 0.8rem;
         padding: 0.45rem 0.5rem;
         overflow: hidden;
-        white-space: nowrap;
     }
     .sidebar-user-card .user-card-avatar{
         position: relative;
@@ -1002,9 +1001,9 @@
         min-width: 0;
         line-height: 1.25;
     }
+    /* El nombre y el rol nunca se cortan con «…»: si no caben en un renglón, bajan al siguiente. */
     .sidebar-user-card .user-card-name{
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow-wrap: anywhere;
         font-size: 0.78rem;
         font-weight: 600;
         color: var(--color-text-primary);
@@ -1019,8 +1018,7 @@
     }
     .sidebar-user-card .user-card-role-text{
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow-wrap: anywhere;
     }
     .sidebar-user-card .user-card-badge{
         flex: none;

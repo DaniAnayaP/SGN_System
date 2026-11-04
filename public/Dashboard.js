@@ -1740,6 +1740,10 @@ function renderMenu(data) {
         footerMount.appendChild(li);
     });
 
+    // Sin ninguna opción en el menú (por ejemplo una cuenta recién creada, sin nada asignado) tampoco sale el buscador: no habría nada que buscar.
+    const searchBox = document.querySelector('.menu-container .search');
+    if (searchBox) searchBox.style.display = mount.querySelector('.menu-link, .sub-menu-link') ? '' : 'none';
+
     wireMenuInteractions();
     applySubmenuAbbreviations();
 }
@@ -12562,6 +12566,9 @@ const SCREEN_GRANT_PATHS = {
 };
 
 function hasScreenAccess(activePage) {
+    // Panel.html: igual que en el menú, solo con el permiso Panel del árbol (el administrador del cliente sin configuración propia siempre). Inicio-en.html NO se bloquea: es la página a la que se llega al entrar
+    // (vacía, sin datos) y desde ella se llega a lo que la cuenta sí tiene.
+    if (activePage === 'panel') return hasMainButtonPermission('panel');
     const path = SCREEN_GRANT_PATHS[activePage];
     if (!path) return true; // not one of the mapped pages — unaffected, same as today
     return hasScreenGrant(path.sectionId, path.itemId, path.submenuPrefix);
