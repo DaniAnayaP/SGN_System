@@ -131,7 +131,9 @@
             legPos.push({ item, x: legX, row: legRow });
             legX += 30 * f + textW + 26 * f;
         });
-        const legendH = tiny ? 0 : 28 * f * (legRow + 1) + 12 * f;
+        // La leyenda (la simbología) se puede quitar de la hoja (data.view.legend = false): el mapa ocupa el lugar que deja.
+        const showLegend = !tiny && view.legend !== false;
+        const legendH = tiny ? 0 : (showLegend ? 28 * f * (legRow + 1) + 12 * f : 8 * f);
         const frameBottom = lineY - legendH;
         // mapa y tarjetas
         let frameX = m;
@@ -180,7 +182,7 @@
         const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700, layers, measures: view.measures !== false, area: view.area !== false, names: view.names !== false, rotation: view.rotation || 0 }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
         s += `<svg x="${frameX + 10 * f}" y="${top + 10 * f}" width="${innerW}" height="${innerH}" viewBox="0 0 700 ${h700}" preserveAspectRatio="xMidYMid meet">${mapInner}</svg>`;
         legPos.forEach(({ item: [key, text, zone], x, row }) => {
-            if (tiny) return;
+            if (tiny || !showLegend) return;
             const ly = frameBottom + 4 * f + row * 28 * f;
             const sw = 20 * f;
             if (zone) {

@@ -3709,7 +3709,7 @@ async function loadSheetData() {
     return { data, logoRatio: await logoRatioOf(data.logoDataUrl) };
 }
 // Con o sin medidas y m² para lo que se imprime: lo que se eligió en la ventana de descarga (si está abierta) o, si no, lo que se ve en el croquis.
-const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals: true, rotation: state.rotation || 0 };
+const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals: true, legend: true, rotation: state.rotation || 0 };
 function buildSheetSvgFrom(loaded) {
     const { data, logoRatio } = loaded;
     return window.LayoutSheet.buildSheetSvg({
@@ -3718,7 +3718,7 @@ function buildSheetSvgFrom(loaded) {
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, rotation: sheetView().rotation },
+        view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, legend: sheetView().legend, rotation: sheetView().rotation },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {
@@ -3741,6 +3741,7 @@ function ensureSheetModal() {
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-area" data-sheet-tgl="area" aria-pressed="true"><i class="bx bx-area" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConM2'))}</span></button>
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-names" data-sheet-tgl="names" aria-pressed="true"><i class="bx bx-rename" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConNombres'))}</span></button>
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-totals" data-sheet-tgl="totals" aria-pressed="true"><i class="bx bx-bar-chart-alt-2" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConTotales'))}</span></button>
+                <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-legend" data-sheet-tgl="legend" aria-pressed="true"><i class="bx bx-list-ul" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConSimbologia'))}</span></button>
                 <button type="button" class="layout-sheet-tgl layout-sheet-rot" id="layout-sheet-rot" data-sheet-rot="1" aria-pressed="false"><i class="bx bx-rotate-right" aria-hidden="true"></i><span>${esc(t('main.layoutGirarBtn'))}</span></button></div>
             <div class="layout-sizebar-info" id="layout-size-info"></div></div>
         <div class="layout-sheet-preview layout-card-preview" id="layout-sheet-preview"></div>
@@ -3760,7 +3761,8 @@ function ensureSheetModal() {
         if (tgl && sheetDialog) {
             sheetDialog.view[tgl.dataset.sheetTgl] = !sheetDialog.view[tgl.dataset.sheetTgl];
             // Con o sin los totales se recuerda en este navegador (como el tamaño de la hoja); medidas y m² siguen lo que se ve en el croquis.
-            if (tgl.dataset.sheetTgl === 'totals') { try { localStorage.setItem(SHEET_TOTALS_KEY, sheetDialog.view.totals ? '1' : '0'); } catch (err) { /* no se recuerda */ } }
+            const rememberKey = { totals: SHEET_TOTALS_KEY, legend: SHEET_LEGEND_KEY }[tgl.dataset.sheetTgl];
+            if (rememberKey) { try { localStorage.setItem(rememberKey, sheetDialog.view[tgl.dataset.sheetTgl] ? '1' : '0'); } catch (err) { /* no se recuerda */ } }
             syncSheetToggles();
             renderSheetPreview();
             return;
@@ -3795,10 +3797,11 @@ function ensureSheetModal() {
 }
 // Los iconos de la ventana (medidas, m² y nombres): solo salen si se tiene el icono correspondiente del árbol, igual que en el croquis.
 const SHEET_TOTALS_KEY = 'sgn_layout_sheet_totals';
+const SHEET_LEGEND_KEY = 'sgn_layout_sheet_legend';
 function syncSheetToggles() {
     if (!sheetDialog || !sheetModalEl) return;
     // Los totales (las cifras de m² y m³ de abajo) no tienen icono propio en el croquis: quien puede descargar la hoja (Códigos QR) puede elegir si los lleva.
-    [['measures', 'canToggleMeasures', 'main.layoutMedidasOcultar', 'main.layoutMedidasVer'], ['area', 'canToggleArea', 'main.layoutAreaOcultar', 'main.layoutAreaVer'], ['names', 'canToggleNames', 'main.layoutNombresOcultar', 'main.layoutNombresVer'], ['totals', 'canUseQr', 'main.layoutTotalesOcultar', 'main.layoutTotalesVer']].forEach(([key, perm, hideKey, showKey]) => {
+    [['measures', 'canToggleMeasures', 'main.layoutMedidasOcultar', 'main.layoutMedidasVer'], ['area', 'canToggleArea', 'main.layoutAreaOcultar', 'main.layoutAreaVer'], ['names', 'canToggleNames', 'main.layoutNombresOcultar', 'main.layoutNombresVer'], ['totals', 'canUseQr', 'main.layoutTotalesOcultar', 'main.layoutTotalesVer'], ['legend', 'canUseQr', 'main.layoutSimbologiaOcultar', 'main.layoutSimbologiaVer']].forEach(([key, perm, hideKey, showKey]) => {
         const btn = sheetModalEl.querySelector(`[data-sheet-tgl="${key}"]`);
         const allowed = !!(state.perms && state.perms[perm]);
         btn.hidden = !allowed;
@@ -3826,8 +3829,9 @@ async function openSheetDialog(kind) {
     ensureSheetModal();
     // Al abrir, la hoja sale como se ve el croquis (con o sin medidas y m²); aquí mismo se puede cambiar solo para esta descarga.
     let totals = true;
-    try { totals = localStorage.getItem(SHEET_TOTALS_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se incluyen */ }
-    sheetDialog = { kind, loaded, view: { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals, rotation: state.rotation || 0 } };
+    let legend = true;
+    try { totals = localStorage.getItem(SHEET_TOTALS_KEY) !== '0'; legend = localStorage.getItem(SHEET_LEGEND_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se incluyen */ }
+    sheetDialog = { kind, loaded, view: { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals, legend, rotation: state.rotation || 0 } };
     syncSheetToggles();
     $('layout-size-w').value = sheetSize.w;
     $('layout-size-h').value = sheetSize.h;

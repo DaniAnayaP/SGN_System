@@ -1921,6 +1921,9 @@
     "layoutHojaConTotales": "Totals",
     "layoutTotalesOcultar": "Remove the totals from the sheet",
     "layoutTotalesVer": "Put the totals on the sheet",
+    "layoutHojaConSimbologia": "Legend",
+    "layoutSimbologiaOcultar": "Remove the legend from the sheet",
+    "layoutSimbologiaVer": "Put the legend on the sheet",
     "layoutAreaOcultar": "Hide m²",
     "layoutAreaVer": "Show m²",
     "layoutNombresBtn": "Show and hide the names of the zones",
@@ -4266,8 +4269,8 @@
       "example": "you hide the m² so the sketch only shows the zone names and show them again to check how big each one is."
     },
     "layoutSheetContent": {
-      "what": "Choose what the downloaded sheet carries: the measures (length of each wall, corner heights and the measure of each zone side), the m² of each zone and the totals (the m² and m³ figures at the bottom: total area, offices, aisles, storage, dead space and volume). When off, that part is not printed and the sketch takes its place. It only changes this download: the screen is not touched, and the preview updates at once.",
-      "example": "to stick the Layout at the entrance you turn the measures off and the sheet shows only the zone names; for the construction plan you leave them on."
+      "what": "Choose what the downloaded sheet carries: the measures (length of each wall, corner heights and the measure of each zone side), the m² of each zone, the totals (the m² and m³ figures at the bottom: total area, offices, aisles, storage, dead space and volume) and the legend (the key with the colors and symbols used in the sketch). When off, that part is not printed and the sketch takes its place. It only changes this download: the screen is not touched, and the preview updates at once.",
+      "example": "to stick the Layout at the entrance you turn the measures off and the sheet shows only the zone names; for the construction plan you leave them on; if the sketch is clear enough that the legend is not needed, you turn it off and the map gets bigger."
     },
     "layoutNames": {
       "what": "Shows or hides the name of each zone on the sketch. If the m² are visible they stay, in the place of the name. The downloaded sheet (PDF or image) comes out as you see it and in the download window you can change it for that download only; the public QR view does not change and the tables keep showing the names.",
