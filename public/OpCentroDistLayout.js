@@ -99,6 +99,22 @@ function rangeCells(s, i, disabled) {
     if (s.type !== 'cold') return RANGE_KEYS.map(() => '<td class="layout-calc">—</td>').join('');
     return RANGE_KEYS.map((key) => `<td><input type="number" step="0.1" ${key.startsWith('temp') ? 'min="-100" max="100"' : 'min="0" max="100"'} data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="layoutRango" value="${s[key] === undefined || s[key] === null ? '' : s[key]}"${disabled ? ' disabled' : ''}></td>`).join('');
 }
+// El lugar y las medidas PROPIOS de un activo dentro de su huella (opcionales): X e Y = distancia desde la esquina de la huella; largo, fondo y alto = las medidas del activo. Vacío = se acomoda solo (uno junto al otro en el orden
+// de la tabla, pegado al borde y con las medidas de la huella; ver LayoutCalc.placeGroup): lo que toma ahora se ve en gris dentro de la caja.
+const OWN_KEYS = LC.OWN_SPACE_KEYS;
+function ownEffective(s) {
+    const f = state.draft.footprints.find((p) => p.id === s.footprintId);
+    if (!f) return {};
+    return { ox: round2(s.x - f.x), oy: round2(s.y - f.y), ol: s.l, od: s.d, oh: s.h };
+}
+function ownCells(s, i, disabled) {
+    const eff = ownEffective(s);
+    const bad = spIssues.get(s.id) || {};
+    return OWN_KEYS.map((key) => {
+        const flag = key === 'oh' ? bad.tall : (bad.sum || bad.out || bad.overlap);
+        return `<td><input type="number" step="0.1" min="${key === 'ox' || key === 'oy' ? 0 : 0.01}" data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="layoutActivoMedidas"${flag ? ' class="layout-missing"' : ''} value="${s[key] === undefined || s[key] === null ? '' : s[key]}" placeholder="${eff[key] === undefined ? '' : eff[key]}"${disabled ? ' disabled' : ''}></td>`;
+    }).join('');
+}
 function cellText(list, i, key, value, disabled) {
     return `<td><input type="text" maxlength="${LC.LIMITS.text}" data-l="${list}" data-i="${i}" data-k="${key}" value="${esc(value)}"${disabled ? ' disabled' : ''}></td>`;
 }
@@ -429,6 +445,26 @@ function footprintZoneView(f) {
     if (issue.out) return { text: `${footprintZoneName(f)} · ${t('main.layoutHuellaNoCabe')}`, bad: true };
     return { text: footprintZoneName(f), bad: false };
 }
+// Los activos de una huella van uno junto al otro y ninguno se sale de ella, es más alto que ella ni se encima con otro (LayoutCalc.spaceViolations): spIssues = id del activo -> { sum | out | tall | overlap }. Sus cajas de lugar
+// y medidas se marcan en rojo; lo que ya estaba mal antes solo se marca, lo nuevo no se deja guardar.
+let spIssues = new Map();
+function computeSpaceIssues() {
+    spIssues = new Map();
+    if (!state.draft) return;
+    LC.spaceViolations(state.draft).forEach((v) => { const m = spIssues.get(v.id) || {}; m[v.kind] = v; spIssues.set(v.id, m); });
+}
+function applyActivoMarks() {
+    (state.draft.spaces || []).forEach((s, i) => {
+        const eff = ownEffective(s);
+        const bad = spIssues.get(s.id) || {};
+        OWN_KEYS.forEach((key) => {
+            const box = document.querySelector(`[data-l="spaces"][data-i="${i}"][data-k="${key}"]`);
+            if (!box) return;
+            if (eff[key] !== undefined) box.placeholder = String(eff[key]);
+            box.classList.toggle('layout-missing', !!(key === 'oh' ? bad.tall : (bad.sum || bad.out || bad.overlap)));
+        });
+    });
+}
 function applyFootprintMarks() {
     state.draft.footprints.forEach((f, i) => {
         const view = footprintZoneView(f);
@@ -554,9 +590,9 @@ function stepHtml(step) {
         const letterOptions = (selected) => LC.SPACE_TYPES.map((id) => `<option value="${id}"${id === (selected || 'rack') ? ' selected' : ''}>${esc(LC.ASSET_LETTER[id])} · ${esc(typeLabel('space', id))}</option>`).join('');
         const rows = d.spaces.map((s, i) => {
             const saved = isSavedRow('spaces', s.id);
-            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptions(s.footprintId)}</select></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${rangeCells(s, i, dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
+            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptions(s.footprintId)}</select></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${ownCells(s, i, dis)}${rangeCells(s, i, dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
         });
-        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutActivoLetra', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', 'main.layoutRangoTempMin', 'main.layoutRangoTempMax', 'main.layoutRangoHumMin', 'main.layoutRangoHumMax', ''], rows, 'layout-activos')}${state.perms && state.perms.canRenumber && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutActivoLetra', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', 'main.layoutActivoPosX', 'main.layoutActivoPosY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutRangoTempMin', 'main.layoutRangoTempMax', 'main.layoutRangoHumMin', 'main.layoutRangoHumMax', ''], rows, 'layout-activos')}${state.perms && state.perms.canRenumber && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una se crea solo la huella (sin activos); los activos que se pongan encima se dan de alta después, en el paso Activos.
@@ -591,7 +627,7 @@ let panelScrollEnd = false;
 const panelScrollers = () => Array.from(document.querySelectorAll('#layout-panel .layout-section-body, #layout-panel .layout-scroll'));
 function renderPanel() {
     // el panel también se dibuja con lo que sale de la huella (zona de cada activo, si está activo): se saca antes de dibujarlo, no solo en refreshLive
-    if (state.draft) { syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; computeFootprintIssues(); }
+    if (state.draft) { syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; computeFootprintIssues(); computeSpaceIssues(); }
     const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
     const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
@@ -616,7 +652,7 @@ function renderPanel() {
     panelScrollStep = state.focus;
     bindLayoutFilters();
     markSelectedRow();
-    if (state.draft) applyFootprintMarks();
+    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); }
     applyFindToTables();
 }
 
@@ -1234,11 +1270,13 @@ function refreshLive() {
     syncHuellas();
     state.draft.spaces = LC.deriveSpaces(state.draft).spaces;
     computeFootprintIssues();
+    computeSpaceIssues();
     state.draft.footprints.forEach((f, i) => {
         const codeCell = document.querySelector(`[data-fp-code="${i}"]`);
         if (codeCell) codeCell.textContent = f.code;
     });
     applyFootprintMarks();
+    applyActivoMarks();
     state.draft.zones.forEach((z, i) => { const cell = document.querySelector(`[data-zone-code="${i}"]`); if (cell) cell.textContent = z.code; });
     // el código y la zona de cada sensor salen de la pared donde se puso: se vuelven a sacar con cada cambio
     (state.draft.sensors || []).forEach((s, i) => {
@@ -1613,6 +1651,11 @@ function onEdit(event) {
         } else if (key === 'assetClassId' || key === 'assetId') {
             const n = parseInt(el.value, 10);
             if (n > 0) row[key] = n; else delete row[key]; // sin elegir = el espacio se guarda sin ese campo
+        } else if (OWN_KEYS.includes(key)) {
+            // el lugar y las medidas propias del activo dentro de su huella: vacío = se acomoda solo
+            const raw = String(el.value).trim();
+            const n = parseFloat(raw);
+            if (raw !== '' && Number.isFinite(n) && n >= (key === 'ox' || key === 'oy' ? 0 : 0.01)) row[key] = n; else delete row[key];
         } else if (RANGE_KEYS.includes(key)) {
             // el rango del refrigerador: vacío = sin ese límite
             const raw = String(el.value).trim();
@@ -2619,6 +2662,17 @@ $('layout-save').addEventListener('click', async () => {
         Dashboard.showToast(t(`main.layoutVio_${v.kind}`, { code: v.code, zone: v.zoneName || '', h: v.h, maxH: v.maxH }), 'warning');
         const at = state.draft.footprints.findIndex((f) => f.id === v.id);
         const box = document.querySelector(`[data-l="footprints"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'h' : 'x'}"]`);
+        if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
+        return;
+    }
+    const freshSpaces = LC.newSpaceViolations(state.draft, state.saved);
+    if (freshSpaces.length) {
+        const v = freshSpaces[0];
+        showStep('activos');
+        renderPanel();
+        Dashboard.showToast(t(`main.layoutVioAct_${v.kind}`, v.vars), 'warning');
+        const at = state.draft.spaces.findIndex((s) => s.id === v.id);
+        const box = document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
         return;
     }

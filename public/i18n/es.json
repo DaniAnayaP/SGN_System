@@ -1693,6 +1693,12 @@
     "layoutLargo": "Largo (m)",
     "layoutAncho": "Ancho (m)",
     "layoutAlto": "Alto (m)",
+    "layoutActivoPosX": "X en la huella (m)",
+    "layoutActivoPosY": "Y en la huella (m)",
+    "layoutVioAct_sum": "Los activos de {fcode} suman {sum} m y la huella mide {len} m: acorta alguno o agranda la huella para poder guardar.",
+    "layoutVioAct_out": "El activo {code} se sale de su huella {fcode}: cambia sus medidas o su posición, o agranda la huella, para poder guardar.",
+    "layoutVioAct_tall": "El activo {code} mide {h} m de alto y su huella {fcode} solo {fh} m: baja su alto para poder guardar.",
+    "layoutVioAct_overlap": "Los activos {other} y {code} están encimados dentro de {fcode}: cambia su posición o sus medidas para poder guardar.",
     "layoutFondo": "Fondo (m)",
     "layoutAgregarObstaculo": "+ Agregar obstáculo",
     "layoutTipo": "Tipo",
@@ -4282,6 +4288,10 @@
     "layoutLocalizadoresLink": {
       "what": "Abre la pantalla Catálogos > Localizadores (solo lectura) con todos los localizadores de todos los centros de costos, su almacén y su sub almacén, filtros e historial. Es el acceso rápido para ir directo, sin pasar por el menú.",
       "example": "quieres buscar un localizador de otro centro de costos: tocas la flechita y filtras ahí."
+    },
+    "layoutActivoMedidas": {
+      "what": "El lugar y las medidas propias de este activo dentro de su huella, todo opcional: X e Y son la distancia desde la esquina de la huella; Largo, Fondo y Alto son sus medidas. Si lo dejas vacío, el activo se acomoda solo: va uno junto al otro con los demás activos de su huella, en el orden de la tabla, pegado al borde, y con las medidas de la huella (el largo que sobra se reparte entre los que no tienen). Lo que tomaría ahora se ve en gris dentro de la caja. Un activo no puede salirse de su huella, ser más alto que ella ni encimarse con otro: lo que no cabe se marca en rojo y no se deja guardar.",
+      "example": "una huella de 5 m con tres anaqueles: al primero le pones Largo 2, al segundo Largo 1.5 y Fondo 1.0, y al tercero lo dejas vacío: toma el 1.5 m que queda y todos van uno junto al otro."
     },
     "layoutQrSensor": {
       "what": "Imprime los QR de los sensores: uno por sensor del Layout (los que marcaste en el paso Sensores), de la zona que elijas o de todas. Cada QR se pega junto a su sensor y, al escanearlo, quien revisa escribe su nombre, lo que marca el sensor (temperatura, humedad o las dos, según su tipo) y toma la foto de la lectura en ese momento (la hora la pone el sistema). Las lecturas se guardan en la misma base de Temperaturas y alimentan el mapa de calor. El QR no cambia nunca, aunque muevas el sensor.",

@@ -31,6 +31,8 @@
     const POWER_TYPES = ['panel', 'outlet110', 'outlet220', 'three-phase'];
     // Sensores de temperatura y humedad: de las dos (both), solo temperatura (temp) o solo humedad (hum).
     const SENSOR_TYPES = ['both', 'temp', 'hum'];
+    // Lo que un activo puede traer de su propio lugar y medidas dentro de su huella (todo opcional): ox, oy = distancia desde la esquina de la huella (m); ol, od, oh = largo (lo que ocupa a lo ancho del dibujo, eje x), fondo (eje y) y alto (m).
+    const OWN_SPACE_KEYS = ['ox', 'oy', 'ol', 'od', 'oh'];
     // Cada sección del Layout cuelga de una columna del árbol de accesos (ver menu.json, colLayout*).
     const SECTIONS = {
         contorno: 'colLayoutContorno',
@@ -555,26 +557,54 @@
         const byId = new Map(layout.footprints.map((f) => [f.id, f]));
         const mates = new Map();
         layout.spaces.forEach((s) => { if (!mates.has(s.footprintId)) mates.set(s.footprintId, []); mates.get(s.footprintId).push(s); });
+        const placed = new Map();
         const spaces = layout.spaces.map((s) => {
             const f = byId.get(s.footprintId);
             // un activo recién agregado todavía sin huella (hay que elegirla): sin lugar en el piso ni medidas, así no suma ni se dibuja hasta que lo ligan a su huella
             if (!f && !s.footprintId) return { ...s, zoneId: '', x: 0, y: 0, l: 0, d: 0, h: 0, active: false };
             if (!f) return s;
             const group = mates.get(f.id);
-            const n = group.length;
-            const i = group.indexOf(s);
-            let { x, y, l, d } = f;
-            if (n > 1) {
-                if ((f.l || 0) >= (f.d || 0)) { const w = round2(f.l / n); x = round2(f.x + w * i); l = i === n - 1 ? round2(f.l - w * (n - 1)) : w; }
-                else { const w = round2(f.d / n); y = round2(f.y + w * i); d = i === n - 1 ? round2(f.d - w * (n - 1)) : w; }
-            }
-            const out = { ...s, zoneId: f.zoneId || '', x, y, l, d, h: f.h, active: s.off !== true && f.active !== false };
+            if (!placed.has(f.id)) placed.set(f.id, placeGroup(f, group));
+            const { x, y, l, d, h } = placed.get(f.id)[group.indexOf(s)];
+            const out = { ...s, zoneId: f.zoneId || '', x, y, l, d, h, active: s.off !== true && f.active !== false };
             if (f.name) out.name = f.name; else delete out.name;
             // El color del activo es PROPIO (Formato de activo): ya no hereda el de su huella, que se dibuja aparte, debajo. En un Layout guardado de antes (sin la marca ownAssetFmt) un formato igual al de su huella viene de cuando lo heredaba y no cuenta como propio.
             if (!layout.ownAssetFmt && s.fmt && f.fmt && sameFmt(s.fmt, f.fmt)) delete out.fmt;
             return out;
         });
         return { ...layout, spaces };
+    }
+
+    // Acomoda los activos de UNA huella uno junto al otro, a lo largo de su lado más largo y en el orden de la tabla. Cada activo puede traer su lugar (ox, oy: distancia desde la esquina de la huella) y sus medidas (ol largo, od fondo,
+    // oh alto); lo que no trae se acomoda solo: el largo del lado se reparte en partes iguales entre los que no lo traen (lo que sobra después de los que sí), empieza justo donde termina el anterior, el fondo es el de la huella y va
+    // pegado al borde (0), y el alto es el de la huella. Sin nada propio queda exactamente como antes (partes iguales). Devuelve, en el mismo orden, { x, y, l, d, h } de cada activo en el piso de la nave.
+    function placeGroup(f, group) {
+        const alongX = (f.l || 0) >= (f.d || 0);
+        const A = alongX ? f.l : f.d; // lo que mide el lado más largo
+        const B = alongX ? f.d : f.l; // lo que hay a lo ancho
+        const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+        const sizeA = (s) => num(alongX ? s.ol : s.od);
+        const sizeB = (s) => num(alongX ? s.od : s.ol);
+        const posA = (s) => num(alongX ? s.ox : s.oy);
+        const posB = (s) => num(alongX ? s.oy : s.ox);
+        const fixed = group.reduce((acc, s) => acc + (sizeA(s) || 0), 0);
+        const freeCount = group.filter((s) => sizeA(s) === null).length;
+        const share = freeCount ? Math.max(0, round2((A - fixed) / freeCount)) : 0;
+        let freeSeen = 0;
+        let cursor = 0;
+        return group.map((s) => {
+            let a = sizeA(s);
+            if (a === null) {
+                freeSeen += 1;
+                // el último sin largo toma exactamente lo que queda (así los redondeos no dejan un pedacito)
+                a = freeSeen === freeCount ? Math.max(0, round2(A - fixed - share * (freeCount - 1))) : share;
+            }
+            const startA = posA(s) !== null ? posA(s) : cursor;
+            cursor = round2(startA + a);
+            const b = sizeB(s) !== null ? sizeB(s) : B;
+            const startB = posB(s) !== null ? posB(s) : 0;
+            return { x: round2(f.x + (alongX ? startA : startB)), y: round2(f.y + (alongX ? startB : startA)), l: alongX ? a : b, d: alongX ? b : a, h: num(s.oh) !== null ? num(s.oh) : f.h };
+        });
     }
 
     // ---- La huella dentro de su zona ---------------------------------------------------------------------------------------------------------
@@ -644,6 +674,48 @@
             const assets = (next.spaces || []).filter((s) => s.footprintId === f.id && oldSpaces.has(s.id) && oldSpaces.get(s.id).code !== s.code).length;
             return { id: f.id, from: locator(from, before), to: locator(to, f), fromZone: from ? from.name : '', toZone: to ? to.name : '', assets };
         }).filter(Boolean);
+    }
+
+    // ---- El activo dentro de su huella -------------------------------------------------------------------------------------------------------
+    // Los activos de una huella van uno junto al otro: ninguno puede salirse de ella ni ser más alto que ella, ni encimarse con otro de la misma huella. Se mira sobre un Layout normalizado (deriveSpaces). Un activo apagado (off) no
+    // cuenta. Igual que con las huellas: lo que ya estaba mal antes y no cambió solo se marca; lo NUEVO o lo que cambió (el activo o su huella) no se deja guardar (ver newSpaceViolations). Cuatro faltas: sum (los activos suman más
+    // que el lado de la huella), out (uno se sale de ella), tall (más alto que ella) y overlap (dos encimados).
+    function spaceViolations(layout) {
+        const out = [];
+        if (!layout || !Array.isArray(layout.footprints) || !Array.isArray(layout.spaces)) return out;
+        const L = deriveSpaces(layout);
+        const byId = new Map(L.footprints.map((f) => [f.id, f]));
+        const groups = new Map();
+        L.spaces.forEach((s) => { if (s.off === true || !byId.has(s.footprintId)) return; if (!groups.has(s.footprintId)) groups.set(s.footprintId, []); groups.get(s.footprintId).push(s); });
+        const eps = 0.005;
+        const m = (n) => String(round2(n));
+        groups.forEach((list, fid) => {
+            const f = byId.get(fid);
+            const fsig = JSON.stringify([f.x, f.y, f.l, f.d, f.h]);
+            const len = (f.l || 0) >= (f.d || 0) ? f.l : f.d;
+            const sum = round2(list.reduce((acc, s) => acc + ((f.l || 0) >= (f.d || 0) ? s.l : s.d), 0));
+            list.forEach((s, i) => {
+                const base = { id: s.id, code: s.code, fcode: f.code };
+                const geo = JSON.stringify([s.x, s.y, s.l, s.d, s.h]) + fsig;
+                if (s.x < f.x - eps || s.y < f.y - eps || s.x + s.l > f.x + f.l + eps || s.y + s.d > f.y + f.d + eps) {
+                    out.push(sum > len + eps
+                        ? { ...base, kind: 'sum', sig: geo, vars: { fcode: f.code, sum: m(sum), len: m(len) }, message: `Los activos de ${f.code} suman ${m(sum)} m y la huella mide ${m(len)} m.` }
+                        : { ...base, kind: 'out', sig: geo, vars: { code: s.code, fcode: f.code }, message: `El activo ${s.code} se sale de su huella ${f.code}: cambia sus medidas o su posición, o agranda la huella.` });
+                }
+                if (s.h > f.h + eps) out.push({ ...base, kind: 'tall', sig: geo, vars: { code: s.code, fcode: f.code, h: m(s.h), fh: m(f.h) }, message: `El activo ${s.code} mide ${m(s.h)} m de alto y su huella ${f.code} solo ${m(f.h)} m.` });
+                for (let j = 0; j < i; j++) {
+                    const o = list[j];
+                    if (s.x < o.x + o.l - eps && o.x < s.x + s.l - eps && s.y < o.y + o.d - eps && o.y < s.y + s.d - eps) {
+                        out.push({ ...base, kind: 'overlap', sig: geo + JSON.stringify([o.id, o.x, o.y, o.l, o.d]), vars: { code: s.code, other: o.code, fcode: f.code }, message: `Los activos ${o.code} y ${s.code} están encimados dentro de ${f.code}.` });
+                    }
+                }
+            });
+        });
+        return out;
+    }
+    function newSpaceViolations(next, previous) {
+        const before = previous ? spaceViolations(previous) : [];
+        return spaceViolations(next).filter((v) => !before.some((p) => p.id === v.id && p.kind === v.kind && p.sig === v.sig));
     }
 
     // ---- Colores: lo que va ADENTRO de algo no lleva el color de lo que lo contiene ------------------------------------------------------------------------
@@ -1053,6 +1125,15 @@
             const humMax = type === 'cold' ? rangeVal(s && s.humMax, 0, 100) : null;
             if (tempMin !== null && tempMax !== null && tempMin > tempMax) errors.push(`${label}: la temperatura mínima no puede ser mayor que la máxima`);
             if (humMin !== null && humMax !== null && humMin > humMax) errors.push(`${label}: la humedad mínima no puede ser mayor que la máxima`);
+            // Lugar y medidas propios dentro de la huella (opcionales; vacío = se acomoda solo, ver placeGroup): la distancia desde la esquina puede ser 0; el largo, el fondo y el alto deben ser mayores que 0.
+            const own = {};
+            [['ox', 0, 'la posición X'], ['oy', 0, 'la posición Y'], ['ol', 0.01, 'el largo'], ['od', 0.01, 'el fondo'], ['oh', 0.01, 'el alto']].forEach(([key, min, what]) => {
+                const raw = s && s[key];
+                if (raw === null || raw === undefined || raw === '') return;
+                const n = Number(raw);
+                if (!Number.isFinite(n) || n < min || n > LIMITS.maxM) { errors.push(`${label}: ${what} debe ser ${min === 0 ? 'cero o más' : 'mayor que 0'} (máximo ${LIMITS.maxM} m)`); return; }
+                own[key] = round2(n);
+            });
             return {
                 id: idOf(s && s.id, spaceIds, label), footprintId, type, code,
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
@@ -1063,6 +1144,7 @@
                 drawers: text(s && s.drawers, label, false),
                 ...(s && s.off === true ? { off: true } : {}),
                 ...(assetFmt ? { fmt: assetFmt } : {}),
+                ...own,
                 ...(tempMin !== null ? { tempMin } : {}), ...(tempMax !== null ? { tempMax } : {}), ...(humMin !== null ? { humMin } : {}), ...(humMax !== null ? { humMax } : {}),
             };
         });
@@ -1240,9 +1322,9 @@
                 const first = !seen.has(s.footprintId);
                 seen.add(s.footprintId);
                 const f = byId.get(s.footprintId);
-                const plain = first && f && (s.type || 'rack') === 'rack' && !s.fmt && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off;
+                const plain = first && f && (s.type || 'rack') === 'rack' && !s.fmt && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off && !OWN_SPACE_KEYS.some((k) => s[k] !== undefined);
                 return !plain;
-            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax'].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
+            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax', ...OWN_SPACE_KEYS].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
         }
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
         if (section === 'posiciones') return (layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays }));
@@ -1259,7 +1341,7 @@
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

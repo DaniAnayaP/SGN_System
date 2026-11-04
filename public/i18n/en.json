@@ -1693,6 +1693,12 @@
     "layoutLargo": "Length (m)",
     "layoutAncho": "Width (m)",
     "layoutAlto": "Height (m)",
+    "layoutActivoPosX": "X in the footprint (m)",
+    "layoutActivoPosY": "Y in the footprint (m)",
+    "layoutVioAct_sum": "The assets of {fcode} add up to {sum} m and the footprint is {len} m: shorten one or make the footprint bigger to be able to save.",
+    "layoutVioAct_out": "Asset {code} goes outside its footprint {fcode}: change its size or its position, or make the footprint bigger, to be able to save.",
+    "layoutVioAct_tall": "Asset {code} is {h} m tall and its footprint {fcode} only {fh} m: lower its height to be able to save.",
+    "layoutVioAct_overlap": "Assets {other} and {code} overlap inside {fcode}: change their position or size to be able to save.",
     "layoutFondo": "Depth (m)",
     "layoutAgregarObstaculo": "+ Add obstacle",
     "layoutTipo": "Type",
@@ -4283,6 +4289,10 @@
     "layoutLocalizadoresLink": {
       "what": "Opens the Catalogs > Locators screen (view-only) with all the locators of all the cost centers, their warehouse and sub-warehouse, filters and history. It is the quick access to go straight there, without the menu.",
       "example": "you want to look up a locator of another cost center: you tap the arrow and filter there."
+    },
+    "layoutActivoMedidas": {
+      "what": "The place and own measures of this asset inside its footprint, all optional: X and Y are the distance from the corner of the footprint; Length, Depth and Height are its measures. If you leave it empty, the asset places itself: it goes next to the other assets of its footprint, in the order of the table, against the edge, and with the measures of the footprint (the leftover length is shared among those without one). What it would take now shows in gray inside the box. An asset cannot go outside its footprint, be taller than it or overlap another: what does not fit is marked in red and cannot be saved.",
+      "example": "a 5 m footprint with three racks: the first gets Length 2, the second Length 1.5 and Depth 1.0, and the third is left empty: it takes the 1.5 m left and all of them go next to each other."
     },
     "layoutQrSensor": {
       "what": "Prints the sensor QR codes: one per sensor of the Layout (the ones you marked in the Sensors step), for the zone you choose or all of them. Each QR is stuck next to its sensor and, when scanned, whoever checks writes their name and what the sensor shows (temperature, humidity or both, depending on its type) and takes a photo of the reading at that moment (the system sets the time). The readings are saved in the same Temperatures database and feed the heat map. The QR never changes, even if you move the sensor.",

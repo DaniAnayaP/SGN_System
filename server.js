@@ -6652,6 +6652,11 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         const fresh = LayoutCalc.newFootprintViolations(next, existing ? existing.layout : null);
         if (fresh.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: fresh.map((v) => v.message), section: 'espacios' });
     }
+    // Los activos de una huella van uno junto al otro y ninguno se sale de ella, es más alto que ella ni se encima con otro: lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
+    {
+        const freshSpaces = LayoutCalc.newSpaceViolations(next, existing ? existing.layout : null);
+        if (freshSpaces.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSpaces.map((v) => v.message), section: 'activos' });
+    }
     // Cada espacio con clasificación o tipo de activo debe apuntar a uno de los catálogos del cliente (activo, o el mismo que ya tenía guardado).
     {
         const catalogs = [['assetClassId', 'activos-clasificacion', 'la clasificación', 'a', 'la'], ['assetId', 'activos-fijos', 'el tipo de activo', 'o', 'lo']];
