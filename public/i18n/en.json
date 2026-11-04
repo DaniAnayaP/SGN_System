@@ -2668,6 +2668,24 @@
     "colLimFotoDespues": "After photo",
     "colLimOrigen": "Origin",
     "colLimDeleteAuth": "Authorization to Delete",
+    "recEditBoton": "Correct this record",
+    "recEditTitulo": "Correct record",
+    "recEditAyuda": "Only what was written wrong gets corrected. The time, the photos and the place can't be changed. The previous value stays in the change history.",
+    "recEditGuardar": "Save correction",
+    "recEditCancelar": "Cancel",
+    "recEditSinPermiso": "You don't have permission to correct this value.",
+    "recEditNoAplica": "This record doesn't carry this value, so it can't be added.",
+    "recEditNada": "You didn't change anything.",
+    "recEditNumero": "Enter a valid number.",
+    "recEditGuardado": "Correction saved",
+    "recEditado": "Edited",
+    "recEditadoPor": "Edited by {who} · {when}",
+    "recEditError_NAME": "Enter the name.",
+    "recEditError_TEMP": "The temperature must be a number from -100 to 100 °C.",
+    "recEditError_HUM": "The humidity must be a number from 0 to 100 %.",
+    "recEditError_NOTEMP": "This reading has no temperature.",
+    "recEditError_NOHUM": "This reading has no humidity.",
+    "recEditError_EMPTY": "There is nothing to correct.",
     "layoutQrPorTemperaturas": "Temperatures",
     "layoutQrTemperaturasImprimir": "Print the QR codes",
     "layoutQrTemperaturasImprimirSub": "Four per Letter page, ready to cut and stick",
@@ -3622,6 +3640,14 @@
     "delete": {
       "what": "Removes this record from the system completely -- it can't be recovered afterward.",
       "example": "you delete a plan you created by mistake that was never used."
+    },
+    "recEdit": {
+      "what": "Opens a window to correct what was written wrong in this record: who did it and, in Temperatures, what it read. The time, the photos and the place never change.",
+      "example": "someone typed \"Jusn\" instead of \"Juan\": you fix it here and the previous name stays in the change history."
+    },
+    "recEditTag": {
+      "what": "Shows this record was corrected after it came in from the QR. Hover to see who corrected it and when.",
+      "example": "you see \"Edited\" next to the origin: you open the History and the previous value is there."
     },
     "planTree": {
       "what": "This is where you set which screens and permissions this plan includes, and what it costs a client who subscribes to it.",

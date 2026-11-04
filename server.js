@@ -161,7 +161,7 @@ const {
     ensureLayoutPublicToken,
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
-    startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord,
+    startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
     addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
@@ -504,6 +504,10 @@ function changedByLabel(req) {
     }
     return req.user.name;
 }
+
+// Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
+const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas' };
+const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
 
@@ -4468,7 +4472,7 @@ app.get('/api/business/org-chart', requireAuth, (req, res) => {
 function notifyDataChange({ clientId, tableKey, recordLabel, fieldKey, oldValue, newValue, actorUserId, actorLabel, sanitize, authorizedBy = '', skipUserIds = null }) {
     try {
         const colKey = String(fieldKey).split('.').pop();
-        const screenKey = (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || tableKey;
+        const screenKey = screenLabelKeyOf(tableKey);
         publishDataChangeNotice({
             clientId, tableKey, screenKey, colKey, recordLabel, action: oldValue ? 'change' : 'fill',
             // Un llenado parte de vacío: el 0 que traen por defecto los campos numéricos no es un valor de antes.
@@ -4482,7 +4486,7 @@ function notifyDataChange({ clientId, tableKey, recordLabel, fieldKey, oldValue,
 // Notificar en botones e íconos (ver publishButtonActionNotice / publishIconUpdateNotice en db.js). Nunca rompen la acción: si el aviso falla, solo se anota.
 function notifyButtonAction(req, tableKey, action, recordLabel) {
     try {
-        const screenKey = (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || tableKey;
+        const screenKey = screenLabelKeyOf(tableKey);
         publishButtonActionNotice({ clientId: req.user.clientId, tableKey, screenKey, action, recordLabel, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
     } catch (err) {
         console.error('[notificar] no se pudo avisar de un botón:', err.message);
@@ -4491,7 +4495,7 @@ function notifyButtonAction(req, tableKey, action, recordLabel) {
 function notifyIconUpdate(req, { tableKey, iconId, action, name, scope }) {
     if (scope !== 'global') return;
     try {
-        const screenKey = (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || tableKey;
+        const screenKey = screenLabelKeyOf(tableKey);
         publishIconUpdateNotice({ clientId: req.user.clientId, tableKey, screenKey, iconId, action, name, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
     } catch (err) {
         console.error('[notificar] no se pudo avisar de un ícono:', err.message);
@@ -4588,7 +4592,7 @@ function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, reco
     // resolveDirectSupervisorUserId) gets an informational alert -- one per
     // rejected field, never requiring authorization, just visibility.
     if (rejected.length) {
-        const screenKey = (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || tableKey;
+        const screenKey = screenLabelKeyOf(tableKey);
         const actingUser = getUserById(req.user.sub, req.user.clientId);
         const actingUserLabel = `${req.user.username} - ${actingUser?.nickname || req.user.name}`;
         const recipientUserId = resolveDirectSupervisorUserId(req.user.sub);
@@ -7164,6 +7168,49 @@ app.get('/api/public/cleaning/:token/:spaceId/photo/:id/:kind', publicLayoutLimi
     res.send(photo.data);
 });
 // La base de registros (Operaciones > Limpieza, con usuario): TODAS las limpiezas de todos los activos y centros de costos del cliente, con las columnas de Control Interno por fila.
+// Una limpieza tal como la ve la base de registros (lista y corrección usan lo mismo). editedAt / editedBy: la última corrección (vacío si nunca se corrigió).
+function cleaningRowOf(r, centers, client) {
+    const cc = centers.get(r.cost_center_id);
+    return {
+        id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
+        zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, locator: r.locator,
+        name: r.person_name, startedAt: sqlUtcIso(r.started_at), finishedAt: sqlUtcIso(r.finished_at), seconds: r.seconds, hasBefore: !!r.has_before, hasAfter: !!r.has_after, source: r.source,
+        editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
+        system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: CLEANING_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.started_at }),
+    };
+}
+// Qué columnas puede corregir quien ve la pantalla: el administrador del cliente todas; los demás, las que tengan en el nivel Modificar (editar) del árbol. columns = [[llave del campo, columna del árbol]].
+function editableColumnsOf(req, tableKey, columns) {
+    if (req.user.isClientAdmin) return Object.fromEntries(columns.map(([key]) => [key, true]));
+    const grants = getUserEffectiveGrants(req.user.sub);
+    return Object.fromEntries(columns.map(([key, colKey]) => [key, getColumnGrantLevel(grants, tableKey, colKey) === 'editar']));
+}
+// Revisa lo que llega para corregir un registro y lo deja listo (solo los campos permitidos, ya limpios); si algo no es válido devuelve { error, code } y no se toca nada.
+// existing: el registro tal como está (un dato que no trae, p. ej. la humedad de una lectura de antes, no se puede agregar al corregir).
+function prepareRecordEdit(body, existing, allowed) {
+    const src = body && typeof body === 'object' ? body : {};
+    const has = (key) => allowed.includes(key) && Object.prototype.hasOwnProperty.call(src, key);
+    const patch = {};
+    if (has('name')) {
+        const name = String(src.name === null || src.name === undefined ? '' : src.name).replace(/\s+/g, ' ').trim().slice(0, 60);
+        if (!name) return { error: 'Falta el nombre de quien lo hizo.', code: 'NAME' };
+        patch.name = name;
+    }
+    if (has('temperature')) {
+        if (existing.temperature === null || existing.temperature === undefined) return { error: 'Esta lectura no lleva temperatura.', code: 'NOTEMP' };
+        if (typeof src.temperature !== 'number' || !Number.isFinite(src.temperature) || src.temperature < TEMPERATURE_MIN || src.temperature > TEMPERATURE_MAX) return { error: 'La temperatura no es válida.', code: 'TEMP' };
+        patch.temperature = Math.round(src.temperature * 10) / 10;
+    }
+    if (has('humidity')) {
+        if (existing.humidity === null || existing.humidity === undefined) return { error: 'Esta lectura no lleva humedad.', code: 'NOHUM' };
+        if (typeof src.humidity !== 'number' || !Number.isFinite(src.humidity) || src.humidity < 0 || src.humidity > 100) return { error: 'La humedad no es válida.', code: 'HUM' };
+        patch.humidity = Math.round(src.humidity * 10) / 10;
+    }
+    if (!Object.keys(patch).length) return { error: 'No hay nada que corregir.', code: 'EMPTY' };
+    return { patch };
+}
+// Para comparar con lo nuevo, los números del registro van como texto: así un 0 °C de verdad cuenta como dato que ya estaba (y se corrige por la vía de autorización) y no como un campo vacío.
+const recordForDiff = (rec) => ({ ...rec, temperature: rec.temperature === null || rec.temperature === undefined ? rec.temperature : String(rec.temperature), humidity: rec.humidity === null || rec.humidity === undefined ? rec.humidity : String(rec.humidity) });
 app.get('/api/business/cleanings', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
@@ -7174,16 +7221,23 @@ app.get('/api/business/cleanings', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({
         truncated: rows.length >= LIMIT, max: LIMIT, canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), CLEANING_TABLE_KEY, 'colLimDeleteAuth'),
-        cleanings: rows.map((r) => {
-            const cc = centers.get(r.cost_center_id);
-            return {
-                id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
-                zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, locator: r.locator,
-                name: r.person_name, startedAt: sqlUtcIso(r.started_at), finishedAt: sqlUtcIso(r.finished_at), seconds: r.seconds, hasBefore: !!r.has_before, hasAfter: !!r.has_after, source: r.source,
-                system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: CLEANING_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.started_at }),
-            };
-        }),
+        editable: editableColumnsOf(req, CLEANING_TABLE_KEY, [['name', 'colLimQuien']]),
+        cleanings: rows.map((r) => cleaningRowOf(r, centers, client)),
     });
+});
+// Corregir quién hizo una limpieza: pasa por la misma tubería de cambios de toda la plataforma (checkAndLogFieldChanges): el administrador del cliente lo aplica directo; quien tiene Modificar en esa columna lo manda a
+// autorizar; los demás reciben el aviso de que no están habilitados. Queda en el historial de cambios (con el valor de antes) y el registro se marca como corregido.
+app.patch('/api/business/cleanings/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getCleaningRecord(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    const prepared = prepareRecordEdit(req.body, rec, ['name']);
+    if (prepared.error) return res.status(400).json({ message: prepared.error, code: prepared.code });
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, recordForDiff(rec), prepared.patch, CLEANING_PATCHABLE_FIELDS, CLEANING_TABLE_KEY, `Limpieza ${rec.space_code} · LIM-${rec.id}`);
+    const updated = updateCleaningRecord(id, req.user.clientId, appliedPatch, { editedBy: changedByLabel(req) });
+    const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
+    res.json({ cleaning: cleaningRowOf(updated, centers, getClientById(req.user.clientId)), pendingFields, rejectedFields });
 });
 app.get('/api/business/cleanings/:id/photo/:kind', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).end();
@@ -7317,6 +7371,17 @@ app.get('/api/public/temperature/:token/:spaceId/photo/:id', publicLayoutLimiter
     res.send(photo.data);
 });
 // La base de registros (Operaciones > Temperaturas, con usuario): TODAS las lecturas de todos los refrigeradores y centros de costos del cliente, con las columnas de Control Interno por fila.
+// Una lectura tal como la ve la base de registros (lista y corrección usan lo mismo). status se calcula al momento con el rango que traía el refrigerador, así que al corregir la temperatura el estado se recalcula solo.
+function temperatureRowOf(r, centers, client) {
+    const cc = centers.get(r.cost_center_id);
+    return {
+        id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
+        zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, sensorCode: r.sensor_code, sensorType: r.sensor_type, locator: r.locator,
+        name: r.person_name, temperature: r.temperature, humidity: r.humidity, limits: temperatureLimits(r), status: temperatureStatus(r), checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo, source: r.source,
+        editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
+        system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: TEMPERATURE_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.checked_at }),
+    };
+}
 app.get('/api/business/temperatures', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
@@ -7327,16 +7392,23 @@ app.get('/api/business/temperatures', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({
         truncated: rows.length >= LIMIT, max: LIMIT, canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), TEMPERATURE_TABLE_KEY, 'colTmpDeleteAuth'),
-        temperatures: rows.map((r) => {
-            const cc = centers.get(r.cost_center_id);
-            return {
-                id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
-                zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, sensorCode: r.sensor_code, sensorType: r.sensor_type, locator: r.locator,
-                name: r.person_name, temperature: r.temperature, humidity: r.humidity, limits: temperatureLimits(r), status: temperatureStatus(r), checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo, source: r.source,
-                system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: TEMPERATURE_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.checked_at }),
-            };
-        }),
+        editable: editableColumnsOf(req, TEMPERATURE_TABLE_KEY, [['name', 'colTmpQuien'], ['temperature', 'colTmpTemperatura'], ['humidity', 'colTmpHumedad']]),
+        temperatures: rows.map((r) => temperatureRowOf(r, centers, client)),
     });
+});
+// Corregir una lectura (quién la revisó, la temperatura y la humedad; nunca la hora, la foto ni el lugar): misma tubería de cambios que Limpieza (ver arriba). Al corregir la temperatura o la humedad, el estado
+// (En rango / Fuera de rango) se recalcula con el rango que traía el refrigerador.
+app.patch('/api/business/temperatures/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getTemperatureRecord(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    const prepared = prepareRecordEdit(req.body, rec, ['name', 'temperature', 'humidity']);
+    if (prepared.error) return res.status(400).json({ message: prepared.error, code: prepared.code });
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, recordForDiff(rec), prepared.patch, TEMPERATURE_PATCHABLE_FIELDS, TEMPERATURE_TABLE_KEY, `Temperatura ${rec.space_code || rec.sensor_code} · TMP-${rec.id}`);
+    const updated = updateTemperatureRecord(id, req.user.clientId, appliedPatch, { editedBy: changedByLabel(req) });
+    const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
+    res.json({ temperature: temperatureRowOf(updated, centers, getClientById(req.user.clientId)), pendingFields, rejectedFields });
 });
 app.get('/api/business/temperatures/:id/photo', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).end();
@@ -9801,7 +9873,7 @@ app.get('/api/business/table-changes', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const changes = getAllTableChanges(req.user.clientId).map((c) => ({
         ...c,
-        screenLabelKey: (WEB_SCREEN_CATALOG.find((s) => s.key === c.table_key) || {}).labelKey || c.table_key,
+        screenLabelKey: screenLabelKeyOf(c.table_key),
     }));
     res.json({ changes });
 });
@@ -9827,6 +9899,9 @@ const PENDING_CHANGE_APPLIERS = {
     'carga-combustible': (recordId, clientId, patch) => updateFuelLoadingRecord(recordId, clientId, patch),
     'tipos-unidad': (recordId, clientId, patch) => updateUnitType(recordId, clientId, patch),
     'nuestras-unidades': (recordId, clientId, patch) => updateFleetUnit(recordId, clientId, patch),
+    // Corregir un registro de Limpieza / Temperaturas: quien autoriza el cambio aplica el valor y el registro queda marcado como corregido por quien lo pidió.
+    'limpieza': (recordId, clientId, patch, extra) => updateCleaningRecord(recordId, clientId, patch, extra),
+    'temperaturas': (recordId, clientId, patch, extra) => updateTemperatureRecord(recordId, clientId, patch, extra),
 };
 const PENDING_CHANGE_SANITIZERS = {
     'registro-combustible': {
@@ -9863,7 +9938,7 @@ app.post('/api/business/pending-changes/:id/approve', requireAuth, (req, res) =>
     }
     const apply = PENDING_CHANGE_APPLIERS[pc.table_key];
     if (!apply) return res.status(500).json({ message: `No hay forma de aplicar cambios de la tabla "${pc.table_key}".` });
-    apply(pc.record_id, pc.client_id, { [pc.column_key]: pc.new_value });
+    apply(pc.record_id, pc.client_id, { [pc.column_key]: pc.new_value }, { editedBy: pc.requested_by });
     const sanitize = PENDING_CHANGE_SANITIZERS[pc.table_key]?.[pc.column_key];
     logTableChange({
         clientId: pc.client_id, tableKey: pc.table_key, recordId: pc.record_id, recordLabel: pc.record_label, action: 'update',

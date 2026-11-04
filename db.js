@@ -3531,6 +3531,9 @@ const TABLE_GRANT_PATHS = {
     // Admin > Mapa de calor (sus iconos: Temperatura | Humedad y Reproducir)
     'mapa-calor': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-mapa-calor' },
     'relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
+    // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
+    'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
+    'temperaturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-temperaturas' },
     'usuarios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-users' },
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
     'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
@@ -5248,6 +5251,10 @@ db.exec(`
         PRIMARY KEY (record_id, kind)
     );
 `);
+// Corregir un registro (ver updateEditableRecord): cuándo y quién lo corrigió por última vez. edited_at vacío = nunca se corrigió.
+for (const [col, ddl] of [['edited_at', 'TEXT'], ['edited_by', "TEXT NOT NULL DEFAULT ''"]]) {
+    if (!db.prepare('PRAGMA table_info(cleaning_records)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE cleaning_records ADD COLUMN ${col} ${ddl}`);
+}
 const CLEANING_SELECT = `SELECT r.*, CASE WHEN r.finished_at IS NULL THEN NULL ELSE CAST(strftime('%s', r.finished_at) AS INTEGER) - CAST(strftime('%s', r.started_at) AS INTEGER) END AS seconds,
     EXISTS(SELECT 1 FROM cleaning_photos p WHERE p.record_id = r.id AND p.kind = 'before') AS has_before, EXISTS(SELECT 1 FROM cleaning_photos p WHERE p.record_id = r.id AND p.kind = 'after') AS has_after FROM cleaning_records r`;
 // Empieza una limpieza: la hora la pone el servidor y la foto de «antes» se guarda en la misma operación. Devuelve el id y la clave con la que ese teléfono la termina.
@@ -5292,6 +5299,46 @@ function getCleaningPhoto(recordId, kind) {
 function deleteCleaningRecord(id, clientId) {
     return db.prepare('DELETE FROM cleaning_records WHERE id = ? AND client_id = ?').run(id, clientId).changes > 0;
 }
+// Corregir un registro ya guardado. Solo se puede corregir lo que una persona pudo escribir mal: quién lo hizo y, en Temperaturas, lo que marcaba (temperatura y humedad). NUNCA la hora, las fotos ni el lugar
+// (zona, huella, activo, localizador): eso lo pone el servidor o el Layout y es la prueba de lo que pasó. fieldKey es la llave de i18n que usa el historial de cambios (igual que FUEL_PATCHABLE_FIELDS).
+const CLEANING_PATCHABLE_FIELDS = { name: { column: 'person_name', fieldKey: 'main.colLimQuien' } };
+const TEMPERATURE_PATCHABLE_FIELDS = {
+    name: { column: 'person_name', fieldKey: 'main.colTmpQuien' },
+    temperature: { column: 'temperature', fieldKey: 'main.colTmpTemperatura' },
+    humidity: { column: 'humidity', fieldKey: 'main.colTmpHumedad' },
+};
+const RECORD_NUMBER_RANGE = { temperature: [-100, 100], humidity: [0, 100] };
+// Escribe la corrección y deja marcado que el registro se corrigió (cuándo y quién). Un dato que el registro no trae (la temperatura de un sensor de solo humedad, la humedad de una lectura de antes de que existiera)
+// no se le agrega. Los valores llegan de la ruta ya validados, o como texto cuando los aplica quien autoriza un cambio pendiente: por eso aquí se vuelven a revisar.
+function updateEditableRecord(table, fields, existing, patch, editedBy) {
+    if (!existing) return;
+    const sets = [];
+    const args = [];
+    for (const [key, { column }] of Object.entries(fields)) {
+        if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+        if (key === 'name') {
+            const name = String(patch.name === null || patch.name === undefined ? '' : patch.name).replace(/\s+/g, ' ').trim().slice(0, 60);
+            if (!name) continue;
+            sets.push(`${column} = ?`);
+            args.push(name);
+        } else {
+            if (patch[key] === '' || patch[key] === null || patch[key] === undefined || existing[column] === null || existing[column] === undefined) continue;
+            const v = Number(patch[key]);
+            const [lo, hi] = RECORD_NUMBER_RANGE[key];
+            if (!Number.isFinite(v) || v < lo || v > hi) continue;
+            sets.push(`${column} = ?`);
+            args.push(Math.round(v * 10) / 10);
+        }
+    }
+    if (!sets.length) return;
+    sets.push("edited_at = datetime('now')", 'edited_by = ?');
+    args.push(String(editedBy || '').slice(0, 120));
+    db.prepare(`UPDATE ${table} SET ${sets.join(', ')} WHERE id = ? AND client_id = ?`).run(...args, existing.id, existing.client_id);
+}
+function updateCleaningRecord(id, clientId, patch, { editedBy = '' } = {}) {
+    updateEditableRecord('cleaning_records', CLEANING_PATCHABLE_FIELDS, getCleaningRecord(id, clientId), patch || {}, editedBy);
+    return getCleaningRecord(id, clientId);
+}
 
 // --- Temperaturas (Operaciones, C. Distribución) -------------------------------------------------------------------------------------------------
 // Una fila por lectura de temperatura de un REFRIGERADOR (activo de tipo Frío) del Layout. El QR de cada refrigerador la abre SIN sesión: quién la tomó (el nombre que escribe), la temperatura que marcaba (°C),
@@ -5332,7 +5379,7 @@ if (!db.prepare('PRAGMA table_info(temperature_photos)').all().some((c) => c.nam
 // Lecturas de un SENSOR del Layout (paso Sensores): llevan su id, su código y su tipo (both, temp o hum); space_id queda vacío. La temperatura debe poder quedar vacía (un sensor de solo humedad):
 // la tabla nació con temperature NOT NULL, y SQLite no quita eso con ALTER, así que se reconstruye UNA vez (con las llaves foráneas apagadas para que las fotos no se borren en cascada) y se verifica que
 // no se perdió ninguna fila ni foto; si algo falla se deja la tabla como estaba y se registra el error (los sensores de solo humedad no podrán guardar hasta arreglarlo, todo lo demás sigue igual).
-for (const [col, ddl] of [['sensor_id', "TEXT NOT NULL DEFAULT ''"], ['sensor_code', "TEXT NOT NULL DEFAULT ''"], ['sensor_type', "TEXT NOT NULL DEFAULT ''"]]) {
+for (const [col, ddl] of [['sensor_id', "TEXT NOT NULL DEFAULT ''"], ['sensor_code', "TEXT NOT NULL DEFAULT ''"], ['sensor_type', "TEXT NOT NULL DEFAULT ''"], ['edited_at', 'TEXT'], ['edited_by', "TEXT NOT NULL DEFAULT ''"]]) {
     if (!db.prepare('PRAGMA table_info(temperature_records)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE temperature_records ADD COLUMN ${col} ${ddl}`);
 }
 {
@@ -5402,6 +5449,10 @@ function getTemperaturePhoto(recordId, small = false) {
 }
 function deleteTemperatureRecord(id, clientId) {
     return db.prepare('DELETE FROM temperature_records WHERE id = ? AND client_id = ?').run(id, clientId).changes > 0;
+}
+function updateTemperatureRecord(id, clientId, patch, { editedBy = '' } = {}) {
+    updateEditableRecord('temperature_records', TEMPERATURE_PATCHABLE_FIELDS, getTemperatureRecord(id, clientId), patch || {}, editedBy);
+    return getTemperatureRecord(id, clientId);
 }
 
 // --- Candados de los QR -------------------------------------------------------------------------------------------------------------------------
@@ -11342,11 +11393,15 @@ module.exports = {
     getCleaningRecord,
     getCleaningPhoto,
     deleteCleaningRecord,
+    updateCleaningRecord,
+    CLEANING_PATCHABLE_FIELDS,
     addTemperatureRecord,
     listTemperatureRecords,
     getTemperatureRecord,
     getTemperaturePhoto,
     deleteTemperatureRecord,
+    updateTemperatureRecord,
+    TEMPERATURE_PATCHABLE_FIELDS,
     getQrLocksRaw,
     saveQrLocks,
     ARTICLE_CATEGORY_TYPES,

@@ -1,8 +1,10 @@
 // ---------------------------------------------------------------------------
 // Temperaturas (Operaciones, C. Distribución): la BASE DE REGISTROS (con usuario) de las lecturas de temperatura que se hacen con el QR de cada refrigerador (activo tipo Frío) del Layout: quién la
 // tomó, la temperatura que marcaba (°C), la hora (se guarda en UTC y aquí se ve en tu hora, con el UTC al pasar el cursor) y la foto de la lectura, tomada con la cámara en vivo. Trae las columnas de
-// Control Interno (empresa, área, módulo, pantalla y centro de costos…) para distinguir cuando se juntan varios sitios. Lo que llega del QR no se puede cambiar; con usuario y el permiso Eliminar se
-// puede quitar un registro. Las filas salen del servidor (GET /api/business/temperatures) y las fotos de GET /api/business/temperatures/:id/photo.
+// Control Interno (empresa, área, módulo, pantalla y centro de costos…) para distinguir cuando se juntan varios sitios. Lo que llega del QR no se puede cambiar de lugar ni de hora ni de foto; sí se puede CORREGIR
+// lo que se escribió mal (quién revisó, la temperatura y la humedad) con el lápiz de cada renglón, según el permiso Modificar de esa columna en el árbol (con autorización del jefe cuando toca): el registro queda
+// marcado «Editado» y el valor de antes queda en el historial de cambios. Con el permiso Eliminar se puede quitar un registro. Las filas salen del servidor (GET /api/business/temperatures, la corrección es
+// PATCH /api/business/temperatures/:id) y las fotos de GET /api/business/temperatures/:id/photo.
 // ---------------------------------------------------------------------------
 
 // Envuelto en una función: Dashboard.js ya declara globales como t, y chocarían con los de esta pantalla.
@@ -23,6 +25,9 @@ const t = (key, params) => {
     return text;
 };
 const lang = () => (Dashboard.getLanguage ? Dashboard.getLanguage() : (localStorage.getItem('lang') || 'es'));
+// Lo que el servidor dice que puede hacer quien ve la pantalla (viene con la lista): qué columnas puede corregir y si puede eliminar.
+let editable = {};
+let canDelete = false;
 
 (async function init() {
     try {
@@ -107,11 +112,51 @@ const footprintText = (r) => r.footprintCode || '';
 // La columna Activo también muestra el sensor de las lecturas que vienen del QR de un sensor del Layout (S001 · Temperatura y humedad).
 const assetText = (r) => (r.spaceCode ? `${r.spaceCode} · ${t(`main.layoutType_space_${r.spaceType || 'cold'}`)}` : (r.sensorCode ? `${r.sensorCode} · ${t(`main.layoutType_sensor_${r.sensorType || 'both'}`)}` : ''));
 
+// Los datos que se pueden corregir de una lectura. Uno que la lectura no trae (la temperatura de un sensor de solo humedad, la humedad de una lectura de antes) no se puede agregar; uno que el usuario no puede
+// modificar según el árbol aparece apagado.
+function editFields(r) {
+    const field = (key, label, kind, value, applies) => ({
+        key, label, kind, value, enabled: applies && !!editable[key],
+        hint: !applies ? t('main.recEditNoAplica') : (editable[key] ? '' : t('main.recEditSinPermiso')),
+    });
+    const has = (v) => v !== null && v !== undefined;
+    return [
+        field('name', t('main.colTmpQuien'), 'text', r.name, true),
+        field('temperature', t('main.colTmpTemperatura'), 'number', r.temperature, has(r.temperature)),
+        field('humidity', t('main.colTmpHumedad'), 'number', r.humidity, has(r.humidity)),
+    ];
+}
+// El origen de la lectura; si ya se corrigió lleva la marca «Editado» (al pasar el cursor: quién y cuándo).
+function originCell(col, text, r) {
+    const td = cell(col, text);
+    if (r.editedAt) {
+        const tag = document.createElement('span');
+        tag.className = 'rel-tag rec-edit-tag';
+        tag.setAttribute('data-help-key', 'recEditTag');
+        tag.textContent = t('main.recEditado');
+        const when = new Date(r.editedAt).toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        tag.title = `${t('main.recEditadoPor', { who: r.editedBy || '—', when })} (UTC ${r.editedAt.replace('T', ' ').replace('Z', '')})`;
+        td.appendChild(tag);
+    }
+    return td;
+}
+
 function actionsCell(r, tr) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
     td.className = 'admin-table-actions';
-    if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) {
+    if (editFields(r).some((f) => f.enabled)) {
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'admin-icon-btn';
+        edit.setAttribute('data-help-key', 'recEdit');
+        edit.setAttribute('aria-label', t('main.recEditBoton'));
+        edit.title = t('main.recEditBoton');
+        edit.innerHTML = '<i class="bx bx-edit-alt" aria-hidden="true"></i>';
+        edit.addEventListener('click', () => editRecord(r, tr));
+        td.appendChild(edit);
+    }
+    if (canDelete || Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'admin-icon-btn admin-icon-btn-danger';
@@ -134,7 +179,7 @@ function buildRow(r) {
         cell('colCatRegistroUnico', `TMP-${r.id}`, 'col-system'),
         cell('colTmpZona', r.zoneName), cell('colTmpHuella', footprintText(r)), cell('colTmpActivo', assetText(r)), cell('colTmpLocalizador', r.locator, 'rel-locator'), cell('colTmpQuien', r.name),
         timeCell('colTmpMomento', r.checkedAt), temperatureCell('colTmpTemperatura', r.temperature, r.status && r.status.temp), humidityCell('colTmpHumedad', r.humidity, r.status && r.status.hum), statusCell('colTmpEstado', r), photoCell('colTmpFoto', r),
-        cell('colTmpOrigen', t(r.source === 'qr' ? 'main.tmpOrigenQr' : (r.source === 'qr-sensor' ? 'main.tmpOrigenSensor' : 'main.tmpOrigenUsuario'))),
+        originCell('colTmpOrigen', t(r.source === 'qr' ? 'main.tmpOrigenQr' : (r.source === 'qr-sensor' ? 'main.tmpOrigenSensor' : 'main.tmpOrigenUsuario')), r),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
@@ -184,6 +229,8 @@ async function refreshTable() {
         if (!res.ok) throw new Error('load failed');
         const body = await res.json();
         if (token !== renderToken) return;
+        editable = body.editable || {};
+        canDelete = !!body.canDelete;
         // Solo las lecturas de los centros de costos marcados arriba.
         const selected = Dashboard.getSelectedCostCenterIds();
         const rows = body.temperatures.filter((r) => !selected || !r.cc || selected.includes(r.cc));
@@ -221,6 +268,26 @@ function applyFilters() {
 }
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFilters);
+
+// Corregir una lectura: abre la ventanita con lo que se puede corregir y manda al servidor SOLO lo que cambió. El servidor decide: lo aplica, lo manda a autorizar o avisa que no hay permiso.
+function editRecord(r, tr) {
+    RecordEdit.open({ title: t('main.recEditTitulo'), subtitle: `TMP-${r.id} · ${r.spaceCode || r.sensorCode || ''}`, fields: editFields(r), save: (patch) => saveEdit(r, tr, patch) });
+}
+async function saveEdit(r, tr, patch) {
+    const res = await fetch(`${API}/${r.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(patch) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, message: RecordEdit.errorText(body.code) };
+    const names = (list) => list.map((fk) => t(fk)).join(', ');
+    if (body.rejectedFields && body.rejectedFields.length) Dashboard.showToast(`${t('main.fieldLocked')}: ${names(body.rejectedFields)}`, 'warning');
+    if (body.pendingFields && body.pendingFields.length) Dashboard.showToast(`${t('main.changePending')}: ${names(body.pendingFields)}`, 'info');
+    if (!(body.rejectedFields && body.rejectedFields.length) && !(body.pendingFields && body.pendingFields.length)) Dashboard.showToast(t('main.recEditGuardado'), 'success');
+    if (body.temperature) {
+        const next = buildRow(body.temperature);
+        next.hidden = tr.hidden;
+        tr.replaceWith(next);
+    }
+    return { ok: true };
+}
 
 async function deleteRecord(r, tr) {
     if (!(await Dashboard.confirm(Dashboard.t('main.recordDeleteConfirm')))) return;

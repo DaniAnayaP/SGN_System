@@ -1,8 +1,10 @@
 // ---------------------------------------------------------------------------
 // Limpieza (Operaciones, C. Distribución): la BASE DE REGISTROS (con usuario) de todas las limpiezas que se hacen con el QR de cada activo del Layout: quién limpió, la hora de inicio y de fin
 // (se guardan en UTC y aquí se ven en tu hora, con el UTC al pasar el cursor), cuánto tardó y las dos fotos (antes y después, tomadas con la cámara en vivo). Trae las columnas de Control Interno
-// (empresa, área, módulo, pantalla y centro de costos…) para distinguir cuando se juntan varios sitios. Lo que llega del QR no se puede cambiar; con usuario y el permiso Eliminar se puede quitar un
-// registro. Las filas salen del servidor (GET /api/business/cleanings) y las fotos de GET /api/business/cleanings/:id/photo/:kind.
+// (empresa, área, módulo, pantalla y centro de costos…) para distinguir cuando se juntan varios sitios. Lo que llega del QR no se puede cambiar de hora, de foto ni de lugar; sí se puede CORREGIR quién
+// limpió (si se escribió mal) con el lápiz de cada renglón, según el permiso Modificar de esa columna en el árbol (con autorización del jefe cuando toca): el registro queda marcado «Editado» y el nombre
+// de antes queda en el historial de cambios. Con el permiso Eliminar se puede quitar un registro. Las filas salen del servidor (GET /api/business/cleanings, la corrección es PATCH /api/business/cleanings/:id)
+// y las fotos de GET /api/business/cleanings/:id/photo/:kind.
 // ---------------------------------------------------------------------------
 
 // Envuelto en una función: Dashboard.js ya declara globales como t, y chocarían con los de esta pantalla.
@@ -23,6 +25,9 @@ const t = (key, params) => {
     return text;
 };
 const lang = () => (Dashboard.getLanguage ? Dashboard.getLanguage() : (localStorage.getItem('lang') || 'es'));
+// Lo que el servidor dice que puede hacer quien ve la pantalla (viene con la lista): qué columnas puede corregir y si puede eliminar.
+let editable = {};
+let canDelete = false;
 
 (async function init() {
     try {
@@ -79,11 +84,41 @@ function photoCell(col, r, kind, has) {
 const footprintText = (r) => r.footprintCode || '';
 const assetText = (r) => (r.spaceCode ? `${r.spaceCode} · ${t(`main.layoutType_space_${r.spaceType || 'rack'}`)}` : '');
 
+// Lo que se puede corregir de una limpieza: quién la hizo (la hora, las fotos y el lugar nunca cambian). Apagado si el usuario no puede modificar esa columna según el árbol.
+function editFields(r) {
+    return [{ key: 'name', label: t('main.colLimQuien'), kind: 'text', value: r.name, enabled: !!editable.name, hint: editable.name ? '' : t('main.recEditSinPermiso') }];
+}
+// El origen de la limpieza; si ya se corrigió lleva la marca «Editado» (al pasar el cursor: quién y cuándo).
+function originCell(col, text, r) {
+    const td = cell(col, text);
+    if (r.editedAt) {
+        const tag = document.createElement('span');
+        tag.className = 'rel-tag rec-edit-tag';
+        tag.setAttribute('data-help-key', 'recEditTag');
+        tag.textContent = t('main.recEditado');
+        const when = new Date(r.editedAt).toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        tag.title = `${t('main.recEditadoPor', { who: r.editedBy || '—', when })} (UTC ${r.editedAt.replace('T', ' ').replace('Z', '')})`;
+        td.appendChild(tag);
+    }
+    return td;
+}
+
 function actionsCell(r, tr) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
     td.className = 'admin-table-actions';
-    if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) {
+    if (editFields(r).some((f) => f.enabled)) {
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'admin-icon-btn';
+        edit.setAttribute('data-help-key', 'recEdit');
+        edit.setAttribute('aria-label', t('main.recEditBoton'));
+        edit.title = t('main.recEditBoton');
+        edit.innerHTML = '<i class="bx bx-edit-alt" aria-hidden="true"></i>';
+        edit.addEventListener('click', () => editRecord(r, tr));
+        td.appendChild(edit);
+    }
+    if (canDelete || Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'admin-icon-btn admin-icon-btn-danger';
@@ -108,7 +143,7 @@ function buildRow(r) {
         timeCell('colLimInicio', r.startedAt), timeCell('colLimFin', r.finishedAt),
         r.finishedAt ? cell('colLimDuracion', durationText(r.seconds)) : (() => { const td = document.createElement('td'); td.dataset.col = 'colLimDuracion'; td.innerHTML = '<span class="rel-tag rel-tag-partial"></span>'; td.firstChild.textContent = t('main.limEnCurso'); return td; })(),
         photoCell('colLimFotoAntes', r, 'before', r.hasBefore), photoCell('colLimFotoDespues', r, 'after', r.hasAfter),
-        cell('colLimOrigen', t(r.source === 'qr' ? 'main.limOrigenQr' : 'main.limOrigenUsuario')),
+        originCell('colLimOrigen', t(r.source === 'qr' ? 'main.limOrigenQr' : 'main.limOrigenUsuario'), r),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
@@ -158,6 +193,8 @@ async function refreshTable() {
         if (!res.ok) throw new Error('load failed');
         const body = await res.json();
         if (token !== renderToken) return;
+        editable = body.editable || {};
+        canDelete = !!body.canDelete;
         // Solo las limpiezas de los centros de costos marcados arriba.
         const selected = Dashboard.getSelectedCostCenterIds();
         const rows = body.cleanings.filter((r) => !selected || !r.cc || selected.includes(r.cc));
@@ -195,6 +232,26 @@ function applyFilters() {
 }
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFilters);
+
+// Corregir quién hizo una limpieza: abre la ventanita y manda al servidor SOLO lo que cambió. El servidor decide: lo aplica, lo manda a autorizar o avisa que no hay permiso.
+function editRecord(r, tr) {
+    RecordEdit.open({ title: t('main.recEditTitulo'), subtitle: `LIM-${r.id} · ${r.spaceCode || ''}`, fields: editFields(r), save: (patch) => saveEdit(r, tr, patch) });
+}
+async function saveEdit(r, tr, patch) {
+    const res = await fetch(`${API}/${r.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(patch) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, message: RecordEdit.errorText(body.code) };
+    const names = (list) => list.map((fk) => t(fk)).join(', ');
+    if (body.rejectedFields && body.rejectedFields.length) Dashboard.showToast(`${t('main.fieldLocked')}: ${names(body.rejectedFields)}`, 'warning');
+    if (body.pendingFields && body.pendingFields.length) Dashboard.showToast(`${t('main.changePending')}: ${names(body.pendingFields)}`, 'info');
+    if (!(body.rejectedFields && body.rejectedFields.length) && !(body.pendingFields && body.pendingFields.length)) Dashboard.showToast(t('main.recEditGuardado'), 'success');
+    if (body.cleaning) {
+        const next = buildRow(body.cleaning);
+        next.hidden = tr.hidden;
+        tr.replaceWith(next);
+    }
+    return { ok: true };
+}
 
 async function deleteRecord(r, tr) {
     if (!(await Dashboard.confirm(Dashboard.t('main.recordDeleteConfirm')))) return;

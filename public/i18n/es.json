@@ -2667,6 +2667,24 @@
     "colLimFotoDespues": "Foto después",
     "colLimOrigen": "Origen",
     "colLimDeleteAuth": "Autorización para Eliminar",
+    "recEditBoton": "Corregir este registro",
+    "recEditTitulo": "Corregir registro",
+    "recEditAyuda": "Solo se corrige lo que se escribió mal. La hora, las fotos y el lugar no se pueden cambiar. Lo de antes queda en el historial de cambios.",
+    "recEditGuardar": "Guardar corrección",
+    "recEditCancelar": "Cancelar",
+    "recEditSinPermiso": "No tienes permiso para corregir este dato.",
+    "recEditNoAplica": "Este registro no lleva este dato, por eso no se puede agregar.",
+    "recEditNada": "No cambiaste nada.",
+    "recEditNumero": "Escribe un número válido.",
+    "recEditGuardado": "Corrección guardada",
+    "recEditado": "Editado",
+    "recEditadoPor": "Editado por {who} · {when}",
+    "recEditError_NAME": "Escribe el nombre.",
+    "recEditError_TEMP": "La temperatura debe ser un número de -100 a 100 °C.",
+    "recEditError_HUM": "La humedad debe ser un número de 0 a 100 %.",
+    "recEditError_NOTEMP": "Esta lectura no lleva temperatura.",
+    "recEditError_NOHUM": "Esta lectura no lleva humedad.",
+    "recEditError_EMPTY": "No hay nada que corregir.",
     "layoutQrPorTemperaturas": "Temperaturas",
     "layoutQrTemperaturasImprimir": "Imprimir los QR",
     "layoutQrTemperaturasImprimirSub": "Cuatro por hoja carta, listos para recortar y pegar",
@@ -3621,6 +3639,14 @@
     "delete": {
       "what": "Borra este registro por completo del sistema, sin poder recuperarlo después.",
       "example": "borras un plan que creaste por error y nunca se usó."
+    },
+    "recEdit": {
+      "what": "Abre una ventana para corregir lo que se escribió mal en este registro: quién lo hizo y, en Temperaturas, lo que marcaba. La hora, las fotos y el lugar nunca cambian.",
+      "example": "alguien escribió «Jusn» en vez de «Juan»: lo corriges aquí y el nombre de antes queda en el historial de cambios."
+    },
+    "recEditTag": {
+      "what": "Avisa que este registro ya se corrigió después de que llegó del QR. Al pasar el cursor ves quién lo corrigió y cuándo.",
+      "example": "ves «Editado» junto al origen: abres el Historial y ahí está el valor de antes."
     },
     "planTree": {
       "what": "Aquí defines qué pantallas y permisos incluye este plan, y qué le cuesta al cliente que lo contrate.",

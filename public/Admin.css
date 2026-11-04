@@ -7651,6 +7651,14 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lim-viewer img{ display: block; max-width: 100%; max-height: 70vh; margin: 0.6rem auto 0; border-radius: 0.6rem; }
 .lim-viewer-tabs{ display: flex; gap: 0.4rem; }
 .lim-viewer-tabs .layout-seg-btn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); }
+/* Corregir un registro (Limpieza / Temperaturas): la ventanita del lápiz y la marca «Editado» */
+.rec-edit-fields{ display: flex; flex-direction: column; gap: 0.7rem; margin: 0.8rem 0; }
+.rec-edit-fields .layout-fl label{ flex: 1 1 100%; font-size: 0.78rem; }
+.rec-edit-fields .layout-fl input{ font-size: 0.9rem; padding: 0.45rem 0.6rem; }
+.rec-edit-hint{ font-size: 0.72rem; color: var(--color-text-secondary); }
+.rec-edit-panel .tpl-muted{ margin: 0; }
+.rec-edit-panel #rec-edit-help{ margin: 0 0 0.9rem; line-height: 1.35; }
+.rec-edit-tag{ margin-left: 0.4rem; }
 /* Opción A: «Textos» y «Capas» son botones redondos en la fila de iconos y su lista FLOTA encima de lo que haya debajo (no alarga el panel), centrada bajo la fila */
 .layout-views-icons{ position: relative; }
 .layout-opt-icon{ position: static; width: auto; max-width: none; }
