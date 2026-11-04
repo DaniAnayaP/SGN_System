@@ -1344,8 +1344,19 @@ function applyScreenGrantFilter(data) {
     };
 }
 
+// Inicio, Panel y Tablero (los tres de General) de un usuario o perfil del cliente salen solo si se los asignaron en su árbol, como todo lo demás: un usuario recién creado, sin nada asignado, no ve ninguna opción. El
+// administrador del cliente sin configuración propia los ve siempre (hasMainButtonPermission) y la cuenta SaaS arma su menú aparte (con sus propios permisos), así que no pasa por aquí.
+const MAIN_NAV_ITEM_IDS = ['home', 'panel', 'dashboard'];
+function applyMainNavGrantFilter(data) {
+    if (currentRole === 'admin') return data;
+    return {
+        ...data,
+        sections: data.sections.map((s) => (s.id !== 'main' ? s : { ...s, items: (s.items || []).filter((i) => !MAIN_NAV_ITEM_IDS.includes(i.id) || hasMainButtonPermission(i.id)) })),
+    };
+}
+
 function renderFilteredMenu() {
-    if (menuData) renderMenu(applyScreenGrantFilter(applyAreaFilter(applyDepartmentFilter(menuData))));
+    if (menuData) renderMenu(applyMainNavGrantFilter(applyScreenGrantFilter(applyAreaFilter(applyDepartmentFilter(menuData)))));
     // Every department/área change (there are several call sites: the
     // dept/area pickers, "defaults" modal, login-defaults auto-apply...)
     // funnels through here, so this is the one place a page like Panel.html
