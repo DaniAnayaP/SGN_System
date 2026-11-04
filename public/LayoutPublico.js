@@ -356,7 +356,7 @@
         return `<div class="m3d-stage" id="m3d-stage"><div class="m3d-msg" id="m3d-msg"></div></div><div class="m3d-info" id="m3d-info" hidden></div>`;
     }
     function layers3d() {
-        return { walls: mapView.walls, doors: mapView.layers.includes('puertas'), power: mapView.layers.includes('luz'), zones: mapView.layers.includes('zonas'), transit: mapView.layers.includes('transito'), safety: mapView.layers.includes('seguridad'), assets: mapView.layers.includes('espacios'), columns: true };
+        return { contour: mapView.walls, walls: mapView.walls, doors: mapView.layers.includes('puertas'), power: mapView.layers.includes('luz'), zones: mapView.layers.includes('zonas'), transit: mapView.layers.includes('transito'), safety: mapView.layers.includes('seguridad'), assets: mapView.layers.includes('espacios'), columns: true };
     }
     function sync3d() {
         if (!scene3d) return;

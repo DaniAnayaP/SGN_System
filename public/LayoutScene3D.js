@@ -15,7 +15,7 @@
     const POWER_COLOR = { panel: 0x6b6f7c, outlet110: 0xf1c232, outlet220: 0xe8892b, 'three-phase': 0xd93a2f };
     const WOOD = 0xb98a52;
     const MAX_SPACE_LABELS = 300;
-    const LAYER_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety'];
+    const LAYER_NAMES = ['contour', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety'];
     // El color de cada elemento de Seguridad (los mismos del croquis: rojo del fuego, verde de emergencia, naranja de alarma, azul del agua).
     const SAFETY_COLOR = { extinguisher: 0xd9443a, hydrant: 0xd9443a, emergency_door: 0x2e9e5b, firstaid: 0x2e9e5b, alarm: 0xe8892b, eyewash: 0x2f7fc7, assembly: 0x2e9e5b, route: 0x2e9e5b };
 
@@ -46,7 +46,7 @@
         scene.add(sun);
         // Un grupo por capa: así cada una se muestra u oculta sola.
         const group = {};
-        ['floor', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
+        ['floor', 'contour', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
         const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a }));
         outline.visible = false;
         scene.add(outline);
@@ -87,6 +87,7 @@
         const mixHex = (c, to, k) => { const r = (c >> 16) & 255; const g = (c >> 8) & 255; const b = c & 255; const R = (to >> 16) & 255; const G = (to >> 8) & 255; const B = to & 255; return (Math.round(r + (R - r) * k) << 16) | (Math.round(g + (G - g) * k) << 8) | Math.round(b + (B - b) * k); };
 
         function applyVisibility() {
+            group.contour.visible = layerOn.contour;
             group.walls.visible = layerOn.walls;
             group.doors.visible = layerOn.doors;
             group.power.visible = layerOn.power;
@@ -333,7 +334,7 @@
                 const ax = PX(a[0]); const az = PZ(a[1]); const bx = PX(b[0]); const bz = PZ(b[1]);
                 lines.push(ax, ha, az, bx, hb, bz, ax, 0, az, ax, ha, az);
             }
-            // El contorno solo es el marco (las aristas de arriba y las esquinas siguen marcando la forma del techo). Las PAREDES son obstáculos del contorno: cada una sube del piso al techo de su lado (o al promedio si va dentro de la nave).
+            // El contorno solo es el marco (las aristas de arriba y las esquinas marcan la forma del techo) y es su propia capa («contour»). Las PAREDES son obstáculos del contorno y son otra capa («walls»): cada una sube del piso al techo de su lado (o al promedio si va dentro de la nave).
             const shapes3 = root.LayoutCalc && root.LayoutCalc.obstacleShapes ? root.LayoutCalc.obstacleShapes(layout) : [];
             const prism = (pts, h, y0) => {
                 try {
@@ -351,7 +352,7 @@
             });
             const lg = new THREE.BufferGeometry();
             lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
-            group.walls.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x4a5f8f })));
+            group.contour.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x4a5f8f })));
 
             // puertas y conexiones de luz (la pared 1 va de la esquina 1 a la 2; dist es desde la esquina de inicio)
             (layout.doors || []).forEach((d) => {

@@ -1711,7 +1711,8 @@ function renderSvg() {
     }
     const cx = (x0 + x1) / 2;
     const cy = (y0 + y1) / 2;
-    for (let i = 1; i <= (finding && !dimmed ? 0 : d.vertices.length); i++) {
+    // las esquinas (puntos), la medida de cada lado y la altura de cada esquina son del contorno: salen solo con el paso Contorno
+    for (let i = 1; i <= ((finding && !dimmed) || !on('contorno') ? 0 : d.vertices.length); i++) {
         const w = LC.wallSegment(d.vertices, i);
         const mx = (w.p[0] + w.q[0]) / 2;
         const my = (w.p[1] + w.q[1]) / 2;
@@ -1720,7 +1721,7 @@ function renderSvg() {
         const out = ((mx - cx) * nx + (my - cy) * ny) >= 0 ? 1 : -1;
         if (sM) putOuter('lt2', X(mx) + nx * out * 15, Y(my) + ny * out * 15 + 3, 'middle', `P${i} · ${fmt(w.length)} m`);
     }
-    (finding && !dimmed ? [] : d.vertices).forEach((p, i) => {
+    ((finding && !dimmed) || !on('contorno') ? [] : d.vertices).forEach((p, i) => {
         s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" class="lv"/>`;
         if (sM) putOuter('lt2', X(p[0]) + (p[0] <= cx ? -8 : 8), Y(p[1]) + (p[1] <= cy ? -7 : 14), p[0] <= cx ? 'end' : 'start', `${i + 1} · ${fmt(p[2])} m`);
     });
@@ -2892,21 +2893,22 @@ let scene3dTimer = 0;
 let scene3dLabels = true;
 // Las capas del 3D que se están viendo (se recuerdan en este navegador): paredes, puertas, luz, columnas, zonas y activos.
 const LAYERS3D_KEY = 'sgn_layout_3d_layers';
-const LAYER3D_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets'];
+const LAYER3D_NAMES = ['contour', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets'];
 const LAYER3D_LABEL_KEYS = { walls: 'main.layout3dCapaWalls', doors: 'main.layout3dCapaDoors', power: 'main.layout3dCapaPower', columns: 'main.layout3dCapaColumns', zones: 'main.layout3dCapaZones', footprints: 'main.layout3dCapaFootprints', assets: 'main.layout3dCapaAssets' };
 const scene3dLayers = { walls: true, doors: true, power: true, columns: true, zones: true, footprints: true, assets: true };
-// El 3D sigue los PASOS igual que el croquis: cada paso encendido muestra su capa y apagarlo la oculta (Contorno = paredes y columnas, Puertas, Zonas, Huella-Espacio = huellas, Energía Eléctrica = luz, Activos y
-// Posiciones = activos). La lista Capas ya NO repite los pasos: solo lleva lo que no es un paso, Paredes y Columnas, para esconderlos aunque Contorno esté encendido (por ejemplo para ver todo el piso).
+// El 3D sigue los PASOS igual que el croquis: cada paso encendido muestra su capa y apagarlo la oculta (Contorno = el contorno, Paredes = las paredes, Obstáculos = columnas y desniveles, Puertas, Zonas, Huella-Espacio = huellas,
+// Energía Eléctrica = luz, Activos y Posiciones = activos); cada uno es independiente de los demás. La lista Capas ya NO repite los pasos: solo lleva lo que no es un paso, Paredes y Columnas, para esconderlos aunque su paso esté
+// encendido (por ejemplo para ver todo el piso).
 function effective3dLayers() {
     const on = (name) => scene3dLayers[name] !== false;
     // con un enfoque: solo lo enfocado (sin paredes, columnas, puertas ni luz) o, con el resto «tenue», todo lo de siempre; los botones de ocultar de la búsqueda valen en los dos
     const f = state.find;
     const hide = state.findHide || {};
     if (f && !state.findDim) {
-        return { walls: false, columns: false, doors: false, power: false, objects: false, transit: false, safety: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
+        return { contour: false, walls: false, columns: false, doors: false, power: false, objects: false, transit: false, safety: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
     }
     const layers = {
-        walls: (stepOn('contorno') || stepOn('paredes')) && on('walls'), columns: stepOn('obstaculos') && on('columns'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
+        contour: stepOn('contorno'), walls: stepOn('paredes') && on('walls'), columns: stepOn('obstaculos') && on('columns'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), assets: stepOn('activos') || stepOn('posiciones'),
     };
     if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }

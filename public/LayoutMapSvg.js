@@ -208,7 +208,7 @@
         const labelBoxes = [];
         const addBox = (x, baseline, text, size, anchor) => { labelBoxes.push(LC.labelBox(x, baseline, text, size, anchor)); };
         // las medidas de afuera de la nave también cuentan: un nombre que sobresale de la nave no debe quedar debajo de una
-        if (options.measures !== false) {
+        if (options.measures !== false && on('contorno')) {
             LC.sideMeasures(layout.vertices, true).forEach((m) => {
                 if (m.len * sc < 24) return;
                 const w = String(fmt(m.len)).length * 4.4 + 2;
@@ -275,7 +275,7 @@
             });
         };
         if (options.measures !== false) {
-            measure(layout.vertices, true, 24);
+            if (on('contorno')) measure(layout.vertices, true, 24);
             (on('zonas') ? (layout.zones || []) : []).forEach((z) => { if (Math.min(z.l, z.w) * sc >= 44) measure(LC.zonePoints(z), false, 30); });
         }
         // Los pasillos son su propia capa (paso Tránsito): rayas (principal) o puntos (entre pasillos), debajo de las huellas y los activos.
