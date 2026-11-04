@@ -2891,16 +2891,9 @@ let scene3dLoading = null;
 let picker3d = null; // el selector de activos del 3D (LayoutAssetPicker.js)
 let scene3dTimer = 0;
 let scene3dLabels = true;
-// Las capas del 3D que se están viendo (se recuerdan en este navegador): paredes, puertas, luz, columnas, zonas y activos.
-const LAYERS3D_KEY = 'sgn_layout_3d_layers';
-const LAYER3D_NAMES = ['contour', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets'];
-const LAYER3D_LABEL_KEYS = { walls: 'main.layout3dCapaWalls', doors: 'main.layout3dCapaDoors', power: 'main.layout3dCapaPower', columns: 'main.layout3dCapaColumns', zones: 'main.layout3dCapaZones', footprints: 'main.layout3dCapaFootprints', assets: 'main.layout3dCapaAssets' };
-const scene3dLayers = { walls: true, doors: true, power: true, columns: true, zones: true, footprints: true, assets: true };
 // El 3D sigue los PASOS igual que el croquis: cada paso encendido muestra su capa y apagarlo la oculta (Contorno = el contorno, Paredes = las paredes, Obstáculos = columnas y desniveles, Puertas, Zonas, Huella-Espacio = huellas,
-// Energía Eléctrica = luz, Activos y Posiciones = activos); cada uno es independiente de los demás. La lista Capas ya NO repite los pasos: solo lleva lo que no es un paso, Paredes y Columnas, para esconderlos aunque su paso esté
-// encendido (por ejemplo para ver todo el piso).
+// Energía Eléctrica = luz, Activos y Posiciones = activos); cada uno es independiente de los demás. Ya no hay un botón de Capas aparte: lo que se ve en el 3D sale de los pasos encendidos.
 function effective3dLayers() {
-    const on = (name) => scene3dLayers[name] !== false;
     // con un enfoque: solo lo enfocado (sin paredes, columnas, puertas ni luz) o, con el resto «tenue», todo lo de siempre; los botones de ocultar de la búsqueda valen en los dos
     const f = state.find;
     const hide = state.findHide || {};
@@ -2908,13 +2901,12 @@ function effective3dLayers() {
         return { contour: false, walls: false, columns: false, doors: false, power: false, objects: false, transit: false, safety: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
     }
     const layers = {
-        contour: stepOn('contorno'), walls: stepOn('paredes') && on('walls'), columns: stepOn('obstaculos') && on('columns'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
+        contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), assets: stepOn('activos') || stepOn('posiciones'),
     };
     if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }
     return layers;
 }
-try { Object.assign(scene3dLayers, JSON.parse(localStorage.getItem(LAYERS3D_KEY) || '{}')); } catch (err) { /* sin almacenamiento: se ven todas */ }
 const lazyScripts = {};
 const can3d = () => !!(state.perms && state.perms.canView3D);
 function loadScriptOnce(src) {
@@ -3014,10 +3006,9 @@ function updateViewBtns() {
     $('layout-mode').hidden = !allowed; // sin 3D no hay nada que elegir: el interruptor 2D | 3D no sale
     updateTextsMenu();
     [['layout-3d-zoom-in', 'main.layout3dAcercar'], ['layout-3d-zoom-out', 'main.layout3dAlejar']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
-    // Capas del 3D: un grupo de iconos con su propia hoja del árbol; solo se ve quien la tiene.
+    // Elegir los activos del 3D: un grupo con su propia hoja del árbol (iconLayout3dCapas); solo se ve quien la tiene.
     $('layout-3d-layers').hidden = !(state.perms && state.perms.canToggle3dLayers);
-    $('layout-capas').hidden = !(state.perms && state.perms.canToggle3dLayers);
-    [['layout-capas-btn', 'main.layoutCapasBtn'], ['layout-texts-btn', 'main.layoutTextos']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
+    [['layout-texts-btn', 'main.layoutTextos']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
     // Elegir qué activos se ven: se marca cuando hay alguno oculto y no sirve con la capa de activos apagada
     const pickBtn = $('layout-3d-assets-pick');
     const hiddenCount = picker3d ? picker3d.getHidden().size : 0;
@@ -3028,14 +3019,6 @@ function updateViewBtns() {
     pickBtn.setAttribute('aria-label', t('main.layout3dActivosElegir') + (hiddenCount ? ` (${pickTotal - hiddenCount}/${pickTotal})` : ''));
     pickBtn.title = pickBtn.getAttribute('aria-label');
     if (picker3d && (!state.view3d || effective3dLayers().assets === false) && picker3d.isOpen()) picker3d.hide();
-    document.querySelectorAll('[data-3d-layer]').forEach((btn) => {
-        const name = btn.getAttribute('data-3d-layer');
-        const on = scene3dLayers[name] !== false;
-        btn.setAttribute('aria-pressed', String(on));
-        btn.classList.toggle('off', !on);
-        btn.setAttribute('aria-label', t(on ? 'main.layout3dCapaOcultar' : 'main.layout3dCapaVer', { name: t(LAYER3D_LABEL_KEYS[name]) }));
-        btn.title = btn.getAttribute('aria-label');
-    });
     const labelsBtn = $('layout-3d-labels');
     labelsBtn.setAttribute('aria-pressed', String(scene3dLabels));
     labelsBtn.classList.toggle('off', !scene3dLabels);
@@ -3094,13 +3077,6 @@ document.querySelectorAll('.layout-3d-view').forEach((btn) => btn.addEventListen
     if (!scene3d) return;
     document.querySelectorAll('.layout-3d-view').forEach((b) => b.classList.toggle('on', b === btn));
     scene3d.setView(btn.getAttribute('data-view'));
-}));
-document.querySelectorAll('[data-3d-layer]').forEach((btn) => btn.addEventListener('click', () => {
-    const name = btn.getAttribute('data-3d-layer');
-    scene3dLayers[name] = scene3dLayers[name] === false;
-    try { localStorage.setItem(LAYERS3D_KEY, JSON.stringify(scene3dLayers)); } catch (err) { /* no se recuerda */ }
-    updateViewBtns();
-    if (scene3d) { const eff = effective3dLayers(); LAYER3D_NAMES.forEach((n) => scene3d.setLayer(n, eff[n])); }
 }));
 $('layout-3d-assets-pick').addEventListener('click', () => { if (picker3d) picker3d.toggle(); });
 $('layout-3d-labels').addEventListener('click', () => {
