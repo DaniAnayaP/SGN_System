@@ -572,9 +572,16 @@
         // to an exact-match test). Toggling always adds/removes every key in
         // `leafKeys` together, mirroring the existing setKeys() cascade the
         // other two modes already use for their checkboxes.
-        function extraSlotArgs(ownKey, leafKeys) {
+        // coverageKeys (opcional, una función que devuelve las llaves): lo que hay MÁS ABAJO de este nivel además de lo que marca el nivel (las columnas de sus pantallas). Un nivel cubierto por
+        // completo (verde o amarillo) pero con algo sin activar más abajo se pinta como mixto (−), así la línea de «no tiene todos los accesos activos» sube desde la tabla hasta el departamento.
+        // Solo cambia lo que se ve: lo que marca o desmarca el nivel (leafKeys) y lo que cuesta siguen igual.
+        function extraSlotArgs(ownKey, leafKeys, coverageKeys) {
             if (mode !== 'clientTricolor') return [ownKey, undefined];
-            const color = colorFor(leafKeys);
+            let color = colorFor(leafKeys);
+            if ((color === 'green' || color === 'yellow') && typeof coverageKeys === 'function') {
+                const deeper = coverageKeys();
+                if (deeper.length > leafKeys.length && colorFor(deeper) === null) color = null;
+            }
             const stageable = grantLimits ? leafKeys.filter((k) => !isLimitLocked(k)) : leafKeys;
             const lockedReason = grantLimits && leafKeys.length > 0 && stageable.length === 0 ? limitReasonKey(leafKeys[0]) : null;
             return [ownKey, {
@@ -1212,6 +1219,14 @@
             return keys;
         }
 
+        // clientTricolor: todo lo que cuenta para saber si un nivel «tiene todos sus accesos»: sus pantallas y, de cada pantalla, sus columnas (las mismas llaves que cuenta la fila «Tabla <X>»).
+        const coverageOfSubSm = (section, item, sm, subSm) => [
+            subSm.standalone ? keyOf(section.id, subSm.id, null) : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`),
+            ...tableSoloVerKeys(section, item, sm, subSm),
+        ];
+        const coverageOfSm = (section, item, sm) => (sm.submenu && sm.submenu.length ? sm.submenu.flatMap((subSm) => coverageOfSubSm(section, item, sm, subSm)) : [keyOf(section.id, item.id, sm.id)]);
+        const coverageOfItem = (section, item) => (item.submenu && item.submenu.length ? item.submenu.flatMap((sm) => coverageOfSm(section, item, sm)) : [keyOf(section.id, item.id, null)]);
+
         // Mirrors PermissionTree.js's cascadeTableColumns -- checking the
         // heading lands every column on Solo Ver only (Operar/Editar/
         // Autorizar stay a deliberate per-column choice); unchecking clears
@@ -1290,7 +1305,7 @@
                 const { row: sectionRowEl, input: sectionInput } = buildRow(t(sectionLabelKey(section)), 0, section.items.length ? {
                     expanded: sectionExpanded,
                     onToggle: () => { if (sectionExpanded) expandedSections.delete(section.id); else expandedSections.add(section.id); },
-                } : null, ...extraSlotArgs(keyOf(section.id, null, null), sectionLeafKeys), computeAppToggle(sectionLeafKeys) || appExtraSlotArgs(sectionLeafKeys));
+                } : null, ...extraSlotArgs(keyOf(section.id, null, null), sectionLeafKeys, () => section.items.flatMap((item) => coverageOfItem(section, item))), computeAppToggle(sectionLeafKeys) || appExtraSlotArgs(sectionLeafKeys));
                 if (sectionInput && mode !== 'clientTricolor') {
                     sectionInput.checked = sectionChecked === sectionLeafKeys.length && sectionLeafKeys.length > 0;
                     sectionInput.indeterminate = sectionChecked > 0 && sectionChecked < sectionLeafKeys.length;
@@ -1316,7 +1331,7 @@
                     const { row: itemRowEl, input: itemInput } = buildRow(t(item.labelKey, item.labelParams), 1, hasSubmenu ? {
                         expanded: itemExpanded,
                         onToggle: () => { if (itemExpanded) expandedItems.delete(itemKey); else expandedItems.add(itemKey); },
-                    } : null, ...extraSlotArgs(keyOf(section.id, item.id, null), itemLeafKeys), computeAppToggle(itemLeafKeys) || appExtraSlotArgs(itemLeafKeys), null, hasSubmenu ? null : itemLeafKeys[0]);
+                    } : null, ...extraSlotArgs(keyOf(section.id, item.id, null), itemLeafKeys, () => coverageOfItem(section, item)), computeAppToggle(itemLeafKeys) || appExtraSlotArgs(itemLeafKeys), null, hasSubmenu ? null : itemLeafKeys[0]);
                     if (itemInput && mode !== 'clientTricolor') {
                         itemInput.checked = itemChecked === itemLeafKeys.length;
                         itemInput.indeterminate = itemChecked > 0 && itemChecked < itemLeafKeys.length;
@@ -1347,7 +1362,7 @@
                         const { row: smRowEl2, input: smInput2 } = buildRow(t(sm.labelKey, sm.labelParams), 2, {
                             expanded: smExpandedNow,
                             onToggle: () => { if (smExpandedNow) expandedItems.delete(smKey); else expandedItems.add(smKey); },
-                        }, ...extraSlotArgs(smCostKey, smLeafKeys), computeAppToggle(smLeafKeys) || appExtraSlotArgs(smLeafKeys));
+                        }, ...extraSlotArgs(smCostKey, smLeafKeys, () => coverageOfSm(section, item, sm)), computeAppToggle(smLeafKeys) || appExtraSlotArgs(smLeafKeys));
                         if (smInput2 && mode !== 'clientTricolor') {
                             smInput2.checked = smChecked === smLeafKeys.length;
                             smInput2.indeterminate = smChecked > 0 && smChecked < smLeafKeys.length;
@@ -1370,7 +1385,7 @@
                             const { row: subRowEl, input: subInput } = buildRow(t(subSm.labelKey, subSm.labelParams), 3, subHasDetail ? {
                                 expanded: subDetailExpanded,
                                 onToggle: () => { if (subDetailExpanded) expandedItems.delete(subDetailKey); else expandedItems.add(subDetailKey); },
-                            } : null, ...extraSlotArgs(key, [key]), computeAppToggle([key]) || appExtraSlotArgs([key]), null, key);
+                            } : null, ...extraSlotArgs(key, [key], () => coverageOfSubSm(section, item, sm, subSm)), computeAppToggle([key]) || appExtraSlotArgs([key]), null, key);
                             if (subInput && mode !== 'clientTricolor') {
                                 subInput.checked = grantSet.has(key);
                                 subInput.addEventListener('change', () => { setKeys([key], subInput.checked); render(); });
