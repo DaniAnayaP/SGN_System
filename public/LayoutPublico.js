@@ -14,7 +14,7 @@
             spaces: 'espacios', noZone: 'Sin zona asignada', zoneWord: 'Zona', noCodes: 'Todavía no hay códigos en esta categoría. Aquí aparecerán con sus fotos y su ubicación.',
             zoomIn: 'Acercar', zoomOut: 'Alejar', zoomReset: 'Ver todo el croquis', codesOne: '1 código en esta zona', codesMany: '{n} códigos en esta zona',
             metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
-            restRow: 'Sin zona (espacio muerto)', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos', zonesHintNoCodes: '{z} zonas',
+            restRow: 'Sin zona (espacio muerto)', transitRow: 'Pasillos fuera de toda zona', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos', zonesHintNoCodes: '{z} zonas',
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
             home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
             rotate: 'Girar el croquis', measures: 'Medidas', areaBtn: 'm² de las zonas', layers: 'Capas del croquis', mapToggle: 'Croquis',
@@ -45,7 +45,7 @@
             spaces: 'spaces', noZone: 'No zone assigned', zoneWord: 'Zone', noCodes: 'There are no codes in this category yet. They will appear here with their photos and location.',
             zoomIn: 'Zoom in', zoomOut: 'Zoom out', zoomReset: 'Show the whole map', codesOne: '1 code in this zone', codesMany: '{n} codes in this zone',
             metrics: 'Metric data', metricsHint: '{n} m² of total area and more', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
-            restRow: 'No zone (dead space)', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes', zonesHintNoCodes: '{z} zones',
+            restRow: 'No zone (dead space)', transitRow: 'Aisles outside any zone', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes', zonesHintNoCodes: '{z} zones',
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
             home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
             rotate: 'Rotate the sketch', measures: 'Measures', areaBtn: 'Zone m²', layers: 'Sketch layers', mapToggle: 'Sketch',
@@ -933,7 +933,7 @@
     function metricDetailHtml(data, key) {
         const m = window.LayoutCalc.metricRows(data.kpis, key);
         const rows = m.rows.map((r) => {
-            const name = r.kind === 'rest' ? TEXT.restRow : r.kind === 'overlap' ? TEXT.overlapRow : r.name;
+            const name = r.kind === 'rest' ? TEXT.restRow : r.kind === 'transit' ? TEXT.transitRow : r.kind === 'overlap' ? TEXT.overlapRow : r.name;
             const type = r.kind === 'zone' ? (r.type ? (TEXT.zone[r.type] || r.type) : TEXT.noZone) : '—';
             return `<tr><td>${esc(name)}</td><td>${esc(type)}</td><td class="num">${fmt(r.value)} ${m.unit}</td></tr>`;
         }).join('') || `<tr><td colspan="3" class="emptyrow">${esc(TEXT.noZonesInMetric)}</td></tr>`;

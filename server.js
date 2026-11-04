@@ -6473,7 +6473,7 @@ const LayoutCalc = require('./public/LayoutCalc.js');
 const RelTemplate = require('./public/RelTemplate.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
-const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones' };
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', transito: 'Tránsito', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 
 function layoutPermissions(req) {
@@ -6563,11 +6563,13 @@ function buildPublicLayoutPayload(clientId, row) {
         // Las paredes (obstáculos del contorno) van en la página pública porque son parte de la nave; columnas, desniveles y el plano de fondo no.
         obstacles: (l.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, name: o.name, kind: o.kind, mode: o.mode, wall: o.wall, dist: o.dist, x: o.x, y: o.y, l: o.l, w: o.w })),
         power: (l.power || []).map((e) => ({ type: e.type, wall: e.wall, dist: e.dist, height: e.height })),
+        // Los pasillos (Tránsito) se dibujan en la página pública y cuentan en los m² de pasillos; quién transita y las medidas no salen.
+        transit: (l.transit || []).map((p) => ({ id: p.id, code: p.code, name: p.name, type: p.type, x: p.x, y: p.y, l: p.l, w: p.w })),
     };
     // Color representativo del cliente (el que se elige al darlo de alta): la hoja y la vista pública se pintan con él. Sin color válido va vacío y todo se ve como siempre.
     const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
     // siteName = el Sitio (título de la página, p. ej. CEDIS CHIHUAHUA); zoneCodes = cuántos códigos hay en cada zona (solo la cuenta, nunca la lista).
-    return { companyName: (client && client.company_name) || '', siteName: l.siteName || '', zoneCodes: countCodesByZone(clientId), hasLogo: !!clientLogoDataUrl(clientId), companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis({ ...pub, obstacles: l.obstacles || [] }) };
+    return { companyName: (client && client.company_name) || '', siteName: l.siteName || '', zoneCodes: countCodesByZone(clientId), hasLogo: !!clientLogoDataUrl(clientId), companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', version: row.version, updatedAt: row.updatedAt, layout: pub, kpis: LayoutCalc.computeKpis({ ...pub, obstacles: l.obstacles || [], transit: l.transit || [] }) };
 }
 
 function layoutSummary(layout, section) {
@@ -6581,6 +6583,7 @@ function layoutSummary(layout, section) {
     if (section === 'puertas') return `${(layout.doors || []).length} puertas`;
     if (section === 'luz') return `${(layout.power || []).length} conexiones de luz`;
     if (section === 'sensores') return `${(layout.sensors || []).length} sensores`;
+    if (section === 'transito') return `${(layout.transit || []).length} pasillos`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
     if (section === 'activos') return `${(layout.spaces || []).length} activos, ${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} con clasificación o tipo, ${(layout.spaces || []).filter((s) => s.fmt).length} con formato propio`;
     if (section === 'posiciones') return `${(layout.spaces || []).reduce((n, s) => n + (s.bays || []).length, 0)} huecos con datos propios`;
@@ -6672,6 +6675,11 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     {
         const freshSpaces = LayoutCalc.newSpaceViolations(next, existing ? existing.layout : null);
         if (freshSpaces.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSpaces.map((v) => v.message), section: 'activos' });
+    }
+    // Tránsito: un pasillo va dentro de una zona, lo que transita por él tiene que caber y nada (huella, columna, pared, desnivel) puede ir adentro. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
+    {
+        const freshTransit = LayoutCalc.newTransitViolations(next, existing ? existing.layout : null);
+        if (freshTransit.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshTransit.map((v) => v.message), section: 'transito' });
     }
     // Cada espacio con clasificación o tipo de activo debe apuntar a uno de los catálogos del cliente (activo, o el mismo que ya tenía guardado).
     {

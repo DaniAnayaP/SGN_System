@@ -8,9 +8,9 @@
 // Envuelto en una función: este script comparte el ámbito global con Dashboard.js, que ya declara nombres como SECTION_LABEL_KEYS.
 (function () {
 const LC = window.LayoutCalc;
-const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'espacios', 'luz', 'sensores', 'activos', 'posiciones'];
+const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'transito', 'espacios', 'luz', 'sensores', 'activos', 'posiciones'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
+    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', transito: 'main.layoutStepTransito', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -460,6 +460,66 @@ function computeSpaceIssues() {
     if (!state.draft) return;
     LC.spaceViolations(state.draft).forEach((v) => { const m = spIssues.get(v.id) || {}; m[v.kind] = v; spIssues.set(v.id, m); });
 }
+// Tránsito: las faltas de cada pasillo y de lo que se mete en él (LayoutCalc.transitViolations): trIssues = id -> { nozone, out, fit: [], blocked: [], intransit: [] }. Se vuelve a calcular con cada cambio del borrador.
+let trIssues = new Map();
+function computeTransitIssues() {
+    trIssues = new Map();
+    if (!state.draft) return;
+    LC.transitViolations(state.draft).forEach((v) => { const m = trIssues.get(v.id) || {}; if (v.kind === 'nozone' || v.kind === 'out') m[v.kind] = v; else (m[v.kind] = m[v.kind] || []).push(v); trIssues.set(v.id, m); });
+}
+// El texto de una falta de Tránsito, en el idioma de la pantalla.
+function transitIssueText(v) {
+    const named = (k) => t(`main.layoutQuien_${k}`);
+    if (v.kind === 'nozone') return t('main.layoutVioTr_nozone', { code: v.code });
+    if (v.kind === 'out') return t('main.layoutVioTr_out', { code: v.code, zone: v.zoneName || '' });
+    if (v.kind === 'fit') return t('main.layoutVioTr_fit', { code: v.code, who: named(v.who), what: (v.problems || []).map((k) => t(`main.layoutQuienDim_${k}`)).join(' / ') });
+    return t('main.layoutVioTr_blocked', { code: v.transitCode || v.code, other: v.otherCode || v.code });
+}
+function transitIssuesAll() {
+    const out = [];
+    LC.transitViolations(state.draft).forEach((v) => { if (v.kind !== 'intransit') out.push(v); });
+    return out;
+}
+// Las cajas del pasillo y las listas de quién transita se marcan en rojo cuando algo no cumple; abajo del paso va la lista de lo que falta.
+function applyTransitMarks() {
+    (state.draft.transit || []).forEach((p, i) => {
+        const bad = trIssues.get(p.id) || {};
+        const geoBad = !!(bad.nozone || bad.out || (bad.blocked || []).length);
+        const fitKeys = new Set();
+        (bad.fit || []).forEach((f) => (f.problems || []).forEach((k) => fitKeys.add(k)));
+        [['x', geoBad], ['y', geoBad], ['l', geoBad || fitKeys.has('l')], ['w', geoBad || fitKeys.has('w')], ['h', fitKeys.has('h')]].forEach(([key, flag]) => {
+            const box = document.querySelector(`[data-l="transit"][data-i="${i}"][data-k="${key}"]`);
+            if (box) box.classList.toggle('layout-missing', !!flag);
+        });
+        const zoneCell = document.querySelector(`[data-tr-zone="${i}"]`);
+        if (zoneCell) {
+            const z = state.draft.zones.find((r) => r.id === p.zoneId);
+            zoneCell.textContent = bad.nozone ? t('main.layoutHuellaSinZona') : (z ? z.name : '—');
+            zoneCell.classList.toggle('layout-bad', !!(bad.nozone || bad.out));
+        }
+        LC.TRANSIT_WHO.forEach((k) => {
+            const chip = document.querySelector(`[data-tr-who="${i}:${k}"]`);
+            if (chip) chip.classList.toggle('layout-bad', (bad.fit || []).some((f) => f.who === k));
+        });
+    });
+    const box = document.querySelector('[data-tr-issues]');
+    if (box) {
+        const all = transitIssuesAll();
+        box.hidden = !all.length;
+        box.innerHTML = all.map((v) => `<p>${esc(transitIssueText(v))}</p>`).join('');
+    }
+}
+function onTransitWho(el) {
+    const [i, key] = el.getAttribute('data-who').split(':');
+    const row = state.draft.transit[Number(i)];
+    if (!row) return;
+    const set = new Set(row.who || []);
+    if (el.checked) set.add(key); else set.delete(key);
+    row.who = LC.TRANSIT_WHO.filter((k) => set.has(k));
+    if (!row.who.includes('other')) delete row.otherName;
+    renderPanel();
+    refreshLive();
+}
 function applyActivoMarks() {
     (state.draft.spaces || []).forEach((s, i) => {
         const eff = ownEffective(s);
@@ -581,11 +641,36 @@ function stepHtml(step) {
         const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wall', wallOptionsHtml(x.wall), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${removeCell('sensors', i, dis)}</tr>`);
         return `${table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutPared', 'main.layoutDistancia', 'main.layoutAlturaPiso', 'main.layoutZona', ''], rows)}${addButton('sensors', 'main.layoutAgregarSensor', dis, true)}`;
     }
+    if (step === 'transito') {
+        // Cada renglón es un PASILLO: por donde pasan personas, montacargas, carritos y plataformas. Va dentro de una zona (la zona sale de su lugar, como la de las huellas), se conecta con otro que lo toque y nada puede ir adentro.
+        // Lo que transita por él tiene que caber (ancho, largo y alto, con las medidas de la tabla de abajo). El código (T001…) lo pone el sistema.
+        d.transitSizes = d.transitSizes || LC.transitSizesOf(d);
+        const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
+        const rows = (d.transit || []).map((p, i) => {
+            const chips = LC.TRANSIT_WHO.map((k) => `<label class="layout-who${(p.who || []).includes(k) ? ' on' : ''}" data-tr-who="${i}:${k}" data-help-key="layoutTransitoQuien"><input type="checkbox" data-who="${i}:${k}"${(p.who || []).includes(k) ? ' checked' : ''}${dis ? ' disabled' : ''}><span>${esc(t(`main.layoutQuien_${k}`))}</span></label>`).join('');
+            const other = (p.who || []).includes('other') ? `<input type="text" class="layout-who-other" maxlength="${LC.LIMITS.text}" data-l="transit" data-i="${i}" data-k="otherName" data-help-key="layoutTransitoQuien" value="${esc(p.otherName || '')}" placeholder="${esc(t('main.layoutQuienOtroCual'))}"${dis ? ' disabled' : ''}>` : '';
+            const alto = `<td><input type="number" step="0.1" min="0" data-l="transit" data-i="${i}" data-k="h" data-help-key="layoutTransitoAltoLibre" value="${p.h > 0 ? p.h : ''}" placeholder="—"${dis ? ' disabled' : ''}></td>`;
+            return `<tr>${cellText('transit', i, 'name', p.name, dis)}<td class="layout-calc"><b data-tr-code="${i}">${esc(p.code || '')}</b></td>${cellSelect('transit', i, 'type', optionsHtml('transit', LC.TRANSIT_TYPES, p.type), dis)}<td><div class="layout-whoset">${chips}${other}</div></td><td class="layout-calc" data-tr-zone="${i}">${esc(zoneName(p.zoneId))}</td>${cellNum('transit', i, 'x', p.x, dis)}${cellNum('transit', i, 'y', p.y, dis)}${cellNum('transit', i, 'l', p.l, dis)}${cellNum('transit', i, 'w', p.w, dis)}${alto}<td class="layout-calc"><span data-tr-area="${i}">${fmt((Number(p.l) || 0) * (Number(p.w) || 0))} m²</span></td>${removeCell('transit', i, dis)}</tr>`;
+        });
+        const sizeRows = LC.TRANSIT_WHO.map((k) => {
+            const sz = d.transitSizes[k] || { w: 0, l: 0, h: 0 };
+            const box = (dim) => `<td><input type="number" step="0.05" min="0" data-l="transitSizes" data-k="${k}:${dim}" data-help-key="layoutTransitoMedidas" value="${sz[dim] > 0 ? sz[dim] : ''}" placeholder="—"${dis ? ' disabled' : ''}></td>`;
+            return `<tr><td class="layout-calc"><b>${esc(t(`main.layoutQuien_${k}`))}</b></td>${box('w')}${box('l')}${box('h')}</tr>`;
+        });
+        const issues = `<div class="layout-vio" data-tr-issues hidden></div>`;
+        const list = rows.length ? table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutTipo', 'main.layoutQuienTransita', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAltoLibre', 'main.layoutSuperficie', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutTransitoVacio'))}</p>`;
+        return `${addButton('transit', 'main.layoutAgregarPasillo', dis, true)}${list}${issues}
+            <h4 class="layout-sub" data-help-key="layoutTransitoMedidas">${esc(t('main.layoutTransitoMedidasTitulo'))}</h4>
+            <p class="layout-muted">${esc(t('main.layoutTransitoMedidasAviso'))}</p>
+            ${table(['main.layoutQuienTransita', 'main.layoutAncho', 'main.layoutLargo', 'main.layoutAlto'], sizeRows)}`;
+    }
     if (step === 'zonas') {
         const rows = d.zones.map((z, i) => {
             const saved = isSavedRow('zones', z.id);
             const free = Array.isArray(z.pts);
-            const typeOptions = `<option value=""${z.type ? '' : ' selected'}>${esc(t('main.layoutSinZona'))}</option>${optionsHtml('zone', LC.ZONE_TYPES, z.type)}`;
+            // Los pasillos ya no son un tipo de zona (van en Tránsito); una zona de pasillo de forma libre que quedó de antes sigue mostrando el suyo.
+            const zoneTypeIds = LC.ZONE_TYPES_CHOOSABLE.includes(z.type) || !z.type ? LC.ZONE_TYPES_CHOOSABLE : [...LC.ZONE_TYPES_CHOOSABLE, z.type];
+            const typeOptions = `<option value=""${z.type ? '' : ' selected'}>${esc(t('main.layoutSinZona'))}</option>${optionsHtml('zone', zoneTypeIds, z.type)}`;
             const o = free && z.pts[0] ? z.pts[0] : [z.x, z.y];
             const position = free
                 ? `${cellNum('zones', i, 'ox', o[0], dis, '0.05')}${cellNum('zones', i, 'oy', o[1], dis, '0.05')}<td class="layout-calc">—</td><td class="layout-calc">—</td>`
@@ -684,7 +769,7 @@ let panelScrollEnd = false;
 const panelScrollers = () => Array.from(document.querySelectorAll('#layout-panel .layout-section-body, #layout-panel .layout-scroll'));
 function renderPanel() {
     // el panel también se dibuja con lo que sale de la huella (zona de cada activo, si está activo): se saca antes de dibujarlo, no solo en refreshLive
-    if (state.draft) { syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; computeFootprintIssues(); computeSpaceIssues(); }
+    if (state.draft) { syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; computeFootprintIssues(); computeSpaceIssues(); computeTransitIssues(); }
     const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
     const tabs = SECTION_ORDER.map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
@@ -709,7 +794,7 @@ function renderPanel() {
     panelScrollStep = state.focus;
     bindLayoutFilters();
     markSelectedRow();
-    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); }
+    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); applyTransitMarks(); }
     applyFindToTables();
 }
 
@@ -1228,6 +1313,16 @@ function renderSvg() {
     });
     // las medidas de adentro se calculan al final, cuando ya se conocen los nombres de TODAS las zonas
     measureJobs.forEach(([pts, minPx, zid]) => { measureLabels += measureText(pts, minPx, zid); });
+    // Los pasillos (paso Tránsito): sombreados con rayas (principal) o puntos (entre pasillos), debajo de las huellas. Con falta (fuera de zona, no cabe, algo adentro o lo que transita no cabe) llevan un contorno rojo punteado.
+    (on('zonas') || on('transito') ? (d.transit || []) : []).forEach((p) => {
+        const w = Math.max((Number(p.l) || 0) * sc, 3);
+        const h = Math.max((Number(p.w) || 0) * sc, 3);
+        const bad = trIssues.get(p.id) || {};
+        const title = `<title>${esc(p.code || '')} · ${esc(p.name || '')} · ${esc(typeLabel('transit', p.type))}</title>`;
+        s += `<rect class="lz ${p.type === 'between' ? 'lz-aisle2' : 'lz-aisle'}" data-tid="${esc(p.id)}" x="${X(p.x)}" y="${Y(p.y)}" width="${w}" height="${h}">${title}</rect>`;
+        if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(p.x) + w / 2}" y="${Y(p.y) + h / 2 + 3}" text-anchor="middle">${esc(p.code || '')}</text>`;
+        if (bad.nozone || bad.out || (bad.fit || []).length || (bad.blocked || []).length) s += `<rect class="lbad" x="${X(p.x) - 2}" y="${Y(p.y) - 2}" width="${w + 4}" height="${h + 4}" rx="3"><title>${esc(p.code || '')} · ${esc(t('main.layoutPasilloConFalta'))}</title></rect>`;
+    });
     if (!finding || dimmed) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     // El contorno de arriba es solo el marco del terreno (línea punteada). Las PAREDES son obstáculos puestos encima y forman parte de la nave: se dibujan siempre; las columnas, desniveles y otros solo con el paso Contorno.
     const obstacleShapes = LC.obstacleShapes(d);
@@ -1236,6 +1331,7 @@ function renderSvg() {
     (on('contorno') ? obstacleShapes.filter(({ o }) => o.kind !== 'wall') : []).forEach(({ o, g }) => {
         const height = o.kind === 'step' ? ` · ${(o.dz || 0) > 0 ? '+' : ''}${fmt(o.dz || 0)} m` : '';
         s += `<polygon class="lo lo-${o.kind}" points="${obstaclePoly(g)}"><title>${esc(o.name)}${height}</title></polygon>`;
+        if ((trIssues.get(o.id) || {}).intransit) s += `<polygon class="lbad" points="${obstaclePoly(g)}"><title>${esc(o.name)} · ${esc(t('main.layoutEnTransitoTitulo'))}</title></polygon>`;
     });
     // Huella-Espacio y Activos son capas aparte: la HUELLA (el lugar en el piso) se dibuja con su paso y va primero, blanca con borde gris o con su color; el ACTIVO va encima con el suyo, un poco más chico, con su propio color (arena si no le han puesto uno): así se distinguen aunque midan lo mismo.
     if (showFp || showSp) {
@@ -1268,7 +1364,7 @@ function renderSvg() {
         });
     }
     if (showFp || showSp) {
-        d.footprints.forEach((f) => { if (fpIssues.has(f.id)) s += `<rect class="lbad" data-lf="${esc(f.id)}" x="${X(f.x) - 2}" y="${Y(f.y) - 2}" width="${Math.max(f.l * sc, 4) + 4}" height="${Math.max(f.d * sc, 4) + 4}" rx="3"><title>${esc(f.code)} · ${esc(t('main.layoutHuellaFueraTitulo'))}</title></rect>`; });
+        d.footprints.forEach((f) => { if ((trIssues.get(f.id) || {}).intransit && !fpIssues.has(f.id)) s += `<rect class="lbad" data-lf="${esc(f.id)}" x="${X(f.x) - 2}" y="${Y(f.y) - 2}" width="${Math.max(f.l * sc, 4) + 4}" height="${Math.max(f.d * sc, 4) + 4}" rx="3"><title>${esc(f.code)} · ${esc(t('main.layoutEnTransitoTitulo'))}</title></rect>`; if (fpIssues.has(f.id)) s += `<rect class="lbad" data-lf="${esc(f.id)}" x="${X(f.x) - 2}" y="${Y(f.y) - 2}" width="${Math.max(f.l * sc, 4) + 4}" height="${Math.max(f.d * sc, 4) + 4}" rx="3"><title>${esc(f.code)} · ${esc(t('main.layoutHuellaFueraTitulo'))}</title></rect>`; });
     }
     const halosAt = s.length; // aquí entran después los contornos de las etiquetas de las paredes: debajo de TODOS los textos
     s += zoneHalos + (sM ? measureHalos : '') + zoneLabels + (sM ? measureLabels : '');
@@ -1342,6 +1438,15 @@ function refreshLive() {
     applyFootprintMarks();
     applyActivoMarks();
     state.draft.zones.forEach((z, i) => { const cell = document.querySelector(`[data-zone-code="${i}"]`); if (cell) cell.textContent = z.code; });
+    // el código, la zona y los m² de cada pasillo salen de su lugar: se vuelven a sacar con cada cambio
+    computeTransitIssues();
+    (state.draft.transit || []).forEach((p, i) => {
+        const codeCell = document.querySelector(`[data-tr-code="${i}"]`);
+        if (codeCell) codeCell.textContent = p.code || '';
+        const areaCell = document.querySelector(`[data-tr-area="${i}"]`);
+        if (areaCell) areaCell.textContent = `${fmt((Number(p.l) || 0) * (Number(p.w) || 0))} m²`;
+    });
+    applyTransitMarks();
     // el código y la zona de cada sensor salen de la pared donde se puso: se vuelven a sacar con cada cambio
     (state.draft.sensors || []).forEach((s, i) => {
         const codeCell = document.querySelector(`[data-sensor-code="${i}"]`);
@@ -1635,6 +1740,13 @@ const ROW_FACTORY = {
     doors: () => ({ id: uid('d'), name: t('main.layoutPuertaNueva'), type: 'dock', wall: 1, dist: 0, width: 1.2, height: 2.1 }),
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     sensors: () => ({ id: uid('n'), code: '', type: 'both', zoneId: '', wall: 1, dist: 1, height: 2.5 }),
+    // un pasillo nuevo nace dentro de la primera zona con tipo (para que no empiece fuera de toda zona); sin zonas, cerca de la esquina
+    transit: () => {
+        const z = state.draft.zones.find((r) => r.type && !Array.isArray(r.pts) && r.l > 2 && r.w > 2);
+        const l = z ? Math.min(10, round2(z.l - 2)) : 10;
+        const w = z ? Math.min(3, round2(z.w - 2)) : 3;
+        return { id: uid('t'), code: '', name: `${t('main.layoutPasillo')} ${(state.draft.transit || []).length + 1}`, type: 'main', who: ['people'], zoneId: '', x: z ? round2(z.x + 1) : 1, y: z ? round2(z.y + 1) : 1, l, w };
+    },
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), kind: 'column', mode: 'free', x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, code: '', type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
     // una huella nueva no puede ser más alta que la nave: mide 4.5 m de alto o, si la nave es más baja, lo que mide la nave
@@ -1642,13 +1754,14 @@ const ROW_FACTORY = {
     // un activo siempre va dentro de una huella: nace sin huella y hay que elegirla (no se puede guardar hasta entonces)
     spaces: () => ({ id: uid('s'), footprintId: '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
-const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
+const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', transit: 'transito', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
 // Los códigos los pone el sistema y no se editan: el de la zona (Z001…, consecutivo), el de la huella (H001… por zona, y su zona sale de dónde está en el croquis) y el del activo (letra de su tipo + número
 // consecutivo por zona y tipo: A001, G001…). Lo que ya estaba guardado y sigue igual conserva su código; lo nuevo (todavía sin guardar) y lo que cambió de zona o de tipo lo recibe cada vez que se acomoda,
 // así siempre es el que le toca, el mismo que le pondrá el servidor al guardar.
 function syncHuellas() {
     const d = state.draft;
-    const next = LC.lockCodes(LC.deriveSensorZones(LC.deriveSpaces(LC.deriveFootprintZones(d))), state.saved);
+    const next = LC.lockCodes(LC.deriveTransitZones(LC.deriveSensorZones(LC.deriveSpaces(LC.deriveFootprintZones(d)))), state.saved);
+    d.transit = next.transit || d.transit || [];
     d.zones = next.zones;
     d.footprints = next.footprints;
     d.sensors = next.sensors;
@@ -1663,6 +1776,7 @@ function onEdit(event) {
         if (event.type === 'change' && /^dir:/.test(el.getAttribute('data-cs') || el.getAttribute('data-zs'))) renderPanel();
         return;
     }
+    if (state.draft && el.getAttribute('data-who') !== null) { onTransitWho(el); return; }
     if (state.draft && el.getAttribute('data-cat') !== null) { onCategoryEdit(el); return; }
     const list = el.getAttribute('data-l');
     if (!list || !state.draft) return;
@@ -1699,13 +1813,23 @@ function onEdit(event) {
         const shownBay = LC.bayOf(space, n, c);
         const cap = document.querySelector(`[data-bay-cap="${el.getAttribute('data-i')}|${n}|${c}"]`);
         if (cap) cap.textContent = String(shownBay.rows * shownBay.depth);
+    } else if (list === 'transitSizes') {
+        // las medidas de lo que transita (ancho, largo y alto, en metros): vacío = sin medida (no se revisa)
+        const [who, dim] = String(el.getAttribute('data-k')).split(':');
+        state.draft.transitSizes = state.draft.transitSizes || LC.transitSizesOf(state.draft);
+        state.draft.transitSizes[who] = { ...(state.draft.transitSizes[who] || { w: 0, l: 0, h: 0 }), [dim]: value > 0 ? value : 0 };
     } else if (list === 'vertices') {
         state.draft.vertices[Number(el.getAttribute('data-i'))][Number(el.getAttribute('data-k'))] = value;
         state.open.contorno = false;
     } else {
         const row = state.draft[list][Number(el.getAttribute('data-i'))];
         const key = el.getAttribute('data-k');
-        if (list === 'obstacles' && (key === 'kind' || key === 'mode')) {
+        if (list === 'transit' && key === 'h') {
+            // el alto libre es opcional: vacío = no se revisa el alto
+            const raw = String(el.value).trim();
+            const n = parseFloat(raw);
+            if (raw !== '' && Number.isFinite(n) && n > 0) row.h = n; else delete row.h;
+        } else if (list === 'obstacles' && (key === 'kind' || key === 'mode')) {
             setObstacleKindOrMode(row, key, el.value);
         } else if (list === 'zones' && (key === 'ox' || key === 'oy')) {
             // una zona de forma libre se mueve completa desde su primera esquina
@@ -2744,6 +2868,15 @@ $('layout-save').addEventListener('click', async () => {
         const at = state.draft.spaces.findIndex((s) => s.id === v.id);
         const box = document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
+        return;
+    }
+    // Tránsito: lo nuevo o lo que cambió y no cumple (fuera de zona, no cabe en su zona, lo que transita no cabe, o algo adentro del pasillo) no se guarda.
+    const freshTransit = LC.newTransitViolations(state.draft, state.saved);
+    if (freshTransit.length) {
+        showStep('transito');
+        renderPanel();
+        refreshLive();
+        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${transitIssueText(freshTransit[0])}`, 'warning');
         return;
     }
     const clashed = LC.newColorClashes(state.draft, state.saved);

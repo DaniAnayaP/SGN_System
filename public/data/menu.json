@@ -1683,6 +1683,7 @@
             { "id": "colLayoutContorno", "labelKey": "main.colLayoutContorno", "permissionOnly": true },
             { "id": "colLayoutPuertas", "labelKey": "main.colLayoutPuertas", "permissionOnly": true },
             { "id": "colLayoutZonas", "labelKey": "main.colLayoutZonas", "permissionOnly": true },
+            { "id": "colLayoutTransito", "labelKey": "main.colLayoutTransito", "permissionOnly": true },
             { "id": "colLayoutEspacios", "labelKey": "main.colLayoutEspacios", "permissionOnly": true },
             { "id": "colLayoutLuz", "labelKey": "main.colLayoutLuz", "permissionOnly": true },
             { "id": "colLayoutSensores", "labelKey": "main.colLayoutSensores", "permissionOnly": true },

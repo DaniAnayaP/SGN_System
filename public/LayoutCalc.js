@@ -9,6 +9,8 @@
     else root.LayoutCalc = factory();
 }(typeof self !== 'undefined' ? self : this, function () {
     const ZONE_TYPES = ['dry', 'cold', 'chemical', 'finished', 'dock', 'office', 'aisle', 'aisle2'];
+    // Los pasillos ya no son un tipo de zona: viven en el paso Tránsito. Los dos tipos viejos se siguen leyendo (una zona de pasillo con forma libre se queda como estaba) pero ya no se ofrecen al elegir el tipo de una zona.
+    const ZONE_TYPES_CHOOSABLE = ['dry', 'cold', 'chemical', 'finished', 'dock', 'office'];
     // Zonas donde se almacena producto (las demás son andenes, oficinas o pasillos).
     const STORAGE_ZONE_TYPES = ['dry', 'cold', 'chemical', 'finished'];
     // Para qué se usa una zona (es aparte del tipo: una zona Seca puede ser de almacenamiento o de operaciones): almacenamiento, operaciones o instalaciones (baño, bombas, etc.).
@@ -41,10 +43,11 @@
         espacios: 'colLayoutEspacios',
         luz: 'colLayoutLuz',
         sensores: 'colLayoutSensores',
+        transito: 'colLayoutTransito',
         activos: 'colLayoutActivos',
         posiciones: 'colLayoutPosiciones',
     };
-    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
+    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -91,7 +94,7 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        return assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], vertices, heightM: round2(meanHeight(vertices)) })))))))));
+        return assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], vertices, heightM: round2(meanHeight(vertices)) }))))))))))));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -608,6 +611,7 @@
         }
         out = lockHuellaCodes(out, previous);
         out = lockSensorCodes(out, previous);
+        out = lockTransitCodes(out, previous);
         if (Array.isArray(out.spaces)) {
             const before = new Map(((previous && previous.spaces) || []).map((s) => [s.id, s]));
             const spaces = out.spaces.map((s) => {
@@ -750,6 +754,164 @@
             const assets = (next.spaces || []).filter((s) => s.footprintId === f.id && oldSpaces.has(s.id) && oldSpaces.get(s.id).code !== s.code).length;
             return { id: f.id, from: locator(from, before), to: locator(to, f), fromZone: from ? from.name : '', toZone: to ? to.name : '', assets };
         }).filter(Boolean);
+    }
+
+    // ---- Tránsito: los pasillos -------------------------------------------------------------------------------------------------------------
+    // Un pasillo es por donde pasan personas, montacargas, carritos y plataformas: vive DENTRO de una zona (la zona sale de su posición, como la de las huellas), se conecta con otro pasillo que lo toque, y nada puede ir adentro
+    // (ni huellas, ni columnas, ni paredes, ni desniveles). Lo que transita por él tiene que caber (ancho en el lado angosto, largo en el lado largo y alto en su «alto libre», si lo tiene). Rectángulo x, y, l (largo, en X) y w (ancho, en Y).
+    const TRANSIT_TYPES = ['main', 'between'];
+    const TRANSIT_WHO = ['people', 'forklift', 'cart', 'platform', 'other'];
+    // Medidas de partida de lo que transita (metros): ancho, largo y alto. «Otro» arranca sin medidas (no se revisa hasta que se capturen).
+    const TRANSIT_SIZE_DEFAULTS = { people: { w: 0.6, l: 0.5, h: 1.8 }, forklift: { w: 1.2, l: 2.8, h: 2.2 }, cart: { w: 0.7, l: 1.3, h: 1.2 }, platform: { w: 0.9, l: 1.6, h: 1.5 }, other: { w: 0, l: 0, h: 0 } };
+    function transitSizesOf(layout) {
+        const stored = (layout && layout.transitSizes) || {};
+        const out = {};
+        TRANSIT_WHO.forEach((k) => {
+            const d = TRANSIT_SIZE_DEFAULTS[k];
+            const s = stored[k] || {};
+            out[k] = { w: Number.isFinite(Number(s.w)) && s.w !== undefined ? Number(s.w) : d.w, l: Number.isFinite(Number(s.l)) && s.l !== undefined ? Number(s.l) : d.l, h: Number.isFinite(Number(s.h)) && s.h !== undefined ? Number(s.h) : d.h };
+        });
+        return out;
+    }
+    // Los pasillos del Layout ya viejos eran zonas de tipo pasillo: al leerlos (una sola vez, transitMigrated) cada zona rectangular de pasillo pasa a Tránsito con el mismo lugar y medidas y deja de estar en Zonas.
+    function migrateTransit(layout) {
+        if (!layout || typeof layout !== 'object') return layout;
+        if (layout.transit != null && !Array.isArray(layout.transit)) return layout; // entrada dañada: la validación lo reporta
+        const transit = Array.isArray(layout.transit) ? layout.transit : [];
+        const base = { ...layout, transit, transitSizes: layout.transitSizes && typeof layout.transitSizes === 'object' ? layout.transitSizes : transitSizesOf(null) };
+        if (layout.transitMigrated || !Array.isArray(layout.zones)) return base;
+        const legacy = layout.zones.filter((z) => z && (z.type === 'aisle' || z.type === 'aisle2') && !hasPoints(z) && z.active !== false);
+        if (!legacy.length) return { ...base, transitMigrated: true };
+        const taken = new Set(transit.map((p) => p.id));
+        const made = legacy.map((z) => {
+            let id = `t${String(z.id)}`.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'tz';
+            let n = 1;
+            while (taken.has(id)) { id = `${id.slice(0, 36)}${n}`; n += 1; }
+            taken.add(id);
+            return { id, name: z.name, type: z.type === 'aisle' ? 'main' : 'between', who: [], x: z.x, y: z.y, l: z.l, w: z.w };
+        });
+        return { ...base, zones: layout.zones.filter((z) => !legacy.includes(z)), transit: [...transit, ...made], transitMigrated: true };
+    }
+    // La zona del pasillo sale de su posición: la zona más chica que contiene su centro (sin zona si cae fuera de todas).
+    function deriveTransitZones(layout) {
+        if (!layout || !Array.isArray(layout.transit)) return layout;
+        let changed = false;
+        const transit = layout.transit.map((p) => {
+            const id = zoneOfPoint(layout.zones, (Number(p.x) || 0) + (Number(p.l) || 0) / 2, (Number(p.y) || 0) + (Number(p.w) || 0) / 2);
+            if ((p.zoneId || '') === id) return p;
+            changed = true;
+            return { ...p, zoneId: id };
+        });
+        return changed ? { ...layout, transit } : layout;
+    }
+    const transitCode = (n) => `T${String(n).padStart(3, '0')}`;
+    const isTransitCode = (c) => /^T\d{3,4}$/.test(String(c == null ? '' : c).trim());
+    // Cada pasillo que ya trae un código T### que no se repite lo conserva; el que no, recibe el siguiente después del más alto del Layout.
+    function assignTransitCodes(layout) {
+        if (!layout || !Array.isArray(layout.transit)) return layout;
+        const used = new Set();
+        const keep = layout.transit.map((p) => { const c = String(p.code == null ? '' : p.code).trim().toUpperCase(); if (isTransitCode(c) && !used.has(c)) { used.add(c); return c; } return ''; });
+        let next = Math.max(0, ...Array.from(used).map((c) => Number(c.slice(1)))) + 1;
+        let changed = false;
+        const transit = layout.transit.map((p, i) => {
+            let code = keep[i];
+            if (!code) { while (used.has(transitCode(next))) next += 1; code = transitCode(next); used.add(code); next += 1; }
+            if (code === p.code) return p;
+            changed = true;
+            return { ...p, code };
+        });
+        return changed ? { ...layout, transit } : layout;
+    }
+    // Al guardar: los códigos de los pasillos no se editan. Uno que ya existía conserva el suyo; uno nuevo recibe el siguiente.
+    function lockTransitCodes(next, previous) {
+        if (!next || !Array.isArray(next.transit)) return next;
+        const before = new Map(((previous && previous.transit) || []).map((p) => [p.id, p.code]));
+        const transit = next.transit.map((p) => { const code = before.has(p.id) ? before.get(p.id) : ''; return code === p.code ? p : { ...p, code }; });
+        return assignTransitCodes({ ...next, transit });
+    }
+    // ¿Se encima (con superficie, no solo se tocan) un rectángulo con un polígono convexo? Prueba de ejes separadores.
+    function rectOverlapsConvex(rect, poly) {
+        const rp = [[rect.x, rect.y], [rect.x + rect.l, rect.y], [rect.x + rect.l, rect.y + rect.w], [rect.x, rect.y + rect.w]];
+        const polys = [rp, poly];
+        const EPS = 1e-6;
+        for (const pts of polys) {
+            for (let i = 0; i < pts.length; i++) {
+                const a = pts[i]; const b = pts[(i + 1) % pts.length];
+                const ax = -(b[1] - a[1]); const ay = b[0] - a[0];
+                const len = Math.hypot(ax, ay);
+                if (!(len > 1e-9)) continue;
+                const proj = (set) => { const v = set.map((p) => (p[0] * ax + p[1] * ay) / len); return [Math.min(...v), Math.max(...v)]; };
+                const r1 = proj(rp); const r2 = proj(poly);
+                if (r1[1] <= r2[0] + EPS || r2[1] <= r1[0] + EPS) return false;
+            }
+        }
+        return true;
+    }
+    function transitProblemsOf(p, sizes) {
+        const narrow = Math.min(Number(p.l) || 0, Number(p.w) || 0);
+        const long = Math.max(Number(p.l) || 0, Number(p.w) || 0);
+        const out = [];
+        (p.who || []).forEach((k) => {
+            const d = sizes[k];
+            if (!d || !(d.w > 0 || d.l > 0 || d.h > 0)) return;
+            const problems = [];
+            if (d.w > narrow + 1e-6) problems.push('w');
+            if (d.l > long + 1e-6) problems.push('l');
+            if (Number(p.h) > 0 && d.h > Number(p.h) + 1e-6) problems.push('h');
+            if (problems.length) out.push({ who: k, problems, size: d });
+        });
+        return out;
+    }
+    // Las faltas de los pasillos de un Layout normalizado. kind: nozone (queda fuera de toda zona), out (no cabe entera en su zona), fit (lo que transita no cabe; who dice quién y problems qué medida), blocked (hay algo adentro: otherId) y,
+    // del lado de lo que estorba, intransit (una huella o un obstáculo metido en el pasillo transitId). sig cambia cuando algo de lo que importa cambia: lo que ya estaba mal y no se tocó solo se marca; lo nuevo no se deja guardar.
+    function transitViolations(layout) {
+        const out = [];
+        if (!layout || !Array.isArray(layout.transit) || !layout.transit.length) return out;
+        const byZone = new Map((layout.zones || []).map((z) => [z.id, z]));
+        const sizes = transitSizesOf(layout);
+        const prints = (layout.footprints || []).filter((f) => f.active !== false);
+        const obstacles = obstacleShapes(layout);
+        layout.transit.forEach((p) => {
+            const base = { id: p.id, code: p.code };
+            const geo = JSON.stringify([p.x, p.y, p.l, p.w, p.h || 0]);
+            const z = p.zoneId ? byZone.get(p.zoneId) : null;
+            if (!z) out.push({ ...base, kind: 'nozone', sig: geo, message: `El pasillo ${p.code} queda fuera de toda zona: acomódalo dentro de una zona.` });
+            else {
+                const pts = zonePoints(z);
+                if (!(pts && pts.length >= 3 && rectInsidePolygon(pts, p.x, p.y, p.l, p.w))) out.push({ ...base, kind: 'out', zoneId: z.id, zoneName: z.name, sig: geo + JSON.stringify([z.id, pts]), message: `El pasillo ${p.code} no cabe dentro de su zona ${z.name}: si cruza el límite de dos zonas, se divide en dos pasillos que se tocan.` });
+            }
+            transitProblemsOf(p, sizes).forEach((f) => out.push({ ...base, kind: 'fit', who: f.who, problems: f.problems, size: f.size, sig: geo + JSON.stringify([f.who, f.size]), message: `En el pasillo ${p.code} no cabe lo que transita (${f.who}): revisa sus medidas o las del pasillo.` }));
+            const rect = { x: Number(p.x) || 0, y: Number(p.y) || 0, l: Number(p.l) || 0, w: Number(p.w) || 0 };
+            prints.forEach((f) => {
+                if (!rectOverlapsConvex(rect, [[f.x, f.y], [f.x + f.l, f.y], [f.x + f.l, f.y + f.d], [f.x, f.y + f.d]])) return;
+                const g2 = JSON.stringify([f.x, f.y, f.l, f.d]);
+                out.push({ ...base, kind: 'blocked', by: 'footprint', otherId: f.id, otherCode: f.code, sig: geo + g2, message: `La huella ${f.code} se mete en el pasillo ${p.code}: nada puede ir dentro de un pasillo.` });
+                out.push({ id: f.id, code: f.code, kind: 'intransit', by: 'footprint', transitId: p.id, transitCode: p.code, sig: geo + g2, message: `La huella ${f.code} se mete en el pasillo ${p.code}: nada puede ir dentro de un pasillo.` });
+            });
+            obstacles.forEach(({ o, g }) => {
+                if (!rectOverlapsConvex(rect, g.pts)) return;
+                const g2 = JSON.stringify(g.pts);
+                out.push({ ...base, kind: 'blocked', by: 'obstacle', otherId: o.id, otherCode: o.name, sig: geo + g2, message: `${o.name || 'Un obstáculo'} se mete en el pasillo ${p.code}: nada puede ir dentro de un pasillo.` });
+                out.push({ id: o.id, code: o.name, kind: 'intransit', by: 'obstacle', transitId: p.id, transitCode: p.code, sig: geo + g2, message: `${o.name || 'Un obstáculo'} se mete en el pasillo ${p.code}: nada puede ir dentro de un pasillo.` });
+            });
+        });
+        return out;
+    }
+    const transitKey = (v) => `${v.id}|${v.kind}|${v.who || ''}|${v.otherId || v.transitId || ''}|${v.sig}`;
+    // Las faltas que hay en next y que antes no estaban igual (pasillo nuevo o cambiado, o algo nuevo que se metió).
+    function newTransitViolations(next, previous) {
+        const before = new Set((previous ? transitViolations(previous) : []).map(transitKey));
+        return transitViolations(next).filter((v) => !before.has(transitKey(v)));
+    }
+    // Superficie de los pasillos: cada metro cuenta una sola vez aunque dos pasillos se encimen en un cruce. Sin encimes es la suma exacta.
+    function transitArea(layout) {
+        const list = (layout && layout.transit) || [];
+        if (!list.length) return { sum: 0, union: 0, overlap: 0 };
+        const sum = list.reduce((acc, p) => acc + (Number(p.l) || 0) * (Number(p.w) || 0), 0);
+        if (list.length < 2) return { sum, union: sum, overlap: 0 };
+        const grid = coveredArea(layout.vertices || [], list.map((p) => ({ x: p.x, y: p.y, l: p.l, w: p.w })));
+        const union = sum - grid <= sum * 0.01 + 0.1 ? sum : grid;
+        return { sum, union, overlap: Math.max(0, sum - union) };
     }
 
     // ---- El activo dentro de su huella -------------------------------------------------------------------------------------------------------
@@ -952,7 +1114,9 @@
         const sumType = (type) => zones.filter((z) => z.type === type).reduce((acc, z) => acc + zoneArea(z), 0);
         const offices = sumType('office');
         // Los dos tipos de pasillo (principal y entre anaqueles) suman en los m² de pasillos.
-        const aisles = sumType('aisle') + sumType('aisle2');
+        // Los pasillos son los del paso Tránsito (más las zonas de pasillo de forma libre que se hayan quedado de antes).
+        const transitM2 = transitArea(layout);
+        const aisles = sumType('aisle') + sumType('aisle2') + transitM2.union;
         const docks = sumType('dock');
         // Almacenamiento = las zonas de almacenamiento (seco, refrigerado, químicos, producto terminado); la huella es lo que ocupan sus anaqueles, gabetas y tarimas.
         const storageZones = zones.filter((z) => STORAGE_ZONE_TYPES.includes(z.type)).reduce((acc, z) => acc + zoneArea(z), 0);
@@ -965,11 +1129,16 @@
         const unassigned = zones.filter((z) => !z.type).reduce((acc, z) => acc + zoneArea(z), 0);
         const assignedArea = assigned.reduce((acc, z) => acc + zoneArea(z), 0);
         let covered = coveredArea(layout.vertices || [], assigned);
+        // Un pasillo que quedó fuera de toda zona también cubre piso (no es espacio muerto): lo que suma sobre las zonas, medido en la misma cuadrícula.
+        const transitPseudo = (layout.transit || []).map((p) => ({ x: p.x, y: p.y, l: p.l, w: p.w }));
+        const transitExtra = transitPseudo.length ? Math.max(0, coveredArea(layout.vertices || [], [...assigned, ...transitPseudo]) - covered) : 0;
         // Medido sobre una cuadrícula, cada borde que no cae en múltiplos de 5 cm se desvía unas décimas de m². Si lo que falta frente a la suma de las zonas es de ese
         // tamaño (menos de 1 % + 0.1 m²), no hay encimes ni zonas fuera de la nave: lo cubierto es la suma exacta de sus superficies.
         if (assignedArea - covered <= assignedArea * 0.01 + 0.1) covered = Math.min(assignedArea, total);
-        const dead = Math.max(0, total - covered);
         const overlap = Math.max(0, assignedArea - covered);
+        const transitOutside = transitExtra > 0.05 ? transitExtra : 0;
+        covered += transitOutside;
+        const dead = Math.max(0, total - covered);
         const perZone = zones.map((z) => {
             const mine = spaces.filter((s) => s.zoneId === z.id);
             const zFootprint = mine.reduce((acc, s) => acc + (s.l || 0) * (s.d || 0), 0);
@@ -983,6 +1152,9 @@
         return {
             total: round2(total), offices: round2(offices), aisles: round2(aisles), docks: round2(docks),
             storage: round2(storageZones), footprint: round2(footprint), covered: round2(covered), overlap: round2(overlap), dead: round2(dead), unassigned: round2(unassigned),
+            // para el desglose de «Datos métricos»: los pasillos con sus metros, lo que se encima entre ellos y lo que cubren fuera de toda zona
+            transit: (layout.transit || []).map((p) => ({ id: p.id, name: p.name || p.code || '', type: p.type === 'between' ? 'aisle2' : 'aisle', area: round2((Number(p.l) || 0) * (Number(p.w) || 0)) })),
+            transitOverlap: round2(transitM2.overlap), transitOutside: round2(transitOutside),
             volume: round2(netVolume(layout)), storageVolume: round2(storageVolume),
             heightMin: round2(heightRange(layout.vertices || []).min), heightMax: round2(heightRange(layout.vertices || []).max),
             perimeter: round2(perimeter(layout.vertices || [])), zones: perZone,
@@ -1004,7 +1176,11 @@
         const restRow = () => ({ kind: 'rest', id: '', name: '', type: '', value: round2(restArea * factor) });
         let rows;
         if (key === 'offices') rows = zones.filter((z) => z.type === 'office').map(zoneRow);
-        else if (key === 'aisles') rows = zones.filter((z) => z.type === 'aisle' || z.type === 'aisle2').map(zoneRow);
+        else if (key === 'aisles') {
+            rows = zones.filter((z) => z.type === 'aisle' || z.type === 'aisle2').map(zoneRow);
+            (kpis.transit || []).forEach((p) => rows.push({ kind: 'zone', id: p.id, name: p.name, type: p.type, value: round2(p.area) }));
+            if ((kpis.transitOverlap || 0) > 0.005) rows.push({ kind: 'overlap', id: '', name: '', type: '', value: -round2(kpis.transitOverlap) });
+        }
         else if (key === 'docks') rows = zones.filter((z) => z.type === 'dock').map(zoneRow);
         else if (key === 'storage') rows = zones.filter((z) => STORAGE_ZONE_TYPES.includes(z.type)).map(zoneRow);
         else if (key === 'dead') {
@@ -1013,6 +1189,7 @@
         } else {
             rows = zones.map(zoneRow);
             if (restArea > 0) rows.push(restRow());
+            if ((kpis.transitOutside || 0) > 0.005) rows.push({ kind: 'transit', id: '', name: '', type: '', value: round2(kpis.transitOutside * factor) });
             if ((kpis.overlap || 0) > 0.005) rows.push({ kind: 'overlap', id: '', name: '', type: '', value: -round2(kpis.overlap * factor) });
         }
         return { rows, sum: kpis[key] || 0, unit: volume ? 'm³' : 'm²' };
@@ -1022,7 +1199,7 @@
     function sanitizeLayout(input) {
         const errors = [];
         // Una pantalla vieja (sin paredes como obstáculos) manda el Layout como lo conocía: se lee igual que al abrirlo, con una pared por lado, para que no cuente como un cambio del contorno.
-        const src = migrateWalls(migrateFootprints(input && typeof input === 'object' ? input : {}));
+        const src = migrateTransit(migrateWalls(migrateFootprints(input && typeof input === 'object' ? input : {})));
         const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
         const meters = (v, label, min = 0) => {
             const n = Number(v);
@@ -1055,6 +1232,7 @@
         const siteName = text(src.siteName, 'Sitio', false);
         if (siteName) out.siteName = siteName;
         if (src.wallsMigrated) out.wallsMigrated = true;
+        if (src.transitMigrated) out.transitMigrated = true;
         // Cada esquina trae su altura [x, y, altura]. Una esquina sin altura (Layout de antes) hereda heightM, la altura única de entonces.
         const legacyHeight = Number(src.heightM);
         out.vertices = list(src.vertices, LIMITS.vertices, 'Esquinas').map((p, i) => {
@@ -1120,6 +1298,29 @@
             }
             if (kind === 'step') base.dz = meters(o && o.dz != null && o.dz !== '' ? o.dz : 0, label, -LIMITS.maxHeight);
             return base;
+        });
+
+        // Tránsito: los pasillos y las medidas de lo que transita por ellos.
+        const transitIds = new Set();
+        out.transit = list(src.transit, LIMITS.transit, 'Pasillos').map((p, i) => {
+            const label = `Pasillo ${i + 1}`;
+            const who = TRANSIT_WHO.filter((k) => Array.isArray(p && p.who) && p.who.includes(k));
+            const item = {
+                id: idOf(p && p.id, transitIds, label), code: text(p && p.code, label, false), name: text(p && p.name, label, false), type: oneOf(p && p.type, TRANSIT_TYPES, 'main'), who, zoneId: '',
+                x: meters(p && p.x, label, -LIMITS.maxM), y: meters(p && p.y, label, -LIMITS.maxM), l: meters(p && p.l, label), w: meters(p && p.w, label),
+            };
+            if (!(item.l > 0 && item.w > 0)) errors.push(`${label}: el largo y el ancho deben ser mayores que 0`);
+            if (who.includes('other')) { const otherName = text(p && p.otherName, label, false); if (otherName) item.otherName = otherName; }
+            const h = p && p.h != null && p.h !== '' ? meters(p.h, label) : 0;
+            if (h > 0) item.h = h;
+            return item;
+        });
+        out.transitSizes = {};
+        TRANSIT_WHO.forEach((k) => {
+            const s = (src.transitSizes && src.transitSizes[k]) || {};
+            const d = TRANSIT_SIZE_DEFAULTS[k];
+            const pick = (key) => (s[key] === undefined || s[key] === null || s[key] === '' ? d[key] : meters(s[key], `Medidas de lo que transita (${k})`));
+            out.transitSizes[k] = { w: pick('w'), l: pick('l'), h: pick('h') };
         });
 
         const zoneIds = new Set();
@@ -1239,6 +1440,7 @@
         });
         out.footprints = assignHuellaCodes(deriveFootprintZones(out)).footprints;
         out.sensors = assignSensorCodes(deriveSensorZones(out)).sensors;
+        out.transit = assignTransitCodes(deriveTransitZones(out)).transit;
         out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
 
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
@@ -1336,6 +1538,7 @@
             vertices: (layout.vertices || []).map((p) => [...turn(p), p[2]]),
             // los obstáculos pegados a un lado del contorno siguen a su lado (que ya viene girado); los de dentro de la nave se giran como cualquier recuadro
             obstacles: (layout.obstacles || []).map((o) => (o.mode === 'contour' ? o : { ...o, ...box(o, 'l', 'w') })),
+            transit: (layout.transit || []).map((p) => ({ ...p, ...box(p, 'l', 'w') })),
             spaces: (layout.spaces || []).map((s) => ({ ...s, ...box(s, 'l', 'd') })),
             footprints: (layout.footprints || []).map((f) => ({ ...f, ...box(f, 'l', 'd') })),
             zones: (layout.zones || []).map((z) => {
@@ -1400,6 +1603,8 @@
         if (section === 'luz') return layout.power;
         // Siempre una lista (un Layout de antes sin sensores cuenta igual que uno sin ninguno); la zona sale de la pared y del croquis, no se captura.
         if (section === 'sensores') return (layout.sensors || []).map(({ zoneId, ...rest }) => rest);
+        // La zona de cada pasillo sale del croquis, no se captura; las medidas de lo que transita van con el paso.
+        if (section === 'transito') return { transit: (layout.transit || []).map(({ zoneId, ...rest }) => rest), sizes: transitSizesOf(layout) };
         if (section === 'zonas') return layout.zones;
         // Los espacios sin lo del paso Activos (la clasificación y el tipo de activo, y sus niveles, espacios por nivel y cajones; todo eso tiene su propio permiso). En Activos, solo los espacios que ya tienen
         // algo de eso: así agregar un espacio nuevo en Huella-Espacio (con 1 nivel) no cuenta como cambio de Activos.
@@ -1426,12 +1631,14 @@
         const data = sectionData(layout, section);
         if (!data) return false;
         if (section === 'contorno') return (data.vertices || []).length > 0;
+        if (section === 'transito') return (data.transit || []).length > 0;
         return (data || []).length > 0;
     }
 
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume,
+        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

@@ -1713,6 +1713,33 @@
     "layoutTodoElLado": "todo el lado",
     "layoutLeyendaPared": "Pared",
     "layoutLeyendaDesnivel": "Desnivel",
+    "layoutStepTransito": "Tránsito",
+    "colLayoutTransito": "Tránsito",
+    "layoutPasillo": "Pasillo",
+    "layoutAgregarPasillo": "+ Agregar pasillo",
+    "layoutQuienTransita": "Quién transita",
+    "layoutAltoLibre": "Alto libre (m)",
+    "layoutType_transit_main": "Principal",
+    "layoutType_transit_between": "Entre pasillos",
+    "layoutQuien_people": "Personas",
+    "layoutQuien_forklift": "Montacargas",
+    "layoutQuien_cart": "Carrito",
+    "layoutQuien_platform": "Plataforma",
+    "layoutQuien_other": "Otro",
+    "layoutQuienOtroCual": "¿Cuál?",
+    "layoutQuienDim_w": "ancho",
+    "layoutQuienDim_l": "largo",
+    "layoutQuienDim_h": "alto",
+    "layoutTransitoVacio": "Todavía no hay pasillos. Agrega uno dentro de una zona.",
+    "layoutTransitoMedidasTitulo": "Cuánto mide lo que transita",
+    "layoutTransitoMedidasAviso": "Medidas en metros. Con ellas se revisa que lo que transita quepa en cada pasillo; lo que dejes vacío no se revisa.",
+    "layoutVioTrAviso": "No se puede guardar:",
+    "layoutVioTr_nozone": "El pasillo {code} queda fuera de toda zona: acomódalo dentro de una zona.",
+    "layoutVioTr_out": "El pasillo {code} no cabe dentro de su zona {zone}: si cruza el límite de dos zonas, divídelo en dos pasillos que se tocan.",
+    "layoutVioTr_fit": "En el pasillo {code} no cabe: {who} ({what}). Agranda el pasillo o cambia las medidas de lo que transita.",
+    "layoutVioTr_blocked": "{other} se mete en el pasillo {code}: nada puede ir dentro de un pasillo. Muévelo o hazlo más chico.",
+    "layoutPasilloConFalta": "Este pasillo tiene una falta",
+    "layoutEnTransitoTitulo": "Se mete en un pasillo",
     "layoutTipo": "Tipo",
     "layoutDistancia": "Distancia (m)",
     "layoutAgregarPuerta": "+ Agregar puerta",
@@ -3844,7 +3871,7 @@
       "example": "un contacto de 220 V en la pared 3, a 20 metros de la esquina y a 1.2 metros del piso."
     },
     "layoutSec_zonas": {
-      "what": "Las zonas de la nave: almacenamiento, andenes, oficinas y pasillos. De aquí salen los m² de oficinas y de pasillos. El código de cada zona (Z001, Z002…) lo pone el sistema, consecutivo en el orden en que las creas, y no se edita: es la Z del Localizador. Lo que sí puedes cambiar es el Nombre.",
+      "what": "Las zonas de la nave: almacenamiento, andenes y oficinas. Los pasillos ya no van aquí: están en el paso Tránsito. De aquí salen los m² de oficinas, andenes y almacenamiento. El código de cada zona (Z001, Z002…) lo pone el sistema, consecutivo en el orden en que las creas, y no se edita: es la Z del Localizador. Lo que sí puedes cambiar es el Nombre.",
       "example": "defines la Zona A, de producto seco, de 22 por 11 metros: el sistema le pone Z001 y la siguiente que crees será Z002."
     },
     "layoutSec_activos": {
@@ -4458,6 +4485,22 @@
     "layoutParedTodo": {
       "what": "Agrega una pared a cada lado del contorno que todavía no la tiene. Las que ya tienes no se repiten.",
       "example": "marcas todo el contorno como pared y después quitas la de un andén abierto."
+    },
+    "layoutSec_transito": {
+      "what": "Los pasillos de la nave: por donde pasan personas, montacargas, carritos y plataformas. Un pasillo va dentro de una zona (la zona sale sola de su lugar), se conecta con otro pasillo que lo toque y nada puede ir adentro: ni huellas, ni columnas, ni paredes, ni desniveles. Lo que transita por él tiene que caber (ancho, largo y alto). El código (T001, T002…) lo pone el sistema. De aquí salen los m² de pasillos.",
+      "example": "un pasillo principal de 25 m de largo por 3 m de ancho dentro de la Zona 1, para personas y montacargas: queda como T001."
+    },
+    "layoutTransitoQuien": {
+      "what": "Quién transita por este pasillo: personas, montacargas, carrito, plataforma u otro (se escribe cuál). Se pueden marcar varios. Si lo que marcas no cabe en el pasillo, sale en rojo y no se puede guardar.",
+      "example": "marcas Personas y Montacargas en el pasillo central; si mide menos de 1.2 m de ancho, el montacargas sale en rojo."
+    },
+    "layoutTransitoMedidas": {
+      "what": "Cuánto mide cada cosa que transita (ancho, largo y alto, en metros). Salen con medidas de partida y las puedes cambiar; con ellas se revisa si cabe en cada pasillo. «Otro» se revisa cuando le captures medidas.",
+      "example": "tu montacargas mide 1.4 m de ancho: cambias 1.2 por 1.4 y los pasillos más angostos salen en rojo."
+    },
+    "layoutTransitoAltoLibre": {
+      "what": "Cuánto espacio libre hay hacia arriba en este pasillo, en metros. Es opcional: vacío quiere decir que no se revisa el alto.",
+      "example": "una viga baja deja 2 m libres: pones 2 y un montacargas de 2.2 m de alto sale en rojo."
     },
     "layoutOrigin": {
       "what": "En qué punto del mapa está la primera esquina; desde ahí se dibujan los lados.",

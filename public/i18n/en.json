@@ -1713,6 +1713,33 @@
     "layoutTodoElLado": "whole side",
     "layoutLeyendaPared": "Wall",
     "layoutLeyendaDesnivel": "Level difference",
+    "layoutStepTransito": "Transit",
+    "colLayoutTransito": "Transit",
+    "layoutPasillo": "Aisle",
+    "layoutAgregarPasillo": "+ Add aisle",
+    "layoutQuienTransita": "Who passes",
+    "layoutAltoLibre": "Clear height (m)",
+    "layoutType_transit_main": "Main",
+    "layoutType_transit_between": "Between aisles",
+    "layoutQuien_people": "People",
+    "layoutQuien_forklift": "Forklift",
+    "layoutQuien_cart": "Cart",
+    "layoutQuien_platform": "Platform",
+    "layoutQuien_other": "Other",
+    "layoutQuienOtroCual": "Which one?",
+    "layoutQuienDim_w": "width",
+    "layoutQuienDim_l": "length",
+    "layoutQuienDim_h": "height",
+    "layoutTransitoVacio": "There are no aisles yet. Add one inside a zone.",
+    "layoutTransitoMedidasTitulo": "Size of what passes",
+    "layoutTransitoMedidasAviso": "Sizes in meters. They are used to check that what passes fits in each aisle; anything you leave empty is not checked.",
+    "layoutVioTrAviso": "It can't be saved:",
+    "layoutVioTr_nozone": "Aisle {code} is outside every zone: place it inside a zone.",
+    "layoutVioTr_out": "Aisle {code} does not fit inside its zone {zone}: if it crosses the border of two zones, split it into two aisles that touch.",
+    "layoutVioTr_fit": "In aisle {code} this does not fit: {who} ({what}). Make the aisle bigger or change the size of what passes.",
+    "layoutVioTr_blocked": "{other} goes into aisle {code}: nothing can be inside an aisle. Move it or make it smaller.",
+    "layoutPasilloConFalta": "This aisle has a problem",
+    "layoutEnTransitoTitulo": "It goes into an aisle",
     "layoutTipo": "Type",
     "layoutDistancia": "Distance (m)",
     "layoutAgregarPuerta": "+ Add door",
@@ -3845,7 +3872,7 @@
       "example": "a 220 V outlet on wall 3, 20 meters from the corner and 1.2 meters from the floor."
     },
     "layoutSec_zonas": {
-      "what": "The zones of the warehouse: storage, docks, offices and aisles. The office and aisle m² come from here. The code of each zone (Z001, Z002…) is set by the system, consecutive in the order you create them, and cannot be edited: it is the Z of the Locator. What you can change is the Name.",
+      "what": "The zones of the warehouse: storage, docks and offices. Aisles are no longer here: they are in the Transit step. The office, dock and storage m² come from here. The code of each zone (Z001, Z002…) is set by the system, consecutive in the order you create them, and cannot be edited: it is the Z of the Locator. What you can change is the Name.",
       "example": "you define Zone A, dry product, 22 by 11 meters: the system names it Z001 and the next one you create will be Z002."
     },
     "layoutSec_activos": {
@@ -4459,6 +4486,22 @@
     "layoutParedTodo": {
       "what": "Adds a wall to each side of the outline that does not have one yet. The ones you already have are not repeated.",
       "example": "you mark the whole outline as wall and then remove the one of an open dock."
+    },
+    "layoutSec_transito": {
+      "what": "The aisles of the warehouse: where people, forklifts, carts and platforms pass. An aisle goes inside a zone (the zone comes by itself from its place), connects with another aisle that touches it, and nothing can be inside: no footprints, columns, walls or level differences. What passes through it has to fit (width, length and height). The code (T001, T002…) is set by the system. The aisle m² come from here.",
+      "example": "a main aisle 25 m long by 3 m wide inside Zone 1, for people and forklifts: it becomes T001."
+    },
+    "layoutTransitoQuien": {
+      "what": "Who passes through this aisle: people, forklift, cart, platform or other (you write which). You can tick several. If what you tick does not fit in the aisle, it shows in red and it can't be saved.",
+      "example": "you tick People and Forklift on the central aisle; if it is less than 1.2 m wide, the forklift shows in red."
+    },
+    "layoutTransitoMedidas": {
+      "what": "How big each thing that passes is (width, length and height, in meters). They start with default sizes and you can change them; they are used to check whether it fits in each aisle. «Other» is checked once you enter its sizes.",
+      "example": "your forklift is 1.4 m wide: you change 1.2 to 1.4 and the narrower aisles show in red."
+    },
+    "layoutTransitoAltoLibre": {
+      "what": "How much free space there is above this aisle, in meters. It is optional: empty means the height is not checked.",
+      "example": "a low beam leaves 2 m free: you enter 2 and a 2.2 m tall forklift shows in red."
     },
     "layoutOrigin": {
       "what": "Where on the map the first corner is; the sides are drawn from there.",

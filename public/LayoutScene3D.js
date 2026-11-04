@@ -356,6 +356,14 @@
                 if (!inactive && !dimZone) addLabel(group.zoneLabels, z.name, PX(ax), 0.12 + 0.004 * i, PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
             });
 
+            // pasillos (paso Tránsito): losas delgadas sobre el piso, con las zonas (principal más oscuro, entre pasillos más claro)
+            const transitY = 0.06 + 0.004 * (layout.zones || []).length;
+            (layout.transit || []).forEach((p, i) => {
+                if (!(p.l > 0) || !(p.w > 0)) return;
+                const slab = new THREE.Mesh(new THREE.BoxGeometry(p.l, 0.02, p.w), new THREE.MeshLambertMaterial({ color: p.type === 'between' ? 0xe3e6ef : 0xc4c9db }));
+                slab.position.set(PX(p.x + p.l / 2), transitY + 0.002 * i, PZ(p.y + p.w / 2));
+                group.zones.add(slab);
+            });
             // huellas (el lugar en el piso, capa «Huella-Espacio»): una losa delgada, blanca o con su color, debajo de sus activos
             (layout.footprints || []).forEach((f) => {
                 if (f.active === false || !(f.l > 0) || !(f.d > 0)) return;
