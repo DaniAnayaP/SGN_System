@@ -4838,6 +4838,11 @@ body.dark-mode .admin-save-status{
 .modal-overlay[hidden]{
     display: none;
 }
+/* Cuadro de los selectores de Configuración de Botones (Departamento, Área, C. Costos, Tamaño del Sistema): el botón Guardar solo es para C. Costos (varios a la vez) y el aviso vacío no deja hueco; sin esto la clase de arriba le gana al atributo hidden y Guardar salía siempre. */
+#default-picker-cc-actions[hidden],
+#default-picker-modal-hint:empty{
+    display: none;
+}
 .modal-panel{
     width: 100%;
     max-width: 30rem;

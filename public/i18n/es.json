@@ -3503,6 +3503,10 @@
       "what": "Hace el texto y las tablas más grandes o más chicas en toda la aplicación.",
       "example": "si te cuesta leer, lo agrandas; si quieres ver más filas de una tabla, lo achicas."
     },
+    "uiScaleDefault": {
+      "what": "Eliges con qué tamaño se abre tu usuario cada vez que entras al sistema.",
+      "example": "si te cuesta leer, eliges 120% y desde la próxima vez todo se abre más grande; con 100% (Ideal) se abre como viene de fábrica."
+    },
     "settings": {
       "what": "Aquí cambias cómo se ve y se comporta el sistema para ti: idioma, colores, y otras opciones.",
       "example": "cambias el idioma de inglés a español, o el estilo de claro a oscuro."

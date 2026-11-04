@@ -3504,6 +3504,10 @@
       "what": "Makes the text and tables bigger or smaller across the whole application.",
       "example": "if reading is hard, you make it bigger; if you want to see more rows in a table, you make it smaller."
     },
+    "uiScaleDefault": {
+      "what": "You choose the size your user opens with every time you enter the system.",
+      "example": "if reading is hard, you pick 120% and from the next time everything opens bigger; with 100% (Ideal) it opens as it comes by default."
+    },
     "settings": {
       "what": "This is where you change how the system looks and behaves for you: language, colors, and other options.",
       "example": "you switch the language from English to Spanish, or the style from light to dark."

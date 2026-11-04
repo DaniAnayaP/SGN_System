@@ -9352,6 +9352,7 @@ const HELP_CONTENT_KEYS = {
     'notifications-btn': 'notifications',
     'bookmarks-btn': 'bookmarks',
     'ui-scale-btn': 'uiScale',
+    'button-config-size-btn': 'uiScaleDefault',
     'settings-btn': 'settings',
     'user-info-btn': 'userInfo',
     'business-profile-btn': 'businessProfile',
@@ -11247,6 +11248,9 @@ function syncButtonConfigShortcuts() {
     if (deptShortcut) deptShortcut.hidden = !(contractedModuleKeys.includes('btn-departamento') && hasMainButtonPermission('btn-departamento'));
     if (areaShortcut) areaShortcut.hidden = !(contractedModuleKeys.includes('btn-area') && hasMainButtonPermission('btn-area'));
     if (ccShortcut) ccShortcut.hidden = !(contractedModuleKeys.includes('btn-cc') && hasMainButtonPermission('btn-cc'));
+    // «Tamaño del Sistema» (armado más abajo, junto a los otros tres): sale con el mismo permiso que el ícono de tamaño de la barra de arriba (nodo btn-tamano-sistema de Configuración, con su Estatus); el personal SaaS lo ve siempre.
+    const sizeShortcut = document.getElementById('button-config-size-btn')?.closest('li');
+    if (sizeShortcut) sizeShortcut.hidden = currentRole === 'admin' ? false : !hasSettingsSubPermission('btn-tamano-sistema');
 }
 
 // Double-gated: a button only shows for role !== 'admin' when the CLIENT has
@@ -11496,6 +11500,26 @@ function openAreaDefaultPicker() {
     });
 }
 
+// Con qué tamaño se abre el usuario de esta cuenta: los 8 tamaños (el mismo que guarda el ícono de la barra de arriba, por cuenta: users.ui_scale); elegir uno lo aplica al momento y es con el que se abre desde la próxima vez.
+function openUiScaleDefaultPicker() {
+    defaultPickerTitle.textContent = t('main.uiScale');
+    defaultPickerHint.textContent = '';
+    defaultPickerCcActions.hidden = true;
+    defaultPickerList.innerHTML = '';
+    UI_SCALE_LEVELS.forEach((pct, i) => {
+        const level = i + 1;
+        const li = buildDefaultPickerOption(level === UI_SCALE_DEFAULT_LEVEL ? `${pct}% · ${t('main.uiScaleIdeal')}` : `${pct}%`, 'bx-text', () => {
+            saveUiScaleLevel(level);
+            closeDefaultPickerModal();
+        });
+        const btn = li.querySelector('button');
+        btn.setAttribute('role', 'menuitemradio');
+        btn.setAttribute('aria-checked', String(level === currentUiScaleLevel));
+        btn.classList.toggle('active', level === currentUiScaleLevel);
+        defaultPickerList.appendChild(li);
+    });
+}
+
 function openCostCenterDefaultPicker() {
     defaultPickerTitle.textContent = t('sidebar.costCenters');
     defaultPickerHint.textContent = t('main.defaultPickerCcHint');
@@ -11560,6 +11584,7 @@ function openDefaultPickerModal(type) {
     if (type === 'department') openDepartmentDefaultPicker();
     else if (type === 'area') openAreaDefaultPicker();
     else if (type === 'costCenters') openCostCenterDefaultPicker();
+    else if (type === 'uiScale') openUiScaleDefaultPicker();
     defaultPickerModal.hidden = false;
 }
 
@@ -11570,6 +11595,20 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && defaultPickerModal && !defaultPickerModal.hidden) closeDefaultPickerModal();
 });
 
+// «Tamaño del Sistema» es el quinto renglón de Configuración de Botones (después de Salir, Departamento, Área y C. Costos); nace oculto para que nadie lo vea antes de saber sus permisos.
+document.querySelectorAll('#button-config-submenu').forEach((submenu) => {
+    if (submenu.querySelector('#button-config-size-btn')) return;
+    const li = document.createElement('li');
+    li.setAttribute('role', 'none');
+    li.hidden = true;
+    li.innerHTML = '<button type="button" role="menuitem" id="button-config-size-btn"><i class="bx bx-text" aria-hidden="true"></i><span data-i18n="main.uiScale">System size</span></button>';
+    submenu.appendChild(li);
+});
+document.getElementById('button-config-size-btn')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeSettingsMenu();
+    openDefaultPickerModal('uiScale');
+});
 document.getElementById('button-config-dept-btn')?.addEventListener('click', (event) => {
     event.stopPropagation();
     closeSettingsMenu();
