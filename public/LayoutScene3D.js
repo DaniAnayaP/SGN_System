@@ -385,6 +385,10 @@
                         fork.position.set(l * 0.38, 0.06, sgn * w * 0.28);
                         g.add(fork);
                     });
+                } else if (o.type === 'box') {
+                    const crate = new THREE.Mesh(new THREE.BoxGeometry(l, h, w), lam(0x9aa0b5));
+                    crate.position.set(0, h / 2, 0);
+                    g.add(crate);
                 } else {
                     const bodyH = Math.max(h - 0.3, 0.3);
                     const body = new THREE.Mesh(new THREE.CylinderGeometry(w / 2, w / 2, bodyH, 12), lam(0xe08a2e));

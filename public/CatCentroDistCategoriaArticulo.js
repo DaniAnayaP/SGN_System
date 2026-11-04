@@ -35,6 +35,8 @@ const CATEGORY_TYPE_TABLE_KEYS = {
     // Activos Fijos (el tipo de activo) y su Clasificación (con su métrica propia: m² o m³).
     'activos-fijos': 'activos-fijos',
     'activos-clasificacion': 'activos-clasificacion',
+    // Lo que transita (personas, montacargas…): tipo, ancho, largo y alto.
+    'transito-equipos': 'transito-equipos',
 };
 
 const CATEGORY_TYPE = document.body.dataset.categoryType;
@@ -42,7 +44,7 @@ const TABLE_KEY = CATEGORY_TYPE_TABLE_KEYS[CATEGORY_TYPE];
 const CATEGORY_API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
 const DELETE_AUTH_COL = 'colCatDeleteAuth';
 const IS_WAREHOUSE = CATEGORY_TYPE === 'almacenes' || CATEGORY_TYPE === 'sub-almacenes';
-const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : 'main.newArticleCategory';
+const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'transito-equipos' ? 'main.newTransitEquip' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : 'main.newArticleCategory';
 // Centros de costos completos, almacenes y, por cada centro, las zonas / anaqueles de su Layout (GET /api/business/warehouse-options).
 let warehouseOptions = { costCenters: [], warehouses: [], zonesByCenter: {} };
 // Categorías de Inventario: cada una elige cuáles clasificaciones (catálogo Nuestras Clasificaciones) tiene; aquí van todas las del catálogo con su estatus.
@@ -286,7 +288,7 @@ function applyCategoryFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica']
+        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colTrEquipTipo']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
@@ -540,6 +542,23 @@ function buildExtraCells(record) {
         return [buildOptionCell(record, 'colAlmCentroCostos', 'parentId', 'whCostCenter',
             centerChoices().map((c) => ({ value: c.id, label: c.name })), record.parentId, record.parentName,
             (v) => ({ parentId: v === '' ? null : Number(v) }))];
+    }
+    if (CATEGORY_TYPE === 'transito-equipos') {
+        // Lo que transita: el tipo (cómo se dibuja) y su ancho, largo y alto en metros (lo que se revisa contra los pasillos).
+        const sizeCell = (col, key, value) => {
+            const td = document.createElement('td');
+            td.dataset.col = col;
+            td.setAttribute('data-help-key', 'transitEquipSize');
+            Dashboard.attachInlineEdit(td, {
+                value: value > 0 ? String(value) : '', inputType: 'number', step: '0.01', tableKey: TABLE_KEY, colKey: col, pending: isPending(record, key),
+                onCommit: (val) => ensureCreatedThenPatch(record, { [key]: val === '' ? 0 : Number(val) }),
+            });
+            return td;
+        };
+        return [
+            buildOptionCell(record, 'colTrEquipTipo', 'kind', 'transitEquipKind', ['person', 'forklift', 'cart', 'platform', 'other'].map((k) => ({ value: k, label: Dashboard.t(`main.trKind_${k}`) })), record.kind || '', '', (v) => ({ kind: v })),
+            sizeCell('colTrEquipAncho', 'widthM', record.widthM), sizeCell('colTrEquipLargo', 'lengthM', record.lengthM), sizeCell('colTrEquipAlto', 'heightM', record.heightM),
+        ];
     }
     if (CATEGORY_TYPE === 'activos-clasificacion') {
         return [buildOptionCell(record, 'colActClasMetrica', 'kind', 'assetClassMetric',

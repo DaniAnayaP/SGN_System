@@ -469,10 +469,10 @@ function computeTransitIssues() {
 }
 // El texto de una falta de Tránsito, en el idioma de la pantalla.
 function transitIssueText(v) {
-    const named = (k) => t(`main.layoutQuien_${k}`);
+    const named = (k) => whoLabel(state.draft, k);
     if (v.kind === 'nozone') return t('main.layoutVioTr_nozone', { code: v.code });
     if (v.kind === 'out') return t('main.layoutVioTr_out', { code: v.code, zone: v.zoneName || '' });
-    if (v.kind === 'fit') return t('main.layoutVioTr_fit', { code: v.code, who: named(v.who), what: (v.problems || []).map((k) => t(`main.layoutQuienDim_${k}`)).join(' / ') });
+    if (v.kind === 'fit') return t('main.layoutVioTr_fit', { code: v.code, who: v.whoName || named(v.who), what: (v.problems || []).map((k) => t(`main.layoutQuienDim_${k}`)).join(' / ') });
     return t('main.layoutVioTr_blocked', { code: v.transitCode || v.code, other: v.otherCode || v.code });
 }
 function transitIssuesAll() {
@@ -497,7 +497,7 @@ function applyTransitMarks() {
             zoneCell.textContent = bad.nozone ? t('main.layoutHuellaSinZona') : (z ? z.name : '—');
             zoneCell.classList.toggle('layout-bad', !!(bad.nozone || bad.out));
         }
-        LC.TRANSIT_WHO.forEach((k) => {
+        (p.who || []).forEach((k) => {
             const chip = document.querySelector(`[data-tr-who="${i}:${k}"]`);
             if (chip) chip.classList.toggle('layout-bad', (bad.fit || []).some((f) => f.who === k));
         });
@@ -510,13 +510,23 @@ function applyTransitMarks() {
     }
 }
 // «Quién transita» de un pasillo: la celda muestra solo lo elegido, en etiquetas chicas (con su ×), y un ＋ abre la lista para marcar más (con las medidas de cada uno al lado).
+// Lo que transita sale del catálogo de la empresa (Catálogos > «Lo que transita»): los ids se guardan como número; las claves de antes (people, forklift…) como texto.
+const whoKey = (k) => (/^\d+$/.test(String(k)) ? Number(k) : k);
+const whoSort = (a, b) => (typeof a === typeof b ? (typeof a === 'number' ? a - b : LC.TRANSIT_WHO.indexOf(a) - LC.TRANSIT_WHO.indexOf(b)) : (typeof a === 'number' ? -1 : 1));
+function whoLabel(layout, k) {
+    const info = LC.transitWhoInfo(layout, k);
+    if (info.missing) return t('main.layoutQuienBorrado');
+    return info.name || (info.legacy ? t(`main.layoutQuien_${k}`) : String(k));
+}
 function toggleTransitWho(spec, on) {
-    const [i, key] = String(spec).split(':');
+    const at = String(spec).indexOf(':');
+    const i = String(spec).slice(0, at);
+    const key = whoKey(String(spec).slice(at + 1));
     const row = state.draft.transit[Number(i)];
     if (!row) return;
     const set = new Set(row.who || []);
     if (on) set.add(key); else set.delete(key);
-    row.who = LC.TRANSIT_WHO.filter((k) => set.has(k));
+    row.who = [...set].sort(whoSort);
     if (!row.who.includes('other')) delete row.otherName;
     const reopen = !!document.getElementById('layout-who-pop');
     renderPanel();
@@ -531,13 +541,17 @@ function openWhoPop(i, anchor) {
     closeWhoPop();
     const row = state.draft.transit[i];
     if (!row) return;
-    const sizes = LC.transitSizesOf(state.draft);
-    const dims = (k) => { const s = sizes[k]; return s.w > 0 || s.l > 0 || s.h > 0 ? `${fmt(s.w)} × ${fmt(s.l)} × ${fmt(s.h)} m` : '—'; };
+    // la lista sale del catálogo: lo activo (y lo que este pasillo ya trae aunque esté inactivo), con sus medidas al lado
+    const picked = new Set(row.who || []);
+    const choices = LC.transitCatalogOf(state.draft).filter((c) => c.status === 'active' || picked.has(c.id));
+    const dims = (c) => (c.w > 0 || c.l > 0 || c.h > 0 ? `${fmt(c.w)} × ${fmt(c.l)} × ${fmt(c.h)} m` : '—');
     const pop = document.createElement('div');
     pop.id = 'layout-who-pop';
     pop.className = 'layout-who-pop';
     pop.setAttribute('role', 'group');
-    pop.innerHTML = LC.TRANSIT_WHO.map((k) => `<label class="layout-who-item"><input type="checkbox" data-who-pick="${i}:${k}"${(row.who || []).includes(k) ? ' checked' : ''}><span>${esc(t(`main.layoutQuien_${k}`))}</span><small>${esc(dims(k))}</small></label>`).join('');
+    pop.innerHTML = choices.length
+        ? choices.map((c) => `<label class="layout-who-item"><input type="checkbox" data-who-pick="${i}:${c.id}"${picked.has(c.id) ? ' checked' : ''}><span>${esc(c.name)}</span><small>${esc(dims(c))}</small></label>`).join('')
+        : `<p class="layout-muted">${esc(t('main.layoutQuienSinCatalogo'))}</p>`;
     document.body.appendChild(pop);
     const r = anchor.getBoundingClientRect();
     pop.style.top = `${Math.max(8, Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8))}px`;
@@ -628,31 +642,33 @@ function addAllWalls() {
     renderPanel();
     refreshLive();
 }
-// Objetos: una persona o un montacargas nuevo nace en el centro de la nave (corridos un poco para que no se encimen) con las medidas de partida de lo que transita; se acomoda con X, Y y Giro.
-function addObject(type) {
+// Objetos: una persona o un montacargas nuevo toma el primer renglón activo de ese tipo del catálogo «Lo que transita» (su dibujo y sus medidas) y nace en el centro de la nave (corrido un poco para que no se encimen);
+// se acomoda con X, Y y Giro. Con el equipo o persona se puede elegir otro renglón del catálogo.
+function addObject(kind) {
     const d = state.draft;
+    const item = LC.transitCatalogOf(d).find((c) => c.status === 'active' && c.kind === kind);
+    if (!item) { Dashboard.showToast(t('main.layoutObjetoSinCatalogo'), 'warning'); return; }
     d.objects = d.objects || [];
     const xs = d.vertices.map((p) => p[0]);
     const ys = d.vertices.map((p) => p[1]);
     const n = d.objects.length;
     d.objects.push({
-        id: uid('b'), name: `${typeLabel('object', type)} ${d.objects.filter((o) => o.type === type).length + 1}`, type,
-        x: round2((Math.min(...xs) + Math.max(...xs)) / 2 + (n % 5) * 1.5), y: round2((Math.min(...ys) + Math.max(...ys)) / 2 + Math.floor(n / 5) * 1.5), angle: 0, ...LC.objectDefaultSize(d, type),
+        id: uid('b'), name: `${item.name} ${d.objects.filter((o) => Number(o.equipId) === item.id).length + 1}`, type: LC.objectShapeOfKind(item.kind), equipId: item.id,
+        x: round2((Math.min(...xs) + Math.max(...xs)) / 2 + (n % 5) * 1.5), y: round2((Math.min(...ys) + Math.max(...ys)) / 2 + Math.floor(n / 5) * 1.5), angle: 0, l: item.l, w: item.w, h: item.h,
     });
     panelScrollEnd = true;
     renderPanel();
     refreshLive();
 }
-// Cambiar de persona a montacargas (o al revés): si sus medidas todavía son las de partida del tipo anterior, pasan a las del nuevo; el nombre de fábrica también sigue al tipo.
-function setObjectType(row, type) {
-    const prev = row.type;
-    const next = LC.OBJECT_TYPES.includes(type) ? type : 'person';
-    const was = LC.objectDefaultSize(state.draft, prev);
-    const sameSize = Math.abs((row.l || 0) - was.l) < 1e-6 && Math.abs((row.w || 0) - was.w) < 1e-6 && Math.abs((row.h || 0) - was.h) < 1e-6;
-    row.type = next;
-    if (sameSize) Object.assign(row, LC.objectDefaultSize(state.draft, next));
-    const oldLabel = typeLabel('object', prev);
-    if (!row.name || row.name === oldLabel || row.name.indexOf(`${oldLabel} `) === 0) row.name = `${typeLabel('object', next)}${row.name && row.name.length > oldLabel.length ? row.name.slice(oldLabel.length) : ''}`;
+// Cambiar el equipo o persona de un objeto: toma el dibujo y las medidas del nuevo renglón; el nombre de fábrica (el del renglón anterior) también lo sigue.
+function setObjectEquip(row, id) {
+    const catalog = LC.transitCatalogOf(state.draft);
+    const prev = catalog.find((c) => Number(c.id) === Number(row.equipId));
+    const next = catalog.find((c) => Number(c.id) === Number(id));
+    if (!next) return;
+    row.equipId = next.id;
+    Object.assign(row, { type: LC.objectShapeOfKind(next.kind), l: next.l, w: next.w, h: next.h });
+    if (prev && (row.name === prev.name || row.name.indexOf(`${prev.name} `) === 0)) row.name = `${next.name}${row.name.slice(prev.name.length)}`;
 }
 function stepHtml(step) {
     if (step === 'localizadores') return locatorsStepHtml();
@@ -696,33 +712,27 @@ function stepHtml(step) {
     if (step === 'objetos') {
         // Cada renglón es una PERSONA o un MONTACARGAS dibujado en el plano, a escala. Es una foto fija (como el plano de Excel), no sigue a nadie en vivo. X e Y son su centro, en metros; el giro dice hacia dónde mira
         // (0° = hacia la derecha, 90° = hacia abajo). Las medidas de partida salen de «Cuánto mide lo que transita» (paso Tránsito) y se pueden cambiar en cada uno.
-        const rows = (d.objects || []).map((o, i) => `<tr>${cellText('objects', i, 'name', o.name, dis)}${cellSelect('objects', i, 'type', optionsHtml('object', LC.OBJECT_TYPES, o.type), dis)}${cellNum('objects', i, 'x', o.x, dis)}${cellNum('objects', i, 'y', o.y, dis)}${cellNum('objects', i, 'angle', o.angle || 0, dis, '5')}${cellNum('objects', i, 'l', o.l, dis, '0.05')}${cellNum('objects', i, 'w', o.w, dis, '0.05')}${cellNum('objects', i, 'h', o.h || 0, dis, '0.05')}${removeCell('objects', i, dis)}</tr>`);
+        const catalog = LC.transitCatalogOf(d);
+        const equipOptions = (o) => `${o.equipId ? '' : '<option value="" selected>—</option>'}${catalog.filter((c) => c.status === 'active' || Number(c.id) === Number(o.equipId)).map((c) => `<option value="${c.id}"${Number(c.id) === Number(o.equipId) ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}`;
+        const rows = (d.objects || []).map((o, i) => `<tr>${cellText('objects', i, 'name', o.name, dis)}${cellSelect('objects', i, 'equipId', equipOptions(o), dis)}${cellNum('objects', i, 'x', o.x, dis)}${cellNum('objects', i, 'y', o.y, dis)}${cellNum('objects', i, 'angle', o.angle || 0, dis, '5')}<td class="layout-calc">${fmt(o.l)}</td><td class="layout-calc">${fmt(o.w)}</td><td class="layout-calc">${fmt(o.h || 0)}</td>${removeCell('objects', i, dis)}</tr>`);
         const addBtn = (type, key) => `<button type="button" class="btn btn-secondary layout-add" data-add-object="${type}" data-main-add="1" data-help-key="layoutObjetoAgregar"${dis ? ' disabled' : ''}>${esc(t(key))}</button>`;
-        const list = rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutX', 'main.layoutY', 'main.layoutGiro', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutObjetosVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutNombre', 'main.layoutEquipoPersona', 'main.layoutX', 'main.layoutY', 'main.layoutGiro', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutObjetosVacio'))}</p>`;
         return `${addBtn('person', 'main.layoutAgregarPersona')}${addBtn('forklift', 'main.layoutAgregarMontacargas')}${list}`;
     }
     if (step === 'transito') {
         // Cada renglón es un PASILLO: por donde pasan personas, montacargas, carritos y plataformas. Va dentro de una zona (la zona sale de su lugar, como la de las huellas), se conecta con otro que lo toque y nada puede ir adentro.
         // Lo que transita por él tiene que caber (ancho, largo y alto, con las medidas de la tabla de abajo). El código (T001…) lo pone el sistema.
-        d.transitSizes = d.transitSizes || LC.transitSizesOf(d);
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
         const rows = (d.transit || []).map((p, i) => {
-            const chips = (p.who || []).map((k) => `<span class="layout-chip" data-tr-who="${i}:${k}" data-help-key="layoutTransitoQuien">${esc(t(`main.layoutQuien_${k}`))}${dis ? '' : `<button type="button" class="layout-chip-x" data-who-del="${i}:${k}" aria-label="${esc(t('main.layoutQuitar'))}">×</button>`}</span>`).join('') + (dis ? '' : `<button type="button" class="layout-chip-add" data-who-open="${i}" data-help-key="layoutTransitoQuien" aria-label="${esc(t('main.layoutQuienAgregar'))}" title="${esc(t('main.layoutQuienAgregar'))}">＋</button>`);
+            const chips = (p.who || []).map((k) => `<span class="layout-chip" data-tr-who="${i}:${k}" data-help-key="layoutTransitoQuien">${esc(whoLabel(d, k))}${dis ? '' : `<button type="button" class="layout-chip-x" data-who-del="${i}:${k}" aria-label="${esc(t('main.layoutQuitar'))}">×</button>`}</span>`).join('') + (dis ? '' : `<button type="button" class="layout-chip-add" data-who-open="${i}" data-help-key="layoutTransitoQuien" aria-label="${esc(t('main.layoutQuienAgregar'))}" title="${esc(t('main.layoutQuienAgregar'))}">＋</button>`);
             const other = (p.who || []).includes('other') ? `<input type="text" class="layout-who-other" maxlength="${LC.LIMITS.text}" data-l="transit" data-i="${i}" data-k="otherName" data-help-key="layoutTransitoQuien" value="${esc(p.otherName || '')}" placeholder="${esc(t('main.layoutQuienOtroCual'))}"${dis ? ' disabled' : ''}>` : '';
             const alto = `<td><input type="number" step="0.1" min="0" data-l="transit" data-i="${i}" data-k="h" data-help-key="layoutTransitoAltoLibre" value="${p.h > 0 ? p.h : ''}" placeholder="—"${dis ? ' disabled' : ''}></td>`;
             return `<tr>${cellText('transit', i, 'name', p.name, dis)}<td class="layout-calc"><b data-tr-code="${i}">${esc(p.code || '')}</b></td>${cellSelect('transit', i, 'type', optionsHtml('transit', LC.TRANSIT_TYPES, p.type), dis)}<td><div class="layout-chips">${chips}${other}</div></td><td class="layout-calc" data-tr-zone="${i}">${esc(zoneName(p.zoneId))}</td>${cellNum('transit', i, 'x', p.x, dis)}${cellNum('transit', i, 'y', p.y, dis)}${cellNum('transit', i, 'l', p.l, dis)}${cellNum('transit', i, 'w', p.w, dis)}${alto}<td class="layout-calc"><span data-tr-area="${i}">${fmt((Number(p.l) || 0) * (Number(p.w) || 0))} m²</span></td>${removeCell('transit', i, dis)}</tr>`;
         });
-        const sizeRows = LC.TRANSIT_WHO.map((k) => {
-            const sz = d.transitSizes[k] || { w: 0, l: 0, h: 0 };
-            const box = (dim) => `<td><input type="number" step="0.05" min="0" data-l="transitSizes" data-k="${k}:${dim}" data-help-key="layoutTransitoMedidas" value="${sz[dim] > 0 ? sz[dim] : ''}" placeholder="—"${dis ? ' disabled' : ''}></td>`;
-            return `<tr><td class="layout-calc"><b>${esc(t(`main.layoutQuien_${k}`))}</b></td>${box('w')}${box('l')}${box('h')}</tr>`;
-        });
+
         const issues = `<div class="layout-vio" data-tr-issues hidden></div>`;
         const list = rows.length ? table(['main.layoutNombre', 'main.layoutCodigo', 'main.layoutTipo', 'main.layoutQuienTransita', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAltoLibre', 'main.layoutSuperficie', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutTransitoVacio'))}</p>`;
-        return `${addButton('transit', 'main.layoutAgregarPasillo', dis, true)}${list}${issues}
-            <h4 class="layout-sub" data-help-key="layoutTransitoMedidas">${esc(t('main.layoutTransitoMedidasTitulo'))}</h4>
-            <p class="layout-muted">${esc(t('main.layoutTransitoMedidasAviso'))}</p>
-            ${table(['main.layoutQuienTransita', 'main.layoutAncho', 'main.layoutLargo', 'main.layoutAlto'], sizeRows)}`;
+        return `${addButton('transit', 'main.layoutAgregarPasillo', dis, true)}${list}${issues}`;
     }
     if (step === 'zonas') {
         const rows = d.zones.map((z, i) => {
@@ -1454,7 +1464,9 @@ function renderSvg() {
         const title = `<title>${esc(o.name || typeLabel('object', o.type))} · ${esc(typeLabel('object', o.type))}</title>`;
         const shape = o.type === 'forklift'
             ? `<rect class="lob lob-forklift" x="${-along / 2}" y="${-across / 2}" width="${along}" height="${across}" rx="2"/><rect class="lob-cab" x="${-along * 0.36}" y="${-across * 0.3}" width="${along * 0.4}" height="${across * 0.6}" rx="1.5"/><line class="lob-fork" x1="${along / 2}" y1="${-across * 0.28}" x2="${along / 2 + along * 0.35}" y2="${-across * 0.28}"/><line class="lob-fork" x1="${along / 2}" y1="${across * 0.28}" x2="${along / 2 + along * 0.35}" y2="${across * 0.28}"/>`
-            : `<ellipse class="lob lob-person" cx="0" cy="0" rx="${along / 2}" ry="${across / 2}"/><circle class="lob-head" cx="0" cy="0" r="${Math.min(along, across) * 0.3}"/>`;
+            : (o.type === 'box'
+                ? `<rect class="lob lob-box" x="${-along / 2}" y="${-across / 2}" width="${along}" height="${across}" rx="2"/>`
+                : `<ellipse class="lob lob-person" cx="0" cy="0" rx="${along / 2}" ry="${across / 2}"/><circle class="lob-head" cx="0" cy="0" r="${Math.min(along, across) * 0.3}"/>`);
         s += `<g class="lobj" data-oid="${esc(o.id)}" transform="translate(${X(o.x)} ${Y(o.y)}) rotate(${Number(o.angle) || 0})">${shape}${title}</g>`;
     });
     const cx = (x0 + x1) / 2;
@@ -1818,7 +1830,9 @@ const ROW_FACTORY = {
         const z = state.draft.zones.find((r) => r.type && !Array.isArray(r.pts) && r.l > 2 && r.w > 2);
         const l = z ? Math.min(10, round2(z.l - 2)) : 10;
         const w = z ? Math.min(3, round2(z.w - 2)) : 3;
-        return { id: uid('t'), code: '', name: `${t('main.layoutPasillo')} ${(state.draft.transit || []).length + 1}`, type: 'main', who: ['people'], zoneId: '', x: z ? round2(z.x + 1) : 1, y: z ? round2(z.y + 1) : 1, l, w };
+        // lo que transita de entrada: el primer renglón activo de personas del catálogo «Lo que transita» (si no hay catálogo, la clave de antes)
+        const person = LC.transitCatalogOf(state.draft).find((c) => c.kind === 'person' && c.status === 'active');
+        return { id: uid('t'), code: '', name: `${t('main.layoutPasillo')} ${(state.draft.transit || []).length + 1}`, type: 'main', who: [person ? person.id : 'people'], zoneId: '', x: z ? round2(z.x + 1) : 1, y: z ? round2(z.y + 1) : 1, l, w };
     },
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), kind: 'column', mode: 'free', x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, code: '', type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
@@ -1835,6 +1849,10 @@ function syncHuellas() {
     const d = state.draft;
     const next = LC.lockCodes(LC.deriveTransitZones(LC.deriveSensorZones(LC.deriveSpaces(LC.deriveFootprintZones(d)))), state.saved);
     d.transit = next.transit || d.transit || [];
+    // los objetos toman del catálogo su dibujo y sus medidas (y las claves de antes pasan a los ids)
+    const withCatalog = LC.applyTransitCatalog(d);
+    d.objects = withCatalog.objects || d.objects;
+    d.transit = withCatalog.transit || d.transit;
     d.zones = next.zones;
     d.footprints = next.footprints;
     d.sensors = next.sensors;
@@ -1897,8 +1915,8 @@ function onEdit(event) {
     } else {
         const row = state.draft[list][Number(el.getAttribute('data-i'))];
         const key = el.getAttribute('data-k');
-        if (list === 'objects' && key === 'type') {
-            setObjectType(row, el.value);
+        if (list === 'objects' && key === 'equipId') {
+            setObjectEquip(row, el.value);
         } else if (list === 'transit' && key === 'h') {
             // el alto libre es opcional: vacío = no se revisa el alto
             const raw = String(el.value).trim();
@@ -1943,7 +1961,7 @@ function onEdit(event) {
     // Al cambiar el tipo o la forma de ponerlo de un obstáculo cambian las celdas del renglón (altura del desnivel, lado o X).
     if (event.type === 'change' && list === 'obstacles' && ['kind', 'mode'].includes(el.getAttribute('data-k'))) renderPanel();
     // Al cambiar de persona a montacargas cambian sus medidas (si eran las de partida) y su nombre.
-    if (event.type === 'change' && list === 'objects' && el.getAttribute('data-k') === 'type') renderPanel();
+    if (event.type === 'change' && list === 'objects' && el.getAttribute('data-k') === 'equipId') renderPanel();
     // Al pasar un activo a otra huella cambia su zona (que se ve en el renglón).
     if (event.type === 'change' && list === 'spaces' && el.getAttribute('data-k') === 'footprintId') renderPanel();
     refreshLive();

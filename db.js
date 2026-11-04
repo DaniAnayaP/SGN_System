@@ -2365,6 +2365,10 @@ if (!articleCategoryColumns.some((c) => c.name === 'kind')) db.exec("ALTER TABLE
 if (!articleCategoryColumns.some((c) => c.name === 'locations')) db.exec("ALTER TABLE article_categories ADD COLUMN locations TEXT NOT NULL DEFAULT ''");
 // Categorías de Inventario: classification_ids = las clasificaciones (catálogo Nuestras Clasificaciones) que tiene esa categoría, como texto JSON canónico [id, id, ...] ('' = ninguna).
 if (!articleCategoryColumns.some((c) => c.name === 'classification_ids')) db.exec("ALTER TABLE article_categories ADD COLUMN classification_ids TEXT NOT NULL DEFAULT ''");
+// Lo que transita (Catálogos > «Lo que transita», C. Distribución): kind = persona, montacargas, carrito, plataforma u otro; ancho, largo y alto en metros.
+if (!articleCategoryColumns.some((c) => c.name === 'width_m')) db.exec('ALTER TABLE article_categories ADD COLUMN width_m REAL NOT NULL DEFAULT 0');
+if (!articleCategoryColumns.some((c) => c.name === 'length_m')) db.exec('ALTER TABLE article_categories ADD COLUMN length_m REAL NOT NULL DEFAULT 0');
+if (!articleCategoryColumns.some((c) => c.name === 'height_m')) db.exec('ALTER TABLE article_categories ADD COLUMN height_m REAL NOT NULL DEFAULT 0');
 
 // Relación Código (Operaciones, C. Distribución): dónde vive un código. Una fila por LUGAR (un mismo artículo puede tener varios): centro de costos > almacén > sub almacén >
 // zona > anaquel > nivel > espacio. Lo que está debajo del almacén es opcional (la fila queda "A medias" hasta completarlo). Zonas y anaqueles son ids del Layout guardado.
@@ -2993,6 +2997,7 @@ function createClient({
     seedTipoCodigoValues(created.id);
     seedActivosFijosValues(created.id);
     seedActivosClasificacionValues(created.id);
+    seedTransitoEquiposValues(created.id);
     resetClientTimeZoneCache();
     return created;
 }
@@ -3544,6 +3549,7 @@ const TABLE_GRANT_PATHS = {
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
     'activos-fijos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-fijos' },
     'activos-clasificacion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-clasificacion' },
+    'transito-equipos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-transito-equipos' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
     'nuestros-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestros-traslados' },
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
@@ -3729,6 +3735,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'sub-almacenes': CATEGORY_BUTTON_NOTIFY,
     'activos-fijos': CATEGORY_BUTTON_NOTIFY,
     'activos-clasificacion': CATEGORY_BUTTON_NOTIFY,
+    'transito-equipos': CATEGORY_BUTTON_NOTIFY,
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
 };
@@ -5187,12 +5194,13 @@ const LayoutCalc = require('./public/LayoutCalc.js');
 // Un Layout por centro de costos (la llave es cliente + centro). costCenterId sin indicar = el primer Layout del cliente (para las pantallas que todavía no eligen centro).
 // withPlanImage: el plano pesa; solo se lee cuando de verdad se va a dibujar (GET .../layout/plan-image).
 const LAYOUT_COLUMNS = 'cost_center_id, data, plan_image, version, created_at, updated_at, updated_by';
-function parseLayoutRow(row, withPlanImage) {
+function parseLayoutRow(row, withPlanImage, clientId) {
     if (!row) return null;
     let layout = null;
     try { layout = JSON.parse(row.data); } catch { layout = null; }
     if (!layout || typeof layout !== 'object') return null;
-    layout = LayoutCalc.normalize(layout);
+    // Con el catálogo de lo que transita de la empresa a la mano (no se guarda con el Layout): los pasillos y los objetos toman de ahí sus medidas.
+    layout = LayoutCalc.normalize(clientId ? { ...layout, transitCatalog: listTransitCatalog(clientId) } : layout);
     return {
         layout, version: row.version, createdAt: row.created_at, updatedAt: row.updated_at, updatedBy: row.updated_by,
         hasPlanImage: !!row.plan_image, planImage: withPlanImage ? row.plan_image : undefined, costCenterId: row.cost_center_id || null,
@@ -5202,11 +5210,11 @@ function getClientLayout(clientId, { withPlanImage = false, costCenterId } = {})
     const row = costCenterId === undefined
         ? db.prepare(`SELECT ${LAYOUT_COLUMNS} FROM client_layouts WHERE client_id = ? ORDER BY cost_center_id ASC LIMIT 1`).get(clientId)
         : db.prepare(`SELECT ${LAYOUT_COLUMNS} FROM client_layouts WHERE client_id = ? AND cost_center_id = ?`).get(clientId, costCenterId || 0);
-    return parseLayoutRow(row, withPlanImage);
+    return parseLayoutRow(row, withPlanImage, clientId);
 }
 // Todos los Layouts del cliente (uno por centro de costos).
 function listClientLayouts(clientId) {
-    return db.prepare(`SELECT ${LAYOUT_COLUMNS} FROM client_layouts WHERE client_id = ? ORDER BY cost_center_id ASC`).all(clientId).map((row) => parseLayoutRow(row, false)).filter(Boolean);
+    return db.prepare(`SELECT ${LAYOUT_COLUMNS} FROM client_layouts WHERE client_id = ? ORDER BY cost_center_id ASC`).all(clientId).map((row) => parseLayoutRow(row, false, clientId)).filter(Boolean);
 }
 
 // --- Limpieza (Operaciones, C. Distribución) -------------------------------------------------------------------------------------------------------
@@ -5443,7 +5451,7 @@ function getLayoutByPublicToken(token) {
     let layout = null;
     try { layout = JSON.parse(row.data); } catch { layout = null; }
     if (!layout || typeof layout !== 'object') return null;
-    return { clientId: row.client_id, costCenterId: row.cost_center_id || null, layout: LayoutCalc.normalize(layout), version: row.version, updatedAt: row.updated_at };
+    return { clientId: row.client_id, costCenterId: row.cost_center_id || null, layout: LayoutCalc.normalize({ ...layout, transitCatalog: listTransitCatalog(row.client_id) }), version: row.version, updatedAt: row.updated_at };
 }
 
 // Crea o reemplaza el Layout de un centro de costos del cliente. expectedVersion = la versión que la persona tenía abierta (0 = todavía no había Layout): si ya cambió, no se
@@ -5454,7 +5462,9 @@ function saveClientLayout({ clientId, layout, planImage, expectedVersion, update
         const current = db.prepare('SELECT version FROM client_layouts WHERE client_id = ? AND cost_center_id = ?').get(clientId, center);
         const currentVersion = current ? current.version : 0;
         if (currentVersion !== expectedVersion) return { conflict: true, currentVersion };
-        const data = JSON.stringify(layout);
+        // el catálogo de lo que transita se lee siempre de la empresa: nunca se guarda con el Layout
+        const { transitCatalog: omittedCatalog, ...toSave } = layout || {};
+        const data = JSON.stringify(toSave);
         if (!current) {
             db.prepare('INSERT INTO client_layouts (client_id, cost_center_id, data, plan_image, version, updated_by, public_token) VALUES (?, ?, ?, ?, 1, ?, ?)').run(clientId, center, data, planImage || '', updatedBy || '', generatePublicToken());
             return { conflict: false, version: 1 };
@@ -5504,8 +5514,15 @@ const ARTICLE_CATEGORY_TYPES = {
     'activos-fijos': { prefix: 'AFI', tableKey: 'activos-fijos', pantalla: 'Nuestros Activos Fijos' },
     // Clasificación de Activos (Mobiliario operativo, Mobiliario almacenamiento…): la lista que va ANTES del tipo. Cada una lleva su métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
     'activos-clasificacion': { prefix: 'ACL', tableKey: 'activos-clasificacion', pantalla: 'Nuestras Clasificaciones de Activos' },
+    // Lo que transita (personas, montacargas, carritos, plataformas… con su ancho, largo y alto): lo eligen los pasillos (Layout > Tránsito) y los objetos (Layout > Objetos).
+    'transito-equipos': { prefix: 'TRE', tableKey: 'transito-equipos', pantalla: 'Lo que Transita' },
 };
 
+// El catálogo de lo que transita de una empresa, como lo usa el Layout: [{ id, name, kind, w, l, h, status }] (solo lo que ya tiene nombre). Se pone en layout.transitCatalog al leer el Layout (no se guarda con él).
+function listTransitCatalog(clientId) {
+    return db.prepare("SELECT id, name, kind, width_m, length_m, height_m, status FROM article_categories WHERE client_id = ? AND category_type = 'transito-equipos' AND is_test_data = 0 AND name != '' ORDER BY record_number ASC")
+        .all(clientId).map((r) => ({ id: r.id, name: r.name, kind: r.kind || 'other', w: r.width_m || 0, l: r.length_m || 0, h: r.height_m || 0, status: r.status }));
+}
 function listArticleCategories(clientId, categoryType, forTestAccount = false) {
     return db.prepare('SELECT * FROM article_categories WHERE client_id = ? AND category_type = ? AND is_test_data = ? ORDER BY record_number ASC')
         .all(clientId, categoryType, forTestAccount ? 1 : 0);
@@ -5602,11 +5619,17 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
     'activos-clasificacion': {
         kind: { column: 'kind', fieldKey: 'main.colActClasMetrica' },
     },
+    'transito-equipos': {
+        kind: { column: 'kind', fieldKey: 'main.colTrEquipTipo' },
+        widthM: { column: 'width_m', fieldKey: 'main.colTrEquipAncho' },
+        lengthM: { column: 'length_m', fieldKey: 'main.colTrEquipLargo' },
+        heightM: { column: 'height_m', fieldKey: 'main.colTrEquipAlto' },
+    },
 };
 function articleCategoryPatchableFields(categoryType) {
     return { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, ...(ARTICLE_CATEGORY_EXTRA_FIELDS[categoryType] || {}) };
 }
-const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' } };
+const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' }, widthM: { column: 'width_m' }, lengthM: { column: 'length_m' }, heightM: { column: 'height_m' } };
 
 function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
     const sets = [];
@@ -7072,6 +7095,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'sub-almacenes', labelKey: 'menu.catCentroDistSubAlmacenes' },
     { key: 'activos-fijos', labelKey: 'menu.catCentroDistActivosFijos' },
     { key: 'activos-clasificacion', labelKey: 'menu.catCentroDistActivosClasificacion' },
+    { key: 'transito-equipos', labelKey: 'menu.catCentroDistTransitoEquipos' },
     { key: 'nuestras-cotizaciones', labelKey: 'menu.opTransVolCotizaciones' },
     { key: 'nuestros-traslados', labelKey: 'menu.opTransVolNuestrosTraslados' },
     { key: 'tipos-cliente', labelKey: 'menu.catTransVolTiposCliente' },
@@ -11175,6 +11199,31 @@ function seedActivosClasificacionValuesOnce() {
     })();
     console.log(`[db] Seeded the Activos clasificación catalog (Mobiliario operativo m², Mobiliario almacenamiento m³) for existing clients: ${seeded} values (one-time).`);
 }
+// Lo que transita (Catálogos > «Lo que transita»): cada empresa arranca con Personas, Montacargas, Carrito y Plataforma, con las medidas de partida de Tránsito; agrega y cambia los suyos desde su pantalla.
+const TRANSITO_EQUIPOS_DEFAULTS = [
+    { name: 'Personas', kind: 'person', w: 0.6, l: 0.5, h: 1.8 },
+    { name: 'Montacargas', kind: 'forklift', w: 1.2, l: 2.8, h: 2.2 },
+    { name: 'Carrito', kind: 'cart', w: 0.7, l: 1.3, h: 1.2 },
+    { name: 'Plataforma', kind: 'platform', w: 0.9, l: 1.6, h: 1.5 },
+];
+const TRANSITO_EQUIPOS_SEED_KEY = 'seed-transito-equipos-v1';
+function seedTransitoEquiposValues(clientId) {
+    if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = 'transito-equipos' LIMIT 1").get(clientId)) return 0;
+    TRANSITO_EQUIPOS_DEFAULTS.forEach(({ name, kind, w, l, h }) => {
+        const row = createArticleCategory({ clientId, categoryType: 'transito-equipos', isTestData: false });
+        db.prepare("UPDATE article_categories SET name = ?, kind = ?, width_m = ?, length_m = ?, height_m = ?, status = 'active' WHERE id = ?").run(name, kind, w, l, h, row.id);
+    });
+    return TRANSITO_EQUIPOS_DEFAULTS.length;
+}
+function seedTransitoEquiposValuesOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(TRANSITO_EQUIPOS_SEED_KEY)) return;
+    let seeded = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => { seeded += seedTransitoEquiposValues(c.id); });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(TRANSITO_EQUIPOS_SEED_KEY);
+    })();
+    console.log(`[db] Seeded the Lo que transita catalog (Personas, Montacargas, Carrito, Plataforma) for existing clients: ${seeded} values (one-time).`);
+}
 function seedActivosFijosValuesOnce() {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_SEED_KEY)) return;
     let seeded = 0;
@@ -11199,6 +11248,7 @@ seedTipoCodigoValuesOnce();
 seedActivosFijosValuesOnce();
 seedActivosFijosTiposOnce();
 seedActivosClasificacionValuesOnce();
+seedTransitoEquiposValuesOnce();
 
 module.exports = {
     db,
@@ -11301,6 +11351,7 @@ module.exports = {
     saveQrLocks,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
+    listTransitCatalog,
     getArticleCategoryById,
     listActiveArticleCategoryNames,
     ZONE_CATEGORY_COLUMNS,

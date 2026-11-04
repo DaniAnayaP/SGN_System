@@ -165,6 +165,7 @@ const {
     addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
+    listTransitCatalog,
     getArticleCategoryById,
     listActiveArticleCategoryNames,
     ZONE_CATEGORY_COLUMNS,
@@ -6667,6 +6668,36 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: existing ? existing.version : 0 });
     }
 
+    // Lo que transita sale del catálogo de la empresa: los pasillos y los objetos solo pueden usar renglones que existen (y activos, salvo que ya los tuvieran). Las claves de antes (people, forklift…) que mande una pantalla vieja pasan a los
+    // ids del catálogo, y cada objeto toma del catálogo su dibujo y sus medidas.
+    const transitCatalog = listTransitCatalog(req.user.clientId);
+    {
+        const known = new Map(transitCatalog.map((c) => [c.id, c]));
+        const prevWho = new Set(((existing && existing.layout.transit) || []).flatMap((p) => (p.who || []).filter((w) => typeof w === 'number')));
+        const prevEquip = new Set(((existing && existing.layout.objects) || []).map((o) => Number(o.equipId)).filter(Boolean));
+        const check = (id, previous, where) => {
+            const c = known.get(id);
+            if (!c) return `${where}: lo que transita ya no existe en el catálogo «Lo que transita». Vuelve a elegirlo.`;
+            if (c.status !== 'active' && !previous.has(id)) return `${where}: «${c.name}» está inactivo en el catálogo «Lo que transita». Elige uno activo.`;
+            return '';
+        };
+        for (const p of next.transit || []) {
+            for (const w of p.who || []) {
+                if (typeof w !== 'number') continue;
+                const bad = check(w, prevWho, `Pasillo ${p.code || p.name || ''}`.trim());
+                if (bad) return res.status(400).json({ message: bad, section: 'transito' });
+            }
+        }
+        for (const o of next.objects || []) {
+            if (!o.equipId) continue;
+            const bad = check(Number(o.equipId), prevEquip, `Objeto ${o.name || ''}`.trim());
+            if (bad) return res.status(400).json({ message: bad, section: 'objetos' });
+        }
+    }
+    {
+        const synced = LayoutCalc.applyTransitCatalog({ ...next, transitCatalog });
+        next = { ...next, transit: synced.transit, objects: synced.objects };
+    }
     // Una huella siempre va dentro de una zona y debe caber completa: lo nuevo o lo que cambió (la huella o su zona) y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar (solo se marca en pantalla).
     {
         const fresh = LayoutCalc.newFootprintViolations(next, existing ? existing.layout : null);
@@ -6679,7 +6710,7 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     }
     // Tránsito: un pasillo va dentro de una zona, lo que transita por él tiene que caber y nada (huella, columna, pared, desnivel) puede ir adentro. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
     {
-        const freshTransit = LayoutCalc.newTransitViolations(next, existing ? existing.layout : null);
+        const freshTransit = LayoutCalc.newTransitViolations({ ...next, transitCatalog }, existing ? existing.layout : null);
         if (freshTransit.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshTransit.map((v) => v.message), section: 'transito' });
     }
     // Cada espacio con clasificación o tipo de activo debe apuntar a uno de los catálogos del cliente (activo, o el mismo que ya tenía guardado).
@@ -7963,6 +7994,24 @@ function prepareFixedAssetPatch(categoryType, patch) {
     return { patch, sanitizers: { kind: (v) => ASSET_CLASS_METRIC_LABELS[v] || '' } };
 }
 
+// Lo que transita: su tipo (persona, montacargas, carrito, plataforma u otro) y sus medidas en metros (ancho, largo y alto).
+const TRANSIT_EQUIPMENT_KINDS = ['person', 'forklift', 'cart', 'platform', 'other'];
+const TRANSIT_EQUIPMENT_KIND_LABELS = { person: 'Persona', forklift: 'Montacargas', cart: 'Carrito', platform: 'Plataforma', other: 'Otro' };
+function prepareTransitEquipmentPatch(categoryType, patch) {
+    if (categoryType !== 'transito-equipos') return { patch, sanitizers: {} };
+    const out = { ...patch };
+    if (Object.prototype.hasOwnProperty.call(out, 'kind') && !['', ...TRANSIT_EQUIPMENT_KINDS].includes(out.kind)) {
+        return { error: { status: 400, message: 'El tipo debe ser Persona, Montacargas, Carrito, Plataforma u Otro.' } };
+    }
+    for (const key of ['widthM', 'lengthM', 'heightM']) {
+        if (!Object.prototype.hasOwnProperty.call(out, key)) continue;
+        if (out[key] === '' || out[key] === null) { out[key] = 0; continue; }
+        const n = Number(out[key]);
+        if (!Number.isFinite(n) || n < 0 || n > 50) return { error: { status: 400, message: 'La medida debe ser un número entre 0 y 50 metros.' } };
+        out[key] = Math.round(n * 1000) / 1000;
+    }
+    return { patch: out, sanitizers: { kind: (v) => TRANSIT_EQUIPMENT_KIND_LABELS[v] || '' } };
+}
 function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null) {
     if (!row) return row;
     const config = articleCategoryTypeConfig(row.category_type);
@@ -7979,6 +8028,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             kind: row.kind, locations: row.kind === 'physical' ? parseWarehouseLocations(row.locations) : [],
         } : {}),
         ...(row.category_type === 'activos-clasificacion' ? { kind: row.kind } : {}),
+        ...(row.category_type === 'transito-equipos' ? { kind: row.kind, widthM: row.width_m || 0, lengthM: row.length_m || 0, heightM: row.height_m || 0 } : {}),
         ...(ctx && row.category_type === 'inventario' ? (() => {
             const ids = parseClassificationIds(row.classification_ids);
             return { classificationIds: ids, classifications: ids.map((id) => ({ id, ...(ctx.classifications.get(id) || {}) })).filter((c) => c.name !== undefined) };
@@ -8037,7 +8087,9 @@ app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, req
     if (preparedClassification.error) return res.status(preparedClassification.error.status).json({ message: preparedClassification.error.message });
     const preparedFixedAsset = prepareFixedAssetPatch(req.params.categoryType, preparedClassification.patch);
     if (preparedFixedAsset.error) return res.status(preparedFixedAsset.error.status).json({ message: preparedFixedAsset.error.message });
-    const prepared = { patch: preparedFixedAsset.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers } };
+    const preparedTransit = prepareTransitEquipmentPatch(req.params.categoryType, preparedFixedAsset.patch);
+    if (preparedTransit.error) return res.status(preparedTransit.error.status).json({ message: preparedTransit.error.message });
+    const prepared = { patch: preparedTransit.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers, ...preparedTransit.sanitizers } };
     const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, articleCategoryPatchableFields(req.params.categoryType), config.tableKey, `#${existing.id}`, prepared.sanitizers, { baseline, overrideConflicts });
     const category = updateArticleCategory(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
@@ -8064,6 +8116,11 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, re
             const codes = used.slice(0, 3).map((s) => s.code).filter(Boolean).join(', ');
             return res.status(409).json({ message: `Hay ${used.length === 1 ? 'un espacio' : `${used.length} espacios`} del Layout con este activo${codes ? ` (${codes}${used.length > 3 ? '…' : ''})` : ''}. Cámbialos primero en Layout > Activos o márcalo como Inactivo.` });
         }
+    }
+    // Un renglón de «Lo que transita» que algún pasillo u objeto de un Layout ya usa no se borra (se deja Inactivo): esos pasillos y objetos perderían sus medidas.
+    if (req.params.categoryType === 'transito-equipos') {
+        const used = listClientLayouts(req.user.clientId).filter((l) => (l.layout.transit || []).some((p) => (p.who || []).includes(existing.id)) || (l.layout.objects || []).some((o) => Number(o.equipId) === existing.id));
+        if (used.length) return res.status(409).json({ message: 'Hay pasillos u objetos de un Layout que usan este renglón. Cámbialos primero en Layout > Tránsito u Objetos, o márcalo como Inactivo.' });
     }
     // Un almacén con sub almacenes no se borra (se deja Inactivo): los sub almacenes quedarían sin almacén.
     if (req.params.categoryType === 'almacenes'

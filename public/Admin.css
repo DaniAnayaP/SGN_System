@@ -7435,6 +7435,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lob-cab{ fill: #c99a00; stroke: #7a5c00; stroke-width: 0.8; }
 .lob-fork{ stroke: #4a3a00; stroke-width: 1.6; stroke-linecap: round; }
 .lob-person{ fill: #e08a2e; stroke: #8a4a0c; stroke-width: 1; }
+.lob-box{ fill: #c9ccd8; stroke: #6b7089; stroke-width: 1; }
 .lob-head{ fill: #f7c98b; stroke: #8a4a0c; stroke-width: 0.8; }
 .layout-legend .lg-person{ background: #e08a2e; border-color: #8a4a0c; border-radius: 50%; }
 .layout-legend .lg-forklift{ background: #f2c230; border-color: #7a5c00; }

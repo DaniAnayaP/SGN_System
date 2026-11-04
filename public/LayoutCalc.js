@@ -95,7 +95,7 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        return assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], vertices, heightM: round2(meanHeight(vertices)) }))))))))))));
+        return applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -848,18 +848,65 @@
         }
         return true;
     }
-    function transitProblemsOf(p, sizes) {
+    // ---- Lo que transita sale del CATÁLOGO de la empresa (Catálogos > «Lo que transita») -----------------------------------------------------------
+    // El servidor (y la pantalla, al leer el Layout) ponen la lista en layout.transitCatalog ([{ id, name, kind, w, l, h, status }]); NO se guarda con el Layout. Un pasillo guarda los ids de lo que transita (who).
+    // Los Layouts de antes guardaban claves (people, forklift…): se siguen leyendo con las medidas de partida y, en cuanto hay catálogo, pasan solos a los ids (applyTransitCatalog).
+    const TRANSIT_KINDS = ['person', 'forklift', 'cart', 'platform', 'other'];
+    const LEGACY_WHO_KIND = { people: 'person', forklift: 'forklift', cart: 'cart', platform: 'platform', other: 'other' };
+    const transitCatalogOf = (layout) => (Array.isArray(layout && layout.transitCatalog) ? layout.transitCatalog : []);
+    // El renglón del catálogo de lo que transita (un id) o, para lo de antes, su clave con las medidas de partida: { id, key, name, kind, w, l, h, legacy?, missing? }.
+    function transitWhoInfo(layout, who) {
+        if (typeof who === 'number' || /^\d+$/.test(String(who))) {
+            const id = Number(who);
+            const it = transitCatalogOf(layout).find((c) => Number(c.id) === id);
+            return it
+                ? { id, key: String(id), name: it.name || '', kind: it.kind || 'other', w: Number(it.w) || 0, l: Number(it.l) || 0, h: Number(it.h) || 0, status: it.status }
+                : { id, key: String(id), name: '', kind: 'other', w: 0, l: 0, h: 0, missing: true };
+        }
+        const d = transitSizesOf(layout)[who] || { w: 0, l: 0, h: 0 };
+        return { id: null, key: String(who), name: '', kind: LEGACY_WHO_KIND[who] || 'other', w: d.w, l: d.l, h: d.h, legacy: true };
+    }
+    const objectShapeOfKind = (kind) => (kind === 'person' ? 'person' : kind === 'forklift' ? 'forklift' : 'box');
+    // Con el catálogo a la mano: lo de antes (claves) pasa a los ids del catálogo y cada objeto toma del catálogo su dibujo y sus medidas (así, si cambian en el catálogo, cambian en todos). Sin catálogo no toca nada.
+    function applyTransitCatalog(layout) {
+        const catalog = transitCatalogOf(layout);
+        if (!layout || !catalog.length) return layout;
+        const firstOfKind = (kind) => catalog.find((c) => c.kind === kind && c.status !== 'inactive') || catalog.find((c) => c.kind === kind) || null;
+        let changed = false;
+        const transit = (layout.transit || []).map((p) => {
+            if (!Array.isArray(p.who) || !p.who.some((w) => typeof w === 'string' && !/^\d+$/.test(w))) return p;
+            const who = [];
+            p.who.forEach((w) => {
+                if (typeof w === 'string' && !/^\d+$/.test(w)) { const it = firstOfKind(LEGACY_WHO_KIND[w]); if (it) { if (!who.includes(it.id)) who.push(it.id); return; } }
+                const v = typeof w === 'string' ? (/^\d+$/.test(w) ? Number(w) : w) : w;
+                if (!who.includes(v)) who.push(v);
+            });
+            changed = true;
+            return { ...p, who };
+        });
+        const objects = (layout.objects || []).map((o) => {
+            let it = o.equipId ? catalog.find((c) => Number(c.id) === Number(o.equipId)) : null;
+            if (!it && !o.equipId) it = firstOfKind(o.type === 'forklift' ? 'forklift' : 'person');
+            if (!it) return o;
+            const next = { ...o, equipId: Number(it.id), type: objectShapeOfKind(it.kind), l: Number(it.l) || o.l, w: Number(it.w) || o.w, h: Number(it.h) || o.h || 0 };
+            if (next.equipId === o.equipId && next.type === o.type && next.l === o.l && next.w === o.w && next.h === o.h) return o;
+            changed = true;
+            return next;
+        });
+        return changed ? { ...layout, transit, objects } : layout;
+    }
+    function transitProblemsOf(p, layout) {
         const narrow = Math.min(Number(p.l) || 0, Number(p.w) || 0);
         const long = Math.max(Number(p.l) || 0, Number(p.w) || 0);
         const out = [];
         (p.who || []).forEach((k) => {
-            const d = sizes[k];
-            if (!d || !(d.w > 0 || d.l > 0 || d.h > 0)) return;
+            const d = transitWhoInfo(layout, k);
+            if (!(d.w > 0 || d.l > 0 || d.h > 0)) return;
             const problems = [];
             if (d.w > narrow + 1e-6) problems.push('w');
             if (d.l > long + 1e-6) problems.push('l');
             if (Number(p.h) > 0 && d.h > Number(p.h) + 1e-6) problems.push('h');
-            if (problems.length) out.push({ who: k, problems, size: d });
+            if (problems.length) out.push({ who: k, name: d.name, problems, size: { w: d.w, l: d.l, h: d.h } });
         });
         return out;
     }
@@ -869,7 +916,7 @@
         const out = [];
         if (!layout || !Array.isArray(layout.transit) || !layout.transit.length) return out;
         const byZone = new Map((layout.zones || []).map((z) => [z.id, z]));
-        const sizes = transitSizesOf(layout);
+
         const prints = (layout.footprints || []).filter((f) => f.active !== false);
         const obstacles = obstacleShapes(layout);
         layout.transit.forEach((p) => {
@@ -881,7 +928,7 @@
                 const pts = zonePoints(z);
                 if (!(pts && pts.length >= 3 && rectInsidePolygon(pts, p.x, p.y, p.l, p.w))) out.push({ ...base, kind: 'out', zoneId: z.id, zoneName: z.name, sig: geo + JSON.stringify([z.id, pts]), message: `El pasillo ${p.code} no cabe dentro de su zona ${z.name}: si cruza el límite de dos zonas, se divide en dos pasillos que se tocan.` });
             }
-            transitProblemsOf(p, sizes).forEach((f) => out.push({ ...base, kind: 'fit', who: f.who, problems: f.problems, size: f.size, sig: geo + JSON.stringify([f.who, f.size]), message: `En el pasillo ${p.code} no cabe lo que transita (${f.who}): revisa sus medidas o las del pasillo.` }));
+            transitProblemsOf(p, layout).forEach((f) => out.push({ ...base, kind: 'fit', who: f.who, whoName: f.name, problems: f.problems, size: f.size, sig: geo + JSON.stringify([f.who, f.size]), message: `En el pasillo ${p.code} no cabe lo que transita (${f.name || f.who}): revisa sus medidas o las del pasillo.` }));
             const rect = { x: Number(p.x) || 0, y: Number(p.y) || 0, l: Number(p.l) || 0, w: Number(p.w) || 0 };
             prints.forEach((f) => {
                 if (!rectOverlapsConvex(rect, [[f.x, f.y], [f.x + f.l, f.y], [f.x + f.l, f.y + f.d], [f.x, f.y + f.d]])) return;
@@ -919,7 +966,7 @@
     // Es una foto fija del plano (como el que se hacía en Excel), no un seguimiento en vivo: cada objeto es una persona o un montacargas en un lugar del plano, girado hacia donde mira. x, y = su centro (en metros);
     // angle = hacia dónde mira, en grados (0 = hacia la derecha, 90 = hacia abajo en el plano); l = largo (en el sentido en que mira), w = ancho y h = alto, en metros, a escala. Las medidas de partida salen de la tabla
     // «Cuánto mide lo que transita» del paso Tránsito, así el dibujo y la revisión de los pasillos usan las mismas.
-    const OBJECT_TYPES = ['person', 'forklift'];
+    const OBJECT_TYPES = ['person', 'forklift', 'box'];
     const OBJECT_SIZE_KEY = { person: 'people', forklift: 'forklift' };
     function objectDefaultSize(layout, type) {
         const s = transitSizesOf(layout)[OBJECT_SIZE_KEY[type] || 'people'];
@@ -1327,7 +1374,7 @@
             const label = `Objeto ${i + 1}`;
             const ang = Number(p && p.angle);
             const item = {
-                id: idOf(p && p.id, objectIds, label), name: text(p && p.name, label, false), type: oneOf(p && p.type, OBJECT_TYPES, 'person'),
+                id: idOf(p && p.id, objectIds, label), name: text(p && p.name, label, false), type: oneOf(p && p.type, OBJECT_TYPES, 'person'), ...(Number(p && p.equipId) > 0 ? { equipId: Math.round(Number(p.equipId)) } : {}),
                 x: meters(p && p.x, label, -LIMITS.maxM), y: meters(p && p.y, label, -LIMITS.maxM),
                 angle: Number.isFinite(ang) ? round2(((ang % 360) + 360) % 360) : 0,
                 l: meters(p && p.l, label), w: meters(p && p.w, label), h: p && p.h != null && p.h !== '' ? meters(p.h, label) : 0,
@@ -1339,7 +1386,13 @@
         const transitIds = new Set();
         out.transit = list(src.transit, LIMITS.transit, 'Pasillos').map((p, i) => {
             const label = `Pasillo ${i + 1}`;
-            const who = TRANSIT_WHO.filter((k) => Array.isArray(p && p.who) && p.who.includes(k));
+            // quién transita: ids del catálogo de la empresa (y, para lo de antes, las claves people, forklift…); primero los ids
+            const who = [];
+            (Array.isArray(p && p.who) ? p.who : []).forEach((w) => {
+                const v = /^\d+$/.test(String(w)) && Number(w) > 0 ? Number(w) : (TRANSIT_WHO.includes(w) ? w : null);
+                if (v !== null && !who.includes(v)) who.push(v);
+            });
+            who.sort((a, b) => (typeof a === typeof b ? (typeof a === 'number' ? a - b : TRANSIT_WHO.indexOf(a) - TRANSIT_WHO.indexOf(b)) : (typeof a === 'number' ? -1 : 1)));
             const item = {
                 id: idOf(p && p.id, transitIds, label), code: text(p && p.code, label, false), name: text(p && p.name, label, false), type: oneOf(p && p.type, TRANSIT_TYPES, 'main'), who, zoneId: '',
                 x: meters(p && p.x, label, -LIMITS.maxM), y: meters(p && p.y, label, -LIMITS.maxM), l: meters(p && p.l, label), w: meters(p && p.w, label),
@@ -1642,7 +1695,7 @@
         if (section === 'sensores') return (layout.sensors || []).map(({ zoneId, ...rest }) => rest);
         if (section === 'objetos') return layout.objects || [];
         // La zona de cada pasillo sale del croquis, no se captura; las medidas de lo que transita van con el paso.
-        if (section === 'transito') return { transit: (layout.transit || []).map(({ zoneId, ...rest }) => rest), sizes: transitSizesOf(layout) };
+        if (section === 'transito') return { transit: (layout.transit || []).map(({ zoneId, ...rest }) => rest) };
         if (section === 'zonas') return layout.zones;
         // Los espacios sin lo del paso Activos (la clasificación y el tipo de activo, y sus niveles, espacios por nivel y cajones; todo eso tiene su propio permiso). En Activos, solo los espacios que ya tienen
         // algo de eso: así agregar un espacio nuevo en Huella-Espacio (con 1 nivel) no cuenta como cambio de Activos.
@@ -1676,7 +1729,7 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume,
-        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon,
+        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

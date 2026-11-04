@@ -321,6 +321,9 @@
     "catCentroDistActivosClasificacion": "Nuestras Clasificaciones de Activos",
     "catCentroDistActivosClasificacionAbbr1": "Clasificación de Activos",
     "catCentroDistActivosClasificacionAbbr2": "Clasif. Activos",
+    "catCentroDistTransitoEquipos": "Lo que Transita",
+    "catCentroDistTransitoEquiposAbbr1": "Lo que Transita",
+    "catCentroDistTransitoEquiposAbbr2": "Transita",
     "opTransVolNuestrosTraslados": "Nuestros Traslados",
     "opTransVolCotizaciones": "Nuestras Cotizaciones",
     "classCotizaciones": "Nuestras Cotizaciones",
@@ -1728,6 +1731,10 @@
     "layoutQuien_other": "Otro",
     "layoutQuienOtroCual": "¿Cuál?",
     "layoutQuienAgregar": "Agregar quién transita",
+    "layoutQuienBorrado": "(ya no está en el catálogo)",
+    "layoutQuienSinCatalogo": "No hay nada en el catálogo «Lo que transita». Agrégalo en Catálogos.",
+    "layoutEquipoPersona": "Equipo o persona",
+    "layoutObjetoSinCatalogo": "No hay un renglón activo de ese tipo en el catálogo «Lo que transita». Agrégalo primero en Catálogos.",
     "layoutQuienDim_w": "ancho",
     "layoutQuienDim_l": "largo",
     "layoutQuienDim_h": "alto",
@@ -2983,6 +2990,16 @@
     "newFixedAsset": "Nuevo Activo Fijo",
     "newAssetClass": "Nueva Clasificación",
     "colActClasMetrica": "Se mide en",
+    "newTransitEquip": "Nuevo equipo o persona",
+    "colTrEquipTipo": "Tipo",
+    "colTrEquipAncho": "Ancho (m)",
+    "colTrEquipLargo": "Largo (m)",
+    "colTrEquipAlto": "Alto (m)",
+    "trKind_person": "Persona",
+    "trKind_forklift": "Montacargas",
+    "trKind_cart": "Carrito",
+    "trKind_platform": "Plataforma",
+    "trKind_other": "Otro",
     "acMetricM2": "m² (mobiliario)",
     "acMetricM3": "m³ (almacenamiento)",
     "colActivoFijoUso": "Uso",
@@ -4025,6 +4042,14 @@
       "what": "Dice para qué sirve este activo fijo. Almacena inventario: guarda mercancía, como un rack o un anaquel (sus espacios cuentan como almacenamiento). Uso operativo: es de trabajo, como un escritorio o una mesa (no guarda inventario).",
       "example": "Rack es Almacena inventario; Escritorio es Uso operativo."
     },
+    "transitEquipKind": {
+      "what": "Qué clase de cosa es: Persona, Montacargas, Carrito, Plataforma u Otro. De aquí sale cómo se dibuja en el plano (la persona como óvalo, el montacargas con sus horquillas, lo demás como caja).",
+      "example": "«Montacargas Hyster 3.0 t» es de tipo Montacargas."
+    },
+    "transitEquipSize": {
+      "what": "Cuánto mide, en metros (ancho, largo y alto). Con estas medidas se revisa que quepa en los pasillos del Layout y se dibuja a escala en Objetos. Si las cambias, cambian en todos los pasillos y objetos que lo usan.",
+      "example": "un montacargas de 1.4 m de ancho no cabe en un pasillo de 1.2 m."
+    },
     "assetClassMetric": {
       "what": "Con qué métrica cuenta esta clasificación en el Layout. m² (mobiliario): el espacio entra en los m² de mobiliario, como el mobiliario operativo. m³ (almacenamiento): se miden sus m³ de almacenamiento, para saber cuántos m³ se están aprovechando.",
       "example": "Mobiliario operativo se mide en m²; Mobiliario almacenamiento se mide en m³."
@@ -4498,11 +4523,11 @@
       "example": "marcas todo el contorno como pared y después quitas la de un andén abierto."
     },
     "layoutSec_transito": {
-      "what": "Los pasillos de la nave: por donde pasan personas, montacargas, carritos y plataformas. Un pasillo va dentro de una zona (la zona sale sola de su lugar), se conecta con otro pasillo que lo toque y nada puede ir adentro: ni huellas, ni columnas, ni paredes, ni desniveles. Lo que transita por él tiene que caber (ancho, largo y alto). El código (T001, T002…) lo pone el sistema. De aquí salen los m² de pasillos.",
+      "what": "Los pasillos de la nave: por donde pasan personas, montacargas, carritos y plataformas. Un pasillo va dentro de una zona (la zona sale sola de su lugar), se conecta con otro pasillo que lo toque y nada puede ir adentro: ni huellas, ni columnas, ni paredes, ni desniveles. Quién transita por él se elige del catálogo «Lo que transita» (Catálogos), y tiene que caber (ancho, largo y alto). El código (T001, T002…) lo pone el sistema. De aquí salen los m² de pasillos.",
       "example": "un pasillo principal de 25 m de largo por 3 m de ancho dentro de la Zona 1, para personas y montacargas: queda como T001."
     },
     "layoutTransitoQuien": {
-      "what": "Quién transita por este pasillo: personas, montacargas, carrito, plataforma u otro (se escribe cuál). Se pueden marcar varios. Si lo que marcas no cabe en el pasillo, sale en rojo y no se puede guardar.",
+      "what": "Quién transita por este pasillo, elegido del catálogo «Lo que transita» (personas, montacargas, carritos, plataformas, los modelos que tengas). Se pueden marcar varios. Las medidas salen del catálogo; si lo que marcas no cabe en el pasillo, sale en rojo y no se puede guardar.",
       "example": "marcas Personas y Montacargas en el pasillo central; si mide menos de 1.2 m de ancho, el montacargas sale en rojo."
     },
     "layoutTransitoMedidas": {
@@ -4514,7 +4539,7 @@
       "example": "una viga baja deja 2 m libres: pones 2 y un montacargas de 2.2 m de alto sale en rojo."
     },
     "layoutSec_objetos": {
-      "what": "Las personas y los montacargas dibujados en el plano, a escala, como una foto fija de cómo está la nave (no sigue a nadie en vivo). Cada uno tiene su lugar (X e Y son su centro, en metros), hacia dónde mira (giro en grados) y sus medidas (largo, ancho y alto), que salen de «Cuánto mide lo que transita» del paso Tránsito y puedes cambiar en cada uno. Se ven en el croquis y en el 3D mientras este paso esté encendido.",
+      "what": "Las personas y los montacargas dibujados en el plano, a escala, como una foto fija de cómo está la nave (no sigue a nadie en vivo). Cada uno tiene su lugar (X e Y son su centro, en metros), hacia dónde mira (giro en grados) y su equipo o persona, elegido del catálogo «Lo que transita»: de ahí salen su dibujo y sus medidas, y si cambian en el catálogo cambian aquí. Se ven en el croquis y en el 3D mientras este paso esté encendido.",
       "example": "un montacargas en el pasillo central, a 12 m en X y 9.5 m en Y, mirando hacia la derecha (giro 0), y una persona junto a él."
     },
     "layoutObjetoAgregar": {

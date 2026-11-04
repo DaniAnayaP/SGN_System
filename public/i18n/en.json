@@ -317,6 +317,9 @@
     "catCentroDistActivosClasificacion": "Our Asset Classifications",
     "catCentroDistActivosClasificacionAbbr1": "Asset Classification",
     "catCentroDistActivosClasificacionAbbr2": "Asset Class.",
+    "catCentroDistTransitoEquipos": "What Passes",
+    "catCentroDistTransitoEquiposAbbr1": "What Passes",
+    "catCentroDistTransitoEquiposAbbr2": "Passes",
     "opTransVolNuestrosTraslados": "Our Transfers",
     "opTransVolCotizaciones": "Our Quotes",
     "classCotizaciones": "Our Quotes",
@@ -1728,6 +1731,10 @@
     "layoutQuien_other": "Other",
     "layoutQuienOtroCual": "Which one?",
     "layoutQuienAgregar": "Add who passes",
+    "layoutQuienBorrado": "(no longer in the catalog)",
+    "layoutQuienSinCatalogo": "There is nothing in the «What Passes» catalog. Add it in Catalogs.",
+    "layoutEquipoPersona": "Equipment or person",
+    "layoutObjetoSinCatalogo": "There is no active row of that type in the «What Passes» catalog. Add it first in Catalogs.",
     "layoutQuienDim_w": "width",
     "layoutQuienDim_l": "length",
     "layoutQuienDim_h": "height",
@@ -2984,6 +2991,16 @@
     "newFixedAsset": "New Fixed Asset",
     "newAssetClass": "New Classification",
     "colActClasMetrica": "Measured in",
+    "newTransitEquip": "New equipment or person",
+    "colTrEquipTipo": "Type",
+    "colTrEquipAncho": "Width (m)",
+    "colTrEquipLargo": "Length (m)",
+    "colTrEquipAlto": "Height (m)",
+    "trKind_person": "Person",
+    "trKind_forklift": "Forklift",
+    "trKind_cart": "Cart",
+    "trKind_platform": "Platform",
+    "trKind_other": "Other",
     "acMetricM2": "m² (furniture)",
     "acMetricM3": "m³ (storage)",
     "colActivoFijoUso": "Use",
@@ -4026,6 +4043,14 @@
       "what": "Says what this fixed asset is for. Stores inventory: holds goods, like a rack or a shelf (its spaces count as storage). Operational use: it is for work, like a desk or a table (it does not hold inventory).",
       "example": "Rack is Stores inventory; Desk is Operational use."
     },
+    "transitEquipKind": {
+      "what": "What kind of thing it is: Person, Forklift, Cart, Platform or Other. It decides how it is drawn on the plan (a person as an oval, a forklift with its forks, the rest as a box).",
+      "example": "«Hyster forklift 3.0 t» is of type Forklift."
+    },
+    "transitEquipSize": {
+      "what": "How big it is, in meters (width, length and height). These sizes are used to check that it fits in the aisles of the Layout and to draw it to scale in Objects. If you change them, they change in every aisle and object that uses it.",
+      "example": "a forklift 1.4 m wide does not fit in an aisle 1.2 m wide."
+    },
     "assetClassMetric": {
       "what": "Which metric this classification counts in the Layout. m² (furniture): the space goes into the furniture m², like operational furniture. m³ (storage): its storage m³ are measured, to know how many m³ are being used.",
       "example": "Operational furniture is measured in m²; Storage furniture is measured in m³."
@@ -4499,11 +4524,11 @@
       "example": "you mark the whole outline as wall and then remove the one of an open dock."
     },
     "layoutSec_transito": {
-      "what": "The aisles of the warehouse: where people, forklifts, carts and platforms pass. An aisle goes inside a zone (the zone comes by itself from its place), connects with another aisle that touches it, and nothing can be inside: no footprints, columns, walls or level differences. What passes through it has to fit (width, length and height). The code (T001, T002…) is set by the system. The aisle m² come from here.",
+      "what": "The aisles of the warehouse: where people, forklifts, carts and platforms pass. An aisle goes inside a zone (the zone comes by itself from its place), connects with another aisle that touches it, and nothing can be inside: no footprints, columns, walls or level differences. Who passes through it is chosen from the «What Passes» catalog (Catalogs), and it has to fit (width, length and height). The code (T001, T002…) is set by the system. The aisle m² come from here.",
       "example": "a main aisle 25 m long by 3 m wide inside Zone 1, for people and forklifts: it becomes T001."
     },
     "layoutTransitoQuien": {
-      "what": "Who passes through this aisle: people, forklift, cart, platform or other (you write which). You can tick several. If what you tick does not fit in the aisle, it shows in red and it can't be saved.",
+      "what": "Who passes through this aisle, chosen from the «What Passes» catalog (people, forklifts, carts, platforms, whatever models you have). You can tick several. The sizes come from the catalog; if what you tick does not fit in the aisle, it shows in red and it can't be saved.",
       "example": "you tick People and Forklift on the central aisle; if it is less than 1.2 m wide, the forklift shows in red."
     },
     "layoutTransitoMedidas": {
@@ -4515,7 +4540,7 @@
       "example": "a low beam leaves 2 m free: you enter 2 and a 2.2 m tall forklift shows in red."
     },
     "layoutSec_objetos": {
-      "what": "The people and forklifts drawn on the plan, to scale, as a still picture of how the warehouse is (it does not follow anyone live). Each one has its place (X and Y are its center, in meters), where it faces (turn in degrees) and its size (length, width and height), which come from «Size of what passes» in the Transit step and can be changed on each one. They show on the sketch and in 3D while this step is on.",
+      "what": "The people and forklifts drawn on the plan, to scale, as a still picture of how the warehouse is (it does not follow anyone live). Each one has its place (X and Y are its center, in meters), where it faces (turn in degrees) and its equipment or person, chosen from the «What Passes» catalog: its drawing and sizes come from there, and if they change in the catalog they change here. They show on the sketch and in 3D while this step is on.",
       "example": "a forklift in the central aisle, 12 m in X and 9.5 m in Y, facing right (turn 0), and a person next to it."
     },
     "layoutObjetoAgregar": {
