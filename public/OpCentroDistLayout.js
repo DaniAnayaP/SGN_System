@@ -1117,8 +1117,16 @@ function renderPanel() {
 // nivel y la columna. Es solo de pantalla (no cambia lo guardado ni la hoja que se descarga) y no hace falta redibujar el croquis: se pone y se quita sobre el dibujo que ya está.
 const HL_ROW_SELECTOR = '#layout-panel .layout-table tbody tr';
 function rowEntity(tr) {
+    // Contorno por lados: los campos del renglón «Lado N» llevan data-cs="dir:N-1" (o tilt, len, h); el lado es el que va de la esquina N a la N+1
+    const cs = tr.querySelector('[data-cs]');
+    if (cs && state.draft) {
+        const m = /^(?:dir|tilt|len|h):(\d+)$/.exec(cs.getAttribute('data-cs') || '');
+        return m && state.draft.vertices[Number(m[1])] ? { kind: 'side', id: m[1] } : null;
+    }
     const ctl = tr.querySelector('[data-l][data-i]');
     if (!ctl || !state.draft) return null;
+    // Contorno por esquinas: el renglón «Esquina N»
+    if (ctl.getAttribute('data-l') === 'vertices') return state.draft.vertices[Number(ctl.getAttribute('data-i'))] ? { kind: 'corner', id: ctl.getAttribute('data-i') } : null;
     const list = ctl.getAttribute('data-l');
     const i = Number(ctl.getAttribute('data-i'));
     if (list === 'zones' && state.draft.zones[i]) return { kind: 'zone', id: state.draft.zones[i].id };
@@ -1157,10 +1165,10 @@ function applyHighlight(reveal) {
     const h = state.hl;
     if (!h || h.step !== state.focus || !state.draft) return;
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
-    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid' };
+    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid', side: 'data-sin-figura', corner: 'data-sin-figura' };
     const els = Array.from(svg.querySelectorAll(`[${HL_ATTR[h.kind] || 'data-sid'}="${CSS.escape(h.id)}"]`));
     // un elemento de seguridad, un objeto, una puerta, una conexión de luz o un sensor son figuras sueltas (línea, símbolo, giro, etiqueta): su contorno sale de un cuadro invisible que se dibuja junto a ellos
-    const shapes = ['safety', 'object', 'door', 'power', 'sensor'].includes(h.kind)
+    const shapes = ['safety', 'object', 'door', 'power', 'sensor', 'side', 'corner'].includes(h.kind)
         ? Array.from(svg.querySelectorAll(`[data-hlbox="${h.kind}:${CSS.escape(h.id)}"]`))
         : els.map((el) => (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'))).filter(Boolean);
     if (!shapes.length) return;
@@ -1184,8 +1192,8 @@ function applyHighlight(reveal) {
             ring = shapes[0].cloneNode(false);
             ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'data-fid', 'data-obid', 'data-tid', 'data-hlbox', 'data-did', 'data-pid', 'data-nid', 'id'].forEach((a) => ring.removeAttribute(a));
         }
-        // una pared o una columna es delgada: su contorno de resaltado es más grueso para que se vea
-        ring.setAttribute('class', `hl-shape ${cls}${h.kind === 'obstacle' ? ' hl-obs' : ''}`);
+        // una pared, una columna o un lado del contorno es delgado: su contorno de resaltado es más grueso para que se vea
+        ring.setAttribute('class', `hl-shape ${cls}${h.kind === 'obstacle' || h.kind === 'side' ? ' hl-obs' : ''}`);
         svg.appendChild(ring);
     });
     if (h.kind === 'bay') {
@@ -1712,6 +1720,16 @@ function renderSvg() {
     }
     const halosAt = s.length; // aquí entran después los contornos de las etiquetas de las paredes: debajo de TODOS los textos
     s += zoneHalos + (sM ? measureHalos : '') + zoneLabels + (sM ? measureLabels : '');
+    // Contorno (paso Contorno): el cuadro (invisible) de cada lado y de cada esquina que usa el resaltado al elegir su renglón; el lado i es el que va de la esquina i a la i+1 (en un contorno abierto no hay lado de regreso).
+    if (on('contorno')) {
+        const verts = d.vertices;
+        const sideCount = state.open.contorno ? verts.length - 1 : verts.length;
+        for (let n = 1; n <= sideCount; n++) {
+            const seg = LC.wallSegment(verts, n);
+            s += `<line class="hl-box" data-hlbox="side:${n - 1}" x1="${X(seg.p[0]).toFixed(1)}" y1="${Y(seg.p[1]).toFixed(1)}" x2="${X(seg.q[0]).toFixed(1)}" y2="${Y(seg.q[1]).toFixed(1)}"/>`;
+        }
+        verts.forEach((p, i) => { s += `<circle class="hl-box" data-hlbox="corner:${i}" cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="9"/>`; });
+    }
     (on('puertas') ? d.doors : []).forEach((door) => {
         const g = LC.doorGeometry(d, door);
         if (!g) return;

@@ -125,6 +125,20 @@
                 const h = layerOn.assets && mates.length ? Math.max(...mates.map((s) => s.h)) : 0.2;
                 return { x: PX(f.x + f.l / 2), y: h / 2, z: PZ(f.y + f.d / 2), sx: f.l, sy: h, sz: f.d };
             }
+            // un lado (o una esquina) del contorno elegido en la tabla de Contorno: el tramo de pared de esa esquina a la siguiente, con la altura de sus esquinas
+            if (hl.kind === 'side' || hl.kind === 'corner') {
+                const vs = lastLayout.vertices || [];
+                const i = Number(hl.id);
+                const p = vs[i];
+                if (!layerOn.contour || !p) return null;
+                if (hl.kind === 'corner') {
+                    const hc = Math.max(Number(p[2]) || 0, 0.5);
+                    return { x: PX(p[0]), y: hc / 2, z: PZ(p[1]), sx: 0.5, sy: hc, sz: 0.5 };
+                }
+                const q = vs[(i + 1) % vs.length];
+                const hs = Math.max(((Number(p[2]) || 0) + (Number(q[2]) || 0)) / 2, 0.5);
+                return { x: PX((p[0] + q[0]) / 2), y: hs / 2, z: PZ((p[1] + q[1]) / 2), sx: Math.max(Math.abs(q[0] - p[0]), 0.3), sy: hs, sz: Math.max(Math.abs(q[1] - p[1]), 0.3) };
+            }
             // una pared, columna o desnivel elegido en las tablas de Paredes o Contorno
             if (hl.kind === 'obstacle') {
                 const shapes = root.LayoutCalc && root.LayoutCalc.obstacleShapes ? root.LayoutCalc.obstacleShapes(lastLayout) : [];
