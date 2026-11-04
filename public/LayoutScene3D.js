@@ -12,10 +12,11 @@
 
     const DEFAULT_ZONE_FILL = { dry: '#d9c7ef', cold: '#bfe0f5', chemical: '#f5d0cf', finished: '#d4efd0', dock: '#9cc3ea', office: '#a3ebcb', aisle: '#d5d8e2', aisle2: '#e6e8ef', none: '#e9e9ee' };
     const DOOR_COLOR = { dock: 0x2a6fd1, staff: 0x8a5a34, emergency: 0x2e9e5b };
+    const SENSOR_COLOR = 0x2b8ca3;
     const POWER_COLOR = { panel: 0x6b6f7c, outlet110: 0xf1c232, outlet220: 0xe8892b, 'three-phase': 0xd93a2f };
     const WOOD = 0xb98a52;
     const MAX_SPACE_LABELS = 300;
-    const LAYER_NAMES = ['contour', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety'];
+    const LAYER_NAMES = ['contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety'];
     // El color de cada elemento de Seguridad (los mismos del croquis: rojo del fuego, verde de emergencia, naranja de alarma, azul del agua).
     const SAFETY_COLOR = { extinguisher: 0xd9443a, hydrant: 0xd9443a, emergency_door: 0x2e9e5b, firstaid: 0x2e9e5b, alarm: 0xe8892b, eyewash: 0x2f7fc7, assembly: 0x2e9e5b, route: 0x2e9e5b };
 
@@ -46,7 +47,7 @@
         scene.add(sun);
         // Un grupo por capa: así cada una se muestra u oculta sola.
         const group = {};
-        ['floor', 'contour', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
+        ['floor', 'contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels', 'sensorLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
         const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a }));
         outline.visible = false;
         scene.add(outline);
@@ -91,6 +92,8 @@
             group.walls.visible = layerOn.walls;
             group.doors.visible = layerOn.doors;
             group.power.visible = layerOn.power;
+            group.sensors.visible = layerOn.sensors;
+            group.sensorLabels.visible = labelsOn && layerOn.sensors;
             group.columns.visible = layerOn.columns;
             group.zones.visible = layerOn.zones;
             group.footprints.visible = layerOn.footprints;
@@ -161,6 +164,14 @@
                 const h = isDoor ? Math.max(0.5, Number(e.height) || 2.1) : 0.28;
                 const thick = Math.max(isDoor ? 0.2 : 0.16, dg.thick + 0.04);
                 return { x: PX((dg.a.x + dg.b.x) / 2), y: isDoor ? h / 2 : Math.max(0.2, Number(e.height) || 0.4), z: PZ((dg.a.y + dg.b.y) / 2), sx: Math.abs(dg.ux) * w + Math.abs(dg.uy) * thick, sy: h, sz: Math.abs(dg.uy) * w + Math.abs(dg.ux) * thick };
+            }
+            // un sensor elegido en la tabla de Sensores: un cubo alrededor del disco, pegado a su pared
+            if (hl.kind === 'sensor') {
+                const e = (lastLayout.sensors || []).find((x) => x.id === hl.id);
+                if (!e || !layerOn.sensors) return null;
+                const sg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(lastLayout, { ...e, width: 0 }) : null;
+                if (!sg) return null;
+                return { x: PX(sg.a.x), y: Math.max(0.2, Number(e.height) || 1.5), z: PZ(sg.a.y), sx: 0.6, sy: 0.6, sz: 0.6 };
             }
             // un elemento de seguridad, un pasillo o un objeto elegido en las tablas de Seguridad, Tránsito u Objetos
             if (hl.kind === 'safety') {
@@ -390,6 +401,20 @@
                 m.position.set(PX(pg.a.x), Math.max(0.2, Number(e.height) || 0.4), PZ(pg.a.y));
                 m.rotation.y = -Math.atan2(pg.uy, pg.ux);
                 group.power.add(m);
+            });
+            // un sensor (de temperatura y/o humedad) va sobre su pared, a su altura del piso: un disco turquesa pegado a la pared (como el del croquis) con su código arriba
+            (layout.sensors || []).forEach((e) => {
+                const sg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(layout, { ...e, width: 0 }) : null;
+                if (!sg) return;
+                const y = Math.max(0.2, Number(e.height) || 1.5);
+                const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, Math.max(0.16, sg.thick + 0.06), 18), lam(SENSOR_COLOR));
+                disc.rotation.x = Math.PI / 2;
+                const g = new THREE.Group();
+                g.add(disc);
+                g.position.set(PX(sg.a.x), y, PZ(sg.a.y));
+                g.rotation.y = -Math.atan2(sg.uy, sg.ux);
+                group.sensors.add(g);
+                addLabel(group.sensorLabels, e.code, PX(sg.a.x), y + 0.45, PZ(sg.a.y), 0.3, false);
             });
             // columnas y obstáculos: del piso al techo
             shapes3.filter(({ o }) => o.kind !== 'wall').forEach(({ o, g }) => {
