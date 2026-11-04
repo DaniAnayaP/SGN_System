@@ -124,6 +124,16 @@
                 const h = layerOn.assets && mates.length ? Math.max(...mates.map((s) => s.h)) : 0.2;
                 return { x: PX(f.x + f.l / 2), y: h / 2, z: PZ(f.y + f.d / 2), sx: f.l, sy: h, sz: f.d };
             }
+            // una pared, columna o desnivel elegido en las tablas de Paredes o Contorno
+            if (hl.kind === 'obstacle') {
+                const shapes = root.LayoutCalc && root.LayoutCalc.obstacleShapes ? root.LayoutCalc.obstacleShapes(lastLayout) : [];
+                const hit = shapes.find(({ o }) => o.id === hl.id);
+                if (!hit || !(hit.o.kind === 'wall' ? layerOn.walls : layerOn.columns)) return null;
+                const xs = hit.g.pts.map((p) => p[0]); const ys = hit.g.pts.map((p) => p[1]);
+                const x0 = Math.min(...xs); const x1 = Math.max(...xs); const y0 = Math.min(...ys); const y1 = Math.max(...ys);
+                const hh = hit.o.kind === 'step' ? Math.max(Math.abs(Number(hit.o.dz) || 0), 0.12) : Math.max(bounds.maxH, 1);
+                return { x: PX((x0 + x1) / 2), y: hh / 2, z: PZ((y0 + y1) / 2), sx: Math.max(x1 - x0, 0.1), sy: hh, sz: Math.max(y1 - y0, 0.1) };
+            }
             const s = (lastLayout.spaces || []).find((e) => e.id === hl.id);
             if (!s || s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id) || !layerOn.assets) return null;
             return { x: PX(s.x + s.l / 2), y: s.h / 2, z: PZ(s.y + s.d / 2), sx: s.l, sy: s.h, sz: s.d };

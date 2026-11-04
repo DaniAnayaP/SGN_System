@@ -954,6 +954,8 @@ function rowEntity(tr) {
     if (list === 'zones' && state.draft.zones[i]) return { kind: 'zone', id: state.draft.zones[i].id };
     if (list === 'footprints' && state.draft.footprints[i]) return { kind: 'footprint', id: state.draft.footprints[i].id };
     if (list === 'spaces' && state.draft.spaces[i]) return { kind: 'space', id: state.draft.spaces[i].id };
+    // las paredes (paso Paredes) y las columnas, desniveles y otros obstáculos (paso Contorno) también se marcan en el croquis al elegir su renglón
+    if (list === 'obstacles' && state.draft.obstacles[i]) return { kind: 'obstacle', id: state.draft.obstacles[i].id };
     if (list === 'bay' && state.draft.spaces[i]) return { kind: 'bay', id: state.draft.spaces[i].id, n: Number(ctl.getAttribute('data-n')), c: Number(ctl.getAttribute('data-c')) };
     return null;
 }
@@ -979,7 +981,7 @@ function applyHighlight(reveal) {
     const h = state.hl;
     if (!h || h.step !== state.focus || !state.draft) return;
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
-    const els = Array.from(svg.querySelectorAll(h.kind === 'zone' ? `[data-zid="${CSS.escape(h.id)}"]` : (h.kind === 'footprint' ? `[data-fid="${CSS.escape(h.id)}"]` : `[data-sid="${CSS.escape(h.id)}"]`)));
+    const els = Array.from(svg.querySelectorAll(h.kind === 'zone' ? `[data-zid="${CSS.escape(h.id)}"]` : (h.kind === 'footprint' ? `[data-fid="${CSS.escape(h.id)}"]` : (h.kind === 'obstacle' ? `[data-obid="${CSS.escape(h.id)}"]` : `[data-sid="${CSS.escape(h.id)}"]`))));
     const shapes = els.map((el) => (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'))).filter(Boolean);
     if (!shapes.length) return;
     els.forEach((el) => el.classList.add('hl-on'));
@@ -1002,7 +1004,8 @@ function applyHighlight(reveal) {
             ring = shapes[0].cloneNode(false);
             ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'data-fid', 'id'].forEach((a) => ring.removeAttribute(a));
         }
-        ring.setAttribute('class', `hl-shape ${cls}`);
+        // una pared o una columna es delgada: su contorno de resaltado es más grueso para que se vea
+        ring.setAttribute('class', `hl-shape ${cls}${h.kind === 'obstacle' ? ' hl-obs' : ''}`);
         svg.appendChild(ring);
     });
     if (h.kind === 'bay') {
@@ -1037,9 +1040,15 @@ function selectRowFrom(target) {
 // Tocar una figura del croquis (sin arrastrarla) la elige: se marca su renglón en la tabla y la figura se resalta con el contorno grueso de siempre; volver a tocarla la regresa al contorno punteado. Solo cuenta
 // el paso que se está editando: en Zonas las zonas, en Huella-Espacio las huellas y en Activos los activos.
 function selectFromMap(target) {
-    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid]') : null;
+    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid]') : null;
     if (!el || !state.draft) return;
     let next = null;
+    // en Paredes se eligen las paredes y en Contorno las columnas, desniveles y otros obstáculos
+    if (el.getAttribute('data-obid')) {
+        const ob = (state.draft.obstacles || []).find((o) => o.id === el.getAttribute('data-obid'));
+        if (ob && ((state.focus === 'paredes' && ob.kind === 'wall') || (state.focus === 'contorno' && ob.kind !== 'wall'))) selectEntity({ kind: 'obstacle', id: ob.id });
+        return;
+    }
     if (state.focus === 'zonas' && el.getAttribute('data-zid')) next = { kind: 'zone', id: el.getAttribute('data-zid') };
     else if (state.focus === 'espacios' && el.getAttribute('data-fid')) next = { kind: 'footprint', id: el.getAttribute('data-fid') };
     else if (state.focus === 'activos' && el.getAttribute('data-sid')) next = { kind: 'space', id: el.getAttribute('data-sid') };
@@ -1468,14 +1477,17 @@ function renderSvg() {
         if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(p.x) + w / 2}" y="${Y(p.y) + h / 2 + 3}" text-anchor="middle">${esc(p.code || '')}</text>`;
         if (why) s += `<rect class="lbad" x="${X(p.x) - 2}" y="${Y(p.y) - 2}" width="${w + 4}" height="${h + 4}" rx="3"/>`;
     });
-    if (!finding || dimmed) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     // El contorno de arriba es solo el marco del terreno (línea punteada). Las PAREDES son obstáculos puestos encima y forman parte de la nave: se dibujan siempre; las columnas, desniveles y otros solo con el paso Contorno.
+    // Un resplandor azul claro del contorno debajo de las paredes: así, donde la pared está sobre el contorno, se ven sus orillas azules y la pared (oscura) se distingue del marco.
+    if (!finding || dimmed) s += `<polygon class="lw-halo" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     const obstacleShapes = LC.obstacleShapes(d);
     const obstaclePoly = (g) => g.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ');
-    if (!finding || dimmed) obstacleShapes.filter(({ o }) => o.kind === 'wall').forEach(({ o, g }) => { s += `<polygon class="lo lo-wall" style="stroke-width:${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}px" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; });
+    if (!finding || dimmed) obstacleShapes.filter(({ o }) => o.kind === 'wall').forEach(({ o, g }) => { s += `<polygon class="lo lo-wall" data-obid="${esc(o.id)}" style="stroke-width:${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}px" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; });
+    // El contorno (línea azul punteada y fina) va ENCIMA de las paredes: así se distingue de ellas aunque estén sobre el mismo lado, y donde no hay pared se ve solo.
+    if (!finding || dimmed) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     (on('contorno') ? obstacleShapes.filter(({ o }) => o.kind !== 'wall') : []).forEach(({ o, g }) => {
         const height = o.kind === 'step' ? ` · ${(o.dz || 0) > 0 ? '+' : ''}${fmt(o.dz || 0)} m` : '';
-        s += `<polygon class="lo lo-${o.kind}" points="${obstaclePoly(g)}"><title>${esc(o.name)}${height}</title></polygon>`;
+        s += `<polygon class="lo lo-${o.kind}" data-obid="${esc(o.id)}" points="${obstaclePoly(g)}"><title>${esc(o.name)}${height}</title></polygon>`;
         if ((trIssues.get(o.id) || {}).intransit) s += `<polygon class="lbad" points="${obstaclePoly(g)}"><title>${esc(o.name)} · ${esc(t('main.layoutEnTransitoTitulo'))}</title></polygon>`;
     });
     // Huella-Espacio y Activos son capas aparte: la HUELLA (el lugar en el piso) se dibuja con su paso y va primero, blanca con borde gris o con su color; el ACTIVO va encima con el suyo, un poco más chico, con su propio color (arena si no le han puesto uno): así se distinguen aunque midan lo mismo.
@@ -3752,6 +3764,7 @@ function sheetLabels() {
         dry: typeLabel('zone', 'dry'), cold: typeLabel('zone', 'cold'), chemical: typeLabel('zone', 'chemical'), finished: typeLabel('zone', 'finished'),
         aisle: typeLabel('zone', 'aisle'), aisle2: typeLabel('zone', 'aisle2'), dock: typeLabel('zone', 'dock'), office: typeLabel('zone', 'office'), none: t('main.layoutSinZona'),
         ...Object.fromEntries(LC.SAFETY_TYPES.map((tp) => [`safety_${tp}`, typeLabel('safety', tp)])),
+        contour: t('main.colLayoutContorno'),
         cutCaption: t('main.layoutHojaRecorte'), printed: t('main.layoutHojaImpreso'), snapshot: t('main.layoutHojaFoto'), updated: t('main.layoutHojaActualizado'), version: t('main.layoutHojaVersion'),
     };
 }

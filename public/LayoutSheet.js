@@ -98,6 +98,7 @@
         // leyenda: los tipos de zona (con los mismos colores del mapa) y, después, cada zona con formato propio con su nombre y su muestra; se acomoda en los renglones que haga falta
         // La leyenda solo nombra lo que se ve en el croquis.
         const leg = [];
+        leg.push(['contour', labels.contour || labels.area]);
         if (on('puertas')) leg.push(['door', labels.door]);
         if (on('luz') && (data.layout.power || []).length) leg.push(['power', labels.power]);
         // La pared se dibuja siempre; columnas y desniveles solo con el contorno encendido (y la leyenda solo nombra lo que se ve).
@@ -184,6 +185,8 @@
             const sw = 20 * f;
             if (zone) {
                 s += window.LayoutMapSvg.zonePaint(`lg-${zone.id}`, zone.fmt).markup(`${x},${ly} ${x + sw},${ly} ${x + sw},${ly + sw} ${x},${ly + sw}`);
+            } else if (key === 'contour') {
+                s += `<line x1="${x}" y1="${ly + sw / 2}" x2="${x + sw}" y2="${ly + sw / 2}" stroke="#4B7BE5" stroke-width="${2.4 * f}" stroke-dasharray="${6 * f} ${4 * f}"/>`;
             } else if (key.indexOf('safety:') === 0) {
                 // el mismo símbolo del croquis; la ruta, una línea con flecha
                 const type = key.slice(7);
