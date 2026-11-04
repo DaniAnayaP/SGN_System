@@ -2663,7 +2663,9 @@ function updateQrMenu() {
     const canZone = !!(state.perms && state.perms.canPrintZone);
     const canClean = !!(state.perms && state.perms.canUseCleaningQr);
     const canTemp = !!(state.perms && state.perms.canUseTemperatureQr);
-    const show = !!((canLayout || canZone || canClean || canTemp) && state.saved && !state.creating);
+    // la pestaña Ficha solo tiene los candados de la Ficha de un código (vale para toda la empresa): sale con el permiso de candados
+    const canFicha = !!(state.perms && state.perms.canLockQr);
+    const show = !!((canLayout || canZone || canClean || canTemp || canFicha) && state.saved && !state.creating);
     $('layout-qrmenu').hidden = !show;
     $('layout-qr-regen').hidden = !(state.perms && state.perms.canRegenerateQr);
     // "Por: Layout | Zona | Limpieza | Temperaturas" solo sale si se puede usar de más de una forma; con una sola, el menú abre directo en esa.
@@ -2671,9 +2673,10 @@ function updateQrMenu() {
     $('layout-qr-by-zone').hidden = !canZone;
     $('layout-qr-by-clean').hidden = !canClean;
     $('layout-qr-by-temp').hidden = !canTemp;
-    $('layout-qr-by').hidden = [canLayout, canZone, canClean, canTemp].filter(Boolean).length < 2;
-    const first = canLayout ? 'layout' : (canZone ? 'zone' : (canClean ? 'clean' : 'temp'));
-    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean) || (qrBy === 'temp' && !canTemp)) qrBy = first;
+    $('layout-qr-by-ficha').hidden = !canFicha;
+    $('layout-qr-by').hidden = [canLayout, canZone, canClean, canTemp, canFicha].filter(Boolean).length < 2;
+    const first = canLayout ? 'layout' : (canZone ? 'zone' : (canClean ? 'clean' : (canTemp ? 'temp' : 'ficha')));
+    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean) || (qrBy === 'temp' && !canTemp) || (qrBy === 'ficha' && !canFicha)) qrBy = first;
     renderQrBy();
     if (!show) closeQrPop();
 }
@@ -2687,7 +2690,7 @@ let qrZoneData = null; // lo último que respondió el servidor para la zona y l
 let qrZoneSeq = 0;
 const ZONE_CATEGORY_TYPES = [['inventario', 'colArticuloCategoriaInventario'], ['compra', 'colArticuloCategoriaCompra'], ['almacenamiento', 'colArticuloCategoriaAlmacenamiento'], ['rotacion', 'colArticuloCategoriaRotacion'], ['manejo', 'colArticuloCategoriaManejo'], ['riesgo', 'colArticuloCategoriaRiesgo'], ['vidautil', 'colArticuloCategoriaVidautil'], ['tipocodigo', 'colArticuloCategoriaTipoCodigo']];
 function renderQrBy() {
-    ['layout', 'zone', 'clean', 'temp'].forEach((k) => {
+    ['layout', 'zone', 'clean', 'temp', 'ficha'].forEach((k) => {
         const on = qrBy === k;
         $(`layout-qr-by-${k}`).classList.toggle('active', on);
         $(`layout-qr-by-${k}`).setAttribute('aria-pressed', String(on));
@@ -2731,13 +2734,17 @@ function tempZoneOptions() {
 // En las pestañas Layout, Zona, Limpieza y Temperaturas del menú «QR y descarga», con el icono Candados de los QR del árbol. Hay una configuración por tipo de QR y por centro de costos y vale para todos los QR de ese tipo (los
 // ya impresos también: el QR no cambia, cambia lo que muestra). Cada cambio se guarda al momento; el servidor es el que los hace cumplir (GET /api/business/layout/qr-locks).
 // Las pestañas Layout y Zona muestran el MISMO juego (tipo «layout»): el QR del Layout, el de una Zona y el de una Categoría abren la misma página, y con candados distintos bastaría cambiar el final de la dirección para saltárselos.
-const QR_LOCK_KINDS = { layout: 'layout', zone: 'layout', clean: 'cleaning', temp: 'temperature' };
+const QR_LOCK_KINDS = { layout: 'layout', zone: 'layout', clean: 'cleaning', temp: 'temperature', ficha: 'ficha' };
 const qrLocksNow = {};
 // Los candados del QR del Layout, en dos grupos: [clave, texto, ayuda] y el título de cada grupo.
 const LAYOUT_LOCK_GROUPS = [
     ['main.layoutLockGrupoCodigos', [['codes', 'main.layoutLockBuscarCodigos'], ['classifications', 'main.layoutLockClasificaciones'], ['photos', 'main.layoutLockFotosArticulos'], ['where', 'main.layoutLockDondeEsta']]],
     ['main.layoutLockGrupoPlano', [['metrics', 'main.layoutLockMetricos'], ['doors', 'main.layoutLockPuertasLuz'], ['counts', 'main.layoutLockConteos']]],
 ];
+// La Ficha de un código es de la empresa (no de un centro de costos): una sola pestaña con sus tres candados.
+const FICHA_LOCK_GROUPS = [['main.layoutLockGrupoFicha', [['photos', 'main.layoutLockFichaFotos'], ['measures', 'main.layoutLockFichaMedidas'], ['where', 'main.layoutLockFichaDonde']]]];
+const QR_LOCK_GROUPS = { layout: LAYOUT_LOCK_GROUPS, ficha: FICHA_LOCK_GROUPS };
+const QR_LOCK_NOTES = { layout: 'main.layoutLockNotaLayout', ficha: 'main.layoutLockNotaFicha' };
 function qrLockItems(kind) {
     const items = [['records', 'main.layoutLockRegistros', 'main.layoutLockRegistrosSub'], ['photos', 'main.layoutLockFotos', ''], ['names', 'main.layoutLockNombres', '']];
     if (kind === 'temp') items.push(['range', 'main.layoutLockRango', 'main.layoutLockRangoSub']);
@@ -2756,10 +2763,11 @@ async function renderQrLocks(kind) {
     } catch (err) { box.hidden = true; return; }
     qrLocksNow[kind] = data.locks;
     const lk = data.locks;
-    const helpFor = (key) => (QR_LOCK_KINDS[kind] === 'layout' ? `layoutLock_${key}` : 'layoutQrLocks');
+    const lockType = QR_LOCK_KINDS[kind];
+    const helpFor = (key) => (lockType === 'layout' ? `layoutLock_${key}` : (lockType === 'ficha' ? `layoutLockFicha_${key}` : 'layoutQrLocks'));
     const sw = ([key, label, sub]) => `<button type="button" role="switch" class="layout-lock-sw" data-lock="${key}" data-help-key="${helpFor(key)}" aria-checked="${!!lk[key]}"><span class="layout-lock-knob" aria-hidden="true"></span><span class="layout-lock-txt">${esc(t(label))}${sub ? `<small>${esc(t(sub))}</small>` : ''}</span></button>`;
-    if (QR_LOCK_KINDS[kind] === 'layout') {
-        box.innerHTML = `<h3 class="layout-lock-title">${esc(t('main.layoutLockTitulo'))}</h3>${LAYOUT_LOCK_GROUPS.map(([title, rows]) => `<h4 class="layout-lock-group">${esc(t(title))}</h4>${rows.map(sw).join('')}`).join('')}<p class="layout-qr-fine">${esc(t('main.layoutLockNotaLayout'))}</p>`;
+    if (QR_LOCK_GROUPS[lockType]) {
+        box.innerHTML = `<h3 class="layout-lock-title">${esc(t('main.layoutLockTitulo'))}</h3>${QR_LOCK_GROUPS[lockType].map(([title, rows]) => `<h4 class="layout-lock-group">${esc(t(title))}</h4>${rows.map(sw).join('')}`).join('')}<p class="layout-qr-fine">${esc(t(QR_LOCK_NOTES[lockType]))}</p>`;
         return;
     }
     const limit = `<label class="layout-lock-limit" data-help-key="layoutQrLocks"><span>${esc(t('main.layoutLockLimite'))}</span><select data-lock="limit">${data.limits.map((n) => `<option value="${n}"${lk.limit === n ? ' selected' : ''}>${esc(t('main.layoutLockUltimos', { n }))}</option>`).join('')}</select></label>`;

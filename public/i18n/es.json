@@ -2633,6 +2633,12 @@
     "layoutLockNotaLimpieza": "Valen para todos los QR de Limpieza de este Layout, también los ya impresos. Hoy todo está abierto; un candado se cierra al apagarlo.",
     "layoutLockNotaTemp": "Valen para todos los QR de Temperaturas de este Layout, también los ya impresos. Las alertas se siguen guardando aunque no se vean.",
     "layoutLockGuardado": "Candado guardado.",
+    "layoutQrPorFicha": "Ficha",
+    "layoutLockGrupoFicha": "Ficha del código",
+    "layoutLockFichaFotos": "Ver las fotos",
+    "layoutLockFichaMedidas": "Ver medidas y pesos",
+    "layoutLockFichaDonde": "Ver dónde está",
+    "layoutLockNotaFicha": "Valen para la Ficha de todos los códigos de la empresa, también las ya impresas. Siempre se ve el nombre de la empresa, la descripción, la unidad y el tipo de artículo. Hoy todo está abierto.",
     "layoutLockGrupoCodigos": "Códigos y productos",
     "layoutLockGrupoPlano": "El plano",
     "layoutLockBuscarCodigos": "Buscar códigos",
@@ -4043,7 +4049,7 @@
       "example": "la Zona 1 es Seca y es de Almacenamiento; el Baño es de Instalaciones; el Andén es de Operaciones."
     },
     "layoutQrBy": {
-      "what": "Elige qué imprimir: el Layout completo (la hoja con el croquis y el QR, como siempre) o una Zona (una hoja con las categorías de los códigos que hay en esa zona, cada una con su QR). Solo sale si tienes los dos accesos.",
+      "what": "Elige sobre qué QR trabajas: el Layout completo (la hoja con el croquis y el QR), una Zona (una hoja con las categorías de los códigos de esa zona, cada una con su QR), Limpieza (un QR por activo), Temperaturas (un QR por refrigerador) o la Ficha (solo los candados de lo que ve quien escanea la Ficha de un código). Cada pestaña sale solo si tienes su acceso.",
       "example": "para pegar en el anaquel de la Zona 1 eliges Zona; para la oficina eliges Layout."
     },
     "layoutQrZonePick": {
@@ -4077,6 +4083,18 @@
     "layout3dAssetsPick": {
       "what": "Abre una lista para elegir CUÁLES activos se ven en el 3D (anaqueles, anaqueles con tarimas, gabinetes y tarimas). Marca o desmarca uno por uno, una zona completa con la casilla de la zona, o usa Todos y Ninguno (actúan sobre lo que muestra la lista; con el buscador vacío, sobre todos). El buscador entiende los mismos signos de todos los filtros: coma para otra búsqueda, $ antes y @ después. El icono queda marcado cuando hay activos ocultos. Solo cambia lo que ves; no modifica el Layout.",
       "example": "quieres ver solo R-07 y T-03 para revisar sus alturas: pulsas Ninguno, buscas R-07 y marcas el anaquel, luego buscas T-03 y marcas la tarima."
+    },
+    "layoutLockFicha_photos": {
+      "what": "Deja ver las fotos del artículo en la Ficha que abre el QR de un código. Apagado, la Ficha sale sin el recuadro de fotos. Vale para la Ficha de todos los códigos de la empresa.",
+      "example": "quien escanea el QR de «Guante de nitrilo M» ve sus seis fotos; apagado, ve solo su descripción y sus datos."
+    },
+    "layoutLockFicha_measures": {
+      "what": "Deja ver las medidas (alto, largo y ancho) y los pesos del artículo y del paquete en la Ficha. Apagado, esos renglones desaparecen. Vale para la Ficha de todos los códigos de la empresa.",
+      "example": "la Ficha dice «Dimensiones 12 × 24 × 10 cm» y «Peso del Empaque 1.2 kg»; apagado, no sale ninguno."
+    },
+    "layoutLockFicha_where": {
+      "what": "Deja ver dónde está el código (la ruta y el Localizador) en la Ficha. Apagado, la sección «Dónde está» no sale. Vale para la Ficha de todos los códigos de la empresa.",
+      "example": "la Ficha dice «Dónde está: Zona 6 › A005 › Nivel 2»; apagado, no dice nada de la ubicación."
     },
     "layoutLock_codes": {
       "what": "Deja que quien escanea el QR del Layout, de una Zona o de una Categoría busque códigos (por SKU, descripción o categoría) en el buscador. Apagado, el buscador solo encuentra zonas, mobiliario y ubicaciones, y en la lista ya no sale ningún código.",

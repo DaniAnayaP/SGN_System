@@ -63,7 +63,8 @@ function render(data) {
         }
         photosEl.appendChild(cell);
     });
-    wrap.appendChild(photosEl);
+    // con el candado «Ver las fotos» cerrado no se dibuja ni el recuadro de las seis fotos
+    if (!(data.locks && data.locks.photos === false)) wrap.appendChild(photosEl);
 
     const info = document.createElement('div');
     info.className = 'info';

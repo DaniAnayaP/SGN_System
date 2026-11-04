@@ -6418,11 +6418,12 @@ app.get('/api/public/ficha/:token', (req, res) => {
     const skuItem = getSkuItemByPublicToken(req.params.token);
     if (!skuItem) return res.status(404).json({ message: 'Ficha not found.' });
     const client = getClientById(skuItem.client_id);
+    const locks = qrLocksOf('ficha', skuItem.client_id, 0);
     const photoFields = [
         ['front', skuItem.evidence_front], ['back', skuItem.evidence_back],
         ['left', skuItem.evidence_left], ['right', skuItem.evidence_right],
         ['top', skuItem.evidence_top], ['bottom', skuItem.evidence_bottom],
-    ].filter(([, key]) => key);
+    ].filter(([, key]) => key && locks.photos);
     Promise.all(photoFields.map(([label, key]) => getDownloadUrl(key, `${label}.jpg`).then((url) => ({ label, url }))))
         .then((photos) => {
             res.json({
@@ -6432,20 +6433,16 @@ app.get('/api/public/ficha/:token', (req, res) => {
                 customDescription: skuItem.custom_description,
                 mainUom: skuItem.main_uom,
                 articleType: skuItem.article_type,
-                height: skuItem.height,
-                length: skuItem.length,
-                width: skuItem.width,
-                articleWeight: skuItem.article_weight,
-                packageWeight: skuItem.package_weight,
+                ...(locks.measures ? { height: skuItem.height, length: skuItem.length, width: skuItem.width, articleWeight: skuItem.article_weight, packageWeight: skuItem.package_weight } : {}),
                 // Dónde está (de Relación Código): un renglón por lugar, con la ruta completa; la ubicación exacta (anaquel, nivel y espacio) solo si ya se sabe.
-                locations: (() => {
+                locations: !locks.where ? [] : (() => {
                     const ctx = codeRelationContextFor(skuItem.client_id, !!skuItem.is_test_data);
                     return listCodeRelations(skuItem.client_id, !!skuItem.is_test_data).filter((r) => r.sku_item_id === skuItem.id).map((r) => mapCodeRelation(r, null, '', ctx)).map((loc) => ({
                         route: [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.footprintCode, loc.spaceCode, loc.level ? `Nivel ${loc.level}` : '', loc.slot ? `Columna ${loc.slot}` : '', loc.row && loc.bayRows > 1 ? `Fila ${loc.row}` : '', loc.depth && loc.bayDepth > 1 ? `Profundidad ${loc.depth}` : ''].filter(Boolean),
                         locator: loc.locator, virtual: loc.subKind === 'virtual', located: loc.status === 'located',
                     }));
                 })(),
-                photos,
+                photos, locks,
             });
         })
         .catch((err) => {
@@ -7000,6 +6997,9 @@ const QR_LOCK_TYPES = {
     //   codes = buscar códigos (SKU, descripción, categoría) · classifications = ver las clasificaciones y sus artículos · photos = ver las fotos de los artículos · where = ver dónde está cada código
     //   metrics = ver los datos métricos (m², volumen) · doors = ver puertas y conexiones de luz · counts = ver cuántos códigos hay por zona y por clasificación.
     layout: { codes: true, classifications: true, photos: true, where: true, metrics: true, doors: true, counts: true },
+    // La Ficha de un código (Ficha.html) es de la EMPRESA, no de un centro de costos: su juego de candados vale para todos los centros (se guarda con centro 0).
+    //   photos = ver las fotos del artículo · measures = ver medidas y pesos · where = ver dónde está (ruta y Localizador). El nombre de la empresa, la descripción, la unidad y el tipo de artículo siempre se ven.
+    ficha: { photos: true, measures: true, where: true },
 };
 const QR_LOCK_LIMITS = [3, 10, 20];
 function qrLocksOf(type, clientId, costCenterId) {
@@ -7321,7 +7321,8 @@ app.get('/api/business/layout/qr-locks', requireAuth, (req, res) => {
     if (!layoutPermissions(req).canLockQr) return res.status(403).json({ message: 'No tienes permiso para ver los candados de los QR.' });
     const type = String(req.query.type || '');
     if (!QR_LOCK_TYPES[type]) return res.status(400).json({ message: 'Ese tipo de QR no existe.' });
-    const center = layoutCenter(req);
+    // la Ficha es de la empresa: no lleva centro de costos
+    const center = type === 'ficha' ? { id: 0 } : layoutCenter(req);
     if (center.error) return res.status(center.error.status).json(center.error.body);
     res.set('Cache-Control', 'no-store');
     res.json({ type, locks: qrLocksOf(type, req.user.clientId, center.id || 0), limits: QR_LOCK_LIMITS });
@@ -7333,7 +7334,7 @@ app.put('/api/business/layout/qr-locks', requireAuth, (req, res) => {
     if (!QR_LOCK_TYPES[type]) return res.status(400).json({ message: 'Ese tipo de QR no existe.' });
     const locks = sanitizeQrLocks(type, req.body && req.body.locks);
     if (!locks) return res.status(400).json({ message: 'Los candados no son válidos.' });
-    const center = layoutCenter(req);
+    const center = type === 'ficha' ? { id: 0 } : layoutCenter(req);
     if (center.error) return res.status(center.error.status).json(center.error.body);
     saveQrLocks(req.user.clientId, center.id || 0, type, locks, req.user.sub);
     res.json({ type, locks: qrLocksOf(type, req.user.clientId, center.id || 0) });

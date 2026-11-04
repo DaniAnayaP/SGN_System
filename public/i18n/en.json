@@ -2634,6 +2634,12 @@
     "layoutLockNotaLimpieza": "They apply to all the Cleaning QR codes of this Layout, including the ones already printed. Today everything is open; a lock is closed by turning it off.",
     "layoutLockNotaTemp": "They apply to all the Temperatures QR codes of this Layout, including the ones already printed. Alerts are still saved even if they are not shown.",
     "layoutLockGuardado": "Lock saved.",
+    "layoutQrPorFicha": "Sheet",
+    "layoutLockGrupoFicha": "Code sheet",
+    "layoutLockFichaFotos": "See the photos",
+    "layoutLockFichaMedidas": "See measures and weights",
+    "layoutLockFichaDonde": "See where it is",
+    "layoutLockNotaFicha": "They apply to the sheet of every code of the company, including the ones already printed. The company name, the description, the unit and the article type are always shown. Today everything is open.",
     "layoutLockGrupoCodigos": "Codes and products",
     "layoutLockGrupoPlano": "The floor plan",
     "layoutLockBuscarCodigos": "Search codes",
@@ -4044,7 +4050,7 @@
       "example": "Zone 1 is Dry and used for Storage; the Restroom is Facilities; the Dock is Operations."
     },
     "layoutQrBy": {
-      "what": "Choose what to print: the whole Layout (the sheet with the map and the QR, as always) or a Zone (a sheet with the categories of the codes in that zone, each with its QR). It only shows if you have both accesses.",
+      "what": "Choose which QR you work on: the whole Layout (the sheet with the map and the QR), a Zone (a sheet with the categories of the codes in that zone, each with its QR), Cleaning (one QR per asset), Temperatures (one QR per refrigerator) or the Sheet (only the locks for what whoever scans the sheet of a code sees). Each tab only shows if you have its access.",
       "example": "for the rack in Zone 1 you pick Zone; for the office you pick Layout."
     },
     "layoutQrZonePick": {
@@ -4078,6 +4084,18 @@
     "layout3dAssetsPick": {
       "what": "Opens a list to choose WHICH assets show in the 3D (racks, racks with pallets, cabinets and pallets). Tick or untick one by one, a whole zone with the zone's checkbox, or use All and None (they act on what the list shows; with an empty search, on all of them). The search understands the same signs as every filter: comma for another search, $ before and @ after. The icon stays marked while some assets are hidden. It only changes what you see; it does not modify the Layout.",
       "example": "you want to see only R-07 and T-03 to check their heights: press None, search R-07 and tick the rack, then search T-03 and tick the pallet."
+    },
+    "layoutLockFicha_photos": {
+      "what": "Lets people see the photos of the article on the sheet the QR of a code opens. Off, the sheet shows without the photo area. It applies to the sheet of every code of the company.",
+      "example": "whoever scans the QR of “Nitrile glove M” sees its six photos; off, they only see its description and data."
+    },
+    "layoutLockFicha_measures": {
+      "what": "Lets people see the measures (height, length and width) and the weights of the article and the package on the sheet. Off, those rows disappear. It applies to the sheet of every code of the company.",
+      "example": "the sheet says “Dimensions 12 × 24 × 10 cm” and “Package weight 1.2 kg”; off, none appears."
+    },
+    "layoutLockFicha_where": {
+      "what": "Lets people see where the code is (the route and the Locator) on the sheet. Off, the “Where it is” section does not appear. It applies to the sheet of every code of the company.",
+      "example": "the sheet says “Where it is: Zone 6 › A005 › Level 2”; off, it says nothing about the location."
     },
     "layoutLock_codes": {
       "what": "Lets whoever scans the Layout, Zone or Category QR search codes (by SKU, description or category) in the search box. Off, the search only finds zones, furniture and locations, and no code appears in the list.",
