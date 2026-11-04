@@ -509,17 +509,43 @@ function applyTransitMarks() {
         box.innerHTML = all.map((v) => `<p>${esc(transitIssueText(v))}</p>`).join('');
     }
 }
-function onTransitWho(el) {
-    const [i, key] = el.getAttribute('data-who').split(':');
+// «Quién transita» de un pasillo: la celda muestra solo lo elegido, en etiquetas chicas (con su ×), y un ＋ abre la lista para marcar más (con las medidas de cada uno al lado).
+function toggleTransitWho(spec, on) {
+    const [i, key] = String(spec).split(':');
     const row = state.draft.transit[Number(i)];
     if (!row) return;
     const set = new Set(row.who || []);
-    if (el.checked) set.add(key); else set.delete(key);
+    if (on) set.add(key); else set.delete(key);
     row.who = LC.TRANSIT_WHO.filter((k) => set.has(k));
     if (!row.who.includes('other')) delete row.otherName;
+    const reopen = !!document.getElementById('layout-who-pop');
     renderPanel();
     refreshLive();
+    if (reopen) { const btn = document.querySelector(`[data-who-open="${i}"]`); if (btn) openWhoPop(Number(i), btn); }
 }
+function closeWhoPop() {
+    const el = document.getElementById('layout-who-pop');
+    if (el) el.remove();
+}
+function openWhoPop(i, anchor) {
+    closeWhoPop();
+    const row = state.draft.transit[i];
+    if (!row) return;
+    const sizes = LC.transitSizesOf(state.draft);
+    const dims = (k) => { const s = sizes[k]; return s.w > 0 || s.l > 0 || s.h > 0 ? `${fmt(s.w)} × ${fmt(s.l)} × ${fmt(s.h)} m` : '—'; };
+    const pop = document.createElement('div');
+    pop.id = 'layout-who-pop';
+    pop.className = 'layout-who-pop';
+    pop.setAttribute('role', 'group');
+    pop.innerHTML = LC.TRANSIT_WHO.map((k) => `<label class="layout-who-item"><input type="checkbox" data-who-pick="${i}:${k}"${(row.who || []).includes(k) ? ' checked' : ''}><span>${esc(t(`main.layoutQuien_${k}`))}</span><small>${esc(dims(k))}</small></label>`).join('');
+    document.body.appendChild(pop);
+    const r = anchor.getBoundingClientRect();
+    pop.style.top = `${Math.max(8, Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8))}px`;
+    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8))}px`;
+    pop.addEventListener('change', (event) => { const el = event.target.closest('[data-who-pick]'); if (el) toggleTransitWho(el.getAttribute('data-who-pick'), el.checked); });
+}
+document.addEventListener('click', (event) => { if (!event.target.closest('#layout-who-pop, [data-who-open]')) closeWhoPop(); });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeWhoPop(); });
 function applyActivoMarks() {
     (state.draft.spaces || []).forEach((s, i) => {
         const eff = ownEffective(s);
@@ -681,10 +707,10 @@ function stepHtml(step) {
         d.transitSizes = d.transitSizes || LC.transitSizesOf(d);
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
         const rows = (d.transit || []).map((p, i) => {
-            const chips = LC.TRANSIT_WHO.map((k) => `<label class="layout-who${(p.who || []).includes(k) ? ' on' : ''}" data-tr-who="${i}:${k}" data-help-key="layoutTransitoQuien"><input type="checkbox" data-who="${i}:${k}"${(p.who || []).includes(k) ? ' checked' : ''}${dis ? ' disabled' : ''}><span>${esc(t(`main.layoutQuien_${k}`))}</span></label>`).join('');
+            const chips = (p.who || []).map((k) => `<span class="layout-chip" data-tr-who="${i}:${k}" data-help-key="layoutTransitoQuien">${esc(t(`main.layoutQuien_${k}`))}${dis ? '' : `<button type="button" class="layout-chip-x" data-who-del="${i}:${k}" aria-label="${esc(t('main.layoutQuitar'))}">×</button>`}</span>`).join('') + (dis ? '' : `<button type="button" class="layout-chip-add" data-who-open="${i}" data-help-key="layoutTransitoQuien" aria-label="${esc(t('main.layoutQuienAgregar'))}" title="${esc(t('main.layoutQuienAgregar'))}">＋</button>`);
             const other = (p.who || []).includes('other') ? `<input type="text" class="layout-who-other" maxlength="${LC.LIMITS.text}" data-l="transit" data-i="${i}" data-k="otherName" data-help-key="layoutTransitoQuien" value="${esc(p.otherName || '')}" placeholder="${esc(t('main.layoutQuienOtroCual'))}"${dis ? ' disabled' : ''}>` : '';
             const alto = `<td><input type="number" step="0.1" min="0" data-l="transit" data-i="${i}" data-k="h" data-help-key="layoutTransitoAltoLibre" value="${p.h > 0 ? p.h : ''}" placeholder="—"${dis ? ' disabled' : ''}></td>`;
-            return `<tr>${cellText('transit', i, 'name', p.name, dis)}<td class="layout-calc"><b data-tr-code="${i}">${esc(p.code || '')}</b></td>${cellSelect('transit', i, 'type', optionsHtml('transit', LC.TRANSIT_TYPES, p.type), dis)}<td><div class="layout-whoset">${chips}${other}</div></td><td class="layout-calc" data-tr-zone="${i}">${esc(zoneName(p.zoneId))}</td>${cellNum('transit', i, 'x', p.x, dis)}${cellNum('transit', i, 'y', p.y, dis)}${cellNum('transit', i, 'l', p.l, dis)}${cellNum('transit', i, 'w', p.w, dis)}${alto}<td class="layout-calc"><span data-tr-area="${i}">${fmt((Number(p.l) || 0) * (Number(p.w) || 0))} m²</span></td>${removeCell('transit', i, dis)}</tr>`;
+            return `<tr>${cellText('transit', i, 'name', p.name, dis)}<td class="layout-calc"><b data-tr-code="${i}">${esc(p.code || '')}</b></td>${cellSelect('transit', i, 'type', optionsHtml('transit', LC.TRANSIT_TYPES, p.type), dis)}<td><div class="layout-chips">${chips}${other}</div></td><td class="layout-calc" data-tr-zone="${i}">${esc(zoneName(p.zoneId))}</td>${cellNum('transit', i, 'x', p.x, dis)}${cellNum('transit', i, 'y', p.y, dis)}${cellNum('transit', i, 'l', p.l, dis)}${cellNum('transit', i, 'w', p.w, dis)}${alto}<td class="layout-calc"><span data-tr-area="${i}">${fmt((Number(p.l) || 0) * (Number(p.w) || 0))} m²</span></td>${removeCell('transit', i, dis)}</tr>`;
         });
         const sizeRows = LC.TRANSIT_WHO.map((k) => {
             const sz = d.transitSizes[k] || { w: 0, l: 0, h: 0 };
@@ -802,6 +828,7 @@ let panelScrollStep = '';
 let panelScrollEnd = false;
 const panelScrollers = () => Array.from(document.querySelectorAll('#layout-panel .layout-section-body, #layout-panel .layout-scroll'));
 function renderPanel() {
+    closeWhoPop();
     // el panel también se dibuja con lo que sale de la huella (zona de cada activo, si está activo): se saca antes de dibujarlo, no solo en refreshLive
     if (state.draft) { syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; computeFootprintIssues(); computeSpaceIssues(); computeTransitIssues(); }
     const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
@@ -1822,7 +1849,7 @@ function onEdit(event) {
         if (event.type === 'change' && /^dir:/.test(el.getAttribute('data-cs') || el.getAttribute('data-zs'))) renderPanel();
         return;
     }
-    if (state.draft && el.getAttribute('data-who') !== null) { onTransitWho(el); return; }
+
     if (state.draft && el.getAttribute('data-cat') !== null) { onCategoryEdit(el); return; }
     const list = el.getAttribute('data-l');
     if (!list || !state.draft) return;
@@ -2028,6 +2055,10 @@ $('layout-panel').addEventListener('click', (event) => {
         return;
     }
     if (event.target.closest('[data-walls-all]')) { addAllWalls(); return; }
+    const whoOpen = event.target.closest('[data-who-open]');
+    if (whoOpen) { openWhoPop(Number(whoOpen.dataset.whoOpen), whoOpen); return; }
+    const whoDel = event.target.closest('[data-who-del]');
+    if (whoDel) { toggleTransitWho(whoDel.dataset.whoDel, false); return; }
     const addObj = event.target.closest('[data-add-object]');
     if (addObj) { addObject(addObj.dataset.addObject); return; }
     const add = event.target.closest('[data-add]');
