@@ -142,7 +142,7 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-zonas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-localizadores'];
+const FILTER_TABLE_IDS = ['layout-zonas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-localizadores', 'layout-paredes'];
 function bindLayoutFilters(root = document.getElementById('layout-panel')) {
     if (!window.Dashboard || !Dashboard.bindExternalColumnFilters || !root) return;
     root.querySelectorAll('table[data-filter-table]').forEach((tbl) => {
@@ -835,6 +835,7 @@ function setObstacleKindOrMode(row, key, value) {
 }
 // «+ Agregar pared» (paso Paredes): una pared nueva sobre el lado 1, a todo lo largo; se acomoda con su lado, su distancia, su largo y su grosor.
 function addWall() {
+    clearLayoutFilters();
     const d = state.draft;
     const n = d.obstacles.filter((o) => o.kind === 'wall').length;
     d.obstacles.push({ id: uid('w'), name: `${t('main.layoutParedNombre')} ${n + 1}`, kind: 'wall', mode: 'contour', wall: 1, dist: 0, l: 0, w: LC.WALL_THICKNESS });
@@ -844,6 +845,7 @@ function addWall() {
 }
 // «+ Pared en todo el contorno»: agrega una pared de todo el lado a cada lado que todavía no la tiene (no repite las que ya hay).
 function addAllWalls() {
+    clearLayoutFilters();
     const d = state.draft;
     const have = new Set(d.obstacles.filter((o) => o.kind === 'wall' && o.mode === 'contour' && !(Number(o.l) > 0) && !(Number(o.dist) > 0)).map((o) => Number(o.wall)));
     d.vertices.forEach((_, i) => {
@@ -930,7 +932,7 @@ function stepHtml(step) {
         const addWallBtn = `<button type="button" class="btn btn-secondary layout-add" data-add-wall="1" data-main-add="1" data-help-key="layoutParedAgregar"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarPared'))}</button>`;
         const wallsAllBtn = `<button type="button" class="btn btn-secondary layout-add" data-walls-all="1" data-main-add="1" data-help-key="layoutParedTodo"${dis ? ' disabled' : ''}>${esc(t('main.layoutParedTodoContorno'))}</button>`;
         const walls = d.obstacles.map((o, i) => (o.kind === 'wall' ? obstacleRowHtml(o, i, dis, true) : '')).filter(Boolean);
-        const list = walls.length ? table(['main.layoutNombre', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', ''], walls) : `<p class="layout-muted">${esc(t('main.layoutParedesVacio'))}</p>`;
+        const list = walls.length ? table(['main.layoutNombre', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', ''], walls, 'layout-paredes') : `<p class="layout-muted">${esc(t('main.layoutParedesVacio'))}</p>`;
         return `${addWallBtn}${wallsAllBtn}${list}`;
     }
     if (step === 'puertas') {
