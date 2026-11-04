@@ -1348,7 +1348,7 @@ function renderSvg() {
     // las medidas de adentro se calculan al final, cuando ya se conocen los nombres de TODAS las zonas
     measureJobs.forEach(([pts, minPx, zid]) => { measureLabels += measureText(pts, minPx, zid); });
     // Los pasillos (paso Tránsito): sombreados con rayas (principal) o puntos (entre pasillos), debajo de las huellas. Con falta (fuera de zona, no cabe, algo adentro o lo que transita no cabe) llevan un contorno rojo punteado.
-    (on('zonas') || on('transito') ? (d.transit || []) : []).forEach((p) => {
+    (on('transito') ? (d.transit || []) : []).forEach((p) => {
         const w = Math.max((Number(p.l) || 0) * sc, 3);
         const h = Math.max((Number(p.w) || 0) * sc, 3);
         const bad = trIssues.get(p.id) || {};
@@ -2583,10 +2583,10 @@ function effective3dLayers() {
     const f = state.find;
     const hide = state.findHide || {};
     if (f && !state.findDim) {
-        return { walls: false, columns: false, doors: false, power: false, objects: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
+        return { walls: false, columns: false, doors: false, power: false, objects: false, transit: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
     }
     const layers = {
-        walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas'), objects: stepOn('objetos'), zones: stepOn('zonas') || stepOn('transito') || !!(f && f.kind === 'zone'),
+        walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), assets: stepOn('activos') || stepOn('posiciones'),
     };
     if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }

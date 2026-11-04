@@ -234,8 +234,8 @@
             measure(layout.vertices, true, 24);
             (on('zonas') ? (layout.zones || []) : []).forEach((z) => { if (Math.min(z.l, z.w) * sc >= 44) measure(LC.zonePoints(z), false, 30); });
         }
-        // Los pasillos (paso Tránsito) van con las zonas: rayas (principal) o puntos (entre pasillos), debajo de las huellas y los activos.
-        (on('zonas') ? (layout.transit || []) : []).forEach((p) => {
+        // Los pasillos son su propia capa (paso Tránsito): rayas (principal) o puntos (entre pasillos), debajo de las huellas y los activos.
+        (on('transito') ? (layout.transit || []) : []).forEach((p) => {
             const ty = (T.types && T.types[p.type === 'between' ? 'aisle2' : 'aisle']) || ['#D5D8E2', '#8E93A8', ''];
             s += `<rect x="${X(p.x)}" y="${Y(p.y)}" width="${Math.max((Number(p.l) || 0) * sc, 2)}" height="${Math.max((Number(p.w) || 0) * sc, 2)}" fill="${ty[0]}" stroke="${ty[1]}" stroke-width="1"${ty[2] ? ` stroke-dasharray="${ty[2]}"` : ''}/>`;
         });

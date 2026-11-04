@@ -35,7 +35,7 @@
             articlesOne: '1 artículo, ordenados por ubicación', articlesMany: '{n} artículos, ordenados por ubicación', viewGrid: 'Cuadrícula', viewList: 'Lista', viewLabel: 'Vista',
             clsMore: 'Ver más', clsShowing: 'Mostrando {n} de {t}', clsNoLoc: 'Sin ubicación', clsLevel: 'Nivel {n}', clsCode: 'Código {n}',
             clsError: 'No se pudo cargar la clasificación. Intenta de nuevo.', clsGone: 'Esta clasificación ya no está disponible.', clsLocked: 'Este QR no muestra las clasificaciones.', clsEmpty: 'Todavía no hay artículos en esta clasificación en esta zona.',
-            layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', espacios: 'Huella-Espacio' },
+            layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', transito: 'Tránsito', espacios: 'Huella-Espacio' },
             zone: { dry: 'Seco', cold: 'Refrigerado', chemical: 'Químicos', finished: 'Producto terminado', dock: 'Andén', office: 'Oficina', aisle: 'Pasillo principal', aisle2: 'Pasillo entre anaqueles' },
         },
         en: {
@@ -66,7 +66,7 @@
             articlesOne: '1 item, sorted by location', articlesMany: '{n} items, sorted by location', viewGrid: 'Grid', viewList: 'List', viewLabel: 'View',
             clsMore: 'Show more', clsShowing: 'Showing {n} of {t}', clsNoLoc: 'No location', clsLevel: 'Level {n}', clsCode: 'Code {n}',
             clsError: 'The classification could not be loaded. Try again.', clsGone: 'This classification is no longer available.', clsLocked: 'This QR does not show the classifications.', clsEmpty: 'There are no items in this classification in this zone yet.',
-            layer: { contorno: 'Outline', puertas: 'Doors', luz: 'Power connections', zonas: 'Zones', espacios: 'Footprint-Space' },
+            layer: { contorno: 'Outline', puertas: 'Doors', luz: 'Power connections', zonas: 'Zones', transito: 'Transit', espacios: 'Footprint-Space' },
             zone: { dry: 'Dry', cold: 'Refrigerated', chemical: 'Chemicals', finished: 'Finished goods', dock: 'Dock', office: 'Office', aisle: 'Main aisle', aisle2: 'Aisle between racks' },
         },
     }[LANG];
@@ -248,10 +248,11 @@
 
     // Botones del croquis (los mismos del Layout con sesión): girar, ver/ocultar medidas, ver/ocultar los m² de cada zona y las capas que se dibujan. Cada quien los mueve para verlo
     // como le conviene; al escanear de nuevo todo vuelve a como se guardó. Contorno siempre se ve; las conexiones de luz salen apagadas hasta que se prende su capa.
-    const LAYER_KEYS = ['contorno', 'puertas', 'luz', 'zonas', 'espacios'];
+    const LAYER_KEYS = ['contorno', 'puertas', 'luz', 'zonas', 'transito', 'espacios'];
     // Con «puertas y luz» cerrado esas dos capas no se ofrecen (el servidor ya no manda sus datos).
-    const layerShown = (key) => !(locked('doors') && (key === 'puertas' || key === 'luz'));
-    const mapView = { layers: ['contorno', 'puertas', 'zonas', 'espacios'], measures: true, area: true, names: true, rotation: 0, mode3d: false, walls: true };
+    // La capa Tránsito (los pasillos) solo se ofrece si el Layout trae pasillos.
+    const layerShown = (key) => !(locked('doors') && (key === 'puertas' || key === 'luz')) && !(key === 'transito' && !((((view.data || {}).layout) || {}).transit || []).length);
+    const mapView = { layers: ['contorno', 'puertas', 'zonas', 'transito', 'espacios'], measures: true, area: true, names: true, rotation: 0, mode3d: false, walls: true };
     // Lo que se está buscando en el croquis ({ zones: { id: color } }): la zona de la categoría que se escaneó sale sombreada y el resto tenue.
     // value = lo que se dibuja ahora (el croquis base o el de la búsqueda); base = lo que corresponde a la página sin buscar; key = lo ya dibujado, para no redibujar sin necesidad.
     const viewFocus = { value: null, base: null, key: 'null' };
@@ -283,7 +284,7 @@
         }
         const views = [['general', TEXT.v3General], ['planta', TEXT.v3Plan], ['frente', TEXT.v3Front]].map(([key, label], i) => `<button type="button" class="lpill" data-m3d-view="${key}" aria-pressed="${i === 0}">${esc(label)}</button>`).join('');
         const layer3 = (key, label) => pill(`data-map-layer="${key}"`, label, mapView.layers.includes(key));
-        const layerPills = [pill('data-map-walls', TEXT.layerWalls, mapView.walls), ...(locked('doors') ? [] : [layer3('puertas', TEXT.layer.puertas), layer3('luz', TEXT.layer.luz)]), layer3('zonas', TEXT.layer.zonas), layer3('espacios', TEXT.layerAssets)].join('');
+        const layerPills = [pill('data-map-walls', TEXT.layerWalls, mapView.walls), ...(locked('doors') ? [] : [layer3('puertas', TEXT.layer.puertas), layer3('luz', TEXT.layer.luz)]), layer3('zonas', TEXT.layer.zonas), ...(layerShown('transito') ? [layer3('transito', TEXT.layer.transito)] : []), layer3('espacios', TEXT.layerAssets)].join('');
         return `<div class="mptitle"><i>3D</i>${esc(TEXT.opts3d)}</div>
             <div class="mgl">${esc(TEXT.group3dView)}</div><div class="mpills">${views}</div>
             <div class="mgl">${esc(TEXT.groupLayers)}</div><div class="mpills" role="group" aria-label="${esc(TEXT.layers)}">${layerPills}</div>
@@ -354,7 +355,7 @@
         return `<div class="m3d-stage" id="m3d-stage"><div class="m3d-msg" id="m3d-msg"></div></div><div class="m3d-info" id="m3d-info" hidden></div>`;
     }
     function layers3d() {
-        return { walls: mapView.walls, doors: mapView.layers.includes('puertas'), power: mapView.layers.includes('luz'), zones: mapView.layers.includes('zonas'), assets: mapView.layers.includes('espacios'), columns: true };
+        return { walls: mapView.walls, doors: mapView.layers.includes('puertas'), power: mapView.layers.includes('luz'), zones: mapView.layers.includes('zonas'), transit: mapView.layers.includes('transito'), assets: mapView.layers.includes('espacios'), columns: true };
     }
     function sync3d() {
         if (!scene3d) return;

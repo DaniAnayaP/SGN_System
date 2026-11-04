@@ -15,7 +15,7 @@
     const POWER_COLOR = { panel: 0x6b6f7c, outlet110: 0xf1c232, outlet220: 0xe8892b, 'three-phase': 0xd93a2f };
     const WOOD = 0xb98a52;
     const MAX_SPACE_LABELS = 300;
-    const LAYER_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects'];
+    const LAYER_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit'];
 
     function wallSegment(vertices, wall) {
         const n = vertices.length;
@@ -44,7 +44,7 @@
         scene.add(sun);
         // Un grupo por capa: así cada una se muestra u oculta sola.
         const group = {};
-        ['floor', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
+        ['floor', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
         const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a }));
         outline.visible = false;
         scene.add(outline);
@@ -93,6 +93,7 @@
             group.footprints.visible = layerOn.footprints;
             group.assets.visible = layerOn.assets;
             group.objects.visible = layerOn.objects;
+            group.transit.visible = layerOn.transit;
             group.zoneLabels.visible = labelsOn && layerOn.zones;
             group.spaceLabels.visible = labelsOn && layerOn.assets;
             if (!layerOn.assets && !layerOn.zones) outline.visible = false;
@@ -357,13 +358,13 @@
                 if (!inactive && !dimZone) addLabel(group.zoneLabels, z.name, PX(ax), 0.12 + 0.004 * i, PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
             });
 
-            // pasillos (paso Tránsito): losas delgadas sobre el piso, con las zonas (principal más oscuro, entre pasillos más claro)
+            // pasillos (paso Tránsito, su propia capa): losas delgadas sobre el piso (principal más oscuro, entre pasillos más claro)
             const transitY = 0.06 + 0.004 * (layout.zones || []).length;
             (layout.transit || []).forEach((p, i) => {
                 if (!(p.l > 0) || !(p.w > 0)) return;
                 const slab = new THREE.Mesh(new THREE.BoxGeometry(p.l, 0.02, p.w), new THREE.MeshLambertMaterial({ color: p.type === 'between' ? 0xe3e6ef : 0xc4c9db }));
                 slab.position.set(PX(p.x + p.l / 2), transitY + 0.002 * i, PZ(p.y + p.w / 2));
-                group.zones.add(slab);
+                group.transit.add(slab);
             });
             // objetos (paso Objetos): personas y montacargas a escala, girados hacia donde miran (foto fija del plano)
             (layout.objects || []).forEach((o) => {

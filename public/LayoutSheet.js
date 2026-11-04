@@ -107,8 +107,14 @@
         if (on('contorno') && obstacleKinds.has('step')) leg.push(['step', labels.step]);
         if (on('espacios') || on('huellas') || on('activos')) leg.push(['space', labels.space]);
         if (on('zonas')) {
-            leg.push(['dry', labels.dry], ['cold', labels.cold], ['chemical', labels.chemical], ['finished', labels.finished], ['dock', labels.dock], ['office', labels.office], ['aisle', labels.aisle], ['aisle2', labels.aisle2], ['none', labels.none]);
+            // los pasillos son de Tránsito (su propia capa); solo una zona de pasillo de forma libre que quedó de antes los trae aquí
+            const aisleZones = (data.layout.zones || []).some((z) => z.type === 'aisle' || z.type === 'aisle2');
+            leg.push(['dry', labels.dry], ['cold', labels.cold], ['chemical', labels.chemical], ['finished', labels.finished], ['dock', labels.dock], ['office', labels.office], ...(aisleZones ? [['aisle', labels.aisle], ['aisle2', labels.aisle2]] : []), ['none', labels.none]);
             (data.layout.zones || []).filter((z) => z.fmt).slice(0, 12).forEach((z) => leg.push([`zone:${z.id}`, z.name, z]));
+        }
+        if (on('transito') && (data.layout.transit || []).length) {
+            if (!leg.some((i) => i[0] === 'aisle')) leg.push(['aisle', labels.aisle]);
+            if (!leg.some((i) => i[0] === 'aisle2')) leg.push(['aisle2', labels.aisle2]);
         }
         const legPos = [];
         let legX = m;
