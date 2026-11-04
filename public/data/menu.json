@@ -1738,6 +1738,7 @@
             { "id": "colLayoutEspacios", "labelKey": "main.colLayoutEspacios", "permissionOnly": true },
             { "id": "colLayoutLuz", "labelKey": "main.colLayoutLuz", "permissionOnly": true },
             { "id": "colLayoutSensores", "labelKey": "main.colLayoutSensores", "permissionOnly": true },
+            { "id": "colLayoutSeguridad", "labelKey": "main.colLayoutSeguridad", "permissionOnly": true },
             { "id": "colLayoutObjetos", "labelKey": "main.colLayoutObjetos", "permissionOnly": true },
             { "id": "colLayoutActivos", "labelKey": "main.colLayoutActivos", "permissionOnly": true },
             { "id": "colLayoutPosiciones", "labelKey": "main.colLayoutPosiciones", "permissionOnly": true },

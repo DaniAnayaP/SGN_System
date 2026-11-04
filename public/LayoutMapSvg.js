@@ -122,6 +122,48 @@
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const fmt = (n) => (Number.isFinite(n) ? n : 0).toLocaleString('es-MX', { maximumFractionDigits: 2 });
 
+    // ---- Seguridad (paso Seguridad) ------------------------------------------------------------------------------------------------------------
+    // Un símbolo chico por tipo (extintor, hidrante, puerta de emergencia, botiquín, alarma o pulsador, regadera y lavaojos, punto de reunión), cada uno con su color, y la ruta de evacuación como una línea punteada con flecha.
+    // Todo va con atributos (sin CSS) para que se vea igual en el editor, en la vista pública y en la hoja que se descarga. (x, y) = el centro del símbolo en píxeles del dibujo; r = su tamaño (la mitad del lado).
+    const SAFETY_OUTLINE = { extinguisher: '#7a1f17', hydrant: '#7a1f17', emergency_door: '#14602f', firstaid: '#14602f', alarm: '#8a4a0c', eyewash: '#134a80', assembly: '#14602f', route: '#14602f' };
+    function safetyGlyph(type, x, y, r) {
+        const color = (LC.SAFETY_COLORS || {})[type] || '#d9443a';
+        const line = SAFETY_OUTLINE[type] || '#7a1f17';
+        const k = (v) => Math.round(v * 100) / 100;
+        const P = (dx, dy) => `${k(x + dx * r)} ${k(y + dy * r)}`;
+        const letter = (txt, dy, size) => `<text x="${k(x)}" y="${k(y + dy * r)}" font-size="${k(size * r)}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${txt}</text>`;
+        const square = `<rect x="${k(x - r)}" y="${k(y - r)}" width="${k(2 * r)}" height="${k(2 * r)}" rx="${k(r * 0.3)}" fill="${color}" stroke="${line}" stroke-width="0.9"/>`;
+        const disc = `<circle cx="${k(x)}" cy="${k(y)}" r="${k(r)}" fill="${color}" stroke="${line}" stroke-width="0.9"/>`;
+        const stroke = `fill="none" stroke="#FFFFFF" stroke-width="${k(Math.max(1.2, r * 0.24))}" stroke-linecap="round" stroke-linejoin="round"`;
+        if (type === 'hydrant') return `${disc}${letter('H', 0.4, 1.15)}`;
+        if (type === 'emergency_door') return `${square}<path d="M${P(-0.55, 0)} H${P(0.5, 0).split(' ')[0]} M${P(0.05, -0.45)} L${P(0.5, 0)} L${P(0.05, 0.45)}" ${stroke}/>`;
+        if (type === 'firstaid') return `${square}<path d="M${P(0, -0.6)} V${P(0, 0.6).split(' ')[1]} M${P(-0.6, 0)} H${P(0.6, 0).split(' ')[0]}" ${stroke}/>`;
+        if (type === 'alarm') return `<path d="M${P(0, -1.15)} L${P(1.15, 0.9)} L${P(-1.15, 0.9)} Z" fill="${color}" stroke="${line}" stroke-width="0.9" stroke-linejoin="round"/>${letter('!', 0.74, 1.0)}`;
+        if (type === 'eyewash') return `${disc}<path d="M${P(0, -0.6)} C${P(0.55, 0.05)} ${P(0.55, 0.55)} ${P(0, 0.55)} C${P(-0.55, 0.55)} ${P(-0.55, 0.05)} ${P(0, -0.6)} Z" fill="#FFFFFF"/>`;
+        if (type === 'assembly') return `${disc}<circle cx="${k(x)}" cy="${k(y)}" r="${k(r * 0.55)}" fill="none" stroke="#FFFFFF" stroke-width="${k(Math.max(1, r * 0.2))}" stroke-dasharray="${k(r * 0.5)} ${k(r * 0.35)}"/>`;
+        return `${square}${letter('E', 0.4, 1.2)}`; // extintor
+    }
+    // La ruta de evacuación: una línea punteada con la punta de flecha en el punto de llegada. w = grosor de la línea, en píxeles.
+    function safetyRoute(x1, y1, x2, y2, w) {
+        const color = (LC.SAFETY_COLORS || {}).route || '#2e9e5b';
+        const k = (v) => Math.round(v * 100) / 100;
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len;
+        const uy = dy / len;
+        const head = Math.min(Math.max(5, w * 3.2), len);
+        const bx = x2 - ux * head;
+        const by = y2 - uy * head;
+        const hw = head * 0.5;
+        return `<line x1="${k(x1)}" y1="${k(y1)}" x2="${k(bx)}" y2="${k(by)}" stroke="${color}" stroke-width="${k(w)}" stroke-dasharray="${k(w * 3.2)} ${k(w * 1.8)}" stroke-linecap="round"/><polygon points="${k(x2)},${k(y2)} ${k(bx - uy * hw)},${k(by + ux * hw)} ${k(bx + uy * hw)},${k(by - ux * hw)}" fill="${color}"/>`;
+    }
+    // El código de un elemento, en letra chica con un contorno blanco para que se lea encima de zonas y huellas.
+    function safetyLabel(x, y, txt, anchor) {
+        const a = `x="${Math.round(x * 100) / 100}" y="${Math.round(y * 100) / 100}" font-size="7.5" font-weight="700" text-anchor="${anchor || 'middle'}"`;
+        return `<text ${a} fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">${esc(txt)}</text><text ${a} fill="#2A1B30">${esc(txt)}</text>`;
+    }
+
     function mapSvg(layout, options = {}) {
         // options.rotation = cuartos de vuelta a la derecha (0 a 3): el croquis sale girado; los textos siguen derechos.
         if (options.rotation) layout = LC.rotateLayout(layout, options.rotation);
@@ -295,10 +337,21 @@
             const w = LC.wallSegment(layout.vertices, e.wall);
             s += `<circle cx="${X(w.p[0] + w.ux * e.dist)}" cy="${Y(w.p[1] + w.uy * e.dist)}" r="5.5" fill="#FBF0DE" stroke="#D9A441" stroke-width="1.6"/>`;
         });
+        // Seguridad (paso Seguridad): primero las rutas de evacuación (debajo) y encima los símbolos con su código.
+        if (on('seguridad') && (layout.safety || []).length) {
+            const rs = Math.max(5, Math.min(8, sc * 0.45));
+            (layout.safety || []).filter((e) => e.type === 'route').forEach((e) => { s += safetyRoute(X(e.x), Y(e.y), X(e.x2), Y(e.y2), 2.4); });
+            (layout.safety || []).forEach((e) => {
+                const cx = X(e.x);
+                const cy = Y(e.y);
+                if (e.type === 'route') s += `<circle cx="${cx}" cy="${cy}" r="3.2" fill="${(LC.SAFETY_COLORS || {}).route}" stroke="#14602F" stroke-width="0.9"/>${safetyLabel(cx, cy - 6, e.code || '')}`;
+                else s += `${safetyGlyph(e.type, cx, cy, rs)}${safetyLabel(cx, cy - rs - 3, e.code || '')}`;
+            });
+        }
         const bar = 5 * sc;
         s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" stroke="${T.chrome.nave}" stroke-width="2"/><text x="${M + bar + 6}" y="${H - 8}" font-size="8.5" fill="#6B7089">5 m</text>`;
         return `${s}</svg>`;
     }
 
-    window.LayoutMapSvg = { mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, defaultAssetFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
+    window.LayoutMapSvg = { safetyGlyph, safetyRoute, safetyLabel, mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, defaultAssetFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
 }());

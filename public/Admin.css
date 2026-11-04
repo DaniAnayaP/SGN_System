@@ -7438,6 +7438,15 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lob-box{ fill: #c9ccd8; stroke: #6b7089; stroke-width: 1; }
 .lob-head{ fill: #f7c98b; stroke: #8a4a0c; stroke-width: 0.8; }
 .layout-legend .lg-person{ background: #e08a2e; border-color: #8a4a0c; border-radius: 50%; }
+/* Seguridad: la leyenda de los símbolos (solo con el paso Seguridad encendido) usa los mismos colores del croquis, el 3D y la hoja */
+.layout-legend .lg-sf-item[hidden]{ display: none; }
+.layout-legend .lg-sf-extinguisher{ background: #d9443a; border-color: #7a1f17; }
+.layout-legend .lg-sf-hydrant{ background: #d9443a; border-color: #7a1f17; border-radius: 50%; }
+.layout-legend .lg-sf-door, .layout-legend .lg-sf-firstaid{ background: #2e9e5b; border-color: #14602f; }
+.layout-legend .lg-sf-alarm{ background: #e8892b; border-color: #8a4a0c; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.layout-legend .lg-sf-eyewash{ background: #2f7fc7; border-color: #134a80; border-radius: 50%; }
+.layout-legend .lg-sf-assembly{ background: #2e9e5b; border-color: #14602f; border-radius: 50%; }
+.layout-legend .lg-sf-route{ background: repeating-linear-gradient(90deg, #2e9e5b 0 4px, transparent 4px 7px); border-color: transparent; height: 0.3rem; margin-top: 0.2rem; }
 .layout-legend .lg-forklift{ background: #f2c230; border-color: #7a5c00; }
 .layout-chips{ display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; min-width: 12rem; }
 .layout-chip{ display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.05rem 0.2rem 0.05rem 0.55rem; border: 1px solid var(--color-primary, #6c3ba0); border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: var(--color-surface-2, #f6eef8); white-space: nowrap; }

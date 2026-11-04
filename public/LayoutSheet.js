@@ -112,6 +112,11 @@
             leg.push(['dry', labels.dry], ['cold', labels.cold], ['chemical', labels.chemical], ['finished', labels.finished], ['dock', labels.dock], ['office', labels.office], ...(aisleZones ? [['aisle', labels.aisle], ['aisle2', labels.aisle2]] : []), ['none', labels.none]);
             (data.layout.zones || []).filter((z) => z.fmt).slice(0, 12).forEach((z) => leg.push([`zone:${z.id}`, z.name, z]));
         }
+        // Seguridad: la leyenda nombra solo los tipos que hay en el croquis (cada uno con su propio símbolo).
+        if (on('seguridad')) {
+            const present = new Set((data.layout.safety || []).map((e) => e.type));
+            ((window.LayoutCalc && window.LayoutCalc.SAFETY_TYPES) || []).filter((tp) => present.has(tp)).forEach((tp) => leg.push([`safety:${tp}`, labels[`safety_${tp}`] || tp]));
+        }
         if (on('transito') && (data.layout.transit || []).length) {
             if (!leg.some((i) => i[0] === 'aisle')) leg.push(['aisle', labels.aisle]);
             if (!leg.some((i) => i[0] === 'aisle2')) leg.push(['aisle2', labels.aisle2]);
@@ -179,6 +184,11 @@
             const sw = 20 * f;
             if (zone) {
                 s += window.LayoutMapSvg.zonePaint(`lg-${zone.id}`, zone.fmt).markup(`${x},${ly} ${x + sw},${ly} ${x + sw},${ly + sw} ${x},${ly + sw}`);
+            } else if (key.indexOf('safety:') === 0) {
+                // el mismo símbolo del croquis; la ruta, una línea con flecha
+                const type = key.slice(7);
+                if (type === 'route') s += window.LayoutMapSvg.safetyRoute(x, ly + sw / 2, x + sw, ly + sw / 2, 2.6 * f);
+                else s += window.LayoutMapSvg.safetyGlyph(type, x + sw / 2, ly + sw / 2, sw * 0.46);
             } else {
                 let paint;
                 if (key === 'door') paint = 'fill="#1E7E34" stroke="#1E7E34"';

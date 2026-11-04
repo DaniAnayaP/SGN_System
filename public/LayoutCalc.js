@@ -45,10 +45,11 @@
         sensores: 'colLayoutSensores',
         transito: 'colLayoutTransito',
         objetos: 'colLayoutObjetos',
+        seguridad: 'colLayoutSeguridad',
         activos: 'colLayoutActivos',
         posiciones: 'colLayoutPosiciones',
     };
-    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, objects: 500, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
+    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, objects: 500, safety: 500, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -95,7 +96,9 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        return applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))));
+        const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))));
+        // Seguridad: la zona de cada elemento sale de su lugar y su código (E001…) lo pone el sistema.
+        return assignSafetyCodes(deriveSafetyZones(normalized));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -613,6 +616,7 @@
         out = lockHuellaCodes(out, previous);
         out = lockSensorCodes(out, previous);
         out = lockTransitCodes(out, previous);
+        out = lockSafetyCodes(out, previous);
         if (Array.isArray(out.spaces)) {
             const before = new Map(((previous && previous.spaces) || []).map((s) => [s.id, s]));
             const spaces = out.spaces.map((s) => {
@@ -982,6 +986,113 @@
         return [[-hl, -hw], [hl, -hw], [hl, hw], [-hl, hw]].map(([px, py]) => [round2((Number(o.x) || 0) + px * c - py * s), round2((Number(o.y) || 0) + px * s + py * c)]);
     }
 
+    // ---- Seguridad: extintores, hidrantes, puertas de emergencia… ----------------------------------------------------------------------------------
+    // Son PUNTOS pequeños puestos sobre el plano (no ocupan m² ni se bloquean con pasillos, huellas ni columnas: un extintor va pegado a una pared o a una columna). Cada uno lleva su tipo, su nombre o modelo y su lugar (x, y en
+    // metros). La ruta de evacuación es la única que lleva dos puntos (de dónde a dónde: x, y y x2, y2). La ZONA no se captura: es la zona que contiene el punto (en la ruta, el de salida). El código (E001, E002…) lo pone el
+    // sistema, con una serie por tipo (cada tipo con su letra), y NO se vuelve a usar aunque se borre un elemento: safetyNext guarda el último número que se dio de cada letra. Todo debe quedar dentro del contorno de la nave.
+    const SAFETY_TYPES = ['extinguisher', 'hydrant', 'emergency_door', 'firstaid', 'alarm', 'eyewash', 'assembly', 'route'];
+    // El color de cada tipo (rojo del fuego, verde de emergencia, naranja de alarma, azul del agua): el mismo en el croquis, el 3D y la leyenda.
+    const SAFETY_COLORS = { extinguisher: '#d9443a', hydrant: '#d9443a', emergency_door: '#2e9e5b', firstaid: '#2e9e5b', alarm: '#e8892b', eyewash: '#2f7fc7', assembly: '#2e9e5b', route: '#2e9e5b' };
+    function deriveSafetyZones(layout) {
+        if (!layout || !Array.isArray(layout.safety)) return layout;
+        let changed = false;
+        const safety = layout.safety.map((e) => {
+            const id = zoneOfPoint(layout.zones, Number(e.x) || 0, Number(e.y) || 0);
+            if ((e.zoneId || '') === id) return e;
+            changed = true;
+            return { ...e, zoneId: id };
+        });
+        return changed ? { ...layout, safety } : layout;
+    }
+    // Cada tipo tiene su propia serie y su letra (Extintor E001, Hidrante I001, Puerta de emergencia P001, Botiquín B001, Alarma L001, Regadera y lavaojos O001, Punto de reunión U001, Ruta de evacuación V001): cada serie cuenta por su
+    // lado y el número de un elemento borrado no se vuelve a usar. Si a un elemento le cambian el tipo, recibe el siguiente de su tipo nuevo (y si regresa a su tipo guardado, recupera su código).
+    const SAFETY_LETTER = { extinguisher: 'E', hydrant: 'I', emergency_door: 'P', firstaid: 'B', alarm: 'L', eyewash: 'O', assembly: 'U', route: 'V' };
+    const safetyLetter = (type) => SAFETY_LETTER[type] || 'E';
+    const safetyCode = (type, n) => `${safetyLetter(type)}${String(n).padStart(3, '0')}`;
+    const isSafetyCode = (type, c) => new RegExp(`^${safetyLetter(type)}\\d{3,4}$`).test(String(c == null ? '' : c).trim());
+    const safetyNum = (c) => Number(String(c).trim().slice(1));
+    // safetyNext = el último número que se dio de cada letra, { E: 3, I: 1 } (sin ceros y con las letras en orden).
+    const cleanSafetyNext = (raw) => {
+        const out = {};
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+            Object.keys(raw).filter((k) => /^[A-Z]$/.test(k)).sort().forEach((k) => { const n = Math.min(99999, Math.max(0, Math.round(Number(raw[k])) || 0)); if (n) out[k] = n; });
+        }
+        return out;
+    };
+    // Cada elemento que ya trae un código de la letra de su tipo que no se repite lo conserva; el que no, recibe el siguiente de su letra después del último que se dio (safetyNext) o, si es mayor, del más alto que hay.
+    function assignSafetyCodes(layout) {
+        if (!layout || !Array.isArray(layout.safety)) return layout;
+        const floors = cleanSafetyNext(layout.safetyNext);
+        if (!layout.safety.length && !Object.keys(floors).length) return layout;
+        const used = new Map();
+        const usedOf = (letter) => { if (!used.has(letter)) used.set(letter, new Set()); return used.get(letter); };
+        const keep = layout.safety.map((e) => {
+            const c = String(e.code == null ? '' : e.code).trim().toUpperCase();
+            const set = usedOf(safetyLetter(e.type));
+            if (isSafetyCode(e.type, c) && !set.has(c)) { set.add(c); return c; }
+            return '';
+        });
+        const given = { ...floors };
+        used.forEach((set, letter) => { const hi = Math.max(0, ...Array.from(set).map(safetyNum)); if (hi) given[letter] = Math.max(given[letter] || 0, hi); });
+        let changed = false;
+        const safety = layout.safety.map((e, i) => {
+            let code = keep[i];
+            if (!code) {
+                const letter = safetyLetter(e.type);
+                const set = usedOf(letter);
+                let n = (given[letter] || 0) + 1;
+                while (set.has(safetyCode(e.type, n))) n += 1;
+                code = safetyCode(e.type, n);
+                set.add(code);
+                given[letter] = n;
+            }
+            if (code === e.code) return e;
+            changed = true;
+            return { ...e, code };
+        });
+        const nextMap = cleanSafetyNext(given);
+        if (!changed && JSON.stringify(nextMap) === JSON.stringify(floors)) return layout;
+        const out = { ...layout, safety };
+        if (Object.keys(nextMap).length) out.safetyNext = nextMap; else delete out.safetyNext;
+        return out;
+    }
+    // Al guardar: los códigos no se editan. Uno que ya existía (con el mismo tipo) conserva el suyo; uno nuevo, o de un tipo que cambió, recibe el siguiente de su letra después del último que se dio (lo guardado manda: quien
+    // manda el Layout no puede bajar esos números).
+    function lockSafetyCodes(next, previous) {
+        if (!next || !Array.isArray(next.safety)) return next;
+        const was = (previous && previous.safety) || [];
+        const before = new Map(was.map((e) => [e.id, e]));
+        const floors = cleanSafetyNext(previous && previous.safetyNext);
+        was.forEach((e) => { if (isSafetyCode(e.type, e.code)) { const letter = safetyLetter(e.type); floors[letter] = Math.max(floors[letter] || 0, safetyNum(e.code)); } });
+        const safety = next.safety.map((e) => { const w = before.get(e.id); const code = w && w.type === e.type ? w.code : ''; return code === e.code ? e : { ...e, code }; });
+        const base = { ...next, safety };
+        if (Object.keys(floors).length) base.safetyNext = cleanSafetyNext(floors); else delete base.safetyNext;
+        return assignSafetyCodes(base);
+    }
+    // Las faltas de los elementos de un Layout normalizado: outside (un punto, o un extremo de la ruta, queda fuera del contorno de la nave) y route (la ruta necesita dos puntos distintos). sig cambia cuando cambia algo
+    // de lo que importa (el lugar o el contorno): lo que ya estaba mal y no se tocó solo se marca; lo nuevo no se deja guardar.
+    function safetyViolations(layout) {
+        const out = [];
+        if (!layout || !Array.isArray(layout.safety) || !layout.safety.length) return out;
+        const poly = (layout.vertices || []).map((p) => [p[0], p[1]]);
+        if (poly.length < 3) return out;
+        const inside = (x, y) => pointInPolygon(x, y, poly) || onPolygonEdge(x, y, poly);
+        layout.safety.forEach((e) => {
+            const isRoute = e.type === 'route';
+            const pts = isRoute ? [[e.x, e.y], [e.x2, e.y2]] : [[e.x, e.y]];
+            const geo = JSON.stringify([e.x, e.y, isRoute ? e.x2 : 0, isRoute ? e.y2 : 0, poly]);
+            if (pts.some(([x, y]) => !inside(Number(x) || 0, Number(y) || 0))) out.push({ id: e.id, code: e.code, kind: 'outside', sig: geo, message: `El elemento de seguridad ${e.code} queda fuera del contorno de la nave: acomódalo dentro.` });
+            if (isRoute && Number(e.x) === Number(e.x2) && Number(e.y) === Number(e.y2)) out.push({ id: e.id, code: e.code, kind: 'route', sig: geo, message: `La ruta de evacuación ${e.code} necesita dos puntos distintos.` });
+        });
+        return out;
+    }
+    const safetyKey = (v) => `${v.id}|${v.kind}|${v.sig}`;
+    // Las faltas que hay en next y que antes no estaban igual (elemento nuevo o cambiado).
+    function newSafetyViolations(next, previous) {
+        const before = new Set((previous ? safetyViolations(previous) : []).map(safetyKey));
+        return safetyViolations(next).filter((v) => !before.has(safetyKey(v)));
+    }
+
     // ---- El activo dentro de su huella -------------------------------------------------------------------------------------------------------
     // Los activos de una huella van uno junto al otro: ninguno puede salirse de ella ni ser más alto que ella, ni encimarse con otro de la misma huella. Se mira sobre un Layout normalizado (deriveSpaces). Un activo apagado (off) no
     // cuenta. Igual que con las huellas: lo que ya estaba mal antes y no cambió solo se marca; lo NUEVO o lo que cambió (el activo o su huella) no se deja guardar (ver newSpaceViolations). Cuatro faltas: sum (los activos suman más
@@ -1118,7 +1229,7 @@
         return {
             mode: 'scratch', heightM: 9,
             vertices: [[0, 0, 9], [30, 0, 9], [30, 20, 9], [0, 20, 9]],
-            doors: [], power: [], sensors: [], objects: [], obstacles: defaultWalls([[0, 0], [30, 0], [30, 20], [0, 20]]), wallsMigrated: true, zones: [], footprints: [], spaces: [],
+            doors: [], power: [], sensors: [], objects: [], safety: [], obstacles: defaultWalls([[0, 0], [30, 0], [30, 20], [0, 20]]), wallsMigrated: true, zones: [], footprints: [], spaces: [],
             plan: null, ownAssetFmt: true,
         };
     }
@@ -1382,6 +1493,20 @@
             if (!(item.l > 0 && item.w > 0)) errors.push(`${label}: el largo y el ancho deben ser mayores que 0`);
             return item;
         });
+        // Seguridad: extintores, hidrantes, puertas de emergencia… (puntos sobre el plano; la ruta de evacuación lleva dos). El código (E001…) lo pone el sistema y la zona sale de dónde queda el punto (más abajo).
+        const safetyIds = new Set();
+        out.safety = list(src.safety, LIMITS.safety, 'Seguridad').map((e, i) => {
+            const label = `Elemento de seguridad ${i + 1}`;
+            const type = oneOf(e && e.type, SAFETY_TYPES, 'extinguisher');
+            const item = {
+                id: idOf(e && e.id, safetyIds, label), code: text(e && e.code, label, false), type, name: text(e && e.name, label, false), zoneId: '',
+                x: meters(e && e.x, label, -LIMITS.maxM), y: meters(e && e.y, label, -LIMITS.maxM),
+            };
+            if (type === 'route') { item.x2 = meters(e && e.x2, label, -LIMITS.maxM); item.y2 = meters(e && e.y2, label, -LIMITS.maxM); }
+            return item;
+        });
+        // el último número de código que se dio (para no volver a usar uno borrado); lo que manda el servidor es lo guardado, esto solo lo conserva
+        out.safetyNext = cleanSafetyNext(src.safetyNext);
         // Tránsito: los pasillos y las medidas de lo que transita por ellos.
         const transitIds = new Set();
         out.transit = list(src.transit, LIMITS.transit, 'Pasillos').map((p, i) => {
@@ -1529,6 +1654,7 @@
         out.footprints = assignHuellaCodes(deriveFootprintZones(out)).footprints;
         out.sensors = assignSensorCodes(deriveSensorZones(out)).sensors;
         out.transit = assignTransitCodes(deriveTransitZones(out)).transit;
+        { const safe = assignSafetyCodes(deriveSafetyZones(out)); out.safety = safe.safety; if (safe.safetyNext && Object.keys(safe.safetyNext).length) out.safetyNext = safe.safetyNext; else delete out.safetyNext; }
         out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
 
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
@@ -1629,6 +1755,8 @@
             transit: (layout.transit || []).map((p) => ({ ...p, ...box(p, 'l', 'w') })),
             // un objeto gira con el croquis: su centro se mueve y hacia donde mira suma el cuarto de vuelta
             objects: (layout.objects || []).map((o) => { const r = pt(o.x, o.y); return { ...o, x: round2(r[0]), y: round2(r[1]), angle: ((((Number(o.angle) || 0) + 90 * q) % 360) + 360) % 360 }; }),
+            // un elemento de seguridad (y los dos extremos de la ruta) se mueve con el croquis
+            safety: (layout.safety || []).map((e) => { const a = pt(e.x, e.y); const moved = { ...e, x: round2(a[0]), y: round2(a[1]) }; if (e.type === 'route') { const b = pt(e.x2, e.y2); moved.x2 = round2(b[0]); moved.y2 = round2(b[1]); } return moved; }),
             spaces: (layout.spaces || []).map((s) => ({ ...s, ...box(s, 'l', 'd') })),
             footprints: (layout.footprints || []).map((f) => ({ ...f, ...box(f, 'l', 'd') })),
             zones: (layout.zones || []).map((z) => {
@@ -1694,6 +1822,8 @@
         // Siempre una lista (un Layout de antes sin sensores cuenta igual que uno sin ninguno); la zona sale de la pared y del croquis, no se captura.
         if (section === 'sensores') return (layout.sensors || []).map(({ zoneId, ...rest }) => rest);
         if (section === 'objetos') return layout.objects || [];
+        // La zona de cada elemento sale de su lugar en el croquis, no se captura.
+        if (section === 'seguridad') return (layout.safety || []).map(({ zoneId, ...rest }) => rest);
         // La zona de cada pasillo sale del croquis, no se captura; las medidas de lo que transita van con el paso.
         if (section === 'transito') return { transit: (layout.transit || []).map(({ zoneId, ...rest }) => rest) };
         if (section === 'zonas') return layout.zones;
@@ -1729,7 +1859,7 @@
     return {
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, sensorPoint, SECTIONS, LIMITS, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume,
-        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
+        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

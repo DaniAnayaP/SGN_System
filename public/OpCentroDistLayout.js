@@ -8,9 +8,9 @@
 // Envuelto en una función: este script comparte el ámbito global con Dashboard.js, que ya declara nombres como SECTION_LABEL_KEYS.
 (function () {
 const LC = window.LayoutCalc;
-const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'transito', 'espacios', 'luz', 'sensores', 'objetos', 'activos', 'posiciones'];
+const SECTION_ORDER = ['contorno', 'puertas', 'zonas', 'transito', 'espacios', 'luz', 'sensores', 'seguridad', 'objetos', 'activos', 'posiciones'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
+    contorno: 'main.layoutStepContorno', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -560,6 +560,38 @@ function openWhoPop(i, anchor) {
 }
 document.addEventListener('click', (event) => { if (!event.target.closest('#layout-who-pop, [data-who-open]')) closeWhoPop(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeWhoPop(); });
+// Seguridad: las faltas de cada elemento (LayoutCalc.safetyViolations): fuera del contorno de la nave, o una ruta con los dos puntos iguales. sfIssues = id -> { outside, route }. Se vuelve a calcular con cada cambio del borrador.
+let sfIssues = new Map();
+function computeSafetyIssues() {
+    sfIssues = new Map();
+    if (!state.draft) return;
+    LC.safetyViolations(state.draft).forEach((v) => { const m = sfIssues.get(v.id) || {}; m[v.kind] = v; sfIssues.set(v.id, m); });
+}
+const safetyIssueText = (v) => t(`main.layoutVioSg_${v.kind}`, { code: v.code });
+// El código y la zona de cada elemento salen de su tipo y de su lugar; las cajas de X e Y (y de la llegada de la ruta) se marcan en rojo si algo no cumple y abajo del paso va la lista de lo que falta.
+// La leyenda de los símbolos solo se ve con el paso Seguridad encendido.
+function applySafetyMarks() {
+    document.querySelectorAll('.lg-sf-item').forEach((el) => { el.hidden = !stepOn('seguridad'); });
+    if (!state.draft) return;
+    computeSafetyIssues();
+    (state.draft.safety || []).forEach((e, i) => {
+        const bad = sfIssues.get(e.id) || {};
+        ['x', 'y', 'x2', 'y2'].forEach((key) => {
+            const box = document.querySelector(`[data-l="safety"][data-i="${i}"][data-k="${key}"]`);
+            if (box) box.classList.toggle('layout-missing', !!(bad.outside || bad.route));
+        });
+        const codeCell = document.querySelector(`[data-sf-code="${i}"]`);
+        if (codeCell) codeCell.textContent = e.code || '';
+        const zoneCell = document.querySelector(`[data-sf-zone="${i}"]`);
+        if (zoneCell) zoneCell.textContent = (state.draft.zones.find((z) => z.id === e.zoneId) || {}).name || '—';
+    });
+    const box = document.querySelector('[data-sf-issues]');
+    if (box) {
+        const all = LC.safetyViolations(state.draft);
+        box.hidden = !all.length;
+        box.innerHTML = all.map((v) => `<p>${esc(safetyIssueText(v))}</p>`).join('');
+    }
+}
 function applyActivoMarks() {
     (state.draft.spaces || []).forEach((s, i) => {
         const eff = ownEffective(s);
@@ -670,6 +702,14 @@ function setObjectEquip(row, id) {
     Object.assign(row, { type: LC.objectShapeOfKind(next.kind), l: next.l, w: next.w, h: next.h });
     if (prev && (row.name === prev.name || row.name.indexOf(`${prev.name} `) === 0)) row.name = `${next.name}${row.name.slice(prev.name.length)}`;
 }
+// Seguridad: cambiar el tipo de un elemento. La ruta de evacuación lleva un punto de llegada (de fábrica, a 5 m a la derecha de donde sale); los demás tipos no. El código lo vuelve a poner el sistema (letra del tipo nuevo).
+function setSafetyType(row, value) {
+    row.type = LC.SAFETY_TYPES.includes(value) ? value : 'extinguisher';
+    if (row.type === 'route') {
+        if (row.x2 === undefined) row.x2 = round2((Number(row.x) || 0) + 5);
+        if (row.y2 === undefined) row.y2 = round2(Number(row.y) || 0);
+    } else { delete row.x2; delete row.y2; }
+}
 function stepHtml(step) {
     if (step === 'localizadores') return locatorsStepHtml();
     const d = state.draft;
@@ -708,6 +748,18 @@ function stepHtml(step) {
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
         const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wall', wallOptionsHtml(x.wall), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${removeCell('sensors', i, dis)}</tr>`);
         return `${table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutPared', 'main.layoutDistancia', 'main.layoutAlturaPiso', 'main.layoutZona', ''], rows)}${addButton('sensors', 'main.layoutAgregarSensor', dis, true)}`;
+    }
+    if (step === 'seguridad') {
+        // Cada renglón es un ELEMENTO de seguridad (extintor, hidrante, puerta de emergencia, botiquín, alarma o pulsador, regadera y lavaojos, punto de reunión o ruta de evacuación): un punto puesto en el plano con X e Y, en metros.
+        // La ruta de evacuación lleva además el punto de llegada (X final, Y final). El código (cada tipo con su letra: E001, I001, P001…) lo pone el sistema y la zona sale de dónde queda el punto: no se capturan.
+        const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
+        const rows = (d.safety || []).map((e, i) => {
+            const route = e.type === 'route';
+            const end = route ? `${cellNum('safety', i, 'x2', e.x2, dis)}${cellNum('safety', i, 'y2', e.y2, dis)}` : '<td class="layout-calc">—</td><td class="layout-calc">—</td>';
+            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}${removeCell('safety', i, dis)}</tr>`;
+        });
+        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', ''], rows) : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
+        return `${addButton('safety', 'main.layoutAgregarSeguridad', dis, true)}${list}<div class="layout-vio" data-sf-issues hidden></div>`;
     }
     if (step === 'objetos') {
         // Cada renglón es una PERSONA o un MONTACARGAS dibujado en el plano, a escala. Es una foto fija (como el plano de Excel), no sigue a nadie en vivo. X e Y son su centro, en metros; el giro dice hacia dónde mira
@@ -865,7 +917,7 @@ function renderPanel() {
     panelScrollStep = state.focus;
     bindLayoutFilters();
     markSelectedRow();
-    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); applyTransitMarks(); }
+    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); applyTransitMarks(); applySafetyMarks(); }
     applyFindToTables();
 }
 
@@ -1469,6 +1521,27 @@ function renderSvg() {
                 : `<ellipse class="lob lob-person" cx="0" cy="0" rx="${along / 2}" ry="${across / 2}"/><circle class="lob-head" cx="0" cy="0" r="${Math.min(along, across) * 0.3}"/>`);
         s += `<g class="lobj" data-oid="${esc(o.id)}" transform="translate(${X(o.x)} ${Y(o.y)}) rotate(${Number(o.angle) || 0})">${shape}${title}</g>`;
     });
+    // Seguridad (paso Seguridad): extintores, hidrantes, puertas de emergencia… como símbolos de su color con su código; la ruta de evacuación, una línea punteada con flecha. Lo que queda fuera del contorno lleva un aro rojo punteado.
+    if (on('seguridad')) {
+        const SG = window.LayoutMapSvg;
+        const rs = Math.max(5, Math.min(8, sc * 0.45));
+        (d.safety || []).filter((e) => e.type === 'route').forEach((e) => { s += SG.safetyRoute(X(e.x), Y(e.y), X(e.x2), Y(e.y2), 2.4); });
+        (d.safety || []).forEach((e) => {
+            const bad = sfIssues.get(e.id);
+            const px = X(e.x);
+            const py = Y(e.y);
+            const zone = (d.zones.find((z) => z.id === e.zoneId) || {}).name;
+            const why = bad ? Object.values(bad).map(safetyIssueText).join(' · ') : '';
+            const title = `<title>${esc(e.code || '')} · ${esc(typeLabel('safety', e.type))}${e.name ? ` · ${esc(e.name)}` : ''}${zone ? ` · ${esc(zone)}` : ''}${why ? `\n${esc(why)}` : ''}</title>`;
+            if (e.type === 'route') {
+                s += `<g class="lsafe" data-sfid="${esc(e.id)}"><circle cx="${px}" cy="${py}" r="3.4" fill="${LC.SAFETY_COLORS.route}" stroke="#14602F" stroke-width="0.9"/>${title}</g>${SG.safetyLabel(px, py - 7, e.code || '')}`;
+                if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="9"/>`;
+            } else {
+                s += `<g class="lsafe" data-sfid="${esc(e.id)}">${SG.safetyGlyph(e.type, px, py, rs)}${title}</g>${SG.safetyLabel(px, py - rs - 3, e.code || '')}`;
+                if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="${rs + 4}"/>`;
+            }
+        });
+    }
     const cx = (x0 + x1) / 2;
     const cy = (y0 + y1) / 2;
     for (let i = 1; i <= (finding && !dimmed ? 0 : d.vertices.length); i++) {
@@ -1532,6 +1605,8 @@ function refreshLive() {
         if (areaCell) areaCell.textContent = `${fmt((Number(p.l) || 0) * (Number(p.w) || 0))} m²`;
     });
     applyTransitMarks();
+    // el código (según su tipo) y la zona de cada elemento de seguridad salen de su tipo y de su lugar: se vuelven a sacar con cada cambio
+    applySafetyMarks();
     // el código y la zona de cada sensor salen de la pared donde se puso: se vuelven a sacar con cada cambio
     (state.draft.sensors || []).forEach((s, i) => {
         const codeCell = document.querySelector(`[data-sensor-code="${i}"]`);
@@ -1825,6 +1900,14 @@ const ROW_FACTORY = {
     doors: () => ({ id: uid('d'), name: t('main.layoutPuertaNueva'), type: 'dock', wall: 1, dist: 0, width: 1.2, height: 2.1 }),
     power: () => ({ id: uid('p'), type: 'outlet110', wall: 1, dist: 1, height: 1.2 }),
     sensors: () => ({ id: uid('n'), code: '', type: 'both', zoneId: '', wall: 1, dist: 1, height: 2.5 }),
+    // un elemento de seguridad nuevo nace como extintor en el centro de la nave (corrido un poco para que no se encimen); se acomoda con X e Y y se le cambia el tipo en la lista
+    safety: () => {
+        const d = state.draft;
+        const xs = d.vertices.map((p) => p[0]);
+        const ys = d.vertices.map((p) => p[1]);
+        const n = (d.safety || []).length;
+        return { id: uid('g'), code: '', type: 'extinguisher', name: '', zoneId: '', x: round2((Math.min(...xs) + Math.max(...xs)) / 2 + (n % 5) * 1.5), y: round2((Math.min(...ys) + Math.max(...ys)) / 2 + Math.floor(n / 5) * 1.5) };
+    },
     // un pasillo nuevo nace dentro de la primera zona con tipo (para que no empiece fuera de toda zona); sin zonas, cerca de la esquina
     transit: () => {
         const z = state.draft.zones.find((r) => r.type && !Array.isArray(r.pts) && r.l > 2 && r.w > 2);
@@ -1841,13 +1924,13 @@ const ROW_FACTORY = {
     // un activo siempre va dentro de una huella: nace sin huella y hay que elegirla (no se puede guardar hasta entonces)
     spaces: () => ({ id: uid('s'), footprintId: '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
-const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', transit: 'transito', objects: 'objetos', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
+const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', safety: 'seguridad', transit: 'transito', objects: 'objetos', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
 // Los códigos los pone el sistema y no se editan: el de la zona (Z001…, consecutivo), el de la huella (H001… por zona, y su zona sale de dónde está en el croquis) y el del activo (letra de su tipo + número
 // consecutivo por zona y tipo: A001, G001…). Lo que ya estaba guardado y sigue igual conserva su código; lo nuevo (todavía sin guardar) y lo que cambió de zona o de tipo lo recibe cada vez que se acomoda,
 // así siempre es el que le toca, el mismo que le pondrá el servidor al guardar.
 function syncHuellas() {
     const d = state.draft;
-    const next = LC.lockCodes(LC.deriveTransitZones(LC.deriveSensorZones(LC.deriveSpaces(LC.deriveFootprintZones(d)))), state.saved);
+    const next = LC.lockCodes(LC.deriveSafetyZones(LC.deriveTransitZones(LC.deriveSensorZones(LC.deriveSpaces(LC.deriveFootprintZones(d))))), state.saved);
     d.transit = next.transit || d.transit || [];
     // los objetos toman del catálogo su dibujo y sus medidas (y las claves de antes pasan a los ids)
     const withCatalog = LC.applyTransitCatalog(d);
@@ -1856,6 +1939,9 @@ function syncHuellas() {
     d.zones = next.zones;
     d.footprints = next.footprints;
     d.sensors = next.sensors;
+    // los elementos de seguridad: su zona y su código (cada tipo con su letra); el contador de los números ya dados viaja con el Layout (sin él no se guarda ese campo)
+    d.safety = next.safety || d.safety || [];
+    if (next.safetyNext && Object.keys(next.safetyNext).length) d.safetyNext = next.safetyNext; else delete d.safetyNext;
     d.spaces = state.renumber ? LC.renumberSpaceCodes(next).spaces : next.spaces; // Renumerar: consecutivos desde 001 por zona y tipo
 }
 
@@ -1917,6 +2003,8 @@ function onEdit(event) {
         const key = el.getAttribute('data-k');
         if (list === 'objects' && key === 'equipId') {
             setObjectEquip(row, el.value);
+        } else if (list === 'safety' && key === 'type') {
+            setSafetyType(row, el.value);
         } else if (list === 'transit' && key === 'h') {
             // el alto libre es opcional: vacío = no se revisa el alto
             const raw = String(el.value).trim();
@@ -1962,6 +2050,8 @@ function onEdit(event) {
     if (event.type === 'change' && list === 'obstacles' && ['kind', 'mode'].includes(el.getAttribute('data-k'))) renderPanel();
     // Al cambiar de persona a montacargas cambian sus medidas (si eran las de partida) y su nombre.
     if (event.type === 'change' && list === 'objects' && el.getAttribute('data-k') === 'equipId') renderPanel();
+    // Al cambiar el tipo de un elemento de seguridad cambian sus celdas (la ruta lleva punto de llegada) y su código.
+    if (event.type === 'change' && list === 'safety' && el.getAttribute('data-k') === 'type') renderPanel();
     // Al pasar un activo a otra huella cambia su zona (que se ve en el renglón).
     if (event.type === 'change' && list === 'spaces' && el.getAttribute('data-k') === 'footprintId') renderPanel();
     refreshLive();
@@ -2084,7 +2174,7 @@ $('layout-panel').addEventListener('click', (event) => {
         const list = add.dataset.add;
         if (list === 'zones') clearLayoutFilters();
         // una huella nueva es SOLO la huella (el lugar en el piso): los activos que se pongan encima se dan de alta después, en el paso Activos
-        state.draft[list].push(ROW_FACTORY[list]());
+        (state.draft[list] = state.draft[list] || []).push(ROW_FACTORY[list]());
         if (list === 'vertices') state.open.contorno = false;
         panelScrollEnd = true;
         renderPanel();
@@ -2632,10 +2722,10 @@ function effective3dLayers() {
     const f = state.find;
     const hide = state.findHide || {};
     if (f && !state.findDim) {
-        return { walls: false, columns: false, doors: false, power: false, objects: false, transit: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
+        return { walls: false, columns: false, doors: false, power: false, objects: false, transit: false, safety: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
     }
     const layers = {
-        walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
+        walls: stepOn('contorno') && on('walls'), columns: stepOn('contorno') && on('columns'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), assets: stepOn('activos') || stepOn('posiciones'),
     };
     if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }
@@ -2978,6 +3068,15 @@ $('layout-save').addEventListener('click', async () => {
         renderPanel();
         refreshLive();
         Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${transitIssueText(freshTransit[0])}`, 'warning');
+        return;
+    }
+    // Seguridad: cada elemento (y los dos extremos de la ruta) va dentro del contorno de la nave; lo nuevo o lo que cambió y no cumple no se guarda.
+    const freshSafety = LC.newSafetyViolations(state.draft, state.saved);
+    if (freshSafety.length) {
+        showStep('seguridad');
+        renderPanel();
+        refreshLive();
+        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${safetyIssueText(freshSafety[0])}`, 'warning');
         return;
     }
     const clashed = LC.newColorClashes(state.draft, state.saved);
@@ -3631,6 +3730,7 @@ function sheetLabels() {
         scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), space: t('main.layoutLeyendaEspacio'),
         dry: typeLabel('zone', 'dry'), cold: typeLabel('zone', 'cold'), chemical: typeLabel('zone', 'chemical'), finished: typeLabel('zone', 'finished'),
         aisle: typeLabel('zone', 'aisle'), aisle2: typeLabel('zone', 'aisle2'), dock: typeLabel('zone', 'dock'), office: typeLabel('zone', 'office'), none: t('main.layoutSinZona'),
+        ...Object.fromEntries(LC.SAFETY_TYPES.map((tp) => [`safety_${tp}`, typeLabel('safety', tp)])),
         cutCaption: t('main.layoutHojaRecorte'), printed: t('main.layoutHojaImpreso'), snapshot: t('main.layoutHojaFoto'), updated: t('main.layoutHojaActualizado'), version: t('main.layoutHojaVersion'),
     };
 }

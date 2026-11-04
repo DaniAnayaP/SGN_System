@@ -6478,7 +6478,7 @@ const LayoutCalc = require('./public/LayoutCalc.js');
 const RelTemplate = require('./public/RelTemplate.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
-const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones' };
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 
 function layoutPermissions(req) {
@@ -6570,6 +6570,8 @@ function buildPublicLayoutPayload(clientId, row) {
         power: (l.power || []).map((e) => ({ type: e.type, wall: e.wall, dist: e.dist, height: e.height })),
         // Los pasillos (Tránsito) se dibujan en la página pública y cuentan en los m² de pasillos; quién transita y las medidas no salen.
         transit: (l.transit || []).map((p) => ({ id: p.id, code: p.code, name: p.name, type: p.type, x: p.x, y: p.y, l: p.l, w: p.w })),
+        // Los elementos de Seguridad (extintores, hidrantes, puertas de emergencia…) se dibujan en la página pública con su propia capa; sin zona, sin fechas ni nada más.
+        safety: (l.safety || []).map((e) => ({ id: e.id, code: e.code, name: e.name, type: e.type, x: e.x, y: e.y, ...(e.type === 'route' ? { x2: e.x2, y2: e.y2 } : {}) })),
     };
     // Color representativo del cliente (el que se elige al darlo de alta): la hoja y la vista pública se pintan con él. Sin color válido va vacío y todo se ve como siempre.
     const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
@@ -6590,6 +6592,7 @@ function layoutSummary(layout, section) {
     if (section === 'sensores') return `${(layout.sensors || []).length} sensores`;
     if (section === 'transito') return `${(layout.transit || []).length} pasillos`;
     if (section === 'objetos') return `${(layout.objects || []).length} objetos`;
+    if (section === 'seguridad') return `${(layout.safety || []).length} elementos de seguridad`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
     if (section === 'activos') return `${(layout.spaces || []).length} activos, ${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} con clasificación o tipo, ${(layout.spaces || []).filter((s) => s.fmt).length} con formato propio`;
     if (section === 'posiciones') return `${(layout.spaces || []).reduce((n, s) => n + (s.bays || []).length, 0)} huecos con datos propios`;
@@ -6716,6 +6719,11 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     {
         const freshTransit = LayoutCalc.newTransitViolations({ ...next, transitCatalog }, existing ? existing.layout : null);
         if (freshTransit.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshTransit.map((v) => v.message), section: 'transito' });
+    }
+    // Seguridad: cada elemento (y los dos extremos de la ruta) va dentro del contorno de la nave. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
+    {
+        const freshSafety = LayoutCalc.newSafetyViolations(next, existing ? existing.layout : null);
+        if (freshSafety.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSafety.map((v) => v.message), section: 'seguridad' });
     }
     // Cada espacio con clasificación o tipo de activo debe apuntar a uno de los catálogos del cliente (activo, o el mismo que ya tenía guardado).
     {

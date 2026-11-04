@@ -15,7 +15,9 @@
     const POWER_COLOR = { panel: 0x6b6f7c, outlet110: 0xf1c232, outlet220: 0xe8892b, 'three-phase': 0xd93a2f };
     const WOOD = 0xb98a52;
     const MAX_SPACE_LABELS = 300;
-    const LAYER_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit'];
+    const LAYER_NAMES = ['walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety'];
+    // El color de cada elemento de Seguridad (los mismos del croquis: rojo del fuego, verde de emergencia, naranja de alarma, azul del agua).
+    const SAFETY_COLOR = { extinguisher: 0xd9443a, hydrant: 0xd9443a, emergency_door: 0x2e9e5b, firstaid: 0x2e9e5b, alarm: 0xe8892b, eyewash: 0x2f7fc7, assembly: 0x2e9e5b, route: 0x2e9e5b };
 
     function wallSegment(vertices, wall) {
         const n = vertices.length;
@@ -44,7 +46,7 @@
         scene.add(sun);
         // Un grupo por capa: así cada una se muestra u oculta sola.
         const group = {};
-        ['floor', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
+        ['floor', 'walls', 'doors', 'power', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
         const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a }));
         outline.visible = false;
         scene.add(outline);
@@ -94,6 +96,7 @@
             group.assets.visible = layerOn.assets;
             group.objects.visible = layerOn.objects;
             group.transit.visible = layerOn.transit;
+            group.safety.visible = layerOn.safety;
             group.zoneLabels.visible = labelsOn && layerOn.zones;
             group.spaceLabels.visible = labelsOn && layerOn.assets;
             if (!layerOn.assets && !layerOn.zones) outline.visible = false;
@@ -400,6 +403,103 @@
                 g.position.set(PX(Number(o.x) || 0), 0.08, PZ(Number(o.y) || 0));
                 g.rotation.y = -((Number(o.angle) || 0) * Math.PI) / 180;
                 group.objects.add(g);
+            });
+            // seguridad (paso Seguridad, su propia capa): extintores, hidrantes, puertas de emergencia, botiquines, alarmas, regaderas y lavaojos y puntos de reunión como figuras sencillas a su altura y con su color;
+            // la ruta de evacuación, como marcas verdes sobre el piso con una flecha al llegar. Lo que va colgado de una pared se pone paralelo a la pared más cercana.
+            const wallAngleAt = (px, py) => {
+                let best = 0;
+                let bestD = Infinity;
+                for (let i = 1; i <= V.length; i++) {
+                    const seg = wallSegment(V, i);
+                    if (!seg.length) continue;
+                    const t = Math.max(0, Math.min(seg.length, (px - seg.p[0]) * seg.ux + (py - seg.p[1]) * seg.uy));
+                    const d = Math.hypot(px - (seg.p[0] + seg.ux * t), py - (seg.p[1] + seg.uy * t));
+                    if (d < bestD) { bestD = d; best = Math.atan2(seg.uy, seg.ux); }
+                }
+                return best;
+            };
+            (layout.safety || []).forEach((e) => {
+                const color = SAFETY_COLOR[e.type] || 0xd9443a;
+                const ex = Number(e.x) || 0;
+                const ey = Number(e.y) || 0;
+                const g = new THREE.Group();
+                if (e.type === 'route') {
+                    const dx = (Number(e.x2) || 0) - ex;
+                    const dy = (Number(e.y2) || 0) - ey;
+                    const len = Math.hypot(dx, dy);
+                    if (!(len > 0.05)) return;
+                    const ang = Math.atan2(dy, dx);
+                    const head = Math.min(0.9, len);
+                    for (let d = 0.25; d + 0.25 <= len - head; d += 0.9) {
+                        const dash = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.2), lam(color));
+                        dash.position.set(Math.cos(ang) * d + Math.cos(ang) * 0.25, 0.12, Math.sin(ang) * d + Math.sin(ang) * 0.25);
+                        dash.rotation.y = -ang;
+                        g.add(dash);
+                    }
+                    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.34, head, 3), lam(color));
+                    tip.rotation.z = -Math.PI / 2;
+                    tip.scale.set(0.15, 1, 1);
+                    tip.position.set(Math.cos(ang) * (len - head / 2), 0.13, Math.sin(ang) * (len - head / 2));
+                    tip.rotation.y = -ang;
+                    g.add(tip);
+                    g.position.set(PX(ex), 0, PZ(ey));
+                    group.safety.add(g);
+                    return;
+                }
+                if (e.type === 'hydrant') {
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.78, 14), lam(color));
+                    body.position.y = 0.39;
+                    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 8), lam(0xb83a30));
+                    cap.position.y = 0.8;
+                    const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.4, 10), lam(0x8a2a22));
+                    nozzle.rotation.z = Math.PI / 2;
+                    nozzle.position.y = 0.5;
+                    g.add(body, cap, nozzle);
+                } else if (e.type === 'emergency_door') {
+                    const door = new THREE.Mesh(new THREE.BoxGeometry(1, 2.1, 0.12), lam(color));
+                    door.position.y = 1.05;
+                    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.06), lam(0x14602f));
+                    sign.position.set(0, 2.25, 0);
+                    g.add(door, sign);
+                    g.rotation.y = -wallAngleAt(ex, ey);
+                } else if (e.type === 'firstaid') {
+                    const box = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.28, 0.12), lam(color));
+                    box.position.y = 1.5;
+                    const bar1 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.02), lam(0xffffff));
+                    bar1.position.set(0, 1.5, 0.07);
+                    const bar2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.02), lam(0xffffff));
+                    bar2.position.set(0, 1.5, 0.07);
+                    g.add(box, bar1, bar2);
+                    g.rotation.y = -wallAngleAt(ex, ey);
+                } else if (e.type === 'alarm') {
+                    const box = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.08), lam(color));
+                    box.position.y = 1.4;
+                    g.add(box);
+                    g.rotation.y = -wallAngleAt(ex, ey);
+                } else if (e.type === 'eyewash') {
+                    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 10), lam(color));
+                    post.position.y = 0.5;
+                    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.17, 0.09, 14), lam(0x1f5f9e));
+                    bowl.position.y = 1.04;
+                    g.add(post, bowl);
+                } else if (e.type === 'assembly') {
+                    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.03, 24), lam(color));
+                    disc.position.y = 0.12;
+                    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.4, 8), lam(0x4a4f5e));
+                    pole.position.y = 1.2;
+                    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 0.04), lam(color));
+                    sign.position.y = 2.3;
+                    g.add(disc, pole, sign);
+                } else {
+                    // extintor: un cilindro rojo con su cabeza, colgado a la altura de la mano
+                    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.5, 12), lam(color));
+                    tank.position.y = 0.95;
+                    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.1, 10), lam(0x2a2f3d));
+                    head.position.y = 1.25;
+                    g.add(tank, head);
+                }
+                g.position.set(PX(ex), 0.08, PZ(ey));
+                group.safety.add(g);
             });
             // huellas (el lugar en el piso, capa «Huella-Espacio»): una losa delgada, blanca o con su color, debajo de sus activos
             (layout.footprints || []).forEach((f) => {
