@@ -189,6 +189,9 @@
         // clientTricolor interactivo: { reason(sectionId, itemId, submenuId) -> null | 'status' | 'contract' } (ver Dashboard.buildGrantLimits). Lo que no
         // se puede dar (fuera del contrato o en un Estatus que no ves) sale con candado en vez de casilla, y "marcar todo" lo salta. Sin esto, igual que siempre.
         grantLimits = null,
+        // Los centros de costos del cliente ({ id, code, name }[]): cada uno es una hoja de «Centros de Costo» dentro de General (llave main / cc-list / cc-<id>), igual que en el árbol de
+        // Roles (PermissionTree.js). Solo lo pasa la pantalla Usuarios; los árboles de planes y clientes no los llevan (un plan es siempre el árbol universal).
+        costCenters = [],
     } = {}) {
         let sectionsData = [];
         const classificationOverrides = new Map();
@@ -1599,7 +1602,11 @@
                                 }),
                             };
                         });
-                    return { ...s, items };
+                    // Los centros de costos se dan de alta por cliente (no están en menu.json): cada uno es una hoja con su texto «CÓDIGO - Nombre» (t() deja tal cual lo que no es una llave de idioma).
+                    const costCentersItem = costCenters.length
+                        ? { id: 'cc-list', labelKey: 'sidebar.costCenters', submenu: costCenters.map((cc) => ({ id: `cc-${cc.id}`, labelKey: `${cc.code} - ${cc.name}` })) }
+                        : null;
+                    return { ...s, items: costCentersItem ? [...items, costCentersItem] : items };
                 });
 
                 if (mode === 'clientTricolor' && visibleGrants) {
