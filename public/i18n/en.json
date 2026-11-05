@@ -4379,7 +4379,7 @@
       "example": "the warehouse is long and the sheet is portrait: you rotate the sketch a quarter turn and it fills the sheet better."
     },
     "layoutOpening": {
-      "what": "Shows or hides the space each door needs to open: the swing of the swinging doors (purple) and the travel of the sliding ones (blue). If something is in that space (an asset, a column, another wall or another door) it turns red and the Doors step lists it below; the warning does not stop you from saving. It shows on the sketch while the Doors step is on.",
+      "what": "Shows or hides the space each door needs to open: the swing of the swinging doors (purple) and the travel of the sliding ones (blue). If something is in that space (an asset, a column, another wall or another door) it turns red and the Doors step lists it below. A new clash cannot be saved: move the door or what is in the way, or change how it opens. Clashes that were already there are marked but do not block. It shows on the sketch while the Doors step is on.",
       "example": "a 1.5 m swinging door needs a 1.5 m quarter circle free: with this button you see it and move the rack before it gets in the way."
     },
     "layoutPuertaAbre": {

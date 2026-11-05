@@ -4378,7 +4378,7 @@
       "example": "la nave es larga y la hoja es vertical: giras el croquis un cuarto de vuelta y llena mejor la hoja."
     },
     "layoutOpening": {
-      "what": "Muestra u oculta el espacio que necesita cada puerta al abrir: el giro de la batiente (en morado) y el recorrido de la corrediza (en azul). Si algo choca con ese espacio (un activo, una columna, otra pared u otra puerta) se pinta en rojo y se avisa abajo del paso Puertas; el aviso no impide guardar. Se ve en el croquis con el paso Puertas encendido.",
+      "what": "Muestra u oculta el espacio que necesita cada puerta al abrir: el giro de la batiente (en morado) y el recorrido de la corrediza (en azul). Si algo choca con ese espacio (un activo, una columna, otra pared u otra puerta) se pinta en rojo y se avisa abajo del paso Puertas. Un choque nuevo no se puede guardar: hay que mover la puerta o lo que estorba, o cambiar cómo abre. Lo que ya estaba así antes se marca pero no bloquea. Se ve en el croquis con el paso Puertas encendido.",
       "example": "una puerta batiente de 1.5 m necesita un cuarto de círculo de 1.5 m libre: con este botón lo ves y mueves el anaquel antes de que estorbe."
     },
     "layoutPuertaAbre": {

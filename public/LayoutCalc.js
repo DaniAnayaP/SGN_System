@@ -414,8 +414,8 @@
         };
         return test(A) && test(B);
     }
-    // Avisos del espacio de apertura (blandos: NO impiden guardar, a diferencia de wallItemViolations): el giro o el recorrido de una puerta choca con un activo, una columna u otro obstáculo (no su propia pared), o con el espacio
-    // de apertura de otra puerta. Un aviso por puerta con todo lo que estorba (others) y otro por cada pareja de puertas que se encimen.
+    // Choques del espacio de apertura: el giro o el recorrido de una puerta choca con un activo, una columna u otro obstáculo (no su propia pared), o con el espacio de apertura de otra puerta. Un aviso por puerta con todo lo que
+    // estorba (others) y otro por cada pareja de puertas que se encimen. Se cuentan como las demás faltas de las puertas (newWallItemViolations): lo nuevo que choca no se guarda; lo que ya estaba así y no cambió solo se marca.
     function doorOpeningClashes(layout) {
         const out = [];
         if (!layout || !Array.isArray(layout.doors) || !layout.doors.length) return out;
@@ -430,7 +430,7 @@
         targets.forEach((t) => { t.box = boxOf(t.pts); });
         const eps = 0.02;
         items.forEach(({ d, o }, i) => {
-            const base = { id: d.id, list: 'doors', section: 'puertas', soft: true, kind: 'clash' };
+            const base = { id: d.id, list: 'doors', section: 'puertas', kind: 'clash' };
             const name = String(d.name || 'Puerta');
             const kindText = o.type === 'swing' ? 'giro' : 'recorrido';
             const box = boxOf(o.pts);
@@ -458,6 +458,9 @@
             const before = new Set((previous ? wallItemViolations(previous, list) : []).map(doorKey));
             wallItemViolations(next, list).forEach((v) => { if (!before.has(doorKey(v))) out.push(v); });
         });
+        // El espacio que necesita una puerta al abrir también cuenta: si choca con algo NUEVO (o lo que choca cambió) no se guarda.
+        const beforeClash = new Set((previous ? doorOpeningClashes(previous) : []).map(doorKey));
+        doorOpeningClashes(next).forEach((v) => { if (!beforeClash.has(doorKey(v))) out.push(v); });
         return out;
     }
     function newDoorViolations(next, previous) { return newWallItemViolations(next, previous).filter((v) => v.list === 'doors'); }
