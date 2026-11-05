@@ -98,6 +98,7 @@ function renderTable() {
         const tdReportsTo = document.createElement('td');
         tdReportsTo.dataset.col = 'ocReportsTo';
         const select = document.createElement('select');
+        select.className = 'data-table-select';
         const noneOpt = document.createElement('option');
         noneOpt.value = '';
         noneOpt.textContent = Dashboard.t('business.orgChartNoSupervisor');
