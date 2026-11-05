@@ -27,7 +27,7 @@
         const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-rrhh-mi-recurso-humano' });
         if (!role) return;
         renderNewRecordButton();
-        await Promise.all([loadCostCenters(), loadJobPositions(), loadHrStatusCatalog()]);
+        await Promise.all([loadCostCenters(), loadJobPositions(), loadHrStatusCatalog(), loadAssignmentOptions()]);
         await refreshTable();
     } catch (err) {
         console.error('Mi Recurso Humano failed to initialize:', err);
@@ -255,7 +255,7 @@ function ensureEmptyState() {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = 14;
+    td.colSpan = getTbody().closest('table').querySelectorAll('thead tr:last-child th').length || 14;
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');
@@ -312,31 +312,164 @@ function buildStatusCell(worker) {
     return td;
 }
 
-// Departamento(s) — plain, non-editable: always a live reflection of
-// whatever the worker's own Puesto grants in Roles (see
-// getJobPositionDepartments in db.js), never something picked by hand here
-// anymore. Editing it means editing the Puesto's tree in Roles instead.
-function buildDepartmentCell(worker) {
+// --- Asignación a laborar (clasificación de 3 columnas): dónde va a operar la persona, EN CADENA y de lo que el cliente tiene contratado ------------------
+// Departamentos -> Sitios -> Centros de costos. Cada una se puede dejar sin elegir, elegir uno, varios o TODOS; no hay sitios sin departamentos ni centros sin sitios, y los centros que salen son los de los sitios
+// elegidos. El servidor vuelve a revisar la cadena (resolveHrAssignment en db.js). Valores: null (sin asignar), 'all' o un arreglo (departamentos: claves; sitios: códigos de sitio; centros: ids).
+let assignmentOptions = { departments: [], sites: [], costCenters: [] };
+async function loadAssignmentOptions() {
+    try {
+        const res = await fetch('/api/business/hr-assignment-options', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        assignmentOptions = await res.json();
+    } catch (err) {
+        console.error('Mi Recurso Humano: failed to load the assignment options', err);
+        assignmentOptions = { departments: [], sites: [], costCenters: [] };
+    }
+}
+const ASSIGN_KINDS = {
+    departments: { col: 'colHrAsigDepartamentos', field: 'assignedDepartments', titleKey: 'main.hrAssignTitleDepartments', helpKey: 'hrAssignDepartments' },
+    sites: { col: 'colHrAsigSitios', field: 'assignedSites', titleKey: 'main.hrAssignTitleSites', helpKey: 'hrAssignSites' },
+    costCenters: { col: 'colHrAsigCentros', field: 'assignedCostCenters', titleKey: 'main.hrAssignTitleCenters', helpKey: 'hrAssignCenters' },
+};
+function assignOptionLabel(kind, value) {
+    if (kind === 'departments') return Dashboard.t(DEPARTMENT_LABEL_KEYS[value] || value);
+    if (kind === 'sites') {
+        const site = assignmentOptions.sites.find((x) => x.code === value);
+        return site ? `${site.code}${site.sucursal ? ` · ${site.sucursal}` : ''}` : String(value);
+    }
+    const center = assignmentOptions.costCenters.find((x) => x.id === value);
+    return center ? `${center.code} - ${center.name}` : String(value);
+}
+// Lo que se puede elegir en ese eslabón para esta persona: los departamentos contratados, los sitios del cliente y los centros de los sitios que ya tiene elegidos.
+function assignChoicesFor(kind, worker) {
+    if (kind === 'departments') return assignmentOptions.departments.map((value) => ({ value, label: assignOptionLabel(kind, value) }));
+    if (kind === 'sites') return assignmentOptions.sites.map((site) => ({ value: site.code, label: assignOptionLabel(kind, site.code) }));
+    const sites = worker.assignedSites;
+    return assignmentOptions.costCenters
+        .filter((cc) => sites === 'all' || (Array.isArray(sites) && sites.includes(cc.siteCode)))
+        .map((cc) => ({ value: cc.id, label: assignOptionLabel(kind, cc.id) }));
+}
+function assignSummary(kind, value) {
+    if (value === 'all') return Dashboard.t('main.hrAssignAll');
+    if (!Array.isArray(value) || !value.length) return '';
+    return value.map((v) => assignOptionLabel(kind, v)).join(', ');
+}
+function buildAssignmentCell(worker, kind) {
+    const meta = ASSIGN_KINDS[kind];
     const td = document.createElement('td');
-    td.dataset.col = 'colHrDepartment';
-    td.textContent = formatDepartments(worker.departments);
-    td.title = Dashboard.t('main.colHrDepartmentReflectsRole');
+    td.dataset.col = meta.col;
+    const summary = assignSummary(kind, worker[meta.field]);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-select data-table-select-btn';
+    btn.setAttribute('data-help-key', meta.helpKey);
+    btn.textContent = summary || Dashboard.t('main.hrAssignPick');
+    btn.classList.toggle('data-table-select-empty', !summary);
+    btn.title = summary || '';
+    btn.disabled = isPending(worker, meta.field) || !Dashboard.canEditField(TABLE_KEY, meta.col, summary);
+    if (btn.disabled) btn.title = Dashboard.t(isPending(worker, meta.field) ? 'main.changePending' : 'main.fieldLocked');
+    btn.addEventListener('click', () => openAssignModal(worker, kind));
+    td.appendChild(btn);
     return td;
 }
-
-// Centro de Costos — a real <select>, always live in the cell, same pattern
-// as Estatus/Tipo Combustible elsewhere in this app.
-function buildCostCenterCell(worker) {
-    const td = document.createElement('td');
-    td.dataset.col = 'colHrCostCenter';
-    const select = document.createElement('select');
-    select.className = 'editable-cell-select';
-    populateCostCenterSelect(select, worker.costCenterId);
-    select.disabled = isPending(worker, 'costCenterId') || !Dashboard.canEditField(TABLE_KEY, 'colHrCostCenter', worker.costCenterId ? String(worker.costCenterId) : '');
-    if (select.disabled) select.title = Dashboard.t(isPending(worker, 'costCenterId') ? 'main.changePending' : 'main.fieldLocked');
-    select.addEventListener('change', () => patchWorker(worker.id, { costCenterId: select.value ? Number(select.value) : null }));
-    td.appendChild(select);
-    return td;
+// Al cambiar un eslabón los de abajo se ajustan: sin departamentos no hay sitios ni centros; al quitar un sitio se quitan sus centros. Devuelve solo lo que cambia (mismo formato que el PATCH) y si se quitó algo que dependía.
+function buildAssignmentPatch(worker, kind, value) {
+    const current = { departments: worker.assignedDepartments, sites: worker.assignedSites, costCenters: worker.assignedCostCenters };
+    const next = { ...current, [kind]: value };
+    if (kind === 'departments' && !value) { next.sites = null; next.costCenters = null; }
+    if (kind === 'sites') {
+        if (!value) next.costCenters = null;
+        else if (Array.isArray(next.costCenters)) {
+            const allowed = new Set(assignmentOptions.costCenters.filter((cc) => value === 'all' || value.includes(cc.siteCode)).map((cc) => cc.id));
+            const kept = next.costCenters.filter((id) => allowed.has(id));
+            next.costCenters = kept.length ? kept : null;
+        }
+    }
+    const names = { departments: 'assignedDepartments', sites: 'assignedSites', costCenters: 'assignedCostCenters' };
+    const patch = {};
+    let removedDependent = false;
+    Object.keys(names).forEach((k) => {
+        if (JSON.stringify(next[k]) === JSON.stringify(current[k])) return;
+        patch[names[k]] = next[k];
+        if (k !== kind && current[k]) removedDependent = true;
+    });
+    return { patch, removedDependent };
+}
+let assignModalEl = null;
+function ensureAssignModal() {
+    if (assignModalEl) return assignModalEl;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.hidden = true;
+    overlay.innerHTML = '<div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="hr-assign-title"><h3 id="hr-assign-title"></h3><ul class="logout-mode-list" id="hr-assign-list"></ul>'
+        + '<div class="admin-form-actions" style="margin-top: 1.25rem;"><button type="button" class="btn" id="hr-assign-save"></button><button type="button" class="btn btn-secondary" id="hr-assign-cancel"></button></div></div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) overlay.hidden = true; });
+    overlay.querySelector('#hr-assign-cancel').addEventListener('click', () => { overlay.hidden = true; });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !overlay.hidden) overlay.hidden = true; });
+    assignModalEl = overlay;
+    return overlay;
+}
+function openAssignModal(worker, kind) {
+    const meta = ASSIGN_KINDS[kind];
+    if (kind === 'sites' && !worker.assignedDepartments) { Dashboard.showToast(Dashboard.t('main.hrAssignNeedDepartments'), 'warning'); return; }
+    if (kind === 'costCenters' && !worker.assignedSites) { Dashboard.showToast(Dashboard.t('main.hrAssignNeedSites'), 'warning'); return; }
+    const overlay = ensureAssignModal();
+    const choices = assignChoicesFor(kind, worker);
+    const current = worker[meta.field];
+    overlay.querySelector('#hr-assign-title').textContent = `${Dashboard.t(meta.titleKey)} — ${worker.fullName}`;
+    const list = overlay.querySelector('#hr-assign-list');
+    list.innerHTML = '';
+    const checkboxes = [];
+    let allBox = null;
+    const addRow = (label, checked, onChange) => {
+        const li = document.createElement('li');
+        const row = document.createElement('label');
+        row.className = 'logout-mode-option';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = checked;
+        box.addEventListener('change', onChange);
+        const span = document.createElement('span');
+        span.textContent = label;
+        row.append(box, span);
+        li.appendChild(row);
+        list.appendChild(li);
+        return box;
+    };
+    if (!choices.length) {
+        const empty = document.createElement('li');
+        empty.className = 'layout-muted';
+        empty.textContent = Dashboard.t('main.hrAssignNoOptions');
+        list.appendChild(empty);
+    } else {
+        allBox = addRow(Dashboard.t('main.hrAssignAll'), current === 'all' || (Array.isArray(current) && choices.every((c) => current.includes(c.value))), () => { checkboxes.forEach((b) => { b.checked = allBox.checked; }); });
+        choices.forEach((choice) => {
+            const box = addRow(choice.label, current === 'all' || (Array.isArray(current) && current.includes(choice.value)), () => { allBox.checked = checkboxes.every((b) => b.checked); });
+            box.dataset.value = String(choice.value);
+            checkboxes.push(box);
+        });
+    }
+    const saveBtn = overlay.querySelector('#hr-assign-save');
+    saveBtn.textContent = Dashboard.t('admin.save');
+    overlay.querySelector('#hr-assign-cancel').textContent = Dashboard.t('admin.cancel');
+    saveBtn.disabled = !choices.length;
+    saveBtn.onclick = async () => {
+        const picked = choices.filter((c, i) => checkboxes[i].checked).map((c) => c.value);
+        const value = picked.length && picked.length === choices.length ? 'all' : (picked.length ? picked : null);
+        const { patch, removedDependent } = buildAssignmentPatch(worker, kind, value);
+        if (!Object.keys(patch).length) { overlay.hidden = true; return; }
+        if (removedDependent && !(await Dashboard.confirm(Dashboard.t('main.hrAssignCascadeConfirm')))) return;
+        overlay.hidden = true;
+        await patchWorker(worker.id, patch);
+    };
+    overlay.hidden = false;
+}
+// Los departamentos de la persona para el filtro de la pantalla: los que se le asignaron (todos los contratados si es «todos») y, mientras no tenga asignación, los de su Puesto.
+function workerDepartments(worker) {
+    if (worker.assignedDepartments === 'all') return assignmentOptions.departments;
+    if (Array.isArray(worker.assignedDepartments)) return worker.assignedDepartments;
+    return worker.departments || [];
 }
 
 // Usuario / Estado de Usuario — the login account auto-created alongside
@@ -401,7 +534,7 @@ function buildRow(worker) {
 
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(worker.id);
-    tr.dataset.departments = JSON.stringify(worker.departments || []);
+    tr.dataset.departments = JSON.stringify(workerDepartments(worker));
     tr.dataset.hrStatusId = worker.hrStatusId ? String(worker.hrStatusId) : '';
     tr.append(
         ...buildSystemCells(worker),
@@ -410,9 +543,10 @@ function buildRow(worker) {
         textCell('colHrFullName', worker.fullName),
         textCell('colHrPosition', worker.position),
         textCell('colHrStartDate', `${pad(day)}/${pad(month)}/${year}`),
-        buildDepartmentCell(worker),
+        buildAssignmentCell(worker, 'departments'),
+        buildAssignmentCell(worker, 'sites'),
+        buildAssignmentCell(worker, 'costCenters'),
         tdArea,
-        buildCostCenterCell(worker),
         tdEmail,
         tdPersonalEmail,
         tdPhone,
@@ -427,7 +561,7 @@ function buildRow(worker) {
     // <select>/click-to-edit cell isn't disabled/locked.
     tr.classList.toggle(
         'data-table-row-editable',
-        !!tr.querySelector('td.editable-cell') || !!tr.querySelector('select:not(:disabled)'),
+        !!tr.querySelector('td.editable-cell') || !!tr.querySelector('select:not(:disabled)') || !!tr.querySelector('.data-table-select-btn:not(:disabled)'),
     );
     return tr;
 }

@@ -225,6 +225,11 @@ const {
     createHrWorker,
     activateHrWorkerUser,
     updateHrWorker,
+    parseHrAssignment,
+    serializeHrAssignment,
+    hrAssignmentOptions,
+    resolveHrAssignment,
+    describeHrAssignment,
     getTableChanges,
     getAllTableChanges,
     logTableChange,
@@ -9538,6 +9543,10 @@ function mapHrWorker(row, pendingByRecord, companyName) {
         // in Roles -- never the stored/manually-picked value anymore (see
         // getJobPositionDepartments), so it can't drift from the real tree.
         departments: getJobPositionDepartments(row.job_position_id),
+        // Asignación a laborar: null (sin asignar), 'all' o un arreglo (departamentos y sitios: sus claves; centros: sus ids).
+        assignedDepartments: parseHrAssignment(row.assigned_departments),
+        assignedSites: parseHrAssignment(row.assigned_sites),
+        assignedCostCenters: parseHrAssignment(row.assigned_cost_centers),
         costCenterId: row.cost_center_id,
         area: row.area,
         email: row.email,
@@ -9561,6 +9570,17 @@ function mapHrWorker(row, pendingByRecord, companyName) {
         }),
     };
 }
+
+// Lo que se puede elegir en «Asignación a laborar»: los departamentos contratados, los sitios y los centros de costos del cliente (cada centro con su sitio).
+app.get('/api/business/hr-assignment-options', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
+    res.json({
+        departments: options.departments,
+        sites: options.sites.map((code) => ({ code, sucursal: (options.centers.find((cc) => cc.site_code === code) || {}).sucursal || '' })),
+        costCenters: options.centers.map((cc) => ({ id: cc.id, code: cc.code, name: cc.name, siteCode: cc.site_code })),
+    });
+});
 
 app.get('/api/business/hr-workers', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -9593,8 +9613,23 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
     if (costCenterId != null && !getCostCenterById(costCenterId, req.user.clientId, req.user.isTestAccount)) {
         return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
     }
+    // Arranque de «Asignación a laborar»: el centro de costos que la da de alta, con su sitio y los departamentos de su Puesto que el cliente tiene contratados (si el Puesto no trae departamentos, todos los contratados). Si la cadena no cuadra se queda sin asignar.
+    let assignment = null;
+    if (costCenterId) {
+        const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
+        const positionDepartments = getJobPositionDepartments(jobPositionId).filter((key) => options.departments.includes(key));
+        const center = getCostCenterById(costCenterId, req.user.clientId, req.user.isTestAccount);
+        if (center && center.site_code) {
+            const resolved = resolveHrAssignment({
+                clientId: req.user.clientId, forTestAccount: req.user.isTestAccount, current: { departments: null, sites: null, costCenters: null },
+                patch: { departments: positionDepartments.length ? positionDepartments : 'all', sites: [center.site_code], costCenters: [center.id] },
+            });
+            if (resolved.ok) assignment = resolved.value;
+        }
+    }
     const worker = await createHrWorker({
         clientId: req.user.clientId,
+        assignment,
         givenNames: givenNames.trim(),
         surnames: surnames.trim(),
         position: position.trim(),
@@ -9626,7 +9661,25 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
         && !getHrStatusCatalogById(patch.hrStatusId, req.user.clientId, req.user.isTestAccount)) {
         return res.status(400).json({ message: 'hrStatusId does not belong to this client.' });
     }
-    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name);
+    // Asignación a laborar: la cadena (departamentos -> sitios -> centros de costos, de lo contratado) se revisa con lo que ya tenía la persona y se guarda como texto fijo para compararlo y para el historial.
+    const assignmentKeys = { assignedDepartments: 'departments', assignedSites: 'sites', assignedCostCenters: 'costCenters' };
+    if (Object.keys(assignmentKeys).some((key) => Object.prototype.hasOwnProperty.call(patch, key))) {
+        const resolved = resolveHrAssignment({
+            clientId: req.user.clientId, forTestAccount: req.user.isTestAccount,
+            current: { departments: parseHrAssignment(existing.assigned_departments), sites: parseHrAssignment(existing.assigned_sites), costCenters: parseHrAssignment(existing.assigned_cost_centers) },
+            patch: Object.fromEntries(Object.entries(assignmentKeys).filter(([key]) => Object.prototype.hasOwnProperty.call(patch, key)).map(([key, name]) => [name, patch[key]])),
+        });
+        if (!resolved.ok) return res.status(400).json({ message: resolved.message });
+        Object.entries(assignmentKeys).forEach(([key, name]) => {
+            if (Object.prototype.hasOwnProperty.call(patch, key)) patch[key] = serializeHrAssignment(resolved.value[name]);
+        });
+    }
+    const assignmentLog = {
+        assignedDepartments: (raw) => describeHrAssignment('departments', raw, req.user.clientId, req.user.isTestAccount),
+        assignedSites: (raw) => describeHrAssignment('sites', raw, req.user.clientId, req.user.isTestAccount),
+        assignedCostCenters: (raw) => describeHrAssignment('costCenters', raw, req.user.clientId, req.user.isTestAccount),
+    };
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name, assignmentLog);
     const worker = updateHrWorker(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     res.json({ worker: mapHrWorker(worker, null, getClientById(req.user.clientId)?.company_name), pendingFields, rejectedFields });
 });

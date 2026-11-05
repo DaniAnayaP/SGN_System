@@ -1883,12 +1883,18 @@
             { "id": "colHrFullName", "labelKey": "main.colHrFullName", "permissionOnly": true },
             { "id": "colHrPosition", "labelKey": "main.colHrPosition", "permissionOnly": true },
             { "id": "colHrStartDate", "labelKey": "main.colHrStartDate", "permissionOnly": true },
+            {
+              "id": "class-asignacion-laborar", "labelKey": "menu.classAsignacionLaborar", "isClassification": true,
+              "submenu": [
+                { "id": "colHrAsigDepartamentos", "labelKey": "main.colHrAsigDepartamentos", "permissionOnly": true },
+                { "id": "colHrAsigSitios", "labelKey": "main.colHrAsigSitios", "permissionOnly": true },
+                { "id": "colHrAsigCentros", "labelKey": "main.colHrAsigCentros", "permissionOnly": true }
+              ]
+            },
             { "id": "colHrArea", "labelKey": "main.colHrArea", "permissionOnly": true },
             { "id": "colHrEmail", "labelKey": "main.colHrEmail", "permissionOnly": true },
             { "id": "colHrPhone", "labelKey": "main.colHrPhone", "permissionOnly": true },
             { "id": "colHrStatus", "labelKey": "main.colHrStatus", "permissionOnly": true },
-            { "id": "colHrDepartment", "labelKey": "main.colHrDepartment", "permissionOnly": true },
-            { "id": "colHrCostCenter", "labelKey": "main.colHrCostCenter", "permissionOnly": true },
             { "id": "colHrUsername", "labelKey": "main.colHrUsername", "permissionOnly": true },
             { "id": "colHrUserStatus", "labelKey": "main.colHrUserStatus", "permissionOnly": true },
             {

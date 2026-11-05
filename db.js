@@ -2218,6 +2218,24 @@ if (!hrWorkerColumns.some((c) => c.name === 'hr_status_id')) {
         if (rescindedId) setWorkerHrStatus.run(rescindedId, clientId, 'inactive');
     });
 }
+// Asignación a laborar (Mi Recurso Humano): dónde va a operar cada persona, en cadena Departamentos -> Sitios -> Centros de costos (ver parseHrAssignment): '' = todavía sin asignar, 'all' = todos o un arreglo JSON.
+ensureColumn('hr_workers', 'assigned_departments', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('hr_workers', 'assigned_sites', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('hr_workers', 'assigned_cost_centers', "TEXT NOT NULL DEFAULT ''");
+db.exec('CREATE INDEX IF NOT EXISTS idx_hr_workers_user_id ON hr_workers(user_id)');
+// Una sola vez por persona: quien ya traía un centro de costos elegido lo conserva como su asignación (su sitio sale de ese centro y sus departamentos, de su Puesto). Sin sitio en el centro no hay cadena y se queda sin asignar.
+{
+    const pendingWorkers = db.prepare("SELECT id, cost_center_id, job_position_id FROM hr_workers WHERE assigned_departments = '' AND assigned_sites = '' AND assigned_cost_centers = '' AND cost_center_id IS NOT NULL").all();
+    const siteOfCenter = db.prepare('SELECT site_code FROM cost_centers WHERE id = ?');
+    const departmentsOfPosition = db.prepare("SELECT DISTINCT section_id AS sectionId FROM job_position_grants WHERE job_position_id = ? AND section_id != 'main'");
+    const saveAssignment = db.prepare('UPDATE hr_workers SET assigned_departments = ?, assigned_sites = ?, assigned_cost_centers = ? WHERE id = ?');
+    pendingWorkers.forEach((w) => {
+        const site = (siteOfCenter.get(w.cost_center_id) || {}).site_code;
+        if (!site) return;
+        const depts = w.job_position_id ? departmentsOfPosition.all(w.job_position_id).map((r) => r.sectionId) : [];
+        saveAssignment.run(depts.length ? JSON.stringify(depts.sort()) : 'all', JSON.stringify([site]), JSON.stringify([w.cost_center_id]), w.id);
+    });
+}
 
 // web_enabled/app_enabled added after master_permission_status shipped
 // twice already under two different (both superseded) shapes -- a
@@ -6568,7 +6586,7 @@ function generateUniqueCostCenterCode(clientId, baseCode, excludeId) {
 // from the table (that's the only place a real, usable password ever gets
 // issued). async because hashing can't happen inside db.transaction()
 // (must stay fully synchronous — see activateClient's own note above).
-async function createHrWorker({ clientId, givenNames, surnames, position, jobPositionId, startDate, costCenterId, email, personalEmail, isTestData = false }) {
+async function createHrWorker({ clientId, givenNames, surnames, position, jobPositionId, startDate, costCenterId, email, personalEmail, assignment = null, isTestData = false }) {
     const fullName = `${givenNames} ${surnames}`.replace(/\s+/g, ' ').trim();
     const username = generateUniqueUsername(computeHrUsername(givenNames, surnames));
     const passwordHash = await hashPassword(generateRandomPassword());
@@ -6590,11 +6608,13 @@ async function createHrWorker({ clientId, givenNames, surnames, position, jobPos
             .prepare(`
                 INSERT INTO hr_workers (
                     client_id, db_id, record_number, record_code, given_names, surnames, full_name,
-                    position, job_position_id, start_date, department, departments, cost_center_id, email, personal_email, user_id, hr_status_id, is_test_data
+                    position, job_position_id, start_date, department, departments, cost_center_id, email, personal_email, user_id, hr_status_id, is_test_data,
+                    assigned_departments, assigned_sites, assigned_cost_centers
                 )
                 VALUES (
                     @clientId, @dbId, @recordNumber, @recordCode, @givenNames, @surnames, @fullName,
-                    @position, @jobPositionId, @startDate, @department, @departments, @costCenterId, @email, @personalEmail, @userId, @hrStatusId, @isTestData
+                    @position, @jobPositionId, @startDate, @department, @departments, @costCenterId, @email, @personalEmail, @userId, @hrStatusId, @isTestData,
+                    @assignedDepartments, @assignedSites, @assignedCostCenters
                 )
             `)
             .run({
@@ -6610,6 +6630,9 @@ async function createHrWorker({ clientId, givenNames, surnames, position, jobPos
                 departments: '[]',
                 costCenterId: costCenterId || null, email, userId: user.id, hrStatusId: activeHrStatusId,
                 isTestData: isTestData ? 1 : 0,
+                assignedDepartments: serializeHrAssignment(assignment && assignment.departments),
+                assignedSites: serializeHrAssignment(assignment && assignment.sites),
+                assignedCostCenters: serializeHrAssignment(assignment && assignment.costCenters),
             });
         return result.lastInsertRowid;
     });
@@ -6634,6 +6657,82 @@ async function activateHrWorkerUser(workerId, clientId, forTestAccount = false) 
     return { username: user.username, password };
 }
 
+// --- Asignación a laborar ----------------------------------------------------------------------------------------------------------------------------
+// Dónde va a operar una persona, en cadena y de lo que el cliente tiene contratado: Departamentos -> Sitios -> Centros de costos. El orden de llenado manda: no hay sitios sin departamentos ni centros sin sitios, y un centro solo
+// puede ser de un sitio elegido. Un sitio es el «código del sitio» de un centro de costos (cost_centers.site_code). Cada uno se puede dejar sin elegir, elegir uno, varios o TODOS ('all': todos los que el cliente tenga).
+const HR_DEPARTMENT_KEYS = MODULE_CATALOG.filter((m) => String(m.labelKey).startsWith('menu.')).map((m) => m.key);
+const HR_DEPARTMENT_NAMES_ES = {
+    'steering-committee': 'Comité Directivo', 'general-management': 'Dirección General', 'management-control': 'Control de Gestión', 'supply-chain': 'Cadena de Suministro', purchasing: 'Compras', commercial: 'Comercial',
+    marketing: 'Mercadotecnia', 'human-resources': 'Recursos Humanos', accounting: 'Contabilidad', finance: 'Finanzas', certifications: 'Certificaciones', 'information-technology': 'Tecnologías de la Información',
+};
+// Lo guardado: '' = sin asignar todavía (null), 'all' = todos, o un arreglo JSON (departamentos y sitios: sus claves; centros: sus ids).
+function parseHrAssignment(raw) {
+    if (!raw) return null;
+    if (raw === 'all') return 'all';
+    try {
+        const list = JSON.parse(raw);
+        return Array.isArray(list) && list.length ? list : null;
+    } catch {
+        return null;
+    }
+}
+// Siempre el mismo texto para lo mismo (arreglo ordenado): así el historial y la comparación no ven un cambio donde no lo hay.
+function serializeHrAssignment(value) {
+    if (value === 'all') return 'all';
+    if (Array.isArray(value) && value.length) return JSON.stringify([...value].sort((a, b) => (typeof a === 'number' ? a - b : String(a).localeCompare(String(b)))));
+    return '';
+}
+// Lo que el cliente tiene para elegir: los departamentos contratados, los centros de costos activos que ya traen su sitio y los sitios (uno por código de sitio).
+function hrAssignmentOptions(clientId, forTestAccount = false) {
+    const contracted = new Set(getClientModuleKeys(clientId));
+    const centers = listCostCenters(clientId, forTestAccount).filter((cc) => cc.status === 'active' && cc.site_code);
+    return {
+        departments: HR_DEPARTMENT_KEYS.filter((key) => contracted.has(key)),
+        sites: [...new Set(centers.map((cc) => cc.site_code))],
+        centers,
+    };
+}
+// Revisa la cadena con lo que ya había (current) y lo que llega (patch: departments, sites, costCenters; cada uno null, 'all' o un arreglo). Devuelve { ok: true, value } con los tres valores resultantes o { ok: false, message }.
+// No quita nada solo: quien cambia un eslabón manda también los de abajo ya ajustados.
+function resolveHrAssignment({ clientId, forTestAccount = false, current, patch }) {
+    const options = hrAssignmentOptions(clientId, forTestAccount);
+    const has = (key) => Object.prototype.hasOwnProperty.call(patch, key);
+    const clean = (value, numeric) => {
+        if (value === undefined || value === null || value === '') return null;
+        if (value === 'all') return 'all';
+        if (!Array.isArray(value)) return undefined;
+        const list = [...new Set(value.map((x) => (numeric ? Number(x) : String(x))))];
+        if (numeric && list.some((x) => !Number.isInteger(x))) return undefined;
+        return list.length ? list : null;
+    };
+    const departments = has('departments') ? clean(patch.departments, false) : current.departments;
+    const sites = has('sites') ? clean(patch.sites, false) : current.sites;
+    const costCenters = has('costCenters') ? clean(patch.costCenters, true) : current.costCenters;
+    if (departments === undefined || sites === undefined || costCenters === undefined) return { ok: false, message: 'La asignación no tiene un formato válido.' };
+    if (has('departments') && Array.isArray(departments) && departments.some((d) => !options.departments.includes(d))) {
+        return { ok: false, message: 'Hay departamentos que el cliente no tiene contratados.' };
+    }
+    if (sites && !departments) return { ok: false, message: 'Primero elige los departamentos: sin departamentos no hay sitios.' };
+    if (has('sites') && Array.isArray(sites) && sites.some((site) => !options.sites.includes(site))) {
+        return { ok: false, message: 'Hay sitios que el cliente no tiene.' };
+    }
+    if (costCenters && !sites) return { ok: false, message: 'Primero elige los sitios: sin sitios no hay centros de costos.' };
+    if ((has('sites') || has('costCenters')) && Array.isArray(costCenters)) {
+        const allowed = new Set(options.centers.filter((cc) => sites === 'all' || sites.includes(cc.site_code)).map((cc) => cc.id));
+        if (costCenters.some((id) => !allowed.has(id))) return { ok: false, message: 'Hay centros de costos que no son de los sitios elegidos.' };
+    }
+    return { ok: true, value: { departments, sites, costCenters } };
+}
+// Para el historial de cambios y los avisos: lo guardado, escrito con nombres.
+function describeHrAssignment(kind, raw, clientId, forTestAccount = false) {
+    const value = parseHrAssignment(raw);
+    if (value === null) return '—';
+    if (value === 'all') return 'Todos';
+    if (kind === 'departments') return value.map((key) => HR_DEPARTMENT_NAMES_ES[key] || key).join(', ');
+    if (kind === 'sites') return value.join(', ');
+    return value.map((id) => { const cc = getCostCenterById(id, clientId, forTestAccount); return cc ? `${cc.code} - ${cc.name}` : String(id); }).join(', ');
+}
+
 const HR_WORKER_PATCHABLE_FIELDS = {
     area: { column: 'area', fieldKey: 'main.colHrArea' },
     email: { column: 'email', fieldKey: 'main.colHrEmail' },
@@ -6641,6 +6740,10 @@ const HR_WORKER_PATCHABLE_FIELDS = {
     phone: { column: 'phone', fieldKey: 'main.colHrPhone' },
     hrStatusId: { column: 'hr_status_id', fieldKey: 'main.colHrStatus' },
     costCenterId: { column: 'cost_center_id', fieldKey: 'main.colHrCostCenter' },
+    // Asignación a laborar (clasificación del mismo nombre en el árbol): cada una es una columna de selección (ninguno, uno, varios o todos).
+    assignedDepartments: { column: 'assigned_departments', fieldKey: 'main.colHrAsigDepartamentos' },
+    assignedSites: { column: 'assigned_sites', fieldKey: 'main.colHrAsigSitios' },
+    assignedCostCenters: { column: 'assigned_cost_centers', fieldKey: 'main.colHrAsigCentros' },
 };
 
 function updateHrWorker(id, clientId, patch, forTestAccount = false) {
@@ -11704,6 +11807,12 @@ module.exports = {
     computeHrUsername,
     activateHrWorkerUser,
     updateHrWorker,
+    HR_DEPARTMENT_KEYS,
+    parseHrAssignment,
+    serializeHrAssignment,
+    hrAssignmentOptions,
+    resolveHrAssignment,
+    describeHrAssignment,
     listPlans,
     getPlanById,
     getPlanByName,

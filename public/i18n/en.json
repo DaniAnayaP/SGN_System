@@ -90,6 +90,7 @@
     "classControlInterno": "Internal Control",
     "classPorDefinir": "To Be Classified",
     "classBotones": "Buttons",
+    "classAsignacionLaborar": "Work assignment",
     "classAcciones": "Actions",
     "classNone": "Not classified",
     "iconsPersonalization": "Icon Customization",
@@ -3172,6 +3173,20 @@
     "colHrDepartmentReflectsRole": "Computed from the assigned Puesto de Trabajo — to change it, edit that Puesto's tree in Roles.",
     "colHrArea": "Assigned Area",
     "colHrCostCenter": "Cost Center",
+    "colHrAsigDepartamentos": "Departments",
+    "colHrAsigSitios": "Sites",
+    "colHrAsigCentros": "Cost Centers",
+    "classAsignacionLaborarDesc": "Where the person will operate, in a chain: departments, sites and cost centers, from what the client has contracted.",
+    "hrAssignAll": "All",
+    "hrAssignPick": "+ Choose",
+    "hrAssignTitleDepartments": "Departments where they will operate",
+    "hrAssignTitleSites": "Sites where they will operate",
+    "hrAssignTitleCenters": "Cost centers where they will operate",
+    "hrAssignNeedDepartments": "Choose the departments where they will operate first.",
+    "hrAssignNeedSites": "Choose the sites where they will operate first.",
+    "hrAssignNoOptions": "Nothing is contracted to choose from here.",
+    "hrAssignCascadeConfirm": "Changing this also removes what depended on it (sites and cost centers). Continue?",
+    "hrNewRecordCostCenter": "Cost center that registers them",
     "colHrEmail": "Email",
     "colHrPersonalEmail": "Personal Email",
     "hrPersonalEmailHint": "Used to send the login password when a new hire can't check their work email yet.",
@@ -3508,6 +3523,18 @@
     "uiScaleDefault": {
       "what": "You choose the size your user opens with every time you enter the system.",
       "example": "if reading is hard, you pick 120% and from the next time everything opens bigger; with 100% (Ideal) it opens as it comes by default."
+    },
+    "hrAssignDepartments": {
+      "what": "You choose which departments this person will work in: one, several or all the ones your company has contracted.",
+      "example": "if your company has Supply Chain and Finance, you can tick only Supply Chain."
+    },
+    "hrAssignSites": {
+      "what": "You choose which sites this person will work at: one, several or all. It can only be done after choosing the departments.",
+      "example": "you tick the Chihuahua site and not the Puebla one."
+    },
+    "hrAssignCenters": {
+      "what": "You choose which cost centers this person will operate in: one, several or all. Only the centers of the sites you already chose appear.",
+      "example": "if you chose the Chihuahua site, only the Chihuahua cost center appears here."
     },
     "settings": {
       "what": "This is where you change how the system looks and behaves for you: language, colors, and other options.",

@@ -88,6 +88,8 @@
         --user-bg-color: #FAFAFC;
         --color-column-system-bg: #EEF2F6;
         --color-column-system-band-bg: #DCE6ED;
+        --color-assign-band-bg: #D6EBDD;
+        --color-assign-band-text: #1F4D3A;
         --color-column-system-text: #3F4E5C;
         --color-table-band-fuel-bg: #E3ECF9;
         --color-table-band-fuel-band-bg: #CBDCF2;
@@ -118,6 +120,8 @@
         --user-bg-color: #FAFAFC;
         --color-column-system-bg: #202B34;
         --color-column-system-band-bg: #2B3A46;
+        --color-assign-band-bg: #23402F;
+        --color-assign-band-text: #BFE3D2;
         --color-column-system-text: #AFC4D3;
         --color-table-band-fuel-bg: #24344A;
         --color-table-band-fuel-band-bg: #2E4360;
@@ -149,6 +153,8 @@
         --user-bg-color: #12141f;
         --color-column-system-bg: #1A1F3A;
         --color-column-system-band-bg: #2C3566;
+        --color-assign-band-bg: #1C3F36;
+        --color-assign-band-text: #B8EBD9;
         --color-column-system-text: #D3D9FC;
         --color-table-band-fuel-bg: #142A3A;
         --color-table-band-fuel-band-bg: #20475F;
@@ -180,6 +186,8 @@
         --user-bg-color: var(--institutional-surface, #FAFAFC);
         --color-column-system-bg: #EEF2F6;
         --color-column-system-band-bg: #DCE6ED;
+        --color-assign-band-bg: #D6EBDD;
+        --color-assign-band-text: #1F4D3A;
         --color-column-system-text: #3F4E5C;
         --color-table-band-fuel-bg: #E3ECF9;
         --color-table-band-fuel-band-bg: #CBDCF2;
@@ -2917,6 +2925,16 @@
         text-overflow: ellipsis;
         transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
+    /* El mismo diseño en un botón (celdas de selección múltiple, como las de «Asignación a laborar»): el texto va a la izquierda y se corta con puntos suspensivos. */
+    .data-table-select-btn{
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .data-table-select-empty{
+        color: var(--color-text-secondary);
+        font-style: italic;
+    }
     .data-table-select:hover{
         border-color: var(--color-text-primary);
     }
@@ -3051,6 +3069,12 @@
        data-group-table attribute. Control Interno reuses its existing
        purple since it's the same concept either way; each real pantalla
        gets its own tone as it's added here. */
+    /* Asignación a laborar (Mi Recurso Humano): su banda lleva su propio tono; se pinta con el nombre del texto o con el id de la clasificación, según ya haya llegado lo del servidor. */
+    .data-table-group-band-classification th[data-group-key="menu.classAsignacionLaborar"],
+    .data-table-group-band-classification th[data-group-key="class-asignacion-laborar"]{
+        background-color: var(--color-assign-band-bg);
+        color: var(--color-assign-band-text);
+    }
     .data-table-group-band-table th[data-group-key="menu.classControlInterno"]{
         background-color: var(--color-column-system-band-bg);
         color: var(--color-column-system-text);

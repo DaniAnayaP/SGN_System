@@ -90,6 +90,7 @@
     "classControlInterno": "Control Interno",
     "classPorDefinir": "Por Definir Clasificación",
     "classBotones": "Botones",
+    "classAsignacionLaborar": "Asignación a laborar",
     "classAcciones": "Acciones",
     "classNone": "Por clasificar",
     "iconsPersonalization": "Iconos Personalización",
@@ -3171,6 +3172,20 @@
     "colHrDepartmentReflectsRole": "Se calcula del Puesto de Trabajo asignado — para cambiarlo, edita el árbol del Puesto en Roles.",
     "colHrArea": "Área Asignada",
     "colHrCostCenter": "Centro de Costos",
+    "colHrAsigDepartamentos": "Departamentos",
+    "colHrAsigSitios": "Sitios",
+    "colHrAsigCentros": "Centros de Costos",
+    "classAsignacionLaborarDesc": "Dónde va a operar la persona, en cadena: departamentos, sitios y centros de costos, de lo que el cliente tiene contratado.",
+    "hrAssignAll": "Todos",
+    "hrAssignPick": "+ Elegir",
+    "hrAssignTitleDepartments": "Departamentos donde va a operar",
+    "hrAssignTitleSites": "Sitios donde va a operar",
+    "hrAssignTitleCenters": "Centros de costos donde va a operar",
+    "hrAssignNeedDepartments": "Primero elige los departamentos donde va a operar.",
+    "hrAssignNeedSites": "Primero elige los sitios donde va a operar.",
+    "hrAssignNoOptions": "No hay nada contratado para elegir aquí.",
+    "hrAssignCascadeConfirm": "Al cambiar esto también se quita lo que dependía de ello (sitios y centros de costos). ¿Continuar?",
+    "hrNewRecordCostCenter": "Centro de costos que lo da de alta",
     "colHrEmail": "Correo Electrónico",
     "colHrPersonalEmail": "Correo Personal",
     "hrPersonalEmailHint": "Se usa para enviar la contraseña de acceso cuando el trabajador todavía no puede revisar su correo de trabajo.",
@@ -3507,6 +3522,18 @@
     "uiScaleDefault": {
       "what": "Eliges con qué tamaño se abre tu usuario cada vez que entras al sistema.",
       "example": "si te cuesta leer, eliges 120% y desde la próxima vez todo se abre más grande; con 100% (Ideal) se abre como viene de fábrica."
+    },
+    "hrAssignDepartments": {
+      "what": "Eliges en qué departamentos va a trabajar esta persona: uno, varios o todos los que tu empresa tiene contratados.",
+      "example": "si tu empresa tiene Cadena de Suministro y Finanzas, puedes marcar solo Cadena de Suministro."
+    },
+    "hrAssignSites": {
+      "what": "Eliges en qué sitios va a trabajar esta persona: uno, varios o todos. Solo se puede después de elegir los departamentos.",
+      "example": "marcas el sitio de Chihuahua y no el de Puebla."
+    },
+    "hrAssignCenters": {
+      "what": "Eliges en qué centros de costos va a operar esta persona: uno, varios o todos. Solo salen los centros de los sitios que ya elegiste.",
+      "example": "si elegiste el sitio de Chihuahua, aquí solo aparece el centro de costos de Chihuahua."
     },
     "settings": {
       "what": "Aquí cambias cómo se ve y se comporta el sistema para ti: idioma, colores, y otras opciones.",
