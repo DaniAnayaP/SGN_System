@@ -1135,6 +1135,8 @@ const ALWAYS_VISIBLE_SECTIONS = ['main'];
 // nothing breaks before that fetch resolves; admin/GEIPSA never shows the
 // picker at all, so it's simply never narrowed for that role.
 let availableDepartments = DEPARTMENTS;
+// Los departamentos que la persona tiene asignados (Mi Recurso Humano > Lo que hace) pero que su Puesto todavía no le da: el selector los muestra bloqueados, con su motivo, en vez de esconderlos.
+let lockedDepartments = [];
 // Raw contracted-module keys (departments + top-bar buttons), kept around
 // after initDashboard() loads them so syncTopBarButtonVisibility() can
 // re-check it without needing its own fetch.
@@ -10868,12 +10870,35 @@ function renderDeptPickerOptions() {
         li.appendChild(btn);
         deptPickerDropdown.appendChild(li);
     });
+    // Asignados pero sin permisos: se ven apagados, con el motivo a la vista, y no se pueden elegir.
+    lockedDepartments.forEach((dept) => {
+        const li = document.createElement('li');
+        li.setAttribute('role', 'none');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('role', 'menuitem');
+        btn.className = 'dept-option dept-option-locked';
+        btn.setAttribute('aria-disabled', 'true');
+        btn.dataset.dept = dept.key;
+        btn.title = t('sidebar.deptNoPermissionHint');
+        const icon = document.createElement('i');
+        icon.className = 'bx bx-lock-alt';
+        icon.setAttribute('aria-hidden', 'true');
+        const span = document.createElement('span');
+        span.textContent = t(dept.labelKey);
+        const tag = document.createElement('span');
+        tag.className = 'dept-option-lock-tag';
+        tag.textContent = t('sidebar.deptNoPermission');
+        btn.append(icon, span, tag);
+        li.appendChild(btn);
+        deptPickerDropdown.appendChild(li);
+    });
 }
 renderDeptPickerOptions();
 
 deptPickerDropdown?.addEventListener('click', (event) => {
     const btn = event.target.closest('.dept-option');
-    if (!btn) return;
+    if (!btn || btn.classList.contains('dept-option-locked')) return;
     selectedDepartment = selectedDepartment === btn.dataset.dept ? null : btn.dataset.dept;
     localStorage.setItem('department', selectedDepartment || '');
     // A department's areas are a different list than the previous one's, so
@@ -12465,6 +12490,14 @@ async function initDashboardInner({ activePage } = {}) {
             }
         }
         availableDepartments = orderByIds(availableDepartments, cascadedOrder && cascadedOrder.departmentOrder, (d) => d.key);
+        // Los asignados a la persona que su Puesto todavía no le da (solo cuentas de usuario con asignación; el administrador del cliente no).
+        lockedDepartments = [];
+        const assignedDepartments = isUnrestrictedClientAdmin() ? null : (cachedBusinessProfile?.hrAssignment || {}).departments;
+        if (assignedDepartments) {
+            const pool = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key) && isEstatusVisible(d.key, null, null)
+                && (assignedDepartments === 'all' || assignedDepartments.includes(d.key)) && !availableDepartments.some((a) => a.key === d.key));
+            lockedDepartments = orderByIds(pool, cascadedOrder && cascadedOrder.departmentOrder, (d) => d.key);
+        }
         if (!availableDepartments.some((d) => d.key === selectedDepartment)) {
             selectedDepartment = availableDepartments.length === 1 ? availableDepartments[0].key : null;
             localStorage.setItem('department', selectedDepartment || '');
@@ -12504,7 +12537,7 @@ async function initDashboardInner({ activePage } = {}) {
     // itself shouldn't even be offered. Clients with 0 or 1 contracted
     // departments don't need to pick either — there's nothing to choose.
     document.getElementById('dept-picker')?.classList.toggle(
-        'dept-picker-disabled', role === 'admin' || availableDepartments.length <= 1
+        'dept-picker-disabled', role === 'admin' || availableDepartments.length + lockedDepartments.length <= 1
     );
     if (role === 'admin') {
         document.getElementById('area-picker')?.classList.add('dept-picker-disabled');

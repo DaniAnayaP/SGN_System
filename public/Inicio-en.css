@@ -476,6 +476,23 @@
         flex-shrink: 0;
         font-size: 0.95rem;
     }
+    /* Departamento asignado pero sin permisos de su Puesto: apagado, con el motivo a la vista. */
+    .dept-picker-dropdown .dept-option-locked{
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    .dept-picker-dropdown .dept-option-locked:hover{
+        background-color: transparent;
+        color: var(--color-text-secondary);
+    }
+    .dept-picker-dropdown .dept-option-lock-tag{
+        margin-left: auto;
+        padding: 0 0.5rem;
+        border: 1px dashed var(--color-text-secondary);
+        border-radius: 999px;
+        font-size: 0.64rem;
+        font-weight: 700;
+    }
     .dept-picker-dropdown .dept-option span{
         overflow: hidden;
         text-overflow: ellipsis;

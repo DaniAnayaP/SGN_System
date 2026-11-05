@@ -80,6 +80,8 @@
     "costCentersAll": "Todos los centros de costo",
     "costCentersAllCount": "Todos ({count})",
     "costCentersNone": "Ninguno seleccionado",
+    "deptNoPermission": "Sin permisos",
+    "deptNoPermissionHint": "Lo tienes asignado, pero tu Puesto todavía no te da permisos en este departamento.",
     "costCentersSelectedCount": "Varios ({count})"
   },
   "menu": {

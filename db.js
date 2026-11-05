@@ -11274,8 +11274,11 @@ function getUserBusinessProfileById(id) {
     // getClientAdminContractGrants). Para cualquier otra cuenta va vacía.
     const account = db.prepare('SELECT client_id AS clientId, is_client_admin AS isClientAdmin FROM users WHERE id = ?').get(id);
     const contractGrants = account && account.clientId && account.isClientAdmin && effectiveGrants.length === 0 ? getClientAdminContractGrants(account.clientId) : [];
+    // Los departamentos de su «Asignación a laborar» (null = sin asignación; 'all' o la lista): el selector de departamentos muestra bloqueados los asignados que su Puesto todavía no le da.
+    const hrAssignment = account && account.clientId && !account.isClientAdmin ? hrWorkerAssignmentOf(id) : null;
     return {
         ...user,
+        hrAssignment: hrAssignment ? { departments: hrAssignment.departments } : null,
         profileNames: jobPosition ? [jobPosition.name] : [],
         effectiveGrants,
         contractGrants,
