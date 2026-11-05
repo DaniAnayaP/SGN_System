@@ -90,6 +90,8 @@
         --color-column-system-band-bg: #DCE6ED;
         --color-assign-band-bg: #D6EBDD;
         --color-assign-band-text: #1F4D3A;
+        --color-do-band-bg: #DCE3F6;
+        --color-do-band-text: #2B3A73;
         --color-column-system-text: #3F4E5C;
         --color-table-band-fuel-bg: #E3ECF9;
         --color-table-band-fuel-band-bg: #CBDCF2;
@@ -122,6 +124,8 @@
         --color-column-system-band-bg: #2B3A46;
         --color-assign-band-bg: #23402F;
         --color-assign-band-text: #BFE3D2;
+        --color-do-band-bg: #2A3150;
+        --color-do-band-text: #C9D2F5;
         --color-column-system-text: #AFC4D3;
         --color-table-band-fuel-bg: #24344A;
         --color-table-band-fuel-band-bg: #2E4360;
@@ -155,6 +159,8 @@
         --color-column-system-band-bg: #2C3566;
         --color-assign-band-bg: #1C3F36;
         --color-assign-band-text: #B8EBD9;
+        --color-do-band-bg: #2E2A5E;
+        --color-do-band-text: #D9D3FC;
         --color-column-system-text: #D3D9FC;
         --color-table-band-fuel-bg: #142A3A;
         --color-table-band-fuel-band-bg: #20475F;
@@ -188,6 +194,8 @@
         --color-column-system-band-bg: #DCE6ED;
         --color-assign-band-bg: #D6EBDD;
         --color-assign-band-text: #1F4D3A;
+        --color-do-band-bg: #DCE3F6;
+        --color-do-band-text: #2B3A73;
         --color-column-system-text: #3F4E5C;
         --color-table-band-fuel-bg: #E3ECF9;
         --color-table-band-fuel-band-bg: #CBDCF2;
@@ -3085,11 +3093,16 @@
        data-group-table attribute. Control Interno reuses its existing
        purple since it's the same concept either way; each real pantalla
        gets its own tone as it's added here. */
-    /* Asignación a laborar (Mi Recurso Humano): su banda lleva su propio tono; se pinta con el nombre del texto o con el id de la clasificación, según ya haya llegado lo del servidor. */
-    .data-table-group-band-classification th[data-group-key="menu.classAsignacionLaborar"],
+    /* Mi Recurso Humano: «Dónde trabaja» (Sitios y Centros de costos) y «Lo que hace» (Departamentos y Áreas) llevan cada una su propio tono; se pintan con el nombre del texto o con el id de la clasificación, según ya haya llegado lo del servidor. */
+    .data-table-group-band-classification th[data-group-key="menu.classDondeTrabaja"],
     .data-table-group-band-classification th[data-group-key="class-asignacion-laborar"]{
         background-color: var(--color-assign-band-bg);
         color: var(--color-assign-band-text);
+    }
+    .data-table-group-band-classification th[data-group-key="menu.classLoQueHace"],
+    .data-table-group-band-classification th[data-group-key="class-lo-que-hace"]{
+        background-color: var(--color-do-band-bg);
+        color: var(--color-do-band-text);
     }
     .data-table-group-band-table th[data-group-key="menu.classControlInterno"]{
         background-color: var(--color-column-system-band-bg);

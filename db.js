@@ -2222,6 +2222,24 @@ if (!hrWorkerColumns.some((c) => c.name === 'hr_status_id')) {
 ensureColumn('hr_workers', 'assigned_departments', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('hr_workers', 'assigned_sites', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('hr_workers', 'assigned_cost_centers', "TEXT NOT NULL DEFAULT ''");
+// Áreas de los departamentos elegidos ('' = todavía sin elegir = sin límite de áreas, 'all' o un arreglo JSON de «departamento/área»).
+ensureColumn('hr_workers', 'assigned_areas', "TEXT NOT NULL DEFAULT ''");
+// Mi Recurso Humano pasa a dos clasificaciones: «Lo que hace» (Departamentos y Áreas) y «Dónde trabaja» (Sitios y Centros; conserva el id class-asignacion-laborar). La columna Departamentos cambia de clasificación y
+// la llave de cada permiso guardado lleva la clasificación en su ruta: se reescribe en todas las tablas que guardan llaves (permisos, costos, estatus, historial) para que nadie pierda lo ya dado. Se puede repetir sin efecto.
+{
+    const oldPath = 'class-asignacion-laborar/colHrAsigDepartamentos';
+    const newPath = 'class-lo-que-hace/colHrAsigDepartamentos';
+    const keyTables = [
+        ['job_position_grants', 'submenu_id'], ['profile_grants', 'submenu_id'], ['user_grants', 'submenu_id'], ['plan_grants', 'submenu_id'], ['sector_grants', 'submenu_id'],
+        ['client_permission_grants', 'submenu_id'], ['master_permission_status', 'submenu_id'], ['master_permission_cost', 'submenu_id'], ['plan_permission_costs', 'submenu_id'],
+        ['sector_permission_cost_adjust', 'submenu_id'], ['plan_permission_cost_adjust', 'submenu_id'],
+        ['master_permission_classification_overrides', 'node_key'], ['master_permission_change_log', 'node_key'], ['saas_classification_overrides', 'node_key'], ['saas_master_change_log', 'node_key'],
+        ['client_permission_change_log', 'node_key'], ['user_grant_change_log', 'node_key'], ['classification_level_overrides', 'node_key'],
+    ];
+    for (const [table, column] of keyTables) {
+        try { db.prepare(`UPDATE OR IGNORE ${table} SET ${column} = REPLACE(${column}, ?, ?) WHERE ${column} LIKE ?`).run(oldPath, newPath, `%${oldPath}%`); } catch { /* la tabla todavía no existe: no hay nada que mover */ }
+    }
+}
 db.exec('CREATE INDEX IF NOT EXISTS idx_hr_workers_user_id ON hr_workers(user_id)');
 // Una sola vez por persona: quien ya traía un centro de costos elegido lo conserva como su asignación (su sitio sale de ese centro y sus departamentos, de su Puesto). Sin sitio en el centro no hay cadena y se queda sin asignar.
 {
@@ -6697,11 +6715,38 @@ function serializeHrAssignment(value) {
     return '';
 }
 // Lo que el cliente tiene para elegir: los departamentos contratados, los centros de costos activos que ya traen su sitio y los sitios (uno por código de sitio).
+// Las áreas de cada departamento (public/data/menu.json, «areas»); un departamento sin catálogo propio lleva las 3 genéricas del árbol (area-1 a area-3). Cada área es { id, labelKey, labelParams? }; en lo guardado va como «departamento/área» (los ids genéricos se repiten entre departamentos).
+let hrAreaCatalogCache = null;
+function hrAreaCatalog() {
+    if (hrAreaCatalogCache) return hrAreaCatalogCache;
+    let areas = {};
+    try { areas = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'data', 'menu.json'), 'utf8')).areas || {}; } catch { areas = {}; }
+    hrAreaCatalogCache = {};
+    HR_DEPARTMENT_KEYS.forEach((dept) => {
+        hrAreaCatalogCache[dept] = Array.isArray(areas[dept]) && areas[dept].length
+            ? areas[dept].map((a) => ({ id: a.id, labelKey: a.labelKey, ...(a.labelParams ? { labelParams: a.labelParams } : {}) }))
+            : [1, 2, 3].map((n) => ({ id: `area-${n}`, labelKey: 'menu.area.generic', labelParams: { n } }));
+    });
+    return hrAreaCatalogCache;
+}
+// El nombre en español de un área («C. Distribución»), para el historial de cambios.
+function hrAreaNameEs(dept, areaId) {
+    const area = (hrAreaCatalog()[dept] || []).find((a) => a.id === areaId);
+    if (!area) return areaId;
+    let es = {};
+    try { es = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'i18n', 'es.json'), 'utf8')); } catch { es = {}; }
+    const text = String(area.labelKey).split('.').reduce((o, p) => (o && typeof o === 'object' ? o[p] : undefined), es);
+    if (typeof text !== 'string') return areaId;
+    return area.labelParams ? text.replace(/\{(\w+)\}/g, (m, k) => (area.labelParams[k] !== undefined ? area.labelParams[k] : m)) : text;
+}
 function hrAssignmentOptions(clientId, forTestAccount = false) {
     const contracted = new Set(getClientModuleKeys(clientId));
     const centers = listCostCenters(clientId, forTestAccount).filter((cc) => cc.status === 'active' && cc.site_code);
+    const departments = HR_DEPARTMENT_KEYS.filter((key) => contracted.has(key));
+    const catalog = hrAreaCatalog();
     return {
-        departments: HR_DEPARTMENT_KEYS.filter((key) => contracted.has(key)),
+        departments,
+        areas: Object.fromEntries(departments.map((dept) => [dept, catalog[dept]])),
         sites: [...new Set(centers.map((cc) => cc.site_code))],
         centers,
     };
@@ -6720,13 +6765,21 @@ function resolveHrAssignment({ clientId, forTestAccount = false, current, patch 
         return list.length ? list : null;
     };
     const departments = has('departments') ? clean(patch.departments, false) : current.departments;
+    const areas = has('areas') ? clean(patch.areas, false) : (current.areas === undefined ? null : current.areas);
     const sites = has('sites') ? clean(patch.sites, false) : current.sites;
     const costCenters = has('costCenters') ? clean(patch.costCenters, true) : current.costCenters;
-    if (departments === undefined || sites === undefined || costCenters === undefined) return { ok: false, message: 'La asignación no tiene un formato válido.' };
+    if (departments === undefined || areas === undefined || sites === undefined || costCenters === undefined) return { ok: false, message: 'La asignación no tiene un formato válido.' };
     if (has('departments') && Array.isArray(departments) && departments.some((d) => !options.departments.includes(d))) {
         return { ok: false, message: 'Hay departamentos que el cliente no tiene contratados.' };
     }
     if (sites && !departments) return { ok: false, message: 'Primero elige los departamentos: sin departamentos no hay sitios.' };
+    if (areas && !departments) return { ok: false, message: 'Primero elige los departamentos: sin departamentos no hay áreas.' };
+    // Las áreas son las de los departamentos elegidos («departamento/área»).
+    if ((has('areas') || has('departments')) && Array.isArray(areas)) {
+        const valid = new Set();
+        (departments === 'all' ? options.departments : departments || []).forEach((dept) => (options.areas[dept] || []).forEach((a) => valid.add(`${dept}/${a.id}`)));
+        if (areas.some((a) => !valid.has(a))) return { ok: false, message: 'Hay áreas que no son de los departamentos elegidos.' };
+    }
     if (has('sites') && Array.isArray(sites) && sites.some((site) => !options.sites.includes(site))) {
         return { ok: false, message: 'Hay sitios que el cliente no tiene.' };
     }
@@ -6735,7 +6788,7 @@ function resolveHrAssignment({ clientId, forTestAccount = false, current, patch 
         const allowed = new Set(options.centers.filter((cc) => sites === 'all' || sites.includes(cc.site_code)).map((cc) => cc.id));
         if (costCenters.some((id) => !allowed.has(id))) return { ok: false, message: 'Hay centros de costos que no son de los sitios elegidos.' };
     }
-    return { ok: true, value: { departments, sites, costCenters } };
+    return { ok: true, value: { departments, areas, sites, costCenters } };
 }
 // Para el historial de cambios y los avisos: lo guardado, escrito con nombres.
 function describeHrAssignment(kind, raw, clientId, forTestAccount = false) {
@@ -6743,6 +6796,7 @@ function describeHrAssignment(kind, raw, clientId, forTestAccount = false) {
     if (value === null) return '—';
     if (value === 'all') return 'Todos';
     if (kind === 'departments') return value.map((key) => HR_DEPARTMENT_NAMES_ES[key] || key).join(', ');
+    if (kind === 'areas') return value.map((key) => { const [dept, ...rest] = String(key).split('/'); return `${HR_DEPARTMENT_NAMES_ES[dept] || dept} › ${hrAreaNameEs(dept, rest.join('/'))}`; }).join(', ');
     if (kind === 'sites') return value.join(', ');
     return value.map((id) => { const cc = getCostCenterById(id, clientId, forTestAccount); return cc ? `${cc.code} - ${cc.name}` : String(id); }).join(', ');
 }
@@ -6756,6 +6810,7 @@ const HR_WORKER_PATCHABLE_FIELDS = {
     costCenterId: { column: 'cost_center_id', fieldKey: 'main.colHrCostCenter' },
     // Asignación a laborar (clasificación del mismo nombre en el árbol): cada una es una columna de selección (ninguno, uno, varios o todos).
     assignedDepartments: { column: 'assigned_departments', fieldKey: 'main.colHrAsigDepartamentos' },
+    assignedAreas: { column: 'assigned_areas', fieldKey: 'main.colHrAsigAreas' },
     assignedSites: { column: 'assigned_sites', fieldKey: 'main.colHrAsigSitios' },
     assignedCostCenters: { column: 'assigned_cost_centers', fieldKey: 'main.colHrAsigCentros' },
 };
@@ -11366,9 +11421,10 @@ function getUserEffectiveGrants(userId) {
 // nuevo en un sitio ya asignado entra solo). Solo toca los permisos de los departamentos y las hojas de centros de costos (main / cc-list / cc-<id>); todo lo demás queda igual.
 // La asignación de una persona ya resuelta: { departments, allowedCenters (Set de ids de centros de costos) }; null si no es una persona de Mi Recurso Humano o todavía no tiene asignación.
 function hrWorkerAssignmentOf(userId) {
-    const worker = db.prepare('SELECT client_id AS clientId, is_test_data AS isTest, assigned_departments AS d, assigned_sites AS s, assigned_cost_centers AS c FROM hr_workers WHERE user_id = ?').get(userId);
+    const worker = db.prepare('SELECT client_id AS clientId, is_test_data AS isTest, assigned_departments AS d, assigned_areas AS a, assigned_sites AS s, assigned_cost_centers AS c FROM hr_workers WHERE user_id = ?').get(userId);
     if (!worker) return null;
     const departments = parseHrAssignment(worker.d);
+    const areas = parseHrAssignment(worker.a);
     const sites = parseHrAssignment(worker.s);
     const centers = parseHrAssignment(worker.c);
     if (!departments && !sites && !centers) return null;
@@ -11378,7 +11434,7 @@ function hrWorkerAssignmentOf(userId) {
     } else if (Array.isArray(centers)) {
         allowedCenters = new Set(centers);
     }
-    return { departments, allowedCenters };
+    return { departments, areas, allowedCenters };
 }
 // Los ids de los centros de costos donde opera esa persona según su asignación (lista, vacía si todavía no eligió ninguno); null = sin asignación, sin límite. Lo usa el árbol por usuario para bloquear los que no están.
 function getHrAssignedCenterIds(userId) {
@@ -11402,10 +11458,15 @@ function getHrAssignedCenterGrants(userId) {
 function applyHrAssignmentLimits(userId, grants, resolved) {
     const assignment = resolved === undefined ? hrWorkerAssignmentOf(userId) : resolved;
     if (!assignment) return grants;
-    const { departments, allowedCenters } = assignment;
+    const { departments, areas, allowedCenters } = assignment;
     return grants.filter((g) => {
         if (g.sectionId === 'main' && g.itemId === 'cc-list' && String(g.submenuId || '').startsWith('cc-')) return allowedCenters.has(Number(String(g.submenuId).slice(3)));
-        if (HR_DEPARTMENT_KEYS.includes(g.sectionId)) return departments === 'all' || (Array.isArray(departments) && departments.includes(g.sectionId));
+        if (HR_DEPARTMENT_KEYS.includes(g.sectionId)) {
+            if (!(departments === 'all' || (Array.isArray(departments) && departments.includes(g.sectionId)))) return false;
+            // Con áreas elegidas, un permiso de un área que no se le asignó no vale (sin áreas elegidas todavía, o «todas», no se recorta; un permiso de todo el departamento no es de un área).
+            if (Array.isArray(areas) && g.itemId && (hrAreaCatalog()[g.sectionId] || []).some((a) => a.id === g.itemId)) return areas.includes(`${g.sectionId}/${g.itemId}`);
+            return true;
+        }
         return true;
     });
 }

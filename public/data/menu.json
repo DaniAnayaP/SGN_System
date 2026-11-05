@@ -1884,9 +1884,15 @@
             { "id": "colHrPosition", "labelKey": "main.colHrPosition", "permissionOnly": true },
             { "id": "colHrStartDate", "labelKey": "main.colHrStartDate", "permissionOnly": true },
             {
-              "id": "class-asignacion-laborar", "labelKey": "menu.classAsignacionLaborar", "isClassification": true,
+              "id": "class-lo-que-hace", "labelKey": "menu.classLoQueHace", "isClassification": true,
               "submenu": [
                 { "id": "colHrAsigDepartamentos", "labelKey": "main.colHrAsigDepartamentos", "permissionOnly": true },
+                { "id": "colHrAsigAreas", "labelKey": "main.colHrAsigAreas", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-asignacion-laborar", "labelKey": "menu.classDondeTrabaja", "isClassification": true,
+              "submenu": [
                 { "id": "colHrAsigSitios", "labelKey": "main.colHrAsigSitios", "permissionOnly": true },
                 { "id": "colHrAsigCentros", "labelKey": "main.colHrAsigCentros", "permissionOnly": true }
               ]

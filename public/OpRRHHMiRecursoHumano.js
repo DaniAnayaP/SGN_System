@@ -315,7 +315,7 @@ function buildStatusCell(worker) {
 // --- Asignación a laborar (clasificación de 3 columnas): dónde va a operar la persona, EN CADENA y de lo que el cliente tiene contratado ------------------
 // Departamentos -> Sitios -> Centros de costos. Cada una se puede dejar sin elegir, elegir uno, varios o TODOS; no hay sitios sin departamentos ni centros sin sitios, y los centros que salen son los de los sitios
 // elegidos. El servidor vuelve a revisar la cadena (resolveHrAssignment en db.js). Valores: null (sin asignar), 'all' o un arreglo (departamentos: claves; sitios: códigos de sitio; centros: ids).
-let assignmentOptions = { departments: [], sites: [], costCenters: [], lockedCostCenters: [] };
+let assignmentOptions = { departments: [], areas: {}, sites: [], costCenters: [], lockedCostCenters: [] };
 async function loadAssignmentOptions() {
     try {
         const res = await fetch('/api/business/hr-assignment-options', { credentials: 'include' });
@@ -323,16 +323,25 @@ async function loadAssignmentOptions() {
         assignmentOptions = await res.json();
     } catch (err) {
         console.error('Mi Recurso Humano: failed to load the assignment options', err);
-        assignmentOptions = { departments: [], sites: [], costCenters: [], lockedCostCenters: [] };
+        assignmentOptions = { departments: [], areas: {}, sites: [], costCenters: [], lockedCostCenters: [] };
     }
 }
 const ASSIGN_KINDS = {
     departments: { col: 'colHrAsigDepartamentos', field: 'assignedDepartments', titleKey: 'main.hrAssignTitleDepartments', helpKey: 'hrAssignDepartments' },
+    areas: { col: 'colHrAsigAreas', field: 'assignedAreas', titleKey: 'main.hrAssignTitleAreas', helpKey: 'hrAssignAreas' },
     sites: { col: 'colHrAsigSitios', field: 'assignedSites', titleKey: 'main.hrAssignTitleSites', helpKey: 'hrAssignSites' },
     costCenters: { col: 'colHrAsigCentros', field: 'assignedCostCenters', titleKey: 'main.hrAssignTitleCenters', helpKey: 'hrAssignCenters' },
 };
+// Un área se guarda como «departamento/área»; se lee «Cadena de Suministro › C. Distribución».
+function areaOptionLabel(value) {
+    const [dept, ...rest] = String(value).split('/');
+    const areaId = rest.join('/');
+    const area = ((assignmentOptions.areas || {})[dept] || []).find((a) => a.id === areaId);
+    return `${Dashboard.t(DEPARTMENT_LABEL_KEYS[dept] || dept)} › ${area ? Dashboard.t(area.labelKey, area.labelParams) : areaId}`;
+}
 function assignOptionLabel(kind, value) {
     if (kind === 'departments') return Dashboard.t(DEPARTMENT_LABEL_KEYS[value] || value);
+    if (kind === 'areas') return areaOptionLabel(value);
     if (kind === 'sites') {
         const site = assignmentOptions.sites.find((x) => x.code === value);
         return site ? `${site.code}${site.sucursal ? ` · ${site.sucursal}` : ''}` : String(value);
@@ -344,6 +353,11 @@ function assignOptionLabel(kind, value) {
 function assignChoicesFor(kind, worker) {
     if (kind === 'departments') return assignmentOptions.departments.map((value) => ({ value, label: assignOptionLabel(kind, value) }));
     if (kind === 'sites') return assignmentOptions.sites.map((site) => ({ value: site.code, label: assignOptionLabel(kind, site.code) }));
+    // Las áreas son las de los departamentos que ya tiene elegidos (en el orden de los departamentos contratados).
+    if (kind === 'areas') {
+        const chosen = worker.assignedDepartments === 'all' ? assignmentOptions.departments : (Array.isArray(worker.assignedDepartments) ? assignmentOptions.departments.filter((d) => worker.assignedDepartments.includes(d)) : []);
+        return chosen.flatMap((dept) => ((assignmentOptions.areas || {})[dept] || []).map((a) => ({ value: `${dept}/${a.id}`, label: areaOptionLabel(`${dept}/${a.id}`) })));
+    }
     const sites = worker.assignedSites;
     return assignmentOptions.costCenters
         .filter((cc) => sites === 'all' || (Array.isArray(sites) && sites.includes(cc.siteCode)))
@@ -383,9 +397,15 @@ function buildAssignmentCell(worker, kind) {
 }
 // Al cambiar un eslabón los de abajo se ajustan: sin departamentos no hay sitios ni centros; al quitar un sitio se quitan sus centros. Devuelve solo lo que cambia (mismo formato que el PATCH) y si se quitó algo que dependía.
 function buildAssignmentPatch(worker, kind, value) {
-    const current = { departments: worker.assignedDepartments, sites: worker.assignedSites, costCenters: worker.assignedCostCenters };
+    const current = { departments: worker.assignedDepartments, areas: worker.assignedAreas, sites: worker.assignedSites, costCenters: worker.assignedCostCenters };
     const next = { ...current, [kind]: value };
-    if (kind === 'departments' && !value) { next.sites = null; next.costCenters = null; }
+    if (kind === 'departments' && !value) { next.areas = null; next.sites = null; next.costCenters = null; }
+    // Al quitar un departamento se quitan sus áreas (las que quedan son las de los departamentos que siguen elegidos).
+    if (kind === 'departments' && value && Array.isArray(next.areas)) {
+        const chosen = value === 'all' ? assignmentOptions.departments : value;
+        const kept = next.areas.filter((a) => chosen.includes(String(a).split('/')[0]));
+        next.areas = kept.length ? kept : null;
+    }
     if (kind === 'sites') {
         if (!value) next.costCenters = null;
         else if (Array.isArray(next.costCenters)) {
@@ -394,7 +414,7 @@ function buildAssignmentPatch(worker, kind, value) {
             next.costCenters = kept.length ? kept : null;
         }
     }
-    const names = { departments: 'assignedDepartments', sites: 'assignedSites', costCenters: 'assignedCostCenters' };
+    const names = { departments: 'assignedDepartments', areas: 'assignedAreas', sites: 'assignedSites', costCenters: 'assignedCostCenters' };
     const patch = {};
     let removedDependent = false;
     Object.keys(names).forEach((k) => {
@@ -421,7 +441,7 @@ function ensureAssignModal() {
 }
 function openAssignModal(worker, kind) {
     const meta = ASSIGN_KINDS[kind];
-    if (kind === 'sites' && !worker.assignedDepartments) { Dashboard.showToast(Dashboard.t('main.hrAssignNeedDepartments'), 'warning'); return; }
+    if ((kind === 'sites' || kind === 'areas') && !worker.assignedDepartments) { Dashboard.showToast(Dashboard.t('main.hrAssignNeedDepartments'), 'warning'); return; }
     if (kind === 'costCenters' && !worker.assignedSites) { Dashboard.showToast(Dashboard.t('main.hrAssignNeedSites'), 'warning'); return; }
     const overlay = ensureAssignModal();
     const choices = assignChoicesFor(kind, worker);
@@ -573,6 +593,7 @@ function buildRow(worker) {
         textCell('colHrPosition', worker.position),
         textCell('colHrStartDate', `${pad(day)}/${pad(month)}/${year}`),
         buildAssignmentCell(worker, 'departments'),
+        buildAssignmentCell(worker, 'areas'),
         buildAssignmentCell(worker, 'sites'),
         buildAssignmentCell(worker, 'costCenters'),
         tdArea,

@@ -9572,6 +9572,7 @@ function mapHrWorker(row, pendingByRecord, companyName) {
         departments: getJobPositionDepartments(row.job_position_id),
         // Asignación a laborar: null (sin asignar), 'all' o un arreglo (departamentos y sitios: sus claves; centros: sus ids).
         assignedDepartments: parseHrAssignment(row.assigned_departments),
+        assignedAreas: parseHrAssignment(row.assigned_areas),
         assignedSites: parseHrAssignment(row.assigned_sites),
         assignedCostCenters: parseHrAssignment(row.assigned_cost_centers),
         costCenterId: row.cost_center_id,
@@ -9605,6 +9606,8 @@ app.get('/api/business/hr-assignment-options', requireAuth, (req, res) => {
     const selectable = new Set(options.centers.map((cc) => cc.id));
     res.json({
         departments: options.departments,
+        // Las áreas de cada departamento contratado ({ id, labelKey, labelParams? }); en lo asignado cada una va como «departamento/área».
+        areas: options.areas,
         sites: options.sites.map((code) => ({ code, sucursal: (options.centers.find((cc) => cc.site_code === code) || {}).sucursal || '' })),
         costCenters: options.centers.map((cc) => ({ id: cc.id, code: cc.code, name: cc.name, siteCode: cc.site_code })),
         // Los centros que no se pueden asignar y por qué (la pantalla los muestra bloqueados): inactivo, o activo pero sin Código del sitio.
@@ -9692,11 +9695,11 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
         return res.status(400).json({ message: 'hrStatusId does not belong to this client.' });
     }
     // Asignación a laborar: la cadena (departamentos -> sitios -> centros de costos, de lo contratado) se revisa con lo que ya tenía la persona y se guarda como texto fijo para compararlo y para el historial.
-    const assignmentKeys = { assignedDepartments: 'departments', assignedSites: 'sites', assignedCostCenters: 'costCenters' };
+    const assignmentKeys = { assignedDepartments: 'departments', assignedAreas: 'areas', assignedSites: 'sites', assignedCostCenters: 'costCenters' };
     if (Object.keys(assignmentKeys).some((key) => Object.prototype.hasOwnProperty.call(patch, key))) {
         const resolved = resolveHrAssignment({
             clientId: req.user.clientId, forTestAccount: req.user.isTestAccount,
-            current: { departments: parseHrAssignment(existing.assigned_departments), sites: parseHrAssignment(existing.assigned_sites), costCenters: parseHrAssignment(existing.assigned_cost_centers) },
+            current: { departments: parseHrAssignment(existing.assigned_departments), areas: parseHrAssignment(existing.assigned_areas), sites: parseHrAssignment(existing.assigned_sites), costCenters: parseHrAssignment(existing.assigned_cost_centers) },
             patch: Object.fromEntries(Object.entries(assignmentKeys).filter(([key]) => Object.prototype.hasOwnProperty.call(patch, key)).map(([key, name]) => [name, patch[key]])),
         });
         if (!resolved.ok) return res.status(400).json({ message: resolved.message });
@@ -9706,6 +9709,7 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     }
     const assignmentLog = {
         assignedDepartments: (raw) => describeHrAssignment('departments', raw, req.user.clientId, req.user.isTestAccount),
+        assignedAreas: (raw) => describeHrAssignment('areas', raw, req.user.clientId, req.user.isTestAccount),
         assignedSites: (raw) => describeHrAssignment('sites', raw, req.user.clientId, req.user.isTestAccount),
         assignedCostCenters: (raw) => describeHrAssignment('costCenters', raw, req.user.clientId, req.user.isTestAccount),
     };

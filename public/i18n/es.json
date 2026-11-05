@@ -90,7 +90,8 @@
     "classControlInterno": "Control Interno",
     "classPorDefinir": "Por Definir Clasificación",
     "classBotones": "Botones",
-    "classAsignacionLaborar": "Asignación a laborar",
+    "classLoQueHace": "Lo que hace",
+    "classDondeTrabaja": "Dónde trabaja",
     "classAcciones": "Acciones",
     "classNone": "Por clasificar",
     "iconsPersonalization": "Iconos Personalización",
@@ -3174,12 +3175,15 @@
     "colHrArea": "Área Asignada",
     "colHrCostCenter": "Centro de Costos",
     "colHrAsigDepartamentos": "Departamentos",
+    "colHrAsigAreas": "Áreas",
     "colHrAsigSitios": "Sitios",
     "colHrAsigCentros": "Centros de Costos",
-    "classAsignacionLaborarDesc": "Dónde va a operar la persona, en cadena: departamentos, sitios y centros de costos, de lo que el cliente tiene contratado.",
+    "classLoQueHaceDesc": "Lo que hace la persona: en qué departamentos y en qué áreas de ellos trabaja, de lo que el cliente tiene contratado.",
+    "classDondeTrabajaDesc": "Dónde trabaja la persona, en cadena: sitios y centros de costos, de lo que el cliente tiene contratado.",
     "hrAssignAll": "Todos",
     "hrAssignPick": "+ Elegir",
     "hrAssignTitleDepartments": "Departamentos donde va a operar",
+    "hrAssignTitleAreas": "Áreas donde va a operar",
     "hrAssignTitleSites": "Sitios donde va a operar",
     "hrAssignTitleCenters": "Centros de costos donde va a operar",
     "hrAssignNeedDepartments": "Primero elige los departamentos donde va a operar.",
@@ -3191,7 +3195,7 @@
     "hrAssignLockHint_siteNotChosen": "Elige primero el sitio de este centro en la columna Sitios.",
     "hrAssignLockHint_noSite": "Ponle su Código del sitio en Nuestros Centros de Costo.",
     "hrAssignLockHint_inactive": "Actívalo en Nuestros Centros de Costo.",
-    "hrAssignCascadeConfirm": "Al cambiar esto también se quita lo que dependía de ello (sitios y centros de costos). ¿Continuar?",
+    "hrAssignCascadeConfirm": "Al cambiar esto también se quita lo que dependía de ello (áreas, sitios y centros de costos). ¿Continuar?",
     "hrNewRecordCostCenter": "Centro de costos que lo da de alta",
     "colHrEmail": "Correo Electrónico",
     "colHrPersonalEmail": "Correo Personal",
@@ -3535,6 +3539,10 @@
     "hrAssignDepartments": {
       "what": "Eliges en qué departamentos va a trabajar esta persona: uno, varios o todos los que tu empresa tiene contratados. Es lo que la habilita: no entra a un departamento que no tenga aquí, aunque su Puesto se lo dé.",
       "example": "si tu empresa tiene Cadena de Suministro y Finanzas, puedes marcar solo Cadena de Suministro."
+    },
+    "hrAssignAreas": {
+      "what": "Eliges en qué áreas va a trabajar esta persona: una, varias o todas las de los departamentos que ya elegiste. Solo salen las áreas de esos departamentos. Si no eliges ninguna, no se le limita por área.",
+      "example": "si eliges Cadena de Suministro, puedes marcar solo C. Distribución y no C. Transporte."
     },
     "hrAssignSites": {
       "what": "Eliges en qué sitios va a trabajar esta persona: uno, varios o todos. Solo se puede después de elegir los departamentos.",

@@ -90,7 +90,8 @@
     "classControlInterno": "Internal Control",
     "classPorDefinir": "To Be Classified",
     "classBotones": "Buttons",
-    "classAsignacionLaborar": "Work assignment",
+    "classLoQueHace": "What they do",
+    "classDondeTrabaja": "Where they work",
     "classAcciones": "Actions",
     "classNone": "Not classified",
     "iconsPersonalization": "Icon Customization",
@@ -3175,12 +3176,15 @@
     "colHrArea": "Assigned Area",
     "colHrCostCenter": "Cost Center",
     "colHrAsigDepartamentos": "Departments",
+    "colHrAsigAreas": "Areas",
     "colHrAsigSitios": "Sites",
     "colHrAsigCentros": "Cost Centers",
-    "classAsignacionLaborarDesc": "Where the person will operate, in a chain: departments, sites and cost centers, from what the client has contracted.",
+    "classLoQueHaceDesc": "What the person does: which departments and which areas of them they work in, from what the client has contracted.",
+    "classDondeTrabajaDesc": "Where the person works, in a chain: sites and cost centers, from what the client has contracted.",
     "hrAssignAll": "All",
     "hrAssignPick": "+ Choose",
     "hrAssignTitleDepartments": "Departments where they will operate",
+    "hrAssignTitleAreas": "Areas where they will operate",
     "hrAssignTitleSites": "Sites where they will operate",
     "hrAssignTitleCenters": "Cost centers where they will operate",
     "hrAssignNeedDepartments": "Choose the departments where they will operate first.",
@@ -3192,7 +3196,7 @@
     "hrAssignLockHint_siteNotChosen": "First choose this center's site in the Sites column.",
     "hrAssignLockHint_noSite": "Give it its Site code in Our Cost Centers.",
     "hrAssignLockHint_inactive": "Activate it in Our Cost Centers.",
-    "hrAssignCascadeConfirm": "Changing this also removes what depended on it (sites and cost centers). Continue?",
+    "hrAssignCascadeConfirm": "Changing this also removes what depended on it (areas, sites and cost centers). Continue?",
     "hrNewRecordCostCenter": "Cost center that registers them",
     "colHrEmail": "Email",
     "colHrPersonalEmail": "Personal Email",
@@ -3536,6 +3540,10 @@
     "hrAssignDepartments": {
       "what": "You choose which departments this person will work in: one, several or all the ones your company has contracted. It is what enables them: they do not enter a department that is not here, even if their Position grants it.",
       "example": "if your company has Supply Chain and Finance, you can tick only Supply Chain."
+    },
+    "hrAssignAreas": {
+      "what": "You choose which areas this person will work in: one, several or all of the departments you already chose. Only the areas of those departments appear. If you choose none, they are not limited by area.",
+      "example": "if you choose Supply Chain, you can tick only Distribution Center and not Transport."
     },
     "hrAssignSites": {
       "what": "You choose which sites this person will work at: one, several or all. It can only be done after choosing the departments.",

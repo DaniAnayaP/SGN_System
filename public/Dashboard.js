@@ -7992,7 +7992,8 @@ async function maybeApplyDefaultSavedLayout(tableId) {
 // labelKey already used for its data-group attribute in the HTML.
 const COLUMN_GROUP_META = {
     'menu.classControlInterno': { swatch: 'var(--color-column-system-band-bg)', descKey: 'main.classControlInternoDesc' },
-    'menu.classAsignacionLaborar': { swatch: 'var(--color-assign-band-bg)', descKey: 'main.classAsignacionLaborarDesc' },
+    'menu.classLoQueHace': { swatch: 'var(--color-do-band-bg)', descKey: 'main.classLoQueHaceDesc' },
+    'menu.classDondeTrabaja': { swatch: 'var(--color-assign-band-bg)', descKey: 'main.classDondeTrabajaDesc' },
     'main.reportColBase': { swatch: 'var(--color-report-base-band-bg)', descKey: 'main.reportColBaseDesc' },
     'main.reportColCalc': { swatch: 'var(--color-report-calc-band-bg)', descKey: 'main.reportColCalcDesc' },
 };
@@ -9416,8 +9417,8 @@ const HELP_CONTENT_KEYS = {
 const HELP_CONTENT_COLUMN_KEYS = {
     colSysEmpresa: 'colSysEmpresa', colSysArea: 'colSysArea', colSysModulo: 'colSysModulo',
     colSysPantalla: 'colSysPantalla', colSysCentroCostos: 'colSysCentroCostos', colSysFecha: 'colSysFecha',
-    // Mi Recurso Humano > Asignación a laborar (sus tres columnas: la cabecera y cada celda)
-    colHrAsigDepartamentos: 'hrAssignDepartments', colHrAsigSitios: 'hrAssignSites', colHrAsigCentros: 'hrAssignCenters',
+    // Mi Recurso Humano > «Lo que hace» y «Dónde trabaja» (sus cuatro columnas: la cabecera y cada celda)
+    colHrAsigDepartamentos: 'hrAssignDepartments', colHrAsigAreas: 'hrAssignAreas', colHrAsigSitios: 'hrAssignSites', colHrAsigCentros: 'hrAssignCenters',
     colSysDiaNum: 'colSysDiaNum', colSysDiaTexto: 'colSysDiaTexto', colSysMesNum: 'colSysMesNum',
     colSysMesTexto: 'colSysMesTexto', colSysAnio: 'colSysAnio', colSysSemana: 'colSysSemana', colSysHora: 'colSysHora',
     // Generic, reused-everywhere data-col values (confirmed live, 2026-09-30:
