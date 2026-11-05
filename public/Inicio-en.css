@@ -2947,6 +2947,22 @@
         opacity: 0.6;
         cursor: not-allowed;
     }
+    /* Mi Recurso Humano > Asignación a laborar: lo que no se puede elegir sale bloqueado y con su motivo a la vista. */
+    .hr-assign-locked{
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    .hr-assign-lock-tag{
+        margin-left: auto;
+        padding: 0.05rem 0.55rem;
+        border: 1px dashed var(--color-text-secondary);
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        line-height: 1.25;
+        text-align: right;
+        color: var(--color-text-secondary);
+    }
     .editable-cell-input,
     .editable-cell-select{
         width: 100%;

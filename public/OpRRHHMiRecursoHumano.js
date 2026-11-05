@@ -315,7 +315,7 @@ function buildStatusCell(worker) {
 // --- Asignación a laborar (clasificación de 3 columnas): dónde va a operar la persona, EN CADENA y de lo que el cliente tiene contratado ------------------
 // Departamentos -> Sitios -> Centros de costos. Cada una se puede dejar sin elegir, elegir uno, varios o TODOS; no hay sitios sin departamentos ni centros sin sitios, y los centros que salen son los de los sitios
 // elegidos. El servidor vuelve a revisar la cadena (resolveHrAssignment en db.js). Valores: null (sin asignar), 'all' o un arreglo (departamentos: claves; sitios: códigos de sitio; centros: ids).
-let assignmentOptions = { departments: [], sites: [], costCenters: [] };
+let assignmentOptions = { departments: [], sites: [], costCenters: [], lockedCostCenters: [] };
 async function loadAssignmentOptions() {
     try {
         const res = await fetch('/api/business/hr-assignment-options', { credentials: 'include' });
@@ -323,7 +323,7 @@ async function loadAssignmentOptions() {
         assignmentOptions = await res.json();
     } catch (err) {
         console.error('Mi Recurso Humano: failed to load the assignment options', err);
-        assignmentOptions = { departments: [], sites: [], costCenters: [] };
+        assignmentOptions = { departments: [], sites: [], costCenters: [], lockedCostCenters: [] };
     }
 }
 const ASSIGN_KINDS = {
@@ -348,6 +348,15 @@ function assignChoicesFor(kind, worker) {
     return assignmentOptions.costCenters
         .filter((cc) => sites === 'all' || (Array.isArray(sites) && sites.includes(cc.siteCode)))
         .map((cc) => ({ value: cc.id, label: assignOptionLabel(kind, cc.id) }));
+}
+// Los centros de costos que ESTA persona no puede tener todavía y por qué, para mostrarlos bloqueados: el sitio del centro no está entre los que ya eligió, no tiene Código del sitio o está inactivo.
+function lockedCenterChoices(worker) {
+    const sites = worker.assignedSites;
+    const siteChosen = (cc) => sites === 'all' || (Array.isArray(sites) && sites.includes(cc.siteCode));
+    const byCode = (a, b) => String(a.code).localeCompare(String(b.code));
+    const notChosen = assignmentOptions.costCenters.filter((cc) => !siteChosen(cc)).map((cc) => ({ code: cc.code, name: cc.name, reason: 'siteNotChosen' }));
+    const other = (assignmentOptions.lockedCostCenters || []).map((cc) => ({ code: cc.code, name: cc.name, reason: cc.reason }));
+    return [...notChosen, ...other].sort(byCode);
 }
 function assignSummary(kind, value) {
     if (value === 'all') return Dashboard.t('main.hrAssignAll');
@@ -448,6 +457,26 @@ function openAssignModal(worker, kind) {
             const box = addRow(choice.label, current === 'all' || (Array.isArray(current) && current.includes(choice.value)), () => { allBox.checked = checkboxes.every((b) => b.checked); });
             box.dataset.value = String(choice.value);
             checkboxes.push(box);
+        });
+    }
+    // Lo que no se puede elegir se ve igual, bloqueado y con su motivo (así no hay que adivinar por qué falta un centro).
+    if (kind === 'costCenters') {
+        lockedCenterChoices(worker).forEach((cc) => {
+            const li = document.createElement('li');
+            const row = document.createElement('label');
+            row.className = 'logout-mode-option hr-assign-locked';
+            row.title = Dashboard.t(`main.hrAssignLockHint_${cc.reason}`);
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.disabled = true;
+            const span = document.createElement('span');
+            span.textContent = `${cc.code} - ${cc.name}`;
+            const tag = document.createElement('span');
+            tag.className = 'hr-assign-lock-tag';
+            tag.textContent = Dashboard.t(`main.hrAssignLock_${cc.reason}`);
+            row.append(box, span, tag);
+            li.appendChild(row);
+            list.appendChild(li);
         });
     }
     const saveBtn = overlay.querySelector('#hr-assign-save');

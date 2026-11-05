@@ -9602,10 +9602,13 @@ function mapHrWorker(row, pendingByRecord, companyName) {
 app.get('/api/business/hr-assignment-options', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
+    const selectable = new Set(options.centers.map((cc) => cc.id));
     res.json({
         departments: options.departments,
         sites: options.sites.map((code) => ({ code, sucursal: (options.centers.find((cc) => cc.site_code === code) || {}).sucursal || '' })),
         costCenters: options.centers.map((cc) => ({ id: cc.id, code: cc.code, name: cc.name, siteCode: cc.site_code })),
+        // Los centros que no se pueden asignar y por qué (la pantalla los muestra bloqueados): inactivo, o activo pero sin Código del sitio.
+        lockedCostCenters: listCostCenters(req.user.clientId, req.user.isTestAccount).filter((cc) => !selectable.has(cc.id)).map((cc) => ({ id: cc.id, code: cc.code, name: cc.name, reason: cc.status !== 'active' ? 'inactive' : 'noSite' })),
     });
 });
 
