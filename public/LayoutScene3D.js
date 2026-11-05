@@ -74,6 +74,8 @@
         let spaceList = [];
         let zoneMeshes = [];
         let fpMeshes = []; // las losas de las huellas (se pueden tocar)
+        let contourHits = []; // las zonas de toque (invisibles) de los lados o las esquinas del contorno: solo las pide el editor con el paso Contorno
+        let contourPickMode = null; // 'sides' | 'corners' | null
         let hiddenAssets = new Set(); // ids de los espacios que NO se dibujan (los eligió quien ve el 3D)
         let lastLayout = null;
         let center = null; // el centro de la nave en el plano (el origen del 3D), para ubicar lo resaltado
@@ -317,6 +319,7 @@
         function update(layout, opts) {
             if (opts && typeof opts.labels === 'boolean') labelsOn = opts.labels;
             if (opts && opts.layers) LAYER_NAMES.forEach((n) => { if (typeof opts.layers[n] === 'boolean') layerOn[n] = opts.layers[n]; });
+            if (opts && 'contourPick' in opts) contourPickMode = opts.contourPick === 'sides' || opts.contourPick === 'corners' ? opts.contourPick : null;
             if (opts && 'focus' in opts) focusSet = opts.focus || null;
             lastLayout = layout;
             Object.keys(group).forEach((n) => clearGroup(group[n]));
@@ -325,6 +328,7 @@
             spaceList = [];
             zoneMeshes = [];
             fpMeshes = [];
+            contourHits = [];
             center = null;
             const V =layout && Array.isArray(layout.vertices) ? layout.vertices.filter((p) => Array.isArray(p) && p.length >= 2) : [];
             if (V.length < 3) { applyVisibility(); return; }
@@ -380,6 +384,34 @@
             const lg = new THREE.BufferGeometry();
             lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
             group.contour.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x4a5f8f })));
+            // Zonas de toque del contorno (solo las pide el editor, con el paso Contorno): una cortina invisible sobre cada lado («Por lados») o un poste sobre cada esquina («Por esquinas»); tocarlas elige su renglón.
+            if (contourPickMode) {
+                const hitMat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
+                if (contourPickMode === 'sides') {
+                    for (let i = 0; i < V.length; i++) {
+                        const a = V[i];
+                        const b = V[(i + 1) % V.length];
+                        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+                        if (!(len > 0.01)) continue;
+                        const hh = Math.max((cornerH[i] + cornerH[(i + 1) % V.length]) / 2, 0.5);
+                        const m = new THREE.Mesh(new THREE.BoxGeometry(len, hh, 0.5), hitMat);
+                        m.position.set(PX((a[0] + b[0]) / 2), hh / 2, PZ((a[1] + b[1]) / 2));
+                        m.rotation.y = -Math.atan2(b[1] - a[1], b[0] - a[0]);
+                        m.userData = { kind: 'side', index: i };
+                        group.contour.add(m);
+                        contourHits.push(m);
+                    }
+                } else {
+                    V.forEach((p, i) => {
+                        const hh = Math.max(cornerH[i], 0.5);
+                        const m = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, hh, 10), hitMat);
+                        m.position.set(PX(p[0]), hh / 2, PZ(p[1]));
+                        m.userData = { kind: 'corner', index: i };
+                        group.contour.add(m);
+                        contourHits.push(m);
+                    });
+                }
+            }
 
             // puertas y conexiones de luz (la pared 1 va de la esquina 1 a la 2; dist es desde la esquina de inicio)
             // una puerta va sobre su pared: por el centro de la pared, a lo largo de ella y un poco más gruesa que ella
@@ -746,6 +778,10 @@
                     const sz = b.getSize(new THREE.Vector3());
                     payload = fh ? { kind: 'footprint', footprint: found.object.userData.footprint } : { kind: 'zone', zone: found.object.userData.zone };
                     box = { x: c.x, y: c.y, z: c.z, sx: sz.x, sy: Math.max(sz.y, 0.1), sz: sz.z };
+                } else if (contourPickMode && layerOn.contour && contourHits.length) {
+                    // sin nada debajo del toque: un lado o una esquina del contorno (el editor marca su renglón y lo resalta; aquí no se dibuja el cuadro de selección)
+                    const ch = raycaster.intersectObjects(contourHits)[0];
+                    if (ch) payload = { kind: ch.object.userData.kind, index: ch.object.userData.index };
                 }
             }
             if (box) { outline.visible = true; outline.position.set(box.x, box.y, box.z); outline.scale.set(box.sx + 0.06, box.sy + 0.06, box.sz + 0.06); } else outline.visible = false;

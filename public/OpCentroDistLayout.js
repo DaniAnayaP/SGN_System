@@ -1300,6 +1300,7 @@ function selectFrom3d(sel) {
         const footprintId = sel.kind === 'footprint' ? sel.footprint.id : (sel.kind === 'space' ? sel.space.footprintId : '');
         if (footprintId) next = { kind: 'footprint', id: footprintId };
     } else if (state.focus === 'activos' && sel.kind === 'space') next = { kind: 'space', id: sel.space.id };
+    else if (state.focus === 'contorno' && (sel.kind === 'side' || sel.kind === 'corner') && (sel.kind === 'side') === (state.contornoMode === 'sides')) next = { kind: sel.kind, id: String(sel.index) };
     if (next) selectEntity(next);
 }
 let mapTap = null;
@@ -2401,7 +2402,7 @@ $('layout-panel').addEventListener('click', (event) => {
         return;
     }
     const cmode = event.target.closest('[data-cmode]');
-    if (cmode) { state.contornoMode = cmode.dataset.cmode; renderPanel(); renderSvg(); return; } // el dibujo se vuelve a armar: sus zonas de toque (lados o esquinas) dependen del modo
+    if (cmode) { state.contornoMode = cmode.dataset.cmode; renderPanel(); renderSvg(); scheduleScene3d(); return; } // el dibujo (y el 3D) se vuelve a armar: sus zonas de toque (lados o esquinas) dependen del modo
     const sadd = event.target.closest('[data-sadd]');
     if (sadd) { if (sadd.dataset.sadd === 'contorno') clearFilterOf('contornoLados'); addSide(sadd.dataset.sadd); panelScrollEnd = true; renderPanel(); refreshLive(); return; }
     const sdel = event.target.closest('[data-sdel]');
@@ -3100,7 +3101,7 @@ function ensureScene3d() {
 }
 function show3dInfo(sel) {
     const box = $('layout-3d-info');
-    if (!sel || !state.draft) { box.hidden = true; return; }
+    if (!sel || !state.draft || sel.kind === 'side' || sel.kind === 'corner') { box.hidden = true; return; }
     box.hidden = false;
     if (sel.kind === 'footprint') {
         const p = sel.footprint;
@@ -3128,7 +3129,7 @@ function refreshScene3d() {
         picker3d.setData({ spaces: shown.spaces.filter((s) => s.active !== false), zones: shown.zones.filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name })) });
         scene3d.setHiddenAssets(picker3d.getHidden(), false);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), focus: fv3.focus });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), focus: fv3.focus, contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');
