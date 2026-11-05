@@ -3059,6 +3059,8 @@
     "layoutPosLargo": "Largo (m)",
     "layoutPosAncho": "Ancho (m)",
     "layoutPosAlto": "Alto (m)",
+    "layoutPosCeja": "Ceja (m)",
+    "layoutPosAltoUtil": "Alto de almacenamiento (m)",
     "layoutPosCapacidad": "Capacidad",
     "layoutPosSinActivos": "Todavía no hay activos. Agrégalos en Huella-Espacio y ponles sus niveles y columnas en Activos: sus huecos salen aquí solos.",
     "layoutPosMuchos": "Se muestran los primeros {n} huecos.",
@@ -4305,8 +4307,12 @@
       "what": "Carga las filas nuevas y listas. Las que quitaste, con error o que ya existen no se tocan y puedes bajarlas en un Excel con su motivo. Cada relación se revisa otra vez en el servidor igual que una hecha a mano.",
       "example": "cargas 280 de 300 filas y bajas las 20 que no se cargaron."
     },
+    "layoutPosCeja": {
+      "what": "Lo que mide el travesaño (el peldaño) de este nivel, en metros. Ese grueso no se puede almacenar: se le quita al Alto del hueco y lo que queda es el Alto de almacenamiento. Tiene que ser menor que el Alto. Con 0 no se reserva nada.",
+      "example": "el hueco mide 1.83 m y su travesaño 0.07 m: se pone 0.07 y el Alto de almacenamiento queda en 1.76 m."
+    },
     "layoutSec_posiciones": {
-      "what": "Cada renglón es un hueco: un nivel × una columna de un activo (el rack con 2 niveles y 3 columnas deja 6 huecos, ya listos). Dentro de cada hueco anotas cuántas filas y cuántas profundidades tiene, su altura desde el piso y sus medidas en metros. Las medidas salen calculadas con las del activo y solo corriges las que cambien; la capacidad es filas × profundidades.",
+      "what": "Cada renglón es un hueco: un nivel × una columna de un activo (el rack con 2 niveles y 3 columnas deja 6 huecos, ya listos). Dentro de cada hueco anotas cuántas filas y cuántas profundidades tiene, su altura desde el piso y sus medidas en metros. Si el nivel tiene un travesaño, anota su grueso en Ceja: se le quita al Alto y queda el Alto de almacenamiento. Las medidas salen calculadas con las del activo y solo corriges las que cambien; la capacidad es filas × profundidades.",
       "example": "el hueco N2·C3 del R-01 lleva 2 filas y 3 profundidades: capacidad 6."
     },
     "relClass": {

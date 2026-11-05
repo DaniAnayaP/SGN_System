@@ -1054,7 +1054,7 @@ function stepHtml(step) {
         // tiene, su altura desde el piso y sus medidas (largo, ancho y alto, en metros). Lo que no se cambia queda como lo de por defecto (las medidas salen calculadas con las del activo) y no se guarda aparte.
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
         const shown = (v) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '');
-        const bayNum = (i, n, c, key, value, edited, step) => `<td><input type="number" min="0" step="${step}" data-l="bay" data-i="${i}" data-n="${n}" data-c="${c}" data-k="${key}" value="${value}"${edited ? ' class="layout-edited"' : ''}${dis ? ' disabled' : ''}></td>`;
+        const bayNum = (i, n, c, key, value, edited, step, extra = '', bad = false) => `<td><input type="number" min="0" step="${step}" data-l="bay" data-i="${i}" data-n="${n}" data-c="${c}" data-k="${key}" value="${value}"${extra}${edited || bad ? ` class="${[edited ? 'layout-edited' : '', bad ? 'layout-missing' : ''].filter(Boolean).join(' ')}"` : ''}${dis ? ' disabled' : ''}></td>`;
         const POSITION_ROWS_MAX = 1500;
         let count = 0;
         const rows = [];
@@ -1069,12 +1069,12 @@ function stepHtml(step) {
                     const bay = LC.bayOf(s, n, c);
                     const m = LC.bayMeasures(s, n, c);
                     const st = bay.stored;
-                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td><td class="layout-calc">${c}</td>${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}${bayNum(i, n, c, 'floorH', shown(m.floorH), st.floorH !== undefined, '0.01')}${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01')}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01')}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01')}<td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}">${bay.rows * bay.depth}</span></td></tr>`);
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td><td class="layout-calc">${c}</td>${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}${bayNum(i, n, c, 'floorH', shown(m.floorH), st.floorH !== undefined, '0.01')}${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01')}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01')}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01')}${bayNum(i, n, c, 'beam', shown(m.beam), st.beam !== undefined, '0.01', ' data-help-key="layoutPosCeja"', m.beam > 0 && m.beam >= m.h)}<td class="layout-calc"><span data-bay-use="${i}|${n}|${c}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}">${bay.rows * bay.depth}</span></td></tr>`);
                 }
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutPosSinActivos'))}</p>`;
-        const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosColumna', 'main.layoutPosFilas', 'main.layoutPosProfundidad', 'main.layoutPosAltura', 'main.layoutPosLargo', 'main.layoutPosAncho', 'main.layoutPosAlto', 'main.layoutPosCapacidad'];
+        const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosColumna', 'main.layoutPosFilas', 'main.layoutPosProfundidad', 'main.layoutPosAltura', 'main.layoutPosLargo', 'main.layoutPosAncho', 'main.layoutPosAlto', 'main.layoutPosCeja', 'main.layoutPosAltoUtil', 'main.layoutPosCapacidad'];
         return `${table(heads, rows, 'layout-posiciones')}${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
     if (step === 'activos') {
@@ -2372,6 +2372,12 @@ function onEdit(event) {
         const shownBay = LC.bayOf(space, n, c);
         const cap = document.querySelector(`[data-bay-cap="${el.getAttribute('data-i')}|${n}|${c}"]`);
         if (cap) cap.textContent = String(shownBay.rows * shownBay.depth);
+        // el alto de almacenamiento (Alto − Ceja) se recalcula al momento y la ceja se marca en rojo si ya no deja espacio
+        const mBay = LC.bayMeasures(space, n, c);
+        const use = document.querySelector(`[data-bay-use="${el.getAttribute('data-i')}|${n}|${c}"]`);
+        if (use) use.textContent = String(Math.round(mBay.useful * 100) / 100);
+        const beamBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${c}"][data-k="beam"]`);
+        if (beamBox) beamBox.classList.toggle('layout-missing', mBay.beam > 0 && mBay.beam >= mBay.h);
     } else if (list === 'transitSizes') {
         // las medidas de lo que transita (ancho, largo y alto, en metros): vacío = sin medida (no se revisa)
         const [who, dim] = String(el.getAttribute('data-k')).split(':');

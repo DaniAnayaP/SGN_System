@@ -2094,6 +2094,12 @@
         { const walled = assignWallCodes(out); out.obstacles = walled.obstacles; if (walled.wallNext) out.wallNext = walled.wallNext; else delete out.wallNext; }
         { const safe = assignSafetyCodes(deriveSafetyZones(out)); out.safety = safe.safety; if (safe.safetyNext && Object.keys(safe.safetyNext).length) out.safetyNext = safe.safetyNext; else delete out.safetyNext; }
         out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
+        // La ceja de un hueco (el travesaño del nivel) tiene que ser menor que su alto: si no, no queda espacio para almacenar.
+        out.spaces.forEach((sp) => (sp.bays || []).forEach((b) => {
+            if (!(b.beam > 0)) return;
+            const m = bayMeasures(sp, b.n, b.c);
+            if (b.beam >= m.h - 1e-9) errors.push(`Activo ${sp.code}, nivel ${b.n}, columna ${b.c}: la ceja (${round2(b.beam)} m) tiene que ser menor que su alto (${round2(m.h)} m)`);
+        }));
 
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
         out.plan = plan ? { widthM: meters(plan.widthM, 'Plano', 0.1) } : null;
@@ -2237,7 +2243,7 @@
             if (rows > 1) bay.rows = Math.min(rows, LIMITS.slots);
             const depth = Math.round(Number(b.depth));
             if (depth > 1) bay.depth = Math.min(depth, LIMITS.depth);
-            ['floorH', 'l', 'w', 'h'].forEach((k) => {
+            ['floorH', 'l', 'w', 'h', 'beam'].forEach((k) => {
                 const v = Number(b[k]);
                 if (Number.isFinite(v) && v > 0 && v <= LIMITS.maxM) bay[k] = Math.round(v * 1000) / 1000;
             });
@@ -2258,11 +2264,16 @@
         const slots = (space && space.slots) || 1;
         const round = (v) => Math.round(v * 1000) / 1000;
         const high = space && space.h > 0 ? space.h / levels : 0;
+        const h = stored.h !== undefined ? stored.h : round(high);
+        // beam = la ceja: lo que mide el travesaño del nivel (en metros); ese grueso no se puede almacenar, así que el alto de almacenamiento (useful) es el alto del hueco menos la ceja
+        const beam = stored.beam !== undefined ? stored.beam : 0;
         return {
             floorH: stored.floorH !== undefined ? stored.floorH : round((Number(level) - 1) * high),
             l: stored.l !== undefined ? stored.l : round(((space && space.l) || 0) / slots),
             w: stored.w !== undefined ? stored.w : round((space && space.d) || 0),
-            h: stored.h !== undefined ? stored.h : round(high),
+            h,
+            beam,
+            useful: round(Math.max(h - beam, 0)),
         };
     }
 
