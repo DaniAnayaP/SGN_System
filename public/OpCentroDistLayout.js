@@ -2044,7 +2044,7 @@ $('layout-opening-btn').addEventListener('click', () => {
     state.showOpening = !state.showOpening;
     try { localStorage.setItem(OPENING_KEY, state.showOpening ? '1' : '0'); } catch (err) { /* no se recuerda */ }
     updateOpeningBtn();
-    if (state.draft) { applyWallItemMarks(); applyLegend(); renderSvg(); }
+    if (state.draft) { applyWallItemMarks(); applyLegend(); renderSvg(); refreshScene3d(); }
 });
 // Icono Ver / ocultar los m² de cada zona: igual que el de medidas (se recuerda en este navegador, solo lo ve quien lo tiene en el árbol y la hoja que se descarga sale como se ve).
 const AREA_KEY = 'sgn_layout_area';
@@ -3239,6 +3239,12 @@ function show3dInfo(sel) {
         box.innerHTML = `<b>${esc(z.name)}</b> · ${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}${z.use ? ` · ${esc(typeLabel('use', z.use))}` : ''} · ${fmt(LC.zoneArea(z))} m² · ${esc(t('main.layout3dEspaciosN', { n: spaces }))}`;
     }
 }
+// Las puertas cuyo espacio de apertura choca con algo (y con lo que choca otra puerta): se pintan en rojo en el 3D.
+function doorClashIds() {
+    const ids = new Set();
+    LC.doorOpeningClashes(state.draft).forEach((v) => { ids.add(v.id); if (v.vars && v.vars.otherId) ids.add(v.vars.otherId); });
+    return [...ids];
+}
 function refreshScene3d() {
     if (!(scene3d && state.view3d && state.draft)) return;
     // el selector se actualiza con el borrador (lo que se ocultó y ya no existe se olvida) y la escena se arma una sola vez
@@ -3248,7 +3254,7 @@ function refreshScene3d() {
         picker3d.setData({ spaces: shown.spaces.filter((s) => s.active !== false), zones: shown.zones.filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name })) });
         scene3d.setHiddenAssets(picker3d.getHidden(), false);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), focus: fv3.focus, contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), openings: !!state.showOpening, clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');

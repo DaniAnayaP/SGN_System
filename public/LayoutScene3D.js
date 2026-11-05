@@ -81,6 +81,9 @@
         let center = null; // el centro de la nave en el plano (el origen del 3D), para ubicar lo resaltado
         // Con el resto de la nave «tenue» (buscar una zona o una huella): ids de lo enfocado { zones, footprints, spaces } (Set); lo demás se dibuja apagado, sin rótulo ni aristas. null = todo normal.
         let focusSet = null;
+        // Apertura de puertas: si se ve (openingsOn), cada puerta que abre dibuja su espacio; las puertas cuyo espacio choca con algo (clashSet) van en rojo.
+        let openingsOn = false;
+        let clashSet = new Set();
         let hl = null; // lo resaltado: { kind: 'zone' | 'footprint' | 'space' | 'bay', id, strong }
         const textureCache = new Map();
 
@@ -321,6 +324,8 @@
             if (opts && opts.layers) LAYER_NAMES.forEach((n) => { if (typeof opts.layers[n] === 'boolean') layerOn[n] = opts.layers[n]; });
             if (opts && 'contourPick' in opts) contourPickMode = opts.contourPick === 'sides' || opts.contourPick === 'corners' ? opts.contourPick : null;
             if (opts && 'focus' in opts) focusSet = opts.focus || null;
+            if (opts && 'openings' in opts) openingsOn = !!opts.openings;
+            if (opts && 'clashDoors' in opts) clashSet = new Set(opts.clashDoors || []);
             lastLayout = layout;
             Object.keys(group).forEach((n) => clearGroup(group[n]));
             outline.visible = false;
@@ -444,6 +449,30 @@
                 m.position.set(PX((dg.a.x + dg.b.x) / 2), h / 2, PZ((dg.a.y + dg.b.y) / 2));
                 m.rotation.y = -Math.atan2(dg.uy, dg.ux);
                 group.doors.add(m);
+                // el espacio que necesita al abrir: sobre el piso (cuarto de círculo del giro o franja del recorrido), con su contorno, y la hoja ya abierta, transparente
+                const op = openingsOn && root.LayoutCalc && root.LayoutCalc.doorOpening ? root.LayoutCalc.doorOpening(layout, d) : null;
+                if (op) {
+                    const col = clashSet.has(d.id) ? 0xc0392b : (op.type === 'swing' ? 0xa63fb5 : 0x2f7fc7);
+                    const shape = new THREE.Shape(op.pts.map((p) => new THREE.Vector2(PX(p[0]), -PZ(p[1]))));
+                    const flat = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }));
+                    flat.rotation.x = -Math.PI / 2;
+                    flat.position.y = 0.03;
+                    group.doors.add(flat);
+                    group.doors.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(op.pts.map((p) => new THREE.Vector3(PX(p[0]), 0.05, PZ(p[1])))), new THREE.LineBasicMaterial({ color: col })));
+                    const a = op.type === 'swing' ? op.leaf : op.travel;
+                    const dx = a[1][0] - a[0][0];
+                    const dz = a[1][1] - a[0][1];
+                    const len = Math.hypot(dx, dz);
+                    const side = op.type === 'swing' ? 0.06 : root.LayoutCalc.SLIDE_DEPTH * 0.8;
+                    const cx = op.type === 'swing' ? (a[0][0] + a[1][0]) / 2 : op.pts.reduce((acc, p) => acc + p[0], 0) / op.pts.length;
+                    const cz = op.type === 'swing' ? (a[0][1] + a[1][1]) / 2 : op.pts.reduce((acc, p) => acc + p[1], 0) / op.pts.length;
+                    if (len > 0.05) {
+                        const leaf = new THREE.Mesh(new THREE.BoxGeometry(len, h, side), new THREE.MeshLambertMaterial({ color: col, transparent: true, opacity: 0.45, depthWrite: false }));
+                        leaf.position.set(PX(cx), h / 2, PZ(cz));
+                        leaf.rotation.y = -Math.atan2(dz, dx);
+                        group.doors.add(leaf);
+                    }
+                }
             });
             // una conexión de luz va sobre su pared: por el centro de la pared y un poco más gruesa que ella
             (layout.power || []).forEach((e) => {
