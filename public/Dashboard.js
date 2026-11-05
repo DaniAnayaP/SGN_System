@@ -1224,7 +1224,9 @@ const AREAS_BY_DEPARTMENT = {
     certifications: [
         { key: 'cert-area-iso-9001', labelKey: 'menu.area.iso9001', abbrKey: 'menu.area.iso9001Abbr', icon: 'bx-badge-check' }
     ],
-    'information-technology': GENERIC_AREAS
+    'information-technology': [
+        { key: 'it-area-operations', labelKey: 'menu.area.itOperations', icon: 'bx-chip' }
+    ]
 };
 
 function getStoredArea() {

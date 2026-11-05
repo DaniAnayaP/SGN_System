@@ -1952,6 +1952,9 @@
     ],
     "certifications": [
       { "id": "cert-area-iso-9001", "labelKey": "menu.area.iso9001" }
+    ],
+    "information-technology": [
+      { "id": "it-area-operations", "labelKey": "menu.area.itOperations" }
     ]
   },
   "footer": []
