@@ -7339,6 +7339,9 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .ld-drag{ cursor: grab; }
 .ld-hit{ stroke: transparent; stroke-width: 18; stroke-linecap: butt; cursor: grab; touch-action: none; }
 .ld-hit:active{ cursor: grabbing; }
+/* Conexión de luz o sensor que se puede arrastrar sobre su pared: zona de toque redonda más grande. */
+.le-hit{ fill: transparent; stroke: none; cursor: grab; touch-action: none; }
+.le-hit:active{ cursor: grabbing; }
 .le{ fill: var(--color-report-calc-bg); stroke: var(--color-report-calc-text); stroke-width: 1.5; }
 .lsn{ fill: var(--color-report-calc-bg); stroke: #2B8CA3; stroke-width: 2; }
 .lv{ fill: var(--color-text-secondary); }

@@ -1786,7 +1786,7 @@ function renderSvg() {
         const a = g.a;
         const b = g.b;
         if (wiIssues.has('doors:' + door.id)) s += `<rect class="lbad" x="${(Math.min(X(a.x), X(b.x)) - 5).toFixed(1)}" y="${(Math.min(Y(a.y), Y(b.y)) - 5).toFixed(1)}" width="${(Math.abs(X(b.x) - X(a.x)) + 10).toFixed(1)}" height="${(Math.abs(Y(b.y) - Y(a.y)) + 10).toFixed(1)}" rx="3"/>`;
-        const movable = canMoveDoors() && !g.legacy;
+        const movable = canMoveWallItem('doors') && !g.legacy;
         s += `<line class="ld${movable ? ' ld-drag' : ''}" data-did="${esc(door.id)}" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"><title>${esc(door.name)}</title></line>`;
         if (movable) s += `<line class="ld-hit" data-did="${esc(door.id)}" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"/>`;
         s += `<rect class="hl-box" data-hlbox="door:${esc(door.id)}" x="${(Math.min(X(a.x), X(b.x)) - 7).toFixed(1)}" y="${(Math.min(Y(a.y), Y(b.y)) - 7).toFixed(1)}" width="${(Math.abs(X(b.x) - X(a.x)) + 14).toFixed(1)}" height="${(Math.abs(Y(b.y) - Y(a.y)) + 14).toFixed(1)}" rx="3"/>`;
@@ -1797,7 +1797,9 @@ function renderSvg() {
         const a = pg.a;
         if (wiIssues.has('power:' + e.id)) s += `<circle class="lbad" cx="${X(a.x)}" cy="${Y(a.y)}" r="10"/>`;
         s += `<rect class="hl-box" data-hlbox="power:${esc(e.id)}" x="${(X(a.x) - 10).toFixed(1)}" y="${(Y(a.y) - 10).toFixed(1)}" width="20" height="20" rx="3"/>`;
-        s += `<circle class="le" data-pid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="6"><title>${esc(typeLabel('power', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">⚡</text>`;
+        const moveP = canMoveWallItem('power') && !pg.legacy;
+        if (moveP) s += `<circle class="le-hit" data-pid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="15"/>`;
+        s += `<circle class="le${moveP ? ' ld-drag' : ''}" data-pid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="6"><title>${esc(typeLabel('power', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">⚡</text>`;
     });
     (on('sensores') ? (d.sensors || []) : []).forEach((e) => {
         const sg = LC.doorGeometry(d, { ...e, width: 0 });
@@ -1805,7 +1807,9 @@ function renderSvg() {
         const a = sg.a;
         if (wiIssues.has('sensors:' + e.id)) s += `<circle class="lbad" cx="${X(a.x)}" cy="${Y(a.y)}" r="11"/>`;
         s += `<rect class="hl-box" data-hlbox="sensor:${esc(e.id)}" x="${(X(a.x) - 11).toFixed(1)}" y="${(Y(a.y) - 19).toFixed(1)}" width="22" height="30" rx="3"/>`;
-        s += `<circle class="lsn" data-nid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="6.5"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">°</text><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) - 10}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
+        const moveS = canMoveWallItem('sensors') && !sg.legacy;
+        if (moveS) s += `<circle class="le-hit" data-nid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="15"/>`;
+        s += `<circle class="lsn${moveS ? ' ld-drag' : ''}" data-nid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="6.5"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">°</text><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) - 10}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
     });
     // Objetos (paso Objetos): personas y montacargas dibujados a escala y girados hacia donde miran (foto fija del plano).
     (on('objetos') ? (d.objects || []) : []).forEach((o) => {
@@ -3040,22 +3044,26 @@ window.addEventListener('pointerup', () => {
 });
 
 // ---- Arrastrar una puerta sobre su pared ---------------------------------------------------------------------------------------------------
-// Solo en el paso Puertas y con permiso para cambiarlas. La puerta sigue la pared (no se sale de ella ni de sus extremos): lo que se mueve el puntero a lo largo de la pared es lo que se mueve la puerta; `dist` (la «Distancia
+// Puertas, conexiones de luz y sensores: cada uno solo se arrastra en su propio paso (Puertas, Luz, Sensores) y con permiso para cambiarlo. Lo que sigue vale para los tres. La puerta sigue la pared (no se sale de ella ni de sus extremos): lo que se mueve el puntero a lo largo de la pared es lo que se mueve la puerta; `dist` (la «Distancia
 // desde el inicio de la pared») se escribe sola mientras se arrastra y los avisos del renglón (cabe, altura) se vuelven a calcular. Si la pared no está elegida (puerta de antes) no se arrastra.
 let doorDrag = null;
-function canMoveDoors() { return !!state.draft && state.focus === 'puertas' && canEdit('puertas') && !state.find; }
+const WALL_ITEM_STEP = { doors: 'puertas', power: 'luz', sensors: 'sensores' };
+function canMoveWallItem(list) { return !!state.draft && state.focus === WALL_ITEM_STEP[list] && canEdit(WALL_ITEM_STEP[list]) && !state.find; }
 $('layout-svg').addEventListener('pointerdown', (event) => {
-    const el = event.target.closest('[data-did]');
-    if (!el || !canMoveDoors()) return;
-    const door = (state.draft.doors || []).find((x) => x.id === el.getAttribute('data-did'));
-    const g = door ? LC.doorGeometry(state.draft, door) : null;
+    const el = event.target.closest('[data-did], [data-pid], [data-nid]');
+    if (!el) return;
+    const list = el.getAttribute('data-did') !== null ? 'doors' : (el.getAttribute('data-pid') !== null ? 'power' : 'sensors');
+    if (!canMoveWallItem(list)) return;
+    const id = el.getAttribute(list === 'doors' ? 'data-did' : (list === 'power' ? 'data-pid' : 'data-nid'));
+    const item = (state.draft[list] || []).find((x) => x.id === id);
+    const g = item ? wallItemGeom(list, item) : null;
     if (!g || g.legacy || !g.wall) return;
-    doorDrag = { id: door.id, px: event.clientX, py: event.clientY, start: Number(door.dist) || 0, ux: g.ux, uy: g.uy, room: Math.max(g.wallLength - (Number(door.width) || 0), 0), moved: false };
+    doorDrag = { list, id: item.id, px: event.clientX, py: event.clientY, start: Number(item.dist) || 0, ux: g.ux, uy: g.uy, room: Math.max(g.wallLength - (list === 'doors' ? Number(item.width) || 0 : 0), 0), moved: false };
     event.preventDefault();
 });
 window.addEventListener('pointermove', (event) => {
     if (!doorDrag || !view || !state.draft) return;
-    const door = (state.draft.doors || []).find((x) => x.id === doorDrag.id);
+    const door = (state.draft[doorDrag.list] || []).find((x) => x.id === doorDrag.id);
     if (!door) { doorDrag = null; return; }
     const rect = $('layout-svg').getBoundingClientRect();
     const k = (view.W / zoom.s) / rect.width / view.sc;
@@ -3073,8 +3081,8 @@ window.addEventListener('pointermove', (event) => {
     if (dist < 0.1) dist = 0;
     if (dist > doorDrag.room - 0.1) dist = doorDrag.room;
     door.dist = round2(Math.min(Math.max(dist, 0), doorDrag.room));
-    const i = state.draft.doors.indexOf(door);
-    const box = document.querySelector(`[data-l="doors"][data-i="${i}"][data-k="dist"]`);
+    const i = state.draft[doorDrag.list].indexOf(door);
+    const box = document.querySelector(`[data-l="${doorDrag.list}"][data-i="${i}"][data-k="dist"]`);
     if (box) box.value = door.dist;
     refreshLive();
 });
