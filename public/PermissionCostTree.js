@@ -595,24 +595,28 @@
         // coverageKeys (opcional, una función que devuelve las llaves): lo que hay MÁS ABAJO de este nivel además de lo que marca el nivel (las columnas de sus pantallas). Un nivel cubierto por
         // completo (verde o amarillo) pero con algo sin activar más abajo se pinta como mixto (−), así la línea de «no tiene todos los accesos activos» sube desde la tabla hasta el departamento.
         // Solo cambia lo que se ve: lo que marca o desmarca el nivel (leafKeys) y lo que cuesta siguen igual.
+        // Marcar un nivel marca también TODO lo que tiene anidado (pantallas, columnas e iconos) que todavía no está cubierto ni por el plan ni por lo ya vendido al cliente: así no se cobra dos veces lo que ya tenía.
         function extraSlotArgs(ownKey, leafKeys, coverageKeys) {
             if (mode !== 'clientTricolor') return [ownKey, undefined];
             let color = colorFor(leafKeys);
-            if ((color === 'green' || color === 'yellow') && typeof coverageKeys === 'function') {
-                const deeper = coverageKeys();
+            const deeper = typeof coverageKeys === 'function' ? coverageKeys() : [];
+            if ((color === 'green' || color === 'yellow') && deeper.length) {
                 if (deeper.length > leafKeys.length && colorFor(deeper) === null) color = null;
             }
-            const stageable = grantLimits ? leafKeys.filter((k) => !isLimitLocked(k)) : leafKeys;
-            const lockedReason = grantLimits && leafKeys.length > 0 && stageable.length === 0 ? limitReasonKey(leafKeys[0]) : null;
+            const covered = (k) => planGrantSet.has(k) || clientGrantSet.has(k);
+            const nested = [...new Set(deeper)].filter((k) => !leafKeys.includes(k) && !covered(k));
+            const own = grantLimits ? leafKeys.filter((k) => !isLimitLocked(k)) : leafKeys;
+            const stageable = [...own, ...(grantLimits ? nested.filter((k) => !isLimitLocked(k)) : nested)];
+            const lockedReason = grantLimits && leafKeys.length > 0 && own.length === 0 ? limitReasonKey(leafKeys[0]) : null;
             return [ownKey, {
                 color,
                 limitReason: color === 'red' ? lockedReason : null,
-                checked: color === 'red' && stageable.length > 0 && stageable.every((k) => pendingAdditions.has(k)),
+                checked: color === 'red' && own.length > 0 && stageable.every((k) => pendingAdditions.has(k)),
                 onChange: (checked) => {
                     stageable.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k)));
                     // «Marcar todo» de un contenedor salta lo que no está habilitado para servicio: se avisa cuántos accesos no se marcaron.
-                    if (checked && grantLimits && stageable.length < leafKeys.length) {
-                        const skipped = leafKeys.filter((k) => { const r = limitReasonKey(k); return typeof r === 'string' && r.indexOf('service:') === 0; }).length;
+                    if (checked && grantLimits && stageable.length < leafKeys.length + nested.length) {
+                        const skipped = [...leafKeys, ...nested].filter((k) => { const r = limitReasonKey(k); return typeof r === 'string' && r.indexOf('service:') === 0; }).length;
                         if (skipped) notifyLimit(t('admin.limitSkippedService', { count: skipped }));
                     }
                 },
@@ -1249,10 +1253,13 @@
             return keys;
         }
 
-        // clientTricolor: todo lo que cuenta para saber si un nivel «tiene todos sus accesos»: sus pantallas y, de cada pantalla, sus columnas (las mismas llaves que cuenta la fila «Tabla <X>»).
+        // Las llaves de los iconos de una pantalla («Iconos Personalización»): las mismas que lee renderIcons.
+        const iconKeysOf = (section, item, sm, subSm) => (subSm.iconsSubmenu || []).map((icon) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`));
+        // clientTricolor: todo lo que cuenta para saber si un nivel «tiene todos sus accesos»: sus pantallas y, de cada pantalla, sus columnas (las mismas llaves que cuenta la fila «Tabla <X>») y sus iconos.
         const coverageOfSubSm = (section, item, sm, subSm) => [
             subSm.standalone ? keyOf(section.id, subSm.id, null) : keyOf(section.id, item.id, `${sm.id}/${subSm.id}`),
             ...tableSoloVerKeys(section, item, sm, subSm),
+            ...iconKeysOf(section, item, sm, subSm),
         ];
         const coverageOfSm = (section, item, sm) => (sm.submenu && sm.submenu.length ? sm.submenu.flatMap((subSm) => coverageOfSubSm(section, item, sm, subSm)) : [keyOf(section.id, item.id, sm.id)]);
         const coverageOfItem = (section, item) => (item.submenu && item.submenu.length ? item.submenu.flatMap((sm) => coverageOfSm(section, item, sm)) : [keyOf(section.id, item.id, null)]);
