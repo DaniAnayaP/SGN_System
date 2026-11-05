@@ -71,6 +71,11 @@
         padding: 0;
         font-family: 'poppins', sans-serif;
     }
+    /* Los campos y botones sin tamaño propio llevaban el de fábrica del navegador (13.33 px FIJOS) y no seguían el Tamaño del sistema (el buscador del menú se quedaba igual mientras todo lo demás crecía o se achicaba):
+       con rem valen lo mismo al 100 % y se mueven con todo lo demás. Cualquier regla con clase que ponga su propio tamaño sigue mandando. */
+    input, select, textarea, button{
+        font-size: 0.8333rem;
+    }
     :root{
         --color-bg: #EBECF2;
         --color-surface: #FFFFFF;
@@ -521,6 +526,8 @@
         outline: none;
         background-color: transparent;
         color: var(--color-text-primary);
+        /* la misma letra que las opciones del menú (antes tenía la de fábrica del navegador y se veía más grande que ellas) */
+        font-size: 0.8rem;
     }
 
     /* Search results dropdown (live filter against the rendered sidebar —
