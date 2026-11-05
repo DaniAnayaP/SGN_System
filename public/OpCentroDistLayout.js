@@ -1251,9 +1251,16 @@ function selectRowFrom(target) {
 // Tocar una figura del croquis (sin arrastrarla) la elige: se marca su renglón en la tabla y la figura se resalta con el contorno grueso de siempre; volver a tocarla la regresa al contorno punteado. Solo cuenta
 // el paso que se está editando: en Zonas las zonas, en Huella-Espacio las huellas y en Activos los activos.
 function selectFromMap(target) {
-    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-tid], [data-oid], [data-did], [data-pid], [data-nid]') : null;
+    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-tid], [data-oid], [data-did], [data-pid], [data-nid], [data-sideid], [data-cornerid]') : null;
     if (!el || !state.draft) return;
     let next = null;
+    // en Contorno se eligen los lados (o las esquinas): se marca su renglón en la tabla y su línea en el croquis y en el 3D
+    if (el.getAttribute('data-sideid') !== null || el.getAttribute('data-cornerid') !== null) {
+        if (state.focus !== 'contorno') return;
+        const isSide = el.getAttribute('data-sideid') !== null;
+        selectEntity({ kind: isSide ? 'side' : 'corner', id: el.getAttribute(isSide ? 'data-sideid' : 'data-cornerid') });
+        return;
+    }
     // en Paredes se eligen las paredes y en Contorno las columnas, desniveles y otros obstáculos
     if (el.getAttribute('data-obid')) {
         const ob = (state.draft.obstacles || []).find((o) => o.id === el.getAttribute('data-obid'));
@@ -1752,6 +1759,17 @@ function renderSvg() {
             s += `<line class="hl-box" data-hlbox="side:${n - 1}" x1="${X(seg.p[0]).toFixed(1)}" y1="${Y(seg.p[1]).toFixed(1)}" x2="${X(seg.q[0]).toFixed(1)}" y2="${Y(seg.q[1]).toFixed(1)}"/>`;
         }
         verts.forEach((p, i) => { s += `<circle class="hl-box" data-hlbox="corner:${i}" cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="9"/>`; });
+        // Tocar el contorno en el croquis elige su renglón (como tocar una zona o una pared): una zona de toque invisible y ancha sobre cada lado (en «Por lados») o sobre cada esquina (en «Por esquinas»), solo con el paso Contorno en edición.
+        if (state.focus === 'contorno') {
+            if (state.contornoMode === 'sides') {
+                for (let n = 1; n <= sideCount; n++) {
+                    const seg = LC.wallSegment(verts, n);
+                    s += `<line class="side-hit" data-sideid="${n - 1}" x1="${X(seg.p[0]).toFixed(1)}" y1="${Y(seg.p[1]).toFixed(1)}" x2="${X(seg.q[0]).toFixed(1)}" y2="${Y(seg.q[1]).toFixed(1)}"/>`;
+                }
+            } else {
+                verts.forEach((p, i) => { s += `<circle class="corner-hit" data-cornerid="${i}" cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="10"/>`; });
+            }
+        }
     }
     (on('puertas') ? d.doors : []).forEach((door) => {
         const g = LC.doorGeometry(d, door);
@@ -2383,7 +2401,7 @@ $('layout-panel').addEventListener('click', (event) => {
         return;
     }
     const cmode = event.target.closest('[data-cmode]');
-    if (cmode) { state.contornoMode = cmode.dataset.cmode; renderPanel(); return; }
+    if (cmode) { state.contornoMode = cmode.dataset.cmode; renderPanel(); renderSvg(); return; } // el dibujo se vuelve a armar: sus zonas de toque (lados o esquinas) dependen del modo
     const sadd = event.target.closest('[data-sadd]');
     if (sadd) { if (sadd.dataset.sadd === 'contorno') clearFilterOf('contornoLados'); addSide(sadd.dataset.sadd); panelScrollEnd = true; renderPanel(); refreshLive(); return; }
     const sdel = event.target.closest('[data-sdel]');
