@@ -1786,7 +1786,9 @@ function renderSvg() {
         const a = g.a;
         const b = g.b;
         if (wiIssues.has('doors:' + door.id)) s += `<rect class="lbad" x="${(Math.min(X(a.x), X(b.x)) - 5).toFixed(1)}" y="${(Math.min(Y(a.y), Y(b.y)) - 5).toFixed(1)}" width="${(Math.abs(X(b.x) - X(a.x)) + 10).toFixed(1)}" height="${(Math.abs(Y(b.y) - Y(a.y)) + 10).toFixed(1)}" rx="3"/>`;
-        s += `<line class="ld" data-did="${esc(door.id)}" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"><title>${esc(door.name)}</title></line>`;
+        const movable = canMoveDoors() && !g.legacy;
+        s += `<line class="ld${movable ? ' ld-drag' : ''}" data-did="${esc(door.id)}" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"><title>${esc(door.name)}</title></line>`;
+        if (movable) s += `<line class="ld-hit" data-did="${esc(door.id)}" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"/>`;
         s += `<rect class="hl-box" data-hlbox="door:${esc(door.id)}" x="${(Math.min(X(a.x), X(b.x)) - 7).toFixed(1)}" y="${(Math.min(Y(a.y), Y(b.y)) - 7).toFixed(1)}" width="${(Math.abs(X(b.x) - X(a.x)) + 14).toFixed(1)}" height="${(Math.abs(Y(b.y) - Y(a.y)) + 14).toFixed(1)}" rx="3"/>`;
     });
     (on('luz') ? d.power : []).forEach((e) => {
@@ -3037,6 +3039,52 @@ window.addEventListener('pointerup', () => {
     if (moved && state.draft) { renderPanel(); refreshLive(); }
 });
 
+// ---- Arrastrar una puerta sobre su pared ---------------------------------------------------------------------------------------------------
+// Solo en el paso Puertas y con permiso para cambiarlas. La puerta sigue la pared (no se sale de ella ni de sus extremos): lo que se mueve el puntero a lo largo de la pared es lo que se mueve la puerta; `dist` (la «Distancia
+// desde el inicio de la pared») se escribe sola mientras se arrastra y los avisos del renglón (cabe, altura) se vuelven a calcular. Si la pared no está elegida (puerta de antes) no se arrastra.
+let doorDrag = null;
+function canMoveDoors() { return !!state.draft && state.focus === 'puertas' && canEdit('puertas') && !state.find; }
+$('layout-svg').addEventListener('pointerdown', (event) => {
+    const el = event.target.closest('[data-did]');
+    if (!el || !canMoveDoors()) return;
+    const door = (state.draft.doors || []).find((x) => x.id === el.getAttribute('data-did'));
+    const g = door ? LC.doorGeometry(state.draft, door) : null;
+    if (!g || g.legacy || !g.wall) return;
+    doorDrag = { id: door.id, px: event.clientX, py: event.clientY, start: Number(door.dist) || 0, ux: g.ux, uy: g.uy, room: Math.max(g.wallLength - (Number(door.width) || 0), 0), moved: false };
+    event.preventDefault();
+});
+window.addEventListener('pointermove', (event) => {
+    if (!doorDrag || !view || !state.draft) return;
+    const door = (state.draft.doors || []).find((x) => x.id === doorDrag.id);
+    if (!door) { doorDrag = null; return; }
+    const rect = $('layout-svg').getBoundingClientRect();
+    const k = (view.W / zoom.s) / rect.width / view.sc;
+    let dx = (event.clientX - doorDrag.px) * k;
+    let dy = (event.clientY - doorDrag.py) * k;
+    // Con el croquis girado, el movimiento que se ve en pantalla se regresa a los ejes del Layout (giro inverso), igual que con las zonas.
+    if (view.rot === 1) [dx, dy] = [dy, -dx];
+    else if (view.rot === 2) [dx, dy] = [-dx, -dy];
+    else if (view.rot === 3) [dx, dy] = [-dy, dx];
+    if (!doorDrag.moved && Math.abs(dx) + Math.abs(dy) < 0.2) return;
+    doorDrag.moved = true;
+    // lo que avanzó a lo largo de la pared; cada 5 cm, y pegada al extremo si queda a menos de 10 cm
+    let dist = doorDrag.start + dx * doorDrag.ux + dy * doorDrag.uy;
+    dist = Math.round(dist / 0.05) * 0.05;
+    if (dist < 0.1) dist = 0;
+    if (dist > doorDrag.room - 0.1) dist = doorDrag.room;
+    door.dist = round2(Math.min(Math.max(dist, 0), doorDrag.room));
+    const i = state.draft.doors.indexOf(door);
+    const box = document.querySelector(`[data-l="doors"][data-i="${i}"][data-k="dist"]`);
+    if (box) box.value = door.dist;
+    refreshLive();
+});
+window.addEventListener('pointerup', () => {
+    if (!doorDrag) return;
+    const moved = doorDrag.moved;
+    doorDrag = null;
+    if (moved && state.draft) { renderPanel(); refreshLive(); }
+});
+
 // ---- Cambiar de centro de costos en el selector de arriba ---------------------------------------------------------------------------
 document.addEventListener('sgn:cost-centers-changed', async () => {
     if (!state.loaded) return;
@@ -3325,7 +3373,7 @@ $('layout-svg').addEventListener('pointerdown', (event) => {
         const [a, b] = [...zoomPts.values()];
         pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s: zoom.s };
         panId = null;
-    } else if (!drag && zoom.s > 1.001) {
+    } else if (!drag && !doorDrag && zoom.s > 1.001) {
         panId = event.pointerId; // acercado, arrastrar el fondo (o una zona que no se puede mover) recorre el croquis
     }
 });
