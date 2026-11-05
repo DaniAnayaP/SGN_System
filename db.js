@@ -6802,7 +6802,6 @@ function describeHrAssignment(kind, raw, clientId, forTestAccount = false) {
 }
 
 const HR_WORKER_PATCHABLE_FIELDS = {
-    area: { column: 'area', fieldKey: 'main.colHrArea' },
     email: { column: 'email', fieldKey: 'main.colHrEmail' },
     personalEmail: { column: 'personal_email', fieldKey: 'main.colHrPersonalEmail' },
     phone: { column: 'phone', fieldKey: 'main.colHrPhone' },

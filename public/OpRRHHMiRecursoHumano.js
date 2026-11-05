@@ -549,14 +549,6 @@ function buildUserStatusCell(worker) {
 function buildRow(worker) {
     const [year, month, day] = worker.startDate.split('-').map(Number);
 
-    const tdArea = document.createElement('td');
-    tdArea.dataset.col = 'colHrArea';
-    Dashboard.attachInlineEdit(tdArea, {
-        value: worker.area || '', tableKey: TABLE_KEY, colKey: 'colHrArea',
-        pending: isPending(worker, 'area'),
-        onCommit: (val) => patchWorker(worker.id, { area: val }),
-    });
-
     const tdEmail = document.createElement('td');
     tdEmail.dataset.col = 'colHrEmail';
     Dashboard.attachInlineEdit(tdEmail, {
@@ -596,7 +588,6 @@ function buildRow(worker) {
         buildAssignmentCell(worker, 'areas'),
         buildAssignmentCell(worker, 'sites'),
         buildAssignmentCell(worker, 'costCenters'),
-        tdArea,
         tdEmail,
         tdPersonalEmail,
         tdPhone,
