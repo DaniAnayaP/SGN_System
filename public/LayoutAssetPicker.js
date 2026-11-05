@@ -15,19 +15,22 @@
         const el = document.createElement('style');
         el.textContent = `
 .lap-host[hidden]{ display:none; }
-.lap{ display:flex; flex-direction:column; max-height:100%; background:var(--color-surface, #fff); color:var(--color-text-primary, var(--brand-ink, #1f2430)); border:1px solid var(--color-border, var(--brand-line, #d5d8e2)); border-radius:10px; box-shadow:0 8px 22px rgba(20,22,31,.2); font-size:12.5px; line-height:1.35; overflow:hidden; }
-.lap-head{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:8px 10px; border-bottom:1px solid var(--color-border, var(--brand-line, #d5d8e2)); }
-.lap-count{ flex:1 1 8rem; font-weight:700; }
-.lap-btn{ font:inherit; font-size:11.5px; padding:3px 10px; border-radius:999px; border:1px solid var(--color-border, var(--brand-line, #d5d8e2)); background:transparent; color:inherit; cursor:pointer; }
+.lap{ display:flex; flex-direction:column; max-height:100%; background:var(--color-surface, #fff); color:var(--color-text-primary, var(--brand-ink, #1f2430)); border:1px solid var(--color-border, var(--brand-line, #d5d8e2)); border-radius:10px; box-shadow:0 8px 22px rgba(20,22,31,.2); font-size:.78rem; line-height:1.35; overflow:hidden; }
+.lap-head{ display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; padding:.5rem .7rem; border-bottom:1px solid var(--color-border, var(--brand-line, #d5d8e2)); }
+.lap-count{ flex:1 1 9rem; font-weight:700; font-size:.82rem; }
+.lap-btn{ font:inherit; font-size:.72rem; padding:.2rem .65rem; border-radius:999px; border:1px solid var(--color-border, var(--brand-line, #d5d8e2)); background:transparent; color:inherit; cursor:pointer; }
 .lap-btn:focus-visible, .lap-search input:focus-visible, .lap input[type=checkbox]:focus-visible{ outline:2px solid var(--brand, #6b3e98); outline-offset:2px; }
-.lap-search{ padding:6px 10px; border-bottom:1px solid var(--color-border, var(--brand-line, #d5d8e2)); }
-.lap-search input{ width:100%; box-sizing:border-box; font:inherit; padding:5px 9px; border:1px solid var(--color-border, var(--brand-line, #d5d8e2)); border-radius:8px; background:var(--color-bg, #fff); color:inherit; }
-.lap-list{ overflow:auto; padding:2px 6px 8px; min-height:3rem; }
-.lap-zone{ display:flex; align-items:center; gap:6px; padding:8px 4px 2px; font-weight:700; }
-.lap-zone small{ font-weight:400; opacity:.7; }
-.lap-item{ display:flex; align-items:center; gap:8px; padding:3px 4px 3px 20px; }
-.lap-item label, .lap-zone label{ display:flex; align-items:center; gap:8px; cursor:pointer; flex:1; min-width:0; }
-.lap-item small{ opacity:.7; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lap-search{ padding:.4rem .7rem; border-bottom:1px solid var(--color-border, var(--brand-line, #d5d8e2)); }
+.lap-search input{ width:100%; box-sizing:border-box; font:inherit; font-size:.78rem; padding:.3rem .6rem; border:1px solid var(--color-border, var(--brand-line, #d5d8e2)); border-radius:8px; background:var(--color-bg, #fff); color:inherit; }
+.lap-list{ overflow:auto; padding:0 .4rem .5rem; min-height:3rem; }
+.lap-zone{ position:sticky; top:0; z-index:1; display:flex; align-items:center; gap:.4rem; padding:.45rem .3rem .25rem; font-weight:700; font-size:.78rem; background:var(--color-surface, #fff); border-bottom:1px solid var(--color-border, var(--brand-line, #d5d8e2)); }
+.lap-zone small{ margin-left:auto; padding:0 .45rem; border:1px solid var(--color-border, var(--brand-line, #d5d8e2)); border-radius:999px; font-weight:600; font-size:.68rem; opacity:.85; }
+.lap-items{ display:grid; grid-template-columns:repeat(auto-fill, minmax(9.5rem, 1fr)); gap:.05rem .5rem; padding:.2rem .3rem .35rem 1.1rem; }
+.lap-item{ display:flex; align-items:center; min-width:0; padding:.1rem 0; }
+.lap-item label, .lap-zone label{ display:flex; align-items:center; gap:.4rem; cursor:pointer; flex:1; min-width:0; }
+.lap input[type=checkbox]{ flex:none; width:.95rem; height:.95rem; margin:0; }
+.lap-item b{ font-size:.78rem; }
+.lap-item small{ font-size:.7rem; opacity:.7; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lap-empty{ padding:12px 6px; opacity:.7; }`;
         document.head.appendChild(el);
     }
@@ -75,7 +78,7 @@
             listEl.innerHTML = groups.map(([zid, name, items]) => {
                 const on = items.filter((s) => !hidden.has(s.id)).length;
                 const rows = items.map((s) => `<div class="lap-item"><label><input type="checkbox" data-lap-id="${esc(s.id)}"${hidden.has(s.id) ? '' : ' checked'}><b>${esc(s.code)}</b><small>${esc(typeLabel(s.type))}${s.name ? ` · ${esc(s.name)}` : ''}</small></label></div>`).join('');
-                return `<div class="lap-zone"><label><input type="checkbox" data-lap-zone="${esc(zid)}" data-lap-state="${on === items.length ? 'all' : on ? 'some' : 'none'}"${on === items.length ? ' checked' : ''}><span>${esc(name)}</span><small>${on} / ${items.length}</small></label></div>${rows}`;
+                return `<div class="lap-zone"><label><input type="checkbox" data-lap-zone="${esc(zid)}" data-lap-state="${on === items.length ? 'all' : on ? 'some' : 'none'}"${on === items.length ? ' checked' : ''}><span>${esc(name)}</span><small>${on} / ${items.length}</small></label></div><div class="lap-items">${rows}</div>`;
             }).join('');
             listEl.querySelectorAll('[data-lap-state="some"]').forEach((box) => { box.indeterminate = true; });
         }
