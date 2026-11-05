@@ -7359,6 +7359,15 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lt3{ font: 600 7.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-secondary); pointer-events: none; }
 /* Croquis del editor: el contorno blanco ya no es un trazo sino 8 copias del texto con el color de la superficie (.lh) debajo del texto (.lx), igual que en la página del QR. */
 .lt.lx, .lt2.lx, .lm.lx{ paint-order: normal; stroke: none; }
+/* Zonas a desnivel (icono «Niveles»): rayas sobre la zona más alta o más baja que el piso, degradado y flecha en la rampa, y el nivel debajo del nombre. No agarran el puntero. */
+.lvl-raised{ pointer-events: none; stroke: #A63FB5; stroke-width: 2.4; }
+.lvl-ramp{ pointer-events: none; stroke: #A63FB5; stroke-width: 1.5; stroke-dasharray: 5 3; }
+.lvl-arrow{ pointer-events: none; stroke: #A63FB5; stroke-width: 2.2; fill: none; marker-end: url(#lvl-arr); }
+.llvl{ font: 700 9.5px var(--font-family, system-ui, sans-serif); fill: #A63FB5; }
+.llvl.lh{ fill: var(--color-surface); pointer-events: none; }
+.llvl.lx{ pointer-events: none; }
+.layout-legend .lg-level-raised{ background: repeating-linear-gradient(45deg, color-mix(in srgb, #A63FB5 55%, transparent) 0 2px, transparent 2px 5px); border: 1.5px solid #A63FB5; }
+.layout-legend .lg-level-ramp{ background: linear-gradient(90deg, color-mix(in srgb, #A63FB5 10%, transparent), color-mix(in srgb, #A63FB5 60%, transparent)); border: 1px dashed #A63FB5; }
 .lt.lh, .lt2.lh, .lm.lh{ fill: var(--color-surface); paint-order: normal; stroke: none; pointer-events: none; }
 .lscale{ stroke: var(--color-text-secondary); stroke-width: 2; }
 

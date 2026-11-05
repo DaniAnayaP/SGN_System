@@ -33,6 +33,9 @@
     // Cómo abre una puerta: batiente (gira sobre su bisagra), corrediza (corre pegada a la pared) o fija (no abre). hinge = de qué extremo de la puerta está la bisagra o hacia dónde corre (inicio o final de la pared); dir = hacia qué
     // lado de la pared abre o corre (adentro o afuera). Una puerta sin estos datos (las de antes) cuenta como fija: no dibuja ni ocupa espacio al abrir.
     const DOOR_OPENS = ['swing', 'slide', 'fixed'];
+    // Zonas a desnivel: cada zona puede estar más alta o más baja que el piso de la nave (lvl, en metros; 0 = a nivel). Una rampa lleva además el nivel de su parte alta (lvl2) y hacia qué lado del croquis sube (rise):
+    // lvl es el nivel del lado bajo y lvl2 el del lado alto. Lo que está dentro de la zona (huellas, activos, pasillos…) queda sobre su piso.
+    const ZONE_RISES = ['up', 'down', 'left', 'right'];
     const DOOR_ENDS = ['start', 'end'];
     const DOOR_SIDES = ['in', 'out'];
     const SLIDE_DEPTH = 0.12;
@@ -464,6 +467,35 @@
         return out;
     }
     function newDoorViolations(next, previous) { return newWallItemViolations(next, previous).filter((v) => v.list === 'doors'); }
+    // ---- Zonas a desnivel -------------------------------------------------------------------------------------------------------------------------------------
+    const zoneHasLevel = (z) => !!z && ((Number(z.lvl) || 0) !== 0 || (z.lvl2 != null && Number(z.lvl2) !== (Number(z.lvl) || 0) && Number.isFinite(Number(z.lvl2))));
+    // El nivel del piso de una zona en un punto (x, y): el de la zona si es plana o, en una rampa, el que le toca por lo que lleva recorrido del lado bajo al lado alto (el piso inclinado es un plano que va de un
+    // borde del recuadro de la zona al opuesto).
+    function zoneLevelAt(z, x, y) {
+        const base = Number(z && z.lvl) || 0;
+        const top = z && z.lvl2 != null ? Number(z.lvl2) : null;
+        if (top === null || !Number.isFinite(top) || top === base || !ZONE_RISES.includes(z.rise)) return base;
+        const pts = zonePoints(z);
+        const xs = pts.map((p) => p[0]);
+        const ys = pts.map((p) => p[1]);
+        const x0 = Math.min(...xs); const x1 = Math.max(...xs); const y0 = Math.min(...ys); const y1 = Math.max(...ys);
+        const along = (v, a, b, flip) => (b > a ? (flip ? (b - v) / (b - a) : (v - a) / (b - a)) : 0);
+        const t = z.rise === 'right' ? along(x, x0, x1, false) : (z.rise === 'left' ? along(x, x0, x1, true) : (z.rise === 'down' ? along(y, y0, y1, false) : along(y, y0, y1, true)));
+        return base + (top - base) * Math.min(Math.max(t, 0), 1);
+    }
+    // El nivel del piso del Layout en un punto: el de la zona con nivel que lo contiene (la más chica si hay varias); 0 si ninguna.
+    function floorLevelAt(layout, x, y) {
+        let best = null;
+        let bestArea = Infinity;
+        ((layout && layout.zones) || []).forEach((z) => {
+            if (!z || z.active === false || !zoneHasLevel(z)) return;
+            const pts = zonePoints(z);
+            if (pts.length < 3 || !(pointInPolygon(x, y, pts) || onPolygonEdge(x, y, pts))) return;
+            const a = zoneArea(z);
+            if (a <= bestArea) { best = z; bestArea = a; }
+        });
+        return best ? zoneLevelAt(best, x, y) : 0;
+    }
     // Volumen de la nave: lo que cabe bajo el techo menos lo que sube el piso en cada desnivel (superficie por su altura sobre el piso; si es más bajo, la altura es negativa y suma).
     function netVolume(layout) {
         const gross = volumeOf((layout && layout.vertices) || []);
@@ -1994,7 +2026,16 @@
                 if (desc.length > LIMITS.categoryText) errors.push(`${cl}: descripción demasiado larga`);
                 return { id: idOf(c && c.id, catIds, cl), name: text(c && c.name, cl, true), desc: desc.slice(0, LIMITS.categoryText), icon: oneOf(c && c.icon, CATEGORY_ICONS, 'tag'), color };
             });
-            const extra = { ...(use ? { use } : {}), ...(planM2 > 0 ? { planM2 } : {}), ...(fmt ? { fmt } : {}), ...(categories.length ? { categories } : {}) };
+            // Nivel del piso (puede ser negativo: un foso) y, si es una rampa, el nivel de su parte alta y hacia qué lado sube; una zona a nivel (0) y sin rampa no guarda nada.
+            const lvlRaw = z && z.lvl != null && z.lvl !== '' ? Number(z.lvl) : 0;
+            const lvl2Raw = z && z.lvl2 != null && z.lvl2 !== '' ? Number(z.lvl2) : null;
+            if (!Number.isFinite(lvlRaw) || Math.abs(lvlRaw) > LIMITS.maxHeight) errors.push(`${label}: el nivel del piso no es válido`);
+            if (lvl2Raw !== null && (!Number.isFinite(lvl2Raw) || Math.abs(lvl2Raw) > LIMITS.maxHeight)) errors.push(`${label}: el nivel de la parte alta no es válido`);
+            const lvl = Number.isFinite(lvlRaw) && Math.abs(lvlRaw) <= LIMITS.maxHeight ? round2(lvlRaw) : 0;
+            const lvl2 = lvl2Raw !== null && Number.isFinite(lvl2Raw) && Math.abs(lvl2Raw) <= LIMITS.maxHeight ? round2(lvl2Raw) : null;
+            const ramp = lvl2 !== null && lvl2 !== lvl;
+            const levelExtra = { ...(lvl !== 0 ? { lvl } : {}), ...(ramp ? { lvl2, rise: oneOf(z && z.rise, ZONE_RISES, 'right') } : {}) };
+            const extra = { ...(use ? { use } : {}), ...(planM2 > 0 ? { planM2 } : {}), ...levelExtra, ...(fmt ? { fmt } : {}), ...(categories.length ? { categories } : {}) };
             const active = !(z && z.active === false);
             if (z && z.pts != null) {
                 // Zona de cualquier forma: sus esquinas son la verdad; x, y, largo y ancho son el recuadro que la envuelve.
@@ -2191,6 +2232,8 @@
         const b = turn([g.b.x, g.b.y]);
         return { ...item, _seg: { ...g, a: { x: a[0], y: a[1] }, b: { x: b[0], y: b[1] }, ux: dir[0], uy: dir[1], nx: nor[0], ny: nor[1] } };
     }
+    // Hacia qué lado del croquis sube una rampa, con el croquis girado q cuartos de vuelta a la derecha.
+    const rotateRise = (rise, q) => { const order = ['up', 'right', 'down', 'left']; const i = order.indexOf(rise); return i < 0 ? rise : order[(i + q) % 4]; };
     function rotateLayout(layout, quarters) {
         const q = ((Math.round(Number(quarters)) % 4) + 4) % 4;
         if (!q || !layout) return layout;
@@ -2224,9 +2267,9 @@
                     const ys = pts.map((p) => p[1]);
                     const x = Math.min(...xs);
                     const y = Math.min(...ys);
-                    return { ...z, pts, x, y, l: round2(Math.max(...xs) - x), w: round2(Math.max(...ys) - y) };
+                    return { ...z, pts, x, y, l: round2(Math.max(...xs) - x), w: round2(Math.max(...ys) - y), ...(z.rise ? { rise: rotateRise(z.rise, q) } : {}) };
                 }
-                return { ...z, ...box(z, 'l', 'w') };
+                return { ...z, ...box(z, 'l', 'w'), ...(z.rise ? { rise: rotateRise(z.rise, q) } : {}) };
             }),
         };
     }
@@ -2325,7 +2368,7 @@
     }
 
     return {
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,

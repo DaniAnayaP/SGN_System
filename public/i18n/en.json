@@ -2203,6 +2203,18 @@
     "layoutAperturaOcultar": "Hide the door openings",
     "layoutLeyendaGiroPuerta": "Door swing",
     "layoutLeyendaRecorridoPuerta": "Sliding door travel",
+    "layoutNivelPiso": "Floor level (m)",
+    "layoutNivelAlto": "Upper level (m)",
+    "layoutLadoAlto": "Higher side",
+    "layoutType_rise_up": "Up",
+    "layoutType_rise_down": "Down",
+    "layoutType_rise_left": "Left",
+    "layoutType_rise_right": "Right",
+    "layoutNivelesBtn": "Show and hide the floor levels",
+    "layoutNivelesVer": "Show the floor levels",
+    "layoutNivelesOcultar": "Hide the floor levels",
+    "layoutLeyendaPisoElevado": "Floor at another level",
+    "layoutLeyendaRampa": "Ramp",
     "layoutLeyendaPuerta": "Door",
     "layoutLeyendaLuz": "Power connection",
     "layoutLeyendaSensor": "Temperature and humidity sensor",
@@ -4419,6 +4431,22 @@
     "layoutPuertaLado": {
       "what": "Which side of the wall a Swinging door opens to, or which side the leaf of a Sliding door sits on: Inside or Outside. On the contour walls, inside is toward the building; on a wall inside the building, inside is down on the sketch (to the left if the wall is vertical). Not used on a Fixed door.",
       "example": "the emergency exit opens Outside, where people leave; the staff entrance opens Inside."
+    },
+    "layoutNiveles": {
+      "what": "Shows or hides the floor levels of the zones: on the sketch, stripes over the zones that are higher or lower than the building floor, a gradient with an arrow on ramps and the level under the name; in 3D, the level next to the zone name. Screen only: the raised floor in 3D is always shown.",
+      "example": "Reception and Offices are at +1.20 m: with the button you see their stripes and level; without it the sketch stays clean."
+    },
+    "layoutNivelPiso": {
+      "what": "How high this zone's floor is compared with the building floor, in meters. 0 is level; positive is higher; negative is lower (a pit). Everything inside the zone (footprints, assets, aisles, objects and safety) sits on that floor in 3D. On a ramp it is the level of its lower part.",
+      "example": "Offices and Reception sit on a 1.2 m platform: you enter 1.2 on each."
+    },
+    "layoutNivelAlto": {
+      "what": "Only for a ramp: the level of its upper part, in meters. With it the zone is no longer flat: the floor rises from the Floor level (low side) to this level (high side). Leave it empty if the zone is flat.",
+      "example": "zone 7 rises from 0 to 1.2: Floor level 0 and Upper level 1.2."
+    },
+    "layoutLadoAlto": {
+      "what": "Which side of the sketch the ramp rises toward: up, down, left or right. Only filled when the zone has an Upper level.",
+      "example": "the ramp is to the right of the offices, which are higher: it rises to the left."
     },
     "layoutSite": {
       "what": "The name of the place (the site). It appears above the company name in the header of the Layout sheet and of the printed cards. If you leave it empty the usual text is used. Later it will come from settings.",

@@ -6544,6 +6544,8 @@ function layoutPermissions(req) {
         canToggleNames: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutNombres'),
         // Ver u ocultar el espacio que necesita cada puerta al abrir (el giro de la batiente y el recorrido de la corrediza) es otro icono con su hoja (iconLayoutApertura).
         canToggleOpening: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutApertura'),
+        // Ver u ocultar los niveles de piso de las zonas (rayas, rampa y el nivel de cada zona) es otro icono con su hoja (iconLayoutNiveles).
+        canToggleLevels: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutNiveles'),
         // Acercar y alejar el croquis (botones, rueda, dos dedos) es otro icono con su hoja (iconLayoutZoom).
         canZoom: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutZoom'),
         // Ver el Layout en 3D (y volver al 2D) es otro icono con su hoja (iconLayoutVista3D).

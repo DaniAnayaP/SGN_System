@@ -84,6 +84,8 @@
         // Apertura de puertas: si se ve (openingsOn), cada puerta que abre dibuja su espacio; las puertas cuyo espacio choca con algo (clashSet) van en rojo.
         let openingsOn = false;
         let clashSet = new Set();
+        // Zonas a desnivel: con levelsOn el nivel de cada zona se escribe junto a su nombre.
+        let levelsOn = true;
         let hl = null; // lo resaltado: { kind: 'zone' | 'footprint' | 'space' | 'bay', id, strong }
         const textureCache = new Map();
 
@@ -124,14 +126,16 @@
                 const pts = Array.isArray(z.pts) && z.pts.length >= 3 ? z.pts : [[z.x, z.y], [z.x + z.l, z.y], [z.x + z.l, z.y + z.w], [z.x, z.y + z.w]];
                 const xs = pts.map((p) => p[0]); const ys = pts.map((p) => p[1]);
                 const x0 = Math.min(...xs); const x1 = Math.max(...xs); const y0 = Math.min(...ys); const y1 = Math.max(...ys);
-                return { x: PX((x0 + x1) / 2), y: 0.1, z: PZ((y0 + y1) / 2), sx: x1 - x0, sy: 0.2, sz: y1 - y0 };
+                const zl = root.LayoutCalc && root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, (x0 + x1) / 2, (y0 + y1) / 2) : 0;
+                return { x: PX((x0 + x1) / 2), y: 0.1 + zl, z: PZ((y0 + y1) / 2), sx: x1 - x0, sy: 0.2, sz: y1 - y0 };
             }
             if (hl.kind === 'footprint') {
                 const f = (lastLayout.footprints || []).find((e) => e.id === hl.id);
                 if (!f || f.active === false || !(f.l > 0) || !(f.d > 0) || !(layerOn.footprints || layerOn.assets)) return null;
                 const mates = (lastLayout.spaces || []).filter((s) => s.footprintId === f.id && s.active !== false && s.h > 0 && !hiddenAssets.has(s.id));
                 const h = layerOn.assets && mates.length ? Math.max(...mates.map((s) => s.h)) : 0.2;
-                return { x: PX(f.x + f.l / 2), y: h / 2, z: PZ(f.y + f.d / 2), sx: f.l, sy: h, sz: f.d };
+                const fz = root.LayoutCalc && root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, f.x + f.l / 2, f.y + f.d / 2) : 0;
+                return { x: PX(f.x + f.l / 2), y: h / 2 + fz, z: PZ(f.y + f.d / 2), sx: f.l, sy: h, sz: f.d };
             }
             // un lado (o una esquina) del contorno elegido en la tabla de Contorno: el tramo de pared de esa esquina a la siguiente, con la altura de sus esquinas
             if (hl.kind === 'side' || hl.kind === 'corner') {
@@ -209,7 +213,8 @@
             }
             const s = (lastLayout.spaces || []).find((e) => e.id === hl.id);
             if (!s || s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id) || !layerOn.assets) return null;
-            return { x: PX(s.x + s.l / 2), y: s.h / 2, z: PZ(s.y + s.d / 2), sx: s.l, sy: s.h, sz: s.d };
+            const sz0 = root.LayoutCalc && root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, s.x + s.l / 2, s.y + s.d / 2) : 0;
+            return { x: PX(s.x + s.l / 2), y: s.h / 2 + sz0, z: PZ(s.y + s.d / 2), sx: s.l, sy: s.h, sz: s.d };
         }
         function applyHl() {
             const box = hlBox();
@@ -325,6 +330,7 @@
             if (opts && 'contourPick' in opts) contourPickMode = opts.contourPick === 'sides' || opts.contourPick === 'corners' ? opts.contourPick : null;
             if (opts && 'focus' in opts) focusSet = opts.focus || null;
             if (opts && 'openings' in opts) openingsOn = !!opts.openings;
+            if (opts && 'levels' in opts) levelsOn = !!opts.levels;
             if (opts && 'clashDoors' in opts) clashSet = new Set(opts.clashDoors || []);
             lastLayout = layout;
             Object.keys(group).forEach((n) => clearGroup(group[n]));
@@ -512,26 +518,66 @@
 
             // zonas: losas de color (el que se les puso en Formato de zona, o el de su tipo)
             const LCalc = root.LayoutCalc;
+            // El nivel del piso en un punto: el de la zona con nivel que lo contiene (0 si no hay ninguna); lo que está encima de una zona elevada sube con ella.
+            const anyLevel = !!LCalc && !!LCalc.floorLevelAt && (layout.zones || []).some((z) => z.active !== false && LCalc.zoneHasLevel(z));
+            const FL = (x, y) => (anyLevel ? LCalc.floorLevelAt(layout, x, y) : 0);
+            // Una zona con nivel (o rampa): la tapa sigue el piso de la zona (plana, o inclinada en la rampa) y cuatro lados bajan hasta el piso de la nave.
+            const levelSlab = (z, pts, color, mat, i) => {
+                const top = new THREE.ShapeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1]))));
+                const pos = top.attributes.position;
+                for (let k = 0; k < pos.count; k++) { const px = pos.getX(k); const py = pos.getY(k); pos.setXYZ(k, PX(px), 0.05 + 0.004 * i + LCalc.zoneLevelAt(z, px, py), PZ(py)); }
+                pos.needsUpdate = true;
+                top.computeVertexNormals();
+                const arr = [];
+                for (let k = 0; k < pts.length; k++) {
+                    const p = pts[k]; const q = pts[(k + 1) % pts.length];
+                    const tp = 0.05 + 0.004 * i + LCalc.zoneLevelAt(z, p[0], p[1]); const tq = 0.05 + 0.004 * i + LCalc.zoneLevelAt(z, q[0], q[1]);
+                    arr.push(PX(p[0]), 0, PZ(p[1]), PX(q[0]), 0, PZ(q[1]), PX(q[0]), tq, PZ(q[1]), PX(p[0]), 0, PZ(p[1]), PX(q[0]), tq, PZ(q[1]), PX(p[0]), tp, PZ(p[1]));
+                }
+                const sides = new THREE.BufferGeometry();
+                sides.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+                sides.computeVertexNormals();
+                const sideMat = mat.clone();
+                sideMat.color = new THREE.Color(mixHex(parseInt(String(color).replace('#', ''), 16) || 0xcccccc, 0x000000, 0.28));
+                sideMat.side = THREE.DoubleSide;
+                mat.side = THREE.DoubleSide;
+                return { top, sides, sideMat };
+            };
             (layout.zones || []).forEach((z, i) => {
                 const pts = Array.isArray(z.pts) && z.pts.length >= 3 ? z.pts : [[z.x, z.y], [z.x + z.l, z.y], [z.x + z.l, z.y + z.w], [z.x, z.y + z.w]];
                 if (!(z.l > 0 || (z.pts && z.pts.length >= 3))) return;
                 const color = (z.fmt && z.fmt.fill) || DEFAULT_ZONE_FILL[z.type || 'none'] || DEFAULT_ZONE_FILL.none;
-                let geo;
-                try {
-                    geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1]))), { depth: 0.05, bevelEnabled: false });
-                } catch (err) { return; }
-                geo.rotateX(Math.PI / 2);
-                geo.translate(-CX, 0.05 + 0.004 * i, -CY);
                 const inactive = z.active === false;
                 const dimZone = !!focusSet && !focusSet.zones.has(z.id);
-                const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive || dimZone, opacity: inactive ? 0.35 : (dimZone ? 0.22 : 1) }));
+                const zoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive || dimZone, opacity: inactive ? 0.35 : (dimZone ? 0.22 : 1) });
+                const leveled = anyLevel && LCalc.zoneHasLevel(z);
+                let geo;
+                let sideMesh = null;
+                if (leveled) {
+                    try {
+                        const slab = levelSlab(z, pts, color, zoneMat, i);
+                        geo = slab.top;
+                        sideMesh = new THREE.Mesh(slab.sides, slab.sideMat);
+                    } catch (err) { return; }
+                } else {
+                    try {
+                        geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1]))), { depth: 0.05, bevelEnabled: false });
+                    } catch (err) { return; }
+                    geo.rotateX(Math.PI / 2);
+                    geo.translate(-CX, 0.05 + 0.004 * i, -CY);
+                }
+                const mesh = new THREE.Mesh(geo, zoneMat);
                 mesh.userData = { kind: 'zone', zone: z };
                 group.zones.add(mesh);
+                if (sideMesh) group.zones.add(sideMesh);
                 zoneMeshes.push(mesh);
                 let ax; let ay;
                 try { const a = LCalc && LCalc.zoneLabelAnchor ? LCalc.zoneLabelAnchor(z) : null; if (a) { ax = a.x; ay = a.y; } } catch (err) { /* usa el centro */ }
                 if (ax === undefined) { ax = z.x + z.l / 2; ay = z.y + z.w / 2; }
-                if (!inactive && !dimZone) addLabel(group.zoneLabels, z.name, PX(ax), 0.12 + 0.004 * i, PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
+                if (!inactive && !dimZone) {
+                    const lvlText = levelsOn && anyLevel && LCalc.zoneHasLevel(z) ? ` · ${z.lvl2 !== undefined && z.rise ? `${Math.round((Number(z.lvl) || 0) * 100) / 100} → ${Math.round(Number(z.lvl2) * 100) / 100}` : `${(Number(z.lvl) || 0) > 0 ? '+' : ''}${Math.round((Number(z.lvl) || 0) * 100) / 100}`} m` : '';
+                    addLabel(group.zoneLabels, z.name + lvlText, PX(ax), 0.12 + 0.004 * i + FL(ax, ay), PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
+                }
             });
 
             // pasillos (paso Tránsito, su propia capa): losas delgadas sobre el piso (principal más oscuro, entre pasillos más claro)
@@ -539,7 +585,7 @@
             (layout.transit || []).forEach((p, i) => {
                 if (!(p.l > 0) || !(p.w > 0)) return;
                 const slab = new THREE.Mesh(new THREE.BoxGeometry(p.l, 0.02, p.w), new THREE.MeshLambertMaterial({ color: p.type === 'between' ? 0xe3e6ef : 0xc4c9db }));
-                slab.position.set(PX(p.x + p.l / 2), transitY + 0.002 * i, PZ(p.y + p.w / 2));
+                slab.position.set(PX(p.x + p.l / 2), transitY + 0.002 * i + FL(p.x + p.l / 2, p.y + p.w / 2), PZ(p.y + p.w / 2));
                 group.transit.add(slab);
             });
             // objetos (paso Objetos): personas y montacargas a escala, girados hacia donde miran (foto fija del plano)
@@ -573,7 +619,7 @@
                     head.position.set(0, bodyH + 0.14, 0);
                     g.add(body, head);
                 }
-                g.position.set(PX(Number(o.x) || 0), 0.08, PZ(Number(o.y) || 0));
+                g.position.set(PX(Number(o.x) || 0), 0.08 + FL(Number(o.x) || 0, Number(o.y) || 0), PZ(Number(o.y) || 0));
                 g.rotation.y = -((Number(o.angle) || 0) * Math.PI) / 180;
                 group.objects.add(g);
             });
@@ -599,7 +645,7 @@
                 if (st.state !== 'soon' && st.state !== 'overdue' && st.state !== 'fail') return;
                 const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.74, 28), new THREE.MeshBasicMaterial({ color: st.state === 'soon' ? 0xe8892b : 0xc0392b, side: THREE.DoubleSide }));
                 ring.rotation.x = -Math.PI / 2;
-                ring.position.set(PX(ex), 0.14, PZ(ey));
+                ring.position.set(PX(ex), 0.14 + FL(ex, ey), PZ(ey));
                 group.safety.add(ring);
             };
             (layout.safety || []).forEach((e) => {
@@ -626,7 +672,7 @@
                     tip.position.set(Math.cos(ang) * (len - head / 2), 0.13, Math.sin(ang) * (len - head / 2));
                     tip.rotation.y = -ang;
                     g.add(tip);
-                    g.position.set(PX(ex), 0, PZ(ey));
+                    g.position.set(PX(ex), FL(ex, ey), PZ(ey));
                     group.safety.add(g);
                     dueRing(ex, ey, e);
                     return;
@@ -694,7 +740,7 @@
                     head.position.y = y0 + tankH + headH / 2;
                     g.add(tank, head);
                 }
-                g.position.set(PX(ex), 0.08, PZ(ey));
+                g.position.set(PX(ex), 0.08 + FL(ex, ey), PZ(ey));
                 group.safety.add(g);
                 dueRing(ex, ey, e);
             });
@@ -704,7 +750,7 @@
                 const paint = f.fmt && f.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(f.fmt.fill || '') ? f.fmt.fill : '#ffffff';
                 const dimFp = !!focusSet && !focusSet.footprints.has(f.id);
                 const slab = new THREE.Mesh(new THREE.BoxGeometry(f.l, 0.02, f.d), new THREE.MeshLambertMaterial({ color: new THREE.Color(paint), transparent: dimFp, opacity: dimFp ? 0.25 : 1 }));
-                slab.position.set(PX(f.x + f.l / 2), 0.085, PZ(f.y + f.d / 2));
+                slab.position.set(PX(f.x + f.l / 2), 0.085 + FL(f.x + f.l / 2, f.y + f.d / 2), PZ(f.y + f.d / 2));
                 slab.userData = { kind: 'footprint', footprint: f };
                 group.footprints.add(slab);
                 fpMeshes.push(slab);
@@ -721,25 +767,26 @@
             (layout.spaces || []).forEach((s) => {
                 if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id)) return;
                 const cx = PX(s.x + s.l / 2); const cz = PZ(s.y + s.d / 2);
+                const fl = FL(s.x + s.l / 2, s.y + s.d / 2); // el piso donde está parado
                 const dimS = !!focusSet && !focusSet.spaces.has(s.id);
                 const mute = (c) => (dimS ? mixHex(c, 0xe4e7f0, 0.8) : c);
                 const lv = Math.max(1, s.levels || 1);
                 // el color que se le puso en Formato de activo (sin relleno o sin color propio se queda con el de su tipo)
                 const own = s.fmt && s.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(s.fmt.fill || '') ? parseInt(s.fmt.fill.slice(1), 16) : null;
                 if (s.type === 'pallet') {
-                    blk.push({ x: cx, y: 0.07, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: mute(own !== null ? own : WOOD) });
+                    blk.push({ x: cx, y: 0.07 + fl, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: mute(own !== null ? own : WOOD) });
                     const loadH = (s.h - 0.14) / lv;
-                    if (!dimS) for (let k = 0; k < lv; k++) edgeBox(cx, 0.14 + k * loadH + loadH / 2, cz, s.l - 0.04, loadH - 0.04, s.d - 0.04);
+                    if (!dimS) for (let k = 0; k < lv; k++) edgeBox(cx, fl + 0.14 + k * loadH + loadH / 2, cz, s.l - 0.04, loadH - 0.04, s.d - 0.04);
                 } else if (s.type === 'cabinet' || s.type === 'cold') {
-                    blk.push({ x: cx, y: s.h / 2, z: cz, sx: s.l, sy: s.h, sz: s.d, c: mute(own !== null ? own : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d)) });
+                    blk.push({ x: cx, y: s.h / 2 + fl, z: cz, sx: s.l, sy: s.h, sz: s.d, c: mute(own !== null ? own : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d)) });
                 } else {
                     const upC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
                     const deckC = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
-                    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([ix, iz]) => upr.push({ x: cx + ix * Math.max(0, s.l / 2 - 0.03), y: s.h / 2, z: cz + iz * Math.max(0, s.d / 2 - 0.03), sx: 0.06, sy: s.h, sz: 0.06, c: upC }));
+                    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([ix, iz]) => upr.push({ x: cx + ix * Math.max(0, s.l / 2 - 0.03), y: s.h / 2 + fl, z: cz + iz * Math.max(0, s.d / 2 - 0.03), sx: 0.06, sy: s.h, sz: 0.06, c: upC }));
                     const pitch = (s.h - 0.3) / lv;
-                    for (let k = 0; k < lv; k++) dck.push({ x: cx, y: 0.15 + k * pitch, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC });
+                    for (let k = 0; k < lv; k++) dck.push({ x: cx, y: 0.15 + k * pitch + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC });
                 }
-                spaceList.push({ s, x: cx, z: cz });
+                spaceList.push({ s, x: cx, z: cz, fl });
             });
             const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
             instanced(group.assets, upr, mat);
@@ -753,11 +800,11 @@
             if (spaceList.length) {
                 hitSpaces = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ visible: false }), spaceList.length);
                 const dummy = new THREE.Object3D();
-                spaceList.forEach((e, i) => { dummy.position.set(e.x, e.s.h / 2, e.z); dummy.scale.set(e.s.l, e.s.h, e.s.d); dummy.updateMatrix(); hitSpaces.setMatrixAt(i, dummy.matrix); });
+                spaceList.forEach((e, i) => { dummy.position.set(e.x, e.s.h / 2 + e.fl, e.z); dummy.scale.set(e.s.l, e.s.h, e.s.d); dummy.updateMatrix(); hitSpaces.setMatrixAt(i, dummy.matrix); });
                 hitSpaces.instanceMatrix.needsUpdate = true;
                 group.assets.add(hitSpaces);
             }
-            if (spaceList.length <= MAX_SPACE_LABELS) spaceList.forEach((e) => { if (!focusSet || focusSet.spaces.has(e.s.id)) addLabel(group.spaceLabels, e.s.code, e.x, e.s.h + 0.4, e.z, 0.38, false); });
+            if (spaceList.length <= MAX_SPACE_LABELS) spaceList.forEach((e) => { if (!focusSet || focusSet.spaces.has(e.s.id)) addLabel(group.spaceLabels, e.s.code, e.x, e.s.h + 0.4 + e.fl, e.z, 0.38, false); });
 
             applyVisibility();
             if (!placed) { placed = true; go(viewTarget('general'), false); }

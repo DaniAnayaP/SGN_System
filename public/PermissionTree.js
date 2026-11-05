@@ -1775,6 +1775,7 @@
             iconLayoutImprimirZona: 'bx-printer',
             iconLayoutGirar: 'bx-rotate-right',
             iconLayoutApertura: 'bx-door-open',
+            iconLayoutNiveles: 'bx-trending-up',
             iconLayoutVista3D: 'bx-cube-alt',
             iconLayout3dCapas: 'bx-layer',
             iconLayoutCategorias: 'bx-purchase-tag-alt',

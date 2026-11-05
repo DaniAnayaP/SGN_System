@@ -2203,6 +2203,18 @@
     "layoutAperturaOcultar": "Ocultar la apertura de las puertas",
     "layoutLeyendaGiroPuerta": "Giro de la puerta",
     "layoutLeyendaRecorridoPuerta": "Recorrido de la corrediza",
+    "layoutNivelPiso": "Nivel del piso (m)",
+    "layoutNivelAlto": "Nivel de la parte alta (m)",
+    "layoutLadoAlto": "Lado más alto",
+    "layoutType_rise_up": "Arriba",
+    "layoutType_rise_down": "Abajo",
+    "layoutType_rise_left": "Izquierda",
+    "layoutType_rise_right": "Derecha",
+    "layoutNivelesBtn": "Ver y ocultar los niveles de piso",
+    "layoutNivelesVer": "Ver los niveles de piso",
+    "layoutNivelesOcultar": "Ocultar los niveles de piso",
+    "layoutLeyendaPisoElevado": "Piso a otro nivel",
+    "layoutLeyendaRampa": "Rampa",
     "layoutLeyendaPuerta": "Puerta",
     "layoutLeyendaLuz": "Conexión de luz",
     "layoutLeyendaSensor": "Sensor de temperatura y humedad",
@@ -4418,6 +4430,22 @@
     "layoutPuertaLado": {
       "what": "Hacia qué lado de la pared abre la Batiente, o de qué lado queda la hoja de la Corrediza: Adentro o Afuera. En las paredes del contorno, adentro es hacia la nave; en una pared de adentro de la nave, adentro es hacia abajo en el croquis (a la izquierda si la pared es vertical). En una Fija no se usa.",
       "example": "la salida de emergencia abre Afuera, hacia donde sale la gente; el acceso de personal abre Adentro."
+    },
+    "layoutNiveles": {
+      "what": "Muestra u oculta los niveles de piso de las zonas: en el croquis, rayas sobre las zonas más altas o más bajas que el piso de la nave, un degradado con flecha en las rampas y el nivel debajo del nombre; en el 3D, el nivel junto al nombre de la zona. Es solo de pantalla: el piso elevado del 3D siempre se ve.",
+      "example": "Recepción y Oficinas están a +1.20 m: con el botón ves sus rayas y su nivel; sin él, el croquis queda limpio."
+    },
+    "layoutNivelPiso": {
+      "what": "A qué altura está el piso de esta zona respecto al piso de la nave, en metros. 0 es a nivel; positivo es más alta; negativo es más baja (un foso). Lo que hay dentro de la zona (huellas, activos, pasillos, objetos y seguridad) queda sobre ese piso en el 3D. En una rampa es el nivel de su parte baja.",
+      "example": "Oficinas y Recepción están sobre una plataforma de 1.2 m: pones 1.2 en cada una."
+    },
+    "layoutNivelAlto": {
+      "what": "Solo para una rampa: el nivel de su parte alta, en metros. Con él la zona deja de ser plana: el piso sube del Nivel del piso (lado bajo) a este nivel (lado alto). Déjalo vacío si la zona es plana.",
+      "example": "la zona 7 sube de 0 a 1.2: Nivel del piso 0 y Nivel de la parte alta 1.2."
+    },
+    "layoutLadoAlto": {
+      "what": "Hacia qué lado del croquis sube la rampa: arriba, abajo, izquierda o derecha. Solo se llena si la zona tiene Nivel de la parte alta.",
+      "example": "la rampa queda a la derecha de las oficinas, que son más altas: sube hacia la izquierda."
     },
     "layoutSite": {
       "what": "El nombre del lugar (el sitio). Sale arriba del nombre de la empresa en el encabezado de la hoja del Layout y de las tarjetas que se imprimen. Si lo dejas vacío sale el texto de siempre. Más adelante saldrá de la configuración.",
