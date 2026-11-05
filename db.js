@@ -7095,6 +7095,13 @@ function seedLayoutVista3DIconGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(LAYOUT_VISTA3D_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutVista3D`], 'the Layout 3D view icon');
 }
+// El icono Apertura de puertas (iconLayoutApertura) se da igual, una sola vez, a quien ya tiene la pantalla Layout (mismos niveles que la siembra del icono Girar).
+const LAYOUT_OPENING_SEED_KEY = 'seed-layout-opening-icon-v1';
+function seedLayoutOpeningIconGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(LAYOUT_OPENING_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutApertura`], 'the Layout door opening icon');
+}
 // Los iconos para mostrar u ocultar las capas del 3D (iconLayout3dCapas) se dan igual, una sola vez, a quien ya tiene la pantalla Layout.
 const LAYOUT_3D_LAYERS_SEED_KEY = 'seed-layout-3d-layers-icon-v1';
 function seedLayout3dLayersIconGrants() {
@@ -11629,6 +11636,7 @@ seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();
 seedLayoutVista3DIconGrants();
 seedLayout3dLayersIconGrants();
+seedLayoutOpeningIconGrants();
 cleanupLayoutCardCenterGrants();
 seedTipoCodigoValuesOnce();
 seedActivosFijosValuesOnce();

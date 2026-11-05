@@ -1822,6 +1822,7 @@
             { "id": "iconLayoutFiltros", "labelKey": "main.layoutFiltrosBtn", "permissionOnly": true },
             { "id": "iconLayoutImprimirZona", "labelKey": "main.layoutImprimirZonaBtn", "permissionOnly": true },
             { "id": "iconLayoutGirar", "labelKey": "main.layoutGirarBtn", "permissionOnly": true },
+            { "id": "iconLayoutApertura", "labelKey": "main.layoutAperturaBtn", "permissionOnly": true },
             { "id": "iconLayoutVista3D", "labelKey": "main.layoutVista3DBtn", "permissionOnly": true },
             { "id": "iconLayout3dCapas", "labelKey": "main.layout3dCapasBtn", "permissionOnly": true },
             { "id": "iconLayoutBuscar", "labelKey": "main.layoutBuscarBtn", "permissionOnly": true },

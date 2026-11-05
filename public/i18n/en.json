@@ -2163,6 +2163,26 @@
     "layoutPlanSoloImagen": "Choose a JPG, PNG or WebP image.",
     "layoutPlanError": "The plan could not be prepared.",
     "layoutPlanAnchoInvalido": "Enter the real width of the plan in meters.",
+    "layoutPuertaAbre": "How it opens",
+    "layoutPuertaBisagra": "Hinge or slides toward",
+    "layoutPuertaLado": "Opens toward",
+    "layoutType_doorOpen_swing": "Swinging",
+    "layoutType_doorOpen_slide": "Sliding",
+    "layoutType_doorOpen_fixed": "Fixed",
+    "layoutType_doorEnd_start": "Wall start",
+    "layoutType_doorEnd_end": "Wall end",
+    "layoutType_doorSide_in": "Inside",
+    "layoutType_doorSide_out": "Outside",
+    "layoutVioDr_clash": "The {what} of the door \"{name}\" hits {other}.",
+    "layoutVioDr_clashDoor": "The {what} of the door \"{name}\" hits the one of the door \"{other}\".",
+    "layoutVioDrMas": "and {n} more",
+    "layoutVioDrWhat_swing": "swing",
+    "layoutVioDrWhat_slide": "travel",
+    "layoutAperturaBtn": "Show and hide the door openings",
+    "layoutAperturaVer": "Show the door openings",
+    "layoutAperturaOcultar": "Hide the door openings",
+    "layoutLeyendaGiroPuerta": "Door swing",
+    "layoutLeyendaRecorridoPuerta": "Sliding door travel",
     "layoutLeyendaPuerta": "Door",
     "layoutLeyendaLuz": "Power connection",
     "layoutLeyendaSensor": "Temperature and humidity sensor",
@@ -4357,6 +4377,22 @@
     "layoutRotate": {
       "what": "Rotates the sketch a quarter turn to the right each time you tap it (90°, 180°, 270° and back to the start). Use it to arrange the sketch the way you will print it, for example with the warehouse lying down or standing up. It only turns the drawing: the tables and what is saved do not change, the texts stay upright and the rotation is remembered in this browser. The downloaded sheet comes out with this rotation (you can change it right there for that download only).",
       "example": "the warehouse is long and the sheet is portrait: you rotate the sketch a quarter turn and it fills the sheet better."
+    },
+    "layoutOpening": {
+      "what": "Shows or hides the space each door needs to open: the swing of the swinging doors (purple) and the travel of the sliding ones (blue). If something is in that space (an asset, a column, another wall or another door) it turns red and the Doors step lists it below; the warning does not stop you from saving. It shows on the sketch while the Doors step is on.",
+      "example": "a 1.5 m swinging door needs a 1.5 m quarter circle free: with this button you see it and move the rack before it gets in the way."
+    },
+    "layoutPuertaAbre": {
+      "what": "How the door opens: Swinging (turns on its hinge), Sliding (slides along the wall) or Fixed (does not open and takes no space). Doors from before stay Fixed until you pick another.",
+      "example": "the staff entrance is Swinging, the dock door is Sliding and a window on the wall is Fixed."
+    },
+    "layoutPuertaBisagra": {
+      "what": "For a Swinging door, which end of the door has the hinge; for a Sliding one, where the leaf slides: toward the start or the end of the wall (the start is where the distance is measured from). Not used on a Fixed door.",
+      "example": "hinge at the start of the wall: the leaf turns from that side. Sliding toward the end: it slides toward the other corner of the wall."
+    },
+    "layoutPuertaLado": {
+      "what": "Which side of the wall a Swinging door opens to, or which side the leaf of a Sliding door sits on: Inside or Outside. On the contour walls, inside is toward the building; on a wall inside the building, inside is down on the sketch (to the left if the wall is vertical). Not used on a Fixed door.",
+      "example": "the emergency exit opens Outside, where people leave; the staff entrance opens Inside."
     },
     "layoutSite": {
       "what": "The name of the place (the site). It appears above the company name in the header of the Layout sheet and of the printed cards. If you leave it empty the usual text is used. Later it will come from settings.",

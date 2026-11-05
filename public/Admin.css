@@ -7258,6 +7258,8 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     border: 1px solid var(--color-border);
 }
 .layout-legend .lg-door{ background: var(--color-report-base-text); border-color: var(--color-report-base-text); }
+.layout-legend .lg-open-swing{ background: color-mix(in srgb, #A63FB5 35%, transparent); border: 1px dashed #A63FB5; }
+.layout-legend .lg-open-slide{ background: color-mix(in srgb, #2F7FC7 35%, transparent); border: 1px dashed #2F7FC7; }
 .layout-legend .lg-power{ background: var(--color-report-calc-bg); border-color: var(--color-report-calc-text); }
 .layout-legend .lg-sensor{ background: var(--color-report-calc-bg); border-color: #2B8CA3; }
 .layout-legend .lg-col{ background: var(--color-text-secondary); }
@@ -7335,6 +7337,13 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lhb{ fill: var(--color-surface); stroke: var(--color-text-secondary); stroke-width: 1; }
 .ls{ fill: #f4e1b8; stroke: #9a7b3c; stroke-width: 1; }
 .ld{ stroke: var(--color-report-base-text); stroke-width: 7; stroke-linecap: butt; }
+/* El espacio que necesita una puerta al abrir: el giro de la batiente (morado) y el recorrido de la corrediza (azul); en rojo si choca con algo. No agarran el puntero: lo que está debajo se sigue tocando y arrastrando. */
+.lopen{ pointer-events: none; stroke-width: 1.5; stroke-dasharray: 5 3; }
+.lopen-swing{ fill: color-mix(in srgb, #A63FB5 32%, transparent); stroke: #A63FB5; }
+.lopen-slide{ fill: color-mix(in srgb, #2F7FC7 38%, transparent); stroke: #2F7FC7; }
+.lopen-bad{ fill: color-mix(in srgb, #c0392b 28%, transparent); stroke: #c0392b; stroke-width: 2; }
+.lopen-leaf{ pointer-events: none; stroke: #A63FB5; stroke-width: 4; stroke-linecap: butt; opacity: 0.85; }
+.lopen-travel{ pointer-events: none; stroke: #2F7FC7; stroke-width: 1.5; stroke-dasharray: 5 3; }
 /* Una puerta que se puede arrastrar sobre su pared (paso Puertas): zona de toque más ancha y manita. */
 .ld-drag{ cursor: grab; }
 .ld-hit{ stroke: transparent; stroke-width: 18; stroke-linecap: butt; cursor: grab; touch-action: none; }

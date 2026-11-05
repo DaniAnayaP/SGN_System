@@ -13,7 +13,7 @@ const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
-    saved: null, draft: null, version: 0, perms: null, showMeasures: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
+    saved: null, draft: null, version: 0, perms: null, showMeasures: true, showOpening: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false, view3d: false, centerId: null, costCenter: null,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
@@ -130,8 +130,8 @@ function ownCells(s, i, disabled) {
 function cellText(list, i, key, value, disabled) {
     return `<td><input type="text" maxlength="${LC.LIMITS.text}" data-l="${list}" data-i="${i}" data-k="${key}" value="${esc(value)}"${disabled ? ' disabled' : ''}></td>`;
 }
-function cellSelect(list, i, key, optionsMarkup, disabled) {
-    return `<td><select data-l="${list}" data-i="${i}" data-k="${key}"${disabled ? ' disabled' : ''}>${optionsMarkup}</select></td>`;
+function cellSelect(list, i, key, optionsMarkup, disabled, helpKey) {
+    return `<td><select data-l="${list}" data-i="${i}" data-k="${key}"${helpKey ? ` data-help-key="${helpKey}"` : ''}${disabled ? ' disabled' : ''}>${optionsMarkup}</select></td>`;
 }
 // filterId: la tabla lleva en cada encabezado el embudo de filtros (el mismo menú de todas las tablas, ver bindLayoutFilters) para quien tiene el icono Filtros en el árbol.
 function table(headKeys, rows, filterId) {
@@ -649,6 +649,7 @@ function applyLegend() {
         contour: () => stepOn('contorno'),
         wall: () => stepOn('paredes') && some('obstacles', (o) => o.kind === 'wall'),
         door: () => stepOn('puertas') && some('doors'),
+        open: (type) => stepOn('puertas') && state.showOpening && some('doors', (x) => LC.doorOpenOf(x) === type),
         power: () => stepOn('luz') && some('power'),
         sensor: () => stepOn('sensores') && some('sensors'),
         column: () => stepOn('obstaculos') && some('obstacles', (o) => o.kind === 'column' || o.kind === 'other'),
@@ -738,10 +739,22 @@ function computeWallItemIssues() {
     if (!state.draft) return;
     WALL_ITEM_LISTS.forEach((list) => {
         wiAll[list] = LC.wallItemViolations(state.draft, list);
-        wiAll[list].forEach((v) => { const key = `${list}:${v.id}`; const m = wiIssues.get(key) || {}; m[v.kind] = v; wiIssues.set(key, m); });
+        // El espacio de apertura que choca es un aviso aparte: se ve y se marca, pero no impide guardar.
+        if (list === 'doors' && state.showOpening !== false) wiAll[list] = wiAll[list].concat(LC.doorOpeningClashes(state.draft));
+        wiAll[list].forEach((v) => {
+            const ids = v.kind === 'clashDoor' && v.vars && v.vars.otherId ? [v.id, v.vars.otherId] : [v.id];
+            ids.forEach((id) => { const key = `${list}:${id}`; const m = wiIssues.get(key) || {}; m[v.kind] = v; wiIssues.set(key, m); });
+        });
     });
 }
-const wallItemIssueText = (list, v) => t(`main.layoutVio${WALL_ITEM_VIO[list]}_${v.kind}`, v.vars || {});
+const wallItemIssueText = (list, v) => t(`main.layoutVio${WALL_ITEM_VIO[list]}_${v.kind}`, v.kind === 'clash' || v.kind === 'clashDoor' ? clashVars(v) : (v.vars || {}));
+// El aviso de choque lleva el nombre de lo que estorba: hasta tres y «y N más».
+function clashVars(v) {
+    const vars = v.vars || {};
+    const names = Array.isArray(vars.others) ? vars.others : [vars.other];
+    const more = names.length > 3 ? ` ${t('main.layoutVioDrMas', { n: names.length - 3 })}` : '';
+    return { ...vars, what: t(`main.layoutVioDrWhat_${vars.what}`), other: names.slice(0, 3).join(', ') + more };
+}
 function applyWallItemMarks() {
     if (!state.draft) return;
     computeWallItemIssues();
@@ -753,6 +766,7 @@ function applyWallItemMarks() {
             mark('dist', bad.outside);
             mark('width', bad.outside);
             mark('height', bad.tall);
+            if (list === 'doors') mark('open', bad.clash || bad.clashDoor);
             const lenCell = document.querySelector(`[data-wi-len="${list}:${i}"]`);
             if (lenCell) lenCell.textContent = wallInfoCell(list, item, 'len');
             const hCell = document.querySelector(`[data-wi-h="${list}:${i}"]`);
@@ -951,8 +965,8 @@ function stepHtml(step) {
     }
     if (step === 'puertas') {
         // Una puerta SIEMPRE va sobre una pared: se elige cuál (de las del paso Paredes) y se mide desde el inicio de esa pared; la pared dice cuánto mide y qué tan alta es, y la puerta no se puede pasar de ninguna de las dos.
-        const rows = d.doors.map((x, i) => `<tr>${cellText('doors', i, 'name', x.name, dis)}${cellSelect('doors', i, 'type', optionsHtml('door', LC.DOOR_TYPES, x.type), dis)}${cellSelect('doors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('doors', i, 'dist', x.dist, dis)}${cellNum('doors', i, 'width', x.width, dis)}${cellNum('doors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="doors:${i}">${wallInfoCell('doors', x, 'len')}</td><td class="layout-calc" data-wi-h="doors:${i}">${wallInfoCell('doors', x, 'h')}</td>${removeCell('doors', i, dis)}</tr>`);
-        return `${addButton('doors', 'main.layoutAgregarPuerta', dis, true)}${rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', ''], rows, 'layout-puertas') : `<p class="layout-muted">${esc(t('main.layoutPuertasVacio'))}</p>`}<div class="layout-vio" data-wi-issues="doors" hidden></div>`;
+        const rows = d.doors.map((x, i) => `<tr>${cellText('doors', i, 'name', x.name, dis)}${cellSelect('doors', i, 'type', optionsHtml('door', LC.DOOR_TYPES, x.type), dis)}${cellSelect('doors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('doors', i, 'dist', x.dist, dis)}${cellNum('doors', i, 'width', x.width, dis)}${cellNum('doors', i, 'height', x.height, dis)}${cellSelect('doors', i, 'open', optionsHtml('doorOpen', LC.DOOR_OPENS, LC.doorOpenOf(x)), dis, 'layoutPuertaAbre')}${cellSelect('doors', i, 'hinge', optionsHtml('doorEnd', LC.DOOR_ENDS, x.hinge === 'end' ? 'end' : 'start'), dis || LC.doorOpenOf(x) === 'fixed', 'layoutPuertaBisagra')}${cellSelect('doors', i, 'dir', optionsHtml('doorSide', LC.DOOR_SIDES, x.dir === 'out' ? 'out' : 'in'), dis || LC.doorOpenOf(x) === 'fixed', 'layoutPuertaLado')}<td class="layout-calc" data-wi-len="doors:${i}">${wallInfoCell('doors', x, 'len')}</td><td class="layout-calc" data-wi-h="doors:${i}">${wallInfoCell('doors', x, 'h')}</td>${removeCell('doors', i, dis)}</tr>`);
+        return `${addButton('doors', 'main.layoutAgregarPuerta', dis, true)}${rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutPuertaAbre', 'main.layoutPuertaBisagra', 'main.layoutPuertaLado', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', ''], rows, 'layout-puertas') : `<p class="layout-muted">${esc(t('main.layoutPuertasVacio'))}</p>`}<div class="layout-vio" data-wi-issues="doors" hidden></div>`;
     }
     if (step === 'luz') {
         // Una conexión de luz SIEMPRE va sobre una pared (igual que una puerta): se elige cuál y se mide desde el inicio de esa pared; la pared dice cuánto mide y qué tan alta es.
@@ -1623,6 +1637,13 @@ function renderSvg() {
     if (state.planImage && d.plan && !rot) {
         x0 = Math.min(x0, 0); y0 = Math.min(y0, 0); x1 = Math.max(x1, d.plan.widthM); y1 = Math.max(y1, d.plan.widthM * state.planAspect);
     }
+    // Una puerta que abre hacia afuera puede salirse del contorno: el croquis crece lo necesario para que su giro (o recorrido) se vea completo.
+    if (on('puertas') && state.showOpening) {
+        (d.doors || []).forEach((door) => {
+            const op = LC.doorOpening(d, door);
+            if (op) op.pts.forEach((p) => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+        });
+    }
     const spanX = Math.max(x1 - x0, 1);
     const spanY = Math.max(y1 - y0, 1);
     const sc = Math.min((W - 2 * M) / spanX, (H - 2 * M - 14) / spanY);
@@ -1786,6 +1807,15 @@ function renderSvg() {
         const a = g.a;
         const b = g.b;
         if (wiIssues.has('doors:' + door.id)) s += `<rect class="lbad" x="${(Math.min(X(a.x), X(b.x)) - 5).toFixed(1)}" y="${(Math.min(Y(a.y), Y(b.y)) - 5).toFixed(1)}" width="${(Math.abs(X(b.x) - X(a.x)) + 10).toFixed(1)}" height="${(Math.abs(Y(b.y) - Y(a.y)) + 10).toFixed(1)}" rx="3"/>`;
+        const op = on('puertas') && state.showOpening ? LC.doorOpening(d, door) : null;
+        if (op) {
+            const bad = wiIssues.get('doors:' + door.id) || {};
+            const clash = !!(bad.clash || bad.clashDoor);
+            const pts = op.pts.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ');
+            s += `<polygon class="lopen lopen-${op.type}${clash ? ' lopen-bad' : ''}" points="${pts}"/>`;
+            if (op.type === 'swing') s += `<line class="lopen-leaf" x1="${X(op.leaf[0][0]).toFixed(1)}" y1="${Y(op.leaf[0][1]).toFixed(1)}" x2="${X(op.leaf[1][0]).toFixed(1)}" y2="${Y(op.leaf[1][1]).toFixed(1)}"/>`;
+            else s += `<line class="lopen-travel" x1="${X(op.travel[0][0]).toFixed(1)}" y1="${Y(op.travel[0][1]).toFixed(1)}" x2="${X(op.travel[1][0]).toFixed(1)}" y2="${Y(op.travel[1][1]).toFixed(1)}"/>`;
+        }
         const movable = canMoveWallItem('doors') && !g.legacy;
         s += `<line class="ld${movable ? ' ld-drag' : ''}" data-did="${esc(door.id)}" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"><title>${esc(door.name)}</title></line>`;
         if (movable) s += `<line class="ld-hit" data-did="${esc(door.id)}" x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(b.x)}" y2="${Y(b.y)}"/>`;
@@ -1999,6 +2029,23 @@ $('layout-measures-btn').addEventListener('click', () => {
     updateMeasuresBtn();
     if (state.draft) renderSvg();
 });
+// Icono Apertura de puertas: muestra u oculta el espacio que necesita cada puerta al abrir (el giro de la batiente y el recorrido de la corrediza); se recuerda en este navegador y solo lo ve quien lo tiene en el árbol.
+const OPENING_KEY = 'sgn_layout_opening';
+function updateOpeningBtn() {
+    const btn = $('layout-opening-btn');
+    btn.hidden = !(state.perms && state.perms.canToggleOpening);
+    btn.setAttribute('aria-pressed', String(state.showOpening));
+    btn.classList.toggle('off', !state.showOpening);
+    btn.setAttribute('aria-label', t(state.showOpening ? 'main.layoutAperturaOcultar' : 'main.layoutAperturaVer'));
+    btn.title = t(state.showOpening ? 'main.layoutAperturaOcultar' : 'main.layoutAperturaVer');
+}
+try { state.showOpening = localStorage.getItem(OPENING_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se ve */ }
+$('layout-opening-btn').addEventListener('click', () => {
+    state.showOpening = !state.showOpening;
+    try { localStorage.setItem(OPENING_KEY, state.showOpening ? '1' : '0'); } catch (err) { /* no se recuerda */ }
+    updateOpeningBtn();
+    if (state.draft) { applyWallItemMarks(); applyLegend(); renderSvg(); }
+});
 // Icono Ver / ocultar los m² de cada zona: igual que el de medidas (se recuerda en este navegador, solo lo ve quien lo tiene en el árbol y la hoja que se descarga sale como se ve).
 const AREA_KEY = 'sgn_layout_area';
 function updateAreaBtn() {
@@ -2057,6 +2104,7 @@ function showEditor() {
     updateAreaBtn();
     updateNamesBtn();
     updateRotateBtn();
+    updateOpeningBtn();
     updateTextsMenu();
     updateZoomUi();
     $('layout-empty').hidden = true;
@@ -2223,7 +2271,7 @@ $('layout-from-scratch').addEventListener('click', newDraftFromScratch);
 // ---- edición -----------------------------------------------------------------------------------------------------------
 const ROW_FACTORY = {
     vertices: () => { const last = state.draft.vertices[state.draft.vertices.length - 1] || [0, 0, 9]; return [last[0], last[1], last[2]]; },
-    doors: () => { const wall = (state.draft.obstacles || []).find((o) => o.kind === 'wall'); return { id: uid('d'), name: t('main.layoutPuertaNueva'), type: 'dock', wallId: wall ? wall.id : '', dist: 0, width: 1.2, height: 2.1 }; },
+    doors: () => { const wall = (state.draft.obstacles || []).find((o) => o.kind === 'wall'); return { id: uid('d'), name: t('main.layoutPuertaNueva'), type: 'dock', wallId: wall ? wall.id : '', dist: 0, width: 1.2, height: 2.1, open: 'swing', hinge: 'start', dir: 'in' }; },
     // una conexión de luz o un sensor nuevo nace sobre la primera pared (sin paredes no se puede agregar)
     power: () => { const wall = (state.draft.obstacles || []).find((o) => o.kind === 'wall'); return { id: uid('p'), type: 'outlet110', wallId: wall ? wall.id : '', dist: 1, height: 1.2 }; },
     sensors: () => { const wall = (state.draft.obstacles || []).find((o) => o.kind === 'wall'); return { id: uid('n'), code: '', type: 'both', zoneId: '', wallId: wall ? wall.id : '', dist: 1, height: 2.5 }; },
@@ -2399,6 +2447,8 @@ function onEdit(event) {
     if (event.type === 'change' && list === 'zones' && el.getAttribute('data-k') === 'name') renderPanel();
     // Al cambiar el tipo o la forma de ponerlo de un obstáculo cambian las celdas del renglón (altura del desnivel, lado o X).
     if (event.type === 'change' && list === 'obstacles' && ['kind', 'mode'].includes(el.getAttribute('data-k'))) renderPanel();
+    // Al cambiar cómo abre una puerta, la bisagra y el lado se apagan si es fija.
+    if (event.type === 'change' && list === 'doors' && el.getAttribute('data-k') === 'open') renderPanel();
     // Al cambiar de persona a montacargas cambian sus medidas (si eran las de partida) y su nombre.
     if (event.type === 'change' && list === 'objects' && el.getAttribute('data-k') === 'equipId') renderPanel();
     // Al cambiar el tipo de un elemento de seguridad cambian sus celdas (la ruta lleva punto de llegada) y su código.

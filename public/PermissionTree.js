@@ -1774,6 +1774,7 @@
             iconLayoutFiltros: 'bx-filter-alt',
             iconLayoutImprimirZona: 'bx-printer',
             iconLayoutGirar: 'bx-rotate-right',
+            iconLayoutApertura: 'bx-door-open',
             iconLayoutVista3D: 'bx-cube-alt',
             iconLayout3dCapas: 'bx-layer',
             iconLayoutCategorias: 'bx-purchase-tag-alt',

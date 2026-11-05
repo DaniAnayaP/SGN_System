@@ -6542,6 +6542,8 @@ function layoutPermissions(req) {
         canFilterTables: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFiltros'),
         // Ver u ocultar los nombres de las zonas (en el croquis y en la hoja que se descarga) es otro icono con su hoja (iconLayoutNombres).
         canToggleNames: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutNombres'),
+        // Ver u ocultar el espacio que necesita cada puerta al abrir (el giro de la batiente y el recorrido de la corrediza) es otro icono con su hoja (iconLayoutApertura).
+        canToggleOpening: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutApertura'),
         // Acercar y alejar el croquis (botones, rueda, dos dedos) es otro icono con su hoja (iconLayoutZoom).
         canZoom: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutZoom'),
         // Ver el Layout en 3D (y volver al 2D) es otro icono con su hoja (iconLayoutVista3D).

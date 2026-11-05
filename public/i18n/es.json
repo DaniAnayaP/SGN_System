@@ -2163,6 +2163,26 @@
     "layoutPlanSoloImagen": "Elige una imagen JPG, PNG o WebP.",
     "layoutPlanError": "No se pudo preparar el plano.",
     "layoutPlanAnchoInvalido": "Escribe el ancho real del plano en metros.",
+    "layoutPuertaAbre": "Cómo abre",
+    "layoutPuertaBisagra": "Bisagra o corre hacia",
+    "layoutPuertaLado": "Abre hacia",
+    "layoutType_doorOpen_swing": "Batiente",
+    "layoutType_doorOpen_slide": "Corrediza",
+    "layoutType_doorOpen_fixed": "Fija",
+    "layoutType_doorEnd_start": "Inicio de la pared",
+    "layoutType_doorEnd_end": "Final de la pared",
+    "layoutType_doorSide_in": "Adentro",
+    "layoutType_doorSide_out": "Afuera",
+    "layoutVioDr_clash": "El {what} de la puerta «{name}» choca con {other}.",
+    "layoutVioDr_clashDoor": "El {what} de la puerta «{name}» choca con el de la puerta «{other}».",
+    "layoutVioDrMas": "y {n} más",
+    "layoutVioDrWhat_swing": "giro",
+    "layoutVioDrWhat_slide": "recorrido",
+    "layoutAperturaBtn": "Ver y ocultar la apertura de las puertas",
+    "layoutAperturaVer": "Ver la apertura de las puertas",
+    "layoutAperturaOcultar": "Ocultar la apertura de las puertas",
+    "layoutLeyendaGiroPuerta": "Giro de la puerta",
+    "layoutLeyendaRecorridoPuerta": "Recorrido de la corrediza",
     "layoutLeyendaPuerta": "Puerta",
     "layoutLeyendaLuz": "Conexión de luz",
     "layoutLeyendaSensor": "Sensor de temperatura y humedad",
@@ -4356,6 +4376,22 @@
     "layoutRotate": {
       "what": "Gira el croquis un cuarto de vuelta a la derecha cada vez que lo tocas (90°, 180°, 270° y de nuevo como estaba). Sirve para acomodarlo como lo vas a imprimir, por ejemplo con la nave acostada o parada. Solo gira el dibujo: las tablas y lo guardado no cambian, los textos siguen derechos y el giro se recuerda en este navegador. La hoja que se descarga sale con este giro (ahí mismo se puede cambiar solo para esa descarga).",
       "example": "la nave es larga y la hoja es vertical: giras el croquis un cuarto de vuelta y llena mejor la hoja."
+    },
+    "layoutOpening": {
+      "what": "Muestra u oculta el espacio que necesita cada puerta al abrir: el giro de la batiente (en morado) y el recorrido de la corrediza (en azul). Si algo choca con ese espacio (un activo, una columna, otra pared u otra puerta) se pinta en rojo y se avisa abajo del paso Puertas; el aviso no impide guardar. Se ve en el croquis con el paso Puertas encendido.",
+      "example": "una puerta batiente de 1.5 m necesita un cuarto de círculo de 1.5 m libre: con este botón lo ves y mueves el anaquel antes de que estorbe."
+    },
+    "layoutPuertaAbre": {
+      "what": "Cómo abre la puerta: Batiente (gira sobre su bisagra), Corrediza (corre pegada a la pared) o Fija (no abre y no ocupa espacio). Las puertas de antes quedan como Fija hasta que elijas otra.",
+      "example": "el acceso de personal es Batiente, el andén es Corrediza y un ventanal sobre la pared es Fija."
+    },
+    "layoutPuertaBisagra": {
+      "what": "En la Batiente, de qué extremo de la puerta está la bisagra; en la Corrediza, hacia dónde corre la hoja: hacia el inicio o hacia el final de la pared (el inicio es desde donde se mide la distancia). En una Fija no se usa.",
+      "example": "bisagra al inicio de la pared: la hoja gira desde ese lado. Corrediza hacia el final: se desliza hacia la otra esquina de la pared."
+    },
+    "layoutPuertaLado": {
+      "what": "Hacia qué lado de la pared abre la Batiente, o de qué lado queda la hoja de la Corrediza: Adentro o Afuera. En las paredes del contorno, adentro es hacia la nave; en una pared de adentro de la nave, adentro es hacia abajo en el croquis (a la izquierda si la pared es vertical). En una Fija no se usa.",
+      "example": "la salida de emergencia abre Afuera, hacia donde sale la gente; el acceso de personal abre Adentro."
     },
     "layoutSite": {
       "what": "El nombre del lugar (el sitio). Sale arriba del nombre de la empresa en el encabezado de la hoja del Layout y de las tarjetas que se imprimen. Si lo dejas vacío sale el texto de siempre. Más adelante saldrá de la configuración.",
