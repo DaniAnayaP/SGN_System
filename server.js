@@ -6568,6 +6568,12 @@ function qrBranding(clientId) {
     const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
     return { companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '', logoDataUrl: clientLogoDataUrl(clientId) };
 }
+// Lo que las páginas públicas de los QR de operación (Limpieza, Temperaturas, Sensor, Seguridad) necesitan para su encabezado: si el cliente tiene logo (la imagen sale por /api/public/layout/<código>/logo, el mismo del Layout) y su color.
+function publicBrand(clientId) {
+    const client = getClientById(clientId);
+    const seed = client && typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
+    return { hasLogo: !!clientLogoDataUrl(clientId), companyColor: /^#[0-9a-fA-F]{6}$/.test(seed) ? seed.toLowerCase() : '' };
+}
 function clientLogoDataUrl(clientId) {
     const client = getClientById(clientId);
     const logo = client && client.logo_data_url;
@@ -7165,7 +7171,7 @@ app.get('/api/public/cleaning/:token/:spaceId', publicLayoutLimiter, (req, res) 
     const records = locks.records ? listCleaningRecords(row.clientId, { costCenterId: row.costCenterId || 0, spaceId: space.id, limit: locks.limit }) : [];
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json({
-        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
         space: { id: space.id, code: space.code, type: space.type, locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '' },
         records: records.map((r) => lockedCleaningRecord(r, locks)), locks, now: new Date().toISOString(),
     });
@@ -7372,7 +7378,7 @@ app.get('/api/public/temperature/:token/:spaceId', publicLayoutLimiter, (req, re
     const records = locks.records ? listTemperatureRecords(row.clientId, { costCenterId: row.costCenterId || 0, spaceId: space.id, limit: locks.limit }) : [];
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json({
-        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
         space: { id: space.id, code: space.code, type: space.type, locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', limits: locks.range ? spaceLimits(space) : {} },
         records: records.map((r) => lockedTemperatureRecord(r, locks)), locks, now: new Date().toISOString(),
     });
@@ -7529,7 +7535,7 @@ app.get('/api/public/sensor/:token/:sensorId', publicLayoutLimiter, (req, res) =
     const records = locks.records ? listTemperatureRecords(row.clientId, { costCenterId: row.costCenterId || 0, sensorId: sensor.id, limit: locks.limit }) : [];
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json({
-        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
         space: { id: sensor.id, code: sensor.code, type: sensor.type, locator, zoneName: zone ? zone.name : '', footprintCode: '', limits: {} },
         records: records.map((r) => lockedSensorRecord(r, locks)), locks, now: new Date().toISOString(),
     });
@@ -7643,7 +7649,7 @@ app.get('/api/public/safety/:token/:elementId', publicLayoutLimiter, (req, res) 
     const records = locks.records ? listSafetyChecks(row.clientId, { costCenterId: row.costCenterId || 0, elementId: element.id, limit: locks.limit }) : [];
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json({
-        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '',
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
         element: { id: element.id, code: element.code, type: element.type, name: element.name || '', locator, zoneName: zone ? zone.name : '' },
         dates: locks.dates ? safetyDatesFor(row, element) : null,
         records: records.map((r) => lockedSafetyRecord(r, locks)), locks, now: new Date().toISOString(),
