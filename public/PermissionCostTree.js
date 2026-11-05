@@ -1277,6 +1277,38 @@
             });
         }
 
+        // «Iconos Personalización» de una pantalla (iconsSubmenu): un nodo como «Tabla <X>», con cada icono como su propio permiso de sí o no (la llave es <pantalla>/<icono>, la misma que lee
+        // hasTableIconGrant en db.js). Sin precio (los iconos no se cobran) y sin visión App (los iconos de la Web no tienen versión App); en el árbol de costos no se dibuja.
+        function renderIcons(container, section, item, sm, subSm) {
+            const icons = subSm.iconsSubmenu || [];
+            if (!icons.length || mode === 'costEdit') return;
+            const iconKeyOf = (icon) => keyOf(section.id, item.id, `${sm.id}/${subSm.id}/${icon.id}`);
+            const leafKeys = icons.map(iconKeyOf);
+            const iconsTreeKey = `icons::${section.id}::${item.id}::${sm.id}/${subSm.id}`;
+            const iconsExpanded = expandedItems.has(iconsTreeKey);
+            const checkedCount = leafKeys.filter((k) => grantSet.has(k)).length;
+            const { row: headRow, input: headInput } = buildRow(t('menu.iconsPersonalization'), 4, {
+                expanded: iconsExpanded,
+                onToggle: () => { if (iconsExpanded) expandedItems.delete(iconsTreeKey); else expandedItems.add(iconsTreeKey); },
+            }, ...extraSlotArgs(null, leafKeys));
+            if (headInput && mode !== 'clientTricolor') {
+                headInput.checked = leafKeys.length > 0 && checkedCount === leafKeys.length;
+                headInput.indeterminate = checkedCount > 0 && checkedCount < leafKeys.length;
+                headInput.addEventListener('change', () => { setKeys(leafKeys, headInput.checked); render(); });
+            }
+            container.appendChild(headRow);
+            if (!iconsExpanded) return;
+            icons.forEach((icon) => {
+                const key = iconKeyOf(icon);
+                const { row, input } = buildRow(t(icon.labelKey), 5, null, ...extraSlotArgs(key, [key]), undefined, null, key);
+                if (input && mode !== 'clientTricolor') {
+                    input.checked = grantSet.has(key);
+                    input.addEventListener('change', () => { setKeys([key], input.checked); render(); });
+                }
+                container.appendChild(row);
+            });
+        }
+
         function renderColumns(container, section, item, sm, subSm) {
             // "Tabla <X>" heading is its own collapsible unit too (same
             // convention as PermissionTree.js's renderTableColumns), and (in
@@ -1409,7 +1441,7 @@
                             // pantalla has a table — folds the whole "Tabla
                             // <X>" block away as one unit, same fix as
                             // PermissionTree.js's equivalent subRow.
-                            const subHasDetail = !!(subSm.submenu && subSm.submenu.length);
+                            const subHasDetail = !!((subSm.submenu && subSm.submenu.length) || (subSm.iconsSubmenu && subSm.iconsSubmenu.length));
                             const subDetailKey = `subdetail::${section.id}::${item.id}::${sm.id}::${subSm.id}`;
                             const subDetailExpanded = expandedItems.has(subDetailKey);
                             const { row: subRowEl, input: subInput } = buildRow(t(subSm.labelKey, subSm.labelParams), 3, subHasDetail ? {
@@ -1423,7 +1455,8 @@
                             container.appendChild(subRowEl);
 
                             if (subHasDetail && subDetailExpanded) {
-                                renderColumns(container, section, item, sm, subSm);
+                                if (subSm.submenu && subSm.submenu.length) renderColumns(container, section, item, sm, subSm);
+                                renderIcons(container, section, item, sm, subSm);
                             }
                         });
                     });

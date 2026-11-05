@@ -1798,6 +1798,15 @@
             { "id": "colLayoutActivos", "labelKey": "main.colLayoutActivos", "permissionOnly": true },
             { "id": "colLayoutPosiciones", "labelKey": "main.colLayoutPosiciones", "permissionOnly": true },
             { "id": "colLayoutQr", "labelKey": "main.colLayoutQr", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colLayoutCargarPlano", "labelKey": "main.colLayoutCargarPlano", "permissionOnly": true },
+                { "id": "colLayoutCrearDesdeCero", "labelKey": "main.colLayoutCrearDesdeCero", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
             { "id": "iconLayoutFormatoZona", "labelKey": "main.layoutFormatoZonaBtn", "permissionOnly": true },
             { "id": "iconLayoutFormatoHuella", "labelKey": "main.layoutFormatoHuellaBtn", "permissionOnly": true },
             { "id": "iconLayoutFormatoActivo", "labelKey": "main.layoutFormatoActivoBtn", "permissionOnly": true },
@@ -1818,14 +1827,7 @@
             { "id": "iconLayoutBuscar", "labelKey": "main.layoutBuscarBtn", "permissionOnly": true },
             { "id": "iconLayoutRenumerar", "labelKey": "main.layoutRenumerarBtn", "permissionOnly": true },
             { "id": "iconLayoutCategorias", "labelKey": "main.layoutCategoriasBtn", "permissionOnly": true },
-            { "id": "iconLayoutTarjeta", "labelKey": "main.layoutTarjetaBtn", "permissionOnly": true },
-            {
-              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
-              "submenu": [
-                { "id": "colLayoutCargarPlano", "labelKey": "main.colLayoutCargarPlano", "permissionOnly": true },
-                { "id": "colLayoutCrearDesdeCero", "labelKey": "main.colLayoutCrearDesdeCero", "permissionOnly": true }
-              ]
-            }
+            { "id": "iconLayoutTarjeta", "labelKey": "main.layoutTarjetaBtn", "permissionOnly": true }
           ]
         },
         {
@@ -1840,6 +1842,8 @@
         {
           "id": "cat-admin-mapa-calor", "labelKey": "menu.adminMapaCalor", "icon": "bx-sun", "href": "AdminMapaCalor.html",
           "submenu": [
+          ],
+          "iconsSubmenu": [
             { "id": "iconMapaCalorMetrica", "labelKey": "main.mapaCalorMetricaBtn", "permissionOnly": true },
             { "id": "iconMapaCalorReproducir", "labelKey": "main.mapaCalorReproducirBtn", "permissionOnly": true }
           ]
