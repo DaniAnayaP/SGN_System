@@ -307,7 +307,7 @@ async function refresh() {
     info = await res.json();
     skew = new Date(info.now).getTime() - Date.now();
     // el mismo encabezado del Layout: logo (o iniciales), tipo de página, Sitio y empresa
-    window.QrBrandHeader.mount($('qr-brand'), { kind: TEXT.title, siteName: info.siteName, companyName: info.companyName, hasLogo: info.hasLogo, companyColor: info.companyColor, token: TOKEN });
+    window.QrBrandHeader.mount($('qr-brand'), { kind: TEXT.title, siteName: info.siteName, companyName: info.companyName, hasLogo: info.hasLogo, companyColor: info.companyColor, logoUrl: `/api/public/layout/${encodeURIComponent(TOKEN)}/logo` });
 }
 
 (async function init() {

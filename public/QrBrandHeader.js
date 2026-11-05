@@ -1,6 +1,6 @@
 // Encabezado de las páginas públicas de los QR de operación (Limpieza, Temperaturas, Sensor, Seguridad): el mismo del Layout público, arriba de todo.
 // Logo del cliente (o sus iniciales si no tiene), el tipo de página en letras chicas, el Sitio (lo fuerte, con el color del cliente) y el nombre de la empresa (lo débil).
-// Usa los colores de la página (--ink, --muted, --line, --accent) y, si el cliente tiene color, una escala de ese color con la misma regla que LayoutMapSvg.theme (mismos tonos:
+// Usa los colores de la página (--ink, --muted, --line, --accent; o los de la Ficha: --text-primary, --text-muted, --border, --accent-1) y, si el cliente tiene color, una escala de ese color con la misma regla que LayoutMapSvg.theme (mismos tonos:
 // el 7.º para el sitio y la marca, el 9.º para el tipo); en modo oscuro los tonos claros para que se lea.
 (function () {
     'use strict';
@@ -32,18 +32,20 @@
     }
 
     const CSS = `
-.qb{ display:flex; align-items:center; gap:10px; padding:2px 2px 12px; border-bottom:1px solid var(--line); --qb-site:var(--qb-site-l, var(--accent)); --qb-ink:var(--qb-ink-l, var(--muted)); }
-.qb-mark{ width:34px; height:34px; border-radius:9px; background:var(--qb-mark, var(--accent)); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:13px; flex:none; }
-.qb-logo{ height:36px; max-width:120px; object-fit:contain; flex:none; background:#fff; border:1px solid var(--line); border-radius:9px; padding:3px; }
+.qb{ --qb-line:var(--line, var(--border, #e0e3f0)); --qb-accent:var(--accent, var(--accent-1, #6C7CF0)); --qb-muted:var(--muted, var(--text-muted, #8890ac)); --qb-text:var(--ink, var(--text-primary, #1c1f30));
+    --qb-site:var(--qb-site-l, var(--qb-accent)); --qb-ink:var(--qb-ink-l, var(--qb-muted));
+    display:flex; align-items:center; gap:10px; padding:2px 2px 12px; border-bottom:1px solid var(--qb-line); }
+.qb-mark{ width:34px; height:34px; border-radius:9px; background:var(--qb-mark, var(--qb-accent)); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:13px; flex:none; }
+.qb-logo{ height:36px; max-width:120px; object-fit:contain; flex:none; background:#fff; border:1px solid var(--qb-line); border-radius:9px; padding:3px; }
 .qb-names{ display:grid; gap:1px; min-width:0; }
-.qb-kind{ font-size:10px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--qb-ink, var(--muted)); line-height:1.2; }
-.qb-site{ font-size:16px; font-weight:800; color:var(--qb-site, var(--accent)); line-height:1.2; overflow-wrap:anywhere; }
-.qb-company{ font-size:10.5px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); line-height:1.25; overflow-wrap:anywhere; }
-.qb-company.strong{ font-size:13px; font-weight:700; letter-spacing:0; text-transform:none; color:var(--ink); }
-@media (prefers-color-scheme: dark){ .qb{ --qb-site:var(--qb-site-d, var(--accent)); --qb-ink:var(--qb-ink-d, var(--muted)); } }
+.qb-kind{ font-size:10px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:var(--qb-ink); line-height:1.2; }
+.qb-site{ font-size:16px; font-weight:800; color:var(--qb-site); line-height:1.2; overflow-wrap:anywhere; }
+.qb-company{ font-size:10.5px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--qb-muted); line-height:1.25; overflow-wrap:anywhere; }
+.qb-company.strong{ font-size:13px; font-weight:700; letter-spacing:0; text-transform:none; color:var(--qb-text); }
+@media (prefers-color-scheme: dark){ .qb:not(.qb-light){ --qb-site:var(--qb-site-d, var(--qb-accent)); --qb-ink:var(--qb-ink-d, var(--qb-muted)); } }
 `;
 
-    // mount(elemento, { kind, siteName, companyName, hasLogo, companyColor, token }): dibuja el encabezado dentro del elemento. token = el código del Layout de la dirección del QR (de ahí sale el logo).
+    // mount(elemento, { kind, siteName, companyName, hasLogo, companyColor, logoUrl, light }): dibuja el encabezado dentro del elemento. logoUrl = de dónde sale la imagen del logo; light = la página no tiene modo oscuro (la Ficha).
     function mount(el, opts) {
         if (!el) return;
         if (!document.getElementById('qb-style')) {
@@ -56,12 +58,13 @@
         const company = String(o.companyName || '').trim();
         const initials = company.slice(0, 2).toUpperCase() || '··';
         const mark = `<span class="qb-mark">${esc(initials)}</span>`;
-        const logo = o.hasLogo && o.token ? `<img class="qb-logo" src="/api/public/layout/${encodeURIComponent(o.token)}/logo" alt="">` : '';
+        const logo = o.hasLogo && o.logoUrl ? `<img class="qb-logo" src="${esc(o.logoUrl)}" alt="">` : '';
         const names = o.siteName
             ? `<span class="qb-kind">${esc(o.kind)}</span><span class="qb-site">${esc(o.siteName)}</span><span class="qb-company">${esc(company)}</span>`
             : `<span class="qb-kind">${esc(o.kind)}</span><span class="qb-company strong">${esc(company)}</span>`;
         el.innerHTML = `<div class="qb">${logo || mark}<div class="qb-names">${names}</div></div>`;
         const box = el.firstElementChild;
+        if (o.light) box.classList.add('qb-light');
         const scale = scaleOf(o.companyColor);
         if (scale.length) {
             box.style.setProperty('--qb-mark', scale[7]);

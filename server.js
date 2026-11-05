@@ -6465,7 +6465,7 @@ app.get('/api/public/ficha/:token', (req, res) => {
     Promise.all(photoFields.map(([label, key]) => getDownloadUrl(key, `${label}.jpg`).then((url) => ({ label, url }))))
         .then((photos) => {
             res.json({
-                companyName: client?.company_name || '',
+                companyName: client?.company_name || '', ...publicBrand(skuItem.client_id),
                 uniqueDescription: skuItem.unique_description,
                 knownDescription: skuItem.known_description,
                 customDescription: skuItem.custom_description,
@@ -7019,14 +7019,23 @@ app.get('/q/:token', publicLayoutLimiter, (req, res) => {
 app.get('/api/public/layout/:token/logo', publicLayoutLimiter, (req, res) => {
     const row = getLayoutByPublicToken(req.params.token);
     if (!row) return res.status(404).end();
-    const match = clientLogoDataUrl(row.clientId).match(/^data:(image\/(?:png|jpe?g|webp|gif|svg\+xml))((?:;[A-Za-z0-9=._-]+)*),(.+)$/);
+    sendClientLogo(res, row.clientId);
+});
+// El mismo logo para la Ficha pública de un artículo (su código es el del artículo, no el de un Layout).
+app.get('/api/public/ficha/:token/logo', publicLayoutLimiter, (req, res) => {
+    const skuItem = getSkuItemByPublicToken(req.params.token);
+    if (!skuItem) return res.status(404).end();
+    sendClientLogo(res, skuItem.client_id);
+});
+function sendClientLogo(res, clientId) {
+    const match = clientLogoDataUrl(clientId).match(/^data:(image\/(?:png|jpe?g|webp|gif|svg\+xml))((?:;[A-Za-z0-9=._-]+)*),(.+)$/);
     if (!match) return res.status(404).end();
     let body;
     try { body = /;base64$/i.test(match[2]) ? Buffer.from(match[3], 'base64') : Buffer.from(decodeURIComponent(match[3])); } catch { return res.status(404).end(); }
     // Un SVG sirve como imagen dentro de la página, pero si alguien abre esta dirección sola no debe poder ejecutar nada: sandbox y sin sniffing.
     res.set({ 'Content-Type': match[1], 'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox" });
     res.send(body);
-});
+}
 // Lo que muestra el QR de una categoría de la hoja por Zona (?z=<zona>&k=<tipo.número>): el nombre ACTUAL de la categoría y cuántos códigos hay hoy en esa zona. Solo eso:
 // ni la lista de códigos ni fotos (esa vista sería otra pieza). Nunca cambia la dirección; sí lo que responde.
 app.get('/api/public/layout/:token/category', publicLayoutLimiter, (req, res) => {

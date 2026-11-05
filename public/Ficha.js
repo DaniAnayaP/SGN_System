@@ -12,10 +12,6 @@ const ARTICLE_TYPE_LABELS = {
     'materia-prima': 'Materia Prima',
 };
 
-function initials(name) {
-    return (name || '').trim().slice(0, 2).toUpperCase() || '··';
-}
-
 function specRow(label, value) {
     if (!value) return '';
     const row = document.createElement('div');
@@ -32,16 +28,11 @@ function render(data) {
     const wrap = document.getElementById('wrap');
     wrap.innerHTML = '';
 
+    // el mismo encabezado del Layout: logo (o iniciales), el tipo de página y la empresa; la Ficha es de un artículo, no de un Sitio
     const brand = document.createElement('div');
-    brand.className = 'brand';
-    const mark = document.createElement('span');
-    mark.className = 'brand-mark';
-    mark.textContent = initials(data.companyName);
-    const name = document.createElement('span');
-    name.className = 'brand-name';
-    name.textContent = data.companyName || '';
-    brand.append(mark, name);
+    brand.className = 'brand-slot';
     wrap.appendChild(brand);
+    window.QrBrandHeader.mount(brand, { kind: 'Ficha de artículo', companyName: data.companyName, hasLogo: data.hasLogo, companyColor: data.companyColor, logoUrl: `/api/public/ficha/${encodeURIComponent(data.publicToken)}/logo`, light: true });
 
     const photosEl = document.createElement('div');
     photosEl.className = 'photos';
@@ -134,6 +125,7 @@ function renderState(message) {
         const res = await fetch(`/api/public/ficha/${encodeURIComponent(token)}`);
         if (!res.ok) { renderState('Ficha no encontrada.'); return; }
         const data = await res.json();
+        data.publicToken = token;
         render(data);
     } catch (err) {
         console.error('Ficha: failed to load', err);
