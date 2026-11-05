@@ -223,6 +223,16 @@
     // dentro de la nave es su extremo de arriba o de la izquierda. Una puerta de antes (sin wallId, con el número de lado) pasa sola a la pared que la cubre (migrateDoors).
     const cornerHeightAt = (layout, i) => { const v = ((layout && layout.vertices) || [])[i]; const h = Number(v && v[2]); return h > 0 ? h : (Number(layout && layout.heightM) > 0 ? Number(layout.heightM) : 0); };
     // El eje de una pared (por el centro de su grosor): dónde empieza, hacia dónde va, cuánto mide, qué tan gruesa y qué tan alta es; null si no se puede ubicar.
+    // Las alturas de una pared: la del inicio (hStart) y la del final (hEnd); height es su promedio y heightAt(d) la que tiene a d metros del inicio. La pared puede traer las suyas (h = al inicio, h2 = al final):
+    // con solo la del inicio, toda la pared va igual de alta; sin ninguna, valen las de fábrica que se le pasan (defStart, defEnd).
+    function wallHeights(o, length, defStart, defEnd) {
+        const own1 = Number(o && o.h);
+        const own2 = Number(o && o.h2);
+        const hStart = own1 > 0 ? own1 : defStart;
+        const hEnd = own2 > 0 ? own2 : (own1 > 0 ? own1 : defEnd);
+        const heightAt = (d) => hStart + (hEnd - hStart) * (length > 0 ? Math.min(Math.max(d / length, 0), 1) : 0);
+        return { height: (hStart + hEnd) / 2, hStart, hEnd, heightAt };
+    }
     function wallAxis(layout, o) {
         if (!o) return null;
         const verts = (layout && layout.vertices) || [];
@@ -239,15 +249,18 @@
             const nx = -seg.uy * sign;
             const ny = seg.ux * sign;
             const n = verts.length;
-            const height = (cornerHeightAt(layout, (side - 1) % n) + cornerHeightAt(layout, side % n)) / 2;
-            return { x: seg.p[0] + seg.ux * dist + nx * thick / 2, y: seg.p[1] + seg.uy * dist + ny * thick / 2, ux: seg.ux, uy: seg.uy, length: len, thick, height };
+            // de fábrica la pared sigue la altura del contorno: en cada extremo, la que tiene el lado en ese punto (de una esquina a la otra del lado)
+            const ha = cornerHeightAt(layout, (side - 1) % n);
+            const hb = cornerHeightAt(layout, side % n);
+            const along = (m) => ha + (hb - ha) * (seg.length > 0 ? Math.min(Math.max(m / seg.length, 0), 1) : 0);
+            return { x: seg.p[0] + seg.ux * dist + nx * thick / 2, y: seg.p[1] + seg.uy * dist + ny * thick / 2, ux: seg.ux, uy: seg.uy, length: len, thick, ...wallHeights(o, len, along(dist), along(dist + len)) };
         }
         const x = Number(o.x) || 0;
         const y = Number(o.y) || 0;
         const l = Math.max(Number(o.l) || 0, 0);
         const w = Math.max(Number(o.w) || 0, 0);
-        const height = verts.length ? verts.reduce((acc, _, i) => acc + cornerHeightAt(layout, i), 0) / verts.length : 0;
-        return l >= w ? { x, y: y + w / 2, ux: 1, uy: 0, length: l, thick: w, height } : { x: x + l / 2, y, ux: 0, uy: 1, length: w, thick: l, height };
+        const avg = verts.length ? verts.reduce((acc, _, i) => acc + cornerHeightAt(layout, i), 0) / verts.length : 0;
+        return l >= w ? { x, y: y + w / 2, ux: 1, uy: 0, length: l, thick: w, ...wallHeights(o, l, avg, avg) } : { x: x + l / 2, y, ux: 0, uy: 1, length: w, thick: l, ...wallHeights(o, w, avg, avg) };
     }
     // Dónde queda una puerta: sus dos extremos (a y b, en metros, por el centro de la pared), hacia dónde va la pared, su grosor y lo que mide y de alto la pared; wall = la pared (o null si es una puerta de antes que todavía
     // no está en una, que se ubica sobre el lado del contorno como se hacía: legacy). null si no se puede ubicar. Un Layout girado (rotateLayout) trae la puerta ya girada en door._seg.
@@ -261,7 +274,7 @@
             const ax = wallAxis(layout, wall);
             if (!ax) return null;
             const a = { x: ax.x + ax.ux * dist, y: ax.y + ax.uy * dist };
-            return { a, b: { x: a.x + ax.ux * width, y: a.y + ax.uy * width }, ux: ax.ux, uy: ax.uy, thick: ax.thick, wallLength: ax.length, wallHeight: ax.height, wall, legacy: false };
+            return { a, b: { x: a.x + ax.ux * width, y: a.y + ax.uy * width }, ux: ax.ux, uy: ax.uy, thick: ax.thick, wallLength: ax.length, wallHeight: Math.min(ax.heightAt(dist), ax.heightAt(dist + width)), wallHeightStart: ax.hStart, wallHeightEnd: ax.hEnd, wall, legacy: false };
         }
         const verts = (layout && layout.vertices) || [];
         const side = Math.round(Number(door.wall));
@@ -1751,7 +1764,15 @@
             const kind = oneOf(o && o.kind, OBSTACLE_KINDS, 'column');
             const mode = oneOf(o && o.mode, OBSTACLE_MODES, 'free');
             const base = { id: idOf(o && o.id, obstacleIds, label), name: text(o && o.name, label, false), kind, mode };
-            if (kind === 'wall') { const wc = text(o && o.code, label, false); if (wc) base.code = wc.toUpperCase(); }
+            if (kind === 'wall') {
+                const wc = text(o && o.code, label, false); if (wc) base.code = wc.toUpperCase();
+                // La altura propia de la pared es opcional y POR ESQUINA: h al inicio y h2 al final (sin ellas valen las de siempre: las del contorno en cada extremo o el promedio de la nave); es distinta de la de las huellas.
+                ['h', 'h2'].forEach((hk) => {
+                    if (!o || o[hk] === undefined || o[hk] === null || o[hk] === '') return;
+                    const wh = Number(o[hk]);
+                    if (Number.isFinite(wh) && wh >= 0.01 && wh <= LIMITS.maxHeight) base[hk] = round2(wh); else errors.push(`${label}: la altura de la pared no es válida`);
+                });
+            }
             if (mode === 'contour') {
                 const wall = Math.round(Number(o && o.wall));
                 if (!(wall >= 1 && wall <= walls)) errors.push(`${label}: lado no válido`);

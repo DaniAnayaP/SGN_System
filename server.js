@@ -6607,7 +6607,7 @@ function buildPublicLayoutPayload(clientId, row) {
         spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, footprintId: s.footprintId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels, ...(s.fmt ? { fmt: s.fmt } : {}) })),
         // Las conexiones de luz salen en la página pública (con su propia capa, apagada al entrar) porque Daniel pidió esos botones ahí; las columnas y el plano de fondo no.
         // Las paredes (obstáculos del contorno) van en la página pública porque son parte de la nave; columnas, desniveles y el plano de fondo no.
-        obstacles: (l.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, name: o.name, kind: o.kind, mode: o.mode, wall: o.wall, dist: o.dist, x: o.x, y: o.y, l: o.l, w: o.w })),
+        obstacles: (l.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, name: o.name, kind: o.kind, mode: o.mode, wall: o.wall, dist: o.dist, x: o.x, y: o.y, l: o.l, w: o.w, ...(o.h > 0 ? { h: o.h } : {}), ...(o.h2 > 0 ? { h2: o.h2 } : {}) })),
         power: (l.power || []).map((e) => ({ type: e.type, ...(e.wallId ? { wallId: e.wallId } : { wall: e.wall }), dist: e.dist, height: e.height })),
         // Los pasillos (Tránsito) se dibujan en la página pública y cuentan en los m² de pasillos; quién transita y las medidas no salen.
         transit: (l.transit || []).map((p) => ({ id: p.id, code: p.code, name: p.name, type: p.type, x: p.x, y: p.y, l: p.l, w: p.w })),
@@ -7822,7 +7822,7 @@ app.get('/api/business/climate-map', requireAuth, (req, res) => {
             vertices: pub.layout.vertices, zones: pub.layout.zones.map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}) })),
             sensors: (row.layout.sensors || []).map((s) => ({ id: s.id, code: s.code, type: s.type, ...(s.wallId ? { wallId: s.wallId } : { wall: s.wall }), dist: s.dist, height: s.height, zoneId: s.zoneId || '' })),
             // las paredes (donde va cada sensor): solo lo que hace falta para ubicarlas
-            obstacles: (row.layout.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, name: o.name, kind: o.kind, mode: o.mode, wall: o.wall, dist: o.dist, x: o.x, y: o.y, l: o.l, w: o.w })),
+            obstacles: (row.layout.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, name: o.name, kind: o.kind, mode: o.mode, wall: o.wall, dist: o.dist, x: o.x, y: o.y, l: o.l, w: o.w, ...(o.h > 0 ? { h: o.h } : {}), ...(o.h2 > 0 ? { h2: o.h2 } : {}) })),
         },
         readings: rows.map((r) => ({ sensorId: r.sensor_id, sensorCode: r.sensor_code, type: r.sensor_type, temperature: r.temperature, humidity: r.humidity, at: sqlUtcIso(r.checked_at), name: r.person_name })),
         truncated: rows.length >= CLIMATE_MAP_ROW_LIMIT,

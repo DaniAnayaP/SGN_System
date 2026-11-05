@@ -376,9 +376,29 @@
                     return geo;
                 } catch (err) { return null; }
             };
+            // Una pared de 4 esquinas con alturas distintas en sus dos extremos: abajo plana y arriba inclinada (la altura de cada esquina sale de dónde cae sobre la pared).
+            const slopedPrism = (pts, ax) => {
+                try {
+                    const hs = pts.map((p) => ax.heightAt(Math.min(Math.max((p[0] - ax.x) * ax.ux + (p[1] - ax.y) * ax.uy, 0), ax.length)));
+                    const pos = [];
+                    pts.forEach((p) => pos.push(PX(p[0]), 0, PZ(p[1])));
+                    pts.forEach((p, i) => pos.push(PX(p[0]), Math.max(hs[i], 0.02), PZ(p[1])));
+                    const n = pts.length;
+                    const idx = [];
+                    for (let i = 1; i < n - 1; i++) { idx.push(0, i, i + 1); idx.push(n, n + i, n + i + 1); }
+                    for (let i = 0; i < n; i++) { const j = (i + 1) % n; idx.push(i, j, n + j, i, n + j, n + i); }
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+                    geo.setIndex(idx);
+                    geo.computeVertexNormals();
+                    return geo;
+                } catch (err) { return null; }
+            };
             shapes3.filter(({ o }) => o.kind === 'wall').forEach(({ o, g }) => {
-                const wallH = o.mode === 'contour' ? (cornerH[(Math.max(1, Number(o.wall)) - 1) % V.length] + cornerH[Math.max(1, Number(o.wall)) % V.length]) / 2 : avgH;
-                const geo = prism(g.pts, wallH, 0);
+                // la pared sube de la altura de su inicio a la de su final (de fábrica, la del contorno en cada extremo); con 4 esquinas se arma con la parte de arriba inclinada
+                const ax = root.LayoutCalc && root.LayoutCalc.wallAxis ? root.LayoutCalc.wallAxis(layout, o) : null;
+                const wallH = ax ? ax.height : (o.mode === 'contour' ? (cornerH[(Math.max(1, Number(o.wall)) - 1) % V.length] + cornerH[Math.max(1, Number(o.wall)) % V.length]) / 2 : avgH);
+                const geo = ax && ax.length > 0 && g.pts.length === 4 && Math.abs(ax.hStart - ax.hEnd) > 0.005 ? slopedPrism(g.pts, ax) : prism(g.pts, wallH, 0);
                 if (geo) group.walls.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x6f84b3, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false })));
             });
             const lg = new THREE.BufferGeometry();

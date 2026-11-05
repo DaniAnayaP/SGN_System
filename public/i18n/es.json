@@ -1728,6 +1728,8 @@
     "layoutDistOY": "Distancia o Y (m)",
     "layoutGrosorAncho": "Grosor o ancho (m)",
     "layoutAlturaDesnivel": "Altura del desnivel (m)",
+    "layoutAlturaPared": "Altura al inicio (m)",
+    "layoutAlturaParedFin": "Altura al final (m)",
     "layoutTodoElLado": "todo el lado",
     "layoutLeyendaPared": "Pared",
     "layoutLeyendaDesnivel": "Desnivel",
@@ -4686,6 +4688,14 @@
     "layoutObstLargo": {
       "what": "Cuánto mide a lo largo. En un obstáculo sobre el contorno, vacío quiere decir todo el lado.",
       "example": "dejas el largo vacío para una pared que cubre el lado completo y pones 3 para una pared de 3 m."
+    },
+    "layoutObstAlturaPared": {
+      "what": "Qué tan alta es esta pared en su esquina de inicio (donde empieza la distancia; en una pared de adentro, su extremo de arriba o de la izquierda), en metros. Es la de la pared, no la de las huellas: pueden ser iguales o distintas. Si la dejas vacía vale la del contorno en ese punto (o el promedio de la nave si está adentro).",
+      "example": "una pared que empieza en la parte más alta de la nave: 9 m."
+    },
+    "layoutObstAlturaParedFin": {
+      "what": "Qué tan alta es esta pared en su esquina del final, en metros. Si es distinta de la del inicio, la pared sube o baja de una esquina a la otra (para naves irregulares, más alta de un lado que del otro). Vacía: igual que la del inicio, o la del contorno en ese punto si tampoco escribiste la del inicio.",
+      "example": "una pared que baja de 9 m en un extremo a 6 m en el otro."
     },
     "layoutObstGrosor": {
       "what": "El grosor del obstáculo hacia adentro de la nave, en metros.",

@@ -1728,6 +1728,8 @@
     "layoutDistOY": "Distance or Y (m)",
     "layoutGrosorAncho": "Thickness or width (m)",
     "layoutAlturaDesnivel": "Level difference height (m)",
+    "layoutAlturaPared": "Height at start (m)",
+    "layoutAlturaParedFin": "Height at end (m)",
     "layoutTodoElLado": "whole side",
     "layoutLeyendaPared": "Wall",
     "layoutLeyendaDesnivel": "Level difference",
@@ -4687,6 +4689,14 @@
     "layoutObstLargo": {
       "what": "How long it is. On an obstacle on the outline, empty means the whole side.",
       "example": "you leave the length empty for a wall that covers the whole side and enter 3 for a 3 m wall."
+    },
+    "layoutObstAlturaPared": {
+      "what": "How tall this wall is at its starting corner (where the distance starts; for an inside wall, its top or left end), in meters. It is the wall's own height, not the footprints': they can be equal or different. If you leave it empty the contour's height at that point applies (or the warehouse average if it is inside).",
+      "example": "a wall that starts at the tallest part of the warehouse: 9 m."
+    },
+    "layoutObstAlturaParedFin": {
+      "what": "How tall this wall is at its ending corner, in meters. If it differs from the start, the wall rises or drops from one corner to the other (for irregular warehouses, taller on one side than the other). Empty: the same as the start, or the contour's height at that point if you did not write the start either.",
+      "example": "a wall that drops from 9 m at one end to 6 m at the other."
     },
     "layoutObstGrosor": {
       "what": "The thickness of the obstacle toward the inside of the warehouse, in meters.",

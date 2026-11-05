@@ -811,7 +811,15 @@ function obstacleRowHtml(o, i, dis, wallsOnly = false) {
         ? `${sel('wall', wallOptionsHtml(o.wall), 'layoutObstLado')}${num('dist', o.dist || 0, 'layoutObstDist', 'min="0"')}${num('l', o.l > 0 ? o.l : '', 'layoutObstLargo', `min="0" placeholder="${esc(t('main.layoutTodoElLado'))}"`)}${num('w', o.w || 0, 'layoutObstGrosor', 'min="0"')}`
         : `${num('x', o.x, 'layoutObstXY')}${num('y', o.y, 'layoutObstXY')}${num('l', o.l, 'layoutObstLargo', 'min="0"')}${num('w', o.w, 'layoutObstAncho', 'min="0"')}`;
     const height = o.kind === 'step' ? num('dz', o.dz === undefined ? 0 : o.dz, 'layoutObstAltura') : '<td class="layout-calc">—</td>';
-    if (wallsOnly) return `<tr><td class="layout-calc"><b data-wall-code="${i}">${esc(o.code || '')}</b></td>${cellText('obstacles', i, 'name', o.name, dis)}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${removeCell('obstacles', i, dis)}</tr>`;
+    if (wallsOnly) {
+        // La altura propia de la pared: vacía = la de siempre (la del lado del contorno o el promedio de la nave), que se ve en gris.
+        // POR ESQUINA: la altura al inicio de la pared y la del final (una pared puede ir más alta de un lado que del otro).
+        const axis = LC.wallAxis(state.draft, { ...o, h: undefined, h2: undefined });
+        const endDefault = axis ? (o.h > 0 ? o.h : axis.hEnd) : '';
+        const wallHeight = num('h', o.h > 0 ? o.h : '', 'layoutObstAlturaPared', `min="0" placeholder="${axis ? fmt(axis.hStart) : ''}"`)
+            + num('h2', o.h2 > 0 ? o.h2 : '', 'layoutObstAlturaParedFin', `min="0" placeholder="${endDefault === '' ? '' : fmt(endDefault)}"`);
+        return `<tr><td class="layout-calc"><b data-wall-code="${i}">${esc(o.code || '')}</b></td>${cellText('obstacles', i, 'name', o.name, dis)}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${wallHeight}${removeCell('obstacles', i, dis)}</tr>`;
+    }
     // en Contorno el Tipo ya no ofrece Pared (las paredes se agregan en su propio paso)
     return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('kind', optionsHtml('obstacle', LC.OBSTACLE_KINDS.filter((k) => k !== 'wall'), o.kind), 'layoutObstTipo')}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${height}${removeCell('obstacles', i, dis)}</tr>`;
 }
@@ -938,7 +946,7 @@ function stepHtml(step) {
         const addWallBtn = `<button type="button" class="btn btn-secondary layout-add" data-add-wall="1" data-main-add="1" data-help-key="layoutParedAgregar"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarPared'))}</button>`;
         const wallsAllBtn = `<button type="button" class="btn btn-secondary layout-add" data-walls-all="1" data-main-add="1" data-help-key="layoutParedTodo"${dis ? ' disabled' : ''}>${esc(t('main.layoutParedTodoContorno'))}</button>`;
         const walls = d.obstacles.map((o, i) => (o.kind === 'wall' ? obstacleRowHtml(o, i, dis, true) : '')).filter(Boolean);
-        const list = walls.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', ''], walls, 'layout-paredes') : `<p class="layout-muted">${esc(t('main.layoutParedesVacio'))}</p>`;
+        const list = walls.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', 'main.layoutAlturaPared', 'main.layoutAlturaParedFin', ''], walls, 'layout-paredes') : `<p class="layout-muted">${esc(t('main.layoutParedesVacio'))}</p>`;
         return `${addWallBtn}${wallsAllBtn}${list}`;
     }
     if (step === 'puertas') {
@@ -2342,6 +2350,11 @@ function onEdit(event) {
             const raw = String(el.value).trim();
             const n = parseFloat(raw);
             if (raw !== '' && Number.isFinite(n) && n > 0) row.h = n; else delete row.h;
+        } else if (list === 'obstacles' && (key === 'h' || key === 'h2')) {
+            // la altura de una pared es opcional y por esquina (h al inicio, h2 al final): vacío = la de siempre (la del contorno en ese extremo o el promedio de la nave)
+            const raw = String(el.value).trim();
+            const n = parseFloat(raw);
+            if (raw !== '' && Number.isFinite(n) && n >= 0.01) row[key] = Math.min(n, LC.LIMITS.maxHeight); else delete row[key];
         } else if (list === 'obstacles' && (key === 'kind' || key === 'mode')) {
             setObstacleKindOrMode(row, key, el.value);
         } else if (list === 'zones' && (key === 'ox' || key === 'oy')) {
