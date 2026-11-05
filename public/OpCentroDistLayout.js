@@ -1251,7 +1251,13 @@ function applyHighlight(reveal) {
         tag.textContent = `${t('main.layoutPosNivel')} ${h.n} · ${t('main.layoutPosColumna')} ${h.c}`;
         svg.appendChild(tag);
     }
-    if (reveal && zoom.s > 1.001) {
+    // reveal === 'zoom' (se eligió desde el buscador): el croquis se acerca para que la figura ocupe más o menos un tercio de lo que se ve, centrada (solo si la cuenta puede acercar)
+    if (reveal === 'zoom' && canZoomMap()) {
+        zoom.s = Math.min(ZOOM_MAX, Math.max(1.5, Math.min(MAP_W / (Math.max(box.width, 24) * 3), MAP_H / (Math.max(box.height, 24) * 3))));
+        zoom.x = box.x + box.width / 2 - MAP_W / zoom.s / 2;
+        zoom.y = box.y + box.height / 2 - MAP_H / zoom.s / 2;
+        applyZoom();
+    } else if (reveal && zoom.s > 1.001) {
         const vw = MAP_W / zoom.s;
         const vh = MAP_H / zoom.s;
         const inside = box.x >= zoom.x && box.y >= zoom.y && box.x + box.width <= zoom.x + vw && box.y + box.height <= zoom.y + vh;
@@ -1301,14 +1307,14 @@ function selectFromMap(target) {
     if (next) selectEntity(next);
 }
 // Elegir una zona, huella o activo: se marca su renglón en la tabla (y se baja hasta él) y su figura se resalta en el croquis y en el 3D; volver a elegirla pasa del contorno grueso al punteado.
-function selectEntity(next) {
+function selectEntity(next, reveal = true) {
     next.step = state.focus;
     next.strong = !(sameHighlight(state.hl, next) && state.hl.strong);
     state.hl = next;
     markSelectedRow();
     const row = highlightedRow();
     if (row) row.scrollIntoView({ block: 'nearest' });
-    applyHighlight(true);
+    applyHighlight(reveal);
 }
 // Tocar una figura en el 3D hace lo mismo que en el croquis: solo cuenta lo del paso que se está editando (en Zonas la zona, en Huella-Espacio la huella y en Activos el activo). Como en el 3D los activos tapan
 // el piso, tocar un activo en el paso Zonas elige la zona donde está y en Huella-Espacio la huella que lo lleva.
@@ -1476,27 +1482,66 @@ function applyFindToTables() {
     });
 }
 // La lista que sale al escribir: zonas y huellas que coinciden (con el mismo motor de búsqueda de todo el sistema: coma, $ y @).
-function findCandidates(query) {
+// Los tipos en que se puede buscar (type = el de los chips, kind = como se elige la figura, step = el paso donde vive). Cada tipo solo sale si el árbol deja ver su paso. Zonas y huellas enfocan (solo se ve lo de adentro);
+// los demás encienden su paso, seleccionan su renglón y acercan el croquis a la figura.
+const FIND_TYPES = [
+    { type: 'zone', step: 'zonas' }, { type: 'footprint', step: 'espacios' }, { type: 'space', kind: 'space', step: 'activos' }, { type: 'wall', kind: 'obstacle', step: 'paredes' }, { type: 'door', kind: 'door', step: 'puertas' },
+    { type: 'safety', kind: 'safety', step: 'seguridad' }, { type: 'sensor', kind: 'sensor', step: 'sensores' }, { type: 'power', kind: 'power', step: 'luz' }, { type: 'obstacle', kind: 'obstacle', step: 'obstaculos' },
+    { type: 'transit', kind: 'transit', step: 'transito' }, { type: 'object', kind: 'object', step: 'objetos' },
+];
+const findTypesShown = () => FIND_TYPES.filter((ft) => stepVisible(ft.step));
+const findTypesChosen = () => (state.findTypes || []).filter((id) => findTypesShown().some((ft) => ft.type === id));
+function findSearch(query) {
     const d = state.draft;
-    if (!d) return [];
+    if (!d) return { items: [], counts: {} };
     const zoneName = (id) => { const z = d.zones.find((x) => x.id === id); return z ? z.name : ''; };
-    const items = [
-        ...d.zones.map((z) => ({ kind: 'zone', id: z.id, title: z.name || z.code, sub: `${t('main.layoutFindZona')} · ${z.code || ''}`, hay: `${z.code || ''} ${z.name || ''}` })),
-        ...d.footprints.map((p) => ({ kind: 'footprint', id: p.id, title: p.code, sub: `${t('main.layoutFindHuella')} · ${zoneName(p.zoneId)}`, hay: `${p.code || ''} ${zoneName(p.zoneId)}` })),
-    ];
+    const fpCode = (id) => { const p = d.footprints.find((x) => x.id === id); return p ? p.code : ''; };
+    const low = (v) => String(v || '').toLowerCase();
+    const wallName = (id) => { const o = (d.obstacles || []).find((x) => x.id === id); return o ? `${o.code ? `${o.code} ` : ''}${o.name || ''}`.trim() : ''; };
+    const by = {
+        zone: () => d.zones.map((z) => ({ id: z.id, title: z.name || z.code, sub: `${t('main.layoutFindZona')} · ${z.code || ''}`, hay: `${z.code || ''} ${z.name || ''}` })),
+        footprint: () => d.footprints.map((p) => ({ id: p.id, title: p.code, sub: `${t('main.layoutFindHuella')} · ${zoneName(p.zoneId)}`, hay: `${p.code || ''} ${zoneName(p.zoneId)}` })),
+        space: () => d.spaces.filter((x) => x.active !== false && x.footprintId).map((x) => ({ id: x.id, title: x.code, sub: `${t('main.layoutFindActivo')} · ${fpCode(x.footprintId)}`, hay: `${x.code || ''} ${typeLabel('space', x.type)} ${fpCode(x.footprintId)} ${zoneName(x.zoneId)}` })),
+        wall: () => (d.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, title: `${o.code ? `${o.code} · ` : ''}${o.name || t('main.layoutFindPared')}`, sub: low(t('main.layoutFindPared')), hay: `${o.code || ''} ${o.name || ''}` })),
+        door: () => (d.doors || []).map((x) => ({ id: x.id, title: x.name || t('main.layoutFindPuerta'), sub: `${t('main.layoutFindPuerta')} · ${wallName(x.wallId)}`.replace(/ · $/, ''), hay: `${x.name || ''} ${typeLabel('door', x.type)} ${wallName(x.wallId)}` })),
+        safety: () => (d.safety || []).map((x) => ({ id: x.id, title: x.name || typeLabel('safety', x.type), sub: `${low(typeLabel('safety', x.type))} · ${x.code || ''}`, hay: `${x.code || ''} ${x.name || ''} ${typeLabel('safety', x.type)}` })),
+        sensor: () => (d.sensors || []).map((x) => ({ id: x.id, title: x.code || t('main.layoutFindSensor'), sub: `${t('main.layoutFindSensor')} · ${low(typeLabel('sensor', x.type))}`, hay: `${x.code || ''} ${typeLabel('sensor', x.type)} ${wallName(x.wallId)}` })),
+        power: () => (d.power || []).map((x) => ({ id: x.id, title: typeLabel('power', x.type), sub: `${t('main.layoutFindLuz')} · ${wallName(x.wallId)}`.replace(/ · $/, ''), hay: `${typeLabel('power', x.type)} ${wallName(x.wallId)}` })),
+        obstacle: () => (d.obstacles || []).filter((o) => o.kind !== 'wall').map((o) => ({ id: o.id, title: o.name || typeLabel('obstacle', o.kind), sub: low(typeLabel('obstacle', o.kind)), hay: `${o.name || ''} ${typeLabel('obstacle', o.kind)}` })),
+        transit: () => (d.transit || []).map((p) => ({ id: p.id, title: p.code || p.name || t('main.layoutFindPasillo'), sub: `${t('main.layoutFindPasillo')} · ${low(typeLabel('transit', p.type))}`, hay: `${p.code || ''} ${p.name || ''} ${typeLabel('transit', p.type)}` })),
+        object: () => (d.objects || []).map((o) => ({ id: o.id, title: o.name || typeLabel('object', o.type), sub: low(typeLabel('object', o.type)), hay: `${o.name || ''} ${typeLabel('object', o.type)}` })),
+    };
     const text = String(query || '').trim();
     const match = text ? SearchSyntax.compile('contains', text) : null;
-    return items.filter((i) => !match || match(i.hay)).slice(0, 40);
+    const chosen = findTypesChosen();
+    const counts = {};
+    const items = [];
+    findTypesShown().forEach((ft) => {
+        const found = by[ft.type]().filter((i) => !match || match(i.hay));
+        counts[ft.type] = found.length;
+        if (chosen.length && !chosen.includes(ft.type)) return;
+        found.forEach((i) => items.push({ type: ft.type, kind: ft.kind || ft.type, step: ft.step, ...i }));
+    });
+    return { items, counts };
 }
+function findCandidates(query) { return findSearch(query).items.slice(0, 40); }
 let findItems = [];
 let findActive = -1;
 function renderFindList() {
     const list = $('layout-find-list');
-    findItems = findCandidates($('layout-find-input').value);
+    const { items, counts } = findSearch($('layout-find-input').value);
+    findItems = items.slice(0, 40);
     findActive = findItems.length ? 0 : -1;
-    list.innerHTML = findItems.length
+    // Los chips «Buscar en»: Todo o uno o varios tipos; cada número es lo que coincide con lo escrito. Solo salen los tipos que el árbol deja ver.
+    const shown = findTypesShown();
+    const chosen = findTypesChosen();
+    const total = shown.reduce((acc, ft) => acc + (counts[ft.type] || 0), 0);
+    const chip = (id, label, n, on) => `<button type="button" class="layout-find-type" data-find-type="${id}" aria-pressed="${on}">${esc(label)} <span class="layout-find-n">${n}</span></button>`;
+    const chips = shown.length > 1 ? `<div class="layout-find-types" role="group" data-help-key="layoutFindTipos"><span class="layout-find-hide-title">${esc(t('main.layoutFindBuscarEn'))}</span>${chip('all', t('main.layoutFindTipoTodo'), total, !chosen.length)}${shown.map((ft) => chip(ft.type, t(`main.layoutFindTipo_${ft.type}`), counts[ft.type] || 0, chosen.includes(ft.type))).join('')}</div>` : '';
+    $('layout-find-input').placeholder = chosen.length === 1 ? t('main.layoutFindEnTipo', { type: t(`main.layoutFindTipo_${chosen[0]}`).toLowerCase() }) : t('main.layoutBuscarPlaceholder');
+    list.innerHTML = chips + (findItems.length
         ? findItems.map((i, n) => `<button type="button" class="layout-find-item" role="option" id="layout-find-opt-${n}" data-find-pick="${n}" aria-selected="${n === findActive}"><b>${esc(i.title)}</b><span>${esc(i.sub)}</span></button>`).join('')
-        : `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
+        : `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`);
     list.hidden = false;
     $('layout-find-input').setAttribute('aria-expanded', 'true');
 }
@@ -1564,9 +1609,27 @@ function applyFind(reset) {
     applyFindToTables();
     updateViewBtns();
 }
+// Elegir algo que no es una zona ni una huella (activo, pared, puerta, alarma…): se quita el enfoque de zona o huella (si había), se enciende y enfoca su paso, se selecciona su renglón en la tabla y el croquis (y el 3D)
+// lo resaltan; el croquis se acerca a la figura si la cuenta puede acercar.
+function locateFound(item) {
+    if (!stepVisible(item.step)) return;
+    const hadFind = !!state.find;
+    clearFind();
+    showStep(item.step);
+    $('layout-find-input').value = '';
+    closeFindList();
+    renderFindBox();
+    renderPanel();
+    refreshLive();
+    if (hadFind) { renderSummary(); applyFindToTables(); updateViewBtns(); }
+    if (item.step === 'activos') loadAssetLists().then(() => { if (state.focus === 'activos') { renderPanel(); markSelectedRow(); } });
+    state.hl = null;
+    selectEntity({ kind: item.kind, id: item.id }, 'zoom');
+}
 function pickFind(n) {
     const item = findItems[n];
     if (!item) return;
+    if (item.type !== 'zone' && item.type !== 'footprint') { locateFound(item); return; }
     state.find = { kind: item.kind, id: item.id };
     state.findHide = {};
     state.findHideIds = {};
@@ -1580,6 +1643,16 @@ $('layout-find-input').addEventListener('keydown', (event) => {
     if (event.key === 'ArrowDown') { event.preventDefault(); if ($('layout-find-list').hidden) renderFindList(); else moveFindActive(1); } else if (event.key === 'ArrowUp') { event.preventDefault(); moveFindActive(-1); } else if (event.key === 'Enter') { event.preventDefault(); if (!$('layout-find-list').hidden && findActive >= 0) pickFind(findActive); } else if (event.key === 'Escape') closeFindList();
 });
 $('layout-find').addEventListener('click', (event) => {
+    // Un chip de tipo: Todo quita la selección; los demás se prenden y apagan (uno o varios a la vez). La lista se vuelve a dibujar y se queda abierta.
+    const typeBtn = event.target.closest('[data-find-type]');
+    if (typeBtn) {
+        event.stopPropagation();
+        const id = typeBtn.getAttribute('data-find-type');
+        const cur = findTypesChosen();
+        state.findTypes = id === 'all' ? [] : (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
+        renderFindList();
+        return;
+    }
     const pick = event.target.closest('[data-find-pick]');
     if (pick) { pickFind(Number(pick.getAttribute('data-find-pick'))); return; }
     if (event.target.closest('[data-find-clear]')) { clearFind(); applyFind(true); return; }

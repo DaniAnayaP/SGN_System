@@ -1952,7 +1952,27 @@
     "layoutRenumerarConfirm": "Se renumerarán los códigos de los activos: en cada zona y tipo quedan consecutivos desde 001 (por ejemplo F020 y F021 pasan a F001 y F002). Los QR, los localizadores y las relaciones siguen funcionando, porque usan el activo y no su código; pero lo que ya imprimiste o pegaste con el código anterior ya no coincidirá. Se aplica cuando guardes el Layout. ¿Renumerar?",
     "layoutRenumerarNada": "Los códigos ya están consecutivos: no hay nada que renumerar.",
     "layoutRenumerarListo": "Códigos renumerados en la tabla. Guarda el Layout para aplicarlos.",
-    "layoutBuscarPlaceholder": "Buscar zona o huella",
+    "layoutBuscarPlaceholder": "Buscar en el Layout",
+    "layoutFindBuscarEn": "Buscar en",
+    "layoutFindTipoTodo": "Todo",
+    "layoutFindEnTipo": "Buscar en {type}",
+    "layoutFindTipo_zone": "Zonas",
+    "layoutFindTipo_footprint": "Huellas",
+    "layoutFindTipo_space": "Activos",
+    "layoutFindTipo_wall": "Paredes",
+    "layoutFindTipo_door": "Puertas",
+    "layoutFindTipo_safety": "Seguridad",
+    "layoutFindTipo_sensor": "Sensores",
+    "layoutFindTipo_power": "Luz",
+    "layoutFindTipo_obstacle": "Obstáculos",
+    "layoutFindTipo_transit": "Pasillos",
+    "layoutFindTipo_object": "Objetos",
+    "layoutFindActivo": "activo",
+    "layoutFindPared": "pared",
+    "layoutFindPuerta": "puerta",
+    "layoutFindSensor": "sensor",
+    "layoutFindLuz": "luz",
+    "layoutFindPasillo": "pasillo",
     "layoutFindZona": "zona",
     "layoutFindHuella": "huella",
     "layoutFindEnfocado": "Enfocado: {name}",
@@ -4536,7 +4556,7 @@
       "example": "los refrigeradores quedaron como F020 y F021: tocas Renumerar códigos y pasan a F001 y F002; guardas el Layout."
     },
     "layoutFind": {
-      "what": "Busca una zona o una huella, por su código o su nombre, y el croquis, el 3D, las tablas y el resumen se quedan solo con lo que hay adentro; el resto de la nave se oculta. Las tablas no pierden renglones: los que no son de lo enfocado solo se esconden. Es solo de pantalla: no cambia lo guardado ni lo que se imprime.",
+      "what": "Busca en el Layout, por su código o su nombre: zonas, huellas, activos, paredes, puertas y lo demás (elige el tipo con los botones de arriba de la lista). Al elegir una zona o una huella, el croquis, el 3D, las tablas y el resumen se quedan solo con lo que hay adentro; el resto de la nave se oculta. Las tablas no pierden renglones: los que no son de lo enfocado solo se esconden. Es solo de pantalla: no cambia lo guardado ni lo que se imprime.",
       "example": "escribes «Zona 6» y eliges la zona: el croquis se acerca y solo se ven sus huellas y activos; escribes «H005» y solo se ven sus activos."
     },
     "layoutFindResto": {
@@ -4546,6 +4566,10 @@
     "layoutFindItems": {
       "what": "La lista de lo que hay adentro de lo enfocado (las huellas con sus activos, o los activos de la huella) con un ojito por renglón: un toque lo quita del croquis y del 3D y otro lo regresa. Al ocultar una huella se ocultan también sus activos. Es solo de pantalla.",
       "example": "quitas el ojito de A003 y solo ese anaquel desaparece del dibujo; los demás se quedan."
+    },
+    "layoutFindTipos": {
+      "what": "Elige en qué buscar: Todo, o uno o varios tipos a la vez (zonas, huellas, activos, paredes, puertas, seguridad, sensores, luz, obstáculos, pasillos u objetos). El número de cada tipo es lo que coincide con lo que escribes. Solo salen los tipos de los pasos que tu cuenta puede ver. Al elegir una zona o una huella se enfoca como siempre; al elegir cualquier otra cosa se enciende su paso, se marca su renglón en la tabla y el croquis se acerca y la resalta.",
+      "example": "marcas Puertas, escribes «andén» y eliges la puerta: el paso Puertas se abre con su renglón marcado y el croquis se acerca a ella."
     },
     "layoutFindChip": {
       "what": "Dice qué zona o huella estás viendo. Al tocarlo se quita el enfoque y vuelve a verse toda la nave.",
