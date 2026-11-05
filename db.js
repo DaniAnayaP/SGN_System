@@ -10959,7 +10959,8 @@ function getClientAdminContractGrants(clientId) {
 // Solo mira los permisos que se AGREGAN (los que ya estaban guardados se quedan como están). Lo que se agrega y no cabe NO se rechaza: se
 // quita del guardado y se avisa, porque un "marcar todo" de un departamento trae también lo que está fuera del contrato o en otro Estatus, y
 // el resto sí debe guardarse. Devuelve { allowed, dropped } con dropped = [{ sectionId, itemId, submenuId, kinds }].
-function clampNewGrantsToLimits({ clientId, visibleStatuses, before, after }) {
+// allowedCenterIds (solo al dar permisos a UN usuario): los centros de costos de su «Asignación a laborar» (getHrAssignedCenterIds); un centro nuevo que no está ahí se quita ('assignment'). null = sin límite.
+function clampNewGrantsToLimits({ clientId, visibleStatuses, before, after, allowedCenterIds = null }) {
     const keyOf = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
     const had = new Set(before.map(keyOf));
     const visible = new Set(visibleStatuses);
@@ -10972,6 +10973,7 @@ function clampNewGrantsToLimits({ clientId, visibleStatuses, before, after }) {
         const kinds = [];
         if (!visible.has(resolveMasterNodeStatus(g.sectionId, g.itemId, g.submenuId, statusOverrides))) kinds.push('status');
         if (contract && g.sectionId !== 'main' && g.submenuId && !isCostCenterGrant(g) && !isTupleGranted(contract, g.sectionId, g.itemId, contractKeyForGrant(g.submenuId))) kinds.push('contract');
+        if (allowedCenterIds && g.sectionId === 'main' && g.itemId === 'cc-list' && /^cc-\d+$/.test(String(g.submenuId || '')) && !allowedCenterIds.includes(Number(String(g.submenuId).slice(3)))) kinds.push('assignment');
         if (kinds.length) dropped.push({ sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null, kinds });
         else allowed.push(g);
     }
@@ -11353,25 +11355,54 @@ function getUserEffectiveGrants(userId) {
     if (!account || !account.clientId || account.isClientAdmin) return combined;
     const ctx = getLimitsContext(account.clientId);
     const visible = new Set(getUserVisibleStatuses(userId));
-    return applyHrAssignmentLimits(userId, combined.filter((g) => limitKindsForGrant(g, ctx, visible, !!account.isTest).length === 0));
+    // Los centros de su asignación se suman ANTES de los límites (así también pasan por el Estatus) y la asignación los recorta DESPUÉS (lo que el Rol da de más y no está asignado no vale).
+    const assignment = hrWorkerAssignmentOf(userId);
+    const withAssigned = assignment ? addHrAssignedCenterGrants(combined, assignment) : combined;
+    return applyHrAssignmentLimits(userId, withAssigned.filter((g) => limitKindsForGrant(g, ctx, visible, !!account.isTest).length === 0), assignment);
 }
 
 // Lo asignado en «Asignación a laborar» (Mi Recurso Humano) es lo que HABILITA a la persona: un centro de costos o un departamento que no tiene asignado no vale aunque su Rol se lo dé (el Rol dice qué puede hacer y la asignación, dónde).
 // Sin asignación todavía (las tres vacías) se queda como estaba. Con asignación, lo que quedó sin elegir es «ninguno» (sin centro de costos no se opera nada). Los centros de «todos» son los de los sitios elegidos, vistos al momento (si el cliente crea uno
 // nuevo en un sitio ya asignado entra solo). Solo toca los permisos de los departamentos y las hojas de centros de costos (main / cc-list / cc-<id>); todo lo demás queda igual.
-function applyHrAssignmentLimits(userId, grants) {
+// La asignación de una persona ya resuelta: { departments, allowedCenters (Set de ids de centros de costos) }; null si no es una persona de Mi Recurso Humano o todavía no tiene asignación.
+function hrWorkerAssignmentOf(userId) {
     const worker = db.prepare('SELECT client_id AS clientId, is_test_data AS isTest, assigned_departments AS d, assigned_sites AS s, assigned_cost_centers AS c FROM hr_workers WHERE user_id = ?').get(userId);
-    if (!worker) return grants;
+    if (!worker) return null;
     const departments = parseHrAssignment(worker.d);
     const sites = parseHrAssignment(worker.s);
     const centers = parseHrAssignment(worker.c);
-    if (!departments && !sites && !centers) return grants;
+    if (!departments && !sites && !centers) return null;
     let allowedCenters = new Set();
     if (centers === 'all') {
         allowedCenters = new Set(hrAssignmentOptions(worker.clientId, !!worker.isTest).centers.filter((cc) => sites === 'all' || (Array.isArray(sites) && sites.includes(cc.site_code))).map((cc) => cc.id));
     } else if (Array.isArray(centers)) {
         allowedCenters = new Set(centers);
     }
+    return { departments, allowedCenters };
+}
+// Los ids de los centros de costos donde opera esa persona según su asignación (lista, vacía si todavía no eligió ninguno); null = sin asignación, sin límite. Lo usa el árbol por usuario para bloquear los que no están.
+function getHrAssignedCenterIds(userId) {
+    const assignment = hrWorkerAssignmentOf(userId);
+    return assignment ? [...assignment.allowedCenters] : null;
+}
+// Lo asignado HABILITA: cada centro de costos de su asignación cuenta como permiso dado (main / cc-list / cc-<id>) aunque el Rol no lo traiga. Sin esto, con la asignación completa y un Rol sin ese centro la persona no tendría ninguno y no vería nada.
+function hrAssignedCenterGrants(assignment) {
+    return [...assignment.allowedCenters].map((id) => ({ sectionId: 'main', itemId: 'cc-list', submenuId: `cc-${id}` }));
+}
+function addHrAssignedCenterGrants(grants, assignment) {
+    const have = new Set(grants.filter((g) => g.sectionId === 'main' && g.itemId === 'cc-list').map((g) => g.submenuId));
+    const extra = hrAssignedCenterGrants(assignment).filter((g) => !have.has(g.submenuId));
+    return extra.length ? [...grants, ...extra] : grants;
+}
+// Los permisos de centros de costos que esa persona tiene por su asignación (para mostrarlos como dados en su árbol); vacío si no tiene asignación.
+function getHrAssignedCenterGrants(userId) {
+    const assignment = hrWorkerAssignmentOf(userId);
+    return assignment ? hrAssignedCenterGrants(assignment) : [];
+}
+function applyHrAssignmentLimits(userId, grants, resolved) {
+    const assignment = resolved === undefined ? hrWorkerAssignmentOf(userId) : resolved;
+    if (!assignment) return grants;
+    const { departments, allowedCenters } = assignment;
     return grants.filter((g) => {
         if (g.sectionId === 'main' && g.itemId === 'cc-list' && String(g.submenuId || '').startsWith('cc-')) return allowedCenters.has(Number(String(g.submenuId).slice(3)));
         if (HR_DEPARTMENT_KEYS.includes(g.sectionId)) return departments === 'all' || (Array.isArray(departments) && departments.includes(g.sectionId));
@@ -11851,6 +11882,8 @@ module.exports = {
     resolveHrAssignment,
     describeHrAssignment,
     applyHrAssignmentLimits,
+    getHrAssignedCenterIds,
+    getHrAssignedCenterGrants,
     listPlans,
     getPlanById,
     getPlanByName,

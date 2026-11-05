@@ -98,6 +98,20 @@ const grantAccessSaveBtn = document.getElementById('grant-access-save');
 // plays for which user it's open for.
 let pendingVisibleStatuses = ['habilitado'];
 
+// Los límites de siempre (Estatus y contrato) y uno más de esta persona: un centro de costos que no está en su «Asignación a laborar» (Mi Recurso Humano) no se puede dar aquí; sale con candado y su motivo.
+// Sin asignación (assignedCostCenterIds null) no hay límite. El servidor aplica la misma regla al guardar (clampNewGrantsToLimits).
+function grantLimitsForUser(data) {
+    const base = Dashboard.buildGrantLimits(data.contractGrants);
+    const assigned = Array.isArray(data.assignedCostCenterIds) ? data.assignedCostCenterIds : null;
+    if (!assigned) return base;
+    return {
+        reason(sectionId, itemId, submenuId) {
+            if (sectionId === 'main' && itemId === 'cc-list' && /^cc-\d+$/.test(String(submenuId || '')) && !assigned.includes(Number(String(submenuId).slice(3)))) return 'assignment';
+            return base.reason(sectionId, itemId, submenuId);
+        },
+    };
+}
+
 async function openGrantAccessModal(user) {
     activeUserId = user.id;
     grantAccessSubtitle.textContent = `${user.name} (${user.username})`;
@@ -119,7 +133,7 @@ async function openGrantAccessModal(user) {
         const classOverrides = await fetch(`/api/business/permission-classifications?level=usuario&entityId=${user.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         grantTree = window.PermissionCostTree.create(grantAccessContainer, {
             order, classOverrides, mode: 'clientTricolor', interactive: true, allowedSectionIds, columnLevels: true, costCenters,
-            grantLimits: Dashboard.buildGrantLimits(data.contractGrants),
+            grantLimits: grantLimitsForUser(data),
             historyEndpoint: '/api/business/user-grant-change-log', historyParams: { userId: user.id },
         });
         await grantTree.init(data.jobPositionGrants || [], [], data.grants || []);

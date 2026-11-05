@@ -388,6 +388,8 @@ const {
     renameClientsPlan,
     getClientContractGrants,
     clampNewGrantsToLimits,
+    getHrAssignedCenterIds,
+    getHrAssignedCenterGrants,
     getOrderTreeForTarget,
     getInheritedClassificationOverridesForTarget,
     applyLevelLayout,
@@ -4078,6 +4080,7 @@ function summarizeDroppedGrants(dropped) {
         count: dropped.length,
         status: dropped.filter((d) => d.kinds.includes('status')).length,
         contract: dropped.filter((d) => d.kinds.includes('contract')).length,
+        assignment: dropped.filter((d) => d.kinds.includes('assignment')).length,
     };
 }
 
@@ -4235,6 +4238,13 @@ app.get('/api/business/me/grant-change-log', requireAuth, (req, res) => {
     res.json({ entries: getUserGrantChangeLog(req.user.sub, nodeKey) });
 });
 
+// Lo que da su Puesto y, como dados, los centros de costos de su «Asignación a laborar» (lo asignado los habilita aunque el Puesto no los traiga): así el árbol los muestra en verde.
+function jobPositionGrantsWithAssignment(userId) {
+    const position = getUserJobPositionGrants(userId);
+    const have = new Set(position.filter((g) => g.itemId === 'cc-list').map((g) => g.submenuId));
+    return [...position, ...getHrAssignedCenterGrants(userId).filter((g) => !have.has(g.submenuId))];
+}
+
 app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req, res) => {
     const user = getUserById(req.params.id, req.user.clientId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
@@ -4249,12 +4259,14 @@ app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     // mismo en el modal").
     res.json({
         grants: getUserGrants(req.params.id),
-        jobPositionGrants: getUserJobPositionGrants(req.params.id),
+        jobPositionGrants: jobPositionGrantsWithAssignment(req.params.id),
         visibleStatuses: getUserVisibleStatuses(req.params.id),
         // Los Estatus que esta cuenta (la del administrador) puede dar: un nivel no da más de lo que ve el de arriba.
         assignableStatuses: getUserVisibleStatuses(req.user.sub),
         // Lo contratado por la empresa: "Permisos Activados" deja en el árbol solo eso (lo no contratado no se muestra).
         contractGrants: getClientContractGrants(req.user.clientId),
+        // Los centros de costos de su «Asignación a laborar» (Mi Recurso Humano): el árbol bloquea, con su motivo, los que no están. null = esa persona no tiene asignación (sin límite).
+        assignedCostCenterIds: getHrAssignedCenterIds(req.params.id),
     });
 });
 
@@ -4267,7 +4279,7 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     if (error) return res.status(400).json({ message: error });
     const grantsBefore = getUserGrants(req.params.id);
     if (rejectUncontractedNewGrants(res, req.user.clientId, grantsBefore, grants)) return;
-    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: grantsBefore, after: grants });
+    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: grantsBefore, after: grants, allowedCenterIds: getHrAssignedCenterIds(req.params.id) });
     const savedGrants = setUserGrants(req.params.id, limited.allowed, changedByLabel(req));
     if (grantsSignature(grantsBefore) !== grantsSignature(savedGrants)) {
         logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyExtraGrants', grantsBefore.length, savedGrants.length);

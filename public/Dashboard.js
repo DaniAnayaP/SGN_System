@@ -140,6 +140,10 @@ function buildGrantLimits(contractGrants) {
 // null si no se quitó nada.
 function limitDroppedMessage(dropped) {
     if (!dropped || !dropped.count) return null;
+    // Los centros de costos fuera de la asignación llevan su propio aviso; el resto, el de siempre (contrato o Estatus).
+    const assignment = Number(dropped.assignment) || 0;
+    if (assignment && assignment >= dropped.count) return t('admin.limitDroppedAssignment', { count: assignment });
+    if (assignment) return `${t('admin.limitDroppedNotice', { count: dropped.count - assignment })} ${t('admin.limitDroppedAssignment', { count: assignment })}`;
     return t('admin.limitDroppedNotice', { count: dropped.count });
 }
 

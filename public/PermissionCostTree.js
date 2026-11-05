@@ -221,6 +221,7 @@
         const SERVICE_STATUS_LABEL_KEYS = { inhabilitado: 'admin.masterTreeStatusInhabilitado', construccion: 'admin.masterTreeStatusConstruccion', mejoras: 'admin.masterTreeStatusMejoras' };
         function limitReasonText(reason) {
             if (reason === 'status') return t('main.limitLockedStatus');
+            if (reason === 'assignment') return t('main.limitLockedAssignment');
             if (typeof reason === 'string' && reason.indexOf('service:') === 0) {
                 const status = reason.slice(8);
                 return t(mode === 'clientTricolor' ? 'admin.limitServiceNotEnabled' : 'admin.limitServiceNotEnabledPlan', { status: SERVICE_STATUS_LABEL_KEYS[status] ? t(SERVICE_STATUS_LABEL_KEYS[status]) : status });
@@ -509,6 +510,13 @@
                     label.textContent = labelText;
                     applyClassificationColorTo(label, classificationId);
                     row.appendChild(label);
+                    // Un centro de costos fuera de la asignación de la persona: el motivo se ve en la fila, no solo al tocarla.
+                    if (colorSlot && colorSlot.limitReason === 'assignment') {
+                        const tag = document.createElement('span');
+                        tag.className = 'perm-tree-limit-tag';
+                        tag.textContent = t('main.limitAssignmentTag');
+                        row.appendChild(tag);
+                    }
                     if (colorSlot && colorSlot.limitReason) {
                         row.classList.add('perm-tree-row-limit-locked');
                         // Se ve, pero no se puede marcar: al intentarlo avisa por qué (por ejemplo, que no está habilitado para servicio).

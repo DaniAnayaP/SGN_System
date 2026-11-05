@@ -6866,6 +6866,21 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .perm-tree-row-limit-locked input[type="checkbox"]:disabled{
     cursor: not-allowed;
 }
+/* El motivo a la vista en un centro de costos fuera de la asignación de la persona (Usuarios > Permisos Adicionales). */
+.perm-tree-limit-tag{
+    flex: 0 1 auto;
+    margin-left: 0.5rem;
+    padding: 0.05rem 0.55rem;
+    max-width: 8rem;
+    border: 1px dashed var(--color-text-secondary);
+    border-radius: 999px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    color: var(--color-text-secondary);
+    cursor: help;
+}
 .perm-tree-limit-lock{
     display: inline-flex;
     align-items: center;
