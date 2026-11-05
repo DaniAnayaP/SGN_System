@@ -70,9 +70,16 @@ async function loadOrgChart() {
     renderDetailView();
 }
 
+// En la vista por centro de costos (buildCcSection) solo cuentan quienes operan en ese centro (workerCenterIds); la tabla y el mapa global muestran a todos.
+let occupantsCenter = null;
+function occupantsOf(position) {
+    if (!occupantsCenter) return position.workers;
+    return position.workers.filter((w) => !Array.isArray(w.centerIds) || w.centerIds.includes(occupantsCenter.id));
+}
 function occupantsLabel(position) {
-    if (!position.workers.length) return '—';
-    return position.workers.map((w) => w.fullName).join(', ');
+    const workers = occupantsOf(position);
+    if (!workers.length) return '—';
+    return workers.map((w) => w.fullName).join(', ');
 }
 
 function altSupervisorNames(position) {
@@ -243,10 +250,16 @@ function buildOrgNode(position, { crossLabel } = {}) {
     titleEl.textContent = position.name;
     box.appendChild(titleEl);
 
-    if (position.workers.length) {
+    // el jefe de otro centro que se dibuja arriba (crossLabel) no es de este centro: se muestran todos sus ocupantes
+    const shownCenter = occupantsCenter;
+    if (crossLabel) occupantsCenter = null;
+    const hasOccupants = occupantsOf(position).length > 0;
+    const occupantsText = occupantsLabel(position);
+    occupantsCenter = shownCenter;
+    if (hasOccupants) {
         const personEl = document.createElement('span');
         personEl.className = 'org-node-person';
-        personEl.textContent = occupantsLabel(position);
+        personEl.textContent = occupantsText;
         box.appendChild(personEl);
     } else {
         const emptyEl = document.createElement('span');
@@ -475,6 +488,14 @@ function buildRootBranch(root, localIds) {
 function buildCcSection(cc) {
     const localPositions = positions.filter((p) => isLocalToCc(p, cc));
     if (!localPositions.length) return null;
+    occupantsCenter = cc;
+    try {
+        return buildCcSectionFor(cc, localPositions);
+    } finally {
+        occupantsCenter = null;
+    }
+}
+function buildCcSectionFor(cc, localPositions) {
     const localIds = new Set(localPositions.map((p) => p.id));
     const localRoots = localPositions.filter((p) => !p.reportsToJobPositionId || !localIds.has(p.reportsToJobPositionId));
 

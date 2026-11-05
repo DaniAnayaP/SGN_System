@@ -4397,12 +4397,26 @@ function getOrgChartPositions(clientId) {
         ORDER BY name ASC
     `).all(clientId);
     const workersByPosition = new Map();
+    // centerIds: los centros de costos donde opera cada persona según su «Asignación a laborar» (null = todavía sin asignación: se ve en todos, como antes).
+    const optionsByTest = new Map();
+    const centersOfWorker = (w) => {
+        const departments = parseHrAssignment(w.assignedDepartments);
+        const sites = parseHrAssignment(w.assignedSites);
+        const centers = parseHrAssignment(w.assignedCostCenters);
+        if (!departments && !sites && !centers) return null;
+        if (Array.isArray(centers)) return centers;
+        if (centers !== 'all') return [];
+        const key = w.isTest ? 1 : 0;
+        if (!optionsByTest.has(key)) optionsByTest.set(key, hrAssignmentOptions(clientId, !!w.isTest));
+        return optionsByTest.get(key).centers.filter((cc) => sites === 'all' || (Array.isArray(sites) && sites.includes(cc.site_code))).map((cc) => cc.id);
+    };
     db.prepare(`
-        SELECT job_position_id AS jobPositionId, id, full_name AS fullName, user_id AS userId
+        SELECT job_position_id AS jobPositionId, id, full_name AS fullName, user_id AS userId, is_test_data AS isTest,
+               assigned_departments AS assignedDepartments, assigned_sites AS assignedSites, assigned_cost_centers AS assignedCostCenters
         FROM hr_workers WHERE client_id = ? AND job_position_id IS NOT NULL
     `).all(clientId).forEach((w) => {
         if (!workersByPosition.has(w.jobPositionId)) workersByPosition.set(w.jobPositionId, []);
-        workersByPosition.get(w.jobPositionId).push({ id: w.id, fullName: w.fullName, userId: w.userId });
+        workersByPosition.get(w.jobPositionId).push({ id: w.id, fullName: w.fullName, userId: w.userId, centerIds: centersOfWorker(w) });
     });
     const altByPosition = new Map();
     db.prepare(`
@@ -11339,7 +11353,30 @@ function getUserEffectiveGrants(userId) {
     if (!account || !account.clientId || account.isClientAdmin) return combined;
     const ctx = getLimitsContext(account.clientId);
     const visible = new Set(getUserVisibleStatuses(userId));
-    return combined.filter((g) => limitKindsForGrant(g, ctx, visible, !!account.isTest).length === 0);
+    return applyHrAssignmentLimits(userId, combined.filter((g) => limitKindsForGrant(g, ctx, visible, !!account.isTest).length === 0));
+}
+
+// Lo asignado en «Asignación a laborar» (Mi Recurso Humano) es lo que HABILITA a la persona: un centro de costos o un departamento que no tiene asignado no vale aunque su Rol se lo dé (el Rol dice qué puede hacer y la asignación, dónde).
+// Sin asignación todavía (las tres vacías) se queda como estaba. Con asignación, lo que quedó sin elegir es «ninguno» (sin centro de costos no se opera nada). Los centros de «todos» son los de los sitios elegidos, vistos al momento (si el cliente crea uno
+// nuevo en un sitio ya asignado entra solo). Solo toca los permisos de los departamentos y las hojas de centros de costos (main / cc-list / cc-<id>); todo lo demás queda igual.
+function applyHrAssignmentLimits(userId, grants) {
+    const worker = db.prepare('SELECT client_id AS clientId, is_test_data AS isTest, assigned_departments AS d, assigned_sites AS s, assigned_cost_centers AS c FROM hr_workers WHERE user_id = ?').get(userId);
+    if (!worker) return grants;
+    const departments = parseHrAssignment(worker.d);
+    const sites = parseHrAssignment(worker.s);
+    const centers = parseHrAssignment(worker.c);
+    if (!departments && !sites && !centers) return grants;
+    let allowedCenters = new Set();
+    if (centers === 'all') {
+        allowedCenters = new Set(hrAssignmentOptions(worker.clientId, !!worker.isTest).centers.filter((cc) => sites === 'all' || (Array.isArray(sites) && sites.includes(cc.site_code))).map((cc) => cc.id));
+    } else if (Array.isArray(centers)) {
+        allowedCenters = new Set(centers);
+    }
+    return grants.filter((g) => {
+        if (g.sectionId === 'main' && g.itemId === 'cc-list' && String(g.submenuId || '').startsWith('cc-')) return allowedCenters.has(Number(String(g.submenuId).slice(3)));
+        if (HR_DEPARTMENT_KEYS.includes(g.sectionId)) return departments === 'all' || (Array.isArray(departments) && departments.includes(g.sectionId));
+        return true;
+    });
 }
 
 // Per-node audit trail — see user_grant_change_log's own DDL comment, same
@@ -11813,6 +11850,7 @@ module.exports = {
     hrAssignmentOptions,
     resolveHrAssignment,
     describeHrAssignment,
+    applyHrAssignmentLimits,
     listPlans,
     getPlanById,
     getPlanByName,

@@ -3525,7 +3525,7 @@
       "example": "if reading is hard, you pick 120% and from the next time everything opens bigger; with 100% (Ideal) it opens as it comes by default."
     },
     "hrAssignDepartments": {
-      "what": "You choose which departments this person will work in: one, several or all the ones your company has contracted.",
+      "what": "You choose which departments this person will work in: one, several or all the ones your company has contracted. It is what enables them: they do not enter a department that is not here, even if their Position grants it.",
       "example": "if your company has Supply Chain and Finance, you can tick only Supply Chain."
     },
     "hrAssignSites": {
@@ -3533,8 +3533,8 @@
       "example": "you tick the Chihuahua site and not the Puebla one."
     },
     "hrAssignCenters": {
-      "what": "You choose which cost centers this person will operate in: one, several or all. Only the centers of the sites you already chose appear.",
-      "example": "if you chose the Chihuahua site, only the Chihuahua cost center appears here."
+      "what": "You choose which cost centers this person will operate in: one, several or all. Only the centers of the sites you already chose appear. It is what enables them: they cannot use a center that is not here, even if their Position grants it.",
+      "example": "if they only have Chihuahua here, this person will not see or be able to pick Puebla."
     },
     "settings": {
       "what": "This is where you change how the system looks and behaves for you: language, colors, and other options.",

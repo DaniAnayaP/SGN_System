@@ -3524,7 +3524,7 @@
       "example": "si te cuesta leer, eliges 120% y desde la próxima vez todo se abre más grande; con 100% (Ideal) se abre como viene de fábrica."
     },
     "hrAssignDepartments": {
-      "what": "Eliges en qué departamentos va a trabajar esta persona: uno, varios o todos los que tu empresa tiene contratados.",
+      "what": "Eliges en qué departamentos va a trabajar esta persona: uno, varios o todos los que tu empresa tiene contratados. Es lo que la habilita: no entra a un departamento que no tenga aquí, aunque su Puesto se lo dé.",
       "example": "si tu empresa tiene Cadena de Suministro y Finanzas, puedes marcar solo Cadena de Suministro."
     },
     "hrAssignSites": {
@@ -3532,8 +3532,8 @@
       "example": "marcas el sitio de Chihuahua y no el de Puebla."
     },
     "hrAssignCenters": {
-      "what": "Eliges en qué centros de costos va a operar esta persona: uno, varios o todos. Solo salen los centros de los sitios que ya elegiste.",
-      "example": "si elegiste el sitio de Chihuahua, aquí solo aparece el centro de costos de Chihuahua."
+      "what": "Eliges en qué centros de costos va a operar esta persona: uno, varios o todos. Solo salen los centros de los sitios que ya elegiste. Es lo que la habilita: no puede usar un centro que no tenga aquí, aunque su Puesto se lo dé.",
+      "example": "si aquí solo tiene Chihuahua, esta persona no verá ni podrá elegir Puebla."
     },
     "settings": {
       "what": "Aquí cambias cómo se ve y se comporta el sistema para ti: idioma, colores, y otras opciones.",
