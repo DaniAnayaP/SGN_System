@@ -637,7 +637,7 @@ function computeSafetyIssues() {
     if (!state.draft) return;
     LC.safetyViolations(state.draft).forEach((v) => { const m = sfIssues.get(v.id) || {}; m[v.kind] = v; sfIssues.set(v.id, m); });
 }
-const safetyIssueText = (v) => t(`main.layoutVioSg_${v.kind}`, { code: v.code, ...(v.vars || {}) });
+const safetyIssueText = (v) => t(`main.layoutVioSg_${v.kind}${v.kind === 'tall' && v.vars && v.vars.level !== undefined ? 'Level' : ''}`, { code: v.code, ...(v.vars || {}) });
 // El código y la zona de cada elemento salen de su tipo y de su lugar; las cajas de X e Y (y de la llegada de la ruta) se marcan en rojo si algo no cumple y abajo del paso va la lista de lo que falta.
 // La leyenda de los símbolos solo se ve con el paso Seguridad encendido.
 // La simbología de la pantalla solo nombra lo que se ve en el croquis: cada parte aparece cuando su paso está encendido Y ya hay algo agregado (una puerta, un sensor, una columna, una pared…). El contorno sale con el
@@ -3633,7 +3633,7 @@ $('layout-save').addEventListener('click', async () => {
         const v = fresh[0];
         showStep('espacios');
         renderPanel();
-        Dashboard.showToast(t(`main.layoutVio_${v.kind}`, { code: v.code, zone: v.zoneName || '', h: v.h, maxH: v.maxH }), 'warning');
+        Dashboard.showToast(t(`main.layoutVio_${v.kind}${v.kind === 'tall' && v.level ? 'Level' : ''}`, { code: v.code, zone: v.zoneName || '', h: v.h, maxH: v.maxH, level: v.level, top: v.top }), 'warning');
         const at = state.draft.footprints.findIndex((f) => f.id === v.id);
         const box = document.querySelector(`[data-l="footprints"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'h' : 'x'}"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }

@@ -496,11 +496,43 @@
         });
         return best ? zoneLevelAt(best, x, y) : 0;
     }
-    // Volumen de la nave: lo que cabe bajo el techo menos lo que sube el piso en cada desnivel (superficie por su altura sobre el piso; si es más bajo, la altura es negativa y suma).
+    // El centro de gravedad de un polígono (el promedio de un plano inclinado sobre él es lo que vale ahí).
+    function polygonCentroid(pts) {
+        let a = 0; let cx = 0; let cy = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const p = pts[i]; const q = pts[(i + 1) % pts.length];
+            const cr = p[0] * q[1] - q[0] * p[1];
+            a += cr; cx += (p[0] + q[0]) * cr; cy += (p[1] + q[1]) * cr;
+        }
+        if (Math.abs(a) < 1e-9) return [pts.reduce((acc, p) => acc + p[0], 0) / pts.length, pts.reduce((acc, p) => acc + p[1], 0) / pts.length];
+        return [cx / (3 * a), cy / (3 * a)];
+    }
+    // Lo que sube el piso por las zonas a desnivel, en m³: superficie de cada zona por su nivel promedio (en una rampa, el del centro de la zona); un foso (nivel negativo) resta. Si dos zonas con nivel se encimen
+    // (su recuadro se cruza) cada punto cuenta una sola vez, con el nivel de la zona más chica que lo contiene: se mide en una cuadrícula.
+    function raisedVolume(layout) {
+        const zs = ((layout && layout.zones) || []).filter((z) => z && z.active !== false && zoneHasLevel(z) && zonePoints(z).length >= 3);
+        if (!zs.length) return 0;
+        const boxes = zs.map((z) => { const p = zonePoints(z); const xs = p.map((q) => q[0]); const ys = p.map((q) => q[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; });
+        let overlap = false;
+        for (let i = 0; i < zs.length && !overlap; i++) {
+            for (let j = i + 1; j < zs.length; j++) {
+                const a = boxes[i]; const b = boxes[j];
+                if (a[0] < b[2] - 1e-6 && b[0] < a[2] - 1e-6 && a[1] < b[3] - 1e-6 && b[1] < a[3] - 1e-6) { overlap = true; break; }
+            }
+        }
+        if (!overlap) return zs.reduce((acc, z) => { const [cx, cy] = polygonCentroid(zonePoints(z)); return acc + zoneArea(z) * zoneLevelAt(z, cx, cy); }, 0);
+        const x0 = Math.min(...boxes.map((b) => b[0])); const y0 = Math.min(...boxes.map((b) => b[1]));
+        const x1 = Math.max(...boxes.map((b) => b[2])); const y1 = Math.max(...boxes.map((b) => b[3]));
+        const step = Math.min(0.5, Math.max(0.05, Math.sqrt(((x1 - x0) * (y1 - y0)) / 50000)));
+        let sum = 0;
+        for (let x = x0 + step / 2; x < x1; x += step) for (let y = y0 + step / 2; y < y1; y += step) sum += floorLevelAt(layout, x, y);
+        return sum * step * step;
+    }
+    // Volumen de la nave: lo que cabe bajo el techo menos lo que sube el piso en cada desnivel (superficie por su altura sobre el piso; si es más bajo, la altura es negativa y suma) y por las zonas a desnivel.
     function netVolume(layout) {
         const gross = volumeOf((layout && layout.vertices) || []);
         const raised = obstacleShapes(layout).filter(({ o }) => o.kind === 'step').reduce((acc, { o, g }) => acc + polygonArea(g.pts) * (Number(o.dz) || 0), 0);
-        return Math.max(0, gross - raised);
+        return Math.max(0, gross - raised - raisedVolume(layout));
     }
     const hasPoints = (z) => !!z && Array.isArray(z.pts) && z.pts.length >= 3;
     const zonePoints = (z) => (hasPoints(z) ? z.pts : rectPoints(z));
@@ -1074,7 +1106,14 @@
                     out.push({ ...base, kind: 'out', zoneId: z.id, zoneName: z.name, sig: geo + JSON.stringify([z.id, pts]), message: `La huella ${f.code} no cabe dentro de su zona ${z.name}: cambia su lugar o sus medidas, o agranda la zona.` });
                 }
             }
-            if (maxH > 0 && f.h > maxH + 0.001) out.push({ ...base, kind: 'tall', h: f.h, maxH, sig: geo + JSON.stringify(maxH), message: `La huella ${f.code} mide ${f.h} m de alto y la nave solo ${maxH} m.` });
+            // el piso de su zona cuenta: una huella de 3 m sobre un piso a +1.2 m llega a 4.2 m
+            const lvl = round2(floorLevelAt(layout, f.x + f.l / 2, f.y + f.d / 2));
+            const top = round2(f.h + lvl);
+            if (maxH > 0 && top > maxH + 0.001) {
+                out.push(lvl !== 0
+                    ? { ...base, kind: 'tall', h: f.h, maxH, level: lvl, top, sig: geo + JSON.stringify([maxH, lvl]), message: `La huella ${f.code} mide ${f.h} m de alto sobre un piso a ${lvl > 0 ? '+' : ''}${lvl} m (llega a ${top} m) y la nave solo ${maxH} m.` }
+                    : { ...base, kind: 'tall', h: f.h, maxH, sig: geo + JSON.stringify(maxH), message: `La huella ${f.code} mide ${f.h} m de alto y la nave solo ${maxH} m.` });
+            }
         });
         return out;
     }
@@ -1469,9 +1508,10 @@
             // la ruta es una marca en el piso (no lleva altura); lo demás llega hasta su altura del piso + su alto, que no puede pasar de lo que mide la nave ahí
             const sz = isRoute ? null : safetySizeOf(e);
             if (sz) {
-                const top = round2(sz.elev + sz.h);
+                const lvlS = round2(floorLevelAt(layout, Number(e.x) || 0, Number(e.y) || 0));
+                const top = round2(lvlS + sz.elev + sz.h);
                 const limit = round2(naveHeightAt(layout, Number(e.x) || 0, Number(e.y) || 0));
-                if (limit > 0 && top > limit + 0.005) out.push({ id: e.id, code: e.code, kind: 'tall', sig: JSON.stringify([top, limit]), vars: { top, height: limit }, message: `El elemento de seguridad ${e.code} llega a ${top} m (altura del piso + alto) y la nave ahí solo mide ${limit} m de alto: bájalo o hazlo más bajo.` });
+                if (limit > 0 && top > limit + 0.005) out.push({ id: e.id, code: e.code, kind: 'tall', sig: JSON.stringify(lvlS !== 0 ? [top, limit, lvlS] : [top, limit]), vars: lvlS !== 0 ? { top, height: limit, level: lvlS } : { top, height: limit }, message: `El elemento de seguridad ${e.code} llega a ${top} m (altura del piso + alto) y la nave ahí solo mide ${limit} m de alto: bájalo o hazlo más bajo.` });
             }
         });
         return out;
@@ -1753,6 +1793,7 @@
             const area = zoneArea(z);
             return {
                 id: z.id, name: z.name, type: z.type, use: z.use || '', area: round2(area), spaces: mine.length,
+                level: zoneHasLevel(z) && zonePoints(z).length >= 3 ? round2(zoneLevelAt(z, ...polygonCentroid(zonePoints(z)))) : 0,
                 footprint: round2(zFootprint), occupancy: area ? round2((zFootprint / area) * 100) : 0,
                 volume: round2(mine.reduce((acc, s) => acc + (s.l || 0) * (s.d || 0) * (s.h || 0), 0)),
             };
@@ -1763,7 +1804,7 @@
             // para el desglose de «Datos métricos»: los pasillos con sus metros, lo que se encima entre ellos y lo que cubren fuera de toda zona
             transit: (layout.transit || []).map((p) => ({ id: p.id, name: p.name || p.code || '', type: p.type === 'between' ? 'aisle2' : 'aisle', area: round2((Number(p.l) || 0) * (Number(p.w) || 0)) })),
             transitOverlap: round2(transitM2.overlap), transitOutside: round2(transitOutside),
-            volume: round2(netVolume(layout)), storageVolume: round2(storageVolume),
+            volume: round2(netVolume(layout)), raised: round2(raisedVolume(layout)), storageVolume: round2(storageVolume),
             heightMin: round2(heightRange(layout.vertices || []).min), heightMax: round2(heightRange(layout.vertices || []).max),
             perimeter: round2(perimeter(layout.vertices || [])), zones: perZone,
         };
@@ -1778,8 +1819,9 @@
         if (!kpis || !METRIC_KEYS.includes(key)) return { rows: [], sum: 0, unit: 'm²' };
         const zones = kpis.zones || [];
         const volume = key === 'volume';
-        const factor = volume ? (kpis.total > 0 ? kpis.volume / kpis.total : 0) : 1;
-        const zoneRow = (z) => ({ kind: 'zone', id: z.id, name: z.name, type: z.type || '', value: round2((z.area || 0) * factor) });
+        // La altura promedio sin lo que suben las zonas a desnivel (esto se resta zona por zona): así la suma sigue siendo la cifra misma.
+        const factor = volume ? (kpis.total > 0 ? (kpis.volume + (kpis.raised || 0)) / kpis.total : 0) : 1;
+        const zoneRow = (z) => ({ kind: 'zone', id: z.id, name: z.name, type: z.type || '', value: round2((z.area || 0) * (volume ? factor - (z.level || 0) : factor)) });
         const restArea = Math.max(0, round2((kpis.dead || 0) - (kpis.unassigned || 0)));
         const restRow = () => ({ kind: 'rest', id: '', name: '', type: '', value: round2(restArea * factor) });
         let rows;
@@ -2058,6 +2100,14 @@
         });
 
         out.zones = assignZoneCodes(out).zones;
+        // El piso de una zona a desnivel tiene que quedar abajo del techo de la nave (en el centro de la zona): si no, no queda espacio para nada.
+        out.zones.forEach((zz) => {
+            if (zz.active === false || !zoneHasLevel(zz) || zonePoints(zz).length < 3) return;
+            const [cx, cy] = polygonCentroid(zonePoints(zz));
+            const top = Math.max(Number(zz.lvl) || 0, zz.lvl2 != null ? Number(zz.lvl2) : 0);
+            const lim = naveHeightAt(out, cx, cy);
+            if (lim > 0 && top >= lim - 1e-9) errors.push(`${zz.name}: su piso (a ${top > 0 ? '+' : ''}${top} m) queda tan arriba como el techo de la nave (${round2(lim)} m): bájalo`);
+        });
 
         // Huellas (paso Huella-Espacio): el lugar en el piso. Cada una puede tener uno o varios activos (ver migrateFootprints).
         const footprintIds = new Set();
@@ -2368,7 +2418,7 @@
     }
 
     return {
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
