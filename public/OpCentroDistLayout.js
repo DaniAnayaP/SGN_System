@@ -8,7 +8,8 @@
 // Envuelto en una función: este script comparte el ámbito global con Dashboard.js, que ya declara nombres como SECTION_LABEL_KEYS.
 (function () {
 const LC = window.LayoutCalc;
-const SECTION_ORDER = ['contorno', 'paredes', 'obstaculos', 'puertas', 'zonas', 'pisos', 'transito', 'espacios', 'luz', 'sensores', 'seguridad', 'objetos', 'activos', 'posiciones'];
+// El orden de los pasos en la barra (Localizadores, que no edita nada, siempre va al final).
+const SECTION_ORDER = ['contorno', 'paredes', 'puertas', 'pisos', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'zonas', 'espacios', 'activos', 'posiciones'];
 const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
 };
