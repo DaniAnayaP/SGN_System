@@ -3233,6 +3233,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'layout': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Layout' },
     'relacion-codigo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
+    'capacidad-almacenamiento': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Capacidad Almacenamiento' },
 };
 
 // "Nuestros Cambios" — every row any pantalla has ever logged via
@@ -3571,6 +3572,7 @@ const TABLE_GRANT_PATHS = {
     // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
+    'capacidad-almacenamiento': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-capacidad-almacenamiento' },
     'temperaturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-temperaturas' },
     'seguridad': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-seguridad' },
     'usuarios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-users' },
@@ -5487,6 +5489,59 @@ function listManualOrderLines(clientId, { costCenterId, limit } = {}) {
     if (costCenterId !== undefined) { where.push('o.cost_center_id = ?'); args.push(costCenterId || 0); }
     const cap = limit ? ` LIMIT ${Math.max(1, Math.min(Number(limit) || 50, 5000))}` : '';
     return db.prepare(`${MANUAL_LINE_SELECT} WHERE ${where.join(' AND ')} ORDER BY o.created_at DESC, l.order_id DESC, l.line_no ASC${cap}`).all(...args);
+}
+// --- Capacidad Almacenamiento (Operaciones, C. Distribución) ---------------------------------------------------------------------------------------------
+// Qué código se asignó a cada lugar de almacenamiento del Layout. El lugar NO es una fila de la base: sale del Layout de cada centro de costos (un hueco = activo × nivel × columna, ver LayoutCalc.storageLocations);
+// aquí solo se guarda la asignación (location_key = id del activo|nivel|columna). La capacidad se calcula con lo del código, así que nunca se guarda.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS storage_capacity (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        cost_center_id  INTEGER NOT NULL DEFAULT 0,
+        location_key    TEXT NOT NULL,
+        sku_item_id     INTEGER,
+        is_test_data    INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at      TEXT,
+        updated_by      TEXT NOT NULL DEFAULT '',
+        UNIQUE (client_id, cost_center_id, location_key, is_test_data)
+    );
+    CREATE INDEX IF NOT EXISTS idx_storage_capacity_client ON storage_capacity (client_id, cost_center_id);
+`);
+const STORAGE_CAPACITY_PATCHABLE_FIELDS = {
+    skuItemId: { column: 'sku_item_id', fieldKey: 'main.colCapCodigo' },
+};
+function listStorageCapacity(clientId, isTest = false) {
+    return db.prepare('SELECT * FROM storage_capacity WHERE client_id = ? AND is_test_data = ?').all(clientId, isTest ? 1 : 0);
+}
+function getStorageCapacityByKey(clientId, costCenterId, locationKey, isTest = false) {
+    return db.prepare('SELECT * FROM storage_capacity WHERE client_id = ? AND cost_center_id = ? AND location_key = ? AND is_test_data = ?').get(clientId, costCenterId || 0, locationKey, isTest ? 1 : 0);
+}
+function createStorageCapacity({ clientId, costCenterId, locationKey, isTest = false }) {
+    const info = db.prepare('INSERT INTO storage_capacity (client_id, cost_center_id, location_key, is_test_data) VALUES (?, ?, ?, ?)').run(clientId, costCenterId || 0, locationKey, isTest ? 1 : 0);
+    return db.prepare('SELECT * FROM storage_capacity WHERE id = ?').get(info.lastInsertRowid);
+}
+// Cambia el código del lugar (null = sin código). Quien lo cambió y cuándo quedan en el propio renglón.
+function updateStorageCapacity(id, clientId, patch, { updatedBy = '', editedBy = '' } = {}) {
+    const p = patch || {};
+    if (Object.prototype.hasOwnProperty.call(p, 'skuItemId')) {
+        const sku = p.skuItemId ? Number(p.skuItemId) : null;
+        db.prepare("UPDATE storage_capacity SET sku_item_id = ?, updated_at = datetime('now'), updated_by = ? WHERE id = ? AND client_id = ?").run(sku, String(updatedBy || editedBy || ''), id, clientId);
+    }
+    return db.prepare('SELECT * FROM storage_capacity WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+function deleteStorageCapacity(id, clientId) {
+    db.prepare('DELETE FROM storage_capacity WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+// Lo del código que usa la capacidad: la base de su tarima (cm) y los tres números de estiba (0 = sin capturar).
+function listSkuCapacityData(clientId, isTest, ids) {
+    const list = [...new Set((ids || []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    const out = [];
+    for (let i = 0; i < list.length; i += 500) {
+        const chunk = list.slice(i, i + 500);
+        out.push(...db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, length, width, height, storage_type, units_per_layer, layers_per_pallet, max_stack FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id IN (${chunk.map(() => '?').join(',')})`).all(clientId, isTest ? 1 : 0, ...chunk));
+    }
+    return out;
 }
 function getManualOrderLine(id, clientId) {
     return db.prepare(`${MANUAL_LINE_SELECT} WHERE l.id = ? AND l.client_id = ?`).get(id, clientId);
@@ -11876,6 +11931,13 @@ module.exports = {
     updateCleaningRecord,
     MANUAL_ORDER_STATUSES,
     MANUAL_ORDER_PATCHABLE_FIELDS,
+    STORAGE_CAPACITY_PATCHABLE_FIELDS,
+    listStorageCapacity,
+    getStorageCapacityByKey,
+    createStorageCapacity,
+    updateStorageCapacity,
+    deleteStorageCapacity,
+    listSkuCapacityData,
     listManualOrderItems,
     getManualOrderItem,
     createManualOrder,

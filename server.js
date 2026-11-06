@@ -163,7 +163,7 @@ const {
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
-    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, listManualOrderItems, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine,
+    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine,
     addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
@@ -517,7 +517,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual' };
+const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -9231,6 +9231,93 @@ app.delete('/api/business/code-relations/:id', requireAuth, requireCostCenter, (
     res.status(204).end();
 });
 
+// --- Capacidad Almacenamiento (Operaciones, C. Distribución) ---------------------------------------------------------------------------------------------
+// Una fila por LUGAR de almacenamiento del Layout de cada centro de costos (un hueco: activo × nivel × columna; ver LayoutCalc.storageLocations), con el código que se le asignó aquí y la capacidad que sale de las medidas del
+// lugar y de los datos del código (LayoutCalc.capacityOf). Todavía no hay cantidades en existencia: eso vendrá con «existencias y transacciones». Las columnas de Control Interno son las del centro (se mandan una vez por centro).
+const STORAGE_CAP_TABLE_KEY = 'capacidad-almacenamiento';
+const STORAGE_CAP_MAX_ROWS = 20000;
+const skuLabelOf = (r) => `${padSku(r.record_number)} · ${r.custom_description || r.known_description || r.unique_description || ''}`.replace(/ · $/, '');
+function storageCapContext(req) {
+    const { clientId, isTestAccount } = req.user;
+    const classes = listArticleCategories(clientId, 'activos-clasificacion', isTestAccount);
+    const types = listArticleCategories(clientId, 'activos-fijos', isTestAccount);
+    return {
+        clientId, isTest: !!isTestAccount, centers: new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c])),
+        classKinds: new Map(classes.map((r) => [r.id, r.kind])), className: new Map(classes.map((r) => [r.id, r.name])), typeName: new Map(types.map((r) => [r.id, r.name])),
+    };
+}
+// Lo que cada quien puede hacer con la columna Código: llenar un lugar vacío pide Ver y Operar (o Modificar); cambiar o quitar uno ya asignado pide Modificar (con autorización cuando toca).
+function storageCapRights(req) {
+    if (req.user.isClientAdmin) return { canFill: true, canChange: true };
+    const level = getColumnGrantLevel(getUserEffectiveGrants(req.user.sub), STORAGE_CAP_TABLE_KEY, 'colCapCodigo');
+    return { canFill: level === 'ver-y-operar' || level === 'editar', canChange: level === 'editar' };
+}
+function storageCapRows(ctx, { costCenterId, key, max = STORAGE_CAP_MAX_ROWS } = {}) {
+    const client = getClientById(ctx.clientId);
+    const assigned = new Map(listStorageCapacity(ctx.clientId, ctx.isTest).map((r) => [`${r.cost_center_id}|${r.location_key}`, r]));
+    const skus = new Map(listSkuCapacityData(ctx.clientId, ctx.isTest, [...assigned.values()].map((r) => r.sku_item_id).filter(Boolean)).map((r) => [r.id, r]));
+    const centers = {};
+    const rows = [];
+    let truncated = false;
+    for (const layoutRow of listClientLayouts(ctx.clientId)) {
+        const cc = ctx.centers.get(layoutRow.costCenterId);
+        if (!cc || (costCenterId && cc.id !== costCenterId)) continue;
+        const built = LayoutCalc.storageLocations(layoutRow.layout, { classKinds: ctx.classKinds, max: max - rows.length });
+        if (built.truncated) truncated = true;
+        centers[cc.id] = {
+            name: cc.name, company: client ? client.company_name : '',
+            system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: 'Capacidad Almacenamiento', centroCostos: cc.name, createdAt: layoutRow.updatedAt }),
+        };
+        for (const loc of built.rows) {
+            if (key && loc.key !== key) continue;
+            const rec = assigned.get(`${cc.id}|${loc.key}`);
+            const sku = rec && rec.sku_item_id ? skus.get(rec.sku_item_id) : null;
+            const code = sku ? { id: sku.id, sku: padSku(sku.record_number), upc: sku.upc || '', description: sku.custom_description || sku.known_description || sku.unique_description || '', uom: sku.main_uom || '', storageType: sku.storage_type || '', length: sku.length || 0, width: sku.width || 0, height: sku.height || 0, ti: sku.units_per_layer || 0, hi: sku.layers_per_pallet || 0, stack: sku.max_stack || 0 } : null;
+            rows.push({
+                cc: cc.id, id: rec ? rec.id : null, key: loc.key, locator: loc.locator, zoneName: loc.zoneName, spaceCode: loc.spaceCode, level: loc.multi ? loc.level : 0, slot: loc.multi ? loc.slot : 0,
+                className: ctx.className.get(loc.assetClassId) || '', typeName: ctx.typeName.get(loc.assetId) || '', l: loc.l, w: loc.w, h: loc.h, m2: loc.m2,
+                code, calc: code ? LayoutCalc.capacityOf(loc, { length: code.length, width: code.width, unitsPerLayer: code.ti, layersPerPallet: code.hi, maxStack: code.stack }) : null, assignedBy: rec && rec.updated_by ? rec.updated_by : '', assignedAt: rec && rec.updated_at ? sqlUtcIso(rec.updated_at) : null,
+            });
+        }
+    }
+    return { centers, rows, truncated };
+}
+app.get('/api/business/storage-capacity', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const built = storageCapRows(storageCapContext(req));
+    res.set('Cache-Control', 'no-store');
+    res.json({ ...built, max: STORAGE_CAP_MAX_ROWS, ...storageCapRights(req) });
+});
+// Asignar (o cambiar, o quitar con null) el código de un lugar. Pasa por la misma tubería de cambios de toda la plataforma (checkAndLogFieldChanges): se aplica, queda pendiente de autorización o se rechaza según el permiso.
+app.patch('/api/business/storage-capacity', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    const key = String((req.body && req.body.locationKey) || '');
+    const raw = req.body ? req.body.skuItemId : undefined;
+    const skuItemId = raw === null || raw === undefined || raw === '' ? null : Number(raw);
+    if (skuItemId !== null && (!Number.isInteger(skuItemId) || !getSkuItemById(skuItemId, clientId, isTestAccount))) return res.status(400).json({ message: 'Elige un código de Alta Artículos.', code: 'SKU' });
+    const ctx = storageCapContext(req);
+    const found = storageCapRows(ctx, { costCenterId: center.id, key });
+    if (!found.rows.length) return res.status(404).json({ message: 'Ese lugar ya no existe en el Layout o ya no guarda inventario.', code: 'LOCATION' });
+    let rec = getStorageCapacityByKey(clientId, center.id, key, isTestAccount);
+    let created = false;
+    if (!rec) {
+        if (skuItemId === null) return res.json({ row: found.rows[0], pendingFields: [], rejectedFields: [] });
+        rec = createStorageCapacity({ clientId, costCenterId: center.id, locationKey: key, isTest: isTestAccount });
+        created = true;
+    }
+    const sanitize = (v) => { if (!v) return ''; const it = getSkuItemById(Number(v), clientId, isTestAccount); return it ? skuLabelOf(it) : String(v); };
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, rec, { skuItemId }, STORAGE_CAPACITY_PATCHABLE_FIELDS, STORAGE_CAP_TABLE_KEY, found.rows[0].locator, { skuItemId: sanitize });
+    const updated = updateStorageCapacity(rec.id, clientId, appliedPatch, { updatedBy: changedByLabel(req) });
+    // un lugar que se acababa de abrir y no quedó con código (sin permiso o a autorización) no deja renglón vacío
+    if (created && !(updated && updated.sku_item_id) && !pendingFields.length) deleteStorageCapacity(rec.id, clientId);
+    const after = storageCapRows(ctx, { costCenterId: center.id, key });
+    res.json({ row: after.rows[0], pendingFields, rejectedFields });
+});
+
 // Verificador Código (SKU): la ficha de un artículo (sin fotos ni Control Interno) y DÓNDE ESTÁ, que sale de Relación Código (un renglón por cada lugar). Con sesión.
 app.get('/api/business/verificador/:id', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -10484,6 +10571,8 @@ const PENDING_CHANGE_APPLIERS = {
     'limpieza': (recordId, clientId, patch, extra) => updateCleaningRecord(recordId, clientId, patch, extra),
     // Corregir un renglón de Pedido Manual (quién lo pidió o la cantidad) cuando lo autoriza otra persona.
     'pedido-manual': (recordId, clientId, patch, extra) => updateManualOrderLine(recordId, clientId, patch, extra),
+    // Cambiar el código ya asignado a un lugar de Capacidad Almacenamiento cuando lo autoriza otra persona.
+    'capacidad-almacenamiento': (recordId, clientId, patch, extra) => updateStorageCapacity(recordId, clientId, patch, extra),
     'temperaturas': (recordId, clientId, patch, extra) => updateTemperatureRecord(recordId, clientId, patch, extra),
     'seguridad': (recordId, clientId, patch, extra) => updateSafetyCheck(recordId, clientId, patch, extra),
 };

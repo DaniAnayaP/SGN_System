@@ -1840,6 +1840,86 @@
           ]
         },
         {
+          "id": "cat-operaciones-centro-dist-capacidad-almacenamiento", "labelKey": "menu.opCentroDistCapacidadAlmacenamiento", "icon": "bx-package", "href": "OpCentroDistCapacidadAlmacenamiento.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-cap-ubicacion", "labelKey": "menu.classCapUbicacion", "isClassification": true,
+              "submenu": [
+                { "id": "colCapUbicacion", "labelKey": "main.colCapUbicacion", "permissionOnly": true },
+                { "id": "colCapActivo", "labelKey": "main.colCapActivo", "permissionOnly": true },
+                { "id": "colCapLargo", "labelKey": "main.colCapLargo", "permissionOnly": true },
+                { "id": "colCapFondo", "labelKey": "main.colCapFondo", "permissionOnly": true },
+                { "id": "colCapAlto", "labelKey": "main.colCapAlto", "permissionOnly": true },
+                { "id": "colCapM2", "labelKey": "main.colCapM2", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-cap-codigo", "labelKey": "menu.classCapCodigo", "isClassification": true,
+              "submenu": [
+                { "id": "colCapCodigo", "labelKey": "main.colCapCodigo", "permissionOnly": true },
+                { "id": "colCapDescripcion", "labelKey": "main.colCapDescripcion", "permissionOnly": true },
+                { "id": "colCapUdm", "labelKey": "main.colCapUdm", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-cap-estiba", "labelKey": "menu.classCapEstiba", "isClassification": true,
+              "submenu": [
+                { "id": "colCapTipoAlm", "labelKey": "main.colCapTipoAlm", "permissionOnly": true },
+                { "id": "colCapBase", "labelKey": "main.colCapBase", "permissionOnly": true },
+                { "id": "colCapTi", "labelKey": "main.colCapTi", "permissionOnly": true },
+                { "id": "colCapHi", "labelKey": "main.colCapHi", "permissionOnly": true },
+                { "id": "colCapEstiba", "labelKey": "main.colCapEstiba", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-cap-huellas", "labelKey": "menu.classCapHuellas", "isClassification": true,
+              "submenu": [
+                { "id": "colCapHuellas", "labelKey": "main.colCapHuellas", "permissionOnly": true }
+              ]
+            },
+            {
+              "id": "class-cap-capacidad", "labelKey": "menu.classCapCapacidad", "isClassification": true,
+              "submenu": [
+                { "id": "colCapPorPallet", "labelKey": "main.colCapPorPallet", "permissionOnly": true },
+                { "id": "colCapPorHuella", "labelKey": "main.colCapPorHuella", "permissionOnly": true },
+                { "id": "colCapMaxima", "labelKey": "main.colCapMaxima", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
+        },
+        {
           "id": "cat-operaciones-centro-dist-pedido-manual", "labelKey": "menu.opCentroDistPedidoManual", "icon": "bx-cart", "href": "OpCentroDistPedidoManual.html",
           "submenu": [
             {

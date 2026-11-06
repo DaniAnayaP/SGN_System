@@ -1747,6 +1747,74 @@
         return { rows, truncated };
     }
 
+    // ---- Capacidad Almacenamiento ------------------------------------------------------------------------------------------------------------
+    // Los lugares donde se puede guardar inventario: un renglón por HUECO (nivel × columna) de cada activo activo que guarda inventario (sin clasificación, o con una que NO se mide en m²: el mobiliario operativo no guarda).
+    // classKinds = Map(id de la clasificación → 'm2' | 'm3'). Un activo con un solo hueco sale como un renglón; uno con varios (un rack con niveles y columnas) sale con un renglón por hueco. Solo cuenta lo que está en una zona
+    // activa (así tiene localizador). Las medidas son las del hueco (bayMeasures), en metros: largo, fondo, alto útil (sin la ceja) y los m² de su base. key = id del activo|nivel|columna (no cambia mientras el activo exista).
+    function storageLocations(layout, { classKinds = new Map(), max = 60000 } = {}) {
+        const rows = [];
+        let truncated = false;
+        if (!layout) return { rows, truncated };
+        const pad = (n) => String(n).padStart(3, '0');
+        const zones = (layout.zones || []).filter((z) => z.active !== false);
+        const footprints = (layout.footprints || []).filter((f) => f.active !== false);
+        const spaces = (layout.spaces || []).filter((s) => s.active !== false);
+        const spByFp = new Map();
+        spaces.forEach((sp) => { if (!spByFp.has(sp.footprintId)) spByFp.set(sp.footprintId, []); spByFp.get(sp.footprintId).push(sp); });
+        for (const z of zones) {
+            for (const f of footprints.filter((fp) => fp.zoneId === z.id)) {
+                for (const sp of (spByFp.get(f.id) || [])) {
+                    if (sp.assetClassId && classKinds.get(sp.assetClassId) === 'm2') continue;
+                    const levels = sp.levels || 1;
+                    const slots = sp.slots || 1;
+                    const multi = levels > 1 || slots > 1;
+                    for (let n = 1; n <= levels; n++) {
+                        for (let c = 1; c <= slots; c++) {
+                            if (rows.length >= max) { truncated = true; return { rows, truncated }; }
+                            const m = bayMeasures(sp, n, c);
+                            const base = [z.code, f.code, sp.code].filter(Boolean).join('.');
+                            rows.push({
+                                key: `${sp.id}|${n}|${c}`, spaceId: sp.id, level: n, slot: c, multi,
+                                zoneId: z.id, zoneCode: z.code || '', zoneName: z.name || '', footprintCode: f.code || '', spaceCode: sp.code || '',
+                                assetClassId: sp.assetClassId || 0, assetId: sp.assetId || 0,
+                                locator: multi ? `${base}.N${pad(n)}.C${pad(c)}` : base,
+                                l: m.l, w: m.w, h: m.useful || m.h, m2: round2(m.l * m.w),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        return { rows, truncated };
+    }
+    // Cuántas tarimas (la base del código, en cm) caben en la base del lugar (en metros): lo que cabe DE VERDAD por cada lado (un espacio de 2.5 × 2.5 m con una base de 1 × 1 m caben 4, no 6) y se toma el acomodo (de frente o
+    // girada) que más acomoda.
+    const fitCount = (a, b, x, y) => (a > 0 && b > 0 && x > 0 && y > 0 ? Math.floor(a / x + 1e-9) * Math.floor(b / y + 1e-9) : 0);
+    function huellasThatFit(l, w, codeL, codeW) {
+        const a = l * 100;
+        const b = w * 100;
+        return Math.max(fitCount(a, b, codeL, codeW), fitCount(a, b, codeW, codeL));
+    }
+    // La capacidad de un lugar con un código (como en el Excel «Capacidades Crane»): por pallet = cantidad por cama (TI) × camas por pallet (HI); por huella = máxima estiba × por pallet; máxima = huellas × por huella. El
+    // Largo × Ancho del código son los de la tarima completa (cm). Lo que no se puede calcular por falta de un dato queda en null y 'missing' dice cuál falta (size, ti, hi, stack).
+    function capacityOf(loc, code) {
+        const out = { huellas: null, perPallet: null, perHuella: null, max: null, missing: [] };
+        if (!loc || !code) return out;
+        const L = Number(code.length) || 0;
+        const W = Number(code.width) || 0;
+        const ti = Math.round(Number(code.unitsPerLayer)) || 0;
+        const hi = Math.round(Number(code.layersPerPallet)) || 0;
+        const stack = Math.round(Number(code.maxStack)) || 0;
+        if (L > 0 && W > 0) out.huellas = huellasThatFit(loc.l, loc.w, L, W); else out.missing.push('size');
+        if (!(ti > 0)) out.missing.push('ti');
+        if (!(hi > 0)) out.missing.push('hi');
+        if (!(stack > 0)) out.missing.push('stack');
+        if (ti > 0 && hi > 0) out.perPallet = ti * hi;
+        if (out.perPallet !== null && stack > 0) out.perHuella = stack * out.perPallet;
+        if (out.huellas !== null && out.perHuella !== null) out.max = out.huellas * out.perHuella;
+        return out;
+    }
+
     function emptyLayout() {
         return {
             mode: 'scratch', heightM: 9,
@@ -2478,6 +2546,7 @@
 
     return {
         sensorZoneIds,
+        storageLocations, huellasThatFit, capacityOf,
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,

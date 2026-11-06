@@ -12640,6 +12640,7 @@ const TABLE_GRANT_PATHS = {
     'localizadores': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-localizadores' },
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
+    'capacidad-almacenamiento': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-capacidad-almacenamiento' },
     'temperaturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-temperaturas' },
     'seguridad': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-seguridad' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
@@ -12673,6 +12674,8 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-centro-dist-limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     // Operaciones > Pedido Manual: los pedidos que llegan del QR de cada centro de costos (con usuario).
     'cat-operaciones-centro-dist-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
+    // Operaciones > Capacidad Almacenamiento: qué código va en cada lugar de almacenamiento del Layout y su capacidad.
+    'cat-operaciones-centro-dist-capacidad-almacenamiento': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-capacidad-almacenamiento' },
     // Operaciones > Temperaturas: la base de registros de las lecturas de temperatura de los refrigeradores con QR (con usuario).
     'cat-operaciones-centro-dist-temperaturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-temperaturas' },
     // Operaciones > Seguridad: la base de registros de las revisiones de los elementos de seguridad con QR (con usuario).
