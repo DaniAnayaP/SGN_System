@@ -1902,7 +1902,9 @@
           ],
           "iconsSubmenu": [
             { "id": "iconMapaCalorMetrica", "labelKey": "main.mapaCalorMetricaBtn", "permissionOnly": true },
-            { "id": "iconMapaCalorReproducir", "labelKey": "main.mapaCalorReproducirBtn", "permissionOnly": true }
+            { "id": "iconMapaCalorReproducir", "labelKey": "main.mapaCalorReproducirBtn", "permissionOnly": true },
+            { "id": "iconMapaCalorCalcular", "labelKey": "main.mapaCalorCalcularBtn", "permissionOnly": true },
+            { "id": "iconMapaCalorValor", "labelKey": "main.mapaCalorValorBtn", "permissionOnly": true }
           ]
         }
       ]

@@ -2981,6 +2981,26 @@
     "mapaCalorReproducirBtn": "Heat map: Play the day button",
     "heatChooseCenter": "Check only one cost center above to see its heat map.",
     "heatNoLayout": "This cost center does not have a saved Layout yet.",
+    "mapaCalorCalcularBtn": "Heat map: How to calculate (specific hour, from one hour to another, whole day)",
+    "mapaCalorValorBtn": "Heat map: Average | Minimum | Maximum",
+    "heatComoCalcular": "How to calculate",
+    "heatModo_hour": "Specific hour",
+    "heatModo_range": "From one hour to another",
+    "heatModo_day": "Whole day",
+    "heatDe": "From",
+    "heatA": "to",
+    "heatCalcular": "Calculate",
+    "heatSePintaCon": "Painted with the",
+    "heatVal_avg": "average",
+    "heatVal_min": "minimum",
+    "heatVal_max": "maximum",
+    "heatTituloRango": "From {from} to {to}",
+    "heatTituloDia": "Whole day · {day}",
+    "heatSubAgg": "{val} of the readings in that time window",
+    "heatZonaSinLecturasHorario": "no readings in this time window",
+    "heatStats": "average {avg} · min {min} · max {max} · {n} readings",
+    "heatStats1": "{avg} · 1 reading",
+    "heatRangoInvalido": "The end time has to be later than the start time.",
     "heatDia": "Day",
     "heatVerRegistros": "Temperature records",
     "heatTemperatura": "Temperature °C",
@@ -4647,6 +4667,18 @@
     "heatHour": {
       "what": "The hour you see on the map. The green dots below are the hours that have readings of what you are viewing. In each hour the last reading of each sensor is used.",
       "example": "you drag to 14:00 and each zone shows the average of what its sensors showed at that hour."
+    },
+    "heatModes": {
+      "what": "How what is painted is calculated. Specific hour: the hour you move on the bar (and Play the day steps the map hour by hour). From one hour to another: all readings between two times of the day. Whole day: all readings from 00:00 to 23:59.",
+      "example": "you pick From one hour to another, 08:00 to 14:00, and each zone is painted with what its sensors marked in that window."
+    },
+    "heatValue": {
+      "what": "Which number paints each zone when you calculate a time window: the average of all readings, the lowest (minimum) or the highest (maximum). The list on the right always shows all three.",
+      "example": "you switch to maximum to see how hot each zone got during the day."
+    },
+    "heatCalc": {
+      "what": "Calculates the time window you typed (From one hour to another) or the whole day. The map and the list fill with the result; if you change the hours, tap it again.",
+      "example": "you change 08:00 to 10:00 and tap Calculate: the map is painted again."
     },
     "heatMap": {
       "what": "The cost center's Layout with each zone painted with the average of what its sensors showed at that hour (blue = cold, red = hot). Each circle is a sensor, with its own value. A gray zone with a dotted line has no sensors or no reading at that hour: no data is made up.",

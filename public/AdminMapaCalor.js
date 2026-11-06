@@ -1,8 +1,11 @@
 // ---------------------------------------------------------------------------
-// Admin > Mapa de calor: el Layout de UN centro de costos con cada zona pintada según lo que marcaron sus SENSORES (los que se colocan en el paso Sensores del Layout) a la hora que se elija. Las lecturas salen
-// de la misma base de Temperaturas (las que se capturan con el QR de cada sensor). Cada zona se pinta con el PROMEDIO de lo que marcaron sus sensores en esa hora (la última lectura de cada sensor dentro de la hora, en
-// tu hora local); cada sensor muestra además su propio valor en su lugar. Una zona sin sensores, o sin lectura a esa hora, queda en gris: no se inventa ningún dato. La escala es FIJA (0 a 40 °C; humedad 0 a 100 %)
-// para poder comparar un día con otro. Las horas se guardan en UTC y aquí se ven en tu hora. El servidor solo manda el Layout y las lecturas del día (GET /api/business/climate-map); lo demás se saca aquí.
+// Admin > Mapa de calor: el Layout de UN centro de costos con cada zona pintada según lo que marcaron sus SENSORES (los que se colocan en el paso Sensores del Layout). Las lecturas salen de la misma base de Temperaturas
+// (las que se capturan con el QR de cada sensor). «Cómo calcular» tiene tres formas:
+//   · Hora específica: la de siempre. Cada zona se pinta con el PROMEDIO de lo que marcaron sus sensores en esa hora (la última lectura de cada sensor dentro de la hora, en tu hora local) y «Reproducir el día» pasa el mapa hora por hora.
+//   · De una hora a otra y Todo el día: con «Calcular» se toman TODAS las lecturas de ese horario (en tu hora local) y cada zona se pinta con su promedio, su mínimo o su máximo (lo que se elija); la lista dice por zona el promedio, el
+//     mínimo, el máximo y cuántas lecturas entraron. Cada sensor muestra además su propio valor del mismo tipo.
+// Una zona sin sensores, o sin lectura en ese horario, queda en gris: no se inventa ningún dato. La escala es FIJA (0 a 40 °C; humedad 0 a 100 %) para poder comparar un día con otro. Las horas se guardan en UTC y aquí se ven en tu hora.
+// El servidor solo manda el Layout y las lecturas del día (GET /api/business/climate-map); lo demás se saca aquí.
 // ---------------------------------------------------------------------------
 
 // Envuelto en una función: Dashboard.js ya declara globales como t, y chocarían con los de esta pantalla.
@@ -38,7 +41,11 @@ function colorAt(metric, value) {
     return `#${s.stops[s.stops.length - 1][1].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
 }
 
-const state = { centerId: null, day: '', hour: 12, metric: 'temp', data: null, buckets: new Map(), perms: { canMetric: true, canPlay: true }, timer: null, seq: 0 };
+// mode: 'hour' | 'range' | 'day'. val: lo que pinta en range/day: 'avg' | 'min' | 'max'. calc: el resultado de «Calcular» (ver calculate); from/to: el horario de «De una hora a otra».
+const state = {
+    centerId: null, day: '', hour: 12, metric: 'temp', mode: 'hour', val: 'avg', from: '08:00', to: '14:00', calc: null,
+    data: null, buckets: new Map(), perms: { canMetric: true, canPlay: true, canCalc: true, canValue: true }, timer: null, seq: 0,
+};
 
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 function dayRange(str) {
@@ -47,6 +54,14 @@ function dayRange(str) {
 }
 const hourText = (h) => `${pad(h)}:00`;
 const fmtValue = (metric, v) => `${Number(v).toFixed(1)} ${SCALE[metric].unit}`;
+const valLabel = (v) => t(`main.heatVal_${v}`);
+// «08:30» → minutos desde la medianoche (null si no es una hora)
+function toMinutes(text) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(text || ''));
+    if (!m) return null;
+    const h = Number(m[1]); const mi = Number(m[2]);
+    return h <= 23 && mi <= 59 ? h * 60 + mi : null;
+}
 
 // ---- datos ---------------------------------------------------------------------------------------------------------------------------
 // De cada sensor, la ÚLTIMA lectura de cada hora (hora local): sensorId → hora → lectura.
@@ -90,6 +105,60 @@ function hoursWithData(metric) {
     return hours;
 }
 
+// ---- Calcular (De una hora a otra · Todo el día) ----------------------------------------------------------------------------------------------
+const statsOf = (values) => {
+    if (!values.length) return null;
+    let sum = 0; let min = Infinity; let max = -Infinity;
+    values.forEach((v) => { sum += v; if (v < min) min = v; if (v > max) max = v; });
+    return { avg: sum / values.length, min, max, n: values.length };
+};
+// Toma TODAS las lecturas del horario (hora local del día elegido; el minuto final cuenta completo) de la medida elegida y saca, por sensor y por zona (con las lecturas de todos sus sensores), el promedio, el mínimo, el máximo y cuántas son.
+function calculate() {
+    if (!state.data) { state.calc = null; return; }
+    const metric = state.metric;
+    const fromMin = state.mode === 'day' ? 0 : toMinutes(state.from);
+    const toMin = state.mode === 'day' ? 24 * 60 - 1 : toMinutes(state.to);
+    const bySensor = new Map();
+    (state.data.readings || []).forEach((r) => {
+        const when = new Date(r.at);
+        if (Number.isNaN(when.getTime())) return;
+        const m = when.getHours() * 60 + when.getMinutes();
+        if (m < fromMin || m > toMin) return;
+        const v = metric === 'temp' ? r.temperature : r.humidity;
+        if (v === null || v === undefined) return;
+        if (!bySensor.has(r.sensorId)) bySensor.set(r.sensorId, []);
+        bySensor.get(r.sensorId).push(Number(v));
+    });
+    const sensors = state.data.layout.sensors;
+    const perSensor = new Map(sensors.map((s) => [s.id, statsOf(bySensor.get(s.id) || [])]));
+    const perZone = new Map(state.data.layout.zones.map((z) => {
+        const mine = sensors.filter((s) => s.zoneId === z.id);
+        return [z.id, { sensors: mine, stats: statsOf(mine.flatMap((s) => bySensor.get(s.id) || [])) }];
+    }));
+    state.calc = {
+        metric, mode: state.mode, perSensor, perZone,
+        title: state.mode === 'day'
+            ? t('main.heatTituloDia', { day: new Date(`${state.day}T12:00:00`).toLocaleDateString(locale(), { day: '2-digit', month: '2-digit', year: 'numeric' }) })
+            : t('main.heatTituloRango', { from: state.from, to: state.to }),
+    };
+}
+const aggregated = () => state.mode !== 'hour';
+const pickStat = (st) => (st ? st[state.val] : null);
+// Lo que se pinta de una zona y lo que marca un sensor, según el modo (la hora elegida o el horario calculado).
+function zoneNow(zone) {
+    if (!aggregated()) return zoneValue(zone, state.hour, state.metric);
+    const z = state.calc && state.calc.perZone.get(zone.id);
+    if (!z || !z.sensors.length) return { value: null, why: 'nosensor', sensors: [] };
+    if (!z.stats) return { value: null, why: 'noreading', sensors: z.sensors };
+    return { value: pickStat(z.stats), why: '', stats: z.stats, sensors: z.sensors };
+}
+function sensorNow(sensor) {
+    if (!aggregated()) return sensorReading(sensor, state.hour, state.metric);
+    const st = state.calc && state.calc.perSensor.get(sensor.id);
+    return st ? { value: pickStat(st), stats: st } : null;
+}
+const statsText = (metric, st) => t(st.n === 1 ? 'main.heatStats1' : 'main.heatStats', { avg: fmtValue(metric, st.avg), min: fmtValue(metric, st.min), max: fmtValue(metric, st.max), n: st.n });
+
 // ---- dibujo --------------------------------------------------------------------------------------------------------------------------
 const W = 700; const H = 460; const M = 28;
 function bounds(layout) {
@@ -107,39 +176,44 @@ function drawMap() {
     const X = (x) => ox + (x - b.x0) * sc;
     const Y = (y) => oy + (y - b.y0) * sc;
     const metric = state.metric;
+    const noReading = t(aggregated() ? 'main.heatSinLecturaCorto' : 'main.heatSinLecturaCorto');
     let s = `<polygon class="heat-nave" points="${layout.vertices.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ')}"/>`;
     let labels = '';
     layout.zones.forEach((z) => {
         const pts = LC.zonePoints(z);
         if (!pts || pts.length < 3) return;
-        const zv = zoneValue(z, state.hour, metric);
+        const zv = zoneNow(z);
         const poly = pts.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ');
         const xs = pts.map((p) => X(p[0])); const ys = pts.map((p) => Y(p[1]));
         const bw = Math.max(...xs) - Math.min(...xs); const bh = Math.max(...ys) - Math.min(...ys);
         const cx = (Math.max(...xs) + Math.min(...xs)) / 2; const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
-        const tip = zv.value === null ? `${z.name} · ${t(zv.why === 'nosensor' ? 'main.heatSinSensor' : 'main.heatSinLecturaCorto')}` : `${z.name} · ${fmtValue(metric, zv.value)}`;
+        const why = t(zv.why === 'nosensor' ? 'main.heatSinSensor' : 'main.heatSinLecturaCorto');
+        const tip = zv.value === null ? `${z.name} · ${why}` : `${z.name} · ${fmtValue(metric, zv.value)}${aggregated() ? ` (${valLabel(state.val)}) · ${statsText(metric, zv.stats)}` : ''}`;
         s += zv.value === null
             ? `<polygon class="heat-zone none" points="${poly}"><title>${esc(tip)}</title></polygon>`
             : `<polygon class="heat-zone" points="${poly}" fill="${colorAt(metric, zv.value)}"><title>${esc(tip)}</title></polygon>`;
         if (bw >= 44 && bh >= 24) {
             labels += `<text class="heat-zname" x="${cx.toFixed(1)}" y="${(cy - 2).toFixed(1)}" text-anchor="middle">${esc(z.name)}</text>`;
             labels += zv.value === null
-                ? `<text class="heat-zval mute" x="${cx.toFixed(1)}" y="${(cy + 13).toFixed(1)}" text-anchor="middle">${esc(t(zv.why === 'nosensor' ? 'main.heatSinSensor' : 'main.heatSinLecturaCorto'))}</text>`
+                ? `<text class="heat-zval mute" x="${cx.toFixed(1)}" y="${(cy + 13).toFixed(1)}" text-anchor="middle">${esc(why)}</text>`
                 : `<text class="heat-zval" x="${cx.toFixed(1)}" y="${(cy + 15).toFixed(1)}" text-anchor="middle">${esc(fmtValue(metric, zv.value))}</text>`;
         }
     });
     s += labels;
-    // los sensores, sobre su pared, con lo que marcaron a esa hora
+    // los sensores, sobre su pared, con lo que marcaron a esa hora (o, calculado, su propio promedio / mínimo / máximo del horario)
     layout.sensors.forEach((sn) => {
         const p = LC.sensorPoint(layout, sn);
         if (!p) return;
-        const r = sensorReading(sn, state.hour, metric);
+        const r = sensorNow(sn);
         const px = X(p.x); const py = Y(p.y);
         const dx = X(p.inx) - px; const dy = Y(p.iny) - py;
         const len = Math.hypot(dx, dy) || 1;
         const lx = px + (dx / len) * 17; const ly = py + (dy / len) * 17 + 3;
         const kind = t(`main.layoutType_sensor_${sn.type}`);
-        const tip = `${sn.code} · ${kind}${r ? ` · ${fmtValue(metric, r.value)} · ${new Date(r.at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })} · ${r.name || ''}` : ` · ${t('main.heatSinLecturaCorto')}`}`;
+        let tip;
+        if (!r) tip = `${sn.code} · ${kind} · ${noReading}`;
+        else if (aggregated()) tip = `${sn.code} · ${kind} · ${fmtValue(metric, r.value)} (${valLabel(state.val)}) · ${statsText(metric, r.stats)}`;
+        else tip = `${sn.code} · ${kind} · ${fmtValue(metric, r.value)} · ${new Date(r.at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })} · ${r.name || ''}`;
         s += `<g class="heat-sensor${r ? '' : ' none'}"><circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="5.5"><title>${esc(tip)}</title></circle>${r ? `<text class="heat-sval" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle">${esc(Number(r.value).toFixed(1))}${SCALE[metric].unit === '%' ? '%' : '°'}</text>` : ''}</g>`;
     });
     $('heat-svg').innerHTML = s;
@@ -157,13 +231,16 @@ function drawTicks() {
 function drawZones() {
     const metric = state.metric;
     const zones = state.data.layout.zones.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), lang(), { numeric: true }));
-    $('heat-side-title').textContent = t('main.heatLaHora', { hour: hourText(state.hour) });
+    $('heat-side-title').textContent = aggregated() ? (state.calc ? state.calc.title : '') : t('main.heatLaHora', { hour: hourText(state.hour) });
+    $('heat-side-sub').textContent = aggregated() ? t('main.heatSubAgg', { val: valLabel(state.val) }) : '';
     $('heat-zones').innerHTML = zones.map((z) => {
-        const zv = zoneValue(z, state.hour, metric);
+        const zv = zoneNow(z);
         const dot = zv.value === null ? '<i class="heat-dot none"></i>' : `<i class="heat-dot" style="background:${colorAt(metric, zv.value)}"></i>`;
         let detail;
-        if (zv.value === null) detail = `<span class="mute">${esc(t(zv.why === 'nosensor' ? 'main.heatZonaSinSensor' : 'main.heatZonaSinLectura'))}</span>`;
-        else {
+        if (zv.value === null) detail = `<span class="mute">${esc(t(zv.why === 'nosensor' ? 'main.heatZonaSinSensor' : (aggregated() ? 'main.heatZonaSinLecturasHorario' : 'main.heatZonaSinLectura')))}</span>`;
+        else if (aggregated()) {
+            detail = `<span class="heat-big">${esc(fmtValue(metric, zv.value))} <span class="mute">(${esc(valLabel(state.val))})</span></span><span class="mute">${esc(statsText(metric, zv.stats))}</span>`;
+        } else {
             const used = zv.sensors.filter((r) => r.reading);
             detail = `<span>${esc(fmtValue(metric, zv.value))} · ${esc(used.length === 1 ? t('main.heatDeUno', { code: used[0].sensor.code }) : t('main.heatPromedio', { codes: used.map((r) => r.sensor.code).join(', ') }))}</span>`
                 + used.map((r) => `<span class="mute">${esc(r.sensor.code)} · ${esc(fmtValue(metric, r.reading.value))} · ${esc(new Date(r.reading.at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }))} · ${esc(r.reading.name || '')}</span>`).join('');
@@ -180,8 +257,23 @@ function drawNote() {
     else if (state.data.truncated) note = t('main.heatNotaCortado');
     $('heat-note').textContent = note;
 }
+// Lo que se ve de la barra según «Cómo calcular»: la hora (con Reproducir) o el horario (con Calcular y lo que se pinta).
+function drawControls() {
+    const perms = state.perms;
+    if (!perms.canCalc) state.mode = 'hour';
+    const hourMode = state.mode === 'hour';
+    $('heat-pick').hidden = !perms.canCalc;
+    document.querySelectorAll('#heat-modes button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode)));
+    $('heat-ctl-hour').hidden = !hourMode;
+    $('heat-ctl-range').hidden = state.mode !== 'range';
+    $('heat-ctl-day').hidden = state.mode !== 'day';
+    $('heat-ctl-calc').hidden = hourMode;
+    $('heat-val').hidden = !perms.canValue;
+    document.querySelectorAll('#heat-val button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.val === state.val)));
+}
 function render() {
     if (!state.data) return;
+    if (aggregated() && (!state.calc || state.calc.metric !== state.metric || state.calc.mode !== state.mode)) calculate();
     $('heat-hour').value = String(state.hour);
     $('heat-hour-label').textContent = hourText(state.hour);
     document.querySelectorAll('#heat-metric button').forEach((b) => b.setAttribute('aria-pressed', String((b.id === 'heat-metric-temp') === (state.metric === 'temp'))));
@@ -192,6 +284,7 @@ function render() {
     $('heat-play').setAttribute('aria-label', label);
     $('heat-play').title = label;
     $('heat-hour').setAttribute('aria-label', t('main.heatHora'));
+    drawControls();
     drawMap();
     drawLegend();
     drawTicks();
@@ -235,11 +328,15 @@ async function load() {
     if (!res.ok) throw new Error('climate map failed');
     state.data = await res.json();
     state.buckets = buildBuckets(state.data.readings);
-    state.perms = state.data.permissions || state.perms;
+    state.perms = { canMetric: true, canPlay: true, canCalc: true, canValue: true, ...(state.data.permissions || {}) };
     if (!state.perms.canMetric) state.metric = 'temp';
-    $('heat-center-chip').textContent = state.data.costCenter ? t('main.heatCentro', { name: state.data.costCenter.name }) : '';
+    if (!state.perms.canCalc) state.mode = 'hour';
+    if (!state.perms.canValue) state.val = 'avg';
+    state.calc = null; // las lecturas son de otro día o centro: se vuelve a calcular
     $('heat-day').value = state.day;
     $('heat-day').max = todayStr();
+    $('heat-from').value = state.from;
+    $('heat-to').value = state.to;
     // la hora de arranque: la de ahora si el día es hoy; si no, la última hora con lectura (o el mediodía)
     if (state.day === todayStr()) state.hour = new Date().getHours();
     else { const has = Array.from(hoursWithData(state.metric)); state.hour = has.length ? Math.max(...has) : 12; }
@@ -257,8 +354,34 @@ $('heat-hour').addEventListener('input', (event) => { state.hour = Number(event.
 $('heat-metric-temp').addEventListener('click', () => { state.metric = 'temp'; render(); });
 $('heat-metric-hum').addEventListener('click', () => { state.metric = 'hum'; render(); });
 $('heat-play').addEventListener('click', startPlay);
+// Cómo calcular: al elegir «Todo el día» (o «De una hora a otra») se calcula de una vez con lo que está escrito; «Calcular» lo vuelve a hacer con el horario nuevo.
+$('heat-modes').addEventListener('click', (event) => {
+    const btn = event.target.closest('button[data-mode]');
+    if (!btn || !state.perms.canCalc) return;
+    if (state.timer) { window.clearInterval(state.timer); state.timer = null; }
+    state.mode = btn.dataset.mode;
+    state.calc = null;
+    render();
+});
+$('heat-val').addEventListener('click', (event) => {
+    const btn = event.target.closest('button[data-val]');
+    if (!btn || !state.perms.canValue) return;
+    state.val = btn.dataset.val;
+    render();
+});
+$('heat-go').addEventListener('click', () => {
+    if (state.mode === 'range') {
+        const from = toMinutes($('heat-from').value);
+        const to = toMinutes($('heat-to').value);
+        if (from === null || to === null || to <= from) { Dashboard.showToast(t('main.heatRangoInvalido'), 'warning'); return; }
+        state.from = $('heat-from').value;
+        state.to = $('heat-to').value;
+    }
+    calculate();
+    render();
+});
 document.addEventListener('sgn:cost-centers-changed', () => { load().catch((err) => console.error('Mapa de calor: no se pudo cargar', err)); });
-document.addEventListener('dashboard:language-changed', () => render());
+document.addEventListener('dashboard:language-changed', () => { state.calc = null; render(); });
 
 (async function init() {
     try {

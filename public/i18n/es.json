@@ -2980,6 +2980,26 @@
     "mapaCalorReproducirBtn": "Mapa de calor: botón Reproducir el día",
     "heatChooseCenter": "Marca un solo centro de costos arriba para ver su mapa de calor.",
     "heatNoLayout": "Este centro de costos todavía no tiene un Layout guardado.",
+    "mapaCalorCalcularBtn": "Mapa de calor: Cómo calcular (hora específica, de una hora a otra, todo el día)",
+    "mapaCalorValorBtn": "Mapa de calor: Promedio | Mínimo | Máximo",
+    "heatComoCalcular": "Cómo calcular",
+    "heatModo_hour": "Hora específica",
+    "heatModo_range": "De una hora a otra",
+    "heatModo_day": "Todo el día",
+    "heatDe": "De",
+    "heatA": "a",
+    "heatCalcular": "Calcular",
+    "heatSePintaCon": "Se pinta con el",
+    "heatVal_avg": "promedio",
+    "heatVal_min": "mínimo",
+    "heatVal_max": "máximo",
+    "heatTituloRango": "De {from} a {to}",
+    "heatTituloDia": "Todo el día · {day}",
+    "heatSubAgg": "{val} de las lecturas de ese horario",
+    "heatZonaSinLecturasHorario": "sin lecturas en este horario",
+    "heatStats": "promedio {avg} · mín {min} · máx {max} · {n} lecturas",
+    "heatStats1": "{avg} · 1 lectura",
+    "heatRangoInvalido": "La hora final tiene que ser mayor que la inicial.",
     "heatDia": "Día",
     "heatVerRegistros": "Base de registros de temperatura",
     "heatTemperatura": "Temperatura °C",
@@ -4646,6 +4666,18 @@
     "heatHour": {
       "what": "La hora que ves en el mapa. Los puntos verdes de abajo son las horas en que sí hay lecturas de lo que estás viendo. En cada hora se usa la última lectura de cada sensor.",
       "example": "arrastras hasta las 14:00 y cada zona muestra el promedio de lo que marcaron sus sensores a esa hora."
+    },
+    "heatModes": {
+      "what": "Cómo se calcula lo que se pinta. Hora específica: la hora que mueves en la barra (y Reproducir el día pasa el mapa hora por hora). De una hora a otra: tomas todas las lecturas entre dos horas del día. Todo el día: todas las lecturas de las 00:00 a las 23:59.",
+      "example": "eliges De una hora a otra, de 08:00 a 14:00, y cada zona se pinta con lo que marcaron sus sensores en ese horario."
+    },
+    "heatValue": {
+      "what": "Con qué número se pinta cada zona cuando calculas un horario: el promedio de todas las lecturas, la más baja (mínimo) o la más alta (máximo). La lista de la derecha siempre muestra los tres.",
+      "example": "cambias a máximo para ver qué tan caliente llegó a estar cada zona en el día."
+    },
+    "heatCalc": {
+      "what": "Calcula el horario que escribiste (De una hora a otra) o el día completo. El mapa y la lista se llenan con el resultado; si cambias las horas hay que volver a tocarlo.",
+      "example": "cambias 08:00 por 10:00 y tocas Calcular: el mapa se vuelve a pintar."
     },
     "heatMap": {
       "what": "El Layout del centro de costos con cada zona pintada con el promedio de lo que marcaron sus sensores a esa hora (azul = frío, rojo = caliente). Cada círculo es un sensor, con su propio valor. Una zona en gris con línea punteada no tiene sensores o no tiene lectura a esa hora: no se inventa ningún dato.",

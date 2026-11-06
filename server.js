@@ -8109,6 +8109,8 @@ app.get('/api/business/climate-map', requireAuth, (req, res) => {
         permissions: {
             canMetric: admin || hasTableIconGrant(grants, 'mapa-calor', 'iconMapaCalorMetrica'),
             canPlay: admin || hasTableIconGrant(grants, 'mapa-calor', 'iconMapaCalorReproducir'),
+            canCalc: admin || hasTableIconGrant(grants, 'mapa-calor', 'iconMapaCalorCalcular'),
+            canValue: admin || hasTableIconGrant(grants, 'mapa-calor', 'iconMapaCalorValor'),
         },
     });
 });

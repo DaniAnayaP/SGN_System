@@ -375,18 +375,48 @@
             </div>
             <div class="heat-screen" id="heat-screen" hidden>
                 <div class="heat-bar">
-                    <span class="heat-chip" id="heat-center-chip"></span>
-                    <label class="heat-field" data-help-key="heatDay"><span data-i18n="main.heatDia">Day</span><input type="date" id="heat-day"></label>
-                    <div class="heat-seg" id="heat-metric" role="group" data-help-key="heatMetric">
-                        <button type="button" id="heat-metric-temp" aria-pressed="true" data-i18n="main.heatTemperatura">Temperature °C</button>
-                        <button type="button" id="heat-metric-hum" aria-pressed="false" data-i18n="main.heatHumedad">Humidity %</button>
+                    <div class="heat-row">
+                        <label class="heat-field" data-help-key="heatDay"><span data-i18n="main.heatDia">Day</span><input type="date" id="heat-day"></label>
+                        <div class="heat-seg" id="heat-metric" role="group" data-help-key="heatMetric">
+                            <button type="button" id="heat-metric-temp" aria-pressed="true" data-i18n="main.heatTemperatura">Temperature °C</button>
+                            <button type="button" id="heat-metric-hum" aria-pressed="false" data-i18n="main.heatHumedad">Humidity %</button>
+                        </div>
+                        <a class="heat-link" id="heat-records-link" href="OpCentroDistTemperaturas.html" data-help-key="heatRecordsLink" hidden><i class="bx bx-link-external" aria-hidden="true"></i><span data-i18n="main.heatVerRegistros">Temperature records</span></a>
                     </div>
-                    <button type="button" class="heat-play" id="heat-play" data-help-key="heatPlay" aria-label="Play the day" title="Play the day"><i class="bx bx-play" aria-hidden="true"></i></button>
-                    <a class="heat-link" id="heat-records-link" href="OpCentroDistTemperaturas.html" data-help-key="heatRecordsLink" hidden><i class="bx bx-link-external" aria-hidden="true"></i><span data-i18n="main.heatVerRegistros">Temperature records</span></a>
-                    <div class="heat-hours" data-help-key="heatHour">
-                        <span class="heat-hour-label" id="heat-hour-label">12:00</span>
-                        <input type="range" id="heat-hour" min="0" max="23" step="1" value="12" aria-label="Hour">
-                        <div class="heat-ticks" id="heat-ticks" aria-hidden="true"></div>
+                    <div class="heat-row heat-how">
+                        <div class="heat-pick" id="heat-pick" data-help-key="heatModes">
+                            <b class="heat-how-title" data-i18n="main.heatComoCalcular">How to calculate</b>
+                            <div class="heat-seg" id="heat-modes" role="group" aria-label="How to calculate">
+                                <button type="button" data-mode="hour" aria-pressed="true" data-i18n="main.heatModo_hour">Specific hour</button>
+                                <button type="button" data-mode="range" aria-pressed="false" data-i18n="main.heatModo_range">From one hour to another</button>
+                                <button type="button" data-mode="day" aria-pressed="false" data-i18n="main.heatModo_day">Whole day</button>
+                            </div>
+                        </div>
+                        <div class="heat-ctl" id="heat-ctl-hour">
+                            <button type="button" class="heat-play" id="heat-play" data-help-key="heatPlay" aria-label="Play the day" title="Play the day"><i class="bx bx-play" aria-hidden="true"></i></button>
+                            <div class="heat-hours" data-help-key="heatHour">
+                                <span class="heat-hour-label" id="heat-hour-label">12:00</span>
+                                <input type="range" id="heat-hour" min="0" max="23" step="1" value="12" aria-label="Hour">
+                                <div class="heat-ticks" id="heat-ticks" aria-hidden="true"></div>
+                            </div>
+                        </div>
+                        <div class="heat-ctl" id="heat-ctl-range" hidden>
+                            <label class="heat-field"><span data-i18n="main.heatDe">From</span><input type="time" id="heat-from" value="08:00"></label>
+                            <label class="heat-field"><span data-i18n="main.heatA">to</span><input type="time" id="heat-to" value="14:00"></label>
+                        </div>
+                        <div class="heat-ctl" id="heat-ctl-day" hidden>
+                            <span class="heat-field"><span data-i18n="main.heatDe">From</span> <b>00:00</b> <span data-i18n="main.heatA">to</span> <b>23:59</b></span>
+                        </div>
+                        <div class="heat-ctl" id="heat-ctl-calc" hidden>
+                            <span class="heat-field" id="heat-val" data-help-key="heatValue"><span data-i18n="main.heatSePintaCon">Painted with the</span>
+                                <span class="heat-seg" role="group">
+                                    <button type="button" data-val="avg" aria-pressed="true" data-i18n="main.heatVal_avg">average</button>
+                                    <button type="button" data-val="min" aria-pressed="false" data-i18n="main.heatVal_min">minimum</button>
+                                    <button type="button" data-val="max" aria-pressed="false" data-i18n="main.heatVal_max">maximum</button>
+                                </span>
+                            </span>
+                            <button type="button" class="heat-go" id="heat-go" data-help-key="heatCalc" data-i18n="main.heatCalcular">Calculate</button>
+                        </div>
                     </div>
                 </div>
                 <div class="heat-body">
@@ -397,6 +427,7 @@
                     </div>
                     <div class="heat-side" data-help-key="heatZones">
                         <h3 class="heat-side-title" id="heat-side-title"></h3>
+                        <p class="heat-side-sub" id="heat-side-sub"></p>
                         <div id="heat-zones"></div>
                     </div>
                 </div>
