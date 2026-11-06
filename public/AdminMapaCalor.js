@@ -43,7 +43,7 @@ function colorAt(metric, value) {
 
 // mode: 'hour' | 'range' | 'day'. val: lo que pinta en range/day: 'avg' | 'min' | 'max'. calc: el resultado de «Calcular» (ver calculate); from/to: el horario de «De una hora a otra».
 const state = {
-    centerId: null, day: '', hour: 12, metric: 'temp', mode: 'hour', val: 'avg', from: '08:00', to: '14:00', calc: null,
+    centerId: null, day: '', hour: 12, metric: 'temp', mode: 'day', val: 'avg', from: '08:00', to: '14:00', calc: null,
     data: null, buckets: new Map(), perms: { canMetric: true, canPlay: true, canCalc: true, canValue: true }, timer: null, seq: 0,
 };
 
@@ -265,13 +265,12 @@ function drawControls() {
     if (!perms.canCalc) state.mode = 'hour';
     const hourMode = state.mode === 'hour';
     $('heat-pick').hidden = !perms.canCalc;
-    document.querySelectorAll('#heat-modes button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode)));
+    $('heat-mode').value = state.mode;
     $('heat-ctl-hour').hidden = !hourMode;
     $('heat-ctl-range').hidden = state.mode !== 'range';
-    $('heat-ctl-day').hidden = state.mode !== 'day';
-    $('heat-ctl-calc').hidden = hourMode;
-    $('heat-val').hidden = !perms.canValue;
-    document.querySelectorAll('#heat-val button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.val === state.val)));
+    $('heat-val').hidden = hourMode || !perms.canValue;
+    $('heat-val-select').value = state.val;
+    $('heat-go').hidden = state.mode !== 'range';
 }
 function render() {
     if (!state.data) return;
@@ -357,18 +356,17 @@ $('heat-metric-temp').addEventListener('click', () => { state.metric = 'temp'; r
 $('heat-metric-hum').addEventListener('click', () => { state.metric = 'hum'; render(); });
 $('heat-play').addEventListener('click', startPlay);
 // Cómo calcular: al elegir «Todo el día» (o «De una hora a otra») se calcula de una vez con lo que está escrito; «Calcular» lo vuelve a hacer con el horario nuevo.
-$('heat-modes').addEventListener('click', (event) => {
-    const btn = event.target.closest('button[data-mode]');
-    if (!btn || !state.perms.canCalc) return;
+// Cómo calcular (desplegable): al elegir «Todo el día» o «De una hora a otra» se calcula de una vez con lo que está escrito; «Calcular» (solo en «De una hora a otra») lo vuelve a hacer con el horario nuevo.
+$('heat-mode').addEventListener('change', (event) => {
+    if (!state.perms.canCalc) return;
     if (state.timer) { window.clearInterval(state.timer); state.timer = null; }
-    state.mode = btn.dataset.mode;
+    state.mode = event.target.value;
     state.calc = null;
     render();
 });
-$('heat-val').addEventListener('click', (event) => {
-    const btn = event.target.closest('button[data-val]');
-    if (!btn || !state.perms.canValue) return;
-    state.val = btn.dataset.val;
+$('heat-val-select').addEventListener('change', (event) => {
+    if (!state.perms.canValue) return;
+    state.val = event.target.value;
     render();
 });
 $('heat-go').addEventListener('click', () => {

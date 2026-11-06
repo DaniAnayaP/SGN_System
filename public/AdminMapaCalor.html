@@ -381,18 +381,14 @@
                             <button type="button" id="heat-metric-temp" aria-pressed="true" data-i18n="main.heatTemperatura">Temperature °C</button>
                             <button type="button" id="heat-metric-hum" aria-pressed="false" data-i18n="main.heatHumedad">Humidity %</button>
                         </div>
-                        <a class="heat-link" id="heat-records-link" href="OpCentroDistTemperaturas.html" data-help-key="heatRecordsLink" hidden><i class="bx bx-link-external" aria-hidden="true"></i><span data-i18n="main.heatVerRegistros">Temperature records</span></a>
-                    </div>
-                    <div class="heat-row heat-how">
-                        <div class="heat-pick" id="heat-pick" data-help-key="heatModes">
-                            <b class="heat-how-title" data-i18n="main.heatComoCalcular">How to calculate</b>
-                            <div class="heat-seg" id="heat-modes" role="group" aria-label="How to calculate">
-                                <button type="button" data-mode="hour" aria-pressed="true" data-i18n="main.heatModo_hour">Specific hour</button>
-                                <button type="button" data-mode="range" aria-pressed="false" data-i18n="main.heatModo_range">From one hour to another</button>
-                                <button type="button" data-mode="day" aria-pressed="false" data-i18n="main.heatModo_day">Whole day</button>
-                            </div>
-                        </div>
-                        <div class="heat-ctl" id="heat-ctl-hour">
+                        <label class="heat-field heat-pick" id="heat-pick" data-help-key="heatModes"><span data-i18n="main.heatComoCalcular">How to calculate</span>
+                            <select id="heat-mode" aria-label="How to calculate">
+                                <option value="day" data-i18n="main.heatModo_day">Whole day</option>
+                                <option value="range" data-i18n="main.heatModo_range">From one hour to another</option>
+                                <option value="hour" data-i18n="main.heatModo_hour">Specific hour</option>
+                            </select>
+                        </label>
+                        <div class="heat-ctl" id="heat-ctl-hour" hidden>
                             <button type="button" class="heat-play" id="heat-play" data-help-key="heatPlay" aria-label="Play the day" title="Play the day"><i class="bx bx-play" aria-hidden="true"></i></button>
                             <div class="heat-hours" data-help-key="heatHour">
                                 <span class="heat-hour-label" id="heat-hour-label">12:00</span>
@@ -400,23 +396,19 @@
                                 <div class="heat-ticks" id="heat-ticks" aria-hidden="true"></div>
                             </div>
                         </div>
-                        <div class="heat-ctl" id="heat-ctl-range" hidden>
+                        <div class="heat-ctl heat-ctl-fit" id="heat-ctl-range" hidden>
                             <label class="heat-field"><span data-i18n="main.heatDe">From</span><input type="time" id="heat-from" value="08:00"></label>
                             <label class="heat-field"><span data-i18n="main.heatA">to</span><input type="time" id="heat-to" value="14:00"></label>
                         </div>
-                        <div class="heat-ctl" id="heat-ctl-day" hidden>
-                            <span class="heat-field"><span data-i18n="main.heatDe">From</span> <b>00:00</b> <span data-i18n="main.heatA">to</span> <b>23:59</b></span>
-                        </div>
-                        <div class="heat-ctl" id="heat-ctl-calc" hidden>
-                            <span class="heat-field" id="heat-val" data-help-key="heatValue"><span data-i18n="main.heatSePintaCon">Painted with the</span>
-                                <span class="heat-seg" role="group">
-                                    <button type="button" data-val="avg" aria-pressed="true" data-i18n="main.heatVal_avg">average</button>
-                                    <button type="button" data-val="min" aria-pressed="false" data-i18n="main.heatVal_min">minimum</button>
-                                    <button type="button" data-val="max" aria-pressed="false" data-i18n="main.heatVal_max">maximum</button>
-                                </span>
-                            </span>
-                            <button type="button" class="heat-go" id="heat-go" data-help-key="heatCalc" data-i18n="main.heatCalcular">Calculate</button>
-                        </div>
+                        <label class="heat-field" id="heat-val" data-help-key="heatValue"><span data-i18n="main.heatSePintaCon">Painted with the</span>
+                            <select id="heat-val-select" aria-label="Painted with the">
+                                <option value="avg" data-i18n="main.heatVal_avg">average</option>
+                                <option value="min" data-i18n="main.heatVal_min">minimum</option>
+                                <option value="max" data-i18n="main.heatVal_max">maximum</option>
+                            </select>
+                        </label>
+                        <button type="button" class="heat-go" id="heat-go" data-help-key="heatCalc" data-i18n="main.heatCalcular" hidden>Calculate</button>
+                        <a class="heat-link" id="heat-records-link" href="OpCentroDistTemperaturas.html" data-help-key="heatRecordsLink" hidden><i class="bx bx-link-external" aria-hidden="true"></i><span data-i18n="main.heatVerRegistros">Temperature records</span></a>
                     </div>
                 </div>
                 <div class="heat-body">

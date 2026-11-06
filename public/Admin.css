@@ -8075,19 +8075,18 @@ body.sgn-scroll-shell > main > .page-scroll{ flex: 1 1 auto; min-height: 0; over
 .layout-sheet-tgl.off i{ position: relative; }
 .layout-sheet-tgl.layout-sheet-rot.off i::after{ display: none; } /* girar no se "apaga": sin giro el icono no lleva la raya */
 .layout-sheet-tgl.off i::after{ content: ""; position: absolute; left: -2px; right: -2px; top: 50%; border-top: 2px solid currentColor; transform: rotate(-45deg); }
-/* Mapa de calor: la barra en dos renglones (día, medida y enlace; luego «Cómo calcular» con lo que toca según la opción). */
-.heat-bar{ flex-direction: column; align-items: stretch; gap: 0.7rem; }
-.heat-row{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem 1.2rem; }
-.heat-how{ padding-top: 0.7rem; border-top: 1px solid var(--color-border); }
-.heat-pick{ display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
-.heat-pick[hidden]{ display: none; }
-.heat-how-title{ font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); }
-.heat-ctl{ display: flex; flex: 1 1 260px; flex-wrap: wrap; align-items: center; gap: 0.7rem 1.1rem; min-width: min(100%, 260px); }
+/* Mapa de calor: la barra en un solo renglón (día, medida, «Cómo calcular» desplegable y lo que toca según la opción; el enlace a la derecha). */
+.heat-bar{ padding: 0.45rem 0.8rem; }
+.heat-row{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; width: 100%; }
+.heat-field select{ font: inherit; font-size: 0.8rem; padding: 0.3rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); max-width: 100%; }
+.heat-field[hidden], .heat-pick[hidden]{ display: none; }
+.heat-ctl{ display: flex; flex: 1 1 14rem; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; min-width: min(100%, 14rem); }
+.heat-ctl.heat-ctl-fit{ flex: 0 1 auto; min-width: 0; }
 .heat-ctl[hidden]{ display: none; }
-.heat-ctl > .heat-hours{ flex: 1 1 200px; }
-.heat-field[hidden]{ display: none; }
-.heat-field .heat-seg{ margin-left: 0.3rem; }
-.heat-go{ font: inherit; font-size: 0.8rem; font-weight: 600; border: 0; border-radius: 999px; padding: 0.45rem 1.2rem; background: var(--color-text-primary); color: var(--color-surface); cursor: pointer; }
+.heat-ctl > .heat-hours{ flex: 1 1 10rem; min-width: 8rem; }
+.heat-go{ font: inherit; font-size: 0.8rem; font-weight: 600; border: 0; border-radius: 999px; padding: 0.4rem 1.1rem; background: var(--color-text-primary); color: var(--color-surface); cursor: pointer; }
+.heat-go[hidden]{ display: none; }
+.heat-link{ margin-left: auto; }
 .heat-go:focus-visible{ outline: 2px solid var(--color-text-primary); outline-offset: 2px; }
 .heat-side-sub{ margin: -0.2rem 0 0.4rem; font-size: 0.72rem; color: var(--color-text-secondary); }
 .heat-side-sub:empty{ display: none; }
