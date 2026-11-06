@@ -1838,6 +1838,61 @@
             { "id": "colVerificadorConsulta", "labelKey": "main.colVerificadorConsulta", "permissionOnly": true },
             { "id": "colVerificadorEscaner", "labelKey": "main.colVerificadorEscaner", "permissionOnly": true }
           ]
+        },
+        {
+          "id": "cat-operaciones-centro-dist-pedido-manual", "labelKey": "menu.opCentroDistPedidoManual", "icon": "bx-cart", "href": "OpCentroDistPedidoManual.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colPmFolio", "labelKey": "main.colPmFolio", "permissionOnly": true },
+            { "id": "colPmFechaHora", "labelKey": "main.colPmFechaHora", "permissionOnly": true },
+            { "id": "colPmSolicitante", "labelKey": "main.colPmSolicitante", "permissionOnly": true },
+            { "id": "colPmCodigo", "labelKey": "main.colPmCodigo", "permissionOnly": true },
+            { "id": "colPmDescripcion", "labelKey": "main.colPmDescripcion", "permissionOnly": true },
+            { "id": "colPmUdm", "labelKey": "main.colPmUdm", "permissionOnly": true },
+            { "id": "colPmCategoria", "labelKey": "main.colPmCategoria", "permissionOnly": true },
+            { "id": "colPmCantidad", "labelKey": "main.colPmCantidad", "permissionOnly": true },
+            { "id": "colPmEstatus", "labelKey": "main.colPmEstatus", "permissionOnly": true },
+            { "id": "colPmOrigen", "labelKey": "main.colPmOrigen", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colPmQr", "labelKey": "main.colPmQr", "permissionOnly": true },
+                { "id": "colPmQrLock", "labelKey": "main.colPmQrLock", "permissionOnly": true },
+                { "id": "colPmDeleteAuth", "labelKey": "main.colPmDeleteAuth", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
         }
       ],
       "cat-admin": [

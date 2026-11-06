@@ -104,7 +104,7 @@ function open({ title, subtitle, fields, save }) {
 
 // El texto de un error del servidor al corregir: los que tienen su aviso propio (nombre vacío, temperatura o humedad no válida…) en el idioma de la pantalla; cualquier otro (sin permiso, sesión vencida,
 // el registro ya no existe…) como el aviso general de «no se pudo guardar», nunca el texto crudo del servidor.
-const KNOWN_ERRORS = new Set(['NAME', 'TEMP', 'HUM', 'NOTEMP', 'NOHUM', 'EMPTY']);
+const KNOWN_ERRORS = new Set(['NAME', 'TEMP', 'HUM', 'NOTEMP', 'NOHUM', 'EMPTY', 'QTY']);
 const errorText = (code) => (KNOWN_ERRORS.has(code) ? t(`main.recEditError_${code}`) : Dashboard.t('admin.saveError'));
 
 window.RecordEdit = { open, close, errorText };

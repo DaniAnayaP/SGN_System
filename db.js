@@ -3232,6 +3232,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'roles': { area: '', modulo: 'Administración del Negocio', pantalla: 'Roles' },
     'layout': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Layout' },
     'relacion-codigo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código' },
+    'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
 };
 
 // "Nuestros Cambios" — every row any pantalla has ever logged via
@@ -3569,6 +3570,7 @@ const TABLE_GRANT_PATHS = {
     'relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
     // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
+    'pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
     'temperaturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-temperaturas' },
     'seguridad': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-seguridad' },
     'usuarios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-users' },
@@ -5398,6 +5400,116 @@ function updateEditableRecord(table, fields, existing, patch, editedBy) {
 function updateCleaningRecord(id, clientId, patch, { editedBy = '' } = {}) {
     updateEditableRecord('cleaning_records', CLEANING_PATCHABLE_FIELDS, getCleaningRecord(id, clientId), patch || {}, editedBy);
     return getCleaningRecord(id, clientId);
+}
+
+// --- Pedido Manual (Operaciones > C. Distribución) --------------------------------------------------------------------------------------------------
+// Cada centro de costos tiene un QR (la dirección fija /pm/<código del Layout del centro>): quien lo escanea NO necesita sesión (salvo que el candado «Pedir inicio de sesión» esté cerrado): busca el artículo por
+// código, descripción, unidad de medida o categoría, pone la cantidad y envía. Un pedido (manual_orders) puede traer varios artículos (manual_order_lines): comparten folio, solicitante y hora; la hora la pone el
+// SERVIDOR (UTC). Cada renglón guarda el artículo tal como estaba al pedirlo (código, descripción, UdM y categorías) y su estatus (pending = Pendiente, supplied = Surtido).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_orders (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id          INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        cost_center_id     INTEGER NOT NULL DEFAULT 0,
+        requester_name     TEXT NOT NULL DEFAULT '',
+        requester_user_id  INTEGER,
+        source             TEXT NOT NULL DEFAULT 'qr',
+        created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_manual_orders_center ON manual_orders(client_id, cost_center_id, created_at);
+    CREATE TABLE IF NOT EXISTS manual_order_lines (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id     INTEGER NOT NULL REFERENCES manual_orders(id) ON DELETE CASCADE,
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        line_no      INTEGER NOT NULL DEFAULT 1,
+        sku_item_id  INTEGER,
+        code         TEXT NOT NULL DEFAULT '',
+        description  TEXT NOT NULL DEFAULT '',
+        uom          TEXT NOT NULL DEFAULT '',
+        categories   TEXT NOT NULL DEFAULT '',
+        quantity     REAL NOT NULL DEFAULT 0,
+        status       TEXT NOT NULL DEFAULT 'pending',
+        status_at    TEXT,
+        status_by    TEXT NOT NULL DEFAULT '',
+        edited_at    TEXT,
+        edited_by    TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_manual_lines_order ON manual_order_lines(order_id);
+    CREATE INDEX IF NOT EXISTS idx_manual_lines_client ON manual_order_lines(client_id, id);
+`);
+const MANUAL_ORDER_STATUSES = ['pending', 'supplied'];
+// Lo que se puede corregir de un pedido ya enviado: quién lo pidió (vale para todo el pedido) y la cantidad de un renglón. La hora, el artículo y el centro nunca cambian. El estatus se cambia aparte (setManualOrderLineStatus).
+const MANUAL_ORDER_PATCHABLE_FIELDS = {
+    name: { column: 'requester_name', fieldKey: 'main.colPmSolicitante' },
+    quantity: { column: 'quantity', fieldKey: 'main.colPmCantidad' },
+};
+const MANUAL_LINE_SELECT = `SELECT l.*, o.cost_center_id, o.requester_name, o.requester_user_id, o.source, o.created_at AS order_created_at FROM manual_order_lines l JOIN manual_orders o ON o.id = l.order_id`;
+const MANUAL_CATEGORY_COLUMNS = ['category_inventario', 'category_compra', 'category_almacenamiento', 'category_rotacion', 'category_manejo', 'category_riesgo', 'category_vidautil'];
+// Los artículos con los que se puede pedir: los de la empresa, con su código, descripciones, UdM y categorías (las siete listas de Alta Nuestros Artículos).
+function listManualOrderItems(clientId, isTest = false) {
+    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? ORDER BY record_number ASC`)
+        .all(clientId, isTest ? 1 : 0);
+}
+function getManualOrderItem(clientId, id, isTest = false) {
+    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id = ?`)
+        .get(clientId, isTest ? 1 : 0, id);
+}
+// Guarda un pedido con todos sus renglones en una sola operación. lines = [{ skuItemId, code, description, uom, categories, quantity }]. La hora la pone el servidor.
+function createManualOrder({ clientId, costCenterId, requesterName, requesterUserId = null, source = 'qr', lines }) {
+    return db.transaction(() => {
+        const info = db.prepare("INSERT INTO manual_orders (client_id, cost_center_id, requester_name, requester_user_id, source, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))")
+            .run(clientId, costCenterId || 0, requesterName || '', requesterUserId, source);
+        const orderId = Number(info.lastInsertRowid);
+        const insert = db.prepare('INSERT INTO manual_order_lines (order_id, client_id, line_no, sku_item_id, code, description, uom, categories, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        lines.forEach((l, i) => insert.run(orderId, clientId, i + 1, l.skuItemId || null, l.code || '', l.description || '', l.uom || '', l.categories || '', l.quantity));
+        const row = db.prepare('SELECT created_at FROM manual_orders WHERE id = ?').get(orderId);
+        return { id: orderId, createdAt: row.created_at, lines: lines.length };
+    })();
+}
+function listManualOrderLines(clientId, { costCenterId, limit } = {}) {
+    const where = ['l.client_id = ?'];
+    const args = [clientId];
+    if (costCenterId !== undefined) { where.push('o.cost_center_id = ?'); args.push(costCenterId || 0); }
+    const cap = limit ? ` LIMIT ${Math.max(1, Math.min(Number(limit) || 50, 5000))}` : '';
+    return db.prepare(`${MANUAL_LINE_SELECT} WHERE ${where.join(' AND ')} ORDER BY o.created_at DESC, l.order_id DESC, l.line_no ASC${cap}`).all(...args);
+}
+function getManualOrderLine(id, clientId) {
+    return db.prepare(`${MANUAL_LINE_SELECT} WHERE l.id = ? AND l.client_id = ?`).get(id, clientId);
+}
+// Corrige un renglón: la cantidad es del renglón; el nombre de quien lo pidió es del pedido entero. Marca el renglón como corregido (cuándo y quién).
+function updateManualOrderLine(id, clientId, patch, { editedBy = '' } = {}) {
+    const existing = getManualOrderLine(id, clientId);
+    if (!existing) return null;
+    const p = patch || {};
+    let changed = false;
+    db.transaction(() => {
+        if (Object.prototype.hasOwnProperty.call(p, 'name')) {
+            const name = String(p.name === null || p.name === undefined ? '' : p.name).replace(/\s+/g, ' ').trim().slice(0, 60);
+            if (name) { db.prepare('UPDATE manual_orders SET requester_name = ? WHERE id = ? AND client_id = ?').run(name, existing.order_id, clientId); changed = true; }
+        }
+        if (Object.prototype.hasOwnProperty.call(p, 'quantity')) {
+            const q = Number(p.quantity);
+            if (Number.isFinite(q) && q > 0 && q <= 999999) { db.prepare('UPDATE manual_order_lines SET quantity = ? WHERE id = ? AND client_id = ?').run(Math.round(q * 1000) / 1000, id, clientId); changed = true; }
+        }
+        if (changed) db.prepare("UPDATE manual_order_lines SET edited_at = datetime('now'), edited_by = ? WHERE id = ? AND client_id = ?").run(String(editedBy || '').slice(0, 120), id, clientId);
+    })();
+    return getManualOrderLine(id, clientId);
+}
+// El estatus de un renglón (Pendiente / Surtido): quién y cuándo lo cambió.
+function setManualOrderLineStatus(id, clientId, status, by = '') {
+    if (!MANUAL_ORDER_STATUSES.includes(status)) return null;
+    db.prepare("UPDATE manual_order_lines SET status = ?, status_at = datetime('now'), status_by = ? WHERE id = ? AND client_id = ?").run(status, String(by || '').slice(0, 120), id, clientId);
+    return getManualOrderLine(id, clientId);
+}
+// Elimina un renglón; si era el último del pedido, el pedido también se va.
+function deleteManualOrderLine(id, clientId) {
+    return db.transaction(() => {
+        const line = db.prepare('SELECT order_id FROM manual_order_lines WHERE id = ? AND client_id = ?').get(id, clientId);
+        if (!line) return false;
+        db.prepare('DELETE FROM manual_order_lines WHERE id = ? AND client_id = ?').run(id, clientId);
+        if (!db.prepare('SELECT 1 FROM manual_order_lines WHERE order_id = ?').get(line.order_id)) db.prepare('DELETE FROM manual_orders WHERE id = ? AND client_id = ?').run(line.order_id, clientId);
+        return true;
+    })();
 }
 
 // --- Temperaturas (Operaciones, C. Distribución) -------------------------------------------------------------------------------------------------
@@ -11746,6 +11858,16 @@ module.exports = {
     getCleaningPhoto,
     deleteCleaningRecord,
     updateCleaningRecord,
+    MANUAL_ORDER_STATUSES,
+    MANUAL_ORDER_PATCHABLE_FIELDS,
+    listManualOrderItems,
+    getManualOrderItem,
+    createManualOrder,
+    listManualOrderLines,
+    getManualOrderLine,
+    updateManualOrderLine,
+    setManualOrderLineStatus,
+    deleteManualOrderLine,
     CLEANING_PATCHABLE_FIELDS,
     addSafetyCheck,
     listSafetyChecks,
