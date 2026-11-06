@@ -66,6 +66,7 @@ const {
     listCostCenters,
     countCostCenters,
     getCostCenterById,
+    getCostCenterAnyLane,
     createCostCenter,
     updateCostCenter,
     SHORT_CODE_LENGTH,
@@ -7397,10 +7398,13 @@ function manualLinesFrom(rawItems, clientId, isTest) {
     }
     return { lines };
 }
+// El QR no tiene cuenta: el centro de costos y los artículos que ve son de UN carril (datos reales o de prueba), el del centro de costos del QR (su is_test_data); sin centro, el de la empresa.
 function manualOrderTarget(req, res) {
     const row = getLayoutByPublicToken(req.params.token);
     if (!row) { res.status(404).json({ message: 'Not found.' }); return null; }
-    return { row, client: getClientById(row.clientId) };
+    const client = getClientById(row.clientId);
+    const center = row.costCenterId ? getCostCenterAnyLane(row.costCenterId, row.clientId) : null;
+    return { row, client, center, isTest: center ? !!center.is_test_data : !!(client && client.is_test) };
 }
 app.get('/pm/:token', publicLayoutLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' });
@@ -7409,11 +7413,10 @@ app.get('/pm/:token', publicLayoutLimiter, (req, res) => {
 app.get('/api/public/pedido-manual/:token', publicLayoutLimiter, (req, res) => {
     const target = manualOrderTarget(req, res);
     if (!target) return;
-    const { row, client } = target;
+    const { row, client, center } = target;
     const locks = qrLocksOf('manual_order', row.clientId, row.costCenterId || 0);
     const user = optionalSessionUser(req);
     const signedIn = !!user && Number(user.clientId) === Number(row.clientId);
-    const center = row.costCenterId ? getCostCenterById(row.costCenterId, row.clientId, !!(client && client.is_test)) : null;
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json({
         companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
@@ -7425,7 +7428,7 @@ app.get('/api/public/pedido-manual/:token', publicLayoutLimiter, (req, res) => {
 app.get('/api/public/pedido-manual/:token/search', publicManualSearchLimiter, (req, res) => {
     const target = manualOrderTarget(req, res);
     if (!target) return;
-    const { row, client } = target;
+    const { row, isTest } = target;
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     if (!qrLocksOf('manual_order', row.clientId, row.costCenterId || 0).register) return res.status(403).json({ message: 'Este QR solo sirve para consultar.', code: 'LOCKED' });
     const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
@@ -7434,13 +7437,13 @@ app.get('/api/public/pedido-manual/:token/search', publicManualSearchLimiter, (r
     const fields = asked.length ? asked : MANUAL_ORDER_SEARCH_FIELDS;
     if (!SearchSyntax.ready(mode, query)) return res.json({ total: 0, items: [] });
     const matches = publicSearchMatcher(mode, query);
-    const found = manualItemsFor(row.clientId, !!(client && client.is_test)).filter((it) => matches(fields.flatMap((k) => it.by[k])));
+    const found = manualItemsFor(row.clientId, isTest).filter((it) => matches(fields.flatMap((k) => it.by[k])));
     res.json({ total: found.length, items: found.slice(0, 20).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories })) });
 });
 app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req, res) => {
     const target = manualOrderTarget(req, res);
     if (!target) return;
-    const { row, client } = target;
+    const { row, isTest } = target;
     const locks = qrLocksOf('manual_order', row.clientId, row.costCenterId || 0);
     if (!locks.register) return res.status(403).json({ message: 'Este QR solo sirve para consultar.', code: 'LOCKED' });
     const user = optionalSessionUser(req);
@@ -7450,7 +7453,7 @@ app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req
     const typed = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
     const name = typed || (signedIn ? String(changedByLabel({ user }) || '').replace(/\s+/g, ' ').trim().slice(0, 60) : '');
     if (!name) return res.status(400).json({ message: 'Falta el nombre de quien pide.', code: 'NAME' });
-    const built = manualLinesFrom(req.body && req.body.items, row.clientId, !!(client && client.is_test));
+    const built = manualLinesFrom(req.body && req.body.items, row.clientId, isTest);
     if (built.error) return res.status(400).json(built.error);
     const lines = built.lines;
     const out = createManualOrder({ clientId: row.clientId, costCenterId: row.costCenterId || 0, requesterName: name, requesterUserId: signedIn ? user.sub : null, source: signedIn ? 'user' : 'qr', lines });

@@ -4036,6 +4036,10 @@ function countCostCenters(clientId, forTestAccount = false) {
 function getCostCenterById(id, clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM cost_centers WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
+// El centro de costos sin importar su carril (real o de prueba): para las páginas públicas, que no tienen cuenta y toman el carril del propio centro (su is_test_data).
+function getCostCenterAnyLane(id, clientId) {
+    return db.prepare('SELECT * FROM cost_centers WHERE id = ? AND client_id = ?').get(id, clientId);
+}
 
 // --- Query helpers: geo catalog (País/Estado/Localidad/Calle, global) -------
 function listCountries() {
@@ -11993,6 +11997,7 @@ module.exports = {
     listCostCenters,
     countCostCenters,
     getCostCenterById,
+    getCostCenterAnyLane,
     createCostCenter,
     SHORT_CODE_LENGTH,
     normalizeShortCode,
