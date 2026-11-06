@@ -465,7 +465,8 @@
                 // la pared sube de la altura de su inicio a la de su final (de fábrica, la del contorno en cada extremo); con 4 esquinas se arma con la parte de arriba inclinada
                 const ax = root.LayoutCalc && root.LayoutCalc.wallAxis ? root.LayoutCalc.wallAxis(layout, o) : null;
                 const wsides = ax && root.LayoutCalc.wallSides ? root.LayoutCalc.wallSides(layout, o, ax) : null;
-                if (ax && wsides && wsides.stepped) {
+                const liftedFloor = !!wsides && [wsides.a.floor0, wsides.a.floor1, wsides.b.floor0, wsides.b.floor1].some((f) => Math.abs(f) > 0.005);
+                if (ax && wsides && (wsides.stepped || liftedFloor)) {
                     const meshes = halfWalls(ax, wsides);
                     if (meshes.length) { meshes.forEach((m) => group.walls.add(m)); return; }
                 }

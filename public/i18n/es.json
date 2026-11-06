@@ -5180,15 +5180,15 @@
       "example": "dejas el largo vacío para una pared que cubre el lado completo y pones 3 para una pared de 3 m."
     },
     "layoutObstAlturaPared": {
-      "what": "Qué tan alta es esta pared del lado A en su esquina de inicio (donde empieza la distancia; en una pared de adentro, su extremo de arriba o de la izquierda), en metros y medida desde el piso de ese lado. Es la de la pared, no la de las huellas: pueden ser iguales o distintas. Si la dejas vacía vale la del contorno en ese punto (o el promedio de la nave si está adentro).",
+      "what": "Qué tan alta es esta pared del lado A en su esquina de inicio (donde empieza la distancia; en una pared de adentro, su extremo de arriba o de la izquierda), en metros y medida desde el piso de ese lado. Es la de la pared, no la de las huellas: pueden ser iguales o distintas. Si la dejas vacía vale la del contorno en ese punto (o el promedio de la nave si está adentro), también medida desde el piso de su lado: un piso más alto no la recorta.",
       "example": "una pared que empieza en la parte más alta de la nave: 9 m."
     },
     "layoutObstAlturaParedB": {
-      "what": "Qué tan alta es esta pared del lado B (el opuesto al A), en su esquina de inicio, en metros y medida desde el piso de ese lado: si la zona de ese lado está más alta, su piso sube. Déjala vacía si la pared llega al mismo remate de los dos lados; con ella la pared lleva un escalón arriba, cada mitad de su grueso a la altura de su lado.",
+      "what": "Qué tan alta es esta pared del lado B (el opuesto al A), en su esquina de inicio, en metros y medida desde el piso de ese lado: si la zona de ese lado está más alta, su piso sube. Déjala vacía si la pared mide lo mismo de los dos lados (la misma altura desde el piso de cada uno, aunque un piso esté más alto); con ella la pared lleva un escalón arriba, cada mitad de su grueso a la altura de su lado.",
       "example": "una pared entre la bodega (5 m del lado A) y las oficinas, que están 1.2 m más arriba: del lado B pones 3 y su remate queda en 4.2 m."
     },
     "layoutObstAlturaParedBFin": {
-      "what": "Qué tan alta es la pared del lado B en su esquina del final, en metros desde el piso de ese lado. Vacía: igual que la del inicio del lado B (o la que resulte del remate del lado A si tampoco escribiste la del inicio).",
+      "what": "Qué tan alta es la pared del lado B en su esquina del final, en metros desde el piso de ese lado. Vacía: igual que la del inicio del lado B (o la altura del lado A si tampoco escribiste la del inicio).",
       "example": "el lado B baja de 3 m en un extremo a 2.5 m en el otro."
     },
     "layoutParedLados": {

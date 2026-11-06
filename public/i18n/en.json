@@ -5181,15 +5181,15 @@
       "example": "you leave the length empty for a wall that covers the whole side and enter 3 for a 3 m wall."
     },
     "layoutObstAlturaPared": {
-      "what": "How tall this wall is on side A at its starting corner (where the distance starts; for an inside wall, its top or left end), in meters and measured from the floor of that side. It is the wall's own height, not the footprints': they can be equal or different. If you leave it empty the contour's height at that point applies (or the warehouse average if it is inside).",
+      "what": "How tall this wall is on side A at its starting corner (where the distance starts; for an inside wall, its top or left end), in meters and measured from the floor of that side. It is the wall's own height, not the footprints': they can be equal or different. If you leave it empty the contour's height at that point applies (or the warehouse average if it is inside), also measured from the floor of its side: a higher floor does not cut it down.",
       "example": "a wall that starts at the tallest part of the warehouse: 9 m."
     },
     "layoutObstAlturaParedB": {
-      "what": "How tall this wall is on side B (the opposite of A), at its starting corner, in meters and measured from the floor of that side: if the zone on that side is higher, its floor rises. Leave it empty if the wall reaches the same top on both sides; with it the wall gets a step on top, each half of its thickness at the height of its side.",
+      "what": "How tall this wall is on side B (the opposite of A), at its starting corner, in meters and measured from the floor of that side: if the zone on that side is higher, its floor rises. Leave it empty if the wall is the same height on both sides (the same height from each side's floor, even if one floor is higher); with it the wall gets a step on top, each half of its thickness at the height of its side.",
       "example": "a wall between the warehouse (5 m on side A) and the offices, which are 1.2 m higher: on side B you enter 3 and its top is at 4.2 m."
     },
     "layoutObstAlturaParedBFin": {
-      "what": "How tall the wall is on side B at its ending corner, in meters from the floor of that side. Empty: the same as the start of side B (or the one that results from side A's top if you did not write the start).",
+      "what": "How tall the wall is on side B at its ending corner, in meters from the floor of that side. Empty: the same as the start of side B (or the height of side A if you did not write the start).",
       "example": "side B drops from 3 m at one end to 2.5 m at the other."
     },
     "layoutParedLados": {

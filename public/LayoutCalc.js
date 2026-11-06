@@ -299,8 +299,8 @@
     }
     // ---- Pared compartida: una altura por lado -----------------------------------------------------------------------------------------------------------------
     // Una pared tiene dos lados: el A (hacia adentro de la nave en una pared del contorno; hacia abajo del croquis, o a la izquierda si es vertical, en una pared de adentro) y el B (el opuesto). Cada lado puede traer su altura:
-    // A con h al inicio y h2 al final, B con hb y hb2, y cada una se mide DESDE EL PISO DE SU LADO (si la zona de ese lado está más alta, su piso sube). Sin altura propia la pared llega hasta donde siempre llegó (el techo) y, si el lado B
-    // no trae la suya, hasta el mismo remate que el A: la pared es una sola.
+    // A con h al inicio y h2 al final, B con hb y hb2, y cada una se mide DESDE EL PISO DE SU LADO (si el piso de ese lado está más alto, el remate sube con él: la altura se pide de piso a techo y un desnivel nunca la recorta).
+    // Sin altura propia, el lado A mide lo que mide el techo en ese punto (del piso de su lado hacia arriba) y, si el lado B no trae la suya, mide lo mismo que el A desde SU piso.
     const wallProbe = (ax, d, side) => {
         const off = (ax.thick || 0) / 2 + 0.15;
         return [ax.x + ax.ux * d + side * (ax.nx || 0) * off, ax.y + ax.uy * d + side * (ax.ny || 0) * off];
@@ -313,10 +313,12 @@
         const own = (v) => { const n = Number(v); return n > 0 ? n : 0; };
         const fA0 = floorAt(0, 1); const fA1 = floorAt(ax.length, 1); const fB0 = floorAt(0, -1); const fB1 = floorAt(ax.length, -1);
         const a1 = own(o && o.h); const a2 = own(o && o.h2); const b1 = own(o && o.hb); const b2 = own(o && o.hb2);
-        const tA0 = a1 ? fA0 + a1 : ax.hStart;
-        const tA1 = a2 ? fA1 + a2 : (a1 ? fA1 + a1 : ax.hEnd);
-        const tB0 = b1 ? fB0 + b1 : tA0;
-        const tB1 = b2 ? fB1 + b2 : (b1 ? fB1 + b1 : tA1);
+        // lo que mide cada lado (de su piso hacia arriba) y su remate (el piso más lo que mide)
+        const cA0 = a1 || ax.hStart;
+        const cA1 = a2 || (a1 || ax.hEnd);
+        const cB0 = b1 || cA0;
+        const cB1 = b2 || (b1 || cA1);
+        const tA0 = fA0 + cA0; const tA1 = fA1 + cA1; const tB0 = fB0 + cB0; const tB1 = fB1 + cB1;
         const side = (f0, f1, t0, t1) => {
             const h0 = t0 - f0; const h1 = t1 - f1;
             return { floor0: f0, floor1: f1, top0: t0, top1: t1, h0, h1, heightAt: (d) => h0 + (h1 - h0) * (ax.length > 0 ? Math.min(Math.max(d / ax.length, 0), 1) : 0) };
