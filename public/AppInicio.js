@@ -164,6 +164,7 @@ const WEB_SCREEN_PAGES = {
     'nuestras-cotizaciones': { href: 'AppCotizaciones.html', icon: 'bx-receipt' },
     'nuestros-traslados': { href: 'AppTraslados.html', icon: 'bx-transfer-alt' },
     'pedido-manual': { href: 'AppPedidoManual.html', icon: 'bx-cart' },
+    'incidentes': { href: 'AppIncidentes.html', icon: 'bx-error-circle' },
     'capacidad-almacenamiento': { href: 'AppCapacidadAlmacenamiento.html', icon: 'bx-package' },
 };
 
@@ -189,6 +190,7 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-operaciones-transporte-vol-cotizaciones': 'nuestras-cotizaciones',
     'cat-operaciones-transporte-vol-nuestros-traslados': 'nuestros-traslados',
     'cat-operaciones-centro-dist-pedido-manual': 'pedido-manual',
+    'cat-operaciones-centro-dist-incidentes': 'incidentes',
     'cat-operaciones-centro-dist-capacidad-almacenamiento': 'capacidad-almacenamiento',
 };
 

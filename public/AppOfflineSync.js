@@ -297,8 +297,16 @@ window.addEventListener('online', flushOfflineQueue);
 document.addEventListener('DOMContentLoaded', flushOfflineQueue);
 setInterval(flushOfflineQueue, 30000);
 
+// Mete una petición directo a la cola (sin probar la red antes): las evidencias que siguen a un reporte se mandan así, en el mismo orden, para que no lleguen antes que el reporte ni se pierdan si se cierra la pantalla.
+async function queueRequest(args) {
+    const entry = await queueOfflineRequest(args);
+    document.dispatchEvent(new CustomEvent('sgn:offline-queue-changed'));
+    return entry;
+}
+
 window.SgnOfflineSync = {
     offlineAwareFetch,
+    queueRequest,
     listOfflineQueue,
     countOfflineQueueForRecord,
     flushOfflineQueue,

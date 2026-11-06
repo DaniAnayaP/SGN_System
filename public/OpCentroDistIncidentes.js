@@ -54,13 +54,15 @@ function cell(col, value, extraClass) {
     return td;
 }
 // Fecha y hora en la zona de quien la ve; al pasar el cursor, el UTC con el que se guardó.
-function timeCell(col, iso) {
+function timeCell(col, iso, receivedIso) {
     const td = document.createElement('td');
     td.dataset.col = col;
     if (!iso) { td.textContent = '—'; return td; }
     const d = new Date(iso);
     td.textContent = d.toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     td.title = `UTC ${iso.replace('T', ' ').replace('Z', '')}`;
+    // un reporte que se mandó sin señal desde la App trae la hora del celular; el servidor lo recibió más tarde
+    if (receivedIso) td.title += ` · ${t('main.pmRecibido')}: UTC ${receivedIso.replace('T', ' ').replace('Z', '')}`;
     return td;
 }
 // La categoría del reporte (la que tenía el criterio al reportar), con su color.
@@ -285,9 +287,9 @@ function buildRow(r) {
     tr.append(
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, system[key], 'col-system')),
         cell('colCatRegistroUnico', r.folio, 'col-system'),
-        cell('colIncFolio', r.folio), timeCell('colIncFechaHora', r.reportedAt), cell('colIncQuien', r.name), placeCell(r), cell('colIncDetalle', r.placeDetail),
+        cell('colIncFolio', r.folio), timeCell('colIncFechaHora', r.reportedAt, r.receivedAt), cell('colIncQuien', r.name), placeCell(r), cell('colIncDetalle', r.placeDetail),
         categoryCell(r), cell('colIncCriterio', r.criterion), descriptionCell(r), photosCell(r), statusCell(r, tr),
-        originCell('colIncOrigen', t(r.source === 'qr' ? 'main.incOrigenQr' : 'main.incOrigenUsuario'), r),
+        originCell('colIncOrigen', t(r.source === 'qr' ? 'main.incOrigenQr' : (r.source === 'app' ? 'main.incOrigenApp' : 'main.incOrigenUsuario')), r),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;

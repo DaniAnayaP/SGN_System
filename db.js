@@ -5542,6 +5542,12 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_incident_photos_incident ON incident_photos(incident_id);
 `);
+// La App: client_ref = la clave que el celular le pone a cada reporte (si reenvía el mismo, el servidor lo reconoce y no lo duplica); received_at = cuándo lo recibió el servidor cuando el reporte se mandó sin señal
+// (created_at es entonces la hora del celular al enviarlo); client_key de una evidencia = su clave en el celular (para no repetirla si el envío se reintenta).
+if (!db.prepare('PRAGMA table_info(incidents)').all().some((c) => c.name === 'client_ref')) db.exec('ALTER TABLE incidents ADD COLUMN client_ref TEXT');
+if (!db.prepare('PRAGMA table_info(incidents)').all().some((c) => c.name === 'received_at')) db.exec('ALTER TABLE incidents ADD COLUMN received_at TEXT');
+if (!db.prepare('PRAGMA table_info(incident_photos)').all().some((c) => c.name === 'client_key')) db.exec('ALTER TABLE incident_photos ADD COLUMN client_key TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS idx_incidents_ref ON incidents(client_id, reporter_user_id, client_ref)');
 const INCIDENT_CATEGORIES = ['mayor', 'menor', 'recomendacion'];
 const INCIDENT_STATUSES = ['open', 'in_progress', 'closed'];
 // Tope técnico de evidencias por reporte (no se espera llegar): protege la base de un envío fuera de lo normal.
@@ -5554,15 +5560,35 @@ const INCIDENT_PATCHABLE_FIELDS = {
 };
 const INCIDENT_SELECT = 'SELECT i.*, (SELECT COUNT(*) FROM incident_photos p WHERE p.incident_id = i.id) AS photo_count FROM incidents i';
 // Guarda un reporte con sus primeras evidencias en una sola operación. zone = { id, code, name } (del Layout), criterion = { id, name, kind }, photos = [{ mime, data, thumb: { mime, data } | null }].
-function createIncident({ clientId, costCenterId, reporterName, reporterUserId = null, source = 'qr', zone, placeDetail = '', criterion, description, photos, addKey }) {
+function createIncident({ clientId, costCenterId, reporterName, reporterUserId = null, source = 'qr', zone, placeDetail = '', criterion, description, photos, addKey, createdAt = null, clientRef = null }) {
     return db.transaction(() => {
-        const info = db.prepare(`INSERT INTO incidents (client_id, cost_center_id, reporter_name, reporter_user_id, source, zone_id, zone_code, zone_name, place_detail, criterion_id, criterion_name, category, description, add_key)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-            .run(clientId, costCenterId || 0, reporterName || '', reporterUserId, source, (zone && zone.id) || '', (zone && zone.code) || '', (zone && zone.name) || '', placeDetail || '', criterion.id || null, criterion.name || '', criterion.kind || '', description || '', addKey || '');
+        // createdAt (UTC 'YYYY-MM-DD HH:MM:SS') solo viene de la App cuando el reporte se mandó sin señal: queda como hora del reporte y la del servidor como hora recibida.
+        const info = db.prepare(`INSERT INTO incidents (client_id, cost_center_id, reporter_name, reporter_user_id, source, zone_id, zone_code, zone_name, place_detail, criterion_id, criterion_name, category, description, add_key, created_at, received_at, client_ref)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?)`)
+            .run(clientId, costCenterId || 0, reporterName || '', reporterUserId, source, (zone && zone.id) || '', (zone && zone.code) || '', (zone && zone.name) || '', placeDetail || '', criterion.id || null, criterion.name || '', criterion.kind || '', description || '', addKey || '', createdAt, createdAt, clientRef);
         const id = Number(info.lastInsertRowid);
-        const insert = db.prepare('INSERT INTO incident_photos (incident_id, mime, data, thumb_mime, thumb) VALUES (?, ?, ?, ?, ?)');
-        (photos || []).forEach((p) => insert.run(id, p.mime, p.data, p.thumb ? p.thumb.mime : null, p.thumb ? p.thumb.data : null));
+        const insert = db.prepare('INSERT INTO incident_photos (incident_id, mime, data, thumb_mime, thumb, client_key) VALUES (?, ?, ?, ?, ?, ?)');
+        (photos || []).forEach((p) => insert.run(id, p.mime, p.data, p.thumb ? p.thumb.mime : null, p.thumb ? p.thumb.data : null, p.key || null));
         return db.prepare(`${INCIDENT_SELECT} WHERE i.id = ?`).get(id);
+    })();
+}
+// El reporte que esa cuenta ya mandó con esa clave (un reenvío de la App), o undefined.
+function findIncidentByRef(clientId, userId, clientRef) {
+    if (!clientRef) return undefined;
+    return db.prepare(`${INCIDENT_SELECT} WHERE i.client_id = ? AND i.reporter_user_id = ? AND i.client_ref = ?`).get(clientId, userId, clientRef);
+}
+// Las evidencias que no cupieron en la primera petición de la App: se agregan al reporte de esa cuenta con esa clave; las que ya estaban (misma clave de foto) no se repiten. Devuelve cuántas evidencias tiene ahora,
+// null si no existe ese reporte, o -1 si pasaría el tope.
+function addIncidentPhotosByRef(clientId, userId, clientRef, photos) {
+    return db.transaction(() => {
+        const row = findIncidentByRef(clientId, userId, clientRef);
+        if (!row) return null;
+        const keys = new Set(db.prepare('SELECT client_key FROM incident_photos WHERE incident_id = ? AND client_key IS NOT NULL').all(row.id).map((p) => p.client_key));
+        const fresh = (photos || []).filter((p) => !(p.key && keys.has(p.key)));
+        if (row.photo_count + fresh.length > INCIDENT_MAX_PHOTOS) return -1;
+        const insert = db.prepare('INSERT INTO incident_photos (incident_id, mime, data, thumb_mime, thumb, client_key) VALUES (?, ?, ?, ?, ?, ?)');
+        fresh.forEach((p) => insert.run(row.id, p.mime, p.data, p.thumb ? p.thumb.mime : null, p.thumb ? p.thumb.data : null, p.key || null));
+        return row.photo_count + fresh.length;
     })();
 }
 // Agrega evidencias a un reporte que ya existe, con la clave que se entregó al crearlo. Devuelve cuántas evidencias tiene ahora, o null si la clave no es la del reporte, o -1 si pasaría el tope.
@@ -7739,6 +7765,7 @@ function deletePlan(id) {
 // language is active) as the screen itself does everywhere else.
 const WEB_SCREEN_CATALOG = [
     { key: 'pedido-manual', labelKey: 'menu.opCentroDistPedidoManual' },
+    { key: 'incidentes', labelKey: 'menu.opCentroDistIncidentes' },
     { key: 'capacidad-almacenamiento', labelKey: 'menu.opCentroDistCapacidadAlmacenamiento' },
     { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
     { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },
@@ -12131,6 +12158,8 @@ module.exports = {
     INCIDENT_MAX_PHOTOS,
     INCIDENT_PATCHABLE_FIELDS,
     createIncident,
+    findIncidentByRef,
+    addIncidentPhotosByRef,
     addIncidentPhotos,
     listIncidents,
     getIncident,

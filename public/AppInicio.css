@@ -2081,3 +2081,51 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .cap-app-grid div{ display: flex; flex-direction: column; gap: 0.05rem; }
 .cap-app-grid span{ font-size: 0.66rem; color: var(--home-text-muted); }
 .cap-app-grid b{ font-size: 1.05rem; color: var(--home-text-primary); font-variant-numeric: tabular-nums; }
+
+/* Incidentes (App) — categoría y estatus en color, criterios, evidencias y su visor (ver AppIncidentes.js). Los demás estilos son los de Pedido Manual (.pm-app-*). */
+.inc-app-pills{ display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; flex: none; }
+.inc-app-kind-mayor{ color: #a32a1e; background: rgba(217, 68, 58, 0.14); border-color: rgba(217, 68, 58, 0.45); }
+.inc-app-kind-menor{ color: #8a5d00; background: rgba(240, 160, 40, 0.16); border-color: rgba(240, 160, 40, 0.5); }
+.inc-app-kind-recomendacion{ color: #0f6f62; background: rgba(30, 160, 140, 0.15); border-color: rgba(30, 160, 140, 0.45); }
+.dark-mode .inc-app-kind-mayor, .futuristic-mode .inc-app-kind-mayor, .institutional-mode .inc-app-kind-mayor{ color: #ff9d94; }
+.dark-mode .inc-app-kind-menor, .futuristic-mode .inc-app-kind-menor, .institutional-mode .inc-app-kind-menor{ color: #f2c46a; }
+.dark-mode .inc-app-kind-recomendacion, .futuristic-mode .inc-app-kind-recomendacion, .institutional-mode .inc-app-kind-recomendacion{ color: #7fdccd; }
+.inc-app-status-open{ color: #a32a1e; background: rgba(217, 68, 58, 0.12); border-color: rgba(217, 68, 58, 0.4); }
+.inc-app-status-in_progress{ color: #b45f06; background: rgba(240, 160, 40, 0.16); border-color: rgba(240, 160, 40, 0.45); }
+.inc-app-status-closed{ color: #1d7a46; background: rgba(40, 170, 100, 0.16); border-color: rgba(40, 170, 100, 0.45); }
+.dark-mode .inc-app-status-open, .futuristic-mode .inc-app-status-open, .institutional-mode .inc-app-status-open{ color: #ff9d94; }
+.dark-mode .inc-app-status-in_progress, .futuristic-mode .inc-app-status-in_progress, .institutional-mode .inc-app-status-in_progress{ color: #ffc169; }
+.dark-mode .inc-app-status-closed, .futuristic-mode .inc-app-status-closed, .institutional-mode .inc-app-status-closed{ color: #6fe0a3; }
+.inc-app-chip{ display: inline-flex; align-items: center; gap: 0.35rem; }
+.inc-app-chip small{ font-size: 0.6rem; font-weight: 500; opacity: 0.75; }
+.inc-app-chip:disabled{ opacity: 0.4; cursor: default; }
+/* la categoría elegida se queda con SU color (más marcado), no con el degradado del chip común */
+.inc-app-chip[aria-pressed="true"]{ background-image: none; font-weight: 800; border-width: 2px; }
+.inc-app-chip.inc-app-kind-mayor[aria-pressed="true"]{ color: #8f2118; background: rgba(217, 68, 58, 0.28); border-color: #d9443a; }
+.inc-app-chip.inc-app-kind-menor[aria-pressed="true"]{ color: #744c00; background: rgba(240, 160, 40, 0.34); border-color: #d98a00; }
+.inc-app-chip.inc-app-kind-recomendacion[aria-pressed="true"]{ color: #0b5a4f; background: rgba(30, 160, 140, 0.28); border-color: #1ea08c; }
+.dark-mode .inc-app-chip.inc-app-kind-mayor[aria-pressed="true"], .futuristic-mode .inc-app-chip.inc-app-kind-mayor[aria-pressed="true"], .institutional-mode .inc-app-chip.inc-app-kind-mayor[aria-pressed="true"]{ color: #ffb4ac; }
+.dark-mode .inc-app-chip.inc-app-kind-menor[aria-pressed="true"], .futuristic-mode .inc-app-chip.inc-app-kind-menor[aria-pressed="true"], .institutional-mode .inc-app-chip.inc-app-kind-menor[aria-pressed="true"]{ color: #ffd68a; }
+.dark-mode .inc-app-chip.inc-app-kind-recomendacion[aria-pressed="true"], .futuristic-mode .inc-app-chip.inc-app-kind-recomendacion[aria-pressed="true"], .institutional-mode .inc-app-chip.inc-app-kind-recomendacion[aria-pressed="true"]{ color: #9be8da; }
+.inc-app-crits{ display: flex; flex-direction: column; gap: 0.35rem; }
+.inc-app-crit{ display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left; font-family: inherit; font-size: 0.8rem; color: var(--home-text-secondary); padding: 0.6rem 0.75rem; border: 1px solid var(--home-border); border-radius: 0.7rem; background: var(--home-bg); cursor: pointer; }
+.inc-app-crit::before{ content: ""; width: 1rem; height: 1rem; flex: none; border-radius: 50%; border: 1.6px solid var(--home-text-muted); }
+.inc-app-crit[aria-pressed="true"]{ border-color: var(--home-accent-strong-1); background: var(--home-surface-2); font-weight: 700; color: var(--home-text-primary); }
+.inc-app-crit[aria-pressed="true"]::before{ border-color: var(--home-accent-strong-1); background: radial-gradient(var(--home-accent-strong-1) 0 45%, transparent 50%); }
+.inc-app-textarea{ min-height: 7rem; resize: vertical; line-height: 1.4; }
+.inc-app-desc{ margin: 0; font-size: 0.8rem; color: var(--home-text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.inc-app-done-kind{ text-align: center; }
+.inc-app-shots{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
+.inc-app-shot{ position: relative; display: block; padding: 0; aspect-ratio: 1; border-radius: 0.7rem; overflow: hidden; border: 1px solid var(--home-border); background: var(--home-surface-2); cursor: pointer; }
+.inc-app-shot img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.inc-app-shot-rm{ position: absolute; top: 0.25rem; right: 0.25rem; width: 1.6rem; height: 1.6rem; border: 0; border-radius: 50%; background: rgba(20, 10, 25, 0.72); color: #fff; display: grid; place-items: center; font-size: 1.05rem; padding: 0; cursor: pointer; }
+.inc-app-add{ position: relative; display: flex; align-items: center; justify-content: center; gap: 0.4rem; cursor: pointer; overflow: hidden; }
+.inc-app-add input{ position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
+.inc-app-viewer{ position: fixed; inset: 0; z-index: 60; background: rgba(8, 6, 12, 0.94); display: flex; flex-direction: column; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
+.inc-app-viewer-bar{ display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 1rem; color: #fff; font-size: 0.8rem; }
+.inc-app-viewer-bar button{ width: 2.2rem; height: 2.2rem; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 1.3rem; display: grid; place-items: center; cursor: pointer; }
+.inc-app-viewer-stage{ flex: 1; min-height: 0; display: grid; place-items: center; padding: 0 0.5rem; }
+.inc-app-viewer-stage img{ max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 0.6rem; }
+.inc-app-viewer-nav{ display: flex; gap: 0.6rem; padding: 0.8rem 1rem; }
+.inc-app-viewer-nav .home-carga-secondary-btn{ flex: 1; }
+.inc-app-viewer-nav .home-carga-secondary-btn:disabled{ opacity: 0.4; }

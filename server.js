@@ -163,7 +163,7 @@ const {
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
-    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
+    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
     addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
@@ -7650,7 +7650,7 @@ function parseIncidentPhotos(raw) {
     for (const item of list) {
         const photo = parseCleaningPhoto(item && item.photo);
         if (!photo) return { error: { message: 'Una de las fotos no es válida o pesa demasiado.', code: 'PHOTO' } };
-        photos.push({ ...photo, thumb: parseThumb(item && item.thumb) });
+        photos.push({ ...photo, thumb: parseThumb(item && item.thumb), key: item && typeof item.key === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(item.key) ? item.key : null });
     }
     return { photos };
 }
@@ -7728,7 +7728,7 @@ function incidentRowOf(r, centers, client) {
         id: r.id, folio: incidentFolio(r.id), cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
         name: r.reporter_name, zoneCode: r.zone_code, zoneName: r.zone_name, placeDetail: r.place_detail, category: r.category, criterion: r.criterion_name, description: r.description,
         status: r.status, statusAt: sqlUtcIso(r.status_at), statusBy: r.status_by || '', reportedAt: sqlUtcIso(r.created_at), source: r.source,
-        photoCount: r.photo_count || 0, photoIds: r.photo_ids || [], editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
+        photoCount: r.photo_count || 0, photoIds: r.photo_ids || [], receivedAt: sqlUtcIso(r.received_at), editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: INCIDENT_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.created_at }),
     };
 }
@@ -7760,7 +7760,8 @@ app.get('/api/business/incidentes', requireAuth, (req, res) => {
     const { clientId, isTestAccount } = req.user;
     const client = getClientById(clientId);
     const centers = new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c]));
-    const LIMIT = 5000;
+    const lite = req.query.lite === '1'; // la App: solo los reportes más recientes y sin las columnas de Control Interno
+    const LIMIT = lite ? 300 : 5000;
     const rows = listIncidents(clientId, { limit: LIMIT });
     res.set('Cache-Control', 'no-store');
     res.json({
@@ -7768,7 +7769,7 @@ app.get('/api/business/incidentes', requireAuth, (req, res) => {
         canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), INCIDENT_TABLE_KEY, 'colIncDeleteAuth'),
         canQr: incidentCan(req, 'colIncQr'), canLock: incidentCan(req, 'colIncQrLock'), canStatus: incidentCan(req, 'colIncEstatus'), canPhotos: incidentCanSeePhotos(req),
         editable: incidentEditable(req),
-        incidents: rows.map((r) => { const o = incidentRowOf(r, centers, client); if (!incidentCanSeePhotos(req)) o.photoIds = []; return o; }),
+        incidents: rows.map((r) => { const o = incidentRowOf(r, centers, client); if (lite) delete o.system; if (!incidentCanSeePhotos(req)) o.photoIds = []; return o; }),
     });
 });
 // Corregir quién reporta, el detalle del lugar o la situación: pasa por la misma tubería de cambios de toda la plataforma (checkAndLogFieldChanges).
@@ -7855,6 +7856,66 @@ app.put('/api/business/incidentes/qr-locks', requireAuth, (req, res) => {
     if (!locks) return res.status(400).json({ message: 'Los candados no son válidos.' });
     saveQrLocks(req.user.clientId, center.id, 'incident', locks, req.user.sub);
     res.json({ locks: qrLocksOf('incident', req.user.clientId, center.id) });
+});
+
+// La App (con sesión): las OPCIONES para armar un reporte (los criterios y las zonas del Layout de cada centro de costos: el celular las guarda para trabajar sin señal) y crear el reporte. El reporte nace con la primera tanda de
+// evidencias y lleva la clave que le pone el celular (clientRef): si el celular lo reenvía (se cortó la señal justo al responder) el servidor contesta el que ya existe; las demás evidencias llegan después a esa clave.
+// Si el reporte se mandó sin señal, el celular manda la hora a la que lo hizo (clientAt: solo vale si es de más de 2 minutos antes y hasta 7 días antes de ahora) y la del servidor queda aparte como hora recibida.
+app.get('/api/business/incidentes/options', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const centerIds = new Set(listCostCenters(clientId, !!isTestAccount).map((c) => c.id));
+    const zonesByCenter = {};
+    listClientLayouts(clientId).forEach((row) => { const cc = row.costCenterId || 0; if (cc && centerIds.has(cc)) zonesByCenter[cc] = incidentZonesOf(row); });
+    res.set('Cache-Control', 'no-store');
+    res.json({ criteria: incidentCriteriaFor(clientId, !!isTestAccount), zonesByCenter, batch: INCIDENT_BATCH_MAX, maxChars: INCIDENT_DESC_MAX, at: new Date().toISOString() });
+});
+app.post('/api/business/incidentes/reports', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const clientRef = typeof body.clientRef === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.clientRef) ? body.clientRef : null;
+    res.set('Cache-Control', 'no-store');
+    // el mismo reporte reenviado: se contesta el que ya existe
+    const already = findIncidentByRef(req.user.clientId, req.user.sub, clientRef);
+    if (already) return res.json({ id: already.id, folio: incidentFolio(already.id), createdAt: sqlUtcIso(already.created_at), photos: already.photo_count, offline: !!already.received_at, duplicate: true });
+    const typed = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const name = typed || String(changedByLabel(req) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!name) return res.status(400).json({ message: 'Falta el nombre de quien reporta.', code: 'NAME' });
+    const layoutRow = getClientLayout(req.user.clientId, { costCenterId: center.id });
+    const zones = layoutRow ? incidentZonesOf(layoutRow) : [];
+    const zone = zones.find((z) => z.id === String(body.zoneId || '')) || null;
+    const placeDetail = String(body.placeDetail || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (zones.length && !zone) return res.status(400).json({ message: 'Falta elegir la zona donde pasó.', code: 'ZONE' });
+    if (!zones.length && !placeDetail) return res.status(400).json({ message: 'Falta decir dónde pasó.', code: 'PLACE' });
+    const criterion = incidentCriteriaFor(req.user.clientId, !!req.user.isTestAccount).find((c) => c.id === Number(body.criterionId));
+    if (!criterion) return res.status(400).json({ message: 'Ese criterio ya no existe: elige otro.', code: 'CRITERION' });
+    const description = String(body.description || '').replace(/[ \t]+/g, ' ').trim().slice(0, INCIDENT_DESC_MAX);
+    if (!description) return res.status(400).json({ message: 'Falta contar la situación.', code: 'DESC' });
+    const parsed = parseIncidentPhotos(body.photos);
+    if (parsed.error) return res.status(400).json(parsed.error);
+    if (!parsed.photos.length) return res.status(400).json({ message: 'Falta al menos una evidencia.', code: 'PHOTO' });
+    let createdAt = null;
+    const clientAt = typeof body.clientAt === 'string' ? Date.parse(body.clientAt) : NaN;
+    if (Number.isFinite(clientAt) && clientAt >= Date.now() - 7 * 86400000 && clientAt < Date.now() - 120000) createdAt = new Date(clientAt).toISOString().slice(0, 19).replace('T', ' ');
+    const out = createIncident({ clientId: req.user.clientId, costCenterId: center.id, reporterName: name, reporterUserId: req.user.sub, source: 'app', zone, placeDetail, criterion, description, photos: parsed.photos, addKey: '', createdAt, clientRef });
+    res.status(201).json({ id: out.id, folio: incidentFolio(out.id), createdAt: sqlUtcIso(out.created_at), photos: out.photo_count, offline: !!createdAt });
+});
+// Las evidencias que no cupieron en la primera petición, a la clave del reporte de esta cuenta.
+app.post('/api/business/incidentes/reports/:clientRef/photos', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const ref = String(req.params.clientRef || '');
+    if (!/^[A-Za-z0-9_-]{8,64}$/.test(ref)) return res.status(404).json({ message: 'Ese reporte no existe.', code: 'NOREPORT' });
+    const parsed = parseIncidentPhotos(req.body && req.body.photos);
+    if (parsed.error) return res.status(400).json(parsed.error);
+    if (!parsed.photos.length) return res.status(400).json({ message: 'No hay fotos.', code: 'PHOTO' });
+    const total = addIncidentPhotosByRef(req.user.clientId, req.user.sub, ref, parsed.photos);
+    res.set('Cache-Control', 'no-store');
+    if (total === null) return res.status(404).json({ message: 'Ese reporte no existe.', code: 'NOREPORT' });
+    if (total === -1) return res.status(400).json({ message: `Un reporte lleva hasta ${INCIDENT_MAX_PHOTOS} evidencias.`, code: 'MAXPHOTOS' });
+    res.json({ photos: total });
 });
 
 // Hoja de QR de limpieza: un QR por activo (de una zona o de todas) con su dirección fija; la hoja se imprime desde el Layout.
