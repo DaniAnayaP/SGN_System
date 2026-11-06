@@ -1729,8 +1729,14 @@
     "layoutDistOY": "Distancia o Y (m)",
     "layoutGrosorAncho": "Grosor o ancho (m)",
     "layoutAlturaDesnivel": "Altura del desnivel (m)",
-    "layoutAlturaPared": "Altura al inicio (m)",
-    "layoutAlturaParedFin": "Altura al final (m)",
+    "layoutAlturaPared": "Altura lado A al inicio (m)",
+    "layoutAlturaParedFin": "Altura lado A al final (m)",
+    "layoutAlturaParedB": "Altura lado B al inicio (m)",
+    "layoutAlturaParedBFin": "Altura lado B al final (m)",
+    "layoutParedLadoA": "Lado A da a",
+    "layoutParedLadoB": "Lado B da a",
+    "layoutParedAfuera": "afuera",
+    "layoutParedPiso": "piso {n} m",
     "layoutTodoElLado": "todo el lado",
     "layoutLeyendaPared": "Pared",
     "layoutLeyendaDesnivel": "Desnivel",
@@ -4786,8 +4792,20 @@
       "example": "dejas el largo vacío para una pared que cubre el lado completo y pones 3 para una pared de 3 m."
     },
     "layoutObstAlturaPared": {
-      "what": "Qué tan alta es esta pared en su esquina de inicio (donde empieza la distancia; en una pared de adentro, su extremo de arriba o de la izquierda), en metros. Es la de la pared, no la de las huellas: pueden ser iguales o distintas. Si la dejas vacía vale la del contorno en ese punto (o el promedio de la nave si está adentro).",
+      "what": "Qué tan alta es esta pared del lado A en su esquina de inicio (donde empieza la distancia; en una pared de adentro, su extremo de arriba o de la izquierda), en metros y medida desde el piso de ese lado. Es la de la pared, no la de las huellas: pueden ser iguales o distintas. Si la dejas vacía vale la del contorno en ese punto (o el promedio de la nave si está adentro).",
       "example": "una pared que empieza en la parte más alta de la nave: 9 m."
+    },
+    "layoutObstAlturaParedB": {
+      "what": "Qué tan alta es esta pared del lado B (el opuesto al A), en su esquina de inicio, en metros y medida desde el piso de ese lado: si la zona de ese lado está más alta, su piso sube. Déjala vacía si la pared llega al mismo remate de los dos lados; con ella la pared lleva un escalón arriba, cada mitad de su grueso a la altura de su lado.",
+      "example": "una pared entre la bodega (5 m del lado A) y las oficinas, que están 1.2 m más arriba: del lado B pones 3 y su remate queda en 4.2 m."
+    },
+    "layoutObstAlturaParedBFin": {
+      "what": "Qué tan alta es la pared del lado B en su esquina del final, en metros desde el piso de ese lado. Vacía: igual que la del inicio del lado B (o la que resulte del remate del lado A si tampoco escribiste la del inicio).",
+      "example": "el lado B baja de 3 m en un extremo a 2.5 m en el otro."
+    },
+    "layoutParedLados": {
+      "what": "A qué da cada lado de la pared, sale solo: la zona que hay de ese lado (y su piso, si no está a nivel) o «afuera» si cae fuera de la nave. El lado A es hacia adentro de la nave en una pared del contorno; en una pared de adentro de la nave es hacia abajo del croquis (a la izquierda si la pared es vertical). El lado B es el opuesto.",
+      "example": "Lado A da a Bodega y Lado B da a Oficinas · piso +1.2 m."
     },
     "layoutObstAlturaParedFin": {
       "what": "Qué tan alta es esta pared en su esquina del final, en metros. Si es distinta de la del inicio, la pared sube o baja de una esquina a la otra (para naves irregulares, más alta de un lado que del otro). Vacía: igual que la del inicio, o la del contorno en ese punto si tampoco escribiste la del inicio.",

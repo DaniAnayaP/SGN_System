@@ -405,9 +405,35 @@
                     return geo;
                 } catch (err) { return null; }
             };
+            // Una pared compartida con una altura distinta de cada lado: dos mitades de su grueso, cada una sube del piso de la nave al remate de su lado (de su inicio a su final).
+            const halfWalls = (ax, sides) => {
+                const half = (ax.thick || 0) / 2;
+                if (!(half > 0) || !(ax.length > 0)) return [];
+                const at = (d, off) => [ax.x + ax.ux * d + ax.nx * off, ax.y + ax.uy * d + ax.ny * off];
+                const mk = (o0, o1, sd, color) => {
+                    const pts = [at(0, o0), at(ax.length, o0), at(ax.length, o1), at(0, o1)];
+                    const hs = [sd.top0, sd.top1, sd.top1, sd.top0].map((v) => Math.max(v, 0.02));
+                    const pos = [];
+                    pts.forEach((p) => pos.push(PX(p[0]), 0, PZ(p[1])));
+                    pts.forEach((p, i) => pos.push(PX(p[0]), hs[i], PZ(p[1])));
+                    const idx = [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7];
+                    for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; idx.push(i, j, 4 + j, i, 4 + j, 4 + i); }
+                    const geo = new THREE.BufferGeometry();
+                    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+                    geo.setIndex(idx);
+                    geo.computeVertexNormals();
+                    return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+                };
+                return [mk(0, half, sides.a, 0x6f84b3), mk(-half, 0, sides.b, 0x566a98)];
+            };
             shapes3.filter(({ o }) => o.kind === 'wall').forEach(({ o, g }) => {
                 // la pared sube de la altura de su inicio a la de su final (de fábrica, la del contorno en cada extremo); con 4 esquinas se arma con la parte de arriba inclinada
                 const ax = root.LayoutCalc && root.LayoutCalc.wallAxis ? root.LayoutCalc.wallAxis(layout, o) : null;
+                const wsides = ax && root.LayoutCalc.wallSides ? root.LayoutCalc.wallSides(layout, o, ax) : null;
+                if (ax && wsides && wsides.stepped) {
+                    const meshes = halfWalls(ax, wsides);
+                    if (meshes.length) { meshes.forEach((m) => group.walls.add(m)); return; }
+                }
                 const wallH = ax ? ax.height : (o.mode === 'contour' ? (cornerH[(Math.max(1, Number(o.wall)) - 1) % V.length] + cornerH[Math.max(1, Number(o.wall)) % V.length]) / 2 : avgH);
                 const geo = ax && ax.length > 0 && g.pts.length === 4 && Math.abs(ax.hStart - ax.hEnd) > 0.005 ? slopedPrism(g.pts, ax) : prism(g.pts, wallH, 0);
                 if (geo) group.walls.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x6f84b3, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false })));

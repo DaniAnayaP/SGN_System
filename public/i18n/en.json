@@ -1729,8 +1729,14 @@
     "layoutDistOY": "Distance or Y (m)",
     "layoutGrosorAncho": "Thickness or width (m)",
     "layoutAlturaDesnivel": "Level difference height (m)",
-    "layoutAlturaPared": "Height at start (m)",
-    "layoutAlturaParedFin": "Height at end (m)",
+    "layoutAlturaPared": "Side A height at start (m)",
+    "layoutAlturaParedFin": "Side A height at end (m)",
+    "layoutAlturaParedB": "Side B height at start (m)",
+    "layoutAlturaParedBFin": "Side B height at end (m)",
+    "layoutParedLadoA": "Side A faces",
+    "layoutParedLadoB": "Side B faces",
+    "layoutParedAfuera": "outside",
+    "layoutParedPiso": "floor {n} m",
     "layoutTodoElLado": "whole side",
     "layoutLeyendaPared": "Wall",
     "layoutLeyendaDesnivel": "Level difference",
@@ -4787,8 +4793,20 @@
       "example": "you leave the length empty for a wall that covers the whole side and enter 3 for a 3 m wall."
     },
     "layoutObstAlturaPared": {
-      "what": "How tall this wall is at its starting corner (where the distance starts; for an inside wall, its top or left end), in meters. It is the wall's own height, not the footprints': they can be equal or different. If you leave it empty the contour's height at that point applies (or the warehouse average if it is inside).",
+      "what": "How tall this wall is on side A at its starting corner (where the distance starts; for an inside wall, its top or left end), in meters and measured from the floor of that side. It is the wall's own height, not the footprints': they can be equal or different. If you leave it empty the contour's height at that point applies (or the warehouse average if it is inside).",
       "example": "a wall that starts at the tallest part of the warehouse: 9 m."
+    },
+    "layoutObstAlturaParedB": {
+      "what": "How tall this wall is on side B (the opposite of A), at its starting corner, in meters and measured from the floor of that side: if the zone on that side is higher, its floor rises. Leave it empty if the wall reaches the same top on both sides; with it the wall gets a step on top, each half of its thickness at the height of its side.",
+      "example": "a wall between the warehouse (5 m on side A) and the offices, which are 1.2 m higher: on side B you enter 3 and its top is at 4.2 m."
+    },
+    "layoutObstAlturaParedBFin": {
+      "what": "How tall the wall is on side B at its ending corner, in meters from the floor of that side. Empty: the same as the start of side B (or the one that results from side A's top if you did not write the start).",
+      "example": "side B drops from 3 m at one end to 2.5 m at the other."
+    },
+    "layoutParedLados": {
+      "what": "What each side of the wall faces, calculated: the zone on that side (and its floor, if not level) or «outside» if it falls outside the building. Side A is toward the inside of the building on a contour wall; on a wall inside the building it is down on the sketch (to the left if the wall is vertical). Side B is the opposite.",
+      "example": "Side A faces Warehouse and Side B faces Offices · floor +1.2 m."
     },
     "layoutObstAlturaParedFin": {
       "what": "How tall this wall is at its ending corner, in meters. If it differs from the start, the wall rises or drops from one corner to the other (for irregular warehouses, taller on one side than the other). Empty: the same as the start, or the contour's height at that point if you did not write the start either.",

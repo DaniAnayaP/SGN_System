@@ -818,6 +818,14 @@ function locatorsStepHtml() {
 // Un renglón de la tabla de obstáculos del contorno. Las cuatro celdas del lugar cambian con la forma de ponerlo: «Sobre el contorno» = lado, distancia, largo (vacío = todo el lado) y grosor; «Dentro de la nave» = X, Y, largo y ancho.
 // La altura solo la lleva el desnivel (su altura sobre el piso; negativa si es más bajo).
 // wallsOnly = el renglón es de una pared (paso Paredes): sin la columna Tipo (siempre es pared) ni la de altura del desnivel.
+// A qué da cada lado de una pared (la zona y su piso; «afuera» si ese lado cae fuera de la nave).
+function wallSideText(o, side) {
+    const info = LC.wallSideInfo(state.draft, o);
+    if (!info) return '—';
+    const x = info[side];
+    const name = x.zoneName || (x.outside ? t('main.layoutParedAfuera') : '—');
+    return x.level ? `${name} · ${t('main.layoutParedPiso', { n: `${x.level > 0 ? '+' : ''}${fmt(x.level)}` })}` : name;
+}
 function obstacleRowHtml(o, i, dis, wallsOnly = false) {
     const off = dis ? ' disabled' : '';
     const sel = (key, markup, help) => `<td><select data-l="obstacles" data-i="${i}" data-k="${key}" data-help-key="${help}"${off}>${markup}</select></td>`;
@@ -829,11 +837,18 @@ function obstacleRowHtml(o, i, dis, wallsOnly = false) {
     if (wallsOnly) {
         // La altura propia de la pared: vacía = la de siempre (la del lado del contorno o el promedio de la nave), que se ve en gris.
         // POR ESQUINA: la altura al inicio de la pared y la del final (una pared puede ir más alta de un lado que del otro).
-        const axis = LC.wallAxis(state.draft, { ...o, h: undefined, h2: undefined });
-        const endDefault = axis ? (o.h > 0 ? o.h : axis.hEnd) : '';
-        const wallHeight = num('h', o.h > 0 ? o.h : '', 'layoutObstAlturaPared', `min="0" placeholder="${axis ? fmt(axis.hStart) : ''}"`)
-            + num('h2', o.h2 > 0 ? o.h2 : '', 'layoutObstAlturaParedFin', `min="0" placeholder="${endDefault === '' ? '' : fmt(endDefault)}"`);
-        return `<tr><td class="layout-calc"><b data-wall-code="${i}">${esc(o.code || '')}</b></td>${cellText('obstacles', i, 'name', o.name, dis)}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${wallHeight}${removeCell('obstacles', i, dis)}</tr>`;
+        // Pared compartida: cada lado trae su altura (A al inicio y al final, B al inicio y al final), medida desde el piso de ese lado; lo que se ve en gris es lo que vale si se deja vacío. A qué zona da cada lado sale solo.
+        const sidesDef = LC.wallSides(state.draft, { ...o, h: undefined, h2: undefined, hb: undefined, hb2: undefined });
+        const sidesA = LC.wallSides(state.draft, { ...o, hb: undefined, hb2: undefined });
+        const endA = sidesDef ? (o.h > 0 ? o.h : sidesDef.a.h1) : '';
+        const endB = sidesA ? (o.hb > 0 ? o.hb : sidesA.b.h1) : '';
+        const ph = (v) => (v === '' || v === undefined || !Number.isFinite(v) ? '' : fmt(v));
+        const wallHeight = num('h', o.h > 0 ? o.h : '', 'layoutObstAlturaPared', `min="0" placeholder="${sidesDef ? ph(sidesDef.a.h0) : ''}"`)
+            + num('h2', o.h2 > 0 ? o.h2 : '', 'layoutObstAlturaParedFin', `min="0" placeholder="${ph(endA)}"`)
+            + num('hb', o.hb > 0 ? o.hb : '', 'layoutObstAlturaParedB', `min="0" placeholder="${sidesA ? ph(sidesA.b.h0) : ''}"`)
+            + num('hb2', o.hb2 > 0 ? o.hb2 : '', 'layoutObstAlturaParedBFin', `min="0" placeholder="${ph(endB)}"`);
+        const sideCells = `<td class="layout-calc" data-wall-sa="${i}" data-help-key="layoutParedLados">${esc(wallSideText(o, 'a'))}</td><td class="layout-calc" data-wall-sb="${i}" data-help-key="layoutParedLados">${esc(wallSideText(o, 'b'))}</td>`;
+        return `<tr><td class="layout-calc"><b data-wall-code="${i}">${esc(o.code || '')}</b></td>${cellText('obstacles', i, 'name', o.name, dis)}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${wallHeight}${sideCells}${removeCell('obstacles', i, dis)}</tr>`;
     }
     // en Contorno el Tipo ya no ofrece Pared (las paredes se agregan en su propio paso)
     return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('kind', optionsHtml('obstacle', LC.OBSTACLE_KINDS.filter((k) => k !== 'wall'), o.kind), 'layoutObstTipo')}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${height}${removeCell('obstacles', i, dis)}</tr>`;
@@ -961,7 +976,7 @@ function stepHtml(step) {
         const addWallBtn = `<button type="button" class="btn btn-secondary layout-add" data-add-wall="1" data-main-add="1" data-help-key="layoutParedAgregar"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarPared'))}</button>`;
         const wallsAllBtn = `<button type="button" class="btn btn-secondary layout-add" data-walls-all="1" data-main-add="1" data-help-key="layoutParedTodo"${dis ? ' disabled' : ''}>${esc(t('main.layoutParedTodoContorno'))}</button>`;
         const walls = d.obstacles.map((o, i) => (o.kind === 'wall' ? obstacleRowHtml(o, i, dis, true) : '')).filter(Boolean);
-        const list = walls.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', 'main.layoutAlturaPared', 'main.layoutAlturaParedFin', ''], walls, 'layout-paredes') : `<p class="layout-muted">${esc(t('main.layoutParedesVacio'))}</p>`;
+        const list = walls.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', 'main.layoutAlturaPared', 'main.layoutAlturaParedFin', 'main.layoutAlturaParedB', 'main.layoutAlturaParedBFin', 'main.layoutParedLadoA', 'main.layoutParedLadoB', ''], walls, 'layout-paredes') : `<p class="layout-muted">${esc(t('main.layoutParedesVacio'))}</p>`;
         return `${addWallBtn}${wallsAllBtn}${list}`;
     }
     if (step === 'puertas') {
@@ -2059,7 +2074,12 @@ function refreshLive() {
     // el código, la zona y los m² de cada pasillo salen de su lugar: se vuelven a sacar con cada cambio
     applyWallItemMarks();
     // el código de cada pared lo pone el sistema: se vuelve a sacar con cada cambio
-    (state.draft.obstacles || []).forEach((o, i) => { const cell = document.querySelector(`[data-wall-code="${i}"]`); if (cell) cell.textContent = o.code || ''; });
+    (state.draft.obstacles || []).forEach((o, i) => {
+        const cell = document.querySelector(`[data-wall-code="${i}"]`); if (cell) cell.textContent = o.code || '';
+        if (o.kind !== 'wall') return;
+        const sa = document.querySelector(`[data-wall-sa="${i}"]`); if (sa) sa.textContent = wallSideText(o, 'a');
+        const sb = document.querySelector(`[data-wall-sb="${i}"]`); if (sb) sb.textContent = wallSideText(o, 'b');
+    });
     computeTransitIssues();
     (state.draft.transit || []).forEach((p, i) => {
         const codeCell = document.querySelector(`[data-tr-code="${i}"]`);
@@ -2550,7 +2570,7 @@ function onEdit(event) {
             const raw = String(el.value).trim();
             const n = parseFloat(raw);
             if (raw !== '' && Number.isFinite(n) && n > 0) row.h = n; else delete row.h;
-        } else if (list === 'obstacles' && (key === 'h' || key === 'h2')) {
+        } else if (list === 'obstacles' && (key === 'h' || key === 'h2' || key === 'hb' || key === 'hb2')) {
             // la altura de una pared es opcional y por esquina (h al inicio, h2 al final): vacío = la de siempre (la del contorno en ese extremo o el promedio de la nave)
             const raw = String(el.value).trim();
             const n = parseFloat(raw);
