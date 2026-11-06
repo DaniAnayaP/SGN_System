@@ -346,16 +346,18 @@ async function changeStatus(report, status) {
     render();
 }
 
-// --- Fotos: se piden con la sesión y se muestran como imagen local (en la App instalada la dirección del servidor es de otro origen) -----------------------------
+// --- Fotos: se piden con la sesión y se muestran como imagen local (en la App instalada la dirección del servidor es de otro origen). Se entregan como data: (la política de seguridad del servidor solo deja
+// cargar imágenes propias y data:, no blob:); las miniaturas se guardan mientras la pantalla está abierta y las fotos completas no.
 const photoCache = new Map();
+const blobToDataUrl = (blob) => new Promise((resolve, reject) => { const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.onerror = () => reject(fr.error); fr.readAsDataURL(blob); });
 async function photoUrl(incidentId, photoId, thumb) {
     const url = `${API}/${incidentId}/photo/${photoId}${thumb ? '?thumb=1' : ''}`;
     if (photoCache.has(url)) return photoCache.get(url);
     const res = await fetch(apiUrl(url), { credentials: 'include' });
     if (!res.ok) throw new Error('photo');
-    const objectUrl = URL.createObjectURL(await res.blob());
-    photoCache.set(url, objectUrl);
-    return objectUrl;
+    const dataUrl = await blobToDataUrl(await res.blob());
+    if (thumb) photoCache.set(url, dataUrl);
+    return dataUrl;
 }
 function fillImage(img, incidentId, photoId, thumb) {
     photoUrl(incidentId, photoId, thumb).then((src) => { img.src = src; }).catch(() => { img.alt = '—'; });
@@ -538,12 +540,17 @@ function loadBitmap(file) {
     return loadImageElement(file);
 }
 function loadImageElement(file) {
+    // la política de seguridad del servidor solo deja cargar imágenes propias y data: (no blob:): la foto se lee como data:
     return new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image')); };
-        img.src = url;
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error('image'));
+        fr.onload = () => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('image'));
+            img.src = fr.result;
+        };
+        fr.readAsDataURL(file);
     });
 }
 function thumbOf(canvas) {

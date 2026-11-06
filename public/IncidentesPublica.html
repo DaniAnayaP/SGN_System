@@ -146,12 +146,17 @@ function loadBitmap(file) {
     return loadImageElement(file);
 }
 function loadImageElement(file) {
+    // la política de seguridad del servidor solo deja cargar imágenes propias y data: (no blob:): la foto se lee como data:
     return new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image')); };
-        img.src = url;
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error('image'));
+        fr.onload = () => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('image'));
+            img.src = fr.result;
+        };
+        fr.readAsDataURL(file);
     });
 }
 function thumbOf(canvas) {
