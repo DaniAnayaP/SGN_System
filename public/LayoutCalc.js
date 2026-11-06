@@ -284,7 +284,7 @@
             const ax = wallAxis(layout, wall);
             if (!ax) return null;
             const a = { x: ax.x + ax.ux * dist, y: ax.y + ax.uy * dist };
-            return { a, b: { x: a.x + ax.ux * width, y: a.y + ax.uy * width }, ux: ax.ux, uy: ax.uy, nx: ax.nx, ny: ax.ny, thick: ax.thick, wallLength: ax.length, wallHeight: Math.min(ax.heightAt(dist), ax.heightAt(dist + width)), wallHeightStart: ax.hStart, wallHeightEnd: ax.hEnd, wall, legacy: false };
+            return { a, b: { x: a.x + ax.ux * width, y: a.y + ax.uy * width }, ux: ax.ux, uy: ax.uy, nx: ax.nx, ny: ax.ny, thick: ax.thick, wallLength: ax.length, wallHeight: (() => { const sd = wallSides(layout, wall, ax); return Math.min(sd.a.heightAt(dist), sd.a.heightAt(dist + width), sd.b.heightAt(dist), sd.b.heightAt(dist + width)); })(), wallHeightStart: ax.hStart, wallHeightEnd: ax.hEnd, wall, legacy: false };
         }
         const verts = (layout && layout.vertices) || [];
         const side = Math.round(Number(door.wall));
@@ -294,6 +294,54 @@
         const a = { x: seg.p[0] + seg.ux * dist, y: seg.p[1] + seg.uy * dist };
         const n = verts.length;
         return { a, b: { x: a.x + seg.ux * width, y: a.y + seg.uy * width }, ux: seg.ux, uy: seg.uy, nx: 0, ny: 0, thick: 0, wallLength: seg.length, wallHeight: (cornerHeightAt(layout, (side - 1) % n) + cornerHeightAt(layout, side % n)) / 2, wall: null, legacy: true };
+    }
+    // ---- Pared compartida: una altura por lado -----------------------------------------------------------------------------------------------------------------
+    // Una pared tiene dos lados: el A (hacia adentro de la nave en una pared del contorno; hacia abajo del croquis, o a la izquierda si es vertical, en una pared de adentro) y el B (el opuesto). Cada lado puede traer su altura:
+    // A con h al inicio y h2 al final, B con hb y hb2, y cada una se mide DESDE EL PISO DE SU LADO (si la zona de ese lado está más alta, su piso sube). Sin altura propia la pared llega hasta donde siempre llegó (el techo) y, si el lado B
+    // no trae la suya, hasta el mismo remate que el A: la pared es una sola.
+    const wallProbe = (ax, d, side) => {
+        const off = (ax.thick || 0) / 2 + 0.15;
+        return [ax.x + ax.ux * d + side * (ax.nx || 0) * off, ax.y + ax.uy * d + side * (ax.ny || 0) * off];
+    };
+    function wallSides(layout, o, axis) {
+        const ax = axis || wallAxis(layout, o);
+        if (!ax) return null;
+        const leveled = ((layout && layout.zones) || []).some((z) => z && z.active !== false && zoneHasLevel(z));
+        const floorAt = (d, side) => (leveled ? floorLevelAt(layout, ...wallProbe(ax, d, side)) : 0);
+        const own = (v) => { const n = Number(v); return n > 0 ? n : 0; };
+        const fA0 = floorAt(0, 1); const fA1 = floorAt(ax.length, 1); const fB0 = floorAt(0, -1); const fB1 = floorAt(ax.length, -1);
+        const a1 = own(o && o.h); const a2 = own(o && o.h2); const b1 = own(o && o.hb); const b2 = own(o && o.hb2);
+        const tA0 = a1 ? fA0 + a1 : ax.hStart;
+        const tA1 = a2 ? fA1 + a2 : (a1 ? fA1 + a1 : ax.hEnd);
+        const tB0 = b1 ? fB0 + b1 : tA0;
+        const tB1 = b2 ? fB1 + b2 : (b1 ? fB1 + b1 : tA1);
+        const side = (f0, f1, t0, t1) => {
+            const h0 = t0 - f0; const h1 = t1 - f1;
+            return { floor0: f0, floor1: f1, top0: t0, top1: t1, h0, h1, heightAt: (d) => h0 + (h1 - h0) * (ax.length > 0 ? Math.min(Math.max(d / ax.length, 0), 1) : 0) };
+        };
+        return { a: side(fA0, fA1, tA0, tA1), b: side(fB0, fB1, tB0, tB1), stepped: Math.abs(tA0 - tB0) > 0.005 || Math.abs(tA1 - tB1) > 0.005 };
+    }
+    // La zona que está de cada lado de una pared (la más chica que contiene el punto de al lado, a la mitad de la pared) y el piso que tiene ahí; outside = ese lado cae fuera de la nave.
+    function wallSideInfo(layout, o) {
+        const ax = wallAxis(layout, o);
+        if (!ax) return null;
+        const verts = (layout && layout.vertices) || [];
+        const info = (side) => {
+            const [px, py] = wallProbe(ax, ax.length / 2, side);
+            let best = null;
+            let bestArea = Infinity;
+            ((layout && layout.zones) || []).forEach((z) => {
+                if (!z || z.active === false || zonePoints(z).length < 3) return;
+                const pts = zonePoints(z);
+                if (!(pointInPolygon(px, py, pts) || onPolygonEdge(px, py, pts))) return;
+                const a = zoneArea(z);
+                if (a <= bestArea) { best = z; bestArea = a; }
+            });
+            const level = best && zoneHasLevel(best) ? round2(zoneLevelAt(best, px, py)) : 0;
+            const inside = verts.length >= 3 ? (pointInPolygon(px, py, verts) || onPolygonEdge(px, py, verts)) : true;
+            return { zoneId: best ? best.id : '', zoneName: best ? best.name : '', zoneCode: best ? best.code || '' : '', level, outside: !best && !inside };
+        };
+        return { a: info(1), b: info(-1) };
     }
     // Las puertas, conexiones de luz y sensores de antes (con el número del lado del contorno, sin pared) pasan a la pared que los cubre en ese lado (una sola vez; con wallId ya no se tocan): su distancia pasa a medirse desde el inicio
     // de esa pared. Si en ese lado no hay una pared que cubra el lugar se queda como estaba y la revisión lo marca «sin pared».
@@ -1944,7 +1992,8 @@
             if (kind === 'wall') {
                 const wc = text(o && o.code, label, false); if (wc) base.code = wc.toUpperCase();
                 // La altura propia de la pared es opcional y POR ESQUINA: h al inicio y h2 al final (sin ellas valen las de siempre: las del contorno en cada extremo o el promedio de la nave); es distinta de la de las huellas.
-                ['h', 'h2'].forEach((hk) => {
+                // El lado B (hb al inicio, hb2 al final) es la altura de la pared del OTRO lado, medida desde el piso de ese lado; vacío = la pared llega a la misma altura de los dos lados.
+                ['h', 'h2', 'hb', 'hb2'].forEach((hk) => {
                     if (!o || o[hk] === undefined || o[hk] === null || o[hk] === '') return;
                     const wh = Number(o[hk]);
                     if (Number.isFinite(wh) && wh >= 0.01 && wh <= LIMITS.maxHeight) base[hk] = round2(wh); else errors.push(`${label}: la altura de la pared no es válida`);
@@ -2418,7 +2467,7 @@
     }
 
     return {
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
