@@ -1964,7 +1964,6 @@
     "layoutElegirCentroTitulo": "Choose a cost center",
     "layoutElegirCentroTexto": "A Layout belongs to one cost center at a time. Choose one in the selector above to see or create its Layout.",
     "layoutCambiarCentroConfirm": "You have unsaved changes in this Layout. If you switch cost center they are discarded. Switch anyway?",
-    "layoutCentroChip": "Layout of {name}",
     "layout3dCapasBtn": "Show or hide the 3D layers",
     "layoutBuscarBtn": "Search a zone or a footprint",
     "layoutRenumerarBtn": "Renumber codes",

@@ -2351,10 +2351,9 @@ async function loadAssetLists() {
 function layoutUrl(url) {
     return state.centerId ? `${url}${url.includes('?') ? '&' : '?'}costCenterId=${state.centerId}` : url;
 }
+// El centro de costos (el sitio) del Layout va al final de la ruta de arriba: «Layout › sitio». Antes salía también en un recuadro aparte.
 function updateCenterChip() {
-    const chip = $('layout-center-chip');
-    chip.hidden = !state.costCenter;
-    if (state.costCenter) chip.textContent = t('main.layoutCentroChip', { name: state.costCenter.name });
+    Dashboard.setBreadcrumbSuffix(state.costCenter ? state.costCenter.name : '');
 }
 // Sin un solo centro elegido (varios marcados o ninguno) no hay Layout que mostrar: se pide elegir uno.
 function showChooseCenter() {

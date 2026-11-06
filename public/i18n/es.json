@@ -1964,7 +1964,6 @@
     "layoutElegirCentroTitulo": "Elige un centro de costos",
     "layoutElegirCentroTexto": "Un Layout es de un solo centro de costos a la vez. Elige uno en el selector de arriba para ver o crear su Layout.",
     "layoutCambiarCentroConfirm": "Tienes cambios sin guardar en este Layout. Si cambias de centro de costos se descartan. ¿Cambiar de todos modos?",
-    "layoutCentroChip": "Layout de {name}",
     "layout3dCapasBtn": "Mostrar u ocultar las capas del 3D",
     "layoutBuscarBtn": "Buscar una zona o una huella",
     "layoutRenumerarBtn": "Renumerar códigos",

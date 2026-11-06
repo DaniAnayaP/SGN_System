@@ -11996,7 +11996,20 @@ function findAreaCategoryTrail(targetFile) {
     return crumbs;
 }
 
+// Un último paso de la ruta que pone la propia pantalla (hoy, el Layout: el nombre del sitio / centro de costos que está elegido, porque solo se puede ver uno a la vez). Vacío = la ruta termina en la pantalla.
+let breadcrumbSuffix = '';
+function setBreadcrumbSuffix(label) {
+    const next = String(label || '').trim();
+    if (next === breadcrumbSuffix) return;
+    breadcrumbSuffix = next;
+    if (chromeLabelsReady) renderBreadcrumbBar();
+}
 function computeBreadcrumbCrumbs() {
+    const crumbs = computeBreadcrumbBase();
+    if (breadcrumbSuffix && crumbs.length > 1) crumbs.push({ label: breadcrumbSuffix, href: null });
+    return crumbs;
+}
+function computeBreadcrumbBase() {
     const targetFile = currentPageFile();
     if (targetFile === 'Inicio-en.html') return [{ label: t('menu.home'), href: null }];
     const home = { label: t('menu.home'), href: 'Inicio-en.html' };
@@ -12176,7 +12189,8 @@ function renderBreadcrumbBar() {
     list.innerHTML = '';
     list.setAttribute('aria-label', t('main.breadcrumbLabel'));
     const crumbList = computeBreadcrumbCrumbs();
-    currentBreadcrumbLabel = crumbList[crumbList.length - 1]?.label || '';
+    // con un paso propio de la pantalla (el sitio), el botón de la ruta cerrada dice «pantalla › sitio»
+    currentBreadcrumbLabel = breadcrumbSuffix && crumbList.length > 2 ? `${crumbList[crumbList.length - 2].label} › ${crumbList[crumbList.length - 1].label}` : (crumbList[crumbList.length - 1]?.label || '');
     crumbList.forEach((crumb, index, crumbs) => {
         const li = document.createElement('li');
         li.className = 'breadcrumb-item';
@@ -13140,6 +13154,7 @@ window.Dashboard = {
     initDashboard,
     renderTableRowsInChunks,
     getSingleSelectedCostCenterId,
+    setBreadcrumbSuffix,
     getSelectedCostCenterIds,
     selectOnlyCostCenter,
     t,

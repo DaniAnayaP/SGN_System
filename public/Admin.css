@@ -7680,8 +7680,6 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-canvas svg.zoomed{ cursor: grab; touch-action: none; }
 .layout-rotate-btn.off::after{ display: none; } /* girar no se "apaga": el icono no lleva la raya */
 /* El centro de costos al que pertenece el Layout que se ve */
-.layout-center-chip{ display: inline-flex; align-items: center; gap: 0.4rem; align-self: flex-start; margin: 0 0 0.6rem; padding: 0.25rem 0.8rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); font-size: 0.78rem; font-weight: 600; }
-.layout-center-chip[hidden]{ display: none; }
 /* Ver 2D / Ver 3D: el que se está viendo queda marcado */
 .layout-view-btn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); border-color: var(--color-text-primary); }
 .layout-views.is-3d .layout-only2d{ display: none !important; }
