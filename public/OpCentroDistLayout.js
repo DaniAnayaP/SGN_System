@@ -1270,6 +1270,25 @@ function markSelectedRow() {
     const tr = highlightedRow();
     if (tr) tr.classList.add('layout-row-sel');
 }
+// Al elegir un sensor (paso Sensores) las zonas que MIDE se marcan muy tenue en el croquis (un tinte suave con el borde punteado), aunque el paso Zonas esté apagado: así se ve qué zonas quedan cubiertas, no solo dónde está
+// el sensor. Se arma con la geometría del último dibujo (view) y se quita junto con el resto del resaltado (lleva la clase hl-shape).
+function drawSensorZones(svg, sensorId) {
+    const sensor = (state.draft.sensors || []).find((n) => n.id === sensorId);
+    if (!sensor || !view || view.x0 === undefined) return;
+    const L = view.rot ? LC.rotateLayout(state.draft, view.rot) : state.draft;
+    const ids = new Set(LC.sensorZoneIds(sensor));
+    (L.zones || []).filter((z) => ids.has(z.id) && z.active !== false).forEach((z) => {
+        const pts = LC.zonePoints(z);
+        if (!pts || pts.length < 3) return;
+        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        poly.setAttribute('class', 'hl-shape hl-zone-measured');
+        poly.setAttribute('points', pts.map((p) => `${(view.ox + (p[0] - view.x0) * view.sc).toFixed(1)},${(view.oy + (p[1] - view.y0) * view.sc).toFixed(1)}`).join(' '));
+        const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+        title.textContent = `${sensor.code || ''} · ${t('main.layoutSensorZonasMide')}: ${z.name || ''}`;
+        poly.appendChild(title);
+        svg.appendChild(poly);
+    });
+}
 // reveal = true cuando se acaba de elegir el renglón: si el croquis está acercado y lo elegido queda fuera de lo que se ve, se recorre para mostrarlo.
 function applyHighlight(reveal) {
     applyHighlight3d();
@@ -1279,6 +1298,7 @@ function applyHighlight(reveal) {
     svg.classList.remove('has-hl', 'hl-soft-mode');
     const h = state.hl;
     if (!h || h.step !== state.focus || !state.draft) return;
+    if (h.kind === 'sensor') drawSensorZones(svg, h.id);
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
     const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid', side: 'data-sin-figura', corner: 'data-sin-figura' };
     const els = Array.from(svg.querySelectorAll(`[${HL_ATTR[h.kind] || 'data-sid'}="${CSS.escape(h.id)}"]`));
@@ -1794,7 +1814,7 @@ function renderSvg() {
     const oy = M;
     const X = (x) => ox + (x - x0) * sc;
     const Y = (y) => oy + (y - y0) * sc;
-    view = { sc, W, rot };
+    view = { sc, W, rot, x0, y0, ox, oy };
     // Los pasillos van sombreados con rayas (principal: rayas; entre anaqueles: puntos).
     let s = '<defs><pattern id="lvl-hatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="#A63FB5" stroke-opacity="0.45" stroke-width="2"/></pattern><marker id="lvl-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#A63FB5"/></marker><pattern id="lh-main" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="var(--color-surface)"/><line x1="0" y1="0" x2="0" y2="8" stroke="var(--color-text-secondary)" stroke-width="2.4" opacity="0.4"/></pattern><pattern id="lh-between" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="var(--color-surface)"/><circle cx="3" cy="3" r="1.15" fill="var(--color-text-secondary)" opacity="0.5"/></pattern></defs>';
     if (state.planImage && d.plan && !rot) s += `<image href="${state.planImage}" x="${X(0)}" y="${Y(0)}" width="${d.plan.widthM * sc}" height="${d.plan.widthM * state.planAspect * sc}" opacity="0.55" preserveAspectRatio="none"/>`;

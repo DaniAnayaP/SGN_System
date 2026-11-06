@@ -8117,3 +8117,5 @@ td.cap-pick{ white-space: nowrap; }
 .cap-result:hover{ background: var(--color-surface-2, #f6eef8); }
 .cap-hint{ margin: 0.4rem 0; font-size: 0.8rem; color: var(--color-text-secondary); text-align: center; }
 .cap-actions{ display: flex; gap: 0.5rem; justify-content: flex-end; flex-wrap: wrap; }
+/* Layout > Sensores: las zonas que mide el sensor elegido, muy tenues (un tinte suave y el borde punteado); no estorban al tocar. */
+.hl-shape.hl-zone-measured{ fill: #2b8ca3; fill-opacity: 0.16; stroke: #2b8ca3; stroke-opacity: 0.5; stroke-width: 1.2; stroke-dasharray: 4 3; }
