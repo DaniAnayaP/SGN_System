@@ -2066,3 +2066,18 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .pm-app-done .pm-app-lbl{ text-align: center; }
 .pm-app-folio{ text-align: center; font-size: 1.7rem; font-weight: 800; letter-spacing: 0.04em; color: var(--home-text-primary); font-variant-numeric: tabular-nums; }
 .pm-app-meta-flat{ padding: 0; border: 0; background: transparent; margin: 0; }
+
+/* Capacidad Almacenamiento (App) — cifras, etiqueta del código y la capacidad calculada (ver AppCapacidadAlmacenamiento.js). Los demás estilos son los de Pedido Manual (.pm-app-*). */
+.cap-app-kpis{ display: grid; grid-template-columns: repeat(auto-fit, minmax(5.6rem, 1fr)); gap: 0.45rem; margin-bottom: 0.6rem; }
+.cap-app-kpi{ display: flex; flex-direction: column; gap: 0.05rem; padding: 0.5rem 0.65rem; border: 1px solid var(--home-border); border-radius: 0.8rem; background: var(--home-surface); min-width: 0; }
+.cap-app-kpi b{ font-size: 0.98rem; font-variant-numeric: tabular-nums; color: var(--home-text-primary); }
+.cap-app-kpi span{ font-size: 0.62rem; color: var(--home-text-muted); }
+.cap-app-pill{ flex-shrink: 0; font-size: 0.64rem; font-weight: 700; line-height: 1; padding: 0.32rem 0.6rem; border-radius: 1rem; border: 1px solid var(--home-accent-strong-1); color: var(--home-text-primary); background: var(--home-surface-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cap-app-pill.none{ border-style: dashed; border-color: var(--home-border); color: var(--home-text-muted); font-weight: 500; }
+.cap-app-pill.warn{ border-color: rgba(240, 160, 40, 0.6); background: rgba(240, 160, 40, 0.16); color: #b45f06; }
+.dark-mode .cap-app-pill.warn, .futuristic-mode .cap-app-pill.warn, .institutional-mode .cap-app-pill.warn{ color: #ffc169; }
+.cap-app-calc{ background: rgba(60, 130, 210, 0.10); border-color: rgba(60, 130, 210, 0.45); }
+.cap-app-grid{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+.cap-app-grid div{ display: flex; flex-direction: column; gap: 0.05rem; }
+.cap-app-grid span{ font-size: 0.66rem; color: var(--home-text-muted); }
+.cap-app-grid b{ font-size: 1.05rem; color: var(--home-text-primary); font-variant-numeric: tabular-nums; }

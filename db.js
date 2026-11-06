@@ -7588,6 +7588,7 @@ function deletePlan(id) {
 // language is active) as the screen itself does everywhere else.
 const WEB_SCREEN_CATALOG = [
     { key: 'pedido-manual', labelKey: 'menu.opCentroDistPedidoManual' },
+    { key: 'capacidad-almacenamiento', labelKey: 'menu.opCentroDistCapacidadAlmacenamiento' },
     { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
     { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },
     { key: 'carga-combustible', labelKey: 'menu.opTransVolCargaCombustible' },

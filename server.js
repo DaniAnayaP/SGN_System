@@ -9284,38 +9284,64 @@ function storageCapRows(ctx, { costCenterId, key, max = STORAGE_CAP_MAX_ROWS } =
 }
 app.get('/api/business/storage-capacity', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const built = storageCapRows(storageCapContext(req));
+    // costCenterId: solo los lugares de ese centro (la App pide el que se eligió arriba, no todos)
+    const only = Number(req.query.costCenterId);
+    const built = storageCapRows(storageCapContext(req), { costCenterId: Number.isInteger(only) && only > 0 ? only : undefined });
     res.set('Cache-Control', 'no-store');
     res.json({ ...built, max: STORAGE_CAP_MAX_ROWS, ...storageCapRights(req) });
 });
-// Asignar (o cambiar, o quitar con null) el código de un lugar. Pasa por la misma tubería de cambios de toda la plataforma (checkAndLogFieldChanges): se aplica, queda pendiente de autorización o se rechaza según el permiso.
-app.patch('/api/business/storage-capacity', requireAuth, (req, res) => {
+// Los códigos que se pueden asignar, con lo que hace falta para calcular su capacidad: la App los guarda en el celular para elegir y calcular sin señal.
+app.get('/api/business/storage-capacity/codes', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
-    const center = layoutCenter(req);
-    if (center.error) return res.status(center.error.status).json(center.error.body);
-    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
-    const key = String((req.body && req.body.locationKey) || '');
+    const ids = searchSkuItems(clientId, '', isTestAccount, 5000).map((r) => r.id);
+    const codes = listSkuCapacityData(clientId, isTestAccount, ids).map((r) => ({
+        id: r.id, sku: padSku(r.record_number), upc: r.upc || '', description: r.custom_description || r.known_description || r.unique_description || '', uom: r.main_uom || '',
+        storageType: r.storage_type || '', length: r.length || 0, width: r.width || 0, height: r.height || 0, ti: r.units_per_layer || 0, hi: r.layers_per_pallet || 0, stack: r.max_stack || 0,
+    }));
+    res.set('Cache-Control', 'no-store');
+    res.json({ codes, at: new Date().toISOString() });
+});
+// Asignar (o cambiar, o quitar con null) el código de un lugar. Pasa por la misma tubería de cambios de toda la plataforma (checkAndLogFieldChanges): se aplica, queda pendiente de autorización o se rechaza según el permiso.
+// Con baseline (lo que la persona veía al guardar sin señal) un código que otra persona ya cambió entre tanto sale como choque (conflictFields) y no se pisa sin preguntar.
+function assignStorageCapacity(req, res, centerId, key) {
+    const { clientId, isTestAccount } = req.user;
     const raw = req.body ? req.body.skuItemId : undefined;
     const skuItemId = raw === null || raw === undefined || raw === '' ? null : Number(raw);
     if (skuItemId !== null && (!Number.isInteger(skuItemId) || !getSkuItemById(skuItemId, clientId, isTestAccount))) return res.status(400).json({ message: 'Elige un código de Alta Artículos.', code: 'SKU' });
     const ctx = storageCapContext(req);
-    const found = storageCapRows(ctx, { costCenterId: center.id, key });
+    const found = storageCapRows(ctx, { costCenterId: centerId, key });
     if (!found.rows.length) return res.status(404).json({ message: 'Ese lugar ya no existe en el Layout o ya no guarda inventario.', code: 'LOCATION' });
-    let rec = getStorageCapacityByKey(clientId, center.id, key, isTestAccount);
+    let rec = getStorageCapacityByKey(clientId, centerId, key, isTestAccount);
     let created = false;
     if (!rec) {
-        if (skuItemId === null) return res.json({ row: found.rows[0], pendingFields: [], rejectedFields: [] });
-        rec = createStorageCapacity({ clientId, costCenterId: center.id, locationKey: key, isTest: isTestAccount });
+        if (skuItemId === null) return res.json({ row: found.rows[0], pendingFields: [], rejectedFields: [], conflictFields: [] });
+        rec = createStorageCapacity({ clientId, costCenterId: centerId, locationKey: key, isTest: isTestAccount });
         created = true;
     }
     const sanitize = (v) => { if (!v) return ''; const it = getSkuItemById(Number(v), clientId, isTestAccount); return it ? skuLabelOf(it) : String(v); };
-    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, rec, { skuItemId }, STORAGE_CAPACITY_PATCHABLE_FIELDS, STORAGE_CAP_TABLE_KEY, found.rows[0].locator, { skuItemId: sanitize });
+    const options = { baseline: req.body && req.body.baseline && typeof req.body.baseline === 'object' ? req.body.baseline : null, overrideConflicts: Array.isArray(req.body && req.body.overrideConflicts) ? req.body.overrideConflicts : [] };
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, rec, { skuItemId }, STORAGE_CAPACITY_PATCHABLE_FIELDS, STORAGE_CAP_TABLE_KEY, found.rows[0].locator, { skuItemId: sanitize }, options);
     const updated = updateStorageCapacity(rec.id, clientId, appliedPatch, { updatedBy: changedByLabel(req) });
     // un lugar que se acababa de abrir y no quedó con código (sin permiso o a autorización) no deja renglón vacío
     if (created && !(updated && updated.sku_item_id) && !pendingFields.length) deleteStorageCapacity(rec.id, clientId);
-    const after = storageCapRows(ctx, { costCenterId: center.id, key });
-    res.json({ row: after.rows[0], pendingFields, rejectedFields });
+    const after = storageCapRows(ctx, { costCenterId: centerId, key });
+    res.json({ row: after.rows[0], pendingFields, rejectedFields, conflictFields });
+}
+app.patch('/api/business/storage-capacity', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    return assignStorageCapacity(req, res, center.id, String((req.body && req.body.locationKey) || ''));
+});
+// La misma operación con el lugar en la dirección (la App: su cola sin señal manda de nuevo solo lo cambiado, sin el centro ni el lugar en el cuerpo).
+app.patch('/api/business/storage-capacity/:cc/:key', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const cc = Number(req.params.cc);
+    const center = Number.isInteger(cc) && cc > 0 ? getCostCenterById(cc, req.user.clientId, req.user.isTestAccount) : null;
+    if (!center) return res.status(404).json({ message: 'Ese centro de costos no existe.' });
+    return assignStorageCapacity(req, res, center.id, String(req.params.key || ''));
 });
 
 // Verificador Código (SKU): la ficha de un artículo (sin fotos ni Control Interno) y DÓNDE ESTÁ, que sale de Relación Código (un renglón por cada lugar). Con sesión.
