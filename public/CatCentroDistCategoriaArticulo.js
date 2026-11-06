@@ -37,6 +37,8 @@ const CATEGORY_TYPE_TABLE_KEYS = {
     'activos-clasificacion': 'activos-clasificacion',
     // Lo que transita (personas, montacargas…): tipo, ancho, largo y alto.
     'transito-equipos': 'transito-equipos',
+    // Criterios de Incidentes: cada criterio lleva su categoría (No conformidad Mayor, No conformidad Menor o Recomendación).
+    'incidentes-criterios': 'incidentes-criterios',
 };
 
 const CATEGORY_TYPE = document.body.dataset.categoryType;
@@ -44,7 +46,7 @@ const TABLE_KEY = CATEGORY_TYPE_TABLE_KEYS[CATEGORY_TYPE];
 const CATEGORY_API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
 const DELETE_AUTH_COL = 'colCatDeleteAuth';
 const IS_WAREHOUSE = CATEGORY_TYPE === 'almacenes' || CATEGORY_TYPE === 'sub-almacenes';
-const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'transito-equipos' ? 'main.newTransitEquip' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : 'main.newArticleCategory';
+const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'transito-equipos' ? 'main.newTransitEquip' : CATEGORY_TYPE === 'incidentes-criterios' ? 'main.newIncCriterion' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : 'main.newArticleCategory';
 // Centros de costos completos, almacenes y, por cada centro, las zonas / anaqueles de su Layout (GET /api/business/warehouse-options).
 let warehouseOptions = { costCenters: [], warehouses: [], zonesByCenter: {} };
 // Categorías de Inventario: cada una elige cuáles clasificaciones (catálogo Nuestras Clasificaciones) tiene; aquí van todas las del catálogo con su estatus.
@@ -288,7 +290,7 @@ function applyCategoryFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colTrEquipTipo']
+        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colTrEquipTipo', 'colIncCritCategoria']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
@@ -559,6 +561,11 @@ function buildExtraCells(record) {
             buildOptionCell(record, 'colTrEquipTipo', 'kind', 'transitEquipKind', ['person', 'forklift', 'cart', 'platform', 'other'].map((k) => ({ value: k, label: Dashboard.t(`main.trKind_${k}`) })), record.kind || '', '', (v) => ({ kind: v })),
             sizeCell('colTrEquipAncho', 'widthM', record.widthM), sizeCell('colTrEquipLargo', 'lengthM', record.lengthM), sizeCell('colTrEquipAlto', 'heightM', record.heightM),
         ];
+    }
+    if (CATEGORY_TYPE === 'incidentes-criterios') {
+        return [buildOptionCell(record, 'colIncCritCategoria', 'kind', 'incCritKind',
+            ['mayor', 'menor', 'recomendacion'].map((k) => ({ value: k, label: Dashboard.t(`main.incKind_${k}`) })), record.kind || '', '',
+            (v) => ({ kind: v }))];
     }
     if (CATEGORY_TYPE === 'activos-clasificacion') {
         return [buildOptionCell(record, 'colActClasMetrica', 'kind', 'assetClassMetric',

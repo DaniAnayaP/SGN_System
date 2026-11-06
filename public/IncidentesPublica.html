@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>Incidentes</title>
+    <link rel="icon" href="/icons/icon-512.png">
+    <style>
+        :root{
+            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --soft:#f1e4f5; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14);
+            --k-mayor:#b3261e; --k-mayor-bg:#fbe3e1; --k-menor:#8a5d00; --k-menor-bg:#fdf0d2; --k-rec:#0f6f62; --k-rec-bg:#dff3ef;
+        }
+        @media (prefers-color-scheme: dark){
+            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --soft:#3a2745; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5);
+                --k-mayor:#ff9d94; --k-mayor-bg:#4a2220; --k-menor:#f2c46a; --k-menor-bg:#40310f; --k-rec:#7fdccd; --k-rec-bg:#12403a; }
+        }
+        *{ box-sizing:border-box; }
+        html,body{ margin:0; min-height:100%; }
+        body{ background:var(--bg); color:var(--ink); font:400 15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:14px 14px 36px; display:flex; justify-content:center; }
+        main{ width:100%; max-width:440px; display:flex; flex-direction:column; gap:12px; }
+        .card{ background:var(--surface); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:16px; display:flex; flex-direction:column; gap:12px; }
+        h1{ font-size:20px; margin:0; }
+        h2{ font-size:15px; margin:0; }
+        .chip{ display:inline-flex; align-items:center; gap:6px; width:max-content; max-width:100%; font-weight:600; font-size:14px; padding:4px 12px; border:1px solid var(--line); border-radius:999px; }
+        label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+        input[type=text], select, textarea{ width:100%; font:500 16px system-ui,sans-serif; padding:11px 14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--ink); }
+        textarea{ min-height:120px; resize:vertical; font-weight:400; line-height:1.4; }
+        input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, .addbtn:focus-within{ outline:2px solid var(--accent); outline-offset:2px; }
+        .btn{ font:600 16px system-ui,sans-serif; padding:14px 16px; border-radius:16px; border:0; background:var(--ink); color:var(--surface); cursor:pointer; width:100%; text-align:center; }
+        .btn.alt{ background:transparent; color:var(--ink); border:1px solid var(--line); }
+        .btn.ok{ background:var(--ok); color:#fff; }
+        .btn[disabled]{ opacity:.55; cursor:default; }
+        .link{ background:none; border:0; color:var(--accent); font:600 14px system-ui,sans-serif; padding:8px; cursor:pointer; text-align:center; }
+        .msg{ color:var(--muted); font-size:13px; border:1px dashed var(--line); border-radius:14px; padding:10px 12px; text-align:center; }
+        .err{ color:var(--warn); font-size:14px; border:1px solid var(--warn); border-radius:14px; padding:10px 12px; }
+        .muted{ color:var(--muted); font-size:13px; }
+        .req{ color:var(--warn); }
+        .steps{ display:flex; flex-direction:column; gap:14px; }
+        .group{ display:flex; flex-direction:column; gap:6px; }
+        .kinds{ display:grid; grid-template-columns:1fr; gap:8px; }
+        .kind{ font:600 15px system-ui,sans-serif; text-align:left; padding:11px 14px; border-radius:14px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+        .kind small{ font-weight:500; font-size:12px; color:var(--muted); }
+        .kind[data-kind="mayor"][aria-pressed="true"]{ background:var(--k-mayor-bg); border-color:var(--k-mayor); color:var(--k-mayor); }
+        .kind[data-kind="menor"][aria-pressed="true"]{ background:var(--k-menor-bg); border-color:var(--k-menor); color:var(--k-menor); }
+        .kind[data-kind="recomendacion"][aria-pressed="true"]{ background:var(--k-rec-bg); border-color:var(--k-rec); color:var(--k-rec); }
+        .kind:disabled{ opacity:.45; cursor:default; }
+        .crits{ display:flex; flex-direction:column; gap:6px; }
+        .crit{ font:500 15px system-ui,sans-serif; text-align:left; padding:10px 14px; border-radius:12px; border:1px solid var(--line); background:var(--surface); color:var(--ink); cursor:pointer; display:flex; align-items:center; gap:10px; }
+        .crit::before{ content:""; width:16px; height:16px; border-radius:50%; border:1.6px solid var(--muted); flex:none; }
+        .crit[aria-pressed="true"]{ border-color:var(--accent); background:var(--soft); font-weight:700; }
+        .crit[aria-pressed="true"]::before{ border-color:var(--accent); background:radial-gradient(var(--accent) 0 45%, transparent 50%); }
+        .count{ text-align:right; font-size:12px; color:var(--muted); margin-top:2px; }
+        .addbtn{ position:relative; display:block; font:600 15px system-ui,sans-serif; text-align:center; padding:13px 14px; border-radius:16px; border:1.5px dashed var(--accent); color:var(--accent); background:var(--soft); cursor:pointer; margin:0; }
+        .addbtn input{ position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; font-size:0; }
+        .shots{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+        .shot{ position:relative; aspect-ratio:1; border-radius:12px; overflow:hidden; border:1px solid var(--line); background:var(--soft); }
+        .shot img{ width:100%; height:100%; object-fit:cover; display:block; }
+        .shot button{ position:absolute; top:4px; right:4px; width:26px; height:26px; border-radius:50%; border:0; background:rgba(20,10,25,.72); color:#fff; font-size:16px; line-height:1; cursor:pointer; padding:0; }
+        .working{ color:var(--muted); font-size:13px; text-align:center; }
+        .done{ text-align:center; display:flex; flex-direction:column; gap:8px; align-items:center; }
+        .done .folio{ font:700 32px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.04em; }
+        .done .sum{ width:100%; text-align:left; border-top:1px solid var(--line); margin-top:4px; padding-top:10px; display:flex; flex-direction:column; gap:6px; font-size:14px; }
+        .done .sum span{ color:var(--muted); font-size:12px; display:block; }
+        .tick{ width:56px; height:56px; border-radius:50%; background:var(--ok); color:#fff; display:grid; place-items:center; font-size:30px; }
+        .tag{ display:inline-block; font-weight:700; font-size:13px; padding:3px 12px; border-radius:999px; border:1px solid var(--line); }
+        .tag[data-kind="mayor"]{ background:var(--k-mayor-bg); color:var(--k-mayor); border-color:var(--k-mayor); }
+        .tag[data-kind="menor"]{ background:var(--k-menor-bg); color:var(--k-menor); border-color:var(--k-menor); }
+        .tag[data-kind="recomendacion"]{ background:var(--k-rec-bg); color:var(--k-rec); border-color:var(--k-rec); }
+        .bar{ width:100%; height:8px; border-radius:999px; background:var(--soft); overflow:hidden; }
+        .bar i{ display:block; height:100%; background:var(--ok); width:0; transition:width .2s; }
+        @media (prefers-reduced-motion: no-preference){ .card{ animation:rise .25s ease-out; } @keyframes rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } } }
+    </style>
+</head>
+<body>
+<main>
+    <div id="qr-brand"></div>
+    <div id="view"></div>
+</main>
+<script src="/QrBrandHeader.js"></script>
+<script>
+(function () {
+'use strict';
+const LANG = (navigator.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
+const TEXT = {
+    es: {
+        title: 'Incidentes', loading: 'Cargando…', notFound: 'Este QR ya no corresponde a ningún centro de costos.',
+        yourName: 'Quién reporta', namePlaceholder: 'Tu nombre', zone: 'Dónde pasó (zona)', zoneChoose: 'Elige la zona', detail: 'Detalle del lugar (opcional)', place: 'Dónde pasó', detailPlaceholder: 'Pasillo, rack, andén…',
+        category: 'Categoría', criterion: 'Criterio', pickCategory: 'Elige primero la categoría.', noCriteria: 'Todavía no hay criterios para esta categoría.', noCriteriaAll: 'Este centro de costos todavía no tiene criterios de incidentes: no se puede reportar.',
+        kinds: { mayor: 'No conformidad Mayor', menor: 'No conformidad Menor', recomendacion: 'Recomendación' }, criteriaN: '{n} criterios', criteria1: '1 criterio',
+        story: 'Cuenta lo que pasó', storyPlaceholder: 'Escribe la situación con tus palabras', evidence: 'Evidencias', evidenceHint: 'Mínimo una foto. Puedes agregar todas las que necesites.', add: 'Tomar foto o elegir de la galería', addMore: 'Agregar más fotos',
+        working: 'Preparando fotos…', remove: 'Quitar', evidenceN: '{n} evidencias', evidence1: '1 evidencia', send: 'Enviar reporte', sending: 'Enviando…',
+        needName: 'Escribe el nombre de quien reporta.', needZone: 'Elige la zona donde pasó.', needPlace: 'Escribe dónde pasó.', needCategory: 'Elige la categoría.', needCriterion: 'Elige el criterio.', needStory: 'Cuenta la situación.', needPhoto: 'Agrega al menos una foto como evidencia.',
+        errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errPhoto: 'Una foto no se pudo leer. Quítala y vuelve a agregarla.', errBatch: 'Son demasiadas fotos en un solo envío.', errCriterion: 'Ese criterio ya no existe: elige otro.', errZone: 'Esa zona ya no existe: elige otra.',
+        sentTitle: 'Reporte enviado', folio: 'Número de reporte', by: 'Reportó', at: 'Hora', where: 'Dónde', what: 'Qué', uploading: 'Subiendo evidencias: {done} de {total}', uploaded: 'Evidencias enviadas: {total}', keepOpen: 'No cierres esta página hasta que terminen de subir.',
+        uploadFailed: 'Faltaron {n} evidencias por subir. Tu reporte ya quedó guardado.', retry: 'Reintentar', newReport: 'Nuevo reporte',
+        viewOnly: 'Este QR solo sirve para consultar.', loginNeeded: 'Este QR pide iniciar sesión para reportar.', login: 'Iniciar sesión', loginHint: 'Inicia sesión en el sistema y vuelve a abrir este QR.', locked: 'Este QR ya no permite reportar.',
+    },
+    en: {
+        title: 'Incidents', loading: 'Loading…', notFound: 'This QR no longer matches any cost center.',
+        yourName: 'Who is reporting', namePlaceholder: 'Your name', zone: 'Where it happened (zone)', zoneChoose: 'Pick the zone', detail: 'Place details (optional)', place: 'Where it happened', detailPlaceholder: 'Aisle, rack, dock…',
+        category: 'Category', criterion: 'Criterion', pickCategory: 'Pick the category first.', noCriteria: 'There are no criteria for this category yet.', noCriteriaAll: 'This cost center has no incident criteria yet: nothing can be reported.',
+        kinds: { mayor: 'Major nonconformity', menor: 'Minor nonconformity', recomendacion: 'Recommendation' }, criteriaN: '{n} criteria', criteria1: '1 criterion',
+        story: 'Tell what happened', storyPlaceholder: 'Describe the situation in your own words', evidence: 'Evidence', evidenceHint: 'At least one photo. Add as many as you need.', add: 'Take a photo or pick from the gallery', addMore: 'Add more photos',
+        working: 'Preparing photos…', remove: 'Remove', evidenceN: '{n} pieces of evidence', evidence1: '1 piece of evidence', send: 'Send report', sending: 'Sending…',
+        needName: 'Type the name of who is reporting.', needZone: 'Pick the zone where it happened.', needPlace: 'Type where it happened.', needCategory: 'Pick the category.', needCriterion: 'Pick the criterion.', needStory: 'Describe the situation.', needPhoto: 'Add at least one photo as evidence.',
+        errGeneric: 'It could not be sent. Check your connection and try again.', errPhoto: 'A photo could not be read. Remove it and add it again.', errBatch: 'There are too many photos in one go.', errCriterion: 'That criterion no longer exists: pick another.', errZone: 'That zone no longer exists: pick another.',
+        sentTitle: 'Report sent', folio: 'Report number', by: 'Reported by', at: 'Time', where: 'Where', what: 'What', uploading: 'Uploading evidence: {done} of {total}', uploaded: 'Evidence sent: {total}', keepOpen: 'Do not close this page until the upload finishes.',
+        uploadFailed: '{n} pieces of evidence are still to upload. Your report is already saved.', retry: 'Try again', newReport: 'New report',
+        viewOnly: 'This QR is for viewing only.', loginNeeded: 'This QR requires signing in to report.', login: 'Sign in', loginHint: 'Sign in to the system and open this QR again.', locked: 'This QR no longer allows reporting.',
+    },
+}[LANG];
+document.documentElement.lang = LANG;
+document.title = TEXT.title;
+
+// La dirección fija del QR: /inc/<código del Layout del centro de costos>
+const parts = location.pathname.split('/').filter(Boolean);
+const TOKEN = parts[1] || '';
+const API = `/api/public/incidentes/${encodeURIComponent(TOKEN)}`;
+const KEY_NAME = 'sgn_inc_name';
+const KINDS = ['mayor', 'menor', 'recomendacion'];
+const PHOTO_MAX_BYTES = 420 * 1024; // el servidor acepta hasta ~450 KB por foto
+const BATCH_MAX_BYTES = 5 * 1024 * 1024; // lo que viaja en una sola petición (el servidor acepta 10 MB)
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fill = (text, vars) => Object.keys(vars).reduce((acc, k) => acc.split(`{${k}}`).join(vars[k]), text);
+const store = {
+    get(key) { try { return localStorage.getItem(key) || ''; } catch (e) { return ''; } },
+    set(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* sin almacenamiento */ } },
+};
+
+let info = null;
+const form = { name: store.get(KEY_NAME), zoneId: '', placeDetail: '', category: '', criterionId: 0, description: '' };
+let photos = [];      // { id, photo, thumb, bytes }
+let preparing = 0;    // fotos que se están reduciendo
+let busy = false;
+let sent = null;      // lo que contestó el servidor al crear el reporte + el avance de las evidencias
+let photoSeq = 0;
+
+// ---- fotos: se reducen en el teléfono (máx. 1280 px de lado, JPEG) para que suban rápido aunque la cámara sea de 12 megapíxeles ------------------
+function loadBitmap(file) {
+    if (window.createImageBitmap) {
+        return createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => loadImageElement(file));
+    }
+    return loadImageElement(file);
+}
+function loadImageElement(file) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image')); };
+        img.src = url;
+    });
+}
+function thumbOf(canvas) {
+    const k = Math.min(1, 160 / Math.max(canvas.width, canvas.height));
+    const small = document.createElement('canvas');
+    small.width = Math.max(1, Math.round(canvas.width * k));
+    small.height = Math.max(1, Math.round(canvas.height * k));
+    small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
+    return small.toDataURL('image/jpeg', 0.6);
+}
+async function prepare(file) {
+    const bmp = await loadBitmap(file);
+    const w = bmp.width || bmp.naturalWidth;
+    const h = bmp.height || bmp.naturalHeight;
+    if (!w || !h) throw new Error('size');
+    let scale = Math.min(1, 1280 / Math.max(w, h));
+    for (let pass = 0; pass < 4; pass++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+        for (const q of [0.78, 0.68, 0.58, 0.48, 0.38]) {
+            const url = canvas.toDataURL('image/jpeg', q);
+            if (url.length * 0.75 < PHOTO_MAX_BYTES) { if (bmp.close) bmp.close(); return { photo: url, thumb: thumbOf(canvas), bytes: Math.round(url.length * 0.75) }; }
+        }
+        scale *= 0.75;
+    }
+    throw new Error('too big');
+}
+
+// ---- la página: se arma una sola vez y después solo se redibujan las partes que cambian (así no se pierde el cursor ni el teclado) -----------------
+const nounCount = (n) => (n === 1 ? TEXT.evidence1 : fill(TEXT.evidenceN, { n }));
+function header() {
+    return `<div class="card"><h1>${esc(TEXT.title)}</h1>${info.costCenter ? `<span class="chip">${esc((info.costCenter.code ? `${info.costCenter.code} · ` : '') + info.costCenter.name)}</span>` : ''}</div>`;
+}
+function view() {
+    if (sent) { viewSent(); return; }
+    const locks = info.locks || {};
+    if (!locks.register) { $('view').innerHTML = `${header()}<div class="card"><div class="msg">${esc(TEXT.viewOnly)}</div></div>`; return; }
+    if (locks.signin && !info.signedIn) { $('view').innerHTML = `${header()}<div class="card"><div class="msg">${esc(TEXT.loginNeeded)}</div><a class="btn alt" style="text-decoration:none" href="/">${esc(TEXT.login)}</a><div class="muted" style="text-align:center">${esc(TEXT.loginHint)}</div></div>`; return; }
+    if (!info.criteria.length) { $('view').innerHTML = `${header()}<div class="card"><div class="msg">${esc(TEXT.noCriteriaAll)}</div></div>`; return; }
+    const zones = info.zones || [];
+    const zoneBlock = zones.length
+        ? `<div class="group"><label for="zone">${esc(TEXT.zone)} <span class="req" aria-hidden="true">*</span></label><select id="zone"><option value="">${esc(TEXT.zoneChoose)}</option>${zones.map((z) => `<option value="${esc(z.id)}"${form.zoneId === z.id ? ' selected' : ''}>${esc((z.code ? `${z.code} · ` : '') + z.name)}</option>`).join('')}</select></div>
+           <div class="group"><label for="detail">${esc(TEXT.detail)}</label><input type="text" id="detail" maxlength="200" autocomplete="off" placeholder="${esc(TEXT.detailPlaceholder)}" value="${esc(form.placeDetail)}"></div>`
+        : `<div class="group"><label for="detail">${esc(TEXT.place)} <span class="req" aria-hidden="true">*</span></label><input type="text" id="detail" maxlength="200" autocomplete="off" placeholder="${esc(TEXT.detailPlaceholder)}" value="${esc(form.placeDetail)}"></div>`;
+    $('view').innerHTML = `${header()}<div class="card"><div class="steps">
+        <div class="group"><label for="name">${esc(TEXT.yourName)} <span class="req" aria-hidden="true">*</span></label><input type="text" id="name" maxlength="60" autocomplete="name" required placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(form.name)}"></div>
+        ${zoneBlock}
+        <div class="group"><h2>${esc(TEXT.category)} <span class="req" aria-hidden="true">*</span></h2><div class="kinds" id="kinds" role="group" aria-label="${esc(TEXT.category)}"></div></div>
+        <div class="group"><h2>${esc(TEXT.criterion)} <span class="req" aria-hidden="true">*</span></h2><div class="crits" id="crits" role="group" aria-label="${esc(TEXT.criterion)}"></div></div>
+        <div class="group"><label for="story">${esc(TEXT.story)} <span class="req" aria-hidden="true">*</span></label><textarea id="story" maxlength="${esc(info.maxChars || 2000)}" placeholder="${esc(TEXT.storyPlaceholder)}">${esc(form.description)}</textarea><div class="count" id="story-count"></div></div>
+        <div class="group"><h2>${esc(TEXT.evidence)} <span class="req" aria-hidden="true">*</span></h2><div class="muted">${esc(TEXT.evidenceHint)}</div><div class="shots" id="shots"></div><div class="working" id="working" hidden>${esc(TEXT.working)}</div>
+            <label class="addbtn" id="addbtn"><span id="addlabel"></span><input type="file" id="file" accept="image/*" multiple></label></div>
+        <button type="button" class="btn ok" id="send"></button>
+        <div class="err" id="err" role="alert" hidden></div>
+    </div></div>`;
+    drawKinds(); drawCrits(); drawStoryCount(); drawPhotos(); drawSend();
+}
+function drawKinds() {
+    const box = $('kinds');
+    if (!box) return;
+    box.innerHTML = KINDS.map((k) => {
+        const n = info.criteria.filter((c) => c.kind === k).length;
+        return `<button type="button" class="kind" data-kind="${k}" aria-pressed="${form.category === k}"${n ? '' : ' disabled'}><span>${esc(TEXT.kinds[k])}</span><small>${esc(n === 1 ? TEXT.criteria1 : fill(TEXT.criteriaN, { n }))}</small></button>`;
+    }).join('');
+}
+function drawCrits() {
+    const box = $('crits');
+    if (!box) return;
+    if (!form.category) { box.innerHTML = `<div class="msg">${esc(TEXT.pickCategory)}</div>`; return; }
+    const list = info.criteria.filter((c) => c.kind === form.category);
+    box.innerHTML = list.length ? list.map((c) => `<button type="button" class="crit" data-crit="${c.id}" aria-pressed="${form.criterionId === c.id}">${esc(c.name)}</button>`).join('') : `<div class="msg">${esc(TEXT.noCriteria)}</div>`;
+}
+function drawStoryCount() {
+    const el = $('story-count');
+    if (el) el.textContent = `${form.description.length} / ${info.maxChars || 2000}`;
+}
+function drawPhotos() {
+    const shots = $('shots');
+    if (!shots) return;
+    shots.innerHTML = photos.map((p) => `<div class="shot"><img alt="" src="${esc(p.thumb)}"><button type="button" data-rm="${p.id}" aria-label="${esc(TEXT.remove)}" title="${esc(TEXT.remove)}">×</button></div>`).join('');
+    $('working').hidden = !preparing;
+    $('addlabel').textContent = photos.length ? TEXT.addMore : TEXT.add;
+    const count = photos.length ? ` · ${nounCount(photos.length)}` : '';
+    $('addlabel').textContent += count;
+}
+function drawSend() {
+    const btn = $('send');
+    if (!btn) return;
+    btn.disabled = busy || preparing > 0;
+    btn.textContent = busy ? TEXT.sending : TEXT.send;
+}
+function fail(text) {
+    const err = $('err');
+    if (!err) return;
+    err.textContent = text;
+    err.hidden = !text;
+}
+
+// ---- lo que se toca en la página ---------------------------------------------------------------------------------------------------------
+$('view').addEventListener('click', (event) => {
+    const t = event.target;
+    const kind = t.closest('[data-kind]');
+    if (kind && !kind.disabled) {
+        const k = kind.getAttribute('data-kind');
+        if (form.category !== k) { form.category = k; form.criterionId = 0; }
+        drawKinds(); drawCrits(); fail('');
+        return;
+    }
+    const crit = t.closest('[data-crit]');
+    if (crit) { form.criterionId = Number(crit.getAttribute('data-crit')); drawCrits(); fail(''); return; }
+    const rm = t.closest('[data-rm]');
+    if (rm) { photos = photos.filter((p) => String(p.id) !== rm.getAttribute('data-rm')); drawPhotos(); return; }
+    if (t.closest('#send')) submit();
+});
+$('view').addEventListener('input', (event) => {
+    const t = event.target;
+    if (t.id === 'name') form.name = t.value;
+    else if (t.id === 'detail') form.placeDetail = t.value;
+    else if (t.id === 'story') { form.description = t.value; drawStoryCount(); }
+});
+$('view').addEventListener('change', async (event) => {
+    const t = event.target;
+    if (t.id === 'zone') { form.zoneId = t.value; return; }
+    if (t.id !== 'file') return;
+    const files = Array.from(t.files || []);
+    t.value = ''; // así se puede volver a elegir la misma foto
+    if (!files.length) return;
+    fail('');
+    preparing += files.length;
+    drawPhotos(); drawSend();
+    for (const file of files) {
+        try {
+            const done = await prepare(file);
+            photos.push({ id: ++photoSeq, ...done });
+        } catch (e) {
+            fail(TEXT.errPhoto);
+        }
+        preparing -= 1;
+        drawPhotos(); drawSend();
+    }
+});
+
+// ---- enviar ------------------------------------------------------------------------------------------------------------------------------
+function problem() {
+    if (!form.name.replace(/\s+/g, ' ').trim()) return { text: TEXT.needName, focus: 'name' };
+    if ((info.zones || []).length && !form.zoneId) return { text: TEXT.needZone, focus: 'zone' };
+    if (!(info.zones || []).length && !form.placeDetail.trim()) return { text: TEXT.needPlace, focus: 'detail' };
+    if (!form.category) return { text: TEXT.needCategory, focus: null };
+    if (!form.criterionId) return { text: TEXT.needCriterion, focus: null };
+    if (!form.description.trim()) return { text: TEXT.needStory, focus: 'story' };
+    if (!photos.length) return { text: TEXT.needPhoto, focus: null };
+    return null;
+}
+// Las fotos se reparten en tandas (por cantidad y por peso) para que cada petición quepa; la primera crea el reporte y las demás se suben con su clave.
+function makeBatches(list) {
+    const limit = info.batch || 10;
+    const out = [];
+    let cur = [];
+    let bytes = 0;
+    list.forEach((p) => {
+        const size = p.bytes * 1.37 + 14000; // base64 + miniatura
+        if (cur.length && (cur.length >= limit || bytes + size > BATCH_MAX_BYTES)) { out.push(cur); cur = []; bytes = 0; }
+        cur.push(p); bytes += size;
+    });
+    if (cur.length) out.push(cur);
+    return out;
+}
+const payloadOf = (list) => list.map((p) => ({ photo: p.photo, thumb: p.thumb }));
+async function submit() {
+    if (busy || preparing) return;
+    const p = problem();
+    if (p) { fail(p.text); if (p.focus && $(p.focus)) $(p.focus).focus(); return; }
+    fail('');
+    busy = true; drawSend();
+    const batches = makeBatches(photos);
+    const first = batches.shift();
+    try {
+        const res = await fetch(`${API}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name.replace(/\s+/g, ' ').trim(), zoneId: form.zoneId, placeDetail: form.placeDetail.trim(), criterionId: form.criterionId, description: form.description.trim(), photos: payloadOf(first) }) });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            busy = false; drawSend();
+            if (body.code === 'LOCKED') { info.locks.register = false; view(); return; }
+            if (body.code === 'LOGIN') { info.locks.signin = true; info.signedIn = false; view(); return; }
+            const map = { NAME: TEXT.needName, ZONE: TEXT.errZone, PLACE: TEXT.needPlace, CRITERION: TEXT.errCriterion, DESC: TEXT.needStory, PHOTO: TEXT.errPhoto, BATCH: TEXT.errBatch };
+            fail(map[body.code] || TEXT.errGeneric);
+            return;
+        }
+        store.set(KEY_NAME, form.name.replace(/\s+/g, ' ').trim());
+        const total = photos.length;
+        sent = { ...body, total, done: first.length, rest: batches, failed: false, uploading: batches.length > 0, zoneName: body.zone };
+        busy = false;
+        photos = [];
+        view();
+        if (sent.rest.length) uploadRest();
+    } catch (e) {
+        busy = false; drawSend();
+        fail(TEXT.errGeneric);
+    }
+}
+async function uploadRest() {
+    if (!sent || sent.busy) return;
+    sent.busy = true; sent.failed = false; sent.uploading = true; viewSent();
+    while (sent.rest.length) {
+        const batch = sent.rest[0];
+        try {
+            const res = await fetch(`${API}/${sent.id}/photos`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ addKey: sent.addKey, photos: payloadOf(batch) }) });
+            if (!res.ok) throw new Error('upload');
+            sent.rest.shift();
+            sent.done += batch.length;
+        } catch (e) {
+            sent.failed = true;
+            break;
+        }
+        viewSent();
+    }
+    sent.busy = false; sent.uploading = false;
+    viewSent();
+}
+function resetForm() {
+    form.zoneId = ''; form.placeDetail = ''; form.category = ''; form.criterionId = 0; form.description = '';
+    photos = []; sent = null;
+}
+function viewSent() {
+    const when = new Date(sent.createdAt).toLocaleString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const pending = sent.rest.reduce((n, b) => n + b.length, 0);
+    let progress = '';
+    if (sent.total > 1 || pending) {
+        if (sent.failed) progress = `<div class="err" role="alert">${esc(fill(TEXT.uploadFailed, { n: pending }))}</div><button type="button" class="btn alt" id="retry">${esc(TEXT.retry)}</button>`;
+        else if (pending) progress = `<div class="bar" aria-hidden="true"><i style="width:${Math.round((sent.done / sent.total) * 100)}%"></i></div><div class="muted" role="status">${esc(fill(TEXT.uploading, { done: sent.done, total: sent.total }))}</div><div class="muted">${esc(TEXT.keepOpen)}</div>`;
+        else progress = `<div class="muted" role="status">${esc(fill(TEXT.uploaded, { total: sent.total }))}</div>`;
+    }
+    $('view').innerHTML = `<div class="card done"><div class="tick" aria-hidden="true">✓</div><h1>${esc(TEXT.sentTitle)}</h1><div class="muted">${esc(TEXT.folio)}</div><div class="folio">${esc(sent.folio)}</div>
+        <span class="tag" data-kind="${esc(sent.category)}">${esc(TEXT.kinds[sent.category] || '')}</span>
+        <div class="sum"><div><span>${esc(TEXT.by)}</span><b>${esc(sent.name)}</b></div><div><span>${esc(TEXT.at)}</span><b>${esc(when)}</b></div>
+        ${sent.zone ? `<div><span>${esc(TEXT.where)}</span><b>${esc(sent.zone)}</b></div>` : ''}<div><span>${esc(TEXT.what)}</span><b>${esc(sent.criterion)}</b></div></div>
+        ${progress}
+        <button type="button" class="btn" id="again"${sent.uploading ? ' disabled' : ''}>${esc(TEXT.newReport)}</button></div>`;
+    $('again').addEventListener('click', () => { if (sent.uploading) return; resetForm(); view(); });
+    const retry = $('retry');
+    if (retry) retry.addEventListener('click', uploadRest);
+}
+
+(async function init() {
+    $('view').innerHTML = `<div class="card"><div class="muted">${esc(TEXT.loading)}</div></div>`;
+    try {
+        const res = await fetch(API, { cache: 'no-store' });
+        if (!res.ok) throw new Error('not found');
+        info = await res.json();
+    } catch (err) { $('view').innerHTML = `<div class="card"><div class="err" role="alert">${esc(TEXT.notFound)}</div></div>`; return; }
+    // el mismo encabezado del Layout: logo (o iniciales), tipo de página, Sitio y empresa
+    window.QrBrandHeader.mount($('qr-brand'), { kind: TEXT.title, siteName: info.siteName, companyName: info.companyName, hasLogo: info.hasLogo, companyColor: info.companyColor, logoUrl: `/api/public/layout/${encodeURIComponent(TOKEN)}/logo` });
+    if (!form.name && info.signedIn) form.name = info.userName || '';
+    view();
+})();
+})();
+</script>
+</body>
+</html>

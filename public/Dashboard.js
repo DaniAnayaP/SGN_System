@@ -12636,6 +12636,8 @@ const TABLE_GRANT_PATHS = {
     'activos-fijos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-fijos' },
     'activos-clasificacion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-clasificacion' },
     'transito-equipos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-transito-equipos' },
+    'incidentes-criterios': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-incidentes-criterios' },
+    'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
     'relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
     'localizadores': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-localizadores' },
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
@@ -12674,6 +12676,8 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-centro-dist-limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     // Operaciones > Pedido Manual: los pedidos que llegan del QR de cada centro de costos (con usuario).
     'cat-operaciones-centro-dist-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
+    // Operaciones > Incidentes: los reportes que llegan del QR de cada centro de costos (con usuario).
+    'cat-operaciones-centro-dist-incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
     // Operaciones > Capacidad Almacenamiento: qué código va en cada lugar de almacenamiento del Layout y su capacidad.
     'cat-operaciones-centro-dist-capacidad-almacenamiento': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-capacidad-almacenamiento' },
     // Operaciones > Temperaturas: la base de registros de las lecturas de temperatura de los refrigeradores con QR (con usuario).

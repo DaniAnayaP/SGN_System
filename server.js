@@ -163,7 +163,7 @@ const {
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
-    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine,
+    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
     addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
@@ -517,7 +517,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento' };
+const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -7146,6 +7146,8 @@ const QR_LOCK_TYPES = {
     safety: { records: true, photos: true, names: true, notes: true, limit: 20, register: true, dates: true },
     // El QR de PEDIDO MANUAL (/pm/…): register = poder enviar un pedido con ese QR · signin = pedir inicio de sesión para enviarlo (el nombre sale de la cuenta en vez de escribirse). De fábrica abierto: sin sesión y con nombre escrito.
     manual_order: { register: true, signin: false },
+    // El QR de INCIDENTES (/inc/…): register = poder reportar con ese QR · signin = pedir inicio de sesión para reportar (el nombre sale de la cuenta en vez de escribirse). De fábrica abierto.
+    incident: { register: true, signin: false },
 };
 const QR_LOCK_LIMITS = [3, 10, 20];
 function qrLocksOf(type, clientId, costCenterId) {
@@ -7614,6 +7616,244 @@ app.put('/api/business/pedido-manual/qr-locks', requireAuth, (req, res) => {
     if (!locks) return res.status(400).json({ message: 'Los candados no son válidos.' });
     saveQrLocks(req.user.clientId, center.id, 'manual_order', locks, req.user.sub);
     res.json({ locks: qrLocksOf('manual_order', req.user.clientId, center.id) });
+});
+
+// --- Incidentes (Operaciones > C. Distribución) ------------------------------------------------------------------------------------------------------
+// Cada centro de costos tiene su QR: la dirección fija /inc/<código aleatorio del Layout del centro> (el mismo código de los demás QR del centro). Quien lo escanea escribe su nombre, elige la ZONA del Layout donde pasó, la
+// categoría y el criterio (catálogo «Criterios de Incidentes»), cuenta la situación con sus palabras y sube sus evidencias (fotos, mínimo una): todo llega a la pantalla Incidentes con la hora (la pone el SERVIDOR, en UTC).
+// Sin sesión, quien escanea escribe su nombre; con el candado «Pedir inicio de sesión» cerrado, solo reporta quien tiene sesión de esa empresa. Los candados se hacen cumplir aquí, en el servidor.
+// Las evidencias no caben siempre en una sola petición: el reporte nace con las primeras y el servidor entrega una clave de un solo reporte (addKey) con la que el teléfono sube las demás.
+const INCIDENT_TABLE_KEY = 'incidentes';
+const INCIDENT_SCREEN_LABEL = 'Incidentes';
+const INCIDENT_STATUS_LABELS = { open: 'Abierto', in_progress: 'En atención', closed: 'Cerrado' };
+const INCIDENT_BATCH_MAX = 10; // fotos por petición
+const INCIDENT_DESC_MAX = 2000;
+const publicIncidentLimiter = rateLimit({ windowMs: 60 * 1000, max: 15, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
+const publicIncidentPhotosLimiter = rateLimit({ windowMs: 60 * 1000, max: 90, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
+const incidentFolio = (id) => `INC-${String(id).padStart(4, '0')}`;
+// Los criterios que se pueden elegir al reportar: los activos del catálogo que ya tienen nombre y una categoría válida, por categoría (Mayor, Menor, Recomendación) y por nombre.
+function incidentCriteriaFor(clientId, isTest) {
+    const order = (k) => INCIDENT_CATEGORIES.indexOf(k);
+    return listArticleCategories(clientId, 'incidentes-criterios', isTest)
+        .filter((r) => r.status === 'active' && String(r.name || '').trim() && INCIDENT_CATEGORIES.includes(r.kind))
+        .map((r) => ({ id: r.id, name: String(r.name).trim(), kind: r.kind }))
+        .sort((a, b) => order(a.kind) - order(b.kind) || a.name.localeCompare(b.name, 'es'));
+}
+// Las zonas activas del Layout del centro (donde pudo pasar el incidente).
+const incidentZonesOf = (row) => ((row.layout && row.layout.zones) || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, code: z.code || '', name: z.name || '' }));
+// Las fotos que llegan (hasta INCIDENT_BATCH_MAX por petición): cada una es una imagen de verdad de hasta ~450 KB y trae su miniatura (opcional). { photos } o { error }.
+function parseIncidentPhotos(raw) {
+    const list = Array.isArray(raw) ? raw : [];
+    if (list.length > INCIDENT_BATCH_MAX) return { error: { message: 'Son demasiadas fotos en un solo envío.', code: 'BATCH' } };
+    const photos = [];
+    for (const item of list) {
+        const photo = parseCleaningPhoto(item && item.photo);
+        if (!photo) return { error: { message: 'Una de las fotos no es válida o pesa demasiado.', code: 'PHOTO' } };
+        photos.push({ ...photo, thumb: parseThumb(item && item.thumb) });
+    }
+    return { photos };
+}
+app.get('/inc/:token', publicLayoutLimiter, (req, res) => {
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' });
+    res.sendFile(path.join(PUBLIC_DIR, 'IncidentesPublica.html'));
+});
+app.get('/api/public/incidentes/:token', publicLayoutLimiter, (req, res) => {
+    const target = manualOrderTarget(req, res);
+    if (!target) return;
+    const { row, client, center, isTest } = target;
+    const locks = qrLocksOf('incident', row.clientId, row.costCenterId || 0);
+    const user = optionalSessionUser(req);
+    const signedIn = !!user && Number(user.clientId) === Number(row.clientId);
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json({
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
+        costCenter: center ? { id: center.id, name: center.name, code: center.code || '' } : null,
+        locks, signedIn, userName: signedIn ? changedByLabel({ user }) : '', now: new Date().toISOString(),
+        zones: incidentZonesOf(row), criteria: incidentCriteriaFor(row.clientId, isTest), batch: INCIDENT_BATCH_MAX, maxChars: INCIDENT_DESC_MAX,
+    });
+});
+app.post('/api/public/incidentes/:token/send', publicIncidentLimiter, (req, res) => {
+    const target = manualOrderTarget(req, res);
+    if (!target) return;
+    const { row, isTest } = target;
+    const locks = qrLocksOf('incident', row.clientId, row.costCenterId || 0);
+    if (!locks.register) return res.status(403).json({ message: 'Este QR solo sirve para consultar.', code: 'LOCKED' });
+    const user = optionalSessionUser(req);
+    const signedIn = !!user && Number(user.clientId) === Number(row.clientId);
+    if (locks.signin && !signedIn) return res.status(401).json({ message: 'Este QR pide iniciar sesión.', code: 'LOGIN' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    // Siempre se pide el nombre de quien reporta (con sesión viene escrito el de la cuenta y se puede cambiar); la cuenta que envía queda registrada aparte.
+    const typed = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const name = typed || (signedIn ? String(changedByLabel({ user }) || '').replace(/\s+/g, ' ').trim().slice(0, 60) : '');
+    if (!name) return res.status(400).json({ message: 'Falta el nombre de quien reporta.', code: 'NAME' });
+    const zones = incidentZonesOf(row);
+    const zone = zones.find((z) => z.id === String(body.zoneId || '')) || null;
+    const placeDetail = String(body.placeDetail || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (zones.length && !zone) return res.status(400).json({ message: 'Falta elegir la zona donde pasó.', code: 'ZONE' });
+    if (!zones.length && !placeDetail) return res.status(400).json({ message: 'Falta decir dónde pasó.', code: 'PLACE' });
+    const criterion = incidentCriteriaFor(row.clientId, isTest).find((c) => c.id === Number(body.criterionId));
+    if (!criterion) return res.status(400).json({ message: 'Falta elegir el criterio.', code: 'CRITERION' });
+    const description = String(body.description || '').replace(/[ \t]+/g, ' ').trim().slice(0, INCIDENT_DESC_MAX);
+    if (!description) return res.status(400).json({ message: 'Falta contar la situación.', code: 'DESC' });
+    const parsed = parseIncidentPhotos(body.photos);
+    if (parsed.error) return res.status(400).json(parsed.error);
+    if (!parsed.photos.length) return res.status(400).json({ message: 'Falta al menos una evidencia.', code: 'PHOTO' });
+    const addKey = crypto.randomBytes(16).toString('hex');
+    const out = createIncident({ clientId: row.clientId, costCenterId: row.costCenterId || 0, reporterName: name, reporterUserId: signedIn ? user.sub : null, source: signedIn ? 'user' : 'qr', zone, placeDetail, criterion, description, photos: parsed.photos, addKey });
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json({ id: out.id, folio: incidentFolio(out.id), createdAt: sqlUtcIso(out.created_at), addKey, photos: out.photo_count, name, category: out.category, criterion: out.criterion_name, zone: zone ? `${zone.code ? `${zone.code} · ` : ''}${zone.name}` : '', now: new Date().toISOString() });
+});
+// Las evidencias que no cupieron en la primera petición: con la clave de ese reporte (nadie más la tiene).
+app.post('/api/public/incidentes/:token/:id/photos', publicIncidentPhotosLimiter, (req, res) => {
+    const target = manualOrderTarget(req, res);
+    if (!target) return;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) return res.status(404).json({ message: 'Not found.' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const parsed = parseIncidentPhotos(body.photos);
+    if (parsed.error) return res.status(400).json(parsed.error);
+    if (!parsed.photos.length) return res.status(400).json({ message: 'No hay fotos.', code: 'PHOTO' });
+    const total = addIncidentPhotos(id, target.row.clientId, typeof body.addKey === 'string' ? body.addKey : '', parsed.photos);
+    res.set('Cache-Control', 'no-store');
+    if (total === null) return res.status(403).json({ message: 'La clave de este reporte no es válida.', code: 'KEY' });
+    if (total === -1) return res.status(400).json({ message: `Un reporte lleva hasta ${INCIDENT_MAX_PHOTOS} evidencias.`, code: 'MAXPHOTOS' });
+    res.json({ photos: total });
+});
+
+// La pantalla (con usuario): TODOS los reportes de la empresa, uno por renglón, con las columnas de Control Interno por fila.
+function incidentRowOf(r, centers, client) {
+    const cc = centers.get(r.cost_center_id);
+    return {
+        id: r.id, folio: incidentFolio(r.id), cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
+        name: r.reporter_name, zoneCode: r.zone_code, zoneName: r.zone_name, placeDetail: r.place_detail, category: r.category, criterion: r.criterion_name, description: r.description,
+        status: r.status, statusAt: sqlUtcIso(r.status_at), statusBy: r.status_by || '', reportedAt: sqlUtcIso(r.created_at), source: r.source,
+        photoCount: r.photo_count || 0, photoIds: r.photo_ids || [], editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
+        system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: INCIDENT_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.created_at }),
+    };
+}
+// Un botón de la pantalla (QR, candado, estatus) pide Ver y Operar en su columna del árbol; el administrador del cliente no depende de hojas.
+const incidentCan = (req, colKey) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), INCIDENT_TABLE_KEY, colKey);
+// Las evidencias (fotos) las ve quien tiene alguna hoja de la columna Evidencias en el árbol.
+const incidentCanSeePhotos = (req) => !!req.user.isClientAdmin || hasColumnGrant(getUserEffectiveGrants(req.user.sub), INCIDENT_TABLE_KEY, 'colIncEvidencias');
+const incidentEditable = (req) => editableColumnsOf(req, INCIDENT_TABLE_KEY, [['name', 'colIncQuien'], ['placeDetail', 'colIncDetalle'], ['description', 'colIncDescripcion']]);
+function prepareIncidentEdit(body, allowed) {
+    const src = body && typeof body === 'object' ? body : {};
+    const has = (key) => allowed.includes(key) && Object.prototype.hasOwnProperty.call(src, key);
+    const patch = {};
+    if (has('name')) {
+        const name = String(src.name === null || src.name === undefined ? '' : src.name).replace(/\s+/g, ' ').trim().slice(0, 60);
+        if (!name) return { error: 'Falta el nombre de quien reporta.', code: 'NAME' };
+        patch.name = name;
+    }
+    if (has('placeDetail')) patch.placeDetail = String(src.placeDetail === null || src.placeDetail === undefined ? '' : src.placeDetail).replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (has('description')) {
+        const text = String(src.description === null || src.description === undefined ? '' : src.description).replace(/[ \t]+/g, ' ').trim().slice(0, INCIDENT_DESC_MAX);
+        if (!text) return { error: 'Falta contar la situación.', code: 'DESC' };
+        patch.description = text;
+    }
+    if (!Object.keys(patch).length) return { error: 'No hay nada que corregir.', code: 'EMPTY' };
+    return { patch };
+}
+app.get('/api/business/incidentes', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const centers = new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c]));
+    const LIMIT = 5000;
+    const rows = listIncidents(clientId, { limit: LIMIT });
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        truncated: rows.length >= LIMIT, max: LIMIT,
+        canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), INCIDENT_TABLE_KEY, 'colIncDeleteAuth'),
+        canQr: incidentCan(req, 'colIncQr'), canLock: incidentCan(req, 'colIncQrLock'), canStatus: incidentCan(req, 'colIncEstatus'), canPhotos: incidentCanSeePhotos(req),
+        editable: incidentEditable(req),
+        incidents: rows.map((r) => { const o = incidentRowOf(r, centers, client); if (!incidentCanSeePhotos(req)) o.photoIds = []; return o; }),
+    });
+});
+// Corregir quién reporta, el detalle del lugar o la situación: pasa por la misma tubería de cambios de toda la plataforma (checkAndLogFieldChanges).
+app.patch('/api/business/incidentes/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getIncident(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    const prepared = prepareIncidentEdit(req.body, ['name', 'placeDetail', 'description']);
+    if (prepared.error) return res.status(400).json({ message: prepared.error, code: prepared.code });
+    const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, rec, prepared.patch, INCIDENT_PATCHABLE_FIELDS, INCIDENT_TABLE_KEY, `Incidente ${incidentFolio(rec.id)}`);
+    const updated = updateIncident(id, req.user.clientId, appliedPatch, { editedBy: changedByLabel(req) });
+    const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
+    const out = incidentRowOf(updated, centers, getClientById(req.user.clientId));
+    if (!incidentCanSeePhotos(req)) out.photoIds = [];
+    res.json({ incident: out, pendingFields, rejectedFields });
+});
+// Cambiar el estatus (Abierto / En atención / Cerrado): es una operación del día, no una corrección; pide Ver y Operar en la columna Estatus y queda en el historial de cambios.
+app.post('/api/business/incidentes/:id/status', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getIncident(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    if (!incidentCan(req, 'colIncEstatus')) return res.status(403).json({ message: 'No tienes permiso para cambiar el estatus.' });
+    const status = String((req.body && req.body.status) || '');
+    if (!INCIDENT_STATUSES.includes(status)) return res.status(400).json({ message: 'El estatus no es válido.', code: 'STATUS' });
+    const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
+    const client = getClientById(req.user.clientId);
+    const wrap = (r) => { const o = incidentRowOf(r, centers, client); if (!incidentCanSeePhotos(req)) o.photoIds = []; return o; };
+    if (status === rec.status) return res.json({ incident: wrap(rec) });
+    const updated = setIncidentStatus(id, req.user.clientId, status, changedByLabel(req));
+    try {
+        logTableChange({ clientId: req.user.clientId, tableKey: INCIDENT_TABLE_KEY, recordId: rec.id, recordLabel: `Incidente ${incidentFolio(rec.id)}`, action: 'update', fieldKey: 'main.colIncEstatus', oldValue: INCIDENT_STATUS_LABELS[rec.status] || rec.status, newValue: INCIDENT_STATUS_LABELS[status], changedBy: changedByLabel(req) });
+    } catch (err) { console.error('incident status log failed', err); }
+    res.json({ incident: wrap(updated) });
+});
+app.delete('/api/business/incidentes/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getIncident(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    if (!req.user.isClientAdmin && !canDeleteColumn(getUserEffectiveGrants(req.user.sub), INCIDENT_TABLE_KEY, 'colIncDeleteAuth')) return res.status(403).json({ message: 'No tienes permiso para eliminar reportes de Incidentes.' });
+    deleteIncident(id, req.user.clientId);
+    try { notifyDataChange({ clientId: req.user.clientId, tableKey: INCIDENT_TABLE_KEY, recordLabel: `Incidente ${incidentFolio(rec.id)}`, fieldKey: 'colIncDeleteAuth', oldValue: `${rec.criterion_name} (${rec.reporter_name})`, newValue: 'Eliminado', actorUserId: req.user.sub, actorLabel: changedByLabel(req) }); } catch (err) { console.error('incident delete notice failed', err); }
+    res.json({ ok: true });
+});
+// Una evidencia de un reporte (la foto completa, o con ?thumb=1 su miniatura): solo con sesión y con la columna Evidencias en el árbol.
+app.get('/api/business/incidentes/:id/photo/:photoId', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).end();
+    if (!incidentCanSeePhotos(req)) return res.status(403).end();
+    const id = Number(req.params.id);
+    const photoId = Number(req.params.photoId);
+    if (!Number.isInteger(id) || !Number.isInteger(photoId) || !getIncident(id, req.user.clientId)) return res.status(404).end();
+    const photo = getIncidentPhoto(id, photoId, req.query.thumb === '1');
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
+});
+// El QR del centro de costos que se eligió: la dirección fija (/inc/…) y la cuadrícula del QR para dibujarlo; sale del Layout de ese centro (si todavía no hay uno guardado, no hay QR).
+app.get('/api/business/incidentes/qr', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!incidentCan(req, 'colIncQr')) return res.status(403).json({ message: 'No tienes permiso para usar el QR de Incidentes.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    const token = ensureLayoutPublicToken(req.user.clientId, center.id);
+    if (!token) return res.status(404).json({ message: 'Todavía no hay un Layout guardado en ese centro de costos: el QR sale de ahí.', code: 'NOLAYOUT' });
+    const layoutRow = getClientLayout(req.user.clientId, { costCenterId: center.id });
+    const url = `${req.protocol}://${req.get('host')}/inc/${token}`;
+    const client = getClientById(req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        url, qrRows: layoutQrRows(url), costCenter: { id: center.costCenter.id, name: center.costCenter.name, code: center.costCenter.code || '' }, siteName: (layoutRow && layoutRow.layout.siteName) || '',
+        companyName: (client && client.company_name) || '', ...qrBranding(req.user.clientId), locks: qrLocksOf('incident', req.user.clientId, center.id), canLock: incidentCan(req, 'colIncQrLock'),
+    });
+});
+app.put('/api/business/incidentes/qr-locks', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!incidentCan(req, 'colIncQrLock')) return res.status(403).json({ message: 'No tienes permiso para cambiar los candados del QR.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    const locks = sanitizeQrLocks('incident', req.body && req.body.locks);
+    if (!locks) return res.status(400).json({ message: 'Los candados no son válidos.' });
+    saveQrLocks(req.user.clientId, center.id, 'incident', locks, req.user.sub);
+    res.json({ locks: qrLocksOf('incident', req.user.clientId, center.id) });
 });
 
 // Hoja de QR de limpieza: un QR por activo (de una zona o de todas) con su dirección fija; la hoja se imprime desde el Layout.
@@ -8618,6 +8858,13 @@ function prepareTransitEquipmentPatch(categoryType, patch) {
     }
     return { patch: out, sanitizers: { kind: (v) => TRANSIT_EQUIPMENT_KIND_LABELS[v] || '' } };
 }
+// Criterios de Incidentes: cada criterio pertenece a UNA categoría de incidente (kind): No conformidad Mayor, No conformidad Menor o Recomendación.
+const INCIDENT_CATEGORY_LABELS = { mayor: 'No conformidad Mayor', menor: 'No conformidad Menor', recomendacion: 'Recomendación' };
+function prepareIncidentCriterionPatch(categoryType, patch) {
+    if (categoryType !== 'incidentes-criterios' || !Object.prototype.hasOwnProperty.call(patch, 'kind')) return { patch, sanitizers: {} };
+    if (!['', ...INCIDENT_CATEGORIES].includes(patch.kind)) return { error: { status: 400, message: 'La categoría debe ser No conformidad Mayor, No conformidad Menor o Recomendación.' } };
+    return { patch, sanitizers: { kind: (v) => INCIDENT_CATEGORY_LABELS[v] || '' } };
+}
 function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null) {
     if (!row) return row;
     const config = articleCategoryTypeConfig(row.category_type);
@@ -8634,6 +8881,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             kind: row.kind, locations: row.kind === 'physical' ? parseWarehouseLocations(row.locations) : [],
         } : {}),
         ...(row.category_type === 'activos-clasificacion' ? { kind: row.kind } : {}),
+        ...(row.category_type === 'incidentes-criterios' ? { kind: row.kind } : {}),
         ...(row.category_type === 'transito-equipos' ? { kind: row.kind, widthM: row.width_m || 0, lengthM: row.length_m || 0, heightM: row.height_m || 0 } : {}),
         ...(ctx && row.category_type === 'inventario' ? (() => {
             const ids = parseClassificationIds(row.classification_ids);
@@ -8695,7 +8943,9 @@ app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, req
     if (preparedFixedAsset.error) return res.status(preparedFixedAsset.error.status).json({ message: preparedFixedAsset.error.message });
     const preparedTransit = prepareTransitEquipmentPatch(req.params.categoryType, preparedFixedAsset.patch);
     if (preparedTransit.error) return res.status(preparedTransit.error.status).json({ message: preparedTransit.error.message });
-    const prepared = { patch: preparedTransit.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers, ...preparedTransit.sanitizers } };
+    const preparedIncident = prepareIncidentCriterionPatch(req.params.categoryType, preparedTransit.patch);
+    if (preparedIncident.error) return res.status(preparedIncident.error.status).json({ message: preparedIncident.error.message });
+    const prepared = { patch: preparedIncident.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers, ...preparedTransit.sanitizers, ...preparedIncident.sanitizers } };
     const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, articleCategoryPatchableFields(req.params.categoryType), config.tableKey, `#${existing.id}`, prepared.sanitizers, { baseline, overrideConflicts });
     const category = updateArticleCategory(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     const client = getClientById(req.user.clientId);
@@ -8727,6 +8977,11 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, re
     if (req.params.categoryType === 'transito-equipos') {
         const used = listClientLayouts(req.user.clientId).filter((l) => (l.layout.transit || []).some((p) => (p.who || []).includes(existing.id)) || (l.layout.objects || []).some((o) => Number(o.equipId) === existing.id));
         if (used.length) return res.status(409).json({ message: 'Hay pasillos u objetos de un Layout que usan este renglón. Cámbialos primero en Layout > Tránsito u Objetos, o márcalo como Inactivo.' });
+    }
+    // Un criterio que algún reporte de Incidentes ya usó no se borra (se deja Inactivo): esos reportes perderían el criterio con el que se clasificaron.
+    if (req.params.categoryType === 'incidentes-criterios') {
+        const used = countIncidentsByCriterion(req.user.clientId, existing.id);
+        if (used) return res.status(409).json({ message: `Hay ${used === 1 ? 'un reporte' : `${used} reportes`} de Incidentes con este criterio. Márcalo como Inactivo en vez de eliminarlo.` });
     }
     // Un almacén con sub almacenes no se borra (se deja Inactivo): los sub almacenes quedarían sin almacén.
     if (req.params.categoryType === 'almacenes'
@@ -10607,6 +10862,8 @@ const PENDING_CHANGE_APPLIERS = {
     'pedido-manual': (recordId, clientId, patch, extra) => updateManualOrderLine(recordId, clientId, patch, extra),
     // Cambiar el código ya asignado a un lugar de Capacidad Almacenamiento cuando lo autoriza otra persona.
     'capacidad-almacenamiento': (recordId, clientId, patch, extra) => updateStorageCapacity(recordId, clientId, patch, extra),
+    // Corregir un reporte de Incidentes (quién reporta, el detalle del lugar o la situación) cuando lo autoriza otra persona.
+    'incidentes': (recordId, clientId, patch, extra) => updateIncident(recordId, clientId, patch, extra),
     'temperaturas': (recordId, clientId, patch, extra) => updateTemperatureRecord(recordId, clientId, patch, extra),
     'seguridad': (recordId, clientId, patch, extra) => updateSafetyCheck(recordId, clientId, patch, extra),
 };

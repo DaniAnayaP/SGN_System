@@ -3034,6 +3034,7 @@ function createClient({
     seedActivosFijosValues(created.id);
     seedActivosClasificacionValues(created.id);
     seedTransitoEquiposValues(created.id);
+    seedIncidentesCriteriosValues(created.id);
     resetClientTimeZoneCache();
     return created;
 }
@@ -3234,6 +3235,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'relacion-codigo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
     'capacidad-almacenamiento': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Capacidad Almacenamiento' },
+    'incidentes': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Incidentes' },
 };
 
 // "Nuestros Cambios" — every row any pantalla has ever logged via
@@ -3594,6 +3596,8 @@ const TABLE_GRANT_PATHS = {
     'activos-fijos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-fijos' },
     'activos-clasificacion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-clasificacion' },
     'transito-equipos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-transito-equipos' },
+    'incidentes-criterios': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-incidentes-criterios' },
+    'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
     'nuestros-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestros-traslados' },
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
@@ -3789,6 +3793,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'activos-fijos': CATEGORY_BUTTON_NOTIFY,
     'activos-clasificacion': CATEGORY_BUTTON_NOTIFY,
     'transito-equipos': CATEGORY_BUTTON_NOTIFY,
+    'incidentes-criterios': CATEGORY_BUTTON_NOTIFY,
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
 };
@@ -5496,6 +5501,141 @@ function listManualOrderLines(clientId, { costCenterId, limit } = {}) {
     const cap = limit ? ` LIMIT ${Math.max(1, Math.min(Number(limit) || 50, 5000))}` : '';
     return db.prepare(`${MANUAL_LINE_SELECT} WHERE ${where.join(' AND ')} ORDER BY o.created_at DESC, l.order_id DESC, l.line_no ASC${cap}`).all(...args);
 }
+// --- Incidentes (Operaciones, C. Distribución) ----------------------------------------------------------------------------------------------------------
+// Cada centro de costos tiene un QR (la dirección fija /inc/<código del Layout del centro>): quien lo escanea reporta un hallazgo. Escribe su nombre, elige la ZONA del Layout donde pasó, la categoría (No conformidad
+// Mayor, No conformidad Menor o Recomendación) y el criterio de esa categoría (catálogo «Criterios de Incidentes»), cuenta la situación con sus palabras y sube sus evidencias (fotos: mínimo una, sin máximo práctico).
+// La hora la pone el SERVIDOR (UTC). El criterio y la zona se guardan tal como estaban al reportar (el catálogo y el Layout pueden cambiar después). El estatus (open, in_progress, closed) lo cambia quien tiene permiso.
+// add_key: la clave de un solo uso que el servidor entrega al crear el reporte para que el teléfono suba las fotos que no cupieron en la primera petición.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS incidents (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id         INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        cost_center_id    INTEGER NOT NULL DEFAULT 0,
+        reporter_name     TEXT NOT NULL DEFAULT '',
+        reporter_user_id  INTEGER,
+        source            TEXT NOT NULL DEFAULT 'qr',
+        zone_id           TEXT NOT NULL DEFAULT '',
+        zone_code         TEXT NOT NULL DEFAULT '',
+        zone_name         TEXT NOT NULL DEFAULT '',
+        place_detail      TEXT NOT NULL DEFAULT '',
+        criterion_id      INTEGER,
+        criterion_name    TEXT NOT NULL DEFAULT '',
+        category          TEXT NOT NULL DEFAULT '',
+        description       TEXT NOT NULL DEFAULT '',
+        status            TEXT NOT NULL DEFAULT 'open',
+        status_at         TEXT,
+        status_by         TEXT NOT NULL DEFAULT '',
+        edited_at         TEXT,
+        edited_by         TEXT NOT NULL DEFAULT '',
+        add_key           TEXT NOT NULL DEFAULT '',
+        created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_incidents_center ON incidents(client_id, cost_center_id, created_at);
+    CREATE TABLE IF NOT EXISTS incident_photos (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        incident_id  INTEGER NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+        mime         TEXT NOT NULL,
+        data         BLOB NOT NULL,
+        thumb_mime   TEXT,
+        thumb        BLOB,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_incident_photos_incident ON incident_photos(incident_id);
+`);
+const INCIDENT_CATEGORIES = ['mayor', 'menor', 'recomendacion'];
+const INCIDENT_STATUSES = ['open', 'in_progress', 'closed'];
+// Tope técnico de evidencias por reporte (no se espera llegar): protege la base de un envío fuera de lo normal.
+const INCIDENT_MAX_PHOTOS = 200;
+// Lo que se puede corregir de un reporte ya enviado: quién reporta, el detalle del lugar y la situación. La hora, la zona, la categoría y el criterio nunca cambian. El estatus se cambia aparte (setIncidentStatus).
+const INCIDENT_PATCHABLE_FIELDS = {
+    name: { column: 'reporter_name', fieldKey: 'main.colIncQuien' },
+    placeDetail: { column: 'place_detail', fieldKey: 'main.colIncDetalle' },
+    description: { column: 'description', fieldKey: 'main.colIncDescripcion' },
+};
+const INCIDENT_SELECT = 'SELECT i.*, (SELECT COUNT(*) FROM incident_photos p WHERE p.incident_id = i.id) AS photo_count FROM incidents i';
+// Guarda un reporte con sus primeras evidencias en una sola operación. zone = { id, code, name } (del Layout), criterion = { id, name, kind }, photos = [{ mime, data, thumb: { mime, data } | null }].
+function createIncident({ clientId, costCenterId, reporterName, reporterUserId = null, source = 'qr', zone, placeDetail = '', criterion, description, photos, addKey }) {
+    return db.transaction(() => {
+        const info = db.prepare(`INSERT INTO incidents (client_id, cost_center_id, reporter_name, reporter_user_id, source, zone_id, zone_code, zone_name, place_detail, criterion_id, criterion_name, category, description, add_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+            .run(clientId, costCenterId || 0, reporterName || '', reporterUserId, source, (zone && zone.id) || '', (zone && zone.code) || '', (zone && zone.name) || '', placeDetail || '', criterion.id || null, criterion.name || '', criterion.kind || '', description || '', addKey || '');
+        const id = Number(info.lastInsertRowid);
+        const insert = db.prepare('INSERT INTO incident_photos (incident_id, mime, data, thumb_mime, thumb) VALUES (?, ?, ?, ?, ?)');
+        (photos || []).forEach((p) => insert.run(id, p.mime, p.data, p.thumb ? p.thumb.mime : null, p.thumb ? p.thumb.data : null));
+        return db.prepare(`${INCIDENT_SELECT} WHERE i.id = ?`).get(id);
+    })();
+}
+// Agrega evidencias a un reporte que ya existe, con la clave que se entregó al crearlo. Devuelve cuántas evidencias tiene ahora, o null si la clave no es la del reporte, o -1 si pasaría el tope.
+function addIncidentPhotos(incidentId, clientId, addKey, photos) {
+    return db.transaction(() => {
+        const row = db.prepare('SELECT id, add_key FROM incidents WHERE id = ? AND client_id = ?').get(incidentId, clientId);
+        if (!row || !row.add_key || row.add_key !== String(addKey || '')) return null;
+        const have = db.prepare('SELECT COUNT(*) AS n FROM incident_photos WHERE incident_id = ?').get(incidentId).n;
+        if (have + (photos || []).length > INCIDENT_MAX_PHOTOS) return -1;
+        const insert = db.prepare('INSERT INTO incident_photos (incident_id, mime, data, thumb_mime, thumb) VALUES (?, ?, ?, ?, ?)');
+        (photos || []).forEach((p) => insert.run(incidentId, p.mime, p.data, p.thumb ? p.thumb.mime : null, p.thumb ? p.thumb.data : null));
+        return have + (photos || []).length;
+    })();
+}
+// Los reportes de la empresa, del más reciente al más viejo, cada uno con los ids de sus evidencias (photoIds) para dibujar las miniaturas sin pedir las fotos.
+function listIncidents(clientId, { costCenterId, limit } = {}) {
+    const where = ['i.client_id = ?'];
+    const args = [clientId];
+    if (costCenterId !== undefined) { where.push('i.cost_center_id = ?'); args.push(costCenterId || 0); }
+    const cap = limit ? ` LIMIT ${Math.max(1, Math.min(Number(limit) || 50, 5000))}` : '';
+    const rows = db.prepare(`${INCIDENT_SELECT} WHERE ${where.join(' AND ')} ORDER BY i.created_at DESC, i.id DESC${cap}`).all(...args);
+    if (!rows.length) return rows;
+    const byIncident = new Map();
+    db.prepare('SELECT p.incident_id, p.id FROM incident_photos p JOIN incidents i ON i.id = p.incident_id WHERE i.client_id = ? ORDER BY p.id ASC').all(clientId)
+        .forEach((p) => { if (!byIncident.has(p.incident_id)) byIncident.set(p.incident_id, []); byIncident.get(p.incident_id).push(p.id); });
+    rows.forEach((r) => { r.photo_ids = byIncident.get(r.id) || []; });
+    return rows;
+}
+function getIncident(id, clientId) {
+    const row = db.prepare(`${INCIDENT_SELECT} WHERE i.id = ? AND i.client_id = ?`).get(id, clientId);
+    if (row) row.photo_ids = db.prepare('SELECT id FROM incident_photos WHERE incident_id = ? ORDER BY id ASC').all(id).map((p) => p.id);
+    return row;
+}
+// small = true: la miniatura (si esa evidencia la tiene, sin leer la foto completa); si no, la foto completa.
+function getIncidentPhoto(incidentId, photoId, small = false) {
+    if (small) {
+        const th = db.prepare('SELECT thumb_mime AS mime, thumb AS data FROM incident_photos WHERE id = ? AND incident_id = ? AND thumb IS NOT NULL').get(photoId, incidentId);
+        if (th) return th;
+    }
+    return db.prepare('SELECT mime, data FROM incident_photos WHERE id = ? AND incident_id = ?').get(photoId, incidentId);
+}
+// Corrige un reporte: quién reporta, el detalle del lugar o la situación. Marca el reporte como corregido (cuándo y quién).
+function updateIncident(id, clientId, patch, { editedBy = '' } = {}) {
+    const existing = db.prepare('SELECT id FROM incidents WHERE id = ? AND client_id = ?').get(id, clientId);
+    if (!existing) return null;
+    const p = patch || {};
+    const sets = [];
+    const params = [];
+    if (Object.prototype.hasOwnProperty.call(p, 'name')) {
+        const name = String(p.name === null || p.name === undefined ? '' : p.name).replace(/\s+/g, ' ').trim().slice(0, 60);
+        if (name) { sets.push('reporter_name = ?'); params.push(name); }
+    }
+    if (Object.prototype.hasOwnProperty.call(p, 'placeDetail')) { sets.push('place_detail = ?'); params.push(String(p.placeDetail === null || p.placeDetail === undefined ? '' : p.placeDetail).replace(/\s+/g, ' ').trim().slice(0, 200)); }
+    if (Object.prototype.hasOwnProperty.call(p, 'description')) {
+        const text = String(p.description === null || p.description === undefined ? '' : p.description).replace(/[ \t]+/g, ' ').trim().slice(0, 2000);
+        if (text) { sets.push('description = ?'); params.push(text); }
+    }
+    if (sets.length) db.prepare(`UPDATE incidents SET ${sets.join(', ')}, edited_at = datetime('now'), edited_by = ? WHERE id = ? AND client_id = ?`).run(...params, String(editedBy || '').slice(0, 120), id, clientId);
+    return getIncident(id, clientId);
+}
+function setIncidentStatus(id, clientId, status, by = '') {
+    if (!INCIDENT_STATUSES.includes(status)) return null;
+    db.prepare("UPDATE incidents SET status = ?, status_at = datetime('now'), status_by = ? WHERE id = ? AND client_id = ?").run(status, String(by || '').slice(0, 120), id, clientId);
+    return getIncident(id, clientId);
+}
+function deleteIncident(id, clientId) {
+    return db.prepare('DELETE FROM incidents WHERE id = ? AND client_id = ?').run(id, clientId).changes > 0;
+}
+// Cuántos reportes usan un criterio del catálogo (para no borrar uno que ya se usó: se deja Inactivo).
+function countIncidentsByCriterion(clientId, criterionId) {
+    return db.prepare('SELECT COUNT(*) AS n FROM incidents WHERE client_id = ? AND criterion_id = ?').get(clientId, criterionId).n;
+}
+
 // --- Capacidad Almacenamiento (Operaciones, C. Distribución) ---------------------------------------------------------------------------------------------
 // Qué código se asignó a cada lugar de almacenamiento del Layout. El lugar NO es una fila de la base: sale del Layout de cada centro de costos (un hueco = activo × nivel × columna, ver LayoutCalc.storageLocations);
 // aquí solo se guarda la asignación (location_key = id del activo|nivel|columna). La capacidad se calcula con lo del código, así que nunca se guarda.
@@ -5906,6 +6046,8 @@ const ARTICLE_CATEGORY_TYPES = {
     'activos-clasificacion': { prefix: 'ACL', tableKey: 'activos-clasificacion', pantalla: 'Nuestras Clasificaciones de Activos' },
     // Lo que transita (personas, montacargas, carritos, plataformas… con su ancho, largo y alto): lo eligen los pasillos (Layout > Tránsito) y los objetos (Layout > Objetos).
     'transito-equipos': { prefix: 'TRE', tableKey: 'transito-equipos', pantalla: 'Lo que Transita' },
+    // Criterios de Incidentes (Pickeo cruzado, Error de lote, Acomodar por agrupación…): cada criterio pertenece a UNA categoría (kind = mayor | menor | recomendacion). Los eligen quienes reportan en el QR de Incidentes.
+    'incidentes-criterios': { prefix: 'ICR', tableKey: 'incidentes-criterios', pantalla: 'Criterios de Incidentes' },
 };
 
 // El catálogo de lo que transita de una empresa, como lo usa el Layout: [{ id, name, kind, w, l, h, status }] (solo lo que ya tiene nombre). Se pone en layout.transitCatalog al leer el Layout (no se guarda con él).
@@ -6008,6 +6150,9 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
     },
     'activos-clasificacion': {
         kind: { column: 'kind', fieldKey: 'main.colActClasMetrica' },
+    },
+    'incidentes-criterios': {
+        kind: { column: 'kind', fieldKey: 'main.colIncCritCategoria' },
     },
     'transito-equipos': {
         kind: { column: 'kind', fieldKey: 'main.colTrEquipTipo' },
@@ -7623,6 +7768,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'activos-fijos', labelKey: 'menu.catCentroDistActivosFijos' },
     { key: 'activos-clasificacion', labelKey: 'menu.catCentroDistActivosClasificacion' },
     { key: 'transito-equipos', labelKey: 'menu.catCentroDistTransitoEquipos' },
+    { key: 'incidentes-criterios', labelKey: 'menu.catCentroDistIncidentesCriterios' },
     { key: 'nuestras-cotizaciones', labelKey: 'menu.opTransVolCotizaciones' },
     { key: 'nuestros-traslados', labelKey: 'menu.opTransVolNuestrosTraslados' },
     { key: 'tipos-cliente', labelKey: 'menu.catTransVolTiposCliente' },
@@ -11814,6 +11960,30 @@ function seedTransitoEquiposValuesOnce() {
     })();
     console.log(`[db] Seeded the Lo que transita catalog (Personas, Montacargas, Carrito, Plataforma) for existing clients: ${seeded} values (one-time).`);
 }
+// Criterios de Incidentes: cada empresa arranca con los tres ejemplos de Daniel (uno por categoría); agrega y cambia los suyos desde Catálogos.
+const INCIDENTES_CRITERIOS_DEFAULTS = [
+    { name: 'Pickeo cruzado', kind: 'mayor' },
+    { name: 'Error de lote', kind: 'menor' },
+    { name: 'Acomodar por agrupación', kind: 'recomendacion' },
+];
+const INCIDENTES_CRITERIOS_SEED_KEY = 'seed-incidentes-criterios-v1';
+function seedIncidentesCriteriosValues(clientId) {
+    if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = 'incidentes-criterios' LIMIT 1").get(clientId)) return 0;
+    INCIDENTES_CRITERIOS_DEFAULTS.forEach(({ name, kind }) => {
+        const row = createArticleCategory({ clientId, categoryType: 'incidentes-criterios', isTestData: false });
+        db.prepare("UPDATE article_categories SET name = ?, kind = ?, status = 'active' WHERE id = ?").run(name, kind, row.id);
+    });
+    return INCIDENTES_CRITERIOS_DEFAULTS.length;
+}
+function seedIncidentesCriteriosValuesOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(INCIDENTES_CRITERIOS_SEED_KEY)) return;
+    let seeded = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => { seeded += seedIncidentesCriteriosValues(c.id); });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(INCIDENTES_CRITERIOS_SEED_KEY);
+    })();
+    console.log(`[db] Seeded the Criterios de Incidentes catalog (Pickeo cruzado, Error de lote, Acomodar por agrupación) for existing clients: ${seeded} values (one-time).`);
+}
 function seedActivosFijosValuesOnce() {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_SEED_KEY)) return;
     let seeded = 0;
@@ -11841,6 +12011,7 @@ seedActivosFijosValuesOnce();
 seedActivosFijosTiposOnce();
 seedActivosClasificacionValuesOnce();
 seedTransitoEquiposValuesOnce();
+seedIncidentesCriteriosValuesOnce();
 
 module.exports = {
     db,
@@ -11955,6 +12126,19 @@ module.exports = {
     updateManualOrderLine,
     setManualOrderLineStatus,
     deleteManualOrderLine,
+    INCIDENT_CATEGORIES,
+    INCIDENT_STATUSES,
+    INCIDENT_MAX_PHOTOS,
+    INCIDENT_PATCHABLE_FIELDS,
+    createIncident,
+    addIncidentPhotos,
+    listIncidents,
+    getIncident,
+    getIncidentPhoto,
+    updateIncident,
+    setIncidentStatus,
+    deleteIncident,
+    countIncidentsByCriterion,
     CLEANING_PATCHABLE_FIELDS,
     addSafetyCheck,
     listSafetyChecks,
