@@ -495,12 +495,15 @@ const searchReady = () => window.SearchSyntax.ready(draft.mode, searchTerms(draf
 const signOff = (sign) => (sign === '$' && draft.mode !== 'contains') || (sign === '@' && draft.mode === 'equals');
 // los valores de un campo: las categorías se prueban una por una (Igual que compara cada una)
 const valuesOf = (item, key) => (key === 'categories' ? String(item.categories || '').split(' · ').filter(Boolean) : [item[key]]);
+// Solo se pueden pedir los códigos RELACIONADOS (Relación Código) con el centro de costos del pedido; un catálogo guardado de antes (sin esa lista) se ve completo hasta que se vuelva a bajar con señal.
+const relatedTo = (it) => !Array.isArray(it.centers) || (draft.costCenterId !== null && it.centers.includes(draft.costCenterId));
 function searchCatalog() {
     if (!searchReady()) return null;
     const test = window.SearchSyntax.compile(draft.mode, searchTerms(draft.query));
     const keys = draft.fields.length ? draft.fields : FIELD_KEYS.map(([k]) => k);
     const found = [];
     for (const it of catalog) {
+        if (!relatedTo(it)) continue;
         if (keys.some((k) => valuesOf(it, k).some((v) => !!v && test(v)))) { found.push(it); if (found.length > MAX_RESULTS) break; }
     }
     return found;
@@ -534,7 +537,16 @@ function renderNew() {
         ccRow.innerHTML = `<span class="home-carga-field-icon"><i class="bx bx-buildings" aria-hidden="true"></i></span><span class="home-carga-field-label"><p>${esc(t('home.pmCenter'))}</p><span>${esc(cc ? `${cc.code ? `${cc.code} · ` : ''}${cc.name}` : t('home.pmCenterPick'))}</span></span><i class="bx ${cc ? 'bx-edit' : 'bx-chevron-down'} home-carga-field-trailing"></i>`;
     };
     ccDraw();
-    ccRow.addEventListener('click', () => openSheet(t('home.pmCenter'), costCenters.map((c) => ({ value: c.id, label: `${c.code ? `${c.code} · ` : ''}${c.name}` })), draft.costCenterId, (value) => { draft.costCenterId = value; ccDraw(); sendDraw(); }));
+    ccRow.addEventListener('click', () => openSheet(t('home.pmCenter'), costCenters.map((c) => ({ value: c.id, label: `${c.code ? `${c.code} · ` : ''}${c.name}` })), draft.costCenterId, (value) => {
+        draft.costCenterId = value;
+        // lo ya agregado que no está relacionado con el centro nuevo se quita del pedido
+        const gone = Array.from(draft.cart.values()).filter(({ item }) => !relatedTo(item));
+        gone.forEach(({ item }) => draft.cart.delete(item.id));
+        if (gone.length) showToast(t('home.pmCartPruned', { n: gone.length }));
+        ccDraw();
+        drawResults();
+        draft.redrawCart();
+    }));
     const ccWrap = document.createElement('div');
     ccWrap.className = 'home-carga-field';
     ccWrap.appendChild(ccRow);
@@ -583,6 +595,8 @@ function renderNew() {
         if (catalogState === 'loading') { note.textContent = t('home.pmCatalogLoading'); return; }
         if (catalogState === 'none') { note.textContent = t('home.pmCatalogNone'); return; }
         if (catalogState === 'cached') note.textContent = t('home.pmCatalogCached', { n: catalog.length });
+        if (draft.costCenterId === null && catalog.some((it) => Array.isArray(it.centers))) { note.textContent = t('home.pmPickCenterFirst'); return; }
+        if (catalog.length && !catalog.some(relatedTo)) { note.textContent = t('home.pmNoRelated'); return; }
         const found = searchCatalog();
         if (found === null) { if (catalogState !== 'cached') note.textContent = t(draft.mode === 'contains' ? 'home.pmTypeMore' : 'home.pmTypeOne'); return; }
         if (!found.length) { note.textContent = t('home.pmNone'); return; }

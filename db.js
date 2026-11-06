@@ -5456,9 +5456,15 @@ const MANUAL_ORDER_PATCHABLE_FIELDS = {
 const MANUAL_LINE_SELECT = `SELECT l.*, o.cost_center_id, o.requester_name, o.requester_user_id, o.source, o.created_at AS order_created_at, o.received_at AS order_received_at FROM manual_order_lines l JOIN manual_orders o ON o.id = l.order_id`;
 const MANUAL_CATEGORY_COLUMNS = ['category_inventario', 'category_compra', 'category_almacenamiento', 'category_rotacion', 'category_manejo', 'category_riesgo', 'category_vidautil'];
 // Los artículos con los que se puede pedir: los de la empresa, con su código, descripciones, UdM y categorías (las siete listas de Alta Nuestros Artículos).
-function listManualOrderItems(clientId, isTest = false) {
-    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? ORDER BY record_number ASC`)
-        .all(clientId, isTest ? 1 : 0);
+// costCenterId > 0: solo los códigos RELACIONADOS con ese centro de costos en Relación Código (de cualquier almacén, zona o clasificación); sin centro, todos los de la empresa.
+function listManualOrderItems(clientId, isTest = false, costCenterId = 0) {
+    const related = costCenterId ? ' AND id IN (SELECT sku_item_id FROM code_relations WHERE client_id = ? AND is_test_data = ? AND cost_center_id = ?)' : '';
+    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ?${related} ORDER BY record_number ASC`)
+        .all(clientId, isTest ? 1 : 0, ...(costCenterId ? [clientId, isTest ? 1 : 0, costCenterId] : []));
+}
+// Con qué centros de costos tiene relación cada código (para que la App filtre por el centro que se elige en el pedido): [{ sku_item_id, cost_center_id }].
+function listManualItemCenters(clientId, isTest = false) {
+    return db.prepare('SELECT DISTINCT sku_item_id, cost_center_id FROM code_relations WHERE client_id = ? AND is_test_data = ? AND sku_item_id IS NOT NULL AND cost_center_id IS NOT NULL').all(clientId, isTest ? 1 : 0);
 }
 function getManualOrderItem(clientId, id, isTest = false) {
     return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id = ?`)
@@ -11940,6 +11946,7 @@ module.exports = {
     deleteStorageCapacity,
     listSkuCapacityData,
     listManualOrderItems,
+    listManualItemCenters,
     getManualOrderItem,
     createManualOrder,
     findManualOrderByRef,

@@ -122,7 +122,7 @@ const TEXT = {
         searchMode: 'Tipo de Filtro', searchModes: { startsWith: 'Inicia con', contains: 'Contiene', equals: 'Igual que' },
         searchSigns: 'Signos de búsqueda', searchSign: { before: 'Antes', after: 'Después', comma: 'Otra búsqueda' }, searchSignOff: 'No aplica con este tipo de filtro',
         searchSignHelp: { before: 'Otra palabra ANTES · rack$cajón', after: 'Otra palabra DESPUÉS · rack@cajón', comma: 'Sirve cualquiera de las dos · rack, estante' },
-        typeMore: 'Escribe al menos 2 letras o números.', typeOne: 'Escribe al menos 1 letra o número.', none: 'No se encontró nada con eso.', more: 'Hay más resultados: escribe más para acotar.',
+        typeMore: 'Escribe al menos 2 letras o números.', typeOne: 'Escribe al menos 1 letra o número.', none: 'No se encontró nada con eso.', noRelated: 'Este centro de costos todavía no tiene códigos relacionados (Relación Código): no hay nada que pedir.', errRelated: 'Un artículo ya no está relacionado con este centro de costos: quítalo del pedido.', more: 'Hay más resultados: escribe más para acotar.',
         qtyTitle: 'Cantidad', add: 'Agregar al pedido', cancel: 'Cancelar', yourOrder: 'Tu pedido', items: '{n} artículos', item1: '1 artículo', empty: 'Todavía no agregas nada. Busca un artículo y elige la cantidad.', remove: 'Quitar',
         yourName: 'Quién pide', namePlaceholder: 'Nombre de quien pide', signedAs: 'Pides como', send: 'Enviar pedido', sending: 'Enviando…', stamp: 'Se guarda en un número de pedido con el nombre de quien pide, la lista de artículos y la hora en que lo envías.',
         needName: 'Escribe el nombre de quien pide para enviar.', errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errQty: 'Una cantidad no es válida.', errItems: 'Agrega al menos un artículo.',
@@ -135,7 +135,7 @@ const TEXT = {
         searchMode: 'Filter type', searchModes: { startsWith: 'Starts with', contains: 'Contains', equals: 'Equal to' },
         searchSigns: 'Search signs', searchSign: { before: 'Before', after: 'After', comma: 'Another search' }, searchSignOff: 'Not available with this filter type',
         searchSignHelp: { before: 'Another word BEFORE · rack$drawer', after: 'Another word AFTER · rack@drawer', comma: 'Either one matches · rack, shelf' },
-        typeMore: 'Type at least 2 letters or numbers.', typeOne: 'Type at least 1 letter or number.', none: 'Nothing was found.', more: 'There are more results: type more to narrow them.',
+        typeMore: 'Type at least 2 letters or numbers.', typeOne: 'Type at least 1 letter or number.', none: 'Nothing was found.', noRelated: 'This cost center has no related codes yet (Code Relation): there is nothing to order.', errRelated: 'An item is no longer related to this cost center: remove it from the order.', more: 'There are more results: type more to narrow them.',
         qtyTitle: 'Quantity', add: 'Add to the order', cancel: 'Cancel', yourOrder: 'Your order', items: '{n} items', item1: '1 item', empty: 'You have not added anything yet. Find an item and choose the quantity.', remove: 'Remove',
         yourName: 'Who is ordering', namePlaceholder: 'Name of who is ordering', signedAs: 'Ordering as', send: 'Send order', sending: 'Sending…', stamp: 'It is saved under one order number with the name of who is ordering, the list of items and the time you send it.',
         needName: 'Type the name of who is ordering to send.', errGeneric: 'It could not be sent. Check your connection and try again.', errQty: 'A quantity is not valid.', errItems: 'Add at least one item.',
@@ -227,7 +227,8 @@ function view() {
 function drawResults() {
     const box = $('results');
     if (!box) return;
-    if (!ready()) box.innerHTML = `<div class="msg">${esc(mode === 'contains' ? TEXT.typeMore : TEXT.typeOne)}</div>`;
+    if (info.relatedCount === 0) box.innerHTML = `<div class="msg">${esc(TEXT.noRelated)}</div>`;
+    else if (!ready()) box.innerHTML = `<div class="msg">${esc(mode === 'contains' ? TEXT.typeMore : TEXT.typeOne)}</div>`;
     else if (!results.length) box.innerHTML = `<div class="msg">${esc(TEXT.none)}</div>`;
     else box.innerHTML = `<div class="list">${results.map((r, i) => `<button type="button" class="res" data-pick="${i}"><div><b>${highlight(r.code)}</b><span>${highlight(r.description)}</span><small>${highlight([r.uom, r.categories].filter(Boolean).join(' · '))}</small></div><i class="plus" aria-hidden="true">+</i></button>`).join('')}</div>${total > results.length ? `<div class="muted">${esc(TEXT.more)}</div>` : ''}`;
 }
@@ -362,7 +363,7 @@ async function sendOrder() {
             btn.disabled = false; btn.textContent = TEXT.send;
             if (body.code === 'LOCKED') { info.locks.register = false; view(); return; }
             if (body.code === 'LOGIN') { info.locks.signin = true; info.signedIn = false; view(); return; }
-            fail(body.code === 'NAME' ? TEXT.needName : (body.code === 'QTY' ? TEXT.errQty : (body.code === 'ITEMS' ? TEXT.errItems : (body.code === 'TOOMANY' ? TEXT.tooMany : TEXT.errGeneric))));
+            fail(body.code === 'NAME' ? TEXT.needName : (body.code === 'QTY' ? TEXT.errQty : (body.code === 'ITEMS' ? TEXT.errItems : (body.code === 'TOOMANY' ? TEXT.tooMany : (body.code === 'RELATED' ? TEXT.errRelated : TEXT.errGeneric)))));
             return;
         }
         store.set(KEY_NAME, name);

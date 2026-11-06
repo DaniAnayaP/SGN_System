@@ -163,7 +163,7 @@ const {
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
-    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine,
+    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine,
     addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
@@ -7361,11 +7361,12 @@ function optionalSessionUser(req) {
     } catch { return null; }
 }
 const manualItemsCache = new Map(); // clientId:prueba -> { at, items }: unos segundos, para no leer todos los artículos en cada letra
-function manualItemsFor(clientId, isTest) {
-    const key = `${clientId}:${isTest ? 1 : 0}`;
+// costCenterId > 0: solo los códigos relacionados con ese centro (Relación Código).
+function manualItemsFor(clientId, isTest, costCenterId = 0) {
+    const key = `${clientId}:${isTest ? 1 : 0}:${costCenterId || 0}`;
     const hit = manualItemsCache.get(key);
     if (hit && Date.now() - hit.at < 20000) return hit.items;
-    const items = listManualOrderItems(clientId, isTest).map((r) => {
+    const items = listManualOrderItems(clientId, isTest, costCenterId || 0).map((r) => {
         const sku = String(r.record_number).padStart(6, '0');
         const cats = [r.category_inventario, r.category_compra, r.category_almacenamiento, r.category_rotacion, r.category_manejo, r.category_riesgo, r.category_vidautil].map((c) => String(c || '').trim()).filter(Boolean);
         return {
@@ -7378,7 +7379,7 @@ function manualItemsFor(clientId, isTest) {
     return items;
 }
 // Los renglones de un pedido a partir de lo que llega (artículos y cantidades): cada artículo debe existir en la empresa, las cantidades van de 0 a 999999 y los repetidos se suman. { lines } o { error }.
-function manualLinesFrom(rawItems, clientId, isTest) {
+function manualLinesFrom(rawItems, clientId, isTest, costCenterId = 0) {
     const raw = Array.isArray(rawItems) ? rawItems : [];
     if (!raw.length) return { error: { message: 'El pedido no trae artículos.', code: 'ITEMS' } };
     if (raw.length > MANUAL_ORDER_MAX_LINES) return { error: { message: `Un pedido lleva hasta ${MANUAL_ORDER_MAX_LINES} artículos.`, code: 'TOOMANY' } };
@@ -7389,11 +7390,15 @@ function manualLinesFrom(rawItems, clientId, isTest) {
         if (!Number.isInteger(id) || id < 1 || !Number.isFinite(quantity) || quantity <= 0 || quantity > 999999) return { error: { message: 'Una cantidad no es válida.', code: 'QTY' } };
         wanted.set(id, Math.round(((wanted.get(id) || 0) + quantity) * 1000) / 1000);
     }
-    const view = new Map(manualItemsFor(clientId, isTest).map((it) => [it.id, it]));
+    const view = new Map(manualItemsFor(clientId, isTest, costCenterId).map((it) => [it.id, it]));
     const lines = [];
     for (const [id, quantity] of wanted) {
         const it = view.get(id);
-        if (!it) return { error: { message: 'Un artículo ya no existe.', code: 'ITEM' } };
+        if (!it) {
+            // existe en la empresa pero ya no está relacionado con este centro de costos
+            if (costCenterId && manualItemsFor(clientId, isTest).some((x) => x.id === id)) return { error: { message: 'Un artículo no está relacionado con este centro de costos.', code: 'RELATED' } };
+            return { error: { message: 'Un artículo ya no existe.', code: 'ITEM' } };
+        }
         lines.push({ skuItemId: it.id, code: it.code, description: it.description, uom: it.uom, categories: it.categories, quantity });
     }
     return { lines };
@@ -7413,7 +7418,7 @@ app.get('/pm/:token', publicLayoutLimiter, (req, res) => {
 app.get('/api/public/pedido-manual/:token', publicLayoutLimiter, (req, res) => {
     const target = manualOrderTarget(req, res);
     if (!target) return;
-    const { row, client, center } = target;
+    const { row, client, center, isTest } = target;
     const locks = qrLocksOf('manual_order', row.clientId, row.costCenterId || 0);
     const user = optionalSessionUser(req);
     const signedIn = !!user && Number(user.clientId) === Number(row.clientId);
@@ -7422,6 +7427,7 @@ app.get('/api/public/pedido-manual/:token', publicLayoutLimiter, (req, res) => {
         companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
         costCenter: center ? { id: center.id, name: center.name, code: center.code || '' } : null,
         locks, signedIn, userName: signedIn ? changedByLabel({ user }) : '', now: new Date().toISOString(),
+        relatedCount: manualItemsFor(row.clientId, isTest, row.costCenterId || 0).length,
     });
 });
 // Buscar artículos mientras se escribe: por código, descripción, unidad de medida o categoría (las siete listas); el mismo motor de búsqueda de todo el sistema (coma, $ y @).
@@ -7437,7 +7443,7 @@ app.get('/api/public/pedido-manual/:token/search', publicManualSearchLimiter, (r
     const fields = asked.length ? asked : MANUAL_ORDER_SEARCH_FIELDS;
     if (!SearchSyntax.ready(mode, query)) return res.json({ total: 0, items: [] });
     const matches = publicSearchMatcher(mode, query);
-    const found = manualItemsFor(row.clientId, isTest).filter((it) => matches(fields.flatMap((k) => it.by[k])));
+    const found = manualItemsFor(row.clientId, isTest, row.costCenterId || 0).filter((it) => matches(fields.flatMap((k) => it.by[k])));
     res.json({ total: found.length, items: found.slice(0, 20).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories })) });
 });
 app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req, res) => {
@@ -7453,7 +7459,7 @@ app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req
     const typed = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
     const name = typed || (signedIn ? String(changedByLabel({ user }) || '').replace(/\s+/g, ' ').trim().slice(0, 60) : '');
     if (!name) return res.status(400).json({ message: 'Falta el nombre de quien pide.', code: 'NAME' });
-    const built = manualLinesFrom(req.body && req.body.items, row.clientId, isTest);
+    const built = manualLinesFrom(req.body && req.body.items, row.clientId, isTest, row.costCenterId || 0);
     if (built.error) return res.status(400).json(built.error);
     const lines = built.lines;
     const out = createManualOrder({ clientId: row.clientId, costCenterId: row.costCenterId || 0, requesterName: name, requesterUserId: signedIn ? user.sub : null, source: signedIn ? 'user' : 'qr', lines });
@@ -7552,7 +7558,9 @@ app.delete('/api/business/pedido-manual/:id', requireAuth, (req, res) => {
 // hora del celular al enviarlo (clientAt: solo vale si es de más de 2 minutos antes y hasta 7 días antes de ahora) y esa queda como hora del pedido; la del servidor se guarda aparte como hora recibida.
 app.get('/api/business/pedido-manual/items', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const items = manualItemsFor(req.user.clientId, !!req.user.isTestAccount).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories }));
+    const centersOf = new Map();
+    listManualItemCenters(req.user.clientId, !!req.user.isTestAccount).forEach((r) => { if (!centersOf.has(r.sku_item_id)) centersOf.set(r.sku_item_id, []); centersOf.get(r.sku_item_id).push(r.cost_center_id); });
+    const items = manualItemsFor(req.user.clientId, !!req.user.isTestAccount).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories, centers: centersOf.get(id) || [] }));
     res.set('Cache-Control', 'no-store');
     res.json({ items, at: new Date().toISOString() });
 });
@@ -7561,7 +7569,7 @@ app.post('/api/business/pedido-manual/orders', requireAuth, (req, res) => {
     const center = layoutCenter(req);
     if (center.error) return res.status(center.error.status).json(center.error.body);
     if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
-    const built = manualLinesFrom(req.body && req.body.items, req.user.clientId, !!req.user.isTestAccount);
+    const built = manualLinesFrom(req.body && req.body.items, req.user.clientId, !!req.user.isTestAccount, center.id);
     if (built.error) return res.status(400).json(built.error);
     const clientRef = req.body && typeof req.body.clientRef === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(req.body.clientRef) ? req.body.clientRef : null;
     res.set('Cache-Control', 'no-store');
