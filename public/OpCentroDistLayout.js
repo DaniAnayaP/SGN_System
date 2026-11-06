@@ -8,9 +8,9 @@
 // Envuelto en una función: este script comparte el ámbito global con Dashboard.js, que ya declara nombres como SECTION_LABEL_KEYS.
 (function () {
 const LC = window.LayoutCalc;
-const SECTION_ORDER = ['contorno', 'paredes', 'obstaculos', 'puertas', 'zonas', 'transito', 'espacios', 'luz', 'sensores', 'seguridad', 'objetos', 'activos', 'posiciones'];
+const SECTION_ORDER = ['contorno', 'paredes', 'obstaculos', 'puertas', 'zonas', 'pisos', 'transito', 'espacios', 'luz', 'sensores', 'seguridad', 'objetos', 'activos', 'posiciones'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
+    contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showOpening: true, showLevels: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -142,7 +142,7 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-zonas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-localizadores', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-objetos', 'layout-transito'];
+const FILTER_TABLE_IDS = ['layout-zonas', 'layout-pisos', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-localizadores', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-objetos', 'layout-transito'];
 // Qué tabla con filtro corresponde a cada lista que se agrega: al agregar un renglón se quitan sus filtros para que el nuevo siempre se vea.
 const FILTER_OF_LIST = { obstacles: 'layout-obstaculos', doors: 'layout-puertas', power: 'layout-luz', sensors: 'layout-sensores', safety: 'layout-seguridad', transit: 'layout-transito', objects: 'layout-objetos', vertices: 'layout-contorno-esquinas', contornoLados: 'layout-contorno-lados' };
 function clearFilterOf(list) {
@@ -186,7 +186,7 @@ const removeCell = (list, i, disabled, extra = '') => {
 const addButton = (list, labelKey, disabled, main = false) => `<button type="button" class="btn btn-secondary layout-add" data-add="${list}"${main ? ' data-main-add="1"' : ''} data-help-key="layoutAddRow"${disabled ? ' disabled' : ''}>${esc(t(labelKey))}</button>`;
 // Fila ya guardada de zonas o espacios: Desactivar/Reactivar (se conserva, deja de contar) y, con permiso, Eliminar.
 function savedRowButtons(list, i, active, disabled, extra = '') {
-    const canDelete = state.perms && (list === 'zones' ? state.perms.canDeleteZones : state.perms.canDeleteSpaces);
+    const canDelete = state.perms && (list === 'zones' ? state.perms.canDeleteZones : (list === 'floors' ? true : state.perms.canDeleteSpaces));
     const toggle = `<button type="button" class="btn btn-secondary layout-toggle" data-toggle="${list}:${i}" data-help-key="layoutToggleRow"${disabled ? ' disabled' : ''}>${esc(t(active === false ? 'main.layoutReactivar' : 'main.layoutDesactivar'))}</button>`;
     const del = canDelete ? `<button type="button" class="btn btn-secondary layout-toggle layout-delete" data-delete="${list}:${i}" data-help-key="layoutDeleteRow"${disabled ? ' disabled' : ''}>${esc(t('main.layoutEliminar'))}</button>` : '';
     return `<td><div class="layout-rowbtns">${extra}${toggle}${del}</div></td>`;
@@ -701,7 +701,7 @@ function applyLegend() {
         wall: () => stepOn('paredes') && some('obstacles', (o) => o.kind === 'wall'),
         door: () => stepOn('puertas') && some('doors'),
         open: (type) => stepOn('puertas') && state.showOpening && some('doors', (x) => LC.doorOpenOf(x) === type),
-        level: (type) => stepOn('zonas') && state.showLevels && some('zones', (z) => z.active !== false && LC.zoneHasLevel(z) && ((z.lvl2 !== undefined) === (type === 'ramp'))),
+        level: (type) => stepOn('pisos') && state.showLevels && some('floors', (f) => f.active !== false && LC.zoneHasLevel(f) && ((f.lvl2 !== undefined) === (type === 'ramp'))),
         power: () => stepOn('luz') && some('power'),
         sensor: () => stepOn('sensores') && some('sensors'),
         column: () => stepOn('obstaculos') && some('obstacles', (o) => o.kind === 'column' || o.kind === 'other'),
@@ -717,8 +717,40 @@ function applyLegend() {
         el.hidden = !(d && rule && rule(el.getAttribute('data-lg-type')));
     });
 }
+// Pisos: dos no pueden encimarse (que se toquen en la orilla sí): los dos se marcan en rojo con el aviso; el código, la superficie y las zonas que toca de cada piso salen de lo escrito.
+function applyFloorMarks() {
+    const d = state.draft;
+    if (!d) return;
+    const clash = new Map();
+    LC.floorOverlaps(d).forEach(({ a, b }) => {
+        if (!clash.has(a.id)) clash.set(a.id, []);
+        if (!clash.has(b.id)) clash.set(b.id, []);
+        clash.get(a.id).push(b);
+        clash.get(b.id).push(a);
+    });
+    (d.floors || []).forEach((f, i) => {
+        const others = clash.get(f.id) || [];
+        ['x', 'y', 'l', 'w'].forEach((key) => {
+            const box = document.querySelector(`[data-l="floors"][data-i="${i}"][data-k="${key}"]`);
+            if (box) box.classList.toggle('layout-missing', others.length > 0);
+        });
+        const note = document.querySelector(`[data-floor-issues="${i}"]`);
+        if (note) note.textContent = others.map((o) => t('main.layoutVioPisoEncima', { other: `${o.code} ${o.name}` })).join(' ');
+        const code = document.querySelector(`[data-floor-code="${i}"]`);
+        if (code) code.textContent = f.code || '';
+        const area = document.querySelector(`[data-floor-area="${i}"]`);
+        if (area) area.textContent = `${fmt((Number(f.l) || 0) * (Number(f.w) || 0))} m²`;
+        const zones = document.querySelector(`[data-floor-zones="${i}"]`);
+        if (zones) zones.textContent = LC.zonesOfFloor(d, f).map((z) => z.code || z.name).join(' · ') || '—';
+    });
+    (d.zones || []).forEach((z, i) => {
+        const cell = document.querySelector(`[data-zone-floors="${i}"]`);
+        if (cell) cell.textContent = LC.floorsOfZone(d, z).map((f) => f.code).join(' · ') || '—';
+    });
+}
 function applySafetyMarks() {
     applyLegend();
+    applyFloorMarks();
     if (!state.draft) return;
     computeSafetyIssues();
     (state.draft.safety || []).forEach((e, i) => {
@@ -1109,15 +1141,27 @@ function stepHtml(step) {
                 ? `<button type="button" class="btn btn-secondary layout-toggle layout-cats${state.catsOpen === z.id ? ' on' : ''}" data-catszone="${esc(z.id)}" data-help-key="layoutZoneCats" aria-label="${esc(t('main.layoutCatDe').replace('{name}', z.name))}"><i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>${catCount ? `<span class="layout-cats-n">${catCount}</span>` : ''}</button>`
                 : '';
             const planBox = `<td><input type="number" step="0.01" min="0" data-l="zones" data-i="${i}" data-k="planM2" data-help-key="layoutZonePlanM2" value="${z.planM2 > 0 ? z.planM2 : ''}"${dis ? ' disabled' : ''}></td>`;
-            // Nivel del piso (0 = a nivel con el de la nave); para una rampa, el nivel de su parte alta y hacia qué lado del croquis sube.
-            const isRamp = z.lvl2 !== undefined;
-            const lvlBoxes = `<td><input type="number" step="0.05" data-l="zones" data-i="${i}" data-k="lvl" data-help-key="layoutNivelPiso" value="${z.lvl !== undefined ? z.lvl : 0}"${dis ? ' disabled' : ''}></td><td><input type="number" step="0.05" data-l="zones" data-i="${i}" data-k="lvl2" data-help-key="layoutNivelAlto" value="${isRamp ? z.lvl2 : ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><select data-l="zones" data-i="${i}" data-k="rise" data-help-key="layoutLadoAlto"${dis || !isRamp ? ' disabled' : ''}>${isRamp ? optionsHtml('rise', LC.ZONE_RISES, z.rise || 'right') : '<option value="">—</option>'}</select></td>`;
+            // Los pisos que toca la zona (los niveles viven en el paso Pisos; aquí solo se lee): una zona puede tocar varios sin partirse.
+            const floorsCell = `<td class="layout-calc"><span data-zone-floors="${i}" data-help-key="layoutPisosQueToca">${esc(LC.floorsOfZone(d, z).map((f) => f.code).join(' · ') || '—')}</span></td>`;
             // Uso de la zona (aparte del tipo): almacenamiento, operaciones o instalaciones. Se puede dejar sin definir.
             const useOptions = `<option value=""${z.use ? '' : ' selected'}>${esc(t('main.layoutUsoSinDefinir'))}</option>${optionsHtml('use', LC.ZONE_USES, z.use)}`;
             const useBox = `<td><select data-l="zones" data-i="${i}" data-k="use" data-help-key="layoutZoneUse"${dis ? ' disabled' : ''}>${useOptions}</select></td>`;
-            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}<td class="layout-calc"><b data-zone-code="${i}">${esc(z.code || '')}</b></td>${cellSelect('zones', i, 'type', typeOptions, dis)}${useBox}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${lvlBoxes}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + catButton + shapeButton) : removeCell('zones', i, dis, fmtButton + catButton + shapeButton)}</tr>`;
+            return `<tr class="${z.active === false ? 'layout-off' : ''}">${cellText('zones', i, 'name', z.name, dis)}<td class="layout-calc"><b data-zone-code="${i}">${esc(z.code || '')}</b></td>${cellSelect('zones', i, 'type', typeOptions, dis)}${useBox}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${floorsCell}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + catButton + shapeButton) : removeCell('zones', i, dis, fmtButton + catButton + shapeButton)}</tr>`;
         });
-        return `${table(['main.layoutNombre', 'main.layoutCodigoZona', 'main.layoutTipo', 'main.layoutUsoZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', 'main.layoutNivelPiso', 'main.layoutNivelAlto', 'main.layoutLadoAlto', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis, true)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis, true)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
+        return `${table(['main.layoutNombre', 'main.layoutCodigoZona', 'main.layoutTipo', 'main.layoutUsoZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', 'main.layoutPisosQueToca', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis, true)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis, true)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
+    }
+    if (step === 'pisos') {
+        // Un piso es un rectángulo del croquis más alto o más bajo que el piso de la nave (plataforma, foso o rampa), aparte de las zonas: una zona puede tocar varios pisos. Nivel del piso (0 = a nivel; negativo = foso); para una rampa,
+        // el nivel de su parte alta y hacia qué lado del croquis sube. Las zonas que toca y su superficie se calculan solas.
+        const rows = (d.floors || []).map((f, i) => {
+            const saved = isSavedRow('floors', f.id);
+            const isRamp = f.lvl2 !== undefined;
+            const lvlBoxes = `<td><input type="number" step="0.05" data-l="floors" data-i="${i}" data-k="lvl" data-help-key="layoutNivelPiso" value="${f.lvl !== undefined ? f.lvl : 0}"${dis ? ' disabled' : ''}></td><td><input type="number" step="0.05" data-l="floors" data-i="${i}" data-k="lvl2" data-help-key="layoutNivelAlto" value="${isRamp ? f.lvl2 : ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><select data-l="floors" data-i="${i}" data-k="rise" data-help-key="layoutLadoAlto"${dis || !isRamp ? ' disabled' : ''}>${isRamp ? optionsHtml('rise', LC.ZONE_RISES, f.rise || 'right') : '<option value="">—</option>'}</select></td>`;
+            const touches = LC.zonesOfFloor(d, f).map((z) => z.code || z.name).join(' · ') || '—';
+            return `<tr class="${f.active === false ? 'layout-off' : ''}">${cellText('floors', i, 'name', f.name, dis)}<td class="layout-calc"><b data-floor-code="${i}">${esc(f.code || '')}</b></td>${cellNum('floors', i, 'x', f.x, dis)}${cellNum('floors', i, 'y', f.y, dis)}${cellNum('floors', i, 'l', f.l, dis)}${cellNum('floors', i, 'w', f.w, dis)}<td class="layout-calc"><span data-floor-area="${i}">${fmt((Number(f.l) || 0) * (Number(f.w) || 0))} m²</span></td>${lvlBoxes}<td class="layout-calc"><span data-floor-zones="${i}" data-help-key="layoutZonasQueToca">${esc(touches)}</span><div class="layout-floor-issue" data-floor-issues="${i}"></div></td>${saved ? savedRowButtons('floors', i, f.active, dis) : removeCell('floors', i, dis)}</tr>`;
+        });
+        const list = rows.length ? table(['main.layoutNombre', 'main.layoutCodigoPiso', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutNivelPiso', 'main.layoutNivelAlto', 'main.layoutLadoAlto', 'main.layoutZonasQueToca', ''], rows, 'layout-pisos') : `<p class="layout-muted">${esc(t('main.layoutPisosVacio'))}</p>`;
+        return `${addButton('floors', 'main.layoutAgregarPiso', dis, true)}${list}`;
     }
     if (step === 'posiciones') {
         // Cada renglón es un HUECO (un nivel × una columna) de un activo de Huella-Espacio: salen solos con los niveles y las columnas de Activos. Dentro de cada hueco se anota cuántas filas y cuántas profundidades
@@ -1880,33 +1924,29 @@ function renderSvg() {
         place.boxes.forEach((b) => labelBoxes.push(b));
         if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureJobs.push([LC.zonePoints(z), 30, z.id]);
     });
-    // Niveles de piso (icono «Niveles»): una zona más alta o más baja que el piso de la nave lleva rayas y su nivel; una rampa, un degradado hacia su lado más alto con una flecha y de qué nivel a cuál va.
-    if (state.showLevels && on('zonas')) {
+    // Niveles de piso (icono «Niveles»): cada PISO más alto o más bajo que el piso de la nave lleva rayas y su nivel; una rampa, un degradado hacia su lado más alto con una flecha y de qué nivel a cuál va. Salen con el paso Pisos.
+    if (state.showLevels && on('pisos')) {
         let lvlLayer = '';
         const signed = (v) => `${v > 0 ? '+' : ''}${fmt(v)} m`;
-        d.zones.forEach((z) => {
-            if (z.active === false || !LC.zoneHasLevel(z)) return;
-            const zp = LC.zonePoints(z);
-            const pts = zp.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ');
-            const lo = Number(z.lvl) || 0;
-            const ramp = z.lvl2 !== undefined && LC.ZONE_RISES.includes(z.rise);
-            const hi = ramp ? Number(z.lvl2) : lo;
-            const xs = zp.map((p) => X(p[0])); const ys = zp.map((p) => Y(p[1]));
-            const bx0 = Math.min(...xs); const bx1 = Math.max(...xs); const by0 = Math.min(...ys); const by1 = Math.max(...ys);
+        (d.floors || []).forEach((f) => {
+            if (f.active === false || !LC.zoneHasLevel(f) || !(f.l > 0 && f.w > 0)) return;
+            const bx0 = X(f.x); const bx1 = X(f.x + f.l); const by0 = Y(f.y); const by1 = Y(f.y + f.w);
+            const rect = `x="${bx0.toFixed(1)}" y="${by0.toFixed(1)}" width="${(bx1 - bx0).toFixed(1)}" height="${(by1 - by0).toFixed(1)}"`;
+            const lo = Number(f.lvl) || 0;
+            const ramp = f.lvl2 !== undefined && LC.ZONE_RISES.includes(f.rise);
+            const hi = ramp ? Number(f.lvl2) : lo;
             let note = signed(lo);
             if (ramp) {
-                const gid = `lvg-${String(z.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
-                const dir = { right: [0, 0, 1, 0], left: [1, 0, 0, 0], down: [0, 0, 0, 1], up: [0, 1, 0, 0] }[z.rise];
-                lvlLayer += `<linearGradient id="${gid}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="#A63FB5" stop-opacity="0.06"/><stop offset="1" stop-color="#A63FB5" stop-opacity="0.55"/></linearGradient><polygon class="lvl-ramp" points="${pts}" fill="url(#${gid})"/>`;
+                const gid = `lvg-${String(f.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
+                const dir = { right: [0, 0, 1, 0], left: [1, 0, 0, 0], down: [0, 0, 0, 1], up: [0, 1, 0, 0] }[f.rise];
+                lvlLayer += `<linearGradient id="${gid}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="#A63FB5" stop-opacity="0.06"/><stop offset="1" stop-color="#A63FB5" stop-opacity="0.55"/></linearGradient><rect class="lvl-ramp" ${rect} fill="url(#${gid})"/>`;
                 const cx = (bx0 + bx1) / 2; const cy = (by0 + by1) / 2;
-                const half = z.rise === 'left' || z.rise === 'right' ? (bx1 - bx0) / 3 : (by1 - by0) / 3;
-                const v = { right: [1, 0], left: [-1, 0], down: [0, 1], up: [0, -1] }[z.rise];
+                const half = f.rise === 'left' || f.rise === 'right' ? (bx1 - bx0) / 3 : (by1 - by0) / 3;
+                const v = { right: [1, 0], left: [-1, 0], down: [0, 1], up: [0, -1] }[f.rise];
                 lvlLayer += `<line class="lvl-arrow" x1="${(cx - v[0] * half).toFixed(1)}" y1="${(cy - v[1] * half).toFixed(1)}" x2="${(cx + v[0] * half).toFixed(1)}" y2="${(cy + v[1] * half).toFixed(1)}"/>`;
                 note = `${signed(lo)} → ${signed(hi)}`;
-            } else lvlLayer += `<polygon class="lvl-raised" points="${pts}" fill="url(#lvl-hatch)"/>`;
-            const a = LC.zoneLabelAnchor(z);
-            const ly = Y(a.y) + (sN ? 11 : 0) + (sA ? 11 : 0) + 11;
-            const label = textWithHalo('llvl', X(a.x).toFixed(1), ly.toFixed(1), 'middle', esc(note), ` data-lz="${esc(z.id)}"`);
+            } else lvlLayer += `<rect class="lvl-raised" ${rect} fill="url(#lvl-hatch)"/>`;
+            const label = textWithHalo('llvl', ((bx0 + bx1) / 2).toFixed(1), (((by0 + by1) / 2) + (ramp ? 16 : 4)).toFixed(1), 'middle', esc(`${f.code} ${note}`), ` data-lf="${esc(f.id)}"`);
             zoneHalos += label.halo;
             zoneLabels += label.main;
         });
@@ -2511,12 +2551,14 @@ const ROW_FACTORY = {
     },
     obstacles: () => ({ id: uid('o'), name: t('main.layoutColumna'), kind: 'column', mode: 'free', x: 1, y: 1, l: 0.6, w: 0.6 }),
     zones: () => ({ id: uid('z'), name: `${t('main.layoutZona')} ${state.draft.zones.length + 1}`, code: '', type: 'dry', x: 1, y: 1, l: 5, w: 5, active: true }),
+    // un piso nuevo es un rectángulo a nivel (0): hay que ponerle su nivel; su código (P001…) lo pone el sistema
+    floors: () => ({ id: uid('p'), name: `${t('main.layoutPiso')} ${(state.draft.floors || []).length + 1}`, code: '', x: 1, y: 1, l: 5, w: 5, active: true }),
     // una huella nueva no puede ser más alta que la nave: mide 4.5 m de alto o, si la nave es más baja, lo que mide la nave
     footprints: () => ({ id: uid('f'), code: '', zoneId: '', x: 1, y: 1, l: 3, d: 1.1, h: Math.min(4.5, Math.max(...state.draft.vertices.map((p) => Number(p[2]) || 0)) || 4.5), active: true }),
     // un activo siempre va dentro de una huella: nace sin huella y hay que elegirla (no se puede guardar hasta entonces)
     spaces: () => ({ id: uid('s'), footprintId: '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
-const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', safety: 'seguridad', transit: 'transito', objects: 'objetos', zones: 'zonas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
+const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', safety: 'seguridad', transit: 'transito', objects: 'objetos', zones: 'zonas', floors: 'pisos', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
 // Los códigos los pone el sistema y no se editan: el de la zona (Z001…, consecutivo), el de la huella (H001… por zona, y su zona sale de dónde está en el croquis) y el del activo (letra de su tipo + número
 // consecutivo por zona y tipo: A001, G001…). Lo que ya estaba guardado y sigue igual conserva su código; lo nuevo (todavía sin guardar) y lo que cambió de zona o de tipo lo recibe cada vez que se acomoda,
 // así siempre es el que le toca, el mismo que le pondrá el servidor al guardar.
@@ -2529,6 +2571,8 @@ function syncHuellas() {
     d.objects = withCatalog.objects || d.objects;
     d.transit = withCatalog.transit || d.transit;
     d.zones = next.zones;
+    // el código de cada piso (P001…) lo pone el sistema
+    d.floors = LC.assignFloorCodes({ ...d, floors: d.floors || [] }).floors || [];
     d.footprints = next.footprints;
     d.sensors = next.sensors;
     // las paredes: su código (M001…) y el contador de los números ya dados viajan con el Layout (sin él no se guarda ese campo)
@@ -2571,9 +2615,9 @@ function onEdit(event) {
                 if (box) box.value = value;
             });
         }
-    } else if (list === 'zones' && ['lvl', 'lvl2', 'rise'].includes(el.getAttribute('data-k'))) {
-        // Nivel del piso de la zona (0 = a nivel: no se guarda), nivel de su parte alta (la vuelve una rampa) y hacia qué lado sube. Quitar la parte alta quita el lado.
-        const row = state.draft.zones[Number(el.getAttribute('data-i'))];
+    } else if (list === 'floors' && ['lvl', 'lvl2', 'rise'].includes(el.getAttribute('data-k'))) {
+        // Nivel del piso (0 = a nivel: no se guarda), nivel de su parte alta (lo vuelve una rampa) y hacia qué lado sube. Quitar la parte alta quita el lado.
+        const row = state.draft.floors[Number(el.getAttribute('data-i'))];
         const zk = el.getAttribute('data-k');
         if (zk === 'rise') { if (el.value) row.rise = el.value; else delete row.rise; } else {
             const raw = String(el.value).trim();
@@ -2854,8 +2898,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (del2) {
         const [list, index] = del2.dataset.delete.split(':');
         const row = state.draft[list][Number(index)];
-        const name = list === 'zones' ? row.name : row.code;
-        const message = t(list === 'zones' ? 'main.layoutEliminarZonaConfirm' : 'main.layoutEliminarEspacioConfirm').replace('{name}', name);
+        const name = list === 'zones' || list === 'floors' ? row.name : row.code;
+        const message = t(list === 'zones' ? 'main.layoutEliminarZonaConfirm' : (list === 'floors' ? 'main.layoutEliminarPisoConfirm' : 'main.layoutEliminarEspacioConfirm')).replace('{name}', name);
         Dashboard.confirm(message).then((ok) => {
             if (!ok) return;
             const current = state.draft[list].findIndex((r) => r.id === row.id);
@@ -3416,10 +3460,10 @@ function effective3dLayers() {
     const f = state.find;
     const hide = state.findHide || {};
     if (f && !state.findDim) {
-        return { contour: false, walls: false, columns: false, doors: false, power: false, sensors: false, objects: false, transit: false, safety: false, zones: stepOn('zonas') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
+        return { contour: false, walls: false, columns: false, doors: false, power: false, sensors: false, objects: false, transit: false, safety: false, zones: stepOn('zonas') || stepOn('pisos') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
     }
     const layers = {
-        contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || !!(f && f.kind === 'zone'),
+        contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || stepOn('pisos') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), sensors: stepOn('sensores'), assets: stepOn('activos') || stepOn('posiciones'),
     };
     if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }

@@ -2235,6 +2235,16 @@
     "layoutNivelesBtn": "Ver y ocultar los niveles de piso",
     "layoutNivelesVer": "Ver los niveles de piso",
     "layoutNivelesOcultar": "Ocultar los niveles de piso",
+    "layoutStepPisos": "Pisos",
+    "colLayoutPisos": "Pisos",
+    "layoutAgregarPiso": "+ Agregar piso",
+    "layoutPiso": "Piso",
+    "layoutCodigoPiso": "Código de piso",
+    "layoutPisosVacio": "Todavía no hay pisos. Agrega uno para marcar un desnivel: una plataforma, un foso o una rampa.",
+    "layoutZonasQueToca": "Zonas que toca",
+    "layoutPisosQueToca": "Pisos que toca",
+    "layoutEliminarPisoConfirm": "¿Eliminar el piso {name}? Lo que está encima vuelve al nivel de la nave.",
+    "layoutVioPisoEncima": "Se encima con {other}: cada piso tiene que quedar aparte.",
     "layoutLeyendaPisoElevado": "Piso a otro nivel",
     "layoutLeyendaRampa": "Rampa",
     "layoutLeyendaPuerta": "Puerta",
@@ -4712,20 +4722,32 @@
       "example": "la salida de emergencia abre Afuera, hacia donde sale la gente; el acceso de personal abre Adentro."
     },
     "layoutNiveles": {
-      "what": "Muestra u oculta los niveles de piso de las zonas: en el croquis, rayas sobre las zonas más altas o más bajas que el piso de la nave, un degradado con flecha en las rampas y el nivel debajo del nombre; en el 3D, el nivel junto al nombre de la zona. Es solo de pantalla: el piso elevado del 3D siempre se ve.",
-      "example": "Recepción y Oficinas están a +1.20 m: con el botón ves sus rayas y su nivel; sin él, el croquis queda limpio."
+      "what": "Muestra u oculta los niveles de los pisos: en el croquis, rayas sobre los pisos más altos o más bajos que el piso de la nave, un degradado con flecha en las rampas y su nivel con su código; en el 3D, el nivel junto al código del piso. Es solo de pantalla: el piso elevado del 3D siempre se ve.",
+      "example": "la plataforma P001 está a +1.20 m: con el botón ves sus rayas y su nivel; sin él el croquis queda limpio."
     },
     "layoutNivelPiso": {
-      "what": "A qué altura está el piso de esta zona respecto al piso de la nave, en metros. 0 es a nivel; positivo es más alta; negativo es más baja (un foso). Lo que hay dentro de la zona (huellas, activos, pasillos, objetos y seguridad) queda sobre ese piso en el 3D. En una rampa es el nivel de su parte baja.",
-      "example": "Oficinas y Recepción están sobre una plataforma de 1.2 m: pones 1.2 en cada una."
+      "what": "A qué altura está este piso respecto al piso de la nave, en metros. 0 es a nivel; positivo es más alto; negativo es más bajo (un foso). Lo que hay encima del piso (huellas, activos, pasillos, objetos y seguridad) queda a ese nivel en el 3D. En una rampa es el nivel de su parte baja.",
+      "example": "Oficinas y Recepción están sobre una plataforma de 1.2 m: dibujas un piso sobre las dos zonas y pones 1.2."
     },
     "layoutNivelAlto": {
-      "what": "Solo para una rampa: el nivel de su parte alta, en metros. Con él la zona deja de ser plana: el piso sube del Nivel del piso (lado bajo) a este nivel (lado alto). Déjalo vacío si la zona es plana.",
-      "example": "la zona 7 sube de 0 a 1.2: Nivel del piso 0 y Nivel de la parte alta 1.2."
+      "what": "Solo para una rampa: el nivel de su parte alta, en metros. Con él el piso deja de ser plano: sube del Nivel del piso (lado bajo) a este nivel (lado alto). Déjalo vacío si el piso es plano.",
+      "example": "la rampa sube de 0 a 1.2: Nivel del piso 0 y Nivel de la parte alta 1.2."
     },
     "layoutLadoAlto": {
-      "what": "Hacia qué lado del croquis sube la rampa: arriba, abajo, izquierda o derecha. Solo se llena si la zona tiene Nivel de la parte alta.",
+      "what": "Hacia qué lado del croquis sube la rampa: arriba, abajo, izquierda o derecha. Solo se llena si el piso tiene Nivel de la parte alta.",
       "example": "la rampa queda a la derecha de las oficinas, que son más altas: sube hacia la izquierda."
+    },
+    "layoutSec_pisos": {
+      "what": "Un piso es un rectángulo del croquis que está más alto o más bajo que el piso de la nave: una plataforma, un foso o una rampa. Se dibuja aparte de las zonas, así una zona puede tocar varios pisos sin partirse ni cambiar de nombre. Lo que está encima de un piso (huellas, activos, pasillos, objetos y seguridad) queda a su nivel, y los m³ de la nave descuentan lo que sube cada piso. Dos pisos no se pueden encimar (que se toquen en la orilla sí).",
+      "example": "una plataforma de 21 × 6 m a +1.20 m cubre Recepción, Oficinas y 3 m de la zona 7; una rampa de 5 × 6 m cubre el resto de la zona 7."
+    },
+    "layoutZonasQueToca": {
+      "what": "Las zonas que comparten superficie con este piso. Se calcula solo, con el croquis de zonas.",
+      "example": "P001 toca Z001, Z002 y Z007."
+    },
+    "layoutPisosQueToca": {
+      "what": "Los pisos que comparten superficie con esta zona. Se calcula solo; vacío quiere decir que la zona está a nivel de la nave.",
+      "example": "la zona 7 toca P001 y P002: una parte está sobre la plataforma y otra sobre la rampa."
     },
     "layoutSite": {
       "what": "El nombre del lugar (el sitio). Sale arriba del nombre de la empresa en el encabezado de la hoja del Layout y de las tarjetas que se imprimen. Si lo dejas vacío sale el texto de siempre. Más adelante saldrá de la configuración.",

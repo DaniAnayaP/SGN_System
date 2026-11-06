@@ -33,8 +33,9 @@
     // Cómo abre una puerta: batiente (gira sobre su bisagra), corrediza (corre pegada a la pared) o fija (no abre). hinge = de qué extremo de la puerta está la bisagra o hacia dónde corre (inicio o final de la pared); dir = hacia qué
     // lado de la pared abre o corre (adentro o afuera). Una puerta sin estos datos (las de antes) cuenta como fija: no dibuja ni ocupa espacio al abrir.
     const DOOR_OPENS = ['swing', 'slide', 'fixed'];
-    // Zonas a desnivel: cada zona puede estar más alta o más baja que el piso de la nave (lvl, en metros; 0 = a nivel). Una rampa lleva además el nivel de su parte alta (lvl2) y hacia qué lado del croquis sube (rise):
-    // lvl es el nivel del lado bajo y lvl2 el del lado alto. Lo que está dentro de la zona (huellas, activos, pasillos…) queda sobre su piso.
+    // Pisos (desniveles): un PISO es un rectángulo del croquis (x, y, largo, ancho) que está más alto o más bajo que el piso de la nave (lvl, en metros; 0 = a nivel). Una rampa lleva además el nivel de su parte alta (lvl2) y hacia
+    // qué lado del croquis sube (rise): lvl es el nivel del lado bajo y lvl2 el del lado alto. Los pisos son independientes de las zonas (una zona puede tocar varios pisos sin partirse): lo que está sobre un piso (huellas,
+    // activos, pasillos…) queda a su nivel, el que tiene el piso en el punto donde está. Antes el nivel vivía dentro de cada zona (lvl, lvl2, rise): migrateFloors lo pasa a un piso con el recuadro de esa zona.
     const ZONE_RISES = ['up', 'down', 'left', 'right'];
     const DOOR_ENDS = ['start', 'end'];
     const DOOR_SIDES = ['in', 'out'];
@@ -51,6 +52,7 @@
         obstaculos: 'colLayoutObstaculos',
         puertas: 'colLayoutPuertas',
         zonas: 'colLayoutZonas',
+        pisos: 'colLayoutPisos',
         espacios: 'colLayoutEspacios',
         luz: 'colLayoutLuz',
         sensores: 'colLayoutSensores',
@@ -60,7 +62,7 @@
         activos: 'colLayoutActivos',
         posiciones: 'colLayoutPosiciones',
     };
-    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, objects: 500, safety: 500, zones: 150, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
+    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, objects: 500, safety: 500, zones: 150, floors: 100, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -107,9 +109,9 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateDoors(migrateWalls({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], vertices, heightM: round2(meanHeight(vertices)) }))))))))))))));
+        const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateDoors(migrateWalls(migrateFloors({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))))));
         // Seguridad: la zona de cada elemento sale de su lugar y su código (E001…) lo pone el sistema.
-        return assignWallCodes(assignSafetyCodes(deriveSafetyZones(normalized)));
+        return assignFloorCodes(assignWallCodes(assignSafetyCodes(deriveSafetyZones(normalized))));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -306,7 +308,7 @@
     function wallSides(layout, o, axis) {
         const ax = axis || wallAxis(layout, o);
         if (!ax) return null;
-        const leveled = ((layout && layout.zones) || []).some((z) => z && z.active !== false && zoneHasLevel(z));
+        const leveled = floorsOf(layout).length > 0;
         const floorAt = (d, side) => (leveled ? floorLevelAt(layout, ...wallProbe(ax, d, side)) : 0);
         const own = (v) => { const n = Number(v); return n > 0 ? n : 0; };
         const fA0 = floorAt(0, 1); const fA1 = floorAt(ax.length, 1); const fB0 = floorAt(0, -1); const fB1 = floorAt(ax.length, -1);
@@ -337,7 +339,7 @@
                 const a = zoneArea(z);
                 if (a <= bestArea) { best = z; bestArea = a; }
             });
-            const level = best && zoneHasLevel(best) ? round2(zoneLevelAt(best, px, py)) : 0;
+            const level = round2(floorLevelAt(layout, px, py));
             const inside = verts.length >= 3 ? (pointInPolygon(px, py, verts) || onPolygonEdge(px, py, verts)) : true;
             return { zoneId: best ? best.id : '', zoneName: best ? best.name : '', zoneCode: best ? best.code || '' : '', level, outside: !best && !inside };
         };
@@ -531,18 +533,126 @@
         const t = z.rise === 'right' ? along(x, x0, x1, false) : (z.rise === 'left' ? along(x, x0, x1, true) : (z.rise === 'down' ? along(y, y0, y1, false) : along(y, y0, y1, true)));
         return base + (top - base) * Math.min(Math.max(t, 0), 1);
     }
-    // El nivel del piso del Layout en un punto: el de la zona con nivel que lo contiene (la más chica si hay varias); 0 si ninguna.
+    // Los pisos que cuentan: activos, con tamaño y con algún nivel (un piso a 0 y sin rampa no cambia nada).
+    const floorsOf = (layout) => ((layout && layout.floors) || []).filter((f) => f && f.active !== false && Number(f.l) > 0 && Number(f.w) > 0 && zoneHasLevel(f));
+    // Superficie que comparten dos rectángulos (m²).
+    const rectShared = (a, b) => Math.max(0, Math.min(a.x + a.l, b.x + b.l) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.w, b.y + b.w) - Math.max(a.y, b.y));
+    // El nivel del piso del Layout en un punto: el del piso que lo contiene (el más chico si hay varios); 0 si ninguno (a nivel con la nave).
     function floorLevelAt(layout, x, y) {
         let best = null;
         let bestArea = Infinity;
-        ((layout && layout.zones) || []).forEach((z) => {
-            if (!z || z.active === false || !zoneHasLevel(z)) return;
-            const pts = zonePoints(z);
-            if (pts.length < 3 || !(pointInPolygon(x, y, pts) || onPolygonEdge(x, y, pts))) return;
-            const a = zoneArea(z);
-            if (a <= bestArea) { best = z; bestArea = a; }
+        floorsOf(layout).forEach((f) => {
+            const pts = rectPoints(f);
+            if (!(pointInPolygon(x, y, pts) || onPolygonEdge(x, y, pts))) return;
+            const a = f.l * f.w;
+            if (a <= bestArea) { best = f; bestArea = a; }
         });
         return best ? zoneLevelAt(best, x, y) : 0;
+    }
+    // Pares de pisos que se enciman (no se permiten; que se toquen en la orilla sí): [{ a, b, area }].
+    function floorOverlaps(layout) {
+        const fs = floorsOf(layout);
+        const out = [];
+        for (let i = 0; i < fs.length; i++) {
+            for (let j = i + 1; j < fs.length; j++) {
+                const area = rectShared(fs[i], fs[j]);
+                if (area > 1e-4) out.push({ a: fs[i], b: fs[j], area: round2(area) });
+            }
+        }
+        return out;
+    }
+    // Recorta un polígono (lista de [x, y]) a un lado de una recta vertical (axis 0, x = value) u horizontal (axis 1, y = value): keepGreater conserva el lado de los valores mayores.
+    function clipHalf(poly, axis, value, keepGreater) {
+        const out = [];
+        const inside = (p) => (keepGreater ? p[axis] >= value - 1e-9 : p[axis] <= value + 1e-9);
+        for (let i = 0; i < poly.length; i++) {
+            const a = poly[i];
+            const b = poly[(i + 1) % poly.length];
+            const ina = inside(a);
+            const inb = inside(b);
+            if (ina) out.push(a);
+            if (ina !== inb && b[axis] !== a[axis]) {
+                const k = (value - a[axis]) / (b[axis] - a[axis]);
+                out.push(axis === 0 ? [value, a[1] + (b[1] - a[1]) * k] : [a[0] + (b[0] - a[0]) * k, value]);
+            }
+        }
+        return out;
+    }
+    // La parte de un polígono que cae dentro de un rectángulo (x0, y0, x1, y1) y las que caen fuera: { inside: polígono | null, outside: [polígonos] }. Sirve para pintar una zona por pedazos según el piso que tiene debajo.
+    function splitByRect(poly, x0, y0, x1, y1) {
+        const keep = (p) => (p.length >= 3 && polygonArea(p) > 1e-9 ? p : null);
+        const out = [];
+        const left = clipHalf(poly, 0, x0, false); let rest = clipHalf(poly, 0, x0, true);
+        const right = clipHalf(rest, 0, x1, true); rest = clipHalf(rest, 0, x1, false);
+        const top = clipHalf(rest, 1, y0, false); rest = clipHalf(rest, 1, y0, true);
+        const bottom = clipHalf(rest, 1, y1, true); rest = clipHalf(rest, 1, y1, false);
+        [left, right, top, bottom].forEach((p) => { const k = keep(p); if (k) out.push(k); });
+        return { inside: keep(rest), outside: out };
+    }
+    const clipPolygonToRect = (poly, x0, y0, x1, y1) => splitByRect(poly, x0, y0, x1, y1).inside || [];
+    // Superficie (m²) que una zona comparte con un piso.
+    const zoneFloorShared = (z, f) => { const p = clipPolygonToRect(zonePoints(z), f.x, f.y, f.x + f.l, f.y + f.w); return p.length >= 3 ? polygonArea(p) : 0; };
+    // Los pisos que toca una zona y las zonas que toca un piso (más de 5 dm² en común; solo para mostrarlo, no se guarda).
+    const floorsOfZone = (layout, z) => ((layout && layout.floors) || []).filter((f) => f && f.active !== false && Number(f.l) > 0 && Number(f.w) > 0 && zoneFloorShared(z, f) > 0.05);
+    const zonesOfFloor = (layout, f) => ((layout && layout.zones) || []).filter((z) => z && z.active !== false && zonePoints(z).length >= 3 && Number(f.l) > 0 && Number(f.w) > 0 && zoneFloorShared(z, f) > 0.05);
+    // El nivel promedio del piso dentro de una zona (m): lo que sube el piso ahí, ponderado por la superficie que toca de cada piso. Zona rectangular: exacto (rectángulo común de cada piso, y en una rampa el nivel de su centro);
+    // zona de forma libre: se mide en una cuadrícula.
+    function zoneAvgLevel(layout, z) {
+        const fs = floorsOf(layout);
+        const area = zoneArea(z);
+        if (!fs.length || !(area > 0)) return 0;
+        if (!hasPoints(z)) {
+            let sum = 0;
+            fs.forEach((f) => {
+                const x0 = Math.max(z.x, f.x); const x1 = Math.min(z.x + z.l, f.x + f.l);
+                const y0 = Math.max(z.y, f.y); const y1 = Math.min(z.y + z.w, f.y + f.w);
+                if (x1 > x0 && y1 > y0) sum += (x1 - x0) * (y1 - y0) * zoneLevelAt(f, (x0 + x1) / 2, (y0 + y1) / 2);
+            });
+            return sum / area;
+        }
+        const pts = z.pts;
+        const xs = pts.map((p) => p[0]); const ys = pts.map((p) => p[1]);
+        const bx0 = Math.min(...xs); const bx1 = Math.max(...xs); const by0 = Math.min(...ys); const by1 = Math.max(...ys);
+        const step = Math.min(0.5, Math.max(0.05, Math.sqrt(((bx1 - bx0) * (by1 - by0)) / 40000)));
+        let sum = 0; let n = 0;
+        for (let x = bx0 + step / 2; x < bx1; x += step) {
+            for (let y = by0 + step / 2; y < by1; y += step) { if (pointInPolygon(x, y, pts)) { sum += floorLevelAt(layout, x, y); n += 1; } }
+        }
+        return n ? sum / n : 0;
+    }
+    // Los pisos de antes vivían dentro de las zonas (lvl, lvl2, rise): al leer un Layout (una sola vez, floorsMigrated) cada zona con nivel pasa a ser un piso con el recuadro de esa zona y la zona se queda sin esos campos.
+    function migrateFloors(layout) {
+        if (!layout || layout.floorsMigrated) return layout;
+        const zones = Array.isArray(layout.zones) ? layout.zones : [];
+        const floors = Array.isArray(layout.floors) ? layout.floors.slice() : [];
+        const ids = new Set(floors.map((f) => f && f.id));
+        zones.forEach((z) => {
+            if (!z || !zoneHasLevel(z)) return;
+            let id = `pz-${z.id}`.slice(0, 38);
+            while (ids.has(id)) id += 'x';
+            ids.add(id);
+            const lvl = Number(z.lvl) || 0;
+            const ramp = z.lvl2 != null && Number.isFinite(Number(z.lvl2)) && Number(z.lvl2) !== lvl;
+            floors.push({ id, name: `Piso ${z.name || z.code || ''}`.trim().slice(0, LIMITS.text), code: '', x: z.x, y: z.y, l: z.l, w: z.w, ...(lvl !== 0 ? { lvl } : {}), ...(ramp ? { lvl2: Number(z.lvl2), rise: ZONE_RISES.includes(z.rise) ? z.rise : 'right' } : {}), active: z.active !== false });
+        });
+        const stripped = zones.map((z) => { if (!z || (z.lvl === undefined && z.lvl2 === undefined && z.rise === undefined)) return z; const { lvl, lvl2, rise, ...rest } = z; return rest; });
+        return { ...layout, zones: stripped, floors, floorsMigrated: true };
+    }
+    const FLOOR_CODE_RE = /^P\d{3,4}$/;
+    const floorCodeOf = (n) => `P${String(n).padStart(3, '0')}`;
+    // El código de cada piso (P001…) lo pone el sistema: el que ya trae se conserva (si no se repite) y los demás reciben el siguiente número.
+    function assignFloorCodes(layout) {
+        if (!layout || !Array.isArray(layout.floors) || !layout.floors.length) return layout;
+        const used = new Set();
+        const out = layout.floors.map((f) => {
+            const code = f && typeof f.code === 'string' ? f.code.trim() : '';
+            if (FLOOR_CODE_RE.test(code) && !used.has(code)) { used.add(code); return f.code === code ? f : { ...f, code }; }
+            return { ...f, code: '' };
+        });
+        let next = Math.max(0, ...Array.from(used).map((c) => Number(c.slice(1)))) + 1;
+        let changed = out.some((f, i) => f !== layout.floors[i]);
+        out.forEach((f, i) => { if (f.code) return; while (used.has(floorCodeOf(next))) next += 1; const code = floorCodeOf(next); used.add(code); out[i] = { ...f, code }; changed = true; });
+        return changed ? { ...layout, floors: out } : layout;
     }
     // El centro de gravedad de un polígono (el promedio de un plano inclinado sobre él es lo que vale ahí).
     function polygonCentroid(pts) {
@@ -555,22 +665,14 @@
         if (Math.abs(a) < 1e-9) return [pts.reduce((acc, p) => acc + p[0], 0) / pts.length, pts.reduce((acc, p) => acc + p[1], 0) / pts.length];
         return [cx / (3 * a), cy / (3 * a)];
     }
-    // Lo que sube el piso por las zonas a desnivel, en m³: superficie de cada zona por su nivel promedio (en una rampa, el del centro de la zona); un foso (nivel negativo) resta. Si dos zonas con nivel se encimen
-    // (su recuadro se cruza) cada punto cuenta una sola vez, con el nivel de la zona más chica que lo contiene: se mide en una cuadrícula.
+    // Lo que sube el piso por los pisos, en m³: superficie de cada piso por su nivel promedio (en una rampa, el del centro); un foso (nivel negativo) resta. Los pisos no se pueden encimar al guardar, pero si en pantalla se enciman
+    // cada punto cuenta una sola vez, con el nivel del piso más chico que lo contiene: se mide en una cuadrícula.
     function raisedVolume(layout) {
-        const zs = ((layout && layout.zones) || []).filter((z) => z && z.active !== false && zoneHasLevel(z) && zonePoints(z).length >= 3);
-        if (!zs.length) return 0;
-        const boxes = zs.map((z) => { const p = zonePoints(z); const xs = p.map((q) => q[0]); const ys = p.map((q) => q[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; });
-        let overlap = false;
-        for (let i = 0; i < zs.length && !overlap; i++) {
-            for (let j = i + 1; j < zs.length; j++) {
-                const a = boxes[i]; const b = boxes[j];
-                if (a[0] < b[2] - 1e-6 && b[0] < a[2] - 1e-6 && a[1] < b[3] - 1e-6 && b[1] < a[3] - 1e-6) { overlap = true; break; }
-            }
-        }
-        if (!overlap) return zs.reduce((acc, z) => { const [cx, cy] = polygonCentroid(zonePoints(z)); return acc + zoneArea(z) * zoneLevelAt(z, cx, cy); }, 0);
-        const x0 = Math.min(...boxes.map((b) => b[0])); const y0 = Math.min(...boxes.map((b) => b[1]));
-        const x1 = Math.max(...boxes.map((b) => b[2])); const y1 = Math.max(...boxes.map((b) => b[3]));
+        const fs = floorsOf(layout);
+        if (!fs.length) return 0;
+        if (!floorOverlaps(layout).length) return fs.reduce((acc, f) => acc + f.l * f.w * zoneLevelAt(f, f.x + f.l / 2, f.y + f.w / 2), 0);
+        const x0 = Math.min(...fs.map((f) => f.x)); const y0 = Math.min(...fs.map((f) => f.y));
+        const x1 = Math.max(...fs.map((f) => f.x + f.l)); const y1 = Math.max(...fs.map((f) => f.y + f.w));
         const step = Math.min(0.5, Math.max(0.05, Math.sqrt(((x1 - x0) * (y1 - y0)) / 50000)));
         let sum = 0;
         for (let x = x0 + step / 2; x < x1; x += step) for (let y = y0 + step / 2; y < y1; y += step) sum += floorLevelAt(layout, x, y);
@@ -1819,7 +1921,7 @@
         return {
             mode: 'scratch', heightM: 9,
             vertices: [[0, 0, 9], [30, 0, 9], [30, 20, 9], [0, 20, 9]],
-            doors: [], power: [], sensors: [], objects: [], safety: [], obstacles: defaultWalls([[0, 0], [30, 0], [30, 20], [0, 20]]), wallsMigrated: true, zones: [], footprints: [], spaces: [],
+            doors: [], power: [], sensors: [], objects: [], safety: [], obstacles: defaultWalls([[0, 0], [30, 0], [30, 20], [0, 20]]), wallsMigrated: true, floorsMigrated: true, floors: [], zones: [], footprints: [], spaces: [],
             plan: null, ownAssetFmt: true,
         };
     }
@@ -1914,18 +2016,21 @@
             const area = zoneArea(z);
             return {
                 id: z.id, name: z.name, type: z.type, use: z.use || '', area: round2(area), spaces: mine.length,
-                level: zoneHasLevel(z) && zonePoints(z).length >= 3 ? round2(zoneLevelAt(z, ...polygonCentroid(zonePoints(z)))) : 0,
+                level: zonePoints(z).length >= 3 ? Math.round(zoneAvgLevel(layout, z) * 1e6) / 1e6 : 0,
                 footprint: round2(zFootprint), occupancy: area ? round2((zFootprint / area) * 100) : 0,
                 volume: round2(mine.reduce((acc, s) => acc + (s.l || 0) * (s.d || 0) * (s.h || 0), 0)),
             };
         });
+        const raisedAll = raisedVolume(layout);
+        // lo que suben los pisos y no cae en ninguna zona (se suma al renglón «el resto» del desglose de volumen, para que las cifras sigan sumando la cifra misma)
+        const raisedRest = raisedAll - perZone.reduce((acc, z) => acc + z.area * z.level, 0);
         return {
-            total: round2(total), offices: round2(offices), aisles: round2(aisles), docks: round2(docks),
+            total: round2(total), offices: round2(offices), aisles: round2(aisles), docks: round2(docks), raisedRest: round2(raisedRest),
             storage: round2(storageZones), footprint: round2(footprint), covered: round2(covered), overlap: round2(overlap), dead: round2(dead), unassigned: round2(unassigned),
             // para el desglose de «Datos métricos»: los pasillos con sus metros, lo que se encima entre ellos y lo que cubren fuera de toda zona
             transit: (layout.transit || []).map((p) => ({ id: p.id, name: p.name || p.code || '', type: p.type === 'between' ? 'aisle2' : 'aisle', area: round2((Number(p.l) || 0) * (Number(p.w) || 0)) })),
             transitOverlap: round2(transitM2.overlap), transitOutside: round2(transitOutside),
-            volume: round2(netVolume(layout)), raised: round2(raisedVolume(layout)), storageVolume: round2(storageVolume),
+            volume: round2(netVolume(layout)), raised: round2(raisedAll), storageVolume: round2(storageVolume),
             heightMin: round2(heightRange(layout.vertices || []).min), heightMax: round2(heightRange(layout.vertices || []).max),
             perimeter: round2(perimeter(layout.vertices || [])), zones: perZone,
         };
@@ -1944,7 +2049,10 @@
         const factor = volume ? (kpis.total > 0 ? (kpis.volume + (kpis.raised || 0)) / kpis.total : 0) : 1;
         const zoneRow = (z) => ({ kind: 'zone', id: z.id, name: z.name, type: z.type || '', value: round2((z.area || 0) * (volume ? factor - (z.level || 0) : factor)) });
         const restArea = Math.max(0, round2((kpis.dead || 0) - (kpis.unassigned || 0)));
-        const restRow = () => ({ kind: 'rest', id: '', name: '', type: '', value: round2(restArea * factor) });
+        // en el volumen, el resto lleva también lo que suben los pisos fuera de toda zona
+        const restRaised = volume ? (kpis.raisedRest || 0) : 0;
+        const restRow = () => ({ kind: 'rest', id: '', name: '', type: '', value: round2(restArea * factor - restRaised) });
+        const hasRest = restArea > 0 || Math.abs(restRaised) > 0.005;
         let rows;
         if (key === 'offices') rows = zones.filter((z) => z.type === 'office').map(zoneRow);
         else if (key === 'aisles') {
@@ -1959,7 +2067,7 @@
             if (restArea > 0) rows.push(restRow());
         } else {
             rows = zones.map(zoneRow);
-            if (restArea > 0) rows.push(restRow());
+            if (hasRest) rows.push(restRow());
             if ((kpis.transitOutside || 0) > 0.005) rows.push({ kind: 'transit', id: '', name: '', type: '', value: round2(kpis.transitOutside * factor) });
             if ((kpis.overlap || 0) > 0.005) rows.push({ kind: 'overlap', id: '', name: '', type: '', value: -round2(kpis.overlap * factor) });
         }
@@ -1970,7 +2078,7 @@
     function sanitizeLayout(input) {
         const errors = [];
         // Una pantalla vieja (sin paredes como obstáculos) manda el Layout como lo conocía: se lee igual que al abrirlo, con una pared por lado, para que no cuente como un cambio del contorno.
-        const src = migrateTransit(migrateDoors(migrateWalls(migrateFootprints(input && typeof input === 'object' ? input : {}))));
+        const src = migrateTransit(migrateDoors(migrateWalls(migrateFloors(migrateFootprints(input && typeof input === 'object' ? input : {})))));
         const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
         const meters = (v, label, min = 0) => {
             const n = Number(v);
@@ -2003,6 +2111,7 @@
         const siteName = text(src.siteName, 'Sitio', false);
         if (siteName) out.siteName = siteName;
         if (src.wallsMigrated) out.wallsMigrated = true;
+        out.floorsMigrated = true;
         if (src.transitMigrated) out.transitMigrated = true;
         // Cada esquina trae su altura [x, y, altura]. Una esquina sin altura (Layout de antes) hereda heightM, la altura única de entonces.
         const legacyHeight = Number(src.heightM);
@@ -2193,16 +2302,8 @@
                 if (desc.length > LIMITS.categoryText) errors.push(`${cl}: descripción demasiado larga`);
                 return { id: idOf(c && c.id, catIds, cl), name: text(c && c.name, cl, true), desc: desc.slice(0, LIMITS.categoryText), icon: oneOf(c && c.icon, CATEGORY_ICONS, 'tag'), color };
             });
-            // Nivel del piso (puede ser negativo: un foso) y, si es una rampa, el nivel de su parte alta y hacia qué lado sube; una zona a nivel (0) y sin rampa no guarda nada.
-            const lvlRaw = z && z.lvl != null && z.lvl !== '' ? Number(z.lvl) : 0;
-            const lvl2Raw = z && z.lvl2 != null && z.lvl2 !== '' ? Number(z.lvl2) : null;
-            if (!Number.isFinite(lvlRaw) || Math.abs(lvlRaw) > LIMITS.maxHeight) errors.push(`${label}: el nivel del piso no es válido`);
-            if (lvl2Raw !== null && (!Number.isFinite(lvl2Raw) || Math.abs(lvl2Raw) > LIMITS.maxHeight)) errors.push(`${label}: el nivel de la parte alta no es válido`);
-            const lvl = Number.isFinite(lvlRaw) && Math.abs(lvlRaw) <= LIMITS.maxHeight ? round2(lvlRaw) : 0;
-            const lvl2 = lvl2Raw !== null && Number.isFinite(lvl2Raw) && Math.abs(lvl2Raw) <= LIMITS.maxHeight ? round2(lvl2Raw) : null;
-            const ramp = lvl2 !== null && lvl2 !== lvl;
-            const levelExtra = { ...(lvl !== 0 ? { lvl } : {}), ...(ramp ? { lvl2, rise: oneOf(z && z.rise, ZONE_RISES, 'right') } : {}) };
-            const extra = { ...(use ? { use } : {}), ...(planM2 > 0 ? { planM2 } : {}), ...levelExtra, ...(fmt ? { fmt } : {}), ...(categories.length ? { categories } : {}) };
+            // El nivel del piso ya no se guarda en la zona: vive en el paso Pisos (los de antes pasaron solos a un piso, ver migrateFloors).
+            const extra = { ...(use ? { use } : {}), ...(planM2 > 0 ? { planM2 } : {}), ...(fmt ? { fmt } : {}), ...(categories.length ? { categories } : {}) };
             const active = !(z && z.active === false);
             if (z && z.pts != null) {
                 // Zona de cualquier forma: sus esquinas son la verdad; x, y, largo y ancho son el recuadro que la envuelve.
@@ -2225,14 +2326,38 @@
         });
 
         out.zones = assignZoneCodes(out).zones;
-        // El piso de una zona a desnivel tiene que quedar abajo del techo de la nave (en el centro de la zona): si no, no queda espacio para nada.
-        out.zones.forEach((zz) => {
-            if (zz.active === false || !zoneHasLevel(zz) || zonePoints(zz).length < 3) return;
-            const [cx, cy] = polygonCentroid(zonePoints(zz));
-            const top = Math.max(Number(zz.lvl) || 0, zz.lvl2 != null ? Number(zz.lvl2) : 0);
-            const lim = naveHeightAt(out, cx, cy);
-            if (lim > 0 && top >= lim - 1e-9) errors.push(`${zz.name}: su piso (a ${top > 0 ? '+' : ''}${top} m) queda tan arriba como el techo de la nave (${round2(lim)} m): bájalo`);
+
+        // Pisos (paso Pisos): rectángulos con su nivel (puede ser negativo: un foso) y, si es una rampa, el nivel de su parte alta y hacia qué lado sube; un piso a nivel (0) y sin rampa no guarda nivel. El código (P001…) lo pone el sistema.
+        const floorIds = new Set();
+        out.floors = list(src.floors, LIMITS.floors, 'Pisos').map((f, i) => {
+            const label = `Piso ${i + 1}`;
+            const id = idOf(f && f.id, floorIds, label);
+            const name = text(f && f.name, label, true);
+            const code = text(f && f.code, label, false);
+            const lvlRaw = f && f.lvl != null && f.lvl !== '' ? Number(f.lvl) : 0;
+            const lvl2Raw = f && f.lvl2 != null && f.lvl2 !== '' ? Number(f.lvl2) : null;
+            if (!Number.isFinite(lvlRaw) || Math.abs(lvlRaw) > LIMITS.maxHeight) errors.push(`${label}: el nivel del piso no es válido`);
+            if (lvl2Raw !== null && (!Number.isFinite(lvl2Raw) || Math.abs(lvl2Raw) > LIMITS.maxHeight)) errors.push(`${label}: el nivel de la parte alta no es válido`);
+            const lvl = Number.isFinite(lvlRaw) && Math.abs(lvlRaw) <= LIMITS.maxHeight ? round2(lvlRaw) : 0;
+            const lvl2 = lvl2Raw !== null && Number.isFinite(lvl2Raw) && Math.abs(lvl2Raw) <= LIMITS.maxHeight ? round2(lvl2Raw) : null;
+            const ramp = lvl2 !== null && lvl2 !== lvl;
+            const item = {
+                id, name, code, x: meters(f && f.x, label, -LIMITS.maxM), y: meters(f && f.y, label, -LIMITS.maxM), l: meters(f && f.l, label), w: meters(f && f.w, label),
+                ...(lvl !== 0 ? { lvl } : {}), ...(ramp ? { lvl2, rise: oneOf(f && f.rise, ZONE_RISES, 'right') } : {}), active: !(f && f.active === false),
+            };
+            if (!(item.l > 0 && item.w > 0)) errors.push(`${label}: el largo y el ancho deben ser mayores que 0`);
+            return item;
         });
+        out.floors = assignFloorCodes(out).floors;
+        // El piso tiene que quedar abajo del techo de la nave (en su centro): si no, no queda espacio para nada.
+        out.floors.forEach((ff) => {
+            if (ff.active === false || !(ff.l > 0 && ff.w > 0) || !zoneHasLevel(ff)) return;
+            const top = Math.max(Number(ff.lvl) || 0, ff.lvl2 != null ? Number(ff.lvl2) : 0);
+            const lim = naveHeightAt(out, ff.x + ff.l / 2, ff.y + ff.w / 2);
+            if (lim > 0 && top >= lim - 1e-9) errors.push(`${ff.code} ${ff.name}: su nivel (a ${top > 0 ? '+' : ''}${top} m) queda tan arriba como el techo de la nave (${round2(lim)} m): bájalo`);
+        });
+        // Dos pisos no se pueden encimar (que se toquen en la orilla sí): así cada punto de la nave tiene un solo nivel.
+        floorOverlaps(out).forEach(({ a, b, area }) => errors.push(`Los pisos ${a.code} ${a.name} y ${b.code} ${b.name} se enciman (${area} m²): cada uno tiene que quedar aparte`));
 
         // Huellas (paso Huella-Espacio): el lugar en el piso. Cada una puede tener uno o varios activos (ver migrateFootprints).
         const footprintIds = new Set();
@@ -2444,10 +2569,12 @@
                     const ys = pts.map((p) => p[1]);
                     const x = Math.min(...xs);
                     const y = Math.min(...ys);
-                    return { ...z, pts, x, y, l: round2(Math.max(...xs) - x), w: round2(Math.max(...ys) - y), ...(z.rise ? { rise: rotateRise(z.rise, q) } : {}) };
+                    return { ...z, pts, x, y, l: round2(Math.max(...xs) - x), w: round2(Math.max(...ys) - y) };
                 }
-                return { ...z, ...box(z, 'l', 'w'), ...(z.rise ? { rise: rotateRise(z.rise, q) } : {}) };
+                return { ...z, ...box(z, 'l', 'w') };
             }),
+            // un piso gira como un recuadro y, si es una rampa, el lado hacia donde sube
+            floors: (layout.floors || []).map((f) => ({ ...f, ...box(f, 'l', 'w'), ...(f.rise ? { rise: rotateRise(f.rise, q) } : {}) })),
         };
     }
 
@@ -2514,6 +2641,7 @@
         // La zona de cada pasillo sale del croquis, no se captura; las medidas de lo que transita van con el paso.
         if (section === 'transito') return { transit: (layout.transit || []).map(({ zoneId, ...rest }) => rest) };
         if (section === 'zonas') return layout.zones;
+        if (section === 'pisos') return layout.floors || [];
         // Los espacios sin lo del paso Activos (la clasificación y el tipo de activo, y sus niveles, espacios por nivel y cajones; todo eso tiene su propio permiso). En Activos, solo los espacios que ya tienen
         // algo de eso: así agregar un espacio nuevo en Huella-Espacio (con 1 nivel) no cuenta como cambio de Activos.
         if (section === 'espacios') return (layout.footprints || []).map(({ zoneId, ...rest }) => rest);
@@ -2547,7 +2675,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,

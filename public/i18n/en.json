@@ -2235,6 +2235,16 @@
     "layoutNivelesBtn": "Show and hide the floor levels",
     "layoutNivelesVer": "Show the floor levels",
     "layoutNivelesOcultar": "Hide the floor levels",
+    "layoutStepPisos": "Floors",
+    "colLayoutPisos": "Floors",
+    "layoutAgregarPiso": "+ Add floor",
+    "layoutPiso": "Floor",
+    "layoutCodigoPiso": "Floor code",
+    "layoutPisosVacio": "There are no floors yet. Add one to mark a level change: a platform, a pit or a ramp.",
+    "layoutZonasQueToca": "Zones it touches",
+    "layoutPisosQueToca": "Floors it touches",
+    "layoutEliminarPisoConfirm": "Delete floor {name}? Whatever is on it goes back to the building level.",
+    "layoutVioPisoEncima": "It overlaps {other}: each floor has to stay apart.",
     "layoutLeyendaPisoElevado": "Floor at another level",
     "layoutLeyendaRampa": "Ramp",
     "layoutLeyendaPuerta": "Door",
@@ -4713,20 +4723,32 @@
       "example": "the emergency exit opens Outside, where people leave; the staff entrance opens Inside."
     },
     "layoutNiveles": {
-      "what": "Shows or hides the floor levels of the zones: on the sketch, stripes over the zones that are higher or lower than the building floor, a gradient with an arrow on ramps and the level under the name; in 3D, the level next to the zone name. Screen only: the raised floor in 3D is always shown.",
-      "example": "Reception and Offices are at +1.20 m: with the button you see their stripes and level; without it the sketch stays clean."
+      "what": "Shows or hides the floor levels: on the sketch, stripes over the floors that are higher or lower than the building floor, a gradient with an arrow on ramps and their level with their code; in 3D, the level next to the floor code. Screen only: the raised floor in 3D is always shown.",
+      "example": "platform P001 is at +1.20 m: with the button you see its stripes and level; without it the sketch stays clean."
     },
     "layoutNivelPiso": {
-      "what": "How high this zone's floor is compared with the building floor, in meters. 0 is level; positive is higher; negative is lower (a pit). Everything inside the zone (footprints, assets, aisles, objects and safety) sits on that floor in 3D. On a ramp it is the level of its lower part.",
-      "example": "Offices and Reception sit on a 1.2 m platform: you enter 1.2 on each."
+      "what": "How high this floor is compared with the building floor, in meters. 0 is level; positive is higher; negative is lower (a pit). Everything on the floor (footprints, assets, aisles, objects and safety) sits at that level in 3D. On a ramp it is the level of its lower part.",
+      "example": "Offices and Reception sit on a 1.2 m platform: you draw one floor over both zones and enter 1.2."
     },
     "layoutNivelAlto": {
-      "what": "Only for a ramp: the level of its upper part, in meters. With it the zone is no longer flat: the floor rises from the Floor level (low side) to this level (high side). Leave it empty if the zone is flat.",
-      "example": "zone 7 rises from 0 to 1.2: Floor level 0 and Upper level 1.2."
+      "what": "Only for a ramp: the level of its upper part, in meters. With it the floor is no longer flat: it rises from the Floor level (low side) to this level (high side). Leave it empty if the floor is flat.",
+      "example": "the ramp rises from 0 to 1.2: Floor level 0 and Upper level 1.2."
     },
     "layoutLadoAlto": {
-      "what": "Which side of the sketch the ramp rises toward: up, down, left or right. Only filled when the zone has an Upper level.",
+      "what": "Which side of the sketch the ramp rises toward: up, down, left or right. Only filled when the floor has an Upper level.",
       "example": "the ramp is to the right of the offices, which are higher: it rises to the left."
+    },
+    "layoutSec_pisos": {
+      "what": "A floor is a rectangle of the sketch that is higher or lower than the building floor: a platform, a pit or a ramp. It is drawn apart from the zones, so a zone can touch several floors without being split or renamed. Whatever is on a floor (footprints, assets, aisles, objects and safety) sits at its level, and the building volume subtracts what each floor raises. Two floors cannot overlap (touching at the edge is fine).",
+      "example": "a 21 × 6 m platform at +1.20 m covers Reception, Offices and 3 m of zone 7; a 5 × 6 m ramp covers the rest of zone 7."
+    },
+    "layoutZonasQueToca": {
+      "what": "The zones that share surface with this floor. Calculated automatically from the zones sketch.",
+      "example": "P001 touches Z001, Z002 and Z007."
+    },
+    "layoutPisosQueToca": {
+      "what": "The floors that share surface with this zone. Calculated automatically; empty means the zone is at the building level.",
+      "example": "zone 7 touches P001 and P002: part of it is on the platform and part on the ramp."
     },
     "layoutSite": {
       "what": "The name of the place (the site). It appears above the company name in the header of the Layout sheet and of the printed cards. If you leave it empty the usual text is used. Later it will come from settings.",

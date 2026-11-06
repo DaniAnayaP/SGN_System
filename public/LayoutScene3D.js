@@ -579,31 +579,61 @@
 
             // zonas: losas de color (el que se les puso en Formato de zona, o el de su tipo)
             const LCalc = root.LayoutCalc;
-            // El nivel del piso en un punto: el de la zona con nivel que lo contiene (0 si no hay ninguna); lo que está encima de una zona elevada sube con ella.
-            const anyLevel = !!LCalc && !!LCalc.floorLevelAt && (layout.zones || []).some((z) => z.active !== false && LCalc.zoneHasLevel(z));
+            // Los pisos (desniveles): el nivel del piso en un punto es el del piso que lo contiene (0 si no hay ninguno); lo que está encima de un piso (huellas, activos, pasillos, objetos, seguridad) sube con él.
+            const floors = LCalc && LCalc.floorsOf ? LCalc.floorsOf(layout) : [];
+            const anyLevel = !!LCalc && !!LCalc.floorLevelAt && floors.length > 0;
             const FL = (x, y) => (anyLevel ? LCalc.floorLevelAt(layout, x, y) : 0);
-            // Una zona con nivel (o rampa): la tapa sigue el piso de la zona (plana, o inclinada en la rampa) y cuatro lados bajan hasta el piso de la nave.
-            const levelSlab = (z, pts, color, mat, i) => {
-                const top = new THREE.ShapeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1]))));
-                const pos = top.attributes.position;
-                for (let k = 0; k < pos.count; k++) { const px = pos.getX(k); const py = pos.getY(k); pos.setXYZ(k, PX(px), 0.05 + 0.004 * i + LCalc.zoneLevelAt(z, px, py), PZ(py)); }
-                pos.needsUpdate = true;
-                top.computeVertexNormals();
-                const arr = [];
-                for (let k = 0; k < pts.length; k++) {
-                    const p = pts[k]; const q = pts[(k + 1) % pts.length];
-                    const tp = 0.05 + 0.004 * i + LCalc.zoneLevelAt(z, p[0], p[1]); const tq = 0.05 + 0.004 * i + LCalc.zoneLevelAt(z, q[0], q[1]);
-                    arr.push(PX(p[0]), 0, PZ(p[1]), PX(q[0]), 0, PZ(q[1]), PX(q[0]), tq, PZ(q[1]), PX(p[0]), 0, PZ(p[1]), PX(q[0]), tq, PZ(q[1]), PX(p[0]), tp, PZ(p[1]));
-                }
-                const sides = new THREE.BufferGeometry();
-                sides.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
-                sides.computeVertexNormals();
-                const sideMat = mat.clone();
-                sideMat.color = new THREE.Color(mixHex(parseInt(String(color).replace('#', ''), 16) || 0xcccccc, 0x000000, 0.28));
-                sideMat.side = THREE.DoubleSide;
-                mat.side = THREE.DoubleSide;
-                return { top, sides, sideMat };
+            // Una zona que toca algún piso se pinta por pedazos: cada pedazo sube (o se inclina, en una rampa) con el piso que tiene debajo y lo que no cae en ningún piso queda a nivel de la nave. Así una zona puede
+            // estar parte sobre una plataforma y parte sobre una rampa sin partirse en dos.
+            const zonePieces = (pts) => {
+                const tris = LCalc.triangulate(pts);
+                if (!tris) return null;
+                const out = [];
+                tris.forEach(([a, b, c]) => {
+                    let rest = [[pts[a], pts[b], pts[c]]];
+                    floors.forEach((f) => {
+                        const next = [];
+                        rest.forEach((poly) => {
+                            const sp = LCalc.splitByRect(poly, f.x, f.y, f.x + f.l, f.y + f.w);
+                            if (sp.inside) out.push({ poly: sp.inside, floor: f });
+                            sp.outside.forEach((o) => next.push(o));
+                        });
+                        rest = next;
+                    });
+                    rest.forEach((poly) => out.push({ poly, floor: null }));
+                });
+                return out;
             };
+            const piecesGeometry = (pieces, i) => {
+                const pos = [];
+                const lift = 0.05 + 0.004 * i;
+                pieces.forEach((pc) => {
+                    const p = pc.poly;
+                    for (let k = 1; k < p.length - 1; k++) {
+                        [p[0], p[k], p[k + 1]].forEach((v) => pos.push(PX(v[0]), lift + (pc.floor ? LCalc.zoneLevelAt(pc.floor, v[0], v[1]) : 0), PZ(v[1])));
+                    }
+                });
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+                geo.computeVertexNormals();
+                return geo;
+            };
+            // Cada piso: sus cuatro lados bajan hasta el piso de la nave (en una rampa, el lado alto es más alto que el bajo).
+            if (anyLevel) {
+                floors.forEach((f, i) => {
+                    const corners = [[f.x, f.y], [f.x + f.l, f.y], [f.x + f.l, f.y + f.w], [f.x, f.y + f.w]];
+                    const arr = [];
+                    for (let k = 0; k < 4; k++) {
+                        const p = corners[k]; const q = corners[(k + 1) % 4];
+                        const tp = 0.05 + 0.004 * i + LCalc.zoneLevelAt(f, p[0], p[1]); const tq = 0.05 + 0.004 * i + LCalc.zoneLevelAt(f, q[0], q[1]);
+                        arr.push(PX(p[0]), 0, PZ(p[1]), PX(q[0]), 0, PZ(q[1]), PX(q[0]), tq, PZ(q[1]), PX(p[0]), 0, PZ(p[1]), PX(q[0]), tq, PZ(q[1]), PX(p[0]), tp, PZ(p[1]));
+                    }
+                    const sides = new THREE.BufferGeometry();
+                    sides.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
+                    sides.computeVertexNormals();
+                    group.zones.add(new THREE.Mesh(sides, new THREE.MeshLambertMaterial({ color: 0xb9a9bf, side: THREE.DoubleSide })));
+                });
+            }
             (layout.zones || []).forEach((z, i) => {
                 const pts = Array.isArray(z.pts) && z.pts.length >= 3 ? z.pts : [[z.x, z.y], [z.x + z.l, z.y], [z.x + z.l, z.y + z.w], [z.x, z.y + z.w]];
                 if (!(z.l > 0 || (z.pts && z.pts.length >= 3))) return;
@@ -611,16 +641,14 @@
                 const inactive = z.active === false;
                 const dimZone = !!focusSet && !focusSet.zones.has(z.id);
                 const zoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive || dimZone, opacity: inactive ? 0.35 : (dimZone ? 0.22 : 1) });
-                const leveled = anyLevel && LCalc.zoneHasLevel(z);
-                let geo;
-                let sideMesh = null;
-                if (leveled) {
+                let geo = null;
+                if (anyLevel && LCalc.floorsOfZone(layout, z).some((f) => floors.some((g) => g.id === f.id))) {
                     try {
-                        const slab = levelSlab(z, pts, color, zoneMat, i);
-                        geo = slab.top;
-                        sideMesh = new THREE.Mesh(slab.sides, slab.sideMat);
-                    } catch (err) { return; }
-                } else {
+                        const pieces = zonePieces(pts);
+                        if (pieces && pieces.length) { geo = piecesGeometry(pieces, i); zoneMat.side = THREE.DoubleSide; }
+                    } catch (err) { geo = null; }
+                }
+                if (!geo) {
                     try {
                         geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1]))), { depth: 0.05, bevelEnabled: false });
                     } catch (err) { return; }
@@ -630,16 +658,21 @@
                 const mesh = new THREE.Mesh(geo, zoneMat);
                 mesh.userData = { kind: 'zone', zone: z };
                 group.zones.add(mesh);
-                if (sideMesh) group.zones.add(sideMesh);
                 zoneMeshes.push(mesh);
                 let ax; let ay;
                 try { const a = LCalc && LCalc.zoneLabelAnchor ? LCalc.zoneLabelAnchor(z) : null; if (a) { ax = a.x; ay = a.y; } } catch (err) { /* usa el centro */ }
                 if (ax === undefined) { ax = z.x + z.l / 2; ay = z.y + z.w / 2; }
-                if (!inactive && !dimZone) {
-                    const lvlText = levelsOn && anyLevel && LCalc.zoneHasLevel(z) ? ` · ${z.lvl2 !== undefined && z.rise ? `${Math.round((Number(z.lvl) || 0) * 100) / 100} → ${Math.round(Number(z.lvl2) * 100) / 100}` : `${(Number(z.lvl) || 0) > 0 ? '+' : ''}${Math.round((Number(z.lvl) || 0) * 100) / 100}`} m` : '';
-                    addLabel(group.zoneLabels, z.name + lvlText, PX(ax), 0.12 + 0.004 * i + FL(ax, ay), PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
-                }
+                if (!inactive && !dimZone) addLabel(group.zoneLabels, z.name, PX(ax), 0.12 + 0.004 * i + FL(ax, ay), PZ(ay), Math.max(0.5, Math.min(0.9, Math.min(z.l, z.w) * 0.1)), true);
             });
+            // el código y el nivel de cada piso (con el icono «Niveles»), un poco más arriba que el nombre de las zonas
+            if (levelsOn && anyLevel) {
+                floors.forEach((f) => {
+                    const cx = f.x + f.l / 2; const cy = f.y + f.w / 2;
+                    const lo = Math.round((Number(f.lvl) || 0) * 100) / 100;
+                    const text = f.lvl2 !== undefined && f.rise ? `${lo} → ${Math.round(Number(f.lvl2) * 100) / 100}` : `${lo > 0 ? '+' : ''}${lo}`;
+                    addLabel(group.zoneLabels, `${f.code} · ${text} m`, PX(cx), 0.7 + FL(cx, cy), PZ(cy), 0.45, true);
+                });
+            }
 
             // pasillos (paso Tránsito, su propia capa): losas delgadas sobre el piso (principal más oscuro, entre pasillos más claro)
             const transitY = 0.06 + 0.004 * (layout.zones || []).length;
