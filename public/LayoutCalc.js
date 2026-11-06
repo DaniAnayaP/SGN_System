@@ -61,6 +61,7 @@
         seguridad: 'colLayoutSeguridad',
         activos: 'colLayoutActivos',
         posiciones: 'colLayoutPosiciones',
+        niveles: 'colLayoutNiveles',
     };
     const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, objects: 500, safety: 500, zones: 150, floors: 100, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
@@ -2397,6 +2398,8 @@
             const slots = Math.round(Number(s && s.slots));
             // Huecos (paso Posiciones): cada hueco = un nivel × una columna de este activo; lleva cuántas filas y cuántas profundidades tiene y sus medidas. Solo se guarda lo que se cambió.
             const bays = sanitizeBays(s && s.bays, Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1, Number.isFinite(slots) && slots > 1 ? Math.min(slots, LIMITS.slots) : 1);
+            // Niveles (paso Niveles): la altura desde el piso, el alto y la ceja de cada nivel, para todas sus columnas. Solo se guarda lo que se cambió.
+            const lvls = sanitizeLevels(s && s.lvls, Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1);
             // Paso Activos: la clasificación (Mobiliario operativo, Mobiliario almacenamiento…) y el tipo (rack, estante, escritorio…) del activo de este espacio; son ids de los catálogos del cliente.
             // Sin elegir, el espacio se guarda sin esos campos.
             const assetClassId = Math.round(Number(s && s.assetClassId));
@@ -2422,6 +2425,7 @@
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
                 ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
                 ...(bays.length ? { bays } : {}),
+                ...(lvls.length ? { lvls } : {}),
                 ...(Number.isFinite(assetClassId) && assetClassId > 0 ? { assetClassId } : {}),
                 ...(Number.isFinite(assetId) && assetId > 0 ? { assetId } : {}),
                 drawers: text(s && s.drawers, label, false),
@@ -2439,12 +2443,19 @@
         { const walled = assignWallCodes(out); out.obstacles = walled.obstacles; if (walled.wallNext) out.wallNext = walled.wallNext; else delete out.wallNext; }
         { const safe = assignSafetyCodes(deriveSafetyZones(out)); out.safety = safe.safety; if (safe.safetyNext && Object.keys(safe.safetyNext).length) out.safetyNext = safe.safetyNext; else delete out.safetyNext; }
         out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
-        // La ceja de un hueco (el travesaño del nivel) tiene que ser menor que su alto: si no, no queda espacio para almacenar.
-        out.spaces.forEach((sp) => (sp.bays || []).forEach((b) => {
-            if (!(b.beam > 0)) return;
-            const m = bayMeasures(sp, b.n, b.c);
-            if (b.beam >= m.h - 1e-9) errors.push(`Activo ${sp.code}, nivel ${b.n}, columna ${b.c}: la ceja (${round2(b.beam)} m) tiene que ser menor que su alto (${round2(m.h)} m)`);
-        }));
+        // La ceja de un nivel o de un hueco (el travesaño) tiene que ser menor que su alto: si no, no queda espacio para almacenar. Un hueco con alto propio también se revisa contra la ceja de su nivel.
+        out.spaces.forEach((sp) => {
+            (sp.lvls || []).forEach((lv) => {
+                if (!(lv.beam > 0)) return;
+                const m = levelMeasures(sp, lv.n);
+                if (lv.beam >= m.h - 1e-9) errors.push(`Activo ${sp.code}, nivel ${lv.n}: la ceja (${round2(lv.beam)} m) tiene que ser menor que su alto (${round2(m.h)} m)`);
+            });
+            (sp.bays || []).forEach((b) => {
+                if (!(b.beam > 0 || b.h !== undefined)) return;
+                const m = bayMeasures(sp, b.n, b.c);
+                if (m.beam > 0 && m.beam >= m.h - 1e-9) errors.push(`Activo ${sp.code}, nivel ${b.n}, columna ${b.c}: la ceja (${round2(m.beam)} m) tiene que ser menor que su alto (${round2(m.h)} m)`);
+            });
+        });
 
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
         out.plan = plan ? { widthM: meters(plan.widthM, 'Plano', 0.1) } : null;
@@ -2600,24 +2611,57 @@
         });
         return [...out.values()].sort((a, b) => a.n - b.n || a.c - b.c);
     }
+    // Niveles guardados de un activo (paso Niveles): [{ n: nivel, floorH?, h?, beam? }] (altura desde el piso, alto y ceja del nivel). Solo se guarda lo que se cambió y vale para TODAS las columnas de ese nivel; un hueco de Posiciones
+    // con medida propia manda sobre el nivel. Se descartan los niveles que el activo ya no tiene.
+    function sanitizeLevels(raw, levels) {
+        const out = new Map();
+        (Array.isArray(raw) ? raw : []).forEach((b) => {
+            const n = Math.round(Number(b && b.n));
+            if (!(n >= 1 && n <= levels)) return;
+            const lv = { n };
+            ['floorH', 'h', 'beam'].forEach((k) => {
+                const v = Number(b[k]);
+                if (Number.isFinite(v) && v > 0 && v <= LIMITS.maxM) lv[k] = Math.round(v * 1000) / 1000;
+            });
+            if (Object.keys(lv).length > 1) out.set(n, lv);
+        });
+        return [...out.values()].sort((a, b) => a.n - b.n);
+    }
+    // Lo guardado de un nivel del activo (paso Niveles) o {}.
+    function levelOf(space, level) {
+        return ((space && space.lvls) || []).find((l) => l.n === Number(level)) || {};
+    }
+    // Lo que muestra Niveles de un nivel (sin mirar los huecos): lo guardado o, si no se cambió, lo que sale del activo (alto = alto del activo entre sus niveles). La altura desde el piso por defecto es lo que miden los niveles
+    // de abajo, así que si se cambia el alto de uno, los de arriba suben con él; sin nada guardado queda igual que siempre ((nivel − 1) × alto). useful = alto − ceja (lo que sí se puede almacenar). Todo en metros.
+    function levelMeasures(space, level) {
+        const n = Number(level);
+        const levels = (space && space.levels) || 1;
+        const round = (v) => Math.round(v * 1000) / 1000;
+        const high = space && space.h > 0 ? space.h / levels : 0;
+        const stored = levelOf(space, n);
+        let below = 0;
+        for (let k = 1; k < n; k += 1) { const s = levelOf(space, k); below += s.h !== undefined ? s.h : high; }
+        const h = stored.h !== undefined ? stored.h : round(high);
+        const beam = stored.beam !== undefined ? stored.beam : 0;
+        return { floorH: stored.floorH !== undefined ? stored.floorH : round(below), h, beam, useful: round(Math.max(h - beam, 0)), stored };
+    }
     // Cuántas filas y cuántas profundidades tiene el hueco (nivel × columna) de un activo: lo guardado o 1.
     function bayOf(space, level, column) {
         const stored = ((space && space.bays) || []).find((b) => b.n === Number(level) && b.c === Number(column)) || {};
         return { rows: stored.rows || 1, depth: stored.depth || 1, stored };
     }
-    // Lo que muestra Posiciones de un hueco: lo guardado o, si no se cambió, lo que sale del activo (alto = alto del activo entre sus niveles; altura desde el piso = los niveles de abajo; largo = su largo entre sus columnas;
-    // ancho = su fondo). Todo en metros.
+    // Lo que muestra Posiciones de un hueco: lo guardado en el hueco o, si no se cambió, lo de su nivel (paso Niveles: altura desde el piso, alto y ceja) y, si el nivel tampoco lo trae, lo que sale del activo (alto = alto del activo
+    // entre sus niveles; altura desde el piso = los niveles de abajo; largo = su largo entre sus columnas; ancho = su fondo). Todo en metros.
     function bayMeasures(space, level, column) {
         const stored = bayOf(space, level, column).stored;
-        const levels = (space && space.levels) || 1;
         const slots = (space && space.slots) || 1;
         const round = (v) => Math.round(v * 1000) / 1000;
-        const high = space && space.h > 0 ? space.h / levels : 0;
-        const h = stored.h !== undefined ? stored.h : round(high);
+        const lv = levelMeasures(space, level);
+        const h = stored.h !== undefined ? stored.h : lv.h;
         // beam = la ceja: lo que mide el travesaño del nivel (en metros); ese grueso no se puede almacenar, así que el alto de almacenamiento (useful) es el alto del hueco menos la ceja
-        const beam = stored.beam !== undefined ? stored.beam : 0;
+        const beam = stored.beam !== undefined ? stored.beam : lv.beam;
         return {
-            floorH: stored.floorH !== undefined ? stored.floorH : round((Number(level) - 1) * high),
+            floorH: stored.floorH !== undefined ? stored.floorH : lv.floorH,
             l: stored.l !== undefined ? stored.l : round(((space && space.l) || 0) / slots),
             w: stored.w !== undefined ? stored.w : round((space && space.d) || 0),
             h,
@@ -2661,6 +2705,8 @@
         }
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
         if (section === 'posiciones') return (layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays }));
+        // Niveles: solo los activos que ya tienen algún nivel con medidas propias (altura desde el piso, alto o ceja distintos de los de por defecto).
+        if (section === 'niveles') return (layout.spaces || []).filter((s) => (s.lvls || []).length).map((s) => ({ id: s.id, lvls: s.lvls }));
         return null;
     }
     function sectionHasData(layout, section) {
@@ -2677,7 +2723,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, sanitizeLevels, levelOf, levelMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,

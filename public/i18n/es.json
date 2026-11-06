@@ -3228,6 +3228,11 @@
     "layoutPosCapacidad": "Capacidad",
     "layoutPosSinActivos": "Todavía no hay activos. Agrégalos en Huella-Espacio y ponles sus niveles y columnas en Activos: sus huecos salen aquí solos.",
     "layoutPosMuchos": "Se muestran los primeros {n} huecos.",
+    "layoutStepNiveles": "Niveles",
+    "colLayoutNiveles": "Niveles",
+    "layoutNivHuecosPropios": "Huecos con medida propia",
+    "layoutNivSinActivos": "Todavía no hay activos. Agrégalos en Huella-Espacio y ponles sus niveles en Activos: sus niveles salen aquí solos.",
+    "layoutNivMuchos": "Se muestran los primeros {n} niveles.",
     "colRelFila": "Fila",
     "relRowShort": "Fila",
     "relRowN": "Fila {n}",
@@ -4694,8 +4699,20 @@
       "what": "Lo que mide el travesaño (el peldaño) de este nivel, en metros. Ese grueso no se puede almacenar: se le quita al Alto del hueco y lo que queda es el Alto de almacenamiento. Tiene que ser menor que el Alto. Con 0 no se reserva nada.",
       "example": "el hueco mide 1.83 m y su travesaño 0.07 m: se pone 0.07 y el Alto de almacenamiento queda en 1.76 m."
     },
+    "layoutSec_niveles": {
+      "what": "Cada renglón es un nivel de un activo (el rack con 3 niveles deja 3 renglones, ya listos). Aquí anotas una sola vez la altura desde el piso, el alto y la ceja (el grueso del travesaño) de ese nivel, y valen para todas sus columnas. La ceja se resta del Alto y queda el Alto de almacenamiento. Las medidas salen calculadas con las del activo y solo corriges las que cambien; si el alto de un nivel cambia, los de arriba suben con él. Un hueco en particular que sea distinto se ajusta en Posiciones: lo que se anote ahí manda sobre el nivel.",
+      "example": "el nivel 2 del R-01 tiene un travesaño de 0.07 m: pones 0.07 en Ceja una sola vez y sus 3 columnas quedan con ese Alto de almacenamiento."
+    },
+    "layoutNivCeja": {
+      "what": "Lo que mide el travesaño (el peldaño) de este nivel, en metros, igual para todas sus columnas. Ese grueso no se puede almacenar: se le quita al Alto y lo que queda es el Alto de almacenamiento. Tiene que ser menor que el Alto. Con 0 no se reserva nada.",
+      "example": "el nivel mide 1.83 m y su travesaño 0.07 m: se pone 0.07 y el Alto de almacenamiento queda en 1.76 m."
+    },
+    "layoutNivHuecos": {
+      "what": "Cuántos huecos (columnas) de este nivel traen en Posiciones su propia altura desde el piso, alto o ceja. A esos no les cambia lo que anotes aquí.",
+      "example": "el nivel 2 tiene 3 columnas y una lleva su propia ceja: aquí dice 1."
+    },
     "layoutSec_posiciones": {
-      "what": "Cada renglón es un hueco: un nivel × una columna de un activo (el rack con 2 niveles y 3 columnas deja 6 huecos, ya listos). Dentro de cada hueco anotas cuántas filas y cuántas profundidades tiene, su altura desde el piso y sus medidas en metros. Si el nivel tiene un travesaño, anota su grueso en Ceja: se le quita al Alto y queda el Alto de almacenamiento. Las medidas salen calculadas con las del activo y solo corriges las que cambien; la capacidad es filas × profundidades.",
+      "what": "Cada renglón es un hueco: un nivel × una columna de un activo (el rack con 2 niveles y 3 columnas deja 6 huecos, ya listos). Dentro de cada hueco anotas cuántas filas y cuántas profundidades tiene, su altura desde el piso y sus medidas en metros. Si el nivel tiene un travesaño, anota su grueso en Ceja: se le quita al Alto y queda el Alto de almacenamiento. Las medidas salen calculadas con las del activo (o con las del nivel, si ya las anotaste en Niveles) y solo corriges las que cambien; la capacidad es filas × profundidades.",
       "example": "el hueco N2·C3 del R-01 lleva 2 filas y 3 profundidades: capacidad 6."
     },
     "relClass": {

@@ -3229,6 +3229,11 @@
     "layoutPosCapacidad": "Capacity",
     "layoutPosSinActivos": "There are no assets yet. Add them in Footprint-Space and give them their levels and columns in Assets: their bays appear here on their own.",
     "layoutPosMuchos": "The first {n} bays are shown.",
+    "layoutStepNiveles": "Levels",
+    "colLayoutNiveles": "Levels",
+    "layoutNivHuecosPropios": "Bays with their own measure",
+    "layoutNivSinActivos": "There are no assets yet. Add them in Footprint-Space and give them their levels in Assets: their levels show up here by themselves.",
+    "layoutNivMuchos": "The first {n} levels are shown.",
     "colRelFila": "Row",
     "relRowShort": "Row",
     "relRowN": "Row {n}",
@@ -4695,8 +4700,20 @@
       "what": "How thick the crossbeam (the rung) of this level is, in meters. That thickness cannot be used for storage: it is taken off the bay Height and what is left is the Storage height. It must be smaller than the Height. With 0 nothing is reserved.",
       "example": "the bay is 1.83 m high and its crossbeam 0.07 m: you enter 0.07 and the Storage height is 1.76 m."
     },
+    "layoutSec_niveles": {
+      "what": "Each line is a level of an asset (a rack with 3 levels leaves 3 lines, already listed). Here you write once the height from the floor, the height and the beam (the thickness of the crossbeam) of that level, and they apply to all its columns. The beam is taken off the Height and what is left is the Storage height. The measures come calculated from the asset's and you only fix the ones that differ; if the height of a level changes, the ones above move up with it. A single bay that is different is adjusted in Positions: what is written there wins over the level.",
+      "example": "level 2 of R-01 has a 0.07 m crossbeam: you write 0.07 in Beam once and its 3 columns get that Storage height."
+    },
+    "layoutNivCeja": {
+      "what": "How thick the crossbeam (the rung) of this level is, in meters, the same for all its columns. That thickness cannot be used for storage: it is taken off the Height and what is left is the Storage height. It must be smaller than the Height. With 0 nothing is reserved.",
+      "example": "the level is 1.83 m and its crossbeam 0.07 m: you write 0.07 and the Storage height is 1.76 m."
+    },
+    "layoutNivHuecos": {
+      "what": "How many bays (columns) of this level have their own height from the floor, height or beam in Positions. What you write here does not change those.",
+      "example": "level 2 has 3 columns and one has its own beam: here it says 1."
+    },
     "layoutSec_posiciones": {
-      "what": "Each line is a bay: one level × one column of an asset (a rack with 2 levels and 3 columns leaves 6 bays, already listed). Inside each bay you write how many rows and how many depths it has, its height from the floor and its measures in meters. The measures come calculated from the asset's and you only fix the ones that differ; the capacity is rows × depths.",
+      "what": "Each line is a bay: one level × one column of an asset (a rack with 2 levels and 3 columns leaves 6 bays, already listed). Inside each bay you write how many rows and how many depths it has, its height from the floor and its measures in meters. The measures come calculated from the asset's (or from the level's, if you already wrote them in Levels) and you only fix the ones that differ; the capacity is rows × depths.",
       "example": "bay N2·C3 of R-01 has 2 rows and 3 depths: capacity 6."
     },
     "relClass": {

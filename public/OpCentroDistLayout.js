@@ -9,9 +9,9 @@
 (function () {
 const LC = window.LayoutCalc;
 // El orden de los pasos en la barra (Localizadores, que no edita nada, siempre va al final).
-const SECTION_ORDER = ['contorno', 'paredes', 'puertas', 'pisos', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'zonas', 'espacios', 'activos', 'posiciones'];
+const SECTION_ORDER = ['contorno', 'paredes', 'puertas', 'pisos', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'zonas', 'espacios', 'activos', 'posiciones', 'niveles'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', localizadores: 'main.layoutStepLocalizadores',
+    contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', niveles: 'main.layoutStepNiveles', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     saved: null, draft: null, version: 0, perms: null, showMeasures: true, showOpening: true, showLevels: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -143,7 +143,7 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-zonas', 'layout-pisos', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-localizadores', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-objetos', 'layout-transito'];
+const FILTER_TABLE_IDS = ['layout-zonas', 'layout-pisos', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-niveles', 'layout-localizadores', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-objetos', 'layout-transito'];
 // Qué tabla con filtro corresponde a cada lista que se agrega: al agregar un renglón se quitan sus filtros para que el nuevo siempre se vea.
 const FILTER_OF_LIST = { obstacles: 'layout-obstaculos', doors: 'layout-puertas', power: 'layout-luz', sensors: 'layout-sensores', safety: 'layout-seguridad', transit: 'layout-transito', objects: 'layout-objetos', vertices: 'layout-contorno-esquinas', contornoLados: 'layout-contorno-lados' };
 function clearFilterOf(list) {
@@ -707,8 +707,8 @@ function applyLegend() {
         sensor: () => stepOn('sensores') && some('sensors'),
         column: () => stepOn('obstaculos') && some('obstacles', (o) => o.kind === 'column' || o.kind === 'other'),
         step: () => stepOn('obstaculos') && some('obstacles', (o) => o.kind === 'step'),
-        footprint: () => (stepOn('espacios') || stepOn('activos') || stepOn('posiciones')) && some('footprints', (f) => f.active !== false),
-        asset: () => (stepOn('activos') || stepOn('posiciones')) && some('spaces', (s) => s.active !== false),
+        footprint: () => (stepOn('espacios') || stepOn('activos') || stepOn('posiciones') || stepOn('niveles')) && some('footprints', (f) => f.active !== false),
+        asset: () => (stepOn('activos') || stepOn('posiciones') || stepOn('niveles')) && some('spaces', (s) => s.active !== false),
         object: (type) => stepOn('objetos') && some('objects', (o) => o.type === type),
         transit: (type) => stepOn('transito') && some('transit', (p) => (type === 'between' ? p.type === 'between' : p.type !== 'between')),
         safety: (type) => stepOn('seguridad') && some('safety', (e) => e.type === type),
@@ -1193,6 +1193,32 @@ function stepHtml(step) {
         const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosColumna', 'main.layoutPosFilas', 'main.layoutPosProfundidad', 'main.layoutPosAltura', 'main.layoutPosLargo', 'main.layoutPosAncho', 'main.layoutPosAlto', 'main.layoutPosCeja', 'main.layoutPosAltoUtil', 'main.layoutPosCapacidad'];
         return `${table(heads, rows, 'layout-posiciones')}${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
+    if (step === 'niveles') {
+        // Cada renglón es un NIVEL de un activo de Huella-Espacio (el rack con 3 niveles deja 3 renglones, ya listos): sus niveles salen solos de Activos. Aquí se anota UNA VEZ la altura desde el piso, el alto y la ceja de ese
+        // nivel y vale para todas sus columnas; lo que no se cambia queda como lo de por defecto (calculado con el alto del activo) y no se guarda aparte. Un hueco de Posiciones con medida propia manda sobre el nivel.
+        const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
+        const shown = (v) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '');
+        const lvlNum = (i, n, key, value, edited, extra = '', bad = false) => `<td><input type="number" min="0" step="0.01" data-l="lvl" data-i="${i}" data-n="${n}" data-k="${key}" value="${value}"${extra}${edited || bad ? ` class="${[edited ? 'layout-edited' : '', bad ? 'layout-missing' : ''].filter(Boolean).join(' ')}"` : ''}${dis ? ' disabled' : ''}></td>`;
+        const LEVEL_ROWS_MAX = 1500;
+        let count = 0;
+        const rows = [];
+        d.spaces.forEach((s, i) => {
+            if (s.active === false) return;
+            const levels = s.levels || 1;
+            for (let n = 1; n <= levels; n += 1) {
+                if (count >= LEVEL_ROWS_MAX) return;
+                count += 1;
+                const m = LC.levelMeasures(s, n);
+                const st = m.stored;
+                // cuántos huecos (columnas) de este nivel traen en Posiciones una medida propia de estas tres
+                const own = (s.bays || []).filter((b) => b.n === n && (b.floorH !== undefined || b.h !== undefined || b.beam !== undefined)).length;
+                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td>${lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined)}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined)}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"', m.beam > 0 && m.beam >= m.h)}<td class="layout-calc"><span data-lvl-use="${i}|${n}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-help-key="layoutNivHuecos">${own || '—'}</span></td></tr>`);
+            }
+        });
+        if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutNivSinActivos'))}</p>`;
+        const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosAltura', 'main.layoutPosAlto', 'main.layoutPosCeja', 'main.layoutPosAltoUtil', 'main.layoutNivHuecosPropios'];
+        return `${table(heads, rows, 'layout-niveles')}${count >= LEVEL_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutNivMuchos').replace('{n}', LEVEL_ROWS_MAX))}</p>` : ''}`;
+    }
     if (step === 'activos') {
         // Cada renglón es un ACTIVO: lo que hay encima de una huella (una huella puede tener varios). Tiene su propio código (de ahí sale el número del activo en el Localizador) y se elige en qué huella está; la zona
         // sale de esa huella y aquí no se captura. Del activo se eligen la clasificación y el tipo (dos listas independientes) y cuántos niveles tiene, cuántas columnas hay por nivel y los cajones (filas × columnas).
@@ -1301,6 +1327,7 @@ function rowEntity(tr) {
     if (list === 'safety' && (state.draft.safety || [])[i]) return { kind: 'safety', id: state.draft.safety[i].id };
     if (list === 'transit' && (state.draft.transit || [])[i]) return { kind: 'transit', id: state.draft.transit[i].id };
     if (list === 'objects' && (state.draft.objects || [])[i]) return { kind: 'object', id: state.draft.objects[i].id };
+    if (list === 'lvl' && state.draft.spaces[i]) return { kind: 'space', id: state.draft.spaces[i].id };
     if (list === 'bay' && state.draft.spaces[i]) return { kind: 'bay', id: state.draft.spaces[i].id, n: Number(ctl.getAttribute('data-n')), c: Number(ctl.getAttribute('data-c')) };
     return null;
 }
@@ -1836,7 +1863,7 @@ function renderSvg() {
     const sM = state.showMeasures && !(finding && hide.medidas);
     const on = stepOn;
     const showFp = finding ? (!hide.huellas && (on('espacios') || state.find.kind === 'footprint')) : on('espacios');
-    const showSp = finding ? (!hide.activos && (on('activos') || on('posiciones'))) : (on('activos') || on('posiciones'));
+    const showSp = finding ? (!hide.activos && (on('activos') || on('posiciones') || on('niveles'))) : (on('activos') || on('posiciones') || on('niveles'));
     const W = 700;
     const H = 460;
     const M = 36;
@@ -2560,7 +2587,7 @@ const ROW_FACTORY = {
     // un activo siempre va dentro de una huella: nace sin huella y hay que elegirla (no se puede guardar hasta entonces)
     spaces: () => ({ id: uid('s'), footprintId: '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
-const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', safety: 'seguridad', transit: 'transito', objects: 'objetos', zones: 'zonas', floors: 'pisos', footprints: 'espacios', spaces: 'activos', bay: 'posiciones' };
+const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', safety: 'seguridad', transit: 'transito', objects: 'objetos', zones: 'zonas', floors: 'pisos', footprints: 'espacios', spaces: 'activos', bay: 'posiciones', lvl: 'niveles' };
 // Los códigos los pone el sistema y no se editan: el de la zona (Z001…, consecutivo), el de la huella (H001… por zona, y su zona sale de dónde está en el croquis) y el del activo (letra de su tipo + número
 // consecutivo por zona y tipo: A001, G001…). Lo que ya estaba guardado y sigue igual conserva su código; lo nuevo (todavía sin guardar) y lo que cambió de zona o de tipo lo recibe cada vez que se acomoda,
 // así siempre es el que le toca, el mismo que le pondrá el servidor al guardar.
@@ -2654,6 +2681,24 @@ function onEdit(event) {
         if (use) use.textContent = String(Math.round(mBay.useful * 100) / 100);
         const beamBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${c}"][data-k="beam"]`);
         if (beamBox) beamBox.classList.toggle('layout-missing', mBay.beam > 0 && mBay.beam >= mBay.h);
+    } else if (list === 'lvl') {
+        // Un nivel de un activo (paso Niveles): solo se guarda lo que se cambió; lo que vuelve a quedar vacío o en 0 es lo de por defecto y se quita. Vale para todas las columnas del nivel.
+        const space = state.draft.spaces[Number(el.getAttribute('data-i'))];
+        const n = Number(el.getAttribute('data-n'));
+        const lvKey = el.getAttribute('data-k');
+        if (!space.lvls) space.lvls = [];
+        let lv = space.lvls.find((l) => l.n === n);
+        if (!lv) { lv = { n }; space.lvls.push(lv); }
+        if (value > 0) lv[lvKey] = value; else delete lv[lvKey];
+        if (Object.keys(lv).length <= 1) space.lvls = space.lvls.filter((l) => l !== lv);
+        if (!space.lvls.length) delete space.lvls;
+        // el alto de almacenamiento (Alto − Ceja) se recalcula al momento y la ceja se marca en rojo si ya no deja espacio; al soltar el campo se vuelve a dibujar la tabla (el alto de un nivel mueve la altura de los de arriba)
+        const mLvl = LC.levelMeasures(space, n);
+        const useLvl = document.querySelector(`[data-lvl-use="${el.getAttribute('data-i')}|${n}"]`);
+        if (useLvl) useLvl.textContent = String(Math.round(mLvl.useful * 100) / 100);
+        const beamLvl = document.querySelector(`[data-l="lvl"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-k="beam"]`);
+        if (beamLvl) beamLvl.classList.toggle('layout-missing', mLvl.beam > 0 && mLvl.beam >= mLvl.h);
+        if (event.type === 'change') renderPanel();
     } else if (list === 'transitSizes') {
         // las medidas de lo que transita (ancho, largo y alto, en metros): vacío = sin medida (no se revisa)
         const [who, dim] = String(el.getAttribute('data-k')).split(':');
@@ -3462,11 +3507,11 @@ function effective3dLayers() {
     const f = state.find;
     const hide = state.findHide || {};
     if (f && !state.findDim) {
-        return { contour: false, walls: false, columns: false, doors: false, power: false, sensors: false, objects: false, transit: false, safety: false, zones: stepOn('zonas') || stepOn('pisos') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones')) };
+        return { contour: false, walls: false, columns: false, doors: false, power: false, sensors: false, objects: false, transit: false, safety: false, zones: stepOn('zonas') || stepOn('pisos') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones') || stepOn('niveles')) };
     }
     const layers = {
         contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || stepOn('pisos') || !!(f && f.kind === 'zone'),
-        footprints: stepOn('espacios'), power: stepOn('luz'), sensors: stepOn('sensores'), assets: stepOn('activos') || stepOn('posiciones'),
+        footprints: stepOn('espacios'), power: stepOn('luz'), sensors: stepOn('sensores'), assets: stepOn('activos') || stepOn('posiciones') || stepOn('niveles'),
     };
     if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }
     return layers;
@@ -4319,7 +4364,7 @@ function buildSheetSvgFrom(loaded) {
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, legend: sheetView().legend, rotation: sheetView().rotation },
+        view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' || s === 'niveles' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, legend: sheetView().legend, rotation: sheetView().rotation },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {
