@@ -800,6 +800,11 @@
         });
         return changed ? { ...layout, sensors } : layout;
     }
+    // Las zonas que mide un sensor: las que se eligieron en su renglón (paso Sensores) o, sin elegir ninguna, la zona donde está colocado.
+    function sensorZoneIds(s) {
+        if (s && Array.isArray(s.zones) && s.zones.length) return s.zones;
+        return s && s.zoneId ? [s.zoneId] : [];
+    }
     const sensorCode = (n) => `S${String(n).padStart(3, '0')}`;
     const isSensorCode = (c) => /^S\d{3,4}$/.test(String(c == null ? '' : c).trim());
     // Cada sensor que ya trae un código S### que no se repite lo conserva; el que no, recibe el siguiente después del más alto del Layout.
@@ -1979,8 +1984,11 @@
             const wallId = e && typeof e.wallId === 'string' ? e.wallId.trim().slice(0, 64) : '';
             if (!wallId && e && e.wall !== undefined && e.wall !== null && !(wall >= 1 && wall <= walls)) errors.push(`${label}: pared no válida`);
             const item = { id: idOf(e && e.id, sensorIds, label), code: text(e && e.code, label, false), type: oneOf(e && e.type, SENSOR_TYPES, 'both'), zoneId: '', dist: meters(e && e.dist, label), height: meters(e && e.height, label) };
-            if (wallId) return { ...item, wallId };
-            return wall >= 1 && wall <= walls ? { ...item, wall } : { ...item, wallId: '' };
+            // Las zonas que mide (una o varias; sin elegir mide la zona donde está colocado): solo se guarda si se eligió alguna. Las que ya no existen se quitan más abajo, cuando las zonas ya están limpias.
+            const measured = Array.isArray(e && e.zones) ? [...new Set(e.zones.filter((zid) => typeof zid === 'string' && zid).map((zid) => zid.slice(0, 64)))].slice(0, LIMITS.zones) : [];
+            const withZones = (obj) => (measured.length ? { ...obj, zones: measured } : obj);
+            if (wallId) return withZones({ ...item, wallId });
+            return wall >= 1 && wall <= walls ? withZones({ ...item, wall }) : withZones({ ...item, wallId: '' });
         });
 
         const obstacleIds = new Set();
@@ -2230,6 +2238,8 @@
         });
         out.footprints = assignHuellaCodes(deriveFootprintZones(out)).footprints;
         out.sensors = assignSensorCodes(deriveSensorZones(out)).sensors;
+        // una zona que ya no existe se quita de las que mide el sensor (borrar una zona no bloquea el guardado)
+        { const known = new Set((out.zones || []).map((zz) => zz.id)); out.sensors = out.sensors.map((sn) => { if (!sn.zones) return sn; const kept = sn.zones.filter((zid) => known.has(zid)); if (kept.length === sn.zones.length) return sn; const { zones: dropped, ...rest } = sn; return kept.length ? { ...rest, zones: kept } : rest; }); }
         out.transit = assignTransitCodes(deriveTransitZones(out)).transit;
         { const walled = assignWallCodes(out); out.obstacles = walled.obstacles; if (walled.wallNext) out.wallNext = walled.wallNext; else delete out.wallNext; }
         { const safe = assignSafetyCodes(deriveSafetyZones(out)); out.safety = safe.safety; if (safe.safetyNext && Object.keys(safe.safetyNext).length) out.safetyNext = safe.safetyNext; else delete out.safetyNext; }
@@ -2467,6 +2477,7 @@
     }
 
     return {
+        sensorZoneIds,
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,

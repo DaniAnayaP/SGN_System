@@ -2167,6 +2167,10 @@
     "layoutPuertaSinPared": "First add a wall (Walls step): a door always goes on a wall.",
     "layoutPuertasSinPared": "A wall that had {n} item(s) (doors, power connections or sensors) was removed: they have no wall now, choose another one in their step.",
     "layoutLuzSinPared": "First add a wall (Walls step): a power connection always goes on a wall.",
+    "layoutSensorZonaColocado": "Zone where it is",
+    "layoutSensorZonasMide": "Zones it measures",
+    "layoutSensorMideSuZona": "The zone where it is",
+    "layoutSensorZonasAgregar": "Choose the zones it measures",
     "layoutSensorSinPared": "First add a wall (Walls step): a sensor always goes on a wall.",
     "layoutVioPw_nowall": "The power connection {name} is not on a wall: choose the wall it goes on.",
     "layoutVioPw_outside": "The power connection {name} is not inside the wall \"{wall}\" (it is {len} m long): it is {dist} m from its start.",
@@ -4979,6 +4983,10 @@
     "layoutSec_transito": {
       "what": "The aisles of the warehouse: where people, forklifts, carts and platforms pass. An aisle goes inside a zone (the zone comes by itself from its place), connects with another aisle that touches it, and nothing can be inside: no footprints, columns, walls or level differences. Who passes through it is chosen from the «What Passes» catalog (Catalogs), and it has to fit (width, length and height). The code (T001, T002…) is set by the system. The aisle m² come from here.",
       "example": "a main aisle 25 m long by 3 m wide inside Zone 1, for people and forklifts: it becomes T001."
+    },
+    "layoutSensorZonas": {
+      "what": "The zones whose temperature and humidity this sensor measures. The wall is only for placing it; here you choose which zones it measures, one or several. If you choose none, it measures the zone where it is placed. In the Heat map each zone is painted with the average of the sensors that measure it.",
+      "example": "a sensor on the wall between the Dock and Zone 1 measures both: you tick Dock and Zone 1, and both zones use its reading."
     },
     "layoutTransitoQuien": {
       "what": "Who passes through this aisle, chosen from the «What Passes» catalog (people, forklifts, carts, platforms, whatever models you have). You can tick several. The sizes come from the catalog; if what you tick does not fit in the aisle, it shows in red and it can't be saved.",

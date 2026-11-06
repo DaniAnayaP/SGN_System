@@ -575,6 +575,57 @@ function openWhoPop(i, anchor) {
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8))}px`;
     pop.addEventListener('change', (event) => { const el = event.target.closest('[data-who-pick]'); if (el) toggleTransitWho(el.getAttribute('data-who-pick'), el.checked); });
 }
+// «Zonas que mide» de un sensor: la pared solo sirve para colocarlo; aquí se eligen las zonas cuya temperatura y humedad mide (una o varias). Sin elegir ninguna mide la zona donde está colocado. La celda muestra lo elegido en
+// etiquetas chicas (con su ×) y un ＋ abre la lista de zonas para marcar más, igual que «Quién transita».
+function sensorZonesCell(x, i, d, dis) {
+    const zoneOf = (id) => (d.zones || []).find((z) => z.id === id);
+    const chips = (x.zones || []).filter((id) => zoneOf(id)).map((id) => `<span class="layout-chip" data-help-key="layoutSensorZonas">${esc(zoneOf(id).name || id)}${dis ? '' : `<button type="button" class="layout-chip-x" data-sz-del="${i}:${esc(id)}" aria-label="${esc(t('main.layoutQuitar'))}">×</button>`}</span>`).join('');
+    const own = chips ? '' : `<span class="layout-muted" data-help-key="layoutSensorZonas">${esc(t('main.layoutSensorMideSuZona'))}</span>`;
+    const add = dis ? '' : `<button type="button" class="layout-chip-add" data-sz-open="${i}" data-help-key="layoutSensorZonas" aria-label="${esc(t('main.layoutSensorZonasAgregar'))}" title="${esc(t('main.layoutSensorZonasAgregar'))}">＋</button>`;
+    return `<td><div class="layout-chips">${chips}${own}${add}</div></td>`;
+}
+function toggleSensorZone(spec, on) {
+    const at = String(spec).indexOf(':');
+    const i = String(spec).slice(0, at);
+    const id = String(spec).slice(at + 1);
+    const row = (state.draft.sensors || [])[Number(i)];
+    if (!row) return;
+    const order = new Map((state.draft.zones || []).map((z, k) => [z.id, k]));
+    const set = new Set(row.zones || []);
+    if (on) set.add(id); else set.delete(id);
+    const list = [...set].sort((a, b) => (order.has(a) ? order.get(a) : 1e9) - (order.has(b) ? order.get(b) : 1e9));
+    if (list.length) row.zones = list; else delete row.zones;
+    const reopen = !!document.getElementById('layout-sz-pop');
+    renderPanel();
+    refreshLive();
+    if (reopen) { const btn = document.querySelector(`[data-sz-open="${i}"]`); if (btn) openSensorZonesPop(Number(i), btn); }
+}
+function closeSensorZonesPop() {
+    const el = document.getElementById('layout-sz-pop');
+    if (el) el.remove();
+}
+function openSensorZonesPop(i, anchor) {
+    closeSensorZonesPop();
+    closeWhoPop();
+    const row = (state.draft.sensors || [])[i];
+    if (!row) return;
+    const picked = new Set(row.zones || []);
+    const zones = (state.draft.zones || []).filter((z) => z.active !== false);
+    const pop = document.createElement('div');
+    pop.id = 'layout-sz-pop';
+    pop.className = 'layout-who-pop';
+    pop.setAttribute('role', 'group');
+    pop.innerHTML = zones.length
+        ? zones.map((z) => `<label class="layout-who-item"><input type="checkbox" data-sz-pick="${i}:${esc(z.id)}"${picked.has(z.id) ? ' checked' : ''}><span>${esc(z.name || z.id)}</span><small>${esc(z.code || '')}</small></label>`).join('')
+        : `<p class="layout-muted">${esc(t('main.heatSinZonas'))}</p>`;
+    document.body.appendChild(pop);
+    const r = anchor.getBoundingClientRect();
+    pop.style.top = `${Math.max(8, Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8))}px`;
+    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8))}px`;
+    pop.addEventListener('change', (event) => { const el = event.target.closest('[data-sz-pick]'); if (el) toggleSensorZone(el.getAttribute('data-sz-pick'), el.checked); });
+}
+document.addEventListener('click', (event) => { if (!event.target.closest('#layout-sz-pop, [data-sz-open]')) closeSensorZonesPop(); });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeSensorZonesPop(); });
 document.addEventListener('click', (event) => { if (!event.target.closest('#layout-who-pop, [data-who-open]')) closeWhoPop(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeWhoPop(); });
 // Seguridad, fechas: el estado de cada elemento (Vigente / Por vencer / Vencido / Sin fecha) sale de la fecha más cercana contra HOY (la fecha de quien ve la pantalla); no bloquea nada. todayIso = hoy como AAAA-MM-DD.
@@ -990,10 +1041,10 @@ function stepHtml(step) {
         return `${table(['main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', ''], rows, 'layout-luz')}${addButton('power', 'main.layoutAgregarConexion', dis, true)}<div class="layout-vio" data-wi-issues="power" hidden></div>`;
     }
     if (step === 'sensores') {
-        // Cada renglón es un SENSOR de temperatura y/o humedad, colocado sobre una pared como las conexiones de luz. El código (S001…) lo pone el sistema y la zona sale de dónde queda el sensor: no se capturan.
+        // Cada renglón es un SENSOR de temperatura y/o humedad, colocado sobre una pared como las conexiones de luz. El código (S001…) lo pone el sistema y la zona donde queda sale de la pared (no se captura); las zonas que MIDE sí se eligen (una o varias).
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
-        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td><td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${removeCell('sensors', i, dis)}</tr>`);
-        return `${table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutZona', ''], rows, 'layout-sensores')}${addButton('sensors', 'main.layoutAgregarSensor', dis, true)}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
+        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td><td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${sensorZonesCell(x, i, d, dis)}${removeCell('sensors', i, dis)}</tr>`);
+        return `${table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutSensorZonaColocado', 'main.layoutSensorZonasMide', ''], rows, 'layout-sensores')}${addButton('sensors', 'main.layoutAgregarSensor', dis, true)}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
     }
     if (step === 'seguridad') {
         // Cada renglón es un ELEMENTO de seguridad (extintor, hidrante, puerta de emergencia, botiquín, alarma o pulsador, regadera y lavaojos, punto de reunión o ruta de evacuación): un punto puesto en el plano con X e Y, en metros.
@@ -2736,6 +2787,10 @@ $('layout-panel').addEventListener('click', (event) => {
     if (whoOpen) { openWhoPop(Number(whoOpen.dataset.whoOpen), whoOpen); return; }
     const whoDel = event.target.closest('[data-who-del]');
     if (whoDel) { toggleTransitWho(whoDel.dataset.whoDel, false); return; }
+    const szOpen = event.target.closest('[data-sz-open]');
+    if (szOpen) { openSensorZonesPop(Number(szOpen.dataset.szOpen), szOpen); return; }
+    const szDel = event.target.closest('[data-sz-del]');
+    if (szDel) { toggleSensorZone(szDel.dataset.szDel, false); return; }
     const addObj = event.target.closest('[data-add-object]');
     if (addObj) { addObject(addObj.dataset.addObject); return; }
     const add = event.target.closest('[data-add]');

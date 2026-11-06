@@ -78,6 +78,8 @@ function buildBuckets(readings) {
     });
     return map;
 }
+// Un sensor mide las zonas que se eligieron en su renglón del Layout (o, sin elegir, la zona donde está colocado).
+const measuresZone = (sensor, zoneId) => (Array.isArray(sensor.measures) && sensor.measures.length ? sensor.measures : [sensor.zoneId]).includes(zoneId);
 // Lo que marcó un sensor a esa hora para la medida elegida (null si no hay lectura o su tipo no la mide).
 function sensorReading(sensor, hour, metric) {
     const r = state.buckets.get(sensor.id) && state.buckets.get(sensor.id).get(hour);
@@ -87,7 +89,7 @@ function sensorReading(sensor, hour, metric) {
 }
 // El valor de una zona a esa hora: el promedio de sus sensores que tienen lectura. Sin sensores: null con why 'nosensor'; con sensores pero sin lectura: null con why 'noreading'.
 function zoneValue(zone, hour, metric) {
-    const sensors = state.data.layout.sensors.filter((s) => s.zoneId === zone.id);
+    const sensors = state.data.layout.sensors.filter((s) => measuresZone(s, zone.id));
     if (!sensors.length) return { value: null, why: 'nosensor', sensors: [] };
     const reads = sensors.map((s) => ({ sensor: s, reading: sensorReading(s, hour, metric) }));
     const got = reads.filter((r) => r.reading);
@@ -132,7 +134,7 @@ function calculate() {
     const sensors = state.data.layout.sensors;
     const perSensor = new Map(sensors.map((s) => [s.id, statsOf(bySensor.get(s.id) || [])]));
     const perZone = new Map(state.data.layout.zones.map((z) => {
-        const mine = sensors.filter((s) => s.zoneId === z.id);
+        const mine = sensors.filter((s) => measuresZone(s, z.id));
         return [z.id, { sensors: mine, stats: statsOf(mine.flatMap((s) => bySensor.get(s.id) || [])) }];
     }));
     state.calc = {

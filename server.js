@@ -8100,7 +8100,7 @@ app.get('/api/business/climate-map', requireAuth, (req, res) => {
         companyName: pub.companyName, siteName: pub.siteName, companyColor: pub.companyColor, costCenter: center ? { id: center.id, name: center.name } : null,
         layout: {
             vertices: pub.layout.vertices, zones: pub.layout.zones.map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}) })),
-            sensors: (row.layout.sensors || []).map((s) => ({ id: s.id, code: s.code, type: s.type, ...(s.wallId ? { wallId: s.wallId } : { wall: s.wall }), dist: s.dist, height: s.height, zoneId: s.zoneId || '' })),
+            sensors: (row.layout.sensors || []).map((s) => ({ id: s.id, code: s.code, type: s.type, ...(s.wallId ? { wallId: s.wallId } : { wall: s.wall }), dist: s.dist, height: s.height, zoneId: s.zoneId || '', measures: LayoutCalc.sensorZoneIds(s) })),
             // las paredes (donde va cada sensor): solo lo que hace falta para ubicarlas
             obstacles: (row.layout.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, name: o.name, kind: o.kind, mode: o.mode, wall: o.wall, dist: o.dist, x: o.x, y: o.y, l: o.l, w: o.w, ...(o.h > 0 ? { h: o.h } : {}), ...(o.h2 > 0 ? { h2: o.h2 } : {}) })),
         },

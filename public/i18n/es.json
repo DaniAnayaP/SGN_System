@@ -2167,6 +2167,10 @@
     "layoutPuertaSinPared": "Primero agrega una pared (paso Paredes): una puerta siempre va sobre una pared.",
     "layoutPuertasSinPared": "Se quitó una pared que tenía {n} elemento(s) (puertas, conexiones de luz o sensores): quedan sin pared, elige otra en su paso.",
     "layoutLuzSinPared": "Primero agrega una pared (paso Paredes): una conexión de luz siempre va sobre una pared.",
+    "layoutSensorZonaColocado": "Zona donde está",
+    "layoutSensorZonasMide": "Zonas que mide",
+    "layoutSensorMideSuZona": "La zona donde está",
+    "layoutSensorZonasAgregar": "Elegir las zonas que mide",
     "layoutSensorSinPared": "Primero agrega una pared (paso Paredes): un sensor siempre va sobre una pared.",
     "layoutVioPw_nowall": "La conexión de luz {name} no está sobre una pared: elige la pared donde va.",
     "layoutVioPw_outside": "La conexión de luz {name} no está dentro de la pared «{wall}» (mide {len} m): está a {dist} m de su inicio.",
@@ -4978,6 +4982,10 @@
     "layoutSec_transito": {
       "what": "Los pasillos de la nave: por donde pasan personas, montacargas, carritos y plataformas. Un pasillo va dentro de una zona (la zona sale sola de su lugar), se conecta con otro pasillo que lo toque y nada puede ir adentro: ni huellas, ni columnas, ni paredes, ni desniveles. Quién transita por él se elige del catálogo «Lo que transita» (Catálogos), y tiene que caber (ancho, largo y alto). El código (T001, T002…) lo pone el sistema. De aquí salen los m² de pasillos.",
       "example": "un pasillo principal de 25 m de largo por 3 m de ancho dentro de la Zona 1, para personas y montacargas: queda como T001."
+    },
+    "layoutSensorZonas": {
+      "what": "Las zonas cuya temperatura y humedad mide este sensor. La pared solo sirve para colocarlo; aquí eliges qué zonas mide, una o varias. Si no eliges ninguna, mide la zona donde está colocado. En el Mapa de calor cada zona se pinta con el promedio de los sensores que la miden.",
+      "example": "un sensor en la pared que separa el Andén de la Zona 1 mide las dos: marcas Andén y Zona 1, y las dos zonas usan su lectura."
     },
     "layoutTransitoQuien": {
       "what": "Quién transita por este pasillo, elegido del catálogo «Lo que transita» (personas, montacargas, carritos, plataformas, los modelos que tengas). Se pueden marcar varios. Las medidas salen del catálogo; si lo que marcas no cabe en el pasillo, sale en rojo y no se puede guardar.",
