@@ -60,6 +60,10 @@
             return l;
         });
 
+        // Las zonas que mide el sensor elegido (paso Sensores): un tinte MUY tenue sobre su piso, con el borde; se arma al resaltar el sensor (ver applyMeasured).
+        const measuredGroup = new THREE.Group();
+        scene.add(measuredGroup);
+
         const cam = new THREE.PerspectiveCamera(42, 1, 0.1, 2000);
         const st = { theta: 0.8, phi: 0.95, r: 40, tx: 0, ty: 1, tz: 0 };
         let bounds = { diag: 40, maxH: 9, sx: 30, sy: 30 };
@@ -216,7 +220,38 @@
             const sz0 = root.LayoutCalc && root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, s.x + s.l / 2, s.y + s.d / 2) : 0;
             return { x: PX(s.x + s.l / 2), y: s.h / 2 + sz0, z: PZ(s.y + s.d / 2), sx: s.l, sy: s.h, sz: s.d };
         }
+        // Al elegir un sensor: sobre el piso de cada zona que mide (las que se eligieron en su renglón o, sin elegir ninguna, la zona donde está colocado) un tinte azul verdoso muy suave y su borde. Se quita al elegir otra cosa.
+        function applyMeasured() {
+            while (measuredGroup.children.length) {
+                const c = measuredGroup.children[0];
+                measuredGroup.remove(c);
+                if (c.geometry) c.geometry.dispose();
+                if (c.material) c.material.dispose();
+            }
+            if (!hl || hl.kind !== 'sensor' || !center || !lastLayout || !root.LayoutCalc || !root.LayoutCalc.sensorZoneIds) return;
+            const sensor = (lastLayout.sensors || []).find((x) => x.id === hl.id);
+            if (!sensor) return;
+            const ids = new Set(root.LayoutCalc.sensorZoneIds(sensor));
+            (lastLayout.zones || []).forEach((z, i) => {
+                if (!ids.has(z.id) || z.active === false) return;
+                const pts = Array.isArray(z.pts) && z.pts.length >= 3 ? z.pts : [[z.x, z.y], [z.x + z.l, z.y], [z.x + z.l, z.y + z.w], [z.x, z.y + z.w]];
+                if (pts.length < 3) return;
+                const xs = pts.map((p) => p[0]); const ys = pts.map((p) => p[1]);
+                const level = root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, (Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2) : 0;
+                const y = 0.075 + 0.004 * i + level;
+                let flat;
+                try {
+                    flat = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0] - center.x, -(p[1] - center.y))))), new THREE.MeshBasicMaterial({ color: 0x2b8ca3, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false }));
+                } catch (err) { return; }
+                flat.rotation.x = -Math.PI / 2;
+                flat.position.y = y;
+                flat.renderOrder = 2;
+                measuredGroup.add(flat);
+                measuredGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(p[0] - center.x, y + 0.005, p[1] - center.y))), new THREE.LineBasicMaterial({ color: 0x2b8ca3, transparent: true, opacity: 0.55 })));
+            });
+        }
         function applyHl() {
+            applyMeasured();
             const box = hlBox();
             hlLines.forEach((l, i) => {
                 const grow = i === 0 ? 0.06 : 0.2;
@@ -961,7 +996,7 @@
             renderer.dispose();
             canvas.remove();
         }
-        return { update, setLabels, setLayer, setHiddenAssets, highlight, setView, zoom, resize, destroy, canvas, layers: LAYER_NAMES.slice() };
+        return { update, setLabels, setLayer, setHiddenAssets, highlight, setView, zoom, resize, destroy, canvas, layers: LAYER_NAMES.slice(), measuredCount: () => measuredGroup.children.length / 2 };
     }
 
     root.LayoutScene3D = { create, LAYERS: LAYER_NAMES.slice() };
