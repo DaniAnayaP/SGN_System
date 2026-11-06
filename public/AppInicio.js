@@ -163,6 +163,7 @@ const WEB_SCREEN_PAGES = {
     'unidad-medida': { href: 'AppUnidadMedida.html', icon: 'bx-ruler' },
     'nuestras-cotizaciones': { href: 'AppCotizaciones.html', icon: 'bx-receipt' },
     'nuestros-traslados': { href: 'AppTraslados.html', icon: 'bx-transfer-alt' },
+    'pedido-manual': { href: 'AppPedidoManual.html', icon: 'bx-cart' },
 };
 
 // menu.json pantalla id -> its WEB_SCREEN_PAGES key, for the category
@@ -186,6 +187,7 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-catalogos-centro-dist-unidad-medida': 'unidad-medida',
     'cat-operaciones-transporte-vol-cotizaciones': 'nuestras-cotizaciones',
     'cat-operaciones-transporte-vol-nuestros-traslados': 'nuestros-traslados',
+    'cat-operaciones-centro-dist-pedido-manual': 'pedido-manual',
 };
 
 // grantedAppScreens (from GET /api/business/app-screens) is the CLIENT's

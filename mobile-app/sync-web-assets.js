@@ -37,6 +37,7 @@ const FILES = [
     'AppUnidadMedida.html',
     'AppCotizaciones.html', 'AppCotizaciones.js',
     'AppTraslados.html', 'AppTraslados.js',
+    'AppPedidoManual.html', 'AppPedidoManual.js', 'SearchSyntax.js',
     'manifest.json', 'sw.js',
     path.join('icons', 'icon-512.png'),
     path.join('data', 'menu.json'),

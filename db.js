@@ -5437,13 +5437,17 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_manual_lines_order ON manual_order_lines(order_id);
     CREATE INDEX IF NOT EXISTS idx_manual_lines_client ON manual_order_lines(client_id, id);
 `);
+// received_at: solo cuando el pedido se mandó SIN señal desde la App y llegó después: created_at es entonces la hora del celular al enviarlo y received_at la del servidor al recibirlo.
+if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'received_at')) db.exec('ALTER TABLE manual_orders ADD COLUMN received_at TEXT');
+// client_ref: la clave que la App le pone a cada pedido al armarlo; si el celular reenvía el mismo pedido (se cortó la señal justo al responder) el servidor lo reconoce y no lo duplica.
+if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'client_ref')) db.exec('ALTER TABLE manual_orders ADD COLUMN client_ref TEXT');
 const MANUAL_ORDER_STATUSES = ['pending', 'supplied'];
 // Lo que se puede corregir de un pedido ya enviado: quién lo pidió (vale para todo el pedido) y la cantidad de un renglón. La hora, el artículo y el centro nunca cambian. El estatus se cambia aparte (setManualOrderLineStatus).
 const MANUAL_ORDER_PATCHABLE_FIELDS = {
     name: { column: 'requester_name', fieldKey: 'main.colPmSolicitante' },
     quantity: { column: 'quantity', fieldKey: 'main.colPmCantidad' },
 };
-const MANUAL_LINE_SELECT = `SELECT l.*, o.cost_center_id, o.requester_name, o.requester_user_id, o.source, o.created_at AS order_created_at FROM manual_order_lines l JOIN manual_orders o ON o.id = l.order_id`;
+const MANUAL_LINE_SELECT = `SELECT l.*, o.cost_center_id, o.requester_name, o.requester_user_id, o.source, o.created_at AS order_created_at, o.received_at AS order_received_at FROM manual_order_lines l JOIN manual_orders o ON o.id = l.order_id`;
 const MANUAL_CATEGORY_COLUMNS = ['category_inventario', 'category_compra', 'category_almacenamiento', 'category_rotacion', 'category_manejo', 'category_riesgo', 'category_vidautil'];
 // Los artículos con los que se puede pedir: los de la empresa, con su código, descripciones, UdM y categorías (las siete listas de Alta Nuestros Artículos).
 function listManualOrderItems(clientId, isTest = false) {
@@ -5455,16 +5459,23 @@ function getManualOrderItem(clientId, id, isTest = false) {
         .get(clientId, isTest ? 1 : 0, id);
 }
 // Guarda un pedido con todos sus renglones en una sola operación. lines = [{ skuItemId, code, description, uom, categories, quantity }]. La hora la pone el servidor.
-function createManualOrder({ clientId, costCenterId, requesterName, requesterUserId = null, source = 'qr', lines }) {
+function createManualOrder({ clientId, costCenterId, requesterName, requesterUserId = null, source = 'qr', lines, createdAt = null, clientRef = null }) {
     return db.transaction(() => {
-        const info = db.prepare("INSERT INTO manual_orders (client_id, cost_center_id, requester_name, requester_user_id, source, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))")
-            .run(clientId, costCenterId || 0, requesterName || '', requesterUserId, source);
+        // createdAt (UTC 'YYYY-MM-DD HH:MM:SS') solo viene de la App cuando el pedido se mandó sin señal: se guarda como hora del pedido y la del servidor como hora recibida.
+        const info = db.prepare("INSERT INTO manual_orders (client_id, cost_center_id, requester_name, requester_user_id, source, created_at, received_at, client_ref) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')), CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?)")
+            .run(clientId, costCenterId || 0, requesterName || '', requesterUserId, source, createdAt, createdAt, clientRef);
         const orderId = Number(info.lastInsertRowid);
         const insert = db.prepare('INSERT INTO manual_order_lines (order_id, client_id, line_no, sku_item_id, code, description, uom, categories, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
         lines.forEach((l, i) => insert.run(orderId, clientId, i + 1, l.skuItemId || null, l.code || '', l.description || '', l.uom || '', l.categories || '', l.quantity));
         const row = db.prepare('SELECT created_at FROM manual_orders WHERE id = ?').get(orderId);
         return { id: orderId, createdAt: row.created_at, lines: lines.length };
     })();
+}
+// El pedido que esa cuenta ya mandó con esa clave (un reenvío de la App), o null.
+function findManualOrderByRef(clientId, userId, clientRef) {
+    if (!clientRef) return null;
+    const row = db.prepare('SELECT id, created_at, received_at, (SELECT COUNT(*) FROM manual_order_lines WHERE order_id = manual_orders.id) AS lines FROM manual_orders WHERE client_id = ? AND requester_user_id = ? AND client_ref = ?').get(clientId, userId, clientRef);
+    return row ? { id: row.id, createdAt: row.created_at, receivedAt: row.received_at, lines: row.lines } : null;
 }
 function listManualOrderLines(clientId, { costCenterId, limit } = {}) {
     const where = ['l.client_id = ?'];
@@ -7517,6 +7528,7 @@ function deletePlan(id) {
 // "which Web screen" picker always shows the same name (in whichever
 // language is active) as the screen itself does everywhere else.
 const WEB_SCREEN_CATALOG = [
+    { key: 'pedido-manual', labelKey: 'menu.opCentroDistPedidoManual' },
     { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
     { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },
     { key: 'carga-combustible', labelKey: 'menu.opTransVolCargaCombustible' },
@@ -11863,6 +11875,7 @@ module.exports = {
     listManualOrderItems,
     getManualOrderItem,
     createManualOrder,
+    findManualOrderByRef,
     listManualOrderLines,
     getManualOrderLine,
     updateManualOrderLine,

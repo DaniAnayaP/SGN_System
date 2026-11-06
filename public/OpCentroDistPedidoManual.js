@@ -51,13 +51,15 @@ function cell(col, value, extraClass) {
     return td;
 }
 // Fecha y hora en la zona de quien la ve; al pasar el cursor, el UTC con el que se guardó.
-function timeCell(col, iso) {
+function timeCell(col, iso, receivedIso) {
     const td = document.createElement('td');
     td.dataset.col = col;
     if (!iso) { td.textContent = '—'; return td; }
     const d = new Date(iso);
     td.textContent = d.toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     td.title = `UTC ${iso.replace('T', ' ').replace('Z', '')}`;
+    // un pedido que se mandó sin señal desde la App trae la hora del celular; el servidor lo recibió más tarde
+    if (receivedIso) td.title += ` · ${t('main.pmRecibido')}: UTC ${receivedIso.replace('T', ' ').replace('Z', '')}`;
     return td;
 }
 function quantityText(q) {
@@ -168,9 +170,9 @@ function buildRow(r) {
     tr.append(
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, system[key], 'col-system')),
         cell('colCatRegistroUnico', `${r.folio}-${r.lineNo}`, 'col-system'),
-        cell('colPmFolio', r.folio), timeCell('colPmFechaHora', r.requestedAt), cell('colPmSolicitante', r.name), cell('colPmCodigo', r.code), cell('colPmDescripcion', r.description), cell('colPmUdm', r.uom),
+        cell('colPmFolio', r.folio), timeCell('colPmFechaHora', r.requestedAt, r.receivedAt), cell('colPmSolicitante', r.name), cell('colPmCodigo', r.code), cell('colPmDescripcion', r.description), cell('colPmUdm', r.uom),
         cell('colPmCategoria', r.categories), cell('colPmCantidad', quantityText(r.quantity), 'col-number'), statusCell(r, tr),
-        originCell('colPmOrigen', t(r.source === 'qr' ? 'main.pmOrigenQr' : 'main.pmOrigenUsuario'), r),
+        originCell('colPmOrigen', t(r.source === 'qr' ? 'main.pmOrigenQr' : (r.source === 'app' ? 'main.pmOrigenApp' : 'main.pmOrigenUsuario')), r),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
@@ -300,13 +302,6 @@ async function deleteRecord(r, tr) {
 const esc = (s) => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let qrOverlay = null;
 let qrState = null;
-function qrSvg(rows) {
-    const n = rows.length;
-    const quiet = 4;
-    let path = '';
-    rows.forEach((row, y) => { for (let x = 0; x < n; x++) if (row[x] === '1') path += `M${x + quiet} ${y + quiet}h1v1h-1z`; });
-    return `<svg viewBox="0 0 ${n + quiet * 2} ${n + quiet * 2}" role="img" aria-label="QR" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${path}" fill="#000"/></svg>`;
-}
 function ensureQrOverlay() {
     if (qrOverlay) return;
     qrOverlay = document.createElement('div');
@@ -317,57 +312,56 @@ function ensureQrOverlay() {
     qrOverlay.addEventListener('click', (event) => { if (event.target === qrOverlay) qrOverlay.hidden = true; });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && qrOverlay && !qrOverlay.hidden) qrOverlay.hidden = true; });
 }
-// La imagen que se descarga: el nombre de la empresa y del sitio, el QR grande, el centro de costos y la dirección.
-function downloadQrPng() {
+// La tarjeta es la MISMA de los demás QR (LayoutSheet.buildCardSvg): encabezado con el logo (o las iniciales), el Sitio y la empresa, el título, un marco con el centro de costos y el QR grande, con el color de la empresa.
+// El tamaño es el último que se eligió en el Layout para sus tarjetas (si no hay, 10.5 × 14.8 cm); la imagen y el PDF son la tarjeta sola, sin hoja ni línea de recorte.
+const CARD_SIZE_KEY = 'sgn_layout_card_size';
+function cardOptions() {
+    let o = { widthCm: 10.5, heightCm: 14.8, cut: false };
+    try {
+        const raw = JSON.parse(localStorage.getItem(CARD_SIZE_KEY) || 'null');
+        if (raw && raw.w >= 6 && raw.w <= 120 && raw.h >= 6 && raw.h <= 120) o = { widthCm: raw.w, heightCm: raw.h, cut: false };
+    } catch (err) { /* sin tamaño recordado */ }
+    return o;
+}
+const logoRatioOf = (dataUrl) => (dataUrl ? new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1);
+    img.onerror = () => resolve(1);
+    img.src = dataUrl;
+}) : Promise.resolve(1));
+function qrCardSvg() {
+    const { rows, companyName, siteName, costCenter, logoDataUrl, logoRatio, companyColor } = qrState;
+    return window.LayoutSheet.buildCardSvg({
+        companyName, siteName: siteName || '', logoDataUrl: logoDataUrl || '', logoRatio, theme: window.LayoutMapSvg.theme(companyColor), zoneName: t('menu.opCentroDistPedidoManual'),
+        categories: [{ name: costCenter.name, desc: costCenter.code || '', icon: 'cart', color: '#D9527F', qrRows: rows }],
+    }, { cardArea: t('main.layoutTarjetaArea'), cardCategory: t('main.pmQrCategoria').toUpperCase(), cardReview: t('main.pmQrEscanea'), cardEmpty: '', cardFooter: '', cutCaption: t('main.layoutHojaRecorte') }, cardOptions());
+}
+const cardFile = (ext) => `QR-Pedido-Manual_${(qrState.costCenter.code || qrState.costCenter.name || 'centro').replace(/[^A-Za-z0-9_-]+/g, '-')}_${new Date().toISOString().slice(0, 10)}.${ext}`;
+async function downloadQrCard(pdf) {
     if (!qrState) return;
-    const { rows, companyName, siteName, costCenter, url } = qrState;
-    const n = rows.length;
-    const W = 720; const pad = 50;
-    const cell = Math.floor((W - pad * 2) / (n + 8));
-    const side = cell * (n + 8);
-    const canvas = document.createElement('canvas');
-    canvas.width = W;
-    canvas.height = side + 250;
-    const g = canvas.getContext('2d');
-    g.fillStyle = '#fff';
-    g.fillRect(0, 0, canvas.width, canvas.height);
-    g.fillStyle = '#2a1b30';
-    g.textAlign = 'center';
-    g.font = '600 30px sans-serif';
-    g.fillText(companyName || '', W / 2, 52);
-    g.font = '400 22px sans-serif';
-    g.fillText(siteName || '', W / 2, 86);
-    g.font = '700 30px sans-serif';
-    g.fillText(t('main.pmQrEscanea'), W / 2, 130);
-    const ox = (W - side) / 2; const oy = 150;
-    g.fillStyle = '#fff';
-    g.fillRect(ox, oy, side, side);
-    g.fillStyle = '#000';
-    rows.forEach((row, y) => { for (let x = 0; x < n; x++) if (row[x] === '1') g.fillRect(ox + (x + 4) * cell, oy + (y + 4) * cell, cell, cell); });
-    g.fillStyle = '#2a1b30';
-    g.font = '600 28px sans-serif';
-    g.fillText(`${costCenter.code ? `${costCenter.code} · ` : ''}${costCenter.name}`, W / 2, oy + side + 44);
-    g.font = '400 16px sans-serif';
-    g.fillStyle = '#5a4a62';
-    g.fillText(url, W / 2, oy + side + 80);
-    canvas.toBlob((blob) => {
-        if (!blob) return;
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `QR-Pedido-Manual-${(costCenter.code || costCenter.name || 'centro').replace(/[^A-Za-z0-9_-]+/g, '-')}.png`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    }, 'image/png');
+    const btn = qrOverlay.querySelector(pdf ? '#pm-qr-pdf' : '#pm-qr-download');
+    const label = btn.textContent;
+    btn.disabled = true;
+    try {
+        const svg = qrCardSvg();
+        window.LayoutSheet.saveBlob(pdf ? await window.LayoutSheet.renderPdf(svg) : await window.LayoutSheet.renderPng(svg), cardFile(pdf ? 'pdf' : 'png'));
+        Dashboard.showToast(t('main.layoutDescargaLista'), 'success');
+    } catch (err) {
+        console.error('Pedido Manual: la tarjeta del QR no se pudo descargar', err);
+        Dashboard.showToast(t('main.layoutDescargaError'), 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+    }
 }
 function renderQrBody() {
-    const { rows, companyName, siteName, costCenter, url, locks } = qrState;
+    const { costCenter, url, locks } = qrState;
     const body = qrOverlay.querySelector('#pm-qr-body');
-    body.innerHTML = `<div class="pm-qr-box">${qrSvg(rows)}<b>${esc(t('main.pmQrEscanea'))}</b><span>${esc([companyName, siteName].filter(Boolean).join(' · '))}</span><span>${esc(`${costCenter.code ? `${costCenter.code} · ` : ''}${costCenter.name}`)}</span><small>${esc(url)}</small></div>
-        <div class="pm-qr-actions"><button type="button" class="btn" id="pm-qr-download">${esc(t('main.pmQrDescargar'))}</button><button type="button" class="btn btn-secondary" id="pm-qr-copy">${esc(t('main.pmQrCopiar'))}</button><button type="button" class="btn btn-secondary" id="pm-qr-close">${esc(t('main.pmQrCerrar'))}</button></div>
+    body.innerHTML = `<div class="pm-qr-card" aria-label="${esc(`${costCenter.code ? `${costCenter.code} · ` : ''}${costCenter.name}`)}">${qrCardSvg()}</div><small class="pm-qr-url">${esc(url)}</small>
+        <div class="pm-qr-actions"><button type="button" class="btn" id="pm-qr-download">${esc(t('main.pmQrDescargar'))}</button><button type="button" class="btn btn-secondary" id="pm-qr-pdf">${esc(t('main.layoutDescargarPdf'))}</button><button type="button" class="btn btn-secondary" id="pm-qr-copy">${esc(t('main.pmQrCopiar'))}</button><button type="button" class="btn btn-secondary" id="pm-qr-close">${esc(t('main.pmQrCerrar'))}</button></div>
         ${qrState.canLock ? `<div><h4>${esc(t('main.pmCandadoTitulo'))}</h4><label class="pm-qr-lock"><input type="checkbox" id="pm-lock-register"${locks.register ? ' checked' : ''}> ${esc(t('main.pmCandadoRegistrar'))}</label><label class="pm-qr-lock"><input type="checkbox" id="pm-lock-signin"${locks.signin ? ' checked' : ''}> ${esc(t('main.pmCandadoSesion'))}</label></div>` : ''}`;
-    body.querySelector('#pm-qr-download').addEventListener('click', downloadQrPng);
+    body.querySelector('#pm-qr-download').addEventListener('click', () => downloadQrCard(false));
+    body.querySelector('#pm-qr-pdf').addEventListener('click', () => downloadQrCard(true));
     body.querySelector('#pm-qr-close').addEventListener('click', () => { qrOverlay.hidden = true; });
     body.querySelector('#pm-qr-copy').addEventListener('click', async () => {
         try { await navigator.clipboard.writeText(url); Dashboard.showToast(t('main.pmQrCopiado'), 'success'); } catch (err) { window.prompt(t('main.pmQrCopiar'), url); }
@@ -396,7 +390,7 @@ async function openQr() {
         const body = await res.json().catch(() => ({}));
         if (!res.ok) { Dashboard.showToast(body.code === 'NOLAYOUT' ? t('main.pmQrSinLayout') : (body.message || Dashboard.t('admin.saveError')), 'warning'); return; }
         ensureQrOverlay();
-        qrState = { rows: body.qrRows, companyName: body.companyName, siteName: body.siteName, costCenter: body.costCenter, url: body.url, locks: body.locks, canLock: !!body.canLock };
+        qrState = { rows: body.qrRows, companyName: body.companyName, siteName: body.siteName, costCenter: body.costCenter, url: body.url, locks: body.locks, canLock: !!body.canLock, logoDataUrl: body.logoDataUrl || '', companyColor: body.companyColor || '', logoRatio: await logoRatioOf(body.logoDataUrl) };
         qrOverlay.querySelector('#pm-qr-title').textContent = t('main.pmQrTitulo');
         renderQrBody();
         qrOverlay.hidden = false;

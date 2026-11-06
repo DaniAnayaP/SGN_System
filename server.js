@@ -162,7 +162,7 @@ const {
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
-    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, listManualOrderItems, getManualOrderItem, createManualOrder, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine,
+    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, listManualOrderItems, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine,
     addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
@@ -7376,6 +7376,27 @@ function manualItemsFor(clientId, isTest) {
     if (manualItemsCache.size > 200) manualItemsCache.delete(manualItemsCache.keys().next().value);
     return items;
 }
+// Los renglones de un pedido a partir de lo que llega (artículos y cantidades): cada artículo debe existir en la empresa, las cantidades van de 0 a 999999 y los repetidos se suman. { lines } o { error }.
+function manualLinesFrom(rawItems, clientId, isTest) {
+    const raw = Array.isArray(rawItems) ? rawItems : [];
+    if (!raw.length) return { error: { message: 'El pedido no trae artículos.', code: 'ITEMS' } };
+    if (raw.length > MANUAL_ORDER_MAX_LINES) return { error: { message: `Un pedido lleva hasta ${MANUAL_ORDER_MAX_LINES} artículos.`, code: 'TOOMANY' } };
+    const wanted = new Map();
+    for (const it of raw) {
+        const id = Number(it && it.id);
+        const quantity = Number(it && it.quantity);
+        if (!Number.isInteger(id) || id < 1 || !Number.isFinite(quantity) || quantity <= 0 || quantity > 999999) return { error: { message: 'Una cantidad no es válida.', code: 'QTY' } };
+        wanted.set(id, Math.round(((wanted.get(id) || 0) + quantity) * 1000) / 1000);
+    }
+    const view = new Map(manualItemsFor(clientId, isTest).map((it) => [it.id, it]));
+    const lines = [];
+    for (const [id, quantity] of wanted) {
+        const it = view.get(id);
+        if (!it) return { error: { message: 'Un artículo ya no existe.', code: 'ITEM' } };
+        lines.push({ skuItemId: it.id, code: it.code, description: it.description, uom: it.uom, categories: it.categories, quantity });
+    }
+    return { lines };
+}
 function manualOrderTarget(req, res) {
     const row = getLayoutByPublicToken(req.params.token);
     if (!row) { res.status(404).json({ message: 'Not found.' }); return null; }
@@ -7425,27 +7446,13 @@ app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req
     const user = optionalSessionUser(req);
     const signedIn = !!user && Number(user.clientId) === Number(row.clientId);
     if (locks.signin && !signedIn) return res.status(401).json({ message: 'Este QR pide iniciar sesión.', code: 'LOGIN' });
-    // con sesión el nombre sale de la cuenta; sin ella lo escribe quien pide
-    const name = signedIn ? changedByLabel({ user }) : String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    // Siempre se pide el nombre de quien pide (con sesión la página lo trae escrito con el de la cuenta, y se puede cambiar: quien manda no siempre es quien pide); la cuenta que envía queda registrada aparte.
+    const typed = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const name = typed || (signedIn ? String(changedByLabel({ user }) || '').replace(/\s+/g, ' ').trim().slice(0, 60) : '');
     if (!name) return res.status(400).json({ message: 'Falta el nombre de quien pide.', code: 'NAME' });
-    const raw = Array.isArray(req.body && req.body.items) ? req.body.items : [];
-    if (!raw.length) return res.status(400).json({ message: 'El pedido no trae artículos.', code: 'ITEMS' });
-    if (raw.length > MANUAL_ORDER_MAX_LINES) return res.status(400).json({ message: `Un pedido lleva hasta ${MANUAL_ORDER_MAX_LINES} artículos.`, code: 'TOOMANY' });
-    const wanted = new Map();
-    for (const it of raw) {
-        const id = Number(it && it.id);
-        const quantity = Number(it && it.quantity);
-        if (!Number.isInteger(id) || id < 1 || !Number.isFinite(quantity) || quantity <= 0 || quantity > 999999) return res.status(400).json({ message: 'Una cantidad no es válida.', code: 'QTY' });
-        wanted.set(id, Math.round(((wanted.get(id) || 0) + quantity) * 1000) / 1000);
-    }
-    const isTest = !!(client && client.is_test);
-    const view = new Map(manualItemsFor(row.clientId, isTest).map((it) => [it.id, it]));
-    const lines = [];
-    for (const [id, quantity] of wanted) {
-        const it = view.get(id);
-        if (!it) return res.status(400).json({ message: 'Un artículo ya no existe.', code: 'ITEM' });
-        lines.push({ skuItemId: it.id, code: it.code, description: it.description, uom: it.uom, categories: it.categories, quantity });
-    }
+    const built = manualLinesFrom(req.body && req.body.items, row.clientId, !!(client && client.is_test));
+    if (built.error) return res.status(400).json(built.error);
+    const lines = built.lines;
     const out = createManualOrder({ clientId: row.clientId, costCenterId: row.costCenterId || 0, requesterName: name, requesterUserId: signedIn ? user.sub : null, source: signedIn ? 'user' : 'qr', lines });
     res.set('Cache-Control', 'no-store');
     res.status(201).json({ folio: manualFolio(out.id), createdAt: sqlUtcIso(out.createdAt), lines: out.lines, name, now: new Date().toISOString() });
@@ -7457,7 +7464,7 @@ function manualOrderRowOf(r, centers, client) {
     return {
         id: r.id, orderId: r.order_id, folio: manualFolio(r.order_id), lineNo: r.line_no, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
         name: r.requester_name, code: r.code, description: r.description, uom: r.uom, categories: r.categories, quantity: r.quantity,
-        status: r.status, statusAt: sqlUtcIso(r.status_at), statusBy: r.status_by || '', requestedAt: sqlUtcIso(r.order_created_at), source: r.source,
+        status: r.status, statusAt: sqlUtcIso(r.status_at), statusBy: r.status_by || '', requestedAt: sqlUtcIso(r.order_created_at), receivedAt: sqlUtcIso(r.order_received_at), source: r.source,
         editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: MANUAL_ORDER_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.order_created_at }),
     };
@@ -7486,7 +7493,8 @@ app.get('/api/business/pedido-manual', requireAuth, (req, res) => {
     const { clientId, isTestAccount } = req.user;
     const client = getClientById(clientId);
     const centers = new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c]));
-    const LIMIT = 5000;
+    const lite = req.query.lite === '1'; // la App: solo los renglones más recientes y sin las columnas de Control Interno
+    const LIMIT = lite ? 400 : 5000;
     const rows = listManualOrderLines(clientId, { limit: LIMIT });
     res.set('Cache-Control', 'no-store');
     res.json({
@@ -7494,7 +7502,7 @@ app.get('/api/business/pedido-manual', requireAuth, (req, res) => {
         canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), MANUAL_ORDER_TABLE_KEY, 'colPmDeleteAuth'),
         canQr: manualCan(req, 'colPmQr'), canLock: manualCan(req, 'colPmQrLock'), canStatus: manualCan(req, 'colPmEstatus'),
         editable: manualEditable(req),
-        orders: rows.map((r) => manualOrderRowOf(r, centers, client)),
+        orders: rows.map((r) => { const o = manualOrderRowOf(r, centers, client); if (lite) delete o.system; return o; }),
     });
 });
 // Corregir quién pidió o la cantidad: pasa por la misma tubería de cambios de toda la plataforma (checkAndLogFieldChanges), igual que Limpieza.
@@ -7537,6 +7545,36 @@ app.delete('/api/business/pedido-manual/:id', requireAuth, (req, res) => {
     try { notifyDataChange({ clientId: req.user.clientId, tableKey: MANUAL_ORDER_TABLE_KEY, recordLabel: `Pedido ${manualFolio(rec.order_id)}`, fieldKey: 'colPmDeleteAuth', oldValue: `${rec.code} × ${rec.quantity} (${rec.requester_name})`, newValue: 'Eliminado', actorUserId: req.user.sub, actorLabel: changedByLabel(req) }); } catch (err) { console.error('manual order delete notice failed', err); }
     res.json({ ok: true });
 });
+// La App: el catálogo de artículos (para buscar aun sin señal, el celular lo guarda) y crear un pedido con sesión. El nombre sale de la cuenta (source 'app'); si el pedido se mandó sin señal y llega después, la App manda la
+// hora del celular al enviarlo (clientAt: solo vale si es de más de 2 minutos antes y hasta 7 días antes de ahora) y esa queda como hora del pedido; la del servidor se guarda aparte como hora recibida.
+app.get('/api/business/pedido-manual/items', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const items = manualItemsFor(req.user.clientId, !!req.user.isTestAccount).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories }));
+    res.set('Cache-Control', 'no-store');
+    res.json({ items, at: new Date().toISOString() });
+});
+app.post('/api/business/pedido-manual/orders', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    const built = manualLinesFrom(req.body && req.body.items, req.user.clientId, !!req.user.isTestAccount);
+    if (built.error) return res.status(400).json(built.error);
+    const clientRef = req.body && typeof req.body.clientRef === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(req.body.clientRef) ? req.body.clientRef : null;
+    res.set('Cache-Control', 'no-store');
+    // el mismo pedido reenviado (la respuesta se perdió y la App lo volvió a mandar): se contesta el que ya existe
+    const already = findManualOrderByRef(req.user.clientId, req.user.sub, clientRef);
+    if (already) return res.json({ folio: manualFolio(already.id), orderId: already.id, createdAt: sqlUtcIso(already.createdAt), lines: already.lines, offline: !!already.receivedAt, duplicate: true });
+    // Hora del pedido: la del celular al enviarlo solo si llegó tarde (más de 2 minutos antes de ahora, hasta 7 días); un pedido que llega al instante queda con la hora del servidor.
+    let createdAt = null;
+    const clientAt = req.body && typeof req.body.clientAt === 'string' ? Date.parse(req.body.clientAt) : NaN;
+    if (Number.isFinite(clientAt) && clientAt >= Date.now() - 7 * 86400000 && clientAt < Date.now() - 120000) createdAt = new Date(clientAt).toISOString().slice(0, 19).replace('T', ' ');
+    // El nombre de quien pide lo escribe la persona (la App lo trae escrito con el de la cuenta y se puede cambiar); si no llega, el de la cuenta.
+    const typed = String((req.body && req.body.requesterName) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const requesterName = typed || String(changedByLabel(req) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const out = createManualOrder({ clientId: req.user.clientId, costCenterId: center.id, requesterName, requesterUserId: req.user.sub, source: 'app', lines: built.lines, createdAt, clientRef });
+    res.status(201).json({ folio: manualFolio(out.id), orderId: out.id, createdAt: sqlUtcIso(out.createdAt), lines: out.lines, offline: !!createdAt });
+});
 // El QR del centro de costos que se eligió: la dirección fija (/pm/…) y la cuadrícula del QR para dibujarlo; sale del Layout de ese centro (si todavía no hay uno guardado, no hay QR).
 app.get('/api/business/pedido-manual/qr', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -7552,7 +7590,7 @@ app.get('/api/business/pedido-manual/qr', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({
         url, qrRows: layoutQrRows(url), costCenter: { id: center.costCenter.id, name: center.costCenter.name, code: center.costCenter.code || '' }, siteName: (layoutRow && layoutRow.layout.siteName) || '',
-        companyName: (client && client.company_name) || '', logoDataUrl: clientLogoDataUrl(req.user.clientId), locks: qrLocksOf('manual_order', req.user.clientId, center.id), canLock: manualCan(req, 'colPmQrLock'),
+        companyName: (client && client.company_name) || '', ...qrBranding(req.user.clientId), locks: qrLocksOf('manual_order', req.user.clientId, center.id), canLock: manualCan(req, 'colPmQrLock'),
     });
 });
 app.put('/api/business/pedido-manual/qr-locks', requireAuth, (req, res) => {

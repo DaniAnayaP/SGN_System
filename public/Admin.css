@@ -7719,10 +7719,9 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .pm-status[data-s="pending"]{ border-color: #c98a00; color: #8a5d00; }
 .pm-status[data-s="supplied"]{ border-color: #1e7e34; color: #1e7e34; }
 .pm-qr-panel{ display: flex; flex-direction: column; gap: 0.7rem; max-width: 26rem; }
-.pm-qr-box{ display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.8rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: #fff; color: #2a1b30; }
-.pm-qr-box svg{ width: 12rem; height: 12rem; display: block; }
-.pm-qr-box b{ font-size: 0.9rem; text-align: center; }
-.pm-qr-box small{ font-size: 0.7rem; color: #5a4a62; word-break: break-all; text-align: center; }
+.pm-qr-card{ padding: 0.6rem; background: var(--color-bg, var(--color-surface)); border: 1px solid var(--color-border); border-radius: 0.8rem; }
+.pm-qr-card svg{ display: block; width: 100%; max-width: 15rem; height: auto; margin: 0 auto; background: #fff; box-shadow: 0 4px 16px rgba(20, 22, 31, 0.16); }
+.pm-qr-url{ font-size: 0.7rem; color: var(--color-text-muted, #5a4a62); word-break: break-all; text-align: center; }
 .pm-qr-actions{ display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .pm-qr-lock{ display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; }
 .lim-photo{ display: inline-block; padding: 0; border: 1px solid var(--color-border); border-radius: 0.4rem; background: var(--color-surface); cursor: zoom-in; overflow: hidden; line-height: 0; }

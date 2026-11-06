@@ -9,10 +9,10 @@
     <link rel="icon" href="/icons/icon-512.png">
     <style>
         :root{
-            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14);
+            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --soft:#f1e4f5; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14);
         }
         @media (prefers-color-scheme: dark){
-            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); }
+            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --soft:#3a2745; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); }
         }
         *{ box-sizing:border-box; }
         html,body{ margin:0; min-height:100%; }
@@ -30,9 +30,6 @@
         .btn.ok{ background:var(--ok); color:#fff; }
         .btn[disabled]{ opacity:.55; cursor:default; }
         .link{ background:none; border:0; color:var(--accent); font:600 14px system-ui,sans-serif; padding:8px; cursor:pointer; text-align:center; }
-        .chips{ display:flex; flex-wrap:wrap; gap:6px; }
-        .chips button{ font:600 13px system-ui,sans-serif; padding:5px 12px; border-radius:999px; border:1px solid var(--line); background:var(--surface); color:var(--ink); cursor:pointer; }
-        .chips button[aria-pressed="true"]{ background:var(--accent); border-color:var(--accent); color:#fff; }
         .list{ display:flex; flex-direction:column; gap:8px; }
         .res{ display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; border:1px solid var(--line); border-radius:14px; padding:8px 10px; background:var(--surface); text-align:left; width:100%; cursor:pointer; font:inherit; color:inherit; }
         .res b{ font-size:13px; font-variant-numeric:tabular-nums; display:block; }
@@ -58,7 +55,52 @@
         .muted{ color:var(--muted); font-size:13px; }
         .done{ text-align:center; display:flex; flex-direction:column; gap:8px; align-items:center; }
         .done .folio{ font:700 32px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.04em; }
+        .done .items{ width:100%; text-align:left; border-top:1px solid var(--line); margin-top:4px; padding-top:8px; }
+        .done .items h2{ margin-bottom:2px; }
         .tick{ width:56px; height:56px; border-radius:50%; background:var(--ok); color:#fff; display:grid; place-items:center; font-size:30px; }
+        .req{ color:var(--warn); }
+        /* El buscador es el mismo de los demás QR (Layout): tipo de filtro, signos $ @ , la caja con su borrar y «Buscar en» con «Todos». */
+        .fmenu{ display:grid; gap:8px; }
+        .mcur{ font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+        .srow{ display:flex; align-items:center; gap:8px; position:relative; }
+        .sbox{ flex:1; min-width:0; display:flex; align-items:center; gap:8px; padding:9px 12px; border:1.5px solid var(--accent); border-radius:14px; background:var(--surface); }
+        .sbox:focus-within{ box-shadow:0 0 0 2px var(--line); }
+        .sbox svg{ width:18px; height:18px; stroke:var(--accent); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+        .sbox input[type=search]{ flex:1; width:0; min-width:0; border:0; outline:0; padding:0; border-radius:0; background:transparent; font:500 16px system-ui,sans-serif; color:var(--ink); -webkit-appearance:none; appearance:none; }
+        .sbox input::placeholder{ color:var(--muted); }
+        .sbox input::-webkit-search-cancel-button, .sbox input::-webkit-search-decoration{ -webkit-appearance:none; display:none; }
+        .sx{ width:24px; height:24px; flex:none; border:0; border-radius:50%; background:var(--soft); color:var(--accent); font-size:15px; line-height:1; cursor:pointer; padding:0; }
+        .sx[hidden]{ display:none; }
+        .fmode{ width:40px; height:40px; flex:none; display:grid; place-items:center; padding:0; border:1px solid var(--accent); border-radius:12px; background:var(--soft); color:var(--ink); cursor:pointer; }
+        .fmode svg{ width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+        .fsign span{ font-size:13px; font-weight:800; letter-spacing:-.02em; }
+        .mpop[hidden]{ display:none; }
+        .mpop{ position:absolute; left:0; top:46px; z-index:5; min-width:160px; background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:0 10px 26px rgba(20,22,31,.18); padding:5px; display:grid; gap:2px; }
+        .mpop.sign{ left:48px; min-width:250px; }
+        .mopt{ font:inherit; font-size:13.5px; text-align:left; padding:9px 12px; border:0; border-radius:8px; background:transparent; color:var(--ink); cursor:pointer; }
+        .mopt[aria-pressed="true"]{ background:var(--soft); font-weight:700; }
+        .mopt:disabled{ opacity:.4; cursor:default; }
+        .mopt.sg{ display:flex; align-items:center; gap:12px; }
+        .mopt.sg b{ width:22px; flex:none; text-align:center; font-size:17px; color:var(--accent); }
+        .mopt.sg span{ display:grid; gap:1px; }
+        .mopt.sg small{ font-size:11.5px; font-weight:400; color:var(--muted); }
+        .sumrow{ font:inherit; display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:9px 11px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:inherit; cursor:pointer; }
+        .sumrow .lbl{ font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
+        .sumrow b{ font-size:13px; font-weight:600; }
+        .sumrow i{ margin-left:auto; width:8px; height:8px; border-right:1.6px solid var(--accent); border-bottom:1.6px solid var(--accent); transform:rotate(45deg) translateY(-2px); }
+        .sumrow[aria-expanded="true"] i{ transform:rotate(-135deg) translateY(-2px); }
+        .flist[hidden]{ display:none; }
+        .flist{ display:grid; }
+        .copt{ position:relative; display:flex; align-items:center; gap:10px; padding:9px 8px; border-radius:9px; font-size:14px; cursor:pointer; margin:0; color:var(--ink); }
+        .copt input{ position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
+        .copt .box{ width:18px; height:18px; border-radius:5px; border:1.6px solid var(--muted); display:grid; place-items:center; flex:none; }
+        .copt input:checked + .box, .copt.mixed .box{ background:var(--accent); border-color:var(--accent); }
+        .copt input:checked + .box::after{ content:""; width:8px; height:4px; border-left:2px solid #fff; border-bottom:2px solid #fff; transform:rotate(-45deg) translateY(-1px); }
+        .copt.mixed input:not(:checked) + .box::after{ content:""; width:8px; height:2px; background:#fff; border-radius:2px; }
+        .copt input:focus-visible + .box{ outline:2px solid var(--accent); outline-offset:2px; }
+        .copt.all{ font-weight:700; border-bottom:1px solid var(--line); border-radius:9px 9px 0 0; margin-bottom:2px; }
+        mark{ background:var(--soft); color:inherit; border-radius:3px; padding:0 1px; box-shadow:0 0 0 1px var(--line); }
+        mark.aux{ background:transparent; }
         @media (prefers-reduced-motion: no-preference){ .card{ animation:rise .25s ease-out; } @keyframes rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } } }
     </style>
 </head>
@@ -68,6 +110,7 @@
     <div id="view"></div>
 </main>
 <script src="/QrBrandHeader.js"></script>
+<script src="/SearchSyntax.js"></script>
 <script>
 (function () {
 'use strict';
@@ -75,20 +118,28 @@ const LANG = (navigator.language || 'es').toLowerCase().startsWith('en') ? 'en' 
 const TEXT = {
     es: {
         title: 'Pedido Manual', loading: 'Cargando…', notFound: 'Este QR ya no corresponde a ningún centro de costos.', searchTitle: 'Buscar artículo', searchPlaceholder: 'Código, descripción, UdM o categoría',
-        fAll: 'Todo', fCode: 'Código', fDesc: 'Descripción', fUom: 'UdM', fCat: 'Categoría', typeMore: 'Escribe al menos 2 letras o números.', none: 'No se encontró nada con eso.', more: 'Hay más resultados: escribe más para acotar.',
+        search: 'Buscar', searchClear: 'Borrar', searchTypes: 'Buscar en', searchFieldsAll: 'Todos', searchSelected: '{n} elegidos', searchField: { code: 'Código', desc: 'Descripción', uom: 'UdM', cat: 'Categoría' },
+        searchMode: 'Tipo de Filtro', searchModes: { startsWith: 'Inicia con', contains: 'Contiene', equals: 'Igual que' },
+        searchSigns: 'Signos de búsqueda', searchSign: { before: 'Antes', after: 'Después', comma: 'Otra búsqueda' }, searchSignOff: 'No aplica con este tipo de filtro',
+        searchSignHelp: { before: 'Otra palabra ANTES · rack$cajón', after: 'Otra palabra DESPUÉS · rack@cajón', comma: 'Sirve cualquiera de las dos · rack, estante' },
+        typeMore: 'Escribe al menos 2 letras o números.', typeOne: 'Escribe al menos 1 letra o número.', none: 'No se encontró nada con eso.', more: 'Hay más resultados: escribe más para acotar.',
         qtyTitle: 'Cantidad', add: 'Agregar al pedido', cancel: 'Cancelar', yourOrder: 'Tu pedido', items: '{n} artículos', item1: '1 artículo', empty: 'Todavía no agregas nada. Busca un artículo y elige la cantidad.', remove: 'Quitar',
-        yourName: 'Tu nombre', namePlaceholder: 'Quién pide', signedAs: 'Pides como', send: 'Enviar pedido', sending: 'Enviando…', stamp: 'Se guarda con tu nombre y la hora en que lo envías.',
-        needName: 'Escribe tu nombre para enviar.', errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errQty: 'Una cantidad no es válida.', errItems: 'Agrega al menos un artículo.',
-        sentTitle: 'Pedido enviado', folio: 'Folio', by: 'Pidió', at: 'Hora', newOrder: 'Nuevo pedido', viewOnly: 'Este QR solo sirve para consultar.', loginNeeded: 'Este QR pide iniciar sesión para enviar pedidos.',
+        yourName: 'Quién pide', namePlaceholder: 'Nombre de quien pide', signedAs: 'Pides como', send: 'Enviar pedido', sending: 'Enviando…', stamp: 'Se guarda en un número de pedido con el nombre de quien pide, la lista de artículos y la hora en que lo envías.',
+        needName: 'Escribe el nombre de quien pide para enviar.', errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errQty: 'Una cantidad no es válida.', errItems: 'Agrega al menos un artículo.',
+        sentTitle: 'Pedido enviado', folio: 'Número de pedido', by: 'Pidió', at: 'Hora', list: 'Artículos del pedido', newOrder: 'Nuevo pedido', viewOnly: 'Este QR solo sirve para consultar.', loginNeeded: 'Este QR pide iniciar sesión para enviar pedidos.',
         login: 'Iniciar sesión', loginHint: 'Inicia sesión en el sistema y vuelve a abrir este QR.', locked: 'Este QR ya no permite enviar pedidos.', tooMany: 'Un pedido lleva hasta 40 artículos.',
     },
     en: {
         title: 'Manual Order', loading: 'Loading…', notFound: 'This QR no longer matches any cost center.', searchTitle: 'Find an item', searchPlaceholder: 'Code, description, UoM or category',
-        fAll: 'All', fCode: 'Code', fDesc: 'Description', fUom: 'UoM', fCat: 'Category', typeMore: 'Type at least 2 letters or numbers.', none: 'Nothing was found.', more: 'There are more results: type more to narrow them.',
+        search: 'Search', searchClear: 'Clear', searchTypes: 'Search in', searchFieldsAll: 'All', searchSelected: '{n} selected', searchField: { code: 'Code', desc: 'Description', uom: 'UoM', cat: 'Category' },
+        searchMode: 'Filter type', searchModes: { startsWith: 'Starts with', contains: 'Contains', equals: 'Equal to' },
+        searchSigns: 'Search signs', searchSign: { before: 'Before', after: 'After', comma: 'Another search' }, searchSignOff: 'Not available with this filter type',
+        searchSignHelp: { before: 'Another word BEFORE · rack$drawer', after: 'Another word AFTER · rack@drawer', comma: 'Either one matches · rack, shelf' },
+        typeMore: 'Type at least 2 letters or numbers.', typeOne: 'Type at least 1 letter or number.', none: 'Nothing was found.', more: 'There are more results: type more to narrow them.',
         qtyTitle: 'Quantity', add: 'Add to the order', cancel: 'Cancel', yourOrder: 'Your order', items: '{n} items', item1: '1 item', empty: 'You have not added anything yet. Find an item and choose the quantity.', remove: 'Remove',
-        yourName: 'Your name', namePlaceholder: 'Who is ordering', signedAs: 'Ordering as', send: 'Send order', sending: 'Sending…', stamp: 'It is saved with your name and the time you send it.',
-        needName: 'Type your name to send.', errGeneric: 'It could not be sent. Check your connection and try again.', errQty: 'A quantity is not valid.', errItems: 'Add at least one item.',
-        sentTitle: 'Order sent', folio: 'Folio', by: 'Ordered by', at: 'Time', newOrder: 'New order', viewOnly: 'This QR is for viewing only.', loginNeeded: 'This QR requires signing in to send orders.',
+        yourName: 'Who is ordering', namePlaceholder: 'Name of who is ordering', signedAs: 'Ordering as', send: 'Send order', sending: 'Sending…', stamp: 'It is saved under one order number with the name of who is ordering, the list of items and the time you send it.',
+        needName: 'Type the name of who is ordering to send.', errGeneric: 'It could not be sent. Check your connection and try again.', errQty: 'A quantity is not valid.', errItems: 'Add at least one item.',
+        sentTitle: 'Order sent', folio: 'Order number', by: 'Ordered by', at: 'Time', list: 'Items in the order', newOrder: 'New order', viewOnly: 'This QR is for viewing only.', loginNeeded: 'This QR requires signing in to send orders.',
         login: 'Sign in', loginHint: 'Sign in to the system and open this QR again.', locked: 'This QR no longer allows sending orders.', tooMany: 'An order takes up to 40 items.',
     },
 }[LANG];
@@ -107,9 +158,16 @@ const store = {
     set(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* sin almacenamiento */ } },
 };
 const fmtQty = (n) => Number(n).toLocaleString(LANG === 'en' ? 'en-US' : 'es-MX', { maximumFractionDigits: 3 });
+const fill = (text, vars) => Object.keys(vars).reduce((acc, k) => acc.split(`{${k}}`).join(vars[k]), text);
+const ICONS = {
+    search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+    sliders: '<path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.2"/><circle cx="9.5" cy="17" r="2.2"/>',
+};
 let info = null;
-let field = 'all';
 let query = '';
+let mode = 'contains';          // el «Tipo de Filtro» de las tablas: Inicia con, Contiene o Igual que
+let fields = [];                // en qué se busca; vacío = en todo (código, descripción, UdM y categoría)
+let nameValue = store.get(KEY_NAME);
 let results = [];
 let total = 0;
 let picked = null;
@@ -117,53 +175,76 @@ let cart = [];
 let sentInfo = null;
 let timer = null;
 let seq = 0;
+const FIELD_KEYS = ['code', 'desc', 'uom', 'cat'];
+const SEARCH_MODES = ['startsWith', 'contains', 'equals'];
+// Lo escrito se lee con el mismo motor que las tablas y el servidor (SearchSyntax.js): varias búsquedas separadas por coma (sirve CUALQUIERA); $ = otra palabra ANTES y @ = otra palabra DESPUÉS. Hasta 80 letras y 6 búsquedas.
+const searchTerms = (raw) => String(raw == null ? '' : raw).slice(0, 80).split(',').slice(0, 6).join(',');
+const ready = () => window.SearchSyntax.ready(mode, searchTerms(query));
+const SIGN_KEYS = { '$': 'before', '@': 'after', ',': 'comma' };
+const signOff = (sign) => (sign === '$' && mode !== 'contains') || (sign === '@' && mode === 'equals');
+// Marca lo que cumple, como en las tablas: la palabra buscada resaltada y las de $ y @ más claro; con Igual que no se marca.
+function highlight(text) {
+    const t = String(text == null ? '' : text);
+    if (!query || mode === 'equals') return esc(t);
+    let out = '';
+    let at = 0;
+    window.SearchSyntax.ranges(mode, searchTerms(query), t).forEach((r) => {
+        out += `${esc(t.slice(at, r.start))}<mark${r.role === 'main' ? '' : ' class="aux"'}>${esc(t.slice(r.start, r.end))}</mark>`;
+        at = r.end;
+    });
+    return out + esc(t.slice(at));
+}
+const fieldsSummary = () => (!fields.length ? TEXT.searchFieldsAll : (fields.length <= 2 ? fields.map((k) => TEXT.searchField[k]).join(', ') : fill(TEXT.searchSelected, { n: fields.length })));
+function fieldsListHtml() {
+    const opt = (key, label, checked, mixed) => `<label class="copt${key === 'all' ? ' all' : ''}${mixed ? ' mixed' : ''}"><input type="checkbox" data-field="${key}"${checked ? ' checked' : ''}><span class="box"></span><span>${esc(label)}</span></label>`;
+    return opt('all', TEXT.searchFieldsAll, !fields.length, !!fields.length) + FIELD_KEYS.map((k) => opt(k, TEXT.searchField[k], fields.includes(k), false)).join('');
+}
+function panelHtml() {
+    const modes = SEARCH_MODES.map((k) => `<button type="button" class="mopt" role="menuitemradio" data-mode="${k}" aria-pressed="${mode === k}">${esc(TEXT.searchModes[k])}</button>`).join('');
+    const signs = Object.keys(SIGN_KEYS).map((s) => `<button type="button" class="mopt sg" role="menuitem" data-sign="${s}"><b aria-hidden="true">${s}</b><span>${esc(TEXT.searchSign[SIGN_KEYS[s]])}<small>${esc(TEXT.searchSignHelp[SIGN_KEYS[s]])}</small></span></button>`).join('');
+    return `<div class="fmenu">
+        <div class="mcur" id="mode-cur">${esc(TEXT.searchModes[mode])}</div>
+        <div class="srow"><button type="button" class="fmode" id="modebtn" aria-haspopup="menu" aria-label="${esc(TEXT.searchMode)}" title="${esc(TEXT.searchMode)}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.sliders}</svg></button>
+        <button type="button" class="fmode fsign" id="signbtn" aria-haspopup="menu" aria-label="${esc(TEXT.searchSigns)}" title="${esc(TEXT.searchSigns)}"><span aria-hidden="true">$@</span></button>
+        <div class="sbox"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.search}</svg><input id="q" type="search" inputmode="search" enterkeyhint="search" maxlength="80" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(TEXT.searchPlaceholder)}" aria-label="${esc(TEXT.search)}" value="${esc(query)}"><button type="button" class="sx" id="qclear" aria-label="${esc(TEXT.searchClear)}" title="${esc(TEXT.searchClear)}"${query ? '' : ' hidden'}>×</button></div>
+        <div class="mpop" id="modepop" role="menu" aria-label="${esc(TEXT.searchMode)}" hidden>${modes}</div>
+        <div class="mpop sign" id="signpop" role="menu" aria-label="${esc(TEXT.searchSigns)}" hidden>${signs}</div></div>
+        <button type="button" class="sumrow" id="fieldstoggle" aria-expanded="false" aria-controls="fields"><span class="lbl">${esc(TEXT.searchTypes)}</span><b id="fields-sum">${esc(fieldsSummary())}</b><i aria-hidden="true"></i></button>
+        <div class="flist" id="fields" role="group" aria-label="${esc(TEXT.searchTypes)}" hidden>${fieldsListHtml()}</div>
+    </div>`;
+}
 
+// La página se arma una sola vez (encabezado, buscador, pedido) y después solo se redibujan resultados, cantidad elegida y pedido: así no se cierran los menús ni se pierde el cursor.
 function view() {
-    if (sentInfo) return viewSent();
+    if (sentInfo) { viewSent(); return; }
     const locks = info.locks || {};
-    const blocked = !locks.register ? `<div class="card"><div class="msg">${esc(TEXT.viewOnly)}</div></div>`
-        : (locks.signin && !info.signedIn ? `<div class="card"><div class="msg">${esc(TEXT.loginNeeded)}</div><a class="btn alt" style="text-align:center;text-decoration:none" href="/">${esc(TEXT.login)}</a><div class="muted" style="text-align:center">${esc(TEXT.loginHint)}</div></div>` : '');
     const header = `<div class="card"><h1>${esc(TEXT.title)}</h1>${info.costCenter ? `<span class="chip">${esc((info.costCenter.code ? `${info.costCenter.code} · ` : '') + info.costCenter.name)}</span>` : ''}</div>`;
-    if (blocked) { $('view').innerHTML = header + blocked; return; }
-    const fields = [['all', TEXT.fAll], ['code', TEXT.fCode], ['desc', TEXT.fDesc], ['uom', TEXT.fUom], ['cat', TEXT.fCat]];
-    let resultsHtml = '';
-    if (query.trim().length < 2) resultsHtml = `<div class="msg">${esc(TEXT.typeMore)}</div>`;
-    else if (!results.length) resultsHtml = `<div class="msg">${esc(TEXT.none)}</div>`;
-    else resultsHtml = `<div class="list">${results.map((r, i) => `<button type="button" class="res" data-pick="${i}"><div><b>${esc(r.code)}</b><span>${esc(r.description)}</span><small>${esc([r.uom, r.categories].filter(Boolean).join(' · '))}</small></div><i class="plus" aria-hidden="true">+</i></button>`).join('')}</div>${total > results.length ? `<div class="muted">${esc(TEXT.more)}</div>` : ''}`;
-    const search = `<div class="card"><h2>${esc(TEXT.searchTitle)}</h2>
-        <input type="search" id="q" value="${esc(query)}" placeholder="${esc(TEXT.searchPlaceholder)}" autocomplete="off" enterkeyhint="search">
-        <div class="chips" role="group">${fields.map(([k, label]) => `<button type="button" data-field="${k}" aria-pressed="${field === k}">${esc(label)}</button>`).join('')}</div>
-        <div id="results">${resultsHtml}</div></div>`;
-    const sel = picked ? `<div class="card"><div class="sel"><b>${esc(picked.description)}</b><small>${esc([picked.code, picked.uom, picked.categories].filter(Boolean).join(' · '))}</small>
+    if (!locks.register) { $('view').innerHTML = `${header}<div class="card"><div class="msg">${esc(TEXT.viewOnly)}</div></div>`; return; }
+    if (locks.signin && !info.signedIn) { $('view').innerHTML = `${header}<div class="card"><div class="msg">${esc(TEXT.loginNeeded)}</div><a class="btn alt" style="text-align:center;text-decoration:none" href="/">${esc(TEXT.login)}</a><div class="muted" style="text-align:center">${esc(TEXT.loginHint)}</div></div>`; return; }
+    $('view').innerHTML = `${header}<div class="card"><h2>${esc(TEXT.searchTitle)}</h2>${panelHtml()}<div id="results"></div></div><div id="selbox"></div><div class="card" id="orderbox"></div>`;
+    drawResults(); drawSel(); drawOrder();
+}
+function drawResults() {
+    const box = $('results');
+    if (!box) return;
+    if (!ready()) box.innerHTML = `<div class="msg">${esc(mode === 'contains' ? TEXT.typeMore : TEXT.typeOne)}</div>`;
+    else if (!results.length) box.innerHTML = `<div class="msg">${esc(TEXT.none)}</div>`;
+    else box.innerHTML = `<div class="list">${results.map((r, i) => `<button type="button" class="res" data-pick="${i}"><div><b>${highlight(r.code)}</b><span>${highlight(r.description)}</span><small>${highlight([r.uom, r.categories].filter(Boolean).join(' · '))}</small></div><i class="plus" aria-hidden="true">+</i></button>`).join('')}</div>${total > results.length ? `<div class="muted">${esc(TEXT.more)}</div>` : ''}`;
+}
+function drawSel() {
+    const box = $('selbox');
+    if (!box) return;
+    box.innerHTML = picked ? `<div class="card"><div class="sel"><b>${esc(picked.description)}</b><small>${esc([picked.code, picked.uom, picked.categories].filter(Boolean).join(' · '))}</small>
         <div class="qty"><button type="button" id="dec" aria-label="−">−</button><input type="number" id="qty" inputmode="decimal" step="any" min="0" value="${esc(picked.qty)}" aria-label="${esc(TEXT.qtyTitle)}"><button type="button" id="inc" aria-label="+">+</button><span>${esc(picked.uom)}</span></div>
         <button type="button" class="btn" id="add">${esc(TEXT.add)}</button><button type="button" class="link" id="cancel">${esc(TEXT.cancel)}</button></div></div>` : '';
-    const lines = cart.length ? cart.map((c, i) => `<div class="line"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small></span><div class="q"><button type="button" data-dec="${i}" aria-label="−">−</button><b>${esc(fmtQty(c.quantity))}</b><button type="button" data-inc="${i}" aria-label="+">+</button><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></div></div>`).join('') : `<div class="msg">${esc(TEXT.empty)}</div>`;
-    const who = info.signedIn ? `<div class="muted">${esc(TEXT.signedAs)} <b>${esc(info.userName)}</b></div>` : `<div><label for="name">${esc(TEXT.yourName)}</label><input type="text" id="name" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(store.get(KEY_NAME))}"></div>`;
-    const order = `<div class="card"><h2>${esc(TEXT.yourOrder)} · ${esc(cart.length === 1 ? TEXT.item1 : TEXT.items.replace('{n}', cart.length))}</h2>${lines}${cart.length ? `${who}<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}</div>`;
-    const active = document.activeElement && document.activeElement.id;
-    const pos = active === 'q' ? $('q').selectionStart : null;
-    $('view').innerHTML = header + search + sel + order;
-    if (active === 'q') { const q = $('q'); q.focus(); try { q.setSelectionRange(pos, pos); } catch (e) { /* tipo sin selección */ } }
-    wire();
 }
-function wire() {
-    const q = $('q');
-    if (q) q.addEventListener('input', () => { query = q.value; clearTimeout(timer); timer = setTimeout(search, 250); });
-    $('view').querySelectorAll('[data-field]').forEach((b) => b.addEventListener('click', () => { field = b.getAttribute('data-field'); search(); }));
-    $('view').querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => { const r = results[Number(b.getAttribute('data-pick'))]; picked = { ...r, qty: 1 }; view(); const qi = $('qty'); if (qi) { qi.focus(); qi.select(); } }));
-    const qty = $('qty');
-    if (qty) {
-        qty.addEventListener('input', () => { picked.qty = qty.value; });
-        $('dec').addEventListener('click', () => { picked.qty = Math.max(1, Math.round((Number(picked.qty) || 1) - 1)); qty.value = picked.qty; });
-        $('inc').addEventListener('click', () => { picked.qty = Math.round((Number(picked.qty) || 0) + 1); qty.value = picked.qty; });
-        $('add').addEventListener('click', addPicked);
-        $('cancel').addEventListener('click', () => { picked = null; view(); });
-    }
-    $('view').querySelectorAll('[data-dec]').forEach((b) => b.addEventListener('click', () => { const c = cart[Number(b.getAttribute('data-dec'))]; c.quantity = Math.max(1, Math.round(c.quantity - 1)); view(); }));
-    $('view').querySelectorAll('[data-inc]').forEach((b) => b.addEventListener('click', () => { const c = cart[Number(b.getAttribute('data-inc'))]; c.quantity = Math.round(c.quantity + 1); view(); }));
-    $('view').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { cart.splice(Number(b.getAttribute('data-rm')), 1); view(); }));
-    const send = $('send');
-    if (send) send.addEventListener('click', sendOrder);
+// El pedido: SIEMPRE pide el nombre de quien pide (con sesión ya viene escrito el de la cuenta y se puede cambiar: quien manda no siempre es quien pide) y lo armado queda en un solo número de pedido con su lista de artículos.
+function drawOrder() {
+    const box = $('orderbox');
+    if (!box) return;
+    const lines = cart.length ? cart.map((c, i) => `<div class="line"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small></span><div class="q"><button type="button" data-dec="${i}" aria-label="−">−</button><b>${esc(fmtQty(c.quantity))}</b><button type="button" data-inc="${i}" aria-label="+">+</button><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></div></div>`).join('') : `<div class="msg">${esc(TEXT.empty)}</div>`;
+    const who = `<div><label for="name">${esc(TEXT.yourName)} <span class="req" aria-hidden="true">*</span></label><input type="text" id="name" maxlength="60" autocomplete="name" required placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(nameValue)}"></div>`;
+    box.innerHTML = `<h2>${esc(TEXT.yourOrder)} · ${esc(cart.length === 1 ? TEXT.item1 : TEXT.items.replace('{n}', cart.length))}</h2>${who}${lines}${cart.length ? `<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}`;
 }
 function addPicked() {
     const n = Number(String(picked.qty).replace(',', '.'));
@@ -171,33 +252,111 @@ function addPicked() {
     const found = cart.find((c) => c.id === picked.id);
     if (found) found.quantity = Math.round((found.quantity + n) * 1000) / 1000; else cart.push({ id: picked.id, code: picked.code, description: picked.description, uom: picked.uom, quantity: Math.round(n * 1000) / 1000 });
     picked = null;
-    view();
+    drawSel(); drawOrder();
 }
 async function search() {
     const my = ++seq;
-    if (query.trim().length < 2) { results = []; total = 0; view(); return; }
+    if (!ready()) { results = []; total = 0; drawResults(); return; }
     try {
-        const res = await fetch(`${API}/search?q=${encodeURIComponent(query)}&fields=${field === 'all' ? '' : field}`, { cache: 'no-store' });
+        const res = await fetch(`${API}/search?q=${encodeURIComponent(searchTerms(query))}&mode=${mode}&fields=${fields.join(',')}`, { cache: 'no-store' });
         if (my !== seq) return;
-        if (!res.ok) { results = []; total = 0; view(); return; }
+        if (!res.ok) { results = []; total = 0; drawResults(); return; }
         const body = await res.json();
         results = body.items || [];
         total = body.total || 0;
     } catch (e) { results = []; total = 0; }
-    if (my === seq) view();
+    if (my === seq) drawResults();
 }
+function queueSearch() {
+    const clear = $('qclear');
+    if (clear) clear.hidden = !query;
+    clearTimeout(timer);
+    timer = setTimeout(search, 250);
+}
+// Escribe el signo donde está el cursor de la caja (la coma lleva su espacio) y deja el cursor justo después, con el teclado abierto.
+function insertSign(sign) {
+    const input = $('q');
+    const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+    const end = input.selectionEnd == null ? start : input.selectionEnd;
+    const text = sign === ',' ? ', ' : sign;
+    input.value = input.value.slice(0, start) + text + input.value.slice(end);
+    input.focus();
+    try { input.setSelectionRange(start + text.length, start + text.length); } catch (e) { /* algunos teclados no dejan mover el cursor */ }
+    query = input.value;
+    queueSearch();
+}
+function drawMode() {
+    $('mode-cur').textContent = TEXT.searchModes[mode];
+    document.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === mode)));
+    document.querySelectorAll('[data-sign]').forEach((b) => { const off = signOff(b.getAttribute('data-sign')); b.disabled = off; if (off) b.title = TEXT.searchSignOff; else b.removeAttribute('title'); });
+    $('modepop').hidden = true; $('signpop').hidden = true;
+}
+function setField(key, checked) {
+    if (key === 'all') fields = [];
+    else {
+        const set = new Set(fields);
+        if (checked) set.add(key); else set.delete(key);
+        fields = FIELD_KEYS.filter((k) => set.has(k));
+        if (fields.length === FIELD_KEYS.length) fields = [];
+    }
+    $('fields').innerHTML = fieldsListHtml();
+    $('fields-sum').textContent = fieldsSummary();
+    search();
+}
+
+// Un solo oyente para todo lo que se toca en la página.
+$('view').addEventListener('click', (event) => {
+    const t = event.target;
+    const modePop = $('modepop');
+    const signPop = $('signpop');
+    if (modePop && !modePop.hidden && !t.closest('#modebtn') && !t.closest('#modepop')) modePop.hidden = true;
+    if (signPop && !signPop.hidden && !t.closest('#signbtn') && !t.closest('#signpop')) signPop.hidden = true;
+    if (t.closest('#modebtn')) { modePop.hidden = !modePop.hidden; signPop.hidden = true; return; }
+    if (t.closest('#signbtn')) { signPop.hidden = !signPop.hidden; modePop.hidden = true; return; }
+    const sign = t.closest('[data-sign]');
+    if (sign) { if (!sign.disabled) insertSign(sign.getAttribute('data-sign')); signPop.hidden = true; return; }
+    const modeBtn = t.closest('[data-mode]');
+    if (modeBtn) { mode = modeBtn.getAttribute('data-mode'); drawMode(); search(); return; }
+    const toggle = t.closest('#fieldstoggle');
+    if (toggle) { const list = $('fields'); list.hidden = !list.hidden; toggle.setAttribute('aria-expanded', String(!list.hidden)); return; }
+    if (t.closest('#qclear')) { const q = $('q'); q.value = ''; query = ''; queueSearch(); q.focus(); return; }
+    const pick = t.closest('[data-pick]');
+    if (pick) { picked = { ...results[Number(pick.getAttribute('data-pick'))], qty: 1 }; drawSel(); const qi = $('qty'); if (qi) { qi.focus(); qi.select(); } return; }
+    if (t.closest('#dec')) { picked.qty = Math.max(1, Math.round((Number(picked.qty) || 1) - 1)); $('qty').value = picked.qty; return; }
+    if (t.closest('#inc')) { picked.qty = Math.round((Number(picked.qty) || 0) + 1); $('qty').value = picked.qty; return; }
+    if (t.closest('#add')) { addPicked(); return; }
+    if (t.closest('#cancel')) { picked = null; drawSel(); return; }
+    const dec = t.closest('[data-dec]');
+    if (dec) { const c = cart[Number(dec.getAttribute('data-dec'))]; c.quantity = Math.max(1, Math.round(c.quantity - 1)); drawOrder(); return; }
+    const inc = t.closest('[data-inc]');
+    if (inc) { const c = cart[Number(inc.getAttribute('data-inc'))]; c.quantity = Math.round(c.quantity + 1); drawOrder(); return; }
+    const rm = t.closest('[data-rm]');
+    if (rm) { cart.splice(Number(rm.getAttribute('data-rm')), 1); drawOrder(); return; }
+    if (t.closest('#send')) sendOrder();
+});
+$('view').addEventListener('input', (event) => {
+    const t = event.target;
+    if (t.id === 'q') { query = t.value; queueSearch(); }
+    else if (t.id === 'qty' && picked) picked.qty = t.value;
+    else if (t.id === 'name') nameValue = t.value;
+});
+$('view').addEventListener('change', (event) => {
+    const box = event.target.closest('[data-field]');
+    if (box) setField(box.getAttribute('data-field'), box.checked);
+});
+
 async function sendOrder() {
     const err = $('err');
     const fail = (text) => { err.textContent = text; err.hidden = false; };
     err.hidden = true;
-    const nameEl = $('name');
-    const name = nameEl ? nameEl.value.replace(/\s+/g, ' ').trim() : '';
-    if (!info.signedIn && !name) { fail(TEXT.needName); nameEl.focus(); return; }
+    const name = nameValue.replace(/\s+/g, ' ').trim();
+    if (!name) { fail(TEXT.needName); $('name').focus(); return; }
     const btn = $('send');
     btn.disabled = true;
     btn.textContent = TEXT.sending;
+    const items = cart.map((c) => ({ ...c }));
     try {
-        const res = await fetch(`${API}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, items: cart.map((c) => ({ id: c.id, quantity: c.quantity })) }) });
+        const res = await fetch(`${API}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, items: items.map((c) => ({ id: c.id, quantity: c.quantity })) }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
             btn.disabled = false; btn.textContent = TEXT.send;
@@ -206,8 +365,8 @@ async function sendOrder() {
             fail(body.code === 'NAME' ? TEXT.needName : (body.code === 'QTY' ? TEXT.errQty : (body.code === 'ITEMS' ? TEXT.errItems : (body.code === 'TOOMANY' ? TEXT.tooMany : TEXT.errGeneric))));
             return;
         }
-        if (!info.signedIn) store.set(KEY_NAME, name);
-        sentInfo = { folio: body.folio, name: body.name, createdAt: body.createdAt, lines: body.lines };
+        store.set(KEY_NAME, name);
+        sentInfo = { folio: body.folio, name: body.name, createdAt: body.createdAt, items };
         cart = [];
         view();
     } catch (e) {
@@ -215,10 +374,13 @@ async function sendOrder() {
         fail(TEXT.errGeneric);
     }
 }
+// Lo enviado: el número de pedido y su lista de artículos.
 function viewSent() {
     const when = new Date(sentInfo.createdAt).toLocaleString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const lines = sentInfo.items.map((c) => `<div class="line"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small></span><div class="q"><b>${esc(fmtQty(c.quantity))}</b></div></div>`).join('');
     $('view').innerHTML = `<div class="card done"><div class="tick" aria-hidden="true">✓</div><h1>${esc(TEXT.sentTitle)}</h1><div class="muted">${esc(TEXT.folio)}</div><div class="folio">${esc(sentInfo.folio)}</div>
-        <div>${esc(TEXT.by)}: <b>${esc(sentInfo.name)}</b></div><div>${esc(TEXT.at)}: <b>${esc(when)}</b></div><div class="muted">${esc(sentInfo.lines === 1 ? TEXT.item1 : TEXT.items.replace('{n}', sentInfo.lines))}</div>
+        <div>${esc(TEXT.by)}: <b>${esc(sentInfo.name)}</b></div><div>${esc(TEXT.at)}: <b>${esc(when)}</b></div>
+        <div class="items"><h2>${esc(TEXT.list)} · ${esc(sentInfo.items.length === 1 ? TEXT.item1 : TEXT.items.replace('{n}', sentInfo.items.length))}</h2>${lines}</div>
         <button type="button" class="btn" id="again">${esc(TEXT.newOrder)}</button></div>`;
     $('again').addEventListener('click', () => { sentInfo = null; query = ''; results = []; total = 0; picked = null; view(); });
 }
@@ -232,6 +394,7 @@ function viewSent() {
     } catch (err) { $('view').innerHTML = `<div class="card"><div class="err" role="alert">${esc(TEXT.notFound)}</div></div>`; return; }
     // el mismo encabezado del Layout: logo (o iniciales), tipo de página, Sitio y empresa
     window.QrBrandHeader.mount($('qr-brand'), { kind: TEXT.title, siteName: info.siteName, companyName: info.companyName, hasLogo: info.hasLogo, companyColor: info.companyColor, logoUrl: `/api/public/layout/${encodeURIComponent(TOKEN)}/logo` });
+    if (!nameValue && info.signedIn) nameValue = info.userName || '';
     view();
 })();
 })();

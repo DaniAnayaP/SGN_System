@@ -114,6 +114,7 @@
         tag: 'M3 12l9-9h7v7l-9 9z M15 7h.01',
         // solo para las tarjetas de QR de Temperaturas y Limpieza (no están en la lista de iconos de las categorías)
         thermometer: 'M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z M11.5 9v8',
+        cart: 'M3 4h2l2.4 11h10.2l2-8H6.2 M9.5 20h.01 M17 20h.01',
         sparkle: 'M11 3l1.8 5.2L18 10l-5.2 1.8L11 17l-1.8-5.2L4 10l5.2-1.8z M18 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z',
     };
     // El icono como trazos listos para poner dentro de un <g> o un <svg viewBox="0 0 24 24">.
