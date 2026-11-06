@@ -982,11 +982,12 @@ function addAllWalls() {
     renderPanel();
     refreshLive();
 }
-// Objetos: una persona o un montacargas nuevo toma el primer renglón activo de ese tipo del catálogo «Lo que transita» (su dibujo y sus medidas) y nace en el centro de la nave (corrido un poco para que no se encimen);
-// se acomoda con X, Y y Giro. Con el equipo o persona se puede elegir otro renglón del catálogo.
-function addObject(kind) {
+// Objetos: un objeto nuevo nace como persona (el primer renglón activo de ese tipo del catálogo «Lo que transita»; si no hay, el primer renglón activo que haya) con su dibujo y sus medidas, en el centro de la nave
+// (corrido un poco para que no se encimen); se acomoda con X, Y y Giro. En «Equipo o persona» se elige qué es (montacargas, carrito, plataforma…) y toma el dibujo y las medidas de ese renglón del catálogo.
+function addObject() {
     const d = state.draft;
-    const item = LC.transitCatalogOf(d).find((c) => c.status === 'active' && c.kind === kind);
+    const active = LC.transitCatalogOf(d).filter((c) => c.status === 'active');
+    const item = active.find((c) => c.kind === 'person') || active[0];
     if (!item) { Dashboard.showToast(t('main.layoutObjetoSinCatalogo'), 'warning'); return; }
     d.objects = d.objects || [];
     clearFilterOf('objects');
@@ -1095,14 +1096,14 @@ function stepHtml(step) {
         return `${addButton('safety', 'main.layoutAgregarSeguridad', dis, true)}${bar}${list}<div class="layout-vio" data-sf-issues hidden></div><div class="layout-due" data-sf-due hidden></div>`;
     }
     if (step === 'objetos') {
-        // Cada renglón es una PERSONA o un MONTACARGAS dibujado en el plano, a escala. Es una foto fija (como el plano de Excel), no sigue a nadie en vivo. X e Y son su centro, en metros; el giro dice hacia dónde mira
+        // Cada renglón es una PERSONA, un MONTACARGAS, un carrito o una plataforma dibujado en el plano, a escala (lo que es se elige en «Equipo o persona»). Es una foto fija (como el plano de Excel), no sigue a nadie en vivo. X e Y son su centro, en metros; el giro dice hacia dónde mira
         // (0° = hacia la derecha, 90° = hacia abajo). Las medidas de partida salen de «Cuánto mide lo que transita» (paso Tránsito) y se pueden cambiar en cada uno.
         const catalog = LC.transitCatalogOf(d);
         const equipOptions = (o) => `${o.equipId ? '' : '<option value="" selected>—</option>'}${catalog.filter((c) => c.status === 'active' || Number(c.id) === Number(o.equipId)).map((c) => `<option value="${c.id}"${Number(c.id) === Number(o.equipId) ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}`;
         const rows = (d.objects || []).map((o, i) => `<tr>${cellText('objects', i, 'name', o.name, dis)}${cellSelect('objects', i, 'equipId', equipOptions(o), dis)}${cellNum('objects', i, 'x', o.x, dis)}${cellNum('objects', i, 'y', o.y, dis)}${cellNum('objects', i, 'angle', o.angle || 0, dis, '5')}<td class="layout-calc">${fmt(o.l)}</td><td class="layout-calc">${fmt(o.w)}</td><td class="layout-calc">${fmt(o.h || 0)}</td>${removeCell('objects', i, dis)}</tr>`);
-        const addBtn = (type, key) => `<button type="button" class="btn btn-secondary layout-add" data-add-object="${type}" data-main-add="1" data-help-key="layoutObjetoAgregar"${dis ? ' disabled' : ''}>${esc(t(key))}</button>`;
+        const addBtn = `<button type="button" class="btn btn-secondary layout-add" data-add-object="1" data-main-add="1" data-help-key="layoutObjetoAgregar"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarObjeto'))}</button>`;
         const list = rows.length ? table(['main.layoutNombre', 'main.layoutEquipoPersona', 'main.layoutX', 'main.layoutY', 'main.layoutGiro', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', ''], rows, 'layout-objetos') : `<p class="layout-muted">${esc(t('main.layoutObjetosVacio'))}</p>`;
-        return `${addBtn('person', 'main.layoutAgregarPersona')}${addBtn('forklift', 'main.layoutAgregarMontacargas')}${list}`;
+        return `${addBtn}${list}`;
     }
     if (step === 'transito') {
         // Cada renglón es un PASILLO: por donde pasan personas, montacargas, carritos y plataformas. Va dentro de una zona (la zona sale de su lugar, como la de las huellas), se conecta con otro que lo toque y nada puede ir adentro.
@@ -2855,7 +2856,7 @@ $('layout-panel').addEventListener('click', (event) => {
     const szDel = event.target.closest('[data-sz-del]');
     if (szDel) { toggleSensorZone(szDel.dataset.szDel, false); return; }
     const addObj = event.target.closest('[data-add-object]');
-    if (addObj) { addObject(addObj.dataset.addObject); return; }
+    if (addObj) { addObject(); return; }
     const add = event.target.closest('[data-add]');
     if (add) {
         const list = add.dataset.add;

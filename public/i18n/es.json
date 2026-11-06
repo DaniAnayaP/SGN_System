@@ -1769,7 +1769,7 @@
     "layoutQuienBorrado": "(ya no está en el catálogo)",
     "layoutQuienSinCatalogo": "No hay nada en el catálogo «Lo que transita». Agrégalo en Catálogos.",
     "layoutEquipoPersona": "Equipo o persona",
-    "layoutObjetoSinCatalogo": "No hay un renglón activo de ese tipo en el catálogo «Lo que transita». Agrégalo primero en Catálogos.",
+    "layoutObjetoSinCatalogo": "No hay ningún renglón activo en el catálogo «Lo que transita». Agrégalo primero en Catálogos.",
     "layoutQuienDim_w": "ancho",
     "layoutQuienDim_l": "largo",
     "layoutQuienDim_h": "alto",
@@ -1788,10 +1788,9 @@
     "colLayoutSeguridad": "Seguridad",
     "layoutType_object_person": "Persona",
     "layoutType_object_forklift": "Montacargas",
-    "layoutAgregarPersona": "+ Agregar persona",
-    "layoutAgregarMontacargas": "+ Agregar montacargas",
+    "layoutAgregarObjeto": "+ Agregar",
     "layoutGiro": "Giro (°)",
-    "layoutObjetosVacio": "Todavía no hay personas ni montacargas dibujados. Agrega uno con los botones de arriba.",
+    "layoutObjetosVacio": "Todavía no hay nada dibujado. Agrega un objeto con el botón de arriba.",
     "layoutStepSeguridad": "Seguridad",
     "layoutAgregarSeguridad": "+ Agregar elemento",
     "layoutSeguridadVacio": "Todavía no hay elementos de seguridad. Agrega extintores, hidrantes, puertas de emergencia y más con el botón de arriba.",
@@ -5268,8 +5267,8 @@
       "example": "un montacargas en el pasillo central, a 12 m en X y 9.5 m en Y, mirando hacia la derecha (giro 0), y una persona junto a él."
     },
     "layoutObjetoAgregar": {
-      "what": "Agrega una persona o un montacargas al centro de la nave, con las medidas de partida. Después lo acomodas con X, Y y Giro.",
-      "example": "agregas un montacargas y lo mueves al pasillo donde trabaja."
+      "what": "Agrega un objeto al centro de la nave: nace como persona, con sus medidas de partida. En «Equipo o persona» eliges si es montacargas, carrito o plataforma, y después lo acomodas con X, Y y Giro.",
+      "example": "agregas uno, eliges Montacargas en «Equipo o persona» y lo mueves al pasillo donde trabaja."
     },
     "layoutOrigin": {
       "what": "En qué punto del mapa está la primera esquina; desde ahí se dibujan los lados.",

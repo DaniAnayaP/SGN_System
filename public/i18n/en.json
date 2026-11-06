@@ -1769,7 +1769,7 @@
     "layoutQuienBorrado": "(no longer in the catalog)",
     "layoutQuienSinCatalogo": "There is nothing in the «What Passes» catalog. Add it in Catalogs.",
     "layoutEquipoPersona": "Equipment or person",
-    "layoutObjetoSinCatalogo": "There is no active row of that type in the «What Passes» catalog. Add it first in Catalogs.",
+    "layoutObjetoSinCatalogo": "There is no active row in the «What Passes» catalog. Add it first in Catalogs.",
     "layoutQuienDim_w": "width",
     "layoutQuienDim_l": "length",
     "layoutQuienDim_h": "height",
@@ -1788,10 +1788,9 @@
     "colLayoutSeguridad": "Safety",
     "layoutType_object_person": "Person",
     "layoutType_object_forklift": "Forklift",
-    "layoutAgregarPersona": "+ Add person",
-    "layoutAgregarMontacargas": "+ Add forklift",
+    "layoutAgregarObjeto": "+ Add",
     "layoutGiro": "Turn (°)",
-    "layoutObjetosVacio": "There are no people or forklifts drawn yet. Add one with the buttons above.",
+    "layoutObjetosVacio": "Nothing is drawn yet. Add an object with the button above.",
     "layoutStepSeguridad": "Safety",
     "layoutAgregarSeguridad": "+ Add item",
     "layoutSeguridadVacio": "There are no safety items yet. Add extinguishers, hydrants, emergency doors and more with the button above.",
@@ -5269,8 +5268,8 @@
       "example": "a forklift in the central aisle, 12 m in X and 9.5 m in Y, facing right (turn 0), and a person next to it."
     },
     "layoutObjetoAgregar": {
-      "what": "Adds a person or a forklift at the center of the warehouse, with the default sizes. Then you place it with X, Y and Turn.",
-      "example": "you add a forklift and move it to the aisle where it works."
+      "what": "Adds an object at the center of the warehouse: it starts as a person, with its default sizes. In «Equipment or person» you choose whether it is a forklift, a cart or a platform, and then you place it with X, Y and Turn.",
+      "example": "you add one, choose Forklift in «Equipment or person» and move it to the aisle where it works."
     },
     "layoutOrigin": {
       "what": "Where on the map the first corner is; the sides are drawn from there.",
