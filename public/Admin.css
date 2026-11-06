@@ -746,11 +746,14 @@ body.dark-mode .admin-generated-email-status-warn{
     color: var(--color-text-primary);
     border-bottom: 1px solid var(--color-border);
 }
+/* La celda de acciones es un <td>: tiene que seguir siendo celda de tabla (con display:flex no crece con la fila, así que con filas altas, como las de una foto, sus iconos y su línea se quedaban arriba y desalineados). Los iconos van centrados y separados. */
 .admin-table-actions{
-    display: flex;
-    gap: 0.4rem;
+    display: table-cell;
+    vertical-align: middle;
     white-space: nowrap;
 }
+.admin-table-actions > *{ vertical-align: middle; }
+.admin-table-actions > * + *{ margin-left: 0.4rem; }
 .admin-icon-btn{
     display: inline-flex;
     align-items: center;
