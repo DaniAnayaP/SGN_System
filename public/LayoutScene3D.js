@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // Vista 3D del Layout (Operaciones, C. Distribución, y la página pública del QR). Levanta en 3D lo MISMO que se ve en el croquis: el contorno con la altura de cada esquina, las puertas y las
-// conexiones de luz en sus paredes, las columnas, las zonas (con el color que se les puso) y los espacios (anaqueles, anaqueles con tarimas, gabinetes y tarimas) con sus medidas y niveles.
+// conexiones de luz en sus paredes, las columnas, las zonas (con el color que se les puso) y los espacios (anaqueles, anaqueles con tarimas, gabinetes y tarimas) con sus medidas y niveles (la repisa de cada nivel a su altura desde el piso y con el grueso de su ceja).
 // No inventa nada: no dibuja mercancía, solo la estructura capturada. En el editor se arma con el borrador que se está editando, así que lo que se cambia en el panel se ve en 3D al momento.
 // Capas que se pueden mostrar u ocultar (setLayer): walls (paredes), doors (puertas), power (conexiones de luz), columns (columnas), zones (zonas) y assets (activos: anaqueles, anaqueles con
 // tarimas, gabinetes y tarimas); los rótulos tienen su propio interruptor (setLabels).
@@ -878,8 +878,17 @@
                     const upC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
                     const deckC = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
                     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([ix, iz]) => upr.push({ x: cx + ix * Math.max(0, s.l / 2 - 0.03), y: s.h / 2 + fl, z: cz + iz * Math.max(0, s.d / 2 - 0.03), sx: 0.06, sy: s.h, sz: 0.06, c: upC }));
-                    const pitch = (s.h - 0.3) / lv;
-                    for (let k = 0; k < lv; k++) dck.push({ x: cx, y: 0.15 + k * pitch + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC });
+                    // La repisa de cada nivel va a su altura desde el piso (paso Niveles) y mide de grueso lo que mide su ceja (sin ceja, 6 cm); la de abajo nunca queda pegada al piso. Si algún hueco (nivel × columna) trae en Posiciones
+                    // su propia altura o ceja, ese nivel se dibuja columna por columna; si no, una sola repisa de todo el largo. Sin LayoutCalc se reparten parejas como siempre.
+                    const LCx = root.LayoutCalc;
+                    const slotsN = Math.max(1, Math.floor(s.slots || 1));
+                    const deckAt = (xc, sx, m) => { const th = m.beam > 0 ? m.beam : 0.06; dck.push({ x: xc, y: fl + Math.max(m.floorH, 0.12) + th / 2, z: cz, sx, sy: th, sz: s.d, c: deckC }); };
+                    for (let k = 1; k <= lv; k++) {
+                        if (!(LCx && LCx.levelMeasures && LCx.bayMeasures)) { dck.push({ x: cx, y: 0.15 + (k - 1) * ((s.h - 0.3) / lv) + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC }); continue; }
+                        if ((s.bays || []).some((b) => b.n === k && (b.floorH !== undefined || b.beam !== undefined))) {
+                            for (let c = 1; c <= slotsN; c++) deckAt(cx - s.l / 2 + (c - 0.5) * (s.l / slotsN), s.l / slotsN, LCx.bayMeasures(s, k, c));
+                        } else deckAt(cx, s.l, LCx.levelMeasures(s, k));
+                    }
                 }
                 spaceList.push({ s, x: cx, z: cz, fl });
             });

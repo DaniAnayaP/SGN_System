@@ -4700,7 +4700,7 @@
       "example": "el hueco mide 1.83 m y su travesaño 0.07 m: se pone 0.07 y el Alto de almacenamiento queda en 1.76 m."
     },
     "layoutSec_niveles": {
-      "what": "Cada renglón es un nivel de un activo (el rack con 3 niveles deja 3 renglones, ya listos). Aquí anotas una sola vez la altura desde el piso, el alto y la ceja (el grueso del travesaño) de ese nivel, y valen para todas sus columnas. La ceja se resta del Alto y queda el Alto de almacenamiento. Las medidas salen calculadas con las del activo y solo corriges las que cambien; si el alto de un nivel cambia, los de arriba suben con él. Un hueco en particular que sea distinto se ajusta en Posiciones: lo que se anote ahí manda sobre el nivel.",
+      "what": "Cada renglón es un nivel de un activo (el rack con 3 niveles deja 3 renglones, ya listos). Aquí anotas una sola vez la altura desde el piso, el alto y la ceja (el grueso del travesaño) de ese nivel, y valen para todas sus columnas. La ceja se resta del Alto y queda el Alto de almacenamiento. Las medidas salen calculadas con las del activo y solo corriges las que cambien; si el alto de un nivel cambia, los de arriba suben con él. Un hueco en particular que sea distinto se ajusta en Posiciones: lo que se anote ahí manda sobre el nivel. En el 3D, la repisa de cada nivel se dibuja a su altura desde el piso y con el grueso de su ceja.",
       "example": "el nivel 2 del R-01 tiene un travesaño de 0.07 m: pones 0.07 en Ceja una sola vez y sus 3 columnas quedan con ese Alto de almacenamiento."
     },
     "layoutNivCeja": {
