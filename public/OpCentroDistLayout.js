@@ -1319,7 +1319,7 @@ function renderPanel() {
 }
 
 // ---- resaltado de lo elegido ------------------------------------------------------------------------------------------
-// Al tocar un renglón de las tablas de Zonas, Huella-Espacio, Activos o Posiciones, lo que ese renglón es se marca en el croquis (contorno naranja y lo demás atenuado) y el renglón queda marcado en la
+// Al tocar un renglón de las tablas de Zonas, Pisos, Huella-Espacio, Activos o Posiciones, lo que ese renglón es se marca en el croquis (contorno naranja y lo demás atenuado) y el renglón queda marcado en la
 // tabla: así, al editar, no se confunde de cuál zona, activo, huella o hueco se trata. Una posición es un hueco dentro de un anaquel y el croquis lo ve desde arriba: se marca el anaquel y se escribe el
 // nivel y la columna. Es solo de pantalla (no cambia lo guardado ni la hoja que se descarga) y no hace falta redibujar el croquis: se pone y se quita sobre el dibujo que ya está.
 const HL_ROW_SELECTOR = '#layout-panel .layout-table tbody tr';
@@ -1337,6 +1337,7 @@ function rowEntity(tr) {
     const list = ctl.getAttribute('data-l');
     const i = Number(ctl.getAttribute('data-i'));
     if (list === 'zones' && state.draft.zones[i]) return { kind: 'zone', id: state.draft.zones[i].id };
+    if (list === 'floors' && (state.draft.floors || [])[i]) return { kind: 'floor', id: state.draft.floors[i].id };
     if (list === 'footprints' && state.draft.footprints[i]) return { kind: 'footprint', id: state.draft.footprints[i].id };
     if (list === 'spaces' && state.draft.spaces[i]) return { kind: 'space', id: state.draft.spaces[i].id };
     // las paredes (paso Paredes) y las columnas, desniveles y otros obstáculos (paso Contorno) también se marcan en el croquis al elegir su renglón
@@ -1393,10 +1394,10 @@ function applyHighlight(reveal) {
     if (!h || h.step !== state.focus || !state.draft) return;
     if (h.kind === 'sensor') drawSensorZones(svg, h.id);
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
-    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid', side: 'data-sin-figura', corner: 'data-sin-figura' };
+    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid', side: 'data-sin-figura', corner: 'data-sin-figura', floor: 'data-sin-figura' };
     const els = Array.from(svg.querySelectorAll(`[${HL_ATTR[h.kind] || 'data-sid'}="${CSS.escape(h.id)}"]`));
     // un elemento de seguridad, un objeto, una puerta, una conexión de luz o un sensor son figuras sueltas (línea, símbolo, giro, etiqueta): su contorno sale de un cuadro invisible que se dibuja junto a ellos
-    const shapes = ['safety', 'object', 'door', 'power', 'sensor', 'side', 'corner'].includes(h.kind)
+    const shapes = ['safety', 'object', 'door', 'power', 'sensor', 'side', 'corner', 'floor'].includes(h.kind)
         ? Array.from(svg.querySelectorAll(`[data-hlbox="${h.kind}:${CSS.escape(h.id)}"]`))
         : els.map((el) => (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'))).filter(Boolean);
     if (!shapes.length) return;
@@ -1973,6 +1974,13 @@ function renderSvg() {
         place.boxes.forEach((b) => labelBoxes.push(b));
         if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureJobs.push([LC.zonePoints(z), 30, z.id]);
     });
+    // El cuadro invisible de cada piso (paso Pisos): de ahí sale su contorno al elegir su renglón de la tabla, tenga o no rayas (un piso a nivel no se pinta).
+    if (on('pisos')) {
+        (d.floors || []).forEach((f) => {
+            if (f.active === false || !(f.l > 0 && f.w > 0)) return;
+            s += `<rect class="hl-box" data-hlbox="floor:${esc(f.id)}" x="${X(f.x).toFixed(1)}" y="${Y(f.y).toFixed(1)}" width="${(X(f.x + f.l) - X(f.x)).toFixed(1)}" height="${(Y(f.y + f.w) - Y(f.y)).toFixed(1)}"/>`;
+        });
+    }
     // Niveles de piso (icono «Niveles»): cada PISO más alto o más bajo que el piso de la nave lleva rayas y su nivel; una rampa, un degradado hacia su lado más alto con una flecha y de qué nivel a cuál va. Salen con el paso Pisos.
     if (state.showLevels && on('pisos')) {
         let lvlLayer = '';

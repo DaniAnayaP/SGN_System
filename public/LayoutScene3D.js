@@ -90,7 +90,7 @@
         let clashSet = new Set();
         // Zonas a desnivel: con levelsOn el nivel de cada zona se escribe junto a su nombre.
         let levelsOn = true;
-        let hl = null; // lo resaltado: { kind: 'zone' | 'footprint' | 'space' | 'bay', id, strong }
+        let hl = null; // lo resaltado: { kind: 'zone' | 'floor' | 'footprint' | 'space' | 'bay', id, strong }
         const textureCache = new Map();
 
         const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -132,6 +132,15 @@
                 const x0 = Math.min(...xs); const x1 = Math.max(...xs); const y0 = Math.min(...ys); const y1 = Math.max(...ys);
                 const zl = root.LayoutCalc && root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, (x0 + x1) / 2, (y0 + y1) / 2) : 0;
                 return { x: PX((x0 + x1) / 2), y: 0.1 + zl, z: PZ((y0 + y1) / 2), sx: x1 - x0, sy: 0.2, sz: y1 - y0 };
+            }
+            if (hl.kind === 'floor') {
+                const f = (lastLayout.floors || []).find((e) => e.id === hl.id);
+                if (!f || f.active === false || !(f.l > 0) || !(f.w > 0) || !layerOn.zones) return null;
+                const lo = Number(f.lvl) || 0;
+                const hi = f.lvl2 !== undefined ? Number(f.lvl2) || 0 : lo;
+                const bottom = Math.min(lo, hi, 0);
+                const hh = Math.max(Math.max(lo, hi, 0) - bottom, 0.2);
+                return { x: PX(f.x + f.l / 2), y: bottom + hh / 2, z: PZ(f.y + f.w / 2), sx: f.l, sy: hh, sz: f.w };
             }
             if (hl.kind === 'footprint') {
                 const f = (lastLayout.footprints || []).find((e) => e.id === hl.id);
