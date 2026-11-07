@@ -234,7 +234,7 @@
                 const slots = Math.max(1, Math.floor(s.slots || 1));
                 const c = hl.kind === 'bay' ? Math.min(Math.max(1, Number(hl.c) || 1), slots) : 0;
                 const m = c ? LCx.bayMeasures(s, n, c) : LCx.levelMeasures(s, n);
-                const bottom = Math.max(m.floorH, 0);
+                const bottom = Math.max(m.floorH + m.beam, 0);
                 const height = Math.max(m.h, 0.1);
                 const len = c ? s.l / slots : s.l;
                 const x0 = c ? s.x + (c - 1) * (s.l / slots) : s.x;
@@ -974,11 +974,11 @@
                     const upC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
                     const deckC = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
                     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([ix, iz]) => upr.push({ x: cx + ix * Math.max(0, s.l / 2 - 0.03), y: s.h / 2 + fl, z: cz + iz * Math.max(0, s.d / 2 - 0.03), sx: 0.06, sy: s.h, sz: 0.06, c: upC }));
-                    // La repisa de cada nivel va a su altura desde el piso (paso Niveles) y mide de grueso lo que mide su ceja (sin ceja, 6 cm); la de abajo nunca queda pegada al piso. Si algún hueco (nivel × columna) trae en Posiciones
+                    // La repisa (reja) de cada nivel va a su altura del piso (paso Niveles: la del nivel 1 se escribe y las demás se calculan) y mide de grueso lo que mide su ceja (sin ceja, 6 cm). Si algún hueco (nivel × columna) trae en Posiciones
                     // su propia altura o ceja, ese nivel se dibuja columna por columna; si no, una sola repisa de todo el largo. Sin LayoutCalc se reparten parejas como siempre.
                     const LCx = root.LayoutCalc;
                     const slotsN = Math.max(1, Math.floor(s.slots || 1));
-                    const deckAt = (xc, sx, m) => { const th = m.beam > 0 ? m.beam : 0.06; dck.push({ x: xc, y: fl + Math.max(m.floorH, 0.12) + th / 2, z: cz, sx, sy: th, sz: s.d, c: deckC }); };
+                    const deckAt = (xc, sx, m) => { const th = m.beam > 0 ? m.beam : 0.06; dck.push({ x: xc, y: fl + Math.max(m.floorH, 0.03) + th / 2, z: cz, sx, sy: th, sz: s.d, c: deckC }); };
                     for (let k = 1; k <= lv; k++) {
                         if (!(LCx && LCx.levelMeasures && LCx.bayMeasures)) { dck.push({ x: cx, y: 0.15 + (k - 1) * ((s.h - 0.3) / lv) + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC }); continue; }
                         if ((s.bays || []).some((b) => b.n === k && (b.floorH !== undefined || b.beam !== undefined))) {

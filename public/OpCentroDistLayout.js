@@ -907,8 +907,12 @@ function applyLevelMarks() {
     (state.draft.spaces || []).forEach((s, i) => {
         for (let n = 1; n <= (s.levels || 1); n += 1) {
             const m = LC.levelMeasures(s, n);
-            const over = s.h > 0 && m.floorH + m.h > s.h + 0.005;
+            const over = s.h > 0 && m.floorH + m.beam + m.h > s.h + 0.005;
             ['floorH', 'h'].forEach((k) => { const input = document.querySelector(`[data-l="lvl"][data-i="${i}"][data-n="${n}"][data-k="${k}"]`); if (input) input.classList.toggle('layout-missing', over); });
+            const autoCell = document.querySelector(`[data-lvl-floor="${i}|${n}"]`);
+            if (autoCell) { autoCell.textContent = String(Math.round(m.floorH * 100) / 100); autoCell.parentElement.classList.toggle('layout-bad', over); }
+            const useCell = document.querySelector(`[data-lvl-use="${i}|${n}"]`);
+            if (useCell) useCell.textContent = String(Math.round(m.useful * 100) / 100);
         }
     });
     const html = levelIssuesHtml();
@@ -1227,7 +1231,7 @@ function stepHtml(step) {
                     const bay = LC.bayOf(s, n, c);
                     const m = LC.bayMeasures(s, n, c);
                     const st = bay.stored;
-                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td><td class="layout-calc">${c}</td>${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}${bayNum(i, n, c, 'floorH', shown(m.floorH), st.floorH !== undefined, '0.01')}${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', s.l > 0 && m.l > s.l + 0.005)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', '', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01')}${bayNum(i, n, c, 'beam', shown(m.beam), st.beam !== undefined, '0.01', ' data-help-key="layoutPosCeja"', m.beam > 0 && m.beam >= m.h)}<td class="layout-calc"><span data-bay-use="${i}|${n}|${c}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}">${bay.rows * bay.depth}</span></td></tr>`);
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td><td class="layout-calc">${c}</td>${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}${bayNum(i, n, c, 'floorH', shown(m.floorH), st.floorH !== undefined, '0.01')}${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', s.l > 0 && m.l > s.l + 0.005)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', '', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01')}${bayNum(i, n, c, 'beam', shown(m.beam), st.beam !== undefined, '0.01', ' data-help-key="layoutPosCeja"')}<td class="layout-calc"><span data-bay-use="${i}|${n}|${c}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}">${bay.rows * bay.depth}</span></td></tr>`);
                 }
             }
         });
@@ -1237,8 +1241,9 @@ function stepHtml(step) {
         return `${table(heads, rows, 'layout-posiciones')}<div class="layout-vio" data-bay-issues${bayIssues ? '' : ' hidden'}>${bayIssues}</div>${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
     if (step === 'niveles') {
-        // Cada renglón es un NIVEL de un activo de Huella-Espacio (el rack con 3 niveles deja 3 renglones, ya listos): sus niveles salen solos de Activos. Aquí se anota UNA VEZ la altura desde el piso, el alto y la ceja de ese
-        // nivel y vale para todas sus columnas; lo que no se cambia queda como lo de por defecto (calculado con el alto del activo) y no se guarda aparte. Un hueco de Posiciones con medida propia manda sobre el nivel.
+        // Cada renglón es un NIVEL de un activo de Huella-Espacio (el rack con 3 niveles deja 3 renglones, ya listos): sus niveles salen solos de Activos. Solo se escribe la altura del piso del nivel 1 (hasta dónde empieza la primera
+        // reja): la de los demás niveles se calcula sola (la del de abajo + su reja + su alto). Se anota UNA VEZ el alto (el espacio libre) y la ceja (el grueso de la reja) de cada nivel y valen para todas sus columnas; lo que no se cambia
+        // queda como lo de por defecto (calculado con el alto del activo) y no se guarda aparte. Un hueco de Posiciones con medida propia manda sobre el nivel.
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
         const shown = (v) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '');
         const lvlNum = (i, n, key, value, edited, extra = '', bad = false) => `<td><input type="number" min="0" step="0.01" data-l="lvl" data-i="${i}" data-n="${n}" data-k="${key}" value="${value}"${extra}${edited || bad ? ` class="${[edited ? 'layout-edited' : '', bad ? 'layout-missing' : ''].filter(Boolean).join(' ')}"` : ''}${dis ? ' disabled' : ''}></td>`;
@@ -1253,10 +1258,10 @@ function stepHtml(step) {
                 count += 1;
                 const m = LC.levelMeasures(s, n);
                 const st = m.stored;
-                const over = s.h > 0 && m.floorH + m.h > s.h + 0.005;
+                const over = s.h > 0 && m.floorH + m.beam + m.h > s.h + 0.005;
                 // cuántos huecos (columnas) de este nivel traen en Posiciones una medida propia de estas tres
                 const own = (s.bays || []).filter((b) => b.n === n && (b.floorH !== undefined || b.h !== undefined || b.beam !== undefined)).length;
-                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td>${lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined, '', over)}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined, '', over)}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"', m.beam > 0 && m.beam >= m.h)}<td class="layout-calc"><span data-lvl-use="${i}|${n}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-help-key="layoutNivHuecos">${own || '—'}</span></td><td><button type="button" class="btn btn-secondary layout-toggle" data-lvl-apply="${i}|${n}" data-help-key="layoutNivAplicar" title="${esc(t('main.layoutNivAplicarTip'))}"${dis || levels < 2 ? ' disabled' : ''}>${esc(t('main.layoutNivAplicar'))}</button></td></tr>`);
+                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td>${n === 1 ? lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined, ' data-help-key="layoutNivArranque"', over) : `<td class="layout-calc${over ? ' layout-bad' : ''}"><span data-lvl-floor="${i}|${n}" data-help-key="layoutNivAuto">${shown(m.floorH)}</span></td>`}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined, '', over)}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"')}<td class="layout-calc"><span data-lvl-use="${i}|${n}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-help-key="layoutNivHuecos">${own || '—'}</span></td><td><button type="button" class="btn btn-secondary layout-toggle" data-lvl-apply="${i}|${n}" data-help-key="layoutNivAplicar" title="${esc(t('main.layoutNivAplicarTip'))}"${dis || levels < 2 ? ' disabled' : ''}>${esc(t('main.layoutNivAplicar'))}</button></td></tr>`);
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutNivSinActivos'))}</p>`;
@@ -2820,12 +2825,10 @@ function onEdit(event) {
         const shownBay = LC.bayOf(space, n, c);
         const cap = document.querySelector(`[data-bay-cap="${el.getAttribute('data-i')}|${n}|${c}"]`);
         if (cap) cap.textContent = String(shownBay.rows * shownBay.depth);
-        // el alto de almacenamiento (Alto − Ceja) se recalcula al momento y la ceja se marca en rojo si ya no deja espacio
+        // el alto de almacenamiento (el mismo Alto: la reja va aparte) se recalcula al momento
         const mBay = LC.bayMeasures(space, n, c);
         const use = document.querySelector(`[data-bay-use="${el.getAttribute('data-i')}|${n}|${c}"]`);
         if (use) use.textContent = String(Math.round(mBay.useful * 100) / 100);
-        const beamBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${c}"][data-k="beam"]`);
-        if (beamBox) beamBox.classList.toggle('layout-missing', mBay.beam > 0 && mBay.beam >= mBay.h);
         // el largo y el ancho del hueco no pasan del largo y el fondo del activo: se marcan en rojo al momento
         [['l', space.l > 0 && mBay.l > space.l + 0.005], ['w', space.d > 0 && mBay.w > space.d + 0.005]].forEach(([k, over]) => {
             const dimBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${c}"][data-k="${k}"]`);
@@ -2844,12 +2847,7 @@ function onEdit(event) {
         if (value > 0) lv[lvKey] = value; else delete lv[lvKey];
         if (Object.keys(lv).length <= 1) space.lvls = space.lvls.filter((l) => l !== lv);
         if (!space.lvls.length) delete space.lvls;
-        // el alto de almacenamiento (Alto − Ceja) se recalcula al momento y la ceja se marca en rojo si ya no deja espacio; al soltar el campo se vuelve a dibujar la tabla (el alto de un nivel mueve la altura de los de arriba)
-        const mLvl = LC.levelMeasures(space, n);
-        const useLvl = document.querySelector(`[data-lvl-use="${el.getAttribute('data-i')}|${n}"]`);
-        if (useLvl) useLvl.textContent = String(Math.round(mLvl.useful * 100) / 100);
-        const beamLvl = document.querySelector(`[data-l="lvl"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-k="beam"]`);
-        if (beamLvl) beamLvl.classList.toggle('layout-missing', mLvl.beam > 0 && mLvl.beam >= mLvl.h);
+        // las alturas del piso de los niveles de arriba (automáticas) y el alto de almacenamiento se recalculan al momento (applyLevelMarks); al soltar el campo se vuelve a dibujar la tabla
         computeSpaceIssues();
         applyLevelMarks();
         if (event.type === 'change') renderPanel();

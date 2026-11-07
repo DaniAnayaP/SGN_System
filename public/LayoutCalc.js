@@ -2496,20 +2496,6 @@
         { const walled = assignWallCodes(out); out.obstacles = walled.obstacles; if (walled.wallNext) out.wallNext = walled.wallNext; else delete out.wallNext; }
         { const safe = assignSafetyCodes(deriveSafetyZones(out)); out.safety = safe.safety; if (safe.safetyNext && Object.keys(safe.safetyNext).length) out.safetyNext = safe.safetyNext; else delete out.safetyNext; }
         out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
-        // La ceja de un nivel o de un hueco (el travesaño) tiene que ser menor que su alto: si no, no queda espacio para almacenar. Un hueco con alto propio también se revisa contra la ceja de su nivel.
-        out.spaces.forEach((sp) => {
-            (sp.lvls || []).forEach((lv) => {
-                if (!(lv.beam > 0)) return;
-                const m = levelMeasures(sp, lv.n);
-                if (lv.beam >= m.h - 1e-9) errors.push(`Activo ${sp.code}, nivel ${lv.n}: la ceja (${round2(lv.beam)} m) tiene que ser menor que su alto (${round2(m.h)} m)`);
-            });
-            (sp.bays || []).forEach((b) => {
-                if (!(b.beam > 0 || b.h !== undefined)) return;
-                const m = bayMeasures(sp, b.n, b.c);
-                if (m.beam > 0 && m.beam >= m.h - 1e-9) errors.push(`Activo ${sp.code}, nivel ${b.n}, columna ${b.c}: la ceja (${round2(m.beam)} m) tiene que ser menor que su alto (${round2(m.h)} m)`);
-            });
-        });
-
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
         out.plan = plan ? { widthM: meters(plan.widthM, 'Plano', 0.1) } : null;
         // marca: desde aquí el color de cada activo es suyo aunque se parezca al de su huella (los Layouts de antes, sin marca, todavía traen los heredados)
@@ -2664,15 +2650,15 @@
         });
         return [...out.values()].sort((a, b) => a.n - b.n || a.c - b.c);
     }
-    // Niveles guardados de un activo (paso Niveles): [{ n: nivel, floorH?, h?, beam? }] (altura desde el piso, alto y ceja del nivel). Solo se guarda lo que se cambió y vale para TODAS las columnas de ese nivel; un hueco de Posiciones
-    // con medida propia manda sobre el nivel. Se descartan los niveles que el activo ya no tiene.
+    // Niveles guardados de un activo (paso Niveles): [{ n: nivel, floorH?, h?, beam? }] (altura del piso, alto del espacio y ceja = grueso de la reja). La altura del piso solo se guarda en el nivel 1 (hasta dónde empieza la primera reja):
+    // la de los demás niveles se calcula sola. Solo se guarda lo que se cambió y vale para TODAS las columnas de ese nivel; un hueco de Posiciones con medida propia manda sobre el nivel. Se descartan los niveles que el activo ya no tiene.
     function sanitizeLevels(raw, levels) {
         const out = new Map();
         (Array.isArray(raw) ? raw : []).forEach((b) => {
             const n = Math.round(Number(b && b.n));
             if (!(n >= 1 && n <= levels)) return;
             const lv = { n };
-            ['floorH', 'h', 'beam'].forEach((k) => {
+            (n === 1 ? ['floorH', 'h', 'beam'] : ['h', 'beam']).forEach((k) => {
                 const v = Number(b[k]);
                 if (Number.isFinite(v) && v > 0 && v <= LIMITS.maxM) lv[k] = Math.round(v * 1000) / 1000;
             });
@@ -2684,44 +2670,48 @@
     function levelOf(space, level) {
         return ((space && space.lvls) || []).find((l) => l.n === Number(level)) || {};
     }
-    // Lo que muestra Niveles de un nivel (sin mirar los huecos): lo guardado o, si no se cambió, lo que sale del activo (alto = alto del activo entre sus niveles). La altura desde el piso por defecto es lo que miden los niveles
-    // de abajo, así que si se cambia el alto de uno, los de arriba suben con él; sin nada guardado queda igual que siempre ((nivel − 1) × alto). useful = alto − ceja (lo que sí se puede almacenar). Todo en metros.
+    // Lo que muestra Niveles de un nivel (sin mirar los huecos). La altura del piso del nivel 1 es la que se escribe (0 si no); la de los demás es AUTOMÁTICA: la del nivel de abajo + su reja (ceja) + su alto (el espacio libre).
+    // Lo que no se escribe sale del activo: cada nivel mide lo mismo (el alto del activo, sin lo que sube el nivel 1, entre sus niveles) con su reja adentro, así que el alto por omisión es eso menos la reja. useful = el Alto (la reja va
+    // aparte: el alto de almacenamiento es el mismo alto). Todo en metros.
     function levelMeasures(space, level) {
         const n = Number(level);
         const levels = (space && space.levels) || 1;
         const round = (v) => Math.round(v * 1000) / 1000;
-        const high = space && space.h > 0 ? space.h / levels : 0;
-        const stored = levelOf(space, n);
-        let below = 0;
-        for (let k = 1; k < n; k += 1) { const s = levelOf(space, k); below += s.h !== undefined ? s.h : high; }
-        const h = stored.h !== undefined ? stored.h : round(high);
-        const beam = stored.beam !== undefined ? stored.beam : 0;
-        return { floorH: stored.floorH !== undefined ? stored.floorH : round(below), h, beam, useful: round(Math.max(h - beam, 0)), stored };
+        const start = levelOf(space, 1).floorH !== undefined ? levelOf(space, 1).floorH : 0;
+        const pitch = space && space.h > start ? (space.h - start) / levels : 0;
+        const beamOf = (k) => { const q = levelOf(space, k); return q.beam !== undefined ? q.beam : 0; };
+        const heightOf = (k) => { const q = levelOf(space, k); return q.h !== undefined ? q.h : Math.max(pitch - beamOf(k), 0); };
+        let floorH = start;
+        for (let k = 1; k < n; k += 1) floorH += beamOf(k) + heightOf(k);
+        const h = round(heightOf(n));
+        return { floorH: round(floorH), h, beam: beamOf(n), useful: h, stored: levelOf(space, n) };
     }
     // Cuántas filas y cuántas profundidades tiene el hueco (nivel × columna) de un activo: lo guardado o 1.
     function bayOf(space, level, column) {
         const stored = ((space && space.bays) || []).find((b) => b.n === Number(level) && b.c === Number(column)) || {};
         return { rows: stored.rows || 1, depth: stored.depth || 1, stored };
     }
-    // Hasta dónde suben los niveles de un activo (m): lo más alto que llega un nivel (su altura desde el piso + su alto); también cuentan los huecos con altura desde el piso o alto propios. Si pasa del alto del activo, hay un aviso.
+    // Hasta dónde suben los niveles de un activo (m): lo más alto que llega un nivel (su altura del piso + su reja + su alto); también cuentan los huecos con altura del piso o alto propios. Si pasa del alto del activo, hay un aviso.
     function levelsTop(space) {
         const levels = (space && space.levels) || 1;
         let top = 0;
-        for (let n = 1; n <= levels; n += 1) { const m = levelMeasures(space, n); top = Math.max(top, m.floorH + m.h); }
+        for (let n = 1; n <= levels; n += 1) { const m = levelMeasures(space, n); top = Math.max(top, m.floorH + m.beam + m.h); }
         ((space && space.bays) || []).forEach((b) => {
             if (b.floorH === undefined && b.h === undefined) return;
             const m = bayMeasures(space, b.n, b.c);
-            top = Math.max(top, m.floorH + m.h);
+            top = Math.max(top, m.floorH + m.beam + m.h);
         });
         return Math.round(top * 1000) / 1000;
     }
-    // Aplicar a todos (paso Niveles): los niveles guardados del activo con el alto y la ceja del nivel dado repetidos en todos los demás niveles. Lo que queda igual a lo de por defecto (el alto repartido o sin ceja) no se guarda aparte;
-    // la altura desde el piso de cada nivel no se toca (la que ya tenía o la que se acomoda sola encima del anterior) y los huecos con medida propia (Posiciones) siguen mandando.
+    // Aplicar a todos (paso Niveles): los niveles guardados del activo con el alto y la ceja del nivel dado repetidos en todos los demás niveles. Lo que queda igual a lo de por defecto (el alto repartido, que depende de la reja, o sin reja) no
+    // se guarda aparte; la altura del piso del nivel 1 no se toca (los demás niveles la calculan sola) y los huecos con medida propia (Posiciones) siguen mandando.
     function levelsWithSame(space, level) {
         const n = Number(level);
         const levels = (space && space.levels) || 1;
         const src = levelMeasures(space, n);
-        const defaultH = Math.round((space && space.h > 0 ? space.h / levels : 0) * 1000) / 1000;
+        const start = levelOf(space, 1).floorH !== undefined ? levelOf(space, 1).floorH : 0;
+        const pitch = space && space.h > start ? (space.h - start) / levels : 0;
+        const defaultH = Math.round(Math.max(pitch - (src.beam > 0 ? src.beam : 0), 0) * 1000) / 1000;
         const out = [];
         for (let k = 1; k <= levels; k += 1) {
             const lv = { ...levelOf(space, k), n: k };
@@ -2741,7 +2731,7 @@
         const round = (v) => Math.round(v * 1000) / 1000;
         const lv = levelMeasures(space, level);
         const h = stored.h !== undefined ? stored.h : lv.h;
-        // beam = la ceja: lo que mide el travesaño del nivel (en metros); ese grueso no se puede almacenar, así que el alto de almacenamiento (useful) es el alto del hueco menos la ceja
+        // beam = la ceja: el grueso de la reja (el travesaño) del nivel, en metros; va aparte del alto (el espacio libre), así que el alto de almacenamiento (useful) es el mismo alto del hueco
         const beam = stored.beam !== undefined ? stored.beam : lv.beam;
         return {
             floorH: stored.floorH !== undefined ? stored.floorH : lv.floorH,
@@ -2749,7 +2739,7 @@
             w: stored.w !== undefined ? stored.w : round((space && space.d) || 0),
             h,
             beam,
-            useful: round(Math.max(h - beam, 0)),
+            useful: round(Math.max(h, 0)),
         };
     }
 
