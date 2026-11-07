@@ -15,8 +15,6 @@
     const SENSOR_COLOR = 0x2b8ca3;
     const POWER_COLOR = { panel: 0x6b6f7c, outlet110: 0xf1c232, outlet220: 0xe8892b, 'three-phase': 0xd93a2f };
     const WOOD = 0xb98a52;
-    // El tinte de lo que cae sobre un piso cuando las zonas van en gris neutro (el morado de los pisos del croquis, muy claro).
-    const FLOOR_TINT = 0xe9cdee;
     const MAX_SPACE_LABELS = 300;
     const LAYER_NAMES = ['contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety'];
     // El color de cada elemento de Seguridad (los mismos del croquis: rojo del fuego, verde de emergencia, naranja de alarma, azul del agua).
@@ -371,6 +369,31 @@
             return mesh;
         }
 
+        // Textura de la trama de un piso (las mismas de Formato de zona: rayas, puntos, cuadrícula…): fondo del color del piso y la trama en el suyo; se arma una vez por combinación y se reutiliza.
+        const patTex = new Map();
+        function patternTexture(fill, pattern, pcolor) {
+            const key = `${pattern}|${fill}|${pcolor}`;
+            if (patTex.has(key)) return patTex.get(key);
+            const cv = document.createElement('canvas');
+            cv.width = 64; cv.height = 64;
+            const g = cv.getContext('2d');
+            g.fillStyle = fill; g.fillRect(0, 0, 64, 64);
+            g.strokeStyle = pcolor; g.fillStyle = pcolor;
+            const diag = (dir, w) => { g.lineWidth = w; for (let k = -64; k <= 128; k += 16) { g.beginPath(); if (dir > 0) { g.moveTo(k, 0); g.lineTo(k + 64, 64); } else { g.moveTo(k + 64, 0); g.lineTo(k, 64); } g.stroke(); } };
+            const lines = (horizontal, w) => { g.lineWidth = w; for (let k = 8; k < 64; k += 16) { g.beginPath(); if (horizontal) { g.moveTo(0, k); g.lineTo(64, k); } else { g.moveTo(k, 0); g.lineTo(k, 64); } g.stroke(); } };
+            if (pattern === 'diag1') diag(1, 4);
+            else if (pattern === 'diag2') diag(-1, 4);
+            else if (pattern === 'horiz') lines(true, 4);
+            else if (pattern === 'vert') lines(false, 4);
+            else if (pattern === 'grid') { lines(true, 3); lines(false, 3); }
+            else if (pattern === 'cross') { diag(1, 3); diag(-1, 3); }
+            else if (pattern === 'dots') { [16, 48].forEach((x) => [16, 48].forEach((y) => { g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fill(); })); }
+            const tx = new THREE.CanvasTexture(cv);
+            tx.wrapS = THREE.RepeatWrapping; tx.wrapT = THREE.RepeatWrapping;
+            patTex.set(key, tx);
+            return tx;
+        }
+
         // ---- arma la escena con el Layout (metros; el centro de la nave queda en el origen)
         function update(layout, opts) {
             if (opts && typeof opts.labels === 'boolean') labelsOn = opts.labels;
@@ -633,20 +656,57 @@
                 geo.computeVertexNormals();
                 return geo;
             };
-            // Cada piso: sus cuatro lados bajan hasta el piso de la nave (en una rampa, el lado alto es más alto que el bajo).
+            // Cada piso: sus cuatro lados bajan hasta el piso de la nave (en una rampa, el lado alto es más alto que el bajo) y arriba lleva SU color (el de su nivel o el de su formato propio, con su trama y su borde), no el de la zona que toca.
+            // Una rampa sin formato propio se pinta con el degradado entre los colores de sus dos niveles.
             if (anyLevel) {
+                const levelCols = LCalc.floorLevelColors ? LCalc.floorLevelColors(layout) : {};
+                const colorOfLevel = (v) => levelCols[Math.round(v * 100) / 100] || '#e9e9ee';
                 floors.forEach((f, i) => {
+                    const fmtF = LCalc.floorFmtOf ? LCalc.floorFmtOf(layout, f) : { fill: '#e6d3f0', pattern: 'solid', pcolor: '#9b6fb0', line: 'thin', bcolor: '#7a5190' };
+                    const lift = 0.05 + 0.004 * i;
                     const corners = [[f.x, f.y], [f.x + f.l, f.y], [f.x + f.l, f.y + f.w], [f.x, f.y + f.w]];
                     const arr = [];
                     for (let k = 0; k < 4; k++) {
                         const p = corners[k]; const q = corners[(k + 1) % 4];
-                        const tp = 0.05 + 0.004 * i + LCalc.zoneLevelAt(f, p[0], p[1]); const tq = 0.05 + 0.004 * i + LCalc.zoneLevelAt(f, q[0], q[1]);
+                        const tp = lift + LCalc.zoneLevelAt(f, p[0], p[1]); const tq = lift + LCalc.zoneLevelAt(f, q[0], q[1]);
                         arr.push(PX(p[0]), 0, PZ(p[1]), PX(q[0]), 0, PZ(q[1]), PX(q[0]), tq, PZ(q[1]), PX(p[0]), 0, PZ(p[1]), PX(q[0]), tq, PZ(q[1]), PX(p[0]), tp, PZ(p[1]));
                     }
                     const sides = new THREE.BufferGeometry();
                     sides.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
                     sides.computeVertexNormals();
-                    group.zones.add(new THREE.Mesh(sides, new THREE.MeshLambertMaterial({ color: 0xb9a9bf, side: THREE.DoubleSide })));
+                    group.zones.add(new THREE.Mesh(sides, new THREE.MeshLambertMaterial({ color: new THREE.Color(LCalc.mixHex ? LCalc.mixHex(fmtF.fill, '#000000', 0.25) : fmtF.fill), side: THREE.DoubleSide })));
+                    // la parte de arriba: dos triángulos con la altura de cada esquina (en una rampa, inclinada)
+                    const lo = Math.round((Number(f.lvl) || 0) * 100) / 100;
+                    const ramp = f.lvl2 !== undefined && f.lvl2 !== null && Math.round((Number(f.lvl2) || 0) * 100) / 100 !== lo;
+                    const gradient = ramp && !f.fmt;
+                    const hi = ramp ? Math.round((Number(f.lvl2) || 0) * 100) / 100 : lo;
+                    const pos = []; const uv = []; const cols = [];
+                    [[0, 1, 2], [0, 2, 3]].forEach((tri) => tri.forEach((k) => {
+                        const p = corners[k];
+                        const lv = LCalc.zoneLevelAt(f, p[0], p[1]);
+                        pos.push(PX(p[0]), lift + lv, PZ(p[1]));
+                        uv.push(p[0] * 0.8, p[1] * 0.8);
+                        if (gradient) {
+                            const t = hi === lo ? 0 : Math.min(Math.max((lv - lo) / (hi - lo), 0), 1);
+                            const c = new THREE.Color(LCalc.mixHex ? LCalc.mixHex(colorOfLevel(lo), colorOfLevel(hi), t) : '#e6d3f0');
+                            cols.push(c.r, c.g, c.b);
+                        }
+                    }));
+                    const top = new THREE.BufferGeometry();
+                    top.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+                    top.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+                    if (gradient) top.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+                    top.computeVertexNormals();
+                    let topMat;
+                    if (gradient) topMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+                    else if (fmtF.pattern === 'solid' || fmtF.pattern === 'none') topMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(fmtF.fill), side: THREE.DoubleSide });
+                    else topMat = new THREE.MeshLambertMaterial({ map: patternTexture(fmtF.fill, fmtF.pattern, fmtF.pcolor), side: THREE.DoubleSide });
+                    group.zones.add(new THREE.Mesh(top, topMat));
+                    // el borde del piso (con el color y el estilo de su formato; sin borde, nada)
+                    if (fmtF.line !== 'none') {
+                        const edge = corners.map((p) => new THREE.Vector3(PX(p[0]), lift + LCalc.zoneLevelAt(f, p[0], p[1]) + 0.006, PZ(p[1])));
+                        group.zones.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(edge), new THREE.LineBasicMaterial({ color: new THREE.Color(fmtF.bcolor) })));
+                    }
                 });
             }
             (layout.zones || []).forEach((z, i) => {
@@ -658,19 +718,17 @@
                 const zoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive || dimZone, opacity: inactive ? 0.35 : (dimZone ? 0.22 : 1) });
                 let geo = null;
                 let usedPieces = false;
-                let floorGeo = null; // en gris neutro: los pedazos que caen sobre un piso (con el tinte del piso) van aparte de lo demás de la zona
+                // lo que cae sobre un piso lo pinta el piso (con su color y su trama): la zona solo se pinta donde no hay piso
                 if (anyLevel && LCalc.floorsOfZone(layout, z).some((f) => floors.some((g) => g.id === f.id))) {
                     try {
                         const pieces = zonePieces(pts);
                         if (pieces && pieces.length) {
                             usedPieces = true;
-                            const onFloor = neutralZones ? pieces.filter((pc) => pc.floor) : [];
-                            const rest = neutralZones ? pieces.filter((pc) => !pc.floor) : pieces;
-                            if (onFloor.length) floorGeo = piecesGeometry(onFloor, i);
+                            const rest = pieces.filter((pc) => !pc.floor);
                             geo = rest.length ? piecesGeometry(rest, i) : null;
                             zoneMat.side = THREE.DoubleSide;
                         }
-                    } catch (err) { geo = null; floorGeo = null; usedPieces = false; }
+                    } catch (err) { geo = null; usedPieces = false; }
                 }
                 if (!geo && !usedPieces) {
                     try {
@@ -678,14 +736,6 @@
                     } catch (err) { return; }
                     geo.rotateX(Math.PI / 2);
                     geo.translate(-CX, 0.05 + 0.004 * i, -CY);
-                }
-                if (floorGeo) {
-                    const floorMat = zoneMat.clone();
-                    floorMat.color = new THREE.Color(FLOOR_TINT);
-                    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
-                    floorMesh.userData = { kind: 'zone', zone: z };
-                    group.zones.add(floorMesh);
-                    zoneMeshes.push(floorMesh);
                 }
                 if (geo) {
                     const mesh = new THREE.Mesh(geo, zoneMat);
@@ -1069,6 +1119,7 @@
             canvas.removeEventListener('wheel', onWheel);
             Object.keys(group).forEach((n) => clearGroup(group[n]));
             textureCache.forEach((e) => e.tex.dispose());
+            patTex.forEach((tx) => tx.dispose());
             renderer.dispose();
             canvas.remove();
         }

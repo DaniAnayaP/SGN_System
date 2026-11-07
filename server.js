@@ -6537,6 +6537,8 @@ function layoutPermissions(req) {
         canFormatSpaces: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoHuella'),
         // Y el color propio de un activo: el icono Formato de activo (hoja <pantalla>/iconLayoutFormatoActivo del árbol).
         canFormatAssets: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoActivo'),
+        // Y el color, la trama y el borde de un piso: el icono Formato de piso (hoja <pantalla>/iconLayoutFormatoPiso del árbol).
+        canFormatFloors: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoPiso'),
         // Ver u ocultar las medidas del croquis es solo de pantalla, pero también es un icono con su propia hoja en el árbol (iconLayoutMedidas).
         canToggleMeasures: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutMedidas'),
         // Ver u ocultar los m² de cada zona en el croquis (y en la hoja que se descarga) es otro icono con su hoja (iconLayoutArea); los filtros de las tablas del panel, otro (iconLayoutFiltros).
@@ -6859,6 +6861,13 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         const beforeAssets = new Map(((existing && existing.layout.spaces) || []).map((s) => [s.id, JSON.stringify(s.fmt || null)]));
         if ((next.spaces || []).some((s) => JSON.stringify(s.fmt || null) !== (beforeAssets.has(s.id) ? beforeAssets.get(s.id) : 'null'))) {
             return res.status(403).json({ message: 'No tienes permiso para cambiar el formato de los activos.', section: 'activos' });
+        }
+    }
+    // El formato de los pisos (color, trama y borde) solo lo cambia quien tiene el icono Formato de piso.
+    if (!perms.canFormatFloors) {
+        const beforeFloors = new Map(((existing && existing.layout.floors) || []).map((f) => [f.id, JSON.stringify(f.fmt || null)]));
+        if ((next.floors || []).some((f) => JSON.stringify(f.fmt || null) !== (beforeFloors.has(f.id) ? beforeFloors.get(f.id) : 'null'))) {
+            return res.status(403).json({ message: 'No tienes permiso para cambiar el formato de los pisos.', section: 'pisos' });
         }
     }
     // Lo que va adentro de algo no puede llevar el color de lo que lo contiene (huella vs su zona, activo vs su huella): lo nuevo o lo que cambió y choca no se guarda; lo que ya estaba así se deja pasar.

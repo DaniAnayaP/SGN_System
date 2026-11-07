@@ -7365,6 +7365,9 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 /* Zonas a desnivel (icono «Niveles»): rayas sobre la zona más alta o más baja que el piso, degradado y flecha en la rampa, y el nivel debajo del nombre. No agarran el puntero. */
 .lvl-raised{ pointer-events: none; stroke: #A63FB5; stroke-width: 2.4; }
 .lvl-ramp{ pointer-events: none; stroke: #A63FB5; stroke-width: 1.5; stroke-dasharray: 5 3; }
+.lvl-floor{ pointer-events: none; }
+.layout-legend .lg-levels{ display: contents; }
+.layout-legend .lg-level-ramp{ background: linear-gradient(90deg, #f7d774, #d9553f); border: 1px dashed #8f2d3a; }
 .lvl-arrow{ pointer-events: none; stroke: #A63FB5; stroke-width: 2.2; fill: none; marker-end: url(#lvl-arr); }
 .layout-floor-issue{ color: #c0392b; font-size: 0.72rem; margin-top: 0.2rem; white-space: normal; max-width: 16rem; }
 .llvl{ font: 700 9.5px var(--font-family, system-ui, sans-serif); fill: #A63FB5; }

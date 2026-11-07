@@ -2076,6 +2076,11 @@
     "layoutFormatoHuellaBtn": "Formato de huella (color, rayas y borde)",
     "layoutFormatoActivoBtn": "Formato de activo (color, rayas y borde)",
     "layoutFormatoActivo": "Formato del activo",
+    "layoutFormatoPisoBtn": "Formato de piso (color, rayas y borde)",
+    "layoutFormatoPiso": "Formato del piso",
+    "layoutAplicarUnaPiso": "Solo este piso",
+    "layoutAplicarNivelPiso": "Los pisos de este mismo nivel",
+    "layoutAplicarNivelSubPiso": "Nivel {level} m · {n} pisos",
     "layoutAplicarUnaActivo": "Solo este activo",
     "layoutAplicarZonaActivo": "Los demás de su zona",
     "layoutAplicarZonaSubActivo": "Todos los activos de {zone} ({n})",
@@ -5116,6 +5121,10 @@
     "layoutFmtLine": {
       "what": "Estilo de la línea del borde de la zona: continua (fina, media o gruesa), guiones, punteada, guion y punto, doble o ninguna.",
       "example": "borde de guiones para una zona provisional."
+    },
+    "layoutFloorFmt": {
+      "what": "Elige el color, la trama (rayas, puntos, cuadrícula…) y el borde de este piso. Sin formato propio el piso lleva el color de su nivel: los que suben van de ámbar a rojo (más alto, más oscuro) y los fosos, en azul. Lo puedes aplicar solo a este piso o a todos los de su mismo nivel. Un piso a nivel (0) no se pinta.",
+      "example": "pones en verde con rayas los pisos de +0.33 m para distinguirlos de la plataforma de +0.60 m."
     },
     "layoutAssetFmt": {
       "what": "Cambia el color, las rayas y el borde del activo (el anaquel, la gabeta o la tarima que está sobre la huella), igual que en Zonas y Huella-Espacio. Sin color propio el activo sale arena, distinto del blanco de la huella, para que se distingan. En «Aplicar a» eliges si el cambio es solo para este activo, para los de su zona o para los del mismo tipo. Regla de colores: lo que va adentro de algo no puede llevar el color de lo que lo contiene (el activo no puede llevar el de su huella, ni la huella el de su zona) porque se confunde; el mismo color sí se puede usar en otro lado.",

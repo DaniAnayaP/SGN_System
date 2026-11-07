@@ -713,6 +713,15 @@ function applyLegend() {
         transit: (type) => stepOn('transito') && some('transit', (p) => (type === 'between' ? p.type === 'between' : p.type !== 'between')),
         safety: (type) => stepOn('seguridad') && some('safety', (e) => e.type === type),
     };
+    // Pisos: un cuadrito por cada nivel que hay (con el color de ese nivel); los pisos con formato propio llevan el suyo y no salen aquí.
+    const lvBox = document.querySelector('[data-lg-levels]');
+    if (lvBox) {
+        const flats = d && stepOn('pisos') && state.showLevels ? (d.floors || []).filter((f) => f.active !== false && LC.zoneHasLevel(f) && f.lvl2 === undefined && !f.fmt) : [];
+        const lvCols = d ? LC.floorLevelColors(d) : {};
+        const levels = [...new Set(flats.map((f) => Math.round((Number(f.lvl) || 0) * 100) / 100))].sort((a, b) => b - a);
+        lvBox.innerHTML = levels.map((lv) => { const c = lvCols[lv] || '#e9e9ee'; return `<span><i class="lg-level" style="background:${c};border:1.5px solid ${LC.mixHex(c, '#000000', 0.4)}"></i><span>${lv > 0 ? '+' : ''}${fmt(lv)} m</span></span>`; }).join('');
+        lvBox.hidden = !levels.length;
+    }
     document.querySelectorAll('[data-lg]').forEach((el) => {
         const rule = RULES[el.getAttribute('data-lg')];
         el.hidden = !(d && rule && rule(el.getAttribute('data-lg-type')));
@@ -1202,7 +1211,8 @@ function stepHtml(step) {
             const isRamp = f.lvl2 !== undefined;
             const lvlBoxes = `<td><input type="number" step="0.05" data-l="floors" data-i="${i}" data-k="lvl" data-help-key="layoutNivelPiso" value="${f.lvl !== undefined ? f.lvl : 0}"${dis ? ' disabled' : ''}></td><td><input type="number" step="0.05" data-l="floors" data-i="${i}" data-k="lvl2" data-help-key="layoutNivelAlto" value="${isRamp ? f.lvl2 : ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><select data-l="floors" data-i="${i}" data-k="rise" data-help-key="layoutLadoAlto"${dis || !isRamp ? ' disabled' : ''}>${isRamp ? optionsHtml('rise', LC.ZONE_RISES, f.rise || 'right') : '<option value="">—</option>'}</select></td>`;
             const touches = LC.zonesOfFloor(d, f).map((z) => z.code || z.name).join(' · ') || '—';
-            return `<tr class="${f.active === false ? 'layout-off' : ''}">${cellText('floors', i, 'name', f.name, dis)}<td class="layout-calc"><b data-floor-code="${i}">${esc(f.code || '')}</b></td>${cellNum('floors', i, 'x', f.x, dis)}${cellNum('floors', i, 'y', f.y, dis)}${cellNum('floors', i, 'l', f.l, dis)}${cellNum('floors', i, 'w', f.w, dis)}<td class="layout-calc"><span data-floor-area="${i}">${fmt((Number(f.l) || 0) * (Number(f.w) || 0))} m²</span></td>${lvlBoxes}<td class="layout-calc"><span data-floor-zones="${i}" data-help-key="layoutZonasQueToca">${esc(touches)}</span><div class="layout-floor-issue" data-floor-issues="${i}"></div></td>${saved ? savedRowButtons('floors', i, f.active, dis) : removeCell('floors', i, dis)}</tr>`;
+            const floorFmt = floorFmtButton(f, i, dis);
+            return `<tr class="${f.active === false ? 'layout-off' : ''}">${cellText('floors', i, 'name', f.name, dis)}<td class="layout-calc"><b data-floor-code="${i}">${esc(f.code || '')}</b></td>${cellNum('floors', i, 'x', f.x, dis)}${cellNum('floors', i, 'y', f.y, dis)}${cellNum('floors', i, 'l', f.l, dis)}${cellNum('floors', i, 'w', f.w, dis)}<td class="layout-calc"><span data-floor-area="${i}">${fmt((Number(f.l) || 0) * (Number(f.w) || 0))} m²</span></td>${lvlBoxes}<td class="layout-calc"><span data-floor-zones="${i}" data-help-key="layoutZonasQueToca">${esc(touches)}</span><div class="layout-floor-issue" data-floor-issues="${i}"></div></td>${saved ? savedRowButtons('floors', i, f.active, dis, floorFmt) : removeCell('floors', i, dis, floorFmt)}</tr>`;
         });
         const list = rows.length ? table(['main.layoutNombre', 'main.layoutCodigoPiso', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutNivelPiso', 'main.layoutNivelAlto', 'main.layoutLadoAlto', 'main.layoutZonasQueToca', ''], rows, 'layout-pisos') : `<p class="layout-muted">${esc(t('main.layoutPisosVacio'))}</p>`;
         return `${addButton('floors', 'main.layoutAgregarPiso', dis, true)}${list}`;
@@ -2018,16 +2028,22 @@ function renderSvg() {
             const ramp = f.lvl2 !== undefined && LC.ZONE_RISES.includes(f.rise);
             const hi = ramp ? Number(f.lvl2) : lo;
             let note = signed(lo);
+            // el color de cada piso sale de su nivel (o de su formato propio): ya no toma el de la zona que toca
+            const lvlCols = LC.floorLevelColors(d);
+            const colOf = (v) => lvlCols[Math.round(v * 100) / 100] || '#e9e9ee';
+            const quad = `${bx0.toFixed(1)},${by0.toFixed(1)} ${bx1.toFixed(1)},${by0.toFixed(1)} ${bx1.toFixed(1)},${by1.toFixed(1)} ${bx0.toFixed(1)},${by1.toFixed(1)}`;
+            const fpid = `ff-${String(f.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
             if (ramp) {
                 const gid = `lvg-${String(f.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
                 const dir = { right: [0, 0, 1, 0], left: [1, 0, 0, 0], down: [0, 0, 0, 1], up: [0, 1, 0, 0] }[f.rise];
-                lvlLayer += `<linearGradient id="${gid}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="#A63FB5" stop-opacity="0.06"/><stop offset="1" stop-color="#A63FB5" stop-opacity="0.55"/></linearGradient><rect class="lvl-ramp" ${rect} fill="url(#${gid})"/>`;
+                if (f.fmt) lvlLayer += `<g class="lvl-floor">${window.LayoutMapSvg.zonePaint(fpid, LC.floorFmtOf(d, f)).markup(quad)}</g>`;
+                else lvlLayer += `<linearGradient id="${gid}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="${colOf(lo)}"/><stop offset="1" stop-color="${colOf(hi)}"/></linearGradient><rect class="lvl-ramp" style="stroke:${LC.mixHex(colOf(hi), '#000000', 0.4)}" ${rect} fill="url(#${gid})"/>`;
                 const cx = (bx0 + bx1) / 2; const cy = (by0 + by1) / 2;
                 const half = f.rise === 'left' || f.rise === 'right' ? (bx1 - bx0) / 3 : (by1 - by0) / 3;
                 const v = { right: [1, 0], left: [-1, 0], down: [0, 1], up: [0, -1] }[f.rise];
                 lvlLayer += `<line class="lvl-arrow" x1="${(cx - v[0] * half).toFixed(1)}" y1="${(cy - v[1] * half).toFixed(1)}" x2="${(cx + v[0] * half).toFixed(1)}" y2="${(cy + v[1] * half).toFixed(1)}"/>`;
                 note = `${signed(lo)} → ${signed(hi)}`;
-            } else lvlLayer += `<rect class="lvl-raised" ${rect} fill="url(#lvl-hatch)"/>`;
+            } else lvlLayer += `<g class="lvl-floor">${window.LayoutMapSvg.zonePaint(fpid, LC.floorFmtOf(d, f)).markup(quad)}</g>`;
             const label = textWithHalo('llvl', ((bx0 + bx1) / 2).toFixed(1), (((by0 + by1) / 2) + (ramp ? 16 : 4)).toFixed(1), 'middle', esc(`${f.code} ${note}`), ` data-lf="${esc(f.id)}"`);
             zoneHalos += label.halo;
             zoneLabels += label.main;
@@ -2920,6 +2936,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (fmtZone) { openFmtDialog(Number(fmtZone.dataset.fmtzone)); return; }
     const fmtAsset = event.target.closest('[data-fmtasset]');
     if (fmtAsset) { openAssetFmtDialog(Number(fmtAsset.dataset.fmtasset)); return; }
+    const fmtFloor = event.target.closest('[data-fmtfloor]');
+    if (fmtFloor) { openFloorFmtDialog(Number(fmtFloor.dataset.fmtfloor)); return; }
     const fmtSpace = event.target.closest('[data-fmtspace]');
     if (fmtSpace) { openSpaceFmtDialog(Number(fmtSpace.dataset.fmtspace)); return; }
     const freeShape = event.target.closest('[data-freeshape]');
@@ -3070,6 +3088,18 @@ function assetFmtButton(s, i, dis) {
     if (!(state.perms && state.perms.canFormatAssets)) return '';
     return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${s.fmt ? ' on' : ''}" data-fmtasset="${i}" data-help-key="layoutAssetFmt" aria-label="${esc(t('main.layoutFormatoActivo'))} ${esc(s.code)}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i>${s.fmt ? `<span class="layout-fmt-dot" style="background:${esc(s.fmt.fill)};border-color:${esc(s.fmt.bcolor)}"></span>` : ''}</button>`;
 }
+// El icono de paleta de cada renglón de Pisos (solo con la hoja del icono en el árbol): el color y la trama propios del piso; el cuadrito muestra el color que lleva ahora (el de su nivel si no tiene formato propio).
+function floorFmtButton(f, i, dis) {
+    if (!(state.perms && state.perms.canFormatFloors)) return '';
+    const cur = LC.floorFmtOf(state.draft, f);
+    return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${f.fmt ? ' on' : ''}" data-fmtfloor="${i}" data-help-key="layoutFloorFmt" aria-label="${esc(t('main.layoutFormatoPiso'))} ${esc(f.code || '')}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i><span class="layout-fmt-dot" style="background:${esc(cur.fill)};border-color:${esc(cur.bcolor)}"></span></button>`;
+}
+// A qué pisos se aplica lo que se elige en la ventana: solo a ese o a los que tienen su mismo nivel (y, si es una rampa, sus mismos dos niveles).
+function floorTargets(f, scope) {
+    if (scope !== 'level') return [f];
+    const same = (x) => (Number(x.lvl) || 0) === (Number(f.lvl) || 0) && (x.lvl2 === undefined) === (f.lvl2 === undefined) && (f.lvl2 === undefined || Number(x.lvl2) === Number(f.lvl2));
+    return (state.draft.floors || []).filter(same);
+}
 // A qué activos se aplica lo que se elige en la ventana: solo a ese, a los de su zona o a los del mismo tipo (anaquel, rack, gabeta o tarima).
 function assetTargets(a, scope) {
     const all = state.draft.spaces;
@@ -3119,6 +3149,18 @@ function renderFmtScope() {
         box.innerHTML = `<legend>${esc(t('main.layoutAplicarA'))}</legend>${options.map(([value, title, sub, disabled]) => `<label class="layout-fmt-opt${disabled ? ' off' : ''}" data-help-key="layoutFmtScope"><input type="radio" name="layout-fmt-scope" value="${value}"${fmtDialog.scope === value ? ' checked' : ''}${disabled ? ' disabled' : ''}><b>${esc(title)}</b><span>${esc(sub)}</span></label>`).join('')}`;
         return;
     }
+    if (fmtDialog && fmtDialog.kind === 'floor') {
+        const f = (state.draft.floors || []).find((x) => x.id === fmtDialog.targetId);
+        box.hidden = !f;
+        if (!f) return;
+        const lvl = Number(f.lvl) || 0;
+        const options = [
+            ['one', t('main.layoutAplicarUnaPiso'), f.code || '', false],
+            ['level', t('main.layoutAplicarNivelPiso'), t('main.layoutAplicarNivelSubPiso').replace('{level}', `${lvl > 0 ? '+' : ''}${fmt(lvl)}`).replace('{n}', String(floorTargets(f, 'level').length)), false],
+        ];
+        box.innerHTML = `<legend>${esc(t('main.layoutAplicarA'))}</legend>${options.map(([value, title, sub, disabled]) => `<label class="layout-fmt-opt${disabled ? ' off' : ''}" data-help-key="layoutFmtScope"><input type="radio" name="layout-fmt-scope" value="${value}"${fmtDialog.scope === value ? ' checked' : ''}${disabled ? ' disabled' : ''}><b>${esc(title)}</b><span>${esc(sub)}</span></label>`).join('')}`;
+        return;
+    }
     const sp = fmtDialog && fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : null;
     box.hidden = !sp;
     if (!sp) return;
@@ -3154,7 +3196,7 @@ function renderFmtBody() {
     const isSpace = fmtDialog.kind !== 'zone';
     const shape = isSpace ? '60,45 170,45 170,105 60,105' : '30,20 200,20 200,70 130,70 130,130 30,130';
     const zone = isSpace ? null : state.draft.zones.find((z) => z.id === fmtDialog.targetId);
-    const space = fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : null);
+    const space = fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'floor' ? (state.draft.floors || []).find((s) => s.id === fmtDialog.targetId) : null));
     const ink = isSpace ? window.LayoutMapSvg.inkFor(d) : '';
     const label = isSpace
         ? `<text class="lt3" x="115" y="78" text-anchor="middle"${ink ? ` style="fill:${ink}"` : ''}>${esc(space ? space.code : '')}</text>`
@@ -3195,7 +3237,10 @@ function ensureFmtModal() {
         }
         if (event.target.closest('#layout-fmt-cancel')) { closeFmtDialog(); return; }
         if (event.target.closest('#layout-fmt-reset')) {
-            if (fmtDialog.kind === 'asset') {
+            if (fmtDialog.kind === 'floor') {
+                const fl = (state.draft.floors || []).find((r) => r.id === fmtDialog.targetId);
+                if (fl) floorTargets(fl, fmtDialog.scope).forEach((x) => { delete x.fmt; });
+            } else if (fmtDialog.kind === 'asset') {
                 const a = state.draft.spaces.find((r) => r.id === fmtDialog.targetId);
                 if (a) assetTargets(a, fmtDialog.scope).forEach((x) => { delete x.fmt; });
             } else if (fmtDialog.kind === 'space') {
@@ -3213,7 +3258,11 @@ function ensureFmtModal() {
         if (event.target.closest('#layout-fmt-ok')) {
             // Se aplica y, si deja algo adentro con el color de lo que lo contiene (huella con el de su zona, activo con el de su huella), se deshace y avisa en esta misma ventana (la ventana se queda abierta).
             const applied = tryFmtChange(() => {
-                if (fmtDialog.kind === 'asset') {
+                if (fmtDialog.kind === 'floor') {
+                    const fl = (state.draft.floors || []).find((r) => r.id === fmtDialog.targetId);
+                    // Con formato propio (aunque no se haya cambiado nada) se puede copiar a los demás del grupo; sin formato y sin cambios (se queda el color de su nivel) no hay nada que aplicar.
+                    if (fl && (fl.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) floorTargets(fl, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
+                } else if (fmtDialog.kind === 'asset') {
                     const a = state.draft.spaces.find((r) => r.id === fmtDialog.targetId);
                     // Con formato propio (aunque no se haya cambiado nada) se puede copiar a los demás del grupo; sin formato y sin cambios no hay nada que aplicar.
                     if (a && (a.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) assetTargets(a, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
@@ -3264,6 +3313,18 @@ function openSpaceFmtDialog(spaceIndex) {
     const base = sp.fmt ? pickFmt(sp.fmt) : window.LayoutMapSvg.defaultSpaceFmt();
     fmtDialog = { kind: 'space', targetId: sp.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
     $('layout-fmt-title').textContent = `${t('main.layoutFormatoHuella')} ${sp.code}`;
+    $('layout-fmt-namefield').hidden = true;
+    fmtModalEl.hidden = false;
+    renderFmtScope();
+    renderFmtBody();
+}
+function openFloorFmtDialog(index) {
+    const f = (state.draft.floors || [])[index];
+    if (!f) return;
+    ensureFmtModal();
+    const base = pickFmt(LC.floorFmtOf(state.draft, f));
+    fmtDialog = { kind: 'floor', targetId: f.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
+    $('layout-fmt-title').textContent = `${t('main.layoutFormatoPiso')} ${f.code || ''}`;
     $('layout-fmt-namefield').hidden = true;
     fmtModalEl.hidden = false;
     renderFmtScope();

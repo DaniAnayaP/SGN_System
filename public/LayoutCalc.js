@@ -538,6 +538,48 @@
     }
     // Los pisos que cuentan: activos, con tamaño y con algún nivel (un piso a 0 y sin rampa no cambia nada).
     const floorsOf = (layout) => ((layout && layout.floors) || []).filter((f) => f && f.active !== false && Number(f.l) > 0 && Number(f.w) > 0 && zoneHasLevel(f));
+    // ---- Color de los pisos ----------------------------------------------------------------------------------------------------------------
+    // Cada piso lleva SU color (no el de la zona que toca) según su nivel: los que suben van de ámbar claro a rojo oscuro (más alto, más oscuro) y los fosos de azul claro a azul fuerte (más hondo, más fuerte). Mismo nivel,
+    // mismo color; el color sale del orden de los niveles que hay en el Layout (con un solo nivel, el color del medio) y una rampa se pinta con el degradado entre los colores de sus dos niveles. A nivel de la nave (0), gris.
+    // El formato propio del piso (fmt: color, trama y borde, como el de las zonas) manda sobre esto.
+    const FLOOR_UP_STOPS = ['#f7d774', '#f0a04b', '#d9553f', '#8f2d3a'];
+    const FLOOR_DOWN_STOPS = ['#c4def2', '#6aa6d6', '#2b5f9e'];
+    const FLOOR_NAVE_COLOR = '#e9e9ee';
+    function mixHex(a, b, k) {
+        const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+        const A = rgb(a); const B = rgb(b);
+        return `#${A.map((v, i) => Math.round(v + (B[i] - v) * k).toString(16).padStart(2, '0')).join('')}`;
+    }
+    function colorAlong(stops, t) {
+        const x = Math.min(Math.max(t, 0), 1) * (stops.length - 1);
+        const i = Math.min(Math.floor(x), stops.length - 2);
+        return mixHex(stops[i], stops[i + 1], x - i);
+    }
+    // { nivel (m, con 2 decimales): '#rrggbb' } de los niveles que hay en los pisos activos (los dos extremos de una rampa también).
+    function floorLevelColors(layout) {
+        const levels = new Set([0]);
+        ((layout && layout.floors) || []).forEach((f) => {
+            if (!f || f.active === false) return;
+            levels.add(round2(Number(f.lvl) || 0));
+            if (f.lvl2 !== undefined && f.lvl2 !== null) levels.add(round2(Number(f.lvl2) || 0));
+        });
+        const ups = [...levels].filter((v) => v > 0).sort((a, b) => a - b);
+        const downs = [...levels].filter((v) => v < 0).sort((a, b) => b - a);
+        const out = { 0: FLOOR_NAVE_COLOR };
+        ups.forEach((v, i) => { out[v] = colorAlong(FLOOR_UP_STOPS, ups.length === 1 ? 0.5 : i / (ups.length - 1)); });
+        downs.forEach((v, i) => { out[v] = colorAlong(FLOOR_DOWN_STOPS, downs.length === 1 ? 0.5 : i / (downs.length - 1)); });
+        return out;
+    }
+    // El formato con el que se ve un piso: el propio o, si no tiene, el de su nivel (un piso plano, con rayas; una rampa, de un solo color, el del medio de sus dos niveles).
+    function floorFmtOf(layout, f) {
+        const own = f && f.fmt ? sanitizeFmt(f.fmt) : null;
+        if (own) return own;
+        const cols = floorLevelColors(layout);
+        const lo = round2(Number(f && f.lvl) || 0);
+        const ramp = !!f && f.lvl2 !== undefined && f.lvl2 !== null && round2(Number(f.lvl2) || 0) !== lo;
+        const fill = ramp ? mixHex(cols[lo] || FLOOR_NAVE_COLOR, cols[round2(Number(f.lvl2) || 0)] || FLOOR_NAVE_COLOR, 0.5) : (cols[lo] || FLOOR_NAVE_COLOR);
+        return { fill, pattern: ramp ? 'solid' : 'diag1', pcolor: mixHex(fill, '#000000', 0.28), line: 'thin', bcolor: mixHex(fill, '#000000', 0.4) };
+    }
     // Superficie que comparten dos rectángulos (m²).
     const rectShared = (a, b) => Math.max(0, Math.min(a.x + a.l, b.x + b.l) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.w, b.y + b.w) - Math.max(a.y, b.y));
     // El nivel del piso del Layout en un punto: el del piso que lo contiene (el más chico si hay varios); 0 si ninguno (a nivel con la nave).
@@ -2357,7 +2399,7 @@
             const ramp = lvl2 !== null && lvl2 !== lvl;
             const item = {
                 id, name, code, x: meters(f && f.x, label, -LIMITS.maxM), y: meters(f && f.y, label, -LIMITS.maxM), l: meters(f && f.l, label), w: meters(f && f.w, label),
-                ...(lvl !== 0 ? { lvl } : {}), ...(ramp ? { lvl2, rise: oneOf(f && f.rise, ZONE_RISES, 'right') } : {}), active: !(f && f.active === false),
+                ...(lvl !== 0 ? { lvl } : {}), ...(ramp ? { lvl2, rise: oneOf(f && f.rise, ZONE_RISES, 'right') } : {}), active: !(f && f.active === false), ...(sanitizeFmt(f && f.fmt) ? { fmt: sanitizeFmt(f && f.fmt) } : {}),
             };
             if (!(item.l > 0 && item.w > 0)) errors.push(`${label}: el largo y el ancho deben ser mayores que 0`);
             return item;
@@ -2764,7 +2806,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorLevelColors, floorFmtOf, mixHex, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,

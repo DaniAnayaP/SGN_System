@@ -2076,6 +2076,11 @@
     "layoutFormatoHuellaBtn": "Footprint format (color, stripes and border)",
     "layoutFormatoActivoBtn": "Asset format (color, stripes and border)",
     "layoutFormatoActivo": "Asset format",
+    "layoutFormatoPisoBtn": "Floor format (color, stripes and border)",
+    "layoutFormatoPiso": "Floor format",
+    "layoutAplicarUnaPiso": "Only this floor",
+    "layoutAplicarNivelPiso": "The floors at this same level",
+    "layoutAplicarNivelSubPiso": "Level {level} m · {n} floors",
     "layoutAplicarUnaActivo": "Only this asset",
     "layoutAplicarZonaActivo": "The others in its zone",
     "layoutAplicarZonaSubActivo": "All the assets of {zone} ({n})",
@@ -5117,6 +5122,10 @@
     "layoutFmtLine": {
       "what": "Line style of the zone border: solid (thin, medium or thick), dashed, dotted, dash-dot, double or none.",
       "example": "a dashed border for a temporary zone."
+    },
+    "layoutFloorFmt": {
+      "what": "Choose the color, the pattern (stripes, dots, grid…) and the border of this floor. Without its own format the floor takes the color of its level: the ones that go up run from amber to red (higher, darker) and the pits are blue. You can apply it to this floor only or to all the floors at the same level. A floor at level (0) is not painted.",
+      "example": "you set the +0.33 m floors to green stripes to tell them apart from the +0.60 m platform."
     },
     "layoutAssetFmt": {
       "what": "Changes the color, stripes and border of the asset (the rack, cabinet or pallet on top of the footprint), like in Zones and Footprint-Space. Without its own color the asset is sand-colored, different from the white of the footprint, so they can be told apart. In \"Apply to\" you choose whether the change is only for this asset, for those of its zone or for those of the same type. Color rule: what goes INSIDE something cannot have the color of what contains it (the asset cannot have the color of its footprint, nor the footprint that of its zone) because it gets confusing; the same color can be used elsewhere.",

@@ -1767,6 +1767,7 @@
             iconFieldRules: 'bx-link',
             iconLayoutFormatoZona: 'bx-palette',
             iconLayoutFormatoHuella: 'bx-palette',
+            iconLayoutFormatoPiso: 'bx-palette',
             iconLayoutMedidas: 'bx-ruler',
             iconLayoutArea: 'bx-area',
             iconLayoutNombres: 'bx-rename',
