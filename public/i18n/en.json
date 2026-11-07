@@ -1979,6 +1979,9 @@
     "layoutBuscarPlaceholder": "Search the Layout",
     "layoutFindBuscarEn": "Search in",
     "layoutFindTipoTodo": "All",
+    "layoutFindQueVer": "What to see",
+    "layoutFindTipo_floor": "Floors",
+    "layoutFindPiso": "floor",
     "layoutFindEnTipo": "Search in {type}",
     "layoutFindTipo_zone": "Zones",
     "layoutFindTipo_footprint": "Footprints",
@@ -5052,9 +5055,17 @@
       "what": "The list of what is inside the focus (the footprints with their assets, or the footprint’s assets) with an eye on each row: one touch removes it from the map and the 3D view and another brings it back. Hiding a footprint also hides its assets. It is screen-only.",
       "example": "you turn off the eye of A003 and only that rack disappears from the drawing; the others stay."
     },
+    "layoutFindDonde": {
+      "what": "First step: where to search. «All» is the whole building. «Zones» shows the zones so you can tick one or several: the list, the «What to see» numbers, the sketch, the 3D view, the tables and the summary keep only what is inside or on the edge of those zones. It only changes what you see: it does not change what is saved.",
+      "example": "you tap Zones and tick Zone 6 and Reception: you only see and search what is in those two zones; you tap All and see the whole building again."
+    },
+    "layoutFindZonas": {
+      "what": "The zones of the Layout. Tap one to tick or untick it; you can tick several. With at least one ticked, the sketch and the rest focus on them.",
+      "example": "you tick Zone 6 and Reception and the sketch zooms in on both; you untick Reception and only Zone 6 stays."
+    },
     "layoutFindTipos": {
-      "what": "Choose what to search in: All, or one or several types at once (zones, footprints, assets, walls, doors, safety, sensors, power, obstacles, aisles or objects). The number on each type is how many match what you type. Only the types of steps your account can see appear. Picking a zone or a footprint focuses it as usual; picking anything else turns on its step, marks its row in the table and the sketch zooms in and highlights it.",
-      "example": "you pick Doors, type «dock» and choose the door: the Doors step opens with its row marked and the sketch zooms in on it."
+      "what": "Second step: what to see of what you chose in «Search in». All, or one or several types at once (zones, footprints, assets, walls, doors, floors, safety, sensors, power, obstacles, aisles or objects). The number on each type is how many match what you type and, with zones chosen, how many are inside them. Only the types of steps your account can see appear. With zones chosen, what you turn on is also drawn on the sketch; without zones it only filters the list. Picking a zone or a footprint from the list focuses it; picking anything else turns on its step, marks its row in the table and the sketch zooms in and highlights it.",
+      "example": "you choose Zone 6 and Reception and turn on Walls and Doors: the list and the sketch only bring the walls and doors of those two zones."
     },
     "layoutFindChip": {
       "what": "Says which zone or footprint you are looking at. Touching it removes the focus and the whole warehouse is shown again.",

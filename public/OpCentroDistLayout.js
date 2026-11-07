@@ -1578,7 +1578,7 @@ $('layout-panel').addEventListener('click', (event) => { if (event.target.closes
 // lo que no se quiere ver (Huellas, Activos, Textos, Medidas). Es solo de pantalla: no cambia lo guardado ni los reportes ni los QR. state.find = { kind: 'zone' | 'footprint', id }; state.findHide = { huellas, activos, textos,
 // medidas } (true = oculto). Las tablas no pierden renglones: los que no son de lo enfocado solo se esconden (clase layout-find-out), por eso sus números de renglón no cambian.
 const canFind = () => !!(state.perms && state.perms.canFind);
-function clearFind() { state.find = null; state.findHide = {}; state.findHideIds = {}; }
+function clearFind() { state.find = null; state.findHide = {}; state.findHideIds = {}; state.findScope = 'all'; }
 // ---- franja de enfoque (arriba del panel de pasos) -------------------------------------------------------------------------------------
 // «Ver»: las opciones (pasos) de abajo, con «Todo». «Enfocado»: el enfoque del buscador (zona o huella) o el activo, nivel o posición del renglón que se eligió en Activos, Niveles o Posiciones. «Resto»: qué pasa con lo
 // que no es de lo enfocado, oculto o tenue (una sola elección, la misma del buscador, que se recuerda en este navegador). El enfoque de un renglón es solo del dibujo (croquis y 3D): las tablas no pierden renglones.
@@ -1674,21 +1674,91 @@ function fxToggleAll() {
 // Resto de la nave al enfocar: oculto por completo (por omisión) o «tenue» de fondo; se recuerda en este navegador.
 const FIND_DIM_KEY = 'sgn_layout_find_dim';
 try { state.findDim = localStorage.getItem(FIND_DIM_KEY) === '1'; } catch (err) { /* sin almacenamiento: oculto */ }
-// Los ids de lo enfocado (la zona o la huella, con sus huellas y activos).
+// ---- Buscar en zonas: lo que hay dentro de las zonas elegidas -----------------------------------------------------------------------------
+// El enfoque de zonas es de UNA o de VARIAS (state.find = { kind: 'zone', id, ids }; state.findScope = 'zones' cuando «Buscar en» está en Zonas). «Qué ver» (state.findTypes) dice qué tipos de cosas se listan y se dibujan dentro de ellas
+// (sin elegir ninguno, todos). Una cosa es de la zona si queda dentro o sobre su borde (a 30 cm): huellas, activos, sensores, seguridad y pasillos ya traen su zona; paredes, puertas, luz, obstáculos, objetos y pisos se miden contra el dibujo.
+const zoneFocusIds = (f) => (f && f.kind === 'zone' ? (Array.isArray(f.ids) && f.ids.length ? f.ids : [f.id]) : []);
+// ¿Este tipo de cosa se dibuja con las zonas enfocadas? (sin tipos elegidos en «Qué ver», todos)
+function fxWant(type) {
+    const f = activeFind();
+    if (!f || f.kind !== 'zone') return true;
+    const c = findTypesChosen();
+    return !c.length || c.includes(type);
+}
+function segDistance(px, py, a, b) {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len2 = dx * dx + dy * dy;
+    const k = len2 ? Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / len2)) : 0;
+    return Math.hypot(px - (a[0] + k * dx), py - (a[1] + k * dy));
+}
+// Los ids de lo que hay dentro de las zonas elegidas, por tipo (footprint, space, wall, obstacle, door, power, sensor, safety, transit, object, floor).
+function scopeInside(d, ids) {
+    const polys = (d.zones || []).filter((z) => ids.includes(z.id)).map((z) => LC.zonePoints(z)).filter((p) => p && p.length >= 3);
+    const near = (x, y) => polys.some((poly) => LC.pointInPolygon(x, y, poly) || poly.some((a, i) => segDistance(x, y, a, poly[(i + 1) % poly.length]) <= 0.3));
+    const anyNear = (pts) => pts.some((p) => near(p[0], p[1]));
+    const along = (a, b) => {
+        const n = Math.min(200, Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.5)));
+        const out = [];
+        for (let i = 0; i <= n; i++) out.push([a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n]);
+        return out;
+    };
+    const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const inZone = (zid) => ids.includes(zid);
+    const out = { footprint: new Set(), space: new Set(), wall: new Set(), obstacle: new Set(), door: new Set(), power: new Set(), sensor: new Set(), safety: new Set(), transit: new Set(), object: new Set(), floor: new Set() };
+    (d.footprints || []).forEach((p) => { if (inZone(p.zoneId)) out.footprint.add(p.id); });
+    (d.spaces || []).forEach((sp) => { if (inZone(sp.zoneId)) out.space.add(sp.id); });
+    (d.obstacles || []).forEach((o) => {
+        const g = LC.obstacleGeometry(o, d.vertices);
+        if (!g) return;
+        const p = g.pts;
+        const long = Math.hypot(p[1][0] - p[0][0], p[1][1] - p[0][1]) >= Math.hypot(p[3][0] - p[0][0], p[3][1] - p[0][1]);
+        const axis = long ? [mid(p[0], p[3]), mid(p[1], p[2])] : [mid(p[0], p[1]), mid(p[3], p[2])];
+        if (anyNear([...along(axis[0], axis[1]), ...p])) out[o.kind === 'wall' ? 'wall' : 'obstacle'].add(o.id);
+    });
+    (d.doors || []).forEach((x) => { const g = LC.doorGeometry(d, x); if (g && anyNear(along([g.a.x, g.a.y], [g.b.x, g.b.y]))) out.door.add(x.id); });
+    (d.power || []).forEach((x) => { const g = LC.doorGeometry(d, { ...x, width: 0 }); if (g && near(g.a.x, g.a.y)) out.power.add(x.id); });
+    (d.sensors || []).forEach((x) => {
+        const g = LC.doorGeometry(d, { ...x, width: 0 });
+        if (LC.sensorZoneIds(x).some(inZone) || (g && near(g.a.x, g.a.y))) out.sensor.add(x.id);
+    });
+    (d.safety || []).forEach((x) => { if (inZone(x.zoneId) || near(Number(x.x) || 0, Number(x.y) || 0)) out.safety.add(x.id); });
+    (d.transit || []).forEach((x) => {
+        const px = Number(x.x) || 0;
+        const py = Number(x.y) || 0;
+        const l = Number(x.l) || 0;
+        const w = Number(x.w) || 0;
+        if (inZone(x.zoneId) || anyNear([[px, py], [px + l, py], [px + l, py + w], [px, py + w]])) out.transit.add(x.id);
+    });
+    (d.objects || []).forEach((x) => { if (anyNear([...LC.objectPolygon(x), [Number(x.x) || 0, Number(x.y) || 0]])) out.object.add(x.id); });
+    (d.floors || []).forEach((f) => {
+        if (f.active === false) return;
+        const pts = LC.zonePoints(f);
+        if (!pts || pts.length < 3) return;
+        const c = LC.polygonCentroid(pts);
+        if (anyNear(pts) || (c && near(c[0], c[1])) || polys.some((poly) => poly.some((p) => LC.pointInPolygon(p[0], p[1], pts)))) out.floor.add(f.id);
+    });
+    return out;
+}
+const FIND_ITEM_ATTR = { wall: 'obid', obstacle: 'obid', door: 'did', power: 'pid', sensor: 'nid', safety: 'sfid', transit: 'tid', object: 'oid' };
+// Los ids de lo enfocado (la zona o las zonas, o la huella, con sus huellas y activos y, en zonas, lo demás que elige «Qué ver»).
 function findIds() {
     const f = activeFind();
     const d = state.draft;
-    const ids = { zones: new Set(), footprints: new Set(), spaces: new Set() };
+    const ids = { zones: new Set(), footprints: new Set(), spaces: new Set(), items: {} };
     if (!f || !d) return ids;
     if (f.kind === 'spaces') {
         f.ids.forEach((id) => { ids.spaces.add(id); const sp = d.spaces.find((x) => x.id === id); if (sp && sp.footprintId) ids.footprints.add(sp.footprintId); });
     } else if (f.kind === 'zone') {
-        ids.zones.add(f.id);
-        d.footprints.forEach((p) => { if (p.zoneId === f.id) ids.footprints.add(p.id); });
-        d.spaces.forEach((s) => { if (s.zoneId === f.id) ids.spaces.add(s.id); });
+        const zids = zoneFocusIds(f);
+        const inside = scopeInside(d, zids);
+        zids.forEach((id) => ids.zones.add(id));
+        if (fxWant('footprint')) inside.footprint.forEach((id) => ids.footprints.add(id));
+        if (fxWant('space')) inside.space.forEach((id) => ids.spaces.add(id));
+        Object.keys(FIND_ITEM_ATTR).forEach((ty) => { if (fxWant(ty)) ids.items[ty] = inside[ty]; });
     } else {
         ids.footprints.add(f.id);
-        d.spaces.forEach((s) => { if (s.footprintId === f.id) ids.spaces.add(s.id); });
+        d.spaces.forEach((sp) => { if (sp.footprintId === f.id) ids.spaces.add(sp.id); });
     }
     return ids;
 }
@@ -1710,7 +1780,7 @@ function findView3d() {
     if (!activeFind()) return { shown: state.draft, focus: null };
     if (!findEntity()) { if (state.find) clearFind(); return { shown: state.draft, focus: null }; }
     if (state.findDim) return { shown: withoutHidden(state.draft), focus: findIds() };
-    return { shown: findLayout(state.draft), focus: null };
+    return { shown: findLayout(state.draft, true), focus: null };
 }
 // Con el resto «tenue»: lo que no es de lo enfocado se ve apagado (las figuras y los textos de lo enfocado llevan la clase find-on).
 function applyFindDim(dimmed) {
@@ -1719,7 +1789,8 @@ function applyFindDim(dimmed) {
     if (!dimmed || !activeFind()) return;
     const f = activeFind();
     const sel = [];
-    if (f.kind === 'zone') sel.push(`[data-zid="${CSS.escape(f.id)}"]`, `[data-lz="${CSS.escape(f.id)}"]`);
+    if (f.kind === 'zone') zoneFocusIds(f).forEach((id) => sel.push(`[data-zid="${CSS.escape(id)}"]`, `[data-lz="${CSS.escape(id)}"]`));
+    if (f.kind === 'zone') { const it = findIds().items; Object.keys(it).forEach((ty) => it[ty].forEach((id) => sel.push(`[data-${FIND_ITEM_ATTR[ty]}="${CSS.escape(id)}"]`))); }
     // un activo (o un nivel o hueco) enfocado: su dibujo y su etiqueta; sus vecinos de la misma huella se apagan con lo demás
     if (f.kind === 'spaces') f.ids.forEach((id) => sel.push(`[data-sid="${CSS.escape(id)}"]`));
     (f.kind === 'spaces' ? new Set() : findIds().footprints).forEach((id) => sel.push(`[data-fid="${CSS.escape(id)}"]`, `[data-lf="${CSS.escape(id)}"]`));
@@ -1732,39 +1803,59 @@ function findEntity() {
     const d = state.draft;
     if (!f || !d) return null;
     if (f.kind === 'spaces') { const sp = d.spaces.find((x) => x.id === f.ids[0]); return sp ? { kind: 'spaces', id: sp.id, code: sp.code || '', name: sp.code || '' } : null; }
-    if (f.kind === 'zone') { const z = d.zones.find((x) => x.id === f.id); return z ? { kind: 'zone', id: z.id, code: z.code || '', name: z.name || '' } : null; }
+    if (f.kind === 'zone') {
+        const zs = zoneFocusIds(f).map((id) => d.zones.find((x) => x.id === id)).filter(Boolean);
+        return zs.length ? { kind: 'zone', id: zs[0].id, ids: zs.map((z) => z.id), code: zs.map((z) => z.code || '').join(' · '), name: zs.map((z) => z.name || z.code || '').join(' · ') } : null;
+    }
     const p = d.footprints.find((x) => x.id === f.id);
     return p ? { kind: 'footprint', id: p.id, code: p.code || '', name: p.code || '', zoneId: p.zoneId || '' } : null;
 }
-// La zona de lo enfocado (la zona misma o la de la huella): es la fila que deja el resumen de abajo.
-function findZoneId() {
+// Las zonas de lo enfocado (la zona o las zonas, o la de la huella): son las filas que deja el resumen de abajo.
+function findZoneIds() {
     const e = findEntity();
-    return e ? (e.kind === 'zone' ? e.id : e.zoneId) : '';
+    return e ? (e.kind === 'zone' ? e.ids : [e.zoneId]) : [];
 }
-// El Layout que se dibuja con el enfoque: solo la zona (con sus huellas y activos) o solo la huella (con sus activos), sin paredes, puertas, luz ni columnas, y con un contorno rectangular
-// justo alrededor para que el croquis y el 3D se acerquen a lo enfocado. Sin enfoque (o si lo enfocado ya no existe) devuelve el mismo Layout.
-function findLayout(d) {
+// El Layout que se dibuja con el enfoque: solo la huella (con sus activos) o las zonas elegidas (con lo que elige «Qué ver» de lo que hay adentro: huellas, activos, paredes, puertas, pisos, seguridad…), con un recuadro justo alrededor
+// (_frame en el croquis; el contorno mismo en el 3D) para que el croquis y el 3D se acerquen a lo enfocado. En el 3D las paredes, puertas, luz, sensores y obstáculos no se dibujan con el enfoque (cuelgan del contorno real).
+// Sin enfoque (o si lo enfocado ya no existe) devuelve el mismo Layout.
+function findLayout(d, flat3d) {
     const f = activeFind();
     if (!f || !d) return d;
     if (!findEntity()) { if (state.find) clearFind(); return d; }
     let zones = [];
     let footprints;
     let spaces;
+    let frameFp;
+    let frameSp;
+    let scoped = null;
     if (f.kind === 'zone') {
-        zones = d.zones.filter((z) => z.id === f.id);
-        footprints = d.footprints.filter((p) => p.zoneId === f.id);
-        spaces = d.spaces.filter((s) => s.zoneId === f.id);
+        const ids = zoneFocusIds(f);
+        const inside = scopeInside(d, ids);
+        zones = d.zones.filter((z) => ids.includes(z.id));
+        frameFp = d.footprints.filter((p) => inside.footprint.has(p.id));
+        frameSp = d.spaces.filter((x) => inside.space.has(x.id));
+        footprints = fxWant('footprint') ? frameFp : [];
+        spaces = fxWant('space') ? frameSp : [];
+        const keep = (list, ty) => (fxWant(ty) ? (list || []).filter((x) => inside[ty].has(x.id)) : []);
+        const doors = keep(d.doors, 'door');
+        const power = keep(d.power, 'power');
+        const sensors = keep(d.sensors, 'sensor');
+        // una puerta, una conexión de luz o un sensor se ubican sobre su pared: la pared viaja aunque no se haya pedido verla (se marca _geom y no se dibuja)
+        const needWall = new Set([...doors, ...power, ...sensors].map((x) => x.wallId).filter(Boolean));
+        const wallShown = (o) => fxWant('wall') && inside.wall.has(o.id);
+        const obstacles = (d.obstacles || []).filter((o) => (o.kind === 'wall' ? wallShown(o) || needWall.has(o.id) : fxWant('obstacle') && inside.obstacle.has(o.id))).map((o) => (o.kind === 'wall' && !wallShown(o) ? { ...o, _geom: true } : o));
+        scoped = { doors, power, sensors, obstacles, safety: keep(d.safety, 'safety'), transit: keep(d.transit, 'transit'), objects: keep(d.objects, 'object'), floors: fxWant('floor') ? (d.floors || []).filter((fl) => inside.floor.has(fl.id)) : [] };
     } else if (f.kind === 'spaces') {
         spaces = d.spaces.filter((x) => f.ids.includes(x.id));
         footprints = d.footprints.filter((p) => spaces.some((x) => x.footprintId === p.id));
     } else {
         footprints = d.footprints.filter((p) => p.id === f.id);
-        spaces = d.spaces.filter((s) => s.footprintId === f.id);
+        spaces = d.spaces.filter((x) => x.footprintId === f.id);
     }
     const pts = [];
     zones.forEach((z) => LC.zonePoints(z).forEach((p) => pts.push(p)));
-    footprints.forEach((p) => { pts.push([p.x, p.y], [p.x + p.l, p.y + p.d]); });
-    spaces.forEach((s) => { pts.push([s.x, s.y], [s.x + s.l, s.y + s.d]); });
+    (frameFp || footprints).forEach((p) => { pts.push([p.x, p.y], [p.x + p.l, p.y + p.d]); });
+    (frameSp || spaces).forEach((x) => { pts.push([x.x, x.y], [x.x + x.l, x.y + x.d]); });
     const ok = pts.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
     if (!ok.length) return d;
     const x0 = Math.min(...ok.map((p) => p[0]));
@@ -1773,41 +1864,56 @@ function findLayout(d) {
     const y1 = Math.max(...ok.map((p) => p[1]));
     const pad = Math.max(0.5, Math.max(x1 - x0, y1 - y0) * 0.06);
     const h = Number(d.heightM) > 0 ? d.heightM : 4;
+    const rect = [[x0 - pad, y0 - pad, h], [x1 + pad, y0 - pad, h], [x1 + pad, y1 + pad, h], [x0 - pad, y1 + pad, h]];
     const hid = state.findHideIds || {};
-    return { ...d, vertices: [[x0 - pad, y0 - pad, h], [x1 + pad, y0 - pad, h], [x1 + pad, y1 + pad, h], [x0 - pad, y1 + pad, h]], zones, footprints: footprints.filter((p) => !hid[p.id]), spaces: spaces.filter((s) => !hid[s.id] && !hid[s.footprintId]), obstacles: [], objects: [], doors: [], power: [], plan: null };
+    const base = { ...d, zones, footprints: footprints.filter((p) => !hid[p.id]), spaces: spaces.filter((x) => !hid[x.id] && !hid[x.footprintId]), plan: null };
+    if (scoped) {
+        const common = { safety: scoped.safety, transit: scoped.transit, objects: scoped.objects, floors: scoped.floors };
+        return flat3d ? { ...base, ...common, vertices: rect, obstacles: [], doors: [], power: [], sensors: [] } : { ...base, ...common, _frame: rect, obstacles: scoped.obstacles, doors: scoped.doors, power: scoped.power, sensors: scoped.sensors };
+    }
+    return { ...base, vertices: rect, obstacles: [], objects: [], doors: [], power: [] };
 }
-// ¿Este renglón de una tabla es de lo enfocado? Los activos todavía sin huella y las huellas sin zona (recién agregados) siempre se ven, para no perderlos.
-function inFind(entity) {
+// ¿Este renglón de una tabla es de lo enfocado? Los activos todavía sin huella y las huellas sin zona (recién agregados) siempre se ven, para no perderlos. Con zonas enfocadas, las paredes, puertas, luz, sensores, seguridad,
+// pasillos, objetos, obstáculos y pisos que no están en esas zonas también se esconden (inside = lo que hay dentro, ya calculado).
+const FIND_ROW_TYPE = { door: 'door', power: 'power', sensor: 'sensor', safety: 'safety', transit: 'transit', object: 'object', floor: 'floor' };
+function inFind(entity, inside) {
     const f = state.find;
     const d = state.draft;
     if (!f || !d || !entity) return true;
-    if (entity.kind === 'zone') return f.kind === 'zone' && entity.id === f.id;
+    const zids = zoneFocusIds(f);
+    if (entity.kind === 'zone') return f.kind === 'zone' && zids.includes(entity.id);
     if (entity.kind === 'footprint') {
         const p = d.footprints.find((x) => x.id === entity.id);
         if (!p) return true;
-        return f.kind === 'zone' ? (!p.zoneId || p.zoneId === f.id) : p.id === f.id;
+        return f.kind === 'zone' ? (!p.zoneId || zids.includes(p.zoneId)) : p.id === f.id;
     }
-    const s = d.spaces.find((x) => x.id === entity.id);
-    if (!s) return true;
-    if (!s.footprintId) return true;
-    return f.kind === 'zone' ? s.zoneId === f.id : s.footprintId === f.id;
+    const sp = d.spaces.find((x) => x.id === entity.id);
+    if (sp) {
+        if (!sp.footprintId) return true;
+        return f.kind === 'zone' ? zids.includes(sp.zoneId) : sp.footprintId === f.id;
+    }
+    if (f.kind !== 'zone' || !inside) return true;
+    if (entity.kind === 'obstacle') { const o = (d.obstacles || []).find((x) => x.id === entity.id); return !o || inside[o.kind === 'wall' ? 'wall' : 'obstacle'].has(o.id); }
+    const ty = FIND_ROW_TYPE[entity.kind];
+    return !ty || inside[ty].has(entity.id);
 }
 function applyFindToTables() {
     const d = state.draft;
+    const inside = state.find && d && state.find.kind === 'zone' ? scopeInside(d, zoneFocusIds(state.find)) : null;
     document.querySelectorAll(HL_ROW_SELECTOR).forEach((tr) => {
         const e = state.find && d ? rowEntity(tr) : null;
-        tr.classList.toggle('layout-find-out', !!e && !inFind(e));
+        tr.classList.toggle('layout-find-out', !!e && !inFind(e, inside));
     });
 }
 // La lista que sale al escribir: zonas y huellas que coinciden (con el mismo motor de búsqueda de todo el sistema: coma, $ y @).
 // Los tipos en que se puede buscar (type = el de los chips, kind = como se elige la figura, step = el paso donde vive). Cada tipo solo sale si el árbol deja ver su paso. Zonas y huellas enfocan (solo se ve lo de adentro);
 // los demás encienden su paso, seleccionan su renglón y acercan el croquis a la figura.
 const FIND_TYPES = [
-    { type: 'zone', step: 'zonas' }, { type: 'footprint', step: 'espacios' }, { type: 'space', kind: 'space', step: 'activos' }, { type: 'wall', kind: 'obstacle', step: 'paredes' }, { type: 'door', kind: 'door', step: 'puertas' },
+    { type: 'zone', step: 'zonas' }, { type: 'footprint', step: 'espacios' }, { type: 'space', kind: 'space', step: 'activos' }, { type: 'wall', kind: 'obstacle', step: 'paredes' }, { type: 'door', kind: 'door', step: 'puertas' }, { type: 'floor', kind: 'floor', step: 'pisos' },
     { type: 'safety', kind: 'safety', step: 'seguridad' }, { type: 'sensor', kind: 'sensor', step: 'sensores' }, { type: 'power', kind: 'power', step: 'luz' }, { type: 'obstacle', kind: 'obstacle', step: 'obstaculos' },
     { type: 'transit', kind: 'transit', step: 'transito' }, { type: 'object', kind: 'object', step: 'objetos' },
 ];
-const findTypesShown = () => FIND_TYPES.filter((ft) => stepVisible(ft.step));
+const findTypesShown = () => FIND_TYPES.filter((ft) => stepVisible(ft.step) && !(ft.type === 'zone' && state.findScope === 'zones'));
 const findTypesChosen = () => (state.findTypes || []).filter((id) => findTypesShown().some((ft) => ft.type === id));
 function findSearch(query) {
     const d = state.draft;
@@ -1822,6 +1928,7 @@ function findSearch(query) {
         space: () => d.spaces.filter((x) => x.active !== false && x.footprintId).map((x) => ({ id: x.id, title: x.code, sub: `${t('main.layoutFindActivo')} · ${fpCode(x.footprintId)}`, hay: `${x.code || ''} ${typeLabel('space', x.type)} ${fpCode(x.footprintId)} ${zoneName(x.zoneId)}` })),
         wall: () => (d.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, title: `${o.code ? `${o.code} · ` : ''}${o.name || t('main.layoutFindPared')}`, sub: low(t('main.layoutFindPared')), hay: `${o.code || ''} ${o.name || ''}` })),
         door: () => (d.doors || []).map((x) => ({ id: x.id, title: x.name || t('main.layoutFindPuerta'), sub: `${t('main.layoutFindPuerta')} · ${wallName(x.wallId)}`.replace(/ · $/, ''), hay: `${x.name || ''} ${typeLabel('door', x.type)} ${wallName(x.wallId)}` })),
+        floor: () => (d.floors || []).filter((x) => x.active !== false).map((x) => ({ id: x.id, title: x.name || x.code || t('main.layoutFindPiso'), sub: `${t('main.layoutFindPiso')} · ${x.code || ''}`.replace(/ · $/, ''), hay: `${x.code || ''} ${x.name || ''}` })),
         safety: () => (d.safety || []).map((x) => ({ id: x.id, title: x.name || typeLabel('safety', x.type), sub: `${low(typeLabel('safety', x.type))} · ${x.code || ''}`, hay: `${x.code || ''} ${x.name || ''} ${typeLabel('safety', x.type)}` })),
         sensor: () => (d.sensors || []).map((x) => ({ id: x.id, title: x.code || t('main.layoutFindSensor'), sub: `${t('main.layoutFindSensor')} · ${low(typeLabel('sensor', x.type))}`, hay: `${x.code || ''} ${typeLabel('sensor', x.type)} ${wallName(x.wallId)}` })),
         power: () => (d.power || []).map((x) => ({ id: x.id, title: typeLabel('power', x.type), sub: `${t('main.layoutFindLuz')} · ${wallName(x.wallId)}`.replace(/ · $/, ''), hay: `${typeLabel('power', x.type)} ${wallName(x.wallId)}` })),
@@ -1834,8 +1941,11 @@ function findSearch(query) {
     const chosen = findTypesChosen();
     const counts = {};
     const items = [];
+    // con zonas elegidas solo cuenta y se lista lo que hay dentro de ellas
+    const zf = zoneFocusIds(state.find);
+    const inside = zf.length ? scopeInside(d, zf) : null;
     findTypesShown().forEach((ft) => {
-        const found = by[ft.type]().filter((i) => !match || match(i.hay));
+        const found = by[ft.type]().filter((i) => (!match || match(i.hay)) && (!inside || !inside[ft.type] || inside[ft.type].has(i.id)));
         counts[ft.type] = found.length;
         if (chosen.length && !chosen.includes(ft.type)) return;
         found.forEach((i) => items.push({ type: ft.type, kind: ft.kind || ft.type, step: ft.step, ...i }));
@@ -1850,14 +1960,22 @@ function renderFindList() {
     const { items, counts } = findSearch($('layout-find-input').value);
     findItems = items.slice(0, 40);
     findActive = findItems.length ? 0 : -1;
-    // Los chips «Buscar en»: Todo o uno o varios tipos; cada número es lo que coincide con lo escrito. Solo salen los tipos que el árbol deja ver.
+    const d = state.draft;
+    const zonesScope = state.findScope === 'zones';
+    const zids = zoneFocusIds(state.find);
+    // Paso 1, «Buscar en»: Todo (toda la nave) o Zonas (se marcan una o varias). Solo sale si la cuenta ve el paso Zonas y hay zonas.
+    const zoneList = stepVisible('zonas') ? (d.zones || []).filter((z) => z.active !== false) : [];
+    const scopeBtn = (id, label, on, n) => `<button type="button" class="layout-find-type" data-find-scope="${id}" aria-pressed="${on}">${esc(label)}${n ? ` <span class="layout-find-n">${n}</span>` : ''}</button>`;
+    const scopeRow = zoneList.length ? `<div class="layout-find-types" role="group" data-help-key="layoutFindDonde"><span class="layout-find-hide-title">${esc(t('main.layoutFindBuscarEn'))}</span>${scopeBtn('all', t('main.layoutFindTipoTodo'), !zonesScope, 0)}${scopeBtn('zones', t('main.layoutFindTipo_zone'), zonesScope, zids.length)}</div>` : '';
+    const zonesRow = zonesScope && zoneList.length ? `<div class="layout-find-types layout-find-zones" role="group" data-help-key="layoutFindZonas">${zoneList.map((z) => `<button type="button" class="layout-find-type layout-find-zone" data-find-zone="${esc(z.id)}" aria-pressed="${zids.includes(z.id)}">${esc(z.name || z.code)}</button>`).join('')}</div>` : '';
+    // Paso 2, «Qué ver»: Todo o uno o varios tipos; cada número es lo que coincide con lo escrito (y, con zonas elegidas, lo que hay dentro de ellas). Solo salen los tipos que el árbol deja ver.
     const shown = findTypesShown();
     const chosen = findTypesChosen();
     const total = shown.reduce((acc, ft) => acc + (counts[ft.type] || 0), 0);
     const chip = (id, label, n, on) => `<button type="button" class="layout-find-type" data-find-type="${id}" aria-pressed="${on}">${esc(label)} <span class="layout-find-n">${n}</span></button>`;
-    const chips = shown.length > 1 ? `<div class="layout-find-types" role="group" data-help-key="layoutFindTipos"><span class="layout-find-hide-title">${esc(t('main.layoutFindBuscarEn'))}</span>${chip('all', t('main.layoutFindTipoTodo'), total, !chosen.length)}${shown.map((ft) => chip(ft.type, t(`main.layoutFindTipo_${ft.type}`), counts[ft.type] || 0, chosen.includes(ft.type))).join('')}</div>` : '';
+    const chips = shown.length > 1 ? `<div class="layout-find-types" role="group" data-help-key="layoutFindTipos"><span class="layout-find-hide-title">${esc(t('main.layoutFindQueVer'))}</span>${chip('all', t('main.layoutFindTipoTodo'), total, !chosen.length)}${shown.map((ft) => chip(ft.type, t(`main.layoutFindTipo_${ft.type}`), counts[ft.type] || 0, chosen.includes(ft.type))).join('')}</div>` : '';
     $('layout-find-input').placeholder = chosen.length === 1 ? t('main.layoutFindEnTipo', { type: t(`main.layoutFindTipo_${chosen[0]}`).toLowerCase() }) : t('main.layoutBuscarPlaceholder');
-    list.innerHTML = chips + (findItems.length
+    list.innerHTML = `<div class="layout-find-head">${scopeRow}${zonesRow}${chips}</div>` + (findItems.length
         ? findItems.map((i, n) => `<button type="button" class="layout-find-item" role="option" id="layout-find-opt-${n}" data-find-pick="${n}" aria-selected="${n === findActive}"><b>${esc(i.title)}</b><span>${esc(i.sub)}</span></button>`).join('')
         : `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`);
     list.hidden = false;
@@ -1886,8 +2004,8 @@ function renderFindBox() {
     const d = state.draft;
     const hide = state.findHide || {};
     const hid = state.findHideIds || {};
-    const fps = d.footprints.filter((p) => p.active !== false && (e.kind === 'zone' ? p.zoneId === e.id : p.id === e.id));
-    const sps = d.spaces.filter((s) => s.active !== false && (e.kind === 'zone' ? s.zoneId === e.id : s.footprintId === e.id));
+    const fps = d.footprints.filter((p) => p.active !== false && (e.kind === 'zone' ? e.ids.includes(p.zoneId) : p.id === e.id));
+    const sps = d.spaces.filter((s) => s.active !== false && (e.kind === 'zone' ? e.ids.includes(s.zoneId) : s.footprintId === e.id));
     const toggles = [];
     if (e.kind === 'zone') toggles.push(['huellas', 'main.layoutFindHuellas', fps.length]);
     toggles.push(['activos', 'main.layoutFindActivos', sps.length], ['textos', 'main.layoutFindTextos', null]);
@@ -1932,8 +2050,9 @@ function applyFind(reset) {
 // lo resaltan; el croquis se acerca a la figura si la cuenta puede acercar.
 function locateFound(item) {
     if (!stepVisible(item.step)) return;
-    const hadFind = !!state.find;
-    clearFind();
+    const keepZones = zoneFocusIds(state.find).length > 0;
+    const hadFind = !!state.find && !keepZones;
+    if (!keepZones) clearFind();
     showStep(item.step);
     $('layout-find-input').value = '';
     closeFindList();
@@ -1949,7 +2068,8 @@ function pickFind(n) {
     const item = findItems[n];
     if (!item) return;
     if (item.type !== 'zone' && item.type !== 'footprint') { locateFound(item); return; }
-    state.find = { kind: item.kind, id: item.id };
+    state.find = item.type === 'zone' ? { kind: 'zone', id: item.id, ids: [item.id] } : { kind: item.kind, id: item.id };
+    state.findScope = item.type === 'zone' ? 'zones' : 'all';
     state.findHide = {};
     state.findHideIds = {};
     $('layout-find-input').value = '';
@@ -1962,13 +2082,50 @@ $('layout-find-input').addEventListener('keydown', (event) => {
     if (event.key === 'ArrowDown') { event.preventDefault(); if ($('layout-find-list').hidden) renderFindList(); else moveFindActive(1); } else if (event.key === 'ArrowUp') { event.preventDefault(); moveFindActive(-1); } else if (event.key === 'Enter') { event.preventDefault(); if (!$('layout-find-list').hidden && findActive >= 0) pickFind(findActive); } else if (event.key === 'Escape') closeFindList();
 });
 $('layout-find').addEventListener('click', (event) => {
-    // Un chip de tipo: Todo quita la selección; los demás se prenden y apagan (uno o varios a la vez). La lista se vuelve a dibujar y se queda abierta.
+    // Paso 1, «Buscar en»: Todo quita el enfoque (toda la nave); Zonas muestra las zonas para marcar una o varias.
+    const scopeBtn = event.target.closest('[data-find-scope]');
+    if (scopeBtn) {
+        event.stopPropagation();
+        if (scopeBtn.getAttribute('data-find-scope') === 'all') {
+            const had = !!state.find;
+            clearFind();
+            if (had) applyFind(true);
+        } else {
+            state.findScope = 'zones';
+            state.findTypes = (state.findTypes || []).filter((x) => x !== 'zone');
+        }
+        renderFindList();
+        return;
+    }
+    // Una zona: se marca o se desmarca (una o varias); con al menos una marcada el croquis, el 3D, las tablas y el resumen se enfocan en ellas.
+    const zoneBtn = event.target.closest('[data-find-zone]');
+    if (zoneBtn) {
+        event.stopPropagation();
+        const id = zoneBtn.getAttribute('data-find-zone');
+        const cur = zoneFocusIds(state.find);
+        const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+        if (!next.length) clearFind();
+        else {
+            if (!(state.find && state.find.kind === 'zone')) { state.findHide = {}; state.findHideIds = {}; }
+            state.find = { kind: 'zone', id: next[0], ids: next };
+        }
+        state.findScope = 'zones';
+        applyFind(true);
+        renderFindList();
+        return;
+    }
+    // Paso 2, «Qué ver»: Todo quita la selección; los demás se prenden y apagan (uno o varios a la vez). La lista se vuelve a dibujar y se queda abierta. Con zonas enfocadas, lo que se prende también se enciende en el croquis.
     const typeBtn = event.target.closest('[data-find-type]');
     if (typeBtn) {
         event.stopPropagation();
         const id = typeBtn.getAttribute('data-find-type');
         const cur = findTypesChosen();
         state.findTypes = id === 'all' ? [] : (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
+        if (zoneFocusIds(state.find).length) {
+            const ft = FIND_TYPES.find((x) => x.type === id);
+            if (ft && state.findTypes.includes(id) && !stepOn(ft.step)) { state.steps = [...state.steps, ft.step]; renderPanel(); }
+            applyFind(false);
+        }
         renderFindList();
         return;
     }
@@ -2012,19 +2169,23 @@ function renderSvg(underlay) {
     const fv = findView(full);
     const d = fv.d;
     const finding = fv.finding;
+    const zoneFocus = finding && !!activeFind() && activeFind().kind === 'zone'; // con zonas enfocadas se dibuja lo que pidió «Qué ver» (la lista ya viene filtrada)
     const dimmed = fv.dimmed; // el resto de la nave se ve «tenue» (se dibuja todo y lo que no es de lo enfocado se apaga)
     const hide = state.findHide || {};
     const sN = state.showNames && !(finding && hide.textos);
     const sA = state.showArea && !(finding && hide.textos);
     const sM = state.showMeasures && !(finding && hide.medidas);
-    const on = underlay ? () => true : stepOn;
+    // con zonas enfocadas y el resto «Oculto» manda «Qué ver» (la lista ya viene filtrada por tipo): lo de adentro se dibuja aunque su paso esté apagado en la franja
+    const FOCUS_STEPS = ['paredes', 'puertas', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'pisos', 'espacios', 'activos'];
+    const on = underlay ? () => true : (zoneFocus && !dimmed ? (step) => stepOn(step) || FOCUS_STEPS.includes(step) : stepOn);
     const showFp = finding ? (!hide.huellas && (on('espacios') || activeFind().kind === 'footprint')) : on('espacios');
     const showSp = finding ? (!hide.activos && (on('activos') || on('posiciones') || on('niveles'))) : (on('activos') || on('posiciones') || on('niveles'));
     const W = 700;
     const H = 460;
     const M = 36;
-    const xs = d.vertices.map((p) => p[0]);
-    const ys = d.vertices.map((p) => p[1]);
+    const frame = d._frame || d.vertices; // con zonas enfocadas el croquis se acerca al recuadro de las zonas (_frame) sin perder el contorno real
+    const xs = frame.map((p) => p[0]);
+    const ys = frame.map((p) => p[1]);
     let x0 = Math.min(...xs); let x1 = Math.max(...xs); let y0 = Math.min(...ys); let y1 = Math.max(...ys);
     if (state.planImage && d.plan && !rot) {
         x0 = Math.min(x0, 0); y0 = Math.min(y0, 0); x1 = Math.max(x1, d.plan.widthM); y1 = Math.max(y1, d.plan.widthM * state.planAspect);
@@ -2075,7 +2236,7 @@ function renderSvg(underlay) {
         const w = String(fmt(m.len)).length * 4.9 + 2;
         return !labelBoxes.some(([bx0, by0, bx1, by1]) => cxm - w / 2 < bx1 && cxm + w / 2 > bx0 && cym - 10 < by1 && cym + 3 > by0);
     }).map((m) => { const l = textWithHalo('lm', (X(m.mx) + m.nx * 9).toFixed(1), (Y(m.my) + m.ny * 9 + 3).toFixed(1), 'middle', fmt(m.len), zid ? ` data-lz="${esc(zid)}"` : ''); measureHalos += l.halo; return l.main; }).join('');
-    (on('zonas') ? d.zones : (finding ? d.zones.filter((z) => !dimmed || (activeFind().kind === 'zone' && z.id === activeFind().id)) : [])).forEach((z) => {
+    (on('zonas') ? d.zones : (finding ? d.zones.filter((z) => !dimmed || zoneFocusIds(activeFind()).includes(z.id)) : [])).forEach((z) => {
         zoneAttr = ` data-lz="${esc(z.id)}"`;
         const typeText = z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona');
         const cls = `lz ${z.type ? (ZONE_CLASS[z.type] || 'lz-dock') : 'lz-none'}${z.active === false ? ' lz-off' : ''}${state.open.zones[z.id] ? ' lz-warn' : ''}${draggable ? ' lz-drag' : ''}`;
@@ -2170,7 +2331,7 @@ function renderSvg(underlay) {
     if (on('contorno') && (!finding || dimmed)) s += `<polygon class="lw-halo" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     const obstacleShapes = LC.obstacleShapes(d);
     const obstaclePoly = (g) => g.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ');
-    if (on('paredes') && (!finding || dimmed)) obstacleShapes.filter(({ o }) => o.kind === 'wall').forEach(({ o, g }) => { s += `<polygon class="lo lo-wall" data-obid="${esc(o.id)}" style="stroke-width:${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}px" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; });
+    if (on('paredes') && (!finding || dimmed || zoneFocus)) obstacleShapes.filter(({ o }) => o.kind === 'wall' && !o._geom).forEach(({ o, g }) => { s += `<polygon class="lo lo-wall" data-obid="${esc(o.id)}" style="stroke-width:${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}px" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; });
     // El contorno (línea azul punteada y fina) va ENCIMA de las paredes: así se distingue de ellas aunque estén sobre el mismo lado, y donde no hay pared se ve solo.
     if (on('contorno') && (!finding || dimmed)) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     (on('obstaculos') ? obstacleShapes.filter(({ o }) => o.kind !== 'wall') : []).forEach(({ o, g }) => {
@@ -2360,7 +2521,7 @@ function renderSvg(underlay) {
 
 function renderSummary() {
     const k = LC.computeKpis(state.draft);
-    const rows = k.zones.filter((z) => !state.find || z.id === findZoneId()).map((z) => `<tr><td>${esc(z.name)}</td><td>${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}</td><td>${esc(z.use ? typeLabel('use', z.use) : '—')}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
+    const rows = k.zones.filter((z) => !state.find || findZoneIds().includes(z.id)).map((z) => `<tr><td>${esc(z.name)}</td><td>${esc(z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona'))}</td><td>${esc(z.use ? typeLabel('use', z.use) : '—')}</td><td>${fmt(z.area)} m²</td><td>${z.spaces}</td><td>${fmt(z.footprint)} m²</td><td>${fmt(z.occupancy, 1)}%</td><td>${fmt(z.volume)} m³</td></tr>`);
     // Tabla del sistema: encabezado sombreado y, para quien tiene el icono Filtros en el árbol, el embudo de filtros de todas las tablas en cada encabezado (se vuelve a enganchar en cada dibujo y conserva los filtros).
     const filterable = !!(state.perms && state.perms.canFilterTables);
     const heads = ['main.layoutZona', 'main.layoutTipoZona', 'main.layoutUsoZona', 'main.layoutSuperficie', 'main.layoutEspacios', 'main.layoutHuella', 'main.layoutOcupacion', 'main.layoutVolumen'];
@@ -3772,13 +3933,22 @@ function effective3dLayers() {
     const f = activeFind();
     const hide = state.findHide || {};
     if (f && !state.findDim) {
-        return { contour: false, walls: false, columns: false, doors: false, power: false, sensors: false, objects: false, transit: false, safety: false, zones: stepOn('zonas') || stepOn('pisos') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint'), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones') || stepOn('niveles')) };
+        const zf = f.kind === 'zone';
+        return { contour: false, walls: false, columns: false, doors: false, power: false, sensors: false, objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), zones: stepOn('zonas') || stepOn('pisos') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint' || zf), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || zf) };
     }
     const layers = {
         contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || stepOn('pisos') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), sensors: stepOn('sensores'), assets: stepOn('activos') || stepOn('posiciones') || stepOn('niveles'),
     };
     if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }
+    // zonas enfocadas con el resto «tenue»: las capas que «Qué ver» no pidió se apagan (y se ven tenues)
+    if (f && f.kind === 'zone') {
+        const c = findTypesChosen();
+        if (c.length) {
+            const map = { wall: 'walls', obstacle: 'columns', door: 'doors', power: 'power', sensor: 'sensors', safety: 'safety', transit: 'transit', object: 'objects', footprint: 'footprints', space: 'assets' };
+            Object.keys(map).forEach((ty) => { if (!c.includes(ty)) layers[map[ty]] = false; });
+        }
+    }
     return layers;
 }
 // Con un enfoque (o con activos elegidos) y el resto «tenue», las opciones apagadas también se ven tenues en el 3D en lugar de quitarse.

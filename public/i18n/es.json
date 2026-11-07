@@ -1979,6 +1979,9 @@
     "layoutBuscarPlaceholder": "Buscar en el Layout",
     "layoutFindBuscarEn": "Buscar en",
     "layoutFindTipoTodo": "Todo",
+    "layoutFindQueVer": "Qué ver",
+    "layoutFindTipo_floor": "Pisos",
+    "layoutFindPiso": "piso",
     "layoutFindEnTipo": "Buscar en {type}",
     "layoutFindTipo_zone": "Zonas",
     "layoutFindTipo_footprint": "Huellas",
@@ -5051,9 +5054,17 @@
       "what": "La lista de lo que hay adentro de lo enfocado (las huellas con sus activos, o los activos de la huella) con un ojito por renglón: un toque lo quita del croquis y del 3D y otro lo regresa. Al ocultar una huella se ocultan también sus activos. Es solo de pantalla.",
       "example": "quitas el ojito de A003 y solo ese anaquel desaparece del dibujo; los demás se quedan."
     },
+    "layoutFindDonde": {
+      "what": "Primer paso: dónde buscar. «Todo» es toda la nave. «Zonas» muestra las zonas para que marques una o varias: la lista, los números de «Qué ver», el croquis, el 3D, las tablas y el resumen se quedan solo con lo que hay dentro o sobre el borde de esas zonas. Solo cambia lo que ves: no cambia lo guardado.",
+      "example": "tocas Zonas y marcas Zona 6 y Recepción: solo ves y buscas lo que hay en esas dos zonas; tocas Todo y vuelves a ver la nave completa."
+    },
+    "layoutFindZonas": {
+      "what": "Las zonas del Layout. Toca una para marcarla o quitarla; puedes marcar varias. Con al menos una marcada, el croquis y lo demás se enfocan en ellas.",
+      "example": "marcas Zona 6 y Recepción y el croquis se acerca a las dos; quitas Recepción y se queda solo Zona 6."
+    },
     "layoutFindTipos": {
-      "what": "Elige en qué buscar: Todo, o uno o varios tipos a la vez (zonas, huellas, activos, paredes, puertas, seguridad, sensores, luz, obstáculos, pasillos u objetos). El número de cada tipo es lo que coincide con lo que escribes. Solo salen los tipos de los pasos que tu cuenta puede ver. Al elegir una zona o una huella se enfoca como siempre; al elegir cualquier otra cosa se enciende su paso, se marca su renglón en la tabla y el croquis se acerca y la resalta.",
-      "example": "marcas Puertas, escribes «andén» y eliges la puerta: el paso Puertas se abre con su renglón marcado y el croquis se acerca a ella."
+      "what": "Segundo paso: qué ver de lo que elegiste en «Buscar en». Todo, o uno o varios tipos a la vez (zonas, huellas, activos, paredes, puertas, pisos, seguridad, sensores, luz, obstáculos, pasillos u objetos). El número de cada tipo es lo que coincide con lo que escribes y, con zonas elegidas, lo que hay dentro de ellas. Solo salen los tipos de los pasos que tu cuenta puede ver. Con zonas elegidas, lo que prendes también se dibuja en el croquis; sin zonas, solo filtra la lista. Al elegir una zona o una huella de la lista se enfoca; al elegir cualquier otra cosa se enciende su paso, se marca su renglón en la tabla y el croquis se acerca y la resalta.",
+      "example": "eliges Zona 6 y Recepción y marcas Paredes y Puertas: la lista y el croquis solo traen las paredes y puertas de esas dos zonas."
     },
     "layoutFindChip": {
       "what": "Dice qué zona o huella estás viendo. Al tocarlo se quita el enfoque y vuelve a verse toda la nave.",
