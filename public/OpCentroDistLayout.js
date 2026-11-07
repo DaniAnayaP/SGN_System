@@ -1085,19 +1085,9 @@ function stepHtml(step) {
     const d = state.draft;
     const dis = !canEdit(step);
     if (step === 'contorno') {
-        const mode = state.contornoMode;
-        const modeBar = `<div class="layout-seg" role="group" data-help-key="layoutContornoMode"><button type="button" class="layout-seg-btn${mode === 'sides' ? ' active' : ''}" data-cmode="sides">${esc(t('main.layoutPorLados'))}</button><button type="button" class="layout-seg-btn${mode === 'corners' ? ' active' : ''}" data-cmode="corners">${esc(t('main.layoutPorEsquinas'))}</button></div>`;
-        const rows = d.vertices.map((p, i) => {
-            const seg = LC.wallSegment(d.vertices, i + 1);
-            return `<tr><td class="layout-calc">${esc(t('main.layoutEsquina'))} ${i + 1}</td>${cellNum('vertices', i, '0', p[0], dis)}${cellNum('vertices', i, '1', p[1], dis)}${cellNum('vertices', i, '2', p[2], dis)}<td class="layout-calc" data-wall-len="${i}">${esc(t('main.layoutPared'))} ${i + 1}: ${fmt(seg.length)} m</td>${d.vertices.length > 3 ? removeCell('vertices', i, dis) : '<td></td>'}</tr>`;
-        });
-        const heights = d.vertices.map((p) => p[2]);
-        const sameHeight = heights.every((h) => h === heights[0]) ? heights[0] : '';
-        const shape = mode === 'sides'
-            ? sidesBlockHtml('contorno', dis)
-            : `${table(['main.layoutEsquina', 'main.layoutX', 'main.layoutY', 'main.layoutAlturaEsquina', 'main.layoutPared', ''], rows, 'layout-contorno-esquinas')}${addButton('vertices', 'main.layoutAgregarEsquina', dis, true)}`;
-        // El botón de agregar un lado (o una esquina) va arriba, junto al título del paso. Las paredes y los obstáculos tienen sus propios pasos.
-        return `${modeBar}<div class="layout-fl"><label>${esc(t('main.layoutAlturaTodas'))}<input type="number" step="0.1" min="0" data-l="allHeights" value="${sameHeight}" placeholder="—"${dis ? ' disabled' : ''}></label><label data-help-key="layoutSite">${esc(t('main.layoutSitio'))}<input type="text" maxlength="${LC.LIMITS.text}" data-l="siteName" value="${esc(d.siteName || '')}" placeholder="${esc(t('main.layoutSitioEjemplo'))}"${dis ? ' disabled' : ''}></label></div>
+        const shape = sidesBlockHtml('contorno', dis);
+        // El botón de agregar un lado va arriba, junto al título del paso (el Contorno se captura solo por lados). Las paredes y los obstáculos tienen sus propios pasos.
+        return `<div class="layout-fl"><label data-help-key="layoutSite">${esc(t('main.layoutSitio'))}<input type="text" maxlength="${LC.LIMITS.text}" data-l="siteName" value="${esc(d.siteName || '')}" placeholder="${esc(t('main.layoutSitioEjemplo'))}"${dis ? ' disabled' : ''}></label></div>
             ${shape}`;
     }
     if (step === 'obstaculos') {
