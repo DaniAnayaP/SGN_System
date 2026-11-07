@@ -1730,6 +1730,7 @@
     "layoutVioAct_sum": "The assets of {fcode} add up to {sum} m and the footprint is {len} m: shorten one or make the footprint bigger to be able to save.",
     "layoutVioAct_out": "Asset {code} goes outside its footprint {fcode}: change its size or its position, or make the footprint bigger, to be able to save.",
     "layoutVioAct_tall": "Asset {code} is {h} m tall and its footprint {fcode} only {fh} m: lower its height to be able to save.",
+    "layoutVioAct_levels": "The levels of asset {code} reach {top} m and the asset is {h} m tall: lower the height of a level or raise the asset height so you can save.",
     "layoutVioAct_overlap": "Assets {other} and {code} overlap inside {fcode}: change their position or size to be able to save.",
     "layoutFondo": "Depth (m)",
     "layoutAgregarObstaculo": "+ Add obstacle",
@@ -4701,7 +4702,7 @@
       "example": "the bay is 1.83 m high and its crossbeam 0.07 m: you enter 0.07 and the Storage height is 1.76 m."
     },
     "layoutSec_niveles": {
-      "what": "Each line is a level of an asset (a rack with 3 levels leaves 3 lines, already listed). Here you write once the height from the floor, the height and the beam (the thickness of the crossbeam) of that level, and they apply to all its columns. The beam is taken off the Height and what is left is the Storage height. The measures come calculated from the asset's and you only fix the ones that differ; if the height of a level changes, the ones above move up with it. A single bay that is different is adjusted in Positions: what is written there wins over the level. In 3D, the shelf of each level is drawn at its height from the floor and with the thickness of its beam.",
+      "what": "Each line is a level of an asset (a rack with 3 levels leaves 3 lines, already listed). Here you write once the height from the floor, the height and the beam (the thickness of the crossbeam) of that level, and they apply to all its columns. The beam is taken off the Height and what is left is the Storage height. The measures come calculated from the asset's and you only fix the ones that differ; if the height of a level changes, the ones above move up with it. A single bay that is different is adjusted in Positions: what is written there wins over the level. In 3D, the shelf of each level is drawn at its height from the floor and with the thickness of its beam. If the levels of an asset go higher than the asset height, they are marked in red and cannot be saved until fixed (lower the height of a level or raise the asset height).",
       "example": "level 2 of R-01 has a 0.07 m crossbeam: you write 0.07 in Beam once and its 3 columns get that Storage height."
     },
     "layoutNivCeja": {

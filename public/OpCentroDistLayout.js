@@ -864,6 +864,24 @@ function applyWallItemMarks() {
         }
     });
 }
+// Paso Niveles: el aviso (uno por activo) de los niveles que suben más que su activo, y las marcas en rojo de sus renglones (se actualizan al teclear).
+function levelIssuesHtml() {
+    return (state.draft.spaces || []).map((s) => (spIssues.get(s.id) || {}).levels).filter(Boolean).map((v) => `<p>${esc(t('main.layoutVioAct_levels', v.vars))}</p>`).join('');
+}
+function applyLevelMarks() {
+    const box = document.querySelector('[data-lvl-issues]');
+    if (!box) return;
+    (state.draft.spaces || []).forEach((s, i) => {
+        for (let n = 1; n <= (s.levels || 1); n += 1) {
+            const m = LC.levelMeasures(s, n);
+            const over = s.h > 0 && m.floorH + m.h > s.h + 0.005;
+            ['floorH', 'h'].forEach((k) => { const input = document.querySelector(`[data-l="lvl"][data-i="${i}"][data-n="${n}"][data-k="${k}"]`); if (input) input.classList.toggle('layout-missing', over); });
+        }
+    });
+    const html = levelIssuesHtml();
+    box.hidden = !html;
+    box.innerHTML = html;
+}
 function applyActivoMarks() {
     (state.draft.spaces || []).forEach((s, i) => {
         const eff = ownEffective(s);
@@ -1210,14 +1228,16 @@ function stepHtml(step) {
                 count += 1;
                 const m = LC.levelMeasures(s, n);
                 const st = m.stored;
+                const over = s.h > 0 && m.floorH + m.h > s.h + 0.005;
                 // cuántos huecos (columnas) de este nivel traen en Posiciones una medida propia de estas tres
                 const own = (s.bays || []).filter((b) => b.n === n && (b.floorH !== undefined || b.h !== undefined || b.beam !== undefined)).length;
-                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td>${lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined)}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined)}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"', m.beam > 0 && m.beam >= m.h)}<td class="layout-calc"><span data-lvl-use="${i}|${n}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-help-key="layoutNivHuecos">${own || '—'}</span></td></tr>`);
+                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td>${lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined, '', over)}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined, '', over)}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"', m.beam > 0 && m.beam >= m.h)}<td class="layout-calc"><span data-lvl-use="${i}|${n}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-help-key="layoutNivHuecos">${own || '—'}</span></td></tr>`);
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutNivSinActivos'))}</p>`;
         const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosAltura', 'main.layoutPosAlto', 'main.layoutPosCeja', 'main.layoutPosAltoUtil', 'main.layoutNivHuecosPropios'];
-        return `${table(heads, rows, 'layout-niveles')}${count >= LEVEL_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutNivMuchos').replace('{n}', LEVEL_ROWS_MAX))}</p>` : ''}`;
+        const issues = levelIssuesHtml();
+        return `${table(heads, rows, 'layout-niveles')}<div class="layout-vio" data-lvl-issues${issues ? '' : ' hidden'}>${issues}</div>${count >= LEVEL_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutNivMuchos').replace('{n}', LEVEL_ROWS_MAX))}</p>` : ''}`;
     }
     if (step === 'activos') {
         // Cada renglón es un ACTIVO: lo que hay encima de una huella (una huella puede tener varios). Tiene su propio código (de ahí sale el número del activo en el Localizador) y se elige en qué huella está; la zona
@@ -2698,6 +2718,8 @@ function onEdit(event) {
         if (useLvl) useLvl.textContent = String(Math.round(mLvl.useful * 100) / 100);
         const beamLvl = document.querySelector(`[data-l="lvl"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-k="beam"]`);
         if (beamLvl) beamLvl.classList.toggle('layout-missing', mLvl.beam > 0 && mLvl.beam >= mLvl.h);
+        computeSpaceIssues();
+        applyLevelMarks();
         if (event.type === 'change') renderPanel();
     } else if (list === 'transitSizes') {
         // las medidas de lo que transita (ancho, largo y alto, en metros): vacío = sin medida (no se revisa)
@@ -3827,11 +3849,15 @@ $('layout-save').addEventListener('click', async () => {
     const freshSpaces = LC.newSpaceViolations(state.draft, state.saved);
     if (freshSpaces.length) {
         const v = freshSpaces[0];
-        showStep('activos');
+        // los niveles que suben más que el activo se arreglan en Niveles (si la cuenta lo ve; si no, en Activos con el alto del activo)
+        const stepName = v.kind === 'levels' && stepVisible('niveles') ? 'niveles' : 'activos';
+        showStep(stepName);
         renderPanel();
         Dashboard.showToast(t(`main.layoutVioAct_${v.kind}`, v.vars), 'warning');
         const at = state.draft.spaces.findIndex((s) => s.id === v.id);
-        const box = document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);
+        const box = stepName === 'niveles'
+            ? (document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"].layout-missing`) || document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"]`))
+            : document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
         return;
     }

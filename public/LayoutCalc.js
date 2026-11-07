@@ -1723,7 +1723,7 @@
     // ---- El activo dentro de su huella -------------------------------------------------------------------------------------------------------
     // Los activos de una huella van uno junto al otro: ninguno puede salirse de ella ni ser más alto que ella, ni encimarse con otro de la misma huella. Se mira sobre un Layout normalizado (deriveSpaces). Un activo apagado (off) no
     // cuenta. Igual que con las huellas: lo que ya estaba mal antes y no cambió solo se marca; lo NUEVO o lo que cambió (el activo o su huella) no se deja guardar (ver newSpaceViolations). Cuatro faltas: sum (los activos suman más
-    // que el lado de la huella), out (uno se sale de ella), tall (más alto que ella) y overlap (dos encimados).
+    // que el lado de la huella), out (uno se sale de ella), tall (más alto que ella), overlap (dos encimados) y levels (sus niveles suben más que el activo: paso Niveles).
     function spaceViolations(layout) {
         const out = [];
         if (!layout || !Array.isArray(layout.footprints) || !Array.isArray(layout.spaces)) return out;
@@ -1745,6 +1745,12 @@
                     out.push(sum > len + eps
                         ? { ...base, kind: 'sum', sig: geo, vars: { fcode: f.code, sum: m(sum), len: m(len) }, message: `Los activos de ${f.code} suman ${m(sum)} m y la huella mide ${m(len)} m.` }
                         : { ...base, kind: 'out', sig: geo, vars: { code: s.code, fcode: f.code }, message: `El activo ${s.code} se sale de su huella ${f.code}: cambia sus medidas o su posición, o agranda la huella.` });
+                }
+                // los niveles no pueden subir más que el activo (solo si el activo trae medidas de niveles o huecos propias: sin ellas los niveles se reparten justo en su alto)
+                const ownBays = (s.bays || []).filter((b) => b.floorH !== undefined || b.h !== undefined);
+                if (s.h > 0 && ((s.lvls || []).length || ownBays.length)) {
+                    const top = levelsTop(s);
+                    if (top > s.h + eps) out.push({ ...base, kind: 'levels', sig: JSON.stringify([s.h, s.levels || 1, s.lvls || null, ownBays]), vars: { code: s.code, top: m(top), h: m(s.h) }, message: `Los niveles del activo ${s.code} llegan a ${m(top)} m y el activo mide ${m(s.h)} m: baja el alto de algún nivel o sube el alto del activo.` });
                 }
                 if (s.h > f.h + eps) out.push({ ...base, kind: 'tall', sig: geo, vars: { code: s.code, fcode: f.code, h: m(s.h), fh: m(f.h) }, message: `El activo ${s.code} mide ${m(s.h)} m de alto y su huella ${f.code} solo ${m(f.h)} m.` });
                 for (let j = 0; j < i; j++) {
@@ -2650,6 +2656,18 @@
         const stored = ((space && space.bays) || []).find((b) => b.n === Number(level) && b.c === Number(column)) || {};
         return { rows: stored.rows || 1, depth: stored.depth || 1, stored };
     }
+    // Hasta dónde suben los niveles de un activo (m): lo más alto que llega un nivel (su altura desde el piso + su alto); también cuentan los huecos con altura desde el piso o alto propios. Si pasa del alto del activo, hay un aviso.
+    function levelsTop(space) {
+        const levels = (space && space.levels) || 1;
+        let top = 0;
+        for (let n = 1; n <= levels; n += 1) { const m = levelMeasures(space, n); top = Math.max(top, m.floorH + m.h); }
+        ((space && space.bays) || []).forEach((b) => {
+            if (b.floorH === undefined && b.h === undefined) return;
+            const m = bayMeasures(space, b.n, b.c);
+            top = Math.max(top, m.floorH + m.h);
+        });
+        return Math.round(top * 1000) / 1000;
+    }
     // Lo que muestra Posiciones de un hueco: lo guardado en el hueco o, si no se cambió, lo de su nivel (paso Niveles: altura desde el piso, alto y ceja) y, si el nivel tampoco lo trae, lo que sale del activo (alto = alto del activo
     // entre sus niveles; altura desde el piso = los niveles de abajo; largo = su largo entre sus columnas; ancho = su fondo). Todo en metros.
     function bayMeasures(space, level, column) {
@@ -2723,7 +2741,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, sanitizeLevels, levelOf, levelMeasures,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, sanitizeLevels, levelOf, levelMeasures, levelsTop,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
