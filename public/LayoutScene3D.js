@@ -15,6 +15,8 @@
     const SENSOR_COLOR = 0x2b8ca3;
     const POWER_COLOR = { panel: 0x6b6f7c, outlet110: 0xf1c232, outlet220: 0xe8892b, 'three-phase': 0xd93a2f };
     const WOOD = 0xb98a52;
+    // El tinte de lo que cae sobre un piso cuando las zonas van en gris neutro (el morado de los pisos del croquis, muy claro).
+    const FLOOR_TINT = 0xe9cdee;
     const MAX_SPACE_LABELS = 300;
     const LAYER_NAMES = ['contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety'];
     // El color de cada elemento de Seguridad (los mismos del croquis: rojo del fuego, verde de emergencia, naranja de alarma, azul del agua).
@@ -90,6 +92,8 @@
         let clashSet = new Set();
         // Zonas a desnivel: con levelsOn el nivel de cada zona se escribe junto a su nombre.
         let levelsOn = true;
+        // Zonas en gris neutro (paso Pisos sin el chip Zonas): no llevan su color y lo que cae sobre un piso lleva el tinte del piso.
+        let neutralZones = false;
         let hl = null; // lo resaltado: { kind: 'zone' | 'floor' | 'footprint' | 'space' | 'bay', id, strong }
         const textureCache = new Map();
 
@@ -375,6 +379,7 @@
             if (opts && 'focus' in opts) focusSet = opts.focus || null;
             if (opts && 'openings' in opts) openingsOn = !!opts.openings;
             if (opts && 'levels' in opts) levelsOn = !!opts.levels;
+            if (opts && 'neutralZones' in opts) neutralZones = !!opts.neutralZones;
             if (opts && 'clashDoors' in opts) clashSet = new Set(opts.clashDoors || []);
             lastLayout = layout;
             Object.keys(group).forEach((n) => clearGroup(group[n]));
@@ -587,7 +592,7 @@
                 if (geo) group.columns.add(new THREE.Mesh(geo, lam(o.kind === 'other' ? 0x7b8196 : 0x3a3f4d)));
             });
 
-            // zonas: losas de color (el que se les puso en Formato de zona, o el de su tipo)
+            // zonas: losas de color (el que se les puso en Formato de zona, o el de su tipo; en gris neutro si el paso Pisos va sin el chip Zonas)
             const LCalc = root.LayoutCalc;
             // Los pisos (desniveles): el nivel del piso en un punto es el del piso que lo contiene (0 si no hay ninguno); lo que está encima de un piso (huellas, activos, pasillos, objetos, seguridad) sube con él.
             const floors = LCalc && LCalc.floorsOf ? LCalc.floorsOf(layout) : [];
@@ -647,28 +652,47 @@
             (layout.zones || []).forEach((z, i) => {
                 const pts = Array.isArray(z.pts) && z.pts.length >= 3 ? z.pts : [[z.x, z.y], [z.x + z.l, z.y], [z.x + z.l, z.y + z.w], [z.x, z.y + z.w]];
                 if (!(z.l > 0 || (z.pts && z.pts.length >= 3))) return;
-                const color = (z.fmt && z.fmt.fill) || DEFAULT_ZONE_FILL[z.type || 'none'] || DEFAULT_ZONE_FILL.none;
+                const color = neutralZones ? DEFAULT_ZONE_FILL.none : ((z.fmt && z.fmt.fill) || DEFAULT_ZONE_FILL[z.type || 'none'] || DEFAULT_ZONE_FILL.none);
                 const inactive = z.active === false;
                 const dimZone = !!focusSet && !focusSet.zones.has(z.id);
                 const zoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive || dimZone, opacity: inactive ? 0.35 : (dimZone ? 0.22 : 1) });
                 let geo = null;
+                let usedPieces = false;
+                let floorGeo = null; // en gris neutro: los pedazos que caen sobre un piso (con el tinte del piso) van aparte de lo demás de la zona
                 if (anyLevel && LCalc.floorsOfZone(layout, z).some((f) => floors.some((g) => g.id === f.id))) {
                     try {
                         const pieces = zonePieces(pts);
-                        if (pieces && pieces.length) { geo = piecesGeometry(pieces, i); zoneMat.side = THREE.DoubleSide; }
-                    } catch (err) { geo = null; }
+                        if (pieces && pieces.length) {
+                            usedPieces = true;
+                            const onFloor = neutralZones ? pieces.filter((pc) => pc.floor) : [];
+                            const rest = neutralZones ? pieces.filter((pc) => !pc.floor) : pieces;
+                            if (onFloor.length) floorGeo = piecesGeometry(onFloor, i);
+                            geo = rest.length ? piecesGeometry(rest, i) : null;
+                            zoneMat.side = THREE.DoubleSide;
+                        }
+                    } catch (err) { geo = null; floorGeo = null; usedPieces = false; }
                 }
-                if (!geo) {
+                if (!geo && !usedPieces) {
                     try {
                         geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1]))), { depth: 0.05, bevelEnabled: false });
                     } catch (err) { return; }
                     geo.rotateX(Math.PI / 2);
                     geo.translate(-CX, 0.05 + 0.004 * i, -CY);
                 }
-                const mesh = new THREE.Mesh(geo, zoneMat);
-                mesh.userData = { kind: 'zone', zone: z };
-                group.zones.add(mesh);
-                zoneMeshes.push(mesh);
+                if (floorGeo) {
+                    const floorMat = zoneMat.clone();
+                    floorMat.color = new THREE.Color(FLOOR_TINT);
+                    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+                    floorMesh.userData = { kind: 'zone', zone: z };
+                    group.zones.add(floorMesh);
+                    zoneMeshes.push(floorMesh);
+                }
+                if (geo) {
+                    const mesh = new THREE.Mesh(geo, zoneMat);
+                    mesh.userData = { kind: 'zone', zone: z };
+                    group.zones.add(mesh);
+                    zoneMeshes.push(mesh);
+                }
                 let ax; let ay;
                 try { const a = LCalc && LCalc.zoneLabelAnchor ? LCalc.zoneLabelAnchor(z) : null; if (a) { ax = a.x; ay = a.y; } } catch (err) { /* usa el centro */ }
                 if (ax === undefined) { ax = z.x + z.l / 2; ay = z.y + z.w / 2; }

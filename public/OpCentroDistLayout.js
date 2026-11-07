@@ -3615,7 +3615,7 @@ function refreshScene3d() {
         picker3d.setData({ spaces: shown.spaces.filter((s) => s.active !== false), zones: shown.zones.filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name })) });
         scene3d.setHiddenAssets(picker3d.getHidden(), false);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, neutralZones: stepOn('pisos') && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');
