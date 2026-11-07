@@ -2002,17 +2002,7 @@
     "layoutFindPasillo": "pasillo",
     "layoutFindZona": "zona",
     "layoutFindHuella": "huella",
-    "layoutFindEnfocado": "Enfocado: {name}",
-    "layoutFindQuitar": "Quitar el enfoque y ver toda la nave",
-    "layoutFindOcultar": "Ocultar",
-    "layoutFindHuellas": "Huellas",
-    "layoutFindActivos": "Activos",
-    "layoutFindTextos": "Textos",
-    "layoutFindMedidas": "Medidas",
-    "layoutFindOcultarX": "Ocultar {name}",
-    "layoutFindVerX": "Ver {name}",
     "layoutFindSin": "Sin resultados",
-    "layoutFindResto": "Resto de la nave",
     "layoutFindRestoOculto": "Oculto",
     "layoutFindRestoTenue": "Tenue",
     "layoutFxTodo": "Todo",
@@ -2020,7 +2010,6 @@
     "layoutFxResto": "Resto",
     "layoutFxQuitar": "Quitar el enfoque",
     "layoutFxElegidos": "{n} de {total} activos elegidos",
-    "layoutFindAdentro": "Lo que hay adentro",
     "layout3dCapaWalls": "Paredes",
     "layout3dCapaDoors": "Puertas",
     "layout3dCapaPower": "Conexiones de luz",
@@ -5046,14 +5035,6 @@
       "what": "Lo que estás enfocando: la zona o huella que buscaste, o el activo, nivel o posición del renglón que elegiste. Toca Oculto o Tenue para que el resto de la nave se quite o se apague; tócalo otra vez para dejarlo como estaba, o toca la X para quitar el enfoque. Las tablas no pierden renglones: solo cambia el dibujo. Con Tenue las opciones apagadas también se ven apagadas en lugar de quitarse, y los activos que marcas en «Elegir activos» salen aquí («3 de 14 activos elegidos»): los demás se quitan (Oculto) o se apagan (Tenue).",
       "example": "eliges el nivel 2 del rack A013 y tocas Tenue: el 3D deja toda la nave apagada y el nivel 2 marcado en naranja."
     },
-    "layoutFindResto": {
-      "what": "Elige qué pasa con lo que NO es de lo enfocado: «Oculto» lo quita por completo y el croquis y el 3D se acercan a lo enfocado; «Tenue» deja toda la nave pero apagada, para no perder dónde está lo enfocado. Se recuerda en este navegador.",
-      "example": "con «Tenue» ves la Zona 6 normal y las demás zonas muy apagadas, para ubicarte dentro de la nave."
-    },
-    "layoutFindItems": {
-      "what": "La lista de lo que hay adentro de lo enfocado (las huellas con sus activos, o los activos de la huella) con un ojito por renglón: un toque lo quita del croquis y del 3D y otro lo regresa. Al ocultar una huella se ocultan también sus activos. Es solo de pantalla.",
-      "example": "quitas el ojito de A003 y solo ese anaquel desaparece del dibujo; los demás se quedan."
-    },
     "layoutFindDonde": {
       "what": "Primer paso: dónde buscar. «Todo» es toda la nave. «Zonas» muestra las zonas para que marques una o varias: la lista, los números de «Qué ver», el croquis, el 3D, las tablas y el resumen se quedan solo con lo que hay dentro o sobre el borde de esas zonas. Solo cambia lo que ves: no cambia lo guardado.",
       "example": "tocas Zonas y marcas Zona 6 y Recepción: solo ves y buscas lo que hay en esas dos zonas; tocas Todo y vuelves a ver la nave completa."
@@ -5065,14 +5046,6 @@
     "layoutFindTipos": {
       "what": "Segundo paso: qué ver de lo que elegiste en «Buscar en». Todo, o uno o varios tipos a la vez (zonas, huellas, activos, paredes, puertas, pisos, seguridad, sensores, luz, obstáculos, pasillos u objetos). El número de cada tipo es lo que coincide con lo que escribes y, con zonas elegidas, lo que hay dentro de ellas. Solo salen los tipos de los pasos que tu cuenta puede ver. Con zonas elegidas, lo que prendes también se dibuja en el croquis; sin zonas, solo filtra la lista. Al elegir una zona o una huella de la lista se enfoca; al elegir cualquier otra cosa se enciende su paso, se marca su renglón en la tabla y el croquis se acerca y la resalta.",
       "example": "eliges Zona 6 y Recepción y marcas Paredes y Puertas: la lista y el croquis solo traen las paredes y puertas de esas dos zonas."
-    },
-    "layoutFindChip": {
-      "what": "Dice qué zona o huella estás viendo. Al tocarlo se quita el enfoque y vuelve a verse toda la nave.",
-      "example": "tocas «Enfocado: Zona 6» y regresas a ver todas las zonas."
-    },
-    "layoutFindHide": {
-      "what": "Botones para ir ocultando lo que no quieres ver de lo enfocado: Huellas, Activos, Textos (nombres, m² y códigos) y Medidas. Un toque lo quita del dibujo; otro toque lo regresa. El número dice cuántos hay.",
-      "example": "quitas Activos y solo quedan las huellas de la zona; quitas Textos y desaparecen los nombres."
     },
     "layout3dLayers": {
       "what": "En 3D, las capas siguen los mismos pasos que el croquis: cuando enciendes un paso (Contorno, Puertas, Zonas, Huella-Espacio, Energía Eléctrica, Activos) se ve su capa y cuando lo apagas se oculta. La lista Capas solo trae lo que no tiene un paso propio: Paredes y Columnas, para esconderlas aunque Contorno esté encendido. Lo que ocultas deja de verse y de poder tocarse. La lista se recuerda en este navegador.",

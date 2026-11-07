@@ -19,7 +19,7 @@ const state = {
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
     // lo que se enfocó con la búsqueda (zona o huella) y lo que se ocultó de ello: ver «buscar una zona o una huella»
-    find: null, findHide: {}, findHideIds: {}, findDim: false,
+    find: null, findDim: false,
     // el usuario pidió renumerar los códigos de los activos (se ve en el borrador y se aplica al guardar)
     renumber: false,
     // lo que se eligió en la tabla y se resalta en el croquis: { kind: 'zone' | 'space' | 'bay', id, n, c, step } (por id, no por número de renglón, para que no se mueva al quitar o agregar renglones)
@@ -1574,11 +1574,11 @@ async function renumberCodes() {
 $('layout-panel').addEventListener('click', (event) => { if (event.target.closest('[data-renumber-codes]')) renumberCodes(); });
 
 // ---- buscar una zona o una huella (enfoque) ----------------------------------------------------------------------------------------
-// La barra de búsqueda de Visualizaciones enfoca el croquis (2D y 3D), las tablas y el resumen en UNA zona o UNA huella: solo se ve lo que hay adentro (el resto de la nave se oculta por completo) y unos botones quitan
-// lo que no se quiere ver (Huellas, Activos, Textos, Medidas). Es solo de pantalla: no cambia lo guardado ni los reportes ni los QR. state.find = { kind: 'zone' | 'footprint', id }; state.findHide = { huellas, activos, textos,
-// medidas } (true = oculto). Las tablas no pierden renglones: los que no son de lo enfocado solo se esconden (clase layout-find-out), por eso sus números de renglón no cambian.
+// La barra de búsqueda (debajo del croquis) enfoca el croquis (2D y 3D), las tablas y el resumen en una o varias ZONAS o en UNA huella: solo se ve lo que hay adentro (el resto de la nave se oculta por completo o queda tenue). Lo enfocado se
+// lee y se quita en la franja de arriba. Es solo de pantalla: no cambia lo guardado ni los reportes ni los QR. state.find = { kind: 'zone', id, ids } | { kind: 'footprint', id }. Las tablas no pierden renglones: los que no son de lo
+// enfocado solo se esconden (clase layout-find-out), por eso sus números de renglón no cambian.
 const canFind = () => !!(state.perms && state.perms.canFind);
-function clearFind() { state.find = null; state.findHide = {}; state.findHideIds = {}; state.findScope = 'all'; }
+function clearFind() { state.find = null; state.findScope = 'all'; }
 // ---- franja de enfoque (arriba del panel de pasos) -------------------------------------------------------------------------------------
 // «Ver»: las opciones (pasos) de abajo, con «Todo». «Enfocado»: el enfoque del buscador (zona o huella) o el activo, nivel o posición del renglón que se eligió en Activos, Niveles o Posiciones. «Resto»: qué pasa con lo
 // que no es de lo enfocado, oculto o tenue (una sola elección, la misma del buscador, que se recuerda en este navegador). El enfoque de un renglón es solo del dibujo (croquis y 3D): las tablas no pierden renglones.
@@ -1762,24 +1762,18 @@ function findIds() {
     }
     return ids;
 }
-// El Layout sin lo que se ocultó con el ojito (una huella oculta se lleva sus activos).
-function withoutHidden(d) {
-    const hid = state.findHideIds || {};
-    if (!d || !Object.keys(hid).length) return d;
-    return { ...d, footprints: d.footprints.filter((p) => !hid[p.id]), spaces: d.spaces.filter((s) => !hid[s.id] && !hid[s.footprintId]) };
-}
 // Cómo se ve el Layout con el enfoque: solo lo enfocado (zona con sus huellas y activos o huella con sus activos) o, con el resto «tenue», todo el Layout con lo enfocado resaltado.
 function findView(full) {
     if (!activeFind()) return { d: full, finding: false, dimmed: false };
     if (!findEntity()) { if (state.find) clearFind(); return { d: full, finding: false, dimmed: false }; }
-    if (state.findDim) return { d: withoutHidden(full), finding: true, dimmed: true };
+    if (state.findDim) return { d: full, finding: true, dimmed: true };
     const d = findLayout(full);
     return { d, finding: d !== full, dimmed: false };
 }
 function findView3d() {
     if (!activeFind()) return { shown: state.draft, focus: null };
     if (!findEntity()) { if (state.find) clearFind(); return { shown: state.draft, focus: null }; }
-    if (state.findDim) return { shown: withoutHidden(state.draft), focus: findIds() };
+    if (state.findDim) return { shown: state.draft, focus: findIds() };
     return { shown: findLayout(state.draft, true), focus: null };
 }
 // Con el resto «tenue»: lo que no es de lo enfocado se ve apagado (las figuras y los textos de lo enfocado llevan la clase find-on).
@@ -1865,8 +1859,7 @@ function findLayout(d, flat3d) {
     const pad = Math.max(0.5, Math.max(x1 - x0, y1 - y0) * 0.06);
     const h = Number(d.heightM) > 0 ? d.heightM : 4;
     const rect = [[x0 - pad, y0 - pad, h], [x1 + pad, y0 - pad, h], [x1 + pad, y1 + pad, h], [x0 - pad, y1 + pad, h]];
-    const hid = state.findHideIds || {};
-    const base = { ...d, zones, footprints: footprints.filter((p) => !hid[p.id]), spaces: spaces.filter((x) => !hid[x.id] && !hid[x.footprintId]), plan: null };
+    const base = { ...d, zones, footprints, spaces, plan: null };
     if (scoped) {
         const common = { safety: scoped.safety, transit: scoped.transit, objects: scoped.objects, floors: scoped.floors };
         return flat3d ? { ...base, ...common, vertices: rect, obstacles: [], doors: [], power: [], sensors: [] } : { ...base, ...common, _frame: rect, obstacles: scoped.obstacles, doors: scoped.doors, power: scoped.power, sensors: scoped.sensors };
@@ -1992,47 +1985,11 @@ function moveFindActive(step) {
     const cur = $(`layout-find-opt-${findActive}`);
     if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
 }
-// El chip de lo enfocado (con su ✕) y los botones para ocultar; solo sale con un enfoque puesto y con el icono Buscar en el árbol.
+// La barra de búsqueda solo sale con el icono Buscar en el árbol (canFind) y con un Layout cargado.
 function renderFindBox() {
     const box = $('layout-find');
     box.hidden = !(canFind() && state.draft);
     $('layout-find-input').setAttribute('aria-label', t('main.layoutBuscarBtn'));
-    const target = $('layout-find-state');
-    const e = box.hidden || !state.find ? null : findEntity();
-    if (!e) { target.innerHTML = ''; return; }
-    const keepTop = (target.querySelector('.layout-find-items') || {}).scrollTop || 0;
-    const d = state.draft;
-    const hide = state.findHide || {};
-    const hid = state.findHideIds || {};
-    const fps = d.footprints.filter((p) => p.active !== false && (e.kind === 'zone' ? e.ids.includes(p.zoneId) : p.id === e.id));
-    const sps = d.spaces.filter((s) => s.active !== false && (e.kind === 'zone' ? e.ids.includes(s.zoneId) : s.footprintId === e.id));
-    const toggles = [];
-    if (e.kind === 'zone') toggles.push(['huellas', 'main.layoutFindHuellas', fps.length]);
-    toggles.push(['activos', 'main.layoutFindActivos', sps.length], ['textos', 'main.layoutFindTextos', null]);
-    if (e.kind === 'zone') toggles.push(['medidas', 'main.layoutFindMedidas', null]);
-    // un ojito por renglón: una huella oculta se lleva sus activos; el activo se oculta solo
-    const eye = (id, name) => {
-        const off = !!hid[id];
-        const title = t(off ? 'main.layoutFindVerX' : 'main.layoutFindOcultarX', { name });
-        return `<button type="button" class="layout-find-eye" data-find-eye="${esc(id)}" data-help-key="layoutFindItems" aria-pressed="${!off}" aria-label="${esc(title)}" title="${esc(title)}"><span class="bx ${off ? 'bx-hide' : 'bx-show'}" aria-hidden="true"></span></button>`;
-    };
-    const row = (id, code, kind, sub, parentId) => `<div class="layout-find-row${hid[id] || (parentId && hid[parentId]) ? ' off' : ''}${sub ? ' sub' : ''}" role="listitem"><b>${esc(code)}</b><span>${esc(kind)}</span>${eye(id, code)}</div>`;
-    const items = [];
-    if (e.kind === 'zone') fps.forEach((p) => { items.push(row(p.id, p.code, t('main.layoutFindHuella'), false)); sps.filter((s) => s.footprintId === p.id).forEach((s) => items.push(row(s.id, s.code, typeLabel('space', s.type), true, p.id))); });
-    else sps.forEach((s) => items.push(row(s.id, s.code, typeLabel('space', s.type), false)));
-    const rest = (v, key) => `<button type="button" class="layout-find-segbtn" data-find-dim="${v}" data-help-key="layoutFindResto" aria-pressed="${!!state.findDim === (v === 1)}">${esc(t(key))}</button>`;
-    target.innerHTML = `<button type="button" class="layout-find-chip" data-find-clear data-help-key="layoutFindChip" aria-label="${esc(t('main.layoutFindQuitar'))}" title="${esc(t('main.layoutFindQuitar'))}">${esc(t('main.layoutFindEnfocado', { name: e.name }))}<span class="bx bx-x layout-find-x" aria-hidden="true"></span></button>
-        <div class="layout-find-hide-title">${esc(t('main.layoutFindResto'))}</div>
-        <div class="layout-find-seg" role="group" data-help-key="layoutFindResto">${rest(0, 'main.layoutFindRestoOculto')}${rest(1, 'main.layoutFindRestoTenue')}</div>
-        <div class="layout-find-hide-title">${esc(t('main.layoutFindOcultar'))}</div>
-        <div class="layout-find-hide" role="group" data-help-key="layoutFindHide">${toggles.map(([key, label, n]) => {
-        const name = t(label);
-        const title = t(hide[key] ? 'main.layoutFindVerX' : 'main.layoutFindOcultarX', { name });
-        return `<button type="button" class="layout-find-toggle" data-find-hide="${key}" data-help-key="layoutFindHide" aria-pressed="${!hide[key]}" aria-label="${esc(title)}" title="${esc(title)}">${esc(name)}${n === null ? '' : ` <span class="layout-find-n">${n}</span>`}</button>`;
-    }).join('')}</div>
-        ${items.length ? `<div class="layout-find-hide-title">${esc(t('main.layoutFindAdentro'))}</div><div class="layout-find-items" role="list" data-help-key="layoutFindItems">${items.slice(0, 300).join('')}</div>` : ''}`;
-    const list = target.querySelector('.layout-find-items');
-    if (list) list.scrollTop = keepTop;
 }
 // Poner o quitar el enfoque (reset = true cuando cambió lo enfocado: el croquis y el 3D se acomodan a lo nuevo).
 let find3dReframe = false;
@@ -2070,8 +2027,6 @@ function pickFind(n) {
     if (item.type !== 'zone' && item.type !== 'footprint') { locateFound(item); return; }
     state.find = item.type === 'zone' ? { kind: 'zone', id: item.id, ids: [item.id] } : { kind: item.kind, id: item.id };
     state.findScope = item.type === 'zone' ? 'zones' : 'all';
-    state.findHide = {};
-    state.findHideIds = {};
     $('layout-find-input').value = '';
     closeFindList();
     applyFind(true);
@@ -2106,7 +2061,6 @@ $('layout-find').addEventListener('click', (event) => {
         const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
         if (!next.length) clearFind();
         else {
-            if (!(state.find && state.find.kind === 'zone')) { state.findHide = {}; state.findHideIds = {}; }
             state.find = { kind: 'zone', id: next[0], ids: next };
         }
         state.findScope = 'zones';
@@ -2131,32 +2085,6 @@ $('layout-find').addEventListener('click', (event) => {
     }
     const pick = event.target.closest('[data-find-pick]');
     if (pick) { pickFind(Number(pick.getAttribute('data-find-pick'))); return; }
-    if (event.target.closest('[data-find-clear]')) { clearFind(); applyFind(true); return; }
-    const eyeBtn = event.target.closest('[data-find-eye]');
-    if (eyeBtn) {
-        const id = eyeBtn.getAttribute('data-find-eye');
-        const next = { ...state.findHideIds };
-        if (next[id]) delete next[id]; else next[id] = true;
-        state.findHideIds = next;
-        applyFind(false);
-        return;
-    }
-    const dimBtn = event.target.closest('[data-find-dim]');
-    if (dimBtn) {
-        const v = dimBtn.getAttribute('data-find-dim') === '1';
-        if (state.findDim !== v) {
-            state.findDim = v;
-            try { localStorage.setItem(FIND_DIM_KEY, v ? '1' : '0'); } catch (err) { /* no se recuerda */ }
-            applyFind(true);
-        }
-        return;
-    }
-    const tg = event.target.closest('[data-find-hide]');
-    if (tg) {
-        const key = tg.getAttribute('data-find-hide');
-        state.findHide = { ...state.findHide, [key]: !state.findHide[key] };
-        applyFind(false);
-    }
 });
 document.addEventListener('click', (event) => { if (!event.target.closest('.layout-find-field, .layout-find-list')) closeFindList(); });
 
@@ -2171,15 +2099,14 @@ function renderSvg(underlay) {
     const finding = fv.finding;
     const zoneFocus = finding && !!activeFind() && activeFind().kind === 'zone'; // con zonas enfocadas se dibuja lo que pidió «Qué ver» (la lista ya viene filtrada)
     const dimmed = fv.dimmed; // el resto de la nave se ve «tenue» (se dibuja todo y lo que no es de lo enfocado se apaga)
-    const hide = state.findHide || {};
-    const sN = state.showNames && !(finding && hide.textos);
-    const sA = state.showArea && !(finding && hide.textos);
-    const sM = state.showMeasures && !(finding && hide.medidas);
+    const sN = state.showNames;
+    const sA = state.showArea;
+    const sM = state.showMeasures;
     // con zonas enfocadas y el resto «Oculto» manda «Qué ver» (la lista ya viene filtrada por tipo): lo de adentro se dibuja aunque su paso esté apagado en la franja
     const FOCUS_STEPS = ['paredes', 'puertas', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'pisos', 'espacios', 'activos'];
     const on = underlay ? () => true : (zoneFocus && !dimmed ? (step) => stepOn(step) || FOCUS_STEPS.includes(step) : stepOn);
-    const showFp = finding ? (!hide.huellas && (on('espacios') || activeFind().kind === 'footprint')) : on('espacios');
-    const showSp = finding ? (!hide.activos && (on('activos') || on('posiciones') || on('niveles'))) : (on('activos') || on('posiciones') || on('niveles'));
+    const showFp = finding ? (on('espacios') || activeFind().kind === 'footprint') : on('espacios');
+    const showSp = on('activos') || on('posiciones') || on('niveles');
     const W = 700;
     const H = 460;
     const M = 36;
@@ -2366,7 +2293,7 @@ function renderSvg(underlay) {
                 s += `<rect class="ls ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" data-fid="${esc(sp.footprintId)}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" rx="2">${spaceTitle}</rect>`;
             }
             const spaceInk = window.LayoutMapSvg.inkFor(sp.fmt || LC.FMT_ASSET_DEFAULT);
-            if (w >= 26 && h >= 9 && !(finding && hide.textos)) s += `<text class="lt3" data-lf="${esc(sp.footprintId)}"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
+            if (w >= 26 && h >= 9) s += `<text class="lt3" data-lf="${esc(sp.footprintId)}"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
         });
     }
     if (showFp || showSp) {
@@ -3931,16 +3858,14 @@ let scene3dLabels = true;
 function effective3dLayers() {
     // con un enfoque: solo lo enfocado (sin paredes, columnas, puertas ni luz) o, con el resto «tenue», todo lo de siempre; los botones de ocultar de la búsqueda valen en los dos
     const f = activeFind();
-    const hide = state.findHide || {};
     if (f && !state.findDim) {
         const zf = f.kind === 'zone';
-        return { contour: false, walls: false, columns: false, doors: false, power: false, sensors: false, objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), zones: stepOn('zonas') || stepOn('pisos') || f.kind === 'zone', footprints: !hide.huellas && (stepOn('espacios') || f.kind === 'footprint' || zf), assets: !hide.activos && (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || zf) };
+        return { contour: false, walls: false, columns: false, doors: false, power: false, sensors: false, objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), zones: stepOn('zonas') || stepOn('pisos') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || zf, assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || zf) };
     }
     const layers = {
         contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || stepOn('pisos') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), sensors: stepOn('sensores'), assets: stepOn('activos') || stepOn('posiciones') || stepOn('niveles'),
     };
-    if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }
     // zonas enfocadas con el resto «tenue»: las capas que «Qué ver» no pidió se apagan (y se ven tenues)
     if (f && f.kind === 'zone') {
         const c = findTypesChosen();
@@ -4032,7 +3957,7 @@ function refreshScene3d() {
         picker3d.setFocus(fv3.focus ? fv3.focus.spaces : null);
         scene3d.setHiddenAssets(picker3d.getHidden(), false, !!state.findDim);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, neutralZones: stepOn('pisos') && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, neutralZones: stepOn('pisos') && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');

@@ -2002,17 +2002,7 @@
     "layoutFindPasillo": "aisle",
     "layoutFindZona": "zone",
     "layoutFindHuella": "footprint",
-    "layoutFindEnfocado": "Focused: {name}",
-    "layoutFindQuitar": "Remove the focus and see the whole warehouse",
-    "layoutFindOcultar": "Hide",
-    "layoutFindHuellas": "Footprints",
-    "layoutFindActivos": "Assets",
-    "layoutFindTextos": "Texts",
-    "layoutFindMedidas": "Measures",
-    "layoutFindOcultarX": "Hide {name}",
-    "layoutFindVerX": "Show {name}",
     "layoutFindSin": "No results",
-    "layoutFindResto": "Rest of the warehouse",
     "layoutFindRestoOculto": "Hidden",
     "layoutFindRestoTenue": "Faded",
     "layoutFxTodo": "All",
@@ -2020,7 +2010,6 @@
     "layoutFxResto": "Rest",
     "layoutFxQuitar": "Remove the focus",
     "layoutFxElegidos": "{n} of {total} assets chosen",
-    "layoutFindAdentro": "What is inside",
     "layout3dCapaWalls": "Walls",
     "layout3dCapaDoors": "Doors",
     "layout3dCapaPower": "Power connections",
@@ -5047,14 +5036,6 @@
       "what": "What you are focusing on: the zone or footprint you searched, or the asset, level or position of the row you chose. Press Hidden or Faded so the rest of the warehouse is removed or dimmed; press it again to leave it as it was, or press the X to remove the focus. The tables keep all their rows: only the drawing changes. With Faded the options that are off also show faded instead of being removed, and the assets you mark in Choose assets show up here (3 of 14 assets chosen): the others are removed (Hidden) or dimmed (Faded).",
       "example": "you choose level 2 of rack A013 and press Faded: the 3D dims the whole warehouse and marks level 2 in orange."
     },
-    "layoutFindResto": {
-      "what": "Chooses what happens to what is NOT part of the focus: “Hidden” removes it completely and the map and the 3D view zoom in on the focus; “Faded” keeps the whole warehouse but greyed out, so you do not lose where the focus is. It is remembered in this browser.",
-      "example": "with “Faded” you see Zone 6 normal and the other zones very faded, to find your place in the warehouse."
-    },
-    "layoutFindItems": {
-      "what": "The list of what is inside the focus (the footprints with their assets, or the footprint’s assets) with an eye on each row: one touch removes it from the map and the 3D view and another brings it back. Hiding a footprint also hides its assets. It is screen-only.",
-      "example": "you turn off the eye of A003 and only that rack disappears from the drawing; the others stay."
-    },
     "layoutFindDonde": {
       "what": "First step: where to search. «All» is the whole building. «Zones» shows the zones so you can tick one or several: the list, the «What to see» numbers, the sketch, the 3D view, the tables and the summary keep only what is inside or on the edge of those zones. It only changes what you see: it does not change what is saved.",
       "example": "you tap Zones and tick Zone 6 and Reception: you only see and search what is in those two zones; you tap All and see the whole building again."
@@ -5066,14 +5047,6 @@
     "layoutFindTipos": {
       "what": "Second step: what to see of what you chose in «Search in». All, or one or several types at once (zones, footprints, assets, walls, doors, floors, safety, sensors, power, obstacles, aisles or objects). The number on each type is how many match what you type and, with zones chosen, how many are inside them. Only the types of steps your account can see appear. With zones chosen, what you turn on is also drawn on the sketch; without zones it only filters the list. Picking a zone or a footprint from the list focuses it; picking anything else turns on its step, marks its row in the table and the sketch zooms in and highlights it.",
       "example": "you choose Zone 6 and Reception and turn on Walls and Doors: the list and the sketch only bring the walls and doors of those two zones."
-    },
-    "layoutFindChip": {
-      "what": "Says which zone or footprint you are looking at. Touching it removes the focus and the whole warehouse is shown again.",
-      "example": "you touch “Focused: Zone 6” and go back to seeing all the zones."
-    },
-    "layoutFindHide": {
-      "what": "Buttons to hide what you do not want to see of what is focused: Footprints, Assets, Texts (names, m² and codes) and Measures. One touch removes it from the drawing; another brings it back. The number says how many there are.",
-      "example": "you remove Assets and only the footprints of the zone remain; you remove Texts and the names disappear."
     },
     "layout3dLayers": {
       "what": "In 3D the layers follow the same steps as the map: when you turn a step on (Outline, Doors, Zones, Footprint-Space, Electrical Power, Assets) its layer is shown and when you turn it off it is hidden. The Layers list only has what does not have a step of its own: Walls and Columns, to hide them even if Outline is on. What you hide is no longer seen or touchable. The list is remembered in this browser.",
