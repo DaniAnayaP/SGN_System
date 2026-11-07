@@ -864,6 +864,18 @@ function applyWallItemMarks() {
         }
     });
 }
+// Paso Niveles, «Aplicar a todos»: el alto y la ceja del nivel elegido pasan a todos los demás niveles de ese activo (LayoutCalc.levelsWithSame); la altura desde el piso de cada nivel no se toca. Se ve en el borrador y se aplica al guardar.
+function applyLevelToAll(key) {
+    if (!state.draft || !canEdit('niveles')) return;
+    const [i, n] = String(key).split('|').map(Number);
+    const space = state.draft.spaces[i];
+    if (!space || (space.levels || 1) < 2) return;
+    const lvls = LC.levelsWithSame(space, n);
+    if (lvls.length) space.lvls = lvls; else delete space.lvls;
+    renderPanel();
+    refreshLive();
+    Dashboard.showToast(t('main.layoutNivAplicado', { n, code: space.code || '', count: (space.levels || 1) - 1 }), 'success');
+}
 // Paso Niveles: el aviso (uno por activo) de los niveles que suben más que su activo, y las marcas en rojo de sus renglones (se actualizan al teclear).
 function levelIssuesHtml() {
     return (state.draft.spaces || []).map((s) => (spIssues.get(s.id) || {}).levels).filter(Boolean).map((v) => `<p>${esc(t('main.layoutVioAct_levels', v.vars))}</p>`).join('');
@@ -1231,11 +1243,11 @@ function stepHtml(step) {
                 const over = s.h > 0 && m.floorH + m.h > s.h + 0.005;
                 // cuántos huecos (columnas) de este nivel traen en Posiciones una medida propia de estas tres
                 const own = (s.bays || []).filter((b) => b.n === n && (b.floorH !== undefined || b.h !== undefined || b.beam !== undefined)).length;
-                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td>${lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined, '', over)}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined, '', over)}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"', m.beam > 0 && m.beam >= m.h)}<td class="layout-calc"><span data-lvl-use="${i}|${n}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-help-key="layoutNivHuecos">${own || '—'}</span></td></tr>`);
+                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td>${lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined, '', over)}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined, '', over)}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"', m.beam > 0 && m.beam >= m.h)}<td class="layout-calc"><span data-lvl-use="${i}|${n}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-help-key="layoutNivHuecos">${own || '—'}</span></td><td><button type="button" class="btn btn-secondary layout-toggle" data-lvl-apply="${i}|${n}" data-help-key="layoutNivAplicar" title="${esc(t('main.layoutNivAplicarTip'))}"${dis || levels < 2 ? ' disabled' : ''}>${esc(t('main.layoutNivAplicar'))}</button></td></tr>`);
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutNivSinActivos'))}</p>`;
-        const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosAltura', 'main.layoutPosAlto', 'main.layoutPosCeja', 'main.layoutPosAltoUtil', 'main.layoutNivHuecosPropios'];
+        const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosAltura', 'main.layoutPosAlto', 'main.layoutPosCeja', 'main.layoutPosAltoUtil', 'main.layoutNivHuecosPropios', ''];
         const issues = levelIssuesHtml();
         return `${table(heads, rows, 'layout-niveles')}<div class="layout-vio" data-lvl-issues${issues ? '' : ' hidden'}>${issues}</div>${count >= LEVEL_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutNivMuchos').replace('{n}', LEVEL_ROWS_MAX))}</p>` : ''}`;
     }
@@ -2933,6 +2945,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (szDel) { toggleSensorZone(szDel.dataset.szDel, false); return; }
     const addObj = event.target.closest('[data-add-object]');
     if (addObj) { addObject(); return; }
+    const lvApply = event.target.closest('[data-lvl-apply]');
+    if (lvApply) { applyLevelToAll(lvApply.dataset.lvlApply); return; }
     const add = event.target.closest('[data-add]');
     if (add) {
         const list = add.dataset.add;

@@ -3234,6 +3234,9 @@
     "layoutNivHuecosPropios": "Huecos con medida propia",
     "layoutNivSinActivos": "Todavía no hay activos. Agrégalos en Huella-Espacio y ponles sus niveles en Activos: sus niveles salen aquí solos.",
     "layoutNivMuchos": "Se muestran los primeros {n} niveles.",
+    "layoutNivAplicar": "Aplicar a todos",
+    "layoutNivAplicarTip": "Pasa el alto y la ceja de este nivel a todos los demás niveles de este activo",
+    "layoutNivAplicado": "El alto y la ceja del nivel {n} de {code} pasaron a sus otros {count} niveles. Guarda el Layout para aplicarlo.",
     "colRelFila": "Fila",
     "relRowShort": "Fila",
     "relRowN": "Fila {n}",
@@ -4701,12 +4704,16 @@
       "example": "el hueco mide 1.83 m y su travesaño 0.07 m: se pone 0.07 y el Alto de almacenamiento queda en 1.76 m."
     },
     "layoutSec_niveles": {
-      "what": "Cada renglón es un nivel de un activo (el rack con 3 niveles deja 3 renglones, ya listos). Aquí anotas una sola vez la altura desde el piso, el alto y la ceja (el grueso del travesaño) de ese nivel, y valen para todas sus columnas. La ceja se resta del Alto y queda el Alto de almacenamiento. Las medidas salen calculadas con las del activo y solo corriges las que cambien; si el alto de un nivel cambia, los de arriba suben con él. Un hueco en particular que sea distinto se ajusta en Posiciones: lo que se anote ahí manda sobre el nivel. En el 3D, la repisa de cada nivel se dibuja a su altura desde el piso y con el grueso de su ceja. Si los niveles de un activo suben más que el alto del activo, se marcan en rojo y no se puede guardar hasta corregirlo (baja el alto de algún nivel o sube el alto del activo).",
+      "what": "Cada renglón es un nivel de un activo (el rack con 3 niveles deja 3 renglones, ya listos). Aquí anotas una sola vez la altura desde el piso, el alto y la ceja (el grueso del travesaño) de ese nivel, y valen para todas sus columnas. La ceja se resta del Alto y queda el Alto de almacenamiento. Las medidas salen calculadas con las del activo y solo corriges las que cambien; si el alto de un nivel cambia, los de arriba suben con él. Un hueco en particular que sea distinto se ajusta en Posiciones: lo que se anote ahí manda sobre el nivel. En el 3D, la repisa de cada nivel se dibuja a su altura desde el piso y con el grueso de su ceja. Si los niveles de un activo suben más que el alto del activo, se marcan en rojo y no se puede guardar hasta corregirlo (baja el alto de algún nivel o sube el alto del activo). Con «Aplicar a todos» pasas el alto y la ceja de un nivel a los demás niveles del activo.",
       "example": "el nivel 2 del R-01 tiene un travesaño de 0.07 m: pones 0.07 en Ceja una sola vez y sus 3 columnas quedan con ese Alto de almacenamiento."
     },
     "layoutNivCeja": {
       "what": "Lo que mide el travesaño (el peldaño) de este nivel, en metros, igual para todas sus columnas. Ese grueso no se puede almacenar: se le quita al Alto y lo que queda es el Alto de almacenamiento. Tiene que ser menor que el Alto. Con 0 no se reserva nada.",
       "example": "el nivel mide 1.83 m y su travesaño 0.07 m: se pone 0.07 y el Alto de almacenamiento queda en 1.76 m."
+    },
+    "layoutNivAplicar": {
+      "what": "Pasa el alto y la ceja de este nivel a todos los demás niveles de este mismo activo, para no capturarlos nivel por nivel. La altura desde el piso de cada nivel no se toca (sigue acomodándose encima del anterior) y los huecos con medida propia en Posiciones se quedan como están. Se ve en la tabla y se aplica al guardar.",
+      "example": "el rack de 4 niveles lleva 0.9 m de alto y 0.07 m de ceja en cada uno: lo anotas en el nivel 1, tocas Aplicar a todos y los otros 3 niveles quedan igual."
     },
     "layoutNivHuecos": {
       "what": "Cuántos huecos (columnas) de este nivel traen en Posiciones su propia altura desde el piso, alto o ceja. A esos no les cambia lo que anotes aquí.",

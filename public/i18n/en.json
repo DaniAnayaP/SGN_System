@@ -3235,6 +3235,9 @@
     "layoutNivHuecosPropios": "Bays with their own measure",
     "layoutNivSinActivos": "There are no assets yet. Add them in Footprint-Space and give them their levels in Assets: their levels show up here by themselves.",
     "layoutNivMuchos": "The first {n} levels are shown.",
+    "layoutNivAplicar": "Apply to all",
+    "layoutNivAplicarTip": "Copies the height and the beam of this level to all the other levels of this asset",
+    "layoutNivAplicado": "The height and beam of level {n} of {code} were applied to its other {count} levels. Save the Layout to keep it.",
     "colRelFila": "Row",
     "relRowShort": "Row",
     "relRowN": "Row {n}",
@@ -4702,12 +4705,16 @@
       "example": "the bay is 1.83 m high and its crossbeam 0.07 m: you enter 0.07 and the Storage height is 1.76 m."
     },
     "layoutSec_niveles": {
-      "what": "Each line is a level of an asset (a rack with 3 levels leaves 3 lines, already listed). Here you write once the height from the floor, the height and the beam (the thickness of the crossbeam) of that level, and they apply to all its columns. The beam is taken off the Height and what is left is the Storage height. The measures come calculated from the asset's and you only fix the ones that differ; if the height of a level changes, the ones above move up with it. A single bay that is different is adjusted in Positions: what is written there wins over the level. In 3D, the shelf of each level is drawn at its height from the floor and with the thickness of its beam. If the levels of an asset go higher than the asset height, they are marked in red and cannot be saved until fixed (lower the height of a level or raise the asset height).",
+      "what": "Each line is a level of an asset (a rack with 3 levels leaves 3 lines, already listed). Here you write once the height from the floor, the height and the beam (the thickness of the crossbeam) of that level, and they apply to all its columns. The beam is taken off the Height and what is left is the Storage height. The measures come calculated from the asset's and you only fix the ones that differ; if the height of a level changes, the ones above move up with it. A single bay that is different is adjusted in Positions: what is written there wins over the level. In 3D, the shelf of each level is drawn at its height from the floor and with the thickness of its beam. If the levels of an asset go higher than the asset height, they are marked in red and cannot be saved until fixed (lower the height of a level or raise the asset height). With the Apply to all button you copy the height and the beam of one level to the other levels of the asset.",
       "example": "level 2 of R-01 has a 0.07 m crossbeam: you write 0.07 in Beam once and its 3 columns get that Storage height."
     },
     "layoutNivCeja": {
       "what": "How thick the crossbeam (the rung) of this level is, in meters, the same for all its columns. That thickness cannot be used for storage: it is taken off the Height and what is left is the Storage height. It must be smaller than the Height. With 0 nothing is reserved.",
       "example": "the level is 1.83 m and its crossbeam 0.07 m: you write 0.07 and the Storage height is 1.76 m."
+    },
+    "layoutNivAplicar": {
+      "what": "Copies the height and the beam of this level to all the other levels of this same asset, so you do not have to write them level by level. The height from the floor of each level is not touched (it keeps stacking on top of the previous one) and the bays with their own measure in Positions stay as they are. It shows in the table and is applied when you save.",
+      "example": "the 4-level rack has 0.9 m of height and 0.07 m of beam on every level: you write them on level 1, press Apply to all and the other 3 levels get the same."
     },
     "layoutNivHuecos": {
       "what": "How many bays (columns) of this level have their own height from the floor, height or beam in Positions. What you write here does not change those.",

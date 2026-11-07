@@ -2668,6 +2668,24 @@
         });
         return Math.round(top * 1000) / 1000;
     }
+    // Aplicar a todos (paso Niveles): los niveles guardados del activo con el alto y la ceja del nivel dado repetidos en todos los demás niveles. Lo que queda igual a lo de por defecto (el alto repartido o sin ceja) no se guarda aparte;
+    // la altura desde el piso de cada nivel no se toca (la que ya tenía o la que se acomoda sola encima del anterior) y los huecos con medida propia (Posiciones) siguen mandando.
+    function levelsWithSame(space, level) {
+        const n = Number(level);
+        const levels = (space && space.levels) || 1;
+        const src = levelMeasures(space, n);
+        const defaultH = Math.round((space && space.h > 0 ? space.h / levels : 0) * 1000) / 1000;
+        const out = [];
+        for (let k = 1; k <= levels; k += 1) {
+            const lv = { ...levelOf(space, k), n: k };
+            if (k !== n) {
+                if (Math.abs(src.h - defaultH) < 0.0005) delete lv.h; else lv.h = src.h;
+                if (src.beam > 0) lv.beam = src.beam; else delete lv.beam;
+            }
+            if (Object.keys(lv).length > 1) out.push(lv);
+        }
+        return out;
+    }
     // Lo que muestra Posiciones de un hueco: lo guardado en el hueco o, si no se cambió, lo de su nivel (paso Niveles: altura desde el piso, alto y ceja) y, si el nivel tampoco lo trae, lo que sale del activo (alto = alto del activo
     // entre sus niveles; altura desde el piso = los niveles de abajo; largo = su largo entre sus columnas; ancho = su fondo). Todo en metros.
     function bayMeasures(space, level, column) {
@@ -2741,7 +2759,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, sanitizeLevels, levelOf, levelMeasures, levelsTop,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
