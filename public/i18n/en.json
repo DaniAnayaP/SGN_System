@@ -1906,6 +1906,10 @@
     "layoutTxtNombres": "Zone names",
     "layoutTxtArea": "Zone m²",
     "layoutTxtMedidas": "Side measures",
+    "layoutTxtCodigos": "Footprint, asset and aisle codes",
+    "layoutTxtPisos": "Floors (code and level)",
+    "layoutTxtSensores": "Sensor codes",
+    "layoutTxtSeguridad": "Safety codes",
     "layoutTxtRotulos": "3D labels",
     "layoutCapasBtn": "Layers",
     "layout3dActivosBtn": "Choose assets",
@@ -4787,6 +4791,10 @@
     "layoutSheetSize": {
       "what": "The width and length, in centimeters, of the area you print. The sheet fits itself to that size (landscape, portrait or small) and the PDF and image come out the same. If the area is smaller than a page, the file comes out on the smallest standard page that fits with the area marked by a dashed cut line. From 6 to 120 cm per side.",
       "example": "you type 10.5 by 14.8 for a card: it comes out on a Letter page with the card drawn with a dashed line, ready to cut."
+    },
+    "layoutTxtOtros": {
+      "what": "Shows or hides that text on the map: the codes of footprints, assets and aisles; the code and level of each floor; the code of each sensor; or the safety codes. It only changes what you see: it does not change what is saved and it is remembered in this browser.",
+      "example": "you remove the asset codes to see the side measures better, and put them back when you need them."
     },
     "layoutMeasures": {
       "what": "Shows or hides the measures on the sketch: the length of each wall, the height of each corner and the measure of each zone side. The name and m² of each zone stay (to remove the m² use the icon next to it). The downloaded sheet comes out as you see it; the public QR view does not change.",

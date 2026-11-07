@@ -7366,6 +7366,11 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .lvl-raised{ pointer-events: none; stroke: #A63FB5; stroke-width: 2.4; }
 .lvl-ramp{ pointer-events: none; stroke: #A63FB5; stroke-width: 1.5; stroke-dasharray: 5 3; }
 .lvl-floor{ pointer-events: none; }
+/* Textos del croquis que se pueden ocultar desde el menú de textos (códigos de huellas, activos y pasillos; código y nivel de los pisos; códigos de sensores y de seguridad). */
+#layout-svg.hide-t-codes text.lt3{ display: none; }
+#layout-svg.hide-t-floors text.llvl{ display: none; }
+#layout-svg.hide-t-sensors text.lt-sensor{ display: none; }
+#layout-svg.hide-t-safety text.lt-safety{ display: none; }
 .layout-legend .lg-levels{ display: contents; }
 .layout-legend .lg-level-ramp{ background: linear-gradient(90deg, #f7d774, #d9553f); border: 1px dashed #8f2d3a; }
 .lvl-arrow{ pointer-events: none; stroke: #A63FB5; stroke-width: 2.2; fill: none; marker-end: url(#lvl-arr); }

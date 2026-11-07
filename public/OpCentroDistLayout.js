@@ -2253,7 +2253,7 @@ function renderSvg() {
         s += `<rect class="hl-box" data-hlbox="sensor:${esc(e.id)}" x="${(X(a.x) - 11).toFixed(1)}" y="${(Y(a.y) - 19).toFixed(1)}" width="22" height="30" rx="3"/>`;
         const moveS = canMoveWallItem('sensors') && !sg.legacy;
         if (moveS) s += `<circle class="le-hit" data-nid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="15"/>`;
-        s += `<circle class="lsn${moveS ? ' ld-drag' : ''}" data-nid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="6.5"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">°</text><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) - 10}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
+        s += `<circle class="lsn${moveS ? ' ld-drag' : ''}" data-nid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="6.5"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">°</text><text class="lt lx lt-sensor" x="${X(a.x)}" y="${Y(a.y) - 10}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
     });
     // Objetos (paso Objetos): personas y montacargas dibujados a escala y girados hacia donde miran (foto fija del plano).
     (on('objetos') ? (d.objects || []) : []).forEach((o) => {
@@ -2326,6 +2326,7 @@ function renderSvg() {
     putOuter('lt2', M + bar + 6, H - 8, 'start', '5 m');
     s = `${s.slice(0, halosAt)}${outerHalos}${s.slice(halosAt)}${outerLabels}`;
     $('layout-svg').innerHTML = s;
+    applyTextGroups();
     applyFindDim(dimmed);
     applyHighlight(false);
     applyZoom(); // cada redibujo conserva el aumento y el lugar donde se estaba viendo
@@ -2509,6 +2510,40 @@ $('layout-names-btn').addEventListener('click', () => {
     updateNamesBtn();
     if (state.draft) renderSvg();
 });
+// Otros textos del croquis: los códigos de huellas, activos y pasillos, el código y el nivel de cada piso, el código de cada sensor y los códigos de seguridad se pueden ocultar o ver desde el menú de textos (junto con los
+// nombres, los m² y las medidas). Se recuerdan en este navegador y lo ve quien tiene el icono Nombres en el árbol; es solo de pantalla: el croquis ya dibujado se oculta con una clase (no hace falta redibujarlo).
+const TEXT_GROUPS = {
+    codes: { id: 'layout-txt-codes-btn', key: 'sgn_layout_txt_codes', cls: 'hide-t-codes' },
+    floors: { id: 'layout-txt-floors-btn', key: 'sgn_layout_txt_floors', cls: 'hide-t-floors' },
+    sensors: { id: 'layout-txt-sensors-btn', key: 'sgn_layout_txt_sensors', cls: 'hide-t-sensors' },
+    safety: { id: 'layout-txt-safety-btn', key: 'sgn_layout_txt_safety', cls: 'hide-t-safety' },
+};
+state.txtOff = {};
+Object.entries(TEXT_GROUPS).forEach(([g, o]) => { try { state.txtOff[g] = localStorage.getItem(o.key) === '0'; } catch (err) { /* sin almacenamiento: se ven */ } });
+function applyTextGroups() {
+    const svg = $('layout-svg');
+    if (!svg) return;
+    Object.entries(TEXT_GROUPS).forEach(([g, o]) => svg.classList.toggle(o.cls, !!state.txtOff[g]));
+}
+function updateTextGroupBtns() {
+    Object.entries(TEXT_GROUPS).forEach(([g, o]) => {
+        const btn = $(o.id);
+        if (!btn) return;
+        btn.hidden = !(state.perms && state.perms.canToggleNames);
+        btn.setAttribute('aria-pressed', String(!state.txtOff[g]));
+        btn.classList.toggle('off', !!state.txtOff[g]);
+    });
+}
+Object.entries(TEXT_GROUPS).forEach(([g, o]) => {
+    const btn = $(o.id);
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+        state.txtOff[g] = !state.txtOff[g];
+        try { localStorage.setItem(o.key, state.txtOff[g] ? '0' : '1'); } catch (err) { /* no se recuerda */ }
+        updateTextGroupBtns();
+        applyTextGroups();
+    });
+});
 // Icono Girar el croquis: da un cuarto de vuelta a la derecha cada vez (0°, 90°, 180°, 270°); se recuerda en este navegador y la hoja que se descarga sale con ese giro.
 const ROTATION_KEY = 'sgn_layout_rotation';
 function updateRotateBtn() {
@@ -2539,6 +2574,8 @@ function showEditor() {
     updateMeasuresBtn();
     updateAreaBtn();
     updateNamesBtn();
+    updateTextGroupBtns();
+    applyTextGroups();
     updateRotateBtn();
     updateOpeningBtn();
     updateLevelsBtn();
@@ -3866,7 +3903,7 @@ async function setView3d(on) {
 // Textos: UN solo botón con una lista en vez de un icono por cada texto que se puede ocultar. En 2D la lista trae los nombres, los m² y las medidas de las zonas; en 3D, los rótulos. Cada renglón sigue siendo el
 // mismo interruptor de siempre (con su permiso del árbol: solo lo ve quien lo tiene) y, si en la vista elegida no hay ninguno que se vea, el botón no sale.
 function updateTextsMenu() {
-    const ids = state.view3d ? ['layout-3d-labels'] : ['layout-names-btn', 'layout-area-btn', 'layout-measures-btn'];
+    const ids = state.view3d ? ['layout-3d-labels'] : ['layout-names-btn', 'layout-area-btn', 'layout-measures-btn', ...Object.values(TEXT_GROUPS).map((o) => o.id)];
     const any = ids.some((id) => !$(id).hidden);
     $('layout-texts').hidden = !any;
     if (!any) closeOptMenus();

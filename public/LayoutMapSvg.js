@@ -164,7 +164,7 @@
     // El código de un elemento, en letra chica con un contorno blanco para que se lea encima de zonas y huellas.
     function safetyLabel(x, y, txt, anchor, color) {
         const a = `x="${Math.round(x * 100) / 100}" y="${Math.round(y * 100) / 100}" font-size="7.5" font-weight="700" text-anchor="${anchor || 'middle'}"`;
-        return `<text ${a} fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">${esc(txt)}</text><text ${a} fill="${color || '#2A1B30'}">${esc(txt)}</text>`;
+        return `<text class="lt-safety" ${a} fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">${esc(txt)}</text><text class="lt-safety" ${a} fill="${color || '#2A1B30'}">${esc(txt)}</text>`;
     }
 
     function mapSvg(layout, options = {}) {

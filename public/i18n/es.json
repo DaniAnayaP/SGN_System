@@ -1906,6 +1906,10 @@
     "layoutTxtNombres": "Nombres de las zonas",
     "layoutTxtArea": "m² de las zonas",
     "layoutTxtMedidas": "Medidas de los lados",
+    "layoutTxtCodigos": "Códigos de huellas, activos y pasillos",
+    "layoutTxtPisos": "Pisos (código y nivel)",
+    "layoutTxtSensores": "Códigos de sensores",
+    "layoutTxtSeguridad": "Códigos de seguridad",
     "layoutTxtRotulos": "Rótulos del 3D",
     "layoutCapasBtn": "Capas",
     "layout3dActivosBtn": "Elegir activos",
@@ -4786,6 +4790,10 @@
     "layoutSheetSize": {
       "what": "El ancho y el largo, en centímetros, del espacio que se imprime. La hoja se acomoda sola a esa medida (horizontal, vertical o chica) y el PDF y la imagen salen igual. Si el espacio es más chico que una hoja, el archivo sale en la hoja estándar más chica donde quepa con el espacio marcado con una línea punteada para recortar. De 6 a 120 cm por lado.",
       "example": "escribes 10.5 por 14.8 para una tarjeta: sale en una hoja Carta con la tarjeta dibujada con línea punteada, lista para recortar."
+    },
+    "layoutTxtOtros": {
+      "what": "Muestra u oculta ese texto en el croquis: los códigos de las huellas, de los activos y de los pasillos; el código y el nivel de cada piso; el código de cada sensor; o los códigos de seguridad. Solo cambia lo que ves: no cambia lo guardado y se recuerda en este navegador.",
+      "example": "quitas los códigos de los activos para ver mejor las medidas de los lados, y los vuelves a poner cuando los necesites."
     },
     "layoutMeasures": {
       "what": "Muestra u oculta las medidas del croquis: el largo de cada pared, la altura de cada esquina y la medida de cada lado de las zonas. El nombre y los m² de cada zona se quedan (para quitar los m² está el icono de al lado). La hoja que se descarga sale igual que lo ves; la vista pública del QR no cambia.",
