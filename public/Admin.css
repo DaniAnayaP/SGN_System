@@ -7889,7 +7889,6 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-fx-chip{ display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.74rem; font-weight: 600; padding: 0.2rem 0.4rem 0.2rem 0.7rem; border: 1.5px solid var(--color-accent, var(--color-text-primary)); border-radius: 999px; color: var(--color-text-primary); }
 .layout-fx-x{ display: inline-flex; align-items: center; font: inherit; padding: 0; border: 0; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
 .layout-fx-x:focus-visible{ outline: 2px solid var(--color-accent, var(--color-text-primary)); outline-offset: 2px; border-radius: 50%; }
-.layout-fx-ver{ align-self: center; margin-right: 0.15rem; }
 .layout-find-seg{ display: inline-flex; gap: 0.15rem; padding: 0.15rem; border: 1px solid var(--color-border); border-radius: 999px; }
 .layout-find-segbtn{ font: inherit; font-size: 0.72rem; font-weight: 600; padding: 0.15rem 0.7rem; border: 0; border-radius: 999px; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
 .layout-find-segbtn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); }

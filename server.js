@@ -6724,6 +6724,8 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     const existing = getClientLayout(req.user.clientId, { costCenterId: targetCenterId });
     // Los códigos de las zonas (Z001…), de las huellas (H001… por zona) y de los activos (A001… por zona y tipo) los pone el sistema: lo que ya existía conserva el suyo y lo nuevo recibe el siguiente.
     next = LayoutCalc.lockCodes(next, existing ? existing.layout : null);
+    // El nombre del sitio ya no se escribe en la pantalla: si llega vacío se conserva el que ya tenía el Layout (así no cuenta como un cambio del Contorno).
+    if (!next.siteName && existing && existing.layout && existing.layout.siteName) next.siteName = existing.layout.siteName;
     const expectedVersion = Number(body.baseVersion) || 0;
     if ((existing ? existing.version : 0) !== expectedVersion) {
         return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: existing ? existing.version : 0 });
@@ -6876,6 +6878,12 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         if (clashes.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: clashes.map((c) => c.message), section: clashes[0].kind === 'asset' ? 'activos' : 'espacios' });
     }
     if (!changed.length && planImage === undefined && existing) return res.json({ version: existing.version, changed: [] });
+    // Sin nombre de sitio, el del Layout es el nombre del centro de costos (sale arriba del nombre de la empresa en la hoja y las tarjetas). Se pone ya revisados los permisos: lo deriva el sistema, no la persona.
+    if (!next.siteName && targetCenterId) {
+        const cc = getCostCenterAnyLane(targetCenterId, req.user.clientId);
+        const ccName = cc && String(cc.name || '').trim().slice(0, LayoutCalc.LIMITS.text);
+        if (ccName) next.siteName = ccName;
+    }
 
     const result = saveClientLayout({ clientId: req.user.clientId, layout: next, planImage, expectedVersion, updatedBy: changedByLabel(req), costCenterId: targetCenterId });
     if (result.conflict) return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: result.currentVersion });
