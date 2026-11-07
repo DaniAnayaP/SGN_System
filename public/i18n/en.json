@@ -2017,6 +2017,7 @@
     "layoutFxEnfocado": "Focused",
     "layoutFxResto": "Rest",
     "layoutFxQuitar": "Remove the focus",
+    "layoutFxElegidos": "{n} of {total} assets chosen",
     "layoutFindAdentro": "What is inside",
     "layout3dCapaWalls": "Walls",
     "layout3dCapaDoors": "Doors",
@@ -5041,7 +5042,7 @@
       "example": "you press All to see walls, doors, zones and assets together; you press it again to keep only the step you are editing."
     },
     "layoutFxEnfocado": {
-      "what": "What you are focusing on: the zone or footprint you searched, or the asset, level or position of the row you chose. Press Hidden or Faded so the rest of the warehouse is removed or dimmed; press it again to leave it as it was, or press the X to remove the focus. The tables keep all their rows: only the drawing changes.",
+      "what": "What you are focusing on: the zone or footprint you searched, or the asset, level or position of the row you chose. Press Hidden or Faded so the rest of the warehouse is removed or dimmed; press it again to leave it as it was, or press the X to remove the focus. The tables keep all their rows: only the drawing changes. With Faded the options that are off also show faded instead of being removed, and the assets you mark in Choose assets show up here (3 of 14 assets chosen): the others are removed (Hidden) or dimmed (Faded).",
       "example": "you choose level 2 of rack A013 and press Faded: the 3D dims the whole warehouse and marks level 2 in orange."
     },
     "layoutFindResto": {

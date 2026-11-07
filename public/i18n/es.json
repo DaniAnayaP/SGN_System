@@ -2017,6 +2017,7 @@
     "layoutFxEnfocado": "Enfocado",
     "layoutFxResto": "Resto",
     "layoutFxQuitar": "Quitar el enfoque",
+    "layoutFxElegidos": "{n} de {total} activos elegidos",
     "layoutFindAdentro": "Lo que hay adentro",
     "layout3dCapaWalls": "Paredes",
     "layout3dCapaDoors": "Puertas",
@@ -5040,7 +5041,7 @@
       "example": "tocas Todo para ver paredes, puertas, zonas y activos juntos; lo tocas otra vez para quedarte solo con el paso que editas."
     },
     "layoutFxEnfocado": {
-      "what": "Lo que estás enfocando: la zona o huella que buscaste, o el activo, nivel o posición del renglón que elegiste. Toca Oculto o Tenue para que el resto de la nave se quite o se apague; tócalo otra vez para dejarlo como estaba, o toca la X para quitar el enfoque. Las tablas no pierden renglones: solo cambia el dibujo.",
+      "what": "Lo que estás enfocando: la zona o huella que buscaste, o el activo, nivel o posición del renglón que elegiste. Toca Oculto o Tenue para que el resto de la nave se quite o se apague; tócalo otra vez para dejarlo como estaba, o toca la X para quitar el enfoque. Las tablas no pierden renglones: solo cambia el dibujo. Con Tenue las opciones apagadas también se ven apagadas en lugar de quitarse, y los activos que marcas en «Elegir activos» salen aquí («3 de 14 activos elegidos»): los demás se quitan (Oculto) o se apagan (Tenue).",
       "example": "eliges el nivel 2 del rack A013 y tocas Tenue: el 3D deja toda la nave apagada y el nivel 2 marcado en naranja."
     },
     "layoutFindResto": {

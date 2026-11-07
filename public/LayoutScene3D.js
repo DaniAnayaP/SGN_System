@@ -92,6 +92,12 @@
         let levelsOn = true;
         // Zonas en gris neutro (paso Pisos sin el chip Zonas): no llevan su color y lo que cae sobre un piso lleva el tinte del piso.
         let neutralZones = false;
+        // «Elegir activos» con el resto «tenue»: los activos que no se eligieron se dibujan apagados en lugar de quitarse.
+        let dimHidden = false;
+        // Con un enfoque y el resto «tenue», las capas apagadas (sus nombres) se ven tenues en lugar de quitarse.
+        let dimLayers = new Set();
+        // El nivel enfocado de un activo { id, n, mode: 'dim' | 'hide' }: los demás niveles de ese activo se apagan o se quitan.
+        let focusLevel = null;
         let hl = null; // lo resaltado: { kind: 'zone' | 'floor' | 'footprint' | 'space' | 'bay', id, strong }
         const textureCache = new Map();
 
@@ -99,6 +105,25 @@
         const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
         // Un color (0xRRGGBB) mezclado con otro: k = cuánto del otro (0 = el mismo, 1 = el otro). Sirve para ver «tenue» lo que no se enfocó.
         const mixHex = (c, to, k) => { const r = (c >> 16) & 255; const g = (c >> 8) & 255; const b = c & 255; const R = (to >> 16) & 255; const G = (to >> 8) & 255; const B = to & 255; return (Math.round(r + (R - r) * k) << 16) | (Math.round(g + (G - g) * k) << 8) | Math.round(b + (B - b) * k); };
+
+        // Opacidad de las capas tenues: cada material guarda su opacidad de origen para poder volver a ella.
+        function applyLayerDim() {
+            LAYER_NAMES.forEach((n) => {
+                const g = group[n];
+                if (!g) return;
+                const dim = dimLayers.has(n) && !layerOn[n];
+                g.traverse((o) => {
+                    const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+                    ms.forEach((m) => {
+                        if (!m.userData) m.userData = {};
+                        if (m.userData.op0 === undefined) m.userData.op0 = [m.opacity, m.transparent];
+                        m.transparent = dim ? true : m.userData.op0[1];
+                        m.opacity = dim ? m.userData.op0[0] * 0.25 : m.userData.op0[0];
+                        m.needsUpdate = true;
+                    });
+                });
+            });
+        }
 
         function applyVisibility() {
             group.contour.visible = layerOn.contour;
@@ -116,6 +141,9 @@
             group.safety.visible = layerOn.safety;
             group.zoneLabels.visible = labelsOn && layerOn.zones;
             group.spaceLabels.visible = labelsOn && layerOn.assets;
+            // las capas apagadas que van «tenues» se ven con poca opacidad (el resto de la nave cuando hay un enfoque)
+            LAYER_NAMES.forEach((n) => { if (group[n] && dimLayers.has(n) && !layerOn[n]) group[n].visible = true; });
+            applyLayerDim();
             if (!layerOn.assets && !layerOn.zones) outline.visible = false;
             applyHl();
             dirty = true;
@@ -416,6 +444,8 @@
             if (opts && 'openings' in opts) openingsOn = !!opts.openings;
             if (opts && 'levels' in opts) levelsOn = !!opts.levels;
             if (opts && 'neutralZones' in opts) neutralZones = !!opts.neutralZones;
+            if (opts && 'dimLayers' in opts) dimLayers = new Set(opts.dimLayers || []);
+            if (opts && 'focusLevel' in opts) focusLevel = opts.focusLevel || null;
             if (opts && 'clashDoors' in opts) clashSet = new Set(opts.clashDoors || []);
             lastLayout = layout;
             Object.keys(group).forEach((n) => clearGroup(group[n]));
@@ -956,10 +986,10 @@
                     [x0, y0, z0, x0, y1, z0], [x1, y0, z0, x1, y1, z0], [x1, y0, z1, x1, y1, z1], [x0, y0, z1, x0, y1, z1]].forEach((e) => edges.push(...e));
             };
             (layout.spaces || []).forEach((s) => {
-                if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id)) return;
+                if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || (hiddenAssets.has(s.id) && !dimHidden)) return;
                 const cx = PX(s.x + s.l / 2); const cz = PZ(s.y + s.d / 2);
                 const fl = FL(s.x + s.l / 2, s.y + s.d / 2); // el piso donde está parado
-                const dimS = !!focusSet && !focusSet.spaces.has(s.id);
+                const dimS = (!!focusSet && !focusSet.spaces.has(s.id)) || (dimHidden && hiddenAssets.has(s.id));
                 const mute = (c) => (dimS ? mixHex(c, 0xe4e7f0, 0.8) : c);
                 const lv = Math.max(1, s.levels || 1);
                 // el color que se le puso en Formato de activo (sin relleno o sin color propio se queda con el de su tipo)
@@ -978,12 +1008,16 @@
                     // su propia altura o ceja, ese nivel se dibuja columna por columna; si no, una sola repisa de todo el largo. Sin LayoutCalc se reparten parejas como siempre.
                     const LCx = root.LayoutCalc;
                     const slotsN = Math.max(1, Math.floor(s.slots || 1));
-                    const deckAt = (xc, sx, m) => { const th = m.beam > 0 ? m.beam : 0.06; dck.push({ x: xc, y: fl + Math.max(m.floorH, 0.03) + th / 2, z: cz, sx, sy: th, sz: s.d, c: deckC }); };
+                    const deckAt = (xc, sx, m, color) => { const th = m.beam > 0 ? m.beam : 0.06; dck.push({ x: xc, y: fl + Math.max(m.floorH, 0.03) + th / 2, z: cz, sx, sy: th, sz: s.d, c: color === undefined ? deckC : color }); };
                     for (let k = 1; k <= lv; k++) {
+                        // con un nivel enfocado en este activo, los demás niveles se apagan (tenue) o se quitan (oculto)
+                        const otherLevel = !!focusLevel && focusLevel.id === s.id && focusLevel.n !== k;
+                        if (otherLevel && focusLevel.mode === 'hide') continue;
+                        const lvColor = otherLevel ? mixHex(deckC, 0xe4e7f0, 0.8) : deckC;
                         if (!(LCx && LCx.levelMeasures && LCx.bayMeasures)) { dck.push({ x: cx, y: 0.15 + (k - 1) * ((s.h - 0.3) / lv) + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC }); continue; }
                         if ((s.bays || []).some((b) => b.n === k && (b.floorH !== undefined || b.beam !== undefined))) {
-                            for (let c = 1; c <= slotsN; c++) deckAt(cx - s.l / 2 + (c - 0.5) * (s.l / slotsN), s.l / slotsN, LCx.bayMeasures(s, k, c));
-                        } else deckAt(cx, s.l, LCx.levelMeasures(s, k));
+                            for (let c = 1; c <= slotsN; c++) deckAt(cx - s.l / 2 + (c - 0.5) * (s.l / slotsN), s.l / slotsN, LCx.bayMeasures(s, k, c), lvColor);
+                        } else deckAt(cx, s.l, LCx.levelMeasures(s, k), lvColor);
                     }
                 }
                 spaceList.push({ s, x: cx, z: cz, fl });
@@ -1004,7 +1038,7 @@
                 hitSpaces.instanceMatrix.needsUpdate = true;
                 group.assets.add(hitSpaces);
             }
-            if (spaceList.length <= MAX_SPACE_LABELS) spaceList.forEach((e) => { if (!focusSet || focusSet.spaces.has(e.s.id)) addLabel(group.spaceLabels, e.s.code, e.x, e.s.h + 0.4 + e.fl, e.z, 0.38, false); });
+            if (spaceList.length <= MAX_SPACE_LABELS) spaceList.forEach((e) => { if ((!focusSet || focusSet.spaces.has(e.s.id)) && !hiddenAssets.has(e.s.id)) addLabel(group.spaceLabels, e.s.code, e.x, e.s.h + 0.4 + e.fl, e.z, 0.38, false); });
 
             applyVisibility();
             if (!placed) { placed = true; go(viewTarget('general'), false); }
@@ -1013,8 +1047,9 @@
         function setLabels(on) { labelsOn = !!on; applyVisibility(); }
         function setLayer(name, on) { if (LAYER_NAMES.includes(name)) { layerOn[name] = !!on; applyVisibility(); } }
         // Elegir qué activos se ven: ids = los que se ocultan. rebuild = false cuando enseguida se llama a update (así no se arma dos veces).
-        function setHiddenAssets(ids, rebuild) {
+        function setHiddenAssets(ids, rebuild, dim) {
             hiddenAssets = new Set(ids || []);
+            dimHidden = !!dim;
             if (rebuild !== false && lastLayout) update(lastLayout);
         }
         // Marcar lo que se eligió en una tabla del editor (sel = { kind, id, strong }) o quitar la marca (null).

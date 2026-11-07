@@ -1592,22 +1592,31 @@ function fxCandidate() {
     const sp = state.draft.spaces.find((x) => x.id === h.id);
     if (!sp) return null;
     const tail = h.kind === 'bay' ? ` · ${t('main.layoutPosNivel')} ${h.n} · ${t('main.layoutPosColumna')} ${h.c}` : (h.n ? ` · ${t('main.layoutPosNivel')} ${h.n}` : '');
-    return { id: sp.id, label: `${sp.code || ''}${tail}` };
+    return { id: sp.id, label: `${sp.code || ''}${tail}`, n: h.n || 0 };
 }
 // El enfoque que no viene del buscador: el activo del renglón elegido, cuando ya se eligió Oculto o Tenue.
 function virtualFind() {
     if (state.find || !state.fxOn || !state.draft) return null;
     const c = fxCandidate();
-    return c ? { kind: 'spaces', ids: [c.id], from: 'row' } : null;
+    return c ? { kind: 'spaces', ids: [c.id], n: c.n, from: 'row' } : null;
 }
 const activeFind = () => state.find || virtualFind();
+// Lo que se eligió en «Elegir activos» (solo en el 3D): cuántos de cuántos; null si se ven todos.
+function pickerFocus() {
+    if (!picker3d) return null;
+    const hid = picker3d.getHidden().size;
+    if (!hid) return null;
+    const total = picker3d.total();
+    return { shown: total - hid, total };
+}
 function focusStripHtml() {
     if (!state.draft) return '';
     const e = state.find ? findEntity() : null;
     const cand = e ? null : fxCandidate();
-    if (!e && !cand) return '';
-    const on = !!e || !!state.fxOn;
-    const label = e ? e.name : cand.label;
+    const pk = !e && !cand ? pickerFocus() : null;
+    if (!e && !cand && !pk) return '';
+    const on = !!e || !!pk || !!state.fxOn;
+    const label = e ? e.name : (cand ? cand.label : t('main.layoutFxElegidos', { n: pk.shown, total: pk.total }));
     const pill = (v, key) => `<button type="button" class="layout-find-segbtn" data-fx-rest="${v}" data-help-key="layoutFxEnfocado" aria-pressed="${on && !!state.findDim === (v === 1)}">${esc(t(key))}</button>`;
     const clear = on ? `<button type="button" class="layout-fx-x" data-fx-clear data-help-key="layoutFxEnfocado" aria-label="${esc(t('main.layoutFxQuitar'))}" title="${esc(t('main.layoutFxQuitar'))}"><span class="bx bx-x" aria-hidden="true"></span></button>` : '';
     return `<div class="layout-fx-row"><span class="layout-find-hide-title">${esc(t('main.layoutFxEnfocado'))}</span><span class="layout-fx-chip" data-help-key="layoutFxEnfocado">${esc(label)}${clear}</span><span class="layout-find-hide-title">${esc(t('main.layoutFxResto'))}</span><div class="layout-find-seg" role="group" data-help-key="layoutFxEnfocado">${pill(0, 'main.layoutFindRestoOculto')}${pill(1, 'main.layoutFindRestoTenue')}</div></div>`;
@@ -1626,6 +1635,14 @@ function fxAfterSelect() {
     renderFocusStrip();
 }
 function fxSetRest(dim) {
+    // lo elegido en «Elegir activos»: la misma elección Oculto o Tenue vale para los activos que no se eligieron
+    if (!state.find && !fxCandidate() && pickerFocus()) {
+        state.findDim = dim;
+        try { localStorage.setItem(FIND_DIM_KEY, dim ? '1' : '0'); } catch (err) { /* no se recuerda */ }
+        scheduleScene3d();
+        renderFocusStrip();
+        return;
+    }
     if (state.find) {
         if (state.findDim !== dim) {
             state.findDim = dim;
@@ -1643,6 +1660,7 @@ function fxSetRest(dim) {
     renderFocusStrip();
 }
 function fxClear() {
+    if (!state.find && !fxCandidate() && pickerFocus()) { picker3d.setHidden(new Set()); scheduleScene3d(); updateViewBtns(); renderFocusStrip(); return; }
     if (state.find) { clearFind(); applyFind(true); } else { state.fxOn = false; fxLastKey = ''; fxReframe(); renderSvg(); }
     renderFocusStrip();
 }
@@ -1986,7 +2004,7 @@ $('layout-find').addEventListener('click', (event) => {
 document.addEventListener('click', (event) => { if (!event.target.closest('.layout-find-field, .layout-find-list')) closeFindList(); });
 
 const ZONE_CLASS = { dry: 'lz-dry', cold: 'lz-cold', chemical: 'lz-chem', finished: 'lz-fin', dock: 'lz-dock', office: 'lz-office', aisle: 'lz-aisle', aisle2: 'lz-aisle2' };
-function renderSvg() {
+function renderSvg(underlay) {
     // El croquis puede estar girado (icono Girar): todo se dibuja desde una copia girada del borrador; lo guardado y las tablas no se tocan.
     const rot = state.rotation || 0;
     const full = rot ? LC.rotateLayout(state.draft, rot) : state.draft;
@@ -1999,7 +2017,7 @@ function renderSvg() {
     const sN = state.showNames && !(finding && hide.textos);
     const sA = state.showArea && !(finding && hide.textos);
     const sM = state.showMeasures && !(finding && hide.medidas);
-    const on = stepOn;
+    const on = underlay ? () => true : stepOn;
     const showFp = finding ? (!hide.huellas && (on('espacios') || activeFind().kind === 'footprint')) : on('espacios');
     const showSp = finding ? (!hide.activos && (on('activos') || on('posiciones') || on('niveles'))) : (on('activos') || on('posiciones') || on('niveles'));
     const W = 700;
@@ -2012,7 +2030,7 @@ function renderSvg() {
         x0 = Math.min(x0, 0); y0 = Math.min(y0, 0); x1 = Math.max(x1, d.plan.widthM); y1 = Math.max(y1, d.plan.widthM * state.planAspect);
     }
     // Una puerta que abre hacia afuera puede salirse del contorno: el croquis crece lo necesario para que su giro (o recorrido) se vea completo.
-    if (on('puertas') && state.showOpening) {
+    if (stepOn('puertas') && state.showOpening) {
         (d.doors || []).forEach((door) => {
             const op = LC.doorOpening(d, door);
             if (op) op.pts.forEach((p) => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
@@ -2326,6 +2344,12 @@ function renderSvg() {
     s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" class="lscale"/>`;
     putOuter('lt2', M + bar + 6, H - 8, 'start', '5 m');
     s = `${s.slice(0, halosAt)}${outerHalos}${s.slice(halosAt)}${outerLabels}`;
+    if (underlay) return s;
+    // con un enfoque y el resto «tenue», las opciones apagadas también se ven (con poca opacidad) debajo de lo encendido
+    if (state.findDim && activeFind() && SECTION_ORDER.filter(stepVisible).some((x) => !stepOn(x))) {
+        const under = renderSvg(true);
+        s = s.replace('</defs>', `</defs><g class="fx-under" opacity="0.3" pointer-events="none">${under.slice(under.indexOf('</defs>') + 7)}</g>`);
+    }
     $('layout-svg').innerHTML = s;
     applyTextGroups();
     applyFindDim(dimmed);
@@ -3757,6 +3781,17 @@ function effective3dLayers() {
     if (f) { layers.footprints = layers.footprints && !hide.huellas; layers.assets = layers.assets && !hide.activos; }
     return layers;
 }
+// Con un enfoque (o con activos elegidos) y el resto «tenue», las opciones apagadas también se ven tenues en el 3D en lugar de quitarse.
+function dim3dLayers() {
+    if (!state.findDim || !(activeFind() || pickerFocus())) return [];
+    const layers = effective3dLayers();
+    return Object.keys(layers).filter((n) => !layers[n]);
+}
+// El nivel enfocado de un activo (renglón de Niveles o Posiciones): los demás niveles de ese activo se apagan (Tenue) o se quitan (Oculto).
+function fxFocusLevel() {
+    const v = virtualFind();
+    return v && v.n ? { id: v.ids[0], n: v.n, mode: state.findDim ? 'dim' : 'hide' } : null;
+}
 const lazyScripts = {};
 const can3d = () => !!(state.perms && state.perms.canView3D);
 function loadScriptOnce(src) {
@@ -3782,7 +3817,7 @@ function ensureScene3d() {
             picker3d = window.LayoutAssetPicker.create($('layout-3d-picker'), {
                 texts: { title: t('main.layout3dActivosTitulo'), count: t('main.layout3dActivosConteo'), all: t('main.layout3dTodos'), none: t('main.layout3dNinguno'), close: t('main.layout3dCerrar'), search: t('main.layout3dActivosBuscar'), noResults: t('main.layout3dSinResultados'), noZone: t('main.layoutSinZona') },
                 typeLabel: (type) => typeLabel('space', type),
-                onChange: (hidden) => { scene3d.setHiddenAssets(hidden); updateViewBtns(); },
+                onChange: () => { scheduleScene3d(); renderFocusStrip(); updateViewBtns(); },
                 onToggle: () => updateViewBtns(),
             });
             return scene3d;
@@ -3824,9 +3859,10 @@ function refreshScene3d() {
     const shown = fv3.shown;
     if (picker3d) {
         picker3d.setData({ spaces: shown.spaces.filter((s) => s.active !== false), zones: shown.zones.filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name })) });
-        scene3d.setHiddenAssets(picker3d.getHidden(), false);
+        picker3d.setFocus(fv3.focus ? fv3.focus.spaces : null);
+        scene3d.setHiddenAssets(picker3d.getHidden(), false, !!state.findDim);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, neutralZones: stepOn('pisos') && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels && !(state.find && state.findHide.textos), layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, neutralZones: stepOn('pisos') && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');

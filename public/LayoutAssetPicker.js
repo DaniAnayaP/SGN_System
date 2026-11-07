@@ -31,6 +31,7 @@
 .lap input[type=checkbox]{ flex:none; width:.95rem; height:.95rem; margin:0; }
 .lap-item b{ font-size:.78rem; }
 .lap-item small{ font-size:.7rem; opacity:.7; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lap-item.lap-focus b::after{ content:' ●'; color:var(--brand, #6b3e98); font-size:.6rem; }
 .lap-empty{ padding:12px 6px; opacity:.7; }`;
         document.head.appendChild(el);
     }
@@ -45,6 +46,7 @@
         let spaces = [];
         let zones = [];
         let query = '';
+        let focusIds = null; // los activos que el buscador (o el renglón elegido) tiene enfocados: salen marcados con un punto
         host.classList.add('lap-host');
         host.hidden = true;
         host.innerHTML = `<div class="lap" role="dialog" aria-label="${esc(texts.title)}">
@@ -77,7 +79,7 @@
             if (byZone.has('')) groups.push(['', texts.noZone, byZone.get('')]);
             listEl.innerHTML = groups.map(([zid, name, items]) => {
                 const on = items.filter((s) => !hidden.has(s.id)).length;
-                const rows = items.map((s) => `<div class="lap-item"><label><input type="checkbox" data-lap-id="${esc(s.id)}"${hidden.has(s.id) ? '' : ' checked'}><b>${esc(s.code)}</b><small>${esc(typeLabel(s.type))}${s.name ? ` · ${esc(s.name)}` : ''}</small></label></div>`).join('');
+                const rows = items.map((s) => `<div class="lap-item${focusIds && focusIds.has(s.id) ? ' lap-focus' : ''}"><label><input type="checkbox" data-lap-id="${esc(s.id)}"${hidden.has(s.id) ? '' : ' checked'}><b>${esc(s.code)}</b><small>${esc(typeLabel(s.type))}${s.name ? ` · ${esc(s.name)}` : ''}</small></label></div>`).join('');
                 return `<div class="lap-zone"><label><input type="checkbox" data-lap-zone="${esc(zid)}" data-lap-state="${on === items.length ? 'all' : on ? 'some' : 'none'}"${on === items.length ? ' checked' : ''}><span>${esc(name)}</span><small>${on} / ${items.length}</small></label></div><div class="lap-items">${rows}</div>`;
             }).join('');
             listEl.querySelectorAll('[data-lap-state="some"]').forEach((box) => { box.indeterminate = true; });
@@ -116,6 +118,10 @@
             toggle() { if (host.hidden) api.show(); else api.hide(); },
             isOpen() { return !host.hidden; },
             getHidden() { return new Set(hidden); },
+            // Poner de golpe lo oculto (un conjunto vacío = todos se ven); avisa igual que si la persona lo hubiera marcado.
+            setHidden(ids) { hidden.clear(); (ids ? [...ids] : []).forEach((id) => hidden.add(id)); render(); notify(); },
+            // Marcar los activos enfocados (null = ninguno).
+            setFocus(ids) { focusIds = ids ? new Set(ids) : null; render(); },
             total() { return spaces.length; },
         };
         return api;
