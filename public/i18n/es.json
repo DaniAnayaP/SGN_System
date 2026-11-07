@@ -2008,6 +2008,11 @@
     "layoutFindResto": "Resto de la nave",
     "layoutFindRestoOculto": "Oculto",
     "layoutFindRestoTenue": "Tenue",
+    "layoutFxVer": "Ver",
+    "layoutFxTodo": "Todo",
+    "layoutFxEnfocado": "Enfocado",
+    "layoutFxResto": "Resto",
+    "layoutFxQuitar": "Quitar el enfoque",
     "layoutFindAdentro": "Lo que hay adentro",
     "layout3dCapaWalls": "Paredes",
     "layout3dCapaDoors": "Puertas",
@@ -5013,6 +5018,14 @@
     "layoutFind": {
       "what": "Busca en el Layout, por su código o su nombre: zonas, huellas, activos, paredes, puertas y lo demás (elige el tipo con los botones de arriba de la lista). Al elegir una zona o una huella, el croquis, el 3D, las tablas y el resumen se quedan solo con lo que hay adentro; el resto de la nave se oculta. Las tablas no pierden renglones: los que no son de lo enfocado solo se esconden. Es solo de pantalla: no cambia lo guardado ni lo que se imprime.",
       "example": "escribes «Zona 6» y eliges la zona: el croquis se acerca y solo se ven sus huellas y activos; escribes «H005» y solo se ven sus activos."
+    },
+    "layoutFxTodo": {
+      "what": "Enciende todas las opciones de abajo para ver todo el Layout a la vez. Si ya están todas encendidas, deja solo la que estás editando.",
+      "example": "tocas Todo para ver paredes, puertas, zonas y activos juntos; lo tocas otra vez para quedarte solo con el paso que editas."
+    },
+    "layoutFxEnfocado": {
+      "what": "Lo que estás enfocando: la zona o huella que buscaste, o el activo, nivel o posición del renglón que elegiste. Toca Oculto o Tenue para que el resto de la nave se quite o se apague; tócalo otra vez para dejarlo como estaba, o toca la X para quitar el enfoque. Las tablas no pierden renglones: solo cambia el dibujo.",
+      "example": "eliges el nivel 2 del rack A013 y tocas Tenue: el 3D deja toda la nave apagada y el nivel 2 marcado en naranja."
     },
     "layoutFindResto": {
       "what": "Elige qué pasa con lo que NO es de lo enfocado: «Oculto» lo quita por completo y el croquis y el 3D se acercan a lo enfocado; «Tenue» deja toda la nave pero apagada, para no perder dónde está lo enfocado. Se recuerda en este navegador.",

@@ -2008,6 +2008,11 @@
     "layoutFindResto": "Rest of the warehouse",
     "layoutFindRestoOculto": "Hidden",
     "layoutFindRestoTenue": "Faded",
+    "layoutFxVer": "View",
+    "layoutFxTodo": "All",
+    "layoutFxEnfocado": "Focused",
+    "layoutFxResto": "Rest",
+    "layoutFxQuitar": "Remove the focus",
     "layoutFindAdentro": "What is inside",
     "layout3dCapaWalls": "Walls",
     "layout3dCapaDoors": "Doors",
@@ -5014,6 +5019,14 @@
     "layoutFind": {
       "what": "Search a zone or a footprint, by its code or its name, and the map, the 3D view, the tables and the summary keep only what is inside it; the rest of the warehouse is hidden. The tables do not lose rows: the ones that are not part of the focus are just tucked away. It is screen-only: it changes nothing that is saved or printed.",
       "example": "you type “Zone 6” and pick the zone: the map zooms in and only its footprints and assets show; you type “H005” and only its assets show."
+    },
+    "layoutFxTodo": {
+      "what": "Turns on all the options below to see the whole Layout at once. If they are all on already, it keeps only the one you are editing.",
+      "example": "you press All to see walls, doors, zones and assets together; you press it again to keep only the step you are editing."
+    },
+    "layoutFxEnfocado": {
+      "what": "What you are focusing on: the zone or footprint you searched, or the asset, level or position of the row you chose. Press Hidden or Faded so the rest of the warehouse is removed or dimmed; press it again to leave it as it was, or press the X to remove the focus. The tables keep all their rows: only the drawing changes.",
+      "example": "you choose level 2 of rack A013 and press Faded: the 3D dims the whole warehouse and marks level 2 in orange."
     },
     "layoutFindResto": {
       "what": "Chooses what happens to what is NOT part of the focus: “Hidden” removes it completely and the map and the 3D view zoom in on the focus; “Faded” keeps the whole warehouse but greyed out, so you do not lose where the focus is. It is remembered in this browser.",

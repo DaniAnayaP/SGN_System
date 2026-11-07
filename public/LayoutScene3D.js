@@ -228,6 +228,19 @@
             }
             const s = (lastLayout.spaces || []).find((e) => e.id === hl.id);
             if (!s || s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || hiddenAssets.has(s.id) || !layerOn.assets) return null;
+            const LCx = root.LayoutCalc;
+            if ((hl.kind === 'bay' || (hl.kind === 'space' && hl.n)) && LCx && LCx.levelMeasures && LCx.bayMeasures) {
+                const n = Math.min(Math.max(1, Number(hl.n) || 1), Math.max(1, s.levels || 1));
+                const slots = Math.max(1, Math.floor(s.slots || 1));
+                const c = hl.kind === 'bay' ? Math.min(Math.max(1, Number(hl.c) || 1), slots) : 0;
+                const m = c ? LCx.bayMeasures(s, n, c) : LCx.levelMeasures(s, n);
+                const bottom = Math.max(m.floorH, 0);
+                const height = Math.max(m.h, 0.1);
+                const len = c ? s.l / slots : s.l;
+                const x0 = c ? s.x + (c - 1) * (s.l / slots) : s.x;
+                const fz = LCx.floorLevelAt ? LCx.floorLevelAt(lastLayout, s.x + s.l / 2, s.y + s.d / 2) : 0;
+                return { x: PX(x0 + len / 2), y: bottom + height / 2 + fz, z: PZ(s.y + s.d / 2), sx: len, sy: height, sz: s.d };
+            }
             const sz0 = root.LayoutCalc && root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, s.x + s.l / 2, s.y + s.d / 2) : 0;
             return { x: PX(s.x + s.l / 2), y: s.h / 2 + sz0, z: PZ(s.y + s.d / 2), sx: s.l, sy: s.h, sz: s.d };
         }
@@ -1005,7 +1018,7 @@
             if (rebuild !== false && lastLayout) update(lastLayout);
         }
         // Marcar lo que se eligió en una tabla del editor (sel = { kind, id, strong }) o quitar la marca (null).
-        function highlight(sel) { hl = sel && sel.id ? { kind: sel.kind, id: sel.id, strong: !!sel.strong } : null; applyHl(); }
+        function highlight(sel) { hl = sel && sel.id ? { kind: sel.kind, id: sel.id, strong: !!sel.strong, n: sel.n, c: sel.c } : null; applyHl(); }
         function setView(name) { go(viewTarget(name), true); }
         function zoom(factor) { st.r = clamp(st.r / factor, 3, bounds.diag * 6); applyCam(); }
 
