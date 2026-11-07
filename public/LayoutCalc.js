@@ -1723,7 +1723,7 @@
     // ---- El activo dentro de su huella -------------------------------------------------------------------------------------------------------
     // Los activos de una huella van uno junto al otro: ninguno puede salirse de ella ni ser más alto que ella, ni encimarse con otro de la misma huella. Se mira sobre un Layout normalizado (deriveSpaces). Un activo apagado (off) no
     // cuenta. Igual que con las huellas: lo que ya estaba mal antes y no cambió solo se marca; lo NUEVO o lo que cambió (el activo o su huella) no se deja guardar (ver newSpaceViolations). Cuatro faltas: sum (los activos suman más
-    // que el lado de la huella), out (uno se sale de ella), tall (más alto que ella), overlap (dos encimados) y levels (sus niveles suben más que el activo: paso Niveles).
+    // que el lado de la huella), out (uno se sale de ella), tall (más alto que ella), overlap (dos encimados), levels (sus niveles suben más que el activo: paso Niveles), bayl y bayw (el largo o el ancho de un hueco de Posiciones pasa del largo o el fondo del activo).
     function spaceViolations(layout) {
         const out = [];
         if (!layout || !Array.isArray(layout.footprints) || !Array.isArray(layout.spaces)) return out;
@@ -1746,6 +1746,11 @@
                         ? { ...base, kind: 'sum', sig: geo, vars: { fcode: f.code, sum: m(sum), len: m(len) }, message: `Los activos de ${f.code} suman ${m(sum)} m y la huella mide ${m(len)} m.` }
                         : { ...base, kind: 'out', sig: geo, vars: { code: s.code, fcode: f.code }, message: `El activo ${s.code} se sale de su huella ${f.code}: cambia sus medidas o su posición, o agranda la huella.` });
                 }
+                // el largo y el ancho de un hueco (Posiciones) no pueden ser mayores que el largo y el fondo del activo (solo cuentan los que el hueco trae propios)
+                (s.bays || []).forEach((b) => {
+                    if (b.l !== undefined && s.l > 0 && b.l > s.l + eps) out.push({ ...base, kind: 'bayl', sig: JSON.stringify([b.n, b.c, 'l', b.l, s.l]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.l), max: m(s.l) }, message: `El hueco del nivel ${b.n}, columna ${b.c} del activo ${s.code} mide ${m(b.l)} m de largo y el activo solo ${m(s.l)} m: baja su largo.` });
+                    if (b.w !== undefined && s.d > 0 && b.w > s.d + eps) out.push({ ...base, kind: 'bayw', sig: JSON.stringify([b.n, b.c, 'w', b.w, s.d]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.w), max: m(s.d) }, message: `El hueco del nivel ${b.n}, columna ${b.c} del activo ${s.code} mide ${m(b.w)} m de ancho y el activo solo ${m(s.d)} m de fondo: baja su ancho.` });
+                });
                 // los niveles no pueden subir más que el activo (solo si el activo trae medidas de niveles o huecos propias: sin ellas los niveles se reparten justo en su alto)
                 const ownBays = (s.bays || []).filter((b) => b.floorH !== undefined || b.h !== undefined);
                 if (s.h > 0 && ((s.lvls || []).length || ownBays.length)) {

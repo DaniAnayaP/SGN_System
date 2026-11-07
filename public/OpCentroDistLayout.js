@@ -876,6 +876,18 @@ function applyLevelToAll(key) {
     refreshLive();
     Dashboard.showToast(t('main.layoutNivAplicado', { n, code: space.code || '', count: (space.levels || 1) - 1 }), 'success');
 }
+// Paso Posiciones: el aviso de los huecos cuyo largo o ancho pasa del largo o el fondo de su activo (los primeros 6) y su actualización al teclear.
+function bayIssuesHtml() {
+    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw');
+    return list.slice(0, 6).map((v) => `<p>${esc(t(`main.layoutVioAct_${v.kind}`, v.vars))}</p>`).join('') + (list.length > 6 ? '<p>…</p>' : '');
+}
+function applyBayMarks() {
+    const box = document.querySelector('[data-bay-issues]');
+    if (!box) return;
+    const html = bayIssuesHtml();
+    box.hidden = !html;
+    box.innerHTML = html;
+}
 // Paso Niveles: el aviso (uno por activo) de los niveles que suben más que su activo, y las marcas en rojo de sus renglones (se actualizan al teclear).
 function levelIssuesHtml() {
     return (state.draft.spaces || []).map((s) => (spIssues.get(s.id) || {}).levels).filter(Boolean).map((v) => `<p>${esc(t('main.layoutVioAct_levels', v.vars))}</p>`).join('');
@@ -1215,13 +1227,14 @@ function stepHtml(step) {
                     const bay = LC.bayOf(s, n, c);
                     const m = LC.bayMeasures(s, n, c);
                     const st = bay.stored;
-                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td><td class="layout-calc">${c}</td>${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}${bayNum(i, n, c, 'floorH', shown(m.floorH), st.floorH !== undefined, '0.01')}${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01')}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01')}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01')}${bayNum(i, n, c, 'beam', shown(m.beam), st.beam !== undefined, '0.01', ' data-help-key="layoutPosCeja"', m.beam > 0 && m.beam >= m.h)}<td class="layout-calc"><span data-bay-use="${i}|${n}|${c}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}">${bay.rows * bay.depth}</span></td></tr>`);
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td><td class="layout-calc">${c}</td>${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}${bayNum(i, n, c, 'floorH', shown(m.floorH), st.floorH !== undefined, '0.01')}${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', s.l > 0 && m.l > s.l + 0.005)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', '', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01')}${bayNum(i, n, c, 'beam', shown(m.beam), st.beam !== undefined, '0.01', ' data-help-key="layoutPosCeja"', m.beam > 0 && m.beam >= m.h)}<td class="layout-calc"><span data-bay-use="${i}|${n}|${c}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}">${bay.rows * bay.depth}</span></td></tr>`);
                 }
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutPosSinActivos'))}</p>`;
         const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosColumna', 'main.layoutPosFilas', 'main.layoutPosProfundidad', 'main.layoutPosAltura', 'main.layoutPosLargo', 'main.layoutPosAncho', 'main.layoutPosAlto', 'main.layoutPosCeja', 'main.layoutPosAltoUtil', 'main.layoutPosCapacidad'];
-        return `${table(heads, rows, 'layout-posiciones')}${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
+        const bayIssues = bayIssuesHtml();
+        return `${table(heads, rows, 'layout-posiciones')}<div class="layout-vio" data-bay-issues${bayIssues ? '' : ' hidden'}>${bayIssues}</div>${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
     if (step === 'niveles') {
         // Cada renglón es un NIVEL de un activo de Huella-Espacio (el rack con 3 niveles deja 3 renglones, ya listos): sus niveles salen solos de Activos. Aquí se anota UNA VEZ la altura desde el piso, el alto y la ceja de ese
@@ -2721,6 +2734,13 @@ function onEdit(event) {
         if (use) use.textContent = String(Math.round(mBay.useful * 100) / 100);
         const beamBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${c}"][data-k="beam"]`);
         if (beamBox) beamBox.classList.toggle('layout-missing', mBay.beam > 0 && mBay.beam >= mBay.h);
+        // el largo y el ancho del hueco no pasan del largo y el fondo del activo: se marcan en rojo al momento
+        [['l', space.l > 0 && mBay.l > space.l + 0.005], ['w', space.d > 0 && mBay.w > space.d + 0.005]].forEach(([k, over]) => {
+            const dimBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${c}"][data-k="${k}"]`);
+            if (dimBox) dimBox.classList.toggle('layout-missing', over);
+        });
+        computeSpaceIssues();
+        applyBayMarks();
     } else if (list === 'lvl') {
         // Un nivel de un activo (paso Niveles): solo se guarda lo que se cambió; lo que vuelve a quedar vacío o en 0 es lo de por defecto y se quita. Vale para todas las columnas del nivel.
         const space = state.draft.spaces[Number(el.getAttribute('data-i'))];
@@ -3872,12 +3892,15 @@ $('layout-save').addEventListener('click', async () => {
     if (freshSpaces.length) {
         const v = freshSpaces[0];
         // los niveles que suben más que el activo se arreglan en Niveles (si la cuenta lo ve; si no, en Activos con el alto del activo)
-        const stepName = v.kind === 'levels' && stepVisible('niveles') ? 'niveles' : 'activos';
+        const bayKind = v.kind === 'bayl' || v.kind === 'bayw';
+        const stepName = v.kind === 'levels' && stepVisible('niveles') ? 'niveles' : (bayKind && stepVisible('posiciones') ? 'posiciones' : 'activos');
         showStep(stepName);
         renderPanel();
         Dashboard.showToast(t(`main.layoutVioAct_${v.kind}`, v.vars), 'warning');
         const at = state.draft.spaces.findIndex((s) => s.id === v.id);
-        const box = stepName === 'niveles'
+        const box = stepName === 'posiciones'
+            ? document.querySelector(`[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"][data-k="${v.kind === 'bayl' ? 'l' : 'w'}"]`)
+            : stepName === 'niveles'
             ? (document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"].layout-missing`) || document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"]`))
             : document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
