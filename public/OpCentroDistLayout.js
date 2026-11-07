@@ -1904,6 +1904,7 @@ function applyFind(reset) {
     if (!state.draft) return;
     if (reset) { resetZoom(); find3dReframe = true; }
     renderFindBox();
+    renderFocusStrip(); // la franja de arriba refleja el enfoque del buscador
     renderSvg();
     renderSummary();
     applyFindToTables();

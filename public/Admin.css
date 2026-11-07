@@ -7831,6 +7831,10 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 /* tamaño de la hoja arriba del croquis y vista de la hoja */
 /* Buscar una zona o una huella (enfoque): la barra, su lista flotante, el chip de lo enfocado y los botones de ocultar */
 .layout-find{ position: relative; width: 100%; display: flex; flex-direction: column; gap: 0.45rem; }
+/* El buscador va debajo del croquis (antes estaba en Visualizaciones): la lista de resultados se abre hacia arriba para no salirse de la pantalla. */
+.layout-map-col{ display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.layout-map-col .layout-find{ padding: 0.6rem 0.8rem 0.8rem; width: auto; }
+.layout-map-col .layout-find-list{ top: auto; bottom: 3.2rem; left: 0.8rem; right: 0.8rem; max-height: 18rem; }
 .layout-find[hidden]{ display: none; }
 .layout-find-field{ display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.7rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); }
 .layout-find-field:focus-within{ border-color: var(--color-accent, var(--color-text-primary)); }

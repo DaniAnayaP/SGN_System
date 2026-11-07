@@ -491,12 +491,22 @@
                     <div class="layout-panel" id="layout-panel"></div>
                     <div class="layout-canvas" data-help-key="layoutCanvas">
                         <div class="layout-canvas-body">
+                            <div class="layout-map-col">
                             <div class="layout-map">
                                 <svg id="layout-svg" viewBox="0 0 700 460" role="img" aria-label="Layout"></svg>
                                 <div class="layout-map3d" id="layout-map3d" hidden>
                                     <div class="layout-3d-picker" id="layout-3d-picker" hidden></div>
                                     <div class="layout-3d-stage" id="layout-3d-stage" data-help-key="layout3dStage"><div class="layout-3d-msg" id="layout-3d-msg" hidden></div></div>
                                     <div class="layout-3d-info" id="layout-3d-info" aria-live="polite" hidden></div>
+                                </div>
+                            </div>
+                                <div class="layout-find" id="layout-find" data-help-key="layoutFind" hidden>
+                                    <div class="layout-find-field">
+                                        <span class="bx bx-search layout-find-ico" aria-hidden="true"></span>
+                                        <input type="search" id="layout-find-input" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="layout-find-list" aria-autocomplete="list" data-help-key="layoutFind" data-i18n-placeholder="main.layoutBuscarPlaceholder" data-i18n-aria-label="main.layoutBuscarBtn" placeholder="Search zone or footprint">
+                                    </div>
+                                    <div class="layout-find-list" id="layout-find-list" role="listbox" hidden></div>
+                                    <div class="layout-find-state" id="layout-find-state"></div>
                                 </div>
                             </div>
                             <div class="layout-legend">
@@ -507,14 +517,6 @@
                                             <button type="button" class="layout-mode-btn" id="layout-view2d-btn" aria-pressed="true" hidden>2D</button>
                                             <button type="button" class="layout-mode-btn" id="layout-view3d-btn" aria-pressed="false" hidden>3D</button>
                                         </div>
-                                    </div>
-                                    <div class="layout-find" id="layout-find" data-help-key="layoutFind" hidden>
-                                        <div class="layout-find-field">
-                                            <span class="bx bx-search layout-find-ico" aria-hidden="true"></span>
-                                            <input type="search" id="layout-find-input" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="layout-find-list" aria-autocomplete="list" data-help-key="layoutFind" data-i18n-placeholder="main.layoutBuscarPlaceholder" data-i18n-aria-label="main.layoutBuscarBtn" placeholder="Search zone or footprint">
-                                        </div>
-                                        <div class="layout-find-list" id="layout-find-list" role="listbox" hidden></div>
-                                        <div class="layout-find-state" id="layout-find-state"></div>
                                     </div>
                                     <div class="layout-vopts layout-only3d">
                                         <div class="layout-3d-views" role="group" data-help-key="layout3dViews">
