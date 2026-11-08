@@ -183,7 +183,7 @@
                 return { x: PX((x0 + x1) / 2), y: 0.1 + zl, z: PZ((y0 + y1) / 2), sx: x1 - x0, sy: 0.2, sz: y1 - y0 };
             }
             if (hl.kind === 'floor') {
-                const f = (lastLayout.floors || []).find((e) => e.id === hl.id);
+                const f = (root.LayoutCalc && root.LayoutCalc.floorsAll ? root.LayoutCalc.floorsAll(lastLayout) : (lastLayout.floors || [])).find((e) => e.id === hl.id);
                 if (!f || f.active === false || !(f.l > 0) || !(f.w > 0) || !layerOn.zones) return null;
                 const lo = Number(f.lvl) || 0;
                 const hi = f.lvl2 !== undefined ? Number(f.lvl2) || 0 : lo;

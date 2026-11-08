@@ -2245,14 +2245,32 @@
     "layoutNivelesOcultar": "Hide the floor levels",
     "layoutStepPisos": "Floors",
     "colLayoutPisos": "Floors",
+    "colLayoutRampas": "Ramps",
     "layoutAgregarPiso": "+ Add floor",
     "layoutPiso": "Floor",
     "layoutCodigoPiso": "Floor code",
-    "layoutPisosVacio": "There are no floors yet. Add one to mark a level change: a platform, a pit or a ramp.",
+    "layoutPisosVacio": "There are no floors yet. Add one to mark a level change: a platform or a pit.",
     "layoutZonasQueToca": "Zones it touches",
     "layoutPisosQueToca": "Floors it touches",
     "layoutEliminarPisoConfirm": "Delete floor {name}? Whatever is on it goes back to the building level.",
     "layoutVioPisoEncima": "It overlaps {other}: each floor has to stay apart.",
+    "layoutStepRampas": "Ramps",
+    "layoutVioRampaEncima": "It overlaps {other}: a ramp cannot sit on top of another floor or ramp; touching at the edge is fine.",
+    "layoutAgregarRampa": "+ Add ramp",
+    "layoutRampa": "Ramp",
+    "layoutCodigoRampa": "Ramp code",
+    "layoutRampaDe": "From",
+    "layoutRampaA": "To",
+    "layoutRampaNave": "Building",
+    "layoutNivelAbajo": "Lower level (m)",
+    "layoutNivelArriba": "Upper level (m)",
+    "layoutRampasVacio": "There are no ramps yet. Add one to join two floors, or a floor with the building.",
+    "layoutEliminarRampaConfirm": "Delete ramp {name}? The floors it joined stay as they are.",
+    "layoutVioRampa_choose": "Choose from which floor to which floor (or from the building) to be able to save.",
+    "layoutVioRampa_same_ref": "«From» and «To» are the same: choose two different ones to be able to save.",
+    "layoutVioRampa_missing": "One of its floors no longer exists: choose it again to be able to save.",
+    "layoutVioRampa_same_level": "It joins two floors at the same level ({level} m): a ramp needs two different levels to be able to save.",
+    "layoutVioRampa_touch": "It does not touch {floor}: move it to its edge or choose another floor to be able to save.",
     "layoutLeyendaPisoElevado": "Floor at another level",
     "layoutLeyendaRampa": "Ramp",
     "layoutLeyendaPuerta": "Door",
@@ -4845,8 +4863,24 @@
       "example": "the ramp is to the right of the offices, which are higher: it rises to the left."
     },
     "layoutSec_pisos": {
-      "what": "A floor is a rectangle of the sketch that is higher or lower than the building floor: a platform, a pit or a ramp. It is drawn apart from the zones, so a zone can touch several floors without being split or renamed. Whatever is on a floor (footprints, assets, aisles, objects and safety) sits at its level, and the building volume subtracts what each floor raises. Two floors cannot overlap (touching at the edge is fine).",
-      "example": "a 21 × 6 m platform at +1.20 m covers Reception, Offices and 3 m of zone 7; a 5 × 6 m ramp covers the rest of zone 7."
+      "what": "A floor is a rectangle of the sketch that is higher or lower than the building floor: a platform or a pit. It is drawn apart from the zones, so a zone can touch several floors without being split or renamed. Whatever is on a floor (footprints, assets, aisles, objects and safety) sits at its level, and the building volume subtracts what each floor raises. Two floors cannot overlap (touching at the edge is fine). Ramps that join two floors go in the Ramps step.",
+      "example": "a 21 × 6 m platform at +1.20 m covers Reception, Offices and 3 m of zone 7."
+    },
+    "layoutSec_rampas": {
+      "what": "A ramp joins two floors (or a floor and the building, which is at level 0). You choose From and To and place it between them with its X, Y, length and width. Its lower level, upper level and the side it rises toward come from those two floors by themselves: if you change a floor level, the ramp follows it and nothing is typed twice. The ramp has to touch both floors and the two levels cannot be equal; anything new that does not comply is not saved. It is drawn sloped, with its code and from which level to which.",
+      "example": "R001 joins the building (0.00 m) with platform P001 (+0.60 m): it rises toward P001, from 0.00 to +0.60 m; R002 joins P001 with the offices floor P002 (+0.33 m)."
+    },
+    "layoutRampaDe": {
+      "what": "Where the ramp starts: a floor or the building (the building floor, at level 0). It goes together with To: the ramp rises toward the higher of the two floors.",
+      "example": "From: Building · 0.00; To: P001 · +0.60 — the ramp rises from the building to the platform."
+    },
+    "layoutRampaA": {
+      "what": "Where the ramp ends: a floor or the building (the building floor, at level 0). It has to be different from From and at another level.",
+      "example": "To: P002 · +0.33, with From: P001 · +0.60 — the ramp goes down from the platform to the offices floor."
+    },
+    "layoutRampaNiveles": {
+      "what": "They are calculated by themselves from the two floors the ramp joins: the lower level, the upper level and the side of the sketch it rises toward. An older ramp that could not be linked to its floors keeps the levels it had.",
+      "example": "From the building to P001 (+0.60 m): lower level 0.00, upper +0.60, and it rises toward the side where P001 is."
     },
     "layoutZonasQueToca": {
       "what": "The zones that share surface with this floor. Calculated automatically from the zones sketch.",

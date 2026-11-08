@@ -6512,7 +6512,7 @@ const LayoutCalc = require('./public/LayoutCalc.js');
 const RelTemplate = require('./public/RelTemplate.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
-const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', paredes: 'Paredes', obstaculos: 'Obstáculos', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', pisos: 'Pisos', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones', niveles: 'Niveles' };
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', paredes: 'Paredes', obstaculos: 'Obstáculos', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', pisos: 'Pisos', rampas: 'Rampas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones', niveles: 'Niveles' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 
 function layoutPermissions(req) {
@@ -6645,6 +6645,7 @@ function layoutSummary(layout, section) {
     if (section === 'seguridad') return `${(layout.safety || []).length} elementos de seguridad`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
     if (section === 'pisos') return `${(layout.floors || []).length} pisos`;
+    if (section === 'rampas') return `${(layout.ramps || []).length} rampas`;
     if (section === 'activos') return `${(layout.spaces || []).length} activos, ${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} con clasificación o tipo, ${(layout.spaces || []).filter((s) => s.fmt).length} con formato propio`;
     if (section === 'posiciones') return `${(layout.spaces || []).reduce((n, s) => n + (s.bays || []).length, 0)} huecos con datos propios`;
     if (section === 'niveles') return `${(layout.spaces || []).reduce((n, s) => n + (s.lvls || []).length, 0)} niveles con datos propios`;

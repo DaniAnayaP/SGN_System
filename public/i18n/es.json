@@ -2245,14 +2245,32 @@
     "layoutNivelesOcultar": "Ocultar los niveles de piso",
     "layoutStepPisos": "Pisos",
     "colLayoutPisos": "Pisos",
+    "colLayoutRampas": "Rampas",
     "layoutAgregarPiso": "+ Agregar piso",
     "layoutPiso": "Piso",
     "layoutCodigoPiso": "Código de piso",
-    "layoutPisosVacio": "Todavía no hay pisos. Agrega uno para marcar un desnivel: una plataforma, un foso o una rampa.",
+    "layoutPisosVacio": "Todavía no hay pisos. Agrega uno para marcar un desnivel: una plataforma o un foso.",
     "layoutZonasQueToca": "Zonas que toca",
     "layoutPisosQueToca": "Pisos que toca",
     "layoutEliminarPisoConfirm": "¿Eliminar el piso {name}? Lo que está encima vuelve al nivel de la nave.",
     "layoutVioPisoEncima": "Se encima con {other}: cada piso tiene que quedar aparte.",
+    "layoutStepRampas": "Rampas",
+    "layoutVioRampaEncima": "Se encima con {other}: una rampa no puede quedar encima de otro piso ni de otra rampa; que se toquen en la orilla sí.",
+    "layoutAgregarRampa": "+ Agregar rampa",
+    "layoutRampa": "Rampa",
+    "layoutCodigoRampa": "Código de rampa",
+    "layoutRampaDe": "De",
+    "layoutRampaA": "A",
+    "layoutRampaNave": "Nave",
+    "layoutNivelAbajo": "Nivel de abajo (m)",
+    "layoutNivelArriba": "Nivel de arriba (m)",
+    "layoutRampasVacio": "Todavía no hay rampas. Agrega una para unir dos pisos, o un piso con la nave.",
+    "layoutEliminarRampaConfirm": "¿Eliminar la rampa {name}? Los pisos que unía se quedan como están.",
+    "layoutVioRampa_choose": "Elige de qué piso a qué piso (o desde la nave) para poder guardar.",
+    "layoutVioRampa_same_ref": "«De» y «A» son el mismo: elige dos distintos para poder guardar.",
+    "layoutVioRampa_missing": "Uno de sus pisos ya no existe: elígelo otra vez para poder guardar.",
+    "layoutVioRampa_same_level": "Une dos pisos al mismo nivel ({level} m): una rampa necesita dos niveles distintos para poder guardar.",
+    "layoutVioRampa_touch": "No toca {floor}: acércala a su orilla o elige otro piso para poder guardar.",
     "layoutLeyendaPisoElevado": "Piso a otro nivel",
     "layoutLeyendaRampa": "Rampa",
     "layoutLeyendaPuerta": "Puerta",
@@ -4844,8 +4862,24 @@
       "example": "la rampa queda a la derecha de las oficinas, que son más altas: sube hacia la izquierda."
     },
     "layoutSec_pisos": {
-      "what": "Un piso es un rectángulo del croquis que está más alto o más bajo que el piso de la nave: una plataforma, un foso o una rampa. Se dibuja aparte de las zonas, así una zona puede tocar varios pisos sin partirse ni cambiar de nombre. Lo que está encima de un piso (huellas, activos, pasillos, objetos y seguridad) queda a su nivel, y los m³ de la nave descuentan lo que sube cada piso. Dos pisos no se pueden encimar (que se toquen en la orilla sí).",
-      "example": "una plataforma de 21 × 6 m a +1.20 m cubre Recepción, Oficinas y 3 m de la zona 7; una rampa de 5 × 6 m cubre el resto de la zona 7."
+      "what": "Un piso es un rectángulo del croquis que está más alto o más bajo que el piso de la nave: una plataforma o un foso. Se dibuja aparte de las zonas, así una zona puede tocar varios pisos sin partirse ni cambiar de nombre. Lo que está encima de un piso (huellas, activos, pasillos, objetos y seguridad) queda a su nivel, y los m³ de la nave descuentan lo que sube cada piso. Dos pisos no se pueden encimar (que se toquen en la orilla sí). Las rampas que unen dos pisos van en el paso Rampas.",
+      "example": "una plataforma de 21 × 6 m a +1.20 m cubre Recepción, Oficinas y 3 m de la zona 7."
+    },
+    "layoutSec_rampas": {
+      "what": "Una rampa une dos pisos (o un piso y la nave, que está a nivel 0). Eliges De y A y la colocas entre los dos con su X, Y, largo y ancho. Su nivel de abajo, su nivel de arriba y el lado hacia donde sube salen solos de esos dos pisos: si cambias el nivel de un piso, la rampa lo sigue y no hay nada que escribir dos veces. La rampa tiene que tocar sus dos pisos y los dos niveles no pueden ser iguales; lo nuevo que no cumpla no se guarda. Se ve inclinada, con su código y de qué nivel a cuál va.",
+      "example": "R001 une la nave (0.00 m) con la plataforma P001 (+0.60 m): sube hacia P001, de 0.00 a +0.60 m; R002 une P001 con el piso de oficinas P002 (+0.33 m)."
+    },
+    "layoutRampaDe": {
+      "what": "De dónde sale la rampa: un piso o la nave (el piso de la nave, a nivel 0). Va junto con A: la rampa sube hacia el piso que esté más alto de los dos.",
+      "example": "De: Nave · 0.00; A: P001 · +0.60 — la rampa sube de la nave a la plataforma."
+    },
+    "layoutRampaA": {
+      "what": "A dónde llega la rampa: un piso o la nave (el piso de la nave, a nivel 0). Tiene que ser distinto de De y estar a otro nivel.",
+      "example": "A: P002 · +0.33, con De: P001 · +0.60 — la rampa baja de la plataforma al piso de oficinas."
+    },
+    "layoutRampaNiveles": {
+      "what": "Se calculan solos de los dos pisos que une la rampa: el nivel de abajo, el nivel de arriba y el lado del croquis hacia donde sube. Una rampa de antes que no se pudo ligar a sus pisos conserva los niveles que tenía.",
+      "example": "De la nave a P001 (+0.60 m): nivel de abajo 0.00, de arriba +0.60 y sube hacia el lado donde está P001."
     },
     "layoutZonasQueToca": {
       "what": "Las zonas que comparten superficie con este piso. Se calcula solo, con el croquis de zonas.",
