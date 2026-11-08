@@ -234,7 +234,7 @@
                 const w = isDoor ? Math.max(0.3, Number(e.width) || 1) : 0.28;
                 const h = isDoor ? Math.max(0.5, Number(e.height) || 2.1) : 0.28;
                 const thick = Math.max(isDoor ? 0.2 : 0.16, dg.thick + 0.04);
-                return { x: PX((dg.a.x + dg.b.x) / 2), y: isDoor ? h / 2 : Math.max(0.2, Number(e.height) || 0.4), z: PZ((dg.a.y + dg.b.y) / 2), sx: Math.abs(dg.ux) * w + Math.abs(dg.uy) * thick, sy: h, sz: Math.abs(dg.uy) * w + Math.abs(dg.ux) * thick };
+                return { x: PX((dg.a.x + dg.b.x) / 2), y: (dg.base || 0) + (isDoor ? h / 2 : Math.max(0.2, Number(e.height) || 0.4)), z: PZ((dg.a.y + dg.b.y) / 2), sx: Math.abs(dg.ux) * w + Math.abs(dg.uy) * thick, sy: h, sz: Math.abs(dg.uy) * w + Math.abs(dg.ux) * thick };
             }
             // un sensor elegido en la tabla de Sensores: un cubo alrededor del disco, pegado a su pared
             if (hl.kind === 'sensor') {
@@ -242,7 +242,7 @@
                 if (!e || !layerOn.sensors) return null;
                 const sg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(lastLayout, { ...e, width: 0 }) : null;
                 if (!sg) return null;
-                return { x: PX(sg.a.x), y: Math.max(0.2, Number(e.height) || 1.5), z: PZ(sg.a.y), sx: 0.6, sy: 0.6, sz: 0.6 };
+                return { x: PX(sg.a.x), y: (sg.base || 0) + Math.max(0.2, Number(e.height) || 1.5), z: PZ(sg.a.y), sx: 0.6, sy: 0.6, sz: 0.6 };
             }
             // un elemento de seguridad, un pasillo o un objeto elegido en las tablas de Seguridad, Tránsito u Objetos
             if (hl.kind === 'safety') {
@@ -619,7 +619,9 @@
                 const w = Math.max(0.3, Number(d.width) || 1);
                 const h = Math.max(0.5, Number(d.height) || 2.1);
                 const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, Math.max(0.2, dg.thick + 0.04)), lam(DOOR_COLOR[d.type] || DOOR_COLOR.staff));
-                m.position.set(PX((dg.a.x + dg.b.x) / 2), h / 2, PZ((dg.a.y + dg.b.y) / 2));
+                // el umbral va en el piso más alto de los dos lados de la pared (dg.base); con pisos a distinto nivel el otro lado queda con un escalón
+                const dBase = dg.base || 0;
+                m.position.set(PX((dg.a.x + dg.b.x) / 2), dBase + h / 2, PZ((dg.a.y + dg.b.y) / 2));
                 m.rotation.y = -Math.atan2(dg.uy, dg.ux);
                 group.doors.add(m);
                 // el espacio que necesita al abrir: sobre el piso (cuarto de círculo del giro o franja del recorrido), con su contorno, y la hoja ya abierta, transparente
@@ -629,9 +631,11 @@
                     const shape = new THREE.Shape(op.pts.map((p) => new THREE.Vector2(PX(p[0]), -PZ(p[1]))));
                     const flat = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false }));
                     flat.rotation.x = -Math.PI / 2;
-                    flat.position.y = 0.03;
+                    // el espacio de apertura va sobre el piso del lado hacia donde abre (el nivel del piso en el centro de ese espacio)
+                    const opFloor = root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(layout, op.pts.reduce((acc, p) => acc + p[0], 0) / op.pts.length, op.pts.reduce((acc, p) => acc + p[1], 0) / op.pts.length) : 0;
+                    flat.position.y = opFloor + 0.03;
                     group.doors.add(flat);
-                    group.doors.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(op.pts.map((p) => new THREE.Vector3(PX(p[0]), 0.05, PZ(p[1])))), new THREE.LineBasicMaterial({ color: col })));
+                    group.doors.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(op.pts.map((p) => new THREE.Vector3(PX(p[0]), opFloor + 0.05, PZ(p[1])))), new THREE.LineBasicMaterial({ color: col })));
                     const a = op.type === 'swing' ? op.leaf : op.travel;
                     const dx = a[1][0] - a[0][0];
                     const dz = a[1][1] - a[0][1];
@@ -641,7 +645,7 @@
                     const cz = op.type === 'swing' ? (a[0][1] + a[1][1]) / 2 : op.pts.reduce((acc, p) => acc + p[1], 0) / op.pts.length;
                     if (len > 0.05) {
                         const leaf = new THREE.Mesh(new THREE.BoxGeometry(len, h, side), new THREE.MeshLambertMaterial({ color: col, transparent: true, opacity: 0.45, depthWrite: false }));
-                        leaf.position.set(PX(cx), h / 2, PZ(cz));
+                        leaf.position.set(PX(cx), dBase + h / 2, PZ(cz));
                         leaf.rotation.y = -Math.atan2(dz, dx);
                         group.doors.add(leaf);
                     }
@@ -653,7 +657,7 @@
                 const pg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(layout, { ...e, width: 0 }) : null;
                 if (!pg) return;
                 const m = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, Math.max(0.16, pg.thick + 0.04)), lam(POWER_COLOR[e.type] || POWER_COLOR.outlet110));
-                m.position.set(PX(pg.a.x), Math.max(0.2, Number(e.height) || 0.4), PZ(pg.a.y));
+                m.position.set(PX(pg.a.x), (pg.base || 0) + Math.max(0.2, Number(e.height) || 0.4), PZ(pg.a.y));
                 m.rotation.y = -Math.atan2(pg.uy, pg.ux);
                 group.power.add(m);
             });
@@ -662,7 +666,7 @@
                 fxItem = { type: 'sensor', id: e.id };
                 const sg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(layout, { ...e, width: 0 }) : null;
                 if (!sg) return;
-                const y = Math.max(0.2, Number(e.height) || 1.5);
+                const y = (sg.base || 0) + Math.max(0.2, Number(e.height) || 1.5);
                 const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, Math.max(0.16, sg.thick + 0.06), 18), lam(SENSOR_COLOR));
                 disc.rotation.x = Math.PI / 2;
                 const g = new THREE.Group();

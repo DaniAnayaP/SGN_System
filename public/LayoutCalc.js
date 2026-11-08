@@ -288,7 +288,7 @@
             const ax = wallAxis(layout, wall);
             if (!ax) return null;
             const a = { x: ax.x + ax.ux * dist, y: ax.y + ax.uy * dist };
-            return { a, b: { x: a.x + ax.ux * width, y: a.y + ax.uy * width }, ux: ax.ux, uy: ax.uy, nx: ax.nx, ny: ax.ny, thick: ax.thick, wallLength: ax.length, wallHeight: (() => { const sd = wallSides(layout, wall, ax); return Math.min(sd.a.heightAt(dist), sd.a.heightAt(dist + width), sd.b.heightAt(dist), sd.b.heightAt(dist + width)); })(), wallHeightStart: ax.hStart, wallHeightEnd: ax.hEnd, wall, legacy: false };
+            return { a, b: { x: a.x + ax.ux * width, y: a.y + ax.uy * width }, ux: ax.ux, uy: ax.uy, nx: ax.nx, ny: ax.ny, thick: ax.thick, wallLength: ax.length, ...fittingOnWall(layout, wall, ax, dist, width), wallHeightStart: ax.hStart, wallHeightEnd: ax.hEnd, wall, legacy: false };
         }
         const verts = (layout && layout.vertices) || [];
         const side = Math.round(Number(door.wall));
@@ -297,7 +297,7 @@
         if (!(seg.length > 0)) return null;
         const a = { x: seg.p[0] + seg.ux * dist, y: seg.p[1] + seg.uy * dist };
         const n = verts.length;
-        return { a, b: { x: a.x + seg.ux * width, y: a.y + seg.uy * width }, ux: seg.ux, uy: seg.uy, nx: 0, ny: 0, thick: 0, wallLength: seg.length, wallHeight: (cornerHeightAt(layout, (side - 1) % n) + cornerHeightAt(layout, side % n)) / 2, wall: null, legacy: true };
+        return { a, b: { x: a.x + seg.ux * width, y: a.y + seg.uy * width }, ux: seg.ux, uy: seg.uy, nx: 0, ny: 0, thick: 0, wallLength: seg.length, wallHeight: (cornerHeightAt(layout, (side - 1) % n) + cornerHeightAt(layout, side % n)) / 2, base: 0, wall: null, legacy: true };
     }
     // ---- Pared compartida: una altura por lado -----------------------------------------------------------------------------------------------------------------
     // Una pared tiene dos lados: el A (hacia adentro de la nave en una pared del contorno; hacia abajo del croquis, o a la izquierda si es vertical, en una pared de adentro) y el B (el opuesto). Cada lado puede traer su altura:
@@ -326,6 +326,18 @@
             return { floor0: f0, floor1: f1, top0: t0, top1: t1, h0, h1, heightAt: (d) => h0 + (h1 - h0) * (ax.length > 0 ? Math.min(Math.max(d / ax.length, 0), 1) : 0) };
         };
         return { a: side(fA0, fA1, tA0, tA1), b: side(fB0, fB1, tB0, tB1), stepped: Math.abs(tA0 - tB0) > 0.005 || Math.abs(tA1 - tB1) > 0.005 };
+    }
+    // Lo que va sobre una pared (puerta, conexión de luz, sensor) se mide desde el piso MÁS ALTO de los dos lados de la pared en el tramo que ocupa (con rampa, el punto más alto del tramo): ahí queda el umbral de una puerta
+    // (del otro lado queda un escalón) y desde ahí cuenta la altura de una conexión o un sensor. base = ese nivel (0 si no hay pisos) y wallHeight = lo que cabe de la base hacia arriba: hasta el remate MÁS BAJO de los dos
+    // lados en ese tramo. Con los dos lados sobre el mismo nivel (o sin pisos) es lo de siempre: lo que mide la pared desde su piso.
+    function fittingOnWall(layout, wall, ax, dist, width) {
+        const sd = wallSides(layout, wall, ax);
+        const leveled = floorsOf(layout).length > 0;
+        const ds = [dist, dist + width / 2, dist + width];
+        const base = leveled ? round2(Math.max(...ds.flatMap((d) => [floorLevelAt(layout, ...wallProbe(ax, d, 1)), floorLevelAt(layout, ...wallProbe(ax, d, -1))]))) : 0;
+        const topAt = (s, d) => s.top0 + (s.top1 - s.top0) * (ax.length > 0 ? Math.min(Math.max(d / ax.length, 0), 1) : 0);
+        const minTop = Math.min(topAt(sd.a, dist), topAt(sd.a, dist + width), topAt(sd.b, dist), topAt(sd.b, dist + width));
+        return { base, wallHeight: minTop - base };
     }
     // La marca de una pared con dos alturas en el croquis: solo si sus dos lados difieren (en altura o por estar sobre pisos distintos). Trae las dos tiras a lo largo (a = lado A, b = lado B, cada una de la mitad del grueso), cuál es la
     // oscura (la del remate más alto), la etiqueta («A 5.0 m · B 3.0 m»; «A 5.0→4.0 m» si cambia de inicio a final; «(+0.33)» = lo que está más alto el piso del lado B) y un punto de la etiqueta (a 3/10 del largo, para no quedar encima de las medidas de los lados de las zonas, que van a la mitad) con la normal del lado A. Se calcula sobre el Layout SIN
@@ -430,8 +442,12 @@
                     message: isDoor ? `${noun} no cabe en la pared «${wname}» (mide ${round2(g.wallLength)} m): empieza a ${round2(dist)} m y mide ${round2(width)} m.` : `${noun} no está dentro de la pared «${wname}» (mide ${round2(g.wallLength)} m): está a ${round2(dist)} m de su inicio.` });
             }
             if (g.wallHeight > 0 && height > g.wallHeight + 0.005) {
-                out.push({ ...base, kind: 'tall', sig: JSON.stringify([d.wallId, height, round2(g.wallHeight)]), vars: { name, wall: wname, height: round2(height), wallHeight: round2(g.wallHeight) },
-                    message: isDoor ? `${noun} (${round2(height)} m de alto) es más alta que la pared «${wname}» (${round2(g.wallHeight)} m).` : `${noun} está a ${round2(height)} m del piso y la pared «${wname}» solo mide ${round2(g.wallHeight)} m de alto.` });
+                // con pisos a distinto nivel se mide desde el piso más alto de los dos lados (g.base): el aviso lo dice
+                const lifted = Math.abs(g.base || 0) > 0.005;
+                out.push({ ...base, kind: 'tall', sig: JSON.stringify([d.wallId, height, round2(g.wallHeight), round2(g.base || 0)]), vars: { name, wall: wname, height: round2(height), wallHeight: round2(g.wallHeight), ...(lifted ? { base: round2(g.base) } : {}) },
+                    message: lifted
+                        ? (isDoor ? `${noun} (${round2(height)} m de alto) no cabe en la pared «${wname}»: se mide desde el piso más alto de sus dos lados (${round2(g.base)} m) y ahí la pared solo deja ${round2(g.wallHeight)} m.` : `${noun} está a ${round2(height)} m del piso más alto de la pared «${wname}» (${round2(g.base)} m) y ahí la pared solo deja ${round2(g.wallHeight)} m.`)
+                        : (isDoor ? `${noun} (${round2(height)} m de alto) es más alta que la pared «${wname}» (${round2(g.wallHeight)} m).` : `${noun} está a ${round2(height)} m del piso y la pared «${wname}» solo mide ${round2(g.wallHeight)} m de alto.`) });
             }
         });
         return out;

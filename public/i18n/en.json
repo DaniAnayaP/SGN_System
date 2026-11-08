@@ -2201,6 +2201,9 @@
     "layoutVioDr_nowall": "The door \"{name}\" is not on a wall: choose the wall it goes on.",
     "layoutVioDr_outside": "The door \"{name}\" does not fit in the wall \"{wall}\" (it is {len} m long): it starts at {dist} m and is {width} m wide.",
     "layoutVioDr_tall": "The door \"{name}\" ({height} m high) is taller than the wall \"{wall}\" ({wallHeight} m).",
+    "layoutVioDr_tallBase": "The door \"{name}\" ({height} m high) does not fit the wall \"{wall}\": it is measured from the higher floor of its two sides ({base} m) and there the wall only leaves {wallHeight} m.",
+    "layoutVioPw_tallBase": "The power outlet {name} is {height} m above the higher floor of the wall \"{wall}\" ({base} m) and there the wall only leaves {wallHeight} m.",
+    "layoutVioSn_tallBase": "The sensor {name} is {height} m above the higher floor of the wall \"{wall}\" ({base} m) and there the wall only leaves {wallHeight} m.",
     "layoutColumna": "Column",
     "layoutSoloVer": "You can only view this section",
     "layoutYaLlena": "It already has data: you need the Modify permission to change it",
@@ -4549,15 +4552,15 @@
       "example": "a warehouse with a higher roof on one side has 6 meters at two corners and 10 at the other two."
     },
     "layoutSec_puertas": {
-      "what": "The doors of the warehouse. A door always goes on a wall: you choose which one (from those you added in the Walls step) and measure it from the start of that wall: how many meters it starts at, how wide and how high it is. The wall says how long and how high it is, and the door cannot go past either. If you remove the wall, its doors have no wall until you choose another one.",
+      "what": "The doors of the warehouse. A door always goes on a wall: you choose which one (from those you added in the Walls step) and measure it from the start of that wall: how many meters it starts at, how wide and how high it is. The wall says how long and how high it is, and the door cannot go past either. If you remove the wall, its doors have no wall until you choose another one. If the wall separates floors at different levels (Floors step), the door is measured from the higher floor of its two sides (that is where the threshold is) and must fit under the lowest top of the wall.",
       "example": "the receiving dock goes on \"Wall 1\" (30 m long): it starts 6 meters from the start of the wall, is 3.5 wide and 2.8 high."
     },
     "layoutSec_sensores": {
-      "what": "The temperature and humidity sensors of the warehouse: the type of each one (temperature, humidity or both), which wall it is on (it always goes on a wall, one from the Walls step), how far from the start of that wall and how high from the floor, just like the power connections and the doors; the wall says how long and how high it is, and the sensor cannot go past either. The code (S001, S002…) is set by the system, consecutive across the whole Layout, and cannot be edited. The zone comes by itself from where the sensor is. The QR of each sensor and the heat map come from here.",
+      "what": "The temperature and humidity sensors of the warehouse: the type of each one (temperature, humidity or both), which wall it is on (it always goes on a wall, one from the Walls step), how far from the start of that wall and how high from the floor, just like the power connections and the doors; the wall says how long and how high it is, and the sensor cannot go past either. The code (S001, S002…) is set by the system, consecutive across the whole Layout, and cannot be edited. The zone comes by itself from where the sensor is. The QR of each sensor and the heat map come from here. If the wall separates floors at different levels (Floors step), the height is counted from the higher floor of its two sides and must fit under the lowest top of the wall.",
       "example": "a temperature and humidity sensor on \"Wall 1\", 4.7 meters from its start and 2.5 meters from the floor: it becomes S001 in the zone that touches that part of the wall."
     },
     "layoutSec_luz": {
-      "what": "The electrical power of the warehouse: the panels and outlets, which wall they are on (they always go on a wall, one from the Walls step), how far from the start of that wall and how high from the floor; the wall says how long and how high it is, and the connection cannot go past either. This step comes after Footprint-Space and before Assets because an asset that needs power (a refrigerator, for example) must be placed near an electrical connection.",
+      "what": "The electrical power of the warehouse: the panels and outlets, which wall they are on (they always go on a wall, one from the Walls step), how far from the start of that wall and how high from the floor; the wall says how long and how high it is, and the connection cannot go past either. This step comes after Footprint-Space and before Assets because an asset that needs power (a refrigerator, for example) must be placed near an electrical connection. If the wall separates floors at different levels (Floors step), the height is counted from the higher floor of its two sides and must fit under the lowest top of the wall.",
       "example": "a 220 V outlet on \"Wall 3\", 20 meters from its start and 1.2 meters from the floor."
     },
     "layoutSec_zonas": {

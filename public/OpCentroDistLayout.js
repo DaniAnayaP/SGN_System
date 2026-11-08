@@ -880,7 +880,7 @@ function computeWallItemIssues() {
         });
     });
 }
-const wallItemIssueText = (list, v) => t(`main.layoutVio${WALL_ITEM_VIO[list]}_${v.kind}`, v.kind === 'clash' || v.kind === 'clashDoor' ? clashVars(v) : (v.vars || {}));
+const wallItemIssueText = (list, v) => t(`main.layoutVio${WALL_ITEM_VIO[list]}_${v.kind}${v.kind === 'tall' && v.vars && v.vars.base !== undefined ? 'Base' : ''}`, v.kind === 'clash' || v.kind === 'clashDoor' ? clashVars(v) : (v.vars || {}));
 // El aviso de choque lleva el nombre de lo que estorba: hasta tres y «y N más».
 function clashVars(v) {
     const vars = v.vars || {};
