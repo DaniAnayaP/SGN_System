@@ -1892,7 +1892,8 @@
     // ---- El activo dentro de su huella -------------------------------------------------------------------------------------------------------
     // Los activos de una huella van uno junto al otro: ninguno puede salirse de ella ni ser más alto que ella, ni encimarse con otro de la misma huella. Se mira sobre un Layout normalizado (deriveSpaces). Un activo apagado (off) no
     // cuenta. Igual que con las huellas: lo que ya estaba mal antes y no cambió solo se marca; lo NUEVO o lo que cambió (el activo o su huella) no se deja guardar (ver newSpaceViolations). Cuatro faltas: sum (los activos suman más
-    // que el lado de la huella), out (uno se sale de ella), tall (más alto que ella), overlap (dos encimados), levels (sus niveles suben más que el activo: paso Niveles), bayl y bayw (el largo o el ancho de un hueco de Posiciones pasa del largo o el fondo del activo).
+    // que el lado de la huella), out (uno se sale de ella), tall (más alto que ella), overlap (dos encimados), levels (sus niveles suben más que el activo: paso Niveles), bayl y bayw (el largo o el ancho de un hueco de Posiciones pasa del largo o el fondo del activo)
+    // y baysum (las columnas de un nivel suman más que el largo del activo).
     function spaceViolations(layout) {
         const out = [];
         if (!layout || !Array.isArray(layout.footprints) || !Array.isArray(layout.spaces)) return out;
@@ -1920,6 +1921,13 @@
                     if (b.l !== undefined && s.l > 0 && b.l > s.l + eps) out.push({ ...base, kind: 'bayl', sig: JSON.stringify([b.n, b.c, 'l', b.l, s.l]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.l), max: m(s.l) }, message: `El hueco del nivel ${b.n}, columna ${b.c} del activo ${s.code} mide ${m(b.l)} m de largo y el activo solo ${m(s.l)} m: baja su largo.` });
                     if (b.w !== undefined && s.d > 0 && b.w > s.d + eps) out.push({ ...base, kind: 'bayw', sig: JSON.stringify([b.n, b.c, 'w', b.w, s.d]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.w), max: m(s.d) }, message: `El hueco del nivel ${b.n}, columna ${b.c} del activo ${s.code} mide ${m(b.w)} m de ancho y el activo solo ${m(s.d)} m de fondo: baja su ancho.` });
                 });
+                // las columnas de un nivel no pueden sumar más que el largo del activo (se suma lo que muestra Posiciones: el largo propio de cada hueco o, sin él, el largo del activo entre sus columnas)
+                for (let n = 1; n <= (s.levels || 1); n += 1) {
+                    const ls = levelLengthSum(s, n);
+                    if (!ls.over) continue;
+                    const lens = Array.from({ length: Math.max(1, Number(s.slots) || 1) }, (_, k) => { const st = bayOf(s, n, k + 1).stored; return st.l !== undefined ? st.l : null; });
+                    out.push({ ...base, kind: 'baysum', sig: JSON.stringify([n, lens, s.l]), vars: { code: s.code, n, sum: m(ls.sum), max: m(s.l) }, message: `Las columnas del nivel ${n} del activo ${s.code} suman ${m(ls.sum)} m de largo y el activo mide ${m(s.l)} m: baja el largo de alguna columna para poder guardar.` });
+                }
                 // los niveles no pueden subir más que el activo (solo si el activo trae medidas de niveles o huecos propias: sin ellas los niveles se reparten justo en su alto)
                 const ownBays = (s.bays || []).filter((b) => b.floorH !== undefined || b.h !== undefined);
                 if (s.h > 0 && ((s.lvls || []).length || ownBays.length)) {
@@ -2877,6 +2885,19 @@
         }
         return out;
     }
+    // Lo que suman las columnas de un nivel (m): el largo propio de cada hueco o, si no lo trae, el largo del activo entre sus columnas. over = suman más que el largo del activo (solo con 2 o más columnas y cuando alguna trae su largo
+    // propio: con 1 columna, su largo ya lo revisa el hueco solo, y sin largos propios la suma da justo el largo del activo).
+    function levelLengthSum(space, level) {
+        const slots = Math.max(1, Number(space && space.slots) || 1);
+        const len = Number(space && space.l) || 0;
+        let sum = 0;
+        let own = 0;
+        for (let c = 1; c <= slots; c += 1) {
+            const b = bayOf(space, level, c).stored;
+            if (b.l !== undefined) { sum += b.l; own += 1; } else sum += len / slots;
+        }
+        return { sum: round2(sum), own, over: slots > 1 && own > 0 && len > 0 && sum > len + 0.005 };
+    }
     // Lo que muestra Posiciones de un hueco: lo guardado en el hueco o, si no se cambió, lo de su nivel (paso Niveles: altura desde el piso, alto y ceja) y, si el nivel tampoco lo trae, lo que sale del activo (alto = alto del activo
     // entre sus niveles; altura desde el piso = los niveles de abajo; largo = su largo entre sus columnas; ancho = su fondo). Todo en metros.
     function bayMeasures(space, level, column) {
@@ -2951,7 +2972,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,

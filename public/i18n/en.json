@@ -1732,6 +1732,7 @@
     "layoutVioAct_tall": "Asset {code} is {h} m tall and its footprint {fcode} only {fh} m: lower its height to be able to save.",
     "layoutVioAct_bayl": "The bay at level {n}, column {c} of asset {code} is {value} m long and the asset is only {max} m: lower its length so you can save.",
     "layoutVioAct_bayw": "The bay at level {n}, column {c} of asset {code} is {value} m wide and the asset is only {max} m deep: lower its width so you can save.",
+    "layoutVioAct_baysum": "The columns of level {n} of asset {code} add up to {sum} m long and the asset is {max} m: lower the length of one column to be able to save.",
     "layoutVioAct_levels": "The levels of asset {code} reach {top} m and the asset is {h} m tall: lower the height of a level or raise the asset height so you can save.",
     "layoutVioAct_overlap": "Assets {other} and {code} overlap inside {fcode}: change their position or size to be able to save.",
     "layoutFondo": "Depth (m)",
@@ -4755,8 +4756,8 @@
       "example": "level 2 has 3 columns and one has its own beam: here it says 1."
     },
     "layoutSec_posiciones": {
-      "what": "Each line is a bay: one level × one column of an asset (a rack with 2 levels and 3 columns leaves 6 bays, already listed). Inside each bay you write how many rows and how many depths it has, its height from the floor and its measures in meters. The measures come calculated from the asset's (or from the level's, if you already wrote them in Levels) and you only fix the ones that differ; the capacity is rows × depths. The length and width of a bay cannot go over the length and depth of the asset: if they do, they are marked in red and cannot be saved until fixed.",
-      "example": "bay N2·C3 of R-01 has 2 rows and 3 depths: capacity 6."
+      "what": "Each line is a bay: one level × one column of an asset (a rack with 2 levels and 3 columns leaves 6 bays, already listed). Inside each bay you write how many rows and how many depths it has, its height from the floor and its measures in meters. The measures come calculated from the asset's (or from the level's, if you already wrote them in Levels) and you only fix the ones that differ; the capacity is rows × depths. The length and width of a bay cannot go over the length and depth of the asset, and the columns of the same level cannot add up to more than the length of the asset: if they do, they are marked in red (for the sum, the length of every column of the level) and cannot be saved until fixed.",
+      "example": "bay N2·C3 of R-01 has 2 rows and 3 depths: capacity 6; if R-01 is 9 m long with 3 columns, each is 3 m and the three of the level add up to 9 m: if you give one 4 m, they add up to 10 m and are marked in red."
     },
     "relClass": {
       "what": "Says what the product is in this place: Active Product (the normal one), Quarantine Product, Clarification Product or Consignment Product. The same place can change classification over time; only one code per space is still allowed. Empty is Active Product.",

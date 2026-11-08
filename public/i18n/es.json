@@ -1732,6 +1732,7 @@
     "layoutVioAct_tall": "El activo {code} mide {h} m de alto y su huella {fcode} solo {fh} m: baja su alto para poder guardar.",
     "layoutVioAct_bayl": "El hueco del nivel {n}, columna {c} del activo {code} mide {value} m de largo y el activo solo {max} m: baja su largo para poder guardar.",
     "layoutVioAct_bayw": "El hueco del nivel {n}, columna {c} del activo {code} mide {value} m de ancho y el activo solo {max} m de fondo: baja su ancho para poder guardar.",
+    "layoutVioAct_baysum": "Las columnas del nivel {n} del activo {code} suman {sum} m de largo y el activo mide {max} m: baja el largo de alguna columna para poder guardar.",
     "layoutVioAct_levels": "Los niveles del activo {code} llegan a {top} m y el activo mide {h} m: baja el alto de algún nivel o sube el alto del activo para poder guardar.",
     "layoutVioAct_overlap": "Los activos {other} y {code} están encimados dentro de {fcode}: cambia su posición o sus medidas para poder guardar.",
     "layoutFondo": "Fondo (m)",
@@ -4754,8 +4755,8 @@
       "example": "el nivel 2 tiene 3 columnas y una lleva su propia ceja: aquí dice 1."
     },
     "layoutSec_posiciones": {
-      "what": "Cada renglón es un hueco: un nivel × una columna de un activo (el rack con 2 niveles y 3 columnas deja 6 huecos, ya listos). Dentro de cada hueco anotas cuántas filas y cuántas profundidades tiene, su altura desde el piso y sus medidas en metros. Si el nivel tiene una reja (travesaño), anota su grueso en Ceja: va aparte del Alto, que es el espacio libre y es también el Alto de almacenamiento. Las medidas salen calculadas con las del activo (o con las del nivel, si ya las anotaste en Niveles) y solo corriges las que cambien; la capacidad es filas × profundidades. El largo y el ancho de un hueco no pueden pasar del largo y el fondo del activo: si pasan, se marcan en rojo y no se puede guardar hasta corregirlos.",
-      "example": "el hueco N2·C3 del R-01 lleva 2 filas y 3 profundidades: capacidad 6."
+      "what": "Cada renglón es un hueco: un nivel × una columna de un activo (el rack con 2 niveles y 3 columnas deja 6 huecos, ya listos). Dentro de cada hueco anotas cuántas filas y cuántas profundidades tiene, su altura desde el piso y sus medidas en metros. Si el nivel tiene una reja (travesaño), anota su grueso en Ceja: va aparte del Alto, que es el espacio libre y es también el Alto de almacenamiento. Las medidas salen calculadas con las del activo (o con las del nivel, si ya las anotaste en Niveles) y solo corriges las que cambien; la capacidad es filas × profundidades. El largo y el ancho de un hueco no pueden pasar del largo y el fondo del activo, y las columnas de un mismo nivel no pueden sumar más que el largo del activo: si pasan, se marcan en rojo (en la suma, el largo de todas las columnas del nivel) y no se puede guardar hasta corregirlos.",
+      "example": "el hueco N2·C3 del R-01 lleva 2 filas y 3 profundidades: capacidad 6; si el R-01 mide 9 m y 3 columnas, cada una mide 3 m y las tres del nivel suman 9 m: si le pones 4 m a una, suman 10 m y se marcan en rojo."
     },
     "relClass": {
       "what": "Dice qué es el producto en este lugar: Producto Activo (el normal), Producto Cuarentena, Producto Aclaración o Producto en Consigna. Un mismo lugar puede cambiar de clasificación con el tiempo; sigue valiendo un solo código por espacio. Vacío es Producto Activo.",

@@ -925,7 +925,7 @@ function applyLevelToAll(key) {
 }
 // Paso Posiciones: el aviso de los huecos cuyo largo o ancho pasa del largo o el fondo de su activo (los primeros 6) y su actualización al teclear.
 function bayIssuesHtml() {
-    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw');
+    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'baysum');
     return list.slice(0, 6).map((v) => `<p>${esc(t(`main.layoutVioAct_${v.kind}`, v.vars))}</p>`).join('') + (list.length > 6 ? '<p>…</p>' : '');
 }
 function applyBayMarks() {
@@ -1277,13 +1277,14 @@ function stepHtml(step) {
             const levels = s.levels || 1;
             const slots = s.slots || 1;
             for (let n = 1; n <= levels; n += 1) {
+                const sumOver = LC.levelLengthSum(s, n).over;
                 for (let c = 1; c <= slots; c += 1) {
                     if (count >= POSITION_ROWS_MAX) return;
                     count += 1;
                     const bay = LC.bayOf(s, n, c);
                     const m = LC.bayMeasures(s, n, c);
                     const st = bay.stored;
-                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td><td class="layout-calc">${c}</td>${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}${bayNum(i, n, c, 'floorH', shown(m.floorH), st.floorH !== undefined, '0.01')}${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', s.l > 0 && m.l > s.l + 0.005)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', '', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01')}${bayNum(i, n, c, 'beam', shown(m.beam), st.beam !== undefined, '0.01', ' data-help-key="layoutPosCeja"')}<td class="layout-calc"><span data-bay-use="${i}|${n}|${c}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}">${bay.rows * bay.depth}</span></td></tr>`);
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td><td class="layout-calc">${c}</td>${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}${bayNum(i, n, c, 'floorH', shown(m.floorH), st.floorH !== undefined, '0.01')}${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', '', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01')}${bayNum(i, n, c, 'beam', shown(m.beam), st.beam !== undefined, '0.01', ' data-help-key="layoutPosCeja"')}<td class="layout-calc"><span data-bay-use="${i}|${n}|${c}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}">${bay.rows * bay.depth}</span></td></tr>`);
                 }
             }
         });
@@ -3050,6 +3051,12 @@ function onEdit(event) {
             const dimBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${c}"][data-k="${k}"]`);
             if (dimBox) dimBox.classList.toggle('layout-missing', over);
         });
+        // las columnas de un nivel no pueden sumar más que el largo del activo: el largo de todas las columnas del nivel se marca (o se desmarca) junto
+        const sumOver = LC.levelLengthSum(space, n).over;
+        for (let col = 1; col <= (space.slots || 1); col += 1) {
+            const lenBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${col}"][data-k="l"]`);
+            if (lenBox) lenBox.classList.toggle('layout-missing', sumOver || (space.l > 0 && LC.bayMeasures(space, n, col).l > space.l + 0.005));
+        }
         computeSpaceIssues();
         applyBayMarks();
     } else if (list === 'lvl') {
@@ -4268,14 +4275,14 @@ $('layout-save').addEventListener('click', async () => {
     if (freshSpaces.length) {
         const v = freshSpaces[0];
         // los niveles que suben más que el activo se arreglan en Niveles (si la cuenta lo ve; si no, en Activos con el alto del activo)
-        const bayKind = v.kind === 'bayl' || v.kind === 'bayw';
+        const bayKind = v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'baysum';
         const stepName = v.kind === 'levels' && stepVisible('niveles') ? 'niveles' : (bayKind && stepVisible('posiciones') ? 'posiciones' : 'activos');
         showStep(stepName);
         renderPanel();
         Dashboard.showToast(t(`main.layoutVioAct_${v.kind}`, v.vars), 'warning');
         const at = state.draft.spaces.findIndex((s) => s.id === v.id);
         const box = stepName === 'posiciones'
-            ? document.querySelector(`[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"][data-k="${v.kind === 'bayl' ? 'l' : 'w'}"]`)
+            ? document.querySelector(v.kind === 'baysum' ? `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-k="l"]` : `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"][data-k="${v.kind === 'bayl' ? 'l' : 'w'}"]`)
             : stepName === 'niveles'
             ? (document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"].layout-missing`) || document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"]`))
             : document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);
