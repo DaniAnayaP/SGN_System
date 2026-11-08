@@ -701,6 +701,7 @@ function applyLegend() {
     const RULES = {
         contour: () => stepOn('contorno'),
         wall: () => stepOn('paredes') && some('obstacles', (o) => o.kind === 'wall'),
+        wall2: () => stepOn('paredes') && some('obstacles', (o) => o.kind === 'wall' && !!LC.wallMark(d, o, 0)),
         door: () => stepOn('puertas') && some('doors'),
         open: (type) => stepOn('puertas') && state.showOpening && some('doors', (x) => LC.doorOpenOf(x) === type),
         level: (type) => !!d && state.showLevels && LC.floorsAll(d).some((f) => (f.isRamp ? stepOn('rampas') : stepOn('pisos')) && LC.zoneHasLevel(f) && ((f.lvl2 !== undefined) === (type === 'ramp'))),
@@ -2313,7 +2314,27 @@ function renderSvg(underlay) {
     if (on('contorno') && (!finding || dimmed)) s += `<polygon class="lw-halo" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     const obstacleShapes = LC.obstacleShapes(d);
     const obstaclePoly = (g) => g.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ');
-    if (on('paredes') && (!finding || dimmed || zoneFocus)) obstacleShapes.filter(({ o }) => o.kind === 'wall' && !o._geom).forEach(({ o, g }) => { s += `<polygon class="lo lo-wall" data-obid="${esc(o.id)}" style="stroke-width:${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}px" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; });
+    if (on('paredes') && (!finding || dimmed || zoneFocus)) {
+        obstacleShapes.filter(({ o }) => o.kind === 'wall' && !o._geom).forEach(({ o, g }) => {
+            const strokeW = `stroke-width:${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}px`;
+            // una pared con dos alturas (o sobre dos pisos distintos) se parte en dos tiras: la del lado más alto oscura y la del más bajo clara, con su etiqueta (se calcula sobre el Layout sin girar)
+            const orig = (state.draft.obstacles || []).find((x) => x.id === o.id);
+            const mk = orig ? LC.wallMark(state.draft, orig, rot) : null;
+            if (!mk) { s += `<polygon class="lo lo-wall" data-obid="${esc(o.id)}" style="${strokeW}" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; return; }
+            const pts = (poly) => poly.map((v) => `${X(v[0])},${Y(v[1])}`).join(' ');
+            s += `<polygon class="lo lo-wall${mk.dark === 'a' ? '' : ' lo-wall-light'}" data-obid="${esc(o.id)}" style="${strokeW}" points="${pts(mk.a)}"><title>${esc(o.name)} · ${esc(mk.label)}</title></polygon><polygon class="lo lo-wall${mk.dark === 'b' ? '' : ' lo-wall-light'}" data-obid="${esc(o.id)}" style="${strokeW}" points="${pts(mk.b)}"><title>${esc(o.name)} · ${esc(mk.label)}</title></polygon>`;
+            // la etiqueta va del lado B de la pared (junto a su punto medio) y sigue el botón de medidas
+            if (sM && mk.length * sc >= 36) {
+                const off = (mk.thick * sc) / 2 + 9;
+                const lx = X(mk.mid[0]) - mk.nx * off;
+                const ly = Y(mk.mid[1]) - mk.ny * off + 3;
+                const anchor = Math.abs(mk.nx) > 0.5 ? (-mk.nx > 0 ? 'start' : 'end') : 'middle';
+                const lab = textWithHalo('lwall', lx.toFixed(1), ly.toFixed(1), anchor, esc(mk.label), ` data-wl="${esc(o.id)}"`);
+                zoneHalos += lab.halo;
+                zoneLabels += lab.main;
+            }
+        });
+    }
     // El contorno (línea azul punteada y fina) va ENCIMA de las paredes: así se distingue de ellas aunque estén sobre el mismo lado, y donde no hay pared se ve solo.
     if (on('contorno') && (!finding || dimmed)) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     (on('obstaculos') ? obstacleShapes.filter(({ o }) => o.kind !== 'wall') : []).forEach(({ o, g }) => {
@@ -4981,7 +5002,7 @@ function sheetLabels() {
         power: t('main.layoutLeyendaLuz'), column: t('main.layoutLeyendaColumna'), wall: t('main.layoutLeyendaPared'), step: t('main.layoutLeyendaDesnivel'),
         kpiTotal: t('main.layoutHojaKpiTotal'), kpiOffices: t('main.layoutHojaKpiOficinas'), kpiAisles: t('main.layoutHojaKpiPasillos'),
         kpiDocks: t('main.layoutHojaKpiAndenes'), kpiStorage: t('main.layoutHojaKpiAlmacenamiento'), kpiDead: t('main.layoutHojaKpiMuertos'), kpiVolume: t('main.layoutHojaKpiVolumen'),
-        scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), openSwing: t('main.layoutLeyendaGiroPuerta'), openSlide: t('main.layoutLeyendaRecorridoPuerta'), ramp: t('main.layoutLeyendaRampa'), space: t('main.layoutLeyendaEspacio'), footprint: t('main.layoutLeyendaHuella'),
+        scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), wall2: t('main.layoutLeyendaParedDos'), openSwing: t('main.layoutLeyendaGiroPuerta'), openSlide: t('main.layoutLeyendaRecorridoPuerta'), ramp: t('main.layoutLeyendaRampa'), space: t('main.layoutLeyendaEspacio'), footprint: t('main.layoutLeyendaHuella'),
         dry: typeLabel('zone', 'dry'), cold: typeLabel('zone', 'cold'), chemical: typeLabel('zone', 'chemical'), finished: typeLabel('zone', 'finished'),
         aisle: typeLabel('zone', 'aisle'), aisle2: typeLabel('zone', 'aisle2'), dock: typeLabel('zone', 'dock'), office: typeLabel('zone', 'office'), none: t('main.layoutSinZona'),
         ...Object.fromEntries(LC.SAFETY_TYPES.map((tp) => [`safety_${tp}`, typeLabel('safety', tp)])),

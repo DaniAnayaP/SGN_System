@@ -169,6 +169,7 @@
 
     function mapSvg(layout, options = {}) {
         // options.rotation = cuartos de vuelta a la derecha (0 a 3): el croquis sale girado; los textos siguen derechos.
+        const layoutNoTurn = layout; // la marca de una pared con dos alturas se calcula sobre el Layout sin girar (wallMark) y se gira después
         if (options.rotation) layout = LC.rotateLayout(layout, options.rotation);
         const T = options.theme || DEFAULT_THEME;
         const W = options.width || 700;
@@ -329,7 +330,27 @@
         const obstacleShapes = LC.obstacleShapes(layout);
         const obstaclePoly = (g) => g.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ');
         // una pared muy delgada para la escala del croquis se refuerza con un trazo para que siempre se vea (como mínimo unos 3 px de grueso)
-        (on('paredes') ? obstacleShapes.filter(({ o }) => o.kind === 'wall') : []).forEach(({ g }) => { s += `<polygon points="${obstaclePoly(g)}" fill="${T.chrome.nave}" stroke="${T.chrome.nave}" stroke-width="${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}" stroke-linejoin="miter"/>`; });
+        (on('paredes') ? obstacleShapes.filter(({ o }) => o.kind === 'wall') : []).forEach(({ o, g }) => {
+            const mk = LC.wallMark ? LC.wallMark(layoutNoTurn, (layoutNoTurn.obstacles || []).find((x) => x.id === o.id), options.rotation || 0) : null;
+            if (mk) {
+                // dos tiras: la del lado más alto con el color de la pared y la del más bajo, clara; la etiqueta (con las medidas) va junto a su punto medio
+                const dark = T.chrome.nave;
+                const light = LC.mixHex(dark, '#FFFFFF', 0.55);
+                const pts = (poly) => poly.map((v) => `${X(v[0])},${Y(v[1])}`).join(' ');
+                const sw = Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2);
+                s += `<polygon points="${pts(mk.a)}" fill="${mk.dark === 'a' ? dark : light}" stroke="${mk.dark === 'a' ? dark : light}" stroke-width="${sw}"/><polygon points="${pts(mk.b)}" fill="${mk.dark === 'b' ? dark : light}" stroke="${mk.dark === 'b' ? dark : light}" stroke-width="${sw}"/>`;
+                if (options.measures !== false && mk.length * sc >= 36) {
+                    const off = (mk.thick * sc) / 2 + 8;
+                    const lx = X(mk.mid[0]) - mk.nx * off;
+                    const ly = Y(mk.mid[1]) - mk.ny * off + 2.5;
+                    const anchor = Math.abs(mk.nx) > 0.5 ? (-mk.nx > 0 ? 'start' : 'end') : 'middle';
+                    const lab = labelText(lx.toFixed(1), ly.toFixed(1), 7.5, 700, '#14161F', anchor, esc(mk.label));
+                    zoneHalos += lab.halo;
+                    zoneLabels += lab.main;
+                }
+                return;
+            }
+            s += `<polygon points="${obstaclePoly(g)}" fill="${T.chrome.nave}" stroke="${T.chrome.nave}" stroke-width="${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}" stroke-linejoin="miter"/>`; });
         // El contorno (línea azul punteada y fina) va ENCIMA de las paredes: se distingue de ellas aunque estén sobre el mismo lado.
         if (on('contorno')) s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${CONTOUR_COLOR}" stroke-width="1.6" stroke-dasharray="7 5" stroke-linejoin="round"/>`;
         // La HUELLA (el lugar en el piso) va primero, blanca o con su color; el ACTIVO encima, un poco más chico, con su propio color (arena si no tiene): así se distinguen aunque midan lo mismo. Un Layout que todavía

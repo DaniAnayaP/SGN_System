@@ -327,6 +327,29 @@
         };
         return { a: side(fA0, fA1, tA0, tA1), b: side(fB0, fB1, tB0, tB1), stepped: Math.abs(tA0 - tB0) > 0.005 || Math.abs(tA1 - tB1) > 0.005 };
     }
+    // La marca de una pared con dos alturas en el croquis: solo si sus dos lados difieren (en altura o por estar sobre pisos distintos). Trae las dos tiras a lo largo (a = lado A, b = lado B, cada una de la mitad del grueso), cuál es la
+    // oscura (la del remate más alto), la etiqueta («A 5.0 m · B 3.0 m»; «A 5.0→4.0 m» si cambia de inicio a final; «(+0.33)» = lo que está más alto el piso del lado B) y un punto de la etiqueta (a 3/10 del largo, para no quedar encima de las medidas de los lados de las zonas, que van a la mitad) con la normal del lado A. Se calcula sobre el Layout SIN
+    // girar y se gira después (quarters), porque el lado A y el B de una pared de adentro dependen de cómo está puesta; null si no hay marca.
+    function wallMark(layout, o, quarters) {
+        if (!o || o.kind !== 'wall') return null;
+        const ax = wallAxis(layout, o);
+        if (!ax || !(ax.length > 0) || !(ax.thick > 0)) return null;
+        const sd = wallSides(layout, o, ax);
+        if (!sd || !sd.stepped) return null;
+        const q = ((Math.round(Number(quarters) || 0) % 4) + 4) % 4;
+        const turn = (x, y) => (q === 1 ? [-y, x] : (q === 2 ? [-x, -y] : (q === 3 ? [y, -x] : [x, y])));
+        const half = ax.thick / 2;
+        const at = (d, off) => turn(ax.x + ax.ux * d + ax.nx * off, ax.y + ax.uy * d + ax.ny * off);
+        const strip = (o0, o1) => [at(0, o0), at(ax.length, o0), at(ax.length, o1), at(0, o1)];
+        const num = (v) => { const r = Math.round(v * 100) / 100; return Math.abs(r * 10 - Math.round(r * 10)) < 1e-9 ? r.toFixed(1) : String(r); };
+        const seg = (side) => (Math.abs(side.h0 - side.h1) < 0.005 ? num(side.h0) : `${num(side.h0)}→${num(side.h1)}`);
+        const dFloor = round2(sd.b.floor0 - sd.a.floor0);
+        const note = Math.abs(dFloor) > 0.004 ? ` (${dFloor > 0 ? '+' : ''}${num(dFloor)})` : '';
+        const topA = (sd.a.top0 + sd.a.top1) / 2;
+        const topB = (sd.b.top0 + sd.b.top1) / 2;
+        const [nx, ny] = turn(ax.nx, ax.ny);
+        return { a: strip(0, half), b: strip(-half, 0), dark: topB > topA + 1e-9 ? 'b' : 'a', label: `A ${seg(sd.a)} m · B ${seg(sd.b)} m${note}`, mid: at(ax.length * 0.3, 0), nx, ny, length: ax.length, thick: ax.thick };
+    }
     // La zona que está de cada lado de una pared (la más chica que contiene el punto de al lado, a la mitad de la pared) y el piso que tiene ahí; outside = ese lado cae fuera de la nave.
     function wallSideInfo(layout, o) {
         const ax = wallAxis(layout, o);
@@ -2972,7 +2995,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,

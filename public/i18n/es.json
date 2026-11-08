@@ -1754,6 +1754,7 @@
     "layoutParedPiso": "piso {n} m",
     "layoutTodoElLado": "todo el lado",
     "layoutLeyendaPared": "Pared",
+    "layoutLeyendaParedDos": "Pared con dos alturas",
     "layoutLeyendaDesnivel": "Desnivel",
     "layoutStepTransito": "Tránsito",
     "colLayoutTransito": "Tránsito",

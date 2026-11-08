@@ -107,6 +107,7 @@
         // La pared sale con su paso (Paredes) y columnas y desniveles con el suyo (Obstáculos); la leyenda solo nombra lo que se ve.
         const obstacleKinds = new Set((data.layout.obstacles || []).map((o) => o.kind));
         if (on('paredes') && obstacleKinds.has('wall')) leg.push(['wall', labels.wall]);
+        if (on('paredes') && labels.wall2 && window.LayoutCalc && window.LayoutCalc.wallMark && (data.layout.obstacles || []).some((o) => o.kind === 'wall' && window.LayoutCalc.wallMark(data.layout, o, 0))) leg.push(['wall2', labels.wall2]);
         if (on('obstaculos') && (obstacleKinds.has('column') || obstacleKinds.has('other'))) leg.push(['column', labels.column]);
         if (on('obstaculos') && obstacleKinds.has('step')) leg.push(['step', labels.step]);
         // Niveles de piso: un cuadrito por cada nivel (con el color de ese nivel; los pisos con formato propio no salen) y la rampa.
@@ -208,6 +209,8 @@
                 const lvCols = (window.LayoutCalc && window.LayoutCalc.floorLevelColors) ? window.LayoutCalc.floorLevelColors(data.layout) : {};
                 const c = lvCols[Math.round(Number(key.slice(6)) * 100) / 100] || '#E9E9EE';
                 s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw}" rx="${4 * f}" fill="${c}" stroke="${window.LayoutCalc.mixHex(c, '#000000', 0.4)}" stroke-width="${1.5 * f}"/>`;
+            } else if (key === 'wall2') {
+                s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw / 2}" fill="${th.chrome.nave}"/><rect x="${x}" y="${ly + sw / 2}" width="${sw}" height="${sw / 2}" fill="${window.LayoutCalc.mixHex(th.chrome.nave, '#FFFFFF', 0.55)}"/>`;
             } else if (key === 'ramp') {
                 s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw}" rx="${4 * f}" fill="#E8D3EE" stroke="#A63FB5" stroke-width="${1.5 * f}" stroke-dasharray="${5 * f} ${3 * f}"/>`;
             } else if (key === 'open:swing' || key === 'open:slide') {

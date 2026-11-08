@@ -1754,6 +1754,7 @@
     "layoutParedPiso": "floor {n} m",
     "layoutTodoElLado": "whole side",
     "layoutLeyendaPared": "Wall",
+    "layoutLeyendaParedDos": "Wall with two heights",
     "layoutLeyendaDesnivel": "Level difference",
     "layoutStepTransito": "Transit",
     "colLayoutTransito": "Transit",
