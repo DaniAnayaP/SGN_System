@@ -165,7 +165,7 @@ const {
     startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
     MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
     addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
-    addSafetyCheck, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
+    addSafetyCheck, findSafetyCheckByRef, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
     listTransitCatalog,
@@ -8327,8 +8327,8 @@ function safetyCheckRowOf(r, centers, client) {
     const cc = centers.get(r.cost_center_id);
     return {
         id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
-        zoneName: r.zone_name, elementCode: r.element_code, elementType: r.element_type, elementName: r.element_name, locator: r.locator,
-        name: r.person_name, result: r.result, note: r.note, checkedAt: sqlUtcIso(r.checked_at), day: r.check_day, hasPhoto: !!r.has_photo, source: r.source,
+        zoneName: r.zone_name, elementId: r.element_id, elementCode: r.element_code, elementType: r.element_type, elementName: r.element_name, locator: r.locator,
+        name: r.person_name, result: r.result, note: r.note, checkedAt: sqlUtcIso(r.checked_at), day: r.check_day, hasPhoto: !!r.has_photo, source: r.source, receivedAt: sqlUtcIso(r.received_at),
         editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: SAFETY_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.checked_at }),
     };
@@ -8338,14 +8338,76 @@ app.get('/api/business/safety-checks', requireAuth, (req, res) => {
     const { clientId, isTestAccount } = req.user;
     const client = getClientById(clientId);
     const centers = new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c]));
-    const LIMIT = 5000;
+    const lite = req.query.lite === '1'; // la App: solo las revisiones más recientes y sin las columnas de Control Interno
+    const LIMIT = lite ? 300 : 5000;
     const rows = listSafetyChecks(clientId, { limit: LIMIT });
     res.set('Cache-Control', 'no-store');
     res.json({
         truncated: rows.length >= LIMIT, max: LIMIT, canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), SAFETY_TABLE_KEY, 'colSgDeleteAuth'),
         editable: editableColumnsOf(req, SAFETY_TABLE_KEY, [['name', 'colSgQuien']]),
-        checks: rows.map((r) => safetyCheckRowOf(r, centers, client)),
+        checks: rows.map((r) => { const o = safetyCheckRowOf(r, centers, client); if (lite) delete o.system; return o; }),
     });
+});
+// La App (con sesión): las OPCIONES para hacer una revisión (los elementos de Seguridad del Layout de cada centro de costos y la última revisión de cada uno: el celular los guarda para trabajar sin señal) y crear la revisión.
+// La revisión lleva la clave que le pone el celular (clientRef): si el celular la reenvía (se cortó la señal justo al responder) el servidor contesta la que ya existe. Si se hizo sin señal, el celular manda la hora a la que la hizo
+// (clientAt: solo vale si es de más de 2 minutos antes y hasta 7 días antes de ahora) y la del servidor queda aparte como hora recibida.
+function safetyElementsOf(row) {
+    const zones = new Map((row.layout.zones || []).map((z) => [z.id, z]));
+    return (row.layout.safety || []).map((e) => {
+        const zone = zones.get(e.zoneId) || null;
+        return { id: e.id, code: e.code, type: e.type, name: e.name || '', zoneId: e.zoneId || '', zoneName: zone ? zone.name : '', locator: [zone && zone.code, e.code].filter(Boolean).join('.') };
+    });
+}
+app.get('/api/business/seguridad/options', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const centerIds = new Set(listCostCenters(clientId, !!isTestAccount).map((c) => c.id));
+    const elementsByCenter = {};
+    const lastByCenter = {};
+    listClientLayouts(clientId).forEach((row) => {
+        const cc = row.costCenterId || 0;
+        if (!cc || !centerIds.has(cc)) return;
+        elementsByCenter[cc] = safetyElementsOf(row);
+        lastByCenter[cc] = getSafetyLast(clientId, cc);
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ elementsByCenter, lastByCenter, noteMax: SAFETY_NOTE_MAX, at: new Date().toISOString() });
+});
+app.post('/api/business/seguridad/checks', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const clientRef = typeof body.clientRef === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.clientRef) ? body.clientRef : null;
+    res.set('Cache-Control', 'no-store');
+    const centers = new Map(listCostCenters(req.user.clientId, !!req.user.isTestAccount).map((c) => [c.id, c]));
+    // la misma revisión reenviada: se contesta la que ya existe
+    const already = findSafetyCheckByRef(req.user.clientId, req.user.sub, clientRef);
+    if (already) return res.json({ record: safetyCheckRowOf(already, centers, getClientById(req.user.clientId)), duplicate: true });
+    const typed = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const personName = typed || String(changedByLabel(req) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!personName) return res.status(400).json({ message: 'Falta el nombre de quien revisa.', code: 'NAME' });
+    const layoutRow = getClientLayout(req.user.clientId, { costCenterId: center.id });
+    const element = layoutRow && SAFETY_ID_RE.test(String(body.elementId || '')) ? (layoutRow.layout.safety || []).find((e) => e.id === body.elementId) : null;
+    if (!element) return res.status(400).json({ message: 'Ese elemento ya no existe: elige otro.', code: 'ELEMENT' });
+    const result = body.result;
+    if (result !== 'ok' && result !== 'fail') return res.status(400).json({ message: 'Falta marcar si el elemento está bien o con falla.', code: 'RESULT' });
+    const rawNote = body.note;
+    if (rawNote !== undefined && rawNote !== null && typeof rawNote !== 'string') return res.status(400).json({ message: 'La nota no es válida.', code: 'NOTE' });
+    const note = String(rawNote || '').replace(/\s+/g, ' ').trim().slice(0, SAFETY_NOTE_MAX);
+    const photo = parseCleaningPhoto(body.photo);
+    if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
+    let createdAt = null;
+    const clientAt = typeof body.clientAt === 'string' ? Date.parse(body.clientAt) : NaN;
+    if (Number.isFinite(clientAt) && clientAt >= Date.now() - 7 * 86400000 && clientAt < Date.now() - 120000) createdAt = new Date(clientAt).toISOString().slice(0, 19).replace('T', ' ');
+    const zone = (layoutRow.layout.zones || []).find((z) => z.id === element.zoneId) || null;
+    const saved = addSafetyCheck({
+        clientId: req.user.clientId, costCenterId: center.id, elementId: element.id, elementCode: element.code, elementType: element.type, elementName: element.name || '',
+        zoneName: zone ? zone.name : '', locator: [zone && zone.code, element.code].filter(Boolean).join('.'), personName, result, note, photo, thumb: parseThumb(body.thumb),
+        source: 'app', userId: req.user.sub, clientRef, createdAt,
+    });
+    res.status(201).json({ record: safetyCheckRowOf(saved, centers, getClientById(req.user.clientId)), offline: !!createdAt });
 });
 // Corregir quién hizo una revisión: misma tubería de cambios que Limpieza y Temperaturas (checkAndLogFieldChanges). El resultado, la hora, la nota, la foto y el lugar no se corrigen: son la prueba de lo que pasó.
 app.patch('/api/business/safety-checks/:id', requireAuth, (req, res) => {

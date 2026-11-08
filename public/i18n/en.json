@@ -3069,6 +3069,7 @@
     "sgResultadoBien": "OK",
     "sgResultadoFalla": "Faulty",
     "sgOrigenQr": "QR",
+    "sgOrigenApp": "App",
     "sgFotoVer": "View the photo of the check",
     "sgCortado": "The first {n} checks are shown; filter by cost center to see the rest.",
     "mapaCalorMetricaBtn": "Heat map: Temperature | Humidity button",
@@ -3838,6 +3839,41 @@
     "incEvidence1": "1 piece of evidence",
     "incNoEvidence": "No evidence",
     "incSend": "Send report",
+    "segTabElements": "Elements",
+    "segTabChecks": "Checks",
+    "segSearchPlaceholder": "Search an element",
+    "segNoMatch": "No element matches your search.",
+    "segElementsEmpty": "There are no safety elements in this cost center's Layout yet.",
+    "segNoCenters": "You have no cost centers to check.",
+    "segOptionsNone": "The elements have not been downloaded yet. Connect once to be able to check them offline.",
+    "segOptionsCached": "No signal: showing the elements saved on your phone.",
+    "segNever": "Never checked",
+    "segChecksEmpty": "There are no checks yet.",
+    "segCheckTitle": "New check",
+    "segWho": "Checked by",
+    "segWhoPlaceholder": "Your name",
+    "segNote": "Note (optional)",
+    "segNotePlaceholder": "If it is faulty, say what is wrong",
+    "segPhoto": "Photo",
+    "segPhotoHint": "Take a photo of the element. It is required.",
+    "segAddPhoto": "Take or choose a photo",
+    "segChangePhoto": "Change photo",
+    "segPreparing": "Preparing the photo…",
+    "segSend": "Send check",
+    "segNeedName": "Write the name of who is checking to send.",
+    "segNeedResult": "Choose whether the element is OK or Faulty.",
+    "segNeedPhoto": "Add the photo of the element to send.",
+    "segErrPhoto": "That photo could not be used. Try another one.",
+    "segErrSend": "The check could not be sent. Try again.",
+    "segElementGone": "That element is no longer in the Layout. Refresh the list.",
+    "segSentTitle": "Check sent",
+    "segSavedTitle": "Saved on your phone",
+    "segNumber": "Check number",
+    "segNoNumberYet": "Pending",
+    "segNumberOnSync": "No signal: it will be sent by itself when the connection returns and will get its number then.",
+    "segAnother": "Check another element",
+    "segBackToList": "See the checks",
+    "segDiscard": "The photo and note you added will be lost. Leave without sending?",
     "incNeedZone": "Pick the zone where it happened.",
     "incNeedPlace": "Type where it happened.",
     "incNeedCategory": "Pick the category.",
@@ -3944,6 +3980,22 @@
     "categorySoonTag": "Soon"
   },
   "help": {
+    "appSegTabs": {
+      "what": "Switches between the safety elements and the checks already made.",
+      "example": "in «Elements» you look for the extinguisher you will check; in «Checks» you see what was already checked."
+    },
+    "appSegElemento": {
+      "what": "The safety element you are checking, with its code and the zone where it is.",
+      "example": "«EXT-004 · Extinguisher» in Warehouse 1."
+    },
+    "appSegResultado": {
+      "what": "You say whether the element is fine or faulty. It is required.",
+      "example": "the extinguisher has a broken seal: you choose «Faulty» and explain it in the note."
+    },
+    "appSegFoto": {
+      "what": "The photo that backs the check. It is required and only one is added.",
+      "example": "a photo of the extinguisher's pressure gauge."
+    },
     "messages": {
       "what": "Here you can message other people who use the system, like a chat.",
       "example": "you message a coworker to ask something without leaving the screen."

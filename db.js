@@ -5903,6 +5903,12 @@ db.exec(`
         thumb       BLOB
     );
 `);
+// La App: client_ref = la clave que el celular le pone a cada revisión (si reenvía la misma, el servidor la reconoce y no la duplica); reporter_user_id = la cuenta que la mandó; received_at = cuándo la recibió el servidor cuando
+// se mandó sin señal (checked_at es entonces la hora del celular al hacerla y check_day el día de esa hora).
+if (!db.prepare('PRAGMA table_info(safety_checks)').all().some((c) => c.name === 'client_ref')) db.exec('ALTER TABLE safety_checks ADD COLUMN client_ref TEXT');
+if (!db.prepare('PRAGMA table_info(safety_checks)').all().some((c) => c.name === 'reporter_user_id')) db.exec('ALTER TABLE safety_checks ADD COLUMN reporter_user_id INTEGER');
+if (!db.prepare('PRAGMA table_info(safety_checks)').all().some((c) => c.name === 'received_at')) db.exec('ALTER TABLE safety_checks ADD COLUMN received_at TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS idx_safety_ref ON safety_checks(client_id, reporter_user_id, client_ref)');
 const SAFETY_CHECK_SELECT = `SELECT r.*, EXISTS(SELECT 1 FROM safety_check_photos p WHERE p.record_id = r.id) AS has_photo FROM safety_checks r`;
 // El día de HOY (o el de utcDate) como AAAA-MM-DD en la zona horaria del cliente: la misma que usan las columnas de Control Interno de sus registros.
 function clientLocalDay(clientId, utcDate = new Date()) {
@@ -5910,14 +5916,21 @@ function clientLocalDay(clientId, utcDate = new Date()) {
     const zone = row && isValidTimeZone(row.time_zone) ? row.time_zone : DEFAULT_CLIENT_TIME_ZONE;
     return wallClockInZone(utcDate, zone).toISOString().slice(0, 10);
 }
-// Guarda una revisión: la hora la pone el servidor y la foto se guarda en la misma operación.
-function addSafetyCheck({ clientId, costCenterId, elementId, elementCode, elementType, elementName, zoneName, locator, personName, result, note, photo, thumb, source = 'qr' }) {
+// Guarda una revisión: la hora la pone el servidor y la foto se guarda en la misma operación. De la App, una revisión que se mandó sin señal trae la hora del celular (createdAt, UTC 'AAAA-MM-DD HH:MM:SS'): queda como hora de la
+// revisión (y su día en la zona del cliente) y la del servidor como hora recibida; clientRef y userId sirven para no duplicar un reenvío.
+function addSafetyCheck({ clientId, costCenterId, elementId, elementCode, elementType, elementName, zoneName, locator, personName, result, note, photo, thumb, source = 'qr', userId = null, clientRef = null, createdAt = null }) {
     return db.transaction(() => {
-        const info = db.prepare(`INSERT INTO safety_checks (client_id, cost_center_id, element_id, element_code, element_type, element_name, zone_name, locator, person_name, result, note, checked_at, check_day, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`).run(clientId, costCenterId || 0, elementId, elementCode || '', elementType || '', elementName || '', zoneName || '', locator || '', personName || '', result === 'fail' ? 'fail' : 'ok', note || '', clientLocalDay(clientId), source);
+        const day = clientLocalDay(clientId, createdAt ? new Date(`${String(createdAt).replace(' ', 'T')}Z`) : undefined);
+        const info = db.prepare(`INSERT INTO safety_checks (client_id, cost_center_id, element_id, element_code, element_type, element_name, zone_name, locator, person_name, result, note, checked_at, check_day, source, reporter_user_id, client_ref, received_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END)`).run(clientId, costCenterId || 0, elementId, elementCode || '', elementType || '', elementName || '', zoneName || '', locator || '', personName || '', result === 'fail' ? 'fail' : 'ok', note || '', createdAt, day, source, userId, clientRef, createdAt);
         db.prepare('INSERT INTO safety_check_photos (record_id, mime, data, thumb_mime, thumb) VALUES (?, ?, ?, ?, ?)').run(info.lastInsertRowid, photo.mime, photo.data, thumb ? thumb.mime : null, thumb ? thumb.data : null);
         return db.prepare(`${SAFETY_CHECK_SELECT} WHERE r.id = ?`).get(info.lastInsertRowid);
     })();
+}
+// La revisión que esa cuenta ya mandó con esa clave (un reenvío de la App), o undefined.
+function findSafetyCheckByRef(clientId, userId, clientRef) {
+    if (!clientRef) return undefined;
+    return db.prepare(`${SAFETY_CHECK_SELECT} WHERE r.client_id = ? AND r.reporter_user_id = ? AND r.client_ref = ?`).get(clientId, userId, clientRef);
 }
 function listSafetyChecks(clientId, { costCenterId, elementId, limit } = {}) {
     const where = ['r.client_id = ?'];
@@ -7766,6 +7779,7 @@ function deletePlan(id) {
 const WEB_SCREEN_CATALOG = [
     { key: 'pedido-manual', labelKey: 'menu.opCentroDistPedidoManual' },
     { key: 'incidentes', labelKey: 'menu.opCentroDistIncidentes' },
+    { key: 'seguridad', labelKey: 'menu.opCentroDistSeguridad' },
     { key: 'capacidad-almacenamiento', labelKey: 'menu.opCentroDistCapacidadAlmacenamiento' },
     { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
     { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },
@@ -12170,6 +12184,7 @@ module.exports = {
     countIncidentsByCriterion,
     CLEANING_PATCHABLE_FIELDS,
     addSafetyCheck,
+    findSafetyCheckByRef,
     listSafetyChecks,
     getSafetyCheck,
     getSafetyPhoto,

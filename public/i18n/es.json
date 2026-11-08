@@ -3068,6 +3068,7 @@
     "sgResultadoBien": "Bien",
     "sgResultadoFalla": "Con falla",
     "sgOrigenQr": "QR",
+    "sgOrigenApp": "App",
     "sgFotoVer": "Ver la foto de la revisión",
     "sgCortado": "Se muestran las primeras {n} revisiones; filtra por centro de costos para ver las demás.",
     "mapaCalorMetricaBtn": "Mapa de calor: botón Temperatura | Humedad",
@@ -3837,6 +3838,41 @@
     "incEvidence1": "1 evidencia",
     "incNoEvidence": "Sin evidencias",
     "incSend": "Enviar reporte",
+    "segTabElements": "Elementos",
+    "segTabChecks": "Revisiones",
+    "segSearchPlaceholder": "Buscar un elemento",
+    "segNoMatch": "Ningún elemento coincide con tu búsqueda.",
+    "segElementsEmpty": "Todavía no hay elementos de seguridad en el Layout de este centro de costos.",
+    "segNoCenters": "No tienes centros de costos para revisar.",
+    "segOptionsNone": "Todavía no se bajaron los elementos. Conéctate una vez para poder revisarlos sin señal.",
+    "segOptionsCached": "Sin señal: se muestran los elementos guardados en tu celular.",
+    "segNever": "Sin revisar",
+    "segChecksEmpty": "Todavía no hay revisiones.",
+    "segCheckTitle": "Nueva revisión",
+    "segWho": "Quién revisa",
+    "segWhoPlaceholder": "Tu nombre",
+    "segNote": "Nota (opcional)",
+    "segNotePlaceholder": "Si tiene falla, di qué le pasa",
+    "segPhoto": "Foto",
+    "segPhotoHint": "Toma una foto del elemento. Es obligatoria.",
+    "segAddPhoto": "Tomar o elegir foto",
+    "segChangePhoto": "Cambiar foto",
+    "segPreparing": "Preparando la foto…",
+    "segSend": "Enviar revisión",
+    "segNeedName": "Escribe el nombre de quien revisa para enviar.",
+    "segNeedResult": "Elige si el elemento está Bien o Con falla.",
+    "segNeedPhoto": "Agrega la foto del elemento para enviar.",
+    "segErrPhoto": "No se pudo usar esa foto. Prueba con otra.",
+    "segErrSend": "No se pudo enviar la revisión. Intenta de nuevo.",
+    "segElementGone": "Ese elemento ya no está en el Layout. Actualiza la lista.",
+    "segSentTitle": "Revisión enviada",
+    "segSavedTitle": "Guardada en tu celular",
+    "segNumber": "Número de revisión",
+    "segNoNumberYet": "Pendiente",
+    "segNumberOnSync": "Sin señal: se enviará sola al volver la conexión y ahí recibirá su número.",
+    "segAnother": "Revisar otro elemento",
+    "segBackToList": "Ver las revisiones",
+    "segDiscard": "Se perderá la foto y la nota que ya agregaste. ¿Salir sin enviar?",
     "incNeedZone": "Elige la zona donde pasó.",
     "incNeedPlace": "Escribe dónde pasó.",
     "incNeedCategory": "Elige la categoría.",
@@ -3943,6 +3979,22 @@
     "categorySoonTag": "Pronto"
   },
   "help": {
+    "appSegTabs": {
+      "what": "Cambia entre los elementos de seguridad y las revisiones ya hechas.",
+      "example": "en «Elementos» buscas el extintor que vas a revisar; en «Revisiones» ves lo que ya se revisó."
+    },
+    "appSegElemento": {
+      "what": "Es el elemento de seguridad que estás revisando, con su código y la zona donde está.",
+      "example": "«EXT-004 · Extintor» en la Bodega 1."
+    },
+    "appSegResultado": {
+      "what": "Dices si el elemento está bien o tiene una falla. Es obligatorio.",
+      "example": "el extintor tiene el seguro roto: eliges «Con falla» y lo explicas en la nota."
+    },
+    "appSegFoto": {
+      "what": "La foto que prueba la revisión. Es obligatoria y solo se agrega una.",
+      "example": "una foto del manómetro del extintor."
+    },
     "messages": {
       "what": "Aquí puedes escribirle a otras personas que usan el sistema, como si fuera un chat.",
       "example": "le escribes a un compañero para preguntarle algo sin salir de la pantalla."

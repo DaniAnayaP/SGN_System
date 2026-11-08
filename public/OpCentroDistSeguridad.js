@@ -149,7 +149,7 @@ function buildRow(r) {
         cell('colCatRegistroUnico', `SEG-${r.id}`, 'col-system'),
         cell('colSgZona', r.zoneName), cell('colSgElemento', elementText(r)), cell('colSgNombre', r.elementName), cell('colSgLocalizador', r.locator, 'rel-locator'), cell('colSgQuien', r.name),
         timeCell('colSgMomento', r.checkedAt), resultCell('colSgResultado', r), cell('colSgNota', r.note), photoCell('colSgFoto', r),
-        originCell('colSgOrigen', t('main.sgOrigenQr'), r),
+        originCell('colSgOrigen', r.source === 'app' ? t('main.sgOrigenApp') : t('main.sgOrigenQr'), r),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
