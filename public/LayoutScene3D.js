@@ -544,7 +544,7 @@
                 };
                 return [mk(0, half, sides.a, 0x6f84b3), mk(-half, 0, sides.b, 0x566a98)];
             };
-            shapes3.filter(({ o }) => o.kind === 'wall').forEach(({ o, g }) => {
+            shapes3.filter(({ o }) => o.kind === 'wall' && !o._geom).forEach(({ o, g }) => {
                 // la pared sube de la altura de su inicio a la de su final (de fábrica, la del contorno en cada extremo); con 4 esquinas se arma con la parte de arriba inclinada
                 const ax = root.LayoutCalc && root.LayoutCalc.wallAxis ? root.LayoutCalc.wallAxis(layout, o) : null;
                 const wsides = ax && root.LayoutCalc.wallSides ? root.LayoutCalc.wallSides(layout, o, ax) : null;

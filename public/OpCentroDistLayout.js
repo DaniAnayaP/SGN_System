@@ -1774,7 +1774,7 @@ function findView3d() {
     if (!activeFind()) return { shown: state.draft, focus: null };
     if (!findEntity()) { if (state.find) clearFind(); return { shown: state.draft, focus: null }; }
     if (state.findDim) return { shown: state.draft, focus: findIds() };
-    return { shown: findLayout(state.draft, true), focus: null };
+    return { shown: findLayout(state.draft), focus: null };
 }
 // Con el resto «tenue»: lo que no es de lo enfocado se ve apagado (las figuras y los textos de lo enfocado llevan la clase find-on).
 function applyFindDim(dimmed) {
@@ -1810,10 +1810,9 @@ function findZoneIds() {
     return e ? (e.kind === 'zone' ? e.ids : [e.zoneId]) : [];
 }
 // El Layout que se dibuja con el enfoque: solo la huella (con sus activos) o las zonas elegidas (con lo que elige «Qué ver» de lo que hay adentro: huellas, activos, paredes, puertas, pisos, seguridad…), con un recuadro justo alrededor
-// (_frame) para que el croquis y el 3D se acerquen a lo enfocado; los dos conservan el contorno real porque de ahí salen las paredes y puertas. En el 3D, con zonas, se dibujan las paredes y las puertas de adentro; la luz, los sensores
-// y los obstáculos todavía no.
+// (_frame) para que el croquis y el 3D se acerquen a lo enfocado; los dos conservan el contorno real porque de ahí salen las paredes, las puertas, la luz y los sensores.
 // Sin enfoque (o si lo enfocado ya no existe) devuelve el mismo Layout.
-function findLayout(d, flat3d) {
+function findLayout(d) {
     const f = activeFind();
     if (!f || !d) return d;
     if (!findEntity()) { if (state.find) clearFind(); return d; }
@@ -1863,8 +1862,7 @@ function findLayout(d, flat3d) {
     const base = { ...d, zones, footprints, spaces, plan: null };
     if (scoped) {
         const common = { safety: scoped.safety, transit: scoped.transit, objects: scoped.objects, floors: scoped.floors };
-        // en el 3D solo van las paredes y las puertas (la luz, los sensores y los obstáculos que no son pared todavía no se dibujan ahí)
-        return flat3d ? { ...base, ...common, _frame: rect, obstacles: scoped.obstacles.filter((o) => o.kind === 'wall'), doors: scoped.doors, power: [], sensors: [] } : { ...base, ...common, _frame: rect, obstacles: scoped.obstacles, doors: scoped.doors, power: scoped.power, sensors: scoped.sensors };
+        return { ...base, ...common, _frame: rect, obstacles: scoped.obstacles, doors: scoped.doors, power: scoped.power, sensors: scoped.sensors };
     }
     return { ...base, vertices: rect, obstacles: [], objects: [], doors: [], power: [] };
 }
@@ -3864,7 +3862,7 @@ function effective3dLayers() {
     const f = activeFind();
     if (f && !state.findDim) {
         const zf = f.kind === 'zone';
-        return { contour: false, walls: zf && fxWant('wall'), columns: false, doors: zf && fxWant('door'), power: false, sensors: false, objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), zones: stepOn('zonas') || stepOn('pisos') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || zf, assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || zf) };
+        return { contour: false, walls: zf && fxWant('wall'), columns: zf && fxWant('obstacle'), doors: zf && fxWant('door'), power: zf && fxWant('power'), sensors: zf && fxWant('sensor'), objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), zones: stepOn('zonas') || stepOn('pisos') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || zf, assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || zf) };
     }
     const layers = {
         contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || stepOn('pisos') || !!(f && f.kind === 'zone'),
