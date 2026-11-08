@@ -458,8 +458,11 @@
             center = null;
             const V =layout && Array.isArray(layout.vertices) ? layout.vertices.filter((p) => Array.isArray(p) && p.length >= 2) : [];
             if (V.length < 3) { applyVisibility(); return; }
-            const xs = V.map((p) => p[0]);
-            const ys = V.map((p) => p[1]);
+            // con un enfoque (zonas), el encuadre (centro, tamaño y piso) sale de _frame, un recuadro alrededor de lo enfocado; el contorno real (V) sigue dando las alturas y las paredes
+            const frame = layout && Array.isArray(layout._frame) ? layout._frame.filter((p) => Array.isArray(p) && p.length >= 2) : [];
+            const F = frame.length >= 3 ? frame : V;
+            const xs = F.map((p) => p[0]);
+            const ys = F.map((p) => p[1]);
             const minX = Math.min(...xs); const maxX = Math.max(...xs); const minY = Math.min(...ys); const maxY = Math.max(...ys);
             const CX = (minX + maxX) / 2;
             const CY = (minY + maxY) / 2;
@@ -474,7 +477,7 @@
 
             // piso (siempre se ve: es la forma de la nave)
             try {
-                const shape = new THREE.Shape(V.map((p) => new THREE.Vector2(p[0], p[1])));
+                const shape = new THREE.Shape(F.map((p) => new THREE.Vector2(p[0], p[1])));
                 const g = new THREE.ShapeGeometry(shape);
                 g.rotateX(Math.PI / 2);
                 g.translate(-CX, 0, -CY);
