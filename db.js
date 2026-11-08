@@ -5328,14 +5328,21 @@ db.exec(`
 for (const [col, ddl] of [['edited_at', 'TEXT'], ['edited_by', "TEXT NOT NULL DEFAULT ''"]]) {
     if (!db.prepare('PRAGMA table_info(cleaning_records)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE cleaning_records ADD COLUMN ${col} ${ddl}`);
 }
+// La App: client_ref = la clave que el celular le pone a la limpieza que EMPIEZA (la que termina la referencia por esa clave aunque todavía no sepa su número); reporter_user_id = la cuenta que la empezó; received_at /
+// finish_received_at = cuándo recibió el servidor el inicio / el fin cuando se mandaron sin señal (started_at y finished_at son entonces la hora del celular).
+for (const [col, ddl] of [['client_ref', 'TEXT'], ['reporter_user_id', 'INTEGER'], ['received_at', 'TEXT'], ['finish_received_at', 'TEXT']]) {
+    if (!db.prepare('PRAGMA table_info(cleaning_records)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE cleaning_records ADD COLUMN ${col} ${ddl}`);
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_cleaning_ref ON cleaning_records(client_id, reporter_user_id, client_ref)');
 const CLEANING_SELECT = `SELECT r.*, CASE WHEN r.finished_at IS NULL THEN NULL ELSE CAST(strftime('%s', r.finished_at) AS INTEGER) - CAST(strftime('%s', r.started_at) AS INTEGER) END AS seconds,
     EXISTS(SELECT 1 FROM cleaning_photos p WHERE p.record_id = r.id AND p.kind = 'before') AS has_before, EXISTS(SELECT 1 FROM cleaning_photos p WHERE p.record_id = r.id AND p.kind = 'after') AS has_after FROM cleaning_records r`;
 // Empieza una limpieza: la hora la pone el servidor y la foto de «antes» se guarda en la misma operación. Devuelve el id y la clave con la que ese teléfono la termina.
-function startCleaningRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, photo, thumb, source = 'qr' }) {
+// De la App, una limpieza que se empezó sin señal trae la hora del celular (startedAt, UTC 'AAAA-MM-DD HH:MM:SS'): queda como hora de inicio y la del servidor como hora recibida; clientRef y userId sirven para no duplicar un reenvío.
+function startCleaningRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, photo, thumb, source = 'qr', userId = null, clientRef = null, startedAt = null }) {
     const key = generatePublicToken();
     return db.transaction(() => {
-        const info = db.prepare(`INSERT INTO cleaning_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, started_at, finish_key, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', key, source);
+        const info = db.prepare(`INSERT INTO cleaning_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, started_at, finish_key, source, reporter_user_id, client_ref, received_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', startedAt, key, source, userId, clientRef, startedAt);
         db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'before', ?, ?)").run(info.lastInsertRowid, photo.mime, photo.data);
         if (thumb) db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'before_thumb', ?, ?)").run(info.lastInsertRowid, thumb.mime, thumb.data);
         const row = db.prepare('SELECT started_at FROM cleaning_records WHERE id = ?').get(info.lastInsertRowid);
@@ -5354,6 +5361,36 @@ function finishCleaningRecord({ clientId, costCenterId, spaceId, id, key, photo,
         if (thumb) db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'after_thumb', ?, ?)").run(id, thumb.mime, thumb.data);
         return { ok: true, record: db.prepare(`${CLEANING_SELECT} WHERE r.id = ?`).get(id) };
     })();
+}
+// La limpieza que esa cuenta ya empezó con esa clave (un reenvío de la App), o undefined.
+function findCleaningByRef(clientId, userId, clientRef) {
+    if (!clientRef) return undefined;
+    return db.prepare(`${CLEANING_SELECT} WHERE r.client_id = ? AND r.reporter_user_id = ? AND r.client_ref = ?`).get(clientId, userId, clientRef);
+}
+// Termina, desde la App, una limpieza que ESA cuenta empezó desde la App (por la clave que le puso el celular o por su número): entra la sesión, no la clave secreta del QR. finishedAt = la hora del celular si se terminó sin
+// señal (nunca antes del inicio); sin ella, la del servidor. Terminar dos veces lo mismo (un reenvío) contesta la limpieza ya terminada con duplicate = true.
+function finishCleaningFromApp({ clientId, userId, id, clientRef, photo, thumb, finishedAt = null }) {
+    return db.transaction(() => {
+        let row = clientRef ? db.prepare('SELECT id, finished_at FROM cleaning_records WHERE client_id = ? AND reporter_user_id = ? AND client_ref = ?').get(clientId, userId, clientRef) : undefined;
+        if (!row && Number.isInteger(id)) row = db.prepare("SELECT id, finished_at FROM cleaning_records WHERE id = ? AND client_id = ? AND reporter_user_id = ? AND source = 'app'").get(id, clientId, userId);
+        if (!row) return { error: 'notfound' };
+        if (row.finished_at) return { duplicate: true, record: db.prepare(`${CLEANING_SELECT} WHERE r.id = ?`).get(row.id) };
+        db.prepare(`UPDATE cleaning_records SET finished_at = CASE WHEN ? IS NULL THEN datetime('now') ELSE MAX(?, started_at) END, finish_received_at = CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END WHERE id = ?`).run(finishedAt, finishedAt, finishedAt, row.id);
+        db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'after', ?, ?)").run(row.id, photo.mime, photo.data);
+        if (thumb) db.prepare("INSERT INTO cleaning_photos (record_id, kind, mime, data) VALUES (?, 'after_thumb', ?, ?)").run(row.id, thumb.mime, thumb.data);
+        return { ok: true, record: db.prepare(`${CLEANING_SELECT} WHERE r.id = ?`).get(row.id) };
+    })();
+}
+// Las limpiezas que esa cuenta empezó desde la App y todavía no termina (la App las muestra «En curso» aunque sean más viejas que las últimas 300 de la lista).
+function listOpenCleaningsOf(clientId, userId) {
+    return db.prepare(`${CLEANING_SELECT} WHERE r.client_id = ? AND r.reporter_user_id = ? AND r.source = 'app' AND r.finished_at IS NULL ORDER BY r.started_at DESC, r.id DESC LIMIT 100`).all(clientId, userId);
+}
+// La última limpieza de cada activo de un centro: { spaceId: { at, finished } } (at = su inicio).
+function getCleaningLast(clientId, costCenterId) {
+    const rows = db.prepare(`SELECT r.space_id, r.started_at, r.finished_at FROM cleaning_records r JOIN (SELECT space_id, MAX(id) AS mid FROM cleaning_records WHERE client_id = ? AND cost_center_id = ? GROUP BY space_id) m ON m.mid = r.id`).all(clientId, costCenterId || 0);
+    const out = {};
+    rows.forEach((r) => { out[r.space_id] = { at: r.started_at, finished: !!r.finished_at }; });
+    return out;
 }
 function listCleaningRecords(clientId, { costCenterId, spaceId, limit } = {}) {
     const where = ['r.client_id = ?'];
@@ -7780,6 +7817,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'pedido-manual', labelKey: 'menu.opCentroDistPedidoManual' },
     { key: 'incidentes', labelKey: 'menu.opCentroDistIncidentes' },
     { key: 'seguridad', labelKey: 'menu.opCentroDistSeguridad' },
+    { key: 'limpieza', labelKey: 'menu.opCentroDistLimpieza' },
     { key: 'capacidad-almacenamiento', labelKey: 'menu.opCentroDistCapacidadAlmacenamiento' },
     { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
     { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },
@@ -12185,6 +12223,10 @@ module.exports = {
     CLEANING_PATCHABLE_FIELDS,
     addSafetyCheck,
     findSafetyCheckByRef,
+    findCleaningByRef,
+    finishCleaningFromApp,
+    listOpenCleaningsOf,
+    getCleaningLast,
     listSafetyChecks,
     getSafetyCheck,
     getSafetyPhoto,

@@ -143,7 +143,7 @@ function buildRow(r) {
         timeCell('colLimInicio', r.startedAt), timeCell('colLimFin', r.finishedAt),
         r.finishedAt ? cell('colLimDuracion', durationText(r.seconds)) : (() => { const td = document.createElement('td'); td.dataset.col = 'colLimDuracion'; td.innerHTML = '<span class="rel-tag rel-tag-partial"></span>'; td.firstChild.textContent = t('main.limEnCurso'); return td; })(),
         photoCell('colLimFotoAntes', r, 'before', r.hasBefore), photoCell('colLimFotoDespues', r, 'after', r.hasAfter),
-        originCell('colLimOrigen', t(r.source === 'qr' ? 'main.limOrigenQr' : 'main.limOrigenUsuario'), r),
+        originCell('colLimOrigen', t(r.source === 'qr' ? 'main.limOrigenQr' : (r.source === 'app' ? 'main.limOrigenApp' : 'main.limOrigenUsuario')), r),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;

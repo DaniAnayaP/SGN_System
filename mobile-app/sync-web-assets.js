@@ -40,6 +40,7 @@ const FILES = [
     'AppPedidoManual.html', 'AppPedidoManual.js', 'SearchSyntax.js',
     'AppIncidentes.html', 'AppIncidentes.js',
     'AppSeguridad.html', 'AppSeguridad.js',
+    'AppLimpieza.html', 'AppLimpieza.js',
     'AppCapacidadAlmacenamiento.html', 'AppCapacidadAlmacenamiento.js',
     'manifest.json', 'sw.js',
     path.join('icons', 'icon-512.png'),

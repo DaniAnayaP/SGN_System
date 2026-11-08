@@ -2150,3 +2150,14 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .seg-app-tab:focus-visible, .seg-app-resbtn:focus-visible{ outline: 2px solid var(--home-accent); outline-offset: 2px; }
 .seg-app-note-area{ min-height: 4.5rem; }
 .seg-app-head .pm-app-note{ text-align: left; margin: 0.2rem 0 0; }
+/* ===== Limpieza (App): cronómetro y fotos de antes / después (AppLimpieza.js); las pestañas y las filas son las de Seguridad ===== */
+.lim-app-timer-card{ text-align: center; }
+.lim-app-timer{ font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--home-text-primary); line-height: 1.2; }
+.lim-app-shots{ grid-template-columns: repeat(2, 1fr); }
+.lim-app-shotcell{ display: flex; flex-direction: column; gap: 0.3rem; align-items: center; }
+.lim-app-shotcell .inc-app-shot{ width: 100%; }
+.lim-app-shotcell small{ font-size: 0.7rem; color: var(--home-text-muted); }
+.lim-app-shot-none{ display: grid; place-items: center; color: var(--home-text-muted); cursor: default; }
+.seg-app-last small b{ font-weight: 700; font-variant-numeric: tabular-nums; }
+.inc-app-pills small{ font-size: 0.62rem; color: var(--home-text-muted); white-space: nowrap; }
+.inc-app-pills small b{ font-weight: 700; font-variant-numeric: tabular-nums; }

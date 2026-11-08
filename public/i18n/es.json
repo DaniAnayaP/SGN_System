@@ -3126,6 +3126,7 @@
     "limEnCurso": "En curso",
     "limOrigenQr": "QR",
     "limOrigenUsuario": "Usuario",
+    "limOrigenApp": "App",
     "limFotoAntesVer": "Ver la foto de antes",
     "limFotoDespuesVer": "Ver la foto de después",
     "limFotoAntes": "Antes",
@@ -3841,6 +3842,53 @@
     "incEvidence1": "1 evidencia",
     "incNoEvidence": "Sin evidencias",
     "incSend": "Enviar reporte",
+    "limTabSpaces": "Activos",
+    "limTabCleanings": "Limpiezas",
+    "limSearchPlaceholder": "Buscar un activo",
+    "limNoMatch": "Ningún activo coincide con tu búsqueda.",
+    "limSpacesEmpty": "Todavía no hay activos en el Layout de este centro de costos.",
+    "limNoCenters": "No tienes centros de costos para limpiar.",
+    "limOptionsNone": "Todavía no se bajaron los activos. Conéctate una vez para poder limpiar sin señal.",
+    "limOptionsCached": "Sin señal: se muestran los activos guardados en tu celular.",
+    "limShowing": "Se muestran {n} de {total}: escribe para buscar el resto.",
+    "limNever": "Sin limpiar",
+    "limRunning": "En curso",
+    "limDone": "Terminada",
+    "limOpen": "Sin terminar",
+    "limCleaningsEmpty": "Todavía no hay limpiezas.",
+    "limStartTitle": "Empezar limpieza",
+    "limFinishTitle": "Terminar limpieza",
+    "limWho": "Quién limpia",
+    "limWhoPlaceholder": "Tu nombre",
+    "limPhotoBefore": "Foto de antes",
+    "limPhotoAfter": "Foto de después",
+    "limPhotoBeforeHint": "Toma una foto del activo antes de limpiarlo. Es obligatoria.",
+    "limPhotoAfterHint": "Toma una foto del activo ya limpio. Es obligatoria.",
+    "limPhotos": "Fotos",
+    "limAddPhoto": "Tomar o elegir foto",
+    "limChangePhoto": "Cambiar foto",
+    "limPreparing": "Preparando la foto…",
+    "limStart": "Empezar limpieza",
+    "limFinish": "Terminar limpieza",
+    "limNeedName": "Escribe el nombre de quien limpia para empezar.",
+    "limNeedPhoto": "Agrega la foto para continuar.",
+    "limErrPhoto": "No se pudo usar esa foto. Prueba con otra.",
+    "limErrSend": "No se pudo enviar. Intenta de nuevo.",
+    "limSpaceGone": "Ese activo ya no está en el Layout. Actualiza la lista.",
+    "limNotFound": "Esa limpieza ya no existe o no es tuya.",
+    "limStartedTitle": "Limpieza iniciada",
+    "limFinishedTitle": "Limpieza terminada",
+    "limSavedTitle": "Guardada en tu celular",
+    "limNumber": "Número de limpieza",
+    "limNoNumberYet": "Pendiente",
+    "limNumberOnSync": "Sin señal: se enviará sola al volver la conexión y ahí recibirá su número. Ya puedes terminarla cuando acabes.",
+    "limFinishOnSync": "Sin señal: la foto de después y la hora de fin se enviarán solas al volver la conexión.",
+    "limStartedNote": "Cuando termines, abre esta limpieza y toma la foto de después.",
+    "limElapsed": "Tiempo transcurrido",
+    "limFinishNow": "Terminar ahora",
+    "limAnother": "Limpiar otro activo",
+    "limBackToList": "Ver las limpiezas",
+    "limDiscard": "Se perderá la foto que ya agregaste. ¿Salir sin enviar?",
     "segTabElements": "Elementos",
     "segTabChecks": "Revisiones",
     "segSearchPlaceholder": "Buscar un elemento",
@@ -3982,6 +4030,30 @@
     "categorySoonTag": "Pronto"
   },
   "help": {
+    "appLimTabs": {
+      "what": "Cambia entre los activos que puedes limpiar y las limpiezas ya hechas o en curso.",
+      "example": "en «Activos» buscas el anaquel que vas a limpiar; en «Limpiezas» ves las que están en curso y las ya terminadas."
+    },
+    "appLimActivo": {
+      "what": "Es el activo que vas a limpiar, con su código y el lugar donde está.",
+      "example": "«A001 · Anaquel» en la Zona 1."
+    },
+    "appLimFotoAntes": {
+      "what": "La foto del activo ANTES de limpiarlo. Es obligatoria y solo se agrega una. Al enviarla empieza a correr el tiempo.",
+      "example": "una foto del anaquel con el polvo y las cajas sucias."
+    },
+    "appLimFotoDespues": {
+      "what": "La foto del activo YA LIMPIO. Es obligatoria y solo se agrega una. Al enviarla se guarda cuánto tardó la limpieza.",
+      "example": "una foto del mismo anaquel ya limpio."
+    },
+    "appLimCronometro": {
+      "what": "El tiempo que lleva la limpieza desde que la empezaste. Sigue corriendo aunque salgas de la pantalla.",
+      "example": "«12 min 30 s» desde que mandaste la foto de antes."
+    },
+    "appLimTerminar": {
+      "what": "Cierra la limpieza: pide la foto de después y guarda cuánto duró. Solo la puede terminar quien la empezó.",
+      "example": "terminas el anaquel, tomas la foto y queda guardada la duración."
+    },
     "appSegTabs": {
       "what": "Cambia entre los elementos de seguridad y las revisiones ya hechas.",
       "example": "en «Elementos» buscas el extintor que vas a revisar; en «Revisiones» ves lo que ya se revisó."

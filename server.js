@@ -162,7 +162,7 @@ const {
     ensureLayoutPublicToken,
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
-    startCleaningRecord, finishCleaningRecord, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
+    startCleaningRecord, finishCleaningRecord, findCleaningByRef, finishCleaningFromApp, listOpenCleaningsOf, getCleaningLast, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
     MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
     addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, findSafetyCheckByRef, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
@@ -7277,6 +7277,7 @@ function cleaningRowOf(r, centers, client) {
         id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
         zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, locator: r.locator,
         name: r.person_name, startedAt: sqlUtcIso(r.started_at), finishedAt: sqlUtcIso(r.finished_at), seconds: r.seconds, hasBefore: !!r.has_before, hasAfter: !!r.has_after, source: r.source,
+        spaceId: r.space_id, receivedAt: sqlUtcIso(r.received_at), finishReceivedAt: sqlUtcIso(r.finish_received_at),
         editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: CLEANING_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.started_at }),
     };
@@ -7318,13 +7319,22 @@ app.get('/api/business/cleanings', requireAuth, (req, res) => {
     const { clientId, isTestAccount } = req.user;
     const client = getClientById(clientId);
     const centers = new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c]));
-    const LIMIT = 5000;
-    const rows = listCleaningRecords(clientId, { limit: LIMIT });
+    const lite = req.query.lite === '1'; // la App: solo las 300 más recientes (más las que esta cuenta tiene en curso) y sin las columnas de Control Interno
+    const LIMIT = lite ? 300 : 5000;
+    let rows = listCleaningRecords(clientId, { limit: LIMIT });
+    if (lite) { const have = new Set(rows.map((r) => r.id)); rows = rows.concat(listOpenCleaningsOf(clientId, req.user.sub).filter((r) => !have.has(r.id))); }
     res.set('Cache-Control', 'no-store');
     res.json({
         truncated: rows.length >= LIMIT, max: LIMIT, canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), CLEANING_TABLE_KEY, 'colLimDeleteAuth'),
         editable: editableColumnsOf(req, CLEANING_TABLE_KEY, [['name', 'colLimQuien']]),
-        cleanings: rows.map((r) => cleaningRowOf(r, centers, client)),
+        cleanings: rows.map((r) => {
+            const o = cleaningRowOf(r, centers, client);
+            if (!lite) return o;
+            delete o.system;
+            o.mine = r.reporter_user_id === req.user.sub;
+            o.clientRef = o.mine ? (r.client_ref || '') : '';
+            return o;
+        }),
     });
 });
 // Corregir quién hizo una limpieza: pasa por la misma tubería de cambios de toda la plataforma (checkAndLogFieldChanges): el administrador del cliente lo aplica directo; quien tiene Modificar en esa columna lo manda a
@@ -7340,6 +7350,81 @@ app.patch('/api/business/cleanings/:id', requireAuth, (req, res) => {
     const updated = updateCleaningRecord(id, req.user.clientId, appliedPatch, { editedBy: changedByLabel(req) });
     const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
     res.json({ cleaning: cleaningRowOf(updated, centers, getClientById(req.user.clientId)), pendingFields, rejectedFields });
+});
+// La App (con sesión): las OPCIONES para limpiar (los activos activos del Layout de cada centro de costos y la última limpieza de cada uno: el celular los guarda para trabajar sin señal), empezar una limpieza (nombre, foto de
+// antes) y terminarla (foto de después). El inicio lleva la clave que le pone el celular (clientRef): el fin la referencia por esa clave aunque el inicio todavía no se haya enviado, así que los dos van en la cola sin señal y se
+// aplican en orden. Si se hicieron sin señal el celular manda la hora (clientAt: solo vale si es de más de 30 segundos antes y hasta 7 días antes de ahora) y la del servidor queda aparte como hora recibida.
+// minAgeMs: cuánto más vieja que «ahora» tiene que ser para contar como hecha sin señal (Limpieza mide una DURACIÓN, así que solo deja pasar lo que tarda en subir una foto: 30 s).
+function appClientTime(raw, minAgeMs = 120000) {
+    const t = typeof raw === 'string' ? Date.parse(raw) : NaN;
+    return Number.isFinite(t) && t >= Date.now() - 7 * 86400000 && t < Date.now() - minAgeMs ? new Date(t).toISOString().slice(0, 19).replace('T', ' ') : null;
+}
+const cleaningLocatorOf = (layout, space) => {
+    const footprint = (layout.footprints || []).find((f) => f.id === space.footprintId) || null;
+    const zone = (layout.zones || []).find((z) => z.id === space.zoneId) || null;
+    return { footprint, zone, locator: zone && footprint ? [zone.code, footprint.code, space.code].join('.') : '' };
+};
+app.get('/api/business/limpieza/options', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const centerIds = new Set(listCostCenters(clientId, !!isTestAccount).map((c) => c.id));
+    const spacesByCenter = {};
+    const lastByCenter = {};
+    listClientLayouts(clientId).forEach((row) => {
+        const cc = row.costCenterId || 0;
+        if (!cc || !centerIds.has(cc)) return;
+        spacesByCenter[cc] = (row.layout.spaces || []).filter((s) => s && s.active !== false && s.code && CLEANING_SPACE_ID_RE.test(String(s.id || ''))).map((s) => {
+            const { footprint, zone, locator } = cleaningLocatorOf(row.layout, s);
+            return { id: s.id, code: s.code, type: s.type || 'rack', locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '' };
+        });
+        lastByCenter[cc] = Object.fromEntries(Object.entries(getCleaningLast(clientId, cc)).map(([spaceId, v]) => [spaceId, { at: sqlUtcIso(v.at), finished: v.finished }]));
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ spacesByCenter, lastByCenter, at: new Date().toISOString() });
+});
+app.post('/api/business/limpieza/start', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const clientRef = typeof body.clientRef === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.clientRef) ? body.clientRef : null;
+    res.set('Cache-Control', 'no-store');
+    const centers = new Map(listCostCenters(req.user.clientId, !!req.user.isTestAccount).map((c) => [c.id, c]));
+    const client = getClientById(req.user.clientId);
+    // la misma limpieza reenviada: se contesta la que ya existe
+    const already = findCleaningByRef(req.user.clientId, req.user.sub, clientRef);
+    if (already) return res.json({ record: cleaningRowOf(already, centers, client), duplicate: true });
+    const typed = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const personName = typed || String(changedByLabel(req) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!personName) return res.status(400).json({ message: 'Falta el nombre de quien limpia.', code: 'NAME' });
+    const layoutRow = getClientLayout(req.user.clientId, { costCenterId: center.id });
+    const space = layoutRow && CLEANING_SPACE_ID_RE.test(String(body.spaceId || '')) ? (layoutRow.layout.spaces || []).find((s) => s.id === body.spaceId && s.active !== false) : null;
+    if (!space) return res.status(400).json({ message: 'Ese activo ya no existe: elige otro.', code: 'SPACE' });
+    const photo = parseCleaningPhoto(body.photo);
+    if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
+    const { footprint, zone, locator } = cleaningLocatorOf(layoutRow.layout, space);
+    const startedAt = appClientTime(body.clientAt, 30000);
+    const started = startCleaningRecord({
+        clientId: req.user.clientId, costCenterId: center.id, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator,
+        personName, photo, thumb: parseThumb(body.thumb), source: 'app', userId: req.user.sub, clientRef, startedAt,
+    });
+    res.status(201).json({ record: cleaningRowOf(getCleaningRecord(started.id, req.user.clientId), centers, client), offline: !!startedAt });
+});
+app.post('/api/business/limpieza/finish', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const clientRef = typeof body.clientRef === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.clientRef) ? body.clientRef : null;
+    const id = Number(body.id);
+    if (!clientRef && !Number.isInteger(id)) return res.status(400).json({ message: 'Datos no válidos.', code: 'REF' });
+    const photo = parseCleaningPhoto(body.photo);
+    if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
+    const finishedAt = appClientTime(body.clientAt, 30000);
+    const done = finishCleaningFromApp({ clientId: req.user.clientId, userId: req.user.sub, id: Number.isInteger(id) ? id : undefined, clientRef, photo, thumb: parseThumb(body.thumb), finishedAt });
+    res.set('Cache-Control', 'no-store');
+    if (done.error === 'notfound') return res.status(404).json({ message: 'Esa limpieza no existe o no es tuya.', code: 'NOTFOUND' });
+    const centers = new Map(listCostCenters(req.user.clientId, !!req.user.isTestAccount).map((c) => [c.id, c]));
+    res.json({ record: cleaningRowOf(done.record, centers, getClientById(req.user.clientId)), ...(done.duplicate ? { duplicate: true } : { offline: !!finishedAt }) });
 });
 app.get('/api/business/cleanings/:id/photo/:kind', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).end();

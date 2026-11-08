@@ -3127,6 +3127,7 @@
     "limEnCurso": "In progress",
     "limOrigenQr": "QR",
     "limOrigenUsuario": "User",
+    "limOrigenApp": "App",
     "limFotoAntesVer": "View the before photo",
     "limFotoDespuesVer": "View the after photo",
     "limFotoAntes": "Before",
@@ -3842,6 +3843,53 @@
     "incEvidence1": "1 piece of evidence",
     "incNoEvidence": "No evidence",
     "incSend": "Send report",
+    "limTabSpaces": "Assets",
+    "limTabCleanings": "Cleanings",
+    "limSearchPlaceholder": "Search an asset",
+    "limNoMatch": "No asset matches your search.",
+    "limSpacesEmpty": "There are no assets in this cost center's Layout yet.",
+    "limNoCenters": "You have no cost centers to clean.",
+    "limOptionsNone": "The assets have not been downloaded yet. Connect once to be able to clean offline.",
+    "limOptionsCached": "No signal: showing the assets saved on your phone.",
+    "limShowing": "Showing {n} of {total}: type to search for the rest.",
+    "limNever": "Never cleaned",
+    "limRunning": "In progress",
+    "limDone": "Finished",
+    "limOpen": "Not finished",
+    "limCleaningsEmpty": "There are no cleanings yet.",
+    "limStartTitle": "Start cleaning",
+    "limFinishTitle": "Finish cleaning",
+    "limWho": "Cleaned by",
+    "limWhoPlaceholder": "Your name",
+    "limPhotoBefore": "Before photo",
+    "limPhotoAfter": "After photo",
+    "limPhotoBeforeHint": "Take a photo of the asset before cleaning it. It is required.",
+    "limPhotoAfterHint": "Take a photo of the asset once it is clean. It is required.",
+    "limPhotos": "Photos",
+    "limAddPhoto": "Take or choose a photo",
+    "limChangePhoto": "Change photo",
+    "limPreparing": "Preparing the photo…",
+    "limStart": "Start cleaning",
+    "limFinish": "Finish cleaning",
+    "limNeedName": "Write the name of who is cleaning to start.",
+    "limNeedPhoto": "Add the photo to continue.",
+    "limErrPhoto": "That photo could not be used. Try another one.",
+    "limErrSend": "It could not be sent. Try again.",
+    "limSpaceGone": "That asset is no longer in the Layout. Refresh the list.",
+    "limNotFound": "That cleaning no longer exists or is not yours.",
+    "limStartedTitle": "Cleaning started",
+    "limFinishedTitle": "Cleaning finished",
+    "limSavedTitle": "Saved on your phone",
+    "limNumber": "Cleaning number",
+    "limNoNumberYet": "Pending",
+    "limNumberOnSync": "No signal: it will be sent by itself when the connection returns and will get its number then. You can already finish it when you are done.",
+    "limFinishOnSync": "No signal: the after photo and the end time will be sent by themselves when the connection returns.",
+    "limStartedNote": "When you are done, open this cleaning and take the after photo.",
+    "limElapsed": "Elapsed time",
+    "limFinishNow": "Finish now",
+    "limAnother": "Clean another asset",
+    "limBackToList": "See the cleanings",
+    "limDiscard": "The photo you added will be lost. Leave without sending?",
     "segTabElements": "Elements",
     "segTabChecks": "Checks",
     "segSearchPlaceholder": "Search an element",
@@ -3983,6 +4031,30 @@
     "categorySoonTag": "Soon"
   },
   "help": {
+    "appLimTabs": {
+      "what": "Switches between the assets you can clean and the cleanings already made or in progress.",
+      "example": "in «Assets» you look for the rack you will clean; in «Cleanings» you see the ones in progress and the finished ones."
+    },
+    "appLimActivo": {
+      "what": "The asset you are about to clean, with its code and where it is.",
+      "example": "«A001 · Rack (shelf)» in Zone 1."
+    },
+    "appLimFotoAntes": {
+      "what": "The photo of the asset BEFORE cleaning it. It is required and only one is added. Once it is sent, the time starts running.",
+      "example": "a photo of the rack with dust and dirty boxes."
+    },
+    "appLimFotoDespues": {
+      "what": "The photo of the asset ONCE CLEAN. It is required and only one is added. Once it is sent, how long the cleaning took is saved.",
+      "example": "a photo of the same rack, clean."
+    },
+    "appLimCronometro": {
+      "what": "How long the cleaning has been going since you started it. It keeps running even if you leave the screen.",
+      "example": "«12 min 30 s» since you sent the before photo."
+    },
+    "appLimTerminar": {
+      "what": "Closes the cleaning: asks for the after photo and saves how long it lasted. Only who started it can finish it.",
+      "example": "you finish the rack, take the photo and the duration is saved."
+    },
     "appSegTabs": {
       "what": "Switches between the safety elements and the checks already made.",
       "example": "in «Elements» you look for the extinguisher you will check; in «Checks» you see what was already checked."
