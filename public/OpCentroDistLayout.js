@@ -2428,9 +2428,11 @@ function renderSvg(underlay) {
         s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="3.5" class="lv"/>`;
         if (sM) putOuter('lt2', X(p[0]) + (p[0] <= cx ? -8 : 8), Y(p[1]) + (p[1] <= cy ? -7 : 14), p[0] <= cx ? 'end' : 'start', `${i + 1} · ${fmt(p[2])} m`);
     });
-    const bar = 5 * sc;
+    // la escala (abajo a la izquierda) mide 5 m; en una nave chica se acorta (2, 1 o 0.5 m) para no llegar hasta la barra de búsqueda que flota a su derecha
+    const scaleM = [5, 2, 1, 0.5].find((m) => m * sc <= 110) || 0.5;
+    const bar = scaleM * sc;
     s += `<line x1="${M}" y1="${H - 12}" x2="${M + bar}" y2="${H - 12}" class="lscale"/>`;
-    putOuter('lt2', M + bar + 6, H - 8, 'start', '5 m');
+    putOuter('lt2', M + bar + 6, H - 8, 'start', `${scaleM} m`);
     s = `${s.slice(0, halosAt)}${outerHalos}${s.slice(halosAt)}${outerLabels}`;
     if (underlay) return s;
     // con un enfoque y el resto «tenue», las opciones apagadas también se ven (con poca opacidad) debajo de lo encendido

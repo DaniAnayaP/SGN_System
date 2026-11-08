@@ -7831,10 +7831,12 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 /* tamaño de la hoja arriba del croquis y vista de la hoja */
 /* Buscar una zona o una huella (enfoque): la barra, su lista flotante, el chip de lo enfocado y los botones de ocultar */
 .layout-find{ position: relative; width: 100%; display: flex; flex-direction: column; gap: 0.45rem; }
-/* El buscador va debajo del croquis (antes estaba en Visualizaciones): la lista de resultados se abre hacia arriba para no salirse de la pantalla. */
+/* El buscador FLOTA encima del croquis, abajo y a la derecha de la escala (no ocupa su propio renglón ni agranda el panel); la lista de resultados se abre hacia arriba y llega hasta la orilla de la izquierda. */
 .layout-map-col{ position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
-.layout-map-col .layout-find{ position: static; padding: 0.6rem 0.8rem 0.8rem; width: auto; }
-.layout-map-col .layout-find-list{ top: auto; bottom: 3.4rem; left: 0.8rem; right: 0.8rem; max-height: 18rem; }
+.layout-map-col .layout-find{ position: absolute; left: 8rem; right: 0.7rem; bottom: 0.7rem; width: auto; z-index: 20; }
+.layout-map-col .layout-3d-info{ position: absolute; top: 0.9rem; left: 0.9rem; right: 0.9rem; z-index: 5; box-shadow: 0 4px 14px rgba(60, 20, 70, 0.16); }
+.layout-map-col .layout-find-field{ background: color-mix(in srgb, var(--color-surface) 92%, transparent); box-shadow: 0 2px 10px rgba(60, 20, 70, 0.16); }
+.layout-map-col .layout-find-list{ top: auto; bottom: calc(100% + 0.35rem); left: -7.3rem; right: 0; max-height: 15rem; }
 /* Lo enfocado (chip, Resto, Ocultar y lo que hay adentro) se SOBREPONE al croquis, en su esquina de arriba, en lugar de agrandar el espacio de abajo. */
 .layout-find[hidden]{ display: none; }
 .layout-find-field{ display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.7rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); }
