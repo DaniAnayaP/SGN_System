@@ -1745,7 +1745,7 @@ const FIND_ITEM_ATTR = { wall: 'obid', obstacle: 'obid', door: 'did', power: 'pi
 function findIds() {
     const f = activeFind();
     const d = state.draft;
-    const ids = { zones: new Set(), footprints: new Set(), spaces: new Set(), items: {} };
+    const ids = { zones: new Set(), footprints: new Set(), spaces: new Set(), items: null };
     if (!f || !d) return ids;
     if (f.kind === 'spaces') {
         f.ids.forEach((id) => { ids.spaces.add(id); const sp = d.spaces.find((x) => x.id === id); if (sp && sp.footprintId) ids.footprints.add(sp.footprintId); });
@@ -1753,6 +1753,7 @@ function findIds() {
         const zids = zoneFocusIds(f);
         const inside = scopeInside(d, zids);
         zids.forEach((id) => ids.zones.add(id));
+        ids.items = {};
         if (fxWant('footprint')) inside.footprint.forEach((id) => ids.footprints.add(id));
         if (fxWant('space')) inside.space.forEach((id) => ids.spaces.add(id));
         Object.keys(FIND_ITEM_ATTR).forEach((ty) => { if (fxWant(ty)) ids.items[ty] = inside[ty]; });
@@ -1784,7 +1785,7 @@ function applyFindDim(dimmed) {
     const f = activeFind();
     const sel = [];
     if (f.kind === 'zone') zoneFocusIds(f).forEach((id) => sel.push(`[data-zid="${CSS.escape(id)}"]`, `[data-lz="${CSS.escape(id)}"]`));
-    if (f.kind === 'zone') { const it = findIds().items; Object.keys(it).forEach((ty) => it[ty].forEach((id) => sel.push(`[data-${FIND_ITEM_ATTR[ty]}="${CSS.escape(id)}"]`))); }
+    if (f.kind === 'zone') { const it = findIds().items || {}; Object.keys(it).forEach((ty) => it[ty].forEach((id) => sel.push(`[data-${FIND_ITEM_ATTR[ty]}="${CSS.escape(id)}"]`))); }
     // un activo (o un nivel o hueco) enfocado: su dibujo y su etiqueta; sus vecinos de la misma huella se apagan con lo demás
     if (f.kind === 'spaces') f.ids.forEach((id) => sel.push(`[data-sid="${CSS.escape(id)}"]`));
     (f.kind === 'spaces' ? new Set() : findIds().footprints).forEach((id) => sel.push(`[data-fid="${CSS.escape(id)}"]`, `[data-lf="${CSS.escape(id)}"]`));

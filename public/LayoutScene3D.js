@@ -48,6 +48,14 @@
         // Un grupo por capa: así cada una se muestra u oculta sola.
         const group = {};
         ['floor', 'contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels', 'sensorLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
+        // Con zonas enfocadas y el resto «tenue», lo que no es de lo enfocado se apaga pieza por pieza: lo que se agrega a estas capas mientras se arma un elemento (fxItem) lleva su tipo y su id (userData.fx).
+        let fxItem = null;
+        ['walls', 'doors', 'power', 'sensors', 'columns', 'transit', 'safety', 'objects'].forEach((n) => {
+            const g = group[n];
+            const add = g.add.bind(g);
+            g.add = (...objs) => { if (fxItem) objs.forEach((o) => { if (o && o.userData) o.userData.fx = fxItem; }); return add(...objs); };
+        });
+        const ITEM_OF_LAYER = { walls: 'wall', columns: 'obstacle', doors: 'door', power: 'power', sensors: 'sensor', transit: 'transit', safety: 'safety', objects: 'object' };
         const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a }));
         outline.visible = false;
         scene.add(outline);
@@ -108,20 +116,31 @@
 
         // Opacidad de las capas tenues: cada material guarda su opacidad de origen para poder volver a ella.
         function applyLayerDim() {
+            const setDim = (root3, dim) => root3.traverse((o) => {
+                const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+                ms.forEach((m) => {
+                    if (!m.userData) m.userData = {};
+                    if (m.userData.op0 === undefined) m.userData.op0 = [m.opacity, m.transparent];
+                    m.transparent = dim ? true : m.userData.op0[1];
+                    m.opacity = dim ? m.userData.op0[0] * 0.25 : m.userData.op0[0];
+                    m.needsUpdate = true;
+                });
+            });
             LAYER_NAMES.forEach((n) => {
                 const g = group[n];
                 if (!g) return;
-                const dim = dimLayers.has(n) && !layerOn[n];
-                g.traverse((o) => {
-                    const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
-                    ms.forEach((m) => {
-                        if (!m.userData) m.userData = {};
-                        if (m.userData.op0 === undefined) m.userData.op0 = [m.opacity, m.transparent];
-                        m.transparent = dim ? true : m.userData.op0[1];
-                        m.opacity = dim ? m.userData.op0[0] * 0.25 : m.userData.op0[0];
-                        m.needsUpdate = true;
+                const layerDim = dimLayers.has(n) && !layerOn[n];
+                const ty = ITEM_OF_LAYER[n];
+                // zonas enfocadas con el resto «tenue» (focusSet.items): lo que no está dentro de las zonas se apaga, pieza por pieza
+                if (ty && focusSet && focusSet.items) {
+                    g.children.forEach((ch) => {
+                        const fx = ch.userData && ch.userData.fx;
+                        const out = !!fx && !(focusSet.items[fx.type] && focusSet.items[fx.type].has(fx.id));
+                        setDim(ch, layerDim || out);
                     });
-                });
+                    return;
+                }
+                setDim(g, layerDim);
             });
         }
 
@@ -448,6 +467,7 @@
             if (opts && 'focusLevel' in opts) focusLevel = opts.focusLevel || null;
             if (opts && 'clashDoors' in opts) clashSet = new Set(opts.clashDoors || []);
             lastLayout = layout;
+            fxItem = null;
             Object.keys(group).forEach((n) => clearGroup(group[n]));
             outline.visible = false;
             hitSpaces = null;
@@ -545,6 +565,7 @@
                 return [mk(0, half, sides.a, 0x6f84b3), mk(-half, 0, sides.b, 0x566a98)];
             };
             shapes3.filter(({ o }) => o.kind === 'wall' && !o._geom).forEach(({ o, g }) => {
+                fxItem = { type: 'wall', id: o.id };
                 // la pared sube de la altura de su inicio a la de su final (de fábrica, la del contorno en cada extremo); con 4 esquinas se arma con la parte de arriba inclinada
                 const ax = root.LayoutCalc && root.LayoutCalc.wallAxis ? root.LayoutCalc.wallAxis(layout, o) : null;
                 const wsides = ax && root.LayoutCalc.wallSides ? root.LayoutCalc.wallSides(layout, o, ax) : null;
@@ -592,6 +613,7 @@
             // puertas y conexiones de luz (la pared 1 va de la esquina 1 a la 2; dist es desde la esquina de inicio)
             // una puerta va sobre su pared: por el centro de la pared, a lo largo de ella y un poco más gruesa que ella
             (layout.doors || []).forEach((d) => {
+                fxItem = { type: 'door', id: d.id };
                 const dg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(layout, d) : null;
                 if (!dg) return;
                 const w = Math.max(0.3, Number(d.width) || 1);
@@ -627,6 +649,7 @@
             });
             // una conexión de luz va sobre su pared: por el centro de la pared y un poco más gruesa que ella
             (layout.power || []).forEach((e) => {
+                fxItem = { type: 'power', id: e.id };
                 const pg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(layout, { ...e, width: 0 }) : null;
                 if (!pg) return;
                 const m = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, Math.max(0.16, pg.thick + 0.04)), lam(POWER_COLOR[e.type] || POWER_COLOR.outlet110));
@@ -636,6 +659,7 @@
             });
             // un sensor (de temperatura y/o humedad) va sobre su pared, a su altura del piso: un disco turquesa pegado a la pared (como el del croquis) con su código arriba
             (layout.sensors || []).forEach((e) => {
+                fxItem = { type: 'sensor', id: e.id };
                 const sg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(layout, { ...e, width: 0 }) : null;
                 if (!sg) return;
                 const y = Math.max(0.2, Number(e.height) || 1.5);
@@ -650,6 +674,7 @@
             });
             // columnas y obstáculos: del piso al techo
             shapes3.filter(({ o }) => o.kind !== 'wall').forEach(({ o, g }) => {
+                fxItem = { type: 'obstacle', id: o.id };
                 if (o.kind === 'step') {
                     // desnivel: una losa sobre el piso con su altura (si es más baja que el piso, una placa delgada de otro color)
                     const dz = Number(o.dz) || 0;
@@ -807,6 +832,7 @@
             // pasillos (paso Tránsito, su propia capa): losas delgadas sobre el piso (principal más oscuro, entre pasillos más claro)
             const transitY = 0.06 + 0.004 * (layout.zones || []).length;
             (layout.transit || []).forEach((p, i) => {
+                fxItem = { type: 'transit', id: p.id };
                 if (!(p.l > 0) || !(p.w > 0)) return;
                 const slab = new THREE.Mesh(new THREE.BoxGeometry(p.l, 0.02, p.w), new THREE.MeshLambertMaterial({ color: p.type === 'between' ? 0xe3e6ef : 0xc4c9db }));
                 slab.position.set(PX(p.x + p.l / 2), transitY + 0.002 * i + FL(p.x + p.l / 2, p.y + p.w / 2), PZ(p.y + p.w / 2));
@@ -814,6 +840,7 @@
             });
             // objetos (paso Objetos): personas y montacargas a escala, girados hacia donde miran (foto fija del plano)
             (layout.objects || []).forEach((o) => {
+                fxItem = { type: 'object', id: o.id };
                 const l = Math.max(Number(o.l) || 0.3, 0.1);
                 const w = Math.max(Number(o.w) || 0.3, 0.1);
                 const h = Math.max(Number(o.h) || 1, 0.2);
@@ -873,6 +900,7 @@
                 group.safety.add(ring);
             };
             (layout.safety || []).forEach((e) => {
+                fxItem = { type: 'safety', id: e.id };
                 const color = SAFETY_COLOR[e.type] || 0xd9443a;
                 const ex = Number(e.x) || 0;
                 const ey = Number(e.y) || 0;
@@ -968,6 +996,7 @@
                 group.safety.add(g);
                 dueRing(ex, ey, e);
             });
+            fxItem = null;
             // huellas (el lugar en el piso, capa «Huella-Espacio»): una losa delgada, blanca o con su color, debajo de sus activos
             (layout.footprints || []).forEach((f) => {
                 if (f.active === false || !(f.l > 0) || !(f.d > 0)) return;
