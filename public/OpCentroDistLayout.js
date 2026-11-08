@@ -4981,7 +4981,7 @@ function sheetLabels() {
         power: t('main.layoutLeyendaLuz'), column: t('main.layoutLeyendaColumna'), wall: t('main.layoutLeyendaPared'), step: t('main.layoutLeyendaDesnivel'),
         kpiTotal: t('main.layoutHojaKpiTotal'), kpiOffices: t('main.layoutHojaKpiOficinas'), kpiAisles: t('main.layoutHojaKpiPasillos'),
         kpiDocks: t('main.layoutHojaKpiAndenes'), kpiStorage: t('main.layoutHojaKpiAlmacenamiento'), kpiDead: t('main.layoutHojaKpiMuertos'), kpiVolume: t('main.layoutHojaKpiVolumen'),
-        scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), space: t('main.layoutLeyendaEspacio'), footprint: t('main.layoutLeyendaHuella'),
+        scan: t('main.layoutHojaEscanea'), fixed: t('main.layoutHojaNoCambia'), door: t('main.layoutLeyendaPuerta'), openSwing: t('main.layoutLeyendaGiroPuerta'), openSlide: t('main.layoutLeyendaRecorridoPuerta'), ramp: t('main.layoutLeyendaRampa'), space: t('main.layoutLeyendaEspacio'), footprint: t('main.layoutLeyendaHuella'),
         dry: typeLabel('zone', 'dry'), cold: typeLabel('zone', 'cold'), chemical: typeLabel('zone', 'chemical'), finished: typeLabel('zone', 'finished'),
         aisle: typeLabel('zone', 'aisle'), aisle2: typeLabel('zone', 'aisle2'), dock: typeLabel('zone', 'dock'), office: typeLabel('zone', 'office'), none: t('main.layoutSinZona'),
         ...Object.fromEntries(LC.SAFETY_TYPES.map((tp) => [`safety_${tp}`, typeLabel('safety', tp)])),

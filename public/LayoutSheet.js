@@ -101,12 +101,23 @@
         const leg = [];
         if (on('contorno')) leg.push(['contour', labels.contour || labels.area]);
         if (on('puertas') && (data.layout.doors || []).length) leg.push(['door', labels.door]);
+        if (on('puertas') && labels.openSwing && (data.layout.doors || []).some((d) => d.open === 'swing')) leg.push(['open:swing', labels.openSwing]);
+        if (on('puertas') && labels.openSlide && (data.layout.doors || []).some((d) => d.open === 'slide')) leg.push(['open:slide', labels.openSlide]);
         if (on('luz') && (data.layout.power || []).length) leg.push(['power', labels.power]);
         // La pared sale con su paso (Paredes) y columnas y desniveles con el suyo (Obstáculos); la leyenda solo nombra lo que se ve.
         const obstacleKinds = new Set((data.layout.obstacles || []).map((o) => o.kind));
         if (on('paredes') && obstacleKinds.has('wall')) leg.push(['wall', labels.wall]);
         if (on('obstaculos') && (obstacleKinds.has('column') || obstacleKinds.has('other'))) leg.push(['column', labels.column]);
         if (on('obstaculos') && obstacleKinds.has('step')) leg.push(['step', labels.step]);
+        // Niveles de piso: un cuadrito por cada nivel (con el color de ese nivel; los pisos con formato propio no salen) y la rampa.
+        const LCs = window.LayoutCalc;
+        if (LCs && LCs.floorsAll && (on('pisos') || on('rampas') || on('niveles'))) {
+            const leveled = LCs.floorsAll(data.layout).filter((f) => LCs.zoneHasLevel(f) && Number(f.l) > 0 && Number(f.w) > 0);
+            if (on('pisos') || on('niveles')) {
+                [...new Set(leveled.filter((f) => !f.isRamp && f.lvl2 === undefined && !f.fmt).map((f) => Math.round((Number(f.lvl) || 0) * 100) / 100))].sort((a, b) => b - a).forEach((lv) => leg.push([`level:${lv}`, `${lv > 0 ? '+' : ''}${lv} m`]));
+            }
+            if ((on('rampas') || on('niveles')) && labels.ramp && leveled.some((f) => f.isRamp || f.lvl2 !== undefined)) leg.push(['ramp', labels.ramp]);
+        }
         // La huella (el lugar en el piso, blanca) y el activo (arena de fábrica, o su color propio) se nombran por separado, como en la pantalla.
         if ((on('huellas') || on('espacios')) && (data.layout.footprints || []).length) leg.push(['footprint', labels.footprint || labels.space]);
         if ((on('activos') || on('espacios')) && (data.layout.spaces || []).length) leg.push(['space', labels.space]);
@@ -193,6 +204,15 @@
                 s += window.LayoutMapSvg.zonePaint(`lg-${zone.id}`, zone.fmt).markup(`${x},${ly} ${x + sw},${ly} ${x + sw},${ly + sw} ${x},${ly + sw}`);
             } else if (key === 'contour') {
                 s += `<line x1="${x}" y1="${ly + sw / 2}" x2="${x + sw}" y2="${ly + sw / 2}" stroke="#4B7BE5" stroke-width="${2.4 * f}" stroke-dasharray="${6 * f} ${4 * f}"/>`;
+            } else if (key.indexOf('level:') === 0) {
+                const lvCols = (window.LayoutCalc && window.LayoutCalc.floorLevelColors) ? window.LayoutCalc.floorLevelColors(data.layout) : {};
+                const c = lvCols[Math.round(Number(key.slice(6)) * 100) / 100] || '#E9E9EE';
+                s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw}" rx="${4 * f}" fill="${c}" stroke="${window.LayoutCalc.mixHex(c, '#000000', 0.4)}" stroke-width="${1.5 * f}"/>`;
+            } else if (key === 'ramp') {
+                s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw}" rx="${4 * f}" fill="#E8D3EE" stroke="#A63FB5" stroke-width="${1.5 * f}" stroke-dasharray="${5 * f} ${3 * f}"/>`;
+            } else if (key === 'open:swing' || key === 'open:slide') {
+                const col = key === 'open:swing' ? '#A63FB5' : '#2F7FC7';
+                s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw}" rx="${4 * f}" fill="${col}" fill-opacity="0.32" stroke="${col}" stroke-width="${1.5 * f}" stroke-dasharray="${5 * f} ${3 * f}"/>`;
             } else if (key.indexOf('safety:') === 0) {
                 // el mismo símbolo del croquis; la ruta, una línea con flecha
                 const type = key.slice(7);

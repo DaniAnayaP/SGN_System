@@ -6608,7 +6608,10 @@ function buildPublicLayoutPayload(clientId, row) {
     const pub = {
         heightM: l.heightM,
         vertices: l.vertices,
-        doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, ...(d.wallId ? { wallId: d.wallId } : { wall: d.wall }), dist: d.dist, width: d.width, height: d.height })),
+        doors: (l.doors || []).map((d) => ({ name: d.name, type: d.type, ...(d.wallId ? { wallId: d.wallId } : { wall: d.wall }), dist: d.dist, width: d.width, height: d.height, ...(d.open ? { open: d.open } : {}), ...(d.dir ? { dir: d.dir } : {}), ...(d.hinge ? { hinge: d.hinge } : {}) })),
+        // Los pisos (plataformas y fosos) y las rampas se dibujan con su nivel en el croquis y el 3D; sin sus formatos de edición más que el color y la trama.
+        floors: (l.floors || []).filter((f) => f.active !== false).map((f) => ({ id: f.id, name: f.name, code: f.code, x: f.x, y: f.y, l: f.l, w: f.w, ...(f.lvl ? { lvl: f.lvl } : {}), ...(f.lvl2 !== undefined ? { lvl2: f.lvl2, rise: f.rise } : {}), ...(f.fmt ? { fmt: f.fmt } : {}) })),
+        ramps: (l.ramps || []).filter((r) => r.active !== false).map((r) => ({ id: r.id, name: r.name, code: r.code, x: r.x, y: r.y, l: r.l, w: r.w, ...(r.from ? { from: r.from } : {}), ...(r.to ? { to: r.to } : {}), ...(r.lvl !== undefined ? { lvl: r.lvl } : {}), ...(r.lvl2 !== undefined ? { lvl2: r.lvl2, rise: r.rise } : {}), ...(r.fmt ? { fmt: r.fmt } : {}) })),
         zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}), ...(Array.isArray(z.categories) && z.categories.length ? { categories: z.categories } : {}) })),
         // La huella (el lugar en el piso, con su color si lo tiene) se dibuja debajo y el activo, con su propio color, encima.
         footprints: (l.footprints || []).filter((f) => f.active !== false).map((f) => ({ id: f.id, code: f.code, x: f.x, y: f.y, l: f.l, d: f.d, h: f.h, ...(f.fmt ? { fmt: f.fmt } : {}) })),

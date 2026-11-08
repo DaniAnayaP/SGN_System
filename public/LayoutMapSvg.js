@@ -279,6 +279,44 @@
             if (on('contorno')) measure(layout.vertices, true, 24);
             (on('zonas') ? (layout.zones || []) : []).forEach((z) => { if (Math.min(z.l, z.w) * sc >= 44) measure(LC.zonePoints(z), false, 30); });
         }
+        // Niveles de piso (pasos Pisos y Rampas; en la vista pública, la capa «niveles»): cada piso más alto o más bajo que la nave lleva el color de su nivel (o su formato propio) con rayas y su nivel; una rampa, un degradado hacia su lado más alto
+        // con una flecha y de qué nivel a cuál va. Los mismos del editor. Sin pisos ni rampas no se dibuja nada.
+        const showFloors = on('pisos') || on('niveles');
+        const showRamps = on('rampas') || on('niveles');
+        if ((showFloors || showRamps) && LC.floorsAll) {
+            const lvlCols = LC.floorLevelColors(layout);
+            const colOf = (v) => lvlCols[Math.round(v * 100) / 100] || '#E9E9EE';
+            const signed = (v) => `${v > 0 ? '+' : ''}${fmt(v)} m`;
+            let lvlLayer = '';
+            LC.floorsAll(layout).filter((f) => (f.isRamp ? showRamps : showFloors)).forEach((f) => {
+                if (!LC.zoneHasLevel(f) || !(f.l > 0 && f.w > 0)) return;
+                const bx0 = X(f.x); const bx1 = X(f.x + f.l); const by0 = Y(f.y); const by1 = Y(f.y + f.w);
+                const quadPts = `${bx0.toFixed(1)},${by0.toFixed(1)} ${bx1.toFixed(1)},${by0.toFixed(1)} ${bx1.toFixed(1)},${by1.toFixed(1)} ${bx0.toFixed(1)},${by1.toFixed(1)}`;
+                const lo = Number(f.lvl) || 0;
+                const ramp = f.lvl2 !== undefined && LC.ZONE_RISES.includes(f.rise);
+                const hi = ramp ? Number(f.lvl2) : lo;
+                const safeId = String(f.id).replace(/[^A-Za-z0-9_-]/g, '');
+                let note = signed(lo);
+                if (ramp) {
+                    if (f.fmt) lvlLayer += zonePaint(`lf-${safeId}`, LC.floorFmtOf(layout, f)).markup(quadPts);
+                    else {
+                        const dir = { right: [0, 0, 1, 0], left: [1, 0, 0, 0], down: [0, 0, 0, 1], up: [0, 1, 0, 0] }[f.rise];
+                        lvlLayer += `<linearGradient id="lvg-${safeId}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="${colOf(lo)}"/><stop offset="1" stop-color="${colOf(hi)}"/></linearGradient><rect x="${bx0.toFixed(1)}" y="${by0.toFixed(1)}" width="${(bx1 - bx0).toFixed(1)}" height="${(by1 - by0).toFixed(1)}" fill="url(#lvg-${safeId})" stroke="${LC.mixHex(colOf(hi), '#000000', 0.4)}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+                    }
+                    const cx = (bx0 + bx1) / 2; const cy = (by0 + by1) / 2;
+                    const half = f.rise === 'left' || f.rise === 'right' ? (bx1 - bx0) / 3 : (by1 - by0) / 3;
+                    const v = { right: [1, 0], left: [-1, 0], down: [0, 1], up: [0, -1] }[f.rise];
+                    lvlLayer += `<defs><marker id="lvl-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#A63FB5"/></marker></defs><line x1="${(cx - v[0] * half).toFixed(1)}" y1="${(cy - v[1] * half).toFixed(1)}" x2="${(cx + v[0] * half).toFixed(1)}" y2="${(cy + v[1] * half).toFixed(1)}" stroke="#A63FB5" stroke-width="2.2" fill="none" marker-end="url(#lvl-arr)"/>`;
+                    note = `${signed(lo)} → ${signed(hi)}`;
+                } else lvlLayer += zonePaint(`lf-${safeId}`, LC.floorFmtOf(layout, f)).markup(quadPts);
+                if (options.names !== false) {
+                    const t = labelText(((bx0 + bx1) / 2).toFixed(1), (((by0 + by1) / 2) + (ramp ? 16 : 4)).toFixed(1), 9.5, 700, '#A63FB5', 'middle', esc(`${f.code || ''} ${note}`.trim()));
+                    zoneHalos += t.halo;
+                    zoneLabels += t.main;
+                }
+            });
+            s += lvlLayer;
+        }
         // Los pasillos son su propia capa (paso Tránsito): rayas (principal) o puntos (entre pasillos), debajo de las huellas y los activos.
         (on('transito') ? (layout.transit || []) : []).forEach((p) => {
             const ty = (T.types && T.types[p.type === 'between' ? 'aisle2' : 'aisle']) || ['#D5D8E2', '#8E93A8', ''];
@@ -333,6 +371,14 @@
         (on('puertas') ? (layout.doors || []) : []).forEach((d) => {
             const g = LC.doorGeometry(layout, d);
             if (!g) return;
+            // cómo abre (options.openings = false la quita): el giro de la hoja (cuarto de círculo con la hoja abierta) o el recorrido de una corrediza
+            const op = options.openings !== false && LC.doorOpening ? LC.doorOpening(layout, d) : null;
+            if (op) {
+                const col = op.type === 'swing' ? '#A63FB5' : '#2F7FC7';
+                s += `<polygon points="${op.pts.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ')}" fill="${col}" fill-opacity="${op.type === 'swing' ? 0.32 : 0.38}" stroke="${col}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+                if (op.type === 'swing') s += `<line x1="${X(op.leaf[0][0]).toFixed(1)}" y1="${Y(op.leaf[0][1]).toFixed(1)}" x2="${X(op.leaf[1][0]).toFixed(1)}" y2="${Y(op.leaf[1][1]).toFixed(1)}" stroke="${col}" stroke-width="4" stroke-linecap="butt" opacity="0.85"/>`;
+                else s += `<line x1="${X(op.travel[0][0]).toFixed(1)}" y1="${Y(op.travel[0][1]).toFixed(1)}" x2="${X(op.travel[1][0]).toFixed(1)}" y2="${Y(op.travel[1][1]).toFixed(1)}" stroke="${col}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+            }
             s += `<line x1="${X(g.a.x)}" y1="${Y(g.a.y)}" x2="${X(g.b.x)}" y2="${Y(g.b.y)}" stroke="#1E7E34" stroke-width="7"/>`;
         });
         // Columnas (con el contorno) y conexiones de luz (con su paso): solo las trae el reporte con sesión; la vista pública nunca las lleva.
