@@ -1992,6 +1992,12 @@
     "layoutFiltroTodas": "All",
     "layoutFiltroTodo": "Everything",
     "layoutFiltroNada": "Nothing",
+    "layoutFiltroElegir": "Pick",
+    "layoutFiltroNinguno": "None",
+    "layoutFiltroNElegidos": "{n} picked",
+    "layoutElegirBuscar": "Search a wall, a hydrant, a floor, a zone…",
+    "layoutElegirLimpiar": "Clear",
+    "layoutElegirMas": "There are more: type to narrow the list.",
     "layoutFiltroTodasZonas": "All zones",
     "layoutFiltroNdeN": "{n} of {total}",
     "layoutFiltroLoDemas": "The rest",
@@ -5317,6 +5323,10 @@
     "layoutFiltroQueVer": {
       "what": "Turns the layers of the Layout on and off (outline, floors, walls, doors, safety, sensors…). «Everything» turns them all on.",
       "example": "you turn Floors and Ramps off to see only the walls and the safety items."
+    },
+    "layoutFiltroElegir": {
+      "what": "Pick specific things, of any type, one or several at a time: a wall, a hydrant, a floor, a zone, an asset, a door, a sensor… You can type to search or filter the list by type with the pills. What you pick is focused on the plan and in 3D; «The rest» decides whether everything else is faded or hidden.",
+      "example": "you tick wall M003, hydrant I002 and floor P001: only those three things are shown, or everything with those three highlighted."
     },
     "layoutFiltroLoDemas": {
       "what": "What happens to what is not part of what you filtered: Faded keeps it visible but dimmed and Hidden removes it completely. It is remembered in this browser.",

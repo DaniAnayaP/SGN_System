@@ -8194,3 +8194,15 @@ td.cap-pick{ white-space: nowrap; }
 /* En «Ver» el croquis ocupa todo el ancho: sin tope se agrandaba al doble (y más al enfocar una zona). Se limita al alto de la pantalla, centrado, para que se vea completo y a un tamaño como el de siempre. */
 .layout-editor.is-view .layout-map svg#layout-svg{ width: auto; max-width: 100%; max-height: max(24rem, calc(100vh - 12rem)); margin-inline: auto; }
 .layout-editor.is-view .layout-3d-stage{ max-width: calc(max(24rem, 100vh - 12rem) * 700 / 460); margin-inline: auto; }
+/* «Elegir» (modo Ver): cualquier cosa en específico; el viejo «Elegir activos» del 3D se esconde en Ver porque este lo reemplaza. */
+.layout-editor.is-view #layout-3d-assets-pick{ display: none; }
+.layout-ch-menu, .layout-dd-menu:has(.layout-ch-search){ min-width: 22rem; max-width: 26rem; }
+.layout-ch-search{ display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.7rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); }
+.layout-ch-search input{ flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 0.78rem; color: var(--color-text-primary); }
+.layout-ch-pills{ display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.4rem 0.1rem; }
+.layout-ch-pill{ padding: 0 0.6rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font: inherit; font-size: 0.7rem; cursor: pointer; }
+.layout-ch-pill.on{ background: var(--color-accent, var(--color-text-primary)); border-color: var(--color-accent, var(--color-text-primary)); color: #fff; font-weight: 700; }
+.layout-ch-list{ display: flex; flex-direction: column; gap: 0.1rem; max-height: 14rem; overflow: auto; }
+.layout-ch-grp{ margin-top: 0.3rem; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-secondary); }
+.layout-ch-foot{ display: flex; justify-content: space-between; align-items: center; margin-top: 0.3rem; padding-top: 0.35rem; border-top: 1px solid var(--color-border); font-size: 0.72rem; color: var(--color-text-secondary); }
+.layout-ch-foot button{ border: 0; background: transparent; color: var(--color-accent, var(--color-text-primary)); font: inherit; font-weight: 600; cursor: pointer; }

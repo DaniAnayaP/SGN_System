@@ -1992,6 +1992,12 @@
     "layoutFiltroTodas": "Todas",
     "layoutFiltroTodo": "Todo",
     "layoutFiltroNada": "Nada",
+    "layoutFiltroElegir": "Elegir",
+    "layoutFiltroNinguno": "Ninguno",
+    "layoutFiltroNElegidos": "{n} elegidos",
+    "layoutElegirBuscar": "Buscar una pared, un hidrante, un piso, una zona…",
+    "layoutElegirLimpiar": "Limpiar",
+    "layoutElegirMas": "Hay más: escribe para acotar la lista.",
     "layoutFiltroTodasZonas": "Todas las zonas",
     "layoutFiltroNdeN": "{n} de {total}",
     "layoutFiltroLoDemas": "Lo demás",
@@ -5316,6 +5322,10 @@
     "layoutFiltroQueVer": {
       "what": "Enciende o apaga las capas del Layout (contorno, pisos, paredes, puertas, seguridad, sensores…). «Todo» las enciende todas.",
       "example": "apagas Pisos y Rampas para ver solo las paredes y la seguridad."
+    },
+    "layoutFiltroElegir": {
+      "what": "Elige cosas en específico, de cualquier tipo, una o varias a la vez: una pared, un hidrante, un piso, una zona, un activo, una puerta, un sensor… Puedes escribir para buscar o filtrar la lista por tipo con las pastillas. Lo elegido se enfoca en el croquis y en el 3D; «Lo demás» decide si el resto se ve tenue u oculto.",
+      "example": "marcas la pared M003, el hidrante I002 y el piso P001: solo se ven esas tres cosas, o todo con esas tres resaltadas."
     },
     "layoutFiltroLoDemas": {
       "what": "Qué pasa con lo que no es de lo que filtraste: Tenue lo deja visible pero apagado y Oculto lo quita del todo. Se recuerda en este navegador.",
