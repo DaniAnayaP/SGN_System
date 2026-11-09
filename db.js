@@ -6239,6 +6239,9 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
         kind: { column: 'kind', fieldKey: 'main.colSubAlmTipo' },
         locations: { column: 'locations', fieldKey: 'main.colSubAlmUbicacion' },
     },
+    'activos-fijos': {
+        kind: { column: 'kind', fieldKey: 'main.colActivoFijoLetra' },
+    },
     'activos-clasificacion': {
         kind: { column: 'kind', fieldKey: 'main.colActClasMetrica' },
     },
@@ -11989,14 +11992,18 @@ function seedTipoCodigoValuesOnce() {
 
 // Activos Fijos (el TIPO de activo): el catálogo arranca con la lista de Daniel (rack, gabinete, refrigerador, estante, escritorio, mesa); el cliente agrega los suyos desde su pantalla. Se siembra
 // una vez para cada cliente que ya existe y al crear uno nuevo. (La primera siembra, v1, solo puso Rack y Escritorio y con un «Uso» que ya no existe; la v2 completa la lista y lo limpia.)
-const ACTIVOS_FIJOS_DEFAULTS = ['Rack', 'Gabinete', 'Refrigerador', 'Estante', 'Escritorio', 'Mesa'];
+const ACTIVOS_FIJOS_DEFAULTS = ['Rack', 'Gabinete', 'Refrigerador', 'Estante', 'Tarima en piso', 'Escritorio', 'Mesa'];
+// La LETRA del Localizador sale del tipo de activo: el tipo de espacio del Layout que le toca (rackpal = R · Rack, rack = A · Anaquel, cabinet = G · Gabeta, pallet = T · Tarima en piso, cold = F · Frío). Se guarda en el campo «kind» del
+// catálogo. Escritorio y Mesa todavía no traen letra (su activo conserva la que ya tenía).
+const ACTIVOS_FIJOS_LETRAS = { rack: 'rackpal', estante: 'rack', gabinete: 'cabinet', refrigerador: 'cold', tarima: 'pallet', 'tarima en piso': 'pallet' };
+const activoFijoKindOf = (name) => ACTIVOS_FIJOS_LETRAS[String(name || '').trim().toLowerCase()] || '';
 const ACTIVOS_FIJOS_SEED_KEY = 'seed-activos-fijos-values-v1';
 const ACTIVOS_FIJOS_TIPOS_SEED_KEY = 'seed-activos-fijos-tipos-v2';
 function seedActivosFijosValues(clientId) {
     if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = 'activos-fijos' LIMIT 1").get(clientId)) return 0;
     ACTIVOS_FIJOS_DEFAULTS.forEach((name) => {
         const row = createArticleCategory({ clientId, categoryType: 'activos-fijos', isTestData: false });
-        db.prepare("UPDATE article_categories SET name = ?, status = 'active' WHERE id = ?").run(name, row.id);
+        db.prepare("UPDATE article_categories SET name = ?, kind = ?, status = 'active' WHERE id = ?").run(name, activoFijoKindOf(name), row.id);
     });
     return ACTIVOS_FIJOS_DEFAULTS.length;
 }
@@ -12018,8 +12025,57 @@ function seedActivosFijosTiposOnce() {
     })();
     console.log(`[db] Completed the Activos Fijos types (rack, cabinet, fridge, shelf, desk, table): ${added} values added (one-time).`);
 }
-// Clasificación de Activos: arranca con Mobiliario operativo (m²) y Mobiliario almacenamiento (m³); el cliente agrega las suyas.
-const ACTIVOS_CLASIFICACION_DEFAULTS = [{ name: 'Mobiliario operativo', kind: 'm2' }, { name: 'Mobiliario almacenamiento', kind: 'm3' }];
+// v3: a cada tipo de activo que ya existe con uno de los nombres de la lista se le pone su letra (solo si no traía una) y, si el cliente no tiene ninguna Tarima, se agrega «Tarima en piso». No toca nombres ni estatus.
+const ACTIVOS_FIJOS_LETRAS_SEED_KEY = 'seed-activos-fijos-letras-v3';
+function seedActivosFijosLetrasOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_LETRAS_SEED_KEY)) return;
+    let set = 0;
+    let added = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => {
+            const rows = db.prepare("SELECT id, name, kind FROM article_categories WHERE client_id = ? AND category_type = 'activos-fijos'").all(c.id);
+            rows.forEach((r) => {
+                const kind = activoFijoKindOf(r.name);
+                if (kind && !r.kind) { db.prepare('UPDATE article_categories SET kind = ? WHERE id = ?').run(kind, r.id); set += 1; }
+            });
+            if (rows.length && !rows.some((r) => String(r.name || '').toLowerCase().includes('tarima'))) {
+                const row = createArticleCategory({ clientId: c.id, categoryType: 'activos-fijos', isTestData: false });
+                db.prepare("UPDATE article_categories SET name = 'Tarima en piso', kind = 'pallet', status = 'active' WHERE id = ?").run(row.id);
+                added += 1;
+            }
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_FIJOS_LETRAS_SEED_KEY);
+    })();
+    console.log(`[db] Activos Fijos: ${set} types got their locator letter and ${added} «Tarima en piso» types were added (one-time).`);
+}
+// Clasificación de Activos: solo hay DOS, fijas: «Activo para operar» (m²) y «Activo para almacenar» (m³). Antes se llamaban Mobiliario operativo y Mobiliario almacenamiento.
+const ACTIVOS_CLASIFICACION_DEFAULTS = [{ name: 'Activo para operar', kind: 'm2' }, { name: 'Activo para almacenar', kind: 'm3' }];
+const ACTIVOS_CLASIFICACION_NAMES_KEY = 'seed-activos-clasificacion-nombres-v2';
+// Renombra las de siempre (solo si todavía se llaman como las de fábrica) y deja a cada cliente con sus dos: la que falte (métrica m² o m³) se vuelve a crear.
+function seedActivosClasificacionNombresOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_CLASIFICACION_NAMES_KEY)) return;
+    let renamed = 0;
+    let added = 0;
+    const OLD = { 'mobiliario operativo': 'Activo para operar', 'mobiliario almacenamiento': 'Activo para almacenar' };
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => {
+            const rows = () => db.prepare("SELECT id, name, kind FROM article_categories WHERE client_id = ? AND category_type = 'activos-clasificacion'").all(c.id);
+            rows().forEach((r) => {
+                const to = OLD[String(r.name || '').trim().toLowerCase()];
+                if (to && !rows().some((x) => String(x.name || '').trim().toLowerCase() === to.toLowerCase())) { db.prepare('UPDATE article_categories SET name = ? WHERE id = ?').run(to, r.id); renamed += 1; }
+            });
+            if (!rows().length) return; // el cliente sin catálogo lo recibe completo de la siembra normal
+            ACTIVOS_CLASIFICACION_DEFAULTS.forEach(({ name, kind }) => {
+                if (rows().some((r) => r.kind === kind)) return;
+                const row = createArticleCategory({ clientId: c.id, categoryType: 'activos-clasificacion', isTestData: false });
+                db.prepare("UPDATE article_categories SET name = ?, kind = ?, status = 'active' WHERE id = ?").run(name, kind, row.id);
+                added += 1;
+            });
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_CLASIFICACION_NAMES_KEY);
+    })();
+    console.log(`[db] Activos clasificación: ${renamed} renamed to «Activo para operar/almacenar» and ${added} missing ones created (one-time).`);
+}
 const ACTIVOS_CLASIFICACION_SEED_KEY = 'seed-activos-clasificacion-v1';
 function seedActivosClasificacionValues(clientId) {
     if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = 'activos-clasificacion' LIMIT 1").get(clientId)) return 0;
@@ -12113,7 +12169,9 @@ cleanupLayoutCardCenterGrants();
 seedTipoCodigoValuesOnce();
 seedActivosFijosValuesOnce();
 seedActivosFijosTiposOnce();
+seedActivosFijosLetrasOnce();
 seedActivosClasificacionValuesOnce();
+seedActivosClasificacionNombresOnce();
 seedTransitoEquiposValuesOnce();
 seedIncidentesCriteriosValuesOnce();
 

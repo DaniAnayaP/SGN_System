@@ -3455,6 +3455,7 @@
     "incFotoCerrar": "Close",
     "recEditError_DESC": "Describe the situation: it cannot be empty.",
     "colActClasMetrica": "Measured in",
+    "colActivoFijoLetra": "Locator letter",
     "newTransitEquip": "New equipment or person",
     "colTrEquipTipo": "Type",
     "colTrEquipAncho": "Width (m)",
@@ -3465,8 +3466,8 @@
     "trKind_cart": "Cart",
     "trKind_platform": "Platform",
     "trKind_other": "Other",
-    "acMetricM2": "m² (furniture)",
-    "acMetricM3": "m³ (storage)",
+    "acMetricM2": "m² (asset for operating)",
+    "acMetricM3": "m³ (asset for storing)",
     "colActivoFijoUso": "Use",
     "faStoresInventory": "Stores inventory",
     "faOperational": "Operational use",
@@ -4912,8 +4913,12 @@
       "example": "a forklift 1.4 m wide does not fit in an aisle 1.2 m wide."
     },
     "assetClassMetric": {
-      "what": "Which metric this classification counts in the Layout. m² (furniture): the space goes into the furniture m², like operational furniture. m³ (storage): its storage m³ are measured, to know how many m³ are being used.",
-      "example": "Operational furniture is measured in m²; Storage furniture is measured in m³."
+      "what": "Which metric this classification counts in the Layout. There are only two and they are fixed. Asset for operating: measured in m², with a single level that cannot be edited. Asset for storing: its storage m³ are measured, with its levels, positions and locators.",
+      "example": "A desk is an asset for operating (m²); a rack is an asset for storing (m³). The same asset type can be either."
+    },
+    "assetTypeLetter": {
+      "what": "The letter the codes of this type's assets and their Locator start with (R001, A001…). It comes from the asset type: it is no longer chosen on each asset. With no letter, the asset keeps the one it already had.",
+      "example": "Rack uses R, Shelf uses A, Cabinet uses G, Refrigerator uses F and Floor pallet uses T."
     },
     "incQr": {
       "what": "Shows the Incidents QR of the cost center you have selected above. Stick it up in the facility: whoever scans it types their name, picks the zone where it happened, the category and the criterion, describes the situation in their own words and uploads their evidence (photos, at least one and no maximum); the report arrives here with its number and the time. From the same window you download the image and open or close the QR locks.",

@@ -3454,6 +3454,7 @@
     "incFotoCerrar": "Cerrar",
     "recEditError_DESC": "Cuenta la situación: no puede quedar vacía.",
     "colActClasMetrica": "Se mide en",
+    "colActivoFijoLetra": "Letra del localizador",
     "newTransitEquip": "Nuevo equipo o persona",
     "colTrEquipTipo": "Tipo",
     "colTrEquipAncho": "Ancho (m)",
@@ -3464,8 +3465,8 @@
     "trKind_cart": "Carrito",
     "trKind_platform": "Plataforma",
     "trKind_other": "Otro",
-    "acMetricM2": "m² (mobiliario)",
-    "acMetricM3": "m³ (almacenamiento)",
+    "acMetricM2": "m² (activo para operar)",
+    "acMetricM3": "m³ (activo para almacenar)",
     "colActivoFijoUso": "Uso",
     "faStoresInventory": "Almacena inventario",
     "faOperational": "Uso operativo",
@@ -4911,8 +4912,12 @@
       "example": "un montacargas de 1.4 m de ancho no cabe en un pasillo de 1.2 m."
     },
     "assetClassMetric": {
-      "what": "Con qué métrica cuenta esta clasificación en el Layout. m² (mobiliario): el espacio entra en los m² de mobiliario, como el mobiliario operativo. m³ (almacenamiento): se miden sus m³ de almacenamiento, para saber cuántos m³ se están aprovechando.",
-      "example": "Mobiliario operativo se mide en m²; Mobiliario almacenamiento se mide en m³."
+      "what": "Con qué métrica cuenta esta clasificación en el Layout. Hay solo dos y son fijas. Activo para operar: se mide en m² y tiene un solo nivel que no se edita. Activo para almacenar: se miden sus m³ de almacenamiento, con sus niveles, posiciones y localizadores.",
+      "example": "Un escritorio es un activo para operar (m²); un rack es un activo para almacenar (m³). Un mismo tipo de activo puede ser de una o de la otra."
+    },
+    "assetTypeLetter": {
+      "what": "La letra con la que empiezan los códigos de los activos de este tipo y su Localizador (R001, A001…). Sale del tipo de activo: ya no se elige en cada activo. Sin letra, el activo conserva la que ya tenía.",
+      "example": "Rack lleva la R, Estante la A, Gabinete la G, Refrigerador la F y Tarima en piso la T."
     },
     "incQr": {
       "what": "Muestra el QR de Incidentes del centro de costos que tienes marcado arriba. Pégalo en la nave: quien lo escanea escribe su nombre, elige la zona donde pasó, la categoría y el criterio, cuenta la situación con sus palabras y sube sus evidencias (fotos, mínimo una y sin máximo); el reporte llega aquí con su número y la hora. Desde la misma ventana se descarga la imagen y se cierran o abren los candados del QR.",

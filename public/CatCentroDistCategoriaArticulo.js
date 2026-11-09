@@ -175,7 +175,7 @@ function buildActionsCell(record, tr) {
         historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
         td.appendChild(historyBtn);
     }
-    if (!record.id || Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) {
+    if (CATEGORY_TYPE !== 'activos-clasificacion' && (!record.id || Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL))) { // las clasificaciones de activos son fijas: no se eliminan
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
@@ -290,7 +290,7 @@ function applyCategoryFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colTrEquipTipo', 'colIncCritCategoria']
+        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colActivoFijoLetra', 'colTrEquipTipo', 'colIncCritCategoria']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
@@ -314,6 +314,7 @@ function createNewCategory() {
 }
 
 function renderNewRecordButton() {
+    if (CATEGORY_TYPE === 'activos-clasificacion') return; // las dos clasificaciones de activos son fijas: no se agregan más
     const wrapper = document.querySelector(`[data-table-id="${TABLE_KEY}"]`);
     const toolbar = wrapper?.previousElementSibling;
     if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
@@ -565,6 +566,13 @@ function buildExtraCells(record) {
     if (CATEGORY_TYPE === 'incidentes-criterios') {
         return [buildOptionCell(record, 'colIncCritCategoria', 'kind', 'incCritKind',
             ['mayor', 'menor', 'recomendacion'].map((k) => ({ value: k, label: Dashboard.t(`main.incKind_${k}`) })), record.kind || '', '',
+            (v) => ({ kind: v }))];
+    }
+    if (CATEGORY_TYPE === 'activos-fijos') {
+        // La letra del Localizador del tipo (la que lleva el código de sus activos: R001, A001…): es el tipo de espacio del Layout que le toca. Sin letra, su activo conserva la que ya tenía.
+        const letters = { rackpal: 'R', rack: 'A', cabinet: 'G', pallet: 'T', cold: 'F' };
+        return [buildOptionCell(record, 'colActivoFijoLetra', 'kind', 'assetTypeLetter',
+            Object.keys(letters).map((k) => ({ value: k, label: `${letters[k]} · ${Dashboard.t(`main.layoutType_space_${k}`)}` })), record.kind || '', '',
             (v) => ({ kind: v }))];
     }
     if (CATEGORY_TYPE === 'activos-clasificacion') {

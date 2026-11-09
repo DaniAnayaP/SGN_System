@@ -1357,6 +1357,7 @@
             },
             { "id": "colCatName", "labelKey": "main.colCatName", "permissionOnly": true },
             { "id": "colCatDescription", "labelKey": "main.colCatDescription", "permissionOnly": true },
+            { "id": "colActivoFijoLetra", "labelKey": "main.colActivoFijoLetra", "permissionOnly": true },
             { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,

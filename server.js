@@ -9184,9 +9184,15 @@ function prepareClassificationPatch(req, categoryType, existing, patch) {
 }
 
 // Clasificación de Activos: su campo propio es la métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
-const ASSET_CLASS_METRIC_LABELS = { m2: 'm² (mobiliario)', m3: 'm³ (almacenamiento)' };
+const ASSET_CLASS_METRIC_LABELS = { m2: 'm² (activo para operar)', m3: 'm³ (activo para almacenar)' };
+// Tipo de activo: su campo propio es la LETRA del Localizador (kind = el tipo de espacio del Layout que le toca; vacío = sin letra todavía).
+const ASSET_TYPE_LETTER_LABELS = { rack: 'A · Anaquel', rackpal: 'R · Rack', cabinet: 'G · Gabeta', pallet: 'T · Tarima en piso', cold: 'F · Frío' };
 function prepareFixedAssetPatch(categoryType, patch) {
-    if (categoryType !== 'activos-clasificacion' || !Object.prototype.hasOwnProperty.call(patch, 'kind')) return { patch, sanitizers: {} };
+    if ((categoryType !== 'activos-clasificacion' && categoryType !== 'activos-fijos') || !Object.prototype.hasOwnProperty.call(patch, 'kind')) return { patch, sanitizers: {} };
+    if (categoryType === 'activos-fijos') {
+        if (patch.kind !== '' && !ASSET_TYPE_LETTER_LABELS[patch.kind]) return { error: { status: 400, message: 'La letra debe ser A, R, G, T o F (o quedar vacía).' } };
+        return { patch, sanitizers: { kind: (v) => ASSET_TYPE_LETTER_LABELS[v] || '' } };
+    }
     if (!['', 'm2', 'm3'].includes(patch.kind)) return { error: { status: 400, message: 'La métrica debe ser m² o m³.' } };
     return { patch, sanitizers: { kind: (v) => ASSET_CLASS_METRIC_LABELS[v] || '' } };
 }
@@ -9231,7 +9237,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             parentId: row.parent_id, parentName: ctx.warehouses.get(row.parent_id) || '',
             kind: row.kind, locations: row.kind === 'physical' ? parseWarehouseLocations(row.locations) : [],
         } : {}),
-        ...(row.category_type === 'activos-clasificacion' ? { kind: row.kind } : {}),
+        ...(row.category_type === 'activos-clasificacion' || row.category_type === 'activos-fijos' ? { kind: row.kind } : {}),
         ...(row.category_type === 'incidentes-criterios' ? { kind: row.kind } : {}),
         ...(row.category_type === 'transito-equipos' ? { kind: row.kind, widthM: row.width_m || 0, lengthM: row.length_m || 0, heightM: row.height_m || 0 } : {}),
         ...(ctx && row.category_type === 'inventario' ? (() => {
@@ -9266,6 +9272,9 @@ app.post('/api/business/article-categories/:categoryType', requireAuth, requireC
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const config = articleCategoryTypeConfig(req.params.categoryType);
     if (!config) return res.status(404).json({ message: 'Unknown category type.' });
+    // Las clasificaciones de activos son dos y fijas (Activo para operar y Activo para almacenar): no se agregan más.
+    // (una cuenta de prueba solo ve lo que ella misma crea: para que pueda armar sus dos clasificaciones sí puede agregarlas)
+    if (req.params.categoryType === 'activos-clasificacion' && !req.user.isTestAccount) return res.status(403).json({ message: 'Las clasificaciones de activos son fijas: Activo para operar y Activo para almacenar.' });
     if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), config.tableKey, 'colCatCreateAuth')) {
         return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
     }
@@ -9309,6 +9318,7 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, re
     if (!config) return res.status(404).json({ message: 'Unknown category type.' });
     const existing = getArticleCategoryById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing || existing.category_type !== req.params.categoryType) return res.status(404).json({ message: 'Category not found.' });
+    if (req.params.categoryType === 'activos-clasificacion' && !req.user.isTestAccount) return res.status(403).json({ message: 'Las clasificaciones de activos son fijas: no se eliminan (solo se pueden dejar Inactivas).' });
     if (!req.user.isClientAdmin) {
         const grants = getUserEffectiveGrants(req.user.sub);
         if (!canDeleteColumn(grants, config.tableKey, 'colCatDeleteAuth')) {
