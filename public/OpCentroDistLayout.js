@@ -2390,6 +2390,7 @@ const ddItem = (attr, on, html) => `<button type="button" class="layout-dd-item"
 // El buscador de los desplegables (Zona, Qué ver y Elegir): el MISMO del resto del sistema (SearchSyntax): el tipo de filtro (Inicia con, Contiene, Igual que), los signos ($ antes, @ después, coma = otra búsqueda) y la caja.
 const vSearch = { zone: { mode: 'contains', q: '', open: '' }, layers: { mode: 'contains', q: '', open: '' }, choose: { mode: 'contains', q: '', open: '' } };
 let ddFocus = false; // el cursor se queda en la caja mientras se escribe
+let ddRendered = ''; // qué desplegable estaba abierto en el último dibujo: si sigue siendo el mismo, la lista se queda donde iba (marcar una opción no la sube)
 function ddMatch(key, text) { const s = vSearch[key]; return !s.q.trim() || SearchSyntax.matches(s.mode, s.q, text); }
 function searchRowHtml(key) {
     const s = vSearch[key];
@@ -2421,7 +2422,7 @@ function renderDdList(key) {
 function renderViewStrip() {
     const box = $('layout-vstrip-filters');
     if (!box) return;
-    if (state.mode === 'edit' || !state.draft) { box.innerHTML = ''; return; }
+    if (state.mode === 'edit' || !state.draft) { box.innerHTML = ''; ddRendered = ''; return; }
     const d = state.draft;
     // lo que enfocó otra cosa (el buscador, la franja de Editar) también se refleja aquí
     const sf = state.find;
@@ -2449,10 +2450,14 @@ function renderViewStrip() {
     // Elegir: cualquier cosa en específico (pared, hidrante, piso, zona, activo, puerta, sensor, objeto…), una o varias; lo elegido se enfoca (Oculto: solo eso; Tenue: todo, resaltado)
     const nChosen = chosenList().length;
     const chooseDd = ddHtml('choose', 'layoutFiltroElegir', t('main.layoutFiltroElegir'), nChosen ? t('main.layoutFiltroNElegidos', { n: nChosen }) : t('main.layoutFiltroNinguno'), vDropdown === 'choose', !canFind(), chooseMenuHtml());
+    // el desplegable se vuelve a crear en cada cambio: si era el mismo que ya estaba abierto, se guarda dónde iba su lista (y la de «Elegir») y se pone igual al terminar
+    const keep = vDropdown && vDropdown === ddRendered ? { menu: (box.querySelector('.layout-dd-menu') || {}).scrollTop || 0, list: (box.querySelector('#layout-ch-list') || {}).scrollTop || 0 } : null;
     box.innerHTML = zoneDd + layersDd + chooseDd + rest;
+    ddRendered = vDropdown;
+    if (keep) { const menuEl = box.querySelector('.layout-dd-menu'); if (menuEl) menuEl.scrollTop = keep.menu; const listEl = box.querySelector('#layout-ch-list'); if (listEl) listEl.scrollTop = keep.list; }
     if (vDropdown && vSearch[vDropdown] && ddFocus) {
         const inp = $(`layout-dd-input-${vDropdown}`);
-        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        if (inp) { inp.focus({ preventScroll: true }); inp.setSelectionRange(inp.value.length, inp.value.length); } // preventScroll: enfocar la caja de arriba no debe subir la lista
     }
 }
 // ---- «Elegir» ---------------------------------------------------------------------------------------------------------------------------------------------
