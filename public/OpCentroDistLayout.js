@@ -1264,7 +1264,8 @@ function stepHtml(step) {
             const lo = info.ok ? signedLv(info.lo) : '—';
             const hi = info.ok ? signedLv(info.hi) : '—';
             const rise = info.ok ? typeLabel('rise', info.rise) : '—';
-            return `<tr class="${r.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-ramp-code="${i}">${esc(r.code || '')}</b></td>${cellText('ramps', i, 'name', r.name, dis)}${cellSelect('ramps', i, 'from', refOptions(r.from || ''), dis, 'layoutRampaDe')}${cellSelect('ramps', i, 'to', refOptions(r.to || ''), dis, 'layoutRampaA')}${cellNum('ramps', i, 'x', r.x, dis)}${cellNum('ramps', i, 'y', r.y, dis)}${cellNum('ramps', i, 'l', r.l, dis)}${cellNum('ramps', i, 'w', r.w, dis)}<td class="layout-calc"><span data-ramp-lo="${i}" data-help-key="layoutRampaNiveles">${esc(lo)}</span></td><td class="layout-calc"><span data-ramp-hi="${i}" data-help-key="layoutRampaNiveles">${esc(hi)}</span></td><td class="layout-calc"><span data-ramp-rise="${i}" data-help-key="layoutRampaNiveles">${esc(rise)}</span><div class="layout-floor-issue" data-ramp-issues="${i}"></div></td>${saved ? savedRowButtons('ramps', i, r.active, dis) : removeCell('ramps', i, dis)}</tr>`;
+            const rampFmt = rampFmtButton(r, i, dis);
+            return `<tr class="${r.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-ramp-code="${i}">${esc(r.code || '')}</b></td>${cellText('ramps', i, 'name', r.name, dis)}${cellSelect('ramps', i, 'from', refOptions(r.from || ''), dis, 'layoutRampaDe')}${cellSelect('ramps', i, 'to', refOptions(r.to || ''), dis, 'layoutRampaA')}${cellNum('ramps', i, 'x', r.x, dis)}${cellNum('ramps', i, 'y', r.y, dis)}${cellNum('ramps', i, 'l', r.l, dis)}${cellNum('ramps', i, 'w', r.w, dis)}<td class="layout-calc"><span data-ramp-lo="${i}" data-help-key="layoutRampaNiveles">${esc(lo)}</span></td><td class="layout-calc"><span data-ramp-hi="${i}" data-help-key="layoutRampaNiveles">${esc(hi)}</span></td><td class="layout-calc"><span data-ramp-rise="${i}" data-help-key="layoutRampaNiveles">${esc(rise)}</span><div class="layout-floor-issue" data-ramp-issues="${i}"></div></td>${saved ? savedRowButtons('ramps', i, r.active, dis, rampFmt) : removeCell('ramps', i, dis, rampFmt)}</tr>`;
         });
         const list = rows.length ? table(['main.layoutCodigoRampa', 'main.layoutNombre', 'main.layoutRampaDe', 'main.layoutRampaA', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutNivelAbajo', 'main.layoutNivelArriba', 'main.layoutLadoAlto', ''], rows, 'layout-rampas') : `<p class="layout-muted">${esc(t('main.layoutRampasVacio'))}</p>`;
         return `${addButton('ramps', 'main.layoutAgregarRampa', dis, true)}${list}`;
@@ -2280,13 +2281,15 @@ function renderSvg(underlay) {
             // el color de cada piso sale de su nivel (o de su formato propio): ya no toma el de la zona que toca
             const lvlCols = LC.floorLevelColors(d);
             const colOf = (v) => lvlCols[Math.round(v * 100) / 100] || '#e9e9ee';
+            // una rampa se difumina entre los colores de los dos pisos que toca (rampEndColors); sin eso, entre los de sus dos niveles
+            const endCols = (ramp && LC.rampEndColors(d, f)) || { lo: colOf(lo), hi: colOf(hi) };
             const quad = `${bx0.toFixed(1)},${by0.toFixed(1)} ${bx1.toFixed(1)},${by0.toFixed(1)} ${bx1.toFixed(1)},${by1.toFixed(1)} ${bx0.toFixed(1)},${by1.toFixed(1)}`;
             const fpid = `ff-${String(f.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
             if (ramp) {
                 const gid = `lvg-${String(f.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
                 const dir = { right: [0, 0, 1, 0], left: [1, 0, 0, 0], down: [0, 0, 0, 1], up: [0, 1, 0, 0] }[f.rise];
                 if (f.fmt) lvlLayer += `<g class="lvl-floor">${window.LayoutMapSvg.zonePaint(fpid, LC.floorFmtOf(d, f)).markup(quad)}</g>`;
-                else lvlLayer += `<linearGradient id="${gid}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="${colOf(lo)}"/><stop offset="1" stop-color="${colOf(hi)}"/></linearGradient><rect class="lvl-ramp" style="stroke:${LC.mixHex(colOf(hi), '#000000', 0.4)}" ${rect} fill="url(#${gid})"/>`;
+                else lvlLayer += `<linearGradient id="${gid}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="${endCols.lo}"/><stop offset="1" stop-color="${endCols.hi}"/></linearGradient><rect class="lvl-ramp" style="stroke:${LC.mixHex(colOf(hi), '#000000', 0.4)}" ${rect} fill="url(#${gid})"/>`;
                 const cx = (bx0 + bx1) / 2; const cy = (by0 + by1) / 2;
                 const half = f.rise === 'left' || f.rise === 'right' ? (bx1 - bx0) / 3 : (by1 - by0) / 3;
                 const v = { right: [1, 0], left: [-1, 0], down: [0, 1], up: [0, -1] }[f.rise];
@@ -3267,6 +3270,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (fmtAsset) { openAssetFmtDialog(Number(fmtAsset.dataset.fmtasset)); return; }
     const fmtFloor = event.target.closest('[data-fmtfloor]');
     if (fmtFloor) { openFloorFmtDialog(Number(fmtFloor.dataset.fmtfloor)); return; }
+    const fmtRamp = event.target.closest('[data-fmtramp]');
+    if (fmtRamp) { openRampFmtDialog(Number(fmtRamp.dataset.fmtramp)); return; }
     const fmtSpace = event.target.closest('[data-fmtspace]');
     if (fmtSpace) { openSpaceFmtDialog(Number(fmtSpace.dataset.fmtspace)); return; }
     const freeShape = event.target.closest('[data-freeshape]');
@@ -3423,6 +3428,21 @@ function floorFmtButton(f, i, dis) {
     const cur = LC.floorFmtOf(state.draft, f);
     return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${f.fmt ? ' on' : ''}" data-fmtfloor="${i}" data-help-key="layoutFloorFmt" aria-label="${esc(t('main.layoutFormatoPiso'))} ${esc(f.code || '')}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i><span class="layout-fmt-dot" style="background:${esc(cur.fill)};border-color:${esc(cur.bcolor)}"></span></button>`;
 }
+// El icono de paleta de cada renglón de Rampas (con la misma hoja del icono en el árbol que los pisos): por defecto la rampa se difumina entre los colores de los dos pisos que toca (el cuadrito muestra ese degradado);
+// con color y trama propios se ve como un piso con formato (el cuadrito muestra su color).
+function rampFmtButton(r, i, dis) {
+    if (!(state.perms && state.perms.canFormatFloors)) return '';
+    const own = r.fmt ? pickFmt(r.fmt) : null;
+    const ends = LC.rampEndColors(state.draft, r);
+    const dot = own ? `background:${esc(own.fill)};border-color:${esc(own.bcolor)}` : `background:linear-gradient(90deg,${esc(ends ? ends.lo : '#e9e9ee')},${esc(ends ? ends.hi : '#e9e9ee')})`;
+    return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${r.fmt ? ' on' : ''}" data-fmtramp="${i}" data-help-key="layoutRampFmt" aria-label="${esc(t('main.layoutFormatoRampa'))} ${esc(r.code || '')}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i><span class="layout-fmt-dot" style="${dot}"></span></button>`;
+}
+// Los nombres de los dos extremos de una rampa para la ventana (la nave o el código del piso): { lo, hi }.
+function rampEndNames(r) {
+    const info = r ? LC.rampInfo(state.draft, r) : null;
+    const nameOf = (ref) => (ref === 'nave' ? t('main.layoutRampaNave') : (((state.draft.floors || []).find((f) => f.id === ref) || {}).code || '—'));
+    return info && info.ok && info.loRef ? { lo: nameOf(info.loRef), hi: nameOf(info.hiRef) } : { lo: '—', hi: '—' };
+}
 // A qué pisos se aplica lo que se elige en la ventana: solo a ese o a los que tienen su mismo nivel (y, si es una rampa, sus mismos dos niveles).
 function floorTargets(f, scope) {
     if (scope !== 'level') return [f];
@@ -3465,6 +3485,15 @@ function spaceTargets(sp, scope) {
 }
 function renderFmtScope() {
     const box = $('layout-fmt-scope');
+    if (fmtDialog && fmtDialog.kind === 'ramp') {
+        const r = (state.draft.ramps || []).find((x) => x.id === fmtDialog.targetId);
+        box.hidden = !r;
+        if (!r) return;
+        const names = rampEndNames(r);
+        const options = [['gradient', t('main.layoutRampaDifuminar'), t('main.layoutRampaDifuminarSub', names)], ['own', t('main.layoutRampaPropio'), t('main.layoutRampaPropioSub')]];
+        box.innerHTML = `<legend>${esc(t('main.layoutRampaColor'))}</legend>${options.map(([value, title, sub]) => `<label class="layout-fmt-opt" data-help-key="layoutRampFmt"><input type="radio" name="layout-fmt-mode" value="${value}"${fmtDialog.mode === value ? ' checked' : ''}><b>${esc(title)}</b><span>${esc(sub)}</span></label>`).join('')}`;
+        return;
+    }
     if (fmtDialog && fmtDialog.kind === 'asset') {
         const a = state.draft.spaces.find((s) => s.id === fmtDialog.targetId);
         box.hidden = !a;
@@ -3508,6 +3537,17 @@ function renderFmtBody() {
     const d = fmtDialog.draft;
     const clashBox = $('layout-fmt-error');
     if (clashBox) clashBox.hidden = true;
+    // Una rampa en modo «Difuminar»: no hay nada que elegir (colores, rayas ni borde); se muestra el degradado que va a llevar.
+    const tabsEl = fmtModalEl && fmtModalEl.querySelector('.layout-fmt-tabs');
+    const gradientRamp = fmtDialog.kind === 'ramp' && fmtDialog.mode === 'gradient';
+    if (tabsEl) { tabsEl.hidden = gradientRamp; tabsEl.style.display = gradientRamp ? 'none' : ''; }
+    if (gradientRamp) {
+        const r = (state.draft.ramps || []).find((x) => x.id === fmtDialog.targetId);
+        const ends = (r && LC.rampEndColors(state.draft, r)) || { lo: '#e9e9ee', hi: '#e9e9ee' };
+        const names = rampEndNames(r);
+        $('layout-fmt-body').innerHTML = `<div><p class="layout-muted">${esc(t('main.layoutRampaDifuminadoNota', names))}</p></div><div class="layout-fmt-preview"><h4>${esc(t('main.layoutVistaPrevia'))}</h4><svg viewBox="0 0 230 150" role="img" aria-label="${esc(t('main.layoutVistaPrevia'))}"><defs><linearGradient id="fpv-ramp" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${esc(ends.lo)}"/><stop offset="1" stop-color="${esc(ends.hi)}"/></linearGradient></defs><rect x="40" y="35" width="150" height="80" rx="3" fill="url(#fpv-ramp)" stroke="${esc(LC.mixHex(ends.hi, '#000000', 0.4))}" stroke-width="1.2"/><text class="lt3" x="115" y="80" text-anchor="middle">${esc((r && r.code) || '')}</text></svg></div>`;
+        return;
+    }
     let left;
     if (fmtDialog.tab === 'fill') {
         const none = d.pattern === 'none';
@@ -3525,7 +3565,7 @@ function renderFmtBody() {
     const isSpace = fmtDialog.kind !== 'zone';
     const shape = isSpace ? '60,45 170,45 170,105 60,105' : '30,20 200,20 200,70 130,70 130,130 30,130';
     const zone = isSpace ? null : state.draft.zones.find((z) => z.id === fmtDialog.targetId);
-    const space = fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'floor' ? (state.draft.floors || []).find((s) => s.id === fmtDialog.targetId) : null));
+    const space = fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'floor' ? (state.draft.floors || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'ramp' ? (state.draft.ramps || []).find((s) => s.id === fmtDialog.targetId) : null)));
     const ink = isSpace ? window.LayoutMapSvg.inkFor(d) : '';
     const label = isSpace
         ? `<text class="lt3" x="115" y="78" text-anchor="middle"${ink ? ` style="fill:${ink}"` : ''}>${esc(space ? space.code : '')}</text>`
@@ -3569,6 +3609,9 @@ function ensureFmtModal() {
             if (fmtDialog.kind === 'floor') {
                 const fl = (state.draft.floors || []).find((r) => r.id === fmtDialog.targetId);
                 if (fl) floorTargets(fl, fmtDialog.scope).forEach((x) => { delete x.fmt; });
+            } else if (fmtDialog.kind === 'ramp') {
+                const rp = (state.draft.ramps || []).find((r) => r.id === fmtDialog.targetId);
+                if (rp) delete rp.fmt;
             } else if (fmtDialog.kind === 'asset') {
                 const a = state.draft.spaces.find((r) => r.id === fmtDialog.targetId);
                 if (a) assetTargets(a, fmtDialog.scope).forEach((x) => { delete x.fmt; });
@@ -3591,6 +3634,10 @@ function ensureFmtModal() {
                     const fl = (state.draft.floors || []).find((r) => r.id === fmtDialog.targetId);
                     // Con formato propio (aunque no se haya cambiado nada) se puede copiar a los demás del grupo; sin formato y sin cambios (se queda el color de su nivel) no hay nada que aplicar.
                     if (fl && (fl.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) floorTargets(fl, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
+                } else if (fmtDialog.kind === 'ramp') {
+                    // «Difuminar» (por defecto) no lleva formato propio; «Elegir color y trama» sí
+                    const rp = (state.draft.ramps || []).find((r) => r.id === fmtDialog.targetId);
+                    if (rp) { if (fmtDialog.mode === 'own') rp.fmt = { ...fmtDialog.draft }; else delete rp.fmt; }
                 } else if (fmtDialog.kind === 'asset') {
                     const a = state.draft.spaces.find((r) => r.id === fmtDialog.targetId);
                     // Con formato propio (aunque no se haya cambiado nada) se puede copiar a los demás del grupo; sin formato y sin cambios no hay nada que aplicar.
@@ -3617,6 +3664,7 @@ function ensureFmtModal() {
     });
     fmtModalEl.addEventListener('change', (event) => {
         if (event.target.name === 'layout-fmt-scope' && fmtDialog) fmtDialog.scope = event.target.value;
+        if (event.target.name === 'layout-fmt-mode' && fmtDialog) { fmtDialog.mode = event.target.value; renderFmtBody(); }
     });
     fmtModalEl.addEventListener('input', (event) => {
         if (event.target.id === 'layout-fmt-name' && fmtDialog) { fmtDialog.name = event.target.value; renderFmtBody(); }
@@ -3654,6 +3702,21 @@ function openFloorFmtDialog(index) {
     const base = pickFmt(LC.floorFmtOf(state.draft, f));
     fmtDialog = { kind: 'floor', targetId: f.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
     $('layout-fmt-title').textContent = `${t('main.layoutFormatoPiso')} ${f.code || ''}`;
+    $('layout-fmt-namefield').hidden = true;
+    fmtModalEl.hidden = false;
+    renderFmtScope();
+    renderFmtBody();
+}
+// La ventana de formato de una rampa: dos modos. «Difuminar» (por defecto, sin formato propio): la rampa se pinta con un degradado entre los colores de los dos pisos que toca; «Elegir color y trama»: color, rayas y borde propios,
+// como los pisos y las zonas.
+function openRampFmtDialog(index) {
+    const r = (state.draft.ramps || [])[index];
+    if (!r) return;
+    ensureFmtModal();
+    const asFloor = LC.floorsAll(state.draft).find((x) => x.id === r.id);
+    const base = pickFmt(r.fmt || (asFloor ? LC.floorFmtOf(state.draft, asFloor) : { fill: '#e6d3f0', pattern: 'solid', pcolor: '#9b6fb0', line: 'thin', bcolor: '#7a5190' }));
+    fmtDialog = { kind: 'ramp', targetId: r.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one', mode: r.fmt ? 'own' : 'gradient' };
+    $('layout-fmt-title').textContent = `${t('main.layoutFormatoRampa')} ${r.code || ''}`;
     $('layout-fmt-namefield').hidden = true;
     fmtModalEl.hidden = false;
     renderFmtScope();

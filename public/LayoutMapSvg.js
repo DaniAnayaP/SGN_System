@@ -296,13 +296,14 @@
                 const lo = Number(f.lvl) || 0;
                 const ramp = f.lvl2 !== undefined && LC.ZONE_RISES.includes(f.rise);
                 const hi = ramp ? Number(f.lvl2) : lo;
+                const endCols = (ramp && LC.rampEndColors && LC.rampEndColors(layout, f)) || { lo: colOf(lo), hi: colOf(hi) };
                 const safeId = String(f.id).replace(/[^A-Za-z0-9_-]/g, '');
                 let note = signed(lo);
                 if (ramp) {
                     if (f.fmt) lvlLayer += zonePaint(`lf-${safeId}`, LC.floorFmtOf(layout, f)).markup(quadPts);
                     else {
                         const dir = { right: [0, 0, 1, 0], left: [1, 0, 0, 0], down: [0, 0, 0, 1], up: [0, 1, 0, 0] }[f.rise];
-                        lvlLayer += `<linearGradient id="lvg-${safeId}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="${colOf(lo)}"/><stop offset="1" stop-color="${colOf(hi)}"/></linearGradient><rect x="${bx0.toFixed(1)}" y="${by0.toFixed(1)}" width="${(bx1 - bx0).toFixed(1)}" height="${(by1 - by0).toFixed(1)}" fill="url(#lvg-${safeId})" stroke="${LC.mixHex(colOf(hi), '#000000', 0.4)}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+                        lvlLayer += `<linearGradient id="lvg-${safeId}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="${endCols.lo}"/><stop offset="1" stop-color="${endCols.hi}"/></linearGradient><rect x="${bx0.toFixed(1)}" y="${by0.toFixed(1)}" width="${(bx1 - bx0).toFixed(1)}" height="${(by1 - by0).toFixed(1)}" fill="url(#lvg-${safeId})" stroke="${LC.mixHex(colOf(hi), '#000000', 0.4)}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
                     }
                     const cx = (bx0 + bx1) / 2; const cy = (by0 + by1) / 2;
                     const half = f.rise === 'left' || f.rise === 'right' ? (bx1 - bx0) / 3 : (by1 - by0) / 3;

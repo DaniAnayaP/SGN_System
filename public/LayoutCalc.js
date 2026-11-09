@@ -618,7 +618,22 @@
         if (hc) vec = [hc[0] - cx, hc[1] - cy];
         else if (lc) vec = [cx - lc[0], cy - lc[1]];
         const rise = Math.abs(vec[0]) >= Math.abs(vec[1]) ? (vec[0] >= 0 ? 'right' : 'left') : (vec[1] >= 0 ? 'down' : 'up');
-        return { ok: true, linked: true, lo: Math.min(a, b), hi: Math.max(a, b), rise };
+        return { ok: true, linked: true, lo: Math.min(a, b), hi: Math.max(a, b), rise, loRef, hiRef };
+    }
+    // Los colores de los dos extremos de una rampa (ya sea la rampa o su versión como piso, f.id): el de abajo (lo) y el de arriba (hi). Son los colores de los DOS PISOS que toca (el formato propio de cada uno, o el de su
+    // nivel; la nave es gris), así que si se cambia el color de uno de esos pisos la rampa lo sigue. Una rampa de antes que no se ligó a pisos usa los colores de sus dos niveles. null si no es una rampa.
+    function rampEndColors(layout, f) {
+        const r = f && ((layout && layout.ramps) || []).find((x) => x && x.id === f.id);
+        if (!r) return null;
+        const cols = floorLevelColors(layout);
+        const info = rampInfo(layout, r);
+        if (!info.ok) return null;
+        const ofRef = (ref, level) => {
+            if (ref === 'nave') return FLOOR_NAVE_COLOR;
+            const fl = ref ? ((layout && layout.floors) || []).find((x) => x && x.id === ref) : null;
+            return fl ? floorFmtOf(layout, fl).fill : (cols[round2(level)] || FLOOR_NAVE_COLOR);
+        };
+        return { lo: ofRef(info.loRef, info.lo), hi: ofRef(info.hiRef, info.hi) };
     }
     // La rampa como un piso más (con su nivel de abajo en lvl, el de arriba en lvl2 y su lado más alto en rise): así el croquis, el 3D, los m³ y los colores la tratan igual que a un piso en rampa.
     function rampAsFloor(layout, r) {
@@ -670,7 +685,8 @@
         const cols = floorLevelColors(layout);
         const lo = round2(Number(f && f.lvl) || 0);
         const ramp = !!f && f.lvl2 !== undefined && f.lvl2 !== null && round2(Number(f.lvl2) || 0) !== lo;
-        const fill = ramp ? mixHex(cols[lo] || FLOOR_NAVE_COLOR, cols[round2(Number(f.lvl2) || 0)] || FLOOR_NAVE_COLOR, 0.5) : (cols[lo] || FLOOR_NAVE_COLOR);
+        const ends = ramp && f.isRamp ? rampEndColors(layout, f) : null;
+        const fill = ends ? mixHex(ends.lo, ends.hi, 0.5) : (ramp ? mixHex(cols[lo] || FLOOR_NAVE_COLOR, cols[round2(Number(f.lvl2) || 0)] || FLOOR_NAVE_COLOR, 0.5) : (cols[lo] || FLOOR_NAVE_COLOR));
         return { fill, pattern: ramp ? 'solid' : 'diag1', pcolor: mixHex(fill, '#000000', 0.28), line: 'thin', bcolor: mixHex(fill, '#000000', 0.4) };
     }
     // Superficie que comparten dos rectángulos (m²).
@@ -3036,7 +3052,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,

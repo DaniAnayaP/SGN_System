@@ -2266,6 +2266,13 @@
     "layoutVioRampaFuera": "It goes outside the nave's outline: that is not possible, move it or change its size so it stays inside.",
     "layoutVioPisoFueraToast": "The floor {code} {name} goes outside the nave's outline: that is not possible. Move it or change its size so it stays inside.",
     "layoutVioRampaFueraToast": "The ramp {code} {name} goes outside the nave's outline: that is not possible. Move it or change its size so it stays inside.",
+    "layoutFormatoRampa": "Ramp format",
+    "layoutRampaColor": "Ramp color",
+    "layoutRampaDifuminar": "Blend the colors of the two floors it touches",
+    "layoutRampaDifuminarSub": "From {lo} to {hi}, bottom to top (this is the default)",
+    "layoutRampaPropio": "Choose a color and pattern",
+    "layoutRampaPropioSub": "Its own color, stripes and border, like the floors and zones",
+    "layoutRampaDifuminadoNota": "The ramp is painted with a gradient: it starts with the color of {lo} and ends with the one of {hi}. If you change the color of one of those floors, the ramp follows it.",
     "layoutAgregarRampa": "+ Add ramp",
     "layoutRampa": "Ramp",
     "layoutCodigoRampa": "Ramp code",
@@ -5371,6 +5378,10 @@
     "layoutFmtLine": {
       "what": "Line style of the zone border: solid (thin, medium or thick), dashed, dotted, dash-dot, double or none.",
       "example": "a dashed border for a temporary zone."
+    },
+    "layoutRampFmt": {
+      "what": "Changes the color of the ramp. By default it blends the colors of the two floors it joins (the nave is gray); you can also choose its own color, stripes and border, like the floors.",
+      "example": "the ramp from the nave (gray) to floor P001 (amber) goes from gray to amber; if you choose «Choose a color and pattern» you paint it a single color."
     },
     "layoutFloorFmt": {
       "what": "Choose the color, the pattern (stripes, dots, grid…) and the border of this floor. Without its own format the floor takes the color of its level: the ones that go up run from amber to red (higher, darker) and the pits are blue. You can apply it to this floor only or to all the floors at the same level. A floor at level (0) is not painted.",

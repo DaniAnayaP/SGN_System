@@ -755,6 +755,8 @@
                     const ramp = f.lvl2 !== undefined && f.lvl2 !== null && Math.round((Number(f.lvl2) || 0) * 100) / 100 !== lo;
                     const gradient = ramp && !f.fmt;
                     const hi = ramp ? Math.round((Number(f.lvl2) || 0) * 100) / 100 : lo;
+                    // el degradado de una rampa va del color del piso de abajo al del piso de arriba (los dos pisos que toca)
+                    const endCols = (ramp && LCalc.rampEndColors && LCalc.rampEndColors(layout, f)) || { lo: colorOfLevel(lo), hi: colorOfLevel(hi) };
                     const pos = []; const uv = []; const cols = [];
                     [[0, 1, 2], [0, 2, 3]].forEach((tri) => tri.forEach((k) => {
                         const p = corners[k];
@@ -763,7 +765,7 @@
                         uv.push(p[0] * 0.8, p[1] * 0.8);
                         if (gradient) {
                             const t = hi === lo ? 0 : Math.min(Math.max((lv - lo) / (hi - lo), 0), 1);
-                            const c = new THREE.Color(LCalc.mixHex ? LCalc.mixHex(colorOfLevel(lo), colorOfLevel(hi), t) : '#e6d3f0');
+                            const c = new THREE.Color(LCalc.mixHex ? LCalc.mixHex(endCols.lo, endCols.hi, t) : '#e6d3f0');
                             cols.push(c.r, c.g, c.b);
                         }
                     }));

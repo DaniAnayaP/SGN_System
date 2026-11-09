@@ -2266,6 +2266,13 @@
     "layoutVioRampaFuera": "Sale del contorno de la nave: no es posible, acomódala o cambia sus medidas para que quede adentro.",
     "layoutVioPisoFueraToast": "El piso {code} {name} sale del contorno de la nave: no es posible. Acomódalo o cambia sus medidas para que quede adentro.",
     "layoutVioRampaFueraToast": "La rampa {code} {name} sale del contorno de la nave: no es posible. Acomódala o cambia sus medidas para que quede adentro.",
+    "layoutFormatoRampa": "Formato de la rampa",
+    "layoutRampaColor": "Color de la rampa",
+    "layoutRampaDifuminar": "Difuminar los colores de los dos pisos que toca",
+    "layoutRampaDifuminarSub": "De {lo} a {hi}, de abajo hacia arriba (así sale por defecto)",
+    "layoutRampaPropio": "Elegir color y trama",
+    "layoutRampaPropioSub": "Un color, rayas y borde propios, como los pisos y las zonas",
+    "layoutRampaDifuminadoNota": "La rampa se pinta con un degradado: empieza con el color de {lo} y termina con el de {hi}. Si cambias el color de uno de esos pisos, la rampa lo sigue.",
     "layoutAgregarRampa": "+ Agregar rampa",
     "layoutRampa": "Rampa",
     "layoutCodigoRampa": "Código de rampa",
@@ -5370,6 +5377,10 @@
     "layoutFmtLine": {
       "what": "Estilo de la línea del borde de la zona: continua (fina, media o gruesa), guiones, punteada, guion y punto, doble o ninguna.",
       "example": "borde de guiones para una zona provisional."
+    },
+    "layoutRampFmt": {
+      "what": "Cambia el color de la rampa. Por defecto se difumina entre los colores de los dos pisos que une (la nave es gris); también puedes elegir un color, rayas y borde propios, como en los pisos.",
+      "example": "la rampa de la nave (gris) al piso P001 (ámbar) sale en degradado de gris a ámbar; si eliges «Elegir color y trama» la pintas toda de un solo color."
     },
     "layoutFloorFmt": {
       "what": "Elige el color, la trama (rayas, puntos, cuadrícula…) y el borde de este piso. Sin formato propio el piso lleva el color de su nivel: los que suben van de ámbar a rojo (más alto, más oscuro) y los fosos, en azul. Lo puedes aplicar solo a este piso o a todos los de su mismo nivel. Un piso a nivel (0) no se pinta.",
