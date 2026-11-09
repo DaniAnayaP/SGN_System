@@ -225,6 +225,7 @@
                 labelBoxes.push([cx - w / 2, cy - 9, cx + w / 2, cy + 3]);
             });
         }
+        const zonesAt = s.length; // desde aquí se dibujan las zonas; los pisos y las rampas se meten debajo (el orden de los pasos es el empalme)
         (on('zonas') ? (layout.zones || []) : []).forEach((z) => {
             const c = z.type ? (T.types[z.type] || T.types.dock) : T.types.none;
             const style = `fill="${c[0]}" stroke="${c[1]}" stroke-width="1.2"${c[2] ? ` stroke-dasharray="${c[2]}"` : ''}`;
@@ -323,7 +324,7 @@
                     zoneLabels += t.main;
                 }
             });
-            s += lvlLayer;
+            s = s.slice(0, zonesAt) + lvlLayer + s.slice(zonesAt);
         }
         // Los pasillos son su propia capa (paso Tránsito): rayas (principal) o puntos (entre pasillos), debajo de las huellas y los activos.
         (on('transito') ? (layout.transit || []) : []).forEach((p) => {

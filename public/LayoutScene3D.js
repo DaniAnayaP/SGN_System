@@ -754,8 +754,10 @@
                 const lift = 0.05 + 0.004 * i;
                 pieces.forEach((pc) => {
                     const p = pc.poly;
+                    // la zona va POR ENCIMA del piso (el orden de los pasos es el empalme): el pedazo que cae sobre un piso o una rampa sube con él y queda un poquito arriba de su losa
+                    const base = pc.floor ? 0.05 + 0.004 * floors.indexOf(pc.floor) + 0.012 + 0.0002 * i : lift;
                     for (let k = 1; k < p.length - 1; k++) {
-                        [p[0], p[k], p[k + 1]].forEach((v) => pos.push(PX(v[0]), lift + (pc.floor ? LCalc.zoneLevelAt(pc.floor, v[0], v[1]) : 0), PZ(v[1])));
+                        [p[0], p[k], p[k + 1]].forEach((v) => pos.push(PX(v[0]), base + (pc.floor ? LCalc.zoneLevelAt(pc.floor, v[0], v[1]) : 0), PZ(v[1])));
                     }
                 });
                 const geo = new THREE.BufferGeometry();
@@ -829,14 +831,13 @@
                 const zoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive || dimZone, opacity: inactive ? 0.35 : (dimZone ? 0.22 : 1) });
                 let geo = null;
                 let usedPieces = false;
-                // lo que cae sobre un piso lo pinta el piso (con su color y su trama): la zona solo se pinta donde no hay piso
+                // la zona se pinta por encima del piso (con su color) también donde hay piso: el piso se ve donde la zona no lo cubre y por sus costados
                 if (anyLevel && LCalc.floorsOfZone(layout, z).some((f) => floors.some((g) => g.id === f.id))) {
                     try {
                         const pieces = zonePieces(pts);
                         if (pieces && pieces.length) {
                             usedPieces = true;
-                            const rest = pieces.filter((pc) => !pc.floor);
-                            geo = rest.length ? piecesGeometry(rest, i) : null;
+                            geo = piecesGeometry(pieces, i);
                             zoneMat.side = THREE.DoubleSide;
                         }
                     } catch (err) { geo = null; usedPieces = false; }

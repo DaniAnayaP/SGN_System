@@ -2264,6 +2264,42 @@ function renderSvg(underlay) {
         const w = String(fmt(m.len)).length * 4.9 + 2;
         return !labelBoxes.some(([bx0, by0, bx1, by1]) => cxm - w / 2 < bx1 && cxm + w / 2 > bx0 && cym - 10 < by1 && cym + 3 > by0);
     }).map((m) => { const l = textWithHalo('lm', (X(m.mx) + m.nx * 9).toFixed(1), (Y(m.my) + m.ny * 9 + 3).toFixed(1), 'middle', fmt(m.len), zid ? ` data-lz="${esc(zid)}"` : ''); measureHalos += l.halo; return l.main; }).join('');
+    // Los pisos y las rampas van DEBAJO de las zonas (el orden de los pasos es el empalme: Pisos, Rampas… y después Zonas). Niveles de piso (icono «Niveles»): cada PISO más alto o más bajo que el piso de la nave lleva rayas y su nivel; una rampa, un degradado hacia su lado más alto con una flecha y de qué nivel a cuál va. Salen con el paso Pisos.
+    if (state.showLevels && (on('pisos') || on('rampas'))) {
+        let lvlLayer = '';
+        const signed = (v) => `${v > 0 ? '+' : ''}${fmt(v)} m`;
+        LC.floorsAll(d).filter((f) => (f.isRamp ? on('rampas') : on('pisos'))).forEach((f) => {
+            if (f.active === false || !LC.zoneHasLevel(f) || !(f.l > 0 && f.w > 0)) return;
+            const bx0 = X(f.x); const bx1 = X(f.x + f.l); const by0 = Y(f.y); const by1 = Y(f.y + f.w);
+            const rect = `x="${bx0.toFixed(1)}" y="${by0.toFixed(1)}" width="${(bx1 - bx0).toFixed(1)}" height="${(by1 - by0).toFixed(1)}"`;
+            const lo = Number(f.lvl) || 0;
+            const ramp = f.lvl2 !== undefined && LC.ZONE_RISES.includes(f.rise);
+            const hi = ramp ? Number(f.lvl2) : lo;
+            let note = signed(lo);
+            // el color de cada piso sale de su nivel (o de su formato propio): ya no toma el de la zona que toca
+            const lvlCols = LC.floorLevelColors(d);
+            const colOf = (v) => lvlCols[Math.round(v * 100) / 100] || '#e9e9ee';
+            // una rampa se difumina entre los colores de los dos pisos que toca (rampEndColors); sin eso, entre los de sus dos niveles
+            const endCols = (ramp && LC.rampEndColors(d, f)) || { lo: colOf(lo), hi: colOf(hi) };
+            const quad = `${bx0.toFixed(1)},${by0.toFixed(1)} ${bx1.toFixed(1)},${by0.toFixed(1)} ${bx1.toFixed(1)},${by1.toFixed(1)} ${bx0.toFixed(1)},${by1.toFixed(1)}`;
+            const fpid = `ff-${String(f.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
+            if (ramp) {
+                const gid = `lvg-${String(f.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
+                const dir = { right: [0, 0, 1, 0], left: [1, 0, 0, 0], down: [0, 0, 0, 1], up: [0, 1, 0, 0] }[f.rise];
+                if (f.fmt) lvlLayer += `<g class="lvl-floor">${window.LayoutMapSvg.zonePaint(fpid, LC.floorFmtOf(d, f)).markup(quad)}</g>`;
+                else lvlLayer += `<linearGradient id="${gid}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="${endCols.lo}"/><stop offset="1" stop-color="${endCols.hi}"/></linearGradient><rect class="lvl-ramp" style="stroke:${LC.mixHex(colOf(hi), '#000000', 0.4)}" ${rect} fill="url(#${gid})"/>`;
+                const cx = (bx0 + bx1) / 2; const cy = (by0 + by1) / 2;
+                const half = f.rise === 'left' || f.rise === 'right' ? (bx1 - bx0) / 3 : (by1 - by0) / 3;
+                const v = { right: [1, 0], left: [-1, 0], down: [0, 1], up: [0, -1] }[f.rise];
+                lvlLayer += `<line class="lvl-arrow" x1="${(cx - v[0] * half).toFixed(1)}" y1="${(cy - v[1] * half).toFixed(1)}" x2="${(cx + v[0] * half).toFixed(1)}" y2="${(cy + v[1] * half).toFixed(1)}"/>`;
+                note = `${signed(lo)} → ${signed(hi)}`;
+            } else lvlLayer += `<g class="lvl-floor">${window.LayoutMapSvg.zonePaint(fpid, LC.floorFmtOf(d, f)).markup(quad)}</g>`;
+            const label = textWithHalo('llvl', ((bx0 + bx1) / 2).toFixed(1), (((by0 + by1) / 2) + (ramp ? 16 : 4)).toFixed(1), 'middle', esc(`${f.code} ${note}`), ` data-lf="${esc(f.id)}"`);
+            zoneHalos += label.halo;
+            zoneLabels += label.main;
+        });
+        s += lvlLayer;
+    }
     (on('zonas') ? d.zones : (finding ? d.zones.filter((z) => !dimmed || zoneFocusIds(activeFind()).includes(z.id)) : [])).forEach((z) => {
         zoneAttr = ` data-lz="${esc(z.id)}"`;
         const typeText = z.type ? typeLabel('zone', z.type) : t('main.layoutSinZona');
@@ -2304,42 +2340,6 @@ function renderSvg(underlay) {
             if (f.active === false || !(f.l > 0 && f.w > 0)) return;
             s += `<rect class="hl-box" data-hlbox="floor:${esc(f.id)}" x="${X(f.x).toFixed(1)}" y="${Y(f.y).toFixed(1)}" width="${(X(f.x + f.l) - X(f.x)).toFixed(1)}" height="${(Y(f.y + f.w) - Y(f.y)).toFixed(1)}"/>`;
         });
-    }
-    // Niveles de piso (icono «Niveles»): cada PISO más alto o más bajo que el piso de la nave lleva rayas y su nivel; una rampa, un degradado hacia su lado más alto con una flecha y de qué nivel a cuál va. Salen con el paso Pisos.
-    if (state.showLevels && (on('pisos') || on('rampas'))) {
-        let lvlLayer = '';
-        const signed = (v) => `${v > 0 ? '+' : ''}${fmt(v)} m`;
-        LC.floorsAll(d).filter((f) => (f.isRamp ? on('rampas') : on('pisos'))).forEach((f) => {
-            if (f.active === false || !LC.zoneHasLevel(f) || !(f.l > 0 && f.w > 0)) return;
-            const bx0 = X(f.x); const bx1 = X(f.x + f.l); const by0 = Y(f.y); const by1 = Y(f.y + f.w);
-            const rect = `x="${bx0.toFixed(1)}" y="${by0.toFixed(1)}" width="${(bx1 - bx0).toFixed(1)}" height="${(by1 - by0).toFixed(1)}"`;
-            const lo = Number(f.lvl) || 0;
-            const ramp = f.lvl2 !== undefined && LC.ZONE_RISES.includes(f.rise);
-            const hi = ramp ? Number(f.lvl2) : lo;
-            let note = signed(lo);
-            // el color de cada piso sale de su nivel (o de su formato propio): ya no toma el de la zona que toca
-            const lvlCols = LC.floorLevelColors(d);
-            const colOf = (v) => lvlCols[Math.round(v * 100) / 100] || '#e9e9ee';
-            // una rampa se difumina entre los colores de los dos pisos que toca (rampEndColors); sin eso, entre los de sus dos niveles
-            const endCols = (ramp && LC.rampEndColors(d, f)) || { lo: colOf(lo), hi: colOf(hi) };
-            const quad = `${bx0.toFixed(1)},${by0.toFixed(1)} ${bx1.toFixed(1)},${by0.toFixed(1)} ${bx1.toFixed(1)},${by1.toFixed(1)} ${bx0.toFixed(1)},${by1.toFixed(1)}`;
-            const fpid = `ff-${String(f.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
-            if (ramp) {
-                const gid = `lvg-${String(f.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
-                const dir = { right: [0, 0, 1, 0], left: [1, 0, 0, 0], down: [0, 0, 0, 1], up: [0, 1, 0, 0] }[f.rise];
-                if (f.fmt) lvlLayer += `<g class="lvl-floor">${window.LayoutMapSvg.zonePaint(fpid, LC.floorFmtOf(d, f)).markup(quad)}</g>`;
-                else lvlLayer += `<linearGradient id="${gid}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="${endCols.lo}"/><stop offset="1" stop-color="${endCols.hi}"/></linearGradient><rect class="lvl-ramp" style="stroke:${LC.mixHex(colOf(hi), '#000000', 0.4)}" ${rect} fill="url(#${gid})"/>`;
-                const cx = (bx0 + bx1) / 2; const cy = (by0 + by1) / 2;
-                const half = f.rise === 'left' || f.rise === 'right' ? (bx1 - bx0) / 3 : (by1 - by0) / 3;
-                const v = { right: [1, 0], left: [-1, 0], down: [0, 1], up: [0, -1] }[f.rise];
-                lvlLayer += `<line class="lvl-arrow" x1="${(cx - v[0] * half).toFixed(1)}" y1="${(cy - v[1] * half).toFixed(1)}" x2="${(cx + v[0] * half).toFixed(1)}" y2="${(cy + v[1] * half).toFixed(1)}"/>`;
-                note = `${signed(lo)} → ${signed(hi)}`;
-            } else lvlLayer += `<g class="lvl-floor">${window.LayoutMapSvg.zonePaint(fpid, LC.floorFmtOf(d, f)).markup(quad)}</g>`;
-            const label = textWithHalo('llvl', ((bx0 + bx1) / 2).toFixed(1), (((by0 + by1) / 2) + (ramp ? 16 : 4)).toFixed(1), 'middle', esc(`${f.code} ${note}`), ` data-lf="${esc(f.id)}"`);
-            zoneHalos += label.halo;
-            zoneLabels += label.main;
-        });
-        s += lvlLayer;
     }
     // las medidas de adentro se calculan al final, cuando ya se conocen los nombres de TODAS las zonas
     measureJobs.forEach(([pts, minPx, zid]) => { measureLabels += measureText(pts, minPx, zid); });
