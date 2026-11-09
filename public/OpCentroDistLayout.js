@@ -959,7 +959,7 @@ function applyLevelToAll(key) {
 }
 // Paso Posiciones: el aviso de los huecos cuyo largo o ancho pasa del largo o el fondo de su activo (los primeros 6) y su actualización al teclear.
 function bayIssuesHtml() {
-    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'baysum');
+    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum');
     return list.slice(0, 6).map((v) => `<p>${esc(t(`main.layoutVioAct_${v.kind}`, v.vars))}</p>`).join('') + (list.length > 6 ? '<p>…</p>' : '');
 }
 function applyBayMarks() {
@@ -1351,9 +1351,8 @@ function stepHtml(step) {
         return `${addButton('ramps', 'main.layoutAgregarRampa', dis, true)}${list}`;
     }
     if (step === 'posiciones') {
-        // Cada renglón es un HUECO (un nivel × una columna) de un activo de Huella-Espacio: salen solos con los niveles y las columnas de Activos. Dentro de cada hueco se anota cuántas filas y cuántas profundidades
-        // tiene, su altura desde el piso y sus medidas (largo, ancho y alto, en metros). Lo que no se cambia queda como lo de por defecto (las medidas salen calculadas con las del activo) y no se guarda aparte.
-        const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
+        // Cada renglón es una POSICIÓN (un nivel × una columna) de un activo: salen solas con los niveles (Activos) y la cantidad de posiciones de cada nivel (Niveles). De cada una se define el largo, el fondo y el alto (en metros) y
+        // cuántas filas y cuántas profundidades tiene (de ahí salen sus localizadores); los m² y los m³ salen solos. La altura del piso y la ceja son del nivel (paso Niveles). Lo que no se cambia queda como lo de por defecto y no se guarda aparte.
         const shown = (v) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '');
         const bayNum = (i, n, c, key, value, edited, step, extra = '', bad = false) => `<td><input type="number" min="0" step="${step}" data-l="bay" data-i="${i}" data-n="${n}" data-c="${c}" data-k="${key}" value="${value}"${extra}${edited || bad ? ` class="${[edited ? 'layout-edited' : '', bad ? 'layout-missing' : ''].filter(Boolean).join(' ')}"` : ''}${dis ? ' disabled' : ''}></td>`;
         const POSITION_ROWS_MAX = 1500;
@@ -1371,12 +1370,16 @@ function stepHtml(step) {
                     const bay = LC.bayOf(s, n, c);
                     const m = LC.bayMeasures(s, n, c);
                     const st = bay.stored;
-                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td><td class="layout-calc">${c}</td>${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}${bayNum(i, n, c, 'floorH', shown(m.floorH), st.floorH !== undefined, '0.01')}${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', '', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01')}${bayNum(i, n, c, 'beam', shown(m.beam), st.beam !== undefined, '0.01', ' data-help-key="layoutPosCeja"')}<td class="layout-calc"><span data-bay-use="${i}|${n}|${c}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}">${bay.rows * bay.depth}</span></td></tr>`);
+                    const lvH = LC.levelMeasures(s, n).h; // el alto del espacio de su nivel: el alto de la posición no pasa de él
+                    const lvName = ((s.lvls || []).find((l) => l.n === n) || {}).name || '';
+                    const nameOf = s.ownName || s.name || '';
+                    const pad3 = (v) => String(v).padStart(3, '0');
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.C${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}<td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}" data-help-key="layoutPosLocalizadores">${bay.rows * bay.depth}</span></td><td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td></tr>`);
                 }
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutPosSinActivos'))}</p>`;
-        const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosColumna', 'main.layoutPosFilas', 'main.layoutPosProfundidad', 'main.layoutPosAltura', 'main.layoutPosLargo', 'main.layoutPosAncho', 'main.layoutPosAlto', 'main.layoutPosCeja', 'main.layoutPosAltoUtil', 'main.layoutPosCapacidad'];
+        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosFilas', 'main.layoutPosProfundidad', 'main.layoutPosLocalizadores', 'main.layoutPosM2', 'main.layoutPosM3'];
         const bayIssues = bayIssuesHtml();
         return `${table(heads, rows, 'layout-posiciones')}<div class="layout-vio" data-bay-issues${bayIssues ? '' : ' hidden'}>${bayIssues}</div>${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
@@ -3821,12 +3824,14 @@ function onEdit(event) {
         const shownBay = LC.bayOf(space, n, c);
         const cap = document.querySelector(`[data-bay-cap="${el.getAttribute('data-i')}|${n}|${c}"]`);
         if (cap) cap.textContent = String(shownBay.rows * shownBay.depth);
-        // el alto de almacenamiento (el mismo Alto: la reja va aparte) se recalcula al momento
+        // los m² (largo × fondo) y los m³ (× alto) se recalculan al momento
         const mBay = LC.bayMeasures(space, n, c);
-        const use = document.querySelector(`[data-bay-use="${el.getAttribute('data-i')}|${n}|${c}"]`);
-        if (use) use.textContent = String(Math.round(mBay.useful * 100) / 100);
-        // el largo y el ancho del hueco no pasan del largo y el fondo del activo: se marcan en rojo al momento
-        [['l', space.l > 0 && mBay.l > space.l + 0.005], ['w', space.d > 0 && mBay.w > space.d + 0.005]].forEach(([k, over]) => {
+        const setBayCell = (attr, v) => { const cell = document.querySelector(`[${attr}="${el.getAttribute('data-i')}|${n}|${c}"]`); if (cell) cell.textContent = String(Math.round(v * 100) / 100); };
+        setBayCell('data-bay-m2', mBay.l * mBay.w);
+        setBayCell('data-bay-m3', mBay.l * mBay.w * mBay.h);
+        // el largo y el fondo de la posición no pasan del largo y el fondo del activo, ni su alto del espacio de su nivel: se marcan en rojo al momento
+        const lvHere = LC.levelMeasures(space, n).h;
+        [['l', space.l > 0 && mBay.l > space.l + 0.005], ['w', space.d > 0 && mBay.w > space.d + 0.005], ['h', bay.h !== undefined && lvHere > 0 && mBay.h > lvHere + 0.005]].forEach(([k, over]) => {
             const dimBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${c}"][data-k="${k}"]`);
             if (dimBox) dimBox.classList.toggle('layout-missing', over);
         });
@@ -5225,14 +5230,14 @@ async function saveLayout() {
     if (freshSpaces.length) {
         const v = freshSpaces[0];
         // los niveles que suben más que el activo se arreglan en Niveles (si la cuenta lo ve; si no, en Activos con el alto del activo)
-        const bayKind = v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'baysum';
+        const bayKind = v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum';
         const stepName = v.kind === 'levels' && stepVisible('niveles') ? 'niveles' : (bayKind && stepVisible('posiciones') ? 'posiciones' : 'activos');
         showStep(stepName);
         renderPanel();
         Dashboard.showToast(t(`main.layoutVioAct_${v.kind}`, v.vars), 'warning');
         const at = state.draft.spaces.findIndex((s) => s.id === v.id);
         const box = stepName === 'posiciones'
-            ? document.querySelector(v.kind === 'baysum' ? `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-k="l"]` : `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"][data-k="${v.kind === 'bayl' ? 'l' : 'w'}"]`)
+            ? document.querySelector(v.kind === 'baysum' ? `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-k="l"]` : `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"][data-k="${{ bayl: 'l', bayw: 'w', bayh: 'h' }[v.kind]}"]`)
             : stepName === 'niveles'
             ? (document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"].layout-missing`) || document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"]`))
             : document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);

@@ -1734,6 +1734,7 @@
     "layoutVioAct_out": "Asset {code} goes outside its footprint {fcode}: change its size or its position, or make the footprint bigger, to be able to save.",
     "layoutVioAct_tall": "Asset {code} is {h} m tall and its footprint {fcode} only {fh} m: lower its height to be able to save.",
     "layoutVioAct_bayl": "The bay at level {n}, column {c} of asset {code} is {value} m long and the asset is only {max} m: lower its length so you can save.",
+    "layoutVioAct_bayh": "The position of level {n}, column {c} of asset {code} is {value} m high and the space of its level is only {max} m: lower its height to be able to save.",
     "layoutVioAct_bayw": "The bay at level {n}, column {c} of asset {code} is {value} m wide and the asset is only {max} m deep: lower its width so you can save.",
     "layoutVioAct_baysum": "The columns of level {n} of asset {code} add up to {sum} m long and the asset is {max} m: lower the length of one column to be able to save.",
     "layoutVioAct_levels": "The levels of asset {code} reach {top} m and the asset is {h} m tall: lower the height of a level or raise the asset height so you can save.",
@@ -3329,8 +3330,12 @@
     "colLayoutPosiciones": "Positions",
     "layoutPosNivel": "Level",
     "layoutPosColumna": "Column",
+    "layoutPosCodigo": "Position code",
+    "layoutPosLocalizadores": "Locators",
+    "layoutPosM2": "m²",
+    "layoutPosM3": "m³",
     "layoutPosFilas": "Rows",
-    "layoutPosProfundidad": "Depth",
+    "layoutPosProfundidad": "Depths",
     "layoutPosAltura": "Height from floor (m)",
     "layoutPosLargo": "Length (m)",
     "layoutPosAncho": "Width (m)",
@@ -5016,6 +5021,18 @@
       "what": "Loads the new, ready rows. The ones you removed, with errors or that already exist are not touched and you can download them in an Excel with their reason. Each relation is checked again on the server just like one made by hand.",
       "example": "you load 280 of 300 rows and download the 20 that were not loaded."
     },
+    "layoutPosFondo": {
+      "what": "The depth (front to back) of this position, in meters. It cannot be more than the depth of the asset. If you leave it empty it takes the depth of the asset.",
+      "example": "the rack is 1.2 m deep: none of its positions can be deeper than 1.2 m."
+    },
+    "layoutPosAlto": {
+      "what": "The height of this position, in meters: the free space to store things. It cannot be more than the height of the space of its level (Levels step). If you leave it empty it takes the level's.",
+      "example": "the level's space is 0.65 m: the position can be up to 0.65 m high; with 0.8 it turns red and cannot be saved."
+    },
+    "layoutPosLocalizadores": {
+      "what": "How many locators this position has: its rows times its depths. Each one is a cell with its own code (F001.P001, F001.P002…).",
+      "example": "2 rows and 3 depths give 6 locators."
+    },
     "layoutPosCeja": {
       "what": "The thickness of the beam (the crossbeam) of this bay, in meters. It is separate from the Height: the free space (the Height) starts on top of the beam, so the Storage height is the same as the Height. If you do not write it, it takes the one of its level (Levels step).",
       "example": "the bay has a 0.07 m beam and 0.65 m of space: you write 0.07 in Beam and the Storage height stays at 0.65 m."
@@ -5065,8 +5082,8 @@
       "example": "level 1 of the rack has 3 positions and level 2 only 2: Positions shows 3 rows for level 1 and 2 for level 2."
     },
     "layoutSec_posiciones": {
-      "what": "Each line is a bay: one level × one column of an asset (a rack with 2 levels and 3 columns leaves 6 bays, already listed). Inside each bay you write how many rows and how many depths it has, its height from the floor and its measures in meters. The measures come calculated from the asset's (or from the level's, if you already wrote them in Levels) and you only fix the ones that differ; the capacity is rows × depths. The length and width of a bay cannot go over the length and depth of the asset, and the columns of the same level cannot add up to more than the length of the asset: if they do, they are marked in red (for the sum, the length of every column of the level) and cannot be saved until fixed.",
-      "example": "bay N2·C3 of R-01 has 2 rows and 3 depths: capacity 6; if R-01 is 9 m long with 3 columns, each is 3 m and the three of the level add up to 9 m: if you give one 4 m, they add up to 10 m and are marked in red."
+      "what": "Each row is a position: a level × a column of an asset (a rack with 2 levels and 3 positions per level leaves 6 positions, ready to go); the levels come from the Assets step and the positions of each level from the Levels step. Here you set the length, depth and height of each one (in meters) and how many rows and how many depths it has: its locators come from that. What goes inside cannot be more than what holds it: the positions of a level do not add up to more than the asset's length, none is deeper than it, and its height is not more than the level's space. m² is length × depth and m³ is length × depth × height.",
+      "example": "position R001.N002.C003 is 3 m long, 1.2 deep and 0.65 high, with 2 rows and 3 depths: 6 locators, 3.6 m² and 2.34 m³."
     },
     "relClass": {
       "what": "Says what the product is in this place: Active Product (the normal one), Quarantine Product, Clarification Product or Consignment Product. The same place can change classification over time; only one code per space is still allowed. Empty is Active Product.",

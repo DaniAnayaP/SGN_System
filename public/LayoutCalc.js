@@ -2096,7 +2096,7 @@
     // ---- El activo dentro de su huella -------------------------------------------------------------------------------------------------------
     // Los activos de una huella van uno junto al otro: ninguno puede salirse de ella ni ser más alto que ella, ni encimarse con otro de la misma huella. Se mira sobre un Layout normalizado (deriveSpaces). Un activo apagado (off) no
     // cuenta. Igual que con las huellas: lo que ya estaba mal antes y no cambió solo se marca; lo NUEVO o lo que cambió (el activo o su huella) no se deja guardar (ver newSpaceViolations). Cuatro faltas: sum (los activos suman más
-    // que el lado de la huella), out (uno se sale de ella), tall (más alto que ella), overlap (dos encimados), levels (sus niveles suben más que el activo: paso Niveles), bayl y bayw (el largo o el ancho de un hueco de Posiciones pasa del largo o el fondo del activo)
+    // que el lado de la huella), out (uno se sale de ella), tall (más alto que ella), overlap (dos encimados), levels (sus niveles suben más que el activo: paso Niveles), bayl, bayw y bayh (el largo, el ancho o el alto de una posición pasa del largo o el fondo del activo, o del espacio de su nivel)
     // y baysum (las columnas de un nivel suman más que el largo del activo).
     function spaceViolations(layout) {
         const out = [];
@@ -2123,6 +2123,11 @@
                 // el largo y el ancho de un hueco (Posiciones) no pueden ser mayores que el largo y el fondo del activo (solo cuentan los que el hueco trae propios)
                 (s.bays || []).forEach((b) => {
                     if (b.l !== undefined && s.l > 0 && b.l > s.l + eps) out.push({ ...base, kind: 'bayl', sig: JSON.stringify([b.n, b.c, 'l', b.l, s.l]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.l), max: m(s.l) }, message: `El hueco del nivel ${b.n}, columna ${b.c} del activo ${s.code} mide ${m(b.l)} m de largo y el activo solo ${m(s.l)} m: baja su largo.` });
+                    // el alto propio de una posición no pasa del alto del espacio de su nivel (paso Niveles)
+                    if (b.h !== undefined) {
+                        const lvH = levelMeasures(s, b.n).h;
+                        if (lvH > 0 && b.h > lvH + eps) out.push({ ...base, kind: 'bayh', sig: JSON.stringify([b.n, b.c, 'h', b.h, lvH]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.h), max: m(lvH) }, message: `La posición del nivel ${b.n}, columna ${b.c} del activo ${s.code} mide ${m(b.h)} m de alto y el espacio de su nivel solo ${m(lvH)} m: baja su alto.` });
+                    }
                     if (b.w !== undefined && s.d > 0 && b.w > s.d + eps) out.push({ ...base, kind: 'bayw', sig: JSON.stringify([b.n, b.c, 'w', b.w, s.d]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.w), max: m(s.d) }, message: `El hueco del nivel ${b.n}, columna ${b.c} del activo ${s.code} mide ${m(b.w)} m de ancho y el activo solo ${m(s.d)} m de fondo: baja su ancho.` });
                 });
                 // las columnas de un nivel no pueden sumar más que el largo del activo (se suma lo que muestra Posiciones: el largo propio de cada hueco o, sin él, el largo del activo entre sus columnas)

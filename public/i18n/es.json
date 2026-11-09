@@ -1734,6 +1734,7 @@
     "layoutVioAct_out": "El activo {code} se sale de su huella {fcode}: cambia sus medidas o su posición, o agranda la huella, para poder guardar.",
     "layoutVioAct_tall": "El activo {code} mide {h} m de alto y su huella {fcode} solo {fh} m: baja su alto para poder guardar.",
     "layoutVioAct_bayl": "El hueco del nivel {n}, columna {c} del activo {code} mide {value} m de largo y el activo solo {max} m: baja su largo para poder guardar.",
+    "layoutVioAct_bayh": "La posición del nivel {n}, columna {c} del activo {code} mide {value} m de alto y el espacio de su nivel solo {max} m: baja su alto para poder guardar.",
     "layoutVioAct_bayw": "El hueco del nivel {n}, columna {c} del activo {code} mide {value} m de ancho y el activo solo {max} m de fondo: baja su ancho para poder guardar.",
     "layoutVioAct_baysum": "Las columnas del nivel {n} del activo {code} suman {sum} m de largo y el activo mide {max} m: baja el largo de alguna columna para poder guardar.",
     "layoutVioAct_levels": "Los niveles del activo {code} llegan a {top} m y el activo mide {h} m: baja el alto de algún nivel o sube el alto del activo para poder guardar.",
@@ -3328,6 +3329,10 @@
     "colLayoutPosiciones": "Posiciones",
     "layoutPosNivel": "Nivel",
     "layoutPosColumna": "Columna",
+    "layoutPosCodigo": "Código de la posición",
+    "layoutPosLocalizadores": "Localizadores",
+    "layoutPosM2": "m²",
+    "layoutPosM3": "m³",
     "layoutPosFilas": "Filas",
     "layoutPosProfundidad": "Profundidad",
     "layoutPosAltura": "Altura del piso (m)",
@@ -5015,6 +5020,18 @@
       "what": "Carga las filas nuevas y listas. Las que quitaste, con error o que ya existen no se tocan y puedes bajarlas en un Excel con su motivo. Cada relación se revisa otra vez en el servidor igual que una hecha a mano.",
       "example": "cargas 280 de 300 filas y bajas las 20 que no se cargaron."
     },
+    "layoutPosFondo": {
+      "what": "El fondo (lo que mide de adelante hacia atrás) de esta posición, en metros. No puede pasar del fondo del activo. Si no lo escribes toma el fondo del activo.",
+      "example": "el rack mide 1.2 m de fondo: ninguna de sus posiciones puede medir más de 1.2 m de fondo."
+    },
+    "layoutPosAlto": {
+      "what": "El alto de esta posición, en metros: el espacio libre para guardar. No puede pasar del alto del espacio de su nivel (paso Niveles). Si no lo escribes toma el del nivel.",
+      "example": "el espacio del nivel mide 0.65 m: la posición puede medir hasta 0.65 m de alto; con 0.8 se marca en rojo y no se guarda."
+    },
+    "layoutPosLocalizadores": {
+      "what": "Cuántos localizadores tiene esta posición: sus filas por sus profundidades. Cada uno es una celda con su propio código (F001.P001, F001.P002…).",
+      "example": "2 filas y 3 profundidades dan 6 localizadores."
+    },
     "layoutPosCeja": {
       "what": "El grueso de la reja (el travesaño) de este hueco, en metros. Va aparte del Alto: el espacio libre (el Alto) empieza encima de la reja, así que el Alto de almacenamiento es el mismo Alto. Si no lo escribes toma el de su nivel (paso Niveles).",
       "example": "el hueco tiene una reja de 0.07 m y 0.65 m de espacio: se pone 0.07 en Ceja y el Alto de almacenamiento queda en 0.65 m."
@@ -5064,8 +5081,8 @@
       "example": "el nivel 1 del rack lleva 3 posiciones y el nivel 2 solo 2: en Posiciones salen 3 renglones para el nivel 1 y 2 para el nivel 2."
     },
     "layoutSec_posiciones": {
-      "what": "Cada renglón es un hueco: un nivel × una columna de un activo (el rack con 2 niveles y 3 columnas deja 6 huecos, ya listos). Dentro de cada hueco anotas cuántas filas y cuántas profundidades tiene, su altura desde el piso y sus medidas en metros. Si el nivel tiene una reja (travesaño), anota su grueso en Ceja: va aparte del Alto, que es el espacio libre y es también el Alto de almacenamiento. Las medidas salen calculadas con las del activo (o con las del nivel, si ya las anotaste en Niveles) y solo corriges las que cambien; la capacidad es filas × profundidades. El largo y el ancho de un hueco no pueden pasar del largo y el fondo del activo, y las columnas de un mismo nivel no pueden sumar más que el largo del activo: si pasan, se marcan en rojo (en la suma, el largo de todas las columnas del nivel) y no se puede guardar hasta corregirlos.",
-      "example": "el hueco N2·C3 del R-01 lleva 2 filas y 3 profundidades: capacidad 6; si el R-01 mide 9 m y 3 columnas, cada una mide 3 m y las tres del nivel suman 9 m: si le pones 4 m a una, suman 10 m y se marcan en rojo."
+      "what": "Cada renglón es una posición: un nivel × una columna de un activo (el rack con 2 niveles y 3 posiciones por nivel deja 6 posiciones, ya listas); los niveles salen del paso Activos y las posiciones de cada nivel del paso Niveles. Aquí defines el largo, el fondo y el alto de cada una (en metros) y cuántas filas y cuántas profundidades tiene: de ahí salen sus localizadores. Lo que va adentro no puede pasar de lo que lo contiene: las posiciones de un nivel no suman más que el largo del activo, ninguna pasa de su fondo y su alto no pasa del espacio del nivel. Los m² son largo × fondo y los m³ son largo × fondo × alto.",
+      "example": "la posición R001.N002.C003 mide 3 m de largo, 1.2 de fondo y 0.65 de alto, con 2 filas y 3 profundidades: 6 localizadores, 3.6 m² y 2.34 m³."
     },
     "relClass": {
       "what": "Dice qué es el producto en este lugar: Producto Activo (el normal), Producto Cuarentena, Producto Aclaración o Producto en Consigna. Un mismo lugar puede cambiar de clasificación con el tiempo; sigue valiendo un solo código por espacio. Vacío es Producto Activo.",
