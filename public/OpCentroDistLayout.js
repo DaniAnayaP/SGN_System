@@ -1440,7 +1440,12 @@ function showStep(step) { if (!stepOn(step)) state.steps = [...state.steps, step
 function pressStep(step) {
     if (!stepOn(step)) { showStep(step); return; }
     if (state.focus !== step) { focusStep(step); return; }
-    if (state.steps.length < 2) return; // siempre queda al menos un paso
+    if (state.steps.length < 2) {
+        // siempre queda al menos un paso: al apagar la última opción encendida se regresa a «Contorno» (el punto de partida) como la única seleccionada
+        const base = stepVisible('contorno') ? 'contorno' : SECTION_ORDER.find(stepVisible);
+        if (base && step !== base) { state.steps = [base]; state.focusStack = [base]; focusStep(base); }
+        return;
+    }
     state.steps = state.steps.filter((x) => x !== step);
     state.focusStack = state.focusStack.filter((x) => x !== step);
     const next = [...state.focusStack].reverse().find(stepOn) || state.steps[0];
@@ -1800,10 +1805,10 @@ function fxClear() {
     if (state.find) { clearFind(); applyFind(true); } else { state.fxOn = false; fxLastKey = ''; fxReframe(); renderSvg(); }
     renderFocusStrip();
 }
-// «Todo»: enciende todas las opciones; si ya están todas encendidas, deja solo la que se está editando.
+// «Todo»: enciende todas las opciones; si ya están todas encendidas, las apaga y regresa a «Contorno» (el punto de partida) como la única seleccionada.
 function fxToggleAll() {
     const visible = SECTION_ORDER.filter(stepVisible);
-    if (visible.every((x) => stepOn(x))) { state.steps = [state.focus]; state.focusStack = [state.focus]; } else state.steps = [...new Set([...visible, ...state.steps])];
+    if (visible.every((x) => stepOn(x))) { const base = stepVisible('contorno') ? 'contorno' : visible[0]; state.steps = [base]; state.focusStack = [base]; state.focus = base; } else state.steps = [...new Set([...visible, ...state.steps])];
     renderPanel();
     refreshLive();
 }
@@ -2497,7 +2502,11 @@ function renderSvg(underlay) {
             zoneHalos += label.halo;
             zoneLabels += label.main;
         });
-        s += lvlLayer;
+        // con zonas enfocadas y el resto «Oculto» los pisos y las rampas solo se ven DENTRO de esas zonas (solo esa parte): se recortan con el dibujo de las zonas elegidas
+        if (zoneFocus && !dimmed && lvlLayer) {
+            const clipPoly = (d.zones || []).map((z) => `<polygon points="${LC.zonePoints(z).map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`).join('');
+            s += `<defs><clipPath id="fx-zone-clip">${clipPoly}</clipPath></defs><g clip-path="url(#fx-zone-clip)">${lvlLayer}</g>`;
+        } else s += lvlLayer;
     }
     (on('zonas') ? d.zones : (finding ? d.zones.filter((z) => !dimmed || zoneFocusIds(activeFind()).includes(z.id)) : [])).forEach((z) => {
         zoneAttr = ` data-lz="${esc(z.id)}"`;
