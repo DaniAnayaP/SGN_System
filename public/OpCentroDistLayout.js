@@ -9,7 +9,7 @@
 (function () {
 const LC = window.LayoutCalc;
 // El orden de los pasos en la barra (Localizadores, que no edita nada, siempre va al final).
-const SECTION_ORDER = ['contorno', 'pisos', 'rampas', 'paredes', 'puertas', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'zonas', 'espacios', 'activos', 'posiciones', 'niveles'];
+const SECTION_ORDER = ['contorno', 'pisos', 'rampas', 'paredes', 'puertas', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'zonas', 'espacios', 'activos', 'niveles', 'posiciones'];
 const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', rampas: 'main.layoutStepRampas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', niveles: 'main.layoutStepNiveles', localizadores: 'main.layoutStepLocalizadores',
 };
