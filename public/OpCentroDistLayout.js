@@ -1141,16 +1141,25 @@ function personColorCell(o, i, key, dis) {
     const can = state.perms && state.perms.canFormatFloors && !dis;
     return `<td><button type="button" class="btn btn-secondary layout-toggle layout-fmt${o[key] ? ' on' : ''}" data-objcolor="${i}:${key}" data-help-key="${key === 'vest' ? 'layoutObjetoChaleco' : 'layoutObjetoCasco'}" aria-label="${esc(label)}"${can ? '' : ' disabled'}><span class="layout-fmt-dot" style="background:${esc(hex)};border-color:${esc(LC.mixHex(hex, '#000000', 0.4))}"></span><span>${esc(hex.toUpperCase())}</span></button></td>`;
 }
+// El color del cuerpo del montacargas y de los demás equipos (carrito, plataforma, otro): un botón igual al de la persona; en la persona va una raya (ella lleva chaleco y casco).
+function equipColorCell(o, i, dis) {
+    if (o.type === 'person') return '<td class="layout-calc">—</td>';
+    const hex = LC.equipColorOf(o);
+    const can = state.perms && state.perms.canFormatFloors && !dis;
+    return `<td><button type="button" class="btn btn-secondary layout-toggle layout-fmt${o.color ? ' on' : ''}" data-objcolor="${i}:color" data-help-key="layoutObjetoColorEquipo" aria-label="${esc(t('main.layoutColorEquipo'))}"${can ? '' : ' disabled'}><span class="layout-fmt-dot" style="background:${esc(hex)};border-color:${esc(LC.mixHex(hex, '#000000', 0.4))}"></span><span>${esc(hex.toUpperCase())}</span></button></td>`;
+}
 function pickObjectColor(spec) {
     const [idx, key] = String(spec).split(':');
     const row = (state.draft.objects || [])[Number(idx)];
-    if (!row || row.type !== 'person' || !(key === 'vest' || key === 'helmet') || !window.ColorDialog) return;
+    const isPerson = !!row && row.type === 'person';
+    if (!row || !(isPerson ? (key === 'vest' || key === 'helmet') : key === 'color') || !window.ColorDialog) return;
+    const factory = isPerson ? LC.PERSON_COLORS[key] : (LC.EQUIP_COLORS[row.type] || LC.EQUIP_COLORS.box);
     window.ColorDialog.open({
-        title: t(key === 'vest' ? 'main.layoutChaleco' : 'main.layoutCasco'),
-        currentHex: LC.personColorsOf(row)[key],
+        title: t(key === 'vest' ? 'main.layoutChaleco' : (key === 'helmet' ? 'main.layoutCasco' : 'main.layoutColorEquipo')),
+        currentHex: isPerson ? LC.personColorsOf(row)[key] : LC.equipColorOf(row),
         onAccept: (hex) => {
             const h = String(hex).toLowerCase();
-            if (/^#[0-9a-f]{6}$/.test(h) && h !== LC.PERSON_COLORS[key]) row[key] = h; else delete row[key];
+            if (/^#[0-9a-f]{6}$/.test(h) && h !== factory) row[key] = h; else delete row[key];
             renderPanel();
             refreshLive();
         },
@@ -1163,7 +1172,9 @@ function setObjectEquip(row, id) {
     const next = catalog.find((c) => Number(c.id) === Number(id));
     if (!next) return;
     row.equipId = next.id;
+    const prevType = row.type;
     Object.assign(row, { type: LC.objectShapeOfKind(next.kind), l: next.l, w: next.w, h: next.h });
+    if (row.type !== prevType) delete row.color; // el color de fábrica cambia con la figura (montacargas amarillo, los demás gris)
     if (row.type !== 'person') { delete row.vest; delete row.helmet; } // el color del chaleco y del casco es solo de la persona
     if (prev && (row.name === prev.name || row.name.indexOf(`${prev.name} `) === 0)) row.name = `${next.name}${row.name.slice(prev.name.length)}`;
 }
@@ -1252,9 +1263,9 @@ function stepHtml(step) {
         // (0° = hacia la derecha, 90° = hacia abajo). Las medidas de partida salen de «Cuánto mide lo que transita» (paso Tránsito) y se pueden cambiar en cada uno.
         const catalog = LC.transitCatalogOf(d);
         const equipOptions = (o) => `${o.equipId ? '' : '<option value="" selected>—</option>'}${catalog.filter((c) => c.status === 'active' || Number(c.id) === Number(o.equipId)).map((c) => `<option value="${c.id}"${Number(c.id) === Number(o.equipId) ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}`;
-        const rows = (d.objects || []).map((o, i) => `<tr><td class="layout-calc"><b data-object-code="${i}">${esc(o.code || '')}</b></td>${cellText('objects', i, 'name', o.name, dis)}${cellSelect('objects', i, 'equipId', equipOptions(o), dis)}${personColorCell(o, i, 'vest', dis)}${personColorCell(o, i, 'helmet', dis)}${cellNum('objects', i, 'x', o.x, dis)}${cellNum('objects', i, 'y', o.y, dis)}${cellNum('objects', i, 'angle', o.angle || 0, dis, '5')}<td class="layout-calc">${fmt(o.l)}</td><td class="layout-calc">${fmt(o.w)}</td><td class="layout-calc">${fmt(o.h || 0)}</td>${removeCell('objects', i, dis)}</tr>`);
+        const rows = (d.objects || []).map((o, i) => `<tr><td class="layout-calc"><b data-object-code="${i}">${esc(o.code || '')}</b></td>${cellText('objects', i, 'name', o.name, dis)}${cellSelect('objects', i, 'equipId', equipOptions(o), dis)}${personColorCell(o, i, 'vest', dis)}${personColorCell(o, i, 'helmet', dis)}${equipColorCell(o, i, dis)}${cellNum('objects', i, 'x', o.x, dis)}${cellNum('objects', i, 'y', o.y, dis)}${cellNum('objects', i, 'angle', o.angle || 0, dis, '5')}<td class="layout-calc">${fmt(o.l)}</td><td class="layout-calc">${fmt(o.w)}</td><td class="layout-calc">${fmt(o.h || 0)}</td>${removeCell('objects', i, dis)}</tr>`);
         const addBtn = `<button type="button" class="btn btn-secondary layout-add" data-add-object="1" data-main-add="1" data-help-key="layoutObjetoAgregar"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarObjeto'))}</button>`;
-        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutEquipoPersona', 'main.layoutChaleco', 'main.layoutCasco', 'main.layoutX', 'main.layoutY', 'main.layoutGiro', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', ''], rows, 'layout-objetos') : `<p class="layout-muted">${esc(t('main.layoutObjetosVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutEquipoPersona', 'main.layoutChaleco', 'main.layoutCasco', 'main.layoutColorEquipo', 'main.layoutX', 'main.layoutY', 'main.layoutGiro', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', ''], rows, 'layout-objetos') : `<p class="layout-muted">${esc(t('main.layoutObjetosVacio'))}</p>`;
         return `${addBtn}${list}`;
     }
     if (step === 'transito') {
@@ -2525,9 +2536,9 @@ function renderSvg(underlay) {
         const across = Math.max((Number(o.w) || 0) * sc, 5);
         const title = `<title>${esc(o.name || typeLabel('object', o.type))} · ${esc(typeLabel('object', o.type))}</title>`;
         const shape = o.type === 'forklift'
-            ? `<rect class="lob lob-forklift" x="${-along / 2}" y="${-across / 2}" width="${along}" height="${across}" rx="2"/><rect class="lob-cab" x="${-along * 0.36}" y="${-across * 0.3}" width="${along * 0.4}" height="${across * 0.6}" rx="1.5"/><line class="lob-fork" x1="${along / 2}" y1="${-across * 0.28}" x2="${along / 2 + along * 0.35}" y2="${-across * 0.28}"/><line class="lob-fork" x1="${along / 2}" y1="${across * 0.28}" x2="${along / 2 + along * 0.35}" y2="${across * 0.28}"/>`
+            ? `<rect class="lob lob-forklift" x="${-along / 2}" y="${-across / 2}" width="${along}" height="${across}" rx="2" style="fill:${LC.equipColorOf(o)};stroke:${LC.mixHex(LC.equipColorOf(o), '#000000', 0.45)}"/><rect class="lob-cab" x="${-along * 0.36}" y="${-across * 0.3}" width="${along * 0.4}" height="${across * 0.6}" rx="1.5" style="fill:${LC.mixHex(LC.equipColorOf(o), '#000000', 0.2)};stroke:${LC.mixHex(LC.equipColorOf(o), '#000000', 0.45)}"/><line class="lob-fork" x1="${along / 2}" y1="${-across * 0.28}" x2="${along / 2 + along * 0.35}" y2="${-across * 0.28}"/><line class="lob-fork" x1="${along / 2}" y1="${across * 0.28}" x2="${along / 2 + along * 0.35}" y2="${across * 0.28}"/>`
             : (o.type === 'box'
-                ? `<rect class="lob lob-box" x="${-along / 2}" y="${-across / 2}" width="${along}" height="${across}" rx="2"/>`
+                ? `<rect class="lob lob-box" x="${-along / 2}" y="${-across / 2}" width="${along}" height="${across}" rx="2" style="fill:${LC.equipColorOf(o)};stroke:${LC.mixHex(LC.equipColorOf(o), '#000000', 0.45)}"/>`
                 : (() => {
                     // el operario visto de arriba (mira hacia la derecha): hombros con el color del chaleco y sus dos franjas, el casco con su color y una flecha hacia donde mira
                     const pc = LC.personColorsOf(o);

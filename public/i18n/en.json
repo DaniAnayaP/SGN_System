@@ -1812,6 +1812,7 @@
     "layoutModeloHidrante": "Hydrant model",
     "layoutChaleco": "Vest color",
     "layoutCasco": "Helmet color",
+    "layoutColorEquipo": "Equipment color",
     "layoutType_safety_emergency_door": "Emergency door",
     "layoutType_safety_firstaid": "First-aid kit",
     "layoutType_safety_alarm": "Alarm / pull station",
@@ -5583,6 +5584,10 @@
     "layoutObjetoCasco": {
       "what": "The color of the operator's helmet, on the plan and in 3D. The default is white. It helps tell apart who holds a position or role.",
       "example": "yellow helmets for supervisors and white ones for operators."
+    },
+    "layoutObjetoColorEquipo": {
+      "what": "The body color of the forklift and of the other equipment of the catalog (cart, platform, other), on the plan and in 3D. By default the forklift is yellow and the rest gray. The person does not have it: she has the color of her vest and helmet.",
+      "example": "electric forklifts in blue and combustion ones in yellow, to tell them apart at a glance."
     },
     "layoutHidranteModelo": {
       "what": "Which kind of hydrant it is: pillar (the usual red post standing on the floor), double-outlet post (a pipe with two valves on top), siamese connection (the Y-shaped connection that goes on the wall) or fire hose cabinet (the red box with a hose, which goes on the wall). Each model comes with its own height from the floor and size, which you can change in its row.",

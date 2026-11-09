@@ -908,8 +908,9 @@
                 const w = Math.max(Number(o.w) || 0.3, 0.1);
                 const h = Math.max(Number(o.h) || 1, 0.2);
                 const g = new THREE.Group();
+                const equipHex = LCalc && LCalc.equipColorOf ? LCalc.equipColorOf(o) : (o.type === 'forklift' ? '#f2c230' : '#9aa0b5');
                 if (o.type === 'forklift') {
-                    const body = new THREE.Mesh(new THREE.BoxGeometry(l * 0.72, h * 0.42, w), lam(0xf2c230));
+                    const body = new THREE.Mesh(new THREE.BoxGeometry(l * 0.72, h * 0.42, w), lam(equipHex));
                     body.position.set(-l * 0.14, h * 0.21 + 0.12, 0);
                     const mast = new THREE.Mesh(new THREE.BoxGeometry(0.1, h * 0.95, w * 0.8), lam(0x4a4f5e));
                     mast.position.set(l * 0.22, h * 0.475, 0);
@@ -922,7 +923,7 @@
                         g.add(fork);
                     });
                 } else if (o.type === 'box') {
-                    const crate = new THREE.Mesh(new THREE.BoxGeometry(l, h, w), lam(0x9aa0b5));
+                    const crate = new THREE.Mesh(new THREE.BoxGeometry(l, h, w), lam(equipHex));
                     crate.position.set(0, h / 2, 0);
                     g.add(crate);
                 } else {
