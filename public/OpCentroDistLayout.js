@@ -2293,7 +2293,8 @@ async function goView() {
 function ddHtml(key, helpKey, label, value, open, disabled, menu) {
     return `<div class="layout-dd${open ? ' open' : ''}"><button type="button" class="layout-dd-btn" data-dd="${key}" data-help-key="${helpKey}" aria-haspopup="true" aria-expanded="${open}"${disabled ? ' disabled' : ''}><span class="layout-dd-k">${esc(label)}</span><b>${esc(value)}</b><span class="bx bx-chevron-down" aria-hidden="true"></span></button>${open ? `<div class="layout-dd-menu" role="menu">${menu}</div>` : ''}</div>`;
 }
-const ddItem = (attr, on, html) => `<button type="button" class="layout-dd-item" role="menuitemcheckbox" aria-checked="${on}" ${attr}><span class="layout-dd-cb${on ? ' on' : ''}"></span><span>${html}</span></button>`;
+// on: true (marcada), false (vacía) o 'mix' (a medias: unas sí y otras no)
+const ddItem = (attr, on, html) => `<button type="button" class="layout-dd-item" role="menuitemcheckbox" aria-checked="${on === 'mix' ? 'mixed' : !!on}" ${attr}><span class="layout-dd-cb${on === 'mix' ? ' mix' : (on ? ' on' : '')}"></span><span>${html}</span></button>`;
 function renderViewStrip() {
     const box = $('layout-vstrip-filters');
     if (!box) return;
@@ -2304,14 +2305,14 @@ function renderViewStrip() {
     const zids = zoneFocusIds(state.find);
     const names = zids.map((id) => (zones.find((z) => z.id === id) || {}).name || '').filter(Boolean);
     const zoneValue = names.length ? names.join(', ') : t('main.layoutFiltroTodas');
-    const zoneMenu = ddItem('data-dd-zone="all"', !zids.length, `<b>${esc(t('main.layoutFiltroTodasZonas'))}</b>`) + '<div class="layout-dd-sep"></div>'
+    const zoneMenu = ddItem('data-dd-all="zone"', !zids.length || zids.length === zones.length ? true : 'mix', `<b>${esc(t('main.layoutFiltroTodasZonas'))}</b>`) + '<div class="layout-dd-sep"></div>'
         + zones.map((z) => ddItem(`data-dd-zone="${esc(z.id)}"`, zids.includes(z.id), `${esc(z.name || z.code || '')} <small>${esc(z.code || '')}</small>`)).join('');
     const zoneDd = ddHtml('zone', 'layoutFiltroZona', t('main.layoutFiltroZona'), zoneValue, vDropdown === 'zone', !(canFind() && stepVisible('zonas') && zones.length), zoneMenu);
     // Qué ver: las capas (los pasos que el árbol deja ver); «Todo» las enciende todas
     const visible = SECTION_ORDER.filter(stepVisible);
     const onN = visible.filter(stepOn).length;
-    const layersValue = onN === visible.length ? t('main.layoutFiltroTodo') : t('main.layoutFiltroNdeN', { n: onN, total: visible.length });
-    const layersMenu = ddItem('data-dd-layer="all"', onN === visible.length, `<b>${esc(t('main.layoutFiltroTodo'))}</b>`) + '<div class="layout-dd-sep"></div>'
+    const layersValue = onN === visible.length ? t('main.layoutFiltroTodo') : (onN === 0 ? t('main.layoutFiltroNada') : t('main.layoutFiltroNdeN', { n: onN, total: visible.length }));
+    const layersMenu = ddItem('data-dd-all="layers"', onN === visible.length ? true : (onN === 0 ? false : 'mix'), `<b>${esc(t('main.layoutFiltroTodo'))}</b>`) + '<div class="layout-dd-sep"></div>'
         + visible.map((s) => ddItem(`data-dd-layer="${s}"`, stepOn(s), esc(t(SECTION_LABEL_KEYS[s])))).join('');
     const layersDd = ddHtml('layers', 'layoutFiltroQueVer', t('main.layoutFiltroQueVer'), layersValue, vDropdown === 'layers', !visible.length, layersMenu);
     // Lo demás: lo que no se eligió se ve tenue u oculto
@@ -2331,11 +2332,35 @@ $('layout-mode-view').addEventListener('click', goView);
 $('layout-vstrip-filters').addEventListener('click', (event) => {
     const dd = event.target.closest('[data-dd]');
     if (dd) { event.stopPropagation(); const key = dd.getAttribute('data-dd'); vDropdown = vDropdown === key ? '' : key; renderViewStrip(); return; }
+    // «Todas las zonas» y «Todo»: un clic pone todo (o, si ya estaba todo, lo quita) y el doble clic siempre quita todo.
+    const allItem = event.target.closest('[data-dd-all]');
+    if (allItem) {
+        const forceNone = event.detail >= 2;
+        if (allItem.getAttribute('data-dd-all') === 'zone') {
+            const zones = (state.draft.zones || []).filter((z) => z.active !== false);
+            const zids = zoneFocusIds(state.find);
+            const allPicked = zones.length > 0 && zids.length === zones.length;
+            // sin filtro (todas las zonas a la vista) o con unas cuantas: se marcan todas; con todas marcadas, o con doble clic: se quitan (vuelve a «Todas», sin filtro)
+            if (forceNone || allPicked) clearFind(); else if (zones.length) state.find = { kind: 'zone', id: zones[0].id, ids: zones.map((z) => z.id) };
+            state.findScope = 'zones';
+            syncFindTypesFromSteps();
+            applyFind(true);
+        } else {
+            const visible = SECTION_ORDER.filter(stepVisible);
+            if (forceNone || visible.every(stepOn)) state.steps = state.steps.filter((x) => x === 'localizadores'); else showAllLayers();
+            if (state.steps.length && !state.steps.includes(state.focus)) state.focus = state.steps[state.steps.length - 1];
+            state.focusStack = state.focusStack.filter((x) => state.steps.includes(x));
+            if (!state.focusStack.length && state.steps.length) state.focusStack = [state.focus];
+            syncFindTypesFromSteps();
+            if (state.find) applyFind(true); else refreshLive();
+            renderViewStrip();
+        }
+        return;
+    }
     const zoneItem = event.target.closest('[data-dd-zone]');
     if (zoneItem) {
         const id = zoneItem.getAttribute('data-dd-zone');
-        if (id === 'all') clearFind();
-        else {
+        {
             const cur = zoneFocusIds(state.find);
             const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
             if (!next.length) clearFind(); else state.find = { kind: 'zone', id: next[0], ids: next };
@@ -2348,13 +2373,12 @@ $('layout-vstrip-filters').addEventListener('click', (event) => {
     const layerItem = event.target.closest('[data-dd-layer]');
     if (layerItem) {
         const s = layerItem.getAttribute('data-dd-layer');
-        if (s === 'all') showAllLayers();
-        else if (stepOn(s)) { if (state.steps.filter((x) => x !== 'localizadores').length > 1) state.steps = state.steps.filter((x) => x !== s); } else state.steps = [...state.steps, s];
-        if (!state.steps.includes(state.focus)) state.focus = state.steps[state.steps.length - 1];
+        if (stepOn(s)) state.steps = state.steps.filter((x) => x !== s); else state.steps = [...state.steps, s];
+        if (state.steps.length && !state.steps.includes(state.focus)) state.focus = state.steps[state.steps.length - 1];
         state.focusStack = state.focusStack.filter((x) => state.steps.includes(x));
-        if (!state.focusStack.length) state.focusStack = [state.focus];
+        if (!state.focusStack.length && state.steps.length) state.focusStack = [state.focus];
         syncFindTypesFromSteps();
-        if (state.find) applyFind(true); else { renderPanel(); refreshLive(); }
+        if (state.find) applyFind(true); else refreshLive(); // en «Ver» el panel no se ve: no se vuelve a dibujar (dejaría siempre una capa encendida)
         renderViewStrip();
         return;
     }

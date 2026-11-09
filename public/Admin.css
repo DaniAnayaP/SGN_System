@@ -8189,3 +8189,8 @@ td.cap-pick{ white-space: nowrap; }
 .layout-dd-seg{ display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.2rem 0.3rem 0.2rem 0.8rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); font-size: 0.78rem; }
 .layout-dd-seg button{ padding: 0.1rem 0.7rem; border: 0; border-radius: 0.6rem; background: transparent; color: var(--color-text-secondary); font: inherit; cursor: pointer; }
 .layout-dd-seg button[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); font-weight: 600; }
+.layout-dd-cb.mix{ background: var(--color-accent, var(--color-text-primary)); border-color: var(--color-accent, var(--color-text-primary)); }
+.layout-dd-cb.mix::after{ content: ""; position: absolute; left: 0.18rem; top: 0.33rem; width: 0.42rem; height: 2px; background: #fff; }
+/* En «Ver» el croquis ocupa todo el ancho: sin tope se agrandaba al doble (y más al enfocar una zona). Se limita al alto de la pantalla, centrado, para que se vea completo y a un tamaño como el de siempre. */
+.layout-editor.is-view .layout-map svg#layout-svg{ width: auto; max-width: 100%; max-height: max(24rem, calc(100vh - 12rem)); margin-inline: auto; }
+.layout-editor.is-view .layout-3d-stage{ max-width: calc(max(24rem, 100vh - 12rem) * 700 / 460); margin-inline: auto; }

@@ -1992,6 +1992,7 @@
     "layoutFiltroQueVer": "Show",
     "layoutFiltroTodas": "All",
     "layoutFiltroTodo": "Everything",
+    "layoutFiltroNada": "Nothing",
     "layoutFiltroTodasZonas": "All zones",
     "layoutFiltroNdeN": "{n} of {total}",
     "layoutFiltroLoDemas": "The rest",
