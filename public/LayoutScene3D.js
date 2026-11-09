@@ -110,6 +110,7 @@
         let dimLayers = new Set();
         // El nivel enfocado de un activo { id, n, mode: 'dim' | 'hide' }: los demás niveles de ese activo se apagan o se quitan.
         let focusLevel = null;
+        let focusContainer = null; // el cuadro (nivel o posición) que el Enfoque dejó dibujado: a él se acerca la cámara
         let hl = null; // lo resaltado: { kind: 'zone' | 'floor' | 'footprint' | 'space' | 'bay', id, strong }
         const textureCache = new Map();
 
@@ -1189,6 +1190,7 @@
             });
 
             // activos: anaqueles (postes y repisas por nivel), anaqueles con tarimas, gabinetes y tarimas
+            focusContainer = null;
             const upr = []; const dck = []; const blk = [];
             const edges = [];
             const edgeBox = (x, y, z, sx, sy, sz) => {
@@ -1205,35 +1207,48 @@
                 const lv = Math.max(1, s.levels || 1);
                 // el color que se le puso en Formato de activo (sin relleno o sin color propio se queda con el de su tipo)
                 const own = s.fmt && s.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(s.fmt.fill || '') ? parseInt(s.fmt.fill.slice(1), 16) : null;
-                // Enfoque u Oculto con un nivel, una posición o un localizador elegido: de ESE activo solo se dibuja eso (sus postes y su repisa, o su bloque), a la altura que tiene
+                // Enfoque u Oculto con un nivel, una posición o un localizador elegido: de ESE activo solo se dibuja el nivel con la distribución de sus posiciones o, con un localizador, su posición con la distribución
+                // de sus filas y profundidades, a la altura que tienen. Lo elegido se marca con el cuadro naranja de siempre (hlBox).
                 const fzm = focusLevel && focusLevel.mode === 'hide' && focusLevel.id === s.id && root.LayoutCalc && root.LayoutCalc.levelMeasures && root.LayoutCalc.bayMeasures ? focusLevel : null;
                 if (fzm) {
                     const LCz = root.LayoutCalc;
                     const nz = Math.min(Math.max(1, Number(fzm.n) || 1), lv);
                     const slotsZ = LCz.levelSlots ? LCz.levelSlots(s, nz) : Math.max(1, Math.floor(s.slots || 1));
                     const cz1 = fzm.c ? Math.min(Math.max(1, Number(fzm.c) || 1), slotsZ) : 0;
-                    const mz = cz1 ? LCz.bayMeasures(s, nz, cz1) : LCz.levelMeasures(s, nz);
-                    let bx0 = cz1 ? s.x + (cz1 - 1) * (s.l / slotsZ) : s.x;
-                    let blen = cz1 ? s.l / slotsZ : s.l;
-                    let by0 = s.y; let bdep = s.d;
-                    if (cz1 && Number(fzm.f) > 0 && Number(fzm.p) > 0 && LCz.bayOf) {
-                        const bz = LCz.bayOf(s, nz, cz1);
-                        const rowsZ = Math.max(1, bz.rows); const depthZ = Math.max(1, bz.depth);
-                        bx0 += (Math.min(Number(fzm.f), rowsZ) - 1) * (blen / rowsZ); blen /= rowsZ;
-                        bdep = s.d / depthZ; by0 = s.y + s.d - Math.min(Number(fzm.p), depthZ) * bdep;
+                    const cont = cz1 && Number(fzm.f) > 0 && Number(fzm.p) > 0 && LCz.bayOf ? cz1 : 0; // con un localizador el cuadro es la posición; si no, el nivel entero
+                    const contBay = cont ? LCz.bayOf(s, nz, cont) : null;
+                    const bx0 = cont ? s.x + (cont - 1) * (s.l / slotsZ) : s.x;
+                    const blen = cont ? s.l / slotsZ : s.l;
+                    const cols = cont ? Math.max(1, contBay.rows) : slotsZ; // las posiciones del nivel (o las filas de la posición)
+                    const depthN = cont ? Math.max(1, contBay.depth) : 1; // la profundidad solo parte una posición
+                    const mAll = cont ? LCz.bayMeasures(s, nz, cont) : LCz.levelMeasures(s, nz);
+                    const yBot = fl + Math.max(mAll.floorH, 0.03);
+                    const yTop = yBot + (mAll.beam > 0 ? mAll.beam : 0.06) + Math.max(mAll.h, 0.1);
+                    const solid = s.type === 'pallet' || s.type === 'cabinet' || s.type === 'cold';
+                    const postC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
+                    const deckZ = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
+                    const blockC = mute(own !== null ? own : (s.type === 'pallet' ? WOOD : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d)));
+                    const wC = blen / cols; const dC = s.d / depthN;
+                    const gx = Math.min(0.02, wC * 0.1); const gz = Math.min(0.02, dC * 0.1);
+                    for (let ci = 0; ci < cols; ci++) {
+                        const mm = cont ? mAll : LCz.bayMeasures(s, nz, ci + 1); // cada posición del nivel con sus propias medidas
+                        const beamC = mm.beam > 0 ? mm.beam : 0.06;
+                        const yB = fl + Math.max(mm.floorH, 0.03);
+                        const hC = Math.max(mm.h, 0.1);
+                        for (let dj = 0; dj < depthN; dj++) {
+                            const xc = PX(bx0 + (ci + 0.5) * wC); const zc = PZ(s.y + s.d - (dj + 0.5) * dC); // la profundidad 1 es la del frente
+                            if (solid) blk.push({ x: xc, y: yB + (beamC + hC) / 2, z: zc, sx: wC - gx, sy: beamC + hC, sz: dC - gz, c: blockC });
+                            else dck.push({ x: xc, y: yB + beamC / 2, z: zc, sx: wC - gx, sy: beamC, sz: dC - gz, c: deckZ });
+                        }
                     }
-                    const beamZ = mz.beam > 0 ? mz.beam : 0.06;
-                    const yBase = fl + Math.max(mz.floorH, 0.03);
-                    const yTop = yBase + beamZ + Math.max(mz.h, 0.1);
-                    const xz = PX(bx0 + blen / 2); const zz = PZ(by0 + bdep / 2);
-                    if (s.type === 'pallet' || s.type === 'cabinet' || s.type === 'cold') {
-                        blk.push({ x: xz, y: (yBase + yTop) / 2, z: zz, sx: blen, sy: yTop - yBase, sz: bdep, c: mute(own !== null ? own : (s.type === 'pallet' ? WOOD : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d))) });
-                    } else {
-                        const postC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
-                        const deckZ = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
-                        [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([ix, iz]) => upr.push({ x: xz + ix * Math.max(0, blen / 2 - 0.03), y: (yBase + yTop) / 2, z: zz + iz * Math.max(0, bdep / 2 - 0.03), sx: 0.06, sy: yTop - yBase, sz: 0.06, c: postC }));
-                        dck.push({ x: xz, y: yBase + beamZ / 2, z: zz, sx: blen, sy: beamZ, sz: bdep, c: deckZ });
+                    if (!solid) {
+                        // postes: las cuatro esquinas del cuadro y uno delgado en cada división (adelante y atrás)
+                        for (let xi = 0; xi <= cols; xi++) {
+                            const edge = xi === 0 || xi === cols;
+                            [s.y, s.y + s.d].forEach((zEdge, zi) => upr.push({ x: PX(bx0 + xi * wC) + (xi === 0 ? 0.03 : (xi === cols ? -0.03 : 0)), y: (yBot + yTop) / 2, z: PZ(zEdge) + (zi === 0 ? 0.03 : -0.03), sx: edge ? 0.06 : 0.04, sy: yTop - yBot, sz: edge ? 0.06 : 0.04, c: postC }));
+                        }
                     }
+                    focusContainer = { x: PX(bx0 + blen / 2), y: (yBot + yTop) / 2, z: PZ(s.y + s.d / 2), sx: blen, sy: yTop - yBot, sz: s.d };
                     spaceList.push({ s, x: cx, z: cz, fl });
                     return;
                 }
@@ -1300,9 +1315,9 @@
         function highlight(sel) { hl = sel && sel.id ? { kind: sel.kind, id: sel.id, strong: !!sel.strong, n: sel.n, c: sel.c, f: sel.f, p: sel.p } : null; applyHl(); }
         // Acercar la cámara a lo que está marcado (un nivel, una posición o un localizador): la distancia sale de lo que mide.
         function focusOn() {
-            const b = hlBox();
+            const b = focusContainer || hlBox();
             if (!b) return;
-            go({ tx: b.x, ty: b.y, tz: b.z, r: clamp(Math.max(b.sx, b.sy, b.sz, 0.5) * 3.2 + 1.2, 3, bounds.diag * 6) }, true);
+            go({ tx: b.x, ty: b.y, tz: b.z, r: clamp(Math.max(b.sx, b.sy, b.sz, 0.5) * 2.4 + 1.2, 3, bounds.diag * 6) }, true);
         }
         function setView(name) { go(viewTarget(name), true); }
         function zoom(factor) { st.r = clamp(st.r / factor, 3, bounds.diag * 6); applyCam(); }
