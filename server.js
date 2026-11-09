@@ -8473,7 +8473,7 @@ app.get('/api/public/safety/:token/:elementId', publicLayoutLimiter, (req, res) 
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     res.json({
         companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
-        element: { id: element.id, code: element.code, type: element.type, name: element.name || '', locator, zoneName: zone ? zone.name : '' },
+        element: { id: element.id, code: element.code, type: element.type, ...(element.type === 'hydrant' ? { model: LayoutCalc.hydrantModelOf(element) } : {}), name: element.name || '', locator, zoneName: zone ? zone.name : '' },
         dates: locks.dates ? safetyDatesFor(row, element) : null,
         records: records.map((r) => lockedSafetyRecord(r, locks)), locks, now: new Date().toISOString(),
     });
@@ -8531,11 +8531,24 @@ app.get('/api/business/safety-checks', requireAuth, (req, res) => {
     const lite = req.query.lite === '1'; // la App: solo las revisiones más recientes y sin las columnas de Control Interno
     const LIMIT = lite ? 300 : 5000;
     const rows = listSafetyChecks(clientId, { limit: LIMIT });
+    // el modelo de cada hidrante sale del Layout vigente de su centro de costos (no se guarda en cada revisión): si cambia de modelo, todas sus revisiones lo muestran
+    const hydrantModels = new Map();
+    listClientLayouts(clientId).forEach((lr) => {
+        const m = new Map();
+        ((lr.layout && lr.layout.safety) || []).forEach((e) => { if (e.type === 'hydrant') m.set(e.id, LayoutCalc.hydrantModelOf(e)); });
+        hydrantModels.set(lr.costCenterId || 0, m);
+    });
     res.set('Cache-Control', 'no-store');
     res.json({
         truncated: rows.length >= LIMIT, max: LIMIT, canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), SAFETY_TABLE_KEY, 'colSgDeleteAuth'),
         editable: editableColumnsOf(req, SAFETY_TABLE_KEY, [['name', 'colSgQuien']]),
-        checks: rows.map((r) => { const o = safetyCheckRowOf(r, centers, client); if (lite) delete o.system; return o; }),
+        checks: rows.map((r) => {
+            const o = safetyCheckRowOf(r, centers, client);
+            const model = r.element_type === 'hydrant' ? (hydrantModels.get(r.cost_center_id) || new Map()).get(r.element_id) : null;
+            if (model) o.elementModel = model;
+            if (lite) delete o.system;
+            return o;
+        }),
     });
 });
 // La App (con sesión): las OPCIONES para hacer una revisión (los elementos de Seguridad del Layout de cada centro de costos y la última revisión de cada uno: el celular los guarda para trabajar sin señal) y crear la revisión.
@@ -8545,7 +8558,7 @@ function safetyElementsOf(row) {
     const zones = new Map((row.layout.zones || []).map((z) => [z.id, z]));
     return (row.layout.safety || []).map((e) => {
         const zone = zones.get(e.zoneId) || null;
-        return { id: e.id, code: e.code, type: e.type, name: e.name || '', zoneId: e.zoneId || '', zoneName: zone ? zone.name : '', locator: [zone && zone.code, e.code].filter(Boolean).join('.') };
+        return { id: e.id, code: e.code, type: e.type, ...(e.type === 'hydrant' ? { model: LayoutCalc.hydrantModelOf(e) } : {}), name: e.name || '', zoneId: e.zoneId || '', zoneName: zone ? zone.name : '', locator: [zone && zone.code, e.code].filter(Boolean).join('.') };
     });
 }
 app.get('/api/business/seguridad/options', requireAuth, (req, res) => {

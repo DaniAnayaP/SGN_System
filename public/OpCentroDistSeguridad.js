@@ -87,6 +87,12 @@ function photoCell(col, r) {
 // El elemento con su tipo (E001 · Extintor); un tipo que la pantalla no conoce se muestra tal cual.
 function elementText(r) {
     if (!r.elementCode) return '';
+    // un hidrante se nombra por su modelo (Hidrante de columna, Gabinete contra incendio…); sin modelo, solo «Hidrante»
+    if (r.elementType === 'hydrant' && r.elementModel) {
+        const mk = `main.layoutType_hydrant_${r.elementModel}`;
+        const ml = Dashboard.t(mk);
+        if (ml && ml !== mk) return `${r.elementCode} · ${ml}`;
+    }
     const key = `main.layoutType_safety_${r.elementType}`;
     const label = Dashboard.t(key);
     return `${r.elementCode} · ${label && label !== key ? label : (r.elementType || '')}`;

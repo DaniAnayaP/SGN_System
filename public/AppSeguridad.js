@@ -171,12 +171,18 @@ function formatTime(iso) {
 }
 const userLabel = () => (currentUser && (currentUser.name || currentUser.username)) || '';
 // El tipo de un elemento (Extintor, Hidrante…); un tipo que la pantalla no conoce se muestra tal cual.
-function typeLabel(type) {
+function typeLabel(type, model) {
+    // un hidrante se nombra por su modelo (Hidrante de columna, Gabinete contra incendio…); sin modelo, solo «Hidrante»
+    if (type === 'hydrant' && model) {
+        const mk = `main.layoutType_hydrant_${model}`;
+        const ml = t(mk);
+        if (ml && ml !== mk) return ml;
+    }
     const key = `main.layoutType_safety_${type}`;
     const label = t(key);
     return label && label !== key ? label : (type || '');
 }
-const elementText = (code, type) => `${code || ''}${code ? ' · ' : ''}${typeLabel(type)}`;
+const elementText = (code, type, model) => `${code || ''}${code ? ' · ' : ''}${typeLabel(type, model)}`;
 const centerOf = (ccId) => costCenters.find((c) => c.id === Number(ccId));
 const centerText = (cc) => (cc ? `${cc.code ? `${cc.code} · ` : ''}${cc.name}` : '');
 const resultLabel = (r) => (r === 'fail' ? t('main.sgResultadoFalla') : t('main.sgResultadoBien'));
@@ -277,7 +283,7 @@ async function refreshQueued() {
         const el = elementsOf(body.costCenterId).find((e) => e.id === body.elementId) || {};
         const cc = centerOf(body.costCenterId);
         queuedChecks.push({
-            key: `q:${body.clientRef || item.id}`, queued: true, ref: body.clientRef, cc: body.costCenterId, centroCostos: cc ? cc.name : '', elementId: body.elementId, elementCode: el.code || '', elementType: el.type || '', elementName: el.name || '',
+            key: `q:${body.clientRef || item.id}`, queued: true, ref: body.clientRef, cc: body.costCenterId, centroCostos: cc ? cc.name : '', elementId: body.elementId, elementCode: el.code || '', elementType: el.type || '', ...(el.model ? { elementModel: el.model } : {}), elementName: el.name || '',
             zoneName: el.zoneName || '', name: body.name || userLabel(), result: body.result, note: body.note || '', checkedAt: body.clientAt || item.queuedAt, source: 'app', photo: body.photo, thumb: body.thumb || body.photo,
         });
     });
@@ -399,7 +405,7 @@ function renderElements() {
             const sub = [el.name, el.zoneName, centers.length > 1 ? cc.name : ''].filter(Boolean).join(' · ');
             row.innerHTML = `
                 <span class="home-carga-active-row-icon"><i class="bx bx-shield-quarter" aria-hidden="true"></i></span>
-                <span class="home-carga-active-row-label"><p>${esc(elementText(el.code, el.type))}</p><span>${esc(sub || el.locator || '')}</span></span>
+                <span class="home-carga-active-row-label"><p>${esc(elementText(el.code, el.type, el.model))}</p><span>${esc(sub || el.locator || '')}</span></span>
                 <span class="seg-app-last">${last ? resultPill(last.result) : `<span class="pm-app-pill pm-app-pill-queued">${esc(t('home.segNever'))}</span>`}${last ? `<small>${esc(last.queued ? t('home.incOnPhone') : formatTime(last.at))}</small>` : ''}</span>`;
             row.addEventListener('click', () => startCheck(cc.id, el));
             listEl.appendChild(row);
@@ -427,7 +433,7 @@ function renderChecks() {
         const sub = [r.name, formatTime(r.checkedAt)].filter(Boolean).join(' · ');
         row.innerHTML = `
             <span class="home-carga-active-row-icon"><i class="bx ${r.queued ? 'bx-cloud-upload' : 'bx-shield-quarter'}" aria-hidden="true"></i></span>
-            <span class="home-carga-active-row-label"><p>${esc(elementText(r.elementCode, r.elementType))}${r.elementName ? ` · ${esc(r.elementName)}` : ''}</p><span>${esc(sub)}</span></span>
+            <span class="home-carga-active-row-label"><p>${esc(elementText(r.elementCode, r.elementType, r.elementModel))}${r.elementName ? ` · ${esc(r.elementName)}` : ''}</p><span>${esc(sub)}</span></span>
             <span class="inc-app-pills">${resultPill(r.result)}${r.queued ? `<span class="pm-app-pill pm-app-pill-queued">${esc(t('home.incOnPhone'))}</span>` : ''}</span>`;
         row.addEventListener('click', () => { openKey = key; view = 'detail'; render(); });
         bodyEl.appendChild(row);
@@ -442,7 +448,7 @@ function renderDetail() {
     const meta = document.createElement('div');
     meta.className = 'pm-app-meta';
     const rows = [
-        [t('main.colSgElemento'), elementText(r.elementCode, r.elementType) + (r.elementName ? ` · ${r.elementName}` : '')],
+        [t('main.colSgElemento'), elementText(r.elementCode, r.elementType, r.elementModel) + (r.elementName ? ` · ${r.elementName}` : '')],
         [t('main.colSgZona'), r.zoneName || '—'],
         [t('home.incCenter'), r.centroCostos || '—'],
         [t('main.colSgQuien'), r.name || '—'],
@@ -597,7 +603,7 @@ function renderNew() {
     const head = document.createElement('div');
     head.className = 'pm-app-card seg-app-head';
     head.setAttribute('data-help-key', 'appSegElemento');
-    head.innerHTML = `<h4 class="pm-app-title">${esc(elementText(el.code, el.type))}</h4><p class="pm-app-note">${esc([el.name, el.zoneName, cc ? centerText(cc) : ''].filter(Boolean).join(' · '))}</p>`;
+    head.innerHTML = `<h4 class="pm-app-title">${esc(elementText(el.code, el.type, el.model))}</h4><p class="pm-app-note">${esc([el.name, el.zoneName, cc ? centerText(cc) : ''].filter(Boolean).join(' · '))}</p>`;
     bodyEl.appendChild(head);
     if (optionsState === 'cached') { const p = document.createElement('p'); p.className = 'pm-app-note'; p.textContent = t('home.segOptionsCached'); bodyEl.appendChild(p); }
 

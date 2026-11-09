@@ -137,6 +137,10 @@ let note = '';
 const TYPE_NAMES = { es: { extinguisher: 'Extintor', hydrant: 'Hidrante', emergency_door: 'Puerta de emergencia', firstaid: 'Botiquín', alarm: 'Alarma / pulsador', eyewash: 'Regadera y lavaojos', assembly: 'Punto de reunión', route: 'Ruta de evacuación' },
     en: { extinguisher: 'Fire extinguisher', hydrant: 'Hydrant', emergency_door: 'Emergency door', firstaid: 'First-aid kit', alarm: 'Alarm / call point', eyewash: 'Eyewash and shower', assembly: 'Assembly point', route: 'Evacuation route' } }[LANG];
 // El mismo color de cada tipo que en el croquis del Layout.
+const MODEL_NAMES = { es: { column: 'Hidrante de columna', double_post: 'Hidrante de poste doble', siamese: 'Toma siamesa', cabinet: 'Gabinete contra incendio' },
+    en: { column: 'Pillar hydrant', double_post: 'Double-outlet post hydrant', siamese: 'Siamese connection', cabinet: 'Fire hose cabinet' } }[LANG];
+// el nombre de un elemento: un hidrante se nombra por su modelo; sin modelo, solo «Hidrante»
+const elementTypeName = (el) => (el.type === 'hydrant' && el.model && MODEL_NAMES[el.model]) || TYPE_NAMES[el.type] || el.type;
 const TYPE_COLORS = { extinguisher: '#d9443a', hydrant: '#d9443a', emergency_door: '#2e9e5b', firstaid: '#2e9e5b', alarm: '#e8892b', eyewash: '#2f7fc7', assembly: '#2e9e5b', route: '#2e9e5b' };
 const fmtTime = (iso) => new Date(iso).toLocaleTimeString(LANG === 'en' ? 'en-US' : 'es-MX', { hour: '2-digit', minute: '2-digit' });
 const fmtDate = (iso) => new Date(iso).toLocaleDateString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short' });
@@ -146,7 +150,7 @@ const fill = (text, n) => text.replace('{n}', String(n)).replace('{d}', String(n
 
 function stopCamera() { if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; } }
 function show(html) { $('view').innerHTML = html; }
-const placeHtml = () => `<span class="chip"><i style="background:${TYPE_COLORS[info.element.type] || '#888'}"></i>${esc(info.element.code)} · ${esc(TYPE_NAMES[info.element.type] || info.element.type)}</span>${info.element.name ? `<div class="nm">${esc(info.element.name)}</div>` : ''}${info.element.locator ? `<div class="loc">${esc(info.element.locator)}${info.element.zoneName ? ` · ${esc(info.element.zoneName)}` : ''}</div>` : ''}`;
+const placeHtml = () => `<span class="chip"><i style="background:${TYPE_COLORS[info.element.type] || '#888'}"></i>${esc(info.element.code)} · ${esc(elementTypeName(info.element))}</span>${info.element.name ? `<div class="nm">${esc(info.element.name)}</div>` : ''}${info.element.locator ? `<div class="loc">${esc(info.element.locator)}${info.element.zoneName ? ` · ${esc(info.element.zoneName)}` : ''}</div>` : ''}`;
 const errBox = () => (note ? `<div class="err" role="alert">${esc(note)}</div>` : '');
 const resultTag = (r) => `<span class="tag${r === 'fail' ? ' bad' : ''}">${esc(r === 'fail' ? TEXT.bad : TEXT.good)}</span>`;
 
