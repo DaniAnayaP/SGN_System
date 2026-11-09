@@ -4121,7 +4121,7 @@ function refreshScene3d() {
         picker3d.setFocus(fv3.focus ? fv3.focus.spaces : null);
         scene3d.setHiddenAssets(picker3d.getHidden(), false, !!state.findDim);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');

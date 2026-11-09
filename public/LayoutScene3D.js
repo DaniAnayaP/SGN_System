@@ -100,6 +100,9 @@
         let levelsOn = true;
         // Zonas en gris neutro (paso Pisos sin el chip Zonas): no llevan su color y lo que cae sobre un piso lleva el tinte del piso.
         let neutralZones = false;
+        // Qué losas de nivel se dibujan: los pisos con el paso Pisos (o Zonas) y las rampas con el paso Rampas (o Zonas), igual que el croquis; sin decir nada (la página pública) se ven los dos.
+        let floorsShow = true;
+        let rampsShow = true;
         // «Elegir activos» con el resto «tenue»: los activos que no se eligieron se dibujan apagados en lugar de quitarse.
         let dimHidden = false;
         // Con un enfoque y el resto «tenue», las capas apagadas (sus nombres) se ven tenues en lugar de quitarse.
@@ -463,6 +466,8 @@
             if (opts && 'openings' in opts) openingsOn = !!opts.openings;
             if (opts && 'levels' in opts) levelsOn = !!opts.levels;
             if (opts && 'neutralZones' in opts) neutralZones = !!opts.neutralZones;
+            if (opts && 'floorsShow' in opts) floorsShow = !!opts.floorsShow;
+            if (opts && 'rampsShow' in opts) rampsShow = !!opts.rampsShow;
             if (opts && 'dimLayers' in opts) dimLayers = new Set(opts.dimLayers || []);
             if (opts && 'focusLevel' in opts) focusLevel = opts.focusLevel || null;
             if (opts && 'clashDoors' in opts) clashSet = new Set(opts.clashDoors || []);
@@ -737,6 +742,8 @@
                 const levelCols = LCalc.floorLevelColors ? LCalc.floorLevelColors(layout) : {};
                 const colorOfLevel = (v) => levelCols[Math.round(v * 100) / 100] || '#e9e9ee';
                 floors.forEach((f, i) => {
+                    // la losa de un piso solo sale con el paso Pisos y la de una rampa solo con el paso Rampas (lo que está encima sigue a la altura que le toca)
+                    if (f.isRamp ? !rampsShow : !floorsShow) return;
                     const fmtF = LCalc.floorFmtOf ? LCalc.floorFmtOf(layout, f) : { fill: '#e6d3f0', pattern: 'solid', pcolor: '#9b6fb0', line: 'thin', bcolor: '#7a5190' };
                     const lift = 0.05 + 0.004 * i;
                     const corners = [[f.x, f.y], [f.x + f.l, f.y], [f.x + f.l, f.y + f.w], [f.x, f.y + f.w]];
