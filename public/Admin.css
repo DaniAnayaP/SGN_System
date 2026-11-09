@@ -8168,9 +8168,6 @@ td.cap-pick{ white-space: nowrap; }
 .layout-mode-edit{ display: inline-flex; align-items: center; gap: 0.35rem; }
 .layout-mode-edit[hidden], #layout-mode-view[hidden]{ display: none; }
 .layout-mode-edit.is-locked{ opacity: 0.55; cursor: not-allowed; }
-.layout-kpis.is-compact{ display: flex; flex-wrap: wrap; gap: 0.3rem 1.3rem; margin-bottom: 0.6rem; }
-.layout-kpis.is-compact .layout-kpi{ flex-direction: row; align-items: baseline; gap: 0.35rem; padding: 0; background: none; border: 0; border-radius: 0; }
-.layout-kpis.is-compact .layout-kpi b{ font-size: 0.95rem; }
 .layout-vstrip{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
 .layout-vstrip[hidden]{ display: none; }
 .layout-vstrip-filters{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }

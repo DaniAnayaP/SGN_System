@@ -2252,7 +2252,6 @@ function applyMode() {
     if (!ed) return;
     const view = state.mode !== 'edit';
     ed.classList.toggle('is-view', view);
-    $('layout-kpis').classList.toggle('is-compact', view);
     const can = !!(state.perms && state.perms.canEditMode);
     const editBtn = $('layout-mode-edit');
     editBtn.hidden = !view;
