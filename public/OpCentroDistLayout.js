@@ -2156,12 +2156,13 @@ function findSearch(query) {
     const counts = {};
     const items = [];
     // con zonas elegidas solo cuenta y se lista lo que hay dentro de ellas
-    const zf = zoneFocusIds(state.find);
+    const zf = state.mode !== 'edit' ? state.zoneScope : zoneFocusIds(state.find); // en «Ver» la zona sale del botón Zona (el buscador solo busca en lo que filtran Zona y Qué ver); en «Editar», que no tiene franja, del enfoque del buscador
     const inside = zf.length ? scopeInside(d, zf) : null;
+    const noTypes = state.mode !== 'edit' && state.findNone; // Qué ver en «Ninguno»: no hay nada donde buscar
     findTypesShown().forEach((ft) => {
         const found = by[ft.type]().filter((i) => (!match || match(i.hay)) && (!inside || !inside[ft.type] || inside[ft.type].has(i.id)));
         counts[ft.type] = found.length;
-        if (chosen.length && !chosen.includes(ft.type)) return;
+        if (noTypes || (chosen.length && !chosen.includes(ft.type))) return;
         found.forEach((i) => items.push({ type: ft.type, kind: ft.kind || ft.type, step: ft.step, ...i }));
     });
     return { items, counts };
@@ -2189,7 +2190,9 @@ function renderFindList() {
     const chip = (id, label, n, on) => `<button type="button" class="layout-find-type" data-find-type="${id}" aria-pressed="${on}">${esc(label)} <span class="layout-find-n">${n}</span></button>`;
     const chips = shown.length > 1 ? `<div class="layout-find-types" role="group" data-help-key="layoutFindTipos"><span class="layout-find-hide-title">${esc(t('main.layoutFindQueVer'))}</span>${chip('all', t('main.layoutFindTipoTodo'), total, !chosen.length)}${shown.map((ft) => chip(ft.type, t(`main.layoutFindTipo_${ft.type}`), counts[ft.type] || 0, chosen.includes(ft.type))).join('')}</div>` : '';
     $('layout-find-input').placeholder = chosen.length === 1 ? t('main.layoutFindEnTipo', { type: t(`main.layoutFindTipo_${chosen[0]}`).toLowerCase() }) : t('main.layoutBuscarPlaceholder');
-    list.innerHTML = `<div class="layout-find-head">${scopeRow}${zonesRow}${chips}</div>` + (findItems.length
+    // en «Ver» no salen «Buscar en» ni «Qué ver» aquí adentro: ya están arriba (Zona y Qué ver) y el buscador busca solo en lo que ellos filtran; en «Editar» no hay franja y se quedan
+    const head = state.mode !== 'edit' ? '' : `<div class="layout-find-head">${scopeRow}${zonesRow}${chips}</div>`;
+    list.innerHTML = head + (findItems.length
         ? findItems.map((i, n) => `<button type="button" class="layout-find-item" role="option" id="layout-find-opt-${n}" data-find-pick="${n}" aria-selected="${n === findActive}"><b>${esc(i.title)}</b><span>${esc(i.sub)}</span></button>`).join('')
         : `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`);
     list.hidden = false;
