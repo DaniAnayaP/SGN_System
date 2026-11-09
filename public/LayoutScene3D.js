@@ -926,12 +926,25 @@
                     crate.position.set(0, h / 2, 0);
                     g.add(crate);
                 } else {
-                    const bodyH = Math.max(h - 0.3, 0.3);
-                    const body = new THREE.Mesh(new THREE.CylinderGeometry(w / 2, w / 2, bodyH, 12), lam(0xe08a2e));
-                    body.position.set(0, bodyH / 2, 0);
-                    const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), lam(0xf7c98b));
-                    head.position.set(0, bodyH + 0.14, 0);
-                    g.add(body, head);
+                    // el operario (mira hacia +x): piernas, chaleco con dos franjas, brazos, cabeza y casco; el color del chaleco y del casco es el del objeto
+                    const pc = LCalc && LCalc.personColorsOf ? LCalc.personColorsOf(o) : { vest: '#e08a2e', helmet: '#f4f4f1' };
+                    const H = Math.max(h, 0.8);
+                    const hex = (c) => new THREE.Color(c);
+                    const mat = (c) => new THREE.MeshLambertMaterial({ color: hex(c) });
+                    const skin = 0xf3c9a0;
+                    const add = (geo, m, x, y, z) => { const mesh = new THREE.Mesh(geo, m); mesh.position.set(x, y, z); g.add(mesh); return mesh; };
+                    [-1, 1].forEach((sd) => {
+                        add(new THREE.BoxGeometry(l * 0.42, H * 0.47, w * 0.26), lam(0x2d3a55), 0, H * 0.235, sd * w * 0.19);
+                        add(new THREE.BoxGeometry(l * 0.62, H * 0.05, w * 0.29), lam(0x1d2433), l * 0.08, H * 0.025, sd * w * 0.19);
+                        add(new THREE.CylinderGeometry(w * 0.07, w * 0.065, H * 0.33, 8), mat(LCalc && LCalc.mixHex ? LCalc.mixHex(pc.vest, '#000000', sd < 0 ? 0.12 : 0.28) : pc.vest), 0, H * 0.635, sd * w * 0.5);
+                        add(new THREE.SphereGeometry(H * 0.032, 8, 6), lam(skin), 0, H * 0.455, sd * w * 0.5);
+                    });
+                    add(new THREE.BoxGeometry(l * 0.7, H * 0.33, w * 0.62), mat(pc.vest), 0, H * 0.635, 0);
+                    [0.56, 0.67].forEach((fy) => add(new THREE.BoxGeometry(l * 0.72, H * 0.032, w * 0.64), lam(0xf6f3e0), 0, H * fy, 0));
+                    add(new THREE.CylinderGeometry(H * 0.03, H * 0.03, H * 0.04, 8), lam(skin), 0, H * 0.82, 0);
+                    add(new THREE.SphereGeometry(H * 0.075, 12, 10), lam(skin), 0, H * 0.885, 0);
+                    add(new THREE.SphereGeometry(H * 0.086, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(pc.helmet), 0, H * 0.9, 0);
+                    add(new THREE.CylinderGeometry(H * 0.099, H * 0.099, H * 0.012, 14), mat(LCalc && LCalc.mixHex ? LCalc.mixHex(pc.helmet, '#000000', 0.15) : pc.helmet), 0, H * 0.9, 0);
                 }
                 g.position.set(PX(Number(o.x) || 0), 0.08 + FL(Number(o.x) || 0, Number(o.y) || 0), PZ(Number(o.y) || 0));
                 g.rotation.y = -((Number(o.angle) || 0) * Math.PI) / 180;

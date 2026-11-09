@@ -1810,6 +1810,8 @@
     "layoutType_hydrant_siamese": "Toma siamesa",
     "layoutType_hydrant_cabinet": "Gabinete contra incendio",
     "layoutModeloHidrante": "Modelo de hidrante",
+    "layoutChaleco": "Color del chaleco",
+    "layoutCasco": "Color del casco",
     "layoutType_safety_emergency_door": "Puerta de emergencia",
     "layoutType_safety_firstaid": "Botiquín",
     "layoutType_safety_alarm": "Alarma / pulsador",
@@ -5572,6 +5574,14 @@
     "layoutSgAvisar": {
       "what": "Con cuántos días de anticipación un elemento sale como «Por vencer». De fábrica son 30; vale para todos los elementos de seguridad de este Layout.",
       "example": "con 45, un extintor que caduca en 40 días ya sale como «Por vencer»."
+    },
+    "layoutObjetoChaleco": {
+      "what": "El color del chaleco del operario, en el croquis y en el 3D. De fábrica es naranja; solo la persona lo lleva (el montacargas y lo demás no). Se elige del selector de colores.",
+      "example": "el personal de recibo con chaleco verde y el de embarques con chaleco azul."
+    },
+    "layoutObjetoCasco": {
+      "what": "El color del casco del operario, en el croquis y en el 3D. De fábrica es blanco. Sirve para distinguir a quien lleva un puesto o una función.",
+      "example": "casco amarillo para los supervisores y blanco para los operarios."
     },
     "layoutHidranteModelo": {
       "what": "Qué clase de hidrante es: de columna (el poste rojo de siempre, parado en el piso), de poste doble (un tubo con dos válvulas arriba), toma siamesa (la conexión en «Y» que va a la pared) o gabinete contra incendio (la caja roja con manguera, que va a la pared). Cada modelo trae su propia altura al piso y tamaño, que puedes cambiar en su renglón.",

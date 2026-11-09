@@ -1133,6 +1133,29 @@ function addObject() {
     renderPanel();
     refreshLive();
 }
+// El color del chaleco y del casco del operario (solo la persona lleva): un botón con el color puesto que abre el selector de colores; los demás objetos llevan una raya.
+function personColorCell(o, i, key, dis) {
+    if (o.type !== 'person') return '<td class="layout-calc">—</td>';
+    const hex = LC.personColorsOf(o)[key];
+    const label = t(key === 'vest' ? 'main.layoutChaleco' : 'main.layoutCasco');
+    const can = state.perms && state.perms.canFormatFloors && !dis;
+    return `<td><button type="button" class="btn btn-secondary layout-toggle layout-fmt${o[key] ? ' on' : ''}" data-objcolor="${i}:${key}" data-help-key="${key === 'vest' ? 'layoutObjetoChaleco' : 'layoutObjetoCasco'}" aria-label="${esc(label)}"${can ? '' : ' disabled'}><span class="layout-fmt-dot" style="background:${esc(hex)};border-color:${esc(LC.mixHex(hex, '#000000', 0.4))}"></span><span>${esc(hex.toUpperCase())}</span></button></td>`;
+}
+function pickObjectColor(spec) {
+    const [idx, key] = String(spec).split(':');
+    const row = (state.draft.objects || [])[Number(idx)];
+    if (!row || row.type !== 'person' || !(key === 'vest' || key === 'helmet') || !window.ColorDialog) return;
+    window.ColorDialog.open({
+        title: t(key === 'vest' ? 'main.layoutChaleco' : 'main.layoutCasco'),
+        currentHex: LC.personColorsOf(row)[key],
+        onAccept: (hex) => {
+            const h = String(hex).toLowerCase();
+            if (/^#[0-9a-f]{6}$/.test(h) && h !== LC.PERSON_COLORS[key]) row[key] = h; else delete row[key];
+            renderPanel();
+            refreshLive();
+        },
+    });
+}
 // Cambiar el equipo o persona de un objeto: toma el dibujo y las medidas del nuevo renglón; el nombre de fábrica (el del renglón anterior) también lo sigue.
 function setObjectEquip(row, id) {
     const catalog = LC.transitCatalogOf(state.draft);
@@ -1141,6 +1164,7 @@ function setObjectEquip(row, id) {
     if (!next) return;
     row.equipId = next.id;
     Object.assign(row, { type: LC.objectShapeOfKind(next.kind), l: next.l, w: next.w, h: next.h });
+    if (row.type !== 'person') { delete row.vest; delete row.helmet; } // el color del chaleco y del casco es solo de la persona
     if (prev && (row.name === prev.name || row.name.indexOf(`${prev.name} `) === 0)) row.name = `${next.name}${row.name.slice(prev.name.length)}`;
 }
 // Seguridad: cambiar el tipo de un elemento. La ruta de evacuación lleva un punto de llegada (de fábrica, a 5 m a la derecha de donde sale); los demás tipos no. El código lo vuelve a poner el sistema (letra del tipo nuevo).
@@ -1228,9 +1252,9 @@ function stepHtml(step) {
         // (0° = hacia la derecha, 90° = hacia abajo). Las medidas de partida salen de «Cuánto mide lo que transita» (paso Tránsito) y se pueden cambiar en cada uno.
         const catalog = LC.transitCatalogOf(d);
         const equipOptions = (o) => `${o.equipId ? '' : '<option value="" selected>—</option>'}${catalog.filter((c) => c.status === 'active' || Number(c.id) === Number(o.equipId)).map((c) => `<option value="${c.id}"${Number(c.id) === Number(o.equipId) ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}`;
-        const rows = (d.objects || []).map((o, i) => `<tr><td class="layout-calc"><b data-object-code="${i}">${esc(o.code || '')}</b></td>${cellText('objects', i, 'name', o.name, dis)}${cellSelect('objects', i, 'equipId', equipOptions(o), dis)}${cellNum('objects', i, 'x', o.x, dis)}${cellNum('objects', i, 'y', o.y, dis)}${cellNum('objects', i, 'angle', o.angle || 0, dis, '5')}<td class="layout-calc">${fmt(o.l)}</td><td class="layout-calc">${fmt(o.w)}</td><td class="layout-calc">${fmt(o.h || 0)}</td>${removeCell('objects', i, dis)}</tr>`);
+        const rows = (d.objects || []).map((o, i) => `<tr><td class="layout-calc"><b data-object-code="${i}">${esc(o.code || '')}</b></td>${cellText('objects', i, 'name', o.name, dis)}${cellSelect('objects', i, 'equipId', equipOptions(o), dis)}${personColorCell(o, i, 'vest', dis)}${personColorCell(o, i, 'helmet', dis)}${cellNum('objects', i, 'x', o.x, dis)}${cellNum('objects', i, 'y', o.y, dis)}${cellNum('objects', i, 'angle', o.angle || 0, dis, '5')}<td class="layout-calc">${fmt(o.l)}</td><td class="layout-calc">${fmt(o.w)}</td><td class="layout-calc">${fmt(o.h || 0)}</td>${removeCell('objects', i, dis)}</tr>`);
         const addBtn = `<button type="button" class="btn btn-secondary layout-add" data-add-object="1" data-main-add="1" data-help-key="layoutObjetoAgregar"${dis ? ' disabled' : ''}>${esc(t('main.layoutAgregarObjeto'))}</button>`;
-        const list = rows.length ? table(['main.layoutNombre', 'main.layoutEquipoPersona', 'main.layoutX', 'main.layoutY', 'main.layoutGiro', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', ''], rows, 'layout-objetos') : `<p class="layout-muted">${esc(t('main.layoutObjetosVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutEquipoPersona', 'main.layoutChaleco', 'main.layoutCasco', 'main.layoutX', 'main.layoutY', 'main.layoutGiro', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', ''], rows, 'layout-objetos') : `<p class="layout-muted">${esc(t('main.layoutObjetosVacio'))}</p>`;
         return `${addBtn}${list}`;
     }
     if (step === 'transito') {
@@ -2504,7 +2528,15 @@ function renderSvg(underlay) {
             ? `<rect class="lob lob-forklift" x="${-along / 2}" y="${-across / 2}" width="${along}" height="${across}" rx="2"/><rect class="lob-cab" x="${-along * 0.36}" y="${-across * 0.3}" width="${along * 0.4}" height="${across * 0.6}" rx="1.5"/><line class="lob-fork" x1="${along / 2}" y1="${-across * 0.28}" x2="${along / 2 + along * 0.35}" y2="${-across * 0.28}"/><line class="lob-fork" x1="${along / 2}" y1="${across * 0.28}" x2="${along / 2 + along * 0.35}" y2="${across * 0.28}"/>`
             : (o.type === 'box'
                 ? `<rect class="lob lob-box" x="${-along / 2}" y="${-across / 2}" width="${along}" height="${across}" rx="2"/>`
-                : `<ellipse class="lob lob-person" cx="0" cy="0" rx="${along / 2}" ry="${across / 2}"/><circle class="lob-head" cx="0" cy="0" r="${Math.min(along, across) * 0.3}"/>`);
+                : (() => {
+                    // el operario visto de arriba (mira hacia la derecha): hombros con el color del chaleco y sus dos franjas, el casco con su color y una flecha hacia donde mira
+                    const pc = LC.personColorsOf(o);
+                    const vestDark = LC.mixHex(pc.vest, '#000000', 0.4);
+                    const bandH = Math.max(1, across * 0.07);
+                    const hr = Math.min(along, across) * 0.42;
+                    const band = (cy) => `<rect x="${-along * 0.25}" y="${cy}" width="${along * 0.5}" height="${bandH}" fill="#f6f3e0" opacity="0.9"/>`;
+                    return `<ellipse class="lob lob-person" cx="0" cy="0" rx="${along / 2}" ry="${across / 2}" style="fill:${pc.vest};stroke:${vestDark}"/>${band(-across * 0.3)}${band(across * 0.3 - bandH)}<circle cx="${along * 0.06}" cy="0" r="${hr}" style="fill:${pc.helmet};stroke:${LC.mixHex(pc.helmet, '#000000', 0.35)}" stroke-width="1"/><path d="M${along / 2 + 2.5} 0l-4.5 -3v6z" style="fill:${vestDark}"/>`;
+                })());
         s += `<g class="lobj" data-oid="${esc(o.id)}" transform="translate(${X(o.x)} ${Y(o.y)}) rotate(${Number(o.angle) || 0})">${shape}${title}</g>`;
         // el cuadro (invisible) que usa el resaltado al elegir su renglón: lo que ocupa el objeto ya girado (el montacargas, con sus horquillas)
         const ang = ((Number(o.angle) || 0) * Math.PI) / 180;
@@ -3337,6 +3369,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (fmtAsset) { openAssetFmtDialog(Number(fmtAsset.dataset.fmtasset)); return; }
     const fmtFloor = event.target.closest('[data-fmtfloor]');
     if (fmtFloor) { openFloorFmtDialog(Number(fmtFloor.dataset.fmtfloor)); return; }
+    const objColor = event.target.closest('[data-objcolor]');
+    if (objColor) { pickObjectColor(objColor.dataset.objcolor); return; }
     const fmtTr = event.target.closest('[data-fmttr]');
     if (fmtTr) { openTransitFmtDialog(Number(fmtTr.dataset.fmttr)); return; }
     const fmtWall = event.target.closest('[data-fmtwall]');

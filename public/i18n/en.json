@@ -1810,6 +1810,8 @@
     "layoutType_hydrant_siamese": "Siamese connection",
     "layoutType_hydrant_cabinet": "Fire hose cabinet",
     "layoutModeloHidrante": "Hydrant model",
+    "layoutChaleco": "Vest color",
+    "layoutCasco": "Helmet color",
     "layoutType_safety_emergency_door": "Emergency door",
     "layoutType_safety_firstaid": "First-aid kit",
     "layoutType_safety_alarm": "Alarm / pull station",
@@ -5573,6 +5575,14 @@
     "layoutSgAvisar": {
       "what": "How many days ahead an item shows as «Due soon». The default is 30; it applies to all the safety items of this Layout.",
       "example": "with 45, an extinguisher that expires in 40 days already shows as «Due soon»."
+    },
+    "layoutObjetoChaleco": {
+      "what": "The color of the operator's vest, on the plan and in 3D. The default is orange; only the person has it (not the forklift or the rest). Chosen from the color picker.",
+      "example": "receiving staff with a green vest and shipping staff with a blue vest."
+    },
+    "layoutObjetoCasco": {
+      "what": "The color of the operator's helmet, on the plan and in 3D. The default is white. It helps tell apart who holds a position or role.",
+      "example": "yellow helmets for supervisors and white ones for operators."
     },
     "layoutHidranteModelo": {
       "what": "Which kind of hydrant it is: pillar (the usual red post standing on the floor), double-outlet post (a pipe with two valves on top), siamese connection (the Y-shaped connection that goes on the wall) or fire hose cabinet (the red box with a hose, which goes on the wall). Each model comes with its own height from the floor and size, which you can change in its row.",
