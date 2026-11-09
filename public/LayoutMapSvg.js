@@ -296,6 +296,7 @@
             const colOf = (v) => lvlCols[Math.round(v * 100) / 100] || '#E9E9EE';
             const signed = (v) => `${v > 0 ? '+' : ''}${fmt(v)} m`;
             let lvlLayer = '';
+            let rampLayer = ''; // las rampas van ENCIMA de las zonas (los pisos, debajo)
             LC.floorsAll(layout).filter((f) => (f.isRamp ? showRamps : showFloors)).forEach((f) => {
                 if (!LC.zoneHasLevel(f) || !(f.l > 0 && f.w > 0)) return;
                 const bx0 = X(f.x); const bx1 = X(f.x + f.l); const by0 = Y(f.y); const by1 = Y(f.y + f.w);
@@ -307,15 +308,15 @@
                 const safeId = String(f.id).replace(/[^A-Za-z0-9_-]/g, '');
                 let note = signed(lo);
                 if (ramp) {
-                    if (f.fmt) lvlLayer += zonePaint(`lf-${safeId}`, LC.floorFmtOf(layout, f)).markup(quadPts);
+                    if (f.fmt) rampLayer += zonePaint(`lf-${safeId}`, LC.floorFmtOf(layout, f)).markup(quadPts);
                     else {
                         const dir = { right: [0, 0, 1, 0], left: [1, 0, 0, 0], down: [0, 0, 0, 1], up: [0, 1, 0, 0] }[f.rise];
-                        lvlLayer += `<linearGradient id="lvg-${safeId}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="${endCols.lo}"/><stop offset="1" stop-color="${endCols.hi}"/></linearGradient><rect x="${bx0.toFixed(1)}" y="${by0.toFixed(1)}" width="${(bx1 - bx0).toFixed(1)}" height="${(by1 - by0).toFixed(1)}" fill="url(#lvg-${safeId})" stroke="${LC.mixHex(colOf(hi), '#000000', 0.4)}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
+                        rampLayer += `<linearGradient id="lvg-${safeId}" x1="${dir[0]}" y1="${dir[1]}" x2="${dir[2]}" y2="${dir[3]}"><stop offset="0" stop-color="${endCols.lo}"/><stop offset="1" stop-color="${endCols.hi}"/></linearGradient><rect x="${bx0.toFixed(1)}" y="${by0.toFixed(1)}" width="${(bx1 - bx0).toFixed(1)}" height="${(by1 - by0).toFixed(1)}" fill="url(#lvg-${safeId})" stroke="${LC.mixHex(colOf(hi), '#000000', 0.4)}" stroke-width="1.5" stroke-dasharray="5 3"/>`;
                     }
                     const cx = (bx0 + bx1) / 2; const cy = (by0 + by1) / 2;
                     const half = f.rise === 'left' || f.rise === 'right' ? (bx1 - bx0) / 3 : (by1 - by0) / 3;
                     const v = { right: [1, 0], left: [-1, 0], down: [0, 1], up: [0, -1] }[f.rise];
-                    lvlLayer += `<defs><marker id="lvl-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#A63FB5"/></marker></defs><line x1="${(cx - v[0] * half).toFixed(1)}" y1="${(cy - v[1] * half).toFixed(1)}" x2="${(cx + v[0] * half).toFixed(1)}" y2="${(cy + v[1] * half).toFixed(1)}" stroke="#A63FB5" stroke-width="2.2" fill="none" marker-end="url(#lvl-arr)"/>`;
+                    rampLayer += `<defs><marker id="lvl-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#A63FB5"/></marker></defs><line x1="${(cx - v[0] * half).toFixed(1)}" y1="${(cy - v[1] * half).toFixed(1)}" x2="${(cx + v[0] * half).toFixed(1)}" y2="${(cy + v[1] * half).toFixed(1)}" stroke="#A63FB5" stroke-width="2.2" fill="none" marker-end="url(#lvl-arr)"/>`;
                     note = `${signed(lo)} → ${signed(hi)}`;
                 } else lvlLayer += zonePaint(`lf-${safeId}`, LC.floorFmtOf(layout, f)).markup(quadPts);
                 if (options.names !== false) {
@@ -324,7 +325,7 @@
                     zoneLabels += t.main;
                 }
             });
-            s = s.slice(0, zonesAt) + lvlLayer + s.slice(zonesAt);
+            s = s.slice(0, zonesAt) + lvlLayer + s.slice(zonesAt) + rampLayer; // lo único que hay después de las zonas en este punto son las zonas: las rampas quedan justo encima de ellas
         }
         // Los pasillos son su propia capa (paso Tránsito): rayas (principal) o puntos (entre pasillos), debajo de las huellas y los activos.
         (on('transito') ? (layout.transit || []) : []).forEach((p) => {

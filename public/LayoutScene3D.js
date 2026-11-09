@@ -775,7 +775,8 @@
                 pieces.forEach((pc) => {
                     const p = pc.poly;
                     // la zona va POR ENCIMA del piso (el orden de los pasos es el empalme): el pedazo que cae sobre un piso o una rampa sube con él y queda un poquito arriba de su losa
-                    const base = pc.floor ? 0.05 + 0.004 * floors.indexOf(pc.floor) + 0.012 + 0.0002 * i : lift;
+                    // pero la RAMPA va por encima de la zona: el pedazo que cae sobre una rampa queda un poquito debajo de su losa
+                    const base = pc.floor ? 0.05 + 0.004 * floors.indexOf(pc.floor) + (pc.floor.isRamp ? -0.05 : 0.012) + 0.0002 * i : lift;
                     for (let k = 1; k < p.length - 1; k++) {
                         [p[0], p[k], p[k + 1]].forEach((v) => pos.push(PX(v[0]), base + (pc.floor ? LCalc.zoneLevelAt(pc.floor, v[0], v[1]) : 0), PZ(v[1])));
                     }
