@@ -2006,6 +2006,15 @@
     "layoutFiltroElegir": "Elegir",
     "layoutFiltroNinguno": "Ninguno",
     "layoutFiltroNElegidos": "{n} elegidos",
+    "layoutFiltroLocalizador": "Localizador",
+    "layoutLocPosicion": "Posición",
+    "layoutLocMedidaNivel": "{floor} m del piso · {h} m de alto",
+    "layoutLocFilasProf": "filas {f} · profundidad {p}",
+    "layoutLocElige_fp": "Elige una huella",
+    "layoutLocElige_sp": "Elige un activo de {code}",
+    "layoutLocElige_n": "Elige un nivel de {code}",
+    "layoutLocElige_c": "Elige una posición de {code}",
+    "layoutLocElige_cell": "Elige un localizador de {code}",
     "layoutElegirBuscar": "Buscar una pared, un hidrante, un piso, una zona…",
     "layoutElegirLimpiar": "Limpiar",
     "layoutElegirMas": "Hay más: escribe para acotar la lista.",
@@ -5033,6 +5042,14 @@
     "layoutNivHuecos": {
       "what": "Cuántos huecos (columnas) de este nivel traen en Posiciones su propia altura desde el piso, alto o ceja. A esos no les cambia lo que anotes aquí.",
       "example": "el nivel 2 tiene 3 columnas y una lleva su propia ceja: aquí dice 1."
+    },
+    "layoutFiltroLocalizador": {
+      "what": "Te lleva paso a paso hasta un lugar exacto: eliges la huella, luego uno de sus activos, un nivel, una posición y, al final, el localizador (la fila y la profundidad). Puedes escribir para buscar en cada lista. Cada elección enfoca lo que escogiste en el croquis y en el 3D, y las pastillas de arriba te regresan a un paso anterior.",
+      "example": "eliges la huella H001, el rack A004, el nivel N002, la posición C001 y el localizador F001.P001: el croquis y el 3D te muestran ese lugar y arriba queda su código Z001.H001.A004.N002.C001.F001.P001."
+    },
+    "layoutFiltroLocalizadorRuta": {
+      "what": "Los pasos del recorrido, de izquierda a derecha: Huella, Activo, Nivel, Posición y Localizador. La pastilla encendida es el paso en el que estás; las que ya tienen un código son las que ya elegiste, y al tocarlas regresas a ese paso (se quita lo que habías elegido después).",
+      "example": "estás en Posición y tocas «Activo A004»: vuelves a la lista de activos de la huella."
     },
     "layoutFiltroElegirTipos": {
       "what": "Las clasificaciones de lo que hay en el Layout (Huellas, Activos, Sensores…), una junto a otra debajo del buscador, para no recorrer una lista enorme. Toca una o varias y la lista solo trae esas; «Todo» las quita. El número es cuántas coinciden con lo que escribiste en el buscador.",

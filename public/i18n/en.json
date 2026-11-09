@@ -2006,6 +2006,15 @@
     "layoutFiltroElegir": "Pick",
     "layoutFiltroNinguno": "None",
     "layoutFiltroNElegidos": "{n} picked",
+    "layoutFiltroLocalizador": "Locator",
+    "layoutLocPosicion": "Position",
+    "layoutLocMedidaNivel": "{floor} m from the floor · {h} m high",
+    "layoutLocFilasProf": "rows {f} · depth {p}",
+    "layoutLocElige_fp": "Pick a footprint",
+    "layoutLocElige_sp": "Pick an asset of {code}",
+    "layoutLocElige_n": "Pick a level of {code}",
+    "layoutLocElige_c": "Pick a position of {code}",
+    "layoutLocElige_cell": "Pick a locator of {code}",
     "layoutElegirBuscar": "Search a wall, a hydrant, a floor, a zone…",
     "layoutElegirLimpiar": "Clear",
     "layoutElegirMas": "There are more: type to narrow the list.",
@@ -5034,6 +5043,14 @@
     "layoutNivHuecos": {
       "what": "How many bays (columns) of this level have their own height from the floor, height or beam in Positions. What you write here does not change those.",
       "example": "level 2 has 3 columns and one has its own beam: here it says 1."
+    },
+    "layoutFiltroLocalizador": {
+      "what": "Takes you step by step to an exact place: pick the footprint, then one of its assets, a level, a position and, last, the locator (row and depth). You can type to search each list. Each choice focuses what you picked on the plan and in 3D, and the pills on top take you back to an earlier step.",
+      "example": "you pick footprint H001, rack A004, level N002, position C001 and locator F001.P001: the plan and the 3D show that place and its code Z001.H001.A004.N002.C001.F001.P001 stays on top."
+    },
+    "layoutFiltroLocalizadorRuta": {
+      "what": "The steps of the trip, left to right: Footprint, Asset, Level, Position and Locator. The lit pill is the step you are on; the ones with a code are what you already picked, and tapping one takes you back to that step (what you picked after it is cleared).",
+      "example": "you are on Position and tap «Asset A004»: you are back at the list of assets of the footprint."
     },
     "layoutFiltroElegirTipos": {
       "what": "The classifications of what is in the Layout (Footprints, Assets, Sensors…), side by side under the search box, so you do not have to go through a huge list. Tap one or several and the list only shows those; «All» clears them. The number is how many match what you typed in the search.",

@@ -8206,6 +8206,8 @@ td.cap-pick{ white-space: nowrap; }
 /* «Elegir»: el buscador y las pastillas de clasificación quedan fijos arriba y la lista corre abajo */
 .layout-ch-head{ position: sticky; top: 0; z-index: 2; background: var(--color-surface); }
 .layout-ch-head .layout-find-types{ padding: 0.1rem 0 0.4rem; }
+.layout-find-type:disabled{ opacity: 0.45; cursor: not-allowed; }
+.layout-dd-item[aria-current="true"]{ background: color-mix(in srgb, var(--color-accent, var(--color-text-primary)) 14%, transparent); }
 .layout-dd-menu:has(.layout-ch-head){ min-width: 21rem; max-width: 26rem; max-height: 30rem; }
 .layout-ch-grp{ margin-top: 0.3rem; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-secondary); }
 .layout-ch-foot{ display: flex; justify-content: space-between; align-items: center; margin-top: 0.3rem; padding-top: 0.35rem; border-top: 1px solid var(--color-border); font-size: 0.72rem; color: var(--color-text-secondary); }
