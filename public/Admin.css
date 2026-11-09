@@ -8163,15 +8163,15 @@ td.cap-pick{ white-space: nowrap; }
 .layout-editor.is-view .layout-panel{ display: none; }
 .layout-editor.is-view #layout-dirty, .layout-editor.is-view #layout-save, .layout-editor.is-view #layout-discard{ display: none; }
 .layout-editor.is-view .layout-studio{ grid-template-columns: minmax(0, 1fr); }
-.layout-editor:not(.is-view) .layout-viewonly{ display: none; }
-.layout-viewonly{ margin-right: auto; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-report-calc-text); background: var(--color-report-calc-bg); border-radius: 999px; padding: 0.15rem 0.7rem; }
 .layout-mode-edit{ display: inline-flex; align-items: center; gap: 0.35rem; }
 .layout-mode-edit[hidden], #layout-mode-view[hidden]{ display: none; }
 .layout-mode-edit.is-locked{ opacity: 0.55; cursor: not-allowed; }
-.layout-vstrip{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+.layout-bar{ flex-wrap: wrap; }
+/* En «Ver» la franja de filtros va en la misma línea que «QR y descarga» y «Editar» (no ocupa un renglón aparte). */
+.layout-vstrip{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-right: auto; }
 .layout-vstrip[hidden]{ display: none; }
 .layout-vstrip-filters{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
-.layout-vstrip-find{ flex: 1 1 14rem; min-width: 12rem; max-width: 26rem; position: relative; }
+.layout-vstrip-find{ flex: 1 1 10rem; min-width: 9rem; max-width: 18rem; position: relative; }
 .layout-dd{ position: relative; }
 .layout-dd-btn{ display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.8rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); color: var(--color-text-primary); font: inherit; font-size: 0.78rem; cursor: pointer; }
 .layout-dd-btn:disabled{ opacity: 0.55; cursor: not-allowed; }

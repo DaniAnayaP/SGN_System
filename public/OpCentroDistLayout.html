@@ -408,7 +408,10 @@
 
             <div class="layout-editor" id="layout-editor" hidden>
                 <div class="layout-bar">
-                    <span class="layout-viewonly" id="layout-viewonly" data-i18n="main.layoutModoSoloVer">View only</span>
+                    <div class="layout-vstrip" id="layout-vstrip" hidden>
+                        <div class="layout-vstrip-filters" id="layout-vstrip-filters"></div>
+                        <div class="layout-vstrip-find" id="layout-vstrip-find"></div>
+                    </div>
                     <span class="layout-dirty" id="layout-dirty" hidden data-i18n="main.layoutSinGuardar">Unsaved changes</span>
                     <button type="button" class="btn btn-secondary" id="layout-mode-view" data-help-key="layoutModoVer" hidden><i class="bx bx-show" aria-hidden="true"></i> <span data-i18n="main.layoutVer">View</span></button>
                     <div class="layout-qrmenu" id="layout-qrmenu" hidden>
@@ -489,10 +492,6 @@
                     <button type="button" class="btn btn-secondary" id="layout-discard" data-help-key="layoutDiscard" disabled data-i18n="main.layoutDescartar">Discard changes</button>
                     <button type="button" class="btn" id="layout-save" data-help-key="layoutSave" disabled data-i18n="main.layoutGuardar">Save</button>
                     <button type="button" class="btn layout-mode-edit" id="layout-mode-edit" data-help-key="layoutModoEditar"><i class="bx bx-pencil" aria-hidden="true"></i> <span data-i18n="main.layoutEditar">Edit</span></button>
-                </div>
-                <div class="layout-vstrip" id="layout-vstrip" hidden>
-                    <div class="layout-vstrip-filters" id="layout-vstrip-filters"></div>
-                    <div class="layout-vstrip-find" id="layout-vstrip-find"></div>
                 </div>
                 <div class="layout-studio">
                     <div class="layout-panel" id="layout-panel"></div>
