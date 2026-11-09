@@ -2265,6 +2265,8 @@
     "layoutVioPisoFuera": "It goes outside the nave's outline: that is not possible, move it or change its size so it stays inside.",
     "layoutVioRampaFuera": "It goes outside the nave's outline: that is not possible, move it or change its size so it stays inside.",
     "layoutVioPisoFueraToast": "The floor {code} {name} goes outside the nave's outline: that is not possible. Move it or change its size so it stays inside.",
+    "layoutVioObs_tall": "The obstacle \"{name}\" reaches {top} m (height from floor + height) and the warehouse there is only {height} m high: lower it or make it shorter.",
+    "layoutVioObs_high": "The obstacle \"{name}\" is {top} m off the floor and the warehouse there is only {height} m high: lower it.",
     "layoutVioRampaFueraToast": "The ramp {code} {name} goes outside the nave's outline: that is not possible. Move it or change its size so it stays inside.",
     "layoutFormatoRampa": "Ramp format",
     "layoutRampaColor": "Ramp color",
@@ -5506,6 +5508,14 @@
     "layoutObstXY": {
       "what": "Where the corner of the obstacle is inside the warehouse, in meters from the origin of the Layout.",
       "example": "a column at 5 m in X and 6 m in Y."
+    },
+    "layoutObstElev": {
+      "what": "Only for Column and Other: how far off the floor the obstacle starts, in meters. Empty = it sits on the floor. If you leave «Height» empty, it goes from there up to the ceiling.",
+      "example": "a beam hanging from the ceiling: you put 3 as height from floor and leave the height empty; it reaches the ceiling."
+    },
+    "layoutObstAlto": {
+      "what": "Only for Column and Other: how tall the obstacle is, in meters. Empty = it reaches the ceiling. Height from floor + height cannot pass the warehouse ceiling (the gray number shows the ceiling there).",
+      "example": "a pipe floating 1.2 m off the floor and 0.8 tall: you put 1.2 and 0.8; it reaches 2.0 m."
     },
     "layoutObstAltura": {
       "what": "Only for the Level difference: its height above the floor, in meters. If it is lower than the floor, write it with a minus sign. The m³ of the warehouse change with it: if the floor rises, there is less air.",

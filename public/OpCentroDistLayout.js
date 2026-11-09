@@ -764,6 +764,25 @@ function applyFloorMarks() {
     });
 }
 // Rampas: lo que le falta a cada una (De y A sin elegir, pisos al mismo nivel, no toca uno de sus pisos, se encima con algo) se marca en rojo con el aviso; su código y sus niveles salen de lo escrito y de los pisos que une.
+// Obstáculos: la altura del piso y el alto de una columna u otro obstáculo no pueden pasar del techo (LayoutCalc.obstacleViolations): las dos cajas se marcan en rojo y abajo del paso va el aviso.
+function applyObstacleMarks() {
+    const d = state.draft;
+    if (!d) return;
+    const all = LC.obstacleViolations(d);
+    const bad = new Set(all.map((v) => v.id));
+    (d.obstacles || []).forEach((o, i) => {
+        if (o.kind === 'wall') return;
+        ['elev', 'h'].forEach((key) => {
+            const box = document.querySelector(`[data-l="obstacles"][data-i="${i}"][data-k="${key}"]`);
+            if (box) box.classList.toggle('layout-missing', bad.has(o.id));
+        });
+    });
+    const note = document.querySelector('[data-ob-issues]');
+    if (note) {
+        note.hidden = !all.length;
+        note.innerHTML = all.map((v) => `<p>${esc(t(`main.layoutVioObs_${v.kind}`, v.vars))}</p>`).join('');
+    }
+}
 function applyRampMarks() {
     const d = state.draft;
     if (!d) return;
@@ -805,6 +824,7 @@ function applySafetyMarks() {
     applyLegend();
     applyFloorMarks();
     applyRampMarks();
+    applyObstacleMarks();
     if (!state.draft) return;
     computeSafetyIssues();
     (state.draft.safety || []).forEach((e, i) => {
@@ -1017,6 +1037,12 @@ function obstacleRowHtml(o, i, dis, wallsOnly = false) {
         ? `${sel('wall', wallOptionsHtml(o.wall), 'layoutObstLado')}${num('dist', o.dist || 0, 'layoutObstDist', 'min="0"')}${num('l', o.l > 0 ? o.l : '', 'layoutObstLargo', `min="0" placeholder="${esc(t('main.layoutTodoElLado'))}"`)}${num('w', o.w || 0, 'layoutObstGrosor', 'min="0"')}`
         : `${num('x', o.x, 'layoutObstXY')}${num('y', o.y, 'layoutObstXY')}${num('l', o.l, 'layoutObstLargo', 'min="0"')}${num('w', o.w, 'layoutObstAncho', 'min="0"')}`;
     const height = o.kind === 'step' ? num('dz', o.dz === undefined ? 0 : o.dz, 'layoutObstAltura') : '<td class="layout-calc">—</td>';
+    // Una columna u otro obstáculo: qué tan despegado está del piso y qué tan alto es (vacíos = del piso al techo); en gris, el techo que tiene arriba. El desnivel no los lleva.
+    const body = o.kind === 'column' || o.kind === 'other';
+    const ceilAt = (() => { const gg = LC.obstacleGeometry(o, state.draft.vertices); return gg ? LC.naveHeightAt(state.draft, gg.x + gg.l / 2, gg.y + gg.w / 2) : 0; })();
+    const bodyCells = body
+        ? `${num('elev', o.elev > 0 ? o.elev : '', 'layoutObstElev', 'min="0" placeholder="0"')}${num('h', o.h > 0 ? o.h : '', 'layoutObstAlto', `min="0" placeholder="${ceilAt > 0 ? esc(fmt(ceilAt)) : ''}"`)}`
+        : '<td class="layout-calc">—</td><td class="layout-calc">—</td>';
     if (wallsOnly) {
         // La altura propia de la pared: vacía = la de siempre (la del lado del contorno o el promedio de la nave), que se ve en gris.
         // POR ESQUINA: la altura al inicio de la pared y la del final (una pared puede ir más alta de un lado que del otro).
@@ -1034,7 +1060,7 @@ function obstacleRowHtml(o, i, dis, wallsOnly = false) {
         return `<tr><td class="layout-calc"><b data-wall-code="${i}">${esc(o.code || '')}</b></td>${cellText('obstacles', i, 'name', o.name, dis)}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${wallHeight}${sideCells}${removeCell('obstacles', i, dis)}</tr>`;
     }
     // en Contorno el Tipo ya no ofrece Pared (las paredes se agregan en su propio paso)
-    return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('kind', optionsHtml('obstacle', LC.OBSTACLE_KINDS.filter((k) => k !== 'wall'), o.kind), 'layoutObstTipo')}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${height}${removeCell('obstacles', i, dis)}</tr>`;
+    return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('kind', optionsHtml('obstacle', LC.OBSTACLE_KINDS.filter((k) => k !== 'wall'), o.kind), 'layoutObstTipo')}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${height}${bodyCells}${removeCell('obstacles', i, dis)}</tr>`;
 }
 // Cambiar el tipo o la forma de ponerlo de un obstáculo: el desnivel trae su altura; al pasar de una forma a otra se conserva dónde queda.
 function setObstacleKindOrMode(row, key, value) {
@@ -1043,7 +1069,8 @@ function setObstacleKindOrMode(row, key, value) {
         row.kind = LC.OBSTACLE_KINDS.includes(value) ? value : 'column';
         // el nombre que traía de fábrica (el del tipo anterior) sigue al tipo nuevo; un nombre que escribió la persona no se toca
         if (!row.name || row.name === typeLabel('obstacle', prevKind)) row.name = typeLabel('obstacle', row.kind);
-        if (row.kind === 'step') { if (row.dz === undefined) row.dz = 0.15; } else delete row.dz;
+        if (row.kind === 'step') { if (row.dz === undefined) row.dz = 0.15; delete row.elev; delete row.h; } else delete row.dz;
+        if (row.kind === 'wall') delete row.elev;
         return;
     }
     const mode = value === 'contour' ? 'contour' : 'free';
@@ -1141,8 +1168,8 @@ function stepHtml(step) {
         // Cada renglón es un OBSTÁCULO que no es pared: una columna, un desnivel (un tramo del piso más alto o más bajo) u otra cosa que estorbe. Va sobre un lado del contorno o dentro de la nave. Las paredes tienen su propio paso.
         // Es la misma lista de obstáculos de antes (cada renglón conserva su lugar en ella).
         const rows = d.obstacles.map((o, i) => (o.kind === 'wall' ? '' : obstacleRowHtml(o, i, dis))).filter(Boolean);
-        const list = rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', 'main.layoutAlturaDesnivel', ''], rows, 'layout-obstaculos') : `<p class="layout-muted">${esc(t('main.layoutObstaculosVacio'))}</p>`;
-        return `${addButton('obstacles', 'main.layoutAgregarObstaculo', dis, true)}${list}`;
+        const list = rows.length ? table(['main.layoutNombre', 'main.layoutTipo', 'main.layoutUbicacion', 'main.layoutLadoOX', 'main.layoutDistOY', 'main.layoutLargo', 'main.layoutGrosorAncho', 'main.layoutAlturaDesnivel', 'main.layoutAlturaPiso', 'main.layoutAlto', ''], rows, 'layout-obstaculos') : `<p class="layout-muted">${esc(t('main.layoutObstaculosVacio'))}</p>`;
+        return `${addButton('obstacles', 'main.layoutAgregarObstaculo', dis, true)}${list}<div class="layout-vio" data-ob-issues hidden></div>`;
     }
     if (step === 'paredes') {
         // Cada renglón es una PARED (un obstáculo de tipo pared): sobre un lado del contorno (todo el lado o un tramo, con su grosor) o dentro de la nave. Es la misma lista de obstáculos de antes, pero las paredes se crean aquí y no en Contorno.
@@ -3140,6 +3167,11 @@ function onEdit(event) {
             const raw = String(el.value).trim();
             const n = parseFloat(raw);
             if (raw !== '' && Number.isFinite(n) && n >= 0.01) row[key] = Math.min(n, LC.LIMITS.maxHeight); else delete row[key];
+        } else if (list === 'obstacles' && key === 'elev') {
+            // la altura del piso de un obstáculo es opcional: vacío (o 0) = va pegado al piso
+            const raw = String(el.value).trim();
+            const n = parseFloat(raw);
+            if (raw !== '' && Number.isFinite(n) && n > 0) row.elev = Math.min(n, LC.LIMITS.maxHeight); else delete row.elev;
         } else if (list === 'obstacles' && (key === 'kind' || key === 'mode')) {
             setObstacleKindOrMode(row, key, el.value);
         } else if (list === 'zones' && (key === 'ox' || key === 'oy')) {
@@ -4385,6 +4417,19 @@ $('layout-save').addEventListener('click', async () => {
         renderPanel();
         refreshLive();
         Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${transitIssueText(freshTransit[0])}`, 'warning');
+        return;
+    }
+    // Obstáculos con altura propia: no pueden pasar del techo; lo nuevo o lo que cambió y no cumple no se guarda.
+    const freshObstacles = LC.newObstacleViolations(state.draft, state.saved);
+    if (freshObstacles.length) {
+        const v = freshObstacles[0];
+        showStep('obstaculos');
+        renderPanel();
+        refreshLive();
+        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${t(`main.layoutVioObs_${v.kind}`, v.vars)}`, 'warning');
+        const at = state.draft.obstacles.findIndex((o) => o.id === v.id);
+        const box = document.querySelector(`[data-l="obstacles"][data-i="${at}"][data-k="h"]`);
+        if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
         return;
     }
     // Pisos y rampas: nada sale del contorno de la nave; lo nuevo o lo que cambió y no cumple no se guarda: se marca en rojo y se lleva a la persona a esa fila.

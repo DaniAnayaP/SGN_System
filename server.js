@@ -6785,6 +6785,11 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         const freshSafety = LayoutCalc.newSafetyViolations(next, existing ? existing.layout : null);
         if (freshSafety.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSafety.map((v) => v.message), section: 'seguridad' });
     }
+    // Obstáculos con altura propia: no pueden pasar del techo (altura del piso + alto). Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
+    {
+        const freshObstacles = LayoutCalc.newObstacleViolations(next, existing ? existing.layout : null);
+        if (freshObstacles.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshObstacles.map((v) => v.message), section: 'obstaculos' });
+    }
     // Pisos y rampas: nada sale del contorno de la nave. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba afuera y no se tocó se deja pasar.
     {
         const freshFloors = LayoutCalc.newFloorViolations(next, existing ? existing.layout : null);

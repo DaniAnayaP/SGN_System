@@ -213,6 +213,40 @@
     function obstacleShapes(layout) {
         return ((layout && layout.obstacles) || []).map((o) => ({ o, g: obstacleGeometry(o, layout.vertices) })).filter((r) => r.g);
     }
+    // ---- Obstáculos con altura propia ---------------------------------------------------------------------------------------------------------------
+    // Una columna u otro obstáculo puede traer su altura del piso (elev: qué tan despegado está del piso que tiene abajo) y su alto (h). Sin ellas va del piso al techo; solo con la altura del piso va de ahí al techo; con el alto
+    // llega hasta altura del piso + alto, que no puede pasar del techo (el más bajo debajo de su recuadro). Lo que ya estaba mal antes solo se marca; lo NUEVO o lo que cambió no se deja guardar (ver newObstacleViolations).
+    function obstacleViolations(layout) {
+        const out = [];
+        if (!layout || !Array.isArray(layout.obstacles)) return out;
+        obstacleShapes(layout).forEach(({ o, g }) => {
+            if ((o.kind !== 'column' && o.kind !== 'other') || !g || !Array.isArray(g.pts) || g.pts.length < 3) return;
+            const elev = Number(o.elev) > 0 ? Number(o.elev) : 0;
+            const h = Number(o.h) > 0 ? Number(o.h) : 0;
+            if (!elev && !h) return;
+            const xs = g.pts.map((p) => p[0]); const ys = g.pts.map((p) => p[1]);
+            const x0 = Math.min(...xs); const x1 = Math.max(...xs); const y0 = Math.min(...ys); const y1 = Math.max(...ys);
+            const cx = (x0 + x1) / 2; const cy = (y0 + y1) / 2;
+            const limits = [[cx, cy], [x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => naveHeightAt(layout, x, y)).filter((v) => v > 0);
+            if (!limits.length) return;
+            const limit = round2(Math.min(...limits));
+            const lvl = round2(floorLevelAt(layout, cx, cy));
+            const base = round2(lvl + elev);
+            const name = String(o.name || 'Obstáculo');
+            const sig = JSON.stringify([o.mode, o.x, o.y, o.wall, o.dist, o.l, o.w, elev, h, lvl, limit]);
+            if (h && round2(base + h) > limit + 0.005) {
+                out.push({ id: o.id, name, kind: 'tall', sig, vars: { name, top: round2(base + h), height: limit }, message: `El obstáculo «${name}» llega a ${round2(base + h)} m (altura del piso + alto) y la nave ahí solo mide ${limit} m de alto: bájalo o hazlo más bajo.` });
+            } else if (!h && base >= limit - 0.005) {
+                out.push({ id: o.id, name, kind: 'high', sig, vars: { name, top: base, height: limit }, message: `El obstáculo «${name}» queda a ${base} m del piso y la nave ahí solo mide ${limit} m de alto: bájalo.` });
+            }
+        });
+        return out;
+    }
+    const obstacleKey = (v) => `${v.id}|${v.kind}|${v.sig}`;
+    function newObstacleViolations(next, previous) {
+        const before = new Set((previous ? obstacleViolations(previous) : []).map(obstacleKey));
+        return obstacleViolations(next).filter((v) => !before.has(obstacleKey(v)));
+    }
     // Una pared por cada lado del contorno, de todo el lado (l 0): así un Layout de antes se ve igual y la pared se quita en los lados que solo son marco.
     function defaultWalls(vertices) {
         return (vertices || []).map((_, i) => ({ id: `wl${i + 1}`, name: `Pared ${i + 1}`, kind: 'wall', mode: 'contour', wall: i + 1, dist: 0, l: 0, w: WALL_THICKNESS }));
@@ -2456,6 +2490,14 @@
                     if (Number.isFinite(wh) && wh >= 0.01 && wh <= LIMITS.maxHeight) base[hk] = round2(wh); else errors.push(`${label}: la altura de la pared no es válida`);
                 });
             }
+            if (kind === 'column' || kind === 'other') {
+                // Un obstáculo que no llega al piso ni al techo: su altura del piso (elev) y su alto (h), opcionales (vacío = va del piso al techo, como una columna). Una altura del piso de 0 es el piso: no se guarda.
+                [['elev', 0], ['h', 0.01]].forEach(([hk, min]) => {
+                    if (!o || o[hk] === undefined || o[hk] === null || o[hk] === '') return;
+                    const hv = Number(o[hk]);
+                    if (Number.isFinite(hv) && hv >= min && hv <= LIMITS.maxHeight) { if (hv > 0) base[hk] = round2(hv); } else errors.push(`${label}: ${hk === 'elev' ? 'la altura del piso' : 'el alto'} del obstáculo no es válido`);
+                });
+            }
             if (mode === 'contour') {
                 const wall = Math.round(Number(o && o.wall));
                 if (!(wall >= 1 && wall <= walls)) errors.push(`${label}: lado no válido`);
@@ -3053,7 +3095,7 @@
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
-        OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
+        OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,

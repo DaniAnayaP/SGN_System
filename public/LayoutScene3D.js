@@ -223,8 +223,15 @@
                 if (!hit || !(hit.o.kind === 'wall' ? layerOn.walls : layerOn.columns)) return null;
                 const xs = hit.g.pts.map((p) => p[0]); const ys = hit.g.pts.map((p) => p[1]);
                 const x0 = Math.min(...xs); const x1 = Math.max(...xs); const y0 = Math.min(...ys); const y1 = Math.max(...ys);
-                const hh = hit.o.kind === 'step' ? Math.max(Math.abs(Number(hit.o.dz) || 0), 0.12) : Math.max(bounds.maxH, 1);
-                return { x: PX((x0 + x1) / 2), y: hh / 2, z: PZ((y0 + y1) / 2), sx: Math.max(x1 - x0, 0.1), sy: hh, sz: Math.max(y1 - y0, 0.1) };
+                let hh = hit.o.kind === 'step' ? Math.max(Math.abs(Number(hit.o.dz) || 0), 0.12) : Math.max(bounds.maxH, 1);
+                // un obstáculo con altura propia: la caja va de su altura del piso a su alto
+                let hy0 = 0;
+                if (hit.o.kind !== 'step' && hit.o.kind !== 'wall' && (Number(hit.o.elev) > 0 || Number(hit.o.h) > 0)) {
+                    const lvl = root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, (x0 + x1) / 2, (y0 + y1) / 2) : 0;
+                    hy0 = lvl + (Number(hit.o.elev) > 0 ? Number(hit.o.elev) : 0);
+                    hh = Number(hit.o.h) > 0 ? Number(hit.o.h) : Math.max(Math.max(bounds.maxH, 1) - hy0, 0.1);
+                }
+                return { x: PX((x0 + x1) / 2), y: hy0 + hh / 2, z: PZ((y0 + y1) / 2), sx: Math.max(x1 - x0, 0.1), sy: hh, sz: Math.max(y1 - y0, 0.1) };
             }
             // una puerta o una conexión de luz elegida en las tablas de Puertas o Luz: pegada a su pared (los sensores no se dibujan en el 3D)
             if (hl.kind === 'door' || hl.kind === 'power') {
@@ -691,7 +698,17 @@
                     if (geo) group.columns.add(new THREE.Mesh(geo, lam(dz > 0 ? 0xcdb4e4 : 0x9a74bd)));
                     return;
                 }
-                const geo = prism(g.pts, avgH, 0);
+                // una columna u otro obstáculo con altura del piso (elev) y/o alto (h) propios no va del piso al techo: va de su altura del piso (sobre el piso que tiene abajo) hasta su alto, o hasta el techo si no trae alto
+                const elev = Number(o.elev) > 0 ? Number(o.elev) : 0;
+                const own = Number(o.h) > 0 ? Number(o.h) : 0;
+                let base = 0; let height = avgH;
+                if (elev || own) {
+                    const bx = g.pts.map((p) => p[0]); const by = g.pts.map((p) => p[1]);
+                    const lvl = root.LayoutCalc && root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(layout, (Math.min(...bx) + Math.max(...bx)) / 2, (Math.min(...by) + Math.max(...by)) / 2) : 0;
+                    base = lvl + elev;
+                    height = own || Math.max(avgH - base, 0.05);
+                }
+                const geo = prism(g.pts, height, base);
                 if (geo) group.columns.add(new THREE.Mesh(geo, lam(o.kind === 'other' ? 0x7b8196 : 0x3a3f4d)));
             });
 

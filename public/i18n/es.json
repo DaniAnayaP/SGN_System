@@ -2265,6 +2265,8 @@
     "layoutVioPisoFuera": "Sale del contorno de la nave: no es posible, acomódalo o cambia sus medidas para que quede adentro.",
     "layoutVioRampaFuera": "Sale del contorno de la nave: no es posible, acomódala o cambia sus medidas para que quede adentro.",
     "layoutVioPisoFueraToast": "El piso {code} {name} sale del contorno de la nave: no es posible. Acomódalo o cambia sus medidas para que quede adentro.",
+    "layoutVioObs_tall": "El obstáculo «{name}» llega a {top} m (altura del piso + alto) y la nave ahí solo mide {height} m de alto: bájalo o hazlo más bajo.",
+    "layoutVioObs_high": "El obstáculo «{name}» queda a {top} m del piso y la nave ahí solo mide {height} m de alto: bájalo.",
     "layoutVioRampaFueraToast": "La rampa {code} {name} sale del contorno de la nave: no es posible. Acomódala o cambia sus medidas para que quede adentro.",
     "layoutFormatoRampa": "Formato de la rampa",
     "layoutRampaColor": "Color de la rampa",
@@ -5505,6 +5507,14 @@
     "layoutObstXY": {
       "what": "Dónde queda la esquina del obstáculo dentro de la nave, en metros desde el origen del Layout.",
       "example": "una columna a 5 m en X y 6 m en Y."
+    },
+    "layoutObstElev": {
+      "what": "Solo para Columna y Otro: qué tan despegado del piso empieza el obstáculo, en metros. Vacío = va pegado al piso. Si lo dejas sin «Alto», sube desde ahí hasta el techo.",
+      "example": "una viga que cuelga del techo: pones 3 de altura del piso y la dejas sin alto; llega hasta el techo."
+    },
+    "layoutObstAlto": {
+      "what": "Solo para Columna y Otro: qué tan alto es el obstáculo, en metros. Vacío = llega hasta el techo. Altura del piso + alto no pueden pasar del techo de la nave (en gris se ve cuánto mide el techo ahí).",
+      "example": "un tubo que flota a 1.2 m del piso y mide 0.8 de alto: pones 1.2 y 0.8; llega a 2.0 m."
     },
     "layoutObstAltura": {
       "what": "Solo para el Desnivel: su altura sobre el piso, en metros. Si es más bajo que el piso se escribe con signo menos. Con ella cambian los m³ de la nave: si el piso sube, hay menos aire.",
