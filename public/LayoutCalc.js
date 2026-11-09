@@ -699,6 +699,31 @@
         }
         return out;
     }
+    // ---- Pisos y rampas dentro del contorno --------------------------------------------------------------------------------------------------------
+    // Nada sale del contorno de la nave: un piso (o una rampa) tiene que caber ENTERO adentro (pegado a la pared cuenta como adentro). Mira todos los pisos y rampas activos con tamaño, tengan nivel o no. Lo que ya estaba
+    // afuera antes de esta regla solo se marca; lo NUEVO o lo que cambió (el rectángulo o el contorno) no se deja guardar (ver newFloorViolations). list = 'floors' | 'ramps' (de qué paso es).
+    function floorViolations(layout) {
+        const out = [];
+        const poly = Array.isArray(layout && layout.vertices) ? layout.vertices.map((p) => [Number(p[0]), Number(p[1])]) : [];
+        if (poly.length < 3) return out;
+        const check = (list, items) => items.forEach((f) => {
+            if (!f || f.active === false) return;
+            const x = Number(f.x) || 0; const y = Number(f.y) || 0; const l = Number(f.l) || 0; const w = Number(f.w) || 0;
+            if (!(l > 0 && w > 0) || rectInsidePolygon(poly, x, y, l, w)) return;
+            const label = `${f.code ? `${f.code} ` : ''}${f.name || ''}`.trim() || (list === 'ramps' ? 'Rampa' : 'Piso');
+            out.push({ id: f.id, list, section: list === 'ramps' ? 'rampas' : 'pisos', code: f.code || '', name: f.name || '', kind: 'outside', sig: JSON.stringify([x, y, l, w, poly]),
+                message: `${list === 'ramps' ? 'La rampa' : 'El piso'} ${label} sale del contorno de la nave: no es posible, acomódalo o cambia sus medidas para que quede adentro.` });
+        });
+        check('floors', (layout && layout.floors) || []);
+        check('ramps', (layout && layout.ramps) || []);
+        return out;
+    }
+    const floorKey = (v) => `${v.list}|${v.id}|${v.kind}|${v.sig}`;
+    // Las faltas que hay en next y que antes no estaban igual: un piso o una rampa nuevos, que se movieron o cambiaron de medidas, o con el contorno cambiado. Esas no se dejan guardar.
+    function newFloorViolations(next, previous) {
+        const before = new Set((previous ? floorViolations(previous) : []).map(floorKey));
+        return floorViolations(next).filter((v) => !before.has(floorKey(v)));
+    }
     // Recorta un polígono (lista de [x, y]) a un lado de una recta vertical (axis 0, x = value) u horizontal (axis 1, y = value): keepGreater conserva el lado de los valores mayores.
     function clipHalf(poly, axis, value, keepGreater) {
         const out = [];
@@ -3011,7 +3036,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, floorOverlaps, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,

@@ -740,14 +740,17 @@ function applyFloorMarks() {
         clash.get(a.id).push(b);
         clash.get(b.id).push(a);
     });
+    // Nada sale del contorno de la nave (LayoutCalc.floorViolations): un piso o una rampa afuera se marca en rojo con el aviso.
+    const outside = new Set(LC.floorViolations(d).map((v) => v.id));
     (d.floors || []).forEach((f, i) => {
         const others = clash.get(f.id) || [];
+        const out = outside.has(f.id);
         ['x', 'y', 'l', 'w'].forEach((key) => {
             const box = document.querySelector(`[data-l="floors"][data-i="${i}"][data-k="${key}"]`);
-            if (box) box.classList.toggle('layout-missing', others.length > 0);
+            if (box) box.classList.toggle('layout-missing', others.length > 0 || out);
         });
         const note = document.querySelector(`[data-floor-issues="${i}"]`);
-        if (note) note.textContent = others.map((o) => t('main.layoutVioPisoEncima', { other: `${o.code} ${o.name}` })).join(' ');
+        if (note) note.textContent = [...(out ? [t('main.layoutVioPisoFuera')] : []), ...others.map((o) => t('main.layoutVioPisoEncima', { other: `${o.code} ${o.name}` }))].join(' ');
         const code = document.querySelector(`[data-floor-code="${i}"]`);
         if (code) code.textContent = f.code || '';
         const area = document.querySelector(`[data-floor-area="${i}"]`);
@@ -774,10 +777,12 @@ function applyRampMarks() {
         clash.get(b.id).push(a);
     });
     const signedLv = (v) => `${v > 0 ? '+' : ''}${(Math.round(v * 100) / 100).toFixed(2)}`;
+    const outsideR = new Set(LC.floorViolations(d).filter((v) => v.list === 'ramps').map((v) => v.id));
     (d.ramps || []).forEach((r, i) => {
         const mine = issues.get(r.id) || [];
         const others = clash.get(r.id) || [];
-        const place = mine.some((v) => v.key === 'touch') || others.length > 0;
+        const out = outsideR.has(r.id);
+        const place = mine.some((v) => v.key === 'touch') || others.length > 0 || out;
         ['x', 'y', 'l', 'w'].forEach((key) => {
             const box = document.querySelector(`[data-l="ramps"][data-i="${i}"][data-k="${key}"]`);
             if (box) box.classList.toggle('layout-missing', place);
@@ -787,7 +792,7 @@ function applyRampMarks() {
             if (box) box.classList.toggle('layout-missing', mine.some((v) => ['choose', 'same_ref', 'missing', 'same_level'].includes(v.key)));
         });
         const note = document.querySelector(`[data-ramp-issues="${i}"]`);
-        if (note) note.textContent = [...mine.map((v) => t(`main.layoutVioRampa_${v.key}`, v.vars)), ...others.map((o) => t('main.layoutVioRampaEncima', { other: `${o.code} ${o.name}` }))].join(' ');
+        if (note) note.textContent = [...(out ? [t('main.layoutVioRampaFuera')] : []), ...mine.map((v) => t(`main.layoutVioRampa_${v.key}`, v.vars)), ...others.map((o) => t('main.layoutVioRampaEncima', { other: `${o.code} ${o.name}` }))].join(' ');
         const info = LC.rampInfo(d, r);
         const set = (attr, value) => { const el = document.querySelector(`[${attr}="${i}"]`); if (el) el.textContent = value; };
         set('data-ramp-code', r.code || '');
@@ -4317,6 +4322,19 @@ $('layout-save').addEventListener('click', async () => {
         renderPanel();
         refreshLive();
         Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${transitIssueText(freshTransit[0])}`, 'warning');
+        return;
+    }
+    // Pisos y rampas: nada sale del contorno de la nave; lo nuevo o lo que cambió y no cumple no se guarda: se marca en rojo y se lleva a la persona a esa fila.
+    const freshFloors = LC.newFloorViolations(state.draft, state.saved);
+    if (freshFloors.length) {
+        const v = freshFloors[0];
+        showStep(v.section);
+        renderPanel();
+        refreshLive();
+        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${t(v.list === 'ramps' ? 'main.layoutVioRampaFueraToast' : 'main.layoutVioPisoFueraToast', { code: v.code, name: v.name })}`, 'warning');
+        const at = (state.draft[v.list] || []).findIndex((f) => f.id === v.id);
+        const box = document.querySelector(`[data-l="${v.list}"][data-i="${at}"][data-k="x"]`);
+        if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
         return;
     }
     // Seguridad: cada elemento (y los dos extremos de la ruta) va dentro del contorno de la nave; lo nuevo o lo que cambió y no cumple no se guarda.

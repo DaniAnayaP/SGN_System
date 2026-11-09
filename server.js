@@ -6785,6 +6785,11 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         const freshSafety = LayoutCalc.newSafetyViolations(next, existing ? existing.layout : null);
         if (freshSafety.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSafety.map((v) => v.message), section: 'seguridad' });
     }
+    // Pisos y rampas: nada sale del contorno de la nave. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba afuera y no se tocó se deja pasar.
+    {
+        const freshFloors = LayoutCalc.newFloorViolations(next, existing ? existing.layout : null);
+        if (freshFloors.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshFloors.map((v) => v.message), section: freshFloors[0].section });
+    }
     // Puertas, conexiones de luz y sensores: cada uno va sobre una pared, queda dentro de ella (la puerta, de principio a fin) y no es más alto que ella. Lo nuevo o lo que cambió (el renglón o su pared) y no cumple no se guarda; lo que
     // ya estaba así y no se tocó se deja pasar.
     {
