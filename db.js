@@ -7540,6 +7540,14 @@ function seedLayout3dLayersIconGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(LAYOUT_3D_LAYERS_SEED_KEY, path, [`${path.submenuPrefix}/iconLayout3dCapas`], 'the Layout 3D layers icons');
 }
+// El icono Editar el Layout (iconLayoutEditar: el Layout abre en «Ver» y con este icono pasa a «Editar») se da igual, una sola vez, a quien ya tiene la pantalla Layout (mismos niveles que la siembra del icono Girar):
+// así nadie pierde lo que ya podía hacer.
+const LAYOUT_EDIT_SEED_KEY = 'seed-layout-edit-mode-icon-v1';
+function seedLayoutEditModeIconGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(LAYOUT_EDIT_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutEditar`], 'the Layout edit mode icon');
+}
 // El icono Centrar las categorías de la tarjeta (iconLayoutTarjetaCentrar) se quitó: con varias categorías el marco ya se reparte solo y esa opción no cambiaba nada. Una sola vez se borran
 // los accesos que se habían sembrado para ese icono (en todos los niveles), para que no queden hojas sueltas de un icono que ya no existe en el árbol.
 const LAYOUT_CARD_CENTER_CLEANUP_KEY = 'cleanup-layout-card-center-v1';
@@ -12100,6 +12108,7 @@ seedLayoutVista3DIconGrants();
 seedLayout3dLayersIconGrants();
 seedLayoutOpeningIconGrants();
 seedLayoutLevelsIconGrants();
+seedLayoutEditModeIconGrants();
 cleanupLayoutCardCenterGrants();
 seedTipoCodigoValuesOnce();
 seedActivosFijosValuesOnce();

@@ -1778,6 +1778,7 @@
             iconLayoutApertura: 'bx-door-open',
             iconLayoutNiveles: 'bx-trending-up',
             iconLayoutVista3D: 'bx-cube-alt',
+            iconLayoutEditar: 'bx-pencil',
             iconLayout3dCapas: 'bx-layer',
             iconLayoutCategorias: 'bx-purchase-tag-alt',
             iconLayoutTarjeta: 'bx-id-card',

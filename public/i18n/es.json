@@ -1983,6 +1983,23 @@
     "layoutCambiarCentroConfirm": "Tienes cambios sin guardar en este Layout. Si cambias de centro de costos se descartan. ¿Cambiar de todos modos?",
     "layout3dCapasBtn": "Mostrar u ocultar las capas del 3D",
     "layoutBuscarBtn": "Buscar una zona o una huella",
+    "layoutEditarBtn": "Editar el Layout",
+    "layoutEditar": "Editar",
+    "layoutVer": "Ver",
+    "layoutModoSoloVer": "Solo para ver",
+    "layoutEditarSinPermiso": "Editar el Layout no está habilitado para tu cuenta.",
+    "layoutFiltroZona": "Zona",
+    "layoutFiltroQueVer": "Qué ver",
+    "layoutFiltroTodas": "Todas",
+    "layoutFiltroTodo": "Todo",
+    "layoutFiltroTodasZonas": "Todas las zonas",
+    "layoutFiltroNdeN": "{n} de {total}",
+    "layoutFiltroLoDemas": "Lo demás",
+    "layoutFiltroTenue": "Tenue",
+    "layoutFiltroOculto": "Oculto",
+    "layoutVerConCambios": "Tienes cambios sin guardar. Si regresas a Ver, se pierden.",
+    "layoutVerDescartar": "Descartar y ver",
+    "layoutVerSeguir": "Seguir editando",
     "layoutRenumerarBtn": "Renumerar códigos",
     "layoutRenumerarConfirm": "Se renumerarán los códigos de los activos: en cada zona y tipo quedan consecutivos desde 001 (por ejemplo F020 y F021 pasan a F001 y F002). Los QR, los localizadores y las relaciones siguen funcionando, porque usan el activo y no su código; pero lo que ya imprimiste o pegaste con el código anterior ya no coincidirá. Se aplica cuando guardes el Layout. ¿Renumerar?",
     "layoutRenumerarNada": "Los códigos ya están consecutivos: no hay nada que renumerar.",
@@ -5283,6 +5300,26 @@
     "pmEstatus": {
       "what": "En qué va cada renglón del pedido: Pendiente (recién llegó) o Surtido (ya se entregó). Quien tiene Ver y Operar en la columna Estatus lo cambia desde aquí; cada cambio queda en el historial.",
       "example": "entregas las 24 piezas de leche: cambias el renglón a Surtido."
+    },
+    "layoutModoEditar": {
+      "what": "Pasa del modo Ver al modo Editar: aparecen los pasos con sus tablas, los botones para agregar y quitar cosas del Layout, Guardar y Descartar cambios. Sin este icono en el árbol de accesos el Layout se queda siempre en Ver.",
+      "example": "entras a Editar, agregas un extintor en Seguridad, guardas y regresas a Ver para revisarlo en el croquis."
+    },
+    "layoutModoVer": {
+      "what": "Regresa al modo Ver: el croquis grande, solo para ver y filtrar. Si hay cambios sin guardar pregunta antes si los descartas o sigues editando.",
+      "example": "terminas de editar, tocas Ver y revisas el Layout completo en 2D o en 3D."
+    },
+    "layoutFiltroZona": {
+      "what": "Elige una, varias o todas las zonas: el croquis y el 3D se acercan a ellas y muestran lo que hay adentro. «Todas las zonas» quita el filtro.",
+      "example": "marcas Zona 6 y Recepción y ves solo lo que hay en esas dos zonas."
+    },
+    "layoutFiltroQueVer": {
+      "what": "Enciende o apaga las capas del Layout (contorno, pisos, paredes, puertas, seguridad, sensores…). «Todo» las enciende todas.",
+      "example": "apagas Pisos y Rampas para ver solo las paredes y la seguridad."
+    },
+    "layoutFiltroLoDemas": {
+      "what": "Qué pasa con lo que no es de lo que filtraste: Tenue lo deja visible pero apagado y Oculto lo quita del todo. Se recuerda en este navegador.",
+      "example": "con Tenue ves la Zona 6 resaltada y el resto de la nave de fondo; con Oculto solo la Zona 6."
     },
     "layoutFind": {
       "what": "Busca en el Layout, por su código o su nombre: zonas, huellas, activos, paredes, puertas y lo demás (elige el tipo con los botones de arriba de la lista). Al elegir una zona o una huella, el croquis, el 3D, las tablas y el resumen se quedan solo con lo que hay adentro; el resto de la nave se oculta. Las tablas no pierden renglones: los que no son de lo enfocado solo se esconden. Es solo de pantalla: no cambia lo guardado ni lo que se imprime.",

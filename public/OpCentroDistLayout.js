@@ -14,7 +14,7 @@ const SECTION_LABEL_KEYS = {
     contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', rampas: 'main.layoutStepRampas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', niveles: 'main.layoutStepNiveles', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
-    saved: null, draft: null, version: 0, perms: null, showMeasures: true, showOpening: true, showLevels: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
+    mode: 'view', saved: null, draft: null, version: 0, perms: null, showMeasures: true, showOpening: true, showLevels: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
     planImage: '', planNew: false, planAspect: 1, pendingPlan: null, loaded: false, view3d: false, centerId: null, costCenter: null,
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
@@ -64,6 +64,7 @@ function ensureVisibleSteps() {
 }
 // Igual que canEditField: "Modificar" siempre; "Ver y Operar" solo mientras esa sección no tenga datos ya guardados.
 function canEdit(section) {
+    if (state.mode !== 'edit') return false; // en «Ver» no se mueve ni se escribe nada
     const level = sectionLevel(section);
     if (level === 'editar') return true;
     if (level === 'ver-y-operar') return !state.saved || !LC.sectionHasData(state.saved, section);
@@ -1808,7 +1809,7 @@ function fxToggleAll() {
 }
 // Resto de la nave al enfocar: oculto por completo (por omisión) o «tenue» de fondo; se recuerda en este navegador.
 const FIND_DIM_KEY = 'sgn_layout_find_dim';
-try { state.findDim = localStorage.getItem(FIND_DIM_KEY) === '1'; } catch (err) { /* sin almacenamiento: oculto */ }
+try { const fd = localStorage.getItem(FIND_DIM_KEY); state.findDim = fd === null ? true : fd === '1'; } catch (err) { state.findDim = true; /* sin almacenamiento: tenue */ }
 // ---- Buscar en zonas: lo que hay dentro de las zonas elegidas -----------------------------------------------------------------------------
 // El enfoque de zonas es de UNA o de VARIAS (state.find = { kind: 'zone', id, ids }; state.findScope = 'zones' cuando «Buscar en» está en Zonas). «Qué ver» (state.findTypes) dice qué tipos de cosas se listan y se dibujan dentro de ellas
 // (sin elegir ninguno, todos). Una cosa es de la zona si queda dentro o sobre su borde (a 30 cm): huellas, activos, sensores, seguridad y pasillos ya traen su zona; paredes, puertas, luz, obstáculos, objetos y pisos se miden contra el dibujo.
@@ -2138,6 +2139,7 @@ function applyFind(reset) {
     renderSummary();
     applyFindToTables();
     updateViewBtns();
+    renderViewStrip();
 }
 // Elegir algo que no es una zona ni una huella (activo, pared, puerta, alarma…): se quita el enfoque de zona o huella (si había), se enciende y enfoca su paso, se selecciona su renglón en la tabla y el croquis (y el 3D)
 // lo resaltan; el croquis se acerca a la figura si la cuenta puede acercar.
@@ -2223,6 +2225,145 @@ $('layout-find').addEventListener('click', (event) => {
     if (pick) { pickFind(Number(pick.getAttribute('data-find-pick'))); return; }
 });
 document.addEventListener('click', (event) => { if (!event.target.closest('.layout-find-field, .layout-find-list')) closeFindList(); });
+
+// ---- Modo Ver y modo Editar -------------------------------------------------------------------------------------------------------------------
+// El Layout abre SIEMPRE en «Ver»: el croquis grande (2D o 3D, Visualizaciones y Simbología) con los filtros desplegables Zona, Qué ver y Lo demás y el buscador. No se mueve, se escribe ni se guarda nada (canEdit() es falso).
+// El icono «Editar» (iconLayoutEditar del árbol; sin él sale con candado) muestra los pasos con sus tablas, Agregar, Quitar, Guardar y Descartar; «Ver» regresa (con cambios sin guardar pregunta antes).
+const findHome = $('layout-find').parentNode; // dónde vive el buscador en «Editar» (sobre el croquis); en «Ver» pasa a la franja de filtros
+let vDropdown = ''; // el desplegable abierto de la franja: 'zone' | 'layers' | ''
+// «Ver» enciende todo el Layout (todas las capas que el árbol deja ver)
+function showAllLayers() {
+    const visible = SECTION_ORDER.filter(stepVisible);
+    if (!visible.length) return;
+    state.steps = [...visible, ...state.steps.filter((s) => s === 'localizadores')];
+    state.focusStack = [...state.focusStack.filter((s) => state.steps.includes(s))];
+    if (!state.steps.includes(state.focus)) state.focus = visible[visible.length - 1];
+    if (!state.focusStack.length) state.focusStack = [state.focus];
+    syncFindTypesFromSteps();
+}
+// Con zonas enfocadas, «Qué ver» (los tipos de adentro) sigue a las capas encendidas: todas encendidas = todos los tipos.
+function syncFindTypesFromSteps() {
+    const shown = findTypesShown();
+    const onTypes = shown.filter((ft) => stepOn(ft.step));
+    state.findTypes = onTypes.length === shown.length ? [] : onTypes.map((ft) => ft.type);
+}
+function applyMode() {
+    const ed = $('layout-editor');
+    if (!ed) return;
+    const view = state.mode !== 'edit';
+    ed.classList.toggle('is-view', view);
+    $('layout-kpis').classList.toggle('is-compact', view);
+    const can = !!(state.perms && state.perms.canEditMode);
+    const editBtn = $('layout-mode-edit');
+    editBtn.hidden = !view;
+    editBtn.disabled = !can; // sin el icono en el árbol sale con candado, no escondido
+    editBtn.classList.toggle('is-locked', !can);
+    editBtn.title = can ? '' : t('main.layoutEditarSinPermiso');
+    $('layout-mode-view').hidden = view;
+    $('layout-vstrip').hidden = !view;
+    const find = $('layout-find');
+    if (view) $('layout-vstrip-find').appendChild(find); else if (find.parentNode !== findHome) findHome.appendChild(find);
+    vDropdown = '';
+    renderViewStrip();
+}
+function goEdit() {
+    if (!state.draft || !(state.perms && state.perms.canEditMode)) return;
+    state.mode = 'edit';
+    ensureVisibleSteps();
+    applyMode();
+    renderPanel();
+    refreshLive();
+}
+async function goView() {
+    if (!state.draft) return;
+    if (isDirty()) {
+        if (!(await Dashboard.confirm(t('main.layoutVerConCambios'), { accept: t('main.layoutVerDescartar'), cancel: t('main.layoutVerSeguir') }))) return;
+        state.creating = false;
+        state.planNew = false;
+        state.mode = 'view';
+        await loadLayout();
+        return;
+    }
+    state.mode = 'view';
+    showAllLayers();
+    applyMode();
+    renderPanel();
+    refreshLive();
+}
+// La franja de filtros de «Ver»: Zona ▾, Qué ver ▾ y Lo demás (Tenue | Oculto); el buscador va a su lado.
+function ddHtml(key, helpKey, label, value, open, disabled, menu) {
+    return `<div class="layout-dd${open ? ' open' : ''}"><button type="button" class="layout-dd-btn" data-dd="${key}" data-help-key="${helpKey}" aria-haspopup="true" aria-expanded="${open}"${disabled ? ' disabled' : ''}><span class="layout-dd-k">${esc(label)}</span><b>${esc(value)}</b><span class="bx bx-chevron-down" aria-hidden="true"></span></button>${open ? `<div class="layout-dd-menu" role="menu">${menu}</div>` : ''}</div>`;
+}
+const ddItem = (attr, on, html) => `<button type="button" class="layout-dd-item" role="menuitemcheckbox" aria-checked="${on}" ${attr}><span class="layout-dd-cb${on ? ' on' : ''}"></span><span>${html}</span></button>`;
+function renderViewStrip() {
+    const box = $('layout-vstrip-filters');
+    if (!box) return;
+    if (state.mode === 'edit' || !state.draft) { box.innerHTML = ''; return; }
+    const d = state.draft;
+    // Zona: una, varias o todas (el mismo enfoque del buscador; pide el icono Buscar del árbol)
+    const zones = (d.zones || []).filter((z) => z.active !== false);
+    const zids = zoneFocusIds(state.find);
+    const names = zids.map((id) => (zones.find((z) => z.id === id) || {}).name || '').filter(Boolean);
+    const zoneValue = names.length ? names.join(', ') : t('main.layoutFiltroTodas');
+    const zoneMenu = ddItem('data-dd-zone="all"', !zids.length, `<b>${esc(t('main.layoutFiltroTodasZonas'))}</b>`) + '<div class="layout-dd-sep"></div>'
+        + zones.map((z) => ddItem(`data-dd-zone="${esc(z.id)}"`, zids.includes(z.id), `${esc(z.name || z.code || '')} <small>${esc(z.code || '')}</small>`)).join('');
+    const zoneDd = ddHtml('zone', 'layoutFiltroZona', t('main.layoutFiltroZona'), zoneValue, vDropdown === 'zone', !(canFind() && stepVisible('zonas') && zones.length), zoneMenu);
+    // Qué ver: las capas (los pasos que el árbol deja ver); «Todo» las enciende todas
+    const visible = SECTION_ORDER.filter(stepVisible);
+    const onN = visible.filter(stepOn).length;
+    const layersValue = onN === visible.length ? t('main.layoutFiltroTodo') : t('main.layoutFiltroNdeN', { n: onN, total: visible.length });
+    const layersMenu = ddItem('data-dd-layer="all"', onN === visible.length, `<b>${esc(t('main.layoutFiltroTodo'))}</b>`) + '<div class="layout-dd-sep"></div>'
+        + visible.map((s) => ddItem(`data-dd-layer="${s}"`, stepOn(s), esc(t(SECTION_LABEL_KEYS[s])))).join('');
+    const layersDd = ddHtml('layers', 'layoutFiltroQueVer', t('main.layoutFiltroQueVer'), layersValue, vDropdown === 'layers', !visible.length, layersMenu);
+    // Lo demás: lo que no se eligió se ve tenue u oculto
+    const rest = `<div class="layout-dd-seg" role="group" data-help-key="layoutFiltroLoDemas"><span class="layout-dd-k">${esc(t('main.layoutFiltroLoDemas'))}</span><button type="button" data-dd-rest="1" aria-pressed="${!!state.findDim}">${esc(t('main.layoutFiltroTenue'))}</button><button type="button" data-dd-rest="0" aria-pressed="${!state.findDim}">${esc(t('main.layoutFiltroOculto'))}</button></div>`;
+    box.innerHTML = zoneDd + layersDd + rest;
+}
+function setRest(dim) {
+    if (!!state.findDim === dim) return;
+    state.findDim = dim;
+    try { localStorage.setItem(FIND_DIM_KEY, dim ? '1' : '0'); } catch (err) { /* no se recuerda */ }
+    if (state.find) applyFind(true); else if (picker3d && pickerFocus()) scheduleScene3d();
+    renderFocusStrip();
+    renderViewStrip();
+}
+$('layout-mode-edit').addEventListener('click', goEdit);
+$('layout-mode-view').addEventListener('click', goView);
+$('layout-vstrip-filters').addEventListener('click', (event) => {
+    const dd = event.target.closest('[data-dd]');
+    if (dd) { event.stopPropagation(); const key = dd.getAttribute('data-dd'); vDropdown = vDropdown === key ? '' : key; renderViewStrip(); return; }
+    const zoneItem = event.target.closest('[data-dd-zone]');
+    if (zoneItem) {
+        const id = zoneItem.getAttribute('data-dd-zone');
+        if (id === 'all') clearFind();
+        else {
+            const cur = zoneFocusIds(state.find);
+            const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+            if (!next.length) clearFind(); else state.find = { kind: 'zone', id: next[0], ids: next };
+        }
+        state.findScope = 'zones';
+        syncFindTypesFromSteps();
+        applyFind(true);
+        return;
+    }
+    const layerItem = event.target.closest('[data-dd-layer]');
+    if (layerItem) {
+        const s = layerItem.getAttribute('data-dd-layer');
+        if (s === 'all') showAllLayers();
+        else if (stepOn(s)) { if (state.steps.filter((x) => x !== 'localizadores').length > 1) state.steps = state.steps.filter((x) => x !== s); } else state.steps = [...state.steps, s];
+        if (!state.steps.includes(state.focus)) state.focus = state.steps[state.steps.length - 1];
+        state.focusStack = state.focusStack.filter((x) => state.steps.includes(x));
+        if (!state.focusStack.length) state.focusStack = [state.focus];
+        syncFindTypesFromSteps();
+        if (state.find) applyFind(true); else { renderPanel(); refreshLive(); }
+        renderViewStrip();
+        return;
+    }
+    const restBtn = event.target.closest('[data-dd-rest]');
+    if (restBtn) setRest(restBtn.getAttribute('data-dd-rest') === '1');
+});
+document.addEventListener('click', (event) => { if (vDropdown && !event.target.closest('.layout-dd')) { vDropdown = ''; renderViewStrip(); } });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && vDropdown) { vDropdown = ''; renderViewStrip(); } });
 
 const ZONE_CLASS = { dry: 'lz-dry', cold: 'lz-cold', chemical: 'lz-chem', finished: 'lz-fin', dock: 'lz-dock', office: 'lz-office', aisle: 'lz-aisle', aisle2: 'lz-aisle2' };
 function renderSvg(underlay) {
@@ -2716,6 +2857,7 @@ function refreshLive() {
         box.innerHTML = sidesStatusHtml(key, !canEdit(key === 'contorno' ? 'contorno' : 'zonas'));
     });
     state.draft.footprints.forEach((s, i) => { const c = document.querySelector(`[data-space-calc="${i}"]`); if (c) c.textContent = `${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³`; });
+    renderViewStrip();
 }
 
 function showEmpty() {
@@ -2881,6 +3023,7 @@ function showEditor() {
     $('layout-choose-center').hidden = true;
     $('layout-plan-width').hidden = true;
     $('layout-editor').hidden = false;
+    applyMode();
     renderPanel();
     refreshLive();
 }
@@ -2951,6 +3094,7 @@ async function loadLayout() {
         } catch (err) { console.error('Layout: no se pudo cargar el plano', err); }
     }
     state.loaded = true;
+    if (state.mode !== 'edit') showAllLayers(); // en «Ver» se ve todo el Layout al entrar
     if (state.draft) showEditor(); else showEmpty();
 }
 
@@ -2969,6 +3113,7 @@ function newDraftFromScratch() {
     state.draft = base;
     initEditState();
     state.creating = true;
+    state.mode = 'edit'; // crear un Layout es editar
     state.planImage = '';
     state.planNew = false;
     state.steps = ['contorno'];
@@ -3026,6 +3171,7 @@ $('layout-plan-width-ok').addEventListener('click', () => {
     state.draft = base;
     initEditState();
     state.creating = true;
+    state.mode = 'edit'; // crear un Layout es editar
     state.planImage = state.pendingPlan.url;
     state.planAspect = state.pendingPlan.aspect;
     state.planNew = true;
@@ -4195,6 +4341,7 @@ document.addEventListener('sgn:cost-centers-changed', async () => {
     }
     try {
         resetZoom();
+        state.mode = 'view'; // otro sitio abre siempre en «Ver»
         await loadLayout();
     } catch (err) {
         console.error('Layout: no se pudo cambiar de centro de costos', err);

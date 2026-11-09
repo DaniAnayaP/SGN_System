@@ -1878,6 +1878,7 @@
             { "id": "iconLayoutNiveles", "labelKey": "main.layoutNivelesBtn", "permissionOnly": true },
             { "id": "iconLayoutVista3D", "labelKey": "main.layoutVista3DBtn", "permissionOnly": true },
             { "id": "iconLayout3dCapas", "labelKey": "main.layout3dCapasBtn", "permissionOnly": true },
+            { "id": "iconLayoutEditar", "labelKey": "main.layoutEditarBtn", "permissionOnly": true },
             { "id": "iconLayoutBuscar", "labelKey": "main.layoutBuscarBtn", "permissionOnly": true },
             { "id": "iconLayoutRenumerar", "labelKey": "main.layoutRenumerarBtn", "permissionOnly": true },
             { "id": "iconLayoutCategorias", "labelKey": "main.layoutCategoriasBtn", "permissionOnly": true },

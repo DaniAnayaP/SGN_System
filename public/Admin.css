@@ -8158,3 +8158,37 @@ td.cap-pick{ white-space: nowrap; }
 /* Leyenda de Seguridad: los modelos de hidrante nuevos usan el mismo símbolo del croquis (un dibujo, no un cuadro de color). */
 .layout-legend .lg-sf-svg{ background: none; border: 0; border-radius: 0; display: inline-block; width: 16px; height: 16px; }
 .layout-legend .lg-sf-svg svg{ display: block; }
+
+/* Layout: modo Ver (al entrar: croquis grande, solo ver y filtrar) y modo Editar (icono Editar: los pasos con sus tablas). */
+.layout-editor.is-view .layout-panel{ display: none; }
+.layout-editor.is-view #layout-dirty, .layout-editor.is-view #layout-save, .layout-editor.is-view #layout-discard{ display: none; }
+.layout-editor.is-view .layout-studio{ grid-template-columns: minmax(0, 1fr); }
+.layout-editor:not(.is-view) .layout-viewonly{ display: none; }
+.layout-viewonly{ margin-right: auto; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-report-calc-text); background: var(--color-report-calc-bg); border-radius: 999px; padding: 0.15rem 0.7rem; }
+.layout-mode-edit{ display: inline-flex; align-items: center; gap: 0.35rem; }
+.layout-mode-edit[hidden], #layout-mode-view[hidden]{ display: none; }
+.layout-mode-edit.is-locked{ opacity: 0.55; cursor: not-allowed; }
+.layout-kpis.is-compact{ display: flex; flex-wrap: wrap; gap: 0.3rem 1.3rem; margin-bottom: 0.6rem; }
+.layout-kpis.is-compact .layout-kpi{ flex-direction: row; align-items: baseline; gap: 0.35rem; padding: 0; background: none; border: 0; border-radius: 0; }
+.layout-kpis.is-compact .layout-kpi b{ font-size: 0.95rem; }
+.layout-vstrip{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+.layout-vstrip[hidden]{ display: none; }
+.layout-vstrip-filters{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.layout-vstrip-find{ flex: 1 1 14rem; min-width: 12rem; max-width: 26rem; position: relative; }
+.layout-dd{ position: relative; }
+.layout-dd-btn{ display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.8rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); color: var(--color-text-primary); font: inherit; font-size: 0.78rem; cursor: pointer; }
+.layout-dd-btn:disabled{ opacity: 0.55; cursor: not-allowed; }
+.layout-dd-btn b{ font-weight: 600; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layout-dd-k{ color: var(--color-text-secondary); font-weight: 600; }
+.layout-dd.open .layout-dd-btn{ border-color: var(--color-accent, var(--color-text-primary)); }
+.layout-dd-menu{ position: absolute; z-index: 40; top: calc(100% + 0.3rem); left: 0; min-width: 14rem; max-height: 18rem; overflow: auto; padding: 0.35rem; display: flex; flex-direction: column; gap: 0.1rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); box-shadow: 0 10px 26px rgba(60, 20, 70, 0.22); }
+.layout-dd-item{ display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.35rem 0.55rem; border: 0; border-radius: 0.5rem; background: transparent; color: var(--color-text-primary); font: inherit; font-size: 0.78rem; text-align: left; cursor: pointer; }
+.layout-dd-item:hover{ background: color-mix(in srgb, var(--color-text-primary) 7%, transparent); }
+.layout-dd-item small{ color: var(--color-text-secondary); }
+.layout-dd-sep{ height: 1px; margin: 0.2rem 0; background: var(--color-border); }
+.layout-dd-cb{ flex: none; position: relative; display: inline-block; width: 0.9rem; height: 0.9rem; border: 1.5px solid var(--color-border); border-radius: 0.25rem; }
+.layout-dd-cb.on{ background: var(--color-accent, var(--color-text-primary)); border-color: var(--color-accent, var(--color-text-primary)); }
+.layout-dd-cb.on::after{ content: ""; position: absolute; left: 0.22rem; top: 0; width: 0.25rem; height: 0.5rem; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.layout-dd-seg{ display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.2rem 0.3rem 0.2rem 0.8rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); font-size: 0.78rem; }
+.layout-dd-seg button{ padding: 0.1rem 0.7rem; border: 0; border-radius: 0.6rem; background: transparent; color: var(--color-text-secondary); font: inherit; cursor: pointer; }
+.layout-dd-seg button[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); font-weight: 600; }

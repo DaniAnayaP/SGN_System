@@ -6558,6 +6558,8 @@ function layoutPermissions(req) {
         canToggle3dLayers: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayout3dCapas'),
         // Buscar una zona o una huella (la barra de Visualizaciones que enfoca el croquis, el 3D, las tablas y el resumen) usa el icono Buscar (hoja <pantalla>/iconLayoutBuscar).
         canFind: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutBuscar'),
+        // El Layout abre en «Ver» (solo ver y filtrar); pasar a «Editar» (los pasos con sus tablas, agregar, quitar y guardar) pide el icono Editar el Layout (hoja <pantalla>/iconLayoutEditar del árbol). Sin él sale con candado.
+        canEditMode: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutEditar'),
         // Renumerar los códigos de los activos (en cada zona y tipo, consecutivos desde 001) usa el icono Renumerar (hoja <pantalla>/iconLayoutRenumerar).
         canRenumber: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutRenumerar'),
         // Los candados de los QR (lo que ve y puede hacer quien escanea sin sesión) se cambian con el icono Candados de los QR (hoja <pantalla>/iconLayoutCandadosQr).

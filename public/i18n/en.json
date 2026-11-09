@@ -1983,6 +1983,23 @@
     "layoutCambiarCentroConfirm": "You have unsaved changes in this Layout. If you switch cost center they are discarded. Switch anyway?",
     "layout3dCapasBtn": "Show or hide the 3D layers",
     "layoutBuscarBtn": "Search a zone or a footprint",
+    "layoutEditarBtn": "Edit the Layout",
+    "layoutEditar": "Edit",
+    "layoutVer": "View",
+    "layoutModoSoloVer": "View only",
+    "layoutEditarSinPermiso": "Editing the Layout is not enabled for your account.",
+    "layoutFiltroZona": "Zone",
+    "layoutFiltroQueVer": "Show",
+    "layoutFiltroTodas": "All",
+    "layoutFiltroTodo": "Everything",
+    "layoutFiltroTodasZonas": "All zones",
+    "layoutFiltroNdeN": "{n} of {total}",
+    "layoutFiltroLoDemas": "The rest",
+    "layoutFiltroTenue": "Faded",
+    "layoutFiltroOculto": "Hidden",
+    "layoutVerConCambios": "You have unsaved changes. If you go back to View, they are lost.",
+    "layoutVerDescartar": "Discard and view",
+    "layoutVerSeguir": "Keep editing",
     "layoutRenumerarBtn": "Renumber codes",
     "layoutRenumerarConfirm": "The asset codes will be renumbered: in each zone and type they become consecutive from 001 (for example F020 and F021 become F001 and F002). QR codes, locators and code relations keep working, because they use the asset and not its code; but anything you already printed or stuck with the old code will no longer match. It is applied when you save the Layout. Renumber?",
     "layoutRenumerarNada": "The codes are already consecutive: there is nothing to renumber.",
@@ -5284,6 +5301,26 @@
     "pmEstatus": {
       "what": "Where each order line is: Pending (just arrived) or Supplied (already delivered). Whoever has View and Operate on the Status column changes it here; every change is kept in the history.",
       "example": "you deliver the 24 milk units: you change the line to Supplied."
+    },
+    "layoutModoEditar": {
+      "what": "Switches from View to Edit mode: the steps with their tables, the buttons to add and remove things of the Layout, Save and Discard changes appear. Without this icon in the access tree the Layout always stays in View.",
+      "example": "you enter Edit, add a fire extinguisher in Safety, save and go back to View to check it on the plan."
+    },
+    "layoutModoVer": {
+      "what": "Goes back to View mode: the large plan, only to look and filter. If there are unsaved changes it asks first whether you discard them or keep editing.",
+      "example": "you finish editing, tap View and check the whole Layout in 2D or 3D."
+    },
+    "layoutFiltroZona": {
+      "what": "Choose one, several or all the zones: the plan and the 3D zoom in on them and show what is inside. «All zones» removes the filter.",
+      "example": "you tick Zone 6 and Reception and see only what is in those two zones."
+    },
+    "layoutFiltroQueVer": {
+      "what": "Turns the layers of the Layout on and off (outline, floors, walls, doors, safety, sensors…). «Everything» turns them all on.",
+      "example": "you turn Floors and Ramps off to see only the walls and the safety items."
+    },
+    "layoutFiltroLoDemas": {
+      "what": "What happens to what is not part of what you filtered: Faded keeps it visible but dimmed and Hidden removes it completely. It is remembered in this browser.",
+      "example": "with Faded you see Zone 6 highlighted and the rest of the building in the background; with Hidden only Zone 6."
     },
     "layoutFind": {
       "what": "Search a zone or a footprint, by its code or its name, and the map, the 3D view, the tables and the summary keep only what is inside it; the rest of the warehouse is hidden. The tables do not lose rows: the ones that are not part of the focus are just tucked away. It is screen-only: it changes nothing that is saved or printed.",
