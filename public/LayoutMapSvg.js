@@ -129,7 +129,7 @@
     // Un símbolo chico por tipo (extintor, hidrante, puerta de emergencia, botiquín, alarma o pulsador, regadera y lavaojos, punto de reunión), cada uno con su color, y la ruta de evacuación como una línea punteada con flecha.
     // Todo va con atributos (sin CSS) para que se vea igual en el editor, en la vista pública y en la hoja que se descarga. (x, y) = el centro del símbolo en píxeles del dibujo; r = su tamaño (la mitad del lado).
     const SAFETY_OUTLINE = { extinguisher: '#7a1f17', hydrant: '#7a1f17', emergency_door: '#14602f', firstaid: '#14602f', alarm: '#8a4a0c', eyewash: '#134a80', assembly: '#14602f', route: '#14602f' };
-    function safetyGlyph(type, x, y, r) {
+    function safetyGlyph(type, x, y, r, model) {
         const color = (LC.SAFETY_COLORS || {})[type] || '#d9443a';
         const line = SAFETY_OUTLINE[type] || '#7a1f17';
         const k = (v) => Math.round(v * 100) / 100;
@@ -138,7 +138,13 @@
         const square = `<rect x="${k(x - r)}" y="${k(y - r)}" width="${k(2 * r)}" height="${k(2 * r)}" rx="${k(r * 0.3)}" fill="${color}" stroke="${line}" stroke-width="0.9"/>`;
         const disc = `<circle cx="${k(x)}" cy="${k(y)}" r="${k(r)}" fill="${color}" stroke="${line}" stroke-width="0.9"/>`;
         const stroke = `fill="none" stroke="#FFFFFF" stroke-width="${k(Math.max(1.2, r * 0.24))}" stroke-linecap="round" stroke-linejoin="round"`;
-        if (type === 'hydrant') return `${disc}${letter('H', 0.4, 1.15)}`;
+        if (type === 'hydrant') {
+            // un símbolo por modelo: columna = H, poste doble = una T, toma siamesa = una Y, gabinete = cuadro rojo con su ventana y la manguera enrollada
+            if (model === 'double_post') return `${disc}<path d="M${P(-0.62, -0.4)} H${P(0.62, -0.4).split(' ')[0]} M${P(0, -0.4)} V${P(0, 0.68).split(' ')[1]}" ${stroke}/>`;
+            if (model === 'siamese') return `${disc}<path d="M${P(-0.55, -0.58)} L${P(0, 0.02)} L${P(0.55, -0.58)} M${P(0, 0.02)} V${P(0, 0.7).split(' ')[1]}" ${stroke}/>`;
+            if (model === 'cabinet') return `${square}<rect x="${k(x - r * 0.58)}" y="${k(y - r * 0.64)}" width="${k(r * 1.16)}" height="${k(r * 1.28)}" rx="${k(r * 0.12)}" fill="none" stroke="#FFFFFF" stroke-width="${k(Math.max(1, r * 0.2))}"/><circle cx="${k(x)}" cy="${k(y + r * 0.08)}" r="${k(r * 0.27)}" fill="#FFFFFF"/>`;
+            return `${disc}${letter('H', 0.4, 1.15)}`;
+        }
         if (type === 'emergency_door') return `${square}<path d="M${P(-0.55, 0)} H${P(0.5, 0).split(' ')[0]} M${P(0.05, -0.45)} L${P(0.5, 0)} L${P(0.05, 0.45)}" ${stroke}/>`;
         if (type === 'firstaid') return `${square}<path d="M${P(0, -0.6)} V${P(0, 0.6).split(' ')[1]} M${P(-0.6, 0)} H${P(0.6, 0).split(' ')[0]}" ${stroke}/>`;
         if (type === 'alarm') return `<path d="M${P(0, -1.15)} L${P(1.15, 0.9)} L${P(-1.15, 0.9)} Z" fill="${color}" stroke="${line}" stroke-width="0.9" stroke-linejoin="round"/>${letter('!', 0.74, 1.0)}`;
@@ -427,7 +433,7 @@
                 const cx = X(e.x);
                 const cy = Y(e.y);
                 if (e.type === 'route') s += `<circle cx="${cx}" cy="${cy}" r="3.2" fill="${(LC.SAFETY_COLORS || {}).route}" stroke="#14602F" stroke-width="0.9"/>${safetyLabel(cx, cy - 6, e.code || '')}`;
-                else s += `${safetyGlyph(e.type, cx, cy, rs)}${safetyLabel(cx, cy - rs - 3, e.code || '')}`;
+                else s += `${safetyGlyph(e.type, cx, cy, rs, e.model)}${safetyLabel(cx, cy - rs - 3, e.code || '')}`;
             });
         }
         const bar = 5 * sc;

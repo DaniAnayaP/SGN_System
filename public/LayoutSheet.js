@@ -131,7 +131,12 @@
         // Seguridad: la leyenda nombra solo los tipos que hay en el croquis (cada uno con su propio símbolo).
         if (on('seguridad')) {
             const present = new Set((data.layout.safety || []).map((e) => e.type));
-            ((window.LayoutCalc && window.LayoutCalc.SAFETY_TYPES) || []).filter((tp) => present.has(tp)).forEach((tp) => leg.push([`safety:${tp}`, labels[`safety_${tp}`] || tp]));
+            const models = new Set((data.layout.safety || []).filter((e) => e.type === 'hydrant').map((e) => (window.LayoutCalc && window.LayoutCalc.hydrantModelOf ? window.LayoutCalc.hydrantModelOf(e) : 'column')));
+            ((window.LayoutCalc && window.LayoutCalc.SAFETY_TYPES) || []).filter((tp) => present.has(tp)).forEach((tp) => {
+                // cada modelo de hidrante lleva su propio símbolo y su renglón en la leyenda
+                if (tp === 'hydrant') ((window.LayoutCalc && window.LayoutCalc.HYDRANT_MODELS) || ['column']).filter((m) => models.has(m)).forEach((m) => leg.push([`safety:hydrant:${m}`, labels[`hydrant_${m}`] || labels.safety_hydrant || tp]));
+                else leg.push([`safety:${tp}`, labels[`safety_${tp}`] || tp]);
+            });
         }
         if (on('transito') && (data.layout.transit || []).length) {
             const transit = data.layout.transit || [];
@@ -218,9 +223,9 @@
                 s += `<rect x="${x}" y="${ly}" width="${sw}" height="${sw}" rx="${4 * f}" fill="${col}" fill-opacity="0.32" stroke="${col}" stroke-width="${1.5 * f}" stroke-dasharray="${5 * f} ${3 * f}"/>`;
             } else if (key.indexOf('safety:') === 0) {
                 // el mismo símbolo del croquis; la ruta, una línea con flecha
-                const type = key.slice(7);
+                const [type, model] = key.slice(7).split(':');
                 if (type === 'route') s += window.LayoutMapSvg.safetyRoute(x, ly + sw / 2, x + sw, ly + sw / 2, 2.6 * f);
-                else s += window.LayoutMapSvg.safetyGlyph(type, x + sw / 2, ly + sw / 2, sw * 0.46);
+                else s += window.LayoutMapSvg.safetyGlyph(type, x + sw / 2, ly + sw / 2, sw * 0.46, model);
             } else {
                 let paint;
                 if (key === 'door') paint = 'fill="#1E7E34" stroke="#1E7E34"';

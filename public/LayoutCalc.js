@@ -1875,8 +1875,18 @@
         eyewash: { elev: 0, l: 0.44, w: 0.44, h: 1.1 },
         assembly: { elev: 0, l: 1.6, w: 1.6, h: 2.5 },
     };
+    // Los hidrantes son de cuatro modelos (model; sin elegir = columna, el de siempre): hidrante de columna, de poste doble, toma siamesa (va a la pared) y gabinete contra incendio con manguera (va a la pared).
+    // Cada modelo trae su propia altura al piso y tamaño de fábrica; el código sigue siendo de la serie del hidrante (I001…).
+    const HYDRANT_MODELS = ['column', 'double_post', 'siamese', 'cabinet'];
+    const HYDRANT_SIZE_DEFAULTS = {
+        column: { elev: 0, l: 0.3, w: 0.3, h: 0.95 },
+        double_post: { elev: 0, l: 0.6, w: 0.2, h: 1.1 },
+        siamese: { elev: 0.8, l: 0.35, w: 0.3, h: 0.4 },
+        cabinet: { elev: 0.9, l: 0.7, w: 0.25, h: 0.9 },
+    };
+    const hydrantModelOf = (e) => (e && HYDRANT_MODELS.includes(e.model) ? e.model : 'column');
     function safetySizeOf(e) {
-        const d = e && SAFETY_SIZE_DEFAULTS[e.type];
+        const d = e && (e.type === 'hydrant' ? HYDRANT_SIZE_DEFAULTS[hydrantModelOf(e)] : SAFETY_SIZE_DEFAULTS[e.type]);
         if (!d) return null;
         const pick = (k) => {
             const raw = e[k];
@@ -2593,6 +2603,8 @@
                 x: meters(e && e.x, label, -LIMITS.maxM), y: meters(e && e.y, label, -LIMITS.maxM),
             };
             if (type === 'route') { item.x2 = meters(e && e.x2, label, -LIMITS.maxM); item.y2 = meters(e && e.y2, label, -LIMITS.maxM); }
+            // el modelo del hidrante (solo se guarda si no es el de columna, el de siempre)
+            if (type === 'hydrant' && e && HYDRANT_MODELS.includes(e.model) && e.model !== 'column') item.model = e.model;
             // Altura al piso y tamaño (todo opcional: vacío = la medida de fábrica de su tipo; la ruta de evacuación no lleva).
             if (type !== 'route') {
                 [['elev', 0, LIMITS.maxHeight, 'la altura del piso'], ['l', 0.01, LIMITS.maxM, 'el largo'], ['w', 0.01, LIMITS.maxM, 'el ancho'], ['h', 0.01, LIMITS.maxHeight, 'el alto']].forEach(([k, min, max, what]) => {
@@ -3161,7 +3173,7 @@
         storageLocations, huellasThatFit, capacityOf,
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
-        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
+        TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

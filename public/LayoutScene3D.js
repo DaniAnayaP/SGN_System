@@ -973,7 +973,60 @@
                 const sz = LCalc.safetySizeOf(e);
                 const y0 = sz.elev;
                 const rr = Math.max(Math.min(sz.l, sz.w) / 2, 0.02);
-                if (e.type === 'hydrant') {
+                if (e.type === 'hydrant' && LCalc.hydrantModelOf(e) === 'double_post') {
+                    // hidrante de poste doble: un tubo parado con un travesaño arriba y una válvula (volante) en cada punta
+                    const pipeR = rr * 0.55;
+                    const base = new THREE.Mesh(new THREE.CylinderGeometry(rr * 1.05, rr * 1.15, 0.05, 14), lam(0x8a2a22));
+                    base.position.y = y0 + 0.025;
+                    const post = new THREE.Mesh(new THREE.CylinderGeometry(pipeR, pipeR, sz.h, 12), lam(color));
+                    post.position.y = y0 + sz.h / 2;
+                    const barY = y0 + sz.h * 0.86;
+                    const bar = new THREE.Mesh(new THREE.CylinderGeometry(pipeR * 0.8, pipeR * 0.8, sz.l, 12), lam(color));
+                    bar.rotation.z = Math.PI / 2;
+                    bar.position.y = barY;
+                    g.add(base, post, bar);
+                    [-1, 1].forEach((sd) => {
+                        const stem = new THREE.Mesh(new THREE.CylinderGeometry(pipeR * 0.4, pipeR * 0.4, sz.h * 0.14, 8), lam(0xb83a30));
+                        stem.position.set(sd * sz.l * 0.4, barY + sz.h * 0.07, 0);
+                        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.9, rr * 0.9, 0.02, 14), lam(0xe9b949));
+                        wheel.position.set(sd * sz.l * 0.4, barY + sz.h * 0.15, 0);
+                        g.add(stem, wheel);
+                    });
+                    g.rotation.y = -wallAngleAt(ex, ey);
+                } else if (e.type === 'hydrant' && LCalc.hydrantModelOf(e) === 'siamese') {
+                    // toma siamesa: una placa en la pared, un tubo de latón y dos bocas que salen en «Y»
+                    const brass = 0xc9a227;
+                    const plate = new THREE.Mesh(new THREE.BoxGeometry(sz.l * 0.55, sz.h * 0.7, 0.04), lam(0x8a2a22));
+                    plate.position.set(0, y0 + sz.h * 0.4, -sz.w / 2 + 0.02);
+                    const stemH = sz.h * 0.4;
+                    const stem = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.34, rr * 0.34, stemH, 10), lam(brass));
+                    stem.position.set(0, y0 + stemH / 2 + sz.h * 0.05, 0);
+                    g.add(plate, stem);
+                    [-1, 1].forEach((sd) => {
+                        const arm = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.3, rr * 0.3, sz.h * 0.55, 10), lam(brass));
+                        arm.rotation.z = -sd * 0.75;
+                        arm.position.set(sd * sz.l * 0.22, y0 + sz.h * 0.68, sz.w * 0.08);
+                        const cap = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.42, rr * 0.42, 0.04, 10), lam(0xb83a30));
+                        cap.rotation.z = -sd * 0.75;
+                        cap.position.set(sd * sz.l * 0.43, y0 + sz.h * 0.9, sz.w * 0.08);
+                        g.add(arm, cap);
+                    });
+                    g.rotation.y = -wallAngleAt(ex, ey);
+                } else if (e.type === 'hydrant' && LCalc.hydrantModelOf(e) === 'cabinet') {
+                    // gabinete contra incendio: caja roja con ventana de vidrio, la manguera enrollada y la válvula
+                    const box = new THREE.Mesh(new THREE.BoxGeometry(sz.l, sz.h, sz.w), lam(color));
+                    box.position.y = y0 + sz.h / 2;
+                    const glass = new THREE.Mesh(new THREE.BoxGeometry(sz.l * 0.78, sz.h * 0.8, 0.02), new THREE.MeshLambertMaterial({ color: 0xcfe6f2, transparent: true, opacity: 0.5 }));
+                    glass.position.set(0, y0 + sz.h / 2, sz.w / 2 + 0.03);
+                    const coilR = Math.min(sz.l, sz.h) * 0.26;
+                    const coil = new THREE.Mesh(new THREE.TorusGeometry(coilR, Math.min(0.04, sz.w * 0.2), 8, 22), lam(0xf4f0e6));
+                    coil.position.set(sz.l * 0.08, y0 + sz.h * 0.42, sz.w / 2 + 0.005);
+                    const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.08, 8), lam(0xc9a227));
+                    valve.rotation.x = Math.PI / 2;
+                    valve.position.set(-sz.l * 0.28, y0 + sz.h * 0.78, sz.w / 2 + 0.015);
+                    g.add(box, glass, coil, valve);
+                    g.rotation.y = -wallAngleAt(ex, ey);
+                } else if (e.type === 'hydrant') {
                     const bodyH = sz.h * 0.82;
                     const body = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.87, rr, bodyH, 14), lam(color));
                     body.position.y = y0 + bodyH / 2;

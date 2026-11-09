@@ -8155,3 +8155,6 @@ td.cap-pick{ white-space: nowrap; }
 .layout-table th:first-child, .layout-table td:first-child{ position: sticky; left: 0; z-index: 1; background: var(--color-surface); box-shadow: 1px 0 0 var(--color-border); }
 .layout-panel .layout-scroll .layout-table thead th:first-child{ z-index: 3; }
 .layout-table tr.layout-row-sel td:first-child{ background: color-mix(in srgb, #e8590c 10%, var(--color-surface)); box-shadow: inset 3px 0 0 #e8590c, 1px 0 0 var(--color-border); }
+/* Leyenda de Seguridad: los modelos de hidrante nuevos usan el mismo símbolo del croquis (un dibujo, no un cuadro de color). */
+.layout-legend .lg-sf-svg{ background: none; border: 0; border-radius: 0; display: inline-block; width: 16px; height: 16px; }
+.layout-legend .lg-sf-svg svg{ display: block; }

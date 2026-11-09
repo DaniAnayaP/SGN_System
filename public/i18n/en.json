@@ -1805,6 +1805,11 @@
     "layoutYFinal": "End Y (m)",
     "layoutType_safety_extinguisher": "Fire extinguisher",
     "layoutType_safety_hydrant": "Hydrant",
+    "layoutType_hydrant_column": "Pillar hydrant",
+    "layoutType_hydrant_double_post": "Double-outlet post hydrant",
+    "layoutType_hydrant_siamese": "Siamese connection",
+    "layoutType_hydrant_cabinet": "Fire hose cabinet",
+    "layoutModeloHidrante": "Hydrant model",
     "layoutType_safety_emergency_door": "Emergency door",
     "layoutType_safety_firstaid": "First-aid kit",
     "layoutType_safety_alarm": "Alarm / pull station",
@@ -5560,6 +5565,10 @@
     "layoutSgAvisar": {
       "what": "How many days ahead an item shows as «Due soon». The default is 30; it applies to all the safety items of this Layout.",
       "example": "with 45, an extinguisher that expires in 40 days already shows as «Due soon»."
+    },
+    "layoutHidranteModelo": {
+      "what": "Which kind of hydrant it is: pillar (the usual red post standing on the floor), double-outlet post (a pipe with two valves on top), siamese connection (the Y-shaped connection that goes on the wall) or fire hose cabinet (the red box with a hose, which goes on the wall). Each model comes with its own height from the floor and size, which you can change in its row.",
+      "example": "on the back wall you place a fire hose cabinet and at the entrance a double-outlet post hydrant: each one shows with its own symbol on the plan, in 3D and in the legend."
     },
     "layoutSec_obstaculos": {
       "what": "The things in the way in the warehouse that are not walls: columns, level differences (a stretch of floor that is higher or lower) and anything else. Each one goes on a side of the outline or inside the warehouse, with its place and sizes; a level difference also has its height. They show on the sketch and in 3D while this step is on, and nothing can go inside an aisle. The add button is at the top, next to the title.",

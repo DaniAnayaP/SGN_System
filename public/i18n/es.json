@@ -1805,6 +1805,11 @@
     "layoutYFinal": "Y final (m)",
     "layoutType_safety_extinguisher": "Extintor",
     "layoutType_safety_hydrant": "Hidrante",
+    "layoutType_hydrant_column": "Hidrante de columna",
+    "layoutType_hydrant_double_post": "Hidrante de poste doble",
+    "layoutType_hydrant_siamese": "Toma siamesa",
+    "layoutType_hydrant_cabinet": "Gabinete contra incendio",
+    "layoutModeloHidrante": "Modelo de hidrante",
     "layoutType_safety_emergency_door": "Puerta de emergencia",
     "layoutType_safety_firstaid": "Botiquín",
     "layoutType_safety_alarm": "Alarma / pulsador",
@@ -5559,6 +5564,10 @@
     "layoutSgAvisar": {
       "what": "Con cuántos días de anticipación un elemento sale como «Por vencer». De fábrica son 30; vale para todos los elementos de seguridad de este Layout.",
       "example": "con 45, un extintor que caduca en 40 días ya sale como «Por vencer»."
+    },
+    "layoutHidranteModelo": {
+      "what": "Qué clase de hidrante es: de columna (el poste rojo de siempre, parado en el piso), de poste doble (un tubo con dos válvulas arriba), toma siamesa (la conexión en «Y» que va a la pared) o gabinete contra incendio (la caja roja con manguera, que va a la pared). Cada modelo trae su propia altura al piso y tamaño, que puedes cambiar en su renglón.",
+      "example": "en la pared del fondo pones un gabinete contra incendio y a la entrada de la nave un hidrante de poste doble: cada uno sale con su símbolo en el croquis, en el 3D y en la leyenda."
     },
     "layoutSec_obstaculos": {
       "what": "Las cosas que estorban en la nave y no son pared: columnas, desniveles (un tramo del piso más alto o más bajo) y cualquier otra cosa. Cada una va sobre un lado del contorno o dentro de la nave, con su lugar y medidas; el desnivel lleva además su altura. Se ven en el croquis y en el 3D mientras este paso esté encendido, y nada puede ir dentro de un pasillo. El botón de agregar está arriba, junto al título.",

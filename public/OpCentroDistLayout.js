@@ -713,7 +713,7 @@ function applyLegend() {
         asset: () => (stepOn('activos') || stepOn('posiciones') || stepOn('niveles')) && some('spaces', (s) => s.active !== false),
         object: (type) => stepOn('objetos') && some('objects', (o) => o.type === type),
         transit: (type) => stepOn('transito') && some('transit', (p) => (type === 'between' ? p.type === 'between' : p.type !== 'between')),
-        safety: (type) => stepOn('seguridad') && some('safety', (e) => e.type === type),
+        safety: (type) => { const [tp, model] = String(type).split(':'); return stepOn('seguridad') && some('safety', (e) => e.type === tp && (tp !== 'hydrant' || LC.hydrantModelOf(e) === (model || 'column'))); },
     };
     // Pisos: un cuadrito por cada nivel que hay (con el color de ese nivel); los pisos con formato propio llevan el suyo y no salen aquí.
     const lvBox = document.querySelector('[data-lg-levels]');
@@ -724,6 +724,10 @@ function applyLegend() {
         lvBox.innerHTML = levels.map((lv) => { const c = lvCols[lv] || '#e9e9ee'; return `<span><i class="lg-level" style="background:${c};border:1.5px solid ${LC.mixHex(c, '#000000', 0.4)}"></i><span>${lv > 0 ? '+' : ''}${fmt(lv)} m</span></span>`; }).join('');
         lvBox.hidden = !levels.length;
     }
+    document.querySelectorAll('[data-sf-glyph]').forEach((el) => {
+        const [tp, model] = el.getAttribute('data-sf-glyph').split(':');
+        if (!el.firstChild && window.LayoutMapSvg) el.innerHTML = `<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">${window.LayoutMapSvg.safetyGlyph(tp, 10, 10, 8, model)}</svg>`;
+    });
     document.querySelectorAll('[data-lg]').forEach((el) => {
         const rule = RULES[el.getAttribute('data-lg')];
         el.hidden = !(d && rule && rule(el.getAttribute('data-lg-type')));
@@ -1146,8 +1150,14 @@ function safetySizeCell(e, i, key, dis) {
     const value = e[key] !== undefined && e[key] !== null ? e[key] : '';
     return `<td><input type="number" step="0.05" min="${key === 'elev' ? 0 : 0.01}" data-l="safety" data-i="${i}" data-k="${key}" value="${value}" placeholder="${def[key]}"${dis ? ' disabled' : ''}></td>`;
 }
+// Seguridad: el modelo del hidrante (columna, poste doble, toma siamesa o gabinete). Sin elegir (o columna) no se guarda nada; la altura al piso y el tamaño vuelven a ser los de fábrica del modelo nuevo.
+function setHydrantModel(row, value) {
+    if (LC.HYDRANT_MODELS.includes(value) && value !== 'column') row.model = value; else delete row.model;
+    ['elev', 'l', 'w', 'h'].forEach((k) => { delete row[k]; });
+}
 function setSafetyType(row, value) {
     row.type = LC.SAFETY_TYPES.includes(value) ? value : 'extinguisher';
+    if (row.type !== 'hydrant') delete row.model;
     // la altura al piso y el tamaño son del tipo: al cambiarlo vuelven a ser los de fábrica del tipo nuevo
     ['elev', 'l', 'w', 'h'].forEach((k) => { delete row[k]; });
     if (row.type === 'route') {
@@ -1204,9 +1214,11 @@ function stepHtml(step) {
             const end = route ? `${cellNum('safety', i, 'x2', e.x2, dis)}${cellNum('safety', i, 'y2', e.y2, dis)}` : '<td class="layout-calc">—</td><td class="layout-calc">—</td>';
             // la ruta de evacuación es una marca en el piso: no lleva altura ni tamaño
             const size = route ? '<td class="layout-calc">—</td>'.repeat(4) : ['elev', 'l', 'w', 'h'].map((k) => safetySizeCell(e, i, k, dis)).join('');
-            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}${size}<td><input type="date" data-l="safety" data-i="${i}" data-k="expires" value="${esc(e.expires || '')}"${dis ? ' disabled' : ''}></td><td><input type="number" step="1" min="1" max="3650" data-l="safety" data-i="${i}" data-k="every" value="${e.every || ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><input type="date" data-l="safety" data-i="${i}" data-k="next" value="${esc(e.next || '')}"${dis ? ' disabled' : ''}><small class="layout-sg-eff" data-sf-next="${i}">${esc(safetyNextNote(e))}</small></td><td class="layout-calc" data-sf-last="${i}">${safetyLastHtml(e)}</td><td class="layout-calc" data-sf-status="${i}">${safetyStatusTag(e)}</td>${removeCell('safety', i, dis)}</tr>`;
+            // solo el hidrante tiene modelo (columna, poste doble, toma siamesa o gabinete): en los demás tipos la celda va con una raya
+            const model = e.type === 'hydrant' ? cellSelect('safety', i, 'model', optionsHtml('hydrant', LC.HYDRANT_MODELS, LC.hydrantModelOf(e)), dis, 'layoutHidranteModelo') : '<td class="layout-calc">—</td>';
+            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${model}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}${size}<td><input type="date" data-l="safety" data-i="${i}" data-k="expires" value="${esc(e.expires || '')}"${dis ? ' disabled' : ''}></td><td><input type="number" step="1" min="1" max="3650" data-l="safety" data-i="${i}" data-k="every" value="${e.every || ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><input type="date" data-l="safety" data-i="${i}" data-k="next" value="${esc(e.next || '')}"${dis ? ' disabled' : ''}><small class="layout-sg-eff" data-sf-next="${i}">${esc(safetyNextNote(e))}</small></td><td class="layout-calc" data-sf-last="${i}">${safetyLastHtml(e)}</td><td class="layout-calc" data-sf-status="${i}">${safetyStatusTag(e)}</td>${removeCell('safety', i, dis)}</tr>`;
         });
-        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutAlturaPiso', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgUltima', 'main.layoutSgEstado', ''], rows, 'layout-seguridad') : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutModeloHidrante', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutAlturaPiso', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgUltima', 'main.layoutSgEstado', ''], rows, 'layout-seguridad') : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
         // arriba: los contadores (Vigentes, Por vencer, Vencidos, Sin fecha) y con cuántos días de anticipación sale «Por vencer» (de fábrica 30); abajo, los vencidos
         const bar = `<div class="layout-sg-bar"><div class="layout-sg-counts" data-sf-counts data-help-key="layoutSgConteo">${safetyCountsHtml()}</div><div class="layout-fl"><label data-help-key="layoutSgAvisar">${esc(t('main.layoutSgAvisarCon'))}<input type="number" min="1" max="365" step="1" data-l="safetyWarn" value="${d.safetyWarnDays || LC.SAFETY_WARN_DAYS}"${dis ? ' disabled' : ''}></label></div></div>`;
         return `${addButton('safety', 'main.layoutAgregarSeguridad', dis, true)}${bar}${list}<div class="layout-vio" data-sf-issues hidden></div><div class="layout-due" data-sf-due hidden></div>`;
@@ -2518,7 +2530,7 @@ function renderSvg(underlay) {
                 s += `<g class="lsafe" data-sfid="${esc(e.id)}"><circle cx="${px}" cy="${py}" r="3.4" fill="${LC.SAFETY_COLORS.route}" stroke="#14602F" stroke-width="0.9"/>${title}</g>${SG.safetyLabel(px, py - 7, e.code || '')}`;
                 if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="9"/>`;
             } else {
-                s += `<g class="lsafe" data-sfid="${esc(e.id)}">${SG.safetyGlyph(e.type, px, py, rs)}${title}</g>${SG.safetyLabel(px, py - rs - 3, e.code || '')}`;
+                s += `<g class="lsafe" data-sfid="${esc(e.id)}">${SG.safetyGlyph(e.type, px, py, rs, e.model)}${title}</g>${SG.safetyLabel(px, py - rs - 3, e.code || '')}`;
                 if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="${rs + 4}"/>`;
             }
             // por vencer = aro ámbar y vencido = aro rojo (con su palabra debajo), para verlos de lejos
@@ -3174,6 +3186,8 @@ function onEdit(event) {
             if (raw !== '' && Number.isFinite(n) && n >= (key === 'elev' ? 0 : 0.01)) row[key] = Math.min(n, key === 'l' || key === 'w' ? LC.LIMITS.maxM : LC.LIMITS.maxHeight); else delete row[key];
         } else if (list === 'safety' && key === 'type') {
             setSafetyType(row, el.value);
+        } else if (list === 'safety' && key === 'model') {
+            setHydrantModel(row, el.value);
         } else if (list === 'transit' && key === 'h') {
             // el alto libre es opcional: vacío = no se revisa el alto
             const raw = String(el.value).trim();
@@ -3234,7 +3248,7 @@ function onEdit(event) {
     // Al cambiar de persona a montacargas cambian sus medidas (si eran las de partida) y su nombre.
     if (event.type === 'change' && list === 'objects' && el.getAttribute('data-k') === 'equipId') renderPanel();
     // Al cambiar el tipo de un elemento de seguridad cambian sus celdas (la ruta lleva punto de llegada) y su código.
-    if (event.type === 'change' && list === 'safety' && el.getAttribute('data-k') === 'type') renderPanel();
+    if (event.type === 'change' && list === 'safety' && (el.getAttribute('data-k') === 'type' || el.getAttribute('data-k') === 'model')) renderPanel();
     // Al pasar un activo a otra huella cambia su zona (que se ve en el renglón).
     if (event.type === 'change' && list === 'spaces' && el.getAttribute('data-k') === 'footprintId') renderPanel();
     refreshLive();
@@ -5190,6 +5204,7 @@ function sheetLabels() {
         dry: typeLabel('zone', 'dry'), cold: typeLabel('zone', 'cold'), chemical: typeLabel('zone', 'chemical'), finished: typeLabel('zone', 'finished'),
         aisle: typeLabel('zone', 'aisle'), aisle2: typeLabel('zone', 'aisle2'), dock: typeLabel('zone', 'dock'), office: typeLabel('zone', 'office'), none: t('main.layoutSinZona'),
         ...Object.fromEntries(LC.SAFETY_TYPES.map((tp) => [`safety_${tp}`, typeLabel('safety', tp)])),
+        ...Object.fromEntries(LC.HYDRANT_MODELS.map((m) => [`hydrant_${m}`, typeLabel('hydrant', m)])),
         contour: t('main.colLayoutContorno'),
         cutCaption: t('main.layoutHojaRecorte'), printed: t('main.layoutHojaImpreso'), snapshot: t('main.layoutHojaFoto'), updated: t('main.layoutHojaActualizado'), version: t('main.layoutHojaVersion'),
     };
