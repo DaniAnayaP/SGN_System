@@ -234,7 +234,7 @@ function ensureConfirmModal() {
     return modal;
 }
 
-// Opcional (options): items = una lista debajo del mensaje; accept y cancel = el texto de cada botón. Sin options queda como siempre.
+// Opcional (options): items = una lista debajo del mensaje; accept y cancel = el texto de cada botón; extra = el texto de un tercer botón (entre Cancelar y Aceptar) que contesta 'extra'. Sin options queda como siempre.
 function confirmDialog(message, options = {}) {
     return new Promise((resolve) => {
         const modal = ensureConfirmModal();
@@ -250,22 +250,36 @@ function confirmDialog(message, options = {}) {
         const cancelBtn = modal.querySelector('#confirm-modal-cancel');
         acceptBtn.textContent = options.accept || t('admin.confirmAccept');
         cancelBtn.textContent = options.cancel || t('admin.cancel');
+        const oldExtra = modal.querySelector('#confirm-modal-extra');
+        if (oldExtra) oldExtra.remove();
+        let extraBtn = null;
+        if (options.extra) {
+            extraBtn = document.createElement('button');
+            extraBtn.type = 'button';
+            extraBtn.className = 'btn btn-secondary';
+            extraBtn.id = 'confirm-modal-extra';
+            extraBtn.textContent = options.extra;
+            cancelBtn.after(extraBtn);
+        }
 
         const done = (result) => {
             modal.hidden = true;
             acceptBtn.removeEventListener('click', onAccept);
             cancelBtn.removeEventListener('click', onCancel);
+            if (extraBtn) { extraBtn.removeEventListener('click', onExtra); extraBtn.remove(); }
             modal.removeEventListener('click', onBackdrop);
             document.removeEventListener('keydown', onKeydown);
             resolve(result);
         };
         const onAccept = () => done(true);
         const onCancel = () => done(false);
+        const onExtra = () => done('extra');
         const onBackdrop = (event) => { if (event.target === modal) done(false); };
         const onKeydown = (event) => { if (event.key === 'Escape') done(false); };
 
         acceptBtn.addEventListener('click', onAccept);
         cancelBtn.addEventListener('click', onCancel);
+        if (extraBtn) extraBtn.addEventListener('click', onExtra);
         modal.addEventListener('click', onBackdrop);
         document.addEventListener('keydown', onKeydown);
 

@@ -2338,12 +2338,17 @@ function goEdit() {
 async function goView() {
     if (!state.draft) return;
     if (isDirty()) {
-        if (!(await Dashboard.confirm(t('main.layoutVerConCambios'), { accept: t('main.layoutVerDescartar'), cancel: t('main.layoutVerSeguir') }))) return;
-        state.creating = false;
-        state.planNew = false;
-        state.mode = 'view';
-        await loadLayout();
-        return;
+        // tres opciones: guardar y ver (true), descartar y ver ('extra') o seguir editando (false)
+        const choice = await Dashboard.confirm(t('main.layoutVerConCambios'), { accept: t('main.layoutVerGuardar'), extra: t('main.layoutVerDescartar'), cancel: t('main.layoutVerSeguir') });
+        if (!choice) return;
+        if (choice === 'extra') {
+            state.creating = false;
+            state.planNew = false;
+            state.mode = 'view';
+            await loadLayout();
+            return;
+        }
+        if (!(await saveLayout())) return; // no se pudo guardar: se queda en Editar (ya avisó por qué)
     }
     state.mode = 'view';
     showAllLayers();
@@ -4839,13 +4844,14 @@ window.addEventListener('pointerup', releaseZoomPointer);
 window.addEventListener('pointercancel', releaseZoomPointer);
 
 // ---- guardar / descartar -----------------------------------------------------------------------------------------------
-$('layout-save').addEventListener('click', async () => {
+// Guardar: devuelve true si se guardó (Guardar y ver espera a saberlo) y false si algo lo impidió (ya avisó por qué).
+async function saveLayout() {
     const button = $('layout-save');
     const openShape = firstOpenShape();
     if (openShape) {
         if (openShape.kind === 'contorno') { showStep('contorno'); Dashboard.showToast(t('main.layoutNoCierraContorno'), 'warning'); } else { showStep('zonas'); state.zoneOpen = openShape.zone.id; Dashboard.showToast(t('main.layoutNoCierraZona').replace('{name}', openShape.zone.name), 'warning'); }
         renderPanel();
-        return;
+        return false;
     }
     const loose = state.draft.spaces.findIndex((s) => !s.footprintId);
     if (loose >= 0) {
@@ -4854,7 +4860,7 @@ $('layout-save').addEventListener('click', async () => {
         Dashboard.showToast(t('main.layoutActivoSinHuella').replace('{n}', String(loose + 1)), 'warning');
         const pick = document.querySelector(`[data-l="spaces"][data-i="${loose}"][data-k="footprintId"]`);
         if (pick) { pick.scrollIntoView({ block: 'center' }); pick.focus(); }
-        return;
+        return false;
     }
     const fresh = LC.newFootprintViolations(state.draft, state.saved);
     if (fresh.length) {
@@ -4865,7 +4871,7 @@ $('layout-save').addEventListener('click', async () => {
         const at = state.draft.footprints.findIndex((f) => f.id === v.id);
         const box = document.querySelector(`[data-l="footprints"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'h' : 'x'}"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
-        return;
+        return false;
     }
     const freshSpaces = LC.newSpaceViolations(state.draft, state.saved);
     if (freshSpaces.length) {
@@ -4883,7 +4889,7 @@ $('layout-save').addEventListener('click', async () => {
             ? (document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"].layout-missing`) || document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"]`))
             : document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
-        return;
+        return false;
     }
     // Tránsito: lo nuevo o lo que cambió y no cumple (fuera de zona, no cabe en su zona, lo que transita no cabe, o algo adentro del pasillo) no se guarda.
     const freshTransit = LC.newTransitViolations(state.draft, state.saved);
@@ -4892,7 +4898,7 @@ $('layout-save').addEventListener('click', async () => {
         renderPanel();
         refreshLive();
         Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${transitIssueText(freshTransit[0])}`, 'warning');
-        return;
+        return false;
     }
     // Obstáculos con altura propia: no pueden pasar del techo; lo nuevo o lo que cambió y no cumple no se guarda.
     const freshObstacles = LC.newObstacleViolations(state.draft, state.saved);
@@ -4905,7 +4911,7 @@ $('layout-save').addEventListener('click', async () => {
         const at = state.draft.obstacles.findIndex((o) => o.id === v.id);
         const box = document.querySelector(`[data-l="obstacles"][data-i="${at}"][data-k="h"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
-        return;
+        return false;
     }
     // Pisos y rampas: nada sale del contorno de la nave; lo nuevo o lo que cambió y no cumple no se guarda: se marca en rojo y se lleva a la persona a esa fila.
     const freshFloors = LC.newFloorViolations(state.draft, state.saved);
@@ -4918,7 +4924,7 @@ $('layout-save').addEventListener('click', async () => {
         const at = (state.draft[v.list] || []).findIndex((f) => f.id === v.id);
         const box = document.querySelector(`[data-l="${v.list}"][data-i="${at}"][data-k="x"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
-        return;
+        return false;
     }
     // Seguridad: cada elemento (y los dos extremos de la ruta) va dentro del contorno de la nave; lo nuevo o lo que cambió y no cumple no se guarda.
     const freshSafety = LC.newSafetyViolations(state.draft, state.saved);
@@ -4927,7 +4933,7 @@ $('layout-save').addEventListener('click', async () => {
         renderPanel();
         refreshLive();
         Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${safetyIssueText(freshSafety[0])}`, 'warning');
-        return;
+        return false;
     }
     const clashed = LC.newColorClashes(state.draft, state.saved);
     if (clashed.length) {
@@ -4935,7 +4941,7 @@ $('layout-save').addEventListener('click', async () => {
         showStep(c.kind === 'asset' ? 'activos' : 'espacios');
         renderPanel();
         Dashboard.showToast(t(`main.layoutColorChoque_${c.kind}`, { code: c.code, parent: c.parentName }), 'warning');
-        return;
+        return false;
     }
     // Aviso antes de guardar: las huellas que ya existían y cambian de zona (y por eso de Localizador). Nada cambia sin que la persona lo vea y lo acepte.
     const moved = LC.footprintZoneChanges(state.draft, state.saved);
@@ -4943,7 +4949,7 @@ $('layout-save').addEventListener('click', async () => {
         const nobody = t('main.layoutZonaCambiaSinZona');
         const items = moved.map((m) => t('main.layoutZonaCambiaItem', { from: m.from || '—', to: m.to || '—', fromZone: m.fromZone || nobody, toZone: m.toZone || nobody }) + (m.assets ? t('main.layoutZonaCambiaActivos', { n: String(m.assets) }) : ''));
         const keep = await Dashboard.confirm(t(moved.length === 1 ? 'main.layoutZonaCambiaUna' : 'main.layoutZonaCambiaVarias', { n: String(moved.length) }), { items, accept: t('main.layoutZonaCambiaGuardar'), cancel: t('main.layoutZonaCambiaRegresar') });
-        if (!keep) return;
+        if (!keep) return false;
     }
     button.disabled = true;
     try {
@@ -4952,9 +4958,9 @@ $('layout-save').addEventListener('click', async () => {
         if (state.renumber) body.renumberCodes = true;
         const res = await fetch('/api/business/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
         const payload = await res.json().catch(() => ({}));
-        if (res.status === 409) { Dashboard.showToast(t('main.layoutConflicto'), 'warning'); await loadLayout(); return; }
-        if (res.status === 403) { Dashboard.showToast(t('main.layoutSinPermiso'), 'warning'); return; }
-        if (res.status === 400) { Dashboard.showToast(`${t('main.layoutDatosInvalidos')} ${(payload.errors && payload.errors[0]) || ''}`.trim(), 'warning'); return; }
+        if (res.status === 409) { Dashboard.showToast(t('main.layoutConflicto'), 'warning'); await loadLayout(); return false; }
+        if (res.status === 403) { Dashboard.showToast(t('main.layoutSinPermiso'), 'warning'); return false; }
+        if (res.status === 400) { Dashboard.showToast(`${t('main.layoutDatosInvalidos')} ${(payload.errors && payload.errors[0]) || ''}`.trim(), 'warning'); return false; }
         if (!res.ok) throw new Error('layout save failed');
         const keepSteps = state.steps;
         const keepFocus = state.focus;
@@ -4965,13 +4971,16 @@ $('layout-save').addEventListener('click', async () => {
         state.focusStack = keepStack;
         if (state.draft) showEditor();
         Dashboard.showToast(t('main.layoutGuardado'), 'success');
+        return true;
     } catch (err) {
         console.error('Layout: no se pudo guardar', err);
         Dashboard.showToast(t('main.layoutErrorGuardar'), 'error');
+        return false;
     } finally {
         refreshButtons();
     }
-});
+}
+$('layout-save').addEventListener('click', () => { saveLayout(); });
 function refreshButtons() {
     if (!state.draft) return;
     const dirty = isDirty();
