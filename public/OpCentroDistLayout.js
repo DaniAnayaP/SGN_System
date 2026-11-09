@@ -2237,6 +2237,7 @@ function renderFindBox() {
 }
 // Poner o quitar el enfoque (reset = true cuando cambió lo enfocado: el croquis y el 3D se acomodan a lo nuevo).
 let find3dReframe = false;
+let loc3dFocus = false; // «Localizador»: al armarse el 3D con lo elegido, la cámara se acerca a ese nivel, posición o localizador
 function applyFind(reset) {
     if (!state.draft) return;
     if (reset) { resetZoom(); find3dReframe = true; }
@@ -2673,7 +2674,12 @@ function locApply() {
     state.pick = [{ type: inSpace ? 'space' : 'footprint', id: inSpace ? vLoc.sp : vLoc.fp }];
     state.hl = null;
     applyViewFocus();
-    if (inSpace && vLoc.n) selectEntity({ kind: vLoc.c ? 'bay' : 'space', id: vLoc.sp, n: vLoc.n, c: vLoc.c || undefined, loc: locCode() }, 'zoom');
+    if (inSpace && vLoc.n) {
+        const cell = /^F(\d+)\.P(\d+)$/.exec(vLoc.cell || '');
+        selectEntity({ kind: vLoc.c ? 'bay' : 'space', id: vLoc.sp, n: vLoc.n, c: vLoc.c || undefined, f: cell ? Number(cell[1]) : undefined, p: cell ? Number(cell[2]) : undefined, loc: locCode() }, 'zoom');
+        loc3dFocus = !!state.view3d;
+        scheduleScene3d();
+    }
     renderViewStrip();
 }
 function locPick(step, value) {
@@ -4898,6 +4904,9 @@ function dim3dLayers() {
 }
 // El nivel enfocado de un activo (renglón de Niveles o Posiciones): los demás niveles de ese activo se apagan (Tenue) o se quitan (Oculto).
 function fxFocusLevel() {
+    // «Localizador»: con Enfoque u Oculto solo se ve el nivel, la posición o el localizador elegido; con Tenue, los demás niveles se apagan
+    const h = state.hl;
+    if (h && h.loc && h.step === state.focus && state.mode !== 'edit' && state.pick.length === 1 && state.pick[0].id === h.id) return { id: h.id, n: h.n, c: h.c, f: h.f, p: h.p, mode: state.findDim ? 'dim' : 'hide' };
     const v = virtualFind();
     return v && v.n ? { id: v.ids[0], n: v.n, mode: state.findDim ? 'dim' : 'hide' } : null;
 }
@@ -4978,13 +4987,14 @@ function refreshScene3d() {
         document.querySelectorAll('.layout-3d-view').forEach((b) => b.classList.toggle('on', b.getAttribute('data-view') === 'general'));
     }
     applyHighlight3d();
+    if (loc3dFocus) { loc3dFocus = false; if (scene3d.focusOn) scene3d.focusOn(); }
     updateViewBtns();
 }
 // Lo que se elige en una tabla también se marca en el 3D (contorno naranja, doble al tocar la figura); solo cuenta en el paso que se está editando, igual que en el croquis.
 function applyHighlight3d() {
     if (!scene3d || !scene3d.highlight) return; // el 3D viejo que quedó en la memoria del navegador aún no la trae
     const h = state.hl;
-    scene3d.highlight(h && h.step === state.focus && state.draft ? { kind: h.kind, id: h.id, strong: !!h.strong, n: h.n, c: h.c } : null);
+    scene3d.highlight(h && h.step === state.focus && state.draft ? { kind: h.kind, id: h.id, strong: !!h.strong, n: h.n, c: h.c, f: h.f, p: h.p } : null);
 }
 function scheduleScene3d() {
     if (!state.view3d) return;

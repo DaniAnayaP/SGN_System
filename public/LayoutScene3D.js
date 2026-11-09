@@ -294,10 +294,18 @@
                 const m = c ? LCx.bayMeasures(s, n, c) : LCx.levelMeasures(s, n);
                 const bottom = Math.max(m.floorH + m.beam, 0);
                 const height = Math.max(m.h, 0.1);
-                const len = c ? s.l / slots : s.l;
-                const x0 = c ? s.x + (c - 1) * (s.l / slots) : s.x;
+                let len = c ? s.l / slots : s.l;
+                let x0 = c ? s.x + (c - 1) * (s.l / slots) : s.x;
+                let z0 = s.y; let dep = s.d;
+                // un localizador (fila y profundidad) es un pedazo de su posición: las filas de izquierda a derecha y la profundidad 1 es la del frente
+                if (c && Number(hl.f) > 0 && Number(hl.p) > 0 && LCx.bayOf) {
+                    const bz = LCx.bayOf(s, n, c);
+                    const rowsZ = Math.max(1, bz.rows); const depthZ = Math.max(1, bz.depth);
+                    x0 += (Math.min(Number(hl.f), rowsZ) - 1) * (len / rowsZ); len /= rowsZ;
+                    dep = s.d / depthZ; z0 = s.y + s.d - Math.min(Number(hl.p), depthZ) * dep;
+                }
                 const fz = LCx.floorLevelAt ? LCx.floorLevelAt(lastLayout, s.x + s.l / 2, s.y + s.d / 2) : 0;
-                return { x: PX(x0 + len / 2), y: bottom + height / 2 + fz, z: PZ(s.y + s.d / 2), sx: len, sy: height, sz: s.d };
+                return { x: PX(x0 + len / 2), y: bottom + height / 2 + fz, z: PZ(z0 + dep / 2), sx: len, sy: height, sz: dep };
             }
             const sz0 = root.LayoutCalc && root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, s.x + s.l / 2, s.y + s.d / 2) : 0;
             return { x: PX(s.x + s.l / 2), y: s.h / 2 + sz0, z: PZ(s.y + s.d / 2), sx: s.l, sy: s.h, sz: s.d };
@@ -1197,6 +1205,38 @@
                 const lv = Math.max(1, s.levels || 1);
                 // el color que se le puso en Formato de activo (sin relleno o sin color propio se queda con el de su tipo)
                 const own = s.fmt && s.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(s.fmt.fill || '') ? parseInt(s.fmt.fill.slice(1), 16) : null;
+                // Enfoque u Oculto con un nivel, una posición o un localizador elegido: de ESE activo solo se dibuja eso (sus postes y su repisa, o su bloque), a la altura que tiene
+                const fzm = focusLevel && focusLevel.mode === 'hide' && focusLevel.id === s.id && root.LayoutCalc && root.LayoutCalc.levelMeasures && root.LayoutCalc.bayMeasures ? focusLevel : null;
+                if (fzm) {
+                    const LCz = root.LayoutCalc;
+                    const nz = Math.min(Math.max(1, Number(fzm.n) || 1), lv);
+                    const slotsZ = LCz.levelSlots ? LCz.levelSlots(s, nz) : Math.max(1, Math.floor(s.slots || 1));
+                    const cz1 = fzm.c ? Math.min(Math.max(1, Number(fzm.c) || 1), slotsZ) : 0;
+                    const mz = cz1 ? LCz.bayMeasures(s, nz, cz1) : LCz.levelMeasures(s, nz);
+                    let bx0 = cz1 ? s.x + (cz1 - 1) * (s.l / slotsZ) : s.x;
+                    let blen = cz1 ? s.l / slotsZ : s.l;
+                    let by0 = s.y; let bdep = s.d;
+                    if (cz1 && Number(fzm.f) > 0 && Number(fzm.p) > 0 && LCz.bayOf) {
+                        const bz = LCz.bayOf(s, nz, cz1);
+                        const rowsZ = Math.max(1, bz.rows); const depthZ = Math.max(1, bz.depth);
+                        bx0 += (Math.min(Number(fzm.f), rowsZ) - 1) * (blen / rowsZ); blen /= rowsZ;
+                        bdep = s.d / depthZ; by0 = s.y + s.d - Math.min(Number(fzm.p), depthZ) * bdep;
+                    }
+                    const beamZ = mz.beam > 0 ? mz.beam : 0.06;
+                    const yBase = fl + Math.max(mz.floorH, 0.03);
+                    const yTop = yBase + beamZ + Math.max(mz.h, 0.1);
+                    const xz = PX(bx0 + blen / 2); const zz = PZ(by0 + bdep / 2);
+                    if (s.type === 'pallet' || s.type === 'cabinet' || s.type === 'cold') {
+                        blk.push({ x: xz, y: (yBase + yTop) / 2, z: zz, sx: blen, sy: yTop - yBase, sz: bdep, c: mute(own !== null ? own : (s.type === 'pallet' ? WOOD : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d))) });
+                    } else {
+                        const postC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
+                        const deckZ = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
+                        [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([ix, iz]) => upr.push({ x: xz + ix * Math.max(0, blen / 2 - 0.03), y: (yBase + yTop) / 2, z: zz + iz * Math.max(0, bdep / 2 - 0.03), sx: 0.06, sy: yTop - yBase, sz: 0.06, c: postC }));
+                        dck.push({ x: xz, y: yBase + beamZ / 2, z: zz, sx: blen, sy: beamZ, sz: bdep, c: deckZ });
+                    }
+                    spaceList.push({ s, x: cx, z: cz, fl });
+                    return;
+                }
                 if (s.type === 'pallet') {
                     blk.push({ x: cx, y: 0.07 + fl, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: mute(own !== null ? own : WOOD) });
                     const loadH = (s.h - 0.14) / lv;
@@ -1257,7 +1297,13 @@
             if (rebuild !== false && lastLayout) update(lastLayout);
         }
         // Marcar lo que se eligió en una tabla del editor (sel = { kind, id, strong }) o quitar la marca (null).
-        function highlight(sel) { hl = sel && sel.id ? { kind: sel.kind, id: sel.id, strong: !!sel.strong, n: sel.n, c: sel.c } : null; applyHl(); }
+        function highlight(sel) { hl = sel && sel.id ? { kind: sel.kind, id: sel.id, strong: !!sel.strong, n: sel.n, c: sel.c, f: sel.f, p: sel.p } : null; applyHl(); }
+        // Acercar la cámara a lo que está marcado (un nivel, una posición o un localizador): la distancia sale de lo que mide.
+        function focusOn() {
+            const b = hlBox();
+            if (!b) return;
+            go({ tx: b.x, ty: b.y, tz: b.z, r: clamp(Math.max(b.sx, b.sy, b.sz, 0.5) * 3.2 + 1.2, 3, bounds.diag * 6) }, true);
+        }
         function setView(name) { go(viewTarget(name), true); }
         function zoom(factor) { st.r = clamp(st.r / factor, 3, bounds.diag * 6); applyCam(); }
 
@@ -1375,7 +1421,7 @@
             renderer.dispose();
             canvas.remove();
         }
-        return { update, setLabels, setLayer, setHiddenAssets, highlight, setView, zoom, resize, destroy, canvas, layers: LAYER_NAMES.slice(), measuredCount: () => measuredGroup.children.length / 2 };
+        return { update, setLabels, setLayer, setHiddenAssets, highlight, focusOn, setView, zoom, resize, destroy, canvas, layers: LAYER_NAMES.slice(), measuredCount: () => measuredGroup.children.length / 2 };
     }
 
     root.LayoutScene3D = { create, LAYERS: LAYER_NAMES.slice() };
