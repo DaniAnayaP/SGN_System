@@ -113,7 +113,7 @@
         });
         const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateDoors(migrateWalls(migrateFloors({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))))));
         // Seguridad: la zona de cada elemento sale de su lugar y su código (E001…) lo pone el sistema.
-        return assignRampCodes(assignFloorCodes(assignWallCodes(assignSafetyCodes(deriveSafetyZones(normalized)))));
+        return assignItemCodes(assignRampCodes(assignFloorCodes(assignWallCodes(assignSafetyCodes(deriveSafetyZones(normalized))))));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -1240,10 +1240,7 @@
         let given = Math.max(floor, 0, ...Array.from(used).map((c) => Number(c.slice(1))));
         let changed = false;
         const obstacles = layout.obstacles.map((o, i) => {
-            if (!isWall(o)) {
-                if (o && o.code !== undefined) { changed = true; const { code, ...rest } = o; return rest; }
-                return o;
-            }
+            if (!isWall(o)) return o; // el código de un obstáculo que no es pared (K001…) lo cuida assignItemCodes
             let code = keep[i];
             if (!code) {
                 let n = given + 1;
@@ -1274,6 +1271,59 @@
             return code === o.code ? o : { ...o, code };
         });
         return assignWallCodes({ ...next, obstacles, wallNext: floor });
+    }
+    // ---- Códigos de puertas, conexiones de luz, obstáculos y objetos ---------------------------------------------------------------------------------------
+    // Cada puerta (D001…), conexión de luz (C001…), obstáculo que no es pared (K001…) y objeto (J001…) lleva su código ÚNICO: lo pone el sistema, consecutivo en su lista, no se edita y NO se vuelve a usar aunque se borre
+    // (el contador de lo ya dado viaja con el Layout: doorNext, powerNext, obstacleNext, objectNext). Las letras están aquí: una línea para cambiarlas. Un Layout de antes sin códigos los recibe al leerlo.
+    const ITEM_CODES = [
+        { list: 'doors', letter: 'D', next: 'doorNext', pick: null },
+        { list: 'power', letter: 'C', next: 'powerNext', pick: null },
+        { list: 'obstacles', letter: 'K', next: 'obstacleNext', pick: (o) => o.kind !== 'wall' },
+        { list: 'objects', letter: 'J', next: 'objectNext', pick: null },
+    ];
+    function assignItemCodes(layout) {
+        let out = layout;
+        ITEM_CODES.forEach(({ list, letter, next, pick }) => {
+            const items = out && out[list];
+            if (!Array.isArray(items)) return;
+            const mine = (o) => !!o && (!pick || pick(o));
+            const floor = cleanWallNext(out[next]);
+            if (!items.some(mine) && !floor) return;
+            const re = new RegExp(`^${letter}\\d{3,4}$`);
+            const codeOf = (n) => `${letter}${String(n).padStart(3, '0')}`;
+            const used = new Set();
+            const keep = items.map((o) => { if (!mine(o)) return ''; const c = String(o.code == null ? '' : o.code).trim().toUpperCase(); if (re.test(c) && !used.has(c)) { used.add(c); return c; } return ''; });
+            let given = Math.max(floor, 0, ...Array.from(used).map((c) => Number(c.slice(1))));
+            let changed = false;
+            const coded = items.map((o, i) => {
+                if (!mine(o)) return o;
+                let c = keep[i];
+                if (!c) { let n = given + 1; while (used.has(codeOf(n))) n += 1; c = codeOf(n); used.add(c); given = n; }
+                if (c === o.code) return o;
+                changed = true;
+                return { ...o, code: c };
+            });
+            if (!changed && given === floor) return;
+            out = { ...out, [list]: coded };
+            if (given) out[next] = given; else delete out[next];
+        });
+        return out;
+    }
+    // Al guardar manda lo ya guardado: cada renglón que ya existía conserva su código y el contador solo sube (lo nuevo recibe el siguiente).
+    function lockItemCodes(next, previous) {
+        let out = next;
+        ITEM_CODES.forEach(({ list, letter, next: nk, pick }) => {
+            if (!out || !Array.isArray(out[list])) return;
+            const mine = (o) => !!o && (!pick || pick(o));
+            const re = new RegExp(`^${letter}\\d{3,4}$`);
+            const before = new Map(((previous && previous[list]) || []).filter(mine).map((o) => [o.id, o.code]));
+            let floor = cleanWallNext(previous && previous[nk]);
+            before.forEach((c) => { if (re.test(String(c == null ? '' : c).trim())) floor = Math.max(floor, Number(String(c).trim().slice(1))); });
+            const items = out[list].map((o) => { if (!mine(o)) return o; const c = before.has(o.id) ? before.get(o.id) : ''; return c === o.code ? o : { ...o, code: c }; });
+            out = { ...out, [list]: items, [nk]: floor };
+            if (!floor) delete out[nk];
+        });
+        return assignItemCodes(out);
     }
     function deriveFootprintZones(layout) {
         if (!layout || !Array.isArray(layout.footprints)) return layout;
@@ -1431,6 +1481,7 @@
         out = lockTransitCodes(out, previous);
         out = lockSafetyCodes(out, previous);
         out = lockWallCodes(out, previous);
+        out = lockItemCodes(out, previous);
         if (Array.isArray(out.spaces)) {
             const before = new Map(((previous && previous.spaces) || []).map((s) => [s.id, s]));
             const spaces = out.spaces.map((s) => {
@@ -2779,6 +2830,17 @@
         { const known = new Set((out.zones || []).map((zz) => zz.id)); out.sensors = out.sensors.map((sn) => { if (!sn.zones) return sn; const kept = sn.zones.filter((zid) => known.has(zid)); if (kept.length === sn.zones.length) return sn; const { zones: dropped, ...rest } = sn; return kept.length ? { ...rest, zones: kept } : rest; }); }
         out.transit = assignTransitCodes(deriveTransitZones(out)).transit;
         { const walled = assignWallCodes(out); out.obstacles = walled.obstacles; if (walled.wallNext) out.wallNext = walled.wallNext; else delete out.wallNext; }
+        // códigos de puertas, luz, obstáculos y objetos: el que ya traen se conserva (si es válido y no se repite) y los demás los pone el sistema
+        ITEM_CODES.forEach(({ list, next }) => {
+            out[list] = (out[list] || []).map((o, i) => {
+                const raw = Array.isArray(src[list]) ? src[list][i] : null;
+                const c = raw && typeof raw.code === 'string' ? raw.code.trim().toUpperCase().slice(0, 12) : '';
+                return c && o.kind !== 'wall' ? { ...o, code: c } : o;
+            });
+            const n = cleanWallNext(src[next]);
+            if (n) out[next] = n;
+        });
+        { const coded = assignItemCodes(out); ITEM_CODES.forEach(({ list, next }) => { out[list] = coded[list]; if (coded[next]) out[next] = coded[next]; else delete out[next]; }); }
         { const safe = assignSafetyCodes(deriveSafetyZones(out)); out.safety = safe.safety; if (safe.safetyNext && Object.keys(safe.safetyNext).length) out.safetyNext = safe.safetyNext; else delete out.safetyNext; }
         out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
@@ -3097,7 +3159,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
