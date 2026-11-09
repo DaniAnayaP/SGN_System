@@ -29,6 +29,8 @@ let view = null;
 let drag = null;
 // Las dos listas del paso Activos (catálogos del cliente): clasificaciones (Mobiliario operativo…) y tipos (rack, estante…); [{ id, name, status }].
 let assetLists = { classes: [], types: [] };
+// Paso Activos: la zona elegida en un renglón que todavía no tiene huella (solo de pantalla; id del activo -> id de zona). Con huella, la zona es la de su huella.
+const zonePick = new Map();
 // Zoom del croquis (ver más abajo): s = aumento (1 = se ve todo), x/y = esquina de lo que se ve, en las medidas del dibujo (700 × 460).
 const MAP_W = 700;
 const MAP_H = 460;
@@ -121,10 +123,10 @@ function ownEffective(s) {
     if (!f) return {};
     return { ox: round2(s.x - f.x), oy: round2(s.y - f.y), ol: s.l, od: s.d, oh: s.h };
 }
-function ownCells(s, i, disabled) {
+function ownCells(s, i, disabled, keys = OWN_KEYS) {
     const eff = ownEffective(s);
     const bad = spIssues.get(s.id) || {};
-    return OWN_KEYS.map((key) => {
+    return keys.map((key) => {
         const flag = key === 'oh' ? bad.tall : (bad.sum || bad.out || bad.overlap);
         return `<td><input type="number" step="0.1" min="${key === 'ox' || key === 'oy' ? 0 : 0.01}" data-l="spaces" data-i="${i}" data-k="${key}" data-help-key="layoutActivoMedidas"${flag ? ' class="layout-missing"' : ''} value="${s[key] === undefined || s[key] === null ? '' : s[key]}" placeholder="${eff[key] === undefined ? '' : eff[key]}"${disabled ? ' disabled' : ''}></td>`;
     }).join('');
@@ -1413,11 +1415,26 @@ function stepHtml(step) {
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
         const footprintOptions = (selected) => `${selected ? '' : `<option value="" selected>${esc(t('main.layoutActivoElegirHuella'))}</option>`}${d.footprints.map((f) => `<option value="${esc(f.id)}"${f.id === selected ? ' selected' : ''}>${esc(f.code)} · ${esc(footprintZoneName(f))}</option>`).join('')}`;
         const letterOptions = (selected) => LC.SPACE_TYPES.map((id) => `<option value="${id}"${id === (selected || 'rack') ? ' selected' : ''}>${esc(LC.ASSET_LETTER[id])} · ${esc(typeLabel('space', id))}</option>`).join('');
+        // La tabla sigue el orden de cómo se define un activo: 1) la zona y la huella (solo salen las huellas de esa zona), 2) la clasificación, 3) el tipo de activo (de él sale la letra del código) y 4) los niveles y las medidas.
+        // Un activo para operar (clasificación en m²) siempre tiene 1 nivel y no se edita. Lo demás del activo (columnas, cajones, lugar dentro de la huella, rangos) se define en Niveles, Posiciones y Localizadores.
+        const metricOf = (id) => { const r = assetLists.classes.find((x) => x.id === id); return r ? r.kind : ''; };
+        const zoneOptions = (selected) => `${selected ? '' : `<option value="" selected>${esc(t('main.layoutActivoElegirZona'))}</option>`}${d.zones.filter((z) => z.active !== false || z.id === selected).map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name || z.code)}</option>`).join('')}`;
+        const footprintOptionsIn = (zone, selected) => {
+            const list = zone ? d.footprints.filter((f) => f.zoneId === zone) : d.footprints.filter((f) => f.id === selected);
+            return `${selected ? '' : `<option value="" selected>${esc(t('main.layoutActivoElegirHuella'))}</option>`}${list.map((f) => `<option value="${esc(f.id)}"${f.id === selected ? ' selected' : ''}>${esc(f.code)}${f.name ? ` · ${esc(f.name)}` : ''}</option>`).join('')}`;
+        };
         const rows = d.spaces.map((s, i) => {
             const saved = isSavedRow('spaces', s.id);
-            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td><td><select data-l="spaces" data-i="${i}" data-k="type" data-help-key="layoutSpaceLetter"${dis ? ' disabled' : ''}>${letterOptions(s.type)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptions(s.footprintId)}</select></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}${cellNum('spaces', i, 'levels', s.levels || 1, dis, '1')}${cellNum('spaces', i, 'slots', s.slots || 1, dis, '1')}${cellText('spaces', i, 'drawers', s.drawers || '', dis)}${ownCells(s, i, dis)}${rangeCells(s, i, dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
+            const fp = d.footprints.find((f) => f.id === s.footprintId);
+            const zone = fp ? (fp.zoneId || '') : (zonePick.get(s.id) || '');
+            const letter = LC.ASSET_LETTER[s.type] || LC.ASSET_LETTER.rack;
+            const nameCell = `<td><input type="text" maxlength="${LC.LIMITS.text}" data-l="spaces" data-i="${i}" data-k="ownName" data-help-key="layoutActivoNombre" value="${esc(s.ownName || '')}" placeholder="${esc(fp && fp.name ? fp.name : '')}"${dis ? ' disabled' : ''}></td>`;
+            const levelsCell = metricOf(s.assetClassId) === 'm2'
+                ? `<td><input type="number" step="1" data-l="spaces" data-i="${i}" data-k="levels" data-help-key="layoutActivoNivelFijo" value="${s.levels || 1}" title="${esc(t('main.layoutActivoNivelFijo'))}" disabled></td>`
+                : cellNum('spaces', i, 'levels', s.levels || 1, dis, '1');
+            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td>${nameCell}<td><select data-zone-pick="${esc(s.id)}" data-help-key="layoutActivoZona"${dis ? ' disabled' : ''}>${zoneOptions(zone)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId" data-help-key="layoutActivoZona"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptionsIn(zone, s.footprintId)}</select></td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}<td class="layout-calc" data-help-key="layoutSpaceLetter"><b>${esc(letter)}</b></td>${levelsCell}${ownCells(s, i, dis, ['ol', 'od', 'oh'])}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
         });
-        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutActivoLetra', 'main.layoutHuellaCol', 'main.layoutZona', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutNiveles', 'main.layoutEspaciosNivel', 'main.layoutCajones', 'main.layoutActivoPosX', 'main.layoutActivoPosY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutRangoTempMin', 'main.layoutRangoTempMax', 'main.layoutRangoHumMin', 'main.layoutRangoHumMax', ''], rows, 'layout-activos')}${state.perms && state.perms.canRenumber && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutHuellaCol', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutActivoLetra', 'main.layoutNiveles', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', ''], rows, 'layout-activos')}${state.perms && state.perms.canRenumber && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una se crea solo la huella (sin activos); los activos que se pongan encima se dan de alta después, en el paso Activos.
@@ -3317,7 +3334,7 @@ async function loadAssetLists() {
         try {
             const r = await fetch(`/api/business/article-categories/${type}`, { credentials: 'include' });
             if (!r.ok) return [];
-            return ((await r.json()).categories || []).map((c) => ({ id: c.id, name: c.name, status: c.status })).filter((c) => c.name || c.status === 'active');
+            return ((await r.json()).categories || []).map((c) => ({ id: c.id, name: c.name, status: c.status, kind: c.kind || '' })).filter((c) => c.name || c.status === 'active');
         } catch (err) { console.error('Layout: no se pudo leer la lista de activos', err); return []; }
     };
     const [classes, types] = await Promise.all([read('activos-clasificacion'), read('activos-fijos')]);
@@ -3534,6 +3551,18 @@ function syncHuellas() {
     d.spaces = state.renumber ? LC.renumberSpaceCodes(next).spaces : next.spaces; // Renumerar: consecutivos desde 001 por zona y tipo
 }
 
+// Paso Activos: la zona elegida en un renglón acota las huellas que se pueden escoger (solo de pantalla). Si la huella que ya tenía no es de esa zona, se quita para que elijan otra.
+function onZonePick(el, event) {
+    if (event.type !== 'change') return;
+    const id = el.getAttribute('data-zone-pick');
+    const row = (state.draft.spaces || []).find((x) => x.id === id);
+    if (!row) return;
+    zonePick.set(id, el.value);
+    const fp = state.draft.footprints.find((f) => f.id === row.footprintId);
+    if (fp && (fp.zoneId || '') !== el.value) row.footprintId = '';
+    renderPanel();
+    refreshLive();
+}
 function onEdit(event) {
     const el = event.target;
     if (state.draft && (el.getAttribute('data-cs') !== null || el.getAttribute('data-zs') !== null)) {
@@ -3544,6 +3573,7 @@ function onEdit(event) {
     }
 
     if (state.draft && el.getAttribute('data-cat') !== null) { onCategoryEdit(el); return; }
+    if (state.draft && el.getAttribute('data-zone-pick') !== null) { onZonePick(el, event); return; }
     const list = el.getAttribute('data-l');
     if (!list || !state.draft) return;
     const isNumber = el.type === 'number';
@@ -3687,9 +3717,15 @@ function onEdit(event) {
             const dy = key === 'oy' ? value - o[1] : 0;
             row.pts = row.pts.map((p) => [round2(p[0] + dx), round2(p[1] + dy)]);
             syncZoneBox(row);
+        } else if (list === 'spaces' && key === 'ownName') {
+            // el nombre propio del activo es opcional: vacío = se ve el nombre de su huella
+            if (String(value).trim()) row.ownName = String(value); else delete row.ownName;
         } else if (key === 'assetClassId' || key === 'assetId') {
             const n = parseInt(el.value, 10);
             if (n > 0) row[key] = n; else delete row[key]; // sin elegir = el espacio se guarda sin ese campo
+            // la LETRA del código sale del tipo de activo (si su catálogo la trae); un activo para operar (clasificación en m²) tiene un solo nivel y no se edita
+            if (list === 'spaces' && key === 'assetId' && n > 0) { const tr = assetLists.types.find((r) => r.id === n); if (tr && LC.SPACE_TYPES.includes(tr.kind)) row.type = tr.kind; }
+            if (list === 'spaces' && key === 'assetClassId' && n > 0) { const cr = assetLists.classes.find((r) => r.id === n); if (cr && cr.kind === 'm2') row.levels = 1; }
         } else if (OWN_KEYS.includes(key)) {
             // el lugar y las medidas propias del activo dentro de su huella: vacío = se acomoda solo
             const raw = String(el.value).trim();
@@ -3725,7 +3761,7 @@ function onEdit(event) {
     // Al cambiar el tipo de un elemento de seguridad cambian sus celdas (la ruta lleva punto de llegada) y su código.
     if (event.type === 'change' && list === 'safety' && (el.getAttribute('data-k') === 'type' || el.getAttribute('data-k') === 'model')) renderPanel();
     // Al pasar un activo a otra huella cambia su zona (que se ve en el renglón).
-    if (event.type === 'change' && list === 'spaces' && el.getAttribute('data-k') === 'footprintId') renderPanel();
+    if (event.type === 'change' && list === 'spaces' && ['footprintId', 'assetId', 'assetClassId'].includes(el.getAttribute('data-k'))) renderPanel();
     refreshLive();
 }
 $('layout-panel').addEventListener('focusin', (event) => selectRowFrom(event.target));

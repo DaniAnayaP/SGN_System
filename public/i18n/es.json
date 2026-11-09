@@ -1697,7 +1697,9 @@
     "layoutHuellaCol": "Huella",
     "layoutCodigoHuella": "Código de huella",
     "layoutCodigoZona": "Código de zona",
-    "layoutActivoLetra": "Tipo (letra del Localizador)",
+    "layoutActivoLetra": "Letra del localizador",
+    "layoutActivoElegirZona": "Elige la zona…",
+    "layoutActivoNivelFijo": "Un activo para operar siempre tiene 1 nivel y no se edita",
     "layoutAgregarActivo": "+ Agregar activo",
     "layoutActivoElegirHuella": "Elige la huella…",
     "layoutActivoSinHuella": "Elige la huella del activo {n}: un activo siempre va dentro de una huella.",
@@ -4776,8 +4778,20 @@
       "example": "una huella de 3 × 1.1 m puesta al borde de la Zona 6 de modo que 40 cm quedan afuera dice «Zona 6 · no cabe»; la mueves hacia adentro y se pone normal. Si pones la Zona 3 encima de la huella H005 de la Zona 6, al Guardar dice «Z006.H005 → Z007.H001» y tú decides."
     },
     "layoutSpaceLetter": {
-      "what": "Qué es el activo: Anaquel (A), Rack (R), Gabeta (G), Tarima en piso (T) o Frío (F: refrigeradores y cámaras frías). La letra es la del Localizador y el sistema pone el número: es consecutivo por zona y por tipo, así que el código (A001, A002…) no se escribe ni se repite. Si cambias el tipo de un activo ya guardado, toma la letra nueva con su mismo número si está libre.",
-      "example": "eliges Gabeta en el primer activo de la Zona 6: el sistema le pone G001; el siguiente anaquel que agregues en esa zona será A001."
+      "what": "La letra con la que empieza el código del activo y su Localizador. Sale del Tipo de activo (catálogo Nuestros Activos Fijos): Rack (R), Estante (A), Gabinete (G), Tarima en piso (T) o Refrigerador (F). El sistema pone el número, consecutivo por zona y por letra, así que el código (R001, R002…) no se escribe ni se repite. Si cambias el tipo de un activo ya guardado, toma la letra nueva con el siguiente número libre.",
+      "example": "eliges el tipo Gabinete en el primer activo de la Zona 6: el sistema le pone G001; el siguiente Estante que agregues en esa zona será A001."
+    },
+    "layoutActivoNombre": {
+      "what": "El nombre que tú le quieras poner al activo para reconocerlo. Es opcional: si lo dejas vacío se ve el nombre de su huella.",
+      "example": "«Rack de lácteos»."
+    },
+    "layoutActivoZona": {
+      "what": "Primero se elige la zona y luego la huella: la lista de huellas solo trae las de esa zona. Un activo siempre va dentro de una huella y su zona es la de su huella.",
+      "example": "eliges Zona 6 y las huellas que salen son solo las de la Zona 6 (H001, H003…)."
+    },
+    "layoutActivoNivelFijo": {
+      "what": "Un activo para operar (clasificación Activo para operar, que se mide en m²) siempre tiene 1 nivel y no se edita. Los niveles, posiciones y localizadores son de los activos para almacenar.",
+      "example": "un escritorio tiene 1 nivel; un rack para almacenar puede tener 4."
     },
     "layoutAssetType": {
       "what": "El tipo de activo de este espacio: rack, gabinete, refrigerador, estante, escritorio, mesa… Viene de Catálogos > Activos Fijos y es independiente de la clasificación. Se puede dejar sin elegir.",

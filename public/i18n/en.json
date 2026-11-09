@@ -1697,7 +1697,9 @@
     "layoutHuellaCol": "Footprint",
     "layoutCodigoHuella": "Footprint code",
     "layoutCodigoZona": "Zone code",
-    "layoutActivoLetra": "Type (Locator letter)",
+    "layoutActivoLetra": "Locator letter",
+    "layoutActivoElegirZona": "Choose the zone…",
+    "layoutActivoNivelFijo": "An asset for operating always has 1 level and it cannot be edited",
     "layoutAgregarActivo": "+ Add asset",
     "layoutActivoElegirHuella": "Choose the footprint…",
     "layoutActivoSinHuella": "Choose the footprint of asset {n}: an asset always goes inside a footprint.",
@@ -4777,8 +4779,20 @@
       "example": "a 3 × 1.1 m footprint placed at the edge of Zone 6 so that 40 cm stick out says \"Zone 6 · does not fit\"; you move it inside and it turns normal. If you put Zone 3 on top of footprint H005 of Zone 6, on Save it says \"Z006.H005 → Z007.H001\" and you decide."
     },
     "layoutSpaceLetter": {
-      "what": "What the asset is: Rack (A), Pallet rack (R), Cabinet (G), Floor pallet (T) or Cold (F: refrigerators and cold rooms). The letter is the Locator's and the system adds the number: it is consecutive per zone and per type, so the code (A001, A002…) is never typed or repeated. If you change the type of an asset that is already saved, it takes the new letter with the same number if it is free.",
-      "example": "you pick Cabinet on the first asset of Zone 6: the system names it G001; the next rack you add in that zone will be A001."
+      "what": "The letter the asset's code and its Locator start with. It comes from the Asset type (Our Fixed Assets catalog): Rack (R), Shelf (A), Cabinet (G), Floor pallet (T) or Refrigerator (F). The system adds the number, consecutive per zone and per letter, so the code (R001, R002…) is never typed or repeated. If you change the type of an asset that is already saved, it takes the new letter with the next free number.",
+      "example": "you pick the Cabinet type on the first asset of Zone 6: the system names it G001; the next Shelf you add in that zone will be A001."
+    },
+    "layoutActivoNombre": {
+      "what": "The name you want to give the asset so you can recognize it. It is optional: if you leave it empty, the name of its footprint is shown.",
+      "example": "«Dairy rack»."
+    },
+    "layoutActivoZona": {
+      "what": "First choose the zone and then the footprint: the footprint list only has the ones in that zone. An asset always sits inside a footprint and its zone is its footprint's zone.",
+      "example": "you pick Zone 6 and the footprints shown are only those of Zone 6 (H001, H003…)."
+    },
+    "layoutActivoNivelFijo": {
+      "what": "An asset for operating (classification Asset for operating, measured in m²) always has 1 level and it cannot be edited. Levels, positions and locators belong to assets for storing.",
+      "example": "a desk has 1 level; a rack for storing can have 4."
     },
     "layoutAssetType": {
       "what": "The type of this space's asset: rack, cabinet, refrigerator, shelf, desk, table… It comes from Catalogs > Fixed Assets and is independent of the classification. It can be left empty.",

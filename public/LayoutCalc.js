@@ -1517,7 +1517,8 @@
             if (!placed.has(f.id)) placed.set(f.id, placeGroup(f, group));
             const { x, y, l, d, h } = placed.get(f.id)[group.indexOf(s)];
             const out = { ...s, zoneId: f.zoneId || '', x, y, l, d, h, active: s.off !== true && f.active !== false };
-            if (f.name) out.name = f.name; else delete out.name;
+            // el nombre que el usuario le puso al activo (ownName) manda; sin él se ve el de su huella
+            if (s.ownName) out.name = s.ownName; else if (f.name) out.name = f.name; else delete out.name;
             // El color del activo es PROPIO (Formato de activo): ya no hereda el de su huella, que se dibuja aparte, debajo. En un Layout guardado de antes (sin la marca ownAssetFmt) un formato igual al de su huella viene de cuando lo heredaba y no cuenta como propio.
             if (!layout.ownAssetFmt && s.fmt && f.fmt && sameFmt(s.fmt, f.fmt)) delete out.fmt;
             return out;
@@ -2831,6 +2832,8 @@
             const label = `Activo ${i + 1}`;
             // El código (A001…) lo pone el sistema según el tipo del activo, consecutivo por zona y tipo (assignSpaceCodes, justo después): lo que mande el cliente solo se usa de punto de partida.
             const code = text(s && s.code, label, false);
+            // el nombre propio del activo (opcional, para personalizar): sin él se ve el de su huella
+            const ownName = text(s && s.ownName, label, false);
             const footprintId = typeof (s && s.footprintId) === 'string' && footprintIds.has(s.footprintId) ? s.footprintId : '';
             if (!footprintId) errors.push(`${label}: elige la huella donde va (un activo siempre va dentro de una huella)`);
             const type = oneOf(s && s.type, SPACE_TYPES, 'rack');
@@ -2863,6 +2866,7 @@
             });
             return {
                 id: idOf(s && s.id, spaceIds, label), footprintId, type, code,
+                ...(ownName ? { ownName } : {}),
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
                 ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
                 ...(bays.length ? { bays } : {}),
@@ -3187,9 +3191,9 @@
                 const first = !seen.has(s.footprintId);
                 seen.add(s.footprintId);
                 const f = byId.get(s.footprintId);
-                const plain = first && f && (s.type || 'rack') === 'rack' && !s.fmt && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off && !OWN_SPACE_KEYS.some((k) => s[k] !== undefined);
+                const plain = first && f && (s.type || 'rack') === 'rack' && !s.ownName && !s.fmt && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off && !OWN_SPACE_KEYS.some((k) => s[k] !== undefined);
                 return !plain;
-            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax', ...OWN_SPACE_KEYS].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
+            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, ...(s.ownName ? { ownName: s.ownName } : {}), type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax', ...OWN_SPACE_KEYS].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
         }
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
         if (section === 'posiciones') return (layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays }));
