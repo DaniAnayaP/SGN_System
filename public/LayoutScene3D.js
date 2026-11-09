@@ -289,7 +289,7 @@
             const LCx = root.LayoutCalc;
             if ((hl.kind === 'bay' || (hl.kind === 'space' && hl.n)) && LCx && LCx.levelMeasures && LCx.bayMeasures) {
                 const n = Math.min(Math.max(1, Number(hl.n) || 1), Math.max(1, s.levels || 1));
-                const slots = Math.max(1, Math.floor(s.slots || 1));
+                const slots = LCx.levelSlots ? LCx.levelSlots(s, n) : Math.max(1, Math.floor(s.slots || 1)); // las posiciones de ESE nivel
                 const c = hl.kind === 'bay' ? Math.min(Math.max(1, Number(hl.c) || 1), slots) : 0;
                 const m = c ? LCx.bayMeasures(s, n, c) : LCx.levelMeasures(s, n);
                 const bottom = Math.max(m.floorH + m.beam, 0);
@@ -1219,7 +1219,8 @@
                         const lvColor = otherLevel ? mixHex(deckC, 0xe4e7f0, 0.8) : deckC;
                         if (!(LCx && LCx.levelMeasures && LCx.bayMeasures)) { dck.push({ x: cx, y: 0.15 + (k - 1) * ((s.h - 0.3) / lv) + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC }); continue; }
                         if ((s.bays || []).some((b) => b.n === k && (b.floorH !== undefined || b.beam !== undefined))) {
-                            for (let c = 1; c <= slotsN; c++) deckAt(cx - s.l / 2 + (c - 0.5) * (s.l / slotsN), s.l / slotsN, LCx.bayMeasures(s, k, c), lvColor);
+                            const slotsK = LCx.levelSlots ? LCx.levelSlots(s, k) : slotsN; // cada nivel tiene las posiciones que se le pusieron en Niveles
+                            for (let c = 1; c <= slotsK; c++) deckAt(cx - s.l / 2 + (c - 0.5) * (s.l / slotsK), s.l / slotsK, LCx.bayMeasures(s, k, c), lvColor);
                         } else deckAt(cx, s.l, LCx.levelMeasures(s, k), lvColor);
                     }
                 }

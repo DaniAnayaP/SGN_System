@@ -1878,6 +1878,15 @@
     "layoutType_use_operations": "Operations",
     "layoutType_use_facilities": "Facilities",
     "layoutNiveles": "Levels",
+    "layoutNivCodigo": "Level code",
+    "layoutNivNombreCol": "Level name",
+    "layoutNivNombrePh": "Your own name (optional)",
+    "layoutNivActivo": "Asset",
+    "layoutNivBase": "Floor to beam height (m)",
+    "layoutNivCejaCol": "Beam height (m)",
+    "layoutNivEspacio": "Space height (m)",
+    "layoutNivAlto": "Level height (m)",
+    "layoutNivCantPos": "Number of positions",
     "layoutEspaciosNivel": "Columns (left to right)",
     "layoutCajones": "Drawers (rows × columns)",
     "layoutHuellaVolumen": "Footprint and volume",
@@ -5025,6 +5034,14 @@
     "layoutNivHuecos": {
       "what": "How many bays (columns) of this level have their own height from the floor, height or beam in Positions. What you write here does not change those.",
       "example": "level 2 has 3 columns and one has its own beam: here it says 1."
+    },
+    "layoutNivNombre": {
+      "what": "The name you want to give this level so you can recognize it. It is optional. The level code (the asset's code + N001, N002…) is set by the system and cannot be changed.",
+      "example": "«Dairy floor» for level 1 of rack R001 (R001.N001)."
+    },
+    "layoutNivPosiciones": {
+      "what": "How many positions (columns, left to right) THIS level has. Each level can have its own. The positions come up on their own in the Positions step, where you set the length, depth and height of each one. Levels are not added here: they come from the Levels column of the Assets step.",
+      "example": "level 1 of the rack has 3 positions and level 2 only 2: Positions shows 3 rows for level 1 and 2 for level 2."
     },
     "layoutSec_posiciones": {
       "what": "Each line is a bay: one level × one column of an asset (a rack with 2 levels and 3 columns leaves 6 bays, already listed). Inside each bay you write how many rows and how many depths it has, its height from the floor and its measures in meters. The measures come calculated from the asset's (or from the level's, if you already wrote them in Levels) and you only fix the ones that differ; the capacity is rows × depths. The length and width of a bay cannot go over the length and depth of the asset, and the columns of the same level cannot add up to more than the length of the asset: if they do, they are marked in red (for the sum, the length of every column of the level) and cannot be saved until fixed.",

@@ -398,6 +398,8 @@ function occupiedBy(spaceId, level, slot, row, depth) {
     return hit ? hit.sku : '';
 }
 // Cuántas filas y cuántas profundidades tiene el hueco (nivel × columna) de un estante (Layout > Posiciones); sin datos propios, 1 y 1.
+// Cuántas posiciones (columnas) tiene un nivel del anaquel: las que se le pusieron en Layout > Niveles (slotsByLevel) o, de una lista vieja sin ellas, las del anaquel.
+const slotsAt = (rack, level) => (Array.isArray(rack.slotsByLevel) && rack.slotsByLevel[level - 1]) || rack.slots || 1;
 function bayInfo(rack, level, column) {
     const b = ((rack && rack.bays) || []).find((x) => x.n === Number(level) && x.c === Number(column)) || {};
     return { rows: b.rows || 1, depth: b.depth || 1 };
@@ -422,7 +424,7 @@ function renderForm() {
     fillSelect('rel-hue', d.footprints.map((f) => ({ value: f.id, label: f.code })), d.zone ? t('main.relChooseFootprint') : t('main.relFirstZone'), st.hue, !d.footprints.length);
     fillSelect('rel-est', d.racks.map((r) => ({ value: r.id, label: r.code })), d.footprint ? t('main.relChooseRack') : t('main.relFirstFootprint'), st.est, !d.racks.length);
     fillSelect('rel-niv', d.rack ? range(d.rack.levels).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relLevelShort') : '—', st.niv, !d.rack);
-    fillSelect('rel-esp', d.rack && st.niv ? range(d.rack.slots).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relSlotShort') : '—', st.esp, !(d.rack && st.niv));
+    fillSelect('rel-esp', d.rack && st.niv ? range(slotsAt(d.rack, st.niv)).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relSlotShort') : '—', st.esp, !(d.rack && st.niv));
     // Dentro del hueco (nivel × columna) están sus filas y sus profundidades: solo se piden si tiene más de una, y se ofrecen las que están libres (más las de esta misma relación, que occupiedBy no cuenta).
     const hasBay = !!(d.rack && st.niv && st.esp);
     const bay = hasBay ? bayInfo(d.rack, st.niv, st.esp) : { rows: 1, depth: 1 };
@@ -454,8 +456,8 @@ function drawRack(rack) {
     $m('rel-rack-sub').textContent = t('main.relRackSub', { levels: rack.levels, slots: rack.slots });
     let html = '';
     for (let n = rack.levels; n >= 1; n -= 1) {
-        html += `<div class="rel-lv" style="--cols:${rack.slots}"><span class="rel-ln">${esc(t('main.relLevelN', { n }))}</span>`;
-        for (let e = 1; e <= rack.slots; e += 1) {
+        html += `<div class="rel-lv" style="--cols:${slotsAt(rack, n)}"><span class="rel-ln">${esc(t('main.relLevelN', { n }))}</span>`;
+        for (let e = 1; e <= slotsAt(rack, n); e += 1) {
             // el hueco está ocupado cuando lo están todas sus filas y profundidades
             const bay = bayInfo(rack, n, e);
             const occs = [];

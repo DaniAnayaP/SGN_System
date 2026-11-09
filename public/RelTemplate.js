@@ -289,9 +289,10 @@
                 if (given(columnGiven) || given(rowGiven) || given(depthGiven)) return err(F('level'), 'levelMissing');
             } else {
                 const levels = rack.levels || 1;
-                const slots = rack.slots || 1;
+                let slots = rack.slots || 1;
                 if (!(levelGiven >= 1 && levelGiven <= levels)) return err(F('level'), 'levelRange', { value: loc ? `N${String(levelGiven).padStart(3, '0')}` : levelRaw, max: levels, rack: rack.code });
                 level = levelGiven;
+                slots = (Array.isArray(rack.slotsByLevel) && rack.slotsByLevel[levelGiven - 1]) || slots; // las posiciones de ESE nivel
                 if (given(columnGiven)) {
                     if (!(columnGiven >= 1 && columnGiven <= slots)) return err(F('slot'), 'slotRange', { value: loc ? `C${String(columnGiven).padStart(3, '0')}` : slotRaw, max: slots, rack: rack.code });
                     slot = columnGiven;

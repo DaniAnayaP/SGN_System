@@ -320,6 +320,8 @@ function derived() {
     return { sub, physical, zones, zone, legacy, footprints, footprint, racks, rack: byId(racks, st.est) };
 }
 // Un espacio es anaquel + nivel + columna + fila + profundidad (sin fila o sin profundidad cuenta como la 1).
+// Cuántas posiciones (columnas) tiene un nivel del anaquel: las que se le pusieron en Layout > Niveles (slotsByLevel) o, de una lista vieja sin ellas, las del anaquel.
+const slotsAt = (rack, level) => (Array.isArray(rack.slotsByLevel) && rack.slotsByLevel[level - 1]) || rack.slots || 1;
 function bayInfo(rack, level, column) {
     const b = ((rack && rack.bays) || []).find((x) => x.n === Number(level) && x.c === Number(column)) || {};
     return { rows: b.rows || 1, depth: b.depth || 1 };
@@ -444,7 +446,7 @@ function refreshForm(keepInput) {
     document.getElementById('rel-hue').closest('.relapp-field').hidden = d.legacy;
     fillSelect('rel-est', d.racks.map((r) => ({ value: r.id, label: r.code })), (d.footprint || d.legacy) ? t('main.relChooseRack') : t('main.relFirstFootprint'), st.est, !d.racks.length);
     fillSelect('rel-niv', d.rack ? range(d.rack.levels).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relLevelShort') : '—', st.niv, !d.rack);
-    fillSelect('rel-esp', d.rack && st.niv ? range(d.rack.slots).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relSlotShort') : '—', st.esp, !(d.rack && st.niv));
+    fillSelect('rel-esp', d.rack && st.niv ? range(slotsAt(d.rack, st.niv)).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relSlotShort') : '—', st.esp, !(d.rack && st.niv));
     const hasBay = !!(d.rack && st.niv && st.esp);
     const bay = hasBay ? bayInfo(d.rack, st.niv, st.esp) : { rows: 1, depth: 1 };
     const slotFree = (r, dd) => !occupiedBy(d.rack.id, Number(st.niv), Number(st.esp), r, dd);
@@ -477,8 +479,8 @@ function drawRack(rack) {
     sub.textContent = t('main.relRackSub', { levels: rack.levels, slots: rack.slots });
     let html = '';
     for (let n = rack.levels; n >= 1; n -= 1) {
-        html += `<div class="relapp-lv" style="--cols:${rack.slots}"><span class="relapp-ln">${n}</span>`;
-        for (let e = 1; e <= rack.slots; e += 1) {
+        html += `<div class="relapp-lv" style="--cols:${slotsAt(rack, n)}"><span class="relapp-ln">${n}</span>`;
+        for (let e = 1; e <= slotsAt(rack, n); e += 1) {
             const bay = bayInfo(rack, n, e);
             const occs = [];
             for (let r = 1; r <= bay.rows; r += 1) for (let dd = 1; dd <= bay.depth; dd += 1) occs.push(occupiedBy(rack.id, n, e, r, dd));

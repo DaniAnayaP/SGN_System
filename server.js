@@ -9567,7 +9567,7 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
             if (entry.spaceIds.length && !entry.spaceIds.includes(state.spaceId)) return bad('Ese anaquel no está asignado a ese sub almacén.');
             if (hasLevel) {
                 if (state.level < 1 || state.level > (space.levels || 1)) return bad('Ese nivel no existe en ese anaquel.');
-                if (hasSlot && (state.slot < 1 || state.slot > (space.slots || 1))) return bad('Esa columna no existe en ese nivel.');
+                if (hasSlot && (state.slot < 1 || state.slot > LayoutCalc.levelSlots(space, state.level))) return bad('Esa columna no existe en ese nivel.');
                 if ((hasRow || hasDepth) && !hasSlot) return bad('Falta la columna.');
                 if (hasRow || hasDepth) {
                     // dentro del hueco (nivel × columna) están sus filas y sus profundidades (Layout > Posiciones)
@@ -9658,7 +9658,7 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
         return idx.zones.map((z) => ({
             id: z.id, name: z.name, code: z.code,
             footprints: idx.footprints.filter((f) => f.zoneId === z.id).map((f) => ({ id: f.id, code: f.code })),
-            spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, footprintId: s.footprintId, levels: s.levels || 1, slots: s.slots || 1, bays: s.bays || [] })),
+            spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, footprintId: s.footprintId, levels: s.levels || 1, slots: LayoutCalc.maxSlots(s), slotsByLevel: LayoutCalc.slotsByLevelOf(s), bays: s.bays || [] })),
         }));
     };
     const zonesByCenter = {};

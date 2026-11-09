@@ -1878,6 +1878,15 @@
     "layoutType_use_operations": "Operaciones",
     "layoutType_use_facilities": "Instalaciones",
     "layoutNiveles": "Niveles",
+    "layoutNivCodigo": "Código del nivel",
+    "layoutNivNombreCol": "Nombre del nivel",
+    "layoutNivNombrePh": "Nombre propio (opcional)",
+    "layoutNivActivo": "Activo",
+    "layoutNivBase": "Alto del piso a la ceja (m)",
+    "layoutNivCejaCol": "Alto de la ceja (m)",
+    "layoutNivEspacio": "Alto del espacio (m)",
+    "layoutNivAlto": "Alto del nivel (m)",
+    "layoutNivCantPos": "Cantidad de posiciones",
     "layoutEspaciosNivel": "Columnas (izq. a der.)",
     "layoutCajones": "Cajones (filas × columnas)",
     "layoutHuellaVolumen": "Huella y volumen",
@@ -5024,6 +5033,14 @@
     "layoutNivHuecos": {
       "what": "Cuántos huecos (columnas) de este nivel traen en Posiciones su propia altura desde el piso, alto o ceja. A esos no les cambia lo que anotes aquí.",
       "example": "el nivel 2 tiene 3 columnas y una lleva su propia ceja: aquí dice 1."
+    },
+    "layoutNivNombre": {
+      "what": "El nombre que tú le quieras poner a este nivel para reconocerlo. Es opcional. El código del nivel (el del activo + N001, N002…) lo pone el sistema y no se cambia.",
+      "example": "«Piso de lácteos» para el nivel 1 del rack R001 (R001.N001)."
+    },
+    "layoutNivPosiciones": {
+      "what": "Cuántas posiciones (columnas, de izquierda a derecha) tiene ESTE nivel. Cada nivel puede tener las suyas. Las posiciones salen solas en el paso Posiciones, donde defines el largo, el fondo y el alto de cada una. Los niveles no se agregan aquí: salen de la columna Niveles del paso Activos.",
+      "example": "el nivel 1 del rack lleva 3 posiciones y el nivel 2 solo 2: en Posiciones salen 3 renglones para el nivel 1 y 2 para el nivel 2."
     },
     "layoutSec_posiciones": {
       "what": "Cada renglón es un hueco: un nivel × una columna de un activo (el rack con 2 niveles y 3 columnas deja 6 huecos, ya listos). Dentro de cada hueco anotas cuántas filas y cuántas profundidades tiene, su altura desde el piso y sus medidas en metros. Si el nivel tiene una reja (travesaño), anota su grueso en Ceja: va aparte del Alto, que es el espacio libre y es también el Alto de almacenamiento. Las medidas salen calculadas con las del activo (o con las del nivel, si ya las anotaste en Niveles) y solo corriges las que cambien; la capacidad es filas × profundidades. El largo y el ancho de un hueco no pueden pasar del largo y el fondo del activo, y las columnas de un mismo nivel no pueden sumar más que el largo del activo: si pasan, se marcan en rojo (en la suma, el largo de todas las columnas del nivel) y no se puede guardar hasta corregirlos.",

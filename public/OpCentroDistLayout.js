@@ -984,6 +984,8 @@ function applyLevelMarks() {
             if (autoCell) { autoCell.textContent = String(Math.round(m.floorH * 100) / 100); autoCell.parentElement.classList.toggle('layout-bad', over); }
             const useCell = document.querySelector(`[data-lvl-use="${i}|${n}"]`);
             if (useCell) useCell.textContent = String(Math.round(m.useful * 100) / 100);
+            const totalCell = document.querySelector(`[data-lvl-total="${i}|${n}"]`);
+            if (totalCell) totalCell.textContent = String(Math.round((m.beam + m.h) * 100) / 100);
         }
     });
     const html = levelIssuesHtml();
@@ -1359,8 +1361,8 @@ function stepHtml(step) {
         d.spaces.forEach((s, i) => {
             if (s.active === false) return;
             const levels = s.levels || 1;
-            const slots = s.slots || 1;
             for (let n = 1; n <= levels; n += 1) {
+                const slots = LC.levelSlots(s, n); // las posiciones que se le pusieron a ESTE nivel en Niveles
                 const sumOver = LC.levelLengthSum(s, n).over;
                 for (let c = 1; c <= slots; c += 1) {
                     if (count >= POSITION_ROWS_MAX) return;
@@ -1396,13 +1398,13 @@ function stepHtml(step) {
                 const m = LC.levelMeasures(s, n);
                 const st = m.stored;
                 const over = s.h > 0 && m.floorH + m.beam + m.h > s.h + 0.005;
-                // cuántos huecos (columnas) de este nivel traen en Posiciones una medida propia de estas tres
-                const own = (s.bays || []).filter((b) => b.n === n && (b.floorH !== undefined || b.h !== undefined || b.beam !== undefined)).length;
-                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}</b></td><td class="layout-calc">${esc(zoneName(s.zoneId))}</td><td class="layout-calc">${n}</td>${n === 1 ? lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined, ' data-help-key="layoutNivArranque"', over) : `<td class="layout-calc${over ? ' layout-bad' : ''}"><span data-lvl-floor="${i}|${n}" data-help-key="layoutNivAuto">${shown(m.floorH)}</span></td>`}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined, '', over)}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"')}<td class="layout-calc"><span data-lvl-use="${i}|${n}">${shown(m.useful)}</span></td><td class="layout-calc"><span data-help-key="layoutNivHuecos">${own || '—'}</span></td><td><button type="button" class="btn btn-secondary layout-toggle" data-lvl-apply="${i}|${n}" data-help-key="layoutNivAplicar" title="${esc(t('main.layoutNivAplicarTip'))}"${dis || levels < 2 ? ' disabled' : ''}>${esc(t('main.layoutNivAplicar'))}</button></td></tr>`);
+                const total = m.beam + m.h;
+                const nameOf = s.ownName || s.name || '';
+                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${String(n).padStart(3, '0')}</b></td><td><input type="text" maxlength="${LC.LIMITS.text}" data-l="lvl" data-i="${i}" data-n="${n}" data-k="name" data-help-key="layoutNivNombre" value="${esc(st.name || '')}" placeholder="${esc(t('main.layoutNivNombrePh'))}"${dis ? ' disabled' : ''}></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td>${n === 1 ? lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined, ' data-help-key="layoutNivArranque"', over) : `<td class="layout-calc${over ? ' layout-bad' : ''}"><span data-lvl-floor="${i}|${n}" data-help-key="layoutNivAuto">${shown(m.floorH)}</span></td>`}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"')}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined, '', over)}<td class="layout-calc"><span data-lvl-total="${i}|${n}">${shown(total)}</span></td><td><input type="number" min="1" max="${LC.LIMITS.slots}" step="1" data-l="lvl" data-i="${i}" data-n="${n}" data-k="slots" data-help-key="layoutNivPosiciones" value="${LC.levelSlots(s, n)}"${st.slots !== undefined ? ' class="layout-edited"' : ''}${dis ? ' disabled' : ''}></td><td><button type="button" class="btn btn-secondary layout-toggle" data-lvl-apply="${i}|${n}" data-help-key="layoutNivAplicar" title="${esc(t('main.layoutNivAplicarTip'))}"${dis || levels < 2 ? ' disabled' : ''}>${esc(t('main.layoutNivAplicar'))}</button></td></tr>`);
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutNivSinActivos'))}</p>`;
-        const heads = ['main.layoutCodigo', 'main.layoutZona', 'main.layoutPosNivel', 'main.layoutPosAltura', 'main.layoutPosAlto', 'main.layoutPosCeja', 'main.layoutPosAltoUtil', 'main.layoutNivHuecosPropios', ''];
+        const heads = ['main.layoutNivCodigo', 'main.layoutNivNombreCol', 'main.layoutNivActivo', 'main.layoutNivBase', 'main.layoutNivCejaCol', 'main.layoutNivEspacio', 'main.layoutNivAlto', 'main.layoutNivCantPos', ''];
         const issues = levelIssuesHtml();
         return `${table(heads, rows, 'layout-niveles')}<div class="layout-vio" data-lvl-issues${issues ? '' : ' hidden'}>${issues}</div>${count >= LEVEL_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutNivMuchos').replace('{n}', LEVEL_ROWS_MAX))}</p>` : ''}`;
     }
@@ -3643,7 +3645,7 @@ function onEdit(event) {
         });
         // las columnas de un nivel no pueden sumar más que el largo del activo: el largo de todas las columnas del nivel se marca (o se desmarca) junto
         const sumOver = LC.levelLengthSum(space, n).over;
-        for (let col = 1; col <= (space.slots || 1); col += 1) {
+        for (let col = 1; col <= LC.levelSlots(space, n); col += 1) {
             const lenBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${col}"][data-k="l"]`);
             if (lenBox) lenBox.classList.toggle('layout-missing', sumOver || (space.l > 0 && LC.bayMeasures(space, n, col).l > space.l + 0.005));
         }
@@ -3657,7 +3659,16 @@ function onEdit(event) {
         if (!space.lvls) space.lvls = [];
         let lv = space.lvls.find((l) => l.n === n);
         if (!lv) { lv = { n }; space.lvls.push(lv); }
-        if (value > 0) lv[lvKey] = value; else delete lv[lvKey];
+        if (lvKey === 'name') {
+            // el nombre del nivel es opcional y de quien lo captura: vacío = sin nombre
+            if (String(value).trim()) lv.name = String(value); else delete lv.name;
+        } else if (lvKey === 'slots') {
+            // cuántas posiciones tiene este nivel; si es la cantidad del activo no se guarda aparte. Los huecos de columnas que el nivel ya no tiene se quitan.
+            const count = Math.max(1, Math.round(value) || 1);
+            if (count !== Math.max(1, Math.round(Number(space.slots)) || 1)) lv.slots = Math.min(count, LC.LIMITS.slots); else delete lv.slots;
+            const own = LC.levelSlots(space, n);
+            if (space.bays) { space.bays = space.bays.filter((b) => b.n !== n || b.c <= own); if (!space.bays.length) delete space.bays; }
+        } else if (value > 0) lv[lvKey] = value; else delete lv[lvKey];
         if (Object.keys(lv).length <= 1) space.lvls = space.lvls.filter((l) => l !== lv);
         if (!space.lvls.length) delete space.lvls;
         // las alturas del piso de los niveles de arriba (automáticas) y el alto de almacenamiento se recalculan al momento (applyLevelMarks); al soltar el campo se vuelve a dibujar la tabla
