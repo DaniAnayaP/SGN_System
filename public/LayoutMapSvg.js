@@ -333,13 +333,17 @@
         // una pared muy delgada para la escala del croquis se refuerza con un trazo para que siempre se vea (como mínimo unos 3 px de grueso)
         (on('paredes') ? obstacleShapes.filter(({ o }) => o.kind === 'wall') : []).forEach(({ o, g }) => {
             const mk = LC.wallMark ? LC.wallMark(layoutNoTurn, (layoutNoTurn.obstacles || []).find((x) => x.id === o.id), options.rotation || 0) : null;
+            // con formato propio (color, trama y borde) la pared se pinta con él; la tira del lado más bajo, más clara
+            const wallSafe = String(o.id).replace(/[^A-Za-z0-9_-]/g, '');
+            const wallLighter = o.fmt ? { ...o.fmt, fill: LC.mixHex(o.fmt.fill, '#FFFFFF', 0.55), bcolor: LC.mixHex(o.fmt.bcolor, '#FFFFFF', 0.55) } : null;
             if (mk) {
                 // dos tiras: la del lado más alto con el color de la pared y la del más bajo, clara; la etiqueta (con las medidas) va junto a su punto medio
                 const dark = T.chrome.nave;
                 const light = LC.mixHex(dark, '#FFFFFF', 0.55);
                 const pts = (poly) => poly.map((v) => `${X(v[0])},${Y(v[1])}`).join(' ');
                 const sw = Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2);
-                s += `<polygon points="${pts(mk.a)}" fill="${mk.dark === 'a' ? dark : light}" stroke="${mk.dark === 'a' ? dark : light}" stroke-width="${sw}"/><polygon points="${pts(mk.b)}" fill="${mk.dark === 'b' ? dark : light}" stroke="${mk.dark === 'b' ? dark : light}" stroke-width="${sw}"/>`;
+                if (o.fmt) s += zonePaint(`wf-${wallSafe}a`, mk.dark === 'a' ? o.fmt : wallLighter).markup(pts(mk.a)) + zonePaint(`wf-${wallSafe}b`, mk.dark === 'b' ? o.fmt : wallLighter).markup(pts(mk.b));
+                else s += `<polygon points="${pts(mk.a)}" fill="${mk.dark === 'a' ? dark : light}" stroke="${mk.dark === 'a' ? dark : light}" stroke-width="${sw}"/><polygon points="${pts(mk.b)}" fill="${mk.dark === 'b' ? dark : light}" stroke="${mk.dark === 'b' ? dark : light}" stroke-width="${sw}"/>`;
                 if (options.measures !== false && mk.length * sc >= 36) {
                     const off = (mk.thick * sc) / 2 + 8;
                     const lx = X(mk.mid[0]) - mk.nx * off;
@@ -351,7 +355,8 @@
                 }
                 return;
             }
-            s += `<polygon points="${obstaclePoly(g)}" fill="${T.chrome.nave}" stroke="${T.chrome.nave}" stroke-width="${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}" stroke-linejoin="miter"/>`; });
+            if (o.fmt) s += zonePaint(`wf-${wallSafe}`, o.fmt).markup(obstaclePoly(g));
+            else s += `<polygon points="${obstaclePoly(g)}" fill="${T.chrome.nave}" stroke="${T.chrome.nave}" stroke-width="${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}" stroke-linejoin="miter"/>`; });
         // El contorno (línea azul punteada y fina) va ENCIMA de las paredes: se distingue de ellas aunque estén sobre el mismo lado.
         if (on('contorno')) s += `<polygon points="${layout.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${CONTOUR_COLOR}" stroke-width="1.6" stroke-dasharray="7 5" stroke-linejoin="round"/>`;
         // La HUELLA (el lugar en el piso) va primero, blanca o con su color; el ACTIVO encima, un poco más chico, con su propio color (arena si no tiene): así se distinguen aunque midan lo mismo. Un Layout que todavía

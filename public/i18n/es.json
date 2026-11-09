@@ -2275,6 +2275,10 @@
     "layoutRampaPropio": "Elegir color y trama",
     "layoutRampaPropioSub": "Un color, rayas y borde propios, como los pisos y las zonas",
     "layoutRampaDifuminadoNota": "La rampa se pinta con un degradado: empieza con el color de {lo} y termina con el de {hi}. Si cambias el color de uno de esos pisos, la rampa lo sigue.",
+    "layoutFormatoPared": "Formato de la pared",
+    "layoutAplicarUnaPared": "Solo esta pared",
+    "layoutAplicarTodasParedes": "Todas las paredes",
+    "layoutAplicarTodasParedesSub": "Las {n} paredes del Layout",
     "layoutAgregarRampa": "+ Agregar rampa",
     "layoutRampa": "Rampa",
     "layoutCodigoRampa": "Código de rampa",
@@ -5379,6 +5383,10 @@
     "layoutFmtLine": {
       "what": "Estilo de la línea del borde de la zona: continua (fina, media o gruesa), guiones, punteada, guion y punto, doble o ninguna.",
       "example": "borde de guiones para una zona provisional."
+    },
+    "layoutWallFmt": {
+      "what": "Cambia el color, la trama y el borde de la pared, como en los pisos y las zonas. Sin formato propio se ve oscura. Puedes aplicarlo solo a esta pared o a todas.",
+      "example": "una pared de oficinas en gris claro con rayas diagonales y las paredes de la bodega en azul sólido."
     },
     "layoutRampFmt": {
       "what": "Cambia el color de la rampa. Por defecto se difumina entre los colores de los dos pisos que une (la nave es gris); también puedes elegir un color, rayas y borde propios, como en los pisos.",

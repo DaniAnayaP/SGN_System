@@ -1057,7 +1057,7 @@ function obstacleRowHtml(o, i, dis, wallsOnly = false) {
             + num('hb', o.hb > 0 ? o.hb : '', 'layoutObstAlturaParedB', `min="0" placeholder="${sidesA ? ph(sidesA.b.h0) : ''}"`)
             + num('hb2', o.hb2 > 0 ? o.hb2 : '', 'layoutObstAlturaParedBFin', `min="0" placeholder="${ph(endB)}"`);
         const sideCells = `<td class="layout-calc" data-wall-sa="${i}" data-help-key="layoutParedLados">${esc(wallSideText(o, 'a'))}</td><td class="layout-calc" data-wall-sb="${i}" data-help-key="layoutParedLados">${esc(wallSideText(o, 'b'))}</td>`;
-        return `<tr><td class="layout-calc"><b data-wall-code="${i}">${esc(o.code || '')}</b></td>${cellText('obstacles', i, 'name', o.name, dis)}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${wallHeight}${sideCells}${removeCell('obstacles', i, dis)}</tr>`;
+        return `<tr><td class="layout-calc"><b data-wall-code="${i}">${esc(o.code || '')}</b></td>${cellText('obstacles', i, 'name', o.name, dis)}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${wallHeight}${sideCells}${removeCell('obstacles', i, dis, wallFmtButton(o, i, dis))}</tr>`;
     }
     // en Contorno el Tipo ya no ofrece Pared (las paredes se agregan en su propio paso)
     return `<tr>${cellText('obstacles', i, 'name', o.name, dis)}${sel('kind', optionsHtml('obstacle', LC.OBSTACLE_KINDS.filter((k) => k !== 'wall'), o.kind), 'layoutObstTipo')}${sel('mode', optionsHtml('obmode', LC.OBSTACLE_MODES, o.mode), 'layoutObstUbicacion')}${place}${height}${bodyCells}${removeCell('obstacles', i, dis)}</tr>`;
@@ -2355,9 +2355,15 @@ function renderSvg(underlay) {
             // una pared con dos alturas (o sobre dos pisos distintos) se parte en dos tiras: la del lado más alto oscura y la del más bajo clara, con su etiqueta (se calcula sobre el Layout sin girar)
             const orig = (state.draft.obstacles || []).find((x) => x.id === o.id);
             const mk = orig ? LC.wallMark(state.draft, orig, rot) : null;
-            if (!mk) { s += `<polygon class="lo lo-wall" data-obid="${esc(o.id)}" style="${strokeW}" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; return; }
+            // con formato propio la pared se pinta con su color y su trama (la tira del lado más bajo, más clara)
+            const ownFmt = orig && orig.fmt ? pickFmt(orig.fmt) : null;
+            const wallSafe = String(o.id).replace(/[^A-Za-z0-9_-]/g, '');
+            const wallPaint = (fm, sfx, ptsStr) => window.LayoutMapSvg.zonePaint(`wf-${wallSafe}${sfx}`, fm).markup(ptsStr);
+            const wallLighter = ownFmt ? { ...ownFmt, fill: LC.mixHex(ownFmt.fill, '#FFFFFF', 0.55), bcolor: LC.mixHex(ownFmt.bcolor, '#FFFFFF', 0.55) } : null;
+            if (!mk) { if (ownFmt) { s += `<g class="lo lo-wall" data-obid="${esc(o.id)}" style="${strokeW}"><title>${esc(o.name)}</title>${wallPaint(ownFmt, '', obstaclePoly(g))}</g>`; return; } s += `<polygon class="lo lo-wall" data-obid="${esc(o.id)}" style="${strokeW}" points="${obstaclePoly(g)}"><title>${esc(o.name)}</title></polygon>`; return; }
             const pts = (poly) => poly.map((v) => `${X(v[0])},${Y(v[1])}`).join(' ');
-            s += `<polygon class="lo lo-wall${mk.dark === 'a' ? '' : ' lo-wall-light'}" data-obid="${esc(o.id)}" style="${strokeW}" points="${pts(mk.a)}"><title>${esc(o.name)} · ${esc(mk.label)}</title></polygon><polygon class="lo lo-wall${mk.dark === 'b' ? '' : ' lo-wall-light'}" data-obid="${esc(o.id)}" style="${strokeW}" points="${pts(mk.b)}"><title>${esc(o.name)} · ${esc(mk.label)}</title></polygon>`;
+            if (ownFmt) s += `<g class="lo lo-wall" data-obid="${esc(o.id)}" style="${strokeW}"><title>${esc(o.name)} · ${esc(mk.label)}</title>${wallPaint(mk.dark === 'a' ? ownFmt : wallLighter, 'a', pts(mk.a))}${wallPaint(mk.dark === 'b' ? ownFmt : wallLighter, 'b', pts(mk.b))}</g>`;
+            else s += `<polygon class="lo lo-wall${mk.dark === 'a' ? '' : ' lo-wall-light'}" data-obid="${esc(o.id)}" style="${strokeW}" points="${pts(mk.a)}"><title>${esc(o.name)} · ${esc(mk.label)}</title></polygon><polygon class="lo lo-wall${mk.dark === 'b' ? '' : ' lo-wall-light'}" data-obid="${esc(o.id)}" style="${strokeW}" points="${pts(mk.b)}"><title>${esc(o.name)} · ${esc(mk.label)}</title></polygon>`;
             // la etiqueta va del lado B de la pared (junto a su punto medio) y sigue el botón de medidas
             if (sM && mk.length * sc >= 36) {
                 const off = (mk.thick * sc) / 2 + 9;
@@ -3302,6 +3308,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (fmtAsset) { openAssetFmtDialog(Number(fmtAsset.dataset.fmtasset)); return; }
     const fmtFloor = event.target.closest('[data-fmtfloor]');
     if (fmtFloor) { openFloorFmtDialog(Number(fmtFloor.dataset.fmtfloor)); return; }
+    const fmtWall = event.target.closest('[data-fmtwall]');
+    if (fmtWall) { openWallFmtDialog(Number(fmtWall.dataset.fmtwall)); return; }
     const fmtRamp = event.target.closest('[data-fmtramp]');
     if (fmtRamp) { openRampFmtDialog(Number(fmtRamp.dataset.fmtramp)); return; }
     const fmtSpace = event.target.closest('[data-fmtspace]');
@@ -3475,6 +3483,17 @@ function rampEndNames(r) {
     const nameOf = (ref) => (ref === 'nave' ? t('main.layoutRampaNave') : (((state.draft.floors || []).find((f) => f.id === ref) || {}).code || '—'));
     return info && info.ok && info.loRef ? { lo: nameOf(info.loRef), hi: nameOf(info.hiRef) } : { lo: '—', hi: '—' };
 }
+// El icono de paleta de cada renglón de Paredes (con la misma hoja del icono en el árbol que los pisos): el color, la trama y el borde propios de la pared; el cuadrito muestra el que lleva ahora (oscuro si no tiene).
+const WALL_DEFAULT_FMT = { fill: '#3f435d', pattern: 'solid', pcolor: '#14161f', line: 'thin', bcolor: '#14161f' };
+function wallFmtButton(o, i, dis) {
+    if (!(state.perms && state.perms.canFormatFloors)) return '';
+    const cur = o.fmt ? pickFmt(o.fmt) : WALL_DEFAULT_FMT;
+    return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${o.fmt ? ' on' : ''}" data-fmtwall="${i}" data-help-key="layoutWallFmt" aria-label="${esc(t('main.layoutFormatoPared'))} ${esc(o.code || '')}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i><span class="layout-fmt-dot" style="background:${esc(cur.fill)};border-color:${esc(cur.bcolor)}"></span></button>`;
+}
+// A qué paredes se aplica lo que se elige en la ventana: solo a esa o a todas las paredes.
+function wallTargets(w, scope) {
+    return scope === 'all' ? (state.draft.obstacles || []).filter((x) => x.kind === 'wall') : [w];
+}
 // A qué pisos se aplica lo que se elige en la ventana: solo a ese o a los que tienen su mismo nivel (y, si es una rampa, sus mismos dos niveles).
 function floorTargets(f, scope) {
     if (scope !== 'level') return [f];
@@ -3517,6 +3536,14 @@ function spaceTargets(sp, scope) {
 }
 function renderFmtScope() {
     const box = $('layout-fmt-scope');
+    if (fmtDialog && fmtDialog.kind === 'wall') {
+        const w = (state.draft.obstacles || []).find((x) => x.id === fmtDialog.targetId);
+        box.hidden = !w;
+        if (!w) return;
+        const options = [['one', t('main.layoutAplicarUnaPared'), w.code || ''], ['all', t('main.layoutAplicarTodasParedes'), t('main.layoutAplicarTodasParedesSub').replace('{n}', String(wallTargets(w, 'all').length))]];
+        box.innerHTML = `<legend>${esc(t('main.layoutAplicarA'))}</legend>${options.map(([value, title, sub]) => `<label class="layout-fmt-opt" data-help-key="layoutFmtScope"><input type="radio" name="layout-fmt-scope" value="${value}"${fmtDialog.scope === value ? ' checked' : ''}><b>${esc(title)}</b><span>${esc(sub)}</span></label>`).join('')}`;
+        return;
+    }
     if (fmtDialog && fmtDialog.kind === 'ramp') {
         const r = (state.draft.ramps || []).find((x) => x.id === fmtDialog.targetId);
         box.hidden = !r;
@@ -3597,7 +3624,7 @@ function renderFmtBody() {
     const isSpace = fmtDialog.kind !== 'zone';
     const shape = isSpace ? '60,45 170,45 170,105 60,105' : '30,20 200,20 200,70 130,70 130,130 30,130';
     const zone = isSpace ? null : state.draft.zones.find((z) => z.id === fmtDialog.targetId);
-    const space = fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'floor' ? (state.draft.floors || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'ramp' ? (state.draft.ramps || []).find((s) => s.id === fmtDialog.targetId) : null)));
+    const space = fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'floor' ? (state.draft.floors || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'ramp' ? (state.draft.ramps || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'wall' ? (state.draft.obstacles || []).find((s) => s.id === fmtDialog.targetId) : null))));
     const ink = isSpace ? window.LayoutMapSvg.inkFor(d) : '';
     const label = isSpace
         ? `<text class="lt3" x="115" y="78" text-anchor="middle"${ink ? ` style="fill:${ink}"` : ''}>${esc(space ? space.code : '')}</text>`
@@ -3641,6 +3668,9 @@ function ensureFmtModal() {
             if (fmtDialog.kind === 'floor') {
                 const fl = (state.draft.floors || []).find((r) => r.id === fmtDialog.targetId);
                 if (fl) floorTargets(fl, fmtDialog.scope).forEach((x) => { delete x.fmt; });
+            } else if (fmtDialog.kind === 'wall') {
+                const wl = (state.draft.obstacles || []).find((r) => r.id === fmtDialog.targetId);
+                if (wl) wallTargets(wl, fmtDialog.scope).forEach((x) => { delete x.fmt; });
             } else if (fmtDialog.kind === 'ramp') {
                 const rp = (state.draft.ramps || []).find((r) => r.id === fmtDialog.targetId);
                 if (rp) delete rp.fmt;
@@ -3666,6 +3696,10 @@ function ensureFmtModal() {
                     const fl = (state.draft.floors || []).find((r) => r.id === fmtDialog.targetId);
                     // Con formato propio (aunque no se haya cambiado nada) se puede copiar a los demás del grupo; sin formato y sin cambios (se queda el color de su nivel) no hay nada que aplicar.
                     if (fl && (fl.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) floorTargets(fl, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
+                } else if (fmtDialog.kind === 'wall') {
+                    // Con formato propio (aunque no se haya cambiado nada) se puede copiar a las demás paredes; sin formato y sin cambios no hay nada que aplicar.
+                    const wl = (state.draft.obstacles || []).find((r) => r.id === fmtDialog.targetId);
+                    if (wl && (wl.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) wallTargets(wl, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
                 } else if (fmtDialog.kind === 'ramp') {
                     // «Difuminar» (por defecto) no lleva formato propio; «Elegir color y trama» sí
                     const rp = (state.draft.ramps || []).find((r) => r.id === fmtDialog.targetId);
@@ -3734,6 +3768,19 @@ function openFloorFmtDialog(index) {
     const base = pickFmt(LC.floorFmtOf(state.draft, f));
     fmtDialog = { kind: 'floor', targetId: f.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
     $('layout-fmt-title').textContent = `${t('main.layoutFormatoPiso')} ${f.code || ''}`;
+    $('layout-fmt-namefield').hidden = true;
+    fmtModalEl.hidden = false;
+    renderFmtScope();
+    renderFmtBody();
+}
+// La ventana de formato de una pared: color, trama y borde como los pisos; se puede aplicar a esa pared o a todas.
+function openWallFmtDialog(index) {
+    const w = (state.draft.obstacles || [])[index];
+    if (!w || w.kind !== 'wall') return;
+    ensureFmtModal();
+    const base = pickFmt(w.fmt || WALL_DEFAULT_FMT);
+    fmtDialog = { kind: 'wall', targetId: w.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
+    $('layout-fmt-title').textContent = `${t('main.layoutFormatoPared')} ${w.code || ''}`;
     $('layout-fmt-namefield').hidden = true;
     fmtModalEl.hidden = false;
     renderFmtScope();

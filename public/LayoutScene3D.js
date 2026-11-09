@@ -556,6 +556,15 @@
                 } catch (err) { return null; }
             };
             // Una pared compartida con una altura distinta de cada lado: dos mitades de su grueso, cada una sube del piso de la nave al remate de su lado (de su inicio a su final).
+            // El material de una pared: el azul de siempre o, con formato propio (wallFmt3), su color y su trama (la tira del lado más bajo, un poco más oscura en el 3D); sin relleno, casi transparente.
+            let wallFmt3 = null;
+            const wallMat = (defaultColor, tone) => {
+                const f = wallFmt3;
+                if (!f) return new THREE.MeshLambertMaterial({ color: defaultColor, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+                const textured = f.pattern !== 'solid' && f.pattern !== 'none';
+                const tint = tone && root.LayoutCalc && root.LayoutCalc.mixHex ? root.LayoutCalc.mixHex(f.fill, '#000000', 0.2) : f.fill;
+                return new THREE.MeshLambertMaterial({ color: textured ? 0xffffff : new THREE.Color(tint), map: textured ? patternTexture(f.fill, f.pattern, f.pcolor) : null, transparent: true, opacity: f.pattern === 'none' ? 0.1 : 0.62, side: THREE.DoubleSide, depthWrite: false });
+            };
             const halfWalls = (ax, sides) => {
                 const half = (ax.thick || 0) / 2;
                 if (!(half > 0) || !(ax.length > 0)) return [];
@@ -572,12 +581,13 @@
                     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
                     geo.setIndex(idx);
                     geo.computeVertexNormals();
-                    return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+                    return new THREE.Mesh(geo, wallMat(color, color === 0x566a98));
                 };
                 return [mk(0, half, sides.a, 0x6f84b3), mk(-half, 0, sides.b, 0x566a98)];
             };
             shapes3.filter(({ o }) => o.kind === 'wall' && !o._geom).forEach(({ o, g }) => {
                 fxItem = { type: 'wall', id: o.id };
+                wallFmt3 = o.fmt || null;
                 // la pared sube de la altura de su inicio a la de su final (de fábrica, la del contorno en cada extremo); con 4 esquinas se arma con la parte de arriba inclinada
                 const ax = root.LayoutCalc && root.LayoutCalc.wallAxis ? root.LayoutCalc.wallAxis(layout, o) : null;
                 const wsides = ax && root.LayoutCalc.wallSides ? root.LayoutCalc.wallSides(layout, o, ax) : null;
@@ -588,7 +598,7 @@
                 }
                 const wallH = ax ? ax.height : (o.mode === 'contour' ? (cornerH[(Math.max(1, Number(o.wall)) - 1) % V.length] + cornerH[Math.max(1, Number(o.wall)) % V.length]) / 2 : avgH);
                 const geo = ax && ax.length > 0 && g.pts.length === 4 && Math.abs(ax.hStart - ax.hEnd) > 0.005 ? slopedPrism(g.pts, ax) : prism(g.pts, wallH, 0);
-                if (geo) group.walls.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x6f84b3, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false })));
+                if (geo) group.walls.add(new THREE.Mesh(geo, wallMat(0x6f84b3, false)));
             });
             const lg = new THREE.BufferGeometry();
             lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));

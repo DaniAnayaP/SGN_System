@@ -2489,6 +2489,9 @@
                     const wh = Number(o[hk]);
                     if (Number.isFinite(wh) && wh >= 0.01 && wh <= LIMITS.maxHeight) base[hk] = round2(wh); else errors.push(`${label}: la altura de la pared no es válida`);
                 });
+                // Formato propio (color, trama y borde, como los pisos y las zonas): opcional; sin él la pared se ve oscura como siempre.
+                const wallFmt = sanitizeFmt(o && o.fmt);
+                if (wallFmt) base.fmt = wallFmt;
             }
             if (kind === 'column' || kind === 'other') {
                 // Un obstáculo que no llega al piso ni al techo: su altura del piso (elev) y su alto (h), opcionales (vacío = va del piso al techo, como una columna). Una altura del piso de 0 es el piso: no se guarda.

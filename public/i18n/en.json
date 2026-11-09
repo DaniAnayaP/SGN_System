@@ -2275,6 +2275,10 @@
     "layoutRampaPropio": "Choose a color and pattern",
     "layoutRampaPropioSub": "Its own color, stripes and border, like the floors and zones",
     "layoutRampaDifuminadoNota": "The ramp is painted with a gradient: it starts with the color of {lo} and ends with the one of {hi}. If you change the color of one of those floors, the ramp follows it.",
+    "layoutFormatoPared": "Wall format",
+    "layoutAplicarUnaPared": "Only this wall",
+    "layoutAplicarTodasParedes": "All walls",
+    "layoutAplicarTodasParedesSub": "The {n} walls of the Layout",
     "layoutAgregarRampa": "+ Add ramp",
     "layoutRampa": "Ramp",
     "layoutCodigoRampa": "Ramp code",
@@ -5380,6 +5384,10 @@
     "layoutFmtLine": {
       "what": "Line style of the zone border: solid (thin, medium or thick), dashed, dotted, dash-dot, double or none.",
       "example": "a dashed border for a temporary zone."
+    },
+    "layoutWallFmt": {
+      "what": "Changes the color, pattern and border of the wall, like in the floors and zones. Without its own format it looks dark. You can apply it to this wall only or to all of them.",
+      "example": "an office wall in light gray with diagonal stripes and the warehouse walls in solid blue."
     },
     "layoutRampFmt": {
       "what": "Changes the color of the ramp. By default it blends the colors of the two floors it joins (the nave is gray); you can also choose its own color, stripes and border, like the floors.",
