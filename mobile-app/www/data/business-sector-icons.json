@@ -13,7 +13,8 @@
     "belleza",
     "servicios",
     "entretenimiento",
-    "inmobiliaria"
+    "inmobiliaria",
+    "cadena"
   ],
   "curated": {
     "alimentos": [
@@ -220,6 +221,24 @@
       "bx-door-open",
       "bx-key",
       "bx-tachometer"
+    ],
+    "cadena": [
+      "bx-package",
+      "bxs-package",
+      "bxs-truck",
+      "bx-box",
+      "bx-archive",
+      "bx-cabinet",
+      "bx-sitemap",
+      "bx-network-chart",
+      "bx-transfer-alt",
+      "bx-barcode",
+      "bx-qr-scan",
+      "bx-fridge",
+      "bx-line-chart",
+      "bx-list-check",
+      "bx-store-alt",
+      "bx-buildings"
     ]
   },
   "all": [

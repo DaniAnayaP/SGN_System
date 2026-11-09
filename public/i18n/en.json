@@ -522,7 +522,8 @@
         "belleza": "Beauty & Wellness",
         "servicios": "Professional Services",
         "entretenimiento": "Entertainment & Tourism",
-        "inmobiliaria": "Real Estate"
+        "inmobiliaria": "Real Estate",
+        "cadena": "Supply Chain"
     },
     "businessSectorDescription": "Description",
     "businessSectorPermsAssigned": "Assigned Permissions",

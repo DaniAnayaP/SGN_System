@@ -411,7 +411,8 @@
         "belleza": "Belleza y Bienestar",
         "servicios": "Servicios Profesionales",
         "entretenimiento": "Entretenimiento y Turismo",
-        "inmobiliaria": "Inmobiliaria"
+        "inmobiliaria": "Inmobiliaria",
+        "cadena": "Cadena de Suministro"
     },
     "businessSectorDescription": "Descripción",
     "businessSectorPermsAssigned": "Permisos Asignados",
