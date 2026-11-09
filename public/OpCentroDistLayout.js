@@ -1507,6 +1507,7 @@ function renderPanel() {
     panelScrollers().forEach((el, i) => { el.scrollTop = panelScrollEnd ? el.scrollHeight : (keepTops[i] || 0); });
     panelScrollEnd = false;
     panelScrollStep = state.focus;
+    if (state.mode === 'edit') renderViewStrip(); // Qué ver (la franja) sigue a los pasos encendidos
     bindLayoutFilters();
     markSelectedRow();
     if (state.draft) { applyFootprintMarks(); applyActivoMarks(); applyTransitMarks(); applySafetyMarks(); applyWallItemMarks(); }
@@ -2107,12 +2108,31 @@ function findLayout(d) {
 }
 // ¿Este renglón de una tabla es de lo enfocado? Los activos todavía sin huella y las huellas sin zona (recién agregados) siempre se ven, para no perderlos. Con zonas enfocadas, las paredes, puertas, luz, sensores, seguridad,
 // pasillos, objetos, obstáculos y pisos que no están en esas zonas también se esconden (inside = lo que hay dentro, ya calculado).
+// El tipo de lo elegido (como en «Elegir») al que corresponde el renglón de una tabla; null si no es de ningún tipo que se pueda elegir.
+function pickTypeOfRow(e) {
+    const d = state.draft;
+    if (e.kind === 'footprint') return 'footprint';
+    if (e.kind === 'space' || e.kind === 'bay') return 'space';
+    if (e.kind === 'obstacle') { const o = (d.obstacles || []).find((x) => x.id === e.id); return o ? (o.kind === 'wall' ? 'wall' : 'obstacle') : null; }
+    return ['door', 'power', 'sensor', 'safety', 'transit', 'object', 'floor'].includes(e.kind) ? e.kind : null;
+}
+// Con cosas elegidas: de cada tipo que tiene algo elegido solo salen esos renglones (los tipos sin nada elegido salen completos); con un nivel o una posición del «Localizador», solo salen los renglones de ese nivel o esa posición.
+function itemRowShown(e) {
+    const ty = pickTypeOfRow(e);
+    if (ty && state.pick.some((p) => p.type === ty) && !state.pick.some((p) => p.type === ty && p.id === e.id)) return false;
+    const h = state.hl;
+    if (h && h.loc && e.id === h.id && (e.kind === 'space' || e.kind === 'bay')) {
+        if (e.n !== undefined && h.n && e.n !== h.n) return false;
+        if (e.kind === 'bay' && h.c && e.c !== h.c) return false;
+    }
+    return true;
+}
 const FIND_ROW_TYPE = { door: 'door', power: 'power', sensor: 'sensor', safety: 'safety', transit: 'transit', object: 'object', floor: 'floor' };
 function inFind(entity, inside) {
     const f = state.find;
     const d = state.draft;
     if (!f || !d || !entity) return true;
-    if (f.kind === 'items') return true; // «Elegir» es del modo Ver: las tablas no se filtran
+    if (f.kind === 'items') return state.findDim || itemRowShown(entity); // «Elegir»: con Tenue las tablas no se filtran; con Oculto o Enfoque solo salen los renglones de lo elegido
     const zids = zoneFocusIds(f);
     if (entity.kind === 'zone') return f.kind === 'zone' && zids.includes(entity.id);
     if (entity.kind === 'footprint') {
@@ -2175,11 +2195,11 @@ function findSearch(query) {
     const by = findLists(d);
     const text = String(query || '').trim();
     const match = text ? SearchSyntax.compile('contains', text) : null;
-    const chosen = findTypesChosen();
+    const chosen = state.mode === 'edit' ? [] : findTypesChosen(); // en Editar los pasos encendidos son pocos: el buscador busca de todo
     const counts = {};
     const items = [];
     // con zonas elegidas solo cuenta y se lista lo que hay dentro de ellas
-    const zf = state.mode !== 'edit' ? state.zoneScope : zoneFocusIds(state.find); // en «Ver» la zona sale del botón Zona (el buscador solo busca en lo que filtran Zona y Qué ver); en «Editar», que no tiene franja, del enfoque del buscador
+    const zf = state.zoneScope; // la zona sale del botón Zona (también en Editar); el buscador solo busca dentro de ella
     const inside = zf.length ? scopeInside(d, zf) : null;
     const noTypes = state.mode !== 'edit' && state.findNone; // Qué ver en «Ninguno»: no hay nada donde buscar
     findTypesShown().forEach((ft) => {
@@ -2195,26 +2215,11 @@ let findItems = [];
 let findActive = -1;
 function renderFindList() {
     const list = $('layout-find-list');
-    const { items, counts } = findSearch($('layout-find-input').value);
+    const { items } = findSearch($('layout-find-input').value);
     findItems = items.slice(0, 40);
     findActive = findItems.length ? 0 : -1;
-    const d = state.draft;
-    const zonesScope = state.findScope === 'zones';
-    const zids = zoneFocusIds(state.find);
-    // Paso 1, «Buscar en»: Todo (toda la nave) o Zonas (se marcan una o varias). Solo sale si la cuenta ve el paso Zonas y hay zonas.
-    const zoneList = stepVisible('zonas') ? (d.zones || []).filter((z) => z.active !== false) : [];
-    const scopeBtn = (id, label, on, n) => `<button type="button" class="layout-find-type" data-find-scope="${id}" aria-pressed="${on}">${esc(label)}${n ? ` <span class="layout-find-n">${n}</span>` : ''}</button>`;
-    const scopeRow = zoneList.length ? `<div class="layout-find-types" role="group" data-help-key="layoutFindDonde"><span class="layout-find-hide-title">${esc(t('main.layoutFindBuscarEn'))}</span>${scopeBtn('all', t('main.layoutFindTipoTodo'), !zonesScope, 0)}${scopeBtn('zones', t('main.layoutFindTipo_zone'), zonesScope, zids.length)}</div>` : '';
-    const zonesRow = zonesScope && zoneList.length ? `<div class="layout-find-types layout-find-zones" role="group" data-help-key="layoutFindZonas">${zoneList.map((z) => `<button type="button" class="layout-find-type layout-find-zone" data-find-zone="${esc(z.id)}" aria-pressed="${zids.includes(z.id)}">${esc(z.name || z.code)}</button>`).join('')}</div>` : '';
-    // Paso 2, «Qué ver»: Todo o uno o varios tipos; cada número es lo que coincide con lo escrito (y, con zonas elegidas, lo que hay dentro de ellas). Solo salen los tipos que el árbol deja ver.
-    const shown = findTypesShown();
-    const chosen = findTypesChosen();
-    const total = shown.reduce((acc, ft) => acc + (counts[ft.type] || 0), 0);
-    const chip = (id, label, n, on) => `<button type="button" class="layout-find-type" data-find-type="${id}" aria-pressed="${on}">${esc(label)} <span class="layout-find-n">${n}</span></button>`;
-    const chips = shown.length > 1 ? `<div class="layout-find-types" role="group" data-help-key="layoutFindTipos"><span class="layout-find-hide-title">${esc(t('main.layoutFindQueVer'))}</span>${chip('all', t('main.layoutFindTipoTodo'), total, !chosen.length)}${shown.map((ft) => chip(ft.type, t(`main.layoutFindTipo_${ft.type}`), counts[ft.type] || 0, chosen.includes(ft.type))).join('')}</div>` : '';
-    $('layout-find-input').placeholder = chosen.length === 1 ? t('main.layoutFindEnTipo', { type: t(`main.layoutFindTipo_${chosen[0]}`).toLowerCase() }) : t('main.layoutBuscarPlaceholder');
-    // en «Ver» no salen «Buscar en» ni «Qué ver» aquí adentro: ya están arriba (Zona y Qué ver) y el buscador busca solo en lo que ellos filtran; en «Editar» no hay franja y se quedan
-    const head = state.mode !== 'edit' ? '' : `<div class="layout-find-head">${scopeRow}${zonesRow}${chips}</div>`;
+    $('layout-find-input').placeholder = t('main.layoutBuscarPlaceholder');
+    const head = ''; // «Buscar en» y «Qué ver» ya están arriba (Zona y Qué ver); aquí solo la lista
     list.innerHTML = head + (findItems.length
         ? findItems.map((i, n) => `<button type="button" class="layout-find-item" role="option" id="layout-find-opt-${n}" data-find-pick="${n}" aria-selected="${n === findActive}"><b>${esc(i.title)}</b><span>${esc(i.sub)}</span></button>`).join('')
         : `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`);
@@ -2340,7 +2345,6 @@ document.addEventListener('click', (event) => { if (!event.target.closest('.layo
 // ---- Modo Ver y modo Editar -------------------------------------------------------------------------------------------------------------------
 // El Layout abre SIEMPRE en «Ver»: el croquis grande (2D o 3D, Visualizaciones y Simbología) con los filtros desplegables Zona, Qué ver y Lo demás y el buscador. No se mueve, se escribe ni se guarda nada (canEdit() es falso).
 // El icono «Editar» (iconLayoutEditar del árbol; sin él sale con candado) muestra los pasos con sus tablas, Agregar, Quitar, Guardar y Descartar; «Ver» regresa (con cambios sin guardar pregunta antes).
-const findHome = $('layout-find').parentNode; // dónde vive el buscador en «Editar» (sobre el croquis); en «Ver» pasa a la franja de filtros
 let vDropdown = ''; // el desplegable abierto de la franja: 'zone' | 'layers' | ''
 // «Ver» enciende todo el Layout (todas las capas que el árbol deja ver)
 function showAllLayers() {
@@ -2371,17 +2375,14 @@ function applyMode() {
     editBtn.classList.toggle('is-locked', !can);
     editBtn.title = can ? '' : t('main.layoutEditarSinPermiso');
     $('layout-mode-view').hidden = view;
-    $('layout-vstrip').hidden = !view;
-    const find = $('layout-find');
-    if (view) $('layout-vstrip-find').appendChild(find); else if (find.parentNode !== findHome) findHome.appendChild(find);
+    $('layout-vstrip').hidden = false; // la franja de filtros sale en Ver y en Editar
+    $('layout-vstrip-find').appendChild($('layout-find'));
     vDropdown = '';
     renderViewStrip();
 }
 function goEdit() {
     if (!state.draft || !(state.perms && state.perms.canEditMode)) return;
     state.mode = 'edit';
-    if (state.find && state.find.kind === 'items') { state.pick = []; state.find = state.zoneScope.length ? { kind: 'zone', id: state.zoneScope[0], ids: state.zoneScope } : null; } // «Elegir» es del modo Ver
-    state.findNone = false; // «Qué ver: Nada» es del modo Ver
     ensureVisibleSteps();
     applyMode();
     renderPanel();
@@ -2450,7 +2451,7 @@ function renderDdList(key) {
 function renderViewStrip() {
     const box = $('layout-vstrip-filters');
     if (!box) return;
-    if (state.mode === 'edit' || !state.draft) { box.innerHTML = ''; ddRendered = ''; return; }
+    if (!state.draft) { box.innerHTML = ''; ddRendered = ''; return; }
     const d = state.draft;
     // lo que enfocó otra cosa (el buscador, la franja de Editar) también se refleja aquí
     const sf = state.find;
@@ -2511,9 +2512,9 @@ function chooseCatalog() {
         if (!stepVisible(ft.step)) return;
         if (ft.type === 'zone') return; // las zonas se eligen en el botón Zona, no aquí
         (lists[ft.type]() || []).forEach((i) => {
-            if (!stepOn(i.step || ft.step)) return; // Qué ver: solo los tipos con su capa encendida
+            if (state.mode !== 'edit' && !stepOn(i.step || ft.step)) return; // Qué ver (en Ver): solo los tipos con su capa encendida; en Editar se elige de todo y lo elegido enciende su paso
             if (inside && inside[ft.type] && !inside[ft.type].has(i.id)) return; // Zona: solo lo que hay dentro de las zonas elegidas
-            out.push({ type: ft.type, id: i.id, title: i.title, sub: i.sub, hay: i.hay });
+            out.push({ type: ft.type, id: i.id, title: i.title, sub: i.sub, hay: i.hay, step: i.step || ft.step });
         });
     });
     return out;
@@ -2531,7 +2532,7 @@ function chooseBodyHtml() {
         const items = rows.filter((i) => i.type === ty).slice(0, Math.max(0, CAP - shown));
         if (!items.length) return;
         shown += items.length;
-        list += `<div class="layout-ch-grp">${esc(t(`main.layoutFindTipo_${ty}`))}</div>` + items.map((i) => ddItem(`data-ch-pick data-ch-kind="${esc(i.type)}" data-ch-id="${esc(i.id)}"`, chosen.some((c) => c.type === i.type && c.id === i.id), `${esc(i.title)} <small>${esc(i.sub || '')}</small>`)).join('');
+        list += `<div class="layout-ch-grp">${esc(t(`main.layoutFindTipo_${ty}`))}</div>` + items.map((i) => ddItem(`data-ch-pick data-ch-kind="${esc(i.type)}" data-ch-id="${esc(i.id)}" data-ch-step="${esc(i.step || '')}"`, chosen.some((c) => c.type === i.type && c.id === i.id), `${esc(i.title)} <small>${esc(i.sub || '')}</small>`)).join('');
     });
     if (!cat.length) list = `<div class="layout-find-empty">${esc(t('main.layoutElegirNada'))}</div>`;
     else if (!rows.length) list = `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
@@ -2674,6 +2675,11 @@ function locApply() {
     const inSpace = !!vLoc.sp;
     const step = inSpace ? 'activos' : 'espacios';
     if (!stepOn(step)) { state.steps = [...state.steps, step]; fixLayerFocus(); } // la capa de lo enfocado se enciende si estaba apagada
+    // en Editar la tabla de abajo pasa al paso de lo elegido: Huella-Espacio, Activos, Niveles o Posiciones
+    if (state.mode === 'edit') {
+        const tableStep = vLoc.cell || vLoc.c ? 'posiciones' : (vLoc.n ? 'niveles' : step);
+        showStep(stepVisible(tableStep) ? tableStep : step);
+    }
     state.pick = [{ type: inSpace ? 'space' : 'footprint', id: inSpace ? vLoc.sp : vLoc.fp }];
     state.hl = null;
     applyViewFocus();
@@ -2683,6 +2689,7 @@ function locApply() {
         loc3dFocus = !!state.view3d;
         scheduleScene3d();
     }
+    if (state.mode === 'edit') renderPanel();
     renderViewStrip();
 }
 function locPick(step, value) {
@@ -2781,8 +2788,11 @@ $('layout-vstrip-filters').addEventListener('click', (event) => {
             state.zoneScope = forceNone || allPicked ? [] : zones.map((z) => z.id);
         } else {
             const visible = SECTION_ORDER.filter(stepVisible);
-            if (forceNone || visible.every(stepOn)) state.steps = state.steps.filter((x) => x === 'localizadores'); else showAllLayers();
-            fixLayerFocus();
+            if (state.mode === 'edit') fxToggleAll(); // en Editar siempre queda al menos un paso encendido (Contorno)
+            else {
+                if (forceNone || visible.every(stepOn)) state.steps = state.steps.filter((x) => x === 'localizadores'); else showAllLayers();
+                fixLayerFocus();
+            }
         }
         applyViewFocus();
         return;
@@ -2797,6 +2807,15 @@ $('layout-vstrip-filters').addEventListener('click', (event) => {
     const layerItem = event.target.closest('[data-dd-layer]');
     if (layerItem) {
         const s = layerItem.getAttribute('data-dd-layer');
+        if (state.mode === 'edit') {
+            // en Editar es lo mismo que tocar la pastilla del paso: encender lo enfoca y apagar deja siempre uno encendido
+            if (!stepOn(s)) showStep(s);
+            else if (state.steps.length > 1) { state.steps = state.steps.filter((x) => x !== s); state.focusStack = state.focusStack.filter((x) => x !== s); focusStep([...state.focusStack].reverse().find(stepOn) || state.steps[0]); }
+            applyViewFocus();
+            renderPanel();
+            refreshLive();
+            return;
+        }
         if (stepOn(s)) state.steps = state.steps.filter((x) => x !== s); else state.steps = [...state.steps, s];
         fixLayerFocus();
         applyViewFocus(); // en «Ver» el panel no se ve: no se vuelve a dibujar (dejaría siempre una capa encendida)
@@ -2823,12 +2842,17 @@ $('layout-vstrip-filters').addEventListener('click', (event) => {
     if (pick) {
         const type = pick.getAttribute('data-ch-kind');
         const id = pick.getAttribute('data-ch-id');
-        state.pick = state.pick.some((c) => c.type === type && c.id === id) ? state.pick.filter((c) => !(c.type === type && c.id === id)) : [...state.pick, { type, id }];
+        const adding = !state.pick.some((c) => c.type === type && c.id === id);
+        state.pick = adding ? [...state.pick, { type, id }] : state.pick.filter((c) => !(c.type === type && c.id === id));
         ddFocus = false;
+        // en Editar lo que se elige enciende su paso y la tabla de abajo pasa a él
+        const pickStep = pick.getAttribute('data-ch-step');
+        if (state.mode === 'edit' && adding && pickStep && stepVisible(pickStep)) showStep(pickStep);
         applyViewFocus();
+        if (state.mode === 'edit') renderPanel();
         return;
     }
-    if (event.target.closest('[data-ch-clear]')) { ddFocus = false; state.pick = []; applyViewFocus(); }
+    if (event.target.closest('[data-ch-clear]')) { ddFocus = false; state.pick = []; applyViewFocus(); if (state.mode === 'edit') renderPanel(); }
 });
 $('layout-vstrip-filters').addEventListener('input', (event) => {
     const el = event.target;
@@ -4911,7 +4935,7 @@ function dim3dLayers() {
 function fxFocusLevel() {
     // «Localizador»: con Enfoque u Oculto solo se ve el nivel, la posición o el localizador elegido; con Tenue, los demás niveles se apagan
     const h = state.hl;
-    if (h && h.loc && h.step === state.focus && state.mode !== 'edit' && state.pick.length === 1 && state.pick[0].id === h.id) return { id: h.id, n: h.n, c: h.c, f: h.f, p: h.p, mode: state.findDim ? 'dim' : 'hide' };
+    if (h && h.loc && h.step === state.focus && state.pick.length === 1 && state.pick[0].id === h.id) return { id: h.id, n: h.n, c: h.c, f: h.f, p: h.p, mode: state.findDim ? 'dim' : 'hide' };
     const v = virtualFind();
     return v && v.n ? { id: v.ids[0], n: v.n, mode: state.findDim ? 'dim' : 'hide' } : null;
 }
