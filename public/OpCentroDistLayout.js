@@ -19,7 +19,7 @@ const state = {
     // figuras que se están armando lado por lado y todavía no cierran (no se pueden guardar así), cómo se captura el contorno y la zona cuyos lados están a la vista
     open: { contorno: false, zones: {} }, contornoMode: 'sides', zoneOpen: null,
     // lo que se enfocó con la búsqueda (zona o huella) y lo que se ocultó de ello: ver «buscar una zona o una huella»
-    find: null, findDim: false,
+    find: null, findDim: false, zoneScope: [], pick: [], // Ver: las zonas elegidas (Zona) y las cosas elegidas (Elegir) van de la mano; state.find sale de las dos
     // el usuario pidió renumerar los códigos de los activos (se ve en el borrador y se aplica al guardar)
     renumber: false,
     // lo que se eligió en la tabla y se resalta en el croquis: { kind: 'zone' | 'space' | 'bay', id, n, c, step } (por id, no por número de renglón, para que no se mueva al quitar o agregar renglones)
@@ -1719,7 +1719,7 @@ $('layout-panel').addEventListener('click', (event) => { if (event.target.closes
 // lee y se quita en la franja de arriba. Es solo de pantalla: no cambia lo guardado ni los reportes ni los QR. state.find = { kind: 'zone', id, ids } | { kind: 'footprint', id }. Las tablas no pierden renglones: los que no son de lo
 // enfocado solo se esconden (clase layout-find-out), por eso sus números de renglón no cambian.
 const canFind = () => !!(state.perms && state.perms.canFind);
-function clearFind() { state.find = null; state.findScope = 'all'; state.findNone = false; }
+function clearFind() { state.find = null; state.findScope = 'all'; state.findNone = false; state.zoneScope = []; state.pick = []; }
 // ---- franja de enfoque (arriba del panel de pasos) -------------------------------------------------------------------------------------
 // «Ver»: las opciones (pasos) de abajo, con «Todo». «Enfocado»: el enfoque del buscador (zona o huella) o el activo, nivel o posición del renglón que se eligió en Activos, Niveles o Posiciones. «Resto»: qué pasa con lo
 // que no es de lo enfocado, oculto o tenue (una sola elección, la misma del buscador, que se recuerda en este navegador). El enfoque de un renglón es solo del dibujo (croquis y 3D): las tablas no pierden renglones.
@@ -1778,23 +1778,21 @@ function fxAfterSelect() {
 function fxSetRest(dim) {
     // lo elegido en «Elegir activos»: la misma elección Oculto o Tenue vale para los activos que no se eligieron
     if (!state.find && !fxCandidate() && pickerFocus()) {
-        state.findDim = dim;
-        try { localStorage.setItem(FIND_DIM_KEY, dim ? '1' : '0'); } catch (err) { /* no se recuerda */ }
+        setFindMode(dim ? 'tenue' : 'enfoque');
         scheduleScene3d();
         renderFocusStrip();
         return;
     }
     if (state.find) {
         if (state.findDim !== dim) {
-            state.findDim = dim;
-            try { localStorage.setItem(FIND_DIM_KEY, dim ? '1' : '0'); } catch (err) { /* no se recuerda */ }
+            setFindMode(dim ? 'tenue' : 'enfoque');
             applyFind(true);
         }
         renderFocusStrip();
         return;
     }
     if (state.fxOn && state.findDim === dim) state.fxOn = false;
-    else { state.fxOn = true; state.findDim = dim; try { localStorage.setItem(FIND_DIM_KEY, dim ? '1' : '0'); } catch (err) { /* no se recuerda */ } }
+    else { state.fxOn = true; setFindMode(dim ? 'tenue' : 'enfoque'); }
     fxLastKey = '';
     fxReframe();
     renderSvg();
@@ -1814,7 +1812,20 @@ function fxToggleAll() {
 }
 // Resto de la nave al enfocar: oculto por completo (por omisión) o «tenue» de fondo; se recuerda en este navegador.
 const FIND_DIM_KEY = 'sgn_layout_find_dim';
-try { const fd = localStorage.getItem(FIND_DIM_KEY); state.findDim = fd === null ? true : fd === '1'; } catch (err) { state.findDim = true; /* sin almacenamiento: tenue */ }
+// «Lo demás» tiene tres opciones: Tenue (todo el Layout apagado y lo elegido resaltado), Oculto (solo lo elegido, centrado y AL MISMO TAMAÑO que en el Layout completo: sin acercar) y Enfoque (solo lo elegido y el croquis y el 3D se acercan).
+// state.findMode lo guarda; state.findDim (tenue o no) lo siguen usando el buscador y la franja de Editar, donde ocultar siempre acerca (es el Enfoque).
+const FIND_MODE_KEY = 'sgn_layout_find_mode';
+const FIND_MODES = ['tenue', 'oculto', 'enfoque'];
+function setFindMode(mode, persist = true) {
+    state.findMode = FIND_MODES.includes(mode) ? mode : 'tenue';
+    state.findDim = state.findMode === 'tenue';
+    if (persist) { try { localStorage.setItem(FIND_MODE_KEY, state.findMode); } catch (err) { /* no se recuerda */ } }
+}
+try {
+    let saved = localStorage.getItem(FIND_MODE_KEY);
+    if (!saved) { const old = localStorage.getItem(FIND_DIM_KEY); saved = old === '0' ? 'enfoque' : 'tenue'; } // el «Oculto» de antes acercaba: ahora se llama Enfoque
+    setFindMode(saved, false);
+} catch (err) { setFindMode('tenue', false); /* sin almacenamiento: tenue */ }
 // ---- Buscar en zonas: lo que hay dentro de las zonas elegidas -----------------------------------------------------------------------------
 // El enfoque de zonas es de UNA o de VARIAS (state.find = { kind: 'zone', id, ids }; state.findScope = 'zones' cuando «Buscar en» está en Zonas). «Qué ver» (state.findTypes) dice qué tipos de cosas se listan y se dibujan dentro de ellas
 // (sin elegir ninguno, todos). Una cosa es de la zona si queda dentro o sobre su borde (a 30 cm): huellas, activos, sensores, seguridad y pasillos ya traen su zona; paredes, puertas, luz, obstáculos, objetos y pisos se miden contra el dibujo.
@@ -2049,7 +2060,19 @@ function findLayout(d) {
     }
     const pad = Math.max(0.5, Math.max(x1 - x0, y1 - y0) * 0.06);
     const h = Number(d.heightM) > 0 ? d.heightM : 4;
-    const rect = [[x0 - pad, y0 - pad, h], [x1 + pad, y0 - pad, h], [x1 + pad, y1 + pad, h], [x0 - pad, y1 + pad, h]];
+    let rect = [[x0 - pad, y0 - pad, h], [x1 + pad, y0 - pad, h], [x1 + pad, y1 + pad, h], [x0 - pad, y1 + pad, h]];
+    if (scoped && state.mode !== 'edit' && state.findMode === 'oculto') {
+        // Oculto (modo Ver): solo lo elegido, centrado y al mismo tamaño que en el Layout completo (el recuadro mide lo que mide la nave, así la escala y la cámara no se acercan)
+        const vx = (d.vertices || []).map((p) => p[0]);
+        const vy = (d.vertices || []).map((p) => p[1]);
+        if (vx.length) {
+            const nw = Math.max(...vx) - Math.min(...vx);
+            const nh = Math.max(...vy) - Math.min(...vy);
+            const cx = (x0 + x1) / 2;
+            const cy = (y0 + y1) / 2;
+            rect = [[cx - nw / 2, cy - nh / 2, h], [cx + nw / 2, cy - nh / 2, h], [cx + nw / 2, cy + nh / 2, h], [cx - nw / 2, cy + nh / 2, h]];
+        }
+    }
     const base = { ...d, zones, footprints, spaces, plan: null };
     if (scoped) {
         const common = { safety: scoped.safety, transit: scoped.transit, objects: scoped.objects, floors: scoped.floors, ramps: scoped.ramps };
@@ -2328,7 +2351,7 @@ function applyMode() {
 function goEdit() {
     if (!state.draft || !(state.perms && state.perms.canEditMode)) return;
     state.mode = 'edit';
-    if (state.find && state.find.kind === 'items') clearFind(); // «Elegir» es del modo Ver
+    if (state.find && state.find.kind === 'items') { state.pick = []; state.find = state.zoneScope.length ? { kind: 'zone', id: state.zoneScope[0], ids: state.zoneScope } : null; } // «Elegir» es del modo Ver
     state.findNone = false; // «Qué ver: Nada» es del modo Ver
     ensureVisibleSteps();
     applyMode();
@@ -2362,49 +2385,90 @@ function ddHtml(key, helpKey, label, value, open, disabled, menu) {
 }
 // on: true (marcada), false (vacía) o 'mix' (a medias: unas sí y otras no)
 const ddItem = (attr, on, html) => `<button type="button" class="layout-dd-item" role="menuitemcheckbox" aria-checked="${on === 'mix' ? 'mixed' : !!on}" ${attr}><span class="layout-dd-cb${on === 'mix' ? ' mix' : (on ? ' on' : '')}"></span><span>${html}</span></button>`;
+// El buscador de los desplegables (Zona, Qué ver y Elegir): el MISMO del resto del sistema (SearchSyntax): el tipo de filtro (Inicia con, Contiene, Igual que), los signos ($ antes, @ después, coma = otra búsqueda) y la caja.
+const vSearch = { zone: { mode: 'contains', q: '', open: '' }, layers: { mode: 'contains', q: '', open: '' }, choose: { mode: 'contains', q: '', open: '' } };
+let ddFocus = false; // el cursor se queda en la caja mientras se escribe
+function ddMatch(key, text) { const s = vSearch[key]; return !s.q.trim() || SearchSyntax.matches(s.mode, s.q, text); }
+function searchRowHtml(key) {
+    const s = vSearch[key];
+    const modes = [['startsWith', 'main.filterModeStartsWith'], ['contains', 'main.filterModeContains'], ['equals', 'main.filterModeEquals']];
+    const signs = [['$', 'Before'], ['@', 'After'], [',', 'Comma']];
+    const off = (sign) => (sign === '$' && s.mode !== 'contains') || (sign === '@' && s.mode === 'equals');
+    return `<div class="layout-dd-searchrow" data-dd-search="${key}">`
+        + `<button type="button" class="layout-dd-sbtn" data-dds="mode" data-help-key="layoutFiltroBuscar" title="${esc(t('main.filterModeLabel'))}" aria-label="${esc(t('main.filterModeLabel'))}"><i class="bx bx-slider-alt" aria-hidden="true"></i></button>`
+        + `<button type="button" class="layout-dd-sbtn" data-dds="signs" data-help-key="layoutFiltroBuscar" title="${esc(t('main.filterSignsLabel'))}" aria-label="${esc(t('main.filterSignsLabel'))}"><b>$@</b></button>`
+        + `<input type="search" class="layout-dd-sinput" id="layout-dd-input-${key}" data-dds="input" data-help-key="layoutFiltroBuscar" autocomplete="off" placeholder="${esc(t('main.filterSearchPlaceholder'))}" value="${esc(s.q)}">`
+        + `<div class="layout-dd-smenu" data-dds-menu="mode"${s.open === 'mode' ? '' : ' hidden'}>${modes.map(([id, k]) => `<button type="button" class="layout-dd-smopt${s.mode === id ? ' on' : ''}" data-dds-mode="${id}">${esc(t(k))}</button>`).join('')}</div>`
+        + `<div class="layout-dd-smenu" data-dds-menu="signs"${s.open === 'signs' ? '' : ' hidden'}>${signs.map(([sg, k]) => `<button type="button" class="layout-dd-smopt" data-dds-sign="${sg}"${off(sg) ? ' disabled' : ''} title="${esc(off(sg) ? t('main.filterSignOff') : t(`main.filterSign${k}Help`))}"><b>${sg}</b> <span>${esc(t(`main.filterSign${k}`))}</span></button>`).join('')}</div>`
+        + '</div>';
+}
+function zoneItemsHtml() {
+    const zones = (state.draft.zones || []).filter((z) => z.active !== false && ddMatch('zone', `${z.name || ''} ${z.code || ''}`));
+    return zones.map((z) => ddItem(`data-dd-zone="${esc(z.id)}"`, state.zoneScope.includes(z.id), `${esc(z.name || z.code || '')} <small>${esc(z.code || '')}</small>`)).join('') || `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
+}
+function layerItemsHtml() {
+    const visible = SECTION_ORDER.filter(stepVisible).filter((s) => ddMatch('layers', t(SECTION_LABEL_KEYS[s])));
+    return visible.map((s) => ddItem(`data-dd-layer="${s}"`, stepOn(s), esc(t(SECTION_LABEL_KEYS[s])))).join('') || `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
+}
+// Mientras se escribe solo se vuelve a dibujar la lista (la caja no se toca para no perder el cursor).
+function renderDdList(key) {
+    if (key === 'choose') { renderChooseBody(); return; }
+    const box = $(`layout-dd-list-${key}`);
+    if (box) box.innerHTML = key === 'zone' ? zoneItemsHtml() : layerItemsHtml();
+}
 function renderViewStrip() {
     const box = $('layout-vstrip-filters');
     if (!box) return;
     if (state.mode === 'edit' || !state.draft) { box.innerHTML = ''; return; }
     const d = state.draft;
+    // lo que enfocó otra cosa (el buscador, la franja de Editar) también se refleja aquí
+    const sf = state.find;
+    if (!sf) { if (state.zoneScope.length || state.pick.length) { state.zoneScope = []; state.pick = []; } }
+    else if (sf.kind === 'zone') { const z = zoneFocusIds(sf); if (JSON.stringify(z) !== JSON.stringify(state.zoneScope)) { state.zoneScope = z; state.pick = []; } }
+    else if (sf.kind === 'items') state.pick = sf.items || [];
+    else { state.zoneScope = []; state.pick = []; }
     // Zona: una, varias o todas (el mismo enfoque del buscador; pide el icono Buscar del árbol)
     const zones = (d.zones || []).filter((z) => z.active !== false);
-    const zids = zoneFocusIds(state.find);
+    const zids = state.zoneScope;
     const names = zids.map((id) => (zones.find((z) => z.id === id) || {}).name || '').filter(Boolean);
     const zoneValue = names.length ? names.join(', ') : t('main.layoutFiltroTodas');
-    const zoneMenu = ddItem('data-dd-all="zone"', !zids.length || zids.length === zones.length ? true : 'mix', `<b>${esc(t('main.layoutFiltroTodasZonas'))}</b>`) + '<div class="layout-dd-sep"></div>'
-        + zones.map((z) => ddItem(`data-dd-zone="${esc(z.id)}"`, zids.includes(z.id), `${esc(z.name || z.code || '')} <small>${esc(z.code || '')}</small>`)).join('');
+    const zoneMenu = vDropdown !== 'zone' ? '' : searchRowHtml('zone') + ddItem('data-dd-all="zone"', !zids.length || zids.length === zones.length ? true : 'mix', `<b>${esc(t('main.layoutFiltroTodasZonas'))}</b>`) + '<div class="layout-dd-sep"></div>'
+        + `<div class="layout-dd-list" id="layout-dd-list-zone">${zoneItemsHtml()}</div>`;
     const zoneDd = ddHtml('zone', 'layoutFiltroZona', t('main.layoutFiltroZona'), zoneValue, vDropdown === 'zone', !(canFind() && stepVisible('zonas') && zones.length), zoneMenu);
     // Qué ver: las capas (los pasos que el árbol deja ver); «Todo» las enciende todas
     const visible = SECTION_ORDER.filter(stepVisible);
     const onN = visible.filter(stepOn).length;
     const layersValue = onN === visible.length ? t('main.layoutFiltroTodo') : (onN === 0 ? t('main.layoutFiltroNada') : t('main.layoutFiltroNdeN', { n: onN, total: visible.length }));
-    const layersMenu = ddItem('data-dd-all="layers"', onN === visible.length ? true : (onN === 0 ? false : 'mix'), `<b>${esc(t('main.layoutFiltroTodo'))}</b>`) + '<div class="layout-dd-sep"></div>'
-        + visible.map((s) => ddItem(`data-dd-layer="${s}"`, stepOn(s), esc(t(SECTION_LABEL_KEYS[s])))).join('');
+    const layersMenu = vDropdown !== 'layers' ? '' : searchRowHtml('layers') + ddItem('data-dd-all="layers"', onN === visible.length ? true : (onN === 0 ? false : 'mix'), `<b>${esc(t('main.layoutFiltroTodo'))}</b>`) + '<div class="layout-dd-sep"></div>'
+        + `<div class="layout-dd-list" id="layout-dd-list-layers">${layerItemsHtml()}</div>`;
     const layersDd = ddHtml('layers', 'layoutFiltroQueVer', t('main.layoutFiltroQueVer'), layersValue, vDropdown === 'layers', !visible.length, layersMenu);
     // Lo demás: lo que no se eligió se ve tenue u oculto
-    const rest = `<div class="layout-dd-seg" role="group" data-help-key="layoutFiltroLoDemas"><span class="layout-dd-k">${esc(t('main.layoutFiltroLoDemas'))}</span><button type="button" data-dd-rest="1" aria-pressed="${!!state.findDim}">${esc(t('main.layoutFiltroTenue'))}</button><button type="button" data-dd-rest="0" aria-pressed="${!state.findDim}">${esc(t('main.layoutFiltroOculto'))}</button></div>`;
+    const rest = `<div class="layout-dd-seg" role="group" data-help-key="layoutFiltroLoDemas"><span class="layout-dd-k">${esc(t('main.layoutFiltroLoDemas'))}</span><button type="button" data-dd-rest="tenue" aria-pressed="${state.findMode === 'tenue'}">${esc(t('main.layoutFiltroTenue'))}</button><button type="button" data-dd-rest="oculto" aria-pressed="${state.findMode === 'oculto'}">${esc(t('main.layoutFiltroOculto'))}</button><button type="button" data-dd-rest="enfoque" aria-pressed="${state.findMode === 'enfoque'}">${esc(t('main.layoutFiltroEnfoque'))}</button></div>`;
     // Elegir: cualquier cosa en específico (pared, hidrante, piso, zona, activo, puerta, sensor, objeto…), una o varias; lo elegido se enfoca (Oculto: solo eso; Tenue: todo, resaltado)
     const nChosen = chosenList().length;
     const chooseDd = ddHtml('choose', 'layoutFiltroElegir', t('main.layoutFiltroElegir'), nChosen ? t('main.layoutFiltroNElegidos', { n: nChosen }) : t('main.layoutFiltroNinguno'), vDropdown === 'choose', !canFind(), chooseMenuHtml());
     box.innerHTML = zoneDd + layersDd + chooseDd + rest;
-    if (vDropdown === 'choose') {
-        const inp = $('layout-ch-input');
-        if (inp) { inp.value = chooseQuery; if (chooseFocus) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }
+    if (vDropdown && vSearch[vDropdown] && ddFocus) {
+        const inp = $(`layout-dd-input-${vDropdown}`);
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
     }
 }
 // ---- «Elegir» ---------------------------------------------------------------------------------------------------------------------------------------------
-let chooseQuery = '';
-let chooseTypes = []; // pastillas de tipo marcadas (vacío = todos)
-let chooseFocus = false; // el cursor se queda en el buscador mientras se escribe
-const chosenList = () => (state.find && state.find.kind === 'items' ? (state.find.items || []) : []);
+const chosenList = () => state.pick;
 // Todo lo que se puede elegir (lo que el árbol deja ver), por tipo: las mismas listas del buscador.
 function chooseCatalog() {
-    const lists = findLists(state.draft);
+    const d = state.draft;
+    const lists = findLists(d);
+    const inside = state.zoneScope.length ? scopeInside(d, state.zoneScope) : null;
     const out = [];
     FIND_TYPES.forEach((ft) => {
         if (!stepVisible(ft.step)) return;
-        (lists[ft.type]() || []).forEach((i) => out.push({ type: ft.type, id: i.id, title: i.title, sub: i.sub, hay: i.hay }));
+        if (ft.type === 'zone') return; // las zonas se eligen en el botón Zona, no aquí
+        (lists[ft.type]() || []).forEach((i) => {
+            if (!stepOn(i.step || ft.step)) return; // Qué ver: solo los tipos con su capa encendida
+            if (inside && inside[ft.type] && !inside[ft.type].has(i.id)) return; // Zona: solo lo que hay dentro de las zonas elegidas
+            out.push({ type: ft.type, id: i.id, title: i.title, sub: i.sub, hay: i.hay });
+        });
     });
     return out;
 }
@@ -2412,10 +2476,7 @@ function chooseBodyHtml() {
     const cat = chooseCatalog();
     const types = FIND_TYPES.map((ft) => ft.type).filter((ty) => cat.some((i) => i.type === ty));
     const chosen = chosenList();
-    const match = chooseQuery.trim() ? SearchSyntax.compile('contains', chooseQuery.trim()) : null;
-    const rows = cat.filter((i) => (!chooseTypes.length || chooseTypes.includes(i.type)) && (!match || match(i.hay)));
-    const pill = (v, label, on) => `<button type="button" class="layout-ch-pill${on ? ' on' : ''}" data-ch-type="${v}" aria-pressed="${on}">${esc(label)}</button>`;
-    const pills = pill('all', t('main.layoutFindTipoTodo'), !chooseTypes.length) + types.map((ty) => pill(ty, t(`main.layoutFindTipo_${ty}`), chooseTypes.includes(ty))).join('');
+    const rows = cat.filter((i) => ddMatch('choose', i.hay));
     const CAP = 150;
     let shown = 0;
     let list = '';
@@ -2425,27 +2486,46 @@ function chooseBodyHtml() {
         shown += items.length;
         list += `<div class="layout-ch-grp">${esc(t(`main.layoutFindTipo_${ty}`))}</div>` + items.map((i) => ddItem(`data-ch-pick data-ch-kind="${esc(i.type)}" data-ch-id="${esc(i.id)}"`, chosen.some((c) => c.type === i.type && c.id === i.id), `${esc(i.title)} <small>${esc(i.sub || '')}</small>`)).join('');
     });
-    if (!rows.length) list = `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
+    if (!cat.length) list = `<div class="layout-find-empty">${esc(t('main.layoutElegirNada'))}</div>`;
+    else if (!rows.length) list = `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
     else if (rows.length > shown) list += `<div class="layout-find-empty">${esc(t('main.layoutElegirMas'))}</div>`;
-    return { pills, list, count: t('main.layoutFiltroNElegidos', { n: chosen.length }) };
+    return { list, count: t('main.layoutFiltroNElegidos', { n: chosen.length }) };
 }
 function chooseMenuHtml() {
     if (vDropdown !== 'choose' || !state.draft) return '';
     const b = chooseBodyHtml();
-    return `<div class="layout-ch-search"><span class="bx bx-search layout-find-ico" aria-hidden="true"></span><input type="search" id="layout-ch-input" autocomplete="off" placeholder="${esc(t('main.layoutElegirBuscar'))}"></div><div class="layout-ch-pills" id="layout-ch-pills">${b.pills}</div><div class="layout-ch-list" id="layout-ch-list">${b.list}</div><div class="layout-ch-foot"><span id="layout-ch-count">${esc(b.count)}</span><button type="button" data-ch-clear>${esc(t('main.layoutElegirLimpiar'))}</button></div>`;
+    return `${searchRowHtml('choose')}<div class="layout-ch-list" id="layout-ch-list">${b.list}</div><div class="layout-ch-foot"><span id="layout-ch-count">${esc(b.count)}</span><button type="button" data-ch-clear>${esc(t('main.layoutElegirLimpiar'))}</button></div>`;
 }
 // Solo la lista, las pastillas y el contador se vuelven a dibujar mientras se escribe (el buscador no se toca para no perder el cursor).
 function renderChooseBody() {
     const b = chooseBodyHtml();
-    const pills = $('layout-ch-pills'); const list = $('layout-ch-list'); const count = $('layout-ch-count');
-    if (pills) pills.innerHTML = b.pills;
+    const list = $('layout-ch-list'); const count = $('layout-ch-count');
     if (list) list.innerHTML = b.list;
     if (count) count.textContent = b.count;
 }
-function setRest(dim) {
-    if (!!state.findDim === dim) return;
-    state.findDim = dim;
-    try { localStorage.setItem(FIND_DIM_KEY, dim ? '1' : '0'); } catch (err) { /* no se recuerda */ }
+function fixLayerFocus() {
+    if (state.steps.length && !state.steps.includes(state.focus)) state.focus = state.steps[state.steps.length - 1];
+    state.focusStack = state.focusStack.filter((x) => state.steps.includes(x));
+    if (!state.focusStack.length && state.steps.length) state.focusStack = [state.focus];
+}
+// Zona, Qué ver y Elegir van de la mano: Zona acota el universo (solo lo que hay dentro de las zonas elegidas), Qué ver dice qué tipos cuentan (los de las capas encendidas) y Elegir señala cosas en específico dentro de eso.
+// Al cambiar Zona o Qué ver, lo elegido que ya no cae en ese alcance se quita. Con cosas elegidas se enfocan ellas; sin ellas, se enfocan las zonas (con los tipos de Qué ver); sin nada, se ve todo.
+function applyViewFocus() {
+    const before = JSON.stringify(state.find);
+    const universe = new Set(chooseCatalog().map((i) => `${i.type}:${i.id}`));
+    state.pick = state.pick.filter((p) => universe.has(`${p.type}:${p.id}`));
+    const zones = state.zoneScope.filter((id) => (state.draft.zones || []).some((z) => z.id === id));
+    state.zoneScope = zones;
+    if (state.pick.length) state.find = { kind: 'items', id: state.pick[0].id, items: state.pick };
+    else if (zones.length) state.find = { kind: 'zone', id: zones[0], ids: zones };
+    else state.find = null;
+    state.findScope = zones.length ? 'zones' : 'all';
+    syncFindTypesFromSteps();
+    applyFind(before !== JSON.stringify(state.find));
+}
+function setRest(mode) {
+    if (state.findMode === mode) return;
+    setFindMode(mode);
     if (state.find) applyFind(true); else if (picker3d && pickerFocus()) scheduleScene3d();
     renderFocusStrip();
     renderViewStrip();
@@ -2454,81 +2534,90 @@ $('layout-mode-edit').addEventListener('click', goEdit);
 $('layout-mode-view').addEventListener('click', goView);
 $('layout-vstrip-filters').addEventListener('click', (event) => {
     const dd = event.target.closest('[data-dd]');
-    if (dd) { event.stopPropagation(); const key = dd.getAttribute('data-dd'); vDropdown = vDropdown === key ? '' : key; if (vDropdown === 'choose') { chooseQuery = ''; chooseTypes = []; chooseFocus = true; } renderViewStrip(); return; }
+    if (dd) { event.stopPropagation(); const key = dd.getAttribute('data-dd'); vDropdown = vDropdown === key ? '' : key; if (vSearch[vDropdown]) { vSearch[vDropdown].q = ''; vSearch[vDropdown].open = ''; ddFocus = true; } renderViewStrip(); return; }
+    // el buscador de cada desplegable: el tipo de filtro, los signos y sus opciones
+    const sbtn = event.target.closest('button[data-dds]');
+    if (sbtn) {
+        const row = sbtn.closest('[data-dd-search]');
+        const s = vSearch[row.getAttribute('data-dd-search')];
+        const which = sbtn.getAttribute('data-dds');
+        s.open = s.open === which ? '' : which;
+        row.querySelectorAll('[data-dds-menu]').forEach((m) => { m.hidden = m.getAttribute('data-dds-menu') !== s.open; });
+        return;
+    }
+    const modeOpt = event.target.closest('[data-dds-mode]');
+    if (modeOpt) { const s = vSearch[modeOpt.closest('[data-dd-search]').getAttribute('data-dd-search')]; s.mode = modeOpt.getAttribute('data-dds-mode'); s.open = ''; ddFocus = true; renderViewStrip(); return; }
+    const signOpt = event.target.closest('[data-dds-sign]');
+    if (signOpt) {
+        if (signOpt.disabled) return;
+        const row = signOpt.closest('[data-dd-search]');
+        const key = row.getAttribute('data-dd-search');
+        const input = row.querySelector('[data-dds="input"]');
+        const sign = signOpt.getAttribute('data-dds-sign');
+        const typed = sign === ',' ? ', ' : sign;
+        const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+        const end = input.selectionEnd == null ? start : input.selectionEnd;
+        input.value = input.value.slice(0, start) + typed + input.value.slice(end);
+        vSearch[key].q = input.value;
+        vSearch[key].open = '';
+        row.querySelectorAll('[data-dds-menu]').forEach((m) => { m.hidden = true; });
+        renderDdList(key);
+        input.focus();
+        try { input.setSelectionRange(start + typed.length, start + typed.length); } catch (err) { /* algunos teclados no dejan mover el cursor */ }
+        return;
+    }
     // «Todas las zonas» y «Todo»: un clic pone todo (o, si ya estaba todo, lo quita) y el doble clic siempre quita todo.
     const allItem = event.target.closest('[data-dd-all]');
     if (allItem) {
         const forceNone = event.detail >= 2;
         if (allItem.getAttribute('data-dd-all') === 'zone') {
             const zones = (state.draft.zones || []).filter((z) => z.active !== false);
-            const zids = zoneFocusIds(state.find);
-            const allPicked = zones.length > 0 && zids.length === zones.length;
+            const allPicked = zones.length > 0 && state.zoneScope.length === zones.length;
             // sin filtro (todas las zonas a la vista) o con unas cuantas: se marcan todas; con todas marcadas, o con doble clic: se quitan (vuelve a «Todas», sin filtro)
-            if (forceNone || allPicked) clearFind(); else if (zones.length) state.find = { kind: 'zone', id: zones[0].id, ids: zones.map((z) => z.id) };
-            state.findScope = 'zones';
-            syncFindTypesFromSteps();
-            applyFind(true);
+            state.zoneScope = forceNone || allPicked ? [] : zones.map((z) => z.id);
         } else {
             const visible = SECTION_ORDER.filter(stepVisible);
             if (forceNone || visible.every(stepOn)) state.steps = state.steps.filter((x) => x === 'localizadores'); else showAllLayers();
-            if (state.steps.length && !state.steps.includes(state.focus)) state.focus = state.steps[state.steps.length - 1];
-            state.focusStack = state.focusStack.filter((x) => state.steps.includes(x));
-            if (!state.focusStack.length && state.steps.length) state.focusStack = [state.focus];
-            syncFindTypesFromSteps();
-            if (state.find) applyFind(true); else refreshLive();
-            renderViewStrip();
+            fixLayerFocus();
         }
+        applyViewFocus();
         return;
     }
     const zoneItem = event.target.closest('[data-dd-zone]');
     if (zoneItem) {
         const id = zoneItem.getAttribute('data-dd-zone');
-        {
-            const cur = zoneFocusIds(state.find);
-            const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
-            if (!next.length) clearFind(); else state.find = { kind: 'zone', id: next[0], ids: next };
-        }
-        state.findScope = 'zones';
-        syncFindTypesFromSteps();
-        applyFind(true);
+        state.zoneScope = state.zoneScope.includes(id) ? state.zoneScope.filter((x) => x !== id) : [...state.zoneScope, id];
+        applyViewFocus();
         return;
     }
     const layerItem = event.target.closest('[data-dd-layer]');
     if (layerItem) {
         const s = layerItem.getAttribute('data-dd-layer');
         if (stepOn(s)) state.steps = state.steps.filter((x) => x !== s); else state.steps = [...state.steps, s];
-        if (state.steps.length && !state.steps.includes(state.focus)) state.focus = state.steps[state.steps.length - 1];
-        state.focusStack = state.focusStack.filter((x) => state.steps.includes(x));
-        if (!state.focusStack.length && state.steps.length) state.focusStack = [state.focus];
-        syncFindTypesFromSteps();
-        if (state.find) applyFind(true); else refreshLive(); // en «Ver» el panel no se ve: no se vuelve a dibujar (dejaría siempre una capa encendida)
-        renderViewStrip();
+        fixLayerFocus();
+        applyViewFocus(); // en «Ver» el panel no se ve: no se vuelve a dibujar (dejaría siempre una capa encendida)
         return;
     }
     const restBtn = event.target.closest('[data-dd-rest]');
-    if (restBtn) { setRest(restBtn.getAttribute('data-dd-rest') === '1'); return; }
+    if (restBtn) { setRest(restBtn.getAttribute('data-dd-rest')); return; }
     const pick = event.target.closest('[data-ch-pick]');
     if (pick) {
         const type = pick.getAttribute('data-ch-kind');
         const id = pick.getAttribute('data-ch-id');
-        const cur = chosenList();
-        const next = cur.some((c) => c.type === type && c.id === id) ? cur.filter((c) => !(c.type === type && c.id === id)) : [...cur, { type, id }];
-        chooseFocus = false;
-        if (!next.length) clearFind(); else state.find = { kind: 'items', id: next[0].id, items: next };
-        state.findScope = 'all';
-        applyFind(true);
+        state.pick = state.pick.some((c) => c.type === type && c.id === id) ? state.pick.filter((c) => !(c.type === type && c.id === id)) : [...state.pick, { type, id }];
+        ddFocus = false;
+        applyViewFocus();
         return;
     }
-    if (event.target.closest('[data-ch-clear]')) { chooseFocus = false; clearFind(); applyFind(true); return; }
-    const typeBtn = event.target.closest('[data-ch-type]');
-    if (typeBtn) {
-        const ty = typeBtn.getAttribute('data-ch-type');
-        chooseTypes = ty === 'all' ? [] : (chooseTypes.includes(ty) ? chooseTypes.filter((x) => x !== ty) : [...chooseTypes, ty]);
-        renderChooseBody();
-    }
+    if (event.target.closest('[data-ch-clear]')) { ddFocus = false; state.pick = []; applyViewFocus(); }
 });
 $('layout-vstrip-filters').addEventListener('input', (event) => {
-    if (event.target && event.target.id === 'layout-ch-input') { chooseQuery = event.target.value; chooseFocus = true; renderChooseBody(); }
+    const el = event.target;
+    if (!el || !el.getAttribute || el.getAttribute('data-dds') !== 'input') return;
+    const key = el.closest('[data-dd-search]').getAttribute('data-dd-search');
+    vSearch[key].q = el.value;
+    ddFocus = true;
+    renderDdList(key);
 });
 document.addEventListener('click', (event) => { if (vDropdown && !event.target.closest('.layout-dd')) { vDropdown = ''; renderViewStrip(); } });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && vDropdown) { vDropdown = ''; renderViewStrip(); } });
@@ -2573,7 +2662,7 @@ function renderSvg(underlay) {
     const spanY = Math.max(y1 - y0, 1);
     const sc = Math.min((W - 2 * M) / spanX, (H - 2 * M - 14) / spanY);
     const ox = M + ((W - 2 * M) - spanX * sc) / 2;
-    const oy = M;
+    const oy = M + (d._frame ? Math.max(0, ((H - 2 * M - 14) - spanY * sc) / 2) : 0); // con un enfoque (recuadro _frame) lo enfocado queda centrado también hacia arriba y abajo
     const X = (x) => ox + (x - x0) * sc;
     const Y = (y) => oy + (y - y0) * sc;
     view = { sc, W, rot, x0, y0, ox, oy };

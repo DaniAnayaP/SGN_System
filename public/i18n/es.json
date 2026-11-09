@@ -1998,11 +1998,13 @@
     "layoutElegirBuscar": "Buscar una pared, un hidrante, un piso, una zona…",
     "layoutElegirLimpiar": "Limpiar",
     "layoutElegirMas": "Hay más: escribe para acotar la lista.",
+    "layoutElegirNada": "No hay nada que elegir con lo que tienes en Zona y Qué ver.",
     "layoutFiltroTodasZonas": "Todas las zonas",
     "layoutFiltroNdeN": "{n} de {total}",
     "layoutFiltroLoDemas": "Lo demás",
     "layoutFiltroTenue": "Tenue",
     "layoutFiltroOculto": "Oculto",
+    "layoutFiltroEnfoque": "Enfoque",
     "layoutVerConCambios": "Tienes cambios sin guardar. ¿Qué hago antes de regresar a Ver?",
     "layoutVerGuardar": "Guardar y ver",
     "layoutVerDescartar": "Descartar y ver",
@@ -5328,8 +5330,12 @@
       "what": "Elige cosas en específico, de cualquier tipo, una o varias a la vez: una pared, un hidrante, un piso, una zona, un activo, una puerta, un sensor… Puedes escribir para buscar o filtrar la lista por tipo con las pastillas. Lo elegido se enfoca en el croquis y en el 3D; «Lo demás» decide si el resto se ve tenue u oculto.",
       "example": "marcas la pared M003, el hidrante I002 y el piso P001: solo se ven esas tres cosas, o todo con esas tres resaltadas."
     },
+    "layoutFiltroBuscar": {
+      "what": "El buscador de este desplegable, el mismo de las tablas: el botón del tipo de filtro (Inicia con, Contiene, Igual que), el de los signos ($ antes, @ después, coma para varias búsquedas a la vez) y la caja. Va quitando de la lista lo que no coincide; lo que ya marcaste se queda marcado.",
+      "example": "escribes «seca, fría» y salen las zonas que tienen una u otra; con rack@cajón sale «rack» que tiene «cajón» después."
+    },
     "layoutFiltroLoDemas": {
-      "what": "Qué pasa con lo que no es de lo que filtraste: Tenue lo deja visible pero apagado y Oculto lo quita del todo. Se recuerda en este navegador.",
+      "what": "Qué pasa con lo que no es de lo que filtraste. Tenue: se ve todo el Layout apagado y lo elegido resaltado. Oculto: se ve solo lo elegido, centrado y al mismo tamaño que en el Layout completo (sin acercar). Enfoque: se ve solo lo elegido y el croquis y el 3D se acercan a eso. Se recuerda en este navegador.",
       "example": "con Tenue ves la Zona 6 resaltada y el resto de la nave de fondo; con Oculto solo la Zona 6."
     },
     "layoutFind": {

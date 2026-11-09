@@ -1998,11 +1998,13 @@
     "layoutElegirBuscar": "Search a wall, a hydrant, a floor, a zone…",
     "layoutElegirLimpiar": "Clear",
     "layoutElegirMas": "There are more: type to narrow the list.",
+    "layoutElegirNada": "There is nothing to pick with what you have in Zone and Show.",
     "layoutFiltroTodasZonas": "All zones",
     "layoutFiltroNdeN": "{n} of {total}",
     "layoutFiltroLoDemas": "The rest",
     "layoutFiltroTenue": "Faded",
     "layoutFiltroOculto": "Hidden",
+    "layoutFiltroEnfoque": "Focus",
     "layoutVerConCambios": "You have unsaved changes. What should I do before going back to View?",
     "layoutVerGuardar": "Save and view",
     "layoutVerDescartar": "Discard and view",
@@ -5329,8 +5331,12 @@
       "what": "Pick specific things, of any type, one or several at a time: a wall, a hydrant, a floor, a zone, an asset, a door, a sensor… You can type to search or filter the list by type with the pills. What you pick is focused on the plan and in 3D; «The rest» decides whether everything else is faded or hidden.",
       "example": "you tick wall M003, hydrant I002 and floor P001: only those three things are shown, or everything with those three highlighted."
     },
+    "layoutFiltroBuscar": {
+      "what": "This dropdown's search, the same as in the tables: the filter type button (Starts with, Contains, Equals), the signs button ($ before, @ after, comma for several searches at once) and the box. It removes from the list what does not match; what you already ticked stays ticked.",
+      "example": "you type «dry, cold» and the zones with either word show up; with rack@drawer you get «rack» having «drawer» after it."
+    },
     "layoutFiltroLoDemas": {
-      "what": "What happens to what is not part of what you filtered: Faded keeps it visible but dimmed and Hidden removes it completely. It is remembered in this browser.",
+      "what": "What happens to what is not part of what you filtered. Faded: the whole Layout is shown dimmed with what you picked highlighted. Hidden: only what you picked is shown, centered and at the same size as in the full Layout (no zoom). Focus: only what you picked is shown and the plan and the 3D zoom in on it. It is remembered in this browser.",
       "example": "with Faded you see Zone 6 highlighted and the rest of the building in the background; with Hidden only Zone 6."
     },
     "layoutFind": {

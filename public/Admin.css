@@ -8206,3 +8206,17 @@ td.cap-pick{ white-space: nowrap; }
 .layout-ch-grp{ margin-top: 0.3rem; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-secondary); }
 .layout-ch-foot{ display: flex; justify-content: space-between; align-items: center; margin-top: 0.3rem; padding-top: 0.35rem; border-top: 1px solid var(--color-border); font-size: 0.72rem; color: var(--color-text-secondary); }
 .layout-ch-foot button{ border: 0; background: transparent; color: var(--color-accent, var(--color-text-primary)); font: inherit; font-weight: 600; cursor: pointer; }
+/* El buscador de los desplegables de Ver (Zona, Qué ver, Elegir): tipo de filtro, signos y caja, como en las tablas. */
+.layout-dd-searchrow{ position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0 0.35rem; background: var(--color-surface); }
+.layout-dd-sbtn{ flex: none; display: inline-grid; place-items: center; min-width: 1.9rem; height: 1.9rem; padding: 0 0.35rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); color: var(--color-text-secondary); font: inherit; font-size: 0.74rem; cursor: pointer; }
+.layout-dd-sbtn:hover{ color: var(--color-text-primary); border-color: var(--color-accent, var(--color-text-primary)); }
+.layout-dd-sinput{ flex: 1; min-width: 0; height: 1.9rem; padding: 0 0.7rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-primary); font: inherit; font-size: 0.78rem; outline: 0; }
+.layout-dd-sinput:focus{ border-color: var(--color-accent, var(--color-text-primary)); }
+.layout-dd-smenu{ position: absolute; z-index: 5; top: 2.2rem; left: 0; display: flex; flex-direction: column; min-width: 10rem; padding: 0.3rem; border: 1px solid var(--color-border); border-radius: 0.7rem; background: var(--color-surface); box-shadow: 0 8px 22px rgba(60, 20, 70, 0.22); }
+.layout-dd-smenu[hidden]{ display: none; }
+.layout-dd-smenu[data-dds-menu="signs"]{ left: 2.2rem; }
+.layout-dd-smopt{ display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.55rem; border: 0; border-radius: 0.5rem; background: transparent; color: var(--color-text-primary); font: inherit; font-size: 0.78rem; text-align: left; cursor: pointer; }
+.layout-dd-smopt:hover:not(:disabled){ background: color-mix(in srgb, var(--color-text-primary) 7%, transparent); }
+.layout-dd-smopt.on{ font-weight: 700; color: var(--color-accent, var(--color-text-primary)); }
+.layout-dd-smopt:disabled{ opacity: 0.45; cursor: not-allowed; }
+.layout-dd-list{ display: flex; flex-direction: column; gap: 0.1rem; }
