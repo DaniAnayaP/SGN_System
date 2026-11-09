@@ -2076,7 +2076,9 @@ function findLayout(d) {
     const base = { ...d, zones, footprints, spaces, plan: null };
     if (scoped) {
         const common = { safety: scoped.safety, transit: scoped.transit, objects: scoped.objects, floors: scoped.floors, ramps: scoped.ramps };
-        return { ...base, ...common, _frame: rect, obstacles: scoped.obstacles, doors: scoped.doors, power: scoped.power, sensors: scoped.sensors };
+        // con zonas enfocadas (no con «Elegir») el 3D recorta los pisos y las rampas al dibujo de esas zonas (_clip)
+        const clip = f.kind === 'zone' ? zones.map((z) => LC.zonePoints(z)).filter((p) => p && p.length >= 3) : null;
+        return { ...base, ...common, _frame: rect, ...(clip && clip.length ? { _clip: clip } : {}), obstacles: scoped.obstacles, doors: scoped.doors, power: scoped.power, sensors: scoped.sensors };
     }
     return { ...base, vertices: rect, obstacles: [], objects: [], doors: [], power: [] };
 }
@@ -2802,6 +2804,7 @@ function renderSvg(underlay) {
     if (on('contorno') && (!finding || dimmed)) s += `<polygon class="lw-halo" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;
     const obstacleShapes = LC.obstacleShapes(d);
     const obstaclePoly = (g) => g.pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ');
+    const wallStart = s.length;
     if (on('paredes') && (!finding || dimmed || zoneFocus)) {
         obstacleShapes.filter(({ o }) => o.kind === 'wall' && !o._geom).forEach(({ o, g }) => {
             const strokeW = `stroke-width:${Math.max(0.01, 3 - Math.min(g.l, g.w) * sc).toFixed(2)}px`;
@@ -2828,6 +2831,12 @@ function renderSvg(underlay) {
                 zoneLabels += lab.main;
             }
         });
+    }
+    // con zonas enfocadas y el resto «Oculto» o «Enfoque» cada pared se corta al tramo que toca esas zonas (una pared larga puede ser de varias zonas): se recorta con el dibujo de las zonas elegidas, crecido lo que mide el grosor de una pared
+    if (zoneFocus && !dimmed && Array.isArray(d._clip) && d._clip.length && s.length > wallStart) {
+        const grown = d._clip.flatMap((cp) => LC.growPolygonShapes(cp, 0.5));
+        const clipPoly = grown.map((poly) => `<polygon points="${poly.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`).join('');
+        s = `${s.slice(0, wallStart)}<defs><clipPath id="fx-wall-clip">${clipPoly}</clipPath></defs><g clip-path="url(#fx-wall-clip)">${s.slice(wallStart)}</g>`;
     }
     // El contorno (línea azul punteada y fina) va ENCIMA de las paredes: así se distingue de ellas aunque estén sobre el mismo lado, y donde no hay pared se ve solo.
     if (on('contorno') && (!finding || dimmed)) s += `<polygon class="lw" points="${d.vertices.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}"/>`;

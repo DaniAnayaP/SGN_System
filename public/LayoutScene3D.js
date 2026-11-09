@@ -38,6 +38,7 @@
         canvas.className = 'layout-3d-canvas';
         container.appendChild(canvas);
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.localClippingEnabled = true; // lo que lleva planos de corte (las paredes con zonas enfocadas) se recorta
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         renderer.setClearColor(0x000000, 0);
 
@@ -505,6 +506,20 @@
             const avgH = cornerH.reduce((a, b) => a + b, 0) / cornerH.length;
             const PX = (x) => x - CX;
             const PZ = (y) => y - CY;
+            // con zonas enfocadas (_clip = el dibujo de esas zonas) las paredes se cortan al cuadro de esas zonas, un poco crecido (lo que mide el grosor de una pared)
+            let wallClipPlanes = null;
+            if (layout && Array.isArray(layout._clip) && layout._clip.length) {
+                const all = layout._clip.flat();
+                const grow = 0.5;
+                const cx0 = Math.min(...all.map((p) => p[0])) - grow;
+                const cx1 = Math.max(...all.map((p) => p[0])) + grow;
+                const cy0 = Math.min(...all.map((p) => p[1])) - grow;
+                const cy1 = Math.max(...all.map((p) => p[1])) + grow;
+                wallClipPlanes = [
+                    new THREE.Plane(new THREE.Vector3(1, 0, 0), -PX(cx0)), new THREE.Plane(new THREE.Vector3(-1, 0, 0), PX(cx1)),
+                    new THREE.Plane(new THREE.Vector3(0, 0, 1), -PZ(cy0)), new THREE.Plane(new THREE.Vector3(0, 0, -1), PZ(cy1)),
+                ];
+            }
             bounds = { diag: Math.max(10, Math.hypot(maxX - minX, maxY - minY)), maxH, sx: maxX - minX, sy: maxY - minY };
 
             // piso (siempre se ve: es la forma de la nave)
@@ -559,6 +574,11 @@
             // El material de una pared: el azul de siempre o, con formato propio (wallFmt3), su color y su trama (la tira del lado más bajo, un poco más oscura en el 3D); sin relleno, casi transparente.
             let wallFmt3 = null;
             const wallMat = (defaultColor, tone) => {
+                const m = wallMatRaw(defaultColor, tone);
+                if (wallClipPlanes) m.clippingPlanes = wallClipPlanes;
+                return m;
+            };
+            const wallMatRaw = (defaultColor, tone) => {
                 const f = wallFmt3;
                 if (!f) return new THREE.MeshLambertMaterial({ color: defaultColor, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
                 const textured = f.pattern !== 'solid' && f.pattern !== 'none';
@@ -770,18 +790,38 @@
             if (anyLevel) {
                 const levelCols = LCalc.floorLevelColors ? LCalc.floorLevelColors(layout) : {};
                 const colorOfLevel = (v) => levelCols[Math.round(v * 100) / 100] || '#e9e9ee';
+                // con zonas enfocadas (_clip = el dibujo de esas zonas) cada piso solo se pinta DENTRO de ellas
+                const clipPolys = layout && Array.isArray(layout._clip) && layout._clip.length ? layout._clip : null;
                 floors.forEach((f, i) => {
                     // la losa de un piso solo sale con el paso Pisos y la de una rampa solo con el paso Rampas (lo que está encima sigue a la altura que le toca)
                     if (f.isRamp ? !rampsShow : !floorsShow) return;
                     const fmtF = LCalc.floorFmtOf ? LCalc.floorFmtOf(layout, f) : { fill: '#e6d3f0', pattern: 'solid', pcolor: '#9b6fb0', line: 'thin', bcolor: '#7a5190' };
                     const lift = 0.05 + 0.004 * i;
                     const corners = [[f.x, f.y], [f.x + f.l, f.y], [f.x + f.l, f.y + f.w], [f.x, f.y + f.w]];
+                    // el pedazo del piso que cae dentro de las zonas enfocadas: los triángulos de cada zona cortados con el cuadro del piso (convexos)
+                    let pieces = null;
+                    if (clipPolys) {
+                        pieces = [];
+                        clipPolys.forEach((cp) => {
+                            const tris = LCalc.triangulate(cp);
+                            if (!tris) return;
+                            tris.forEach(([a, b, c]) => {
+                                const sp = LCalc.splitByRect([cp[a], cp[b], cp[c]], f.x, f.y, f.x + f.l, f.y + f.w);
+                                if (sp.inside && sp.inside.length >= 3) pieces.push(sp.inside);
+                            });
+                        });
+                        if (!pieces.length) return; // este piso no toca las zonas enfocadas
+                    }
+                    // los costados bajan solo por la orilla del piso (no por donde la zona lo corta ni por dentro de los pedazos)
+                    const eps = 1e-6;
+                    const onRim = (p, q) => (Math.abs(p[0] - f.x) < eps && Math.abs(q[0] - f.x) < eps) || (Math.abs(p[0] - (f.x + f.l)) < eps && Math.abs(q[0] - (f.x + f.l)) < eps)
+                        || (Math.abs(p[1] - f.y) < eps && Math.abs(q[1] - f.y) < eps) || (Math.abs(p[1] - (f.y + f.w)) < eps && Math.abs(q[1] - (f.y + f.w)) < eps);
+                    const edges = pieces ? pieces.flatMap((poly) => poly.map((p, k) => [p, poly[(k + 1) % poly.length]]).filter(([p, q]) => onRim(p, q))) : corners.map((p, k) => [p, corners[(k + 1) % 4]]);
                     const arr = [];
-                    for (let k = 0; k < 4; k++) {
-                        const p = corners[k]; const q = corners[(k + 1) % 4];
+                    edges.forEach(([p, q]) => {
                         const tp = lift + LCalc.zoneLevelAt(f, p[0], p[1]); const tq = lift + LCalc.zoneLevelAt(f, q[0], q[1]);
                         arr.push(PX(p[0]), 0, PZ(p[1]), PX(q[0]), 0, PZ(q[1]), PX(q[0]), tq, PZ(q[1]), PX(p[0]), 0, PZ(p[1]), PX(q[0]), tq, PZ(q[1]), PX(p[0]), tp, PZ(p[1]));
-                    }
+                    });
                     const sides = new THREE.BufferGeometry();
                     sides.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
                     sides.computeVertexNormals();
@@ -794,8 +834,8 @@
                     // el degradado de una rampa va del color del piso de abajo al del piso de arriba (los dos pisos que toca)
                     const endCols = (ramp && LCalc.rampEndColors && LCalc.rampEndColors(layout, f)) || { lo: colorOfLevel(lo), hi: colorOfLevel(hi) };
                     const pos = []; const uv = []; const cols = [];
-                    [[0, 1, 2], [0, 2, 3]].forEach((tri) => tri.forEach((k) => {
-                        const p = corners[k];
+                    const topTris = pieces ? pieces.flatMap((poly) => poly.slice(2).map((_, k) => [poly[0], poly[k + 1], poly[k + 2]])) : [[corners[0], corners[1], corners[2]], [corners[0], corners[2], corners[3]]];
+                    topTris.forEach((tri) => tri.forEach((p) => {
                         const lv = LCalc.zoneLevelAt(f, p[0], p[1]);
                         pos.push(PX(p[0]), lift + lv, PZ(p[1]));
                         uv.push(p[0] * 0.8, p[1] * 0.8);
@@ -816,7 +856,7 @@
                     else topMat = new THREE.MeshLambertMaterial({ map: patternTexture(fmtF.fill, fmtF.pattern, fmtF.pcolor), side: THREE.DoubleSide });
                     group.zones.add(new THREE.Mesh(top, topMat));
                     // el borde del piso (con el color y el estilo de su formato; sin borde, nada)
-                    if (fmtF.line !== 'none') {
+                    if (fmtF.line !== 'none' && !pieces) {
                         const edge = corners.map((p) => new THREE.Vector3(PX(p[0]), lift + LCalc.zoneLevelAt(f, p[0], p[1]) + 0.006, PZ(p[1])));
                         group.zones.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(edge), new THREE.LineBasicMaterial({ color: new THREE.Color(fmtF.bcolor) })));
                     }
