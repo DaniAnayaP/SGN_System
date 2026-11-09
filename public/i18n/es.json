@@ -2281,6 +2281,10 @@
     "layoutRampaPropioSub": "Un color, rayas y borde propios, como los pisos y las zonas",
     "layoutRampaDifuminadoNota": "La rampa se pinta con un degradado: empieza con el color de {lo} y termina con el de {hi}. Si cambias el color de uno de esos pisos, la rampa lo sigue.",
     "layoutFormatoPared": "Formato de la pared",
+    "layoutFormatoPasillo": "Formato del pasillo",
+    "layoutAplicarUnPasillo": "Solo este pasillo",
+    "layoutAplicarTodosPasillos": "Todos los pasillos",
+    "layoutAplicarTodosPasillosSub": "Los {n} pasillos del Layout",
     "layoutAplicarUnaPared": "Solo esta pared",
     "layoutAplicarTodasParedes": "Todas las paredes",
     "layoutAplicarTodasParedesSub": "Las {n} paredes del Layout",
@@ -5388,6 +5392,10 @@
     "layoutFmtLine": {
       "what": "Estilo de la línea del borde de la zona: continua (fina, media o gruesa), guiones, punteada, guion y punto, doble o ninguna.",
       "example": "borde de guiones para una zona provisional."
+    },
+    "layoutTransitFmt": {
+      "what": "Cambia el color, la trama y el borde del pasillo, como en los pisos, las paredes y las zonas. Sin formato propio se ve como siempre: rayas el pasillo principal y puntos el de entre pasillos. Puedes aplicarlo solo a este pasillo o a todos.",
+      "example": "el pasillo central en azul claro con rayas y los pasillos entre anaqueles en gris con puntos."
     },
     "layoutWallFmt": {
       "what": "Cambia el color, la trama y el borde de la pared, como en los pisos y las zonas. Sin formato propio se ve oscura. Puedes aplicarlo solo a esta pared o a todas.",

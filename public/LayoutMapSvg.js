@@ -328,6 +328,12 @@
         // Los pasillos son su propia capa (paso Tránsito): rayas (principal) o puntos (entre pasillos), debajo de las huellas y los activos.
         (on('transito') ? (layout.transit || []) : []).forEach((p) => {
             const ty = (T.types && T.types[p.type === 'between' ? 'aisle2' : 'aisle']) || ['#D5D8E2', '#8E93A8', ''];
+            // con formato propio (color, trama y borde) el pasillo se pinta con él
+            if (p.fmt) {
+                const tx = X(p.x); const ty0 = Y(p.y); const tw = Math.max((Number(p.l) || 0) * sc, 2); const th = Math.max((Number(p.w) || 0) * sc, 2);
+                s += zonePaint(`tf-${String(p.id).replace(/[^A-Za-z0-9_-]/g, '')}`, p.fmt).markup(`${tx},${ty0} ${tx + tw},${ty0} ${tx + tw},${ty0 + th} ${tx},${ty0 + th}`);
+                return;
+            }
             s += `<rect x="${X(p.x)}" y="${Y(p.y)}" width="${Math.max((Number(p.l) || 0) * sc, 2)}" height="${Math.max((Number(p.w) || 0) * sc, 2)}" fill="${ty[0]}" stroke="${ty[1]}" stroke-width="1"${ty[2] ? ` stroke-dasharray="${ty[2]}"` : ''}/>`;
         });
         // El contorno es solo el marco del terreno (línea punteada) y sale con la capa «contorno»; las PAREDES son obstáculos puestos encima y salen con la capa «paredes»: son capas independientes (columnas, desniveles y otros,

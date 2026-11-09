@@ -2651,6 +2651,9 @@
             if (who.includes('other')) { const otherName = text(p && p.otherName, label, false); if (otherName) item.otherName = otherName; }
             const h = p && p.h != null && p.h !== '' ? meters(p.h, label) : 0;
             if (h > 0) item.h = h;
+            // Formato propio (color, trama y borde, como los pisos y las zonas): opcional; sin él el pasillo se ve como siempre (rayas el principal, puntos el de entre pasillos).
+            const transitFmt = sanitizeFmt(p && p.fmt);
+            if (transitFmt) item.fmt = transitFmt;
             return item;
         });
         out.transitSizes = {};

@@ -1241,7 +1241,7 @@ function stepHtml(step) {
             const chips = (p.who || []).map((k) => `<span class="layout-chip" data-tr-who="${i}:${k}" data-help-key="layoutTransitoQuien">${esc(whoLabel(d, k))}${dis ? '' : `<button type="button" class="layout-chip-x" data-who-del="${i}:${k}" aria-label="${esc(t('main.layoutQuitar'))}">×</button>`}</span>`).join('') + (dis ? '' : `<button type="button" class="layout-chip-add" data-who-open="${i}" data-help-key="layoutTransitoQuien" aria-label="${esc(t('main.layoutQuienAgregar'))}" title="${esc(t('main.layoutQuienAgregar'))}">＋</button>`);
             const other = (p.who || []).includes('other') ? `<input type="text" class="layout-who-other" maxlength="${LC.LIMITS.text}" data-l="transit" data-i="${i}" data-k="otherName" data-help-key="layoutTransitoQuien" value="${esc(p.otherName || '')}" placeholder="${esc(t('main.layoutQuienOtroCual'))}"${dis ? ' disabled' : ''}>` : '';
             const alto = `<td><input type="number" step="0.1" min="0" data-l="transit" data-i="${i}" data-k="h" data-help-key="layoutTransitoAltoLibre" value="${p.h > 0 ? p.h : ''}" placeholder="—"${dis ? ' disabled' : ''}></td>`;
-            return `<tr><td class="layout-calc"><b data-tr-code="${i}">${esc(p.code || '')}</b></td>${cellText('transit', i, 'name', p.name, dis)}${cellSelect('transit', i, 'type', optionsHtml('transit', LC.TRANSIT_TYPES, p.type), dis)}<td><div class="layout-chips">${chips}${other}</div></td><td class="layout-calc" data-tr-zone="${i}">${esc(zoneName(p.zoneId))}</td>${cellNum('transit', i, 'x', p.x, dis)}${cellNum('transit', i, 'y', p.y, dis)}${cellNum('transit', i, 'l', p.l, dis)}${cellNum('transit', i, 'w', p.w, dis)}${alto}<td class="layout-calc"><span data-tr-area="${i}">${fmt((Number(p.l) || 0) * (Number(p.w) || 0))} m²</span></td>${removeCell('transit', i, dis)}</tr>`;
+            return `<tr><td class="layout-calc"><b data-tr-code="${i}">${esc(p.code || '')}</b></td>${cellText('transit', i, 'name', p.name, dis)}${cellSelect('transit', i, 'type', optionsHtml('transit', LC.TRANSIT_TYPES, p.type), dis)}<td><div class="layout-chips">${chips}${other}</div></td><td class="layout-calc" data-tr-zone="${i}">${esc(zoneName(p.zoneId))}</td>${cellNum('transit', i, 'x', p.x, dis)}${cellNum('transit', i, 'y', p.y, dis)}${cellNum('transit', i, 'l', p.l, dis)}${cellNum('transit', i, 'w', p.w, dis)}${alto}<td class="layout-calc"><span data-tr-area="${i}">${fmt((Number(p.l) || 0) * (Number(p.w) || 0))} m²</span></td>${removeCell('transit', i, dis, transitFmtButton(p, i, dis))}</tr>`;
         });
 
         const issues = `<div class="layout-vio" data-tr-issues hidden></div>`;
@@ -2351,7 +2351,11 @@ function renderSvg(underlay) {
         // al pasar el cursor por el pasillo dice qué falta, si algo falta (fuera de toda zona, no cabe en su zona, lo que transita no cabe o algo adentro)
         const why = [bad.nozone, bad.out, ...(bad.fit || []), ...(bad.blocked || [])].filter(Boolean).map(transitIssueText).join(' · ');
         const title = `<title>${esc(p.code || '')} · ${esc(p.name || '')} · ${esc(typeLabel('transit', p.type))}${why ? `\n${esc(why)}` : ''}</title>`;
-        s += `<rect class="lz ${p.type === 'between' ? 'lz-aisle2' : 'lz-aisle'}" data-tid="${esc(p.id)}" x="${X(p.x)}" y="${Y(p.y)}" width="${w}" height="${h}">${title}</rect>`;
+        if (p.fmt) {
+            // con formato propio el pasillo se pinta con su color, su trama y su borde
+            const tq = `${X(p.x)},${Y(p.y)} ${X(p.x) + w},${Y(p.y)} ${X(p.x) + w},${Y(p.y) + h} ${X(p.x)},${Y(p.y) + h}`;
+            s += `<g class="lzf" data-tid="${esc(p.id)}">${title}${window.LayoutMapSvg.zonePaint(`tf-${String(p.id).replace(/[^A-Za-z0-9_-]/g, '')}`, p.fmt).markup(tq)}</g>`;
+        } else s += `<rect class="lz ${p.type === 'between' ? 'lz-aisle2' : 'lz-aisle'}" data-tid="${esc(p.id)}" x="${X(p.x)}" y="${Y(p.y)}" width="${w}" height="${h}">${title}</rect>`;
         if (w >= 26 && h >= 9) s += `<text class="lt3" x="${X(p.x) + w / 2}" y="${Y(p.y) + h / 2 + 3}" text-anchor="middle">${esc(p.code || '')}</text>`;
         if (why) s += `<rect class="lbad" x="${X(p.x) - 2}" y="${Y(p.y) - 2}" width="${w + 4}" height="${h + 4}" rx="3"/>`;
     });
@@ -3333,6 +3337,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (fmtAsset) { openAssetFmtDialog(Number(fmtAsset.dataset.fmtasset)); return; }
     const fmtFloor = event.target.closest('[data-fmtfloor]');
     if (fmtFloor) { openFloorFmtDialog(Number(fmtFloor.dataset.fmtfloor)); return; }
+    const fmtTr = event.target.closest('[data-fmttr]');
+    if (fmtTr) { openTransitFmtDialog(Number(fmtTr.dataset.fmttr)); return; }
     const fmtWall = event.target.closest('[data-fmtwall]');
     if (fmtWall) { openWallFmtDialog(Number(fmtWall.dataset.fmtwall)); return; }
     const fmtRamp = event.target.closest('[data-fmtramp]');
@@ -3515,6 +3521,16 @@ function wallFmtButton(o, i, dis) {
     const cur = o.fmt ? pickFmt(o.fmt) : WALL_DEFAULT_FMT;
     return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${o.fmt ? ' on' : ''}" data-fmtwall="${i}" data-help-key="layoutWallFmt" aria-label="${esc(t('main.layoutFormatoPared'))} ${esc(o.code || '')}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i><span class="layout-fmt-dot" style="background:${esc(cur.fill)};border-color:${esc(cur.bcolor)}"></span></button>`;
 }
+// El icono de paleta de cada renglón de Tránsito (con la misma hoja del icono en el árbol que los pisos y las paredes): el color, la trama y el borde propios del pasillo; el cuadrito muestra el que lleva ahora.
+function transitFmtButton(p, i, dis) {
+    if (!(state.perms && state.perms.canFormatFloors)) return '';
+    const cur = p.fmt ? pickFmt(p.fmt) : window.LayoutMapSvg.defaultFmt(p.type === 'between' ? 'aisle2' : 'aisle');
+    return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${p.fmt ? ' on' : ''}" data-fmttr="${i}" data-help-key="layoutTransitFmt" aria-label="${esc(t('main.layoutFormatoPasillo'))} ${esc(p.code || '')}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i><span class="layout-fmt-dot" style="background:${esc(cur.fill)};border-color:${esc(cur.bcolor)}"></span></button>`;
+}
+// A qué pasillos se aplica lo que se elige en la ventana: solo a ese o a todos los pasillos.
+function transitTargets(p, scope) {
+    return scope === 'all' ? (state.draft.transit || []) : [p];
+}
 // A qué paredes se aplica lo que se elige en la ventana: solo a esa o a todas las paredes.
 function wallTargets(w, scope) {
     return scope === 'all' ? (state.draft.obstacles || []).filter((x) => x.kind === 'wall') : [w];
@@ -3561,6 +3577,14 @@ function spaceTargets(sp, scope) {
 }
 function renderFmtScope() {
     const box = $('layout-fmt-scope');
+    if (fmtDialog && fmtDialog.kind === 'transit') {
+        const p = (state.draft.transit || []).find((x) => x.id === fmtDialog.targetId);
+        box.hidden = !p;
+        if (!p) return;
+        const options = [['one', t('main.layoutAplicarUnPasillo'), p.code || ''], ['all', t('main.layoutAplicarTodosPasillos'), t('main.layoutAplicarTodosPasillosSub').replace('{n}', String(transitTargets(p, 'all').length))]];
+        box.innerHTML = `<legend>${esc(t('main.layoutAplicarA'))}</legend>${options.map(([value, title, sub]) => `<label class="layout-fmt-opt" data-help-key="layoutFmtScope"><input type="radio" name="layout-fmt-scope" value="${value}"${fmtDialog.scope === value ? ' checked' : ''}><b>${esc(title)}</b><span>${esc(sub)}</span></label>`).join('')}`;
+        return;
+    }
     if (fmtDialog && fmtDialog.kind === 'wall') {
         const w = (state.draft.obstacles || []).find((x) => x.id === fmtDialog.targetId);
         box.hidden = !w;
@@ -3649,7 +3673,7 @@ function renderFmtBody() {
     const isSpace = fmtDialog.kind !== 'zone';
     const shape = isSpace ? '60,45 170,45 170,105 60,105' : '30,20 200,20 200,70 130,70 130,130 30,130';
     const zone = isSpace ? null : state.draft.zones.find((z) => z.id === fmtDialog.targetId);
-    const space = fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'floor' ? (state.draft.floors || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'ramp' ? (state.draft.ramps || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'wall' ? (state.draft.obstacles || []).find((s) => s.id === fmtDialog.targetId) : null))));
+    const space = fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'floor' ? (state.draft.floors || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'ramp' ? (state.draft.ramps || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'wall' ? (state.draft.obstacles || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'transit' ? (state.draft.transit || []).find((s) => s.id === fmtDialog.targetId) : null)))));
     const ink = isSpace ? window.LayoutMapSvg.inkFor(d) : '';
     const label = isSpace
         ? `<text class="lt3" x="115" y="78" text-anchor="middle"${ink ? ` style="fill:${ink}"` : ''}>${esc(space ? space.code : '')}</text>`
@@ -3693,6 +3717,9 @@ function ensureFmtModal() {
             if (fmtDialog.kind === 'floor') {
                 const fl = (state.draft.floors || []).find((r) => r.id === fmtDialog.targetId);
                 if (fl) floorTargets(fl, fmtDialog.scope).forEach((x) => { delete x.fmt; });
+            } else if (fmtDialog.kind === 'transit') {
+                const tp = (state.draft.transit || []).find((r) => r.id === fmtDialog.targetId);
+                if (tp) transitTargets(tp, fmtDialog.scope).forEach((x) => { delete x.fmt; });
             } else if (fmtDialog.kind === 'wall') {
                 const wl = (state.draft.obstacles || []).find((r) => r.id === fmtDialog.targetId);
                 if (wl) wallTargets(wl, fmtDialog.scope).forEach((x) => { delete x.fmt; });
@@ -3721,6 +3748,10 @@ function ensureFmtModal() {
                     const fl = (state.draft.floors || []).find((r) => r.id === fmtDialog.targetId);
                     // Con formato propio (aunque no se haya cambiado nada) se puede copiar a los demás del grupo; sin formato y sin cambios (se queda el color de su nivel) no hay nada que aplicar.
                     if (fl && (fl.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) floorTargets(fl, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
+                } else if (fmtDialog.kind === 'transit') {
+                    // Con formato propio (aunque no se haya cambiado nada) se puede copiar a los demás pasillos; sin formato y sin cambios no hay nada que aplicar.
+                    const tp = (state.draft.transit || []).find((r) => r.id === fmtDialog.targetId);
+                    if (tp && (tp.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) transitTargets(tp, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
                 } else if (fmtDialog.kind === 'wall') {
                     // Con formato propio (aunque no se haya cambiado nada) se puede copiar a las demás paredes; sin formato y sin cambios no hay nada que aplicar.
                     const wl = (state.draft.obstacles || []).find((r) => r.id === fmtDialog.targetId);
@@ -3793,6 +3824,19 @@ function openFloorFmtDialog(index) {
     const base = pickFmt(LC.floorFmtOf(state.draft, f));
     fmtDialog = { kind: 'floor', targetId: f.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
     $('layout-fmt-title').textContent = `${t('main.layoutFormatoPiso')} ${f.code || ''}`;
+    $('layout-fmt-namefield').hidden = true;
+    fmtModalEl.hidden = false;
+    renderFmtScope();
+    renderFmtBody();
+}
+// La ventana de formato de un pasillo: color, trama y borde como los pisos y las paredes; se puede aplicar a ese pasillo o a todos.
+function openTransitFmtDialog(index) {
+    const p = (state.draft.transit || [])[index];
+    if (!p) return;
+    ensureFmtModal();
+    const base = pickFmt(p.fmt || window.LayoutMapSvg.defaultFmt(p.type === 'between' ? 'aisle2' : 'aisle'));
+    fmtDialog = { kind: 'transit', targetId: p.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
+    $('layout-fmt-title').textContent = `${t('main.layoutFormatoPasillo')} ${p.code || ''}`;
     $('layout-fmt-namefield').hidden = true;
     fmtModalEl.hidden = false;
     renderFmtScope();

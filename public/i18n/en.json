@@ -2281,6 +2281,10 @@
     "layoutRampaPropioSub": "Its own color, stripes and border, like the floors and zones",
     "layoutRampaDifuminadoNota": "The ramp is painted with a gradient: it starts with the color of {lo} and ends with the one of {hi}. If you change the color of one of those floors, the ramp follows it.",
     "layoutFormatoPared": "Wall format",
+    "layoutFormatoPasillo": "Aisle format",
+    "layoutAplicarUnPasillo": "Only this aisle",
+    "layoutAplicarTodosPasillos": "All aisles",
+    "layoutAplicarTodosPasillosSub": "The {n} aisles of the Layout",
     "layoutAplicarUnaPared": "Only this wall",
     "layoutAplicarTodasParedes": "All walls",
     "layoutAplicarTodasParedesSub": "The {n} walls of the Layout",
@@ -5389,6 +5393,10 @@
     "layoutFmtLine": {
       "what": "Line style of the zone border: solid (thin, medium or thick), dashed, dotted, dash-dot, double or none.",
       "example": "a dashed border for a temporary zone."
+    },
+    "layoutTransitFmt": {
+      "what": "Changes the color, pattern and border of the aisle, like in the floors, walls and zones. Without its own format it looks as usual: stripes for the main aisle and dots for the aisle between racks. You can apply it to this aisle only or to all of them.",
+      "example": "the central aisle in light blue with stripes and the aisles between racks in gray with dots."
     },
     "layoutWallFmt": {
       "what": "Changes the color, pattern and border of the wall, like in the floors and zones. Without its own format it looks dark. You can apply it to this wall only or to all of them.",
