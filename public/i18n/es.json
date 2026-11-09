@@ -3122,6 +3122,7 @@
     "tmpOrigenQr": "QR",
     "tmpOrigenSensor": "QR del sensor",
     "tmpOrigenUsuario": "Usuario",
+    "tmpOrigenApp": "App",
     "tmpFotoVer": "Ver la foto de la lectura",
     "tmpCortado": "Se muestran las primeras {n} lecturas; filtra por centro de costos para ver las demás.",
     "limEnCurso": "En curso",
@@ -3843,6 +3844,53 @@
     "incEvidence1": "1 evidencia",
     "incNoEvidence": "Sin evidencias",
     "incSend": "Enviar reporte",
+    "tmpTabPoints": "Equipos",
+    "tmpTabReadings": "Lecturas",
+    "tmpSearchPlaceholder": "Buscar un refrigerador o sensor",
+    "tmpNoMatch": "Ningún equipo coincide con tu búsqueda.",
+    "tmpPointsEmpty": "Todavía no hay refrigeradores ni sensores en el Layout de este centro de costos.",
+    "tmpNoCenters": "No tienes centros de costos para tomar lecturas.",
+    "tmpOptionsNone": "Todavía no se bajaron los equipos. Conéctate una vez para poder tomar lecturas sin señal.",
+    "tmpOptionsCached": "Sin señal: se muestran los equipos guardados en tu celular.",
+    "tmpShowing": "Se muestran {n} de {total}: escribe para buscar el resto.",
+    "tmpNever": "Sin lecturas",
+    "tmpReadingsEmpty": "Todavía no hay lecturas.",
+    "tmpNewTitle": "Nueva lectura",
+    "tmpWho": "Quién revisa",
+    "tmpWhoPlaceholder": "Tu nombre",
+    "tmpTemperature": "Temperatura que marca",
+    "tmpHumidity": "Humedad que marca",
+    "tmpToggleSign": "Cambiar entre arriba y abajo de cero",
+    "tmpRange": "Rango del equipo: {range}",
+    "tmpPhoto": "Foto de la lectura",
+    "tmpPhotoHint": "Apunta al termómetro o a la pantalla del equipo y toma la foto. Es obligatoria.",
+    "tmpAddPhoto": "Tomar o elegir foto",
+    "tmpChangePhoto": "Cambiar foto",
+    "tmpPreparing": "Preparando la foto…",
+    "tmpSend": "Guardar la lectura",
+    "tmpNeedName": "Escribe el nombre de quien revisa para guardar.",
+    "tmpNeedTemp": "Escribe la temperatura que marca (por ejemplo 4.5 o -18).",
+    "tmpBadTemp": "Esa temperatura no es válida: usa un número entre -100 y 100.",
+    "tmpNeedHum": "Escribe la humedad que marca (por ejemplo 55).",
+    "tmpBadHum": "Esa humedad no es válida: usa un número entre 0 y 100.",
+    "tmpNeedPhoto": "Agrega la foto de la lectura para guardar.",
+    "tmpErrPhoto": "No se pudo usar esa foto. Prueba con otra.",
+    "tmpErrSend": "No se pudo guardar la lectura. Intenta de nuevo.",
+    "tmpPointGone": "Ese equipo ya no está en el Layout. Actualiza la lista.",
+    "tmpOutTitle": "Fuera de rango",
+    "tmpOutSaved": "Se guardará con la alerta.",
+    "tmpTempLow": "La temperatura está por debajo del mínimo ({n} °C).",
+    "tmpTempHigh": "La temperatura está por encima del máximo ({n} °C).",
+    "tmpHumLow": "La humedad está por debajo del mínimo ({n} %).",
+    "tmpHumHigh": "La humedad está por encima del máximo ({n} %).",
+    "tmpSentTitle": "Lectura guardada",
+    "tmpSavedTitle": "Guardada en tu celular",
+    "tmpNumber": "Número de lectura",
+    "tmpNoNumberYet": "Pendiente",
+    "tmpNumberOnSync": "Sin señal: se enviará sola al volver la conexión y ahí recibirá su número.",
+    "tmpAnother": "Leer otro equipo",
+    "tmpBackToList": "Ver las lecturas",
+    "tmpDiscard": "Se perderá lo que ya escribiste y la foto. ¿Salir sin guardar?",
     "limTabSpaces": "Activos",
     "limTabCleanings": "Limpiezas",
     "limSearchPlaceholder": "Buscar un activo",
@@ -4031,6 +4079,26 @@
     "categorySoonTag": "Pronto"
   },
   "help": {
+    "appTmpTabs": {
+      "what": "Cambia entre los refrigeradores y sensores que puedes leer y las lecturas ya tomadas.",
+      "example": "en «Equipos» buscas el refrigerador que vas a revisar; en «Lecturas» ves lo que ya se leyó y si quedó en rango."
+    },
+    "appTmpEquipo": {
+      "what": "Es el refrigerador o sensor que estás leyendo, con su código, el lugar donde está y su rango de temperatura y humedad (si lo tiene).",
+      "example": "«F001 · Frío» en la Zona 6, con rango de 0 a 8 °C."
+    },
+    "appTmpTemperatura": {
+      "what": "La temperatura que marca el equipo. Con el botón ± la pasas a negativa, porque algunos teclados del celular no traen el signo menos. Si queda fuera del rango, avisa antes de guardar.",
+      "example": "-18.5 en un congelador, o 4.2 en un refrigerador."
+    },
+    "appTmpHumedad": {
+      "what": "La humedad que marca el equipo, de 0 a 100 %. Si queda fuera del rango, avisa antes de guardar.",
+      "example": "55 %."
+    },
+    "appTmpFoto": {
+      "what": "La foto de la pantalla o del termómetro en el momento de la lectura. Es obligatoria y solo se agrega una.",
+      "example": "una foto del termómetro del refrigerador marcando 4.2 °C."
+    },
     "appLimTabs": {
       "what": "Cambia entre los activos que puedes limpiar y las limpiezas ya hechas o en curso.",
       "example": "en «Activos» buscas el anaquel que vas a limpiar; en «Limpiezas» ves las que están en curso y las ya terminadas."

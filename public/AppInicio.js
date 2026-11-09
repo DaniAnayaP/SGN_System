@@ -167,6 +167,7 @@ const WEB_SCREEN_PAGES = {
     'incidentes': { href: 'AppIncidentes.html', icon: 'bx-error-circle' },
     'seguridad': { href: 'AppSeguridad.html', icon: 'bx-shield-quarter' },
     'limpieza': { href: 'AppLimpieza.html', icon: 'bx-brush-alt' },
+    'temperaturas': { href: 'AppTemperaturas.html', icon: 'bx-fridge' },
     'capacidad-almacenamiento': { href: 'AppCapacidadAlmacenamiento.html', icon: 'bx-package' },
 };
 
@@ -195,6 +196,7 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-operaciones-centro-dist-incidentes': 'incidentes',
     'cat-operaciones-centro-dist-seguridad': 'seguridad',
     'cat-operaciones-centro-dist-limpieza': 'limpieza',
+    'cat-operaciones-centro-dist-temperaturas': 'temperaturas',
     'cat-operaciones-centro-dist-capacidad-almacenamiento': 'capacidad-almacenamiento',
 };
 

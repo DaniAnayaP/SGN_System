@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title data-i18n="menu.opCentroDistTemperaturas">Temperatures</title>
+    <link rel="icon" href="icons/icon-512.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-512.png">
+    <meta name="theme-color" content="#0b0d14">
+    <link rel="stylesheet" href="AppInicio.css">
+    <link rel="stylesheet" href="vendor/boxicons/css/boxicons.min.css">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+            // Same reload-on-new-service-worker guard as every other App page (see AppCotizaciones.html).
+            let sgnSwRefreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (sgnSwRefreshing) return;
+                sgnSwRefreshing = true;
+                window.location.reload();
+            });
+        }
+    </script>
+</head>
+<body>
+    <!-- Temperaturas (App): the same screen as the Web one (Operaciones > Temperaturas), made for the phone: the refrigerators and sensors of the Layout with their last reading, the list of readings and a new reading (who, temperature and/or humidity, a photo of the reading; it works with no signal and is sent by itself on reconnecting). See AppTemperaturas.js. -->
+    <div class="home-screen">
+        <div class="home-subscreen">
+            <div class="home-subscreen-header home-carga-header">
+                <div class="home-carga-header-top">
+                    <button type="button" class="home-subscreen-back" id="carga-back" data-i18n-aria="admin.back" aria-label="Back">
+                        <i class="bx bx-arrow-back" aria-hidden="true"></i>
+                    </button>
+                    <h2 data-i18n="menu.opCentroDistTemperaturas" id="carga-title">Temperatures</h2>
+                </div>
+                <div class="home-carga-progress-track" id="carga-progress-track" hidden>
+                    <div class="home-carga-progress-fill" id="carga-progress-fill"></div>
+                </div>
+                <p class="home-carga-progress-label" id="carga-progress-label" hidden></p>
+            </div>
+            <div class="home-subscreen-body" id="carga-body"></div>
+        </div>
+    </div>
+
+    <div class="home-toast-container" id="home-toast-container"></div>
+
+    <script src="AppConfig.js"></script>
+    <script src="HelpMode.js"></script>
+    <script src="ColorPalette.js"></script>
+    <script src="AppOfflineSync.js"></script>
+    <script src="AppTemperaturas.js" defer></script>
+</body>
+</html>

@@ -179,7 +179,7 @@ function buildRow(r) {
         cell('colCatRegistroUnico', `TMP-${r.id}`, 'col-system'),
         cell('colTmpZona', r.zoneName), cell('colTmpHuella', footprintText(r)), cell('colTmpActivo', assetText(r)), cell('colTmpLocalizador', r.locator, 'rel-locator'), cell('colTmpQuien', r.name),
         timeCell('colTmpMomento', r.checkedAt), temperatureCell('colTmpTemperatura', r.temperature, r.status && r.status.temp), humidityCell('colTmpHumedad', r.humidity, r.status && r.status.hum), statusCell('colTmpEstado', r), photoCell('colTmpFoto', r),
-        originCell('colTmpOrigen', t(r.source === 'qr' ? 'main.tmpOrigenQr' : (r.source === 'qr-sensor' ? 'main.tmpOrigenSensor' : 'main.tmpOrigenUsuario')), r),
+        originCell('colTmpOrigen', t(r.source === 'qr' ? 'main.tmpOrigenQr' : (r.source === 'qr-sensor' ? 'main.tmpOrigenSensor' : (r.source === 'app' ? 'main.tmpOrigenApp' : 'main.tmpOrigenUsuario'))), r),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;

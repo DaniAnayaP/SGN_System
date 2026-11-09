@@ -164,7 +164,7 @@ const {
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, findCleaningByRef, finishCleaningFromApp, listOpenCleaningsOf, getCleaningLast, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
     MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
-    addTemperatureRecord, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
+    addTemperatureRecord, findTemperatureByRef, getTemperatureLast, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, findSafetyCheckByRef, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
@@ -8144,6 +8144,7 @@ function temperatureRowOf(r, centers, client) {
         id: r.id, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
         zoneName: r.zone_name, footprintCode: r.footprint_code, spaceCode: r.space_code, spaceType: r.space_type, sensorCode: r.sensor_code, sensorType: r.sensor_type, locator: r.locator,
         name: r.person_name, temperature: r.temperature, humidity: r.humidity, limits: temperatureLimits(r), status: temperatureStatus(r), checkedAt: sqlUtcIso(r.checked_at), hasPhoto: !!r.has_photo, source: r.source,
+        spaceId: r.space_id, sensorId: r.sensor_id, receivedAt: sqlUtcIso(r.received_at),
         editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: TEMPERATURE_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.checked_at }),
     };
@@ -8153,13 +8154,21 @@ app.get('/api/business/temperatures', requireAuth, (req, res) => {
     const { clientId, isTestAccount } = req.user;
     const client = getClientById(clientId);
     const centers = new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c]));
-    const LIMIT = 5000;
+    const lite = req.query.lite === '1'; // la App: solo las 300 más recientes y sin las columnas de Control Interno
+    const LIMIT = lite ? 300 : 5000;
     const rows = listTemperatureRecords(clientId, { limit: LIMIT });
     res.set('Cache-Control', 'no-store');
     res.json({
         truncated: rows.length >= LIMIT, max: LIMIT, canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), TEMPERATURE_TABLE_KEY, 'colTmpDeleteAuth'),
         editable: editableColumnsOf(req, TEMPERATURE_TABLE_KEY, [['name', 'colTmpQuien'], ['temperature', 'colTmpTemperatura'], ['humidity', 'colTmpHumedad']]),
-        temperatures: rows.map((r) => temperatureRowOf(r, centers, client)),
+        temperatures: rows.map((r) => {
+            const o = temperatureRowOf(r, centers, client);
+            if (!lite) return o;
+            delete o.system;
+            o.mine = r.reporter_user_id === req.user.sub;
+            o.clientRef = o.mine ? (r.client_ref || '') : '';
+            return o;
+        }),
     });
 });
 // Corregir una lectura (quién la revisó, la temperatura y la humedad; nunca la hora, la foto ni el lugar): misma tubería de cambios que Limpieza (ver arriba). Al corregir la temperatura o la humedad, el estado
@@ -8175,6 +8184,92 @@ app.patch('/api/business/temperatures/:id', requireAuth, (req, res) => {
     const updated = updateTemperatureRecord(id, req.user.clientId, appliedPatch, { editedBy: changedByLabel(req) });
     const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
     res.json({ temperature: temperatureRowOf(updated, centers, getClientById(req.user.clientId)), pendingFields, rejectedFields });
+});
+// La App (con sesión): las OPCIONES para tomar una lectura (los refrigeradores —activos de tipo Frío— y los sensores del Layout de cada centro de costos, con su rango y su última lectura: el celular las guarda para trabajar
+// sin señal) y registrar la lectura (nombre, temperatura y/o humedad según el equipo, foto). La lectura lleva la clave que le pone el celular (clientRef): si el celular la reenvía el servidor contesta la que ya existe. Si se hizo
+// sin señal el celular manda la hora (clientAt: solo vale si es de más de 30 segundos antes y hasta 7 días antes de ahora) y la del servidor queda aparte como hora recibida. Cada equipo se identifica con su tipo y su id: kind
+// 'fridge' (refrigerador) o 'sensor'.
+app.get('/api/business/temperaturas/options', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const centerIds = new Set(listCostCenters(clientId, !!isTestAccount).map((c) => c.id));
+    const pointsByCenter = {};
+    const lastByCenter = {};
+    listClientLayouts(clientId).forEach((row) => {
+        const cc = row.costCenterId || 0;
+        if (!cc || !centerIds.has(cc)) return;
+        const points = [];
+        (row.layout.spaces || []).filter((s) => s && s.active !== false && s.type === 'cold' && s.code && CLEANING_SPACE_ID_RE.test(String(s.id || ''))).forEach((s) => {
+            const { footprint, zone, locator } = cleaningLocatorOf(row.layout, s);
+            points.push({ kind: 'fridge', id: s.id, code: s.code, type: 'cold', locator, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', limits: spaceLimits(s) });
+        });
+        (row.layout.sensors || []).filter((s) => s && s.code && SENSOR_ID_RE.test(String(s.id || ''))).forEach((s) => {
+            const zone = (row.layout.zones || []).find((z) => z.id === s.zoneId) || null;
+            points.push({ kind: 'sensor', id: s.id, code: s.code, type: s.type || 'both', locator: [zone && zone.code, s.code].filter(Boolean).join('.'), zoneName: zone ? zone.name : '', footprintCode: '', limits: {} });
+        });
+        pointsByCenter[cc] = points;
+        const last = {};
+        getTemperatureLast(clientId, cc).forEach((r) => {
+            last[r.sensor_id ? `s:${r.sensor_id}` : `f:${r.space_id}`] = { at: sqlUtcIso(r.checked_at), temperature: r.temperature, humidity: r.humidity, status: temperatureStatus(r) };
+        });
+        lastByCenter[cc] = last;
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ pointsByCenter, lastByCenter, at: new Date().toISOString() });
+});
+app.post('/api/business/temperaturas/readings', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const clientRef = typeof body.clientRef === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.clientRef) ? body.clientRef : null;
+    res.set('Cache-Control', 'no-store');
+    const centers = new Map(listCostCenters(req.user.clientId, !!req.user.isTestAccount).map((c) => [c.id, c]));
+    const client = getClientById(req.user.clientId);
+    // la misma lectura reenviada: se contesta la que ya existe
+    const already = findTemperatureByRef(req.user.clientId, req.user.sub, clientRef);
+    if (already) return res.json({ record: temperatureRowOf(already, centers, client), duplicate: true });
+    const typed = String(body.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const personName = typed || String(changedByLabel(req) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!personName) return res.status(400).json({ message: 'Falta el nombre de quien revisa.', code: 'NAME' });
+    const layoutRow = getClientLayout(req.user.clientId, { costCenterId: center.id });
+    const isSensor = body.kind === 'sensor';
+    const pointId = String(body.pointId || '');
+    const space = !isSensor && layoutRow && CLEANING_SPACE_ID_RE.test(pointId) ? (layoutRow.layout.spaces || []).find((s) => s.id === pointId && s.active !== false && s.type === 'cold') : null;
+    const sensor = isSensor && layoutRow && SENSOR_ID_RE.test(pointId) ? (layoutRow.layout.sensors || []).find((s) => s.id === pointId) : null;
+    if (!space && !sensor) return res.status(400).json({ message: 'Ese equipo ya no existe: elige otro.', code: 'POINT' });
+    // lo que pide el equipo: un refrigerador, temperatura (y humedad, que puede faltar); un sensor, temperatura, humedad o las dos según su tipo (lo que su tipo no lleva se ignora)
+    let temperature = null;
+    if (space || sensor.type !== 'hum') {
+        const raw = body.temperature;
+        if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < TEMPERATURE_MIN || raw > TEMPERATURE_MAX) return res.status(400).json({ message: 'La temperatura no es válida.', code: 'TEMP' });
+        temperature = Math.round(raw * 10) / 10;
+    }
+    let humidity = null;
+    if (space ? (body.humidity !== undefined && body.humidity !== null) : sensor.type !== 'temp') {
+        const rawHum = body.humidity;
+        if (typeof rawHum !== 'number' || !Number.isFinite(rawHum) || rawHum < 0 || rawHum > 100) return res.status(400).json({ message: 'La humedad no es válida.', code: 'HUM' });
+        humidity = Math.round(rawHum * 10) / 10;
+    }
+    const photo = parseCleaningPhoto(body.photo);
+    if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
+    const checkedAt = appClientTime(body.clientAt, 30000);
+    let saved;
+    if (space) {
+        const { footprint, zone, locator } = cleaningLocatorOf(layoutRow.layout, space);
+        saved = addTemperatureRecord({
+            clientId: req.user.clientId, costCenterId: center.id, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature, humidity,
+            limits: spaceLimits(space), photo, thumb: parseThumb(body.thumb), source: 'app', userId: req.user.sub, clientRef, checkedAt,
+        });
+    } else {
+        const zone = (layoutRow.layout.zones || []).find((z) => z.id === sensor.zoneId) || null;
+        saved = addTemperatureRecord({
+            clientId: req.user.clientId, costCenterId: center.id, spaceId: '', spaceCode: '', spaceType: '', zoneName: zone ? zone.name : '', footprintCode: '', locator: [zone && zone.code, sensor.code].filter(Boolean).join('.'), personName, temperature, humidity, limits: {},
+            photo, thumb: parseThumb(body.thumb), source: 'app', sensorId: sensor.id, sensorCode: sensor.code, sensorType: sensor.type, userId: req.user.sub, clientRef, checkedAt,
+        });
+    }
+    res.status(201).json({ record: temperatureRowOf(saved, centers, client), offline: !!checkedAt });
 });
 app.get('/api/business/temperatures/:id/photo', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).end();

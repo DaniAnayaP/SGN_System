@@ -2161,3 +2161,12 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .seg-app-last small b{ font-weight: 700; font-variant-numeric: tabular-nums; }
 .inc-app-pills small{ font-size: 0.62rem; color: var(--home-text-muted); white-space: nowrap; }
 .inc-app-pills small b{ font-weight: 700; font-variant-numeric: tabular-nums; }
+/* ===== Temperaturas (App): temperatura con ± y humedad, aviso de fuera de rango y lectura grande (AppTemperaturas.js); las pestañas, filas y pastillas son las de Seguridad ===== */
+.tmp-app-row{ display: flex; align-items: center; gap: 0.5rem; }
+.tmp-app-row .pm-app-input{ flex: 1; min-width: 0; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.tmp-app-sign{ flex: none; width: 3rem; align-self: stretch; min-height: 2.8rem; font-family: inherit; font-size: 1.3rem; font-weight: 700; border-radius: 0.8rem; border: 1px solid var(--home-border); background: var(--home-surface-2); color: var(--home-text-primary); cursor: pointer; }
+.tmp-app-unit{ flex: none; font-weight: 700; color: var(--home-text-secondary); }
+.tmp-app-sign:focus-visible{ outline: 2px solid var(--home-accent); outline-offset: 2px; }
+.tmp-app-alert{ margin: 0 0 0.6rem; padding: 0.7rem 0.85rem; border-radius: 0.9rem; border: 1px solid rgba(217, 68, 58, 0.55); background: rgba(217, 68, 58, 0.1); color: #a32a1e; font-size: 0.8rem; line-height: 1.45; }
+.dark-mode .tmp-app-alert, .futuristic-mode .tmp-app-alert, .institutional-mode .tmp-app-alert{ color: #ff9d94; }
+.tmp-app-big{ margin: 0.6rem 0; font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--home-text-primary); }

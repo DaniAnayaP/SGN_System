@@ -3123,6 +3123,7 @@
     "tmpOrigenQr": "QR",
     "tmpOrigenSensor": "Sensor QR",
     "tmpOrigenUsuario": "User",
+    "tmpOrigenApp": "App",
     "tmpFotoVer": "View the photo of the reading",
     "tmpCortado": "Showing the first {n} readings; filter by cost center to see the rest.",
     "limEnCurso": "In progress",
@@ -3844,6 +3845,53 @@
     "incEvidence1": "1 piece of evidence",
     "incNoEvidence": "No evidence",
     "incSend": "Send report",
+    "tmpTabPoints": "Equipment",
+    "tmpTabReadings": "Readings",
+    "tmpSearchPlaceholder": "Search a refrigerator or sensor",
+    "tmpNoMatch": "No equipment matches your search.",
+    "tmpPointsEmpty": "There are no refrigerators or sensors in this cost center's Layout yet.",
+    "tmpNoCenters": "You have no cost centers to take readings in.",
+    "tmpOptionsNone": "The equipment has not been downloaded yet. Connect once to be able to take readings offline.",
+    "tmpOptionsCached": "No signal: showing the equipment saved on your phone.",
+    "tmpShowing": "Showing {n} of {total}: type to search for the rest.",
+    "tmpNever": "No readings",
+    "tmpReadingsEmpty": "There are no readings yet.",
+    "tmpNewTitle": "New reading",
+    "tmpWho": "Checked by",
+    "tmpWhoPlaceholder": "Your name",
+    "tmpTemperature": "Temperature shown",
+    "tmpHumidity": "Humidity shown",
+    "tmpToggleSign": "Switch between above and below zero",
+    "tmpRange": "Equipment range: {range}",
+    "tmpPhoto": "Photo of the reading",
+    "tmpPhotoHint": "Point at the thermometer or the equipment display and take the photo. It is required.",
+    "tmpAddPhoto": "Take or choose a photo",
+    "tmpChangePhoto": "Change photo",
+    "tmpPreparing": "Preparing the photo…",
+    "tmpSend": "Save the reading",
+    "tmpNeedName": "Write the name of who is checking to save.",
+    "tmpNeedTemp": "Type the temperature shown (for example 4.5 or -18).",
+    "tmpBadTemp": "That temperature is not valid: use a number between -100 and 100.",
+    "tmpNeedHum": "Type the humidity shown (for example 55).",
+    "tmpBadHum": "That humidity is not valid: use a number between 0 and 100.",
+    "tmpNeedPhoto": "Add the photo of the reading to save.",
+    "tmpErrPhoto": "That photo could not be used. Try another one.",
+    "tmpErrSend": "The reading could not be saved. Try again.",
+    "tmpPointGone": "That equipment is no longer in the Layout. Refresh the list.",
+    "tmpOutTitle": "Out of range",
+    "tmpOutSaved": "It will be saved with the alert.",
+    "tmpTempLow": "The temperature is below the minimum ({n} °C).",
+    "tmpTempHigh": "The temperature is above the maximum ({n} °C).",
+    "tmpHumLow": "The humidity is below the minimum ({n} %).",
+    "tmpHumHigh": "The humidity is above the maximum ({n} %).",
+    "tmpSentTitle": "Reading saved",
+    "tmpSavedTitle": "Saved on your phone",
+    "tmpNumber": "Reading number",
+    "tmpNoNumberYet": "Pending",
+    "tmpNumberOnSync": "No signal: it will be sent by itself when the connection returns and will get its number then.",
+    "tmpAnother": "Read another equipment",
+    "tmpBackToList": "See the readings",
+    "tmpDiscard": "What you wrote and the photo will be lost. Leave without saving?",
     "limTabSpaces": "Assets",
     "limTabCleanings": "Cleanings",
     "limSearchPlaceholder": "Search an asset",
@@ -4032,6 +4080,26 @@
     "categorySoonTag": "Soon"
   },
   "help": {
+    "appTmpTabs": {
+      "what": "Switches between the refrigerators and sensors you can read and the readings already taken.",
+      "example": "in «Equipment» you look for the refrigerator you will check; in «Readings» you see what was already read and whether it was in range."
+    },
+    "appTmpEquipo": {
+      "what": "The refrigerator or sensor you are reading, with its code, where it is and its temperature and humidity range (if it has one).",
+      "example": "«F001 · Cold» in Zone 6, with a range of 0 to 8 °C."
+    },
+    "appTmpTemperatura": {
+      "what": "The temperature the equipment shows. The ± button makes it negative, because some phone keyboards have no minus sign. If it is out of range, it warns before saving.",
+      "example": "-18.5 in a freezer, or 4.2 in a refrigerator."
+    },
+    "appTmpHumedad": {
+      "what": "The humidity the equipment shows, from 0 to 100 %. If it is out of range, it warns before saving.",
+      "example": "55 %."
+    },
+    "appTmpFoto": {
+      "what": "A photo of the display or thermometer at the moment of the reading. It is required and only one is added.",
+      "example": "a photo of the refrigerator's thermometer showing 4.2 °C."
+    },
     "appLimTabs": {
       "what": "Switches between the assets you can clean and the cleanings already made or in progress.",
       "example": "in «Assets» you look for the rack you will clean; in «Cleanings» you see the ones in progress and the finished ones."

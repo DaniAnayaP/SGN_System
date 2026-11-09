@@ -5864,15 +5864,30 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_temperature_space ON temperature_records(client_id, cost_center_id, space_id, checked_at);
     CREATE INDEX IF NOT EXISTS idx_temperature_sensor ON temperature_records(client_id, cost_center_id, sensor_id, checked_at);
 `);
+// La App: client_ref = la clave que el celular le pone a cada lectura (si reenvía la misma, el servidor la reconoce y no la duplica); reporter_user_id = la cuenta que la mandó; received_at = cuándo la recibió el servidor
+// cuando se mandó sin señal (checked_at es entonces la hora del celular al tomarla).
+for (const [col, ddl] of [['client_ref', 'TEXT'], ['reporter_user_id', 'INTEGER'], ['received_at', 'TEXT']]) {
+    if (!db.prepare('PRAGMA table_info(temperature_records)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE temperature_records ADD COLUMN ${col} ${ddl}`);
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_temperature_ref ON temperature_records(client_id, reporter_user_id, client_ref)');
 const TEMPERATURE_SELECT = `SELECT r.*, EXISTS(SELECT 1 FROM temperature_photos p WHERE p.record_id = r.id) AS has_photo FROM temperature_records r`;
 // Guarda una lectura: la hora la pone el servidor y la foto se guarda en la misma operación.
-function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, limits, photo, thumb, source = 'qr', sensorId = '', sensorCode = '', sensorType = '' }) {
+function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, limits, photo, thumb, source = 'qr', sensorId = '', sensorCode = '', sensorType = '', userId = null, clientRef = null, checkedAt = null }) {
     return db.transaction(() => {
-        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, humidity, temp_min, temp_max, hum_min, hum_max, checked_at, source, sensor_id, sensor_code, sensor_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, humidity === undefined ? null : humidity, limits && limits.tempMin !== undefined ? limits.tempMin : null, limits && limits.tempMax !== undefined ? limits.tempMax : null, limits && limits.humMin !== undefined ? limits.humMin : null, limits && limits.humMax !== undefined ? limits.humMax : null, source, sensorId || '', sensorCode || '', sensorType || '');
+        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, humidity, temp_min, temp_max, hum_min, hum_max, checked_at, source, sensor_id, sensor_code, sensor_type, reporter_user_id, client_ref, received_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, humidity === undefined ? null : humidity, limits && limits.tempMin !== undefined ? limits.tempMin : null, limits && limits.tempMax !== undefined ? limits.tempMax : null, limits && limits.humMin !== undefined ? limits.humMin : null, limits && limits.humMax !== undefined ? limits.humMax : null, checkedAt, source, sensorId || '', sensorCode || '', sensorType || '', userId, clientRef, checkedAt);
         db.prepare('INSERT INTO temperature_photos (record_id, mime, data, thumb_mime, thumb) VALUES (?, ?, ?, ?, ?)').run(info.lastInsertRowid, photo.mime, photo.data, thumb ? thumb.mime : null, thumb ? thumb.data : null);
         return db.prepare(`${TEMPERATURE_SELECT} WHERE r.id = ?`).get(info.lastInsertRowid);
     })();
+}
+// La lectura que esa cuenta ya mandó con esa clave (un reenvío de la App), o undefined.
+function findTemperatureByRef(clientId, userId, clientRef) {
+    if (!clientRef) return undefined;
+    return db.prepare(`${TEMPERATURE_SELECT} WHERE r.client_id = ? AND r.reporter_user_id = ? AND r.client_ref = ?`).get(clientId, userId, clientRef);
+}
+// La última lectura de cada refrigerador y de cada sensor de un centro (las filas completas; la más nueva por id de cada uno).
+function getTemperatureLast(clientId, costCenterId) {
+    return db.prepare(`${TEMPERATURE_SELECT} JOIN (SELECT MAX(id) AS mid FROM temperature_records WHERE client_id = ? AND cost_center_id = ? GROUP BY space_id, sensor_id) m ON m.mid = r.id`).all(clientId, costCenterId || 0);
 }
 // sensorId = las de un sensor; sensorOnly = solo las de sensores (para el mapa de calor); since / until = rango de checked_at en UTC ('YYYY-MM-DD HH:MM:SS'), until sin incluir.
 function listTemperatureRecords(clientId, { costCenterId, spaceId, sensorId, sensorOnly, since, until, limit } = {}) {
@@ -7818,6 +7833,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'incidentes', labelKey: 'menu.opCentroDistIncidentes' },
     { key: 'seguridad', labelKey: 'menu.opCentroDistSeguridad' },
     { key: 'limpieza', labelKey: 'menu.opCentroDistLimpieza' },
+    { key: 'temperaturas', labelKey: 'menu.opCentroDistTemperaturas' },
     { key: 'capacidad-almacenamiento', labelKey: 'menu.opCentroDistCapacidadAlmacenamiento' },
     { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
     { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },
@@ -12236,6 +12252,8 @@ module.exports = {
     clientLocalDay,
     SAFETY_CHECK_PATCHABLE_FIELDS,
     addTemperatureRecord,
+    findTemperatureByRef,
+    getTemperatureLast,
     listTemperatureRecords,
     getTemperatureRecord,
     getTemperaturePhoto,
