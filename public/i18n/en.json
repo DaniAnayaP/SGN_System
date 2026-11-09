@@ -5035,6 +5035,10 @@
       "what": "How many bays (columns) of this level have their own height from the floor, height or beam in Positions. What you write here does not change those.",
       "example": "level 2 has 3 columns and one has its own beam: here it says 1."
     },
+    "layoutFiltroElegirTipos": {
+      "what": "The classifications of what is in the Layout (Footprints, Assets, Sensors…), side by side under the search box, so you do not have to go through a huge list. Tap one or several and the list only shows those; «All» clears them. The number is how many match what you typed in the search.",
+      "example": "you tap Footprints and Assets: the list only shows footprints and assets, and you tick the ones you want."
+    },
     "layoutNivNombre": {
       "what": "The name you want to give this level so you can recognize it. It is optional. The level code (the asset's code + N001, N002…) is set by the system and cannot be changed.",
       "example": "«Dairy floor» for level 1 of rack R001 (R001.N001)."

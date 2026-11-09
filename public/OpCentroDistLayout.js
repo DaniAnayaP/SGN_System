@@ -2484,6 +2484,8 @@ function renderViewStrip() {
 }
 // ---- «Elegir» ---------------------------------------------------------------------------------------------------------------------------------------------
 const chosenList = () => state.pick;
+// «Elegir»: las clasificaciones (tipos) prendidas en las pastillas de abajo del buscador; vacío = todas. Se pueden prender varias a la vez.
+const vChooseTypes = new Set();
 // Todo lo que se puede elegir (lo que el árbol deja ver), por tipo: las mismas listas del buscador.
 function chooseCatalog() {
     const d = state.draft;
@@ -2505,7 +2507,8 @@ function chooseBodyHtml() {
     const cat = chooseCatalog();
     const types = FIND_TYPES.map((ft) => ft.type).filter((ty) => cat.some((i) => i.type === ty));
     const chosen = chosenList();
-    const rows = cat.filter((i) => ddMatch('choose', i.hay));
+    const matched = cat.filter((i) => ddMatch('choose', i.hay));
+    const rows = vChooseTypes.size ? matched.filter((i) => vChooseTypes.has(i.type)) : matched;
     const CAP = 150;
     let shown = 0;
     let list = '';
@@ -2518,17 +2521,23 @@ function chooseBodyHtml() {
     if (!cat.length) list = `<div class="layout-find-empty">${esc(t('main.layoutElegirNada'))}</div>`;
     else if (!rows.length) list = `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
     else if (rows.length > shown) list += `<div class="layout-find-empty">${esc(t('main.layoutElegirMas'))}</div>`;
-    return { list, count: t('main.layoutFiltroNElegidos', { n: chosen.length }) };
+    // las clasificaciones, horizontales debajo del buscador: cada número es lo que coincide con lo escrito
+    const countBy = {};
+    matched.forEach((i) => { countBy[i.type] = (countBy[i.type] || 0) + 1; });
+    const chip = (id, label, n, on) => `<button type="button" class="layout-find-type" data-ch-type="${id}" aria-pressed="${on}">${esc(label)} <span class="layout-find-n">${n}</span></button>`;
+    const chips = types.length > 1 ? `<div class="layout-find-types" role="group" data-help-key="layoutFiltroElegirTipos">${chip('all', t('main.layoutFindTipoTodo'), matched.length, !vChooseTypes.size)}${types.map((ty) => chip(ty, t(`main.layoutFindTipo_${ty}`), countBy[ty] || 0, vChooseTypes.has(ty))).join('')}</div>` : '';
+    return { list, count: t('main.layoutFiltroNElegidos', { n: chosen.length }), chips };
 }
 function chooseMenuHtml() {
     if (vDropdown !== 'choose' || !state.draft) return '';
     const b = chooseBodyHtml();
-    return `${searchRowHtml('choose')}<div class="layout-ch-list" id="layout-ch-list">${b.list}</div><div class="layout-ch-foot"><span id="layout-ch-count">${esc(b.count)}</span><button type="button" data-ch-clear>${esc(t('main.layoutElegirLimpiar'))}</button></div>`;
+    return `<div class="layout-ch-head">${searchRowHtml('choose')}<div id="layout-ch-chips">${b.chips}</div></div><div class="layout-ch-list" id="layout-ch-list">${b.list}</div><div class="layout-ch-foot"><span id="layout-ch-count">${esc(b.count)}</span><button type="button" data-ch-clear>${esc(t('main.layoutElegirLimpiar'))}</button></div>`;
 }
 // Solo la lista, las pastillas y el contador se vuelven a dibujar mientras se escribe (el buscador no se toca para no perder el cursor).
 function renderChooseBody() {
     const b = chooseBodyHtml();
-    const list = $('layout-ch-list'); const count = $('layout-ch-count');
+    const list = $('layout-ch-list'); const count = $('layout-ch-count'); const chipsBox = $('layout-ch-chips');
+    if (chipsBox) chipsBox.innerHTML = b.chips;
     if (list) list.innerHTML = b.list;
     if (count) count.textContent = b.count;
 }
@@ -2563,7 +2572,7 @@ $('layout-mode-edit').addEventListener('click', goEdit);
 $('layout-mode-view').addEventListener('click', goView);
 $('layout-vstrip-filters').addEventListener('click', (event) => {
     const dd = event.target.closest('[data-dd]');
-    if (dd) { event.stopPropagation(); const key = dd.getAttribute('data-dd'); vDropdown = vDropdown === key ? '' : key; if (vSearch[vDropdown]) { vSearch[vDropdown].q = ''; vSearch[vDropdown].open = ''; ddFocus = true; } renderViewStrip(); return; }
+    if (dd) { event.stopPropagation(); const key = dd.getAttribute('data-dd'); vDropdown = vDropdown === key ? '' : key; vChooseTypes.clear(); if (vSearch[vDropdown]) { vSearch[vDropdown].q = ''; vSearch[vDropdown].open = ''; ddFocus = true; } renderViewStrip(); return; }
     // el buscador de cada desplegable: el tipo de filtro, los signos y sus opciones
     const sbtn = event.target.closest('button[data-dds]');
     if (sbtn) {
@@ -2629,6 +2638,15 @@ $('layout-vstrip-filters').addEventListener('click', (event) => {
     }
     const restBtn = event.target.closest('[data-dd-rest]');
     if (restBtn) { setRest(restBtn.getAttribute('data-dd-rest')); return; }
+    // «Elegir»: tocar una pastilla de clasificación la prende o la apaga (varias a la vez); «Todo» las apaga todas
+    const chType = event.target.closest('[data-ch-type]');
+    if (chType) {
+        event.stopPropagation(); // la pastilla se vuelve a dibujar: sin esto el clic parecería de afuera y cerraría el desplegable
+        const ty = chType.getAttribute('data-ch-type');
+        if (ty === 'all') vChooseTypes.clear(); else if (vChooseTypes.has(ty)) vChooseTypes.delete(ty); else vChooseTypes.add(ty);
+        renderChooseBody();
+        return;
+    }
     const pick = event.target.closest('[data-ch-pick]');
     if (pick) {
         const type = pick.getAttribute('data-ch-kind');

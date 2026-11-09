@@ -5034,6 +5034,10 @@
       "what": "Cuántos huecos (columnas) de este nivel traen en Posiciones su propia altura desde el piso, alto o ceja. A esos no les cambia lo que anotes aquí.",
       "example": "el nivel 2 tiene 3 columnas y una lleva su propia ceja: aquí dice 1."
     },
+    "layoutFiltroElegirTipos": {
+      "what": "Las clasificaciones de lo que hay en el Layout (Huellas, Activos, Sensores…), una junto a otra debajo del buscador, para no recorrer una lista enorme. Toca una o varias y la lista solo trae esas; «Todo» las quita. El número es cuántas coinciden con lo que escribiste en el buscador.",
+      "example": "tocas Huellas y Activos: la lista solo muestra huellas y activos, y de ahí marcas los que quieres."
+    },
     "layoutNivNombre": {
       "what": "El nombre que tú le quieras poner a este nivel para reconocerlo. Es opcional. El código del nivel (el del activo + N001, N002…) lo pone el sistema y no se cambia.",
       "example": "«Piso de lácteos» para el nivel 1 del rack R001 (R001.N001)."

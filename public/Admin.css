@@ -8203,6 +8203,10 @@ td.cap-pick{ white-space: nowrap; }
 .layout-ch-pill{ padding: 0 0.6rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font: inherit; font-size: 0.7rem; cursor: pointer; }
 .layout-ch-pill.on{ background: var(--color-accent, var(--color-text-primary)); border-color: var(--color-accent, var(--color-text-primary)); color: #fff; font-weight: 700; }
 .layout-ch-list{ display: flex; flex-direction: column; gap: 0.1rem; max-height: 14rem; overflow: auto; }
+/* «Elegir»: el buscador y las pastillas de clasificación quedan fijos arriba y la lista corre abajo */
+.layout-ch-head{ position: sticky; top: 0; z-index: 2; background: var(--color-surface); }
+.layout-ch-head .layout-find-types{ padding: 0.1rem 0 0.4rem; }
+.layout-dd-menu:has(.layout-ch-head){ min-width: 21rem; max-width: 26rem; max-height: 30rem; }
 .layout-ch-grp{ margin-top: 0.3rem; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-secondary); }
 .layout-ch-foot{ display: flex; justify-content: space-between; align-items: center; margin-top: 0.3rem; padding-top: 0.35rem; border-top: 1px solid var(--color-border); font-size: 0.72rem; color: var(--color-text-secondary); }
 .layout-ch-foot button{ border: 0; background: transparent; color: var(--color-accent, var(--color-text-primary)); font: inherit; font-weight: 600; cursor: pointer; }
