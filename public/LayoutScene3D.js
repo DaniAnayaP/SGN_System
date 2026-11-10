@@ -1356,6 +1356,41 @@
                 [[x0, y0, z0, x1, y0, z0], [x1, y0, z0, x1, y0, z1], [x1, y0, z1, x0, y0, z1], [x0, y0, z1, x0, y0, z0], [x0, y1, z0, x1, y1, z0], [x1, y1, z0, x1, y1, z1], [x1, y1, z1, x0, y1, z1], [x0, y1, z1, x0, y1, z0],
                     [x0, y0, z0, x0, y1, z0], [x1, y0, z0, x1, y1, z0], [x1, y0, z1, x1, y1, z1], [x0, y0, z1, x0, y1, z1]].forEach((e) => (into || edges).push(...e));
             };
+            // Gabinete (gabeta): cuerpo blanco con costados, tapa y zócalo grises, un cajón (frente blanco con su jaladera) por nivel y por espacio en la cara que mira al pasillo (su frente), y un contorno fino: así se ve limpio,
+            // se distinguen los cajones y un gabinete del que está pegado a él. Se arma en un marco propio (u = a lo ancho de la cara, v = hacia afuera del frente) para cualquier lado del frente.
+            const cabParts = []; const cabEdges = [];
+            const CAB = { core: 0xd3d8e2, frame: 0xb6bdcc, plinth: 0x98a1b3, drawer: 0xffffff, handle: 0x465065 };
+            const addCabinet3d = (s, cx, cz, fl, lv, own, mute) => {
+                const LCc = root.LayoutCalc;
+                const side = frontSides[s.id] || (LCc && LCc.activoFront ? (LCc.activoFront(layout, s) || {}).side : '') || 'S';
+                const nv = LCc && LCc.faceVectors ? LCc.faceVectors(side).front : [0, 1];
+                const nx = nv[0]; const nz = nv[1];
+                const alongX = nz !== 0; // el frente mira hacia arriba o abajo del croquis: el ancho de la cara va a lo largo (X)
+                const tx = alongX ? 1 : 0; const tz = alongX ? 0 : 1;
+                const W = alongX ? s.l : s.d; const D = alongX ? s.d : s.l; const H = s.h;
+                const put = (u, y, v, w, h, dp, c) => cabParts.push({ x: cx + tx * u + nx * v, y: fl + y, z: cz + tz * u + nz * v, sx: alongX ? w : dp, sy: h, sz: alongX ? dp : w, c: mute(c) });
+                const ts = Math.min(0.03, W * 0.08); const tp = Math.min(0.03, H * 0.03); const base = Math.min(0.06, H * 0.05);
+                put(0, H / 2, 0, Math.max(W - 0.004, 0.02), Math.max(H - 0.004, 0.02), Math.max(D - 0.004, 0.02), CAB.core); // el cuerpo
+                [-1, 1].forEach((k) => put(k * (W / 2 - ts / 2), H / 2, 0, ts, H, D, CAB.frame)); // los costados
+                put(0, H - tp / 2, 0, W, tp, D, CAB.frame); // la tapa
+                put(0, base / 2, -0.01, Math.max(W - 0.02, 0.02), base, Math.max(D - 0.03, 0.02), CAB.plinth); // el zócalo
+                const inner0 = base; const inner1 = H - tp;
+                for (let k = 1; k <= lv; k++) {
+                    let y0; let y1;
+                    if (LCc && LCc.levelMeasures) { const m = LCc.levelMeasures(s, k); y0 = Math.max(m.floorH, inner0); y1 = Math.min(m.floorH + (m.beam > 0 ? m.beam : 0.06) + m.h, inner1); }
+                    else { const step = (inner1 - inner0) / lv; y0 = inner0 + (k - 1) * step; y1 = y0 + step; }
+                    if (!(y1 - y0 > 0.04)) continue;
+                    const yc = (y0 + y1) / 2; const hD = y1 - y0 - 0.016;
+                    const rects = alongX && LCc && LCc.levelBayRects ? LCc.levelBayRects(s, k) : null; // un cajón por espacio del nivel (de lado: uno solo, del ancho de la cara)
+                    const cols = rects && rects.length ? rects.map((r) => ({ u: r.x + r.l / 2 - s.l / 2, w: r.l })) : [{ u: 0, w: W - 2 * ts }];
+                    cols.forEach((cl) => {
+                        const wD = Math.max(cl.w - 0.016, 0.03);
+                        put(cl.u, yc, D / 2 + 0.006, wD, hD, 0.02, own !== null ? own : CAB.drawer); // el frente del cajón
+                        put(cl.u, yc + Math.min(hD * 0.25, 0.05), D / 2 + 0.03, Math.min(0.14, wD * 0.5), 0.018, 0.03, CAB.handle); // su jaladera
+                    });
+                }
+                edgeBox(cx, fl + H / 2, cz, s.l, H, s.d, cabEdges); // el contorno del gabinete
+            };
             (layout.spaces || []).forEach((s) => {
                 if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || (hiddenAssets.has(s.id) && !dimHidden)) return;
                 const cx = PX(s.x + s.l / 2); const cz = PZ(s.y + s.d / 2);
@@ -1399,7 +1434,7 @@
                     const solid = s.type === 'pallet' || s.type === 'cabinet' || s.type === 'cold';
                     const postC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
                     const deckZ = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
-                    const blockC = mute(own !== null ? own : (s.type === 'pallet' ? WOOD : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d)));
+                    const blockC = mute(own !== null ? own : (s.type === 'pallet' ? WOOD : (s.type === 'cold' ? 0x8cc7e6 : 0xdfe3ea)));
                     const wC = blen / cols;
                     const gx = Math.min(0.02, wC * 0.1); const gz = 0.02;
                     if (allMode) {
@@ -1456,8 +1491,10 @@
                     blk.push({ x: cx, y: 0.07 + fl, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: mute(own !== null ? own : WOOD) });
                     const loadH = (s.h - 0.14) / lv;
                     if (!dimS) for (let k = 0; k < lv; k++) edgeBox(cx, fl + 0.14 + k * loadH + loadH / 2, cz, s.l - 0.04, loadH - 0.04, s.d - 0.04);
-                } else if (s.type === 'cabinet' || s.type === 'cold') {
-                    blk.push({ x: cx, y: s.h / 2 + fl, z: cz, sx: s.l, sy: s.h, sz: s.d, c: mute(own !== null ? own : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d)) });
+                } else if (s.type === 'cabinet') {
+                    addCabinet3d(s, cx, cz, fl, lv, own, mute);
+                } else if (s.type === 'cold') {
+                    blk.push({ x: cx, y: s.h / 2 + fl, z: cz, sx: s.l, sy: s.h, sz: s.d, c: mute(own !== null ? own : 0x8cc7e6) });
                 } else {
                     const upC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
                     const deckC = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
@@ -1516,6 +1553,14 @@
             instanced(group.assets, upr, mat);
             instanced(group.assets, dck, mat);
             instanced(group.assets, blk, mat);
+            if (cabParts.length) { const cp = instanced(group.assets, cabParts, mat); if (cp) cp.raycast = () => {}; } // los gabinetes no tapan los toques: el activo se elige por su caja
+            if (cabEdges.length) {
+                const cg = new THREE.BufferGeometry();
+                cg.setAttribute('position', new THREE.Float32BufferAttribute(cabEdges, 3));
+                const cl = new THREE.LineSegments(cg, new THREE.LineBasicMaterial({ color: 0x6f778a }));
+                cl.raycast = () => {};
+                group.assets.add(cl);
+            }
             volBoxes.forEach((vb) => {
                 const plain = vb.fmt.pattern === 'solid' || vb.fmt.pattern === 'none';
                 // una barra cúbica de su color un poco desvanecido (suavizado hacia el blanco y algo traslúcido, para ver lo que tiene detrás), con las aristas de su borde bien marcadas
