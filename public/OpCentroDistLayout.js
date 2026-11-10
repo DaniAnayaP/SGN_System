@@ -140,7 +140,7 @@ function goToOut(it) {
     selectEntity({ ...it.target }, 'zoom');
     applyHighlight('zoom'); // elegir puede reencuadrar el croquis (cambió lo enfocado): se acerca otra vez a lo elegido
     const row = highlightedRow();
-    if (row) row.scrollIntoView({ block: 'center' });
+    if (row) revealRow(row, 'center');
     const map = $('layout-svg');
     if (map && !map.hasAttribute('hidden')) map.scrollIntoView({ block: 'nearest' });
 }
@@ -1794,7 +1794,7 @@ function addPositionAfter(posId) {
     refreshLive();
     markSelectedRow();
     const row = highlightedRow();
-    if (row) row.scrollIntoView({ block: 'nearest' });
+    if (row) revealRow(row, 'nearest');
 }
 $('layout-panel').addEventListener('click', (event) => {
     const add = event.target.closest('[data-pos-add]');
@@ -1936,7 +1936,7 @@ function renderPanel() {
     closeWhoPop();
     // el panel también se dibuja con lo que sale de la huella (zona de cada activo, si está activo): se saca antes de dibujarlo, no solo en refreshLive
     if (state.draft) { syncWallItems(); syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; syncPositions(); computeFootprintIssues(); computeSpaceIssues(); computeTransitIssues(); }
-    const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
+    const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => [el.scrollTop, el.scrollLeft]) : []; // lo que se había bajado y lo que se había corrido a la derecha
     ensureVisibleSteps();
     const tabs = SECTION_ORDER.filter(stepVisible).map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
@@ -1966,7 +1966,7 @@ function renderPanel() {
     // Los botones de agregar del paso suben a la fila del título, pegados a la derecha (siguen siendo los mismos botones: el clic se atiende igual).
     const headActions = document.querySelector('#layout-panel .layout-head-actions');
     if (headActions) document.querySelectorAll('#layout-panel [data-main-add]').forEach((btn) => headActions.appendChild(btn));
-    panelScrollers().forEach((el, i) => { el.scrollTop = panelScrollEnd ? el.scrollHeight : (keepTops[i] || 0); });
+    panelScrollers().forEach((el, i) => { const [top, left] = keepTops[i] || [0, 0]; el.scrollTop = panelScrollEnd ? el.scrollHeight : top; el.scrollLeft = left; });
     panelScrollEnd = false;
     panelScrollStep = state.focus;
     if (state.mode === 'edit') renderViewStrip(); // Qué ver (la franja) sigue a los pasos encendidos
@@ -1981,6 +1981,14 @@ function renderPanel() {
 // tabla: así, al editar, no se confunde de cuál zona, activo, huella o hueco se trata. Una posición es un hueco dentro de un anaquel y el croquis lo ve desde arriba: se marca el anaquel y se escribe el
 // nivel y la columna. Es solo de pantalla (no cambia lo guardado ni la hoja que se descarga) y no hace falta redibujar el croquis: se pone y se quita sobre el dibujo que ya está.
 const HL_ROW_SELECTOR = '#layout-panel .layout-table tbody tr';
+// Sube o baja la tabla hasta que el renglón se vea SIN correrla a los lados: scrollIntoView también la regresaba a la izquierda (el renglón es más ancho que la pantalla), y al tocar una opción de un renglón
+// (Atrás, Der.…) la barra desplazadora volvía al inicio.
+function revealRow(row, block) {
+    const scroller = row.closest('.layout-scroll');
+    const left = scroller ? scroller.scrollLeft : 0;
+    row.scrollIntoView({ block });
+    if (scroller) scroller.scrollLeft = left;
+}
 function rowEntity(tr) {
     // paso Posiciones: el renglón es una posición (de su espacio): se marca el espacio y la posición en el croquis y en el 3D
     const posId = tr.getAttribute('data-posid');
@@ -2341,7 +2349,7 @@ function selectEntity(next, reveal = true) {
     state.hl = next;
     markSelectedRow();
     const row = highlightedRow();
-    if (row) row.scrollIntoView({ block: 'nearest' });
+    if (row) revealRow(row, 'nearest');
     applyHighlight(reveal);
     fxAfterSelect();
 }
