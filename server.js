@@ -8331,7 +8331,7 @@ app.get('/api/business/layout/cleaning-qr', requireAuth, (req, res) => {
     res.json(cleaningQrList(req, row));
 });
 // Operaciones > QR's: cada app con QR se puede hacer desde la computadora (se abre la misma pantalla que abre el QR). Cada entrada pide la hoja de su pantalla en el árbol; el administrador del cliente no depende de hojas.
-const QR_APP_SCREENS = { limpieza: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza' };
+const QR_APP_SCREENS = { limpieza: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza', temperaturas: 'cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas' };
 function canUseQrApp(req, key) {
     return !!req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), 'supply-chain', 'sc-area-distribution-center', QR_APP_SCREENS[key]);
 }
@@ -8343,6 +8343,28 @@ app.get('/api/business/qr-apps/limpieza', requireAuth, (req, res) => {
     const list = cleaningQrList(req, row);
     res.set('Cache-Control', 'no-store');
     res.json({ siteName: list.siteName, zones: list.zones, spaces: list.spaces.map(({ qrRows, url, ...rest }) => rest) });
+});
+// QR's > Temperaturas: los refrigeradores (activos de tipo Frío, /t/…) y los sensores (/s/…) del Layout, cada uno con la dirección fija de su QR; las dos pantallas públicas registran en la tabla de Temperaturas.
+app.get('/api/business/qr-apps/temperaturas', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!canUseQrApp(req, 'temperaturas')) return res.status(403).json({ message: 'No tienes permiso para esta pantalla.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0);
+    const layout = row.layout;
+    const zones = (layout.zones || []).filter((z) => z.active !== false);
+    const zoneOf = (id) => zones.find((z) => z.id === id);
+    const fridges = (layout.spaces || []).filter((s) => s.active !== false && s.type === 'cold').map((s) => {
+        const fp = (layout.footprints || []).find((f) => f.id === s.footprintId);
+        const zone = zoneOf(s.zoneId);
+        return { key: `fridge:${s.id}`, kind: 'fridge', id: s.id, code: s.code, type: 'cold', zoneId: s.zoneId || '', zoneName: zone ? zone.name : '', locator: zone && fp ? [zone.code, fp.code, s.code].join('.') : '', path: `/t/${token}/${s.id}` };
+    });
+    const sensors = (layout.sensors || []).map((s) => {
+        const zone = zoneOf(s.zoneId);
+        return { key: `sensor:${s.id}`, kind: 'sensor', id: s.id, code: s.code, type: s.type, zoneId: s.zoneId || '', zoneName: zone ? zone.name : '', locator: [zone && zone.code, s.code].filter(Boolean).join('.'), path: `/s/${token}/${s.id}` };
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ siteName: layout.siteName || '', zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces: [...fridges, ...sensors].slice(0, 600) });
 });
 
 // --- Temperaturas (Operaciones > C. Distribución) ------------------------------------------------------------------------------------------------

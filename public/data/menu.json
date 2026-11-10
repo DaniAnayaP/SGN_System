@@ -2157,6 +2157,9 @@
         },
         {
           "id": "cat-operaciones-centro-dist-qr-limpieza", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrLimpieza", "icon": "bx-brush-alt", "href": "OpCentroDistQrLimpieza.html"
+        },
+        {
+          "id": "cat-operaciones-centro-dist-qr-temperaturas", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrTemperaturas", "icon": "bx-fridge", "href": "OpCentroDistQrTemperaturas.html"
         }
       ],
       "cat-admin": [

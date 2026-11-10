@@ -1,11 +1,10 @@
 // ---------------------------------------------------------------------------
-// Operaciones > QR's > Limpieza: la app de Limpieza que se hace escaneando el QR de cada activo, pero desde la computadora (para quien no tiene celular a la mano). Se elige el sitio arriba, se busca el activo y
-// «Abrir» muestra, en una ventana sobre esta página, la MISMA pantalla que abre el QR (la dirección fija /l/<código del Layout>/<activo>): lo que se registra queda en Operaciones > Limpieza igual que desde el celular.
-// La foto la toma la cámara de la computadora (la pantalla pública exige cámara en vivo).
+// Operaciones > QR's: cada app que se hace escaneando un QR, pero desde la computadora (para quien no tiene celular a la mano). Se elige el sitio arriba, se busca lo que tiene QR (un activo, un refrigerador, un sensor…) y
+// «Abrir» muestra, en una ventana sobre esta página, la MISMA pantalla que abre el QR (su dirección fija): lo que se registra queda en la base de Operaciones de esa app igual que desde el celular. La foto la toma la
+// cámara de la computadora (las pantallas públicas exigen cámara en vivo). Una sola página sirve a todas las entradas del grupo: cuál es sale de data-qr-app del <body> (ver APPS).
 // Envuelto en una función: Dashboard.js ya declara globales como t.
 // ---------------------------------------------------------------------------
 (function () {
-    const API = '/api/business/qr-apps/limpieza';
     const t = (key, params) => {
         let text = Dashboard.t(key);
         Object.entries(params || {}).forEach(([name, value]) => { text = text.split(`{${name}}`).join(String(value)); });
@@ -13,7 +12,23 @@
     };
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const $ = (id) => document.getElementById(id);
-    const typeName = (type) => Dashboard.t(`main.layoutType_space_${type}`);
+    const typeName = (group, type) => Dashboard.t(`main.layoutType_${group}_${type}`);
+    // Qué cambia de una entrada a otra: la pantalla del menú, la lista del servidor, cómo se llama lo que se elige y los textos.
+    const APPS = {
+        limpieza: {
+            page: 'cat-operaciones-centro-dist-qr-limpieza', api: '/api/business/qr-apps/limpieza', help: 'qrsLimpieza',
+            first: 'main.colLimActivo', search: 'main.qrsBuscar', empty: 'main.qrsVacio', windowTitle: 'main.qrsVentana', count: 'main.qrsCuantos',
+            label: (s) => `<b>${esc(s.code)}</b> · ${esc(typeName('space', s.type))}`, haystack: (s) => `${s.code} ${typeName('space', s.type)} ${s.zoneName} ${s.locator}`,
+        },
+        temperaturas: {
+            page: 'cat-operaciones-centro-dist-qr-temperaturas', api: '/api/business/qr-apps/temperaturas', help: 'qrsTemperaturas',
+            first: 'main.qrsEquipo', search: 'main.qrsBuscarEquipo', empty: 'main.qrsVacioTemp', windowTitle: 'main.qrsVentanaTemp', count: 'main.qrsCuantosEquipos',
+            label: (s) => `<b>${esc(s.code)}</b> · ${esc(s.kind === 'sensor' ? `${t('main.qrsSensor')} ${typeName('sensor', s.type).toLowerCase()}` : t('main.qrsRefrigerador'))}`,
+            haystack: (s) => `${s.code} ${s.kind === 'sensor' ? `${t('main.qrsSensor')} ${typeName('sensor', s.type)}` : t('main.qrsRefrigerador')} ${s.zoneName} ${s.locator}`,
+        },
+    };
+    const app = APPS[document.body.dataset.qrApp];
+    if (!app) return;
     let data = { zones: [], spaces: [] };
     let zone = '';
     let q = '';
@@ -21,44 +36,44 @@
 
     (async function init() {
         try {
-            const role = await Dashboard.initDashboard({ activePage: 'cat-operaciones-centro-dist-qr-limpieza' });
+            const role = await Dashboard.initDashboard({ activePage: app.page });
             if (!role) return;
             await load();
         } catch (err) {
-            console.error('QR\'s > Limpieza failed to initialize:', err);
+            console.error('QR\'s failed to initialize:', err);
         }
     })();
     document.addEventListener('sgn:cost-centers-changed', () => { zone = ''; q = ''; load(); });
 
     const page = () => document.querySelector('.page-content');
     function message(icon, text, title) {
-        page().innerHTML = `<div class="empty-state" data-help-key="qrsLimpieza"><i class="bx ${icon}" aria-hidden="true"></i>${title ? `<h3>${esc(title)}</h3>` : ''}<p>${esc(text)}</p></div>`;
+        page().innerHTML = `<div class="empty-state" data-help-key="${app.help}"><i class="bx ${icon}" aria-hidden="true"></i>${title ? `<h3>${esc(title)}</h3>` : ''}<p>${esc(text)}</p></div>`;
     }
     async function load() {
         const centerId = Dashboard.getSingleSelectedCostCenterId();
         if (!centerId) { message('bx-buildings', t('main.layoutElegirCentroTexto'), t('main.layoutElegirCentroTitulo')); return; }
         try {
-            const res = await fetch(`${API}?costCenterId=${centerId}`, { credentials: 'include' });
+            const res = await fetch(`${app.api}?costCenterId=${centerId}`, { credentials: 'include' });
             if (res.status === 404) { message('bx-map-alt', t('main.qrsSinLayout')); return; }
             if (res.status === 403) { message('bx-lock-alt', t('main.qrsSinPermiso')); return; }
             if (!res.ok) throw new Error('load failed');
             data = await res.json();
             render();
         } catch (err) {
-            console.error('QR\'s > Limpieza: failed to load', err);
+            console.error('QR\'s: failed to load', err);
             message('bx-error-circle', Dashboard.t('admin.saveError'));
         }
     }
 
     function shown() {
         return data.spaces.filter((s) => (!zone || s.zoneId === zone)
-            && (!q || SearchSyntax.matches('contains', q.toLowerCase(), `${s.code} ${typeName(s.type)} ${s.zoneName} ${s.locator}`.toLowerCase())));
+            && (!q || SearchSyntax.matches('contains', q.toLowerCase(), app.haystack(s).toLowerCase())));
     }
     function render() {
-        page().innerHTML = `<div class="qrs" data-help-key="qrsLimpieza">
+        page().innerHTML = `<div class="qrs" data-help-key="${app.help}">
             <div class="qrs-bar">
                 <select id="qrs-zone" aria-label="${esc(Dashboard.t('main.colLimZona'))}"><option value="">${esc(t('main.qrsTodasZonas'))}</option>${data.zones.map((z) => `<option value="${esc(z.id)}"${z.id === zone ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}</select>
-                <input type="search" id="qrs-q" autocomplete="off" placeholder="${esc(t('main.qrsBuscar'))}" aria-label="${esc(t('main.qrsBuscar'))}" value="${esc(q)}">
+                <input type="search" id="qrs-q" autocomplete="off" placeholder="${esc(t(app.search))}" aria-label="${esc(t(app.search))}" value="${esc(q)}">
                 <span class="qrs-count" id="qrs-count"></span>
             </div>
             <div id="qrs-list"></div>
@@ -73,14 +88,14 @@
     }
     function renderList() {
         const list = shown();
-        $('qrs-count').textContent = t('main.qrsCuantos', { n: list.length });
-        if (!list.length) { $('qrs-list').innerHTML = `<div class="empty-state"><i class="bx bx-qr" aria-hidden="true"></i><p>${esc(t('main.qrsVacio'))}</p></div>`; return; }
-        $('qrs-list').innerHTML = `<table class="qrs-table"><thead><tr><th>${esc(Dashboard.t('main.colLimActivo'))}</th><th>${esc(Dashboard.t('main.colLimZona'))}</th><th>${esc(Dashboard.t('main.colLimLocalizador'))}</th><th></th></tr></thead><tbody>${list.map((s) => `<tr><td><b>${esc(s.code)}</b> · ${esc(typeName(s.type))}</td><td>${esc(s.zoneName || '—')}</td><td>${esc(s.locator || '—')}</td><td><button type="button" class="btn btn-secondary" data-open="${esc(s.id)}" data-help-key="qrsAbrir">${esc(t('main.qrsAbrir'))}</button></td></tr>`).join('')}</tbody></table>`;
+        $('qrs-count').textContent = t(app.count, { n: list.length });
+        if (!list.length) { $('qrs-list').innerHTML = `<div class="empty-state"><i class="bx bx-qr" aria-hidden="true"></i><p>${esc(t(app.empty))}</p></div>`; return; }
+        $('qrs-list').innerHTML = `<table class="qrs-table"><thead><tr><th>${esc(Dashboard.t(app.first))}</th><th>${esc(Dashboard.t('main.colLimZona'))}</th><th>${esc(Dashboard.t('main.colLimLocalizador'))}</th><th></th></tr></thead><tbody>${list.map((s) => `<tr><td>${app.label(s)}</td><td>${esc(s.zoneName || '—')}</td><td>${esc(s.locator || '—')}</td><td><button type="button" class="btn btn-secondary" data-open="${esc(s.key || s.id)}" data-help-key="qrsAbrir">${esc(t('main.qrsAbrir'))}</button></td></tr>`).join('')}</tbody></table>`;
     }
 
     // La misma pantalla que abre el QR, en una ventana sobre esta página (sin salir de aquí).
-    function openWindow(spaceId) {
-        const s = data.spaces.find((x) => x.id === spaceId);
+    function openWindow(id) {
+        const s = data.spaces.find((x) => (x.key || x.id) === id);
         if (!s) return;
         if (!winEl) {
             winEl = document.createElement('div');
@@ -94,9 +109,9 @@
             winEl.addEventListener('click', (event) => { if (event.target === winEl || event.target.closest('#qrs-win-close')) closeWindow(); });
             document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && winEl && !winEl.hidden) closeWindow(); });
         }
-        $('qrs-win-title').textContent = t('main.qrsVentana', { code: s.code });
+        $('qrs-win-title').textContent = t(app.windowTitle, { code: s.code });
         $('qrs-win-close').textContent = t('main.qrsCerrar');
-        $('qrs-frame').title = t('main.qrsVentana', { code: s.code });
+        $('qrs-frame').title = t(app.windowTitle, { code: s.code });
         $('qrs-frame').src = s.path;
         winEl.hidden = false;
     }

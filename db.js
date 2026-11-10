@@ -7739,6 +7739,15 @@ function seedQrLimpiezaScreenGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(QR_LIMPIEZA_SCREEN_SEED_KEY, { ...path, submenuPrefix: `${path.submenuPrefix}/iconLayoutQrLimpieza` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-limpieza'], "the QR's Limpieza screen");
 }
+// Operaciones > QR's > Temperaturas: la reciben quienes ya tienen el icono del QR de temperaturas o el de sensores en el Layout (dos siembras únicas; la segunda no repite lo que ya dio la primera).
+const QR_TEMPERATURAS_SCREEN_SEED_KEYS = [['seed-qrs-temperaturas-screen-v1', 'iconLayoutQrTemperaturas'], ['seed-qrs-temperaturas-sensores-screen-v1', 'iconLayoutQrSensores']];
+function seedQrTemperaturasScreenGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    QR_TEMPERATURAS_SCREEN_SEED_KEYS.forEach(([key, icon]) => {
+        seedLeavesForScreenHolders(key, { ...path, submenuPrefix: `${path.submenuPrefix}/${icon}` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas'], "the QR's Temperaturas screen");
+    });
+}
 const LAYOUT_ROOF_SEED_KEY = 'seed-layout-roof-icon-v1';
 function seedLayoutRoofIconGrants() {
     const path = TABLE_GRANT_PATHS.layout;
@@ -12383,6 +12392,7 @@ seedUdmDistribucionScreenGrants();
 seedLayoutCodesIconGrants();
 seedLayoutRoofIconGrants();
 seedQrLimpiezaScreenGrants();
+seedQrTemperaturasScreenGrants();
 seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();
