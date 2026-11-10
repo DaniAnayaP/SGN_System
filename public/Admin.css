@@ -8351,3 +8351,6 @@ td.cap-pick{ white-space: nowrap; }
 .layout-dd-smopt.on{ font-weight: 700; color: var(--color-accent, var(--color-text-primary)); }
 .layout-dd-smopt:disabled{ opacity: 0.45; cursor: not-allowed; }
 .layout-dd-list{ display: flex; flex-direction: column; gap: 0.1rem; }
+/* Alta Nuestros Artículos (y Códigos / Edición Código): «Mostrando X de Y» con los botones para dibujar más filas. */
+.sku-more-bar{ display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.sku-more-btn{ padding: 0.25rem 0.8rem; font-size: 0.78rem; }

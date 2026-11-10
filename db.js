@@ -6807,14 +6807,20 @@ const SYSTEM_COLUMN_DAY_ABBR = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb
 const DEFAULT_CLIENT_TIME_ZONE = 'America/Mexico_City';
 const SAAS_TIME_ZONE = 'America/Mexico_City';
 
+// Construir un Intl.DateTimeFormat es caro y esto se preguntaba por cada fila de cada tabla grande (con 5,000 códigos eran segundos de espera): se recuerda la respuesta de cada zona.
+const validTimeZoneCache = new Map();
 function isValidTimeZone(timeZone) {
     if (typeof timeZone !== 'string' || !timeZone || timeZone.length > 64) return false;
+    const known = validTimeZoneCache.get(timeZone);
+    if (known !== undefined) return known;
+    let ok = true;
     try {
         new Intl.DateTimeFormat('en-US', { timeZone });
-        return true;
     } catch {
-        return false;
+        ok = false;
     }
+    if (validTimeZoneCache.size < 500) validTimeZoneCache.set(timeZone, ok);
+    return ok;
 }
 
 const timeZoneFormatters = new Map();

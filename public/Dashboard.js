@@ -3737,6 +3737,9 @@ function attachSortHandler(th, tableId) {
     th.addEventListener('click', (event) => {
         if (event.target.closest('.data-table-col-resize-handle') || event.target.closest('.data-table-col-filter-trigger')) return;
         if (!hasColumnSearchGrant(tableId, th.dataset.col, 'sort')) return;
+        // ordenar mueve las filas dibujadas: una tabla que dibuja solo una parte de sus filas (registerPartialTable) dibuja primero el resto
+        const pending = needAllTableRows(tableId);
+        if (pending) { pending.then(() => sortTableByColumn(tableId, th.dataset.col)); return; }
         sortTableByColumn(tableId, th.dataset.col);
     });
 }
@@ -4201,6 +4204,11 @@ function countRuleRows(tableId, key, rule, selected) {
 function applyColumnValueFilters(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
+    // una tabla que dibuja solo una parte de sus filas (ver registerPartialTable) dibuja primero el resto: el filtro por columna lee las filas dibujadas
+    if (state.columnFilters.size || state.columnRules.size) {
+        const pending = needAllTableRows(tableId);
+        if (pending) { pending.then(() => applyColumnValueFilters(tableId)); return; }
+    }
     const rows = Array.from(state.table.tBodies[0]?.rows || []).filter((tr) => !tr.querySelector('td.data-table-empty-cell'));
     if (!state.columnFilters.size && !state.columnRules.size) {
         rows.forEach((tr) => tr.classList.remove('data-table-row-col-filtered'));
@@ -4611,6 +4619,9 @@ function attachColumnFilterTrigger(th, tableId) {
     btn.innerHTML = '<i class="bx bx-filter-alt" aria-hidden="true"></i>';
     btn.addEventListener('click', (event) => {
         event.stopPropagation();
+        // los valores del menú salen de las filas dibujadas: con una tabla parcial (registerPartialTable) se dibuja primero el resto
+        const pending = needAllTableRows(tableId);
+        if (pending) { pending.then(() => openColumnFilterMenu(th, tableId, th.dataset.col)); return; }
         openColumnFilterMenu(th, tableId, th.dataset.col);
     });
     th.appendChild(btn);
@@ -13166,9 +13177,22 @@ async function renderTableRowsInChunks({ tableKey, tbody, records, buildRow, isS
     return true;
 }
 
+// Tablas que dibujan solo una parte de sus filas al entrar (con miles de registros, cada fila trae más de cien piezas y dibujarlas todas congelaba la pantalla por minutos): la pantalla registra aquí cómo saber si ya
+// están todas (isComplete) y cómo dibujar las que faltan (loadAll, devuelve una promesa). Lo que lee todas las filas del DOM (ordenar y filtrar por columna) pide primero el resto con needAllTableRows.
+const partialTableLoaders = new Map();
+function registerPartialTable(tableId, loader) { partialTableLoaders.set(tableId, loader); }
+function needAllTableRows(tableId) {
+    const loader = partialTableLoaders.get(tableId);
+    return loader && !loader.isComplete() ? loader.loadAll() : null;
+}
+// Vuelve a aplicar los filtros por columna a las filas dibujadas (una pantalla que dibuja las filas otra vez los pide para que las nuevas queden filtradas).
+function reapplyColumnFilters(tableId) { applyColumnValueFilters(tableId); }
+
 window.Dashboard = {
     initDashboard,
     renderTableRowsInChunks,
+    registerPartialTable,
+    reapplyColumnFilters,
     getSingleSelectedCostCenterId,
     setBreadcrumbSuffix,
     getSelectedCostCenterIds,

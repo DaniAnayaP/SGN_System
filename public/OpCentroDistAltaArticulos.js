@@ -250,7 +250,7 @@ async function moveSkuItem(record, action) {
             return;
         }
         Dashboard.showToast(Dashboard.t(action === 'edit' ? 'main.skuPasoAEdicion' : 'main.skuTerminoEdicion').replace('{sku}', record.sku), 'success');
-        await refreshTable();
+        removeSkuRecord(record.id);
     } catch (err) {
         console.error('Códigos: failed to move the record', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
@@ -278,7 +278,9 @@ async function patchSkuItem(id, patch) {
             Dashboard.showToast(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'info');
         }
         announceMoved(body.skuItem);
-        await refreshTable();
+        const clean = body.skuItem && !body.rejectedFields?.length && !body.pendingFields?.length && !body.conflictFields?.length;
+        if (clean && skuRecords.some((r) => r.id === body.skuItem.id)) applySavedSkuRecord(body.skuItem, skuRecords.find((r) => r.id === body.skuItem.id));
+        else await refreshTable();
     } catch (err) {
         console.error('Alta Nuestros Artículos: failed to save change', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
@@ -469,8 +471,7 @@ async function deleteSkuItem(id, tr) {
             if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
             throw new Error('delete failed');
         }
-        tr.remove();
-        ensureEmptyState();
+        removeSkuRecord(id);
     } catch (err) {
         console.error('Alta Nuestros Artículos: failed to delete record', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
@@ -610,40 +611,150 @@ function ensureEmptyState() {
     tbody.appendChild(tr);
 }
 
-// Con más de mil códigos, dibujar todas las filas de un golpe congelaba la pantalla: se dibujan por tandas (ver Dashboard.renderTableRowsInChunks) y una recarga que llega a la mitad cancela la anterior.
-let skuRowsLoadToken = 0;
+// Con miles de códigos esta pantalla tardaba minutos en abrirse: cada fila trae más de cien piezas (listas, fotos, botones) y dibujarlas todas, y recalcular la tabla en cada tanda, congelaba la página. Ahora solo se dibujan
+// las primeras filas al entrar; el resto sale al bajar (o con «Mostrar más» / «Mostrar todos»). Todo lo que llegó del servidor se guarda en skuRecords: la búsqueda de texto trabaja sobre esos datos (no sobre las filas
+// dibujadas), y lo que lee todas las filas del DOM (ordenar o filtrar por columna) pide primero dibujar el resto (Dashboard.registerPartialTable). Al guardar una celda solo se cambia esa fila, ya no se vuelve a leer y
+// dibujar toda la tabla.
+const SKU_FIRST_ROWS = 100; // las que se dibujan al entrar
+const SKU_NEXT_ROWS = 200; // las que se agregan al bajar o con «Mostrar más»
+let skuRecords = []; // todo lo que mandó el servidor
+let skuView = []; // lo que cumple la búsqueda de texto (todo, si no hay búsqueda)
+let skuDrawn = 0; // cuántos de skuView ya están dibujados
+let skuDrawing = null; // la tanda que se está dibujando (promesa)
+let skuLoadToken = 0; // una recarga o una búsqueda nueva cancela la tanda anterior
+let skuFetchToken = 0;
+
+const skuSearchText = () => (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+function skuMatchesText(record, text) {
+    const haystack = [record.sku, record.upc, record.uniqueDescription, record.knownDescription].map((v) => String(v || '')).join(' ').toLowerCase();
+    return SearchSyntax.matches('contains', text, haystack);
+}
+function computeSkuView() {
+    const text = skuSearchText();
+    skuView = text ? skuRecords.filter((r) => skuMatchesText(r, text)) : skuRecords.slice();
+}
+// ¿Este código es de esta pantalla? (Alta: los que aún les falta algún dato; Códigos: los completos; Edición Código: los que se mandaron a corregir)
+function skuInScope(record) {
+    if (EDIT_MODE) return !!record.editing;
+    return !record.editing && !!record.complete === CODES_MODE;
+}
+
+function drawSkuRows(count) {
+    if (skuDrawing) return skuDrawing;
+    if (skuDrawn >= skuView.length) return Promise.resolve(true);
+    const token = skuLoadToken;
+    const from = skuDrawn;
+    const slice = skuView.slice(from, from + count);
+    const run = (async () => {
+        const finished = await Dashboard.renderTableRowsInChunks({ tableKey: TABLE_KEY, tbody: getTbody(), records: slice, buildRow, isStale: () => token !== skuLoadToken });
+        if (token === skuLoadToken) {
+            if (finished) skuDrawn = from + slice.length;
+            skuDrawing = null;
+            updateSkuMoreBar();
+        }
+        return finished;
+    })();
+    skuDrawing = run;
+    return run;
+}
+// Dibuja todo lo que falta (para ordenar o filtrar por columna, o con «Mostrar todos»).
+async function drawAllSkuRows() {
+    while (skuDrawn < skuView.length) {
+        const ok = await drawSkuRows(skuView.length - skuDrawn);
+        if (!ok) return false;
+    }
+    return true;
+}
+function resetSkuRows() {
+    skuLoadToken += 1;
+    skuDrawing = null;
+    skuDrawn = 0;
+    getTbody().innerHTML = '';
+    if (!skuView.length) { ensureEmptyState(); updateSkuMoreBar(); return Promise.resolve(true); }
+    return drawSkuRows(SKU_FIRST_ROWS);
+}
+function skuToolbar() { return document.querySelector('[data-table-id="nuestros-articulos"]')?.previousElementSibling || null; }
+// «Mostrando X de Y» con los botones para dibujar más; solo sale cuando falta algo por dibujar.
+function updateSkuMoreBar() {
+    const toolbar = skuToolbar();
+    if (!toolbar) return;
+    let bar = toolbar.querySelector('.sku-more-bar');
+    if (skuDrawn >= skuView.length) { if (bar) bar.remove(); return; }
+    if (!bar) {
+        bar = document.createElement('span');
+        bar.className = 'sku-more-bar tpl-muted';
+        bar.innerHTML = '<span class="sku-more-text" aria-live="polite"></span><button type="button" class="btn btn-secondary sku-more-btn" data-sku-more></button><button type="button" class="btn btn-secondary sku-more-btn" data-sku-all></button>';
+        bar.querySelector('[data-sku-more]').addEventListener('click', () => drawSkuRows(SKU_NEXT_ROWS));
+        bar.querySelector('[data-sku-all]').addEventListener('click', () => drawAllSkuRows());
+        toolbar.prepend(bar);
+    }
+    bar.querySelector('.sku-more-text').textContent = Dashboard.t('main.skuMostrando').replace('{shown}', String(skuDrawn)).replace('{total}', String(skuView.length));
+    bar.querySelector('[data-sku-more]').textContent = Dashboard.t('main.skuMostrarMas');
+    bar.querySelector('[data-sku-all]').textContent = Dashboard.t('main.skuMostrarTodos');
+}
+// Al bajar casi hasta el final de lo dibujado, se dibujan más filas.
+function watchSkuScroll() {
+    const wrapper = document.querySelector('[data-table-id="nuestros-articulos"]');
+    if (!wrapper || wrapper.dataset.skuScrollBound) return;
+    wrapper.dataset.skuScrollBound = '1';
+    wrapper.addEventListener('scroll', () => {
+        if (skuDrawing || skuDrawn >= skuView.length) return;
+        if (wrapper.scrollTop + wrapper.clientHeight >= wrapper.scrollHeight - 800) drawSkuRows(SKU_NEXT_ROWS);
+    }, { passive: true });
+}
+
 async function refreshTable() {
     const tbody = getTbody();
     if (tbody.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
-    const token = ++skuRowsLoadToken;
+    const token = ++skuFetchToken;
     try {
         const res = await fetch(`/api/business/sku-items?scope=${SKU_SCOPE}`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { skuItems } = await res.json();
-        if (token !== skuRowsLoadToken) return; // llegó otra recarga después de esta
-        tbody.innerHTML = '';
-        if (!skuItems.length) { ensureEmptyState(); return; }
-        const finished = await Dashboard.renderTableRowsInChunks({ tableKey: TABLE_KEY, tbody, records: skuItems, buildRow, isStale: () => token !== skuRowsLoadToken });
-        if (!finished) return;
-        applySkuItemFilters();
+        if (token !== skuFetchToken) return; // llegó otra recarga después de esta
+        skuRecords = skuItems;
+        computeSkuView();
+        watchSkuScroll();
+        const finished = await resetSkuRows();
+        if (finished && token === skuFetchToken && window.Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(TABLE_KEY);
     } catch (err) {
         console.error('Alta Nuestros Artículos: failed to load records', err);
     }
 }
 
+// La búsqueda de texto trabaja sobre todos los códigos que llegaron (no solo sobre las filas dibujadas) y dibuja las primeras de lo que coincide.
 function applySkuItemFilters() {
-    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
-    getTbody().querySelectorAll('tr').forEach((tr) => {
-        if (tr.querySelector('td.data-table-empty-cell')) return;
-        if (!text) { tr.hidden = false; return; }
-        const haystack = ['colArticuloSku', 'colArticuloUpc', 'colArticuloDescUnica', 'colArticuloDescConocida']
-            .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
-            .join(' ');
-        tr.hidden = !SearchSyntax.matches('contains', text, haystack);
-    });
+    computeSkuView();
+    resetSkuRows().then((finished) => { if (finished && window.Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(TABLE_KEY); });
 }
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applySkuItemFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applySkuItemFilters);
+if (window.Dashboard && Dashboard.registerPartialTable) Dashboard.registerPartialTable(TABLE_KEY, { isComplete: () => skuDrawn >= skuView.length, loadAll: drawAllSkuRows });
+
+// Un código dejó de ser de esta pantalla (quedó completo, se mandó a Edición, o se borró): sale de la lista y de la tabla sin volver a leerla.
+function removeSkuRecord(id) {
+    skuRecords = skuRecords.filter((r) => r.id !== id);
+    const before = skuView.length;
+    skuView = skuView.filter((r) => r.id !== id);
+    const tr = getTbody().querySelector(`tr[data-record-id="${id}"]`);
+    if (tr) { tr.remove(); skuDrawn = Math.max(0, skuDrawn - 1); }
+    else if (skuView.length < before) skuDrawn = Math.min(skuDrawn, skuView.length);
+    if (!getTbody().querySelector('tr')) {
+        if (skuDrawn < skuView.length) drawSkuRows(SKU_FIRST_ROWS); else ensureEmptyState();
+    }
+    updateSkuMoreBar();
+}
+// Lo que respondió el servidor al guardar una celda: solo esa fila se vuelve a dibujar (si sigue siendo de esta pantalla).
+function applySavedSkuRecord(updated, previous) {
+    if (!skuInScope(updated)) { removeSkuRecord(updated.id); return; }
+    const merged = { ...updated, pendingFields: (previous && previous.pendingFields) || [] };
+    const at = skuRecords.findIndex((r) => r.id === merged.id);
+    if (at >= 0) skuRecords[at] = merged;
+    const viewAt = skuView.findIndex((r) => r.id === merged.id);
+    if (viewAt >= 0) skuView[viewAt] = merged;
+    const tr = getTbody().querySelector(`tr[data-record-id="${merged.id}"]`);
+    if (tr) tr.replaceWith(buildRow(merged));
+}
 
 function renderNewRecordButton() {
     const wrapper = document.querySelector('[data-table-id="nuestros-articulos"]');

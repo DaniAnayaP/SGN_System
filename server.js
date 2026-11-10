@@ -6096,10 +6096,16 @@ function inventoryClassificationsFor(clientId, isTest, categoryName) {
     const all = new Map(listArticleCategories(clientId, 'clasificaciones', isTest).map((r) => [r.id, r]));
     return parseClassificationIds(category.classification_ids).map((id) => all.get(id)).filter(Boolean);
 }
+// Mientras se arma una lista de códigos (GET /sku-items, que es síncrono) se recuerda el nombre de cada clasificación: con miles de códigos eran miles de consultas iguales.
+let classificationNameMemo = null;
 const classificationNameOf = (clientId, isTest, id) => {
     if (id == null || id === '') return '';
+    const memoKey = classificationNameMemo ? `${clientId}|${isTest ? 1 : 0}|${id}` : null;
+    if (memoKey && classificationNameMemo.has(memoKey)) return classificationNameMemo.get(memoKey);
     const row = getArticleCategoryById(Number(id), clientId, isTest);
-    return row && row.category_type === 'clasificaciones' ? (row.name || '') : '';
+    const name = row && row.category_type === 'clasificaciones' ? (row.name || '') : '';
+    if (memoKey) classificationNameMemo.set(memoKey, name);
+    return name;
 };
 // Revisa classificationId en el PATCH de un código: vacío = sin clasificación; si no, debe ser una de las de su Categoría Inventario (la que trae el mismo PATCH o la que ya tiene).
 function prepareSkuClassificationPatch(req, existing, patch) {
@@ -6211,7 +6217,12 @@ app.get('/api/business/sku-items', requireAuth, (req, res) => {
         return !r.editing && isSkuItemComplete(r) === (scope === 'complete');
     };
     const rows = listSkuItems(req.user.clientId, req.user.isTestAccount).filter(inScope);
-    res.json({ skuItems: rows.map((r) => mapSkuItemRecord(r, pendingByRecord, client?.company_name)) });
+    classificationNameMemo = new Map();
+    try {
+        res.json({ skuItems: rows.map((r) => mapSkuItemRecord(r, pendingByRecord, client?.company_name)) });
+    } finally {
+        classificationNameMemo = null;
+    }
 });
 
 app.post('/api/business/sku-items', requireAuth, requireCostCenter, (req, res) => {
