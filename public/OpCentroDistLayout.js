@@ -1803,7 +1803,7 @@ function renderPanel() {
         : '';
     const allOn = SECTION_ORDER.filter(stepVisible).every((x) => stepOn(x));
     const allPill = `<button type="button" role="button" aria-pressed="${allOn}" class="layout-step layout-step-all${allOn ? ' active' : ''}" data-step-all data-help-key="layoutFxTodo">${esc(t('main.layoutFxTodo'))}</button>`;
-    $('layout-panel').innerHTML = `<div class="layout-fx" id="layout-fx">${focusStripHtml()}</div><div class="layout-steps" role="group" data-help-key="layoutSteps">${allPill}${tabs}${locatorsLink}</div>${section}`;
+    $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${allPill}${tabs}${locatorsLink}</div>${section}`;
     // Los botones de agregar del paso suben a la fila del título, pegados a la derecha (siguen siendo los mismos botones: el clic se atiende igual).
     const headActions = document.querySelector('#layout-panel .layout-head-actions');
     if (headActions) document.querySelectorAll('#layout-panel [data-main-add]').forEach((btn) => headActions.appendChild(btn));
@@ -2151,19 +2151,6 @@ function pickerFocus() {
     const total = picker3d.total();
     return { shown: total - hid, total };
 }
-function focusStripHtml() {
-    if (!state.draft) return '';
-    const e = state.find ? findEntity() : null;
-    const cand = e ? null : fxCandidate();
-    const pk = !e && !cand ? pickerFocus() : null;
-    if (!e && !cand && !pk) return '';
-    const on = !!e || !!pk || !!state.fxOn;
-    const label = e ? e.name : (cand ? cand.label : t('main.layoutFxElegidos', { n: pk.shown, total: pk.total }));
-    const pill = (v, key) => `<button type="button" class="layout-find-segbtn" data-fx-rest="${v}" data-help-key="layoutFxEnfocado" aria-pressed="${on && !!state.findDim === (v === 1)}">${esc(t(key))}</button>`;
-    const clear = on ? `<button type="button" class="layout-fx-x" data-fx-clear data-help-key="layoutFxEnfocado" aria-label="${esc(t('main.layoutFxQuitar'))}" title="${esc(t('main.layoutFxQuitar'))}"><span class="bx bx-x" aria-hidden="true"></span></button>` : '';
-    return `<div class="layout-fx-row"><span class="layout-find-hide-title">${esc(t('main.layoutFxEnfocado'))}</span><span class="layout-fx-chip" data-help-key="layoutFxEnfocado">${esc(label)}${clear}</span><span class="layout-find-hide-title">${esc(t('main.layoutFxResto'))}</span><div class="layout-find-seg" role="group" data-help-key="layoutFxEnfocado">${pill(0, 'main.layoutFindRestoOculto')}${pill(1, 'main.layoutFindRestoTenue')}</div></div>`;
-}
-function renderFocusStrip() { const box = $('layout-fx'); if (box) box.innerHTML = focusStripHtml(); }
 function fxReframe() { resetZoom(); find3dReframe = true; }
 // Cambió el renglón elegido: con el enfoque puesto el croquis y el 3D se vuelven a armar con el activo nuevo; la franja siempre se actualiza.
 function fxAfterSelect() {
@@ -2174,14 +2161,12 @@ function fxAfterSelect() {
         fxLastKey = key;
         renderSvg();
     }
-    renderFocusStrip();
 }
 function fxSetRest(dim) {
     // lo elegido en «Elegir activos»: la misma elección Oculto o Tenue vale para los activos que no se eligieron
     if (!state.find && !fxCandidate() && pickerFocus()) {
         setFindMode(dim ? 'tenue' : 'enfoque');
         scheduleScene3d();
-        renderFocusStrip();
         return;
     }
     if (state.find) {
@@ -2189,7 +2174,6 @@ function fxSetRest(dim) {
             setFindMode(dim ? 'tenue' : 'enfoque');
             applyFind(true);
         }
-        renderFocusStrip();
         return;
     }
     if (state.fxOn && state.findDim === dim) state.fxOn = false;
@@ -2197,12 +2181,10 @@ function fxSetRest(dim) {
     fxLastKey = '';
     fxReframe();
     renderSvg();
-    renderFocusStrip();
 }
 function fxClear() {
-    if (!state.find && !fxCandidate() && pickerFocus()) { picker3d.setHidden(new Set()); scheduleScene3d(); updateViewBtns(); renderFocusStrip(); return; }
+    if (!state.find && !fxCandidate() && pickerFocus()) { picker3d.setHidden(new Set()); scheduleScene3d(); updateViewBtns(); return; }
     if (state.find) { clearFind(); applyFind(true); } else { state.fxOn = false; fxLastKey = ''; fxReframe(); renderSvg(); }
-    renderFocusStrip();
 }
 // «Todo»: enciende todas las opciones; si ya están todas encendidas, las apaga y regresa a «Contorno» (el punto de partida) como la única seleccionada.
 function fxToggleAll() {
@@ -2232,10 +2214,11 @@ try {
 // (sin elegir ninguno, todos). Una cosa es de la zona si queda dentro o sobre su borde (a 30 cm): huellas, activos, sensores, seguridad y pasillos ya traen su zona; paredes, puertas, luz, obstáculos, objetos y pisos se miden contra el dibujo.
 const zoneFocusIds = (f) => (f && f.kind === 'zone' ? (Array.isArray(f.ids) && f.ids.length ? f.ids : [f.id]) : []);
 // ¿Este tipo de cosa se dibuja con las zonas enfocadas? (sin tipos elegidos en «Qué ver», todos)
+// ¿«Qué ver» deja ver este tipo de cosa de lo enfocado? Vale para las zonas enfocadas y para lo que se eligió en «Elegir»: con una capa apagada (o todas) eso ya no se dibuja, aunque esté enfocado.
 function fxWant(type) {
     const f = activeFind();
-    if (!f || f.kind !== 'zone') return true;
-    if (state.findNone) return false; // «Qué ver: Nada» (sin capas de cosas encendidas): de la zona solo se ve la zona, no lo de adentro
+    if (!f || (f.kind !== 'zone' && f.kind !== 'items')) return true;
+    if (state.findNone) return false; // «Qué ver: Nada» (sin capas de cosas encendidas): de la zona (o de lo elegido) no se ve nada de lo de adentro
     const c = findTypesChosen();
     return !c.length || c.includes(type);
 }
@@ -2627,7 +2610,6 @@ function applyFind(reset) {
     if (!state.draft) return;
     if (reset) { resetZoom(); find3dReframe = true; }
     renderFindBox();
-    renderFocusStrip(); // la franja de arriba refleja el enfoque del buscador
     renderSvg();
     renderSummary();
     applyFindToTables();
@@ -3145,7 +3127,6 @@ function setRest(mode) {
     if (state.findMode === mode) return;
     setFindMode(mode);
     if (state.find) applyFind(true); else if (picker3d && pickerFocus()) scheduleScene3d();
-    renderFocusStrip();
     renderViewStrip();
 }
 $('layout-mode-edit').addEventListener('click', goEdit);
@@ -4398,9 +4379,6 @@ $('layout-panel').addEventListener('click', (event) => selectRowFrom(event.targe
 $('layout-panel').addEventListener('input', onEdit);
 $('layout-panel').addEventListener('change', onEdit);
 $('layout-panel').addEventListener('click', (event) => {
-    const fxRest = event.target.closest('[data-fx-rest]');
-    if (fxRest) { fxSetRest(fxRest.dataset.fxRest === '1'); return; }
-    if (event.target.closest('[data-fx-clear]')) { fxClear(); return; }
     if (event.target.closest('[data-step-all]')) { fxToggleAll(); return; }
     const stepBtn = event.target.closest('[data-step]');
     if (stepBtn) {
@@ -5311,7 +5289,7 @@ function effective3dLayers() {
     const f = activeFind();
     if (f && !state.findDim) {
         const zf = f.kind === 'zone' || f.kind === 'items';
-        return { contour: false, walls: zf && fxWant('wall'), columns: zf && fxWant('obstacle'), doors: zf && fxWant('door'), power: zf && fxWant('power'), sensors: zf && fxWant('sensor'), objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || zf, assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || zf) };
+        return { contour: false, walls: zf && fxWant('wall'), columns: zf && fxWant('obstacle'), doors: zf && fxWant('door'), power: zf && fxWant('power'), sensors: zf && fxWant('sensor'), objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || (zf && fxWant('footprint')), assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || (zf && fxWant('space'))) };
     }
     const layers = {
         contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || !!(f && f.kind === 'zone'),
@@ -5366,7 +5344,7 @@ function ensureScene3d() {
             picker3d = window.LayoutAssetPicker.create($('layout-3d-picker'), {
                 texts: { title: t('main.layout3dActivosTitulo'), count: t('main.layout3dActivosConteo'), all: t('main.layout3dTodos'), none: t('main.layout3dNinguno'), close: t('main.layout3dCerrar'), search: t('main.layout3dActivosBuscar'), noResults: t('main.layout3dSinResultados'), noZone: t('main.layoutSinZona') },
                 typeLabel: (type) => typeLabel('space', type),
-                onChange: () => { scheduleScene3d(); renderFocusStrip(); updateViewBtns(); },
+                onChange: () => { scheduleScene3d(); updateViewBtns(); },
                 onToggle: () => updateViewBtns(),
             });
             return scene3d;
