@@ -3431,6 +3431,8 @@
     "layoutPosLargo": "Largo (m)",
     "layoutPosAncho": "Ancho (m)",
     "layoutPosAlto": "Alto (m)",
+    "layoutPosDesde": "Desde el piso (m)",
+    "layoutPosHasta": "Hasta (m)",
     "layoutPosCeja": "Ceja (m)",
     "layoutPosAltoUtil": "Alto de almacenamiento (m)",
     "layoutPosCapacidad": "Capacidad",
@@ -5115,6 +5117,14 @@
     "layoutPosAlto": {
       "what": "El alto de este espacio, en metros: la altura libre para guardar. No puede pasar del alto de su nivel (paso Niveles). Si no lo escribes toma el del nivel.",
       "example": "el alto del nivel es 0.65 m: el espacio puede medir hasta 0.65 m de alto; con 0.8 se marca en rojo y no se guarda."
+    },
+    "layoutPosDesde": {
+      "what": "A qué altura EMPIEZA este espacio, contada desde el piso donde está parado el activo: es la altura del piso de su nivel más lo que mide su ceja (la ceja termina donde empieza el espacio). Solo se lee: se cambia en el paso Niveles, y todos los espacios de un nivel empiezan a la misma altura.",
+      "example": "el nivel 1 tiene su altura del piso en 0.13 m y su ceja en 0.07 m: sus espacios empiezan a 0.20 m."
+    },
+    "layoutPosHasta": {
+      "what": "A qué altura TERMINA este espacio: donde empieza (Desde el piso) más su alto. Arriba de ahí va la ceja del nivel de arriba. Solo se lee; lo que ves aquí es lo mismo que dibuja el cuadro naranja del 3D.",
+      "example": "empieza a 0.20 m y mide 0.66 m de alto: llega hasta 0.86 m, justo donde empieza la ceja del nivel 2."
     },
     "layoutPosCantidad": {
       "what": "Cuántas posiciones tiene este espacio. Son las que salen como renglones en el paso Posiciones: al cambiar el número, el espacio se parte en esa cantidad de posiciones iguales (de izquierda a derecha) que siguen su tamaño; si ya las acomodaste a mano, se agregan al final o se quitan las últimas.",

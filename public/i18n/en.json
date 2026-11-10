@@ -3432,6 +3432,8 @@
     "layoutPosLargo": "Length (m)",
     "layoutPosAncho": "Width (m)",
     "layoutPosAlto": "Height (m)",
+    "layoutPosDesde": "From the floor (m)",
+    "layoutPosHasta": "Up to (m)",
     "layoutPosCeja": "Beam (m)",
     "layoutPosAltoUtil": "Storage height (m)",
     "layoutPosCapacidad": "Capacity",
@@ -5116,6 +5118,14 @@
     "layoutPosAlto": {
       "what": "The height of this space, in meters: the free height to store things. It cannot be more than the height of its level (Levels step). If you leave it empty it takes the level's.",
       "example": "the level is 0.65 m high: the space can be up to 0.65 m; with 0.8 it turns red and cannot be saved."
+    },
+    "layoutPosDesde": {
+      "what": "At what height this space STARTS, counted from the floor the asset stands on: the floor height of its level plus the thickness of its beam (the beam ends where the space begins). Read-only: it is changed in the Levels step, and all the spaces of a level start at the same height.",
+      "example": "level 1 has its floor height at 0.13 m and its beam at 0.07 m: its spaces start at 0.20 m."
+    },
+    "layoutPosHasta": {
+      "what": "At what height this space ENDS: where it starts (From the floor) plus its height. The beam of the level above goes over it. Read-only; what you see here is the same thing the orange box in 3D draws.",
+      "example": "it starts at 0.20 m and is 0.66 m high: it reaches 0.86 m, right where the beam of level 2 starts."
     },
     "layoutPosCantidad": {
       "what": "How many positions this space has. They are the rows that show up in the Positions step: when you change the number, the space is split into that many equal positions (left to right) that follow its size; if you already placed them by hand, new ones are added at the end or the last ones are removed.",
