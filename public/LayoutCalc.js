@@ -2317,9 +2317,20 @@
                 // las columnas de un nivel no pueden sumar más que el largo del activo (se suma lo que muestra Posiciones: el largo propio de cada hueco o, sin él, el largo del activo entre sus columnas)
                 for (let n = 1; n <= (s.levels || 1); n += 1) {
                     const ls = levelLengthSum(s, n);
-                    if (!ls.over) continue;
+                    if (!ls.over || levelHasPlaced(s, n)) continue;
                     const lens = Array.from({ length: levelSlots(s, n) }, (_, k) => { const st = bayOf(s, n, k + 1).stored; return st.l !== undefined ? st.l : null; });
                     out.push({ ...base, kind: 'baysum', sig: JSON.stringify([n, lens, s.l]), vars: { code: s.code, n, sum: m(ls.sum), max: m(s.l) }, message: `Los espacios del nivel ${n} del activo ${s.code} suman ${m(ls.sum)} m de largo y el activo mide ${m(s.l)} m: baja el largo de algún espacio para poder guardar.` });
+                }
+                // con espacios acomodados a mano (x, y propios) cada uno solo tiene que caber DENTRO del activo (los que miden más que el activo ya los avisan bayl y bayw)
+                for (let n = 1; n <= (s.levels || 1); n += 1) {
+                    if (!levelHasPlaced(s, n)) continue;
+                    levelBayRects(s, n).forEach((r) => {
+                        if (r.l > s.l + eps || r.w > s.d + eps) return;
+                        if (r.x < -eps || r.y < -eps || r.x + r.l > s.l + eps || r.y + r.w > s.d + eps) {
+                            out.push({ ...base, kind: 'bayout', sig: JSON.stringify([n, r.c, r.x, r.y, r.l, r.w, s.l, s.d]), vars: { code: s.code, n, c: r.c, x: m(r.x), y: m(r.y), l: m(r.l), w: m(r.w), L: m(s.l), D: m(s.d) },
+                                message: `El espacio ${r.c} del nivel ${n} del activo ${s.code} se sale del activo (queda en X ${m(r.x)} · Y ${m(r.y)}, mide ${m(r.l)} × ${m(r.w)} m y el activo ${m(s.l)} × ${m(s.d)} m): acomódalo para poder guardar.` });
+                        }
+                    });
                 }
                 // los niveles no pueden subir más que el activo (solo si el activo trae medidas de niveles o huecos propias: sin ellas los niveles se reparten justo en su alto)
                 const ownBays = (s.bays || []).filter((b) => b.h !== undefined);
@@ -2376,7 +2387,7 @@
                 out.push({ level: 'space', step: 'activos', kind: v.kind, id: v.id, target: { kind: 'space', id: v.id }, vars: v.vars });
             } else if (v.kind === 'levels') {
                 out.push({ level: 'level', step: 'niveles', kind: 'levels', id: v.id, target: { kind: 'space', id: v.id }, vars: v.vars });
-            } else if (v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh') {
+            } else if (v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'bayout') {
                 out.push({ level: 'bay', step: 'posiciones', kind: v.kind, id: v.id, target: { kind: 'bay', id: v.id, n: v.vars.n, c: v.vars.c }, vars: v.vars });
             } else if (v.kind === 'baysum') {
                 out.push({ level: 'bay', step: 'posiciones', kind: 'baysum', id: v.id, target: { kind: 'space', id: v.id, n: v.vars.n }, vars: v.vars });
@@ -3563,6 +3574,11 @@
                 const v = Number(b[k]);
                 if (Number.isFinite(v) && v > 0 && v <= LIMITS.maxM) bay[k] = Math.round(v * 1000) / 1000;
             });
+            // dónde está el espacio dentro de su activo (x desde el lado izquierdo, y desde el fondo): el 0 también vale (sin ellos, el espacio va pegado al anterior)
+            ['x', 'y'].forEach((k) => {
+                const v = Number(b[k]);
+                if (b[k] !== undefined && b[k] !== null && b[k] !== '' && Number.isFinite(v) && v >= 0 && v <= LIMITS.maxM) bay[k] = Math.round(v * 1000) / 1000;
+            });
             const bayFaces = sanitizeFaces(b.faces); // sus caras de consumo (solo si las cambió)
             if (bayFaces) bay.faces = bayFaces;
             if (Object.keys(bay).length > 2) out.set(`${n}|${c}`, bay);
@@ -3700,16 +3716,24 @@
 
     // Dónde cae cada espacio (columna) de un nivel dentro de su activo, en metros: x (desde el lado izquierdo del activo), y (0: pegado al fondo, como las posiciones que se miden desde la esquina de arriba a la izquierda del espacio),
     // l (su largo) y w (su fondo). Van uno junto al otro de izquierda a derecha, cada uno con su largo y su fondo propios (o, sin ellos, el largo del activo entre sus columnas y el fondo del activo). El croquis y el 3D dibujan cada espacio ahí.
+    // Cada espacio puede llevar su propio lugar (x, y: se arrastra en el croquis o se escribe en la tabla); el que no lo trae va en su lugar de siempre: uno junto al otro según su largo (x) y al fondo (y 0).
     function levelBayRects(space, level) {
         const slots = levelSlots(space, level);
         const out = [];
-        let x = 0;
+        let cursor = 0;
         for (let c = 1; c <= slots; c += 1) {
             const m = bayMeasures(space, level, c);
-            out.push({ c, x: Math.round(x * 1000) / 1000, y: 0, l: m.l, w: m.w });
-            x += m.l;
+            const st = bayOf(space, level, c).stored;
+            const x = st.x !== undefined ? st.x : cursor;
+            const y = st.y !== undefined ? st.y : 0;
+            out.push({ c, x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000, l: m.l, w: m.w });
+            cursor += m.l; // el lugar de siempre de los demás NO depende de dónde se puso este: mover un espacio no empuja a los otros
         }
         return out;
+    }
+    // ¿Algún espacio de ese nivel trae su lugar propio? (entonces el nivel ya no es una fila de espacios pegados: cada uno solo tiene que caber dentro del activo)
+    function levelHasPlaced(space, level) {
+        return ((space && space.bays) || []).some((b) => b.n === Number(level) && (b.x !== undefined || b.y !== undefined));
     }
 
     function sectionData(layout, section) {
@@ -3772,6 +3796,6 @@
         levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
-        FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, BAY_COLORS, bayFmtOf, levelBayRects, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
+        FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, BAY_COLORS, bayFmtOf, levelBayRects, levelHasPlaced, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
 }));

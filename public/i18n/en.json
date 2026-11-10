@@ -1647,6 +1647,7 @@
     "layoutSale_bay_bayw": "Space {c} of level {n} of asset {code} is {value} m wide and the asset only {max} m deep.",
     "layoutSale_bay_bayh": "Space {c} of level {n} of asset {code} is {value} m high and the level only {max} m.",
     "layoutSale_bay_baysum": "The spaces of level {n} of asset {code} add up to {sum} m long and the asset is {max} m.",
+    "layoutSale_bay_bayout": "Space {c} of level {n} of asset {code} goes outside the asset.",
     "layoutSale_pos_out": "Position {code} goes outside its space (which is {l} × {w} m).",
     "layoutSale_pos_tall": "Position {code} is {h} m high and its space only {max} m.",
     "layoutHojaKpiAndenes": "Docks",
@@ -1774,6 +1775,7 @@
     "layoutVioAct_bayh": "Space {c} of level {n} of asset {code} is {value} m high and the level is only {max} m: lower its height so you can save.",
     "layoutVioAct_bayw": "Space {c} of level {n} of asset {code} is {value} m wide and the asset is only {max} m deep: lower its width so you can save.",
     "layoutVioAct_baysum": "The spaces of level {n} of asset {code} add up to {sum} m long and the asset is {max} m: lower the length of one space so you can save.",
+    "layoutVioAct_bayout": "Space {c} of level {n} of asset {code} goes outside the asset (it sits at X {x} · Y {y}, measures {l} × {w} m and the asset {L} × {D} m): move it to be able to save.",
     "layoutVioAct_levels": "The levels of asset {code} reach {top} m and the asset is {h} m tall: lower the height of a level or raise the asset height so you can save.",
     "layoutVioAct_overlap": "Assets {other} and {code} overlap inside {fcode}: change their position or size to be able to save.",
     "layoutFondo": "Depth (m)",
@@ -5688,6 +5690,14 @@
     "layoutBayFmt": {
       "what": "The color, pattern and border of this space NUMBER: all spaces with the same number (all the E001, or all the E002…) share it, and each number has its own, so they can be told apart on the plan and in 3D when the Spaces step is on. Without its own format they use the factory color of their number. The palette dot shows the current one; «Remove format» goes back to the factory color.",
       "example": "you give E001 blue with stripes: every E001 of every level and asset looks blue with stripes; E002 keeps its own color."
+    },
+    "layoutBayX": {
+      "what": "Where this space is inside its asset, left to right: the distance from the left side of the asset to the left side of the space. Type it here or drag the space box on the plan (in Edit with the Spaces step). It cannot go outside the asset. Empty = the space stays in its usual place: one next to the other, by length; moving one does not push the others.",
+      "example": "the asset is 0.93 m and the space 0.47 m: with X = 0.3 it has 0.3 m free on its left and 0.16 on its right; with X = 0.6 it would go outside the asset and cannot be saved."
+    },
+    "layoutBayY": {
+      "what": "Where this space is inside its asset, back to front: the distance from the back of the asset to the back of the space. Type it here or drag the space box on the plan. It cannot go outside the asset. Empty = against the back (0).",
+      "example": "the asset is 1.26 m deep and the space 0.68 m: with Y = 0.58 it sits against the front."
     },
     "layoutAssetFmt": {
       "what": "Changes the color, stripes and border of the asset (the rack, cabinet or pallet on top of the footprint), like in Zones and Footprint. Without its own color the asset is sand-colored, different from the white of the footprint, so they can be told apart. In \"Apply to\" you choose whether the change is only for this asset, for those of its zone or for those of the same type. Color rule: what goes INSIDE something cannot have the color of what contains it (the asset cannot have the color of its footprint, nor the footprint that of its zone) because it gets confusing; the same color can be used elsewhere.",

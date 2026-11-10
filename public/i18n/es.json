@@ -1647,6 +1647,7 @@
     "layoutSale_bay_bayw": "El espacio {c} del nivel {n} del activo {code} mide {value} m de ancho y el activo solo {max} m de fondo.",
     "layoutSale_bay_bayh": "El espacio {c} del nivel {n} del activo {code} mide {value} m de alto y el nivel solo {max} m.",
     "layoutSale_bay_baysum": "Los espacios del nivel {n} del activo {code} suman {sum} m de largo y el activo mide {max} m.",
+    "layoutSale_bay_bayout": "El espacio {c} del nivel {n} del activo {code} se sale del activo.",
     "layoutSale_pos_out": "La posición {code} se sale de su espacio (que mide {l} × {w} m).",
     "layoutSale_pos_tall": "La posición {code} mide {h} m de alto y su espacio solo {max} m.",
     "layoutHojaKpiAndenes": "Andenes",
@@ -1774,6 +1775,7 @@
     "layoutVioAct_bayh": "El espacio {c} del nivel {n} del activo {code} mide {value} m de alto y el nivel solo {max} m: baja su alto para poder guardar.",
     "layoutVioAct_bayw": "El espacio {c} del nivel {n} del activo {code} mide {value} m de ancho y el activo solo {max} m de fondo: baja su ancho para poder guardar.",
     "layoutVioAct_baysum": "Los espacios del nivel {n} del activo {code} suman {sum} m de largo y el activo mide {max} m: baja el largo de algún espacio para poder guardar.",
+    "layoutVioAct_bayout": "El espacio {c} del nivel {n} del activo {code} se sale del activo (queda en X {x} · Y {y}, mide {l} × {w} m y el activo {L} × {D} m): acomódalo para poder guardar.",
     "layoutVioAct_levels": "Los niveles del activo {code} llegan a {top} m y el activo mide {h} m: baja el alto de algún nivel o sube el alto del activo para poder guardar.",
     "layoutVioAct_overlap": "Los activos {other} y {code} están encimados dentro de {fcode}: cambia su posición o sus medidas para poder guardar.",
     "layoutFondo": "Fondo (m)",
@@ -5687,6 +5689,14 @@
     "layoutBayFmt": {
       "what": "El color, la trama y el borde de este NÚMERO de espacio: todos los espacios con el mismo número (todos los E001, o todos los E002…) llevan el mismo, y cada número el suyo, para distinguirlos en el croquis y en el 3D cuando el paso Espacios está encendido. Sin formato propio llevan el color de fábrica de su número. El cuadrito de la paleta muestra el que lleva ahora; «Quitar formato» regresa al de fábrica.",
       "example": "al E001 le pones azul con rayas: todos los E001 de todos los niveles y activos se ven azules con rayas; el E002 sigue de su color."
+    },
+    "layoutBayX": {
+      "what": "Dónde está este espacio dentro de su activo, de izquierda a derecha: la distancia desde el lado izquierdo del activo hasta el lado izquierdo del espacio. Se escribe aquí o se arrastra el cuadro del espacio en el croquis (en Editar y con el paso Espacios). No puede salirse del activo. Vacío = el espacio va en su lugar de siempre: uno junto al otro, según su largo; moverlo no empuja a los demás.",
+      "example": "el activo mide 0.93 m y el espacio 0.47 m: con X = 0.3 queda con 0.3 m libres a su izquierda y 0.16 a su derecha; con X = 0.6 se saldría del activo y no se deja guardar."
+    },
+    "layoutBayY": {
+      "what": "Dónde está este espacio dentro de su activo, de atrás hacia adelante: la distancia desde el fondo del activo hasta el fondo del espacio. Se escribe aquí o se arrastra el cuadro del espacio en el croquis. No puede salirse del activo. Vacío = pegado al fondo (0).",
+      "example": "el activo mide 1.26 m de fondo y el espacio 0.68 m: con Y = 0.58 queda pegado al frente."
     },
     "layoutAssetFmt": {
       "what": "Cambia el color, las rayas y el borde del activo (el anaquel, la gabeta o la tarima que está sobre la huella), igual que en Zonas y Huella. Sin color propio el activo sale arena, distinto del blanco de la huella, para que se distingan. En «Aplicar a» eliges si el cambio es solo para este activo, para los de su zona o para los del mismo tipo. Regla de colores: lo que va adentro de algo no puede llevar el color de lo que lo contiene (el activo no puede llevar el de su huella, ni la huella el de su zona) porque se confunde; el mismo color sí se puede usar en otro lado.",

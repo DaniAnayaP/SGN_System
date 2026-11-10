@@ -436,12 +436,12 @@
                         const rc = rcs[c - 1];
                         const kx = rc.l / Math.max(m.l, 0.01);
                         const kz = rc.w / Math.max(m.w, 0.01);
-                        const fr = rectOf(spU.x + rc.x, spU.y, rc.l, rc.w);
+                        const fr = rectOf(spU.x + rc.x, spU.y + rc.y, rc.l, rc.w);
                         g += `<rect x="${f1(fr.x)}" y="${f1(fr.y)}" width="${f1(fr.w)}" height="${f1(fr.h)}" fill="none" stroke="#6B7089" stroke-width="0.9" stroke-dasharray="3 2"/>`;
                         const bayFaces = LC.facesOfBay(spU, lv, c);
                         if (!sameFaces(bayFaces, LC.facesOfLevel(spU, lv))) g += faceMarkSvg(fr, bayFaces, faceDirs, { width: 1.8, arrow: 3 }); // un espacio que se consume distinto que su nivel
                         (layoutNoTurn.positions || []).filter((p) => p.s === spU.id && p.n === lv && p.c === c).sort((a, z) => (a.num || 0) - (z.num || 0)).forEach((p) => {
-                            const r = rectOf(spU.x + rc.x + p.x * kx, spU.y + p.y * kz, p.l * kx, p.w * kz);
+                            const r = rectOf(spU.x + rc.x + p.x * kx, spU.y + rc.y + p.y * kz, p.l * kx, p.w * kz);
                             g += `<rect x="${f1(r.x)}" y="${f1(r.y)}" width="${f1(Math.max(r.w, 1))}" height="${f1(Math.max(r.h, 1))}" fill="#FFFFFF" fill-opacity="0.9" stroke="#6B7089" stroke-width="0.9"/>`;
                             if (r.w >= 17 && r.h >= 8) g += `<text x="${f1(r.x + r.w / 2)}" y="${f1(r.y + r.h / 2 + 2.5)}" font-size="6.5" font-weight="600" fill="${T.chrome.ink}" text-anchor="middle">P${String(p.num).padStart(3, '0')}</text>`;
                             else if (r.w >= 8 && r.h >= 8) g += `<text x="${f1(r.x + r.w / 2)}" y="${f1(r.y + r.h / 2 + 2.3)}" font-size="5.5" font-weight="600" fill="${T.chrome.ink}" text-anchor="middle">${p.num}</text>`;
@@ -566,17 +566,18 @@
                 const rc = rcs[c - 1];
                 const slotW = (rc.l / totalL) * planW; // este espacio ocupa lo que mide
                 const bayH = (rc.w / spaceD) * planH;
+                const offY = (rc.y / spaceD) * planH; // dónde empieza el espacio a lo hondo del activo
                 const kx = slotW / Math.max(m.l, 0.01);
                 const kz = bayH / Math.max(m.w, 0.01);
                 const bx = titleW + (rc.x / totalL) * planW;
                 const chosen = hl && hl.n === n && hl.c === c;
                 if (slotW >= 16) s += `<text x="${(bx + slotW / 2).toFixed(1)}" y="${(y0 + 11).toFixed(1)}" font-size="${slotW >= 34 ? 10 : 8}" font-weight="${chosen ? 800 : 600}" fill="${chosen ? '#E8590C' : '#6B7089'}" text-anchor="middle">${slotW >= 34 ? `E${pad3(c)}` : c}</text>`;
-                s += `<rect x="${bx.toFixed(1)}" y="${(y0 + head).toFixed(1)}" width="${slotW.toFixed(1)}" height="${bayH.toFixed(1)}" fill="none" stroke="${chosen ? '#E8590C' : C.frame}" stroke-width="${chosen ? 1.6 : 1}" stroke-dasharray="${chosen ? '' : '4 3'}"/>`;
+                s += `<rect x="${bx.toFixed(1)}" y="${(y0 + head + offY).toFixed(1)}" width="${slotW.toFixed(1)}" height="${bayH.toFixed(1)}" fill="none" stroke="${chosen ? '#E8590C' : C.frame}" stroke-width="${chosen ? 1.6 : 1}" stroke-dasharray="${chosen ? '' : '4 3'}"/>`;
                 const bayFaces = LC.facesOfBay(space, n, c);
-                if (!sameFaces(bayFaces, LC.facesOfLevel(space, n))) s += faceMarkSvg({ x: bx, y: y0 + head, w: slotW, h: bayH }, bayFaces, faceDirs, { width: 1.6, arrow: 4 });
+                if (!sameFaces(bayFaces, LC.facesOfLevel(space, n))) s += faceMarkSvg({ x: bx, y: y0 + head + offY, w: slotW, h: bayH }, bayFaces, faceDirs, { width: 1.6, arrow: 4 });
                 (byKey.get(`${n}|${c}`) || []).forEach((p) => {
                     const px = bx + p.x * kx;
-                    const py = y0 + head + p.y * kz;
+                    const py = y0 + head + offY + p.y * kz;
                     const pw = Math.max(p.l * kx, 1);
                     const ph = Math.max(p.w * kz, 1);
                     const mark = chosen && hl.num === p.num;

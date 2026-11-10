@@ -1014,8 +1014,22 @@ function applyLevelToAll(key) {
 }
 // Paso Posiciones: el aviso de los huecos cuyo largo o ancho pasa del largo o el fondo de su activo (los primeros 6) y su actualización al teclear.
 function bayIssuesHtml() {
-    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum' || v.kind === 'facesBay');
+    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum' || v.kind === 'bayout' || v.kind === 'facesBay');
     return list.slice(0, 6).map((v) => `<p>${esc(vioActText(v))}</p>`).join('') + (list.length > 6 ? '<p>…</p>' : '');
+}
+// Pone al día los X y Y que muestra la tabla para los espacios de un nivel (sin tocar el campo que se está escribiendo) y marca en rojo los que se salen del activo.
+function syncBayXY(space, n, skip) {
+    const i = state.draft.spaces.indexOf(space);
+    const placed = LC.levelHasPlaced(space, n);
+    LC.levelBayRects(space, n).forEach((r) => {
+        const out = placed && (r.x < -0.005 || r.y < -0.005 || r.x + r.l > space.l + 0.005 || r.y + r.w > space.d + 0.005);
+        ['x', 'y'].forEach((k) => {
+            const input = document.querySelector(`[data-l="bay"][data-i="${i}"][data-n="${n}"][data-c="${r.c}"][data-k="${k}"]`);
+            if (!input) return;
+            if (input !== skip && document.activeElement !== input) input.value = String(Math.round(r[k] * 100) / 100);
+            input.classList.toggle('layout-missing', out);
+        });
+    });
 }
 function applyBayMarks() {
     const box = document.querySelector('[data-bay-issues]');
@@ -1424,9 +1438,12 @@ function stepHtml(step) {
             for (let n = 1; n <= levels; n += 1) {
                 const slots = LC.levelSlots(s, n); // las posiciones que se le pusieron a ESTE nivel en Niveles
                 const sumOver = LC.levelLengthSum(s, n).over;
+                const rcsL = LC.levelBayRects(s, n); // dónde cae cada espacio del nivel (su X y su Y dentro del activo)
                 for (let c = 1; c <= slots; c += 1) {
                     if (count >= POSITION_ROWS_MAX) return;
                     count += 1;
+                    const rcL = rcsL[c - 1];
+                    const outL = rcL.x + rcL.l > s.l + 0.005 || rcL.y + rcL.w > s.d + 0.005 || rcL.x < -0.005 || rcL.y < -0.005;
                     const bay = LC.bayOf(s, n, c);
                     const m = LC.bayMeasures(s, n, c);
                     const st = bay.stored;
@@ -1434,12 +1451,12 @@ function stepHtml(step) {
                     const lvName = ((s.lvls || []).find((l) => l.n === n) || {}).name || '';
                     const nameOf = s.ownName || s.name || '';
                     const pad3 = (v) => String(v).padStart(3, '0');
-                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.E${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}<td class="layout-calc" data-help-key="layoutPosDesde"><span data-bay-from="${i}|${n}|${c}">${shown(m.floorH + m.beam)}</span></td><td class="layout-calc" data-help-key="layoutPosHasta"><span data-bay-to="${i}|${n}|${c}">${shown(m.floorH + m.beam + m.h)}</span></td><td><input type="number" min="1" max="${LC.LIMITS.slots}" step="1" data-l="bay" data-i="${i}" data-n="${n}" data-c="${c}" data-k="count" data-help-key="layoutPosCantidad" value="${posCounts.get(`${s.id}|${n}|${c}`) || 1}"${dis || !canEdit('ubicaciones') ? ' disabled' : ''}></td><td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td>${facesCellHtml('bay', i, n, c, LC.facesOfBay(s, n, c), LC.facesOfLevel(s, n), st.faces !== undefined, dis)}<td>${bayFmtButton(c, dis)}</td></tr>`);
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.E${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'x', shown(rcL.x), st.x !== undefined, '0.01', ' data-help-key="layoutBayX"', outL && LC.levelHasPlaced(s, n))}${bayNum(i, n, c, 'y', shown(rcL.y), st.y !== undefined, '0.01', ' data-help-key="layoutBayY"', outL && LC.levelHasPlaced(s, n))}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}<td class="layout-calc" data-help-key="layoutPosDesde"><span data-bay-from="${i}|${n}|${c}">${shown(m.floorH + m.beam)}</span></td><td class="layout-calc" data-help-key="layoutPosHasta"><span data-bay-to="${i}|${n}|${c}">${shown(m.floorH + m.beam + m.h)}</span></td><td><input type="number" min="1" max="${LC.LIMITS.slots}" step="1" data-l="bay" data-i="${i}" data-n="${n}" data-c="${c}" data-k="count" data-help-key="layoutPosCantidad" value="${posCounts.get(`${s.id}|${n}|${c}`) || 1}"${dis || !canEdit('ubicaciones') ? ' disabled' : ''}></td><td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td>${facesCellHtml('bay', i, n, c, LC.facesOfBay(s, n, c), LC.facesOfLevel(s, n), st.faces !== undefined, dis)}<td>${bayFmtButton(c, dis)}</td></tr>`);
                 }
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutPosSinActivos'))}</p>`;
-        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosDesde', 'main.layoutPosHasta', 'main.layoutPosCantidad', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo', ''];
+        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutUbicX', 'main.layoutUbicY', 'main.layoutAlto', 'main.layoutPosDesde', 'main.layoutPosHasta', 'main.layoutPosCantidad', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo', ''];
         const bayIssues = bayIssuesHtml();
         return `${table(heads, rows, 'layout-posiciones')}<div class="layout-vio" data-bay-issues${bayIssues ? '' : ' hidden'}>${bayIssues}</div>${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
@@ -1977,6 +1994,7 @@ function drawPositionsOverlay() {
     const f1 = (v) => v.toFixed(1);
     const spt = (px, py) => { const a = turn(px, py); return [view.ox + (a[0] - view.x0) * view.sc, view.oy + (a[1] - view.y0) * view.sc]; };
     // lo marcado se junta por activo y nivel: cada nivel se dibuja una vez, con todo lo marcado en él
+    const canDragBays = state.mode === 'edit' && state.focus === 'posiciones' && canEdit('posiciones');
     const bayColors = stepOn('posiciones') && !!window.LayoutMapSvg && !!LC.bayFmtOf; // con el paso Espacios encendido, cada número de espacio lleva su color y su trama
     let paintSeq = 0;
     const groups = new Map();
@@ -2004,7 +2022,7 @@ function drawPositionsOverlay() {
             const kz = rc.w / Math.max(m.w, 0.01);
             const sel = grp.items.some((it) => it.c === c);
             const dim = specific && !sel ? ' dim' : '';
-            const fr = box(s.x + rc.x, s.y, rc.l, rc.w);
+            const fr = box(s.x + rc.x, s.y + rc.y, rc.l, rc.w);
             if (bayColors) {
                 const paint = window.LayoutMapSvg.zonePaint(`pbay${paintSeq += 1}`, LC.bayFmtOf(state.draft, c));
                 const pts = `${f1(fr.x)},${f1(fr.y)} ${f1(fr.x + fr.w)},${f1(fr.y)} ${f1(fr.x + fr.w)},${f1(fr.y + fr.h)} ${f1(fr.x)},${f1(fr.y + fr.h)}`;
@@ -2012,11 +2030,13 @@ function drawPositionsOverlay() {
                 if (fr.w >= 24 && fr.h >= 12) add('text', { class: `pos-ov-t${dim}`, x: f1(fr.x + 3), y: f1(fr.y + 9), 'text-anchor': 'start' }, `E${ubicPad(c)}`);
             }
             add('rect', { class: `pos-ov-bay${sel ? ' sel' : ''}${dim}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h) });
-            if (grp.items.some((it) => it.c === c && !it.p)) faceJobs.push({ r: { x: s.x + rc.x, y: s.y, w: rc.l, d: rc.w }, faces: LC.facesOfBay(s, lv, c) });
+            // en Editar y en el paso Espacios el espacio se arrastra con el dedo o el mouse (sin salirse del activo)
+            if (canDragBays) add('rect', { class: 'pos-ov-hit', 'data-bayhit': `${s.id}|${lv}|${c}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h), fill: 'transparent', 'pointer-events': 'all', style: 'cursor:move' });
+            if (grp.items.some((it) => it.c === c && !it.p)) faceJobs.push({ r: { x: s.x + rc.x, y: s.y + rc.y, w: rc.l, d: rc.w }, faces: LC.facesOfBay(s, lv, c) });
             LC.positionsOfBay(state.draft, s.id, lv, c).forEach((p) => {
-                const r = box(s.x + rc.x + p.x * kx, s.y + p.y * kz, p.l * kx, p.w * kz);
+                const r = box(s.x + rc.x + p.x * kx, s.y + rc.y + p.y * kz, p.l * kx, p.w * kz);
                 const chosen = grp.items.some((it) => it.c === c && it.p === p.num);
-                if (chosen) faceJobs.push({ r: { x: s.x + rc.x + p.x * kx, y: s.y + p.y * kz, w: p.l * kx, d: p.w * kz }, faces: LC.facesOfPosition(s, p) });
+                if (chosen) faceJobs.push({ r: { x: s.x + rc.x + p.x * kx, y: s.y + rc.y + p.y * kz, w: p.l * kx, d: p.w * kz }, faces: LC.facesOfPosition(s, p) });
                 add('rect', { class: `pos-ov-pos${chosen ? ' chosen' : ''}${dim}`, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)) });
                 if (r.w >= 17 && r.h >= 8) add('text', { class: `pos-ov-t${dim}`, x: f1(r.x + r.w / 2), y: f1(r.y + r.h / 2 + 2.5), 'text-anchor': 'middle' }, `P${ubicPad(p.num)}`);
             });
@@ -4418,7 +4438,7 @@ function onEdit(event) {
         if (!space.bays) space.bays = [];
         let bay = space.bays.find((b) => b.n === n && b.c === c);
         if (!bay) { bay = { n, c }; space.bays.push(bay); }
-        if (value > 0) bay[bayKey] = value; else delete bay[bayKey];
+        if (bayKey === 'x' || bayKey === 'y') { if (el.value === '' || !(value >= 0)) delete bay[bayKey]; else bay[bayKey] = Math.round(value * 100) / 100; } else if (value > 0) bay[bayKey] = value; else delete bay[bayKey];
         if (Object.keys(bay).length <= 2) space.bays = space.bays.filter((b) => b !== bay);
         if (!space.bays.length) delete space.bays;
         // los m² (largo × fondo) y los m³ (× alto) se recalculan al momento
@@ -4440,6 +4460,7 @@ function onEdit(event) {
             const lenBox = document.querySelector(`[data-l="bay"][data-i="${el.getAttribute('data-i')}"][data-n="${n}"][data-c="${col}"][data-k="l"]`);
             if (lenBox) lenBox.classList.toggle('layout-missing', sumOver || (space.l > 0 && LC.bayMeasures(space, n, col).l > space.l + 0.005));
         }
+        syncBayXY(space, n, el); // el lugar (X, Y) de los demás espacios del nivel cambia cuando uno cambia de largo, de fondo o de lugar
         computeSpaceIssues();
         applyBayMarks();
     } else if (list === 'lvl') {
@@ -5443,6 +5464,69 @@ window.addEventListener('pointerup', () => {
     if (moved && state.draft) { renderPanel(); refreshLive(); }
 });
 
+// ---- acomodar un espacio arrastrándolo sobre el croquis ------------------------------------------------------------------------------------
+// En Editar y en el paso Espacios, el cuadro de un espacio del nivel elegido se arrastra con el dedo o el mouse a donde se quiera DENTRO de su activo (no se sale de él); al acercarse a menos de 5 cm del lado de otro espacio o del activo
+// se pega, y su X y su Y se escriben solos en la tabla (también se pueden escribir ahí). Vacío = vuelve a su lugar de siempre (uno junto al otro, según su largo); mover uno no empuja a los demás.
+const BAY_SNAP_M = 0.05;
+let bayDrag = null;
+$('layout-svg').addEventListener('pointerdown', (event) => {
+    const el = event.target.closest('[data-bayhit]');
+    if (!el || !state.draft || !canEdit('posiciones')) return;
+    const [sid, n, c] = el.getAttribute('data-bayhit').split('|');
+    const space = state.draft.spaces.find((x) => x.id === sid);
+    const rc = space ? LC.levelBayRects(space, Number(n))[Number(c) - 1] : null;
+    if (!rc) return;
+    bayDrag = { sid, n: Number(n), c: Number(c), px: event.clientX, py: event.clientY, x0: rc.x, y0: rc.y, moved: false };
+    event.preventDefault();
+});
+window.addEventListener('pointermove', (event) => {
+    if (!bayDrag || !view || !state.draft) return;
+    const space = state.draft.spaces.find((x) => x.id === bayDrag.sid);
+    const rects = space ? LC.levelBayRects(space, bayDrag.n) : [];
+    const me = rects[bayDrag.c - 1];
+    if (!me) { bayDrag = null; return; }
+    const box = $('layout-svg').getBoundingClientRect();
+    const k = (view.W / zoom.s) / box.width / view.sc;
+    let dx = (event.clientX - bayDrag.px) * k;
+    let dy = (event.clientY - bayDrag.py) * k;
+    // Con el croquis girado, el movimiento que se ve en pantalla se regresa a los ejes del Layout (giro inverso), igual que con las zonas.
+    if (view.rot === 1) [dx, dy] = [dy, -dx];
+    else if (view.rot === 2) [dx, dy] = [-dx, -dy];
+    else if (view.rot === 3) [dx, dy] = [-dy, dx];
+    if (!bayDrag.moved && Math.abs(dx) + Math.abs(dy) < 0.03) return;
+    bayDrag.moved = true;
+    const xs = [0, space.l];
+    const ys = [0, space.d];
+    rects.forEach((r, i) => { if (i !== bayDrag.c - 1) { xs.push(r.x, r.x + r.l); ys.push(r.y, r.y + r.w); } });
+    const snap = (lo, size, list) => {
+        let best = null;
+        list.forEach((v) => [lo, lo + size].forEach((edge) => { const d = v - edge; if (Math.abs(d) < BAY_SNAP_M && (best === null || Math.abs(d) < Math.abs(best))) best = d; }));
+        return best === null ? 0 : best;
+    };
+    let nx = bayDrag.x0 + dx;
+    let ny = bayDrag.y0 + dy;
+    nx += snap(nx, me.l, xs);
+    ny += snap(ny, me.w, ys);
+    nx = Math.min(Math.max(nx, 0), Math.max(space.l - me.l, 0)); // sin salirse del activo
+    ny = Math.min(Math.max(ny, 0), Math.max(space.d - me.w, 0));
+    if (!space.bays) space.bays = [];
+    let bay = space.bays.find((x) => x.n === bayDrag.n && x.c === bayDrag.c);
+    if (!bay) { bay = { n: bayDrag.n, c: bayDrag.c }; space.bays.push(bay); }
+    // a 2 decimales y sin pasar del borde del activo (redondear hacia arriba lo sacaría unos milímetros)
+    bay.x = Math.min(round2(nx), Math.max(Math.floor((space.l - me.l) * 100) / 100, 0));
+    bay.y = Math.min(round2(ny), Math.max(Math.floor((space.d - me.w) * 100) / 100, 0));
+    syncBayXY(space, bayDrag.n, null);
+    computeSpaceIssues();
+    applyBayMarks();
+    refreshLive();
+});
+window.addEventListener('pointerup', () => {
+    if (!bayDrag) return;
+    const moved = bayDrag.moved;
+    bayDrag = null;
+    if (moved && state.draft) { renderPanel(); refreshLive(); }
+});
+
 // ---- Arrastrar una puerta sobre su pared ---------------------------------------------------------------------------------------------------
 // Puertas, conexiones de luz y sensores: cada uno solo se arrastra en su propio paso (Puertas, Luz, Sensores) y con permiso para cambiarlo. Lo que sigue vale para los tres. La puerta sigue la pared (no se sale de ella ni de sus extremos): lo que se mueve el puntero a lo largo de la pared es lo que se mueve la puerta; `dist` (la «Distancia
 // desde el inicio de la pared») se escribe sola mientras se arrastra y los avisos del renglón (cabe, altura) se vuelven a calcular. Si la pared no está elegida (puerta de antes) no se arrastra.
@@ -5890,7 +5974,7 @@ async function saveLayout() {
     if (freshSpaces.length) {
         const v = freshSpaces[0];
         // los niveles que suben más que el activo se arreglan en Niveles (si la cuenta lo ve; si no, en Activos con el alto del activo)
-        const bayKind = v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum' || v.kind === 'facesBay';
+        const bayKind = v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum' || v.kind === 'bayout' || v.kind === 'facesBay';
         const stepName = (v.kind === 'levels' || v.kind === 'facesLevel') && stepVisible('niveles') ? 'niveles' : (bayKind && stepVisible('posiciones') ? 'posiciones' : 'activos');
         showStep(stepName);
         renderPanel();
@@ -5901,7 +5985,7 @@ async function saveLayout() {
             : v.kind === 'facesLevel' && stepName === 'niveles'
             ? (document.querySelector(`button.layout-face.bad[data-fk="lvl"][data-i="${at}"][data-n="${v.vars.n}"]`) || document.querySelector(`button.layout-face[data-fk="lvl"][data-i="${at}"][data-n="${v.vars.n}"]`))
             : stepName === 'posiciones'
-            ? document.querySelector(v.kind === 'baysum' ? `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-k="l"]` : `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"][data-k="${{ bayl: 'l', bayw: 'w', bayh: 'h' }[v.kind]}"]`)
+            ? document.querySelector(v.kind === 'baysum' ? `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-k="l"]` : `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"][data-k="${{ bayl: 'l', bayw: 'w', bayh: 'h', bayout: 'x' }[v.kind]}"]`)
             : stepName === 'niveles'
             ? (document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"].layout-missing`) || document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"]`))
             : document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);

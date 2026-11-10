@@ -392,7 +392,7 @@
                 const rcb = c && LCx.levelBayRects ? LCx.levelBayRects(s, n)[c - 1] : null; // el espacio donde cae de verdad (su largo y su fondo propios)
                 let len = rcb ? rcb.l : (c ? s.l / slots : s.l);
                 let x0 = rcb ? s.x + rcb.x : (c ? s.x + (c - 1) * (s.l / slots) : s.x);
-                let z0 = s.y; let dep = rcb ? rcb.w : s.d;
+                let z0 = rcb ? s.y + rcb.y : s.y; let dep = rcb ? rcb.w : s.d;
                 // un localizador es una posición del espacio: ocupa su lugar y sus medidas dentro del espacio (x de izquierda a derecha, y desde el fondo hacia el frente)
                 let posAlto = 0;
                 if (c && Number(hl.p) > 0 && lastLayout) {
@@ -400,7 +400,7 @@
                     if (pp) {
                         const sxP = len / Math.max(m.l, 0.01); const szP = dep / Math.max(m.w, 0.01);
                         x0 += pp.x * sxP; len = pp.l * sxP;
-                        z0 = s.y + pp.y * szP; dep = pp.w * szP;
+                        z0 += pp.y * szP; dep = pp.w * szP;
                         posAlto = Math.min(pp.h, m.h);
                     }
                 }
@@ -1359,6 +1359,7 @@
                     const bx0 = rc ? s.x + rc.x : (cont ? s.x + (cont - 1) * (s.l / slotsZ) : s.x);
                     const blen = rc ? rc.l : (cont ? s.l / slotsZ : s.l);
                     const depthZ = rc ? rc.w : s.d; // el fondo del cuadro enfocado
+                    const by0 = rc ? s.y + rc.y : s.y; // y desde dónde empieza ese cuadro
                     const mAll = cont ? LCz.bayMeasures(s, nz, cont) : LCz.levelMeasures(s, nz);
                     // con un localizador se dibuja la distribución de las posiciones del espacio (cada una en su lugar y con sus medidas); si no, las divisiones del nivel
                     const contPos = cont && lastLayout ? posOf(s.id, nz, cont) : [];
@@ -1376,7 +1377,7 @@
                     if (allMode) {
                         for (let c2 = 1; c2 <= slotsZ; c2++) {
                             const mm = LCz.bayMeasures(s, nz, c2);
-                            const r2 = rects ? rects[c2 - 1] : { x: (c2 - 1) * (s.l / slotsZ), l: s.l / slotsZ, w: s.d };
+                            const r2 = rects ? rects[c2 - 1] : { x: (c2 - 1) * (s.l / slotsZ), y: 0, l: s.l / slotsZ, w: s.d };
                             const slotWz = r2.l;
                             const kxz = slotWz / Math.max(mm.l, 0.01); const kzz = r2.w / Math.max(mm.w, 0.01);
                             const beamC = mm.beam > 0 ? mm.beam : 0.06;
@@ -1386,7 +1387,7 @@
                                 const hC = Math.max(pp ? Math.min(pp.h, mm.h) : mm.h, 0.1);
                                 const sxC = pp ? pp.l * kxz : slotWz; const szC = pp ? pp.w * kzz : s.d;
                                 const xc = PX(pp ? s.x + r2.x + (pp.x + pp.l / 2) * kxz : s.x + r2.x + slotWz / 2);
-                                const zc = PZ(pp ? s.y + (pp.y + pp.w / 2) * kzz : s.y + s.d / 2);
+                                const zc = PZ(pp ? s.y + r2.y + (pp.y + pp.w / 2) * kzz : s.y + s.d / 2);
                                 if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, c2, false);
                                 else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, c2, false);
                             });
@@ -1401,10 +1402,10 @@
                         const rb = rects && !cont ? rects[ci] : null; // el espacio del nivel con su largo y su fondo propios
                         const sxC = pp ? pp.l * sxP : (rb ? rb.l : wC); const szC = pp ? pp.w * szP : s.d;
                         const xc = PX(pp ? bx0 + (pp.x + pp.l / 2) * sxP : (rb ? s.x + rb.x + rb.l / 2 : bx0 + (ci + 0.5) * wC));
-                        const zc = PZ(pp ? s.y + (pp.y + pp.w / 2) * szP : s.y + s.d / 2);
+                        const zc = PZ(pp ? by0 + (pp.y + pp.w / 2) * szP : s.y + s.d / 2);
                         if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, ci + 1, false);
                         else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, ci + 1, false);
-                        if (!solid && !contPos.length) { const dV = rb ? rb.w : s.d; bayVolume(xc, yB + beamC + hC / 2, PZ(s.y + dV / 2), Math.max(sxC - gx, 0.02), hC, Math.max(dV - gz, 0.02), ci + 1); }
+                        if (!solid && !contPos.length) { const dV = rb ? rb.w : s.d; bayVolume(xc, yB + beamC + hC / 2, PZ(s.y + (rb ? rb.y : 0) + dV / 2), Math.max(sxC - gx, 0.02), hC, Math.max(dV - gz, 0.02), ci + 1); }
                     }
                     if (!solid) {
                         // postes: las cuatro esquinas del cuadro y uno delgado en cada división (adelante y atrás)
@@ -1412,10 +1413,10 @@
                         const edgeAt = (xi) => (rects && !cont && !contPos.length ? (xi === 0 ? s.x : (xi >= postCols ? s.x + s.l : s.x + rects[xi - 1].x + rects[xi - 1].l)) : bx0 + xi * (blen / postCols)); // las divisiones, donde termina cada espacio
                         for (let xi = 0; xi <= postCols; xi++) {
                             const edge = xi === 0 || xi === postCols;
-                            [s.y, s.y + depthZ].forEach((zEdge, zi) => upr.push({ x: PX(edgeAt(xi)) + (xi === 0 ? 0.03 : (xi === postCols ? -0.03 : 0)), y: (yBot + yTop) / 2, z: PZ(zEdge) + (zi === 0 ? 0.03 : -0.03), sx: edge ? 0.06 : 0.04, sy: yTop - yBot, sz: edge ? 0.06 : 0.04, c: postC }));
+                            [by0, by0 + depthZ].forEach((zEdge, zi) => upr.push({ x: PX(edgeAt(xi)) + (xi === 0 ? 0.03 : (xi === postCols ? -0.03 : 0)), y: (yBot + yTop) / 2, z: PZ(zEdge) + (zi === 0 ? 0.03 : -0.03), sx: edge ? 0.06 : 0.04, sy: yTop - yBot, sz: edge ? 0.06 : 0.04, c: postC }));
                         }
                     }
-                    addFocusContainer({ x: PX(bx0 + blen / 2), y: (yBot + yTop) / 2, z: PZ(s.y + depthZ / 2), sx: blen, sy: yTop - yBot, sz: depthZ });
+                    addFocusContainer({ x: PX(bx0 + blen / 2), y: (yBot + yTop) / 2, z: PZ(by0 + depthZ / 2), sx: blen, sy: yTop - yBot, sz: depthZ });
                   });
                     spaceList.push({ s, x: cx, z: cz, fl });
                     return;
@@ -1449,10 +1450,10 @@
                             const rectsK = LCx.levelBayRects ? LCx.levelBayRects(s, k) : null;
                             for (let c = 1; c <= slotsK; c++) {
                                 const mb = LCx.bayMeasures(s, k, c);
-                                const rk = rectsK ? rectsK[c - 1] : { x: (c - 1) * (s.l / slotsK), l: s.l / slotsK, w: s.d };
+                                const rk = rectsK ? rectsK[c - 1] : { x: (c - 1) * (s.l / slotsK), y: 0, l: s.l / slotsK, w: s.d };
                                 const thB = mb.beam > 0 ? mb.beam : 0.06;
                                 const hB = Math.max(mb.h, 0.05);
-                                bayVolume(cx - s.l / 2 + rk.x + rk.l / 2, fl + Math.max(mb.floorH, 0.03) + thB + hB / 2, cz - s.d / 2 + rk.w / 2, Math.max(rk.l - 0.02, 0.02), hB, Math.max(rk.w - 0.02, 0.02), c);
+                                bayVolume(cx - s.l / 2 + rk.x + rk.l / 2, fl + Math.max(mb.floorH, 0.03) + thB + hB / 2, cz - s.d / 2 + rk.y + rk.w / 2, Math.max(rk.l - 0.02, 0.02), hB, Math.max(rk.w - 0.02, 0.02), c);
                             }
                         }
                     }
