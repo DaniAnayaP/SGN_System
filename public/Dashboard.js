@@ -687,7 +687,18 @@ function syncSidebarToggleLabel() {
 
 function applyStaticTranslations() {
     document.querySelectorAll('[data-i18n]').forEach((el) => {
-        el.textContent = t(el.dataset.i18n);
+        const text = t(el.dataset.i18n);
+        // La unidad de un encabezado de tabla se escribe con su símbolo del Sistema Internacional (cm, kg, g, m²…) aunque el encabezado se vea en mayúsculas.
+        const unit = el.tagName === 'TH' ? /^(.*?)\s*\((cm|mm|m|kg|g|ml|l|m²|m³|°C|%)\)$/.exec(text) : null;
+        if (unit) {
+            el.textContent = unit[1];
+            const span = document.createElement('span');
+            span.className = 'unit-si';
+            span.textContent = ` (${unit[2]})`;
+            el.appendChild(span);
+        } else {
+            el.textContent = text;
+        }
     });
     document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
         el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder));
@@ -12999,7 +13010,8 @@ async function getEvidenceDownloadUrl({ tableKey, recordId, fieldKey }) {
 // permission-driven and applies automatically the moment a cell has a value:
 // pass both to opt a cell into locking, omit them and it never locks (so
 // older/simpler callers keep working unchanged).
-function attachInlineEdit(td, { value = '', inputType = 'text', step = '0.01', formatDisplay, onCommit, disabled = false, disabledText, tableKey, colKey, pending = false } = {}) {
+// unit: la unidad (cm, kg…) que se ve siempre después del número, también mientras se escribe; no es parte del dato (el texto de la celda sigue siendo solo el número).
+function attachInlineEdit(td, { value = '', inputType = 'text', step = '0.01', formatDisplay, onCommit, disabled = false, disabledText, tableKey, colKey, pending = false, unit = '' } = {}) {
     let current = value;
     let isDisabled = disabled;
     let isPending = pending;
@@ -13027,6 +13039,7 @@ function attachInlineEdit(td, { value = '', inputType = 'text', step = '0.01', f
         const span = document.createElement('span');
         span.className = hasValue ? 'editable-cell-value' : 'editable-cell-value editable-cell-placeholder';
         span.textContent = hasValue ? (formatDisplay ? formatDisplay(current) : current) : t('main.fuelAddValue');
+        if (unit && hasValue) span.dataset.unit = unit;
         if (isPending) {
             td.classList.remove('editable-cell', 'editable-cell-disabled', 'editable-cell-locked');
             td.classList.add('editable-cell-pending');
@@ -13066,7 +13079,17 @@ function attachInlineEdit(td, { value = '', inputType = 'text', step = '0.01', f
         input.className = 'editable-cell-input';
         input.value = current;
         if (inputType === 'number') { input.step = step; input.min = '0'; }
-        td.appendChild(input);
+        if (unit) {
+            const wrap = document.createElement('div');
+            wrap.className = 'editable-cell-unit-wrap';
+            const sym = document.createElement('span');
+            sym.className = 'editable-cell-unit';
+            sym.textContent = unit;
+            wrap.append(input, sym);
+            td.appendChild(wrap);
+        } else {
+            td.appendChild(input);
+        }
         input.focus();
         input.select();
         const commit = () => {

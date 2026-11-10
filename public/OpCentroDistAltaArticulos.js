@@ -512,18 +512,20 @@ function buildRow(record) {
         cells[colId] = td;
     });
 
+    // medidas en centímetros y pesos en kilogramos: la unidad se ve siempre después del número
     [
-        ['colArticuloAlto', 'height'],
-        ['colArticuloLargo', 'length'],
-        ['colArticuloAncho', 'width'],
-        ['colArticuloPesoArticulo', 'articleWeight'],
-        ['colArticuloPesoEmpaque', 'packageWeight'],
-    ].forEach(([colId, key]) => {
+        ['colArticuloAlto', 'height', 'cm'],
+        ['colArticuloLargo', 'length', 'cm'],
+        ['colArticuloAncho', 'width', 'cm'],
+        ['colArticuloPesoArticulo', 'articleWeight', 'kg'],
+        ['colArticuloPesoEmpaque', 'packageWeight', 'kg'],
+    ].forEach(([colId, key, unit]) => {
         const td = document.createElement('td');
         td.dataset.col = colId;
         Dashboard.attachInlineEdit(td, {
             value: record[key] || '',
             inputType: 'number',
+            unit,
             tableKey: TABLE_KEY,
             colKey: colId,
             pending: isPending(record, key),
