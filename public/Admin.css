@@ -8140,6 +8140,10 @@ th[data-col="colUdmDRamificacion"]{ min-width: 17rem; }
 .udm-tnode.root{ font-weight: 700; }
 /* El nodo del material principal (la UDM principal del producto) lleva un tinte suave del color de acento, para distinguirlo de sus presentaciones en el árbol. Se ve igual en los tres estilos (claro, oscuro, institucional). */
 .udm-node.udm-main{ background-color: color-mix(in srgb, var(--color-accent) 11%, var(--color-surface)); }
+/* En Operaciones (un renglón por presentación) la fila del material principal (la UDM principal del producto) lleva el mismo tinte suave en toda la fila. Va como capa sobre el fondo, así también se ve en las columnas fijas. */
+tr.udm-main-row > td{ background-image: linear-gradient(color-mix(in srgb, var(--color-accent) 11%, transparent), color-mix(in srgb, var(--color-accent) 11%, transparent)); }
+.udm-ops-search{ margin: 0 0 0.7rem; }
+.udm-ops-search input[type=search]{ width: 100%; max-width: 42rem; }
 .udm-tcount{ align-self: center; margin-left: 0.5rem; font-size: 0.74rem; color: var(--color-text-secondary); white-space: nowrap; }
 .udm-tcount.none{ font-style: italic; }
 .udm-nx{ line-height: 1.25; }

@@ -326,6 +326,9 @@
     "catCentroDistLugaresEnvio": "Shipping Places",
     "catCentroDistLugaresEnvioAbbr1": "Places",
     "catCentroDistLugaresEnvioAbbr2": "Ship Places",
+    "catCentroDistPresentaciones": "Distribution Presentations Catalog",
+    "catCentroDistPresentacionesAbbr1": "Presentations",
+    "catCentroDistPresentacionesAbbr2": "Distrib. Present.",
     "catCentroDistClasificaciones": "Our Classifications",
     "catCentroDistClasificacionesAbbr1": "Classifications",
     "catCentroDistClasificacionesAbbr2": "Classif.",
@@ -3703,6 +3706,10 @@
     "pmEliminarPedido": "Delete order {folio} with {n} item(s)? This cannot be undone.",
     "pmArticulosN": "{n} item(s)",
     "qrsVolver": "Back to the list",
+    "udmOpsBuscar": "Find a code by its description (or type its code)",
+    "udmOpsVacio": "Only the presentations of the codes you search for are shown here. Type the description (for example «aspirin») to see the ones it already has and add or edit.",
+    "udmOpsSinCoincidencias": "No codes match that description.",
+    "udmOpsMuchos": "Showing the first {n} matching codes: type more to narrow them down.",
     "udmTreeOpen": "View the branching tree of this code",
     "udmNPres": "{n} presentations",
     "udmNPres0": "No presentations",
@@ -5315,7 +5322,7 @@
       "what": "The presentation tree of this code: the main material on the left and, from it, the presentations that come out of it (each with its name, measures, weight and how many main units it equals). The line joining them says how many of the previous one it holds. Several can come out of the same one and each branch goes on by itself. It opens from the Branching column.",
       "example": "tablet → box of 20 (× 20) → box of 20 boxes (× 20) and box of 50 boxes (× 50); and apart, tablet → box of 30 (× 30)."
     },
-    "udmRamificacion": {"what": "Summarizes the code in one row: its main material and how many presentations it has. Tapping the cell opens the branching tree in a floating window, where its presentations are seen, added, edited and removed.", "example": "Tablet · 3 presentations: tapping it you see the box of 12, the box of 24 and the box of 10 boxes."},
+    "udmRamificacion": {"what": "Where each presentation of the code comes from. In Operations it draws the tree (each row with its line to the presentation it comes from); in the catalog it summarizes the code: its main unit and how many presentations it has. Tapping the cell opens the code's full tree in a floating window.", "example": "Tbta › Box of 20 Tbta › Box of 50 Box."},
     "udmSaleDe": {"what": "The list has the UoMs this code already has captured (the main material and its presentations): choose which one the new one comes from. The first one comes from the main material; if there is already a primary package and you want the secondary, choose the primary. «How many it holds» is counted from the one you choose and below it says what the new one will be (primary, secondary packaging…). Up to 10 can come out of the same one and there are up to 10 levels. It is not changed afterwards: remove it and capture it again.", "example": "the box of 50 comes out of the box of 20 (it holds 50 boxes of 20)."},
     "udmClasificacion": {"what": "If the code is sold with brands: Patent or Generic. Only one brand of a patent per code; as many generic brands as needed, each with its own presentations. It is optional: without it the presentation comes straight from the main material. But once a code uses brands, all its presentations go under a brand.", "example": "ASPIRINA PROTECT: Patent BAYER; Generic PISA and Generic SANAFI."},
     "udmMarca": {"what": "The presentation's brand, chosen from Catalogs > Our Brands (BAYER, PISA…). The brand is created in the code with its first presentation and every box of that brand comes out of it; it does not change what each box equals and has no measures or weight.", "example": "Generic › PISA: box of 24, box of 30 and box of 84."},
@@ -5338,6 +5345,10 @@
     "pmEstatusPedido": {
       "what": "The status of the whole order: Pending if no item has been supplied, Supplied if all have and Partial if only some. Changing it changes all its items; to mark just one, open the order list.",
       "example": "you mark the whole order Supplied once you have sent everything."
+    },
+    "udmOpsBuscar": {
+      "what": "The whole catalog is not shown here: type the description (or the code) of the product and only the presentations of the matching codes appear, with the ones they already have. From there you add a new one (with the «+» of the presentation it comes from) or edit one that already exists. To see everything registered, with its branching, there is the Distribution Presentations catalog.",
+      "example": "you type «aspirin» and see the presentations Aspirin Protect already has; with the «+» of the box of 12 you add the box of 50."
     },
     "udmAddUnder": {
       "what": "Adds a presentation that comes from this row: the code is already chosen and you only capture the unit, how many of this row it holds, its measures and its weight.",

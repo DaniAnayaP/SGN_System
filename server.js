@@ -196,6 +196,7 @@ const {
     countSkuDistributionByBrand,
     countSkuDistributionByShipTo,
     listSkuItemsWithoutDistribution,
+    listSkuDistributionBySkus,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,
@@ -10502,8 +10503,9 @@ const UDM_DIST_MAIN_KEYS = ['shape', 'canLay', 'storageTypes', 'shipTo', ...UDM_
 const UDM_DIST_MAX_DEPTH = 10; // hasta 10 niveles de profundidad (sin contar el material principal)
 const UDM_DIST_MAX_CHILDREN = 10; // hasta 10 presentaciones que salen de una misma presentación
 const UDM_DIST_MAX_PER_SKU = 100; // tope de seguridad por código
+const UDM_DIST_SEARCH_LIMIT = 30; // cuántos códigos trae la búsqueda de Operaciones
 const round4 = (v) => Math.round(v * 10000) / 10000;
-function mapSkuDistribution(row, pendingByRecord, companyName, node) {
+function mapSkuDistribution(row, pendingByRecord, companyName, node, pantalla) {
     const principal = row.level === 0;
     const isBrand = row.kind === 'marca';
     const cyl = row.shape === 'cilindrica';
@@ -10537,7 +10539,7 @@ function mapSkuDistribution(row, pendingByRecord, companyName, node) {
         maxStack: row.max_stack || 0,
         fromArticle: principal, // sus medidas y su peso se capturan en Alta Artículos
         pendingFields: pendingByRecord?.get(row.id) || [],
-        ...getSystemColumnsForRecord({ companyName, area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones de Distribución', centroCostos: '', createdAt: row.created_at }),
+        ...getSystemColumnsForRecord({ companyName, area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: pantalla || 'Presentaciones de Distribución', centroCostos: '', createdAt: row.created_at }),
     };
 }
 // Un código que todavía no tiene presentaciones se lista igual, con su material principal (unidad, medidas y peso de Alta Artículos) y lo demás de partida: es un renglón SIN GUARDAR (id negativo, virtual = true); al
@@ -10550,11 +10552,11 @@ function skuDistPlaceholderRow(s) {
     };
 }
 // Los renglones (de uno o de varios códigos) en el orden del árbol de cada código, con su «Equivale a» y lo que hace falta para dibujar la ramificación.
-function mapSkuDistributionRows(rows, pendingByRecord, companyName) {
+function mapSkuDistributionRows(rows, pendingByRecord, companyName, pantalla) {
     const bySku = new Map();
     rows.forEach((r) => { if (!bySku.has(r.sku_item_id)) bySku.set(r.sku_item_id, []); bySku.get(r.sku_item_id).push(r); });
     const out = [];
-    bySku.forEach((list) => skuDistTree(list).forEach((node) => out.push(mapSkuDistribution(node.row, pendingByRecord, companyName, node))));
+    bySku.forEach((list) => skuDistTree(list).forEach((node) => out.push(mapSkuDistribution(node.row, pendingByRecord, companyName, node, pantalla))));
     return out;
 }
 // Lo que llega en el cuerpo, ya con sus tipos; null en lo que no vino.
@@ -10631,14 +10633,36 @@ app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     // skuItemId: solo las presentaciones de ese código (la ventana «Ver presentaciones de distribución» de Alta Artículos)
     const onlySku = Number(req.query.skuItemId);
-    let source = Number.isInteger(onlySku) && onlySku > 0 ? listSkuDistributionBySku(clientId, isTestAccount, onlySku) : listSkuDistribution(clientId, isTestAccount);
-    // la pantalla lista TODOS los códigos de Alta Artículos desde el inicio: los que todavía no tienen presentaciones salen con su material principal (renglón sin guardar); la ventana de un solo código (Alta) no los lleva
-    if (!(Number.isInteger(onlySku) && onlySku > 0)) {
+    const wantsSku = Number.isInteger(onlySku) && onlySku > 0;
+    // q: la búsqueda de Operaciones (por descripción o código, con el motor de búsqueda de todo el sistema): trae las presentaciones de los códigos que coinciden (hasta UDM_DIST_SEARCH_LIMIT) y, de los que todavía no tienen
+    // ninguna, su material principal sin guardar para poder capturarlo. Sin q y sin skuItemId: el catálogo, TODOS los códigos de Alta con su ramificación (los que no tienen presentaciones, con su material principal sin guardar).
+    const searching = !wantsSku && req.query.q !== undefined;
+    let source;
+    let truncated = false;
+    if (wantsSku) source = listSkuDistributionBySku(clientId, isTestAccount, onlySku);
+    else if (searching) {
+        source = [];
+        const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
+        const query = publicSearchQuery(req.query.q);
+        if (SearchSyntax.ready(mode, query)) {
+            const matches = publicSearchMatcher(mode, query);
+            const found = searchSkuItems(clientId, '', isTestAccount, 100000).filter((s) => matches([padSku(s.record_number), s.upc, s.unique_description, s.known_description, s.custom_description]));
+            truncated = found.length > UDM_DIST_SEARCH_LIMIT;
+            const ids = found.slice(0, UDM_DIST_SEARCH_LIMIT).map((s) => s.id);
+            source = listSkuDistributionBySkus(clientId, isTestAccount, ids);
+            const have = new Set(source.map((r) => r.sku_item_id));
+            const want = new Set(ids.filter((id) => !have.has(id)));
+            if (want.size) source = source.concat(listSkuItemsWithoutDistribution(clientId, isTestAccount).filter((s) => want.has(s.id)).map(skuDistPlaceholderRow)).sort((a, z) => a.sku_number - z.sku_number);
+        }
+    } else {
+        source = listSkuDistribution(clientId, isTestAccount);
         const bare = listSkuItemsWithoutDistribution(clientId, isTestAccount).map(skuDistPlaceholderRow);
         if (bare.length) source = source.concat(bare).sort((a, z) => a.sku_number - z.sku_number);
     }
+    const pantalla = req.query.catalog === '1' ? 'Presentaciones Distribución' : undefined; // el catálogo se rotula con su propio nombre en la columna Pantalla de Control Interno
     res.json({
-        rows: mapSkuDistributionRows(source, pendingByRecord, client?.company_name).map((r) => (r.id < 0 ? { ...r, virtual: true, registroUnico: '' } : r)),
+        searched: searching, truncated, maxCodes: UDM_DIST_SEARCH_LIMIT,
+        rows: mapSkuDistributionRows(source, pendingByRecord, client?.company_name, pantalla).map((r) => (r.id < 0 ? { ...r, virtual: true, registroUnico: '' } : r)),
         uoms: listActiveArticleCategoryNames(clientId, 'udm', isTestAccount),
         // las marcas activas del catálogo Nuestras Marcas (para elegir la de una presentación)
         brands: listArticleCategories(clientId, 'marcas', isTestAccount).filter((r) => r.status === 'active' && r.name).map((r) => ({ id: r.id, name: r.name })),

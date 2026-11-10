@@ -3337,6 +3337,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'layout': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Layout' },
     'relacion-codigo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código' },
     'udm-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones de Distribución' },
+    'presentaciones-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones Distribución' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
     'capacidad-almacenamiento': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Capacidad Almacenamiento' },
     'incidentes': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Incidentes' },
@@ -3697,6 +3698,7 @@ const TABLE_GRANT_PATHS = {
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
     'marcas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-marcas' },
     'lugares-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-lugares-envio' },
+    'presentaciones-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-presentaciones-distribucion' },
     'clasificaciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
@@ -6491,6 +6493,11 @@ function listSkuItemsWithoutDistribution(clientId, forTestAccount = false) {
     return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, length, width, height, article_weight, created_at FROM sku_items
         WHERE client_id = ? AND is_test_data = ? AND id NOT IN (SELECT sku_item_id FROM sku_distribution_units WHERE client_id = ? AND is_test_data = ?) ORDER BY record_number ASC`).all(clientId, forTestAccount ? 1 : 0, clientId, forTestAccount ? 1 : 0);
 }
+// Los renglones de varios códigos a la vez (la búsqueda de Operaciones trae las presentaciones de los códigos que coinciden).
+function listSkuDistributionBySkus(clientId, forTestAccount, skuItemIds) {
+    if (!skuItemIds.length) return [];
+    return db.prepare(`${SKU_DIST_SELECT} WHERE d.client_id = ? AND d.is_test_data = ? AND d.sku_item_id IN (${skuItemIds.map(() => '?').join(',')}) ORDER BY s.record_number ASC, d.level ASC, d.id ASC`).all(clientId, forTestAccount ? 1 : 0, ...skuItemIds);
+}
 function getSkuDistributionById(id, clientId, forTestAccount = false) {
     return db.prepare(`${SKU_DIST_SELECT} WHERE d.id = ? AND d.client_id = ? AND d.is_test_data = ?`).get(id, clientId, forTestAccount ? 1 : 0);
 }
@@ -7905,6 +7912,13 @@ function seedPmDescargarGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(PM_DESCARGAR_SEED_KEY, path, [`${path.submenuPrefix}/class-botones/colPmDescargar/ver-y-operar`], 'the Pedido Manual download button');
 }
+// Catálogos > Presentaciones Distribución (2026-11-10): el catálogo (solo ver) con todos los códigos y su ramificación lo reciben, una sola vez, quienes ya tienen Presentaciones de Distribución en Operaciones.
+const PRESENTACIONES_CATALOG_SEED_KEY = 'seed-presentaciones-catalog-screen-v1';
+function seedPresentacionesCatalogGrants() {
+    const path = TABLE_GRANT_PATHS['udm-distribucion'];
+    if (!path) return;
+    seedLeavesForScreenHolders(PRESENTACIONES_CATALOG_SEED_KEY, path, ['cat-catalogos/cat-catalogos-centro-dist-presentaciones-distribucion'], 'the Presentaciones Distribución catalog screen');
+}
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
     const path = TABLE_GRANT_PATHS['pedido-manual'];
@@ -8220,6 +8234,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'unidad-medida', labelKey: 'menu.catCentroDistUnidadMedida' },
     { key: 'marcas', labelKey: 'menu.catCentroDistMarcas' },
     { key: 'lugares-envio', labelKey: 'menu.catCentroDistLugaresEnvio' },
+    { key: 'presentaciones-distribucion', labelKey: 'menu.catCentroDistPresentaciones' },
     { key: 'clasificaciones', labelKey: 'menu.catCentroDistClasificaciones' },
     { key: 'almacenes', labelKey: 'menu.catCentroDistAlmacenes' },
     { key: 'sub-almacenes', labelKey: 'menu.catCentroDistSubAlmacenes' },
@@ -12562,6 +12577,7 @@ seedQrPedidoManualScreenGrants();
 seedMarcasScreenGrants();
 seedLugaresEnvioScreenGrants();
 seedPmDescargarGrants();
+seedPresentacionesCatalogGrants();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
@@ -12770,6 +12786,7 @@ module.exports = {
     countSkuDistributionByBrand,
     countSkuDistributionByShipTo,
     listSkuItemsWithoutDistribution,
+    listSkuDistributionBySkus,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,

@@ -330,6 +330,9 @@
     "catCentroDistLugaresEnvio": "Lugares de Envío",
     "catCentroDistLugaresEnvioAbbr1": "Lugares",
     "catCentroDistLugaresEnvioAbbr2": "Lug. Envío",
+    "catCentroDistPresentaciones": "Presentaciones Distribución",
+    "catCentroDistPresentacionesAbbr1": "Presentaciones",
+    "catCentroDistPresentacionesAbbr2": "Present. Distrib.",
     "catCentroDistClasificaciones": "Nuestras Clasificaciones",
     "catCentroDistClasificacionesAbbr1": "Clasificaciones",
     "catCentroDistClasificacionesAbbr2": "Clasif.",
@@ -3703,6 +3706,10 @@
     "pmEliminarPedido": "¿Eliminar el pedido {folio} con {n} artículo(s)? No se puede deshacer.",
     "pmArticulosN": "{n} artículo(s)",
     "qrsVolver": "Volver a la lista",
+    "udmOpsBuscar": "Busca un código por su descripción (o escribe su código)",
+    "udmOpsVacio": "Aquí solo se ven las presentaciones de los códigos que buscas. Escribe la descripción (por ejemplo «aspirina») para ver las que ya tiene y agregar o editar.",
+    "udmOpsSinCoincidencias": "No hay códigos con esa descripción.",
+    "udmOpsMuchos": "Se muestran los primeros {n} códigos que coinciden: escribe más para acotar.",
     "udmTreeOpen": "Ver el árbol de ramificación de este código",
     "udmNPres": "{n} presentaciones",
     "udmNPres0": "Sin presentaciones",
@@ -5314,7 +5321,7 @@
       "what": "El árbol de presentaciones de este código: el material principal a la izquierda y, de él, las presentaciones que salen (cada una con su nombre, medidas, peso y a cuántas unidades principales equivale). La línea que las une dice cuántas de la anterior lleva. De una misma pueden salir varias y cada rama sigue sola. Se abre desde la columna Ramificación.",
       "example": "tableta → caja con 20 (× 20) → caja con 20 cajas (× 20) y caja con 50 cajas (× 50); y aparte, tableta → caja con 30 (× 30)."
     },
-    "udmRamificacion": {"what": "Resume el código en un solo renglón: su material principal y cuántas presentaciones tiene. Al tocar la celda se abre el árbol de ramificación en una pantalla flotante, donde se ven, se agregan, se editan y se quitan sus presentaciones.", "example": "Tableta · 3 presentaciones: al tocarla ves la caja con 12, la caja con 24 y la caja con 10 cajas."},
+    "udmRamificacion": {"what": "De dónde sale cada presentación del código. En Operaciones dibuja el árbol (cada renglón con su línea a la presentación de la que sale); en el catálogo resume el código: su unidad principal y cuántas presentaciones tiene. Al tocar la celda se abre el árbol completo del código en una pantalla flotante.", "example": "Tbta › Caja con 20 Tbta › Caja con 50 Caja."},
     "udmSaleDe": {"what": "La lista trae las UDM que este código ya tiene capturadas (el material principal y sus presentaciones): elige de cuál viene la nueva. La primera sale del material principal; si ya hay un empaque primario y quieres el secundario, eliges el primario. «Cuántas lleva» se cuenta de la que elijas y abajo dice cómo queda la nueva (Empaque primario, secundario…). De una misma pueden salir hasta 10 y hay hasta 10 niveles. No se cambia después: se quita y se vuelve a capturar.", "example": "la caja con 50 sale de la caja con 20 (lleva 50 cajas de 20)."},
     "udmClasificacion": {"what": "Si el código se vende con marcas: Patente o Genérico. De una patente solo puede haber una marca por código; de genéricos, las que sean, cada una con sus propias presentaciones. Es opcional: sin ella, la presentación sale directo del material principal. Pero cuando un código ya usa marcas, todas sus presentaciones van en una marca.", "example": "ASPIRINA PROTECT: Patente BAYER; Genérico PISA y Genérico SANAFI."},
     "udmMarca": {"what": "La marca de la presentación, elegida del catálogo Catálogos > Nuestras Marcas (BAYER, PISA…). La marca se crea sola en el código con su primera presentación y de ahí salen todas las cajas de esa marca; no cambia lo que equivale cada caja ni lleva medidas o peso.", "example": "Genérico › PISA: caja con 24, caja con 30 y caja con 84."},
@@ -5337,6 +5344,10 @@
     "pmEstatusPedido": {
       "what": "El estatus de todo el pedido: Pendiente si ningún artículo se ha surtido, Surtido si ya se surtieron todos y Parcial si solo algunos. Al cambiarlo se cambian todos sus artículos; para marcar uno solo, abre la lista del pedido.",
       "example": "marcas Surtido el pedido completo cuando ya enviaste todo."
+    },
+    "udmOpsBuscar": {
+      "what": "Aquí no se ve todo el catálogo: escribe la descripción (o el código) del producto y salen solo las presentaciones de los códigos que coinciden, con las que ya tienen. Desde ahí agregas una nueva (con el «+» de la presentación de la que sale) o editas una que ya exista. Para ver todo lo registrado, con su ramificación, está el catálogo Presentaciones Distribución.",
+      "example": "escribes «aspirina» y ves las presentaciones que ya tiene Aspirina Protect; con el «+» de la caja con 12 agregas la caja con 50."
     },
     "udmAddUnder": {
       "what": "Agrega una presentación que sale de este renglón: el código ya viene elegido y solo capturas la unidad, cuántas de este renglón lleva, sus medidas y su peso.",
