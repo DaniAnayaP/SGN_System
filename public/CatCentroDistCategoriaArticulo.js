@@ -27,6 +27,7 @@ const CATEGORY_TYPE_TABLE_KEYS = {
     // Cliente (el historial, los permisos de edición y la tabla misma se buscaban
     // con la clave "undefined").
     udm: 'unidad-medida',
+    marcas: 'marcas', // las marcas (BAYER, PISA…) que eligen las presentaciones de Unidad de Medida por Distribución
     clasificaciones: 'clasificaciones',
     'tipos-cliente': 'tipos-cliente',
     // Catálogos con campos propios (centro de costos / almacén, tipo físico o virtual, ubicación asignada): ver buildExtraCells.
@@ -46,7 +47,7 @@ const TABLE_KEY = CATEGORY_TYPE_TABLE_KEYS[CATEGORY_TYPE];
 const CATEGORY_API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
 const DELETE_AUTH_COL = 'colCatDeleteAuth';
 const IS_WAREHOUSE = CATEGORY_TYPE === 'almacenes' || CATEGORY_TYPE === 'sub-almacenes';
-const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'transito-equipos' ? 'main.newTransitEquip' : CATEGORY_TYPE === 'incidentes-criterios' ? 'main.newIncCriterion' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : 'main.newArticleCategory';
+const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'transito-equipos' ? 'main.newTransitEquip' : CATEGORY_TYPE === 'incidentes-criterios' ? 'main.newIncCriterion' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : CATEGORY_TYPE === 'marcas' ? 'main.newBrand' : 'main.newArticleCategory';
 // Centros de costos completos, almacenes y, por cada centro, las zonas / anaqueles de su Layout (GET /api/business/warehouse-options).
 let warehouseOptions = { costCenters: [], warehouses: [], zonesByCenter: {} };
 // Categorías de Inventario: cada una elige cuáles clasificaciones (catálogo Nuestras Clasificaciones) tiene; aquí van todas las del catálogo con su estatus.

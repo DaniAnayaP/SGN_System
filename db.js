@@ -3687,6 +3687,7 @@ const TABLE_GRANT_PATHS = {
     'categorias-vidautil': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-vidautil' },
     'categorias-tipocodigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-tipocodigo' },
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
+    'marcas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-marcas' },
     'clasificaciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
@@ -3884,6 +3885,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'categorias-vidautil': CATEGORY_BUTTON_NOTIFY,
     'categorias-tipocodigo': CATEGORY_BUTTON_NOTIFY,
     'unidad-medida': CATEGORY_BUTTON_NOTIFY,
+    'marcas': CATEGORY_BUTTON_NOTIFY,
     'clasificaciones': CATEGORY_BUTTON_NOTIFY,
     'almacenes': CATEGORY_BUTTON_NOTIFY,
     'sub-almacenes': CATEGORY_BUTTON_NOTIFY,
@@ -6218,6 +6220,8 @@ const ARTICLE_CATEGORY_TYPES = {
     // Artículos) -- reuses this same table/routes/screen instead of a
     // near-duplicate units_of_measure setup, same reasoning as the 7 above.
     udm: { prefix: 'UDM', tableKey: 'unidad-medida', pantalla: 'Nuestras Unidad Medida' },
+    // Marcas (BAYER, PISA, SANAFI…): misma forma (código, nombre, descripción, estatus). Las eligen las presentaciones de Unidad de Medida por Distribución (después de la clasificación Patente o Genérico).
+    marcas: { prefix: 'MAR', tableKey: 'marcas', pantalla: 'Nuestras Marcas' },
     // Lives under Transporte Volumen (like Tipos de Unidad), not Centro de
     // Distribución like the 8 above -- `area` overrides
     // ARTICLE_CATEGORY_AREA_LABEL's own default for this one (see
@@ -7803,6 +7807,13 @@ function seedQrTemperaturasScreenGrants() {
     });
 }
 // Operaciones > QR's > Pedido manual: la reciben, una sola vez, quienes ya tienen el botón QR de la pantalla Pedido Manual (colPmQr).
+// Catálogos > Nuestras Marcas (2026-11-10): la pantalla nueva la reciben, una sola vez, quienes ya tienen Unidad de Medida por Distribución (ahí se eligen las marcas).
+const MARCAS_SCREEN_SEED_KEY = 'seed-marcas-catalog-screen-v1';
+function seedMarcasScreenGrants() {
+    const path = TABLE_GRANT_PATHS['udm-distribucion'];
+    if (!path) return;
+    seedLeavesForScreenHolders(MARCAS_SCREEN_SEED_KEY, path, ['cat-catalogos/cat-catalogos-centro-dist-marcas'], 'the Marcas catalog screen');
+}
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
     const path = TABLE_GRANT_PATHS['pedido-manual'];
@@ -8116,6 +8127,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'categorias-vidautil', labelKey: 'menu.catCentroDistCategoriasVidautil' },
     { key: 'categorias-tipocodigo', labelKey: 'menu.catCentroDistCategoriasTipocodigo' },
     { key: 'unidad-medida', labelKey: 'menu.catCentroDistUnidadMedida' },
+    { key: 'marcas', labelKey: 'menu.catCentroDistMarcas' },
     { key: 'clasificaciones', labelKey: 'menu.catCentroDistClasificaciones' },
     { key: 'almacenes', labelKey: 'menu.catCentroDistAlmacenes' },
     { key: 'sub-almacenes', labelKey: 'menu.catCentroDistSubAlmacenes' },
@@ -12455,6 +12467,7 @@ seedLayoutRoofIconGrants();
 seedQrLimpiezaScreenGrants();
 seedQrTemperaturasScreenGrants();
 seedQrPedidoManualScreenGrants();
+seedMarcasScreenGrants();
 seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();

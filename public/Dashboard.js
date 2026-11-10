@@ -12844,6 +12844,7 @@ const TABLE_GRANT_PATHS = {
     'categorias-vidautil': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-vidautil' },
     'categorias-tipocodigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-tipocodigo' },
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
+    'marcas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-marcas' },
     'clasificaciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
