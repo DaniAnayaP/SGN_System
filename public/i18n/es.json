@@ -3423,6 +3423,7 @@
     "relTplInst_footprint": "El código de la huella (el lugar en el piso) de esa zona. Opcional: el activo ya dice en cuál está.",
     "colRelHuella": "Huella",
     "colRelLocalizador": "Localizador",
+    "colRelUbicar": "Ubicar",
     "sessionExpired": "Tu sesión terminó (dura 8 horas). Recarga la página e inicia sesión otra vez.",
     "relLoadingRows": "Cargando filas… {done} de {total}",
     "colRelProfundidad": "Posición",
@@ -3527,6 +3528,22 @@
     "relStatusLocated": "Ubicado",
     "relStatusPartial": "A medias",
     "relEdit": "Editar relación",
+    "relUbicar": "Ubicar este código",
+    "relUbicarTitle": "Ubicar código",
+    "relUbicarTabSteps": "Paso a paso",
+    "relUbicarTabSearch": "Buscar",
+    "relUbicarSearchPh": "Escribe el localizador, el activo o la zona…",
+    "relUbicarHint": "Escribe para buscar un lugar de este sub almacén. Con Enter eliges el primero libre.",
+    "relUbicarNone": "No hay lugares que coincidan.",
+    "relUbicarMore": "Hay {n} más: escribe un poco más para acotar.",
+    "relUbicarNoSub": "Este renglón no tiene un sub almacén físico con zonas asignadas. Elígelo o cámbialo con Editar y vuelve aquí.",
+    "relUbicarPlace": "Lugar",
+    "relUbicarNow": "Ahora: {x}",
+    "relUbicarNowNone": "Todavía sin lugar.",
+    "relUbicarSame": "Sin cambios en el lugar.",
+    "relUbicarReady": "Listo: al guardar queda ubicado.",
+    "relUbicarPartial": "Falta el lugar completo: se guardará a medias.",
+    "relUbicarSave": "Guardar",
     "relSaved": "Relación guardada.",
     "relLevelN": "Nivel {n}",
     "relSlotN": "Espacio {n}",
@@ -5038,6 +5055,22 @@
     "relEdit": {
       "what": "Cambia la ubicación de este renglón en la misma ventana. Cada dato pide su propia hoja en el árbol.",
       "example": "Pasar el código del nivel 2 al nivel 3."
+    },
+    "relUbicar": {
+      "what": "Ubica este código en un lugar del almacén de forma rápida: abre una ventanita donde eliges el lugar paso a paso o buscándolo por su localizador, y se llenan solos Zona, Huella, Activo, Nivel, Espacio y Posición. Se guarda al pulsar Guardar.",
+      "example": "al código 000123 le escribes R001.N002 en Buscar, eliges el espacio libre y pulsas Guardar."
+    },
+    "relUbicarSteps": {
+      "what": "Eliges el lugar con listas que se abren una tras otra: Zona, Huella, Activo, Nivel, Espacio y Posición. Cada lista solo ofrece lo que hay dentro de la anterior y, en las posiciones, lo que está libre.",
+      "example": "eliges la Zona 6, la huella H001, el activo R001, el nivel 2 y el espacio 1."
+    },
+    "relUbicarSearch": {
+      "what": "Escribes parte del localizador, del activo o de la zona y salen los lugares de este sub almacén; los ocupados salen apagados con el código que los ocupa. Funciona como los demás buscadores: $ pone otra palabra antes, @ después y la coma separa varias búsquedas. Con Enter eliges el primero libre y se llenan todos los campos.",
+      "example": "escribes R001@N002 (el activo y después el nivel) y eliges Z006.H001.R001.N002.E001.P001."
+    },
+    "relUbicarSave": {
+      "what": "Guarda el lugar elegido en este renglón con las mismas revisiones de Editar: lugar ocupado, permisos de cada dato y registro de cambios.",
+      "example": "eliges el lugar con Buscar y pulsas Guardar: el renglón queda ubicado."
     },
     "whCostCenter": {
       "what": "El centro de costos al que pertenece este almacén. Solo ofrece los centros completos que tienes marcados arriba, en el selector de centros de costos; esta lista solo muestra los almacenes de esos centros.",

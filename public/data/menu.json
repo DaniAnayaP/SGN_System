@@ -1639,6 +1639,7 @@
             { "id": "colRelEspacio", "labelKey": "main.colRelEspacio", "permissionOnly": true },
             { "id": "colRelProfundidad", "labelKey": "main.colRelProfundidad", "permissionOnly": true },
             { "id": "colRelLocalizador", "labelKey": "main.colRelLocalizador", "permissionOnly": true },
+            { "id": "colRelUbicar", "labelKey": "main.colRelUbicar", "permissionOnly": true },
             { "id": "colRelClasificacion", "labelKey": "main.colRelClasificacion", "permissionOnly": true },
             { "id": "colRelEstado", "labelKey": "main.colRelEstado", "permissionOnly": true },
             {

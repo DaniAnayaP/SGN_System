@@ -56,6 +56,17 @@ function classCell(r) {
     return td;
 }
 
+// «Ubicar»: un botón por renglón que abre una ventanita para ponerle lugar al código sin abrir Editar. Se ofrece a quien puede llenar o cambiar el lugar (Zona, Activo, Nivel, Espacio o Posición).
+const PLACE_COLS = ['colRelZona', 'colRelEstante', 'colRelNivel', 'colRelEspacio', 'colRelProfundidad'];
+const canPlace = () => PLACE_COLS.some((col) => Dashboard.canEditField(TABLE_KEY, col, '') || Dashboard.canEditField(TABLE_KEY, col, '1'));
+function ubicarCell(r) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colRelUbicar';
+    td.className = 'rel-ubicar';
+    if (canPlace()) td.appendChild(iconButton('admin-icon-btn', 'bx-map-pin', t('main.relUbicar'), 'relUbicar', () => openLocate(r)));
+    return td;
+}
+
 function statusCell(r) {
     const td = document.createElement('td');
     td.dataset.col = 'colRelEstado';
@@ -106,6 +117,7 @@ function buildRow(r) {
         cell('colRelSku', r.sku), cell('colRelUpc', r.upc), cell('colRelDescripcion', r.description),
         cell('colRelCentroCostos', r.centroCostos), cell('colRelAlmacen', r.warehouseName), cell('colRelSubAlmacen', r.subWarehouseName),
         cell('colRelZona', r.zoneName), cell('colRelHuella', r.footprintCode), cell('colRelEstante', r.spaceCode), cell('colRelNivel', r.level), cell('colRelEspacio', r.slot), cell('colRelProfundidad', r.position), cell('colRelLocalizador', r.locator, 'rel-locator'),
+        ubicarCell(r),
         classCell(r),
         statusCell(r),
     );
@@ -551,6 +563,243 @@ async function save() {
         console.error('Relación Código: failed to save', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
         $m('rel-save').disabled = false;
+    }
+}
+
+// ---- «Ubicar» ------------------------------------------------------------------------------------------------------------------------
+// Ventanita con dos formas de elegir el lugar de un renglón (el centro de costos, el almacén y el sub almacén ya vienen del renglón, de ahí salen las zonas y los activos):
+//   · Paso a paso: Zona > Huella > Activo > Nivel > Espacio > Posición, cada lista con lo que hay dentro de la anterior (las mismas reglas de la ventana de Editar).
+//   · Buscar: un solo buscador (con $ antes, @ después y coma, como los demás) sobre los localizadores libres de este sub almacén; al elegir uno se llenan solos los campos y se pasa a «Paso a paso» para verlos.
+// Se llena y se guarda con «Guardar» (el mismo PATCH de Editar: las mismas validaciones del servidor, el mismo registro de cambios y las hojas del árbol de cada dato).
+let locEl = null;
+let locTab = 'steps';
+let locCands = null;     // los lugares que ofrece Buscar (se arman una vez por ventana)
+let locShown = [];       // los resultados que se ven ahora
+const LOC_MAX = 40;
+
+function ensureLocModal() {
+    if (locEl) return;
+    locEl = document.createElement('div');
+    locEl.className = 'modal-overlay';
+    locEl.id = 'rel-loc-modal';
+    locEl.hidden = true;
+    const field = (id, labelKey, helpKey) => `<div class="rel-fld"><label for="${id}">${esc(t(labelKey))}</label><select id="${id}" data-help-key="${helpKey}"></select></div>`;
+    locEl.innerHTML = `<div class="modal-panel rel-dialog rel-loc" role="dialog" aria-modal="true" aria-labelledby="loc-title">
+        <h3 id="loc-title">${esc(t('main.relUbicarTitle'))}</h3>
+        <div class="rel-art" id="loc-art"></div>
+        <div class="rel-loc-tabs" role="tablist">
+            <button type="button" class="rel-loc-tab" role="tab" data-tab="steps" data-help-key="relUbicarSteps">${esc(t('main.relUbicarTabSteps'))}</button>
+            <button type="button" class="rel-loc-tab" role="tab" data-tab="search" data-help-key="relUbicarSearch">${esc(t('main.relUbicarTabSearch'))}</button>
+        </div>
+        <div class="rel-loc-pane" id="loc-steps">
+            <div class="rel-two">${field('loc-zona', 'main.colRelZona', 'relZone')}${field('loc-hue', 'main.colRelHuella', 'relFootprint')}</div>
+            ${field('loc-est', 'main.colRelEstante', 'relRack')}
+            <div class="rel-three">${field('loc-niv', 'main.colRelNivel', 'relLevel')}${field('loc-esp', 'main.colRelEspacio', 'relSlot')}${field('loc-pos', 'main.colRelProfundidad', 'relPosition')}</div>
+        </div>
+        <div class="rel-loc-pane" id="loc-search" hidden>
+            <div class="rel-fld"><label for="loc-q">${esc(t('main.relUbicarTabSearch'))}</label><input type="search" id="loc-q" autocomplete="off" placeholder="${esc(t('main.relUbicarSearchPh'))}" data-help-key="relUbicarSearch"></div>
+            <div class="rel-results rel-loc-results" id="loc-results"></div>
+        </div>
+        <div class="rel-fld"><label>${esc(t('main.relUbicarPlace'))}</label><div class="rel-path" id="loc-path"></div></div>
+        <div class="rel-foot">
+            <span class="rel-muted" id="loc-msg"></span>
+            <button type="button" class="btn" id="loc-save" data-help-key="relUbicarSave">${esc(t('main.relUbicarSave'))}</button>
+            <button type="button" class="btn btn-secondary" id="loc-close">${esc(t('main.whClose'))}</button>
+        </div>
+    </div>`;
+    document.body.appendChild(locEl);
+    locEl.addEventListener('click', (event) => {
+        if (event.target === locEl || event.target.closest('#loc-close')) { closeLocate(); return; }
+        if (event.target.closest('#loc-save')) { saveLocate(); return; }
+        const tab = event.target.closest('.rel-loc-tab');
+        if (tab && !tab.disabled) { locTab = tab.dataset.tab; locRender(); if (locTab === 'search') $m('loc-q').focus(); return; }
+        const pick = event.target.closest('[data-loc-i]');
+        if (pick) locPick(locShown[Number(pick.dataset.locI)]);
+    });
+    // Al elegir algo, lo que solo tiene una opción (la única huella de la zona, el único activo de la huella) se elige solo.
+    const autoPick = () => {
+        let d = derived();
+        if (d.zone && !st.hue && d.footprints.length === 1) { st.hue = d.footprints[0].id; d = derived(); }
+        if (d.footprint && !st.est && d.racks.length === 1) st.est = d.racks[0].id;
+    };
+    const bindSel = (id, key, numeric) => $m(id).addEventListener('change', (event) => {
+        const v = event.target.value;
+        st[key] = numeric && v !== '' ? Number(v) : v;
+        cutBelow(key);
+        if (key === 'zona' || key === 'hue') autoPick();
+        locRender();
+    });
+    bindSel('loc-zona', 'zona'); bindSel('loc-hue', 'hue'); bindSel('loc-est', 'est'); bindSel('loc-niv', 'niv', true); bindSel('loc-esp', 'esp', true); bindSel('loc-pos', 'pos', true);
+    $m('loc-q').addEventListener('input', locRenderResults);
+    // Con Enter se elige el primer lugar libre de la lista: así se captura sin tocar el mouse.
+    $m('loc-q').addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        const first = locShown.find((c) => !c.occ);
+        if (first) locPick(first);
+    });
+}
+
+async function openLocate(record) {
+    let res;
+    try {
+        res = await fetch(`${API}/options`, { credentials: 'include' });
+        if (!res.ok) throw new Error('options failed');
+        opts = await res.json();
+    } catch (err) {
+        console.error('Relación Código: failed to load options', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        return;
+    }
+    ensureLocModal();
+    editing = record;
+    locCands = null;
+    locShown = [];
+    locTab = 'steps';
+    st = {
+        sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc, uom: '' },
+        centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', hue: record.footprintId || '', est: record.spaceId || '',
+        niv: record.level || '', esp: record.slot || '', pos: record.position || '', clas: record.classification || 'activo',
+    };
+    $m('loc-q').value = '';
+    locRender();
+    locEl.hidden = false;
+}
+
+function closeLocate() {
+    if (locEl) locEl.hidden = true;
+    editing = null;
+    locCands = null;
+}
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && locEl && !locEl.hidden) closeLocate(); });
+
+// El localizador completo de lo que está elegido ('' mientras falte alguna pieza).
+function locLocator(d) {
+    if (!(d.zone && d.footprint && d.rack && st.niv && st.esp) || !window.RelTemplate) return '';
+    const nums = positionsAt(d.rack, st.niv, st.esp);
+    if (nums.length > 1 && !st.pos) return '';
+    return window.RelTemplate.formatLocator({ zoneCode: d.zone.code, zoneName: d.zone.name, footprintCode: d.footprint.code, spaceCode: d.rack.code, spaceType: d.rack.type, level: Number(st.niv), slot: Number(st.esp), position: Number(st.pos) || 1 });
+}
+
+// ¿Lo elegido cambia el lugar que ya tenía el renglón?
+function locChanged() {
+    const same = (a, b) => String(a ?? '') === String(b ?? '');
+    return !(same(st.zona, editing.zoneId) && same(st.est, editing.spaceId) && same(st.niv, editing.level) && same(st.esp, editing.slot) && same(st.pos, editing.position));
+}
+
+function locRender() {
+    const d = derived();
+    const usable = d.physical && d.zones.length > 0;
+    $m('loc-art').innerHTML = `<b>${esc(editing.sku)} · ${esc(editing.description)}</b><span>${esc(editing.locator ? t('main.relUbicarNow', { x: editing.locator }) : t('main.relUbicarNowNone'))}</span>`;
+    locEl.querySelectorAll('.rel-loc-tab').forEach((tab) => { tab.setAttribute('aria-selected', String(tab.dataset.tab === locTab)); tab.disabled = !usable; });
+    $m('loc-steps').hidden = !(usable && locTab === 'steps');
+    $m('loc-search').hidden = !(usable && locTab === 'search');
+    if (!usable) {
+        $m('loc-path').innerHTML = '';
+        $m('loc-msg').textContent = t('main.relUbicarNoSub');
+        $m('loc-save').disabled = true;
+        return;
+    }
+    fillSelect('loc-zona', d.zones.map((z) => ({ value: z.id, label: z.name })), t('main.relChooseZone'), st.zona, !d.zones.length);
+    fillSelect('loc-hue', d.footprints.map((f) => ({ value: f.id, label: f.code })), d.zone ? t('main.relChooseFootprint') : t('main.relFirstZone'), st.hue, !d.footprints.length);
+    fillSelect('loc-est', d.racks.map((r) => ({ value: r.id, label: r.code })), d.footprint ? t('main.relChooseRack') : t('main.relFirstFootprint'), st.est, !d.racks.length);
+    fillSelect('loc-niv', d.rack ? range(d.rack.levels).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relLevelShort') : '—', st.niv, !d.rack);
+    fillSelect('loc-esp', d.rack && st.niv ? range(slotsAt(d.rack, st.niv)).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relSlotShort') : '—', st.esp, !(d.rack && st.niv));
+    const hasBay = !!(d.rack && st.niv && st.esp);
+    const nums = hasBay ? positionsAt(d.rack, st.niv, st.esp) : [1];
+    const freeNums = hasBay && nums.length > 1 ? nums.filter((p) => !occupiedBy(d.rack.id, Number(st.niv), Number(st.esp), p)) : [];
+    fillSelect('loc-pos', freeNums.map((n) => ({ value: n, label: n })), nums.length > 1 ? t('main.relPositionShort') : '—', st.pos, !freeNums.length);
+    const locator = locLocator(d);
+    const parts = [
+        [t('main.colRelZona'), d.zone && d.zone.name],
+        [t('main.colRelHuella'), d.footprint && d.footprint.code],
+        [t('main.colRelEstante'), d.rack && d.rack.code],
+        [t('main.colRelNivel'), st.niv ? t('main.relLevelN', { n: st.niv }) : ''],
+        [t('main.colRelEspacio'), st.esp ? t('main.relSlotN', { n: st.esp }) : ''],
+        [t('main.colRelProfundidad'), st.pos ? t('main.relPositionN', { n: st.pos }) : ''],
+    ];
+    $m('loc-path').innerHTML = parts.map(([label, value], i) => `${i ? '<span class="rel-arrow">›</span>' : ''}<span class="rel-step${value ? ' rel-step-on' : ''}">${esc(value || label)}</span>`).join('')
+        + (locator ? `<span class="rel-arrow">=</span><span class="rel-step rel-step-on rel-locator">${esc(locator)}</span>` : '');
+    const changed = locChanged();
+    $m('loc-save').disabled = !changed;
+    $m('loc-msg').textContent = !changed ? t('main.relUbicarSame') : (locator ? t('main.relUbicarReady') : t('main.relUbicarPartial'));
+    if (locTab === 'search') locRenderResults();
+}
+
+// Los lugares que ofrece Buscar: cada posición de cada activo de las zonas de este sub almacén, con su localizador; los ocupados salen apagados con el código que los ocupa.
+function locCandidates() {
+    if (locCands) return locCands;
+    const d = derived();
+    const entries = d.sub ? d.sub.locations : [];
+    const out = [];
+    d.zones.forEach((zone) => {
+        const entry = entries.find((e) => e.zoneId === zone.id);
+        (zone.spaces || []).filter((s) => !entry || !entry.spaceIds.length || entry.spaceIds.includes(s.id)).forEach((s) => {
+            const fp = byId(zone.footprints, s.footprintId);
+            if (!fp) return;
+            for (let n = 1; n <= s.levels; n += 1) {
+                for (let c = 1; c <= slotsAt(s, n); c += 1) {
+                    const nums = positionsAt(s, n, c);
+                    nums.forEach((p) => {
+                        const text = window.RelTemplate ? window.RelTemplate.formatLocator({ zoneCode: zone.code, zoneName: zone.name, footprintCode: fp.code, spaceCode: s.code, spaceType: s.type, level: n, slot: c, position: p }) : '';
+                        out.push({ text: text || `${zone.name} ${fp.code} ${s.code} N${n} E${c} P${p}`, hay: `${text} ${zone.name} ${fp.code} ${s.code}`, zona: zone.id, hue: fp.id, est: s.id, niv: n, esp: c, pos: nums.length > 1 ? p : '', occ: occupiedBy(s.id, n, c, p) });
+                    });
+                }
+            }
+        });
+    });
+    locCands = out;
+    return out;
+}
+
+function locRenderResults() {
+    const q = $m('loc-q').value.trim();
+    const box = $m('loc-results');
+    if (!q) { locShown = []; box.innerHTML = `<span class="rel-muted">${esc(t('main.relUbicarHint'))}</span>`; return; }
+    const all = locCandidates().filter((c) => SearchSyntax.matches('contains', q, c.hay));
+    all.sort((a, b) => (a.occ ? 1 : 0) - (b.occ ? 1 : 0)); // primero los libres
+    locShown = all.slice(0, LOC_MAX);
+    if (!all.length) { box.innerHTML = `<span class="rel-muted">${esc(t('main.relUbicarNone'))}</span>`; return; }
+    box.innerHTML = locShown.map((c, i) => (c.occ
+        ? `<button type="button" class="rel-result rel-loc-occ" disabled><b>${esc(c.text)}</b> <span class="rel-muted">${esc(t('main.relOccupiedBy', { sku: c.occ }))}</span></button>`
+        : `<button type="button" class="rel-result" data-loc-i="${i}"><b>${esc(c.text)}</b></button>`)).join('')
+        + (all.length > LOC_MAX ? `<span class="rel-muted">${esc(t('main.relUbicarMore', { n: all.length - LOC_MAX }))}</span>` : '');
+}
+
+// Elegir un lugar de Buscar llena todos los campos y pasa a «Paso a paso» para verlos; falta pulsar «Guardar».
+function locPick(c) {
+    if (!c || c.occ) return;
+    st.zona = c.zona; st.hue = c.hue; st.est = c.est; st.niv = c.niv; st.esp = c.esp; st.pos = c.pos;
+    locTab = 'steps';
+    locRender();
+    $m('loc-save').focus();
+}
+
+async function saveLocate() {
+    const values = { zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, position: st.pos || null };
+    const before = { zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, position: editing.position };
+    const body = {};
+    Object.keys(values).forEach((key) => { if (String(values[key] ?? '') !== String(before[key] ?? '')) body[key] = values[key]; });
+    if (!Object.keys(body).length) { closeLocate(); return; }
+    const id = editing.id;
+    $m('loc-save').disabled = true;
+    try {
+        const res = await fetch(`${API}/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            Dashboard.showToast(json.message || Dashboard.t('admin.saveError'), res.status === 403 ? 'warning' : 'error');
+            $m('loc-save').disabled = false;
+            return;
+        }
+        if (json.rejectedFields?.length) Dashboard.showToast(`${Dashboard.t('main.fieldLocked')}: ${json.rejectedFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'warning');
+        else if (json.pendingFields?.length) Dashboard.showToast(`${Dashboard.t('main.changePending')}: ${json.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'info');
+        else Dashboard.showToast(t('main.relSaved'), 'success');
+        closeLocate();
+        await refreshTable();
+    } catch (err) {
+        console.error('Relación Código: failed to locate', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        $m('loc-save').disabled = false;
     }
 }
 })();

@@ -3424,6 +3424,7 @@
     "relTplInst_footprint": "The code of the footprint (the place on the floor) in that zone. Optional: the asset already says which one it is on.",
     "colRelHuella": "Footprint",
     "colRelLocalizador": "Locator",
+    "colRelUbicar": "Locate",
     "sessionExpired": "Your session has ended (it lasts 8 hours). Reload the page and sign in again.",
     "relLoadingRows": "Loading rows… {done} of {total}",
     "colRelProfundidad": "Position",
@@ -3528,6 +3529,22 @@
     "relStatusLocated": "Located",
     "relStatusPartial": "Partial",
     "relEdit": "Edit relation",
+    "relUbicar": "Locate this code",
+    "relUbicarTitle": "Locate code",
+    "relUbicarTabSteps": "Step by step",
+    "relUbicarTabSearch": "Search",
+    "relUbicarSearchPh": "Type the locator, the asset or the zone…",
+    "relUbicarHint": "Type to search a place of this sub-warehouse. Enter picks the first free one.",
+    "relUbicarNone": "No places match.",
+    "relUbicarMore": "{n} more: type a little more to narrow it down.",
+    "relUbicarNoSub": "This row has no physical sub-warehouse with assigned zones. Choose or change it with Edit and come back here.",
+    "relUbicarPlace": "Place",
+    "relUbicarNow": "Now: {x}",
+    "relUbicarNowNone": "No place yet.",
+    "relUbicarSame": "No change in the place.",
+    "relUbicarReady": "Ready: it will be located when you save.",
+    "relUbicarPartial": "The full place is missing: it will be saved partially.",
+    "relUbicarSave": "Save",
     "relSaved": "Relation saved.",
     "relLevelN": "Level {n}",
     "relSlotN": "Space {n}",
@@ -5039,6 +5056,22 @@
     "relEdit": {
       "what": "Changes the location of this row in the same window. Each field needs its own leaf in the tree.",
       "example": "Move the code from level 2 to level 3."
+    },
+    "relUbicar": {
+      "what": "Locates this code in a place of the warehouse quickly: it opens a small window where you choose the place step by step or by searching its locator, and Zone, Footprint, Asset, Level, Space and Position fill themselves. It is saved when you press Save.",
+      "example": "for code 000123 you type R001.N002 in Search, pick the free space and press Save."
+    },
+    "relUbicarSteps": {
+      "what": "You choose the place with lists that open one after another: Zone, Footprint, Asset, Level, Space and Position. Each list only offers what is inside the previous one and, for positions, what is free.",
+      "example": "you pick Zone 6, footprint H001, asset R001, level 2 and space 1."
+    },
+    "relUbicarSearch": {
+      "what": "You type part of the locator, the asset or the zone and the places of this sub-warehouse appear; occupied ones appear faded with the code that occupies them. It works like the other searches: $ puts another word before, @ after and the comma separates several searches. Enter picks the first free one and every field fills in.",
+      "example": "you type R001@N002 (the asset and then the level) and pick Z006.H001.R001.N002.E001.P001."
+    },
+    "relUbicarSave": {
+      "what": "Saves the chosen place in this row with the same checks as Edit: occupied place, each field permission and the change history.",
+      "example": "you pick the place with Search and press Save: the row is located."
     },
     "whCostCenter": {
       "what": "The cost center this warehouse belongs to. It only offers the complete cost centers you have checked above, in the cost center selector; this list only shows the warehouses of those centers.",
