@@ -6557,7 +6557,7 @@ const LayoutCalc = require('./public/LayoutCalc.js');
 const RelTemplate = require('./public/RelTemplate.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
-const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', paredes: 'Paredes', obstaculos: 'Obstáculos', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', pisos: 'Pisos', rampas: 'Rampas', espacios: 'Huella', activos: 'Activos', posiciones: 'Espacios', niveles: 'Niveles', ubicaciones: 'Posiciones' };
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', paredes: 'Paredes', obstaculos: 'Obstáculos', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', techos: 'Techos', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', pisos: 'Pisos', rampas: 'Rampas', espacios: 'Huella', activos: 'Activos', posiciones: 'Espacios', niveles: 'Niveles', ubicaciones: 'Posiciones' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 
 function layoutPermissions(req) {
@@ -6705,6 +6705,7 @@ function layoutSummary(layout, section) {
     if (section === 'transito') return `${(layout.transit || []).length} pasillos`;
     if (section === 'objetos') return `${(layout.objects || []).length} objetos`;
     if (section === 'seguridad') return `${(layout.safety || []).length} elementos de seguridad`;
+    if (section === 'techos') return `${(layout.ceiling || []).length} elementos del techo`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
     if (section === 'pisos') return `${(layout.floors || []).length} pisos`;
     if (section === 'rampas') return `${(layout.ramps || []).length} rampas`;
@@ -7017,6 +7018,8 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     {
         const freshSafety = LayoutCalc.newSafetyViolations(next, existing ? existing.layout : null);
         if (freshSafety.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSafety.map((v) => v.message), section: 'seguridad' });
+        const freshCeiling = LayoutCalc.newCeilingViolations(next, existing ? existing.layout : null);
+        if (freshCeiling.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshCeiling.map((v) => v.message), section: 'techos' });
     }
     // Obstáculos con altura propia: no pueden pasar del techo (altura del piso + alto). Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
     {

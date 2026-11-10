@@ -173,6 +173,26 @@
         return `<text class="lt-safety" ${a} fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">${esc(txt)}</text><text class="lt-safety" ${a} fill="${color || '#2A1B30'}">${esc(txt)}</text>`;
     }
 
+    // ---- Techos (paso Techos) ------------------------------------------------------------------------------------------------------------------
+    // Cámara, bocina, ventilación, extractor u otro: el símbolo de su color dentro de un círculo punteado (dice que va colgado del techo, no en el piso). (x, y) = el centro en píxeles del dibujo; r = el tamaño del símbolo.
+    function ceilingGlyph(type, x, y, r) {
+        const color = (LC.CEILING_COLORS || {})[type] || '#8a8f9e';
+        const k = (v) => Math.round(v * 100) / 100;
+        const ring = `<circle cx="${k(x)}" cy="${k(y)}" r="${k(r * 1.55)}" fill="#FFFFFF" fill-opacity="0.92" stroke="${color}" stroke-width="1.2" stroke-dasharray="${k(r * 0.5)} ${k(r * 0.35)}"/>`;
+        let icon;
+        if (type === 'camera') icon = `<rect x="-9" y="-5.5" width="12" height="11" rx="2.2" fill="${color}"/><path d="M4 -2.4L10.5 -6v12L4 2.4z" fill="${color}"/>`;
+        else if (type === 'speaker') icon = `<path d="M-9 -3.2h4l5.5 -4.6v15.6L-5 3.2h-4z" fill="${color}"/><path d="M4.5 -4a5.2 5.2 0 0 1 0 8M8 -7.4a10 10 0 0 1 0 14.8" fill="none" stroke="${color}" stroke-width="1.7" stroke-linecap="round"/>`;
+        else if (type === 'ventilation') icon = `<rect x="-9" y="-9" width="18" height="18" rx="2.2" fill="none" stroke="${color}" stroke-width="1.9"/><path d="M-5.5 -4.2h11M-5.5 0h11M-5.5 4.2h11" stroke="${color}" stroke-width="1.7" stroke-linecap="round"/>`;
+        else if (type === 'extractor') icon = `<circle r="9.2" fill="none" stroke="${color}" stroke-width="1.9"/><g fill="${color}"><ellipse cx="0" cy="-4.6" rx="2.3" ry="4.4"/><ellipse cx="0" cy="-4.6" rx="2.3" ry="4.4" transform="rotate(120)"/><ellipse cx="0" cy="-4.6" rx="2.3" ry="4.4" transform="rotate(240)"/></g>`;
+        else icon = `<circle r="8" fill="none" stroke="${color}" stroke-width="1.9"/><circle r="2.6" fill="${color}"/>`;
+        return `${ring}<g transform="translate(${k(x)} ${k(y)}) scale(${k(r / 9)})">${icon}</g>`;
+    }
+    // El código de lo que cuelga del techo, en letra chica con un contorno blanco (como el de Seguridad, con su propia clase).
+    function ceilingLabel(x, y, txt, anchor, color) {
+        const a = `x="${Math.round(x * 100) / 100}" y="${Math.round(y * 100) / 100}" font-size="7.5" font-weight="700" text-anchor="${anchor || 'middle'}"`;
+        return `<text class="lt-ceiling" ${a} fill="#FFFFFF" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round">${esc(txt)}</text><text class="lt-ceiling" ${a} fill="${color || '#2A1B30'}">${esc(txt)}</text>`;
+    }
+
     function mapSvg(layout, options = {}) {
         // options.rotation = cuartos de vuelta a la derecha (0 a 3): el croquis sale girado; los textos siguen derechos.
         const layoutNoTurn = layout; // la marca de una pared con dos alturas se calcula sobre el Layout sin girar (wallMark) y se gira después
@@ -601,5 +621,5 @@
         return `<svg class="aplan" viewBox="0 0 ${W} ${(inner.height + 16).toFixed(0)}" width="100%" role="img" font-family="inherit" xmlns="http://www.w3.org/2000/svg"><g transform="translate(8,8)">${inner.svg}</g></svg>`;
     }
 
-    window.LayoutMapSvg = { assetLevelsSvg, assetLevelsDoc, safetyGlyph, safetyRoute, safetyLabel, mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, defaultAssetFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
+    window.LayoutMapSvg = { assetLevelsSvg, assetLevelsDoc, safetyGlyph, safetyRoute, safetyLabel, ceilingGlyph, ceilingLabel, mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, defaultAssetFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
 }());

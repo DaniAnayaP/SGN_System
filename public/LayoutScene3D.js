@@ -17,8 +17,10 @@
     const WOOD = 0xb98a52;
     const MAX_SPACE_LABELS = 300;
     const MAX_POS_LABELS = 80; // con el paso Posiciones encendido, hasta cuántos rótulos P001… se dibujan en el 3D
-    const LAYER_NAMES = ['contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety'];
+    const LAYER_NAMES = ['contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'ceiling'];
     // El color de cada elemento de Seguridad (los mismos del croquis: rojo del fuego, verde de emergencia, naranja de alarma, azul del agua).
+    // Lo que cuelga del techo (paso Techos): el color de cada tipo, el mismo del croquis.
+    const CEILING_COLOR = { camera: 0x4f5d7a, speaker: 0xd98a1f, ventilation: 0x2a9d8f, extractor: 0x7a5cc7, other: 0x8a8f9e };
     const SAFETY_COLOR = { extinguisher: 0xd9443a, hydrant: 0xd9443a, emergency_door: 0x2e9e5b, firstaid: 0x2e9e5b, alarm: 0xe8892b, eyewash: 0x2f7fc7, assembly: 0x2e9e5b, route: 0x2e9e5b };
 
     function wallSegment(vertices, wall) {
@@ -49,15 +51,15 @@
         scene.add(sun);
         // Un grupo por capa: así cada una se muestra u oculta sola.
         const group = {};
-        ['floor', 'roof', 'marks', 'contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels', 'sensorLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
+        ['floor', 'roof', 'marks', 'contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'ceiling', 'zoneLabels', 'spaceLabels', 'sensorLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
         // Con zonas enfocadas y el resto «tenue», lo que no es de lo enfocado se apaga pieza por pieza: lo que se agrega a estas capas mientras se arma un elemento (fxItem) lleva su tipo y su id (userData.fx).
         let fxItem = null;
-        ['walls', 'doors', 'power', 'sensors', 'columns', 'transit', 'safety', 'objects'].forEach((n) => {
+        ['walls', 'doors', 'power', 'sensors', 'columns', 'transit', 'safety', 'ceiling', 'objects'].forEach((n) => {
             const g = group[n];
             const add = g.add.bind(g);
             g.add = (...objs) => { if (fxItem) objs.forEach((o) => { if (o && o.userData) o.userData.fx = fxItem; }); return add(...objs); };
         });
-        const ITEM_OF_LAYER = { walls: 'wall', columns: 'obstacle', doors: 'door', power: 'power', sensors: 'sensor', transit: 'transit', safety: 'safety', objects: 'object' };
+        const ITEM_OF_LAYER = { walls: 'wall', columns: 'obstacle', doors: 'door', power: 'power', sensors: 'sensor', transit: 'transit', safety: 'safety', ceiling: 'ceiling', objects: 'object' };
         const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a }));
         outline.visible = false;
         scene.add(outline);
@@ -189,6 +191,7 @@
         const cam = new THREE.PerspectiveCamera(42, 1, 0.1, 2000);
         const st = { theta: 0.8, phi: 0.95, r: 40, tx: 0, ty: 1, tz: 0 };
         let bounds = { diag: 40, maxH: 9, sx: 30, sy: 30 };
+        let viewTy = 1; // a qué altura mira la vista general: con lo del techo enfocado, a media altura de lo que cuelga (si no, no se vería)
         let dirty = true;
         let anim = 0;
         let destroyed = false;
@@ -294,6 +297,7 @@
             group.objects.visible = layerOn.objects;
             group.transit.visible = layerOn.transit;
             group.safety.visible = layerOn.safety;
+            group.ceiling.visible = layerOn.ceiling;
             group.zoneLabels.visible = labelsOn && layerOn.zones;
             group.spaceLabels.visible = labelsOn && layerOn.assets;
             // las capas apagadas que van «tenues» se ven con poca opacidad (el resto de la nave cuando hay un enfoque)
@@ -402,6 +406,15 @@
                 const W = Math.max(sz.l, sz.w, 0.2) + 0.2;
                 const H = sz.h + (e.type === 'emergency_door' ? 0.35 : 0);
                 return { x: PX(ex), y: 0.08 + sz.elev + H / 2, z: PZ(ey), sx: W, sy: H, sz: W };
+            }
+            // lo que cuelga del techo, elegido en la tabla del paso Techos: un cuadro alrededor del aparato, a su altura
+            if (hl.kind === 'ceiling') {
+                const e = (lastLayout.ceiling || []).find((x) => x.id === hl.id);
+                const LCh = root.LayoutCalc;
+                if (!e || !layerOn.ceiling || !LCh || !LCh.ceilingSizeOf) return null;
+                const sz = LCh.ceilingSizeOf(e);
+                const W = Math.max(sz.l, sz.w, 0.2) + 0.2;
+                return { x: PX(Number(e.x) || 0), y: LCh.ceilingHangOf(lastLayout, e), z: PZ(Number(e.y) || 0), sx: W, sy: sz.h + 0.2, sz: W };
             }
             if (hl.kind === 'transit') {
                 const p = (lastLayout.transit || []).find((x) => x.id === hl.id);
@@ -524,7 +537,7 @@
             const aspect = cam.aspect || 1.5;
             if (name === 'planta') return { theta: 0, phi: 0.03, r: 1.12 * Math.max(bounds.sy / 0.768, bounds.sx / (0.768 * aspect)), tx: 0, ty: 0, tz: 0 };
             if (name === 'frente') return { theta: 0, phi: 1.2, r: 1.15 * Math.max(bounds.sx / (0.768 * aspect), (bounds.maxH + bounds.sy * 0.35) / 0.768), tx: 0, ty: bounds.maxH / 3, tz: 0 };
-            return { theta: 0.8, phi: 0.95, r: d * 1.0, tx: 0, ty: 1, tz: 0 };
+            return { theta: 0.8, phi: 0.95, r: d * 1.0, tx: 0, ty: viewTy, tz: 0 };
         }
         function go(target, animate) {
             cancelAnimationFrame(anim);
@@ -1370,6 +1383,71 @@
                 dueRing(ex, ey, e);
             });
             fxItem = null;
+            // Techos (paso Techos): cámaras, bocinas, ventilación, extractores… colgados del techo. Cada uno cuelga de un cable delgado que sale del techo de la nave en ese punto (que no es plano: LayoutCalc.ceilingLimitAt) y el aparato queda a su
+            // altura «Cuelga a» (vacío = pegado al techo). Se arma con el tamaño de fábrica de su tipo (LayoutCalc.ceilingSizeOf).
+            (layout.ceiling || []).forEach((e) => {
+                if (!LCalc || !LCalc.ceilingSizeOf) return;
+                fxItem = { type: 'ceiling', id: e.id };
+                const color = CEILING_COLOR[e.type] || 0x8a8f9e;
+                const dark = 0x232733;
+                const ex = Number(e.x) || 0;
+                const ey = Number(e.y) || 0;
+                const sz = LCalc.ceilingSizeOf(e);
+                const roofY = LCalc.ceilingLimitAt(layout, e);
+                const hang = LCalc.ceilingHangOf(layout, e);
+                const g = new THREE.Group();
+                const body = new THREE.Group();
+                if (e.type === 'camera') {
+                    body.add(new THREE.Mesh(new THREE.BoxGeometry(sz.l, sz.h, sz.w), lam(color)));
+                    const lens = new THREE.Mesh(new THREE.CylinderGeometry(sz.h * 0.32, sz.h * 0.32, 0.05, 14), lam(dark));
+                    lens.rotation.z = Math.PI / 2;
+                    lens.position.x = sz.l / 2 + 0.02;
+                    body.add(lens);
+                } else if (e.type === 'speaker') {
+                    const horn = new THREE.Mesh(new THREE.CylinderGeometry(0.05, sz.l / 2, sz.h, 18), lam(color));
+                    const cap = new THREE.Mesh(new THREE.CylinderGeometry(sz.l / 2 + 0.01, sz.l / 2 + 0.01, 0.025, 18), lam(dark));
+                    cap.position.y = -sz.h / 2;
+                    body.add(horn, cap);
+                } else if (e.type === 'ventilation') {
+                    body.add(new THREE.Mesh(new THREE.BoxGeometry(sz.l, sz.h, sz.w), lam(color)));
+                    for (let k = -1; k <= 1; k++) {
+                        const slat = new THREE.Mesh(new THREE.BoxGeometry(sz.l * 0.84, 0.012, 0.03), lam(dark));
+                        slat.position.set(0, -sz.h / 2 - 0.004, k * sz.w * 0.26);
+                        body.add(slat);
+                    }
+                } else if (e.type === 'extractor') {
+                    const shroud = new THREE.Mesh(new THREE.CylinderGeometry(sz.l / 2, sz.l / 2, sz.h, 22, 1, true), lam(color));
+                    shroud.material.side = THREE.DoubleSide;
+                    body.add(shroud);
+                    for (let k = 0; k < 3; k++) {
+                        const blade = new THREE.Mesh(new THREE.BoxGeometry(sz.l * 0.46, 0.012, 0.07), lam(dark));
+                        blade.position.set(Math.cos((k * Math.PI * 2) / 3) * sz.l * 0.22, 0, Math.sin((k * Math.PI * 2) / 3) * sz.l * 0.22);
+                        blade.rotation.y = -(k * Math.PI * 2) / 3;
+                        body.add(blade);
+                    }
+                    body.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.05, 10), lam(dark)));
+                } else {
+                    body.add(new THREE.Mesh(new THREE.BoxGeometry(sz.l, sz.h, sz.w), lam(color)));
+                }
+                body.position.y = hang;
+                g.add(body);
+                // el cable: del techo al aparato (si queda pegado al techo no hace falta)
+                const cableLen = roofY - (hang + sz.h / 2);
+                if (cableLen > 0.03) {
+                    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, cableLen, 6), lam(0x59606f));
+                    cable.position.y = hang + sz.h / 2 + cableLen / 2;
+                    g.add(cable);
+                }
+                g.position.set(PX(ex), 0, PZ(ey));
+                g.traverse((o) => { if (o.isMesh) o.raycast = () => {}; });
+                group.ceiling.add(g);
+            });
+            fxItem = null;
+            viewTy = 1;
+            if (layout._frame && (layout.ceiling || []).length && LCalc && LCalc.ceilingHangOf) {
+                const hs = layout.ceiling.map((e) => LCalc.ceilingHangOf(layout, e));
+                viewTy = Math.max(1, (hs.reduce((a, b) => a + b, 0) / hs.length) * 0.6);
+            }
             // huellas (el lugar en el piso, capa «Huella-Espacio»): una losa delgada, blanca o con su color, debajo de sus activos
             (layout.footprints || []).forEach((f) => {
                 if (f.active === false || !(f.l > 0) || !(f.d > 0)) return;

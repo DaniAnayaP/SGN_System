@@ -7488,14 +7488,14 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-map svg.has-hl .lz:not(.hl-on), .layout-map svg.has-hl .lzf:not(.hl-on), .layout-map svg.has-hl .lhb:not(.hl-on), .layout-map svg.has-hl .lhbf:not(.hl-on), .layout-map svg.has-hl .ls:not(.hl-on), .layout-map svg.has-hl .lsf:not(.hl-on){ opacity: 0.4; }
 .hl-shape{ fill: none; stroke-linejoin: round; stroke-dasharray: none; vector-effect: non-scaling-stroke; pointer-events: none; }
 /* paredes, columnas y desniveles: al elegir uno, los demás se atenúan (como zonas, huellas y activos) y su contorno de resaltado es más grueso porque son figuras delgadas */
-.layout-map svg.has-hl .lo:not(.hl-on), .layout-map svg.has-hl .lsafe:not(.hl-on), .layout-map svg.has-hl .lobj:not(.hl-on), .layout-map svg.has-hl .ld:not(.hl-on), .layout-map svg.has-hl .le:not(.hl-on), .layout-map svg.has-hl .lsn:not(.hl-on){ opacity: 0.4; }
+.layout-map svg.has-hl .lo:not(.hl-on), .layout-map svg.has-hl .lsafe:not(.hl-on), .layout-map svg.has-hl .lceil:not(.hl-on), .layout-map svg.has-hl .lobj:not(.hl-on), .layout-map svg.has-hl .ld:not(.hl-on), .layout-map svg.has-hl .le:not(.hl-on), .layout-map svg.has-hl .lsn:not(.hl-on){ opacity: 0.4; }
 .layout-map svg .hl-box{ fill: none; stroke: none; pointer-events: none; }
 /* Zonas de toque del contorno (paso Contorno): invisibles y anchas para poder tocar un lado, o una esquina, y elegir su renglón de la tabla. */
 .layout-map svg .side-hit{ fill: none; stroke: transparent; stroke-width: 14; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: pointer; }
 .layout-map svg .corner-hit{ fill: transparent; stroke: none; pointer-events: all; cursor: pointer; }
 /* Las etiquetas de medida de los lados (P2 · 20 m) quedan justo en medio del lado: dejan pasar el toque para poder elegir el lado también ahí. */
 .layout-map svg .lt2.lx{ pointer-events: none; }
-.layout-map svg.has-hl.hl-soft-mode .lo:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lsafe:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lobj:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .ld:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .le:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lsn:not(.hl-on){ opacity: 0.75; }
+.layout-map svg.has-hl.hl-soft-mode .lo:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lsafe:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lceil:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lobj:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .ld:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .le:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lsn:not(.hl-on){ opacity: 0.75; }
 .hl-obs.hl-under{ stroke-width: 11; }
 .hl-obs.hl-ring{ stroke-width: 6; }
 .hl-obs.hl-soft{ stroke-width: 4.5; stroke-dasharray: 6 3; }

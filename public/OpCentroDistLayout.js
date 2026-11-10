@@ -9,11 +9,11 @@
 (function () {
 const LC = window.LayoutCalc;
 // El orden de los pasos en la barra (Localizadores, que no edita nada, siempre va al final).
-const SECTION_ORDER = ['contorno', 'pisos', 'rampas', 'paredes', 'puertas', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'zonas', 'espacios', 'activos', 'niveles', 'posiciones', 'ubicaciones'];
+const SECTION_ORDER = ['contorno', 'pisos', 'rampas', 'paredes', 'puertas', 'obstaculos', 'seguridad', 'techos', 'sensores', 'luz', 'transito', 'objetos', 'zonas', 'espacios', 'activos', 'niveles', 'posiciones', 'ubicaciones'];
 // Los pasos de solo consulta (no editan nada, no llevan candado y van al final de la barra con su flechita): Localizadores y Relación Código.
 const INFO_STEPS = ['localizadores', 'relacion'];
 const SECTION_LABEL_KEYS = {
-    relacion: 'main.layoutRelacionCodigoLink', contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', rampas: 'main.layoutStepRampas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', ubicaciones: 'main.layoutStepUbicaciones', niveles: 'main.layoutStepNiveles', localizadores: 'main.layoutStepLocalizadores',
+    relacion: 'main.layoutRelacionCodigoLink', contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', techos: 'main.layoutStepTechos', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', rampas: 'main.layoutStepRampas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', ubicaciones: 'main.layoutStepUbicaciones', niveles: 'main.layoutStepNiveles', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     mode: 'view', saved: null, draft: null, version: 0, perms: null, showMeasures: true, showOpening: true, showLevels: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -191,9 +191,9 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-ubicaciones', 'layout-zonas', 'layout-pisos', 'layout-rampas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-niveles', 'layout-localizadores', 'layout-relacion', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-objetos', 'layout-transito'];
+const FILTER_TABLE_IDS = ['layout-ubicaciones', 'layout-zonas', 'layout-pisos', 'layout-rampas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-niveles', 'layout-localizadores', 'layout-relacion', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-techos', 'layout-objetos', 'layout-transito'];
 // Qué tabla con filtro corresponde a cada lista que se agrega: al agregar un renglón se quitan sus filtros para que el nuevo siempre se vea.
-const FILTER_OF_LIST = { ubicaciones: 'layout-ubicaciones', obstacles: 'layout-obstaculos', doors: 'layout-puertas', power: 'layout-luz', sensors: 'layout-sensores', safety: 'layout-seguridad', transit: 'layout-transito', objects: 'layout-objetos', vertices: 'layout-contorno-esquinas', contornoLados: 'layout-contorno-lados' };
+const FILTER_OF_LIST = { ubicaciones: 'layout-ubicaciones', obstacles: 'layout-obstaculos', doors: 'layout-puertas', power: 'layout-luz', sensors: 'layout-sensores', safety: 'layout-seguridad', ceiling: 'layout-techos', transit: 'layout-transito', objects: 'layout-objetos', vertices: 'layout-contorno-esquinas', contornoLados: 'layout-contorno-lados' };
 function clearFilterOf(list) {
     if (window.Dashboard && Dashboard.clearExternalColumnFilters && FILTER_OF_LIST[list]) Dashboard.clearExternalColumnFilters(FILTER_OF_LIST[list]);
 }
@@ -751,6 +751,40 @@ function computeSafetyIssues() {
     if (!state.draft) return;
     LC.safetyViolations(state.draft).forEach((v) => { const m = sfIssues.get(v.id) || {}; m[v.kind] = v; sfIssues.set(v.id, m); });
 }
+// Techos: las faltas de cada elemento (LayoutCalc.ceilingViolations): fuera del contorno de la nave o «Cuelga a» por encima del techo de ese punto. clIssues = id -> { outside, tall }.
+let clIssues = new Map();
+function computeCeilingIssues() {
+    clIssues = new Map();
+    if (!state.draft) return;
+    LC.ceilingViolations(state.draft).forEach((v) => { const m = clIssues.get(v.id) || {}; m[v.kind] = v; clIssues.set(v.id, m); });
+}
+const ceilingIssueText = (v) => t(`main.layoutVioCl_${v.kind}`, { code: v.code, ...(v.vars || {}) });
+// El código, la zona y el techo de cada elemento salen de su tipo y de su lugar; las cajas de X, Y y «Cuelga a» se marcan en rojo si algo no cumple y abajo del paso va la lista de lo que falta.
+function applyCeilingMarks() {
+    if (!state.draft) return;
+    computeCeilingIssues();
+    (state.draft.ceiling || []).forEach((e, i) => {
+        const bad = clIssues.get(e.id) || {};
+        ['x', 'y'].forEach((key) => {
+            const box = document.querySelector(`[data-l="ceiling"][data-i="${i}"][data-k="${key}"]`);
+            if (box) box.classList.toggle('layout-missing', !!bad.outside);
+        });
+        const hBox = document.querySelector(`[data-l="ceiling"][data-i="${i}"][data-k="h"]`);
+        if (hBox) { hBox.classList.toggle('layout-missing', !!bad.tall); hBox.placeholder = String(LC.ceilingHangOf(state.draft, e)); }
+        const codeCell = document.querySelector(`[data-cl-code="${i}"]`);
+        if (codeCell) codeCell.textContent = e.code || '';
+        const zoneCell = document.querySelector(`[data-cl-zone="${i}"]`);
+        if (zoneCell) zoneCell.textContent = (state.draft.zones.find((z) => z.id === e.zoneId) || {}).name || '—';
+        const limitCell = document.querySelector(`[data-cl-limit="${i}"]`);
+        if (limitCell) { const lim = LC.ceilingLimitAt(state.draft, e); limitCell.textContent = lim ? fmt(lim) : '—'; }
+    });
+    const box = document.querySelector('[data-cl-issues]');
+    if (box) {
+        const all = LC.ceilingViolations(state.draft);
+        box.hidden = !all.length;
+        box.innerHTML = all.map((v) => `<p>${esc(ceilingIssueText(v))}</p>`).join('');
+    }
+}
 const safetyIssueText = (v) => t(`main.layoutVioSg_${v.kind}${v.kind === 'tall' && v.vars && v.vars.level !== undefined ? 'Level' : ''}`, { code: v.code, ...(v.vars || {}) });
 // El código y la zona de cada elemento salen de su tipo y de su lugar; las cajas de X e Y (y de la llegada de la ruta) se marcan en rojo si algo no cumple y abajo del paso va la lista de lo que falta.
 // La leyenda de los símbolos solo se ve con el paso Seguridad encendido.
@@ -775,6 +809,7 @@ function applyLegend() {
         pieces: (type) => piecesVisible() && state.pieces.some((p) => (type === 'free' ? (p.leftD > 0.5 || p.leftH > 0.5) : (type === '2' ? p.level >= 2 : String(p.level) === type))),
         object: (type) => stepOn('objetos') && some('objects', (o) => o.type === type),
         transit: (type) => stepOn('transito') && some('transit', (p) => (type === 'between' ? p.type === 'between' : p.type !== 'between')),
+        ceiling: (type) => stepOn('techos') && some('ceiling', (e) => e.type === type),
         safety: (type) => { const [tp, model] = String(type).split(':'); return stepOn('seguridad') && some('safety', (e) => e.type === tp && (tp !== 'hydrant' || LC.hydrantModelOf(e) === (model || 'column'))); },
     };
     // Pisos: un cuadrito por cada nivel que hay (con el color de ese nivel); los pisos con formato propio llevan el suyo y no salen aquí.
@@ -786,6 +821,9 @@ function applyLegend() {
         lvBox.innerHTML = levels.map((lv) => { const c = lvCols[lv] || '#e9e9ee'; return `<span><i class="lg-level" style="background:${c};border:1.5px solid ${LC.mixHex(c, '#000000', 0.4)}"></i><span>${lv > 0 ? '+' : ''}${fmt(lv)} m</span></span>`; }).join('');
         lvBox.hidden = !levels.length;
     }
+    document.querySelectorAll('[data-cl-glyph]').forEach((el) => {
+        if (!el.firstChild && window.LayoutMapSvg) el.innerHTML = `<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">${window.LayoutMapSvg.ceilingGlyph(el.getAttribute('data-cl-glyph'), 10, 10, 6)}</svg>`;
+    });
     document.querySelectorAll('[data-sf-glyph]').forEach((el) => {
         const [tp, model] = el.getAttribute('data-sf-glyph').split(':');
         if (!el.firstChild && window.LayoutMapSvg) el.innerHTML = `<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">${window.LayoutMapSvg.safetyGlyph(tp, 10, 10, 8, model)}</svg>`;
@@ -1426,6 +1464,18 @@ function stepHtml(step) {
         const bar = `<div class="layout-sg-bar"><div class="layout-sg-counts" data-sf-counts data-help-key="layoutSgConteo">${safetyCountsHtml()}</div><div class="layout-fl"><label data-help-key="layoutSgAvisar">${esc(t('main.layoutSgAvisarCon'))}<input type="number" min="1" max="365" step="1" data-l="safetyWarn" value="${d.safetyWarnDays || LC.SAFETY_WARN_DAYS}"${dis ? ' disabled' : ''}></label></div></div>`;
         return `${addButton('safety', 'main.layoutAgregarSeguridad', dis, true)}${bar}${list}<div class="layout-vio" data-sf-issues hidden></div><div class="layout-due" data-sf-due hidden></div>`;
     }
+    if (step === 'techos') {
+        // Cada renglón es algo que CUELGA DEL TECHO (cámara, bocina, ventilación, extractor u otro): un punto puesto en el plano con X e Y, en metros, y «Cuelga a», la altura desde el piso a la que queda (vacío = pegado al techo).
+        // El techo no es plano: «Techo ahí» dice cuánto mide la nave en ese punto y «Cuelga a» no puede pasar de ahí. El código (Q001, N001, W001, X001, Y001…) lo pone el sistema y la zona sale de dónde queda el punto: no se capturan.
+        const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
+        const rows = (d.ceiling || []).map((e, i) => {
+            const lim = LC.ceilingLimitAt(d, e);
+            const hang = `<td><input type="number" step="0.05" min="0.01" data-l="ceiling" data-i="${i}" data-k="h" data-help-key="layoutCuelgaA" value="${e.h > 0 ? e.h : ''}" placeholder="${LC.ceilingHangOf(d, e)}"${dis ? ' disabled' : ''}></td>`;
+            return `<tr><td class="layout-calc"><b data-cl-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('ceiling', i, 'type', optionsHtml('ceiling', LC.CEILING_TYPES, e.type), dis)}${cellText('ceiling', i, 'name', e.name || '', dis)}<td class="layout-calc" data-cl-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('ceiling', i, 'x', e.x, dis)}${cellNum('ceiling', i, 'y', e.y, dis)}${hang}<td class="layout-calc" data-cl-limit="${i}">${lim ? fmt(lim) : '—'}</td>${removeCell('ceiling', i, dis)}</tr>`;
+        });
+        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutCuelgaA', 'main.layoutTechoAhi', ''], rows, 'layout-techos') : `<p class="layout-muted">${esc(t('main.layoutTechosVacio'))}</p>`;
+        return `${addButton('ceiling', 'main.layoutAgregarTecho', dis, true)}${list}<div class="layout-vio" data-cl-issues hidden></div>`;
+    }
     if (step === 'objetos') {
         // Cada renglón es una PERSONA, un MONTACARGAS, un carrito o una plataforma dibujado en el plano, a escala (lo que es se elige en «Equipo o persona»). Es una foto fija (como el plano de Excel), no sigue a nadie en vivo. X e Y son su centro, en metros; el giro dice hacia dónde mira
         // (0° = hacia la derecha, 90° = hacia abajo). Las medidas de partida salen de «Cuánto mide lo que transita» (paso Tránsito) y se pueden cambiar en cada uno.
@@ -1981,7 +2031,7 @@ function renderPanel() {
     if (state.mode === 'edit') renderViewStrip(); // Qué ver (la franja) sigue a los pasos encendidos
     bindLayoutFilters();
     markSelectedRow();
-    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); applyTransitMarks(); applySafetyMarks(); applyWallItemMarks(); }
+    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); applyTransitMarks(); applySafetyMarks(); applyCeilingMarks(); applyWallItemMarks(); }
     applyFindToTables();
 }
 
@@ -2028,6 +2078,7 @@ function rowEntity(tr) {
     if (list === 'power' && (state.draft.power || [])[i]) return { kind: 'power', id: state.draft.power[i].id };
     if (list === 'sensors' && (state.draft.sensors || [])[i]) return { kind: 'sensor', id: state.draft.sensors[i].id };
     if (list === 'safety' && (state.draft.safety || [])[i]) return { kind: 'safety', id: state.draft.safety[i].id };
+    if (list === 'ceiling' && (state.draft.ceiling || [])[i]) return { kind: 'ceiling', id: state.draft.ceiling[i].id };
     if (list === 'transit' && (state.draft.transit || [])[i]) return { kind: 'transit', id: state.draft.transit[i].id };
     if (list === 'objects' && (state.draft.objects || [])[i]) return { kind: 'object', id: state.draft.objects[i].id };
     if (list === 'lvl' && state.draft.spaces[i]) return { kind: 'space', id: state.draft.spaces[i].id, n: Number(ctl.getAttribute('data-n')) };
@@ -2234,9 +2285,9 @@ function applyHighlight(reveal) {
     if (!h || h.step !== state.focus || !state.draft) return;
     if (h.kind === 'sensor') drawSensorZones(svg, h.id);
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
-    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid', side: 'data-sin-figura', corner: 'data-sin-figura', floor: 'data-sin-figura' };
+    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', ceiling: 'data-clid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid', side: 'data-sin-figura', corner: 'data-sin-figura', floor: 'data-sin-figura' };
     // un elemento de seguridad, un objeto, una puerta, una conexión de luz o un sensor son figuras sueltas (línea, símbolo, giro, etiqueta): su contorno sale de un cuadro invisible que se dibuja junto a ellos
-    const BOX_KINDS = ['safety', 'object', 'door', 'power', 'sensor', 'side', 'corner', 'floor'];
+    const BOX_KINDS = ['safety', 'ceiling', 'object', 'door', 'power', 'sensor', 'side', 'corner', 'floor'];
     // lo resaltado es una cosa (el renglón elegido) o varias (lo que marcó el Localizador: varios activos de una huella, varios niveles, espacios o posiciones); cada una se contornea una sola vez
     const entries = [];
     highlightedList().forEach((e) => { if (!entries.some((x) => x.kind === e.kind && x.id === e.id)) entries.push(e); });
@@ -2325,7 +2376,7 @@ function selectRowFrom(target) {
 // Tocar una figura del croquis (sin arrastrarla) la elige: se marca su renglón en la tabla y la figura se resalta con el contorno grueso de siempre; volver a tocarla la regresa al contorno punteado. Solo cuenta
 // el paso que se está editando: en Zonas las zonas, en Huella-Espacio las huellas y en Activos los activos.
 function selectFromMap(target) {
-    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-tid], [data-oid], [data-did], [data-pid], [data-nid], [data-sideid], [data-cornerid]') : null;
+    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-clid], [data-tid], [data-oid], [data-did], [data-pid], [data-nid], [data-sideid], [data-cornerid]') : null;
     if (!el || !state.draft) return;
     let next = null;
     // en Contorno se eligen los lados (o las esquinas): se marca su renglón en la tabla y su línea en el croquis y en el 3D
@@ -2345,6 +2396,7 @@ function selectFromMap(target) {
     else if (state.focus === 'espacios' && el.getAttribute('data-fid')) next = { kind: 'footprint', id: el.getAttribute('data-fid') };
     else if (state.focus === 'activos' && el.getAttribute('data-sid')) next = { kind: 'space', id: el.getAttribute('data-sid') };
     else if (state.focus === 'seguridad' && el.getAttribute('data-sfid')) next = { kind: 'safety', id: el.getAttribute('data-sfid') };
+    else if (state.focus === 'techos' && el.getAttribute('data-clid')) next = { kind: 'ceiling', id: el.getAttribute('data-clid') };
     else if (state.focus === 'transito' && el.getAttribute('data-tid')) next = { kind: 'transit', id: el.getAttribute('data-tid') };
     else if (state.focus === 'objetos' && el.getAttribute('data-oid')) next = { kind: 'object', id: el.getAttribute('data-oid') };
     else if (state.focus === 'puertas' && el.getAttribute('data-did')) next = { kind: 'door', id: el.getAttribute('data-did') };
@@ -2505,7 +2557,7 @@ function scopeInside(d, ids) {
     };
     const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     const inZone = (zid) => ids.includes(zid);
-    const out = { footprint: new Set(), space: new Set(), wall: new Set(), obstacle: new Set(), door: new Set(), power: new Set(), sensor: new Set(), safety: new Set(), transit: new Set(), object: new Set(), floor: new Set() };
+    const out = { footprint: new Set(), space: new Set(), wall: new Set(), obstacle: new Set(), door: new Set(), power: new Set(), sensor: new Set(), safety: new Set(), ceiling: new Set(), transit: new Set(), object: new Set(), floor: new Set() };
     (d.footprints || []).forEach((p) => { if (inZone(p.zoneId)) out.footprint.add(p.id); });
     (d.spaces || []).forEach((sp) => { if (inZone(sp.zoneId)) out.space.add(sp.id); });
     (d.obstacles || []).forEach((o) => {
@@ -2523,6 +2575,7 @@ function scopeInside(d, ids) {
         if (LC.sensorZoneIds(x).some(inZone) || (g && near(g.a.x, g.a.y))) out.sensor.add(x.id);
     });
     (d.safety || []).forEach((x) => { if (inZone(x.zoneId) || near(Number(x.x) || 0, Number(x.y) || 0)) out.safety.add(x.id); });
+    (d.ceiling || []).forEach((x) => { if (inZone(x.zoneId) || near(Number(x.x) || 0, Number(x.y) || 0)) out.ceiling.add(x.id); });
     (d.transit || []).forEach((x) => {
         const px = Number(x.x) || 0;
         const py = Number(x.y) || 0;
@@ -2540,18 +2593,18 @@ function scopeInside(d, ids) {
     });
     return out;
 }
-const FIND_ITEM_ATTR = { wall: 'obid', obstacle: 'obid', door: 'did', power: 'pid', sensor: 'nid', safety: 'sfid', transit: 'tid', object: 'oid' };
+const FIND_ITEM_ATTR = { wall: 'obid', obstacle: 'obid', door: 'did', power: 'pid', sensor: 'nid', safety: 'sfid', ceiling: 'clid', transit: 'tid', object: 'oid' };
 // «Elegir» (modo Ver): lo elegido, una o varias cosas de cualquier tipo, en la misma forma que scopeInside (ids por tipo) para dibujarlo igual que lo de una zona enfocada.
 // Una huella elegida lleva sus activos y un activo elegido lleva su huella (para poder dibujarlo).
 function chosenInside(d, f) {
-    const out = { zone: new Set(), footprint: new Set(), space: new Set(), wall: new Set(), obstacle: new Set(), door: new Set(), power: new Set(), sensor: new Set(), safety: new Set(), transit: new Set(), object: new Set(), floor: new Set() };
+    const out = { zone: new Set(), footprint: new Set(), space: new Set(), wall: new Set(), obstacle: new Set(), door: new Set(), power: new Set(), sensor: new Set(), safety: new Set(), ceiling: new Set(), transit: new Set(), object: new Set(), floor: new Set() };
     ((f && f.items) || []).forEach((it) => { if (out[it.type]) out[it.type].add(it.id); });
     (d.spaces || []).forEach((sp) => { if (out.footprint.has(sp.footprintId)) out.space.add(sp.id); });
     (d.spaces || []).forEach((sp) => { if (out.space.has(sp.id) && sp.footprintId) out.footprint.add(sp.footprintId); });
     return out;
 }
 function itemExists(d, type, id) {
-    const lists = { zone: d.zones, footprint: d.footprints, space: d.spaces, wall: d.obstacles, obstacle: d.obstacles, door: d.doors, power: d.power, sensor: d.sensors, safety: d.safety, transit: d.transit, object: d.objects, floor: LC.floorsAll(d) };
+    const lists = { zone: d.zones, footprint: d.footprints, space: d.spaces, wall: d.obstacles, obstacle: d.obstacles, door: d.doors, power: d.power, sensor: d.sensors, safety: d.safety, ceiling: d.ceiling, transit: d.transit, object: d.objects, floor: LC.floorsAll(d) };
     return (lists[type] || []).some((x) => x.id === id);
 }
 // Los puntos de lo elegido (para encuadrar el croquis y el 3D alrededor).
@@ -2562,6 +2615,7 @@ function itemFramePoints(d, inside) {
     [['power', d.power], ['sensor', d.sensors]].forEach(([ty, list]) => (list || []).forEach((x) => { if (inside[ty].has(x.id)) { const g = LC.doorGeometry(d, { ...x, width: 0 }); if (g) pts.push([g.a.x, g.a.y]); } }));
     (d.safety || []).forEach((x) => { if (inside.safety.has(x.id)) { pts.push([Number(x.x) || 0, Number(x.y) || 0]); if (x.type === 'route') pts.push([Number(x.x2) || 0, Number(x.y2) || 0]); } });
     (d.transit || []).forEach((x) => { if (inside.transit.has(x.id)) pts.push([Number(x.x) || 0, Number(x.y) || 0], [(Number(x.x) || 0) + (Number(x.l) || 0), (Number(x.y) || 0) + (Number(x.w) || 0)]); });
+    (d.ceiling || []).forEach((x) => { if (inside.ceiling.has(x.id)) pts.push([Number(x.x) || 0, Number(x.y) || 0]); });
     (d.objects || []).forEach((x) => { if (inside.object.has(x.id)) LC.objectPolygon(x).forEach((p) => pts.push(p)); });
     LC.floorsAll(d).forEach((fl) => { if (inside.floor.has(fl.id)) { const zp = LC.zonePoints(fl); if (zp) zp.forEach((p) => pts.push(p)); } });
     return pts;
@@ -2733,7 +2787,7 @@ function findLayout(d) {
         const needWall = new Set([...doors, ...power, ...sensors].map((x) => x.wallId).filter(Boolean));
         const wallShown = (o) => fxWant('wall') && inside.wall.has(o.id);
         const obstacles = (d.obstacles || []).filter((o) => (o.kind === 'wall' ? wallShown(o) || needWall.has(o.id) : fxWant('obstacle') && inside.obstacle.has(o.id))).map((o) => (o.kind === 'wall' && !wallShown(o) ? { ...o, _geom: true } : o));
-        scoped = { doors, power, sensors, obstacles, safety: keep(d.safety, 'safety'), transit: keep(d.transit, 'transit'), objects: keep(d.objects, 'object'), floors: fxWant('floor') ? (d.floors || []).filter((fl) => inside.floor.has(fl.id)) : [], ramps: fxWant('floor') ? (d.ramps || []).filter((rp) => inside.floor.has(rp.id)) : [] };
+        scoped = { doors, power, sensors, obstacles, safety: keep(d.safety, 'safety'), ceiling: keep(d.ceiling, 'ceiling'), transit: keep(d.transit, 'transit'), objects: keep(d.objects, 'object'), floors: fxWant('floor') ? (d.floors || []).filter((fl) => inside.floor.has(fl.id)) : [], ramps: fxWant('floor') ? (d.ramps || []).filter((rp) => inside.floor.has(rp.id)) : [] };
     } else if (f.kind === 'spaces') {
         spaces = d.spaces.filter((x) => f.ids.includes(x.id));
         footprints = d.footprints.filter((p) => spaces.some((x) => x.footprintId === p.id));
@@ -2778,13 +2832,13 @@ function findLayout(d) {
     }
     const base = { ...d, zones, footprints, spaces, plan: null };
     if (scoped) {
-        const common = { safety: scoped.safety, transit: scoped.transit, objects: scoped.objects, floors: scoped.floors, ramps: scoped.ramps };
+        const common = { safety: scoped.safety, ceiling: scoped.ceiling, transit: scoped.transit, objects: scoped.objects, floors: scoped.floors, ramps: scoped.ramps };
         // con zonas enfocadas (no con «Elegir») el 3D recorta los pisos y las rampas al dibujo de esas zonas (_clip)
         const clip = f.kind === 'zone' ? zones.map((z) => LC.zonePoints(z)).filter((p) => p && p.length >= 3) : null;
         return { ...base, ...common, _frame: rect, ...(clip && clip.length ? { _clip: clip } : {}), obstacles: scoped.obstacles, doors: scoped.doors, power: scoped.power, sensors: scoped.sensors };
     }
     // un activo o una huella enfocados (o el renglón elegido de una tabla): solo ellos; sin pisos, rampas, pasillos, seguridad ni sensores de la nave
-    return { ...base, vertices: rect, obstacles: [], objects: [], doors: [], power: [], floors: [], ramps: [], transit: [], safety: [], sensors: [] };
+    return { ...base, vertices: rect, obstacles: [], objects: [], doors: [], power: [], floors: [], ramps: [], transit: [], safety: [], ceiling: [], sensors: [] };
 }
 // ¿Este renglón de una tabla es de lo enfocado? Los activos todavía sin huella y las huellas sin zona (recién agregados) siempre se ven, para no perderlos. Con zonas enfocadas, las paredes, puertas, luz, sensores, seguridad,
 // pasillos, objetos, obstáculos y pisos que no están en esas zonas también se esconden (inside = lo que hay dentro, ya calculado).
@@ -2794,7 +2848,7 @@ function pickTypeOfRow(e) {
     if (e.kind === 'footprint') return 'footprint';
     if (e.kind === 'space' || e.kind === 'bay') return 'space';
     if (e.kind === 'obstacle') { const o = (d.obstacles || []).find((x) => x.id === e.id); return o ? (o.kind === 'wall' ? 'wall' : 'obstacle') : null; }
-    return ['door', 'power', 'sensor', 'safety', 'transit', 'object', 'floor'].includes(e.kind) ? e.kind : null;
+    return ['door', 'power', 'sensor', 'safety', 'ceiling', 'transit', 'object', 'floor'].includes(e.kind) ? e.kind : null;
 }
 // Con cosas elegidas: de cada tipo que tiene algo elegido solo salen esos renglones (los tipos sin nada elegido salen completos); lo que va DENTRO de lo elegido sale solo de eso (con una huella elegida, los activos, niveles,
 // espacios y posiciones de esa huella; con activos elegidos, los de esos activos; con un nivel, un espacio o una posición del «Localizador», solo los de lo marcado).
@@ -2817,7 +2871,7 @@ function itemRowShown(e) {
     }
     return true;
 }
-const FIND_ROW_TYPE = { door: 'door', power: 'power', sensor: 'sensor', safety: 'safety', transit: 'transit', object: 'object', floor: 'floor' };
+const FIND_ROW_TYPE = { door: 'door', power: 'power', sensor: 'sensor', safety: 'safety', ceiling: 'ceiling', transit: 'transit', object: 'object', floor: 'floor' };
 function inFind(entity, inside) {
     const f = state.find;
     const d = state.draft;
@@ -2855,7 +2909,7 @@ function applyFindToTables() {
 // los demás encienden su paso, seleccionan su renglón y acercan el croquis a la figura.
 const FIND_TYPES = [
     { type: 'zone', step: 'zonas' }, { type: 'footprint', step: 'espacios' }, { type: 'space', kind: 'space', step: 'activos' }, { type: 'wall', kind: 'obstacle', step: 'paredes' }, { type: 'door', kind: 'door', step: 'puertas' }, { type: 'floor', kind: 'floor', step: 'pisos' },
-    { type: 'safety', kind: 'safety', step: 'seguridad' }, { type: 'sensor', kind: 'sensor', step: 'sensores' }, { type: 'power', kind: 'power', step: 'luz' }, { type: 'obstacle', kind: 'obstacle', step: 'obstaculos' },
+    { type: 'safety', kind: 'safety', step: 'seguridad' }, { type: 'ceiling', kind: 'ceiling', step: 'techos' }, { type: 'sensor', kind: 'sensor', step: 'sensores' }, { type: 'power', kind: 'power', step: 'luz' }, { type: 'obstacle', kind: 'obstacle', step: 'obstaculos' },
     { type: 'transit', kind: 'transit', step: 'transito' }, { type: 'object', kind: 'object', step: 'objetos' },
 ];
 const findTypesShown = () => FIND_TYPES.filter((ft) => stepVisible(ft.step) && !(ft.type === 'zone' && state.findScope === 'zones'));
@@ -2873,6 +2927,7 @@ function findLists(d) {
         door: () => (d.doors || []).map((x) => ({ id: x.id, title: x.name || t('main.layoutFindPuerta'), sub: `${t('main.layoutFindPuerta')} · ${wallName(x.wallId)}`.replace(/ · $/, ''), hay: `${x.name || ''} ${typeLabel('door', x.type)} ${wallName(x.wallId)}` })),
         floor: () => LC.floorsAll(d).map((x) => ({ id: x.id, step: x.isRamp ? 'rampas' : 'pisos', title: x.name || x.code || t('main.layoutFindPiso'), sub: `${t('main.layoutFindPiso')} · ${x.code || ''}`.replace(/ · $/, ''), hay: `${x.code || ''} ${x.name || ''}` })),
         safety: () => (d.safety || []).map((x) => ({ id: x.id, title: x.name || typeLabel('safety', x.type), sub: `${low(typeLabel('safety', x.type))} · ${x.code || ''}`, hay: `${x.code || ''} ${x.name || ''} ${typeLabel('safety', x.type)}` })),
+        ceiling: () => (d.ceiling || []).map((x) => ({ id: x.id, title: x.name || typeLabel('ceiling', x.type), sub: `${low(typeLabel('ceiling', x.type))} · ${x.code || ''}`, hay: `${x.code || ''} ${x.name || ''} ${typeLabel('ceiling', x.type)}` })),
         sensor: () => (d.sensors || []).map((x) => ({ id: x.id, title: x.code || t('main.layoutFindSensor'), sub: `${t('main.layoutFindSensor')} · ${low(typeLabel('sensor', x.type))}`, hay: `${x.code || ''} ${typeLabel('sensor', x.type)} ${wallName(x.wallId)}` })),
         power: () => (d.power || []).map((x) => ({ id: x.id, title: typeLabel('power', x.type), sub: `${t('main.layoutFindLuz')} · ${wallName(x.wallId)}`.replace(/ · $/, ''), hay: `${typeLabel('power', x.type)} ${wallName(x.wallId)}` })),
         obstacle: () => (d.obstacles || []).filter((o) => o.kind !== 'wall').map((o) => ({ id: o.id, title: o.name || typeLabel('obstacle', o.kind), sub: low(typeLabel('obstacle', o.kind)), hay: `${o.name || ''} ${typeLabel('obstacle', o.kind)}` })),
@@ -3699,7 +3754,7 @@ function renderSvg(underlay) {
     const sA = state.showArea;
     const sM = state.showMeasures;
     // con zonas enfocadas y el resto «Oculto» manda «Qué ver» (la lista ya viene filtrada por tipo): lo de adentro se dibuja aunque su paso esté apagado en la franja
-    const FOCUS_STEPS = ['paredes', 'puertas', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'pisos', 'rampas', 'espacios', 'activos'];
+    const FOCUS_STEPS = ['paredes', 'puertas', 'obstaculos', 'seguridad', 'techos', 'sensores', 'luz', 'transito', 'objetos', 'pisos', 'rampas', 'espacios', 'activos'];
     const on = underlay ? () => true : (zoneFocus && !dimmed ? (step) => stepOn(step) || FOCUS_STEPS.includes(step) : stepOn);
     const showFp = finding ? (on('espacios') || activeFind().kind === 'footprint' || activeFind().kind === 'items') : on('espacios');
     const showSp = on('activos') || on('posiciones') || on('niveles') || on('ubicaciones');
@@ -4063,6 +4118,23 @@ function renderSvg(underlay) {
             }
         });
     }
+    // Techos (paso Techos): cámaras, bocinas, ventilación, extractores… como símbolos de su color dentro de un círculo punteado (que dice que están arriba, no en el piso), con su código. Lo que queda fuera del contorno o pasa del techo lleva un aro rojo.
+    if (on('techos')) {
+        const SG = window.LayoutMapSvg;
+        const rs = Math.max(4.5, Math.min(7, sc * 0.4));
+        (d.ceiling || []).forEach((e) => {
+            const bad = clIssues.get(e.id);
+            const px = X(e.x);
+            const py = Y(e.y);
+            const zone = (d.zones.find((z) => z.id === e.zoneId) || {}).name;
+            const why = bad ? Object.values(bad).map(ceilingIssueText).join(' · ') : '';
+            const title = `<title>${esc(e.code || '')} · ${esc(typeLabel('ceiling', e.type))}${e.name ? ` · ${esc(e.name)}` : ''}${zone ? ` · ${esc(zone)}` : ''} · ${esc(t('main.layoutCuelgaA'))} ${fmt(LC.ceilingHangOf(d, e))}${why ? `\n${esc(why)}` : ''}</title>`;
+            const hb = [px - rs * 1.55 - 3, py - rs * 1.55 - 3, 2 * rs * 1.55 + 6, 2 * rs * 1.55 + 6];
+            s += `<rect class="hl-box" data-hlbox="ceiling:${esc(e.id)}" x="${hb[0].toFixed(1)}" y="${hb[1].toFixed(1)}" width="${hb[2].toFixed(1)}" height="${hb[3].toFixed(1)}" rx="3"/>`;
+            s += `<g class="lceil" data-clid="${esc(e.id)}">${SG.ceilingGlyph(e.type, px, py, rs)}${title}</g>${SG.ceilingLabel(px, py - rs * 1.55 - 3, e.code || '')}`;
+            if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="${(rs * 1.55 + 3).toFixed(1)}"/>`;
+        });
+    }
     const cx = (x0 + x1) / 2;
     const cy = (y0 + y1) / 2;
     // las esquinas (puntos), la medida de cada lado y la altura de cada esquina son del contorno: salen solo con el paso Contorno
@@ -4153,6 +4225,7 @@ function refreshLive() {
     applyTransitMarks();
     // el código (según su tipo) y la zona de cada elemento de seguridad salen de su tipo y de su lugar: se vuelven a sacar con cada cambio
     applySafetyMarks();
+    applyCeilingMarks();
     // el código y la zona de cada sensor salen de la pared donde se puso: se vuelven a sacar con cada cambio
     (state.draft.sensors || []).forEach((s, i) => {
         const codeCell = document.querySelector(`[data-sensor-code="${i}"]`);
@@ -4768,6 +4841,14 @@ const ROW_FACTORY = {
         const n = (d.safety || []).length;
         return { id: uid('g'), code: '', type: 'extinguisher', name: '', zoneId: '', x: round2((Math.min(...xs) + Math.max(...xs)) / 2 + (n % 5) * 1.5), y: round2((Math.min(...ys) + Math.max(...ys)) / 2 + Math.floor(n / 5) * 1.5) };
     },
+    // algo nuevo del techo nace como cámara en el centro de la nave (corrido un poco para que no se encimen), pegado al techo; se acomoda con X e Y y se le cambia el tipo en la lista
+    ceiling: () => {
+        const d = state.draft;
+        const xs = d.vertices.map((p) => p[0]);
+        const ys = d.vertices.map((p) => p[1]);
+        const n = (d.ceiling || []).length;
+        return { id: uid('c'), code: '', type: 'camera', name: '', zoneId: '', x: round2((Math.min(...xs) + Math.max(...xs)) / 2 + (n % 5) * 1.5), y: round2((Math.min(...ys) + Math.max(...ys)) / 2 + Math.floor(n / 5) * 1.5) };
+    },
     // un pasillo nuevo nace dentro de la primera zona con tipo (para que no empiece fuera de toda zona); sin zonas, cerca de la esquina
     transit: () => {
         const z = state.draft.zones.find((r) => r.type && !Array.isArray(r.pts) && r.l > 2 && r.w > 2);
@@ -4788,13 +4869,13 @@ const ROW_FACTORY = {
     // un activo siempre va dentro de una huella: nace sin huella y hay que elegirla (no se puede guardar hasta entonces)
     spaces: () => ({ id: uid('s'), footprintId: '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
-const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', safety: 'seguridad', transit: 'transito', objects: 'objetos', zones: 'zonas', floors: 'pisos', ramps: 'rampas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones', lvl: 'niveles' };
+const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', safety: 'seguridad', ceiling: 'techos', transit: 'transito', objects: 'objetos', zones: 'zonas', floors: 'pisos', ramps: 'rampas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones', lvl: 'niveles' };
 // Los códigos los pone el sistema y no se editan: el de la zona (Z001…, consecutivo), el de la huella (H001… por zona, y su zona sale de dónde está en el croquis) y el del activo (letra de su tipo + número
 // consecutivo por zona y tipo: A001, G001…). Lo que ya estaba guardado y sigue igual conserva su código; lo nuevo (todavía sin guardar) y lo que cambió de zona o de tipo lo recibe cada vez que se acomoda,
 // así siempre es el que le toca, el mismo que le pondrá el servidor al guardar.
 function syncHuellas() {
     const d = state.draft;
-    const next = LC.lockCodes(LC.deriveSafetyZones(LC.deriveTransitZones(LC.deriveSensorZones(LC.deriveSpaces(LC.deriveFootprintZones(d))))), state.saved);
+    const next = LC.lockCodes(LC.deriveCeilingZones(LC.deriveSafetyZones(LC.deriveTransitZones(LC.deriveSensorZones(LC.deriveSpaces(LC.deriveFootprintZones(d)))))), state.saved);
     d.transit = next.transit || d.transit || [];
     // los objetos toman del catálogo su dibujo y sus medidas (y las claves de antes pasan a los ids)
     const withCatalog = LC.applyTransitCatalog(d);
@@ -4819,6 +4900,9 @@ function syncHuellas() {
     // los elementos de seguridad: su zona y su código (cada tipo con su letra); el contador de los números ya dados viaja con el Layout (sin él no se guarda ese campo)
     d.safety = next.safety || d.safety || [];
     if (next.safetyNext && Object.keys(next.safetyNext).length) d.safetyNext = next.safetyNext; else delete d.safetyNext;
+    // lo que cuelga del techo: igual (su zona, su código por tipo y el contador de los números ya dados)
+    d.ceiling = next.ceiling || d.ceiling || [];
+    if (next.ceilingNext && Object.keys(next.ceilingNext).length) d.ceilingNext = next.ceilingNext; else delete d.ceilingNext;
     d.spaces = state.renumber ? LC.renumberSpaceCodes(next).spaces : next.spaces; // Renumerar: consecutivos desde 001 por zona y tipo
 }
 
@@ -4980,6 +5064,13 @@ function onEdit(event) {
             setSafetyType(row, el.value);
         } else if (list === 'safety' && key === 'model') {
             setHydrantModel(row, el.value);
+        } else if (list === 'ceiling' && key === 'h') {
+            // «Cuelga a» es opcional: vacío = pegado al techo
+            const raw = String(el.value).trim();
+            const n = parseFloat(raw);
+            if (raw !== '' && Number.isFinite(n) && n > 0) row.h = Math.min(n, LC.LIMITS.maxHeight); else delete row.h;
+        } else if (list === 'ceiling' && key === 'type') {
+            row.type = LC.CEILING_TYPES.includes(el.value) ? el.value : 'camera';
         } else if (list === 'transit' && key === 'h') {
             // el alto libre es opcional: vacío = no se revisa el alto
             const raw = String(el.value).trim();
@@ -6134,17 +6225,17 @@ function effective3dLayers() {
     const f = activeFind();
     if (f && !state.findDim) {
         const zf = f.kind === 'zone' || f.kind === 'items';
-        return { contour: false, walls: zf && fxWant('wall'), columns: zf && fxWant('obstacle'), doors: zf && fxWant('door'), power: zf && fxWant('power'), sensors: zf && fxWant('sensor'), objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || (zf && fxWant('footprint')), assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones') || (zf && fxWant('space'))) };
+        return { contour: false, walls: zf && fxWant('wall'), columns: zf && fxWant('obstacle'), doors: zf && fxWant('door'), power: zf && fxWant('power'), sensors: zf && fxWant('sensor'), objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), ceiling: zf && fxWant('ceiling'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || (zf && fxWant('footprint')), assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones') || (zf && fxWant('space'))) };
     }
     const layers = {
-        contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || !!(f && f.kind === 'zone'),
+        contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), ceiling: stepOn('techos'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), sensors: stepOn('sensores'), assets: stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones'),
     };
     // zonas enfocadas con el resto «tenue»: las capas que «Qué ver» no pidió se apagan (y se ven tenues)
     if (f && f.kind === 'zone') {
         const c = findTypesChosen();
         if (c.length) {
-            const map = { wall: 'walls', obstacle: 'columns', door: 'doors', power: 'power', sensor: 'sensors', safety: 'safety', transit: 'transit', object: 'objects', footprint: 'footprints', space: 'assets' };
+            const map = { wall: 'walls', obstacle: 'columns', door: 'doors', power: 'power', sensor: 'sensors', safety: 'safety', ceiling: 'ceiling', transit: 'transit', object: 'objects', footprint: 'footprints', space: 'assets' };
             Object.keys(map).forEach((ty) => { if (!c.includes(ty)) layers[map[ty]] = false; });
         }
     }
@@ -6626,6 +6717,15 @@ async function saveLayout() {
         renderPanel();
         refreshLive();
         Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${safetyIssueText(freshSafety[0])}`, 'warning');
+        return false;
+    }
+    // Techos: lo que cuelga del techo va dentro del contorno y no pasa del techo de su punto; lo nuevo o lo que cambió y no cumple no se guarda.
+    const freshCeiling = LC.newCeilingViolations(state.draft, state.saved);
+    if (freshCeiling.length) {
+        showStep('techos');
+        renderPanel();
+        refreshLive();
+        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${ceilingIssueText(freshCeiling[0])}`, 'warning');
         return false;
     }
     const clashed = LC.newColorClashes(state.draft, state.saved);
