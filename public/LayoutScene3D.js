@@ -1424,17 +1424,23 @@
             };
             // Gabinete (gabeta): cuerpo blanco con costados, tapa y zócalo grises, un cajón (frente blanco con su jaladera) por nivel y por espacio en la cara que mira al pasillo (su frente), y un contorno fino: así se ve limpio,
             // se distinguen los cajones y un gabinete del que está pegado a él. Se arma en un marco propio (u = a lo ancho de la cara, v = hacia afuera del frente) para cualquier lado del frente.
-            const cabParts = []; const cabEdges = [];
+            const cabParts = []; const cabEdges = []; const cabEdgesDim = []; // el contorno de los gabinetes tenues va aparte, en un gris claro
             const CAB = { core: 0xd3d8e2, frame: 0xb6bdcc, plinth: 0x98a1b3, drawer: 0xffffff, handle: 0x465065 };
-            const addCabinet3d = (s, cx, cz, fl, lv, own, mute) => {
+            const addCabinet3d = (s, cx, cz, fl, lv, own, mute, dimIt) => {
                 const LCc = root.LayoutCalc;
                 const side = frontSides[s.id] || (LCc && LCc.activoFront ? (LCc.activoFront(layout, s) || {}).side : '') || 'S';
-                const nv = LCc && LCc.faceVectors ? LCc.faceVectors(side).front : [0, 1];
-                const nx = nv[0]; const nz = nv[1];
-                const alongX = nz !== 0; // el frente mira hacia arriba o abajo del croquis: el ancho de la cara va a lo largo (X)
-                const tx = alongX ? 1 : 0; const tz = alongX ? 0 : 1;
-                const W = alongX ? s.l : s.d; const D = alongX ? s.d : s.l; const H = s.h;
-                const put = (u, y, v, w, h, dp, c) => cabParts.push({ x: cx + tx * u + nx * v, y: fl + y, z: cz + tz * u + nz * v, sx: alongX ? w : dp, sy: h, sz: alongX ? dp : w, c: mute(c) });
+                const dirs = LCc && LCc.faceVectors ? LCc.faceVectors(side) : { front: [0, 1], back: [0, -1], left: [-1, 0], right: [1, 0] };
+                // las caras por donde se consume (frente, atrás, izquierda, derecha): cada una lleva sus cajones; sin nada guardado, solo el frente
+                const faces = (LCc && LCc.facesOfSpace ? LCc.facesOfSpace(s) : ['front']).filter((f) => dirs[f]);
+                // el marco de una cara: u = a lo ancho de la cara, v = hacia afuera de ella
+                const frameOf = (nv) => {
+                    const nx = nv[0]; const nz = nv[1];
+                    const alongX = nz !== 0; // la cara mira hacia arriba o abajo del croquis: su ancho va a lo largo (X)
+                    const tx = alongX ? 1 : 0; const tz = alongX ? 0 : 1;
+                    return { alongX, W: alongX ? s.l : s.d, D: alongX ? s.d : s.l, put: (u, y, v, w, h, dp, c) => cabParts.push({ x: cx + tx * u + nx * v, y: fl + y, z: cz + tz * u + nz * v, sx: alongX ? w : dp, sy: h, sz: alongX ? dp : w, c: mute(c) }) };
+                };
+                const { W, D, put } = frameOf(dirs.front);
+                const H = s.h;
                 const ts = Math.min(0.03, W * 0.08); const tp = Math.min(0.03, H * 0.03); const base = Math.min(0.06, H * 0.05);
                 put(0, H / 2, 0, Math.max(W - 0.004, 0.02), Math.max(H - 0.004, 0.02), Math.max(D - 0.004, 0.02), CAB.core); // el cuerpo
                 [-1, 1].forEach((k) => put(k * (W / 2 - ts / 2), H / 2, 0, ts, H, D, CAB.frame)); // los costados
@@ -1447,15 +1453,20 @@
                     else { const step = (inner1 - inner0) / lv; y0 = inner0 + (k - 1) * step; y1 = y0 + step; }
                     if (!(y1 - y0 > 0.04)) continue;
                     const yc = (y0 + y1) / 2; const hD = y1 - y0 - 0.016;
-                    const rects = alongX && LCc && LCc.levelBayRects ? LCc.levelBayRects(s, k) : null; // un cajón por espacio del nivel (de lado: uno solo, del ancho de la cara)
-                    const cols = rects && rects.length ? rects.map((r) => ({ u: r.x + r.l / 2 - s.l / 2, w: r.l })) : [{ u: 0, w: W - 2 * ts }];
-                    cols.forEach((cl) => {
-                        const wD = Math.max(cl.w - 0.016, 0.03);
-                        put(cl.u, yc, D / 2 + 0.006, wD, hD, 0.02, own !== null ? own : CAB.drawer); // el frente del cajón
-                        put(cl.u, yc + Math.min(hD * 0.25, 0.05), D / 2 + 0.03, Math.min(0.14, wD * 0.5), 0.018, 0.03, CAB.handle); // su jaladera
+                    // cada cara por donde se consume lleva su cajón por nivel (con varios espacios en el nivel, uno por espacio; de lado, uno solo del ancho de la cara)
+                    faces.forEach((fc) => {
+                        const fr = frameOf(dirs[fc]);
+                        const rects = fr.alongX && LCc && LCc.levelBayRects ? LCc.levelBayRects(s, k) : null;
+                        const tsF = Math.min(0.03, fr.W * 0.08);
+                        const cols = rects && rects.length ? rects.map((r) => ({ u: r.x + r.l / 2 - s.l / 2, w: r.l })) : [{ u: 0, w: fr.W - 2 * tsF }];
+                        cols.forEach((cl) => {
+                            const wD = Math.max(cl.w - 0.016, 0.03);
+                            fr.put(cl.u, yc, fr.D / 2 + 0.006, wD, hD, 0.02, own !== null ? own : CAB.drawer); // el frente del cajón
+                            fr.put(cl.u, yc + Math.min(hD * 0.25, 0.05), fr.D / 2 + 0.03, Math.min(0.14, wD * 0.5), 0.018, 0.03, CAB.handle); // su jaladera
+                        });
                     });
                 }
-                edgeBox(cx, fl + H / 2, cz, s.l, H, s.d, cabEdges); // el contorno del gabinete
+                edgeBox(cx, fl + H / 2, cz, s.l, H, s.d, dimIt ? cabEdgesDim : cabEdges); // el contorno del gabinete (gris claro si está tenue)
             };
             // Rack móvil: un carrito de repisas de alambre cromado con ruedas (más ligero que el rack): cuatro postes delgados, una repisa de alambre por nivel (marco, hilos a lo largo y a lo ancho), la de arriba con borde de canasta,
             // un asa en un extremo del lado largo y cuatro ruedas con su base. Se arma dentro de su caja (largo × fondo × alto); el eje largo es el del carrito.
@@ -1595,7 +1606,8 @@
                     const loadH = (s.h - 0.14) / lv;
                     if (!dimS) for (let k = 0; k < lv; k++) edgeBox(cx, fl + 0.14 + k * loadH + loadH / 2, cz, s.l - 0.04, loadH - 0.04, s.d - 0.04);
                 } else if (s.type === 'cabinet') {
-                    addCabinet3d(s, cx, cz, fl, lv, own, mute);
+                    // tenue: se desvanece menos que lo demás para que se sigan distinguiendo sus cajones, y su contorno es gris claro (no el oscuro de los elegidos)
+                    addCabinet3d(s, cx, cz, fl, lv, own, dimS ? (c) => mixHex(c, 0xe4e7f0, 0.8) : mute, dimS);
                 } else if (s.type === 'cart') {
                     addCart3d(s, cx, cz, fl, lv, own, mute);
                 } else if (s.type === 'cold') {
@@ -1665,6 +1677,13 @@
                 const cl = new THREE.LineSegments(cg, new THREE.LineBasicMaterial({ color: 0x6f778a }));
                 cl.raycast = () => {};
                 group.assets.add(cl);
+            }
+            if (cabEdgesDim.length) {
+                const cgd = new THREE.BufferGeometry();
+                cgd.setAttribute('position', new THREE.Float32BufferAttribute(cabEdgesDim, 3));
+                const cld = new THREE.LineSegments(cgd, new THREE.LineBasicMaterial({ color: 0xc3c9d8 }));
+                cld.raycast = () => {};
+                group.assets.add(cld);
             }
             volBoxes.forEach((vb) => {
                 const plain = vb.fmt.pattern === 'solid' || vb.fmt.pattern === 'none';

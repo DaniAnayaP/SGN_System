@@ -2623,6 +2623,16 @@ function addObjectDisc(svg, box, cls) {
     mk('obj-disc', r);
     mk('obj-ring', r * 1.14);
 }
+// Lo que se eligió de verdad: una huella elegida lleva todos sus activos, pero un activo elegido va solo (su huella se usa para dibujarlo, no se ilumina).
+function findExplicit() {
+    const f = activeFind();
+    const out = { fps: new Set(), sps: new Set() };
+    if (!f) return out;
+    if (f.kind === 'items') (f.items || []).forEach((it) => { if (it.type === 'footprint') out.fps.add(it.id); else if (it.type === 'space') out.sps.add(it.id); });
+    else if (f.kind === 'spaces') (f.ids || []).forEach((id) => out.sps.add(id));
+    else findIds().footprints.forEach((id) => out.fps.add(id));
+    return out;
+}
 function applyFindDim(dimmed) {
     const svg = $('layout-svg');
     svg.classList.remove('find-dimmed');
@@ -2633,8 +2643,9 @@ function applyFindDim(dimmed) {
     if (f.kind === 'zone' || f.kind === 'items') (f.kind === 'zone' ? zoneFocusIds(f) : [...findIds().zones]).forEach((id) => sel.push(`[data-zid="${CSS.escape(id)}"]`, `[data-lz="${CSS.escape(id)}"]`));
     if (f.kind === 'zone' || f.kind === 'items') { const it = findIds().items || {}; Object.keys(it).forEach((ty) => it[ty].forEach((id) => sel.push(`[data-${FIND_ITEM_ATTR[ty]}="${CSS.escape(id)}"]`))); }
     // un activo (o un nivel o hueco) enfocado: su dibujo y su etiqueta; sus vecinos de la misma huella se apagan con lo demás
-    if (f.kind === 'spaces') f.ids.forEach((id) => sel.push(`[data-sid="${CSS.escape(id)}"]`));
-    (f.kind === 'spaces' ? new Set() : findIds().footprints).forEach((id) => sel.push(`[data-fid="${CSS.escape(id)}"]`, `[data-lf="${CSS.escape(id)}"]`));
+    const ex = findExplicit();
+    ex.sps.forEach((id) => sel.push(`[data-sid="${CSS.escape(id)}"]`, `[data-ls="${CSS.escape(id)}"]`));
+    ex.fps.forEach((id) => sel.push(`[data-fid="${CSS.escape(id)}"]`, `[data-lf="${CSS.escape(id)}"]`));
     if (sel.length) svg.querySelectorAll(sel.join(',')).forEach((n) => n.classList.add('find-on'));
     svg.classList.add('find-dimmed');
     // lo elegido lleva el contorno punteado naranja que gira (como el del renglón elegido): una caja por huella, activo o zona
@@ -2645,7 +2656,8 @@ function applyFindDim(dimmed) {
         if (shape) addObjectDisc(svg, shape.getBBox(), 'find-mark');
     });
     svg.querySelectorAll('[data-fid].find-on, [data-sid].find-on, [data-zid].find-on').forEach((el) => {
-        const key = el.hasAttribute('data-fid') ? `f:${el.getAttribute('data-fid')}` : (el.hasAttribute('data-sid') ? `s:${el.getAttribute('data-sid')}` : `z:${el.getAttribute('data-zid')}`);
+        // un activo de una huella elegida va en la caja de su huella; un activo elegido solo lleva su propia caja
+        const key = el.hasAttribute('data-sid') && !ex.fps.has(el.getAttribute('data-fid')) ? `s:${el.getAttribute('data-sid')}` : (el.hasAttribute('data-fid') ? `f:${el.getAttribute('data-fid')}` : `z:${el.getAttribute('data-zid')}`);
         const shape = el.matches('rect, polygon') ? el : el.querySelector('polygon, rect');
         if (!shape) return;
         if (!groups.has(key)) groups.set(key, []);
@@ -3924,7 +3936,7 @@ function renderSvg(underlay) {
                 s += `<rect class="ls ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" data-fid="${esc(sp.footprintId)}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" rx="2">${spaceTitle}</rect>`;
             }
             const spaceInk = window.LayoutMapSvg.inkFor(sp.fmt || LC.FMT_ASSET_DEFAULT);
-            if (w >= 26 && h >= 9) s += `<text class="lt3" data-lf="${esc(sp.footprintId)}"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
+            if (w >= 26 && h >= 9) s += `<text class="lt3" data-lf="${esc(sp.footprintId)}" data-ls="${esc(sp.id)}"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
         });
     }
     if (showFp || showSp) {
