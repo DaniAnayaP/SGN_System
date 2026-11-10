@@ -266,7 +266,7 @@
     // La capa Tránsito (los pasillos) solo se ofrece si el Layout trae pasillos.
     // La capa Seguridad (extintores, hidrantes, puertas de emergencia…) tampoco se ofrece si el Layout no trae elementos de seguridad.
     const layerShown = (key) => !(locked('doors') && (key === 'puertas' || key === 'luz')) && !(key === 'niveles' && !((((view.data || {}).layout) || {}).floors || []).length && !((((view.data || {}).layout) || {}).ramps || []).length) && !(key === 'transito' && !((((view.data || {}).layout) || {}).transit || []).length) && !(key === 'seguridad' && !((((view.data || {}).layout) || {}).safety || []).length);
-    const mapView = { layers: ['contorno', 'puertas', 'zonas', 'niveles', 'transito', 'seguridad', 'espacios'], measures: true, area: true, names: true, rotation: 0, mode3d: false, walls: true, posFocus: null };
+    const mapView = { layers: ['contorno', 'puertas', 'zonas', 'niveles', 'transito', 'seguridad', 'espacios'], measures: true, area: true, names: true, rotation: 0, mode3d: false, walls: true, posFocus: null, pos3d: null };
     // Lo que se está buscando en el croquis ({ zones: { id: color } }): la zona de la categoría que se escaneó sale sombreada y el resto tenue.
     // value = lo que se dibuja ahora (el croquis base o el de la búsqueda); base = lo que corresponde a la página sin buscar; key = lo ya dibujado, para no redibujar sin necesidad.
     const viewFocus = { value: null, base: null, key: 'null' };
@@ -396,19 +396,40 @@
         if (picker3d && !layers.assets && picker3d.isOpen()) picker3d.hide();
     }
     function destroy3d() {
+        mapView.pos3d = null;
         if (scene3d) { scene3d.destroy(); scene3d = null; }
         picker3d = null;
+    }
+    // Posiciones en el 3D: al tocar un activo, la tarjeta de arriba ofrece sus niveles; al elegir uno, de ese activo solo se ve ese nivel con la distribución de sus posiciones y por dónde se consume (LayoutScene3D, focusLevel
+    // con all). N001 otra vez, o la ✕, lo quita.
+    function set3dLevel(id, n) {
+        if (!scene3d || !view.data) return;
+        const layout = view.data.layout;
+        const fronts = Object.fromEntries((layout.spaces || []).map((s) => [s.id, (window.LayoutCalc.activoFront(layout, s) || {}).side]));
+        mapView.pos3d = n ? { id, n } : null;
+        // con un nivel elegido solo se ve ese activo (los demás se ocultan); al quitarlo vuelven los que el selector de activos tenía ocultos
+        scene3d.setHiddenAssets(n ? new Set((layout.spaces || []).filter((s) => s.id !== id).map((s) => s.id)) : new Set(m3dHidden), false);
+        scene3d.update(layout, { fronts, focusLevel: n ? { id, n, mode: 'hide', all: true } : null });
+        scene3d.highlight(n ? { kind: 'space', id, n, strong: true, all: true } : null);
+        if (n && scene3d.focusOn) scene3d.focusOn();
+    }
+    function pos3dChipsHtml(s) {
+        if (!positionsOn() || !((view.data.layout.positions || []).some((p) => p.s === s.id))) return '';
+        const cur = mapView.pos3d && mapView.pos3d.id === s.id ? mapView.pos3d.n : 0;
+        const chips = Array.from({ length: Math.max(1, Math.floor(s.levels || 1)) }, (_, i) => `<button type="button" class="cchip" data-pos3-level="${i + 1}" data-pos3-id="${esc(s.id)}" aria-pressed="${cur === i + 1}">N${String(i + 1).padStart(3, '0')}</button>`).join('');
+        return `<div class="pos3"><span class="lv">${esc(TEXT.positions)}: ${chips}</span>${cur ? `<button type="button" class="pclose" data-pos3-clear aria-label="${esc(TEXT.posClose)}" title="${esc(TEXT.posClose)}">✕</button><small class="fnote">${esc(TEXT.posFaceNote)}</small>` : ''}</div>`;
     }
     function show3dInfo(sel) {
         const box = document.getElementById('m3d-info');
         if (!box) return;
-        if (!sel || !view.data) { box.hidden = true; return; }
+        if (!sel || !view.data) { box.hidden = true; if (mapView.pos3d) set3dLevel(null, 0); return; }
+        if (mapView.pos3d && !(sel.kind === 'space' && sel.space && sel.space.id === mapView.pos3d.id)) set3dLevel(null, 0); // otro activo: se quita el nivel enfocado
         const layout = view.data.layout;
         if (sel.kind === 'space') {
             const s = sel.space;
             const zone = (layout.zones || []).find((z) => z.id === s.zoneId);
             const levels = (s.levels || 1) === 1 ? TEXT.level1 : fill(TEXT.levelsN, { n: s.levels });
-            box.innerHTML = `<b>${esc(s.code)}</b> · ${esc(TEXT.spaceType[s.type] || s.type)}${zone ? ` · ${esc(zone.name)}` : ''} · ${fmt(s.l)} × ${fmt(s.d)} × ${fmt(s.h)} m · ${esc(levels)}`;
+            box.innerHTML = `<b>${esc(s.code)}</b> · ${esc(TEXT.spaceType[s.type] || s.type)}${zone ? ` · ${esc(zone.name)}` : ''} · ${fmt(s.l)} × ${fmt(s.d)} × ${fmt(s.h)} m · ${esc(levels)}${pos3dChipsHtml(s)}`;
         } else {
             const z = sel.zone;
             box.innerHTML = `<b>${esc(z.name)}</b> · ${esc(z.type ? (TEXT.zone[z.type] || z.type) : TEXT.noZone)} · ${fmt(window.LayoutCalc.zoneArea(z))} m²`;
@@ -1056,6 +1077,19 @@
             mapView.posFocus = null;
             renderPosPick(view.data);
             replaceMap(view.data);
+            return;
+        }
+        // Posiciones en el 3D: los niveles de la tarjeta de arriba del 3D
+        const lv3 = event.target.closest('[data-pos3-level]');
+        const clear3 = event.target.closest('[data-pos3-clear]');
+        if ((lv3 || clear3) && view.data && scene3d) {
+            const id = lv3 ? lv3.dataset.pos3Id : (mapView.pos3d && mapView.pos3d.id);
+            const n = lv3 ? Number(lv3.dataset.pos3Level) : 0;
+            const again = !!(lv3 && mapView.pos3d && mapView.pos3d.id === id && mapView.pos3d.n === n);
+            set3dLevel(id, again ? 0 : n);
+            const sp3 = (view.data.layout.spaces || []).find((x) => x.id === id);
+            const holder = document.querySelector('#m3d-info .pos3');
+            if (holder && sp3) holder.outerHTML = pos3dChipsHtml(sp3) || '<span class="pos3"></span>';
             return;
         }
         const posChip = event.target.closest('[data-pos-space]');

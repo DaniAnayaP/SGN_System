@@ -71,6 +71,8 @@
 
         // La cara de consumo de lo elegido (activo, nivel, espacio o posición): con lo demás oculto no se ve el pasillo, así que el lado por donde se consume se marca con un marco punteado y una flecha hacia afuera.
         let frontSides = {};
+        // las posiciones de un espacio (nivel × espacio) de un activo, por número; las del editor traen spaceId y las de la página pública, s
+        const posOf = (sid, n, c) => ((lastLayout && lastLayout.positions) || []).filter((p) => (p.spaceId || p.s) === sid && p.n === n && p.c === c).sort((a, z) => (a.num || 0) - (z.num || 0));
         const faceGroup = new THREE.Group();
         scene.add(faceGroup);
         function clearFaceMarks() {
@@ -93,32 +95,56 @@
             if (n) faces = LCf.facesOfLevel(sp, n);
             if (n && c) {
                 faces = LCf.facesOfBay(sp, n, c);
-                const pos = Number(hl.p) > 0 && LCf.positionsOfBay ? LCf.positionsOfBay(lastLayout, sp.id, n, c).find((q) => q.num === Number(hl.p)) : null;
+                const pos = Number(hl.p) > 0 ? posOf(sp.id, n, c).find((q) => q.num === Number(hl.p)) : null;
                 if (pos) faces = LCf.facesOfPosition(sp, pos);
             }
             const dirs = LCf.faceVectors(frontSides[sp.id] || (LCf.activoFront(lastLayout, sp) || {}).side);
-            const hx = box.sx / 2; const hz = box.sz / 2;
-            const y0 = box.y - box.sy / 2; const y1 = box.y + box.sy / 2;
-            const span = Math.max(Math.min(box.sx, box.sz), 0.2);
-            const dash = clamp(span * 0.06, 0.03, 0.25);
-            faces.forEach((f) => {
-                const v = dirs[f];
-                if (!v) return;
-                const pts = v[0] !== 0
-                    ? [[box.x + v[0] * hx, y0, box.z - hz], [box.x + v[0] * hx, y0, box.z + hz], [box.x + v[0] * hx, y1, box.z + hz], [box.x + v[0] * hx, y1, box.z - hz], [box.x + v[0] * hx, y0, box.z - hz]]
-                    : [[box.x - hx, y0, box.z + v[1] * hz], [box.x + hx, y0, box.z + v[1] * hz], [box.x + hx, y1, box.z + v[1] * hz], [box.x - hx, y1, box.z + v[1] * hz], [box.x - hx, y0, box.z + v[1] * hz]];
-                const geo = new THREE.BufferGeometry().setFromPoints(pts.map((q) => new THREE.Vector3(q[0], q[1], q[2])));
-                const line = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: 0x0b8f6a, dashSize: dash, gapSize: dash * 0.6, depthTest: false, transparent: true }));
-                line.computeLineDistances();
-                line.renderOrder = 11;
-                faceGroup.add(line);
-                const r = clamp(span * 0.14, 0.05, 0.3);
-                const cone = new THREE.Mesh(new THREE.ConeGeometry(r, r * 2.2, 12), new THREE.MeshBasicMaterial({ color: 0x0b8f6a, depthTest: false, transparent: true }));
-                cone.position.set(box.x + v[0] * (hx + r * 1.2), box.y, box.z + v[1] * (hz + r * 1.2));
-                cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(v[0], 0, v[1]));
-                cone.renderOrder = 11;
-                faceGroup.add(cone);
-            });
+            // una cara de consumo de una caja (x, y, z = su centro; sx, sy, sz = su tamaño): un marco punteado en el lado por donde se consume y una flecha hacia afuera
+            const mark = (b2, list) => {
+                const hx = b2.sx / 2; const hz = b2.sz / 2;
+                const y0 = b2.y - b2.sy / 2; const y1 = b2.y + b2.sy / 2;
+                const span = Math.max(Math.min(b2.sx, b2.sz), 0.2);
+                const dash = clamp(span * 0.06, 0.03, 0.25);
+                list.forEach((f) => {
+                    const v = dirs[f];
+                    if (!v) return;
+                    const pts = v[0] !== 0
+                        ? [[b2.x + v[0] * hx, y0, b2.z - hz], [b2.x + v[0] * hx, y0, b2.z + hz], [b2.x + v[0] * hx, y1, b2.z + hz], [b2.x + v[0] * hx, y1, b2.z - hz], [b2.x + v[0] * hx, y0, b2.z - hz]]
+                        : [[b2.x - hx, y0, b2.z + v[1] * hz], [b2.x + hx, y0, b2.z + v[1] * hz], [b2.x + hx, y1, b2.z + v[1] * hz], [b2.x - hx, y1, b2.z + v[1] * hz], [b2.x - hx, y0, b2.z + v[1] * hz]];
+                    const geo = new THREE.BufferGeometry().setFromPoints(pts.map((q) => new THREE.Vector3(q[0], q[1], q[2])));
+                    const line = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: 0x0b8f6a, dashSize: dash, gapSize: dash * 0.6, depthTest: false, transparent: true }));
+                    line.computeLineDistances();
+                    line.renderOrder = 11;
+                    faceGroup.add(line);
+                    const r = clamp(span * 0.14, 0.05, 0.3);
+                    const cone = new THREE.Mesh(new THREE.ConeGeometry(r, r * 2.2, 12), new THREE.MeshBasicMaterial({ color: 0x0b8f6a, depthTest: false, transparent: true }));
+                    cone.position.set(b2.x + v[0] * (hx + r * 1.2), b2.y, b2.z + v[1] * (hz + r * 1.2));
+                    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(v[0], 0, v[1]));
+                    cone.renderOrder = 11;
+                    faceGroup.add(cone);
+                });
+            };
+            mark(box, faces);
+            // el nivel entero (página pública): los espacios y las posiciones que se consumen distinto que lo que los contiene llevan su propia marca
+            if (hl.all && n && !c) {
+                const same = (a, z) => JSON.stringify(a || []) === JSON.stringify(z || []);
+                const slots = Math.max(1, LCf.levelSlots(sp, n));
+                const slotW = sp.l / slots;
+                const left = box.x - box.sx / 2;
+                const lvFaces = LCf.facesOfLevel(sp, n);
+                for (let k = 1; k <= slots; k += 1) {
+                    const bayF = LCf.facesOfBay(sp, n, k);
+                    if (!same(bayF, lvFaces)) mark({ x: left + (k - 0.5) * slotW, y: box.y, z: box.z, sx: slotW, sy: box.sy, sz: box.sz }, bayF);
+                    const bm = LCf.bayMeasures(sp, n, k);
+                    const kx = slotW / Math.max(bm.l, 0.01);
+                    const kz = sp.d / Math.max(bm.w, 0.01);
+                    posOf(sp.id, n, k).forEach((p) => {
+                        if (!(Array.isArray(p.faces) && p.faces.length) || same(p.faces, bayF)) return;
+                        const ph = Math.min(p.h, box.sy);
+                        mark({ x: left + (k - 1) * slotW + (p.x + p.l / 2) * kx, y: box.y - box.sy / 2 + ph / 2, z: box.z - box.sz / 2 + (p.y + p.w / 2) * kz, sx: p.l * kx, sy: ph, sz: p.w * kz }, p.faces);
+                    });
+                }
+            }
         }
 
         // Las zonas que mide el sensor elegido (paso Sensores): un tinte MUY tenue sobre su piso, con el borde; se arma al resaltar el sensor (ver applyMeasured).
@@ -352,8 +378,8 @@
                 let z0 = s.y; let dep = s.d;
                 // un localizador es una posición del espacio: ocupa su lugar y sus medidas dentro del espacio (x de izquierda a derecha, y desde el fondo hacia el frente)
                 let posAlto = 0;
-                if (c && Number(hl.p) > 0 && LCx.positionsOfBay && lastLayout) {
-                    const pp = LCx.positionsOfBay(lastLayout, s.id, n, c).find((q) => q.num === Number(hl.p));
+                if (c && Number(hl.p) > 0 && lastLayout) {
+                    const pp = posOf(s.id, n, c).find((q) => q.num === Number(hl.p));
                     if (pp) {
                         const sxP = len / Math.max(m.l, 0.01); const szP = s.d / Math.max(m.w, 0.01);
                         x0 += pp.x * sxP; len = pp.l * sxP;
@@ -401,8 +427,11 @@
         function applyHl() {
             applyMeasured();
             const box = hlBox();
+            // El contorno de un espacio o una posición (y de un nivel) va pegado a su medida: con la holgura de siempre (6 y 20 cm) una posición chica parecía salirse de su espacio.
+            const tight = !!hl && (hl.kind === 'bay' || (hl.kind === 'space' && !!hl.n));
+            const minDim = box ? Math.max(Math.min(box.sx, box.sy, box.sz), 0.05) : 1;
             hlLines.forEach((l, i) => {
-                const grow = i === 0 ? 0.06 : 0.2;
+                const grow = tight ? (i === 0 ? 0 : Math.min(0.2, minDim * 0.05)) : (i === 0 ? 0.06 : 0.2);
                 l.visible = !!box && (i === 0 || hl.strong);
                 if (box) { l.position.set(box.x, box.y, box.z); l.scale.set(box.sx + grow, box.sy + grow, box.sz + grow); }
             });
@@ -1279,7 +1308,8 @@
                     const blen = cont ? s.l / slotsZ : s.l;
                     const mAll = cont ? LCz.bayMeasures(s, nz, cont) : LCz.levelMeasures(s, nz);
                     // con un localizador se dibuja la distribución de las posiciones del espacio (cada una en su lugar y con sus medidas); si no, las divisiones del nivel
-                    const contPos = cont && LCz.positionsOfBay && lastLayout ? LCz.positionsOfBay(lastLayout, s.id, nz, cont) : [];
+                    const contPos = cont && lastLayout ? posOf(s.id, nz, cont) : [];
+                    const allMode = !!fzm.all && !cont; // el nivel entero con las posiciones de todos sus espacios (página pública)
                     const cols = contPos.length ? contPos.length : slotsZ;
                     const sxP = blen / Math.max(mAll.l, 0.01); const szP = s.d / Math.max(mAll.w, 0.01);
                     const yBot = fl + Math.max(mAll.floorH, 0.03);
@@ -1290,7 +1320,25 @@
                     const blockC = mute(own !== null ? own : (s.type === 'pallet' ? WOOD : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d)));
                     const wC = blen / cols;
                     const gx = Math.min(0.02, wC * 0.1); const gz = 0.02;
-                    for (let ci = 0; ci < cols; ci++) {
+                    if (allMode) {
+                        const slotWz = s.l / slotsZ;
+                        for (let c2 = 1; c2 <= slotsZ; c2++) {
+                            const mm = LCz.bayMeasures(s, nz, c2);
+                            const kxz = slotWz / Math.max(mm.l, 0.01); const kzz = s.d / Math.max(mm.w, 0.01);
+                            const beamC = mm.beam > 0 ? mm.beam : 0.06;
+                            const yB = fl + Math.max(mm.floorH, 0.03);
+                            const list = posOf(s.id, nz, c2);
+                            (list.length ? list : [null]).forEach((pp) => {
+                                const hC = Math.max(pp ? Math.min(pp.h, mm.h) : mm.h, 0.1);
+                                const sxC = pp ? pp.l * kxz : slotWz; const szC = pp ? pp.w * kzz : s.d;
+                                const xc = PX(pp ? s.x + (c2 - 1) * slotWz + (pp.x + pp.l / 2) * kxz : s.x + (c2 - 0.5) * slotWz);
+                                const zc = PZ(pp ? s.y + (pp.y + pp.w / 2) * kzz : s.y + s.d / 2);
+                                if (solid) blk.push({ x: xc, y: yB + (beamC + hC) / 2, z: zc, sx: Math.max(sxC - gx, 0.02), sy: beamC + hC, sz: Math.max(szC - gz, 0.02), c: blockC });
+                                else dck.push({ x: xc, y: yB + beamC / 2, z: zc, sx: Math.max(sxC - gx, 0.02), sy: beamC, sz: Math.max(szC - gz, 0.02), c: deckZ });
+                            });
+                        }
+                    }
+                    for (let ci = 0; ci < (allMode ? 0 : cols); ci++) {
                         const mm = cont ? mAll : LCz.bayMeasures(s, nz, ci + 1); // cada espacio del nivel con sus propias medidas
                         const beamC = mm.beam > 0 ? mm.beam : 0.06;
                         const yB = fl + Math.max(mm.floorH, 0.03);
@@ -1374,7 +1422,7 @@
             if (rebuild !== false && lastLayout) update(lastLayout);
         }
         // Marcar lo que se eligió en una tabla del editor (sel = { kind, id, strong }) o quitar la marca (null).
-        function highlight(sel) { hl = sel && sel.id ? { kind: sel.kind, id: sel.id, strong: !!sel.strong, n: sel.n, c: sel.c, f: sel.f, p: sel.p } : null; applyHl(); }
+        function highlight(sel) { hl = sel && sel.id ? { kind: sel.kind, id: sel.id, strong: !!sel.strong, n: sel.n, c: sel.c, f: sel.f, p: sel.p, all: !!sel.all } : null; applyHl(); }
         // Acercar la cámara a lo que está marcado (un nivel, una posición o un localizador): la distancia sale de lo que mide.
         function focusOn() {
             const b = focusContainer || hlBox();
