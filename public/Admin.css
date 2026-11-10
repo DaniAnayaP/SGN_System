@@ -7917,7 +7917,10 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-find-segbtn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); }
 .layout-find-segbtn:focus-visible{ outline: 2px solid var(--color-accent, var(--color-text-primary)); outline-offset: 2px; }
 /* el resto de la nave «tenue»: lo que no es de lo enfocado se ve apagado */
-#layout-svg.find-dimmed > :not(.find-on):not(defs):not(.hl-shape):not(.hl-tag):not(.pos-ov){ opacity: 0.18; }
+#layout-svg.find-dimmed > :not(.find-on):not(defs):not(.hl-shape):not(.hl-tag):not(.pos-ov):not(.find-mark){ opacity: 0.12; }
+/* lo elegido con el resto tenue: contorno punteado naranja que gira, igual que el del renglón elegido */
+#layout-svg .find-mark{ fill: none; stroke: #e8590c; stroke-width: 2; stroke-dasharray: 5 3; animation: hl-march 0.6s linear infinite; pointer-events: none; }
+@media (prefers-reduced-motion: reduce){ #layout-svg .find-mark{ animation: none; } }
 /* las posiciones del nivel enfocado, dibujadas encima del activo en el croquis (solo de pantalla) */
 .pos-ov-bay{ fill: none; stroke: var(--color-text-secondary); stroke-width: 0.9; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
 .pos-ov-bay.sel{ stroke: #e8590c; stroke-width: 1.5; stroke-dasharray: none; }

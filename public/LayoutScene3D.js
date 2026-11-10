@@ -49,7 +49,7 @@
         scene.add(sun);
         // Un grupo por capa: así cada una se muestra u oculta sola.
         const group = {};
-        ['floor', 'roof', 'contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels', 'sensorLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
+        ['floor', 'roof', 'marks', 'contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels', 'sensorLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
         // Con zonas enfocadas y el resto «tenue», lo que no es de lo enfocado se apaga pieza por pieza: lo que se agrega a estas capas mientras se arma un elemento (fxItem) lleva su tipo y su id (userData.fx).
         let fxItem = null;
         ['walls', 'doors', 'power', 'sensors', 'columns', 'transit', 'safety', 'objects'].forEach((n) => {
@@ -186,6 +186,9 @@
         let levelsOn = true;
         // Techo: la losa que se apoya sobre la altura de pared de cada esquina del contorno (con alturas distintas queda inclinada). Es una opción aparte (roofOn), no una capa.
         let roofOn = false;
+        // Lo que se eligió (Elegir, Localizador o Zona) con el resto «tenue»: un contorno punteado naranja que gira, igual que el del croquis, para identificarlo rápido. marks = [{ kind: 'footprint' | 'space' | 'zone', id }].
+        let marks = [];
+        let marchMats = [];
         // Zonas en gris neutro (paso Pisos sin el chip Zonas): no llevan su color y lo que cae sobre un piso lleva el tinte del piso.
         let neutralZones = false;
         // Qué losas de nivel se dibujan: los pisos con el paso Pisos (o Zonas) y las rampas con el paso Rampas (o Zonas), igual que el croquis; sin decir nada (la página pública) se ven los dos.
@@ -227,7 +230,7 @@
                     if (!m.userData) m.userData = {};
                     if (m.userData.op0 === undefined) m.userData.op0 = [m.opacity, m.transparent];
                     m.transparent = dim ? true : m.userData.op0[1];
-                    m.opacity = dim ? m.userData.op0[0] * 0.25 : m.userData.op0[0];
+                    m.opacity = dim ? m.userData.op0[0] * 0.12 : m.userData.op0[0];
                     m.needsUpdate = true;
                 });
             });
@@ -608,6 +611,7 @@
             if (opts && 'openings' in opts) openingsOn = !!opts.openings;
             if (opts && 'levels' in opts) levelsOn = !!opts.levels;
             if (opts && 'roof' in opts) roofOn = !!opts.roof;
+            if (opts && 'marks' in opts) marks = Array.isArray(opts.marks) ? opts.marks : [];
             if (opts && 'neutralZones' in opts) neutralZones = !!opts.neutralZones;
             if (opts && 'floorsShow' in opts) floorsShow = !!opts.floorsShow;
             if (opts && 'rampsShow' in opts) rampsShow = !!opts.rampsShow;
@@ -1036,7 +1040,7 @@
                 const color = neutralZones ? DEFAULT_ZONE_FILL.none : ((z.fmt && z.fmt.fill) || DEFAULT_ZONE_FILL[z.type || 'none'] || DEFAULT_ZONE_FILL.none);
                 const inactive = z.active === false;
                 const dimZone = !!focusSet && !focusSet.zones.has(z.id);
-                const zoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive || dimZone, opacity: inactive ? 0.35 : (dimZone ? 0.22 : 1) });
+                const zoneMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(color), transparent: inactive || dimZone, opacity: inactive ? 0.35 : (dimZone ? 0.1 : 1) });
                 let geo = null;
                 let usedPieces = false;
                 // la zona se pinta por encima del piso (con su color) también donde hay piso: el piso se ve donde la zona no lo cubre y por sus costados
@@ -1340,7 +1344,7 @@
                 if (f.active === false || !(f.l > 0) || !(f.d > 0)) return;
                 const paint = f.fmt && f.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(f.fmt.fill || '') ? f.fmt.fill : '#ffffff';
                 const dimFp = !!focusSet && !focusSet.footprints.has(f.id);
-                const slab = new THREE.Mesh(new THREE.BoxGeometry(f.l, 0.02, f.d), new THREE.MeshLambertMaterial({ color: new THREE.Color(paint), transparent: dimFp, opacity: dimFp ? 0.25 : 1 }));
+                const slab = new THREE.Mesh(new THREE.BoxGeometry(f.l, 0.02, f.d), new THREE.MeshLambertMaterial({ color: new THREE.Color(paint), transparent: dimFp, opacity: dimFp ? 0.1 : 1 }));
                 slab.position.set(PX(f.x + f.l / 2), 0.085 + FL(f.x + f.l / 2, f.y + f.d / 2), PZ(f.y + f.d / 2));
                 slab.userData = { kind: 'footprint', footprint: f };
                 group.footprints.add(slab);
@@ -1360,7 +1364,7 @@
                 const bf = c && list === blk ? bayFmtFor(c) : null;
                 if (!bf) { list.push({ x, y, z, sx, sy, sz, c: color }); return; }
                 if (bf.pattern !== 'solid' && bf.pattern !== 'none') { patDecks.push({ x, y, z, sx, sy, sz, fmt: bf, dim: !!dimIt }); return; }
-                list.push({ x, y, z, sx, sy, sz, c: dimIt ? mixHex(hexNum(bf.fill), 0xe4e7f0, 0.8) : hexNum(bf.fill) });
+                list.push({ x, y, z, sx, sy, sz, c: dimIt ? mixHex(hexNum(bf.fill), 0xe4e7f0, 0.93) : hexNum(bf.fill) });
             };
             const edges = [];
             const posEdges = []; const posFill = []; const posTags = []; // las posiciones (paso Posiciones): bordes, relleno suave y rótulos
@@ -1427,7 +1431,7 @@
                 const cx = PX(s.x + s.l / 2); const cz = PZ(s.y + s.d / 2);
                 const fl = FL(s.x + s.l / 2, s.y + s.d / 2); // el piso donde está parado
                 const dimS = (!!focusSet && !focusSet.spaces.has(s.id)) || (dimHidden && hiddenAssets.has(s.id));
-                const mute = (c) => (dimS ? mixHex(c, 0xe4e7f0, 0.8) : c);
+                const mute = (c) => (dimS ? mixHex(c, 0xe4e7f0, 0.93) : c);
                 const lv = Math.max(1, s.levels || 1);
                 // el color que se le puso en Formato de activo (sin relleno o sin color propio se queda con el de su tipo)
                 const own = s.fmt && s.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(s.fmt.fill || '') ? parseInt(s.fmt.fill.slice(1), 16) : null;
@@ -1539,7 +1543,7 @@
                         const mineFx = focusLevels.filter((f) => f.id === s.id);
                         const otherLevel = mineFx.length > 0 && !mineFx.some((f) => (Number(f.n) || 1) === k);
                         if (otherLevel && mineFx[0].mode === 'hide') continue;
-                        const lvColor = otherLevel ? mixHex(deckC, 0xe4e7f0, 0.8) : deckC;
+                        const lvColor = otherLevel ? mixHex(deckC, 0xe4e7f0, 0.93) : deckC;
                         if (!(LCx && LCx.levelMeasures && LCx.bayMeasures)) { dck.push({ x: cx, y: 0.15 + (k - 1) * ((s.h - 0.3) / lv) + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC }); continue; }
                         // todos los espacios de un nivel van a la misma altura (la del nivel): una sola repisa de todo el largo, con el color de su nivel
                         deckAt(cx, s.l, LCx.levelMeasures(s, k), lvColor);
@@ -1653,6 +1657,40 @@
                 group.assets.add(hitSpaces);
             }
             if (spaceList.length <= MAX_SPACE_LABELS) spaceList.forEach((e) => { if ((!focusSet || focusSet.spaces.has(e.s.id)) && !hiddenAssets.has(e.s.id)) addLabel(group.spaceLabels, e.s.code, e.x, e.s.h + 0.4 + e.fl, e.z, 0.38, false); });
+
+            // lo elegido: un contorno punteado naranja que gira, sobre la caja de cada huella, activo o zona (por encima de lo demás, para verlo aunque esté tapado)
+            marchMats = [];
+            (marks || []).forEach((m) => {
+                let geo = null; let pos = null; let loop = false;
+                if (m.kind === 'footprint') {
+                    const f = (layout.footprints || []).find((x) => x.id === m.id);
+                    if (!f || f.active === false || !(f.l > 0) || !(f.d > 0)) return;
+                    const h = Math.max(Number(f.h) || 0, 0.1);
+                    geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(f.l + 0.1, h + 0.1, f.d + 0.1));
+                    pos = [PX(f.x + f.l / 2), FL(f.x + f.l / 2, f.y + f.d / 2) + h / 2, PZ(f.y + f.d / 2)];
+                } else if (m.kind === 'space') {
+                    const s = (layout.spaces || []).find((x) => x.id === m.id);
+                    if (!s || s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0)) return;
+                    geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(s.l + 0.08, s.h + 0.08, s.d + 0.08));
+                    pos = [PX(s.x + s.l / 2), FL(s.x + s.l / 2, s.y + s.d / 2) + s.h / 2, PZ(s.y + s.d / 2)];
+                } else if (m.kind === 'zone') {
+                    const z = (layout.zones || []).find((x) => x.id === m.id);
+                    if (!z) return;
+                    const pts = Array.isArray(z.pts) && z.pts.length >= 3 ? z.pts : [[z.x, z.y], [z.x + z.l, z.y], [z.x + z.l, z.y + z.w], [z.x, z.y + z.w]];
+                    if (!(z.l > 0 || (z.pts && z.pts.length >= 3))) return;
+                    geo = new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(PX(p[0]), 0.16 + FL(p[0], p[1]), PZ(p[1]))));
+                    pos = [0, 0, 0]; loop = true;
+                }
+                if (!geo) return;
+                const mat = new THREE.LineDashedMaterial({ color: 0xe8590c, dashSize: 0.26, gapSize: 0.16, depthTest: false, transparent: true });
+                const line = loop ? new THREE.LineLoop(geo, mat) : new THREE.LineSegments(geo, mat);
+                line.computeLineDistances();
+                line.position.set(pos[0], pos[1], pos[2]);
+                line.renderOrder = 12;
+                line.raycast = () => {}; // el contorno no tapa los toques
+                group.marks.add(line);
+                marchMats.push(mat);
+            });
 
             applyVisibility();
             if (!placed) { placed = true; go(viewTarget('general'), false); }
@@ -1775,6 +1813,7 @@
         applyCam();
         const loop = () => {
             if (destroyed) return;
+            if (marchMats.length) { marchMats.forEach((m) => { m.dashOffset -= 0.012; }); dirty = true; } // el punteado de lo elegido gira
             if (dirty) { dirty = false; renderer.render(scene, cam); }
             requestAnimationFrame(loop);
         };

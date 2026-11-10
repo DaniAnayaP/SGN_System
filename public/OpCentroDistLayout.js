@@ -2603,6 +2603,7 @@ function findView3d() {
 function applyFindDim(dimmed) {
     const svg = $('layout-svg');
     svg.classList.remove('find-dimmed');
+    svg.querySelectorAll('.find-mark').forEach((n) => n.remove());
     if (!dimmed || !activeFind()) return;
     const f = activeFind();
     const sel = [];
@@ -2613,6 +2614,31 @@ function applyFindDim(dimmed) {
     (f.kind === 'spaces' ? new Set() : findIds().footprints).forEach((id) => sel.push(`[data-fid="${CSS.escape(id)}"]`, `[data-lf="${CSS.escape(id)}"]`));
     if (sel.length) svg.querySelectorAll(sel.join(',')).forEach((n) => n.classList.add('find-on'));
     svg.classList.add('find-dimmed');
+    // lo elegido lleva el contorno punteado naranja que gira (como el del renglón elegido): una caja por huella, activo o zona
+    const groups = new Map();
+    svg.querySelectorAll('[data-fid].find-on, [data-sid].find-on, [data-zid].find-on').forEach((el) => {
+        const key = el.hasAttribute('data-fid') ? `f:${el.getAttribute('data-fid')}` : (el.hasAttribute('data-sid') ? `s:${el.getAttribute('data-sid')}` : `z:${el.getAttribute('data-zid')}`);
+        const shape = el.matches('rect, polygon') ? el : el.querySelector('polygon, rect');
+        if (!shape) return;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(shape);
+    });
+    if (groups.size > 80) return; // con tantas cosas elegidas el contorno no ayuda
+    groups.forEach((shapes) => {
+        let ring;
+        if (shapes.length === 1 && shapes[0].tagName.toLowerCase() === 'polygon') {
+            ring = shapes[0].cloneNode(false);
+            ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'data-fid', 'data-obid', 'data-tid', 'data-hlbox', 'id'].forEach((a) => ring.removeAttribute(a));
+        } else {
+            const boxes = shapes.map((sh) => sh.getBBox());
+            const x0 = Math.min(...boxes.map((b) => b.x)); const y0 = Math.min(...boxes.map((b) => b.y));
+            const x1 = Math.max(...boxes.map((b) => b.x + b.width)); const y1 = Math.max(...boxes.map((b) => b.y + b.height));
+            ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            ring.setAttribute('x', x0); ring.setAttribute('y', y0); ring.setAttribute('width', x1 - x0); ring.setAttribute('height', y1 - y0);
+        }
+        ring.setAttribute('class', 'find-mark');
+        svg.appendChild(ring);
+    });
 }
 // Lo enfocado, con lo que hace falta para escribirlo; null si ya no existe (se borró).
 function findEntity() {
@@ -6169,6 +6195,16 @@ function doorClashIds() {
     LC.doorOpeningClashes(state.draft).forEach((v) => { ids.add(v.id); if (v.vars && v.vars.otherId) ids.add(v.vars.otherId); });
     return [...ids];
 }
+// Lo elegido con el resto «tenue» lleva en el 3D un contorno punteado naranja que gira (el mismo del croquis) para identificarlo rápido: huellas, activos y zonas. Con Oculto o Enfoque lo demás ya no se ve.
+function find3dMarks() {
+    const f = activeFind();
+    if (!f || !state.draft || !state.findDim) return [];
+    if (f.kind === 'zone') return zoneFocusIds(f).map((id) => ({ kind: 'zone', id }));
+    if (f.kind === 'spaces') return (f.ids || []).map((id) => ({ kind: 'space', id }));
+    if (f.kind === 'footprint') return [{ kind: 'footprint', id: f.id }];
+    if (f.kind === 'items') return (f.items || []).filter((it) => it.type === 'footprint' || it.type === 'space' || it.type === 'zone').map((it) => ({ kind: it.type, id: it.id }));
+    return [];
+}
 function refreshScene3d() {
     if (!(scene3d && state.view3d && state.draft)) return;
     // el selector se actualiza con el borrador (lo que se ocultó y ya no existe se olvida) y la escena se arma una sola vez
@@ -6179,7 +6215,7 @@ function refreshScene3d() {
         picker3d.setFocus(fv3.focus ? fv3.focus.spaces : null);
         scene3d.setHiddenAssets(picker3d.getHidden(), false, !!state.findDim);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { positions: stepOn('ubicaciones'), pieces: piecesVisible() ? state.pieces : [], bayFmt: stepOn('posiciones') ? (state.draft.bayFmt || {}) : null, fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, roof: !!state.showRoof && !!(state.perms && state.perms.canToggleRoof), floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { positions: stepOn('ubicaciones'), pieces: piecesVisible() ? state.pieces : [], bayFmt: stepOn('posiciones') ? (state.draft.bayFmt || {}) : null, fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, roof: !!state.showRoof && !!(state.perms && state.perms.canToggleRoof), marks: find3dMarks(), floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');
