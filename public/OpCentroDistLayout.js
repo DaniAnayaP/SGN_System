@@ -102,7 +102,50 @@ function renderKpis() {
         warn.hidden = !(k && k.overlap > 0.05);
         if (!warn.hidden) warn.textContent = t('main.layoutAvisoEncimadas').replace('{n}', fmt(k.overlap));
     }
+    renderOutList();
 }
+// ---- Lo que se sale de su contenedor ---------------------------------------------------------------------------------------------------------------
+// Bajo los KPIs: la lista de todo lo que hoy no cabe en lo que lo contiene (LayoutCalc.outOfContainer: zona en la nave, huella en su zona, activo en su huella, niveles y espacios en su activo, posición en su espacio). Solo salen
+// los pasos que la cuenta puede ver, y «Ir a verlo» abre el paso, elige el renglón y lo marca en el croquis. Se vuelve a calcular con cada cambio (con una pausa corta para no estorbar al teclear).
+let outItems = [];
+let outTimer = 0;
+const OUT_MAX = 200;
+function renderOutList() {
+    clearTimeout(outTimer);
+    outTimer = setTimeout(drawOutList, 150);
+}
+function drawOutList() {
+    const box = $('layout-out');
+    if (!box) return;
+    outItems = state.draft ? LC.outOfContainer(state.draft).filter((it) => stepVisible(it.step)) : [];
+    box.hidden = !outItems.length;
+    if (!outItems.length) return;
+    $('layout-out-title').textContent = t(outItems.length === 1 ? 'main.layoutSaleTitulo_uno' : 'main.layoutSaleTitulo_varias', { n: outItems.length });
+    let html = '';
+    let last = '';
+    outItems.slice(0, OUT_MAX).forEach((it, i) => {
+        if (it.level !== last) { html += `${last ? '</ul>' : ''}<h4 class="layout-out-grp">${esc(t(`main.layoutSaleGrp_${it.level}`))}</h4><ul>`; last = it.level; }
+        html += `<li><span>${esc(t(`main.layoutSale_${it.level}_${it.kind}`, it.vars))}</span><button type="button" class="layout-out-go" data-out-go="${i}">${esc(t('main.layoutSaleIr'))}</button></li>`;
+    });
+    html += `</ul>${outItems.length > OUT_MAX ? `<p class="layout-muted">${esc(t('main.layoutSaleMas', { n: outItems.length - OUT_MAX }))}</p>` : ''}`;
+    $('layout-out-list').innerHTML = html;
+}
+function goToOut(it) {
+    if (!it || !state.draft || !stepVisible(it.step)) return;
+    showStep(it.step);
+    if (state.mode === 'edit') renderPanel();
+    state.hlList = null;
+    selectEntity({ ...it.target }, 'zoom');
+    applyHighlight('zoom'); // elegir puede reencuadrar el croquis (cambió lo enfocado): se acerca otra vez a lo elegido
+    const row = highlightedRow();
+    if (row) row.scrollIntoView({ block: 'center' });
+    const map = $('layout-svg');
+    if (map && !map.hasAttribute('hidden')) map.scrollIntoView({ block: 'nearest' });
+}
+document.addEventListener('click', (event) => {
+    const go = event.target.closest('[data-out-go]');
+    if (go) goToOut(outItems[Number(go.getAttribute('data-out-go'))]);
+});
 
 // ---- formularios por sección ------------------------------------------------------------------------------------------
 function cellNum(list, i, key, value, disabled, step = '0.1') {

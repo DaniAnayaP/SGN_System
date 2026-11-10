@@ -2174,6 +2174,52 @@
         return spaceViolations(next).filter((v) => !before.some((p) => p.id === v.id && p.kind === v.kind && p.sig === v.sig));
     }
 
+    // ---- Lo que se sale de su contenedor -------------------------------------------------------------------------------------------------------------
+    // La lista de TODO lo que hoy no cabe en lo que lo contiene, de arriba hacia abajo: la zona en la nave, la huella en su zona (o en la altura de la nave), el activo en su huella, los niveles en su activo, un espacio en su activo (o en su
+    // nivel) y una posición en su espacio. Junta las faltas que ya calculan footprintViolations, spaceViolations y positionViolations (lo que ya estaba mal solo se marca; lo nuevo no se deja guardar) y las zonas que salen de la nave.
+    // Cada renglón: { level, step (el paso donde se arregla), kind, id, target (lo que se señala en el croquis), vars (para el texto) }. Los activos que suman más que su huella salen UNA vez por huella.
+    const OUT_LEVELS = ['zone', 'fp', 'space', 'level', 'bay', 'pos'];
+    function outOfContainer(layout) {
+        const out = [];
+        if (!layout) return out;
+        (layout.zones || []).forEach((z) => {
+            if (Array.isArray(z.pts) && z.pts.length < 3) return; // una zona por dibujar todavía no cuenta
+            if (zoneOutsideNave(layout.vertices, z)) out.push({ level: 'zone', step: 'zonas', kind: 'nave', id: z.id, target: { kind: 'zone', id: z.id }, vars: { code: z.code || z.name || '' } });
+        });
+        footprintViolations(layout).forEach((v) => {
+            const target = { kind: 'footprint', id: v.id };
+            if (v.kind === 'nozone') out.push({ level: 'fp', step: 'espacios', kind: 'nozone', id: v.id, target, vars: { code: v.code } });
+            else if (v.kind === 'out') out.push({ level: 'fp', step: 'espacios', kind: 'out', id: v.id, target, vars: { code: v.code, zone: v.zoneName || '' } });
+            else if (v.kind === 'tall') {
+                const lvl = v.level !== undefined;
+                out.push({ level: 'fp', step: 'espacios', kind: lvl ? 'tall_lvl' : 'tall', id: v.id, target, vars: { code: v.code, h: String(round2(v.h)), maxH: String(round2(v.maxH)), ...(lvl ? { level: `${v.level > 0 ? '+' : ''}${round2(v.level)}`, top: String(round2(v.top)) } : {}) } });
+            }
+        });
+        const seenSum = new Set();
+        spaceViolations(layout).forEach((v) => {
+            if (v.kind === 'sum') {
+                if (seenSum.has(v.vars.fcode)) return;
+                seenSum.add(v.vars.fcode);
+                out.push({ level: 'space', step: 'activos', kind: 'sum', id: v.id, target: { kind: 'space', id: v.id }, vars: v.vars });
+            } else if (v.kind === 'out' || v.kind === 'tall') {
+                out.push({ level: 'space', step: 'activos', kind: v.kind, id: v.id, target: { kind: 'space', id: v.id }, vars: v.vars });
+            } else if (v.kind === 'levels') {
+                out.push({ level: 'level', step: 'niveles', kind: 'levels', id: v.id, target: { kind: 'space', id: v.id }, vars: v.vars });
+            } else if (v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh') {
+                out.push({ level: 'bay', step: 'posiciones', kind: v.kind, id: v.id, target: { kind: 'bay', id: v.id, n: v.vars.n, c: v.vars.c }, vars: v.vars });
+            } else if (v.kind === 'baysum') {
+                out.push({ level: 'bay', step: 'posiciones', kind: 'baysum', id: v.id, target: { kind: 'space', id: v.id, n: v.vars.n }, vars: v.vars });
+            }
+        });
+        const byPos = new Map((layout.positions || []).map((p) => [p.id, p]));
+        positionViolations(layout).forEach((v) => {
+            if (v.kind !== 'out' && v.kind !== 'tall') return;
+            const p = byPos.get(v.id);
+            out.push({ level: 'pos', step: 'ubicaciones', kind: v.kind, id: v.id, target: { kind: 'bay', id: v.spaceId, n: v.n, c: v.c, p: p ? p.num : undefined }, vars: v.vars });
+        });
+        return out.map((r, i) => ({ r, i })).sort((a, z) => OUT_LEVELS.indexOf(a.r.level) - OUT_LEVELS.indexOf(z.r.level) || a.i - z.i).map((x) => x.r);
+    }
+
     // ---- Colores: lo que va ADENTRO de algo no lleva el color de lo que lo contiene ------------------------------------------------------------------------
     // Criterio de Daniel para todo: la huella no puede llevar el color de su zona ni el activo el de su huella (se confunden); el mismo color sí se puede usar en otro lado (otra zona, otra huella…). Solo se compara el
     // color de relleno (sin relleno no hay color) y se toman como el mismo los que casi no se distinguen (distancia menor a 24 en la escala 0-255). Si ninguno de los dos tiene color propio no hay choque: los de fábrica
@@ -3528,7 +3574,7 @@
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
