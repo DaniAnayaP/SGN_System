@@ -327,6 +327,11 @@ function positionsAt(rack, level, column) {
     const g = ((rack && rack.positions) || []).find((x) => x.n === Number(level) && x.c === Number(column));
     return g && Array.isArray(g.nums) && g.nums.length ? g.nums : [1];
 }
+// El lugar y las medidas de las posiciones de un espacio ({ bl, bw, boxes: [{ num, x, y, l, w }] }); null si las opciones (guardadas por una copia vieja de la App) no las traen.
+function boxesAt(rack, level, column) {
+    const g = ((rack && rack.positions) || []).find((x) => x.n === Number(level) && x.c === Number(column));
+    return g && Array.isArray(g.boxes) && g.boxes.length && g.bl > 0 && g.bw > 0 ? g : null;
+}
 function occupiedBy(spaceId, level, slot, position) {
     const hit = options.occupied.find((o) => o.spaceId === spaceId && o.level === level && o.slot === slot && (o.position || 1) === (position || 1) && !(editing && o.id === editing.id));
     return hit ? hit.sku : '';
@@ -389,6 +394,14 @@ function renderForm() {
         if (pick) chooseSku(byId(skus, pick.dataset.id));
     });
     document.getElementById('rel-frame').addEventListener('click', (event) => {
+        const posBtn = event.target.closest('.relapp-pos[data-p]');
+        if (posBtn) {
+            st.niv = Number(posBtn.dataset.n);
+            st.esp = Number(posBtn.dataset.e);
+            st.pos = Number(posBtn.dataset.p);
+            refreshForm();
+            return;
+        }
         const cell = event.target.closest('.relapp-cell[data-n]');
         if (cell) {
             st.niv = Number(cell.dataset.n);
@@ -480,6 +493,20 @@ function drawRack(rack) {
             const occs = positionsAt(rack, n, e).map((p) => occupiedBy(rack.id, n, e, p));
             const occ = occs.every(Boolean) ? occs[0] : '';
             const sel = Number(st.niv) === n && Number(st.esp) === e;
+            const bay = boxesAt(rack, n, e);
+            // un espacio con varias posiciones se dibuja visto desde arriba, con cada posición en su lugar y con su medida (el fondo hacia abajo); se elige tocando la posición
+            if (bay && bay.boxes.length > 1) {
+                const boxes = bay.boxes.map((b) => {
+                    const who = occupiedBy(rack.id, n, e, b.num);
+                    const pick = sel && Number(st.pos) === b.num;
+                    const geo = `left:${(b.x / bay.bl * 100).toFixed(2)}%;top:${(b.y / bay.bw * 100).toFixed(2)}%;width:${(b.l / bay.bl * 100).toFixed(2)}%;height:${(b.w / bay.bw * 100).toFixed(2)}%`;
+                    return who
+                        ? `<button type="button" class="relapp-pos occ" disabled style="${geo}" title="${esc(t('main.relOccupiedBy', { sku: who }))}">${esc(who.slice(-3))}</button>`
+                        : `<button type="button" class="relapp-pos${pick ? ' sel' : ''}" data-n="${n}" data-e="${e}" data-p="${b.num}" style="${geo}" aria-label="${esc(t('main.relPositionN', { n: b.num }))}">${b.num}</button>`;
+                }).join('');
+                html += `<div class="relapp-bay${sel ? ' on' : ''}" title="${esc(t('main.relSlotN', { n: e }))}">${boxes}</div>`;
+                continue;
+            }
             html += occ
                 ? `<button type="button" class="relapp-cell occ" disabled>${esc(occ.slice(-3))}</button>`
                 : `<button type="button" class="relapp-cell${sel ? ' sel' : ''}" data-n="${n}" data-e="${e}">${e}</button>`;

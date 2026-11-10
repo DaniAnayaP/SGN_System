@@ -9678,7 +9678,7 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
             footprints: idx.footprints.filter((f) => f.zoneId === z.id).map((f) => ({ id: f.id, code: f.code })),
             spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, footprintId: s.footprintId, levels: s.levels || 1, slots: LayoutCalc.maxSlots(s), slotsByLevel: LayoutCalc.slotsByLevelOf(s), bays: s.bays || [],
                 // las posiciones de cada espacio: [{ n, c, nums: [1, 2…] }] (las copias viejas de la App siguen leyendo bays)
-                positions: [...idx.positions.entries()].filter(([key]) => key.startsWith(`${s.id}|`)).map(([key, list]) => { const [, n, c] = key.split('|'); return { n: Number(n), c: Number(c), nums: list.map((p) => p.num) }; }) })),
+                positions: [...idx.positions.entries()].filter(([key]) => key.startsWith(`${s.id}|`)).map(([key, list]) => { const [, n, c] = key.split('|'); const bm = LayoutCalc.bayMeasures(s, Number(n), Number(c)); return { n: Number(n), c: Number(c), nums: list.map((p) => p.num), bl: bm.l, bw: bm.w, boxes: list.map((p) => ({ num: p.num, x: p.x, y: p.y, l: p.l, w: p.w })) }; }) })),
         }));
     };
     const zonesByCenter = {};

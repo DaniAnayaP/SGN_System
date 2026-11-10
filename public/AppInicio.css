@@ -1931,6 +1931,12 @@ body.help-mode-active *{
 .relapp-cell{ font-family: inherit; font-size: 0.7rem; font-weight: 700; height: 2.3rem; min-width: 0; padding: 0; border: 1px solid var(--home-border); border-radius: 0.45rem; background: var(--home-surface-2); color: var(--home-text-secondary); cursor: pointer; }
 .relapp-cell.occ{ border-style: dashed; opacity: 0.6; font-size: 0.6rem; cursor: not-allowed; }
 .relapp-cell.sel{ background: var(--home-accent); color: var(--home-on-accent); border-color: var(--home-accent); }
+/* un espacio con varias posiciones: visto desde arriba, cada posición en su lugar y con su medida */
+.relapp-bay{ position: relative; height: 3.6rem; min-width: 0; border: 1px dashed var(--home-border); border-radius: 0.45rem; background: var(--home-surface-2); }
+.relapp-bay.on{ border-color: var(--home-accent); border-style: solid; }
+.relapp-pos{ position: absolute; box-sizing: border-box; font-family: inherit; font-size: 0.62rem; font-weight: 700; min-width: 0; min-height: 0; padding: 0; overflow: hidden; border: 1px solid var(--home-text-muted); border-radius: 0.25rem; background: var(--home-surface); color: var(--home-text-secondary); cursor: pointer; line-height: 1; }
+.relapp-pos.sel{ background: var(--home-accent); color: var(--home-on-accent); border-color: var(--home-accent); }
+.relapp-pos.occ{ border-style: dashed; opacity: 0.6; font-size: 0.5rem; cursor: not-allowed; }
 .relapp-path{ display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; }
 .relapp-step{ font-size: 0.7rem; border: 1px solid var(--home-border); border-radius: 999px; padding: 0.05rem 0.6rem; color: var(--home-text-muted); }
 .relapp-step.on{ background: var(--home-accent); color: var(--home-on-accent); border-color: var(--home-accent); font-weight: 700; }
