@@ -849,9 +849,10 @@
         return { fill, pattern: ramp ? 'solid' : 'diag1', pcolor: mixHex(fill, '#000000', 0.28), line: 'thin', bcolor: mixHex(fill, '#000000', 0.4) };
     }
     // ---- Color de los espacios (el E001, el E002…) ---------------------------------------------------------------------------------------------------
-    // Todos los espacios con el MISMO número (el E001 de cada nivel de cada activo) llevan el mismo color, y cada número el suyo, para distinguirlos de un vistazo. De fábrica una paleta de 10 colores que se repite; cada número puede
-    // llevar su formato propio (color, trama y borde, como el de piso) en layout.bayFmt = { '1': { fill, pattern, pcolor, line, bcolor }, … }. Sin formato propio queda el de fábrica.
-    const BAY_COLORS = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1', '#76b7b2', '#edc948', '#ff9da7', '#9c755f', '#bab0ac'];
+    // Todos los espacios con el MISMO número (el E001 de cada nivel de cada activo) llevan el mismo color, y cada número el suyo, para distinguirlos de un vistazo. De fábrica una paleta de 7 colores que se repite; cada número puede
+    // llevar su formato propio (color, trama y borde, como el de piso) en layout.bayFmt = { '1': { fill, pattern, pcolor, line, bcolor }, … }. Sin formato propio queda el de fábrica. El color de un espacio es del VOLUMEN del espacio
+    // (largo × fondo × alto) y tiene que verse distinto del de los niveles (las repisas: naranja del anaquel con tarimas, gris del anaquel, azul de los postes, madera de la tarima), por eso la paleta evita el naranja, el azul y el gris.
+    const BAY_COLORS = ['#2fa36b', '#8e5bd6', '#d6409f', '#14a7b8', '#e6d200', '#d64545', '#7bb33a'];
     function bayFmtOf(layout, c) {
         const n = Math.max(1, Math.round(Number(c)) || 1);
         const own = layout && layout.bayFmt && typeof layout.bayFmt === 'object' ? sanitizeFmt(layout.bayFmt[String(n)]) : null;

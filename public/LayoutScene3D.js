@@ -1315,9 +1315,11 @@
             const patDecks = []; // los decks y bloques con trama: cada uno una caja con su textura (los de un solo color van instanciados)
             const bayFmtFor = (c) => (bayFmtOn && root.LayoutCalc && root.LayoutCalc.bayFmtOf ? root.LayoutCalc.bayFmtOf({ bayFmt: bayFmtOn }, c) : null);
             const hexNum = (h) => parseInt(String(h).slice(1), 16);
-            // una pieza de un espacio (deck o bloque): con formato de su número lleva su color (o su trama); sin él, el color de siempre. dimIt = apagada (Tenue).
+            // una pieza de un espacio: la repisa (deck) lleva SIEMPRE el color de su nivel; solo el bloque de lo que es macizo (tarima, gabinete, cámara) lleva el formato de su número. dimIt = apagada (Tenue).
+            const volBoxes = []; // los espacios como VOLUMEN (largo × fondo × alto) con el color y la trama de su número, traslúcidos: [{ x, y, z, sx, sy, sz, fmt }]
+            const bayVolume = (x, y, z, sx, sy, sz, c) => { const bf = bayFmtFor(c); if (bf) volBoxes.push({ x, y, z, sx, sy, sz, fmt: bf }); };
             const pushPiece = (list, x, y, z, sx, sy, sz, color, c, dimIt) => {
-                const bf = c ? bayFmtFor(c) : null;
+                const bf = c && list === blk ? bayFmtFor(c) : null;
                 if (!bf) { list.push({ x, y, z, sx, sy, sz, c: color }); return; }
                 if (bf.pattern !== 'solid' && bf.pattern !== 'none') { patDecks.push({ x, y, z, sx, sy, sz, fmt: bf, dim: !!dimIt }); return; }
                 list.push({ x, y, z, sx, sy, sz, c: dimIt ? mixHex(hexNum(bf.fill), 0xe4e7f0, 0.8) : hexNum(bf.fill) });
@@ -1395,6 +1397,7 @@
                         const zc = PZ(pp ? s.y + (pp.y + pp.w / 2) * szP : s.y + s.d / 2);
                         if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, ci + 1, false);
                         else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, ci + 1, false);
+                        if (!solid && !contPos.length) bayVolume(xc, yB + beamC + hC / 2, zc, Math.max(sxC - gx, 0.02), hC, Math.max(szC - gz, 0.02), ci + 1);
                     }
                     if (!solid) {
                         // postes: las cuatro esquinas del cuadro y uno delgado en cada división (adelante y atrás)
@@ -1430,12 +1433,18 @@
                         if (otherLevel && mineFx[0].mode === 'hide') continue;
                         const lvColor = otherLevel ? mixHex(deckC, 0xe4e7f0, 0.8) : deckC;
                         if (!(LCx && LCx.levelMeasures && LCx.bayMeasures)) { dck.push({ x: cx, y: 0.15 + (k - 1) * ((s.h - 0.3) / lv) + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC }); continue; }
-                        // todos los espacios de un nivel van a la misma altura (la del nivel): una sola repisa de todo el largo o, con el paso Espacios encendido, una por espacio con el color de su número
-                        if (bayFmtOn && LCx.levelSlots) {
+                        // todos los espacios de un nivel van a la misma altura (la del nivel): una sola repisa de todo el largo, con el color de su nivel
+                        deckAt(cx, s.l, LCx.levelMeasures(s, k), lvColor);
+                        // con el paso Espacios encendido cada espacio se ve como un VOLUMEN (largo × fondo × alto, el espacio libre encima de la ceja) con el color y la trama de su número, aparte del color del nivel
+                        if (bayFmtOn && LCx.levelSlots && LCx.bayMeasures && !otherLevel) {
                             const slotsK = LCx.levelSlots(s, k);
-                            const mk = LCx.levelMeasures(s, k);
-                            for (let c = 1; c <= slotsK; c++) deckAt(cx - s.l / 2 + (c - 0.5) * (s.l / slotsK), s.l / slotsK, mk, lvColor, c, otherLevel);
-                        } else deckAt(cx, s.l, LCx.levelMeasures(s, k), lvColor);
+                            for (let c = 1; c <= slotsK; c++) {
+                                const mb = LCx.bayMeasures(s, k, c);
+                                const thB = mb.beam > 0 ? mb.beam : 0.06;
+                                const hB = Math.max(mb.h, 0.05);
+                                bayVolume(cx - s.l / 2 + (c - 0.5) * (s.l / slotsK), fl + Math.max(mb.floorH, 0.03) + thB + hB / 2, cz, Math.max(s.l / slotsK - 0.02, 0.02), hB, Math.max(s.d - 0.02, 0.02), c);
+                            }
+                        }
                     }
                 }
                 spaceList.push({ s, x: cx, z: cz, fl });
@@ -1444,6 +1453,24 @@
             instanced(group.assets, upr, mat);
             instanced(group.assets, dck, mat);
             instanced(group.assets, blk, mat);
+            volBoxes.forEach((vb) => {
+                const plain = vb.fmt.pattern === 'solid' || vb.fmt.pattern === 'none';
+                // una barra cúbica de su color un poco desvanecido (suavizado hacia el blanco y algo traslúcido, para ver lo que tiene detrás), con las aristas de su borde bien marcadas
+                const vm = plain
+                    ? new THREE.MeshLambertMaterial({ color: new THREE.Color(vb.fmt.fill).lerp(new THREE.Color(0xffffff), 0.18), transparent: true, opacity: 0.68, depthWrite: false })
+                    : new THREE.MeshLambertMaterial({ map: patternTexture(vb.fmt.fill, vb.fmt.pattern, vb.fmt.pcolor), transparent: true, opacity: 0.75, depthWrite: false });
+                const geo = new THREE.BoxGeometry(vb.sx, vb.sy, vb.sz);
+                const mesh = new THREE.Mesh(geo, vm);
+                mesh.position.set(vb.x, vb.y, vb.z);
+                mesh.raycast = () => {}; // el volumen no tapa los toques al activo
+                group.assets.add(mesh);
+                if (vb.fmt.line !== 'none') {
+                    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: new THREE.Color(vb.fmt.bcolor) }));
+                    edges.position.copy(mesh.position);
+                    edges.raycast = () => {};
+                    group.assets.add(edges);
+                }
+            });
             patDecks.forEach((pd) => {
                 const tex = patternTexture(pd.fmt.fill, pd.fmt.pattern, pd.fmt.pcolor);
                 const pm = new THREE.MeshLambertMaterial({ map: tex });
