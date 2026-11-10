@@ -26,6 +26,12 @@
             label: (s) => `<b>${esc(s.code)}</b> · ${esc(s.kind === 'sensor' ? `${t('main.qrsSensor')} ${typeName('sensor', s.type).toLowerCase()}` : t('main.qrsRefrigerador'))}`,
             haystack: (s) => `${s.code} ${s.kind === 'sensor' ? `${t('main.qrsSensor')} ${typeName('sensor', s.type)}` : t('main.qrsRefrigerador')} ${s.zoneName} ${s.locator}`,
         },
+        // simple: la lista es de un solo renglón (el QR es uno por centro de costos): sin filtro de zona, sin buscador y sin columnas de zona ni localizador.
+        pedidoManual: {
+            page: 'cat-operaciones-centro-dist-qr-pedido-manual', api: '/api/business/qr-apps/pedido-manual', help: 'qrsPedidoManual', simple: true,
+            first: 'main.qrsCentro', windowTitle: 'main.qrsVentanaPm', count: 'main.qrsCuantosCentros',
+            label: (s) => `<b>${esc(s.code)}</b>${s.siteName ? ` · ${esc(s.siteName)}` : ''}`,
+        },
     };
     const app = APPS[document.body.dataset.qrApp];
     if (!app) return;
@@ -70,16 +76,16 @@
             && (!q || SearchSyntax.matches('contains', q.toLowerCase(), app.haystack(s).toLowerCase())));
     }
     function render() {
-        page().innerHTML = `<div class="qrs" data-help-key="${app.help}">
-            <div class="qrs-bar">
+        const bar = app.simple ? '' : `<div class="qrs-bar">
                 <select id="qrs-zone" aria-label="${esc(Dashboard.t('main.colLimZona'))}"><option value="">${esc(t('main.qrsTodasZonas'))}</option>${data.zones.map((z) => `<option value="${esc(z.id)}"${z.id === zone ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}</select>
                 <input type="search" id="qrs-q" autocomplete="off" placeholder="${esc(t(app.search))}" aria-label="${esc(t(app.search))}" value="${esc(q)}">
                 <span class="qrs-count" id="qrs-count"></span>
-            </div>
-            <div id="qrs-list"></div>
-        </div>`;
-        $('qrs-zone').addEventListener('change', (event) => { zone = event.target.value; renderList(); });
-        $('qrs-q').addEventListener('input', (event) => { q = event.target.value.trim(); renderList(); });
+            </div>`;
+        page().innerHTML = `<div class="qrs" data-help-key="${app.help}">${bar}<div id="qrs-list"></div></div>`;
+        if (!app.simple) {
+            $('qrs-zone').addEventListener('change', (event) => { zone = event.target.value; renderList(); });
+            $('qrs-q').addEventListener('input', (event) => { q = event.target.value.trim(); renderList(); });
+        }
         $('qrs-list').addEventListener('click', (event) => {
             const btn = event.target.closest('[data-open]');
             if (btn) openWindow(btn.dataset.open);
@@ -88,9 +94,12 @@
     }
     function renderList() {
         const list = shown();
-        $('qrs-count').textContent = t(app.count, { n: list.length });
-        if (!list.length) { $('qrs-list').innerHTML = `<div class="empty-state"><i class="bx bx-qr" aria-hidden="true"></i><p>${esc(t(app.empty))}</p></div>`; return; }
-        $('qrs-list').innerHTML = `<table class="qrs-table"><thead><tr><th>${esc(Dashboard.t(app.first))}</th><th>${esc(Dashboard.t('main.colLimZona'))}</th><th>${esc(Dashboard.t('main.colLimLocalizador'))}</th><th></th></tr></thead><tbody>${list.map((s) => `<tr><td>${app.label(s)}</td><td>${esc(s.zoneName || '—')}</td><td>${esc(s.locator || '—')}</td><td><button type="button" class="btn btn-secondary" data-open="${esc(s.key || s.id)}" data-help-key="qrsAbrir">${esc(t('main.qrsAbrir'))}</button></td></tr>`).join('')}</tbody></table>`;
+        if ($('qrs-count')) $('qrs-count').textContent = t(app.count, { n: list.length });
+        if (!list.length) { $('qrs-list').innerHTML = `<div class="empty-state"><i class="bx bx-qr" aria-hidden="true"></i><p>${esc(t(app.empty || 'main.qrsVacio'))}</p></div>`; return; }
+        const openBtn = (s) => `<button type="button" class="btn btn-secondary" data-open="${esc(s.key || s.id)}" data-help-key="qrsAbrir">${esc(t('main.qrsAbrir'))}</button>`;
+        $('qrs-list').innerHTML = app.simple
+            ? `<table class="qrs-table"><thead><tr><th>${esc(Dashboard.t(app.first))}</th><th></th></tr></thead><tbody>${list.map((s) => `<tr><td>${app.label(s)}</td><td>${openBtn(s)}</td></tr>`).join('')}</tbody></table>`
+            : `<table class="qrs-table"><thead><tr><th>${esc(Dashboard.t(app.first))}</th><th>${esc(Dashboard.t('main.colLimZona'))}</th><th>${esc(Dashboard.t('main.colLimLocalizador'))}</th><th></th></tr></thead><tbody>${list.map((s) => `<tr><td>${app.label(s)}</td><td>${esc(s.zoneName || '—')}</td><td>${esc(s.locator || '—')}</td><td>${openBtn(s)}</td></tr>`).join('')}</tbody></table>`;
     }
 
     // La misma pantalla que abre el QR, en una ventana sobre esta página (sin salir de aquí).

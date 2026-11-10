@@ -8362,7 +8362,7 @@ app.get('/api/business/layout/cleaning-qr', requireAuth, (req, res) => {
     res.json(cleaningQrList(req, row));
 });
 // Operaciones > QR's: cada app con QR se puede hacer desde la computadora (se abre la misma pantalla que abre el QR). Cada entrada pide la hoja de su pantalla en el árbol; el administrador del cliente no depende de hojas.
-const QR_APP_SCREENS = { limpieza: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza', temperaturas: 'cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas' };
+const QR_APP_SCREENS = { limpieza: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza', temperaturas: 'cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas', pedidoManual: 'cat-operaciones/cat-operaciones-centro-dist-qr-pedido-manual' };
 function canUseQrApp(req, key) {
     return !!req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), 'supply-chain', 'sc-area-distribution-center', QR_APP_SCREENS[key]);
 }
@@ -8396,6 +8396,19 @@ app.get('/api/business/qr-apps/temperaturas', requireAuth, (req, res) => {
     });
     res.set('Cache-Control', 'no-store');
     res.json({ siteName: layout.siteName || '', zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces: [...fridges, ...sensors].slice(0, 600) });
+});
+// QR's > Pedido manual: el QR de Pedido Manual es UNO por centro de costos (/pm/…, la misma dirección de la pantalla Pedido Manual), así que la lista es de un solo renglón: el centro que se eligió arriba. «Abrir» muestra la misma
+// página que abre el QR (buscar el artículo, la cantidad, el nombre y enviar) en una ventana; lo que se envía llega a Operaciones > Pedido Manual igual que desde el celular.
+app.get('/api/business/qr-apps/pedido-manual', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!canUseQrApp(req, 'pedidoManual')) return res.status(403).json({ message: 'No tienes permiso para esta pantalla.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    if (!row.costCenterId) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId);
+    const center = getCostCenterAnyLane(row.costCenterId, req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({ siteName: row.layout.siteName || '', zones: [], spaces: [{ key: `pm:${row.costCenterId}`, id: `pm:${row.costCenterId}`, kind: 'center', code: center ? center.name : '', siteName: row.layout.siteName || '', zoneId: '', zoneName: '', locator: '', path: `/pm/${token}` }] });
 });
 
 // --- Temperaturas (Operaciones > C. Distribución) ------------------------------------------------------------------------------------------------

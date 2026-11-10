@@ -7802,6 +7802,13 @@ function seedQrTemperaturasScreenGrants() {
         seedLeavesForScreenHolders(key, { ...path, submenuPrefix: `${path.submenuPrefix}/${icon}` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas'], "the QR's Temperaturas screen");
     });
 }
+// Operaciones > QR's > Pedido manual: la reciben, una sola vez, quienes ya tienen el botón QR de la pantalla Pedido Manual (colPmQr).
+const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
+function seedQrPedidoManualScreenGrants() {
+    const path = TABLE_GRANT_PATHS['pedido-manual'];
+    if (!path) return;
+    seedLeavesForScreenHolders(QR_PEDIDO_MANUAL_SCREEN_SEED_KEY, { ...path, submenuPrefix: `${path.submenuPrefix}/class-botones/colPmQr` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-pedido-manual'], "the QR's Pedido manual screen");
+}
 const LAYOUT_ROOF_SEED_KEY = 'seed-layout-roof-icon-v1';
 function seedLayoutRoofIconGrants() {
     const path = TABLE_GRANT_PATHS.layout;
@@ -12447,6 +12454,7 @@ seedLayoutCodesIconGrants();
 seedLayoutRoofIconGrants();
 seedQrLimpiezaScreenGrants();
 seedQrTemperaturasScreenGrants();
+seedQrPedidoManualScreenGrants();
 seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();

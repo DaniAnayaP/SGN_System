@@ -2160,6 +2160,9 @@
         },
         {
           "id": "cat-operaciones-centro-dist-qr-temperaturas", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrTemperaturas", "icon": "bx-fridge", "href": "OpCentroDistQrTemperaturas.html"
+        },
+        {
+          "id": "cat-operaciones-centro-dist-qr-pedido-manual", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrPedidoManual", "icon": "bx-cart", "href": "OpCentroDistQrPedidoManual.html"
         }
       ],
       "cat-admin": [
