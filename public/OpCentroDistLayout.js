@@ -1566,6 +1566,7 @@ function positionsLive() {
     const items = posItems(cur);
     const { map: bad, list: vios } = posViolationsOf(cur);
     $('layout-pos-svg').innerHTML = positionsSvgHtml(cur, m, items, bad);
+    drawPositionsOverlay();
     $('layout-pos-kpis').innerHTML = positionsKpisHtml(m, items);
     const box = $('layout-pos-issues');
     box.hidden = !vios.length;
@@ -1622,7 +1623,7 @@ $('layout-panel').addEventListener('click', (event) => {
 });
 $('layout-panel').addEventListener('change', (event) => {
     const sel = event.target.closest('#layout-pos-sel');
-    if (sel) { state.posSel = sel.value; state.posPick = ''; renderPanel(); return; }
+    if (sel) { state.posSel = sel.value; state.posPick = ''; renderPanel(); drawPositionsOverlay(); return; }
     if (event.target.closest('[data-pk]')) renderPanel();
 });
 $('layout-panel').addEventListener('input', (event) => {
@@ -1882,6 +1883,67 @@ function drawSensorZones(svg, sensorId) {
         svg.appendChild(poly);
     });
 }
+// Las posiciones en el croquis: al enfocar un nivel, un espacio o una posición (el renglón de Niveles o de Espacios, el botón Localizador o el paso Posiciones) se dibuja, encima del activo, la distribución de ESE nivel:
+// cada espacio con sus posiciones (P001…) y lo elegido marcado. En planta los niveles quedan uno sobre otro, por eso solo se ve el que se enfocó. Es solo de pantalla: no cambia nada de lo guardado.
+function positionsOverlayTarget() {
+    if (!state.draft) return null;
+    const h = state.hl;
+    if (h && h.step === state.focus && h.n && (h.kind === 'bay' || h.kind === 'space')) return { id: h.id, n: h.n, c: h.kind === 'bay' ? h.c : 0, p: h.p || 0 };
+    if (state.focus === 'ubicaciones') {
+        const pc = posCurrent();
+        if (!pc) return null;
+        const pick = (state.draft.positions || []).find((p) => p.id === state.posPick && p.spaceId === pc.cur.s.id && p.n === pc.cur.n && p.c === pc.cur.c);
+        return { id: pc.cur.s.id, n: pc.cur.n, c: pc.cur.c, p: pick ? pick.num : 0 };
+    }
+    return null;
+}
+function drawPositionsOverlay() {
+    const svg = $('layout-svg');
+    if (!svg) return;
+    svg.querySelectorAll('.pos-ov').forEach((n) => n.remove());
+    const tg = positionsOverlayTarget();
+    if (!tg || !view || view.x0 === undefined) return;
+    const s = (state.draft.spaces || []).find((x) => x.id === tg.id);
+    if (!s || s.active === false || !(s.l > 0) || !(s.d > 0)) return;
+    const lv = Math.min(Math.max(1, Number(tg.n) || 1), s.levels || 1);
+    const slots = LC.levelSlots(s, lv);
+    const q = ((Math.round(Number(view.rot) || 0) % 4) + 4) % 4;
+    // el croquis puede estar girado (cuartos de vuelta): se gira igual que LayoutCalc.rotateLayout
+    const turn = (x, y) => (q === 1 ? [-y, x] : (q === 2 ? [-x, -y] : (q === 3 ? [y, -x] : [x, y])));
+    const box = (x, y, w, d) => {
+        const a = turn(x, y);
+        const b = turn(x + w, y + d);
+        return { x: view.ox + (Math.min(a[0], b[0]) - view.x0) * view.sc, y: view.oy + (Math.min(a[1], b[1]) - view.y0) * view.sc, w: Math.abs(b[0] - a[0]) * view.sc, h: Math.abs(b[1] - a[1]) * view.sc };
+    };
+    const NS = 'http://www.w3.org/2000/svg';
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'pos-ov');
+    g.setAttribute('pointer-events', 'none');
+    const add = (tag, attrs, text) => {
+        const el = document.createElementNS(NS, tag);
+        Object.keys(attrs).forEach((k) => el.setAttribute(k, attrs[k]));
+        if (text !== undefined) el.textContent = text;
+        g.appendChild(el);
+    };
+    const f1 = (v) => v.toFixed(1);
+    const slotW = s.l / slots; // cada espacio ocupa su pedazo del largo del activo (como en el 3D); sus posiciones se acomodan dentro con las medidas del espacio
+    for (let c = 1; c <= slots; c += 1) {
+        const m = LC.bayMeasures(s, lv, c);
+        const kx = slotW / Math.max(m.l, 0.01);
+        const kz = s.d / Math.max(m.w, 0.01);
+        const sel = tg.c === c;
+        const dim = tg.c && !sel ? ' dim' : '';
+        const fr = box(s.x + (c - 1) * slotW, s.y, slotW, s.d);
+        add('rect', { class: `pos-ov-bay${sel ? ' sel' : ''}${dim}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h) });
+        LC.positionsOfBay(state.draft, s.id, lv, c).forEach((p) => {
+            const r = box(s.x + (c - 1) * slotW + p.x * kx, s.y + p.y * kz, p.l * kx, p.w * kz);
+            const chosen = sel && tg.p && p.num === tg.p;
+            add('rect', { class: `pos-ov-pos${chosen ? ' chosen' : ''}${dim}`, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)) });
+            if (r.w >= 17 && r.h >= 8) add('text', { class: `pos-ov-t${dim}`, x: f1(r.x + r.w / 2), y: f1(r.y + r.h / 2 + 2.5), 'text-anchor': 'middle' }, `P${ubicPad(p.num)}`);
+        });
+    }
+    svg.appendChild(g);
+}
 // reveal = true cuando se acaba de elegir el renglón: si el croquis está acercado y lo elegido queda fuera de lo que se ve, se recorre para mostrarlo.
 function applyHighlight(reveal) {
     applyHighlight3d();
@@ -1889,6 +1951,7 @@ function applyHighlight(reveal) {
     svg.querySelectorAll('.hl-shape, .hl-tag').forEach((n) => n.remove());
     svg.querySelectorAll('.hl-on').forEach((n) => n.classList.remove('hl-on'));
     svg.classList.remove('has-hl', 'hl-soft-mode');
+    drawPositionsOverlay();
     const h = state.hl;
     if (!h || h.step !== state.focus || !state.draft) return;
     if (h.kind === 'sensor') drawSensorZones(svg, h.id);

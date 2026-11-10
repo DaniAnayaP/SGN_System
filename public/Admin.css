@@ -7896,7 +7896,14 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-find-segbtn[aria-pressed="true"]{ background: var(--color-text-primary); color: var(--color-surface); }
 .layout-find-segbtn:focus-visible{ outline: 2px solid var(--color-accent, var(--color-text-primary)); outline-offset: 2px; }
 /* el resto de la nave «tenue»: lo que no es de lo enfocado se ve apagado */
-#layout-svg.find-dimmed > :not(.find-on):not(defs):not(.hl-shape):not(.hl-tag){ opacity: 0.18; }
+#layout-svg.find-dimmed > :not(.find-on):not(defs):not(.hl-shape):not(.hl-tag):not(.pos-ov){ opacity: 0.18; }
+/* las posiciones del nivel enfocado, dibujadas encima del activo en el croquis (solo de pantalla) */
+.pos-ov-bay{ fill: none; stroke: var(--color-text-secondary); stroke-width: 0.9; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+.pos-ov-bay.sel{ stroke: #e8590c; stroke-width: 1.5; stroke-dasharray: none; }
+.pos-ov-pos{ fill: var(--color-surface); fill-opacity: 0.86; stroke: var(--color-text-secondary); stroke-width: 0.9; vector-effect: non-scaling-stroke; }
+.pos-ov-pos.chosen{ fill: #e8590c; fill-opacity: 0.5; stroke: #e8590c; stroke-width: 1.8; }
+.pos-ov-t{ font: 600 6.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-primary); paint-order: stroke; stroke: var(--color-surface); stroke-width: 2px; stroke-linejoin: round; }
+.pos-ov .dim{ opacity: 0.4; }
 .layout-sizebar{ display: flex; flex-direction: column; gap: 0.6rem; padding: 0.7rem 3.2rem 0.7rem 0.9rem; border-bottom: 1px solid var(--color-border); }
 .layout-sizebar[hidden], .layout-sheet-preview[hidden], .layout-canvas svg[hidden], .layout-legend[hidden]{ display: none; }
 .layout-sizebar-row{ display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: flex-end; }
