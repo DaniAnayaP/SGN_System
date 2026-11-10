@@ -155,10 +155,16 @@
         .dchip small{ font-weight:400; font-size:11px; color:var(--muted); }
         .dchip[aria-pressed="true"]{ background:var(--accent); border-color:var(--accent); color:var(--surface); }
         .dchip[aria-pressed="true"] small{ color:var(--surface); opacity:.85; }
-        .sendbox{ display:flex; flex-direction:column; gap:10px; }
+        .sendbox{ display:flex; flex-direction:column; justify-content:flex-end; }
         .sendbox[hidden]{ display:none; }
+        .whospacer{ display:none; }
         .whorow{ display:grid; grid-template-columns:1fr; gap:12px; }
-        main.wide .whorow{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+        /* en pantalla ancha: «Quién pide», «Lugar que solicita» y «Enviar pedido» en un solo renglón; en la angosta (aunque se elija la tabla), uno debajo del otro */
+        @media (min-width: 780px){
+            main.wide .whorow{ grid-template-columns:minmax(0, 1fr) minmax(0, 1fr) auto; align-items:end; }
+            main.wide .whospacer{ display:block; }
+            main.wide .sendbox .btn{ width:auto; padding-inline:2.2rem; white-space:nowrap; }
+        }
         select.place{ width:100%; font:500 16px system-ui,sans-serif; padding:11px 14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--ink); }
         main.compact select.place{ font-size:.85rem; padding:.55rem .8rem; border-radius:.8rem; }
         select.dsel, select.when{ font:600 13px system-ui,sans-serif; border:1px solid var(--line); border-radius:12px; padding:6px 10px; background:var(--surface); color:var(--ink); max-width:100%; }
@@ -223,13 +229,16 @@
         main.compact .dias th.dc .dh b{ font-size:1.2rem; }
         main.compact .dias th.dc .dh small{ font-size:.68rem; }
         main.compact .dias th.dc .dh em{ font-size:.55rem; }
-        main.compact .dias .dh b.asap{ font-size:.72rem; }
+        main.compact .dias th.dc .dh b.asap{ font-size:.72rem; line-height:1.15; font-weight:700; max-width:none; }
         main.compact .dias .qc{ width:4rem; max-width:none; height:2.5rem; padding:0; font-size:.95rem; border-radius:.8rem; }
         main.compact .dias td.art b{ font-size:.85rem; }
         main.compact .dias td.art small{ font-size:.7rem; }
         main.compact .dias .tot{ font-size:.95rem; }
         main.compact .dias .tot small{ font-size:.66rem; }
-        .scroll{ width:fit-content; max-width:100%; } /* el borde abraza la tabla */
+        /* la tabla del pedido se desplaza por dentro (barra hacia abajo y, si hace falta, a los lados) y sus encabezados se quedan fijos arriba; el primer encabezado también a la izquierda */
+        .scroll{ width:fit-content; max-width:100%; overflow:auto; max-height:max(18rem, calc(100vh - 19rem)); } /* el borde abraza la tabla */
+        main.compact .dias thead th{ position:sticky; top:0; z-index:3; }
+        main.compact .dias thead th.art{ left:0; z-index:4; }
         .catfoot{ display:flex; align-items:center; gap:.8rem; font-size:.78rem; }
         .fbtn{ border:0; background:transparent; padding:.2rem; border-radius:.45rem; cursor:pointer; color:var(--muted); line-height:0; }
         .fbtn svg{ width:.95rem; height:.95rem; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linejoin:round; }
@@ -492,13 +501,15 @@ const rowVisible = (c) => (!tblFilter.total || totalOf(c) > 0) && [...tblFilter.
 async function loadCatalog(append) {
     const my = ++catSeq;
     catalog.loading = true;
+    catalog.added = [];
     const offset = append ? catalog.items.length : 0;
     try {
         const res = await fetch(`${API}/list?offset=${offset}&limit=100&q=${encodeURIComponent(searchTerms(query))}&mode=${mode}&fields=${fields.join(',')}`, { cache: 'no-store' });
         if (my !== catSeq) return;
         if (res.ok) {
             const body = await res.json();
-            catalog.items = append ? catalog.items.concat(body.items || []) : (body.items || []);
+            catalog.added = body.items || [];
+            catalog.items = append ? catalog.items.concat(catalog.added) : catalog.added;
             catalog.total = body.total || 0;
         } else if (!append) { catalog.items = []; catalog.total = 0; }
     } catch (e) { if (my === catSeq && !append) { catalog.items = []; catalog.total = 0; } }
@@ -507,7 +518,17 @@ async function loadCatalog(append) {
     catalog.loaded = true;
     const fb = document.querySelector('[data-filter="art"]');
     if (fb) fb.classList.toggle('on', !!String(query).trim() || mode !== 'contains' || fields.length > 0);
-    if (wide) drawTableBody();
+    if (wide) { if (append && catalog.added && catalog.added.length) appendTableRows(catalog.added); else drawTableBody(); }
+}
+// Una página más de códigos: se agregan al final de la tabla sin redibujar los que ya están (así no se pierde el lugar al ir bajando).
+function appendTableRows(items) {
+    const tb = $('tbody');
+    if (!tb || filterActive()) { drawTableBody(); return; }
+    const cols = tableCols();
+    tb.insertAdjacentHTML('beforeend', items.map((it) => rowHtml(it, cols)).join(''));
+    const foot = $('catfoot');
+    if (foot) foot.innerHTML = catFootHtml();
+    refreshTable();
 }
 function tableCols() {
     const days = allDays();
@@ -620,8 +641,25 @@ function openPop(kind, anchor) {
 }
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePop(); });
 document.addEventListener('click', (event) => { if (pop && !event.target.closest('#fpop') && !event.target.closest('[data-filter]')) closePop(); }); // un toque fuera de la ventanita la cierra
-window.addEventListener('scroll', (event) => { const t = event.target; if (t && t.nodeType === 1 && t.closest && t.closest('#fpop')) return; closePop(); }, true);
-window.addEventListener('resize', closePop);
+window.addEventListener('scroll', (event) => {
+    const t = event.target;
+    if (t && t.nodeType === 1 && t.closest && t.closest('#fpop')) return;
+    // la tabla del pedido pide más códigos al llegar casi al final de lo que ya trae
+    if (t && t.nodeType === 1 && t.classList && t.classList.contains('scroll')) {
+        if (!catalog.loading && !filterActive() && catalog.items.length < catalog.total && t.scrollTop + t.clientHeight >= t.scrollHeight - 300) loadCatalog(true);
+        if (t.scrollLeft !== (t._sl || 0)) { t._sl = t.scrollLeft; closePop(); } // al desplazarla a los lados el filtro abierto ya no queda junto a su encabezado; hacia abajo los encabezados no se mueven
+        return;
+    }
+    closePop();
+}, true);
+// La tabla del pedido ocupa lo que queda de la pantalla desde donde empieza hasta abajo (con su barra desplazadora y sus encabezados fijos): así se ve completa sin tener que bajar la página.
+function fitScroll() {
+    const sc = document.querySelector('.scroll');
+    if (!sc) return;
+    const top = sc.getBoundingClientRect().top + window.scrollY;
+    sc.style.maxHeight = `${Math.max(260, Math.floor(window.innerHeight - top - 24))}px`;
+}
+window.addEventListener('resize', () => { closePop(); fitScroll(); });
 // El pedido: SIEMPRE pide el nombre de quien pide (con sesión ya viene escrito el de la cuenta y se puede cambiar: quien manda no siempre es quien pide) y lo armado queda en un solo número de pedido con su lista de artículos.
 function drawOrder() {
     const box = $('orderbox');
@@ -632,8 +670,8 @@ function drawOrder() {
     const places = info.places || [];
     const placeField = places.length ? `<div><label for="place">${esc(TEXT.placeLabel)} <span class="req" aria-hidden="true">*</span></label><select id="place" class="place" required><option value="">${esc(TEXT.placeChoose)}</option>${places.map((p) => `<option value="${p.id}"${p.id === placeId ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>` : '';
     const today = wide ? `<span class="muted">${esc(fill(TEXT.todayIs, { d: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(dayDate(todayIso())) }))}</span>` : '';
-    box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${layoutToggle()}</div><div class="whorow">${who}${placeField}</div>${body}<div class="sendbox" id="sendbox"${cart.length ? '' : ' hidden'}><button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div></div>`;
-    if (wide) { refreshTable(); if (!catalog.loaded && !catalog.loading) loadCatalog(false); }
+    box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${layoutToggle()}</div><div class="whorow">${who}${placeField || '<div class="whospacer"></div>'}<div class="sendbox" id="sendbox"${cart.length ? '' : ' hidden'}><button type="button" class="btn ok" id="send" title="${esc(TEXT.stamp)}">${esc(TEXT.send)}</button></div></div><div class="err" id="err" role="alert" hidden></div>${body}`;
+    if (wide) { refreshTable(); fitScroll(); if (!catalog.loaded && !catalog.loading) loadCatalog(false); }
     if (pop) { const a = document.querySelector(`[data-filter="${pop.kind}"]`); if (a) { pop.anchor = a; placePop(); } else closePop(); }
 }
 function addPicked() {
