@@ -5879,6 +5879,19 @@ async function saveLayout() {
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
         return false;
     }
+    // Zonas: nada sale del contorno de la nave; lo nuevo o lo que cambió y no cumple no se guarda: se lleva a la persona a esa zona.
+    const freshZones = LC.newZoneViolations(state.draft, state.saved);
+    if (freshZones.length) {
+        const v = freshZones[0];
+        showStep('zonas');
+        renderPanel();
+        refreshLive();
+        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${t('main.layoutVioZonaFueraToast', { code: v.code, name: v.name })}`, 'warning');
+        const at = (state.draft.zones || []).findIndex((z) => z.id === v.id);
+        const box = document.querySelector(`[data-l="zones"][data-i="${at}"][data-k="x"]`);
+        if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
+        return false;
+    }
     // Seguridad: cada elemento (y los dos extremos de la ruta) va dentro del contorno de la nave; lo nuevo o lo que cambió y no cumple no se guarda.
     const freshSafety = LC.newSafetyViolations(state.draft, state.saved);
     if (freshSafety.length) {

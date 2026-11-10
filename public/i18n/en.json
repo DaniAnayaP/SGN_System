@@ -2407,6 +2407,7 @@
     "layoutVioObs_tall": "The obstacle \"{name}\" reaches {top} m (height from floor + height) and the warehouse there is only {height} m high: lower it or make it shorter.",
     "layoutVioObs_high": "The obstacle \"{name}\" is {top} m off the floor and the warehouse there is only {height} m high: lower it.",
     "layoutVioRampaFueraToast": "The ramp {code} {name} goes outside the nave's outline: that is not possible. Move it or change its size so it stays inside.",
+    "layoutVioZonaFueraToast": "Zone {code} {name} goes outside the warehouse outline: that is not possible. Move it or change its measures so it stays inside.",
     "layoutFormatoRampa": "Ramp format",
     "layoutRampaColor": "Ramp color",
     "layoutRampaDifuminar": "Blend the colors of the two floors it touches",

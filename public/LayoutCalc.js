@@ -776,6 +776,29 @@
         const before = new Set((previous ? floorViolations(previous) : []).map(floorKey));
         return floorViolations(next).filter((v) => !before.has(floorKey(v)));
     }
+    // ---- Zonas dentro del contorno ------------------------------------------------------------------------------------------------------------------
+    // Una zona (rectángulo o forma libre) tiene que caber ENTERA en la nave (pegada a la pared cuenta como adentro). Mira las zonas activas ya dibujadas (con 3 puntos o más). Lo que ya estaba afuera antes de esta regla solo se
+    // marca; lo NUEVO o lo que cambió (la zona o el contorno) no se deja guardar (ver newZoneViolations).
+    function zoneViolations(layout) {
+        const out = [];
+        const nave = Array.isArray(layout && layout.vertices) ? layout.vertices.map((p) => [Number(p[0]), Number(p[1])]) : [];
+        if (nave.length < 3) return out;
+        ((layout && layout.zones) || []).forEach((z) => {
+            if (!z || z.active === false) return;
+            const pts = zonePoints(z);
+            if (!pts || pts.length < 3 || !zoneOutsideNave(nave, z)) return;
+            const label = `${z.code ? `${z.code} ` : ''}${z.name || ''}`.trim() || 'Zona';
+            out.push({ id: z.id, code: z.code || '', name: z.name || '', kind: 'outside', section: 'zonas', sig: JSON.stringify([pts, nave]),
+                message: `La zona ${label} sale del contorno de la nave: no es posible, acomódala o cambia sus medidas para que quede adentro.` });
+        });
+        return out;
+    }
+    const zoneKey = (v) => `${v.id}|${v.kind}|${v.sig}`;
+    // Las faltas que hay en next y que antes no estaban igual: una zona nueva, que se movió o cambió de medidas, o con el contorno cambiado. Esas no se dejan guardar.
+    function newZoneViolations(next, previous) {
+        const before = new Set((previous ? zoneViolations(previous) : []).map(zoneKey));
+        return zoneViolations(next).filter((v) => !before.has(zoneKey(v)));
+    }
     // Recorta un polígono (lista de [x, y]) a un lado de una recta vertical (axis 0, x = value) u horizontal (axis 1, y = value): keepGreater conserva el lado de los valores mayores.
     function clipHalf(poly, axis, value, keepGreater) {
         const out = [];
@@ -992,9 +1015,20 @@
         return false;
     }
     // ¿Alguna esquina de la zona queda fuera del contorno de la nave? (aviso en la pantalla; lo que sale del contorno no cuenta como piso de la nave)
+    // La zona sale de la nave si alguna esquina suya queda afuera, si un lado suyo cruza un lado de la nave o si una esquina de la nave (un rincón) queda metida dentro de la zona: en una nave con rincones puede tener todas
+    // las esquinas adentro y aun así taparlos. Pegada a la pared cuenta como adentro.
     function zoneOutsideNave(vertices, z) {
         if (!vertices || vertices.length < 3) return false;
-        return zonePoints(z).some((p) => !pointInPolygon(p[0], p[1], vertices) && !onPolygonEdge(p[0], p[1], vertices));
+        const pts = zonePoints(z);
+        if (!pts || pts.length < 3) return false;
+        if (pts.some((p) => !pointInPolygon(p[0], p[1], vertices) && !onPolygonEdge(p[0], p[1], vertices))) return true;
+        const nave = vertices.map((p) => [p[0], p[1]]);
+        for (let i = 0; i < pts.length; i++) {
+            for (let j = 0; j < nave.length; j++) {
+                if (crossesProperly(pts[i], pts[(i + 1) % pts.length], nave[j], nave[(j + 1) % nave.length])) return true;
+            }
+        }
+        return nave.some((p) => pointInPolygon(p[0], p[1], pts) && !onPolygonEdge(p[0], p[1], pts));
     }
     // Un punto dentro de la zona, lo más alejado de sus lados (ahí cabe el nombre), para las zonas que no son rectángulos.
     function zoneLabelAnchor(z) {
@@ -2183,7 +2217,7 @@
         const out = [];
         if (!layout) return out;
         (layout.zones || []).forEach((z) => {
-            if (Array.isArray(z.pts) && z.pts.length < 3) return; // una zona por dibujar todavía no cuenta
+            if (z.active === false || (Array.isArray(z.pts) && z.pts.length < 3)) return; // una zona apagada o por dibujar todavía no cuenta
             if (zoneOutsideNave(layout.vertices, z)) out.push({ level: 'zone', step: 'zonas', kind: 'nave', id: z.id, target: { kind: 'zone', id: z.id }, vars: { code: z.code || z.name || '' } });
         });
         footprintViolations(layout).forEach((v) => {
@@ -3576,6 +3610,6 @@
         levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
-        FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
+        FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
 }));

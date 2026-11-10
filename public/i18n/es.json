@@ -2407,6 +2407,7 @@
     "layoutVioObs_tall": "El obstáculo «{name}» llega a {top} m (altura del piso + alto) y la nave ahí solo mide {height} m de alto: bájalo o hazlo más bajo.",
     "layoutVioObs_high": "El obstáculo «{name}» queda a {top} m del piso y la nave ahí solo mide {height} m de alto: bájalo.",
     "layoutVioRampaFueraToast": "La rampa {code} {name} sale del contorno de la nave: no es posible. Acomódala o cambia sus medidas para que quede adentro.",
+    "layoutVioZonaFueraToast": "La zona {code} {name} sale del contorno de la nave: no es posible. Acomódala o cambia sus medidas para que quede adentro.",
     "layoutFormatoRampa": "Formato de la rampa",
     "layoutRampaColor": "Color de la rampa",
     "layoutRampaDifuminar": "Difuminar los colores de los dos pisos que toca",
