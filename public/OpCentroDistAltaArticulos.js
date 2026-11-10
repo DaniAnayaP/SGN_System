@@ -569,10 +569,9 @@ function buildRow(record) {
         cells.colArticuloAncho,
         cells.colArticuloPesoArticulo,
         cells.colArticuloPesoEmpaque,
-        buildStorageTypeCell(record),
-        cells.colArticuloCantidadCama,
-        cells.colArticuloCamasPallet,
-        cells.colArticuloMaxEstiba,
+        // «Almacenamiento Artículo» (tipo de almacenamiento, cantidad por cama, camas por pallet, máxima estiba) ya no se captura en Alta: pasa a Unidad de Medida por Distribución (en Alta solo se configura la UDM original del
+        // producto). Mientras tanto Catálogos > Códigos y Edición Código lo siguen mostrando para no perder lo ya capturado.
+        ...(CODES_MODE || EDIT_MODE ? [buildStorageTypeCell(record), cells.colArticuloCantidadCama, cells.colArticuloCamasPallet, cells.colArticuloMaxEstiba] : []),
         buildEvidenceCell(record, 'evidenceFront', 'colArticuloEvidenceFront'),
         buildEvidenceCell(record, 'evidenceBack', 'colArticuloEvidenceBack'),
         buildEvidenceCell(record, 'evidenceLeft', 'colArticuloEvidenceLeft'),
