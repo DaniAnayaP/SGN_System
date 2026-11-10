@@ -5700,7 +5700,8 @@ function fxFocusLevel() {
     const h = state.hl;
     if (h && h.loc && h.step === state.focus) {
         const picked = new Set(state.pick.filter((x) => x.type === 'space').map((x) => x.id));
-        const out = highlightedList().filter((e) => e.n && picked.has(e.id)).map((e) => ({ id: e.id, n: e.n, c: e.c, f: e.f, p: e.p, mode: state.findDim ? 'dim' : 'hide' }));
+        // un espacio marcado (sin posición) se dibuja solo, sin los demás espacios de su nivel (only)
+        const out = highlightedList().filter((e) => e.n && picked.has(e.id)).map((e) => ({ id: e.id, n: e.n, c: e.c, f: e.f, p: e.p, only: !!(e.c && !e.p), mode: state.findDim ? 'dim' : 'hide' }));
         if (out.length) return out;
     }
     const v = virtualFind();

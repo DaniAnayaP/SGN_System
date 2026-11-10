@@ -1344,7 +1344,7 @@
                 // de sus filas y profundidades, a la altura que tienen. Lo elegido se marca con el cuadro naranja de siempre (hlBox).
                 // varios niveles (o espacios o posiciones) del mismo activo: cada uno se dibuja una vez (los repetidos se juntan)
                 const fzsAll = focusLevels.filter((f) => f.mode === 'hide' && f.id === s.id);
-                const fzKey = (f) => `${Number(f.n) || 1}|${Number(f.p) > 0 ? Number(f.c) || 0 : 0}|${Number(f.p) > 0 ? Number(f.p) : 0}`;
+                const fzKey = (f) => `${Number(f.n) || 1}|${Number(f.p) > 0 || f.only ? Number(f.c) || 0 : 0}|${Number(f.p) > 0 ? Number(f.p) : 0}`;
                 const fzs = root.LayoutCalc && root.LayoutCalc.levelMeasures && root.LayoutCalc.bayMeasures ? fzsAll.filter((f, i) => fzsAll.findIndex((g2) => fzKey(g2) === fzKey(f)) === i) : [];
                 if (fzs.length) {
                   fzs.forEach((fzm) => {
@@ -1353,18 +1353,20 @@
                     const slotsZ = LCz.levelSlots ? LCz.levelSlots(s, nz) : Math.max(1, Math.floor(s.slots || 1));
                     const cz1 = fzm.c ? Math.min(Math.max(1, Number(fzm.c) || 1), slotsZ) : 0;
                     const cont = cz1 && Number(fzm.p) > 0 && LCz.bayOf ? cz1 : 0; // con un localizador el cuadro es el espacio; si no, el nivel entero
+                    const esp = !cont && cz1 && fzm.only ? cz1 : 0; // un espacio marcado en el Localizador (sin posición): solo ese espacio, no los demás del nivel
+                    const one = cont || esp; // el espacio de un solo cuadro (con sus posiciones o sin ellas)
                     // cada espacio del nivel donde cae de verdad: su largo y su fondo propios, uno junto al otro de izquierda a derecha
                     const rects = LCz.levelBayRects ? LCz.levelBayRects(s, nz) : null;
-                    const rc = cont && rects ? rects[cont - 1] : null;
-                    const bx0 = rc ? s.x + rc.x : (cont ? s.x + (cont - 1) * (s.l / slotsZ) : s.x);
-                    const blen = rc ? rc.l : (cont ? s.l / slotsZ : s.l);
+                    const rc = one && rects ? rects[one - 1] : null;
+                    const bx0 = rc ? s.x + rc.x : (one ? s.x + (one - 1) * (s.l / slotsZ) : s.x);
+                    const blen = rc ? rc.l : (one ? s.l / slotsZ : s.l);
                     const depthZ = rc ? rc.w : s.d; // el fondo del cuadro enfocado
                     const by0 = rc ? s.y + rc.y : s.y; // y desde dónde empieza ese cuadro
-                    const mAll = cont ? LCz.bayMeasures(s, nz, cont) : LCz.levelMeasures(s, nz);
+                    const mAll = one ? LCz.bayMeasures(s, nz, one) : LCz.levelMeasures(s, nz);
                     // con un localizador se dibuja la distribución de las posiciones del espacio (cada una en su lugar y con sus medidas); si no, las divisiones del nivel
                     const contPos = cont && lastLayout ? posOf(s.id, nz, cont) : [];
                     const allMode = !!fzm.all && !cont; // el nivel entero con las posiciones de todos sus espacios (página pública)
-                    const cols = contPos.length ? contPos.length : slotsZ;
+                    const cols = contPos.length ? contPos.length : (esp ? 1 : slotsZ);
                     const sxP = blen / Math.max(mAll.l, 0.01); const szP = depthZ / Math.max(mAll.w, 0.01);
                     const yBot = fl + Math.max(mAll.floorH, 0.03);
                     const yTop = yBot + (mAll.beam > 0 ? mAll.beam : 0.06) + Math.max(mAll.h, 0.1);
@@ -1394,23 +1396,23 @@
                         }
                     }
                     for (let ci = 0; ci < (allMode ? 0 : cols); ci++) {
-                        const mm = cont ? mAll : LCz.bayMeasures(s, nz, ci + 1); // cada espacio del nivel con sus propias medidas
+                        const mm = one ? mAll : LCz.bayMeasures(s, nz, ci + 1); // cada espacio del nivel con sus propias medidas
                         const beamC = mm.beam > 0 ? mm.beam : 0.06;
                         const yB = fl + Math.max(mm.floorH, 0.03);
                         const pp = contPos[ci] || null; // la posición (en su lugar y con sus medidas) o, sin ella, todo el espacio
                         const hC = Math.max(pp ? Math.min(pp.h, mm.h) : mm.h, 0.1);
-                        const rb = rects && !cont ? rects[ci] : null; // el espacio del nivel con su largo y su fondo propios
+                        const rb = rects && !cont ? rects[esp ? esp - 1 : ci] : null; // el espacio del nivel con su largo y su fondo propios
                         const sxC = pp ? pp.l * sxP : (rb ? rb.l : wC); const szC = pp ? pp.w * szP : s.d;
                         const xc = PX(pp ? bx0 + (pp.x + pp.l / 2) * sxP : (rb ? s.x + rb.x + rb.l / 2 : bx0 + (ci + 0.5) * wC));
                         const zc = PZ(pp ? by0 + (pp.y + pp.w / 2) * szP : s.y + s.d / 2);
-                        if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, ci + 1, false);
-                        else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, ci + 1, false);
-                        if (!solid && !contPos.length) { const dV = rb ? rb.w : s.d; bayVolume(xc, yB + beamC + hC / 2, PZ(s.y + (rb ? rb.y : 0) + dV / 2), Math.max(sxC - gx, 0.02), hC, Math.max(dV - gz, 0.02), ci + 1); }
+                        if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, esp || ci + 1, false);
+                        else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, esp || ci + 1, false);
+                        if (!solid && !contPos.length) { const dV = rb ? rb.w : s.d; bayVolume(xc, yB + beamC + hC / 2, PZ(s.y + (rb ? rb.y : 0) + dV / 2), Math.max(sxC - gx, 0.02), hC, Math.max(dV - gz, 0.02), esp || ci + 1); }
                     }
                     if (!solid) {
                         // postes: las cuatro esquinas del cuadro y uno delgado en cada división (adelante y atrás)
                         const postCols = contPos.length ? 1 : cols; // con las posiciones del espacio, solo las cuatro esquinas del cuadro
-                        const edgeAt = (xi) => (rects && !cont && !contPos.length ? (xi === 0 ? s.x : (xi >= postCols ? s.x + s.l : s.x + rects[xi - 1].x + rects[xi - 1].l)) : bx0 + xi * (blen / postCols)); // las divisiones, donde termina cada espacio
+                        const edgeAt = (xi) => (rects && !one && !contPos.length ? (xi === 0 ? s.x : (xi >= postCols ? s.x + s.l : s.x + rects[xi - 1].x + rects[xi - 1].l)) : bx0 + xi * (blen / postCols)); // las divisiones, donde termina cada espacio
                         for (let xi = 0; xi <= postCols; xi++) {
                             const edge = xi === 0 || xi === postCols;
                             [by0, by0 + depthZ].forEach((zEdge, zi) => upr.push({ x: PX(edgeAt(xi)) + (xi === 0 ? 0.03 : (xi === postCols ? -0.03 : 0)), y: (yBot + yTop) / 2, z: PZ(zEdge) + (zi === 0 ? 0.03 : -0.03), sx: edge ? 0.06 : 0.04, sy: yTop - yBot, sz: edge ? 0.06 : 0.04, c: postC }));
