@@ -1720,7 +1720,7 @@
     "layoutActivoClase": "Clasificación del activo",
     "layoutActivoTipo": "Tipo de activo",
     "layoutActivoElegir": "Elige…",
-    "layoutActivosSinEspacios": "Todavía no hay huellas. Agrégalas en Huella y aquí se ponen sus activos.",
+    "layoutActivosSinEspacios": "Todavía no hay huellas. Agrégalas en Huella, pon cuántos activos lleva cada una y aquí los acomodas.",
     "layoutHuellaCol": "Huella",
     "layoutCodigoHuella": "Código de huella",
     "layoutCodigoZona": "Código de zona",
@@ -1728,6 +1728,9 @@
     "layoutActivoElegirZona": "Elige la zona…",
     "layoutActivoNivelFijo": "Un activo para operar siempre tiene 1 nivel y no se edita",
     "layoutAgregarActivo": "+ Agregar activo",
+    "layoutHuellaActivos": "Activos",
+    "layoutHuellaActivosGuardados": "{n} activo(s) ya guardado(s) no se quitan desde aquí: elimínalos o desactívalos en el paso Activos.",
+    "layoutHuellaActivosTope": "No caben más activos: el Layout llega al máximo de {n}.",
     "layoutActivoElegirHuella": "Elige la huella…",
     "layoutActivoSinHuella": "Elige la huella del activo {n}: un activo siempre va dentro de una huella.",
     "layoutHuellaSinZona": "Fuera de toda zona",
@@ -5115,6 +5118,10 @@
     "layoutPosCantidad": {
       "what": "Cuántas posiciones tiene este espacio. Son las que salen como renglones en el paso Posiciones: al cambiar el número, el espacio se parte en esa cantidad de posiciones iguales (de izquierda a derecha) que siguen su tamaño; si ya las acomodaste a mano, se agregan al final o se quitan las últimas.",
       "example": "el espacio R001.N001.E002 pasa de 1 a 3 posiciones: en Posiciones salen R001.N001.E002.P001, P002 y P003, cada una de un tercio del largo."
+    },
+    "layoutHuellaActivos": {
+      "what": "Cuántos activos lleva esta huella. Son los que salen como renglones en el paso Activos, ya ligados a ella: al subir el número nacen activos nuevos (sin tipo; el largo de la huella se reparte entre ellos y luego le pones sus medidas a cada uno); al bajarlo se quitan los últimos que todavía no se guardan. Un activo ya guardado se elimina o se desactiva en el paso Activos.",
+      "example": "la huella H001 pasa de 0 a 3 activos: en Activos salen tres renglones de H001, donde eliges el tipo de cada uno y, si no ocupan todo el largo de la huella, les pones su largo."
     },
     "layoutPosCeja": {
       "what": "El grueso de la reja (el travesaño) de este espacio, en metros. Va aparte del Alto: la altura libre (el Alto) empieza encima de la reja, así que el Alto de almacenamiento es el mismo Alto. Si no lo escribes toma el de su nivel (paso Niveles).",
