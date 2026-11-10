@@ -2052,6 +2052,7 @@
     "layoutFiltroNElegidos": "{n} elegidos",
     "layoutFiltroLocalizador": "Localizador",
     "layoutLocPosicion": "Espacio",
+    "layoutLocCapaApagada": "Enciende «{layer}» en Qué ver para ver esto aquí.",
     "layoutLocMedidaNivel": "{floor} m del piso · {h} m de alto",
     "layoutLocFilasProf": "filas {f} · profundidad {p}",
     "layoutLocElige_fp": "Elige una huella",
@@ -5104,7 +5105,7 @@
       "example": "el nivel 2 tiene 3 espacios y uno lleva su propia ceja: aquí dice 1."
     },
     "layoutFiltroLocalizador": {
-      "what": "Te lleva paso a paso hasta un lugar exacto: eliges la huella, luego uno de sus activos, un nivel, un espacio y, al final, el localizador (la fila y la profundidad). Puedes escribir para buscar en cada lista. Cada elección enfoca lo que escogiste en el croquis y en el 3D, y las pastillas de arriba te regresan a un paso anterior.",
+      "what": "Te lleva paso a paso hasta un lugar exacto: eliges la huella, luego uno de sus activos, un nivel, un espacio y, al final, el localizador (la fila y la profundidad). Va de la mano de Zona, Qué ver y Elegir: solo lista lo que esos filtros dejan ver, y si en Elegir escogiste una sola huella o un solo activo, el recorrido arranca ahí. Puedes escribir para buscar en cada lista. Cada elección enfoca lo que escogiste en el croquis y en el 3D, y las pastillas de arriba te regresan a un paso anterior.",
       "example": "eliges la huella H001, el rack A004, el nivel N002, el espacio C001 y el localizador F001.P001: el croquis y el 3D te muestran ese lugar y arriba queda su código Z001.H001.A004.N002.C001.F001.P001."
     },
     "layoutFiltroLocalizadorRuta": {

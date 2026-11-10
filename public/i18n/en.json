@@ -2052,6 +2052,7 @@
     "layoutFiltroNElegidos": "{n} picked",
     "layoutFiltroLocalizador": "Locator",
     "layoutLocPosicion": "Space",
+    "layoutLocCapaApagada": "Turn on «{layer}» in Show to see this here.",
     "layoutLocMedidaNivel": "{floor} m from the floor · {h} m high",
     "layoutLocFilasProf": "rows {f} · depth {p}",
     "layoutLocElige_fp": "Pick a footprint",
@@ -5105,7 +5106,7 @@
       "example": "level 2 has 3 spaces and one has its own beam: here it says 1."
     },
     "layoutFiltroLocalizador": {
-      "what": "Takes you step by step to an exact place: pick the footprint, then one of its assets, a level, a space and, last, the locator (row and depth). You can type to search each list. Each choice focuses what you picked on the plan and in 3D, and the pills on top take you back to an earlier step.",
+      "what": "Takes you step by step to an exact place: pick the footprint, then one of its assets, a level, a space and, last, the locator (row and depth). It goes hand in hand with Zone, Show and Pick: it only lists what those filters let you see, and if you picked a single footprint or a single asset in Pick, the trip starts there. You can type to search each list. Each choice focuses what you picked on the plan and in 3D, and the pills on top take you back to an earlier step.",
       "example": "you pick footprint H001, rack A004, level N002, space C001 and locator F001.P001: the plan and the 3D show that place and its code Z001.H001.A004.N002.C001.F001.P001 stays on top."
     },
     "layoutFiltroLocalizadorRuta": {

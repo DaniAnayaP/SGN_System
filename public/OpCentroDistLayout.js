@@ -2649,7 +2649,7 @@ function showAllLayers() {
 }
 // Con zonas enfocadas, «Qué ver» (los tipos de adentro) sigue a las capas encendidas: todas encendidas = todos los tipos.
 function syncFindTypesFromSteps() {
-    const shown = findTypesShown();
+    const shown = findTypesShown().filter((ft) => ft.type !== 'zone'); // «Qué ver» no lleva las zonas: eso es del botón Zona
     const onTypes = shown.filter((ft) => stepOn(ft.step));
     state.findNone = onTypes.length === 0; // ninguna capa de cosas encendida: con zonas enfocadas no se muestra nada de lo de adentro
     state.findTypes = onTypes.length === shown.length || !onTypes.length ? [] : onTypes.map((ft) => ft.type);
@@ -2728,8 +2728,10 @@ function zoneItemsHtml() {
     const zones = (state.draft.zones || []).filter((z) => z.active !== false && ddMatch('zone', `${z.name || ''} ${z.code || ''}`));
     return zones.map((z) => ddItem(`data-dd-zone="${esc(z.id)}"`, state.zoneScope.includes(z.id), `${esc(z.name || z.code || '')} <small>${esc(z.code || '')}</small>`)).join('') || `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
 }
+// «Qué ver» lista las capas del Layout menos «Zonas»: las zonas se eligen con el botón Zona (y en «Ver» siempre se dibujan).
+const queVerSteps = () => SECTION_ORDER.filter(stepVisible).filter((s) => s !== 'zonas');
 function layerItemsHtml() {
-    const visible = SECTION_ORDER.filter(stepVisible).filter((s) => ddMatch('layers', t(SECTION_LABEL_KEYS[s])));
+    const visible = queVerSteps().filter((s) => ddMatch('layers', t(SECTION_LABEL_KEYS[s])));
     return visible.map((s) => ddItem(`data-dd-layer="${s}"`, stepOn(s), esc(t(SECTION_LABEL_KEYS[s])))).join('') || `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
 }
 // Mientras se escribe solo se vuelve a dibujar la lista (la caja no se toca para no perder el cursor).
@@ -2759,7 +2761,7 @@ function renderViewStrip() {
         + `<div class="layout-dd-list" id="layout-dd-list-zone">${zoneItemsHtml()}</div>`;
     const zoneDd = ddHtml('zone', 'layoutFiltroZona', t('main.layoutFiltroZona'), zoneValue, vDropdown === 'zone', !(canFind() && stepVisible('zonas') && zones.length), zoneMenu);
     // Qué ver: las capas (los pasos que el árbol deja ver); «Todo» las enciende todas
-    const visible = SECTION_ORDER.filter(stepVisible);
+    const visible = queVerSteps();
     const onN = visible.filter(stepOn).length;
     const layersValue = onN === visible.length ? t('main.layoutFiltroTodo') : (onN === 0 ? t('main.layoutFiltroNada') : t('main.layoutFiltroNdeN', { n: onN, total: visible.length }));
     const layersMenu = vDropdown !== 'layers' ? '' : searchRowHtml('layers') + ddItem('data-dd-all="layers"', onN === visible.length ? true : (onN === 0 ? false : 'mix'), `<b>${esc(t('main.layoutFiltroTodo'))}</b>`) + '<div class="layout-dd-sep"></div>'
@@ -2791,8 +2793,8 @@ const chosenList = () => state.pick;
 // «Elegir»: las clasificaciones (tipos) prendidas en las pastillas de abajo del buscador; vacío = todas. Se pueden prender varias a la vez.
 const vChooseTypes = new Set();
 // «Localizador»: hasta dónde se ha bajado: huella, activo, nivel, posición (columna) y celda (fila y profundidad, «F001.P001»). Vacío = ese paso sigue.
-const vLoc = { fp: '', sp: '', n: 0, c: 0, cell: '' };
-const locReset = () => { vLoc.fp = ''; vLoc.sp = ''; vLoc.n = 0; vLoc.c = 0; vLoc.cell = ''; };
+const vLoc = { fp: '', sp: '', n: 0, c: 0, cell: '', scope: null }; // scope = lo que Elegir tenía escogido al empezar el recorrido (sigue acotando sus listas)
+const locReset = () => { vLoc.fp = ''; vLoc.sp = ''; vLoc.n = 0; vLoc.c = 0; vLoc.cell = ''; vLoc.scope = null; };
 // Todo lo que se puede elegir (lo que el árbol deja ver), por tipo: las mismas listas del buscador.
 function chooseCatalog() {
     const d = state.draft;
@@ -2875,21 +2877,48 @@ function locCode() {
     const z = (state.draft.zones || []).find((x) => x.id === f.zoneId);
     return [z && z.code, ...LOC_STEPS.map(locPart)].filter(Boolean).join('.');
 }
+// Elegir ↔ Localizador: lo que Elegir tiene escogido (huellas o activos) acota lo que lista el Localizador, y con UNA sola huella o UN solo activo elegido el Localizador arranca ahí. Lo que escogió el propio Localizador
+// (que deja su elección como la de Elegir) no lo acota: así se puede cambiar de huella sin quitar nada.
+function locAdopt() {
+    if (vLoc.fp || !state.draft || state.pick.length !== 1) return;
+    const p = state.pick[0];
+    if (p.type === 'footprint' && (state.draft.footprints || []).some((f) => f.id === p.id)) vLoc.fp = p.id;
+    else if (p.type === 'space') {
+        const s = (state.draft.spaces || []).find((x) => x.id === p.id);
+        if (s && s.footprintId) { vLoc.fp = s.footprintId; vLoc.sp = s.id; }
+    }
+}
+function locLimits() {
+    const own = vLoc.fp ? (vLoc.sp ? ['space', vLoc.sp] : ['footprint', vLoc.fp]) : null;
+    const owned = own && state.pick.length === 1 && state.pick[0].type === own[0] && state.pick[0].id === own[1];
+    const picks = vLoc.fp && vLoc.scope ? vLoc.scope : (owned ? [] : state.pick);
+    const spaces = state.draft.spaces || [];
+    const fp = new Set();
+    const sp = new Set();
+    picks.forEach((p) => {
+        if (p.type === 'footprint') fp.add(p.id);
+        if (p.type === 'space') { sp.add(p.id); const s = spaces.find((x) => x.id === p.id); if (s) fp.add(s.footprintId); }
+    });
+    // los activos elegidos solo acotan la lista de la huella en la que hay alguno elegido
+    const spOfFp = sp.size ? new Set([...sp].filter((id) => { const s = spaces.find((x) => x.id === id); return s && s.footprintId === vLoc.fp; })) : new Set();
+    return { fp: fp.size ? fp : null, sp: spOfFp.size ? spOfFp : null };
+}
 // Lo que sale en la lista del paso en el que se va: { value, title, sub, hay }
 function locItems(step) {
     const d = state.draft;
     const { s } = locEntities();
     const prefix = locCode(); // lo que ya se eligió, para poder buscar también por el código completo
     const zoneOf = (id) => (d.zones || []).find((z) => z.id === id) || {};
+    const limits = locLimits();
     if (step === 'fp') {
         const inside = state.zoneScope.length ? scopeInside(d, state.zoneScope) : null; // el botón Zona acota lo que se puede bajar
-        return (d.footprints || []).filter((x) => x.active !== false && (!inside || inside.footprint.has(x.id))).map((x) => {
+        return (d.footprints || []).filter((x) => x.active !== false && (!inside || inside.footprint.has(x.id)) && (!limits.fp || limits.fp.has(x.id))).map((x) => {
             const z = zoneOf(x.zoneId);
             return { value: x.id, title: x.code || '', sub: [x.name, z.name].filter(Boolean).join(' · '), hay: `${[z.code, x.code].filter(Boolean).join('.')} ${x.code || ''} ${x.name || ''} ${z.name || ''}` };
         });
     }
     if (step === 'sp') {
-        return (d.spaces || []).filter((x) => x.active !== false && x.footprintId === vLoc.fp).map((x) => ({
+        return (d.spaces || []).filter((x) => x.active !== false && x.footprintId === vLoc.fp && (!limits.sp || limits.sp.has(x.id))).map((x) => ({
             value: x.id, title: x.code || '', sub: [x.ownName, typeLabel('space', x.type)].filter(Boolean).join(' · '), hay: `${prefix}.${x.code || ''} ${x.code || ''} ${x.ownName || ''} ${x.name || ''} ${typeLabel('space', x.type)}`,
         }));
     }
@@ -2929,11 +2958,15 @@ function locBodyHtml() {
         const cur = k === stepKey;
         return `<button type="button" class="layout-find-type" data-loc-crumb="${k}" aria-pressed="${cur}"${val || cur ? '' : ' disabled'}>${esc(t(LOC_LABEL[k]))}${val ? ` <span class="layout-find-n">${esc(val)}</span>` : ''}</button>`;
     }).join('')}</div>`;
-    const rows = locItems(stepKey).filter((i) => ddMatch('loc', i.hay));
+    const needLayer = { fp: 'espacios', sp: 'activos', n: 'niveles', c: 'posiciones', cell: 'posiciones' }[stepKey];
+    const off = state.mode !== 'edit' && !stepOn(needLayer); // Qué ver: con la capa apagada no hay nada que bajar
+    const rows = off ? [] : locItems(stepKey).filter((i) => ddMatch('loc', i.hay));
     const CAP = 150;
     const before = LOC_STEPS[LOC_STEPS.indexOf(stepKey) - 1];
     const head = `<div class="layout-ch-grp">${esc(t(`main.layoutLocElige_${stepKey}`, { code: before ? locPart(before) : '' }))}</div>`;
-    const list = head + (rows.length
+    const list = head + (off
+        ? `<div class="layout-find-empty">${esc(t('main.layoutLocCapaApagada', { layer: t(SECTION_LABEL_KEYS[needLayer]) }))}</div>`
+        : rows.length
         ? rows.slice(0, CAP).map((i) => `<button type="button" class="layout-dd-item" role="menuitem" data-loc-pick="${stepKey}" data-loc-val="${esc(i.value)}"${step === 'done' && i.value === vLoc.cell ? ' aria-current="true"' : ''}><span><b>${esc(i.title)}</b> <small>${esc(i.sub || '')}</small></span></button>`).join('') + (rows.length > CAP ? `<div class="layout-find-empty">${esc(t('main.layoutElegirMas'))}</div>` : '')
         : `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`);
     return { crumbs, list, code: locCode() };
@@ -2951,6 +2984,7 @@ function renderLocBody() {
 }
 // Si lo que se enfocó cambió por otro lado (Elegir, Zona, otro Layout), el recorrido empieza de nuevo y su resaltado se quita.
 function locSync() {
+    locAdopt();
     if (!vLoc.fp || !state.draft) return;
     const d = state.draft;
     const want = vLoc.sp ? ['space', vLoc.sp] : ['footprint', vLoc.fp];
@@ -2984,6 +3018,7 @@ function locApply() {
     renderViewStrip();
 }
 function locPick(step, value) {
+    if (step === 'fp' && !vLoc.fp) vLoc.scope = state.pick.length ? state.pick.map((p) => ({ ...p })) : null; // lo que Elegir tenía escogido sigue acotando las listas de los pasos que siguen
     if (step === 'fp') Object.assign(vLoc, { fp: value, sp: '', n: 0, c: 0, cell: '' });
     else if (step === 'sp') Object.assign(vLoc, { sp: value, n: 0, c: 0, cell: '' });
     else if (step === 'n') Object.assign(vLoc, { n: Number(value), c: 0, cell: '' });
@@ -3078,10 +3113,10 @@ $('layout-vstrip-filters').addEventListener('click', (event) => {
             // sin filtro (todas las zonas a la vista) o con unas cuantas: se marcan todas; con todas marcadas, o con doble clic: se quitan (vuelve a «Todas», sin filtro)
             state.zoneScope = forceNone || allPicked ? [] : zones.map((z) => z.id);
         } else {
-            const visible = SECTION_ORDER.filter(stepVisible);
+            const visible = queVerSteps();
             if (state.mode === 'edit') fxToggleAll(); // en Editar siempre queda al menos un paso encendido (Contorno)
             else {
-                if (forceNone || visible.every(stepOn)) state.steps = state.steps.filter((x) => x === 'localizadores'); else showAllLayers();
+                if (forceNone || visible.every(stepOn)) state.steps = state.steps.filter((x) => x === 'localizadores' || x === 'zonas'); else showAllLayers(); // las zonas no se apagan aquí: se filtran con el botón Zona
                 fixLayerFocus();
             }
         }
