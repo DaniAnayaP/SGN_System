@@ -1407,10 +1407,9 @@
                     const upC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
                     const deckC = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
                     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([ix, iz]) => upr.push({ x: cx + ix * Math.max(0, s.l / 2 - 0.03), y: s.h / 2 + fl, z: cz + iz * Math.max(0, s.d / 2 - 0.03), sx: 0.06, sy: s.h, sz: 0.06, c: upC }));
-                    // La repisa (reja) de cada nivel va a su altura del piso (paso Niveles: la del nivel 1 se escribe y las demás se calculan) y mide de grueso lo que mide su ceja (sin ceja, 6 cm). Si algún hueco (nivel × columna) trae en Posiciones
-                    // su propia altura o ceja, ese nivel se dibuja columna por columna; si no, una sola repisa de todo el largo. Sin LayoutCalc se reparten parejas como siempre.
+                    // La repisa (reja) de cada nivel va a su altura del piso (paso Niveles: la del nivel 1 se escribe y las demás se calculan) y mide de grueso lo que mide su ceja (sin ceja, 6 cm); todos los espacios del nivel van a
+                    // esa misma altura (una sola repisa de todo el largo). Sin LayoutCalc se reparten parejas como siempre.
                     const LCx = root.LayoutCalc;
-                    const slotsN = Math.max(1, Math.floor(s.slots || 1));
                     const deckAt = (xc, sx, m, color) => { const th = m.beam > 0 ? m.beam : 0.06; dck.push({ x: xc, y: fl + Math.max(m.floorH, 0.03) + th / 2, z: cz, sx, sy: th, sz: s.d, c: color === undefined ? deckC : color }); };
                     for (let k = 1; k <= lv; k++) {
                         // con un nivel enfocado en este activo, los demás niveles se apagan (tenue) o se quitan (oculto)
@@ -1419,10 +1418,8 @@
                         if (otherLevel && mineFx[0].mode === 'hide') continue;
                         const lvColor = otherLevel ? mixHex(deckC, 0xe4e7f0, 0.8) : deckC;
                         if (!(LCx && LCx.levelMeasures && LCx.bayMeasures)) { dck.push({ x: cx, y: 0.15 + (k - 1) * ((s.h - 0.3) / lv) + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC }); continue; }
-                        if ((s.bays || []).some((b) => b.n === k && (b.floorH !== undefined || b.beam !== undefined))) {
-                            const slotsK = LCx.levelSlots ? LCx.levelSlots(s, k) : slotsN; // cada nivel tiene las posiciones que se le pusieron en Niveles
-                            for (let c = 1; c <= slotsK; c++) deckAt(cx - s.l / 2 + (c - 0.5) * (s.l / slotsK), s.l / slotsK, LCx.bayMeasures(s, k, c), lvColor);
-                        } else deckAt(cx, s.l, LCx.levelMeasures(s, k), lvColor);
+                        // todos los espacios de un nivel van a la misma altura (la del nivel): una sola repisa de todo el largo
+                        deckAt(cx, s.l, LCx.levelMeasures(s, k), lvColor);
                     }
                 }
                 spaceList.push({ s, x: cx, z: cz, fl });

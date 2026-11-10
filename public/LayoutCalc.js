@@ -115,7 +115,20 @@
         const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateDoors(migrateWalls(migrateFloors({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))))));
         // Seguridad: la zona de cada elemento sale de su lugar y su código (E001…) lo pone el sistema.
         // Todo espacio tiene al menos una posición: las que no están guardadas (los Layouts de antes, con sus filas y profundidades) se generan aquí, siempre iguales (ensurePositions)
-        return ensurePositions(assignItemCodes(assignRampCodes(assignFloorCodes(assignWallCodes(assignSafetyCodes(deriveSafetyZones(normalized)))))));
+        return dropBayHeights(ensurePositions(assignItemCodes(assignRampCodes(assignFloorCodes(assignWallCodes(assignSafetyCodes(deriveSafetyZones(normalized))))))));
+    }
+    // Los Layouts de antes guardaban en algunos huecos (espacios) su propia altura del piso y su propia ceja, de cuando se capturaban por espacio: el 3D y las hojas dibujaban ese espacio más arriba que los demás de su nivel.
+    // La altura del piso y la ceja son del NIVEL (paso Niveles), así que al leer el Layout se quitan de los huecos (lo demás del hueco, como su largo, ancho, alto y caras, se queda).
+    function dropBayHeights(layout) {
+        const stale = (b) => b && (b.floorH !== undefined || b.beam !== undefined);
+        if (!layout || !Array.isArray(layout.spaces) || !layout.spaces.some((s) => s && Array.isArray(s.bays) && s.bays.some(stale))) return layout;
+        return { ...layout, spaces: layout.spaces.map((s) => {
+            if (!s || !Array.isArray(s.bays) || !s.bays.some(stale)) return s;
+            const bays = s.bays.map((b) => { if (!stale(b)) return b; const { floorH, beam, ...rest } = b; return rest; }).filter((b) => Object.keys(b).length > 2);
+            if (bays.length) return { ...s, bays };
+            const { bays: dropped, ...others } = s;
+            return others;
+        }) };
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -2187,7 +2200,7 @@
                     out.push({ ...base, kind: 'baysum', sig: JSON.stringify([n, lens, s.l]), vars: { code: s.code, n, sum: m(ls.sum), max: m(s.l) }, message: `Los espacios del nivel ${n} del activo ${s.code} suman ${m(ls.sum)} m de largo y el activo mide ${m(s.l)} m: baja el largo de algún espacio para poder guardar.` });
                 }
                 // los niveles no pueden subir más que el activo (solo si el activo trae medidas de niveles o huecos propias: sin ellas los niveles se reparten justo en su alto)
-                const ownBays = (s.bays || []).filter((b) => b.floorH !== undefined || b.h !== undefined);
+                const ownBays = (s.bays || []).filter((b) => b.h !== undefined);
                 if (s.h > 0 && ((s.lvls || []).length || ownBays.length)) {
                     const top = levelsTop(s);
                     if (top > s.h + eps) out.push({ ...base, kind: 'levels', sig: JSON.stringify([s.h, s.levels || 1, s.lvls || null, ownBays]), vars: { code: s.code, top: m(top), h: m(s.h) }, message: `Los niveles del activo ${s.code} llegan a ${m(top)} m y el activo mide ${m(s.h)} m: baja el alto de algún nivel o sube el alto del activo.` });
@@ -3400,7 +3413,8 @@
         return positionViolations(next).filter((v) => !before.some((p) => p.id === v.id && p.kind === v.kind && p.sig === v.sig));
     }
 
-    // Huecos guardados de un activo: [{ n: nivel, c: columna, rows?, depth?, floorH?, l?, w?, h? }] (solo lo cambiado; lo demás es lo de por defecto). Se descartan los que ya no caben en sus niveles y columnas.
+    // Huecos guardados de un activo: [{ n: nivel, c: columna, rows?, depth?, l?, w?, h? }] (solo lo cambiado; lo demás es lo de por defecto). Se descartan los que ya no caben en sus niveles y columnas. La altura del piso y la ceja
+    // son del NIVEL (paso Niveles): todos los espacios de un nivel salen a la misma altura, así que un hueco ya no las guarda (las que traían los Layouts de antes, de cuando se capturaban por espacio, se quitan al leerlos).
     function sanitizeBays(raw, levels, slots) {
         const out = new Map();
         (Array.isArray(raw) ? raw : []).forEach((b) => {
@@ -3412,7 +3426,7 @@
             if (rows > 1) bay.rows = Math.min(rows, LIMITS.slots);
             const depth = Math.round(Number(b.depth));
             if (depth > 1) bay.depth = Math.min(depth, LIMITS.depth);
-            ['floorH', 'l', 'w', 'h', 'beam'].forEach((k) => {
+            ['l', 'w', 'h'].forEach((k) => {
                 const v = Number(b[k]);
                 if (Number.isFinite(v) && v > 0 && v <= LIMITS.maxM) bay[k] = Math.round(v * 1000) / 1000;
             });
@@ -3491,7 +3505,7 @@
         let top = 0;
         for (let n = 1; n <= levels; n += 1) { const m = levelMeasures(space, n); top = Math.max(top, m.floorH + m.beam + m.h); }
         ((space && space.bays) || []).forEach((b) => {
-            if (b.floorH === undefined && b.h === undefined) return;
+            if (b.h === undefined) return;
             const m = bayMeasures(space, b.n, b.c);
             top = Math.max(top, m.floorH + m.beam + m.h);
         });
@@ -3538,10 +3552,11 @@
         const round = (v) => Math.round(v * 1000) / 1000;
         const lv = levelMeasures(space, level);
         const h = stored.h !== undefined ? stored.h : lv.h;
-        // beam = la ceja: el grueso de la reja (el travesaño) del nivel, en metros; va aparte del alto (el espacio libre), así que el alto de almacenamiento (useful) es el mismo alto del hueco
-        const beam = stored.beam !== undefined ? stored.beam : lv.beam;
+        // beam = la ceja: el grueso de la reja (el travesaño) del nivel, en metros; va aparte del alto (el espacio libre), así que el alto de almacenamiento (useful) es el mismo alto del hueco.
+        // La altura del piso y la ceja son SIEMPRE las del nivel (todos los espacios de un nivel quedan a la misma altura, la ceja termina donde empieza el espacio): lo que un hueco guardó de antes se ignora.
+        const beam = lv.beam;
         return {
-            floorH: stored.floorH !== undefined ? stored.floorH : lv.floorH,
+            floorH: lv.floorH,
             l: stored.l !== undefined ? stored.l : round(((space && space.l) || 0) / slots),
             w: stored.w !== undefined ? stored.w : round((space && space.d) || 0),
             h,
