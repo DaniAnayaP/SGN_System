@@ -1979,7 +1979,7 @@
     "layoutEspaciosNivel": "Spaces (left to right)",
     "layoutCajones": "Drawers (rows × columns)",
     "layoutHuellaVolumen": "Footprint and volume",
-    "layoutAgregarEspacio": "+ Add space",
+    "layoutAgregarEspacio": "+ Add footprint",
     "layoutQuitar": "Remove",
     "layoutDesactivar": "Deactivate",
     "layoutReactivar": "Reactivate",
