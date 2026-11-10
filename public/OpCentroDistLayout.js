@@ -4564,6 +4564,7 @@ function ensureRelateModal() {
         </div>
     </div>`;
     document.body.appendChild(relEl);
+    Dashboard.attachSearchOptions($('lrel-code')); // Inicia con / Contiene / Igual que y los signos $ @ coma, como en las tablas
     relEl.addEventListener('click', (event) => {
         if (event.target === relEl || event.target.closest('#lrel-close')) { closeRelateDialog(); return; }
         if (event.target.closest('#lrel-save')) { saveRelate(); return; }
@@ -4583,7 +4584,7 @@ async function relSearchCodes() {
     const box = $('lrel-results');
     if (!q || !rd) { box.hidden = true; return; }
     try {
-        const res = await fetch(`/api/business/code-relations/skus?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+        const res = await fetch(`/api/business/code-relations/skus?q=${encodeURIComponent(q)}&mode=${Dashboard.searchModeOf($('lrel-code'))}`, { credentials: 'include' });
         if (!res.ok) return;
         const { skus } = await res.json();
         skus.forEach((s) => relSkuCache.set(s.id, s));

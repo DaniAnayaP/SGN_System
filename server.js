@@ -10046,8 +10046,24 @@ app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
     const limit = req.query.all === '1' ? 5000 : 20;
     res.set('Cache-Control', 'no-store');
     const packMap = packagingMapFor(req.user.clientId, req.user.isTestAccount);
+    // Con el tipo de filtro de las tablas (Inicia con / Igual que) o con signos ($ antes, @ después, coma) se busca con el motor de todo el sistema (SearchSyntax) en el SKU, el UPC y las descripciones; Contiene sin signos sigue
+    // como siempre (basta una parte de lo escrito).
+    const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
+    const query = publicSearchQuery(term);
+    let found;
+    if (req.query.all !== '1' && (mode !== 'contains' || /[$@,]/.test(query))) {
+        if (!SearchSyntax.ready(mode, query)) found = [];
+        else {
+            const matches = publicSearchMatcher(mode, query);
+            found = searchSkuItems(req.user.clientId, '', req.user.isTestAccount, 100000)
+                .filter((s) => matches([padSku(s.record_number), s.upc, s.unique_description, s.known_description, s.custom_description]))
+                .slice(0, limit);
+        }
+    } else {
+        found = searchSkuItems(req.user.clientId, req.query.all === '1' ? '' : term, req.user.isTestAccount, limit);
+    }
     res.json({
-        skus: searchSkuItems(req.user.clientId, req.query.all === '1' ? '' : term, req.user.isTestAccount, limit).map((s) => ({
+        skus: found.map((s) => ({
             id: s.id, sku: padSku(s.record_number), upc: s.upc || '', description: s.unique_description || s.known_description || s.custom_description || '', uom: s.main_uom || '',
             length: s.length || 0, width: s.width || 0, height: s.height || 0, packaging: packMap.get(s.id) || null,
         })),

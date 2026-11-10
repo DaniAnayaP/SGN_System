@@ -8317,6 +8317,10 @@ td.cap-pick{ white-space: nowrap; }
 .editable-cell-unit-wrap{ display: flex; align-items: center; gap: 0.3rem; }
 .editable-cell-unit-wrap .editable-cell-input{ flex: 1; min-width: 0; width: auto; }
 .editable-cell-unit{ flex: none; color: var(--color-text-secondary); font-size: 0.85em; }
+/* las opciones de búsqueda (tipo de filtro y signos) junto a un campo de texto de una ventana */
+.search-opts-row{ position: relative; padding: 0; background: transparent; }
+.search-opts-row .layout-dd-sbtn{ align-self: stretch; height: auto; min-height: 2rem; }
+.search-opts-row > input[type="search"]{ flex: 1; min-width: 0; width: auto; }
 .menu-resize-grip{ position: absolute; right: 3px; bottom: 3px; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none; opacity: 0.55; color: var(--color-text-secondary); background: linear-gradient(135deg, transparent 0 42%, currentColor 42% 50%, transparent 50% 62%, currentColor 62% 70%, transparent 70% 82%, currentColor 82% 90%, transparent 90%); }
 .menu-resize-grip:hover{ opacity: 1; }
 .data-table-col-filter-menu.has-resize-grip{ padding-bottom: 1rem; }

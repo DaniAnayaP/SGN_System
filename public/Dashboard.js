@@ -4324,6 +4324,78 @@ function addMenuResizeGrip(menu, opts = {}) {
     if (state.dw || state.dh) apply();
 }
 
+// ---- Opciones de búsqueda para un campo de texto ------------------------------------------------------------------------------------------------------
+// Las mismas de las tablas: el tipo de filtro (Inicia con, Contiene, Igual que) y los signos de búsqueda ($ otra palabra antes, @ otra palabra después, coma = o bien otra búsqueda). Se agregan junto al campo, que sigue siendo
+// el mismo (mismo id y mismos eventos): al cambiar el tipo o poner un signo se dispara su evento «input» para que lo que ya busca vuelva a buscar. Dashboard.searchModeOf(campo) dice el tipo elegido (startsWith | contains | equals)
+// para mandarlo al servidor. El motor es uno solo para todo el sistema (public/SearchSyntax.js).
+function attachSearchOptions(input) {
+    if (!input || input.dataset.searchOpts) return;
+    input.dataset.searchOpts = '1';
+    input.dataset.searchMode = 'contains';
+    const modes = [['startsWith', 'main.filterModeStartsWith'], ['contains', 'main.filterModeContains'], ['equals', 'main.filterModeEquals']];
+    const signs = [['$', 'Before'], ['@', 'After'], [',', 'Comma']];
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const row = document.createElement('div');
+    row.className = 'layout-dd-searchrow search-opts-row';
+    const button = (kind, html, labelKey) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'layout-dd-sbtn';
+        b.dataset.dds = kind;
+        b.dataset.helpKey = 'layoutFiltroBuscar';
+        b.title = t(labelKey);
+        b.setAttribute('aria-label', t(labelKey));
+        b.innerHTML = html;
+        return b;
+    };
+    const modeBtn = button('mode', '<i class="bx bx-slider-alt" aria-hidden="true"></i>', 'main.filterModeLabel');
+    const signBtn = button('signs', '<b>$@</b>', 'main.filterSignsLabel');
+    const modeMenu = document.createElement('div');
+    modeMenu.className = 'layout-dd-smenu';
+    modeMenu.hidden = true;
+    const signMenu = document.createElement('div');
+    signMenu.className = 'layout-dd-smenu';
+    signMenu.dataset.ddsMenu = 'signs';
+    signMenu.hidden = true;
+    const paint = () => {
+        const mode = input.dataset.searchMode;
+        modeMenu.innerHTML = modes.map(([id, key]) => `<button type="button" class="layout-dd-smopt${mode === id ? ' on' : ''}" data-m="${id}">${esc(t(key))}</button>`).join('');
+        signMenu.innerHTML = signs.map(([sign, key]) => {
+            const off = (sign === '$' && mode !== 'contains') || (sign === '@' && mode === 'equals');
+            return `<button type="button" class="layout-dd-smopt" data-sign="${sign}"${off ? ' disabled' : ''} title="${esc(off ? t('main.filterSignOff') : t(`main.filterSign${key}Help`))}"><b>${sign}</b> <span>${esc(t(`main.filterSign${key}`))}</span></button>`;
+        }).join('');
+    };
+    const hideMenus = () => { modeMenu.hidden = true; signMenu.hidden = true; };
+    const fire = () => input.dispatchEvent(new Event('input', { bubbles: true }));
+    paint();
+    input.parentNode.insertBefore(row, input);
+    row.append(modeBtn, signBtn, input, modeMenu, signMenu);
+    modeBtn.addEventListener('click', () => { if (input.disabled) return; const open = modeMenu.hidden; hideMenus(); modeMenu.hidden = !open; });
+    signBtn.addEventListener('click', () => { if (input.disabled) return; const open = signMenu.hidden; hideMenus(); signMenu.hidden = !open; });
+    modeMenu.addEventListener('click', (event) => {
+        const opt = event.target.closest('[data-m]');
+        if (!opt) return;
+        input.dataset.searchMode = opt.dataset.m;
+        paint();
+        hideMenus();
+        fire();
+        input.focus();
+    });
+    signMenu.addEventListener('click', (event) => {
+        const opt = event.target.closest('[data-sign]');
+        if (!opt || opt.disabled) return;
+        const typed = opt.dataset.sign === ',' ? ', ' : opt.dataset.sign;
+        const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+        const end = input.selectionEnd == null ? start : input.selectionEnd;
+        input.value = input.value.slice(0, start) + typed + input.value.slice(end);
+        hideMenus();
+        fire();
+        input.focus();
+    });
+    document.addEventListener('click', (event) => { if (!row.contains(event.target)) hideMenus(); });
+}
+const searchModeOf = (input) => (input && input.dataset && input.dataset.searchMode) || 'contains';
+
 function openColumnFilterMenu(th, tableId, key) {
     const reopening = dataTableFilterMenuTableId === tableId && dataTableFilterMenuEl?.dataset.col === key;
     closeColumnFilterMenu();
@@ -13374,6 +13446,8 @@ window.Dashboard = {
     getVisibleTableSnapshot,
     showToast,
     addMenuResizeGrip,
+    attachSearchOptions,
+    searchModeOf,
     limitErrorMessage,
     limitDroppedMessage,
     buildGrantLimits,

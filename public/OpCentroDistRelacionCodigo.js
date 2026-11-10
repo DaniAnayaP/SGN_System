@@ -320,6 +320,7 @@ function ensureModal() {
         </div>
     </div>`;
     document.body.appendChild(modalEl);
+    Dashboard.attachSearchOptions($m('rel-code')); // Inicia con / Contiene / Igual que y los signos $ @ coma, como en las tablas
 
     modalEl.addEventListener('click', (event) => {
         if (event.target === modalEl || event.target.closest('#rel-close')) { closeDialog(); return; }
@@ -389,7 +390,7 @@ async function searchCodes() {
     const box = $m('rel-results');
     if (!q || (st.sku && q === `${st.sku.sku} · ${st.sku.description}`)) { box.hidden = true; return; }
     try {
-        const res = await fetch(`${API}/skus?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+        const res = await fetch(`${API}/skus?q=${encodeURIComponent(q)}&mode=${Dashboard.searchModeOf($m('rel-code'))}`, { credentials: 'include' });
         if (!res.ok) return;
         const { skus } = await res.json();
         skus.forEach((s) => skuCache.set(s.id, s));
