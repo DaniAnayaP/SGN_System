@@ -124,6 +124,10 @@
         .split{ font:600 13px system-ui,sans-serif; color:var(--accent); background:none; border:0; cursor:pointer; padding:0; text-align:left; width:max-content; }
         .pickwhen{ display:flex; align-items:center; gap:8px; justify-content:center; }
         .pickwhen label{ margin:0; }
+        .ohd{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+        .seg{ display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+        .seg button{ font:600 12px system-ui,sans-serif; padding:5px 14px; border:0; background:transparent; color:var(--ink); cursor:pointer; }
+        .seg button[aria-pressed="true"]{ background:var(--accent); color:var(--surface); }
         .scroll{ overflow-x:auto; border:1px solid var(--line); border-radius:16px; }
         table.dias{ border-collapse:separate; border-spacing:0; width:100%; min-width:760px; font-size:13px; }
         .dias th, .dias td{ padding:6px 5px; border-bottom:1px solid var(--line); text-align:center; vertical-align:middle; background:var(--surface); }
@@ -175,7 +179,7 @@ const TEXT = {
         needName: 'Escribe el nombre de quien pide para enviar.', errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errQty: 'Una cantidad no es válida.', errItems: 'Agrega al menos un artículo.',
         sentTitle: 'Pedido enviado', folio: 'Número de pedido', by: 'Pidió', at: 'Hora', list: 'Artículos del pedido', newOrder: 'Nuevo pedido', viewOnly: 'Este QR solo sirve para consultar.', loginNeeded: 'Este QR pide iniciar sesión para enviar pedidos.',
         login: 'Iniciar sesión', loginHint: 'Inicia sesión en el sistema y vuelve a abrir este QR.', locked: 'Este QR ya no permite enviar pedidos.', tooMany: 'Un pedido lleva hasta 40 artículos.',
-        whenTitle: 'Todo el pedido para', asap: 'Lo antes posible', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.',
+        whenTitle: 'Todo el pedido para', asap: 'Lo antes posible', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.', layoutTitle: 'Ver el pedido como', layoutList: 'Lista', layoutTable: 'Tabla',
     },
     en: {
         title: 'Manual Order', loading: 'Loading…', notFound: 'This QR no longer matches any cost center.', searchTitle: 'Find an item', searchPlaceholder: 'Code, description, UoM or category',
@@ -189,7 +193,7 @@ const TEXT = {
         needName: 'Type the name of who is ordering to send.', errGeneric: 'It could not be sent. Check your connection and try again.', errQty: 'A quantity is not valid.', errItems: 'Add at least one item.',
         sentTitle: 'Order sent', folio: 'Order number', by: 'Ordered by', at: 'Time', list: 'Items in the order', newOrder: 'New order', viewOnly: 'This QR is for viewing only.', loginNeeded: 'This QR requires signing in to send orders.',
         login: 'Sign in', loginHint: 'Sign in to the system and open this QR again.', locked: 'This QR no longer allows sending orders.', tooMany: 'An order takes up to 40 items.',
-        whenTitle: 'The whole order for', asap: 'As soon as possible', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.',
+        whenTitle: 'The whole order for', asap: 'As soon as possible', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.', layoutTitle: 'View the order as', layoutList: 'List', layoutTable: 'Table',
     },
 }[LANG];
 document.documentElement.lang = LANG;
@@ -200,6 +204,7 @@ const parts = location.pathname.split('/').filter(Boolean);
 const TOKEN = parts[1] || '';
 const API = `/api/public/pedido-manual/${encodeURIComponent(TOKEN)}`;
 const KEY_NAME = 'sgn_pm_name';
+const KEY_LAYOUT = 'sgn_pm_layout';   // cómo se ve el pedido en este aparato: lista o tabla (si no se eligió, según el ancho de la pantalla)
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const store = {
@@ -222,7 +227,9 @@ let total = 0;
 let picked = null;
 let cart = [];
 let defaultWhen = '';           // para cuándo se pide todo el pedido ('' = lo antes posible)
-let wide = false;               // pantalla ancha: la tabla por día; angosta (celular): la lista
+let wide = false;               // se ve como tabla por día (true) o como lista (false)
+let layoutPref = store.get(KEY_LAYOUT); // 'list' | 'table' | '' (sin elegir: tabla en pantalla ancha, lista en celular)
+let mq = null;
 let extraCols = [];             // días de más (después de los primeros 7) que se agregaron a la tabla
 let sentInfo = null;
 let timer = null;
@@ -311,6 +318,13 @@ const whenOptions = (selected) => `<option value=""${selected === '' ? ' selecte
 const partOf = (c, when) => c.parts.find((p) => p.when === when);
 const totalOf = (c) => Math.round(c.parts.reduce((s, p) => s + p.quantity, 0) * 1000) / 1000;
 const articleCount = () => cart.filter((c) => c.parts.length).length;
+// Lista o tabla: el botón lo elige y se recuerda en este aparato; sin elegir, manda el ancho de la pantalla (ancha: tabla; celular: lista).
+function applyWide() {
+    wide = layoutPref ? layoutPref === 'table' : !!(mq && mq.matches);
+    const m = document.querySelector('main');
+    if (m) m.classList.toggle('wide', wide);
+}
+const layoutToggle = () => `<div class="seg" role="group" aria-label="${esc(TEXT.layoutTitle)}"><button type="button" data-layout="list" aria-pressed="${!wide}">${esc(TEXT.layoutList)}</button><button type="button" data-layout="table" aria-pressed="${wide}">${esc(TEXT.layoutTable)}</button></div>`;
 const headText = () => { const n = articleCount(); return `${esc(TEXT.yourOrder)} · ${esc(n === 1 ? TEXT.item1 : TEXT.items.replace('{n}', n))}`; };
 function setQty(c, when, quantity) {
     const p = partOf(c, when);
@@ -393,7 +407,7 @@ function drawOrder() {
     if (!box) return;
     const body = cart.length ? (wide ? drawOrderTable() : drawOrderList()) : `<div class="msg">${esc(TEXT.empty)}</div>`;
     const who = `<div><label for="name">${esc(TEXT.yourName)} <span class="req" aria-hidden="true">*</span></label><input type="text" id="name" maxlength="60" autocomplete="name" required placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(nameValue)}"></div>`;
-    box.innerHTML = `<h2 id="ohead">${headText()}</h2>${who}${body}${cart.length ? `<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}`;
+    box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${layoutToggle()}</div>${who}${body}${cart.length ? `<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}`;
     if (cart.length && wide) refreshTable();
 }
 function addPicked() {
@@ -495,6 +509,8 @@ $('view').addEventListener('click', (event) => {
         if (c && free !== undefined) { c.parts.push({ when: free, quantity: 1 }); drawOrder(); }
         return;
     }
+    const lay = t.closest('[data-layout]');
+    if (lay) { layoutPref = lay.getAttribute('data-layout'); store.set(KEY_LAYOUT, layoutPref); applyWide(); drawOrder(); return; }
     const defwhen = t.closest('[data-defwhen]');
     if (defwhen) { setDefault(defwhen.getAttribute('data-defwhen')); return; }
     const rm = t.closest('[data-rm]');
@@ -590,10 +606,9 @@ function viewSent() {
     window.QrBrandHeader.mount($('qr-brand'), { kind: TEXT.title, siteName: info.siteName, companyName: info.companyName, hasLogo: info.hasLogo, companyColor: info.companyColor, logoUrl: `/api/public/layout/${encodeURIComponent(TOKEN)}/logo` });
     if (!nameValue && info.signedIn) nameValue = info.userName || '';
     // pantalla ancha (la computadora, la ventana de QR's): la tabla por día; angosta (el celular): la lista. Al cambiar el ancho se vuelve a dibujar el mismo pedido.
-    const mq = window.matchMedia('(min-width: 780px)');
-    const applyWide = () => { wide = mq.matches; const m = document.querySelector('main'); if (m) m.classList.toggle('wide', wide); };
+    mq = window.matchMedia('(min-width: 780px)');
     applyWide();
-    mq.addEventListener('change', () => { applyWide(); drawOrder(); });
+    mq.addEventListener('change', () => { if (!layoutPref) { applyWide(); drawOrder(); } });
     view();
 })();
 })();
