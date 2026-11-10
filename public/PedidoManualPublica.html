@@ -167,6 +167,7 @@
         .oline .q b{ min-width:40px; text-align:center; font-variant-numeric:tabular-nums; }
         .oline .q .u{ font-size:12px; color:var(--muted); }
         .oline select.when{ margin-left:auto; }
+        .art .rm[hidden]{ display:none; }
         .oline .rm, .art .rm{ border:0; background:none; color:var(--warn); font-size:12px; cursor:pointer; padding:2px 6px; }
         .split{ font:600 13px system-ui,sans-serif; color:var(--accent); background:none; border:0; cursor:pointer; padding:0; text-align:left; width:max-content; }
         .pickwhen{ display:flex; align-items:center; gap:8px; justify-content:center; }
@@ -208,24 +209,27 @@
         main.compact .dias th, main.compact .dias td{ padding:.5rem .3rem; }
         main.compact .dias thead th{ position:relative; vertical-align:middle; }
         main.compact .dias th.art, main.compact .dias td.art{ min-width:0; max-width:none; padding-left:.9rem; text-align:left; vertical-align:middle; }
-        main.compact .dias .arthd{ display:flex; align-items:center; justify-content:space-between; gap:.4rem; margin:0; }
+        main.compact .dias .arthd{ display:flex; align-items:center; justify-content:flex-start; gap:.35rem; margin:0; }
         main.compact .dias .arttitle{ font-size:.95rem; font-weight:600; margin:0; }
         main.compact .dias th.totalh{ padding-right:.6rem; }
-        main.compact .dias th.dc .dh{ height:auto; min-height:4.4rem; justify-content:center; }
+        main.compact .dias th.dc .dh{ height:auto; min-height:3.9rem; justify-content:center; }
         main.compact .dias th.dc .dh span{ font-size:.62rem; }
         main.compact .dias th.dc .dh b{ font-size:1.2rem; }
         main.compact .dias th.dc .dh small{ font-size:.68rem; }
         main.compact .dias th.dc .dh em{ font-size:.55rem; }
         main.compact .dias .dh b.asap{ font-size:.72rem; }
-        main.compact .dias .qc{ width:4.2rem; max-width:none; height:2.5rem; padding:0; font-size:.95rem; border-radius:.8rem; }
+        main.compact .dias .qc{ width:4rem; max-width:none; height:2.5rem; padding:0; font-size:.95rem; border-radius:.8rem; }
         main.compact .dias td.art b{ font-size:.85rem; }
         main.compact .dias td.art small{ font-size:.7rem; }
         main.compact .dias .tot{ font-size:.95rem; }
         main.compact .dias .tot small{ font-size:.66rem; }
+        .scroll{ width:fit-content; max-width:100%; } /* el borde abraza la tabla */
+        .catfoot{ display:flex; align-items:center; gap:.8rem; font-size:.78rem; }
         .fbtn{ border:0; background:transparent; padding:.2rem; border-radius:.45rem; cursor:pointer; color:var(--muted); line-height:0; }
         .fbtn svg{ width:.95rem; height:.95rem; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linejoin:round; }
         .fbtn.on{ color:var(--accent); background:var(--soft); }
-        .dias th.dc .fbtn{ position:absolute; top:.2rem; right:.1rem; }
+        .dias th.dc .dh span{ display:inline-flex; align-items:center; gap:.2rem; }
+        .dias th.dc .fbtn{ position:static; padding:.1rem; }
         .fpop{ position:fixed; z-index:30; width:min(23rem, calc(100vw - 1rem)); max-height:75vh; overflow:auto; background:var(--surface); border:1px solid var(--line); border-radius:1rem; box-shadow:var(--shadow); padding:.8rem; display:flex; flex-direction:column; gap:.6rem; }
         .fpop-h{ font-weight:700; font-size:.9rem; }
         .fpop .mpop{ position:static; box-shadow:none; margin-top:.3rem; }
@@ -275,7 +279,7 @@ const TEXT = {
         needName: 'Escribe el nombre de quien pide para enviar.', errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errQty: 'Una cantidad no es válida.', errItems: 'Agrega al menos un artículo.',
         sentTitle: 'Pedido enviado', folio: 'Número de pedido', by: 'Pidió', at: 'Hora', list: 'Artículos del pedido', newOrder: 'Nuevo pedido', viewOnly: 'Este QR solo sirve para consultar.', loginNeeded: 'Este QR pide iniciar sesión para enviar pedidos.',
         login: 'Iniciar sesión', loginHint: 'Inicia sesión en el sistema y vuelve a abrir este QR.', locked: 'Este QR ya no permite enviar pedidos.', tooMany: 'Un pedido lleva hasta 40 artículos.',
-        whenTitle: 'Todo el pedido para', asap: 'Lo antes posible', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.', layoutTitle: 'Ver el pedido como', layoutList: 'Lista', layoutTable: 'Tabla', todayIs: 'Hoy es {d}', emptyTable: 'Todavía no agregas nada. Toca el embudo de la columna Artículo para buscar un artículo y escribe cuántos quieres en cada día.', noMatch: 'Ningún artículo cumple el filtro.', inTotal: 'en total', onlyWithQty: 'Solo lo que lleva cantidad', onlyWithQtyDay: 'Solo artículos con cantidad este día',
+        whenTitle: 'Todo el pedido para', asap: 'Lo antes posible', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.', layoutTitle: 'Ver el pedido como', layoutList: 'Lista', layoutTable: 'Tabla', todayIs: 'Hoy es {d}', emptyTable: 'Todavía no escribes ninguna cantidad. Escríbela en el día que la quieras.', noMatch: 'Ningún artículo cumple el filtro.', showing: 'Mostrando {n} de {m} códigos', showMore: 'Ver más', filterHint: 'La lista de la tabla se filtra mientras escribes.', inTotal: 'en total', onlyWithQty: 'Solo lo que lleva cantidad', onlyWithQtyDay: 'Solo artículos con cantidad este día',
     },
     en: {
         title: 'Manual Order', loading: 'Loading…', notFound: 'This QR no longer matches any cost center.', searchTitle: 'Find an item', searchPlaceholder: 'Code, description, UoM or category',
@@ -289,7 +293,7 @@ const TEXT = {
         needName: 'Type the name of who is ordering to send.', errGeneric: 'It could not be sent. Check your connection and try again.', errQty: 'A quantity is not valid.', errItems: 'Add at least one item.',
         sentTitle: 'Order sent', folio: 'Order number', by: 'Ordered by', at: 'Time', list: 'Items in the order', newOrder: 'New order', viewOnly: 'This QR is for viewing only.', loginNeeded: 'This QR requires signing in to send orders.',
         login: 'Sign in', loginHint: 'Sign in to the system and open this QR again.', locked: 'This QR no longer allows sending orders.', tooMany: 'An order takes up to 40 items.',
-        whenTitle: 'The whole order for', asap: 'As soon as possible', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.', layoutTitle: 'View the order as', layoutList: 'List', layoutTable: 'Table', todayIs: 'Today is {d}', emptyTable: 'You have not added anything yet. Tap the funnel of the Item column to find an item and type how many you want on each day.', noMatch: 'No item meets the filter.', inTotal: 'in total', onlyWithQty: 'Only what has a quantity', onlyWithQtyDay: 'Only items with a quantity on this day',
+        whenTitle: 'The whole order for', asap: 'As soon as possible', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.', layoutTitle: 'View the order as', layoutList: 'List', layoutTable: 'Table', todayIs: 'Today is {d}', emptyTable: 'You have not typed any quantity yet. Type it on the day you want it.', noMatch: 'No item meets the filter.', showing: 'Showing {n} of {m} codes', showMore: 'Show more', filterHint: 'The table list is filtered as you type.', inTotal: 'in total', onlyWithQty: 'Only what has a quantity', onlyWithQtyDay: 'Only items with a quantity on this day',
     },
 }[LANG];
 document.documentElement.lang = LANG;
@@ -461,13 +465,42 @@ function drawOrderList() {
         + `<button type="button" class="split" data-addpart="${i}">${esc(TEXT.addDate)}</button></div>`).join('');
     return `${top}<div>${lines}</div>`;
 }
-// Tabla por día (pantalla ancha), como la maqueta: un renglón por artículo y una columna por día (los próximos 7; «+ Otra fecha» agrega más, hasta 14). «Lo antes posible» sale como columna solo si se usa o se agrega.
-// Cada encabezado lleva su filtro (el embudo): Artículo = buscar un artículo (Contiene, Inicia con, Igual que, signos, «Buscar en») y agregarlo; cada día y Total = ver solo los artículos que llevan cantidad.
+// Tabla por día (pantalla ancha), como la maqueta: DE INICIO sale toda la lista de códigos (con su descripción única), un renglón por código y una columna por día (los próximos 7; «+ Otra fecha» agrega más, hasta 14). «Lo antes posible»
+// sale como columna solo si se usa o se agrega. Se escribe la cantidad en el día que se quiera; lo que no lleva cantidad no se pide. Cada encabezado lleva su filtro (el embudo): Artículo filtra la lista (Contiene, Inicia con,
+// Igual que, signos, «Buscar en»); cada día y Total muestran solo los artículos que llevan cantidad.
 let showAsap = false;
 let tblFilter = { days: new Set(), total: false };
 let pop = null; // el filtro abierto: { kind: 'art' | 'total' | 'day:AAAA-MM-DD', anchor }
 const FUNNEL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.2 7.2V18l-3.6-1.8v-4z"/></svg>';
 const fbtn = (kind, active, label) => `<button type="button" class="fbtn${active ? ' on' : ''}" data-filter="${esc(kind)}" aria-label="${esc(label)}" title="${esc(label)}">${FUNNEL}</button>`;
+let catalog = { items: [], total: 0, loading: false, loaded: false }; // la lista de códigos de la tabla (por páginas de 100)
+let catSeq = 0;
+const entryOf = (id) => cart.find((c) => c.id === id);
+const findItem = (id) => catalog.items.find((it) => it.id === id);
+const filterActive = () => tblFilter.total || tblFilter.days.size > 0;
+// ¿El artículo pasa los filtros de los encabezados de cantidad? (solo se revisa al dibujar la tabla, no al escribir: un renglón no desaparece mientras se le escribe)
+const rowVisible = (c) => (!tblFilter.total || totalOf(c) > 0) && [...tblFilter.days].every((w) => { const part = partOf(c, w); return !!part && part.quantity > 0; });
+// Pide la lista (la primera página o, con append, la siguiente) con el filtro del encabezado Artículo.
+async function loadCatalog(append) {
+    const my = ++catSeq;
+    catalog.loading = true;
+    const offset = append ? catalog.items.length : 0;
+    try {
+        const res = await fetch(`${API}/list?offset=${offset}&limit=100&q=${encodeURIComponent(searchTerms(query))}&mode=${mode}&fields=${fields.join(',')}`, { cache: 'no-store' });
+        if (my !== catSeq) return;
+        if (res.ok) {
+            const body = await res.json();
+            catalog.items = append ? catalog.items.concat(body.items || []) : (body.items || []);
+            catalog.total = body.total || 0;
+        } else if (!append) { catalog.items = []; catalog.total = 0; }
+    } catch (e) { if (my === catSeq && !append) { catalog.items = []; catalog.total = 0; } }
+    if (my !== catSeq) return;
+    catalog.loading = false;
+    catalog.loaded = true;
+    const fb = document.querySelector('[data-filter="art"]');
+    if (fb) fb.classList.toggle('on', !!String(query).trim() || mode !== 'contains' || fields.length > 0);
+    if (wide) drawTableBody();
+}
 function tableCols() {
     const days = allDays();
     const base = days.slice(0, 7);
@@ -485,34 +518,64 @@ function summaryHtml() {
     if (!by.size) return `<div class="pill empty">${esc(TEXT.nothingYet)}</div>`;
     return [...by.entries()].sort((a, z) => a[0].localeCompare(z[0])).map(([w, ids]) => `<div class="pill"><b>${esc(whenLabel(w))}</b>${esc(ids.size === 1 ? TEXT.item1 : TEXT.items.replace('{n}', ids.size))}</div>`).join('');
 }
-// ¿El artículo pasa los filtros de los encabezados? (solo se revisa al dibujar la tabla, no al escribir: un renglón no desaparece mientras se le escribe)
-const rowVisible = (c) => (!tblFilter.total || totalOf(c) > 0) && [...tblFilter.days].every((w) => { const part = partOf(c, w); return !!part && part.quantity > 0; });
+// Los renglones: toda la lista de códigos (ya filtrada por el encabezado Artículo) o, con un filtro de cantidad puesto, solo lo que lleva cantidad.
+const tableRowItems = () => (filterActive() ? cart.filter(rowVisible).map((c) => ({ id: c.id, code: c.code, description: c.description, uom: c.uom })) : catalog.items);
+function rowHtml(it, cols) {
+    const c = entryOf(it.id);
+    const cells = cols.map((w) => {
+        const part = c ? partOf(c, w) : null;
+        const weekend = w && dayParts(w).weekend;
+        return `<td${weekend ? ' class="wk"' : ''}><input class="qc${part ? ' on' : ''}" type="number" min="0" step="any" inputmode="decimal" placeholder="–" data-item="${it.id}" data-when="${esc(w)}" value="${esc(part ? part.quantity : '')}" aria-label="${esc(`${it.description}, ${whenLabel(w)}`)}"></td>`;
+    }).join('');
+    return `<tr><td class="art"><b>${esc(it.description)}</b><small>${esc([it.code, it.uom].filter(Boolean).join(' · '))}</small><button type="button" class="rm" data-clear="${it.id}"${c && c.parts.length ? '' : ' hidden'}>${esc(TEXT.remove)}</button></td>${cells}<td></td><td class="tot" data-id="${it.id}"></td></tr>`;
+}
+function tableBodyHtml(cols) {
+    const items = tableRowItems();
+    let msg = '';
+    if (info.relatedCount === 0) msg = TEXT.noRelated;
+    else if (filterActive()) msg = items.length ? '' : (cart.length ? TEXT.noMatch : TEXT.emptyTable);
+    else if (!catalog.loaded) msg = TEXT.loading;
+    else if (!items.length) msg = TEXT.none;
+    return items.map((it) => rowHtml(it, cols)).join('') + (msg ? `<tr><td colspan="${cols.length + 3}" class="emptyrow">${esc(msg)}</td></tr>` : '');
+}
+function catFootHtml() {
+    if (filterActive() || !catalog.items.length) return '';
+    const shown = catalog.items.length;
+    return `<span class="muted">${esc(fill(TEXT.showing, { n: shown, m: catalog.total }))}</span>${shown < catalog.total ? `<button type="button" class="link" data-more>${esc(TEXT.showMore)}</button>` : ''}`;
+}
+// Cambia lo de adentro de la tabla (renglones y su pie) sin tocar el encabezado ni el filtro abierto: así no se pierde el cursor al filtrar.
+function drawTableBody() {
+    const tb = $('tbody');
+    if (!tb) return;
+    tb.innerHTML = tableBodyHtml(tableCols());
+    const foot = $('catfoot');
+    if (foot) foot.innerHTML = catFootHtml();
+    refreshTable();
+}
 function drawOrderTable() {
     const cols = tableCols();
     const days = allDays();
     const more = days.filter((d) => !cols.includes(d));
     const head = cols.map((w) => {
-        if (w === '') return `<th class="dc">${fbtn('day:', tblFilter.days.has(''), TEXT.asap)}<div class="dh"><span>&nbsp;</span><b class="asap">${esc(TEXT.asap)}</b></div></th>`;
+        if (w === '') return `<th class="dc"><div class="dh"><span>${fbtn('day:', tblFilter.days.has(''), TEXT.asap)}</span><b class="asap">${esc(TEXT.asap)}</b></div></th>`;
         const d = dayParts(w);
-        return `<th class="dc${d.weekend ? ' wk' : ''}">${fbtn(`day:${w}`, tblFilter.days.has(w), whenLabel(w))}<div class="dh"><span>${esc(d.dow.toUpperCase())}</span><b>${d.day}</b><small>${esc(d.mon)}</small>${w === days[0] ? `<em>${esc(TEXT.tomorrow)}</em>` : ''}</div></th>`;
+        return `<th class="dc${d.weekend ? ' wk' : ''}"><div class="dh"><span>${fbtn(`day:${w}`, tblFilter.days.has(w), whenLabel(w))}${esc(d.dow.toUpperCase())}</span><b>${d.day}</b><small>${esc(d.mon)}</small>${w === days[0] ? `<em>${esc(TEXT.tomorrow)}</em>` : ''}</div></th>`;
     }).join('');
-    const tableW = 17 + cols.length * 5.5 + 7.5 + 5.5;
-    const colgroup = `<colgroup><col style="width:17rem">${cols.map(() => '<col style="width:5.5rem">').join('')}<col style="width:7.5rem"><col style="width:5.5rem"></colgroup>`;
+    const tableW = 15 + cols.length * 4.75 + 7.5 + 5;
+    const colgroup = `<colgroup><col style="width:15rem">${cols.map(() => '<col style="width:4.75rem">').join('')}<col style="width:7.5rem"><col style="width:5rem"></colgroup>`;
     const addOptions = `${cols.includes('') ? '' : `<option value="__asap">${esc(TEXT.asap)}</option>`}${more.map((d) => `<option value="${d}">${esc(dayShort(d))}</option>`).join('')}`;
     const addCol = addOptions ? `<select class="dsel" id="addcol" aria-label="${esc(TEXT.addColumn)}"><option value="">${esc(TEXT.addColumn)}</option>${addOptions}</select>` : '';
-    const visible = cart.filter(rowVisible).length;
-    const msg = !cart.length ? TEXT.emptyTable : (!visible ? TEXT.noMatch : '');
-    const rows = cart.map((c, i) => `<tr${rowVisible(c) ? '' : ' hidden'}><td class="art"><b>${esc(c.description)}</b><small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></td>${cols.map((w) => {
-        const part = partOf(c, w);
-        const weekend = w && dayParts(w).weekend;
-        return `<td${weekend ? ' class="wk"' : ''}><input class="qc${part ? ' on' : ''}" type="number" min="0" step="any" inputmode="decimal" placeholder="–" data-cell="${i}|${w}" value="${esc(part ? part.quantity : '')}" aria-label="${esc(`${c.description}, ${whenLabel(w)}`)}"></td>`;
-    }).join('')}<td></td><td class="tot" id="tot-${i}"></td></tr>`).join('');
-    const emptyRow = msg ? `<tr><td colspan="${cols.length + 3}" class="emptyrow">${esc(msg)}</td></tr>` : '';
-    return `<div class="scroll" role="region" tabindex="0" aria-label="${esc(TEXT.yourOrder)}"><table class="dias" style="width:100%;min-width:${tableW}rem">${colgroup}<thead><tr><th class="art"><div class="arthd"><span class="arttitle">${esc(TEXT.article)}</span>${fbtn('art', false, TEXT.searchTitle)}</div></th>${head}<th>${addCol}</th><th class="totalh"><div class="arthd"><span class="arttitle">${esc(TEXT.total)}</span>${fbtn('total', tblFilter.total, TEXT.total)}</div></th></tr></thead><tbody>${rows}${emptyRow}</tbody></table></div><div><div class="muted">${esc(TEXT.perDay)}</div><div class="sumbar" id="sumbar">${summaryHtml()}</div></div>`;
+    const artActive = !!String(query).trim() || mode !== 'contains' || fields.length > 0;
+    return `<div class="scroll" role="region" tabindex="0" aria-label="${esc(TEXT.yourOrder)}"><table class="dias" style="width:${tableW}rem">${colgroup}<thead><tr><th class="art"><div class="arthd">${fbtn('art', artActive, TEXT.searchTitle)}<span class="arttitle">${esc(TEXT.article)}</span></div></th>${head}<th>${addCol}</th><th class="totalh"><div class="arthd">${fbtn('total', tblFilter.total, TEXT.total)}<span class="arttitle">${esc(TEXT.total)}</span></div></th></tr></thead><tbody id="tbody">${tableBodyHtml(cols)}</tbody></table></div><div class="catfoot" id="catfoot">${catFootHtml()}</div><div><div class="muted">${esc(TEXT.perDay)}</div><div class="sumbar" id="sumbar">${summaryHtml()}</div></div>`;
 }
 // Al escribir en una casilla solo se ponen al día los totales, el resumen por día y el título: así no se pierde el cursor.
 function refreshTable() {
-    cart.forEach((c, i) => { const el = $(`tot-${i}`); if (el) el.innerHTML = totalOf(c) > 0 ? `${esc(fmtQty(totalOf(c)))}<small>${esc(TEXT.inTotal)}</small>` : '–'; });
+    document.querySelectorAll('button.rm[data-clear]').forEach((b) => { const c = entryOf(Number(b.getAttribute('data-clear'))); b.hidden = !(c && c.parts.length); });
+    document.querySelectorAll('td.tot').forEach((td) => {
+        const c = entryOf(Number(td.getAttribute('data-id')));
+        const total = c ? totalOf(c) : 0;
+        td.innerHTML = total > 0 ? `${esc(fmtQty(total))}<small>${esc(TEXT.inTotal)}</small>` : '–';
+    });
     const bar = $('sumbar');
     if (bar) bar.innerHTML = summaryHtml();
     const head = $('ohead');
@@ -520,7 +583,7 @@ function refreshTable() {
 }
 // El filtro de un encabezado se abre en una ventanita junto al embudo (así no ensancha la tabla ni se corta con su desplazamiento).
 function popBody(kind) {
-    if (kind === 'art') return `<div class="fpop-h">${esc(TEXT.searchTitle)}</div>${panelHtml()}<div id="results"></div>`;
+    if (kind === 'art') return `<div class="fpop-h">${esc(TEXT.searchTitle)}</div>${panelHtml()}<div class="muted">${esc(TEXT.filterHint)}</div>`;
     if (kind === 'total') return `<div class="fpop-h">${esc(TEXT.total)}</div><label class="copt"><input type="checkbox" data-totalfilter${tblFilter.total ? ' checked' : ''}><span class="box"></span><span>${esc(TEXT.onlyWithQty)}</span></label>`;
     const w = kind.slice(4);
     return `<div class="fpop-h">${esc(whenLabel(w))}</div><label class="copt"><input type="checkbox" data-dayfilter="${esc(w)}"${tblFilter.days.has(w) ? ' checked' : ''}><span class="box"></span><span>${esc(TEXT.onlyWithQtyDay)}</span></label>`;
@@ -557,16 +620,8 @@ function drawOrder() {
     const who = `<div><label for="name">${esc(TEXT.yourName)} <span class="req" aria-hidden="true">*</span></label><input type="text" id="name" maxlength="60" autocomplete="name" required placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(nameValue)}"></div>`;
     const today = wide ? `<span class="muted">${esc(fill(TEXT.todayIs, { d: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(dayDate(todayIso())) }))}</span>` : '';
     box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${layoutToggle()}</div>${who}${body}${cart.length ? `<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}`;
-    if (wide) refreshTable();
+    if (wide) { refreshTable(); if (!catalog.loaded && !catalog.loading) loadCatalog(false); }
     if (pop) { const a = document.querySelector(`[data-filter="${pop.kind}"]`); if (a) { pop.anchor = a; placePop(); } else closePop(); }
-}
-// Tabla: al elegir un artículo del buscador se agrega su renglón (sin cantidad) y el cursor queda en la casilla del día de partida.
-function addRow(r) {
-    let idx = cart.findIndex((c) => c.id === r.id);
-    if (idx < 0) { cart.push({ id: r.id, code: r.code, description: r.description, uom: r.uom, parts: [] }); idx = cart.length - 1; }
-    drawOrder();
-    const cell = document.querySelector(`input[data-cell^="${idx}|"]`);
-    if (cell) { cell.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
 }
 function addPicked() {
     const n = Number(String(picked.qty).replace(',', '.'));
@@ -580,6 +635,7 @@ function addPicked() {
     drawSel(); drawOrder();
 }
 async function search() {
+    if (wide) { loadCatalog(false); return; } // tabla: el filtro Artículo acota la lista de códigos
     const my = ++seq;
     if (!ready()) { results = []; total = 0; drawResults(); return; }
     try {
@@ -649,7 +705,6 @@ $('view').addEventListener('click', (event) => {
     if (toggle) { const list = $('fields'); list.hidden = !list.hidden; toggle.setAttribute('aria-expanded', String(!list.hidden)); return; }
     if (t.closest('#qclear')) { const q = $('q'); q.value = ''; query = ''; queueSearch(); q.focus(); return; }
     const pick = t.closest('[data-pick]');
-    if (pick && wide) { addRow(results[Number(pick.getAttribute('data-pick'))]); return; }
     if (pick) { picked = { ...results[Number(pick.getAttribute('data-pick'))], qty: 1, when: defaultWhen }; drawSel(); const qi = $('qty'); if (qi) { qi.focus(); qi.select(); } return; }
     if (t.closest('#dec')) { picked.qty = Math.max(1, Math.round((Number(picked.qty) || 1) - 1)); $('qty').value = picked.qty; return; }
     if (t.closest('#inc')) { picked.qty = Math.round((Number(picked.qty) || 0) + 1); $('qty').value = picked.qty; return; }
@@ -673,6 +728,9 @@ $('view').addEventListener('click', (event) => {
     }
     const lay = t.closest('[data-layout]');
     if (lay) { layoutPref = lay.getAttribute('data-layout'); store.set(KEY_LAYOUT, layoutPref); applyWide(); view(); return; }
+    const clear = t.closest('[data-clear]');
+    if (clear) { const id = Number(clear.getAttribute('data-clear')); cart = cart.filter((c) => c.id !== id); if (filterActive()) drawOrder(); else drawTableBody(); return; }
+    if (t.closest('[data-more]')) { loadCatalog(true); return; }
     const defwhen = t.closest('[data-defwhen]');
     if (defwhen) { setDefault(defwhen.getAttribute('data-defwhen')); return; }
     const rm = t.closest('[data-rm]');
@@ -684,14 +742,16 @@ $('view').addEventListener('input', (event) => {
     if (t.id === 'q') { query = t.value; queueSearch(); }
     else if (t.id === 'qty' && picked) picked.qty = t.value;
     else if (t.id === 'name') nameValue = t.value;
-    else if (t.dataset && t.dataset.cell !== undefined) {
-        // una casilla de la tabla por día: artículo|fecha
-        const [i, w] = t.dataset.cell.split('|');
-        const c = cart[Number(i)];
-        if (!c) return;
+    else if (t.dataset && t.dataset.item !== undefined) {
+        // una casilla de la tabla por día: código y fecha; el código entra al pedido al ponerle una cantidad y sale si se queda sin ninguna
+        const id = Number(t.dataset.item);
+        const w = t.dataset.when || '';
+        let c = entryOf(id);
+        if (!c) { const it = findItem(id); if (!it) return; c = { id, code: it.code, description: it.description, uom: it.uom, parts: [] }; cart.push(c); }
         const n = Number(String(t.value).replace(',', '.'));
         const q = Number.isFinite(n) && n > 0 ? Math.round(n * 1000) / 1000 : 0;
         setQty(c, w, q);
+        if (!c.parts.length) cart.splice(cart.indexOf(c), 1);
         t.classList.toggle('on', q > 0);
         refreshTable();
     }

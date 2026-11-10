@@ -7801,7 +7801,7 @@ function manualItemsFor(clientId, isTest, costCenterId = 0) {
         const sku = String(r.record_number).padStart(6, '0');
         const cats = [r.category_inventario, r.category_compra, r.category_almacenamiento, r.category_rotacion, r.category_manejo, r.category_riesgo, r.category_vidautil].map((c) => String(c || '').trim()).filter(Boolean);
         return {
-            id: r.id, code: r.upc || sku, description: r.custom_description || r.known_description || r.unique_description || '', uom: r.main_uom || '', categories: [...new Set(cats)].join(' · '),
+            id: r.id, code: r.upc || sku, description: r.custom_description || r.known_description || r.unique_description || '', unique: r.unique_description || '', uom: r.main_uom || '', categories: [...new Set(cats)].join(' · '),
             by: { code: [r.upc, sku, String(r.record_number)].map(foldText), desc: [r.unique_description, r.known_description, r.custom_description].map(foldText), uom: [r.main_uom].map(foldText), cat: cats.map(foldText) },
         };
     });
@@ -7892,6 +7892,27 @@ app.get('/api/public/pedido-manual/:token/search', publicManualSearchLimiter, (r
     const matches = publicSearchMatcher(mode, query);
     const found = manualItemsFor(row.clientId, isTest, row.costCenterId || 0).filter((it) => matches(fields.flatMap((k) => it.by[k])));
     res.json({ total: found.length, items: found.slice(0, 20).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories })) });
+});
+// La tabla por día del QR muestra DE INICIO toda la lista de códigos relacionados con el centro (con su descripción única) y los filtros de sus encabezados la acotan: por páginas (offset y límite de hasta 200), con el mismo motor de búsqueda
+// (Contiene, Inicia con, Igual que, signos y «Buscar en»); sin buscar, o con una búsqueda todavía muy corta, trae todos.
+app.get('/api/public/pedido-manual/:token/list', publicManualSearchLimiter, (req, res) => {
+    const target = manualOrderTarget(req, res);
+    if (!target) return;
+    const { row, isTest } = target;
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    if (!qrLocksOf('manual_order', row.clientId, row.costCenterId || 0).register) return res.status(403).json({ message: 'Este QR solo sirve para consultar.', code: 'LOCKED' });
+    const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
+    const query = publicSearchQuery(req.query.q);
+    const asked = String(req.query.fields || '').split(',').map((f) => f.trim()).filter((f) => MANUAL_ORDER_SEARCH_FIELDS.includes(f));
+    const fields = asked.length ? asked : MANUAL_ORDER_SEARCH_FIELDS;
+    let found = manualItemsFor(row.clientId, isTest, row.costCenterId || 0);
+    if (query && SearchSyntax.ready(mode, query)) {
+        const matches = publicSearchMatcher(mode, query);
+        found = found.filter((it) => matches(fields.flatMap((k) => it.by[k])));
+    }
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 100));
+    res.json({ total: found.length, offset, items: found.slice(offset, offset + limit).map(({ id, code, description, unique, uom, categories }) => ({ id, code, description: unique || description, uom, categories })) });
 });
 app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req, res) => {
     const target = manualOrderTarget(req, res);
