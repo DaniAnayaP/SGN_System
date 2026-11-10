@@ -3526,6 +3526,7 @@
     "colUdmDSku": "Código (SKU)",
     "colUdmDUpc": "UPC",
     "colUdmDDescripcion": "Descripción única",
+    "colUdmDRamificacion": "Ramificación",
     "colUdmDNivel": "Presentación",
     "colUdmDUnidad": "Unidad de medida",
     "colUdmDContiene": "Contiene",
@@ -3641,14 +3642,16 @@
     "udmWith": "con",
     "udmFromArticle": "Se captura en Alta Artículos",
     "udmFromArticleLong": "su unidad, medidas y peso se capturan en Alta Artículos",
-    "udmChainTitle": "La secuencia de {sku}",
+    "udmChainTitle": "Las ramificaciones de {sku}",
     "udmChainMore": "tarima, bulto… y así sucesivamente",
     "udmNoCode": "Elige primero el código.",
-    "udmMaxLevels": "Un código lleva el material principal y hasta {n} empaques.",
+    "udmMaxLevels": "Una presentación admite hasta {n} niveles.",
     "udmMainMeasures": "Unidad: {uom} · medidas de Alta Artículos: largo {l} × ancho {w} × alto {h} cm. Aquí solo eliges su forma y si se puede acostar.",
-    "udmContainsLbl": "Cuántas de la presentación anterior contiene",
+    "udmContainsLbl": "Cuántas lleva de la presentación de la que sale",
+    "udmSaleDe": "Sale de",
+    "udmNoParentRoom": "Todas las presentaciones de este código ya tienen el máximo de {c} ramificaciones o llegaron al último nivel ({d}). Quita alguna para agregar otra.",
     "udmWeightHint": "En gramos: 1.5 kg se escribe 1500.",
-    "udmEquiv": "Equivale a {n} {u}: {c} {p} de la presentación anterior.",
+    "udmEquiv": "Equivale a {n} {u} ({c} {p}).",
     "layoutTxtPiezas": "Piezas que caben",
     "layoutLeyendaPc2": "Empaque secundario y siguientes",
     "layoutLeyendaSobra": "Espacio que sobra",
@@ -3682,6 +3685,10 @@
     "pkLevel4": "Empaque cuaternario",
     "pkLevel5": "Empaque quinto",
     "pkLevel6": "Empaque sexto",
+    "pkLevel7": "Empaque séptimo",
+    "pkLevel8": "Empaque octavo",
+    "pkLevel9": "Empaque noveno",
+    "pkLevel10": "Empaque décimo",
     "relUbicar": "Ubicar este código",
     "relUbicarTitle": "Ubicar código",
     "relUbicarTabSteps": "Paso a paso",
@@ -5227,12 +5234,14 @@
       "example": "tocas la flecha del localizador y ves solo su relación."
     },
     "udmChain": {
-      "what": "La secuencia de presentaciones de este código, de la unidad principal hacia afuera: cada una depende de la anterior (lo que contiene) y muestra sus propias medidas y peso, y cuántas unidades principales equivale. Sale cuando en la tabla se ve un solo código.",
-      "example": "tableta × 12 → caja con 12 × 50 → caja con 50 = 600 tabletas."
+      "what": "El árbol de presentaciones de este código: el material principal a la izquierda y, de él, las presentaciones que salen (cada una con su nombre, medidas, peso y a cuántas unidades principales equivale). La línea que las une dice cuántas de la anterior lleva. De una misma pueden salir varias y cada rama sigue sola. Sale cuando en la tabla se ve un solo código.",
+      "example": "tableta → caja con 20 (× 20) → caja con 20 cajas (× 20) y caja con 50 cajas (× 50); y aparte, tableta → caja con 30 (× 30)."
     },
+    "udmRamificacion": {"what": "Dibuja el árbol de presentaciones del código en la columna: el material principal arriba y, con líneas, las presentaciones que salen de él y las que salen de esas. Cada renglón es una presentación y su línea la une a la de la que sale. Pasa el cursor sobre el nombre para ver su camino completo.", "example": "Tbta › Caja con 20 Tbta › Caja con 50 Caja."},
+    "udmSaleDe": {"what": "De cuál presentación del código sale la nueva: «cuántas lleva» se cuenta de esa. De una misma pueden salir hasta 10 y hay hasta 10 niveles. No se cambia después: se quita y se vuelve a capturar.", "example": "la caja con 50 sale de la caja con 20 (lleva 50 cajas de 20)."},
     "udmNew": {
-      "what": "Agrega la siguiente presentación de un código. La primera es el material principal (solo eliges su forma); las demás son empaques, cada uno con su unidad del catálogo, cuántas del nivel anterior contiene, sus medidas en cm y su peso en gramos.",
-      "example": "después de la caja con 12 agregas la caja con 50: contiene 50 cajas, 40 × 20 × 15 cm, 1500 g."
+      "what": "Agrega una presentación de un código. La primera es el material principal (solo eliges su forma); las demás salen de una presentación que ya existe («Sale de»; de una misma pueden salir varias), cada una con su unidad del catálogo, cuántas de esa lleva, sus medidas en cm y su peso en gramos. Eliges el código por su descripción única y luego las opciones que piden.",
+      "example": "la caja con 50 sale de la caja con 20: contiene 50 cajas, 40 × 20 × 15 cm, 1500 g."
     },
     "udmEdit": {
       "what": "Cambia los datos de esta presentación. Las medidas y el peso del material principal se capturan en Alta Artículos.",

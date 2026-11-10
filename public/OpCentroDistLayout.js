@@ -4523,7 +4523,7 @@ document.addEventListener('click', (event) => {
     if (rel && !rel.disabled) openRelateDialog(rel.dataset.locRel, rel.dataset.locText);
 });
 let relEl = null;
-let rd = null; // { spaceId, level, slot, position, locator, info, sku, packLevel, box }
+let rd = null; // { spaceId, level, slot, position, locator, info, sku, packUnit (el id de la presentación; 0 = el material principal), box }
 let relSearchTimer = null;
 const relSkuCache = new Map();
 const round1 = (v) => Math.round(v * 10) / 10;
@@ -4569,14 +4569,14 @@ function ensureRelateModal() {
         if (event.target === relEl || event.target.closest('#lrel-close')) { closeRelateDialog(); return; }
         if (event.target.closest('#lrel-save')) { saveRelate(); return; }
         const card = event.target.closest('[data-lrel-pack]');
-        if (card && !card.disabled) { rd.packLevel = Number(card.dataset.lrelPack); renderRelate(); return; }
+        if (card && !card.disabled) { rd.packUnit = Number(card.dataset.lrelPack); renderRelate(); return; }
         const pick = event.target.closest('[data-lrel-sku]');
         if (pick) {
             rd.sku = relSkuCache.get(Number(pick.dataset.lrelSku)) || null;
-            if (rd.sku) { $('lrel-code').value = `${rd.sku.sku} · ${rd.sku.description}`; $('lrel-results').hidden = true; if (!relLevelsOf(rd.sku).some((lv) => lv.level === rd.packLevel)) rd.packLevel = null; renderRelate(); }
+            if (rd.sku) { $('lrel-code').value = `${rd.sku.sku} · ${rd.sku.description}`; $('lrel-results').hidden = true; if (!relLevelsOf(rd.sku).some((lv) => lv.id === rd.packUnit)) rd.packUnit = null; renderRelate(); }
         }
     });
-    $('lrel-code').addEventListener('input', () => { rd.sku = null; rd.packLevel = null; clearTimeout(relSearchTimer); relSearchTimer = setTimeout(relSearchCodes, 220); renderRelate(); });
+    $('lrel-code').addEventListener('input', () => { rd.sku = null; rd.packUnit = null; clearTimeout(relSearchTimer); relSearchTimer = setTimeout(relSearchCodes, 220); renderRelate(); });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && relEl && !relEl.hidden) closeRelateDialog(); });
 }
 async function relSearchCodes() {
@@ -4599,7 +4599,7 @@ function openRelateDialog(key, locator) {
     const [spaceId, level, slot, position] = key.split('|');
     const info = state.locCodes.get(key) || null;
     ensureRelateModal();
-    rd = { spaceId, level: Number(level), slot: Number(slot), position: Number(position), locator, info, sku: null, packLevel: info && info.packLevel != null ? info.packLevel : null };
+    rd = { spaceId, level: Number(level), slot: Number(slot), position: Number(position), locator, info, sku: null, packUnit: info && info.packUnitId != null ? info.packUnitId : null };
     rd.box = relPositionBox(rd.spaceId, rd.level, rd.slot, rd.position);
     $('lrel-title').textContent = t(info ? 'main.layoutCambiarTitulo' : 'main.layoutRelacionarTitulo', { loc: locator });
     $('lrel-code').value = info ? `${info.sku} · ${info.description}` : '';
@@ -4631,27 +4631,27 @@ function renderRelate() {
     const fits = levels.map((lv) => ({ lv, f: window.PackCalc.fit(rd.box, lv) }));
     const best = fits.filter((x) => x.f.capacity > 0).sort((a, b) => b.f.capacity - a.f.capacity || b.lv.level - a.lv.level)[0];
     opts.innerHTML = fits.map(({ lv, f }) => {
-        const sel = rd.packLevel === lv.level;
+        const sel = rd.packUnit === lv.id;
         const unit = t(lv.level === 0 ? 'main.relPackUnitMain' : 'main.relPackUnitPack');
         const top = f.count ? `<svg viewBox="-1 -1 ${rd.box.l + 2} ${rd.box.w + 2}" class="rel-pack-svg" role="img" aria-label="${esc(t('main.relPackTop'))}"><rect x="0" y="0" width="${rd.box.l}" height="${rd.box.w}" class="pk-pos"/>${f.cells.map((c) => (c.r ? `<circle cx="${c.cx.toFixed(2)}" cy="${c.cy.toFixed(2)}" r="${(c.r - 0.15).toFixed(2)}" class="pk-c lv${Math.min(lv.level, 2)}"/>` : `<rect x="${(c.x + 0.2).toFixed(2)}" y="${(c.y + 0.2).toFixed(2)}" width="${Math.max(c.l - 0.4, 0.1).toFixed(2)}" height="${Math.max(c.w - 0.4, 0.1).toFixed(2)}" class="pk-b lv${Math.min(lv.level, 2)}"/>`)).join('')}</svg>` : '';
-        return `<button type="button" class="rel-pack-card${sel ? ' sel' : ''}" data-lrel-pack="${lv.level}"${f.count ? '' : ' disabled'}>
-            <span class="rel-pack-h"><b>${esc(relPackName(lv))}</b>${best && best.lv.level === lv.level ? `<span class="rel-tag rel-tag-ok">${esc(t('main.relPackSuggested'))}</span>` : ''}</span>
+        return `<button type="button" class="rel-pack-card${sel ? ' sel' : ''}" data-lrel-pack="${lv.id}"${f.count ? '' : ' disabled'}>
+            <span class="rel-pack-h"><b>${esc(relPackName(lv))}</b>${best && best.lv.id === lv.id ? `<span class="rel-tag rel-tag-ok">${esc(t('main.relPackSuggested'))}</span>` : ''}</span>
             <span class="rel-pack-m">${esc(t(lv.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect'))} · ${esc(lv.shape === 'cilindrica' ? `Ø ${lv.l}` : `${lv.l} × ${lv.w}`)} × ${esc(lv.h)} cm</span>
             ${top}
             <span class="rel-pack-n">${f.count ? `<b>${f.capacity}</b><span class="rel-muted">${esc(t('main.relPackPieces'))}</span>` : `<span class="rel-pack-warn">${esc(t('main.relPackNoFit'))}</span>`}</span>
             ${f.count ? `<span class="rel-pack-d">${esc(t('main.relPackFitsN', { n: f.count, u: unit }))}. ${esc(t('main.relPackLayers', { k: f.layers, m: f.perLayer }))}. ${esc(t('main.relPackLeft', { h: f.leftH, d: f.leftD }))}.</span>` : ''}
         </button>`;
     }).join('');
-    const chosen = fits.find((x) => x.lv.level === rd.packLevel);
+    const chosen = fits.find((x) => x.lv.id === rd.packUnit);
     save.disabled = !(chosen && chosen.f.count);
 }
 async function saveRelate() {
-    if (!rd || !rd.sku || rd.packLevel === null) return;
+    if (!rd || !rd.sku || rd.packUnit === null) return;
     $('lrel-save').disabled = true;
     try {
         const res = await fetch(layoutUrl('/api/business/layout/locator-code'), {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-            body: JSON.stringify({ skuItemId: rd.sku.id, spaceId: rd.spaceId, level: rd.level, slot: rd.slot, position: rd.position, packLevel: rd.packLevel, relationId: rd.info ? rd.info.relationId : undefined }),
+            body: JSON.stringify({ skuItemId: rd.sku.id, spaceId: rd.spaceId, level: rd.level, slot: rd.slot, position: rd.position, packUnitId: rd.packUnit, relationId: rd.info ? rd.info.relationId : undefined }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) { Dashboard.showToast(json.message || Dashboard.t('admin.saveError'), res.status === 403 ? 'warning' : 'error'); $('lrel-save').disabled = false; return; }

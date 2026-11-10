@@ -349,7 +349,7 @@ function ensureModal() {
         if (pick) {
             const full = skuCache.get(Number(pick.dataset.sku)) || {};
             st.sku = { id: Number(pick.dataset.sku), sku: pick.dataset.skuCode, description: pick.dataset.desc, upc: pick.dataset.upc, uom: pick.dataset.uom, length: full.length, width: full.width, height: full.height, packaging: full.packaging };
-            if (!packLevelsOf(st.sku).some((lv) => lv.level === Number(st.pack))) st.pack = '';
+            if (!packLevelsOf(st.sku).some((lv) => lv.id === Number(st.pack))) st.pack = '';
             $m('rel-code').value = `${st.sku.sku} · ${st.sku.description}`;
             $m('rel-results').hidden = true;
             renderForm();
@@ -513,21 +513,21 @@ function renderPack(d, nums) {
     if (!box) {
         hint.textContent = t('main.relPackNoPlace');
         // sin lugar todavía se puede elegir qué se acomoda; solo falta el cálculo
-        opts2.innerHTML = levels.map((lv) => `<button type="button" class="rel-pack-card${Number(st.pack) === lv.level && st.pack !== '' ? ' sel' : ''}" data-pack="${lv.level}"><span class="rel-pack-h"><b>${esc(packName(lv))}</b></span><span class="rel-pack-m">${esc(t(lv.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect'))} · ${esc(lv.shape === 'cilindrica' ? `Ø ${lv.l}` : `${lv.l} × ${lv.w}`)} × ${esc(lv.h)} cm</span></button>`).join('');
+        opts2.innerHTML = levels.map((lv) => `<button type="button" class="rel-pack-card${Number(st.pack) === lv.id && st.pack !== '' ? ' sel' : ''}" data-pack="${lv.id}"><span class="rel-pack-h"><b>${esc(packName(lv))}</b></span><span class="rel-pack-m">${esc(t(lv.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect'))} · ${esc(lv.shape === 'cilindrica' ? `Ø ${lv.l}` : `${lv.l} × ${lv.w}`)} × ${esc(lv.h)} cm</span></button>`).join('');
         return out;
     }
     hint.textContent = t('main.relPackBox', { l: box.l, w: box.w, h: box.h });
     const fits = levels.map((lv) => ({ lv, f: window.PackCalc.fit(box, lv) }));
     const best = fits.filter((x) => x.f.capacity > 0).sort((a, b) => b.f.capacity - a.f.capacity || b.lv.level - a.lv.level)[0];
     opts2.innerHTML = fits.map(({ lv, f }) => {
-        const sel = st.pack !== '' && Number(st.pack) === lv.level;
+        const sel = st.pack !== '' && Number(st.pack) === lv.id;
         if (sel && !f.count) out.blocked = true;
         const unit = t(lv.level === 0 ? 'main.relPackUnitMain' : 'main.relPackUnitPack');
         const detail = f.count
             ? `${t('main.relPackLayers', { k: f.layers, m: f.perLayer })}. ${t('main.relPackLeft', { h: f.leftH, d: f.leftD })}.`
             : '';
-        return `<button type="button" class="rel-pack-card${sel ? ' sel' : ''}" data-pack="${lv.level}"${f.count ? '' : ' title="' + esc(t('main.relPackNoFit')) + '"'}>
-            <span class="rel-pack-h"><b>${esc(packName(lv))}</b>${best && best.lv.level === lv.level ? `<span class="rel-tag rel-tag-ok">${esc(t('main.relPackSuggested'))}</span>` : ''}</span>
+        return `<button type="button" class="rel-pack-card${sel ? ' sel' : ''}" data-pack="${lv.id}"${f.count ? '' : ' title="' + esc(t('main.relPackNoFit')) + '"'}>
+            <span class="rel-pack-h"><b>${esc(packName(lv))}</b>${best && best.lv.id === lv.id ? `<span class="rel-tag rel-tag-ok">${esc(t('main.relPackSuggested'))}</span>` : ''}</span>
             <span class="rel-pack-m">${esc(t(lv.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect'))} · ${esc(lv.shape === 'cilindrica' ? `Ø ${lv.l}` : `${lv.l} × ${lv.w}`)} × ${esc(lv.h)} cm</span>
             ${f.count ? packTopSvg(box, f, lv.level) : ''}
             <span class="rel-pack-n">${f.count ? `<b>${f.capacity}</b><span class="rel-muted">${esc(t('main.relPackPieces'))}</span>` : `<span class="rel-pack-warn">${esc(t('main.relPackNoFit'))}</span>`}</span>
@@ -596,7 +596,7 @@ async function openDialog(record) {
         ? {
             sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc, uom: '', length: record.skuLength, width: record.skuWidth, height: record.skuHeight, packaging: record.skuPackaging },
             centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', hue: record.footprintId || '', est: record.spaceId || '',
-            niv: record.level || '', esp: record.slot || '', pos: record.position || '', clas: record.classification || 'activo', pack: record.packLevel == null ? '' : record.packLevel,
+            niv: record.level || '', esp: record.slot || '', pos: record.position || '', clas: record.classification || 'activo', pack: record.packUnitId == null ? '' : record.packUnitId,
         }
         : blankState();
     $m('rel-title').textContent = t(record ? 'main.relDialogEdit' : 'main.relDialogNew');
@@ -615,7 +615,7 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && 
 async function save() {
     const values = {
         skuItemId: st.sku ? st.sku.id : null, costCenterId: st.centro || null, warehouseId: st.alm || null, subWarehouseId: st.sub || null,
-        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, position: st.pos || null, classification: st.clas || 'activo', packLevel: st.pack === '' ? null : Number(st.pack),
+        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, position: st.pos || null, classification: st.clas || 'activo', packUnitId: st.pack === '' ? null : Number(st.pack),
     };
     let method = 'POST';
     let url = API;
@@ -623,7 +623,7 @@ async function save() {
     if (editing) {
         const before = {
             skuItemId: editing.skuItemId, costCenterId: editing.costCenterId, warehouseId: editing.warehouseId, subWarehouseId: editing.subWarehouseId,
-            zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, position: editing.position, classification: editing.classification || 'activo', packLevel: editing.packLevel ?? null,
+            zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, position: editing.position, classification: editing.classification || 'activo', packUnitId: editing.packUnitId ?? null,
         };
         body = {};
         Object.keys(values).forEach((key) => { if (String(values[key] ?? '') !== String(before[key] ?? '')) body[key] = values[key]; });

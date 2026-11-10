@@ -114,15 +114,18 @@
         };
     }
 
-    // Los niveles de empaque de un artículo, del principal hacia afuera: [{ level: 0, name, shape, l, w, h, pieces, lay }, …]
-    // art = { dims: { length, width, height }, packaging: { main: { shape, lay }, levels: [{ name, shape, l, w, h, pieces, lay }] } }
+    // Las presentaciones de un artículo, en el orden del árbol (primero el principal): [{ id, level, name, shape, l, w, h, pieces, lay }, …]
+    //   id = cuál presentación es (0 = el material principal; las demás, el id de su renglón en Unidad de Medida por Distribución: con él se elige «Se acomoda»),
+    //   level = su profundidad en el árbol (0 principal, 1 sale del principal, 2 sale de una de nivel 1…), pieces = cuántas unidades principales trae.
+    // art = { dims: { length, width, height }, packaging: { main: { shape, lay }, levels: [{ id, parentId, depth, name, shape, l, w, h, pieces, lay }] } }
+    // (Un levels sin id ni depth, como el que se guardaba antes, se lee como una cadena: id y profundidad = su lugar en la lista.)
     // ¿Esta presentación se puede acomodar? Sin tipos capturados (datos de antes) sí; con tipos, solo si tiene al menos uno habilitado (Unidad de Medida por Distribución).
     const enabled = (lv) => !Array.isArray(lv && lv.types) || lv.types.length > 0;
     function levelsOf(art) {
         const p = (art && art.packaging) || {};
         const main = p.main || {};
-        const out = [{ level: 0, name: String(main.name || ''), shape: main.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(art && art.length), w: num(art && art.width), h: num(art && art.height), pieces: 1, lay: !!main.lay, weightG: num(main.weightG), types: Array.isArray(main.types) ? main.types : null }];
-        (Array.isArray(p.levels) ? p.levels : []).forEach((lv, i) => out.push({ level: i + 1, name: String(lv.name || ''), shape: lv.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(lv.l), w: num(lv.w), h: num(lv.h), pieces: Math.max(1, Math.floor(num(lv.pieces)) || 1), lay: !!lv.lay, weightG: num(lv.weightG), types: Array.isArray(lv.types) ? lv.types : null }));
+        const out = [{ id: 0, parentId: null, level: 0, name: String(main.name || ''), shape: main.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(art && art.length), w: num(art && art.width), h: num(art && art.height), pieces: 1, lay: !!main.lay, weightG: num(main.weightG), types: Array.isArray(main.types) ? main.types : null }];
+        (Array.isArray(p.levels) ? p.levels : []).forEach((lv, i) => out.push({ id: Number.isInteger(lv.id) && lv.id > 0 ? lv.id : i + 1, parentId: lv.parentId || null, level: Number.isInteger(lv.depth) && lv.depth >= 1 ? lv.depth : i + 1, name: String(lv.name || ''), shape: lv.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(lv.l), w: num(lv.w), h: num(lv.h), pieces: Math.max(1, Math.floor(num(lv.pieces)) || 1), lay: !!lv.lay, weightG: num(lv.weightG), types: Array.isArray(lv.types) ? lv.types : null }));
         return out;
     }
 

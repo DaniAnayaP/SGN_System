@@ -442,9 +442,9 @@ async function openUdmDistView(record) {
     try {
         const res = await fetch(`/api/business/sku-distribution?skuItemId=${encodeURIComponent(record.id)}`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
-        const { rows, maxExtra } = await res.json();
+        const { rows } = await res.json();
         const safe = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-        body.innerHTML = rows.length ? Dashboard.udmChainHtml(rows, maxExtra) : `<div class="udm-chain-title">${safe(Dashboard.t('main.udmChainTitle').replace('{sku}', `${record.sku} · ${record.uniqueDescription || record.knownDescription || record.customDescription || ''}`))}</div><p class="rel-muted">${safe(Dashboard.t('main.udmVerVacio'))}</p>`;
+        body.innerHTML = rows.length ? Dashboard.udmChainHtml(rows) : `<div class="udm-chain-title">${safe(Dashboard.t('main.udmChainTitle').replace('{sku}', `${record.uniqueDescription || record.knownDescription || record.customDescription || ''}`))}</div><p class="rel-muted">${safe(Dashboard.t('main.udmVerVacio'))}</p>`;
     } catch (err) {
         console.error('Alta Artículos: no se pudo cargar la UDM de distribución', err);
         body.innerHTML = `<p class="rel-muted">${Dashboard.t('admin.saveError')}</p>`;

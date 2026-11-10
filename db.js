@@ -2441,6 +2441,9 @@ if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name ==
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'classification')) db.exec("ALTER TABLE code_relations ADD COLUMN classification TEXT NOT NULL DEFAULT 'activo'");
 // Qué se acomoda en el lugar de la relación: 0 = el material principal, 1… = el empaque primario, secundario… del código (ver sku_items.packaging); NULL = sin elegir. De ahí salen cuántas piezas caben.
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'pack_level')) db.exec('ALTER TABLE code_relations ADD COLUMN pack_level INTEGER');
+// Desde que las presentaciones forman un árbol, lo que se acomoda se guarda por el ID de la presentación (sku_distribution_units.id; 0 = el material principal, que siempre existe) y no por su número de nivel,
+// que ya no dice cuál (de un mismo nivel pueden salir varias). pack_level queda solo como rastro de lo anterior y ya nadie lo lee.
+if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'pack_unit_id')) db.exec('ALTER TABLE code_relations ADD COLUMN pack_unit_id INTEGER');
 
 // Unidad de Medida por Distribución (Operaciones, C. Distribución): las presentaciones en que se distribuye cada código, en cadena (principal > empaque 1 > empaque 2…). Cada nivel lleva su unidad del
 // catálogo Nuestras Unidad Medida, cuántas del nivel anterior contiene y SUS PROPIAS medidas (cm) y peso (g): nada se calcula multiplicando. Nivel 0 = el material principal (sus medidas y su peso salen de
@@ -2462,8 +2465,7 @@ db.exec(`
         weight_g      REAL NOT NULL DEFAULT 0,
         can_lay       INTEGER NOT NULL DEFAULT 0,
         is_test_data  INTEGER NOT NULL DEFAULT 0,
-        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
-        UNIQUE (sku_item_id, level)
+        created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_sku_distribution_client ON sku_distribution_units (client_id, is_test_data);
 `);
@@ -2474,6 +2476,58 @@ if (!db.prepare('PRAGMA table_info(sku_distribution_units)').all().some((c) => c
 // salen los de Capacidad Almacenamiento (antes eran del código, en Alta Artículos).
 for (const col of ['units_per_layer', 'layers_per_pallet', 'max_stack']) {
     if (!db.prepare('PRAGMA table_info(sku_distribution_units)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE sku_distribution_units ADD COLUMN ${col} INTEGER NOT NULL DEFAULT 0`);
+}
+// Árbol de presentaciones: cada presentación dice de cuál sale (parent_id; el material principal, nivel 0, no sale de ninguna) y de una misma pueden salir varias (la caja de 20 y la de 30 de la misma tableta; la caja de 20
+// va en cajas de 20 cajas y también en cajas de 50 cajas). «level» pasa a ser la profundidad en el árbol (0 = principal, 1 = sale del principal, 2 = sale de una de nivel 1…), por eso ya no puede ser único por código.
+if (!db.prepare('PRAGMA table_info(sku_distribution_units)').all().some((c) => c.name === 'parent_id')) db.exec('ALTER TABLE sku_distribution_units ADD COLUMN parent_id INTEGER');
+{
+    const ddl = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sku_distribution_units'").get();
+    if (ddl && /UNIQUE\s*\(\s*sku_item_id\s*,\s*level\s*\)/i.test(ddl.sql)) {
+        // SQLite no puede quitar un UNIQUE de una tabla: se arma una igual sin él, se pasan los renglones y se cambia por la vieja.
+        const cols = ['id', 'client_id', 'db_id', 'record_number', 'sku_item_id', 'level', 'uom', 'contains', 'shape', 'length', 'width', 'height', 'weight_g', 'can_lay', 'is_test_data', 'created_at', 'storage_types', 'units_per_layer', 'layers_per_pallet', 'max_stack', 'parent_id'].join(', ');
+        db.transaction(() => {
+            db.exec(`
+                CREATE TABLE sku_distribution_units__new (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+                    db_id         TEXT NOT NULL,
+                    record_number INTEGER NOT NULL,
+                    sku_item_id   INTEGER NOT NULL REFERENCES sku_items(id) ON DELETE CASCADE,
+                    level         INTEGER NOT NULL,
+                    uom           TEXT NOT NULL DEFAULT '',
+                    contains      INTEGER,
+                    shape         TEXT NOT NULL DEFAULT 'rectangular',
+                    length        REAL NOT NULL DEFAULT 0,
+                    width         REAL NOT NULL DEFAULT 0,
+                    height        REAL NOT NULL DEFAULT 0,
+                    weight_g      REAL NOT NULL DEFAULT 0,
+                    can_lay       INTEGER NOT NULL DEFAULT 0,
+                    is_test_data  INTEGER NOT NULL DEFAULT 0,
+                    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                    storage_types TEXT,
+                    units_per_layer INTEGER NOT NULL DEFAULT 0,
+                    layers_per_pallet INTEGER NOT NULL DEFAULT 0,
+                    max_stack     INTEGER NOT NULL DEFAULT 0,
+                    parent_id     INTEGER
+                );
+                INSERT INTO sku_distribution_units__new (${cols}) SELECT ${cols} FROM sku_distribution_units;
+                DROP TABLE sku_distribution_units;
+                ALTER TABLE sku_distribution_units__new RENAME TO sku_distribution_units;
+                CREATE INDEX IF NOT EXISTS idx_sku_distribution_client ON sku_distribution_units (client_id, is_test_data);
+            `);
+        })();
+    }
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_sku_distribution_sku ON sku_distribution_units (sku_item_id, parent_id)');
+// Una sola vez: lo capturado como cadena (empaque primario, secundario…) se borra para volver a capturarlo como árbol (decisión de Daniel, 2026-11-10: «empezar de cero»). Se quedan los renglones del material principal
+// (su forma, tipos y estiba) y las relaciones que acomodaban el material principal; las que acomodaban un empaque quedan sin «Se acomoda» (se vuelve a elegir con las presentaciones nuevas).
+const SKU_DIST_TREE_RESET_KEY = 'seed-udm-presentation-tree-reset-v1';
+if (!db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SKU_DIST_TREE_RESET_KEY)) {
+    db.transaction(() => {
+        db.prepare('UPDATE code_relations SET pack_unit_id = 0 WHERE pack_level = 0 AND pack_unit_id IS NULL').run();
+        db.prepare('DELETE FROM sku_distribution_units WHERE level >= 1').run();
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(SKU_DIST_TREE_RESET_KEY);
+    })();
 }
 
 // public_token: set once (see maybeIssuePublicToken in server.js) the
@@ -6337,7 +6391,7 @@ const CODE_RELATION_PATCHABLE_FIELDS = {
     slot: { column: 'slot', fieldKey: 'main.colRelEspacio' },
     position: { column: 'position', fieldKey: 'main.colRelPosicion' },
     classification: { column: 'classification', fieldKey: 'main.colRelClasificacion' },
-    packLevel: { column: 'pack_level', fieldKey: 'main.colRelSeAcomoda' },
+    packUnitId: { column: 'pack_unit_id', fieldKey: 'main.colRelSeAcomoda' },
 };
 const CODE_RELATION_SELECT = `SELECT r.*, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.record_number AS sku_number,
         s.length AS sku_length, s.width AS sku_width, s.height AS sku_height, s.packaging AS sku_packaging
@@ -6355,11 +6409,11 @@ function createCodeRelation({ clientId, isTestData = false, values }) {
     const recordNumber = db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM code_relations WHERE client_id = ? AND is_test_data = ?')
         .get(clientId, isTestData ? 1 : 0).n;
-    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, position, classification, pack_level, is_test_data)
-        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @position, @classification, @packLevel, @isTestData)`).run({
+    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, position, classification, pack_unit_id, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @position, @classification, @packUnitId, @isTestData)`).run({
         clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0,
         skuItemId: values.skuItemId, costCenterId: values.costCenterId ?? null, warehouseId: values.warehouseId ?? null, subWarehouseId: values.subWarehouseId ?? null,
-        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null, position: values.position ?? null, classification: values.classification || 'activo', packLevel: values.packLevel ?? null,
+        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null, position: values.position ?? null, classification: values.classification || 'activo', packUnitId: values.packUnitId ?? null,
     });
     return getCodeRelationById(result.lastInsertRowid, clientId, isTestData);
 }
@@ -6402,19 +6456,19 @@ const SKU_DIST_SELECT = `SELECT d.*, s.record_number AS sku_number, s.upc AS sku
         s.main_uom AS sku_uom, s.length AS sku_length, s.width AS sku_width, s.height AS sku_height, s.article_weight AS sku_weight
     FROM sku_distribution_units d JOIN sku_items s ON s.id = d.sku_item_id`;
 function listSkuDistribution(clientId, forTestAccount = false) {
-    return db.prepare(`${SKU_DIST_SELECT} WHERE d.client_id = ? AND d.is_test_data = ? ORDER BY s.record_number ASC, d.level ASC`).all(clientId, forTestAccount ? 1 : 0);
+    return db.prepare(`${SKU_DIST_SELECT} WHERE d.client_id = ? AND d.is_test_data = ? ORDER BY s.record_number ASC, d.level ASC, d.id ASC`).all(clientId, forTestAccount ? 1 : 0);
 }
 function listSkuDistributionBySku(clientId, forTestAccount, skuItemId) {
-    return db.prepare(`${SKU_DIST_SELECT} WHERE d.client_id = ? AND d.is_test_data = ? AND d.sku_item_id = ? ORDER BY d.level ASC`).all(clientId, forTestAccount ? 1 : 0, skuItemId);
+    return db.prepare(`${SKU_DIST_SELECT} WHERE d.client_id = ? AND d.is_test_data = ? AND d.sku_item_id = ? ORDER BY d.level ASC, d.id ASC`).all(clientId, forTestAccount ? 1 : 0, skuItemId);
 }
 function getSkuDistributionById(id, clientId, forTestAccount = false) {
     return db.prepare(`${SKU_DIST_SELECT} WHERE d.id = ? AND d.client_id = ? AND d.is_test_data = ?`).get(id, clientId, forTestAccount ? 1 : 0);
 }
 function createSkuDistribution({ clientId, isTestData = false, values }) {
     const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM sku_distribution_units WHERE client_id = ? AND is_test_data = ?').get(clientId, isTestData ? 1 : 0).n;
-    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, storage_types, units_per_layer, layers_per_pallet, max_stack, is_test_data)
-        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @storageTypes, @unitsPerLayer, @layersPerPallet, @maxStack, @isTestData)`).run({
-        clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuItemId: values.skuItemId, level: values.level,
+    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, parent_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, storage_types, units_per_layer, layers_per_pallet, max_stack, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @parentId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @storageTypes, @unitsPerLayer, @layersPerPallet, @maxStack, @isTestData)`).run({
+        clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuItemId: values.skuItemId, parentId: values.parentId ?? null, level: values.level,
         uom: values.uom || '', contains: values.contains ?? null, shape: values.shape === 'cilindrica' ? 'cilindrica' : 'rectangular',
         length: Number(values.length) || 0, width: Number(values.width) || 0, height: Number(values.height) || 0, weightG: Number(values.weightG) || 0, canLay: values.canLay ? 1 : 0,
         storageTypes: values.storageTypes === undefined || values.storageTypes === null ? null : String(values.storageTypes),
@@ -6455,14 +6509,14 @@ function migrateSkuPackagingToDistribution() {
             const main = p.main && typeof p.main === 'object' ? p.main : {};
             if (!levels.length && main.shape !== 'cilindrica' && !main.lay) continue;
             const isTest = !!r.is_test_data;
-            createSkuDistribution({ clientId: r.client_id, isTestData: isTest, values: { skuItemId: r.id, level: 0, shape: main.shape, canLay: !!main.lay } });
+            let parent = createSkuDistribution({ clientId: r.client_id, isTestData: isTest, values: { skuItemId: r.id, level: 0, shape: main.shape, canLay: !!main.lay } });
             let prev = 1;
             levels.slice(0, 6).forEach((lv, i) => {
                 const total = Math.max(1, Math.floor(Number(lv.pieces)) || 1);
                 const contains = Math.max(1, Math.round(total / prev));
-                createSkuDistribution({
+                parent = createSkuDistribution({
                     clientId: r.client_id, isTestData: isTest,
-                    values: { skuItemId: r.id, level: i + 1, uom: '', contains, shape: lv.shape, length: lv.l, width: lv.shape === 'cilindrica' ? lv.l : lv.w, height: lv.h, weightG: 0, canLay: !!lv.lay },
+                    values: { skuItemId: r.id, parentId: parent.id, level: i + 1, uom: '', contains, shape: lv.shape, length: lv.l, width: lv.shape === 'cilindrica' ? lv.l : lv.w, height: lv.h, weightG: 0, canLay: !!lv.lay },
                 });
                 prev = prev * contains;
             });

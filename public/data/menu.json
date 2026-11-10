@@ -1627,9 +1627,8 @@
                 { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
               ]
             },
-            { "id": "colUdmDSku", "labelKey": "main.colUdmDSku", "permissionOnly": true },
-            { "id": "colUdmDUpc", "labelKey": "main.colUdmDUpc", "permissionOnly": true },
             { "id": "colUdmDDescripcion", "labelKey": "main.colUdmDDescripcion", "permissionOnly": true },
+            { "id": "colUdmDRamificacion", "labelKey": "main.colUdmDRamificacion", "permissionOnly": true },
             { "id": "colUdmDNivel", "labelKey": "main.colUdmDNivel", "permissionOnly": true },
             { "id": "colUdmDUnidad", "labelKey": "main.colUdmDUnidad", "permissionOnly": true },
             { "id": "colUdmDContiene", "labelKey": "main.colUdmDContiene", "permissionOnly": true },

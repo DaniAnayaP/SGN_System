@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// Unidad de Medida por Distribución (Operaciones, C. Distribución): las presentaciones en que se distribuye cada código, en cadena. Nivel 0 = el material principal (su unidad, sus medidas y su peso son los de Alta
-// Artículos; aquí solo su forma y si se puede acostar) y de ahí hasta 6 empaques. Cada empaque tiene su unidad del catálogo Nuestras Unidad Medida, cuántas del nivel anterior contiene y SUS PROPIAS medidas (cm) y
-// peso (g): nada se calcula multiplicando. «Equivale a» sí se calcula (cuántas unidades principales trae). Cada presentación depende de la anterior: no se crea una sin la de abajo ni se quita una de en medio.
-// Arriba de la tabla, con un solo código a la vista, se dibuja la secuencia. De aquí leen Relación Código («Se acomoda») y el Layout (piezas que caben).
+// Unidad de Medida por Distribución (Operaciones, C. Distribución): las presentaciones en que se distribuye cada código, en ÁRBOL. La raíz (nivel 0) es el material principal (su unidad, sus medidas y su peso son los de
+// Alta Artículos; aquí solo su forma y si se puede acostar) y cada presentación dice de cuál sale («Sale de»): de una misma pueden salir varias (hasta 10) y hay hasta 10 niveles. Cada una tiene su unidad del catálogo
+// Nuestras Unidad Medida, cuántas de la que la contiene lleva y SUS PROPIAS medidas (cm) y peso (g): nada se calcula multiplicando. «Equivale a» sí se calcula (cuántas unidades principales trae, por su camino).
+// La columna «Ramificación» dibuja el árbol y, arriba de la tabla, con un solo código a la vista, se dibuja completo. De aquí leen Relación Código («Se acomoda») y el Layout (piezas que caben).
 // ---------------------------------------------------------------------------
 
 // Envuelto en una función: Dashboard.js ya declara globales como t, y chocarían con los de esta pantalla.
@@ -37,7 +37,8 @@ const levelName = (level) => t(`main.pkLevel${level}`);
 
 let rows = [];
 let uoms = [];
-let maxExtra = 6;
+let maxDepth = 10;
+let maxChildren = 10;
 
 (async function init() {
     try {
@@ -51,9 +52,10 @@ let maxExtra = 6;
 })();
 
 // ---- datos de cada código --------------------------------------------------------------------------------------------------------------
-const rowsOfSku = (skuId) => rows.filter((r) => r.skuItemId === skuId).sort((a, z) => a.level - z.level);
+const rowsOfSku = (skuId) => rows.filter((r) => r.skuItemId === skuId); // en el orden del árbol que manda el servidor (cada una antes de las que salen de ella)
 const mainUomOf = (skuId) => (rowsOfSku(skuId)[0] || {}).uom || '';
-const prevRowOf = (r) => rowsOfSku(r.skuItemId).find((x) => x.level === r.level - 1);
+const parentRowOf = (r) => rows.find((x) => x.id === r.parentId);
+const childCountOf = (id) => rows.filter((r) => r.parentId === id).length;
 
 // ---- tabla --------------------------------------------------------------------------------------------------------------------------
 function cell(col, value, extraClass, title) {
@@ -87,21 +89,36 @@ function actionsCell(r, tr) {
     if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) td.appendChild(iconButton('admin-icon-btn admin-icon-btn-danger', 'bx-trash', t('admin.delete'), 'delete', () => deletePresentation(r)));
     return td;
 }
-function buildRow(r) {
+// Ramificación: el árbol de presentaciones del código dibujado en la columna (las líneas de los niveles de arriba, el codo hacia esta presentación y su nombre).
+function treeCell(r) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colUdmDRamificacion';
+    td.className = 'udm-tree-cell';
+    const name = r.name || levelName(r.level);
+    td.title = (r.path && r.path.length ? r.path : [name]).join(' › ');
+    td.innerHTML = `<div class="udm-tree">${(r.treeLines || []).map((on) => `<i class="udm-tl${on ? ' on' : ''}"></i>`).join('')}${r.depth >= 1 ? `<i class="udm-te${r.treeLast ? ' last' : ''}"></i>` : ''}<span class="udm-tnode${r.depth === 0 ? ' root' : ''}">${esc(name)}</span></div>`;
+    return td;
+}
+// repeatCode: la presentación anterior es del mismo código; su descripción se queda en el renglón (para buscar y filtrar) pero sin verse: el código sale una sola vez, con sus presentaciones debajo.
+function buildRow(r, repeatCode) {
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(r.id);
     tr.dataset.sku = String(r.skuItemId);
+    tr.dataset.skuCode = r.sku || '';
+    tr.dataset.upc = r.upc || '';
     const principal = r.level === 0;
     const fromArticle = principal ? t('main.udmFromArticle') : '';
     const mainUom = mainUomOf(r.skuItemId);
-    const prev = prevRowOf(r);
+    const parent = parentRowOf(r);
+    const descCell = cell('colUdmDDescripcion', r.description);
+    if (repeatCode && r.description) descCell.innerHTML = `<span class="udm-dup">${esc(r.description)}</span>`;
     tr.append(
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, r[key], 'col-system')),
         cell('colCatRegistroUnico', r.registroUnico, 'col-system'),
-        cell('colUdmDSku', r.sku), cell('colUdmDUpc', r.upc), cell('colUdmDDescripcion', r.description),
+        descCell, treeCell(r),
         cell('colUdmDNivel', levelName(r.level)),
         cell('colUdmDUnidad', r.uom, principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDContiene', principal ? '' : `${r.contains} ${prev ? prev.uom : ''}`.trim()),
+        cell('colUdmDContiene', principal ? '' : `${r.contains} ${parent ? parent.uom : ''}`.trim()),
         cell('colUdmDEquivale', `${r.equivalent} ${mainUom}`.trim()),
         cell('colUdmDForma', t(r.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect')),
         cell('colUdmDLargo', fmt(r.length), principal ? 'udm-ro' : '', fromArticle),
@@ -140,11 +157,12 @@ async function refreshTable() {
         const body = await res.json();
         rows = body.rows || [];
         uoms = body.uoms || [];
-        maxExtra = body.maxExtra || 6;
+        maxDepth = body.maxDepth || 10;
+        maxChildren = body.maxChildren || 10;
         tbody.innerHTML = '';
         if (!rows.length) { ensureEmptyState(); renderChain(); return; }
         const fragment = document.createDocumentFragment();
-        rows.forEach((r) => fragment.appendChild(buildRow(r)));
+        rows.forEach((r, i) => fragment.appendChild(buildRow(r, i > 0 && rows[i - 1].skuItemId === r.skuItemId)));
         tbody.appendChild(fragment);
         applyFilters();
     } catch (err) {
@@ -156,8 +174,9 @@ function applyFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colUdmDSku', 'colUdmDUpc', 'colUdmDDescripcion', 'colUdmDNivel', 'colUdmDUnidad']
+        const haystack = ['colUdmDDescripcion', 'colUdmDRamificacion', 'colUdmDNivel', 'colUdmDUnidad']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
+            .concat([(tr.dataset.skuCode || '').toLowerCase(), (tr.dataset.upc || '').toLowerCase()])
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
     });
@@ -174,7 +193,7 @@ function renderChain() {
     if (ids.length !== 1) { box.hidden = true; box.innerHTML = ''; return; }
     const list = rowsOfSku(ids[0]);
     if (!list.length) { box.hidden = true; return; }
-    box.innerHTML = Dashboard.udmChainHtml(list, maxExtra); // la misma secuencia que se ve desde Alta Artículos (Ver UDM de distribución)
+    box.innerHTML = Dashboard.udmChainHtml(list); // el mismo árbol que se ve desde Alta Artículos (Ver UDM de distribución)
     box.hidden = false;
 }
 
@@ -231,7 +250,7 @@ function ensureModal() {
     });
     modalEl.addEventListener('input', (event) => {
         const el = event.target;
-        if (el.id === 'udm-code') { f.sku = null; f.level = null; clearTimeout(searchTimer); searchTimer = setTimeout(searchCodes, 220); renderForm(); return; }
+        if (el.id === 'udm-code') { f.sku = null; f.level = null; f.parentId = null; clearTimeout(searchTimer); searchTimer = setTimeout(searchCodes, 220); renderForm(); return; }
         const k = el.dataset && el.dataset.k;
         if (!k || !f) return;
         f[k] = el.type === 'checkbox' ? el.checked : el.value;
@@ -246,6 +265,7 @@ function ensureModal() {
             renderForm();
             return;
         }
+        if (f && el.dataset && el.dataset.parent) { setParent(Number(el.value)); renderForm(); return; } // «Sale de»
         const k = el.dataset && el.dataset.k;
         if (!k || !f || el.type === 'checkbox') return;
         f[k] = el.value;
@@ -258,14 +278,14 @@ function openDialog(record) {
     ensureModal();
     const sku = record ? { id: record.skuItemId, sku: record.sku, description: record.description, uom: mainUomOf(record.skuItemId), length: 0, width: 0, height: 0 } : null;
     f = {
-        rec: record, sku, level: record ? record.level : null,
+        rec: record, sku, level: record ? record.level : null, parentId: record ? record.parentId : null,
         uom: record ? record.uom : '', contains: record && record.contains != null ? record.contains : '', shape: record ? record.shape : 'rectangular',
         length: record ? record.length : '', width: record ? record.width : '', height: record ? record.height : '', weightG: record ? record.weightG : '', canLay: record ? record.canLay : false,
         storageTypes: record ? [...(record.storageTypes || [])] : [],
         unitsPerLayer: record && record.unitsPerLayer ? record.unitsPerLayer : '', layersPerPallet: record && record.layersPerPallet ? record.layersPerPallet : '', maxStack: record && record.maxStack ? record.maxStack : '',
     };
     $('udm-title').textContent = t(record ? 'main.udmDialogEdit' : 'main.udmDialogNew');
-    $('udm-code').value = record ? `${record.sku} · ${record.description}` : '';
+    $('udm-code').value = record ? record.description : ''; // el código se ve solo por su descripción única
     $('udm-code').disabled = !!record;
     $('udm-results').hidden = true;
     if (!record) f.level = null;
@@ -284,22 +304,33 @@ async function searchCodes() {
         if (!res.ok) return;
         const { skus } = await res.json();
         box.innerHTML = skus.length
-            ? skus.map((s) => `<button type="button" class="rel-result" data-sku="${s.id}" data-sku-code="${esc(s.sku)}" data-desc="${esc(s.description)}" data-uom="${esc(s.uom)}" data-length="${esc(s.length)}" data-width="${esc(s.width)}" data-height="${esc(s.height)}"><b>${esc(s.sku)}</b> ${esc(s.description)} <span class="rel-muted">${esc(s.upc)}</span></button>`).join('')
+            ? skus.map((s) => `<button type="button" class="rel-result" data-sku="${s.id}" data-sku-code="${esc(s.sku)}" data-desc="${esc(s.description)}" data-uom="${esc(s.uom)}" data-length="${esc(s.length)}" data-width="${esc(s.width)}" data-height="${esc(s.height)}"><b>${esc(s.description)}</b></button>`).join('')
             : `<span class="rel-muted">${esc(t('main.relNoMatches'))}</span>`;
         box.hidden = false;
     } catch (err) {
         console.error('Unidad de Medida por Distribución: code search failed', err);
     }
 }
-// Al elegir el código, la presentación que sigue es la de arriba de las que ya tiene (el material principal si todavía no tiene ninguna).
+// Al elegir el código: si todavía no tiene presentaciones, la primera es el material principal; si ya tiene, la nueva sale (de partida) del material principal y se puede cambiar en «Sale de».
 function pickSku(s) {
     f.sku = s;
-    $('udm-code').value = `${s.sku} · ${s.description}`;
+    $('udm-code').value = s.description;
     $('udm-results').hidden = true;
     const have = rowsOfSku(s.id);
-    f.level = have.length ? Math.max(...have.map((r) => r.level)) + 1 : 0;
-    f.storageTypes = [f.level === 0 ? 'principal' : 'empaque']; // de partida el de siempre; se puede cambiar abajo
+    if (!have.length) { f.level = 0; f.parentId = null; f.storageTypes = ['principal']; } // de partida el de siempre; se puede cambiar abajo
+    else {
+        const open = have.filter((r) => r.level < maxDepth && childCountOf(r.id) < maxChildren);
+        const first = open.find((r) => r.level === 0) || open[0] || null;
+        setParent(first ? first.id : null);
+        f.storageTypes = ['empaque'];
+    }
     renderForm();
+}
+// De cuál presentación sale la nueva: su nivel es el de esa + 1 (null = ya no hay dónde ponerla).
+function setParent(id) {
+    const p = rows.find((r) => r.id === id);
+    f.parentId = p ? p.id : null;
+    f.level = p ? p.level + 1 : null;
 }
 
 const canField = (col, value) => Dashboard.canEditField(TABLE_KEY, col, f.rec ? String(value ?? '') : '');
@@ -314,9 +345,9 @@ function renderForm() {
     msg.textContent = '';
     if (!f.sku) { info.textContent = t('main.udmNoCode'); box.innerHTML = ''; save.disabled = true; return; }
     const have = rowsOfSku(f.sku.id);
-    if (!f.rec && f.level > maxExtra) { info.textContent = t('main.udmMaxLevels', { n: maxExtra }); box.innerHTML = ''; save.disabled = true; return; }
+    if (!f.rec && f.level === null) { info.textContent = t('main.udmNoParentRoom', { d: maxDepth, c: maxChildren }); box.innerHTML = ''; save.disabled = true; return; }
     const principal = f.level === 0;
-    info.innerHTML = `<b>${esc(f.sku.sku)} · ${esc(f.sku.description)}</b><span>${esc(levelName(f.level))}${principal ? ` · ${esc(t('main.udmFromArticleLong'))}` : ''}</span>`;
+    info.innerHTML = `<b>${esc(f.sku.description)}</b><span>${esc(levelName(f.level))}${principal ? ` · ${esc(t('main.udmFromArticleLong'))}` : ''}</span>`;
     const dis = (col, key) => (canField(col, f.rec ? f.rec[key] : '') ? '' : ' disabled');
     const shapeSel = `<select id="udm-f-shape" data-k="shape"${dis(COLS.shape, 'shape')}><option value="rectangular"${f.shape === 'rectangular' ? ' selected' : ''}>${esc(t('main.pkRect'))}</option><option value="cilindrica"${f.shape === 'cilindrica' ? ' selected' : ''}>${esc(t('main.pkCyl'))}</option></select>`;
     const layBox = `<label class="udm-check"><input type="checkbox" id="udm-f-canLay" data-k="canLay"${f.canLay ? ' checked' : ''}${dis(COLS.canLay, 'canLay')}> ${esc(t('main.colUdmDAcostar'))}</label>`;
@@ -332,13 +363,22 @@ function renderForm() {
         save.disabled = false;
         return;
     }
-    const prev = have.find((r) => r.level === f.level - 1);
-    const prevName = prev ? (prev.uom || levelName(prev.level)) : '';
+    const prev = have.find((r) => r.id === f.parentId);
+    const prevName = prev ? (prev.name || prev.uom || levelName(prev.level)) : '';
+    // «Sale de»: cualquiera de las presentaciones del código (en el orden del árbol), menos las que ya tienen el máximo de ramificaciones o están en el último nivel
+    const parentOpts = have.map((r) => {
+        const full = r.level >= maxDepth || childCountOf(r.id) >= maxChildren;
+        return `<option value="${r.id}"${r.id === f.parentId ? ' selected' : ''}${full && r.id !== f.parentId ? ' disabled' : ''}>${'\u00a0\u00a0'.repeat(r.depth)}${r.depth ? '└ ' : ''}${esc(r.name || levelName(r.level))}</option>`;
+    }).join('');
+    const parentField = f.rec
+        ? `<div class="rel-fld"><label>${esc(t('main.udmSaleDe'))}</label><div class="udm-from">${esc(prevName)}</div></div>`
+        : `<div class="rel-fld" data-help-key="udmSaleDe"><label for="udm-f-parent">${esc(t('main.udmSaleDe'))}</label><select id="udm-f-parent" data-parent="1">${parentOpts}</select></div>`;
     const uomOptions = [...new Set([...(f.uom ? [f.uom] : []), ...uoms])];
     const uomSel = `<select id="udm-f-uom" data-k="uom"${dis(COLS.uom, 'uom')}><option value="">${esc(t('main.articleTypeSelect'))}</option>${uomOptions.map((u) => `<option value="${esc(u)}"${u === f.uom ? ' selected' : ''}>${esc(u)}</option>`).join('')}</select>`;
     const num = (key, col, step) => `<input type="number" id="udm-f-${key}" data-k="${key}" step="${step || 'any'}" min="0" value="${esc(f[key])}"${dis(col, key)}>`;
     const cyl = f.shape === 'cilindrica';
-    box.innerHTML = `<div class="rel-two">${fieldHtml('uom', 'main.colUdmDUnidad', uomSel)}${fieldHtml('contains', 'main.udmContainsLbl', num('contains', COLS.contains, '1'))}</div>
+    box.innerHTML = `${parentField}
+        <div class="rel-two">${fieldHtml('uom', 'main.colUdmDUnidad', uomSel)}${fieldHtml('contains', 'main.udmContainsLbl', num('contains', COLS.contains, '1'))}</div>
         <div class="rel-muted" id="udm-equiv"></div>
         <div class="rel-two">${fieldHtml('shape', 'main.colUdmDForma', shapeSel)}<div class="rel-fld"><label>&nbsp;</label>${layBox}</div></div>
         <div class="rel-three">${fieldHtml('length', 'main.colUdmDLargo', num('length', COLS.length))}${cyl ? '<div class="rel-fld"><label>&nbsp;</label><span class="rel-muted">= Ø</span></div>' : fieldHtml('width', 'main.colUdmDAncho', num('width', COLS.width))}${fieldHtml('height', 'main.colUdmDAlto', num('height', COLS.height))}</div>
@@ -353,10 +393,9 @@ function renderForm() {
 function updateEquivalence() {
     const el = $('udm-equiv');
     if (!el || !f || !f.sku || f.level === 0) return;
-    const have = rowsOfSku(f.sku.id);
-    const prev = have.find((r) => r.level === f.level - 1);
+    const prev = rowsOfSku(f.sku.id).find((r) => r.id === f.parentId);
     const n = Number(f.contains);
-    el.textContent = prev && Number.isInteger(n) && n >= 1 ? t('main.udmEquiv', { n: n * prev.equivalent, u: have[0].uom || '', c: n, p: prev.uom || levelName(prev.level) }) : '';
+    el.textContent = prev && Number.isInteger(n) && n >= 1 ? t('main.udmEquiv', { n: n * prev.equivalent, u: mainUomOf(f.sku.id), c: n, p: prev.name || prev.uom || levelName(prev.level) }) : '';
 }
 
 async function save() {
@@ -370,7 +409,7 @@ async function save() {
     };
     let method = 'POST';
     let url = API;
-    let payload = { skuItemId: f.sku.id, ...body };
+    let payload = { skuItemId: f.sku.id, ...(f.level >= 1 ? { parentId: f.parentId } : {}), ...body };
     if (f.rec) {
         const before = f.rec;
         const changed = {};

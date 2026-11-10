@@ -4396,25 +4396,31 @@ function attachSearchOptions(input) {
 }
 const searchModeOf = (input) => (input && input.dataset && input.dataset.searchMode) || 'contains';
 
-// ---- La secuencia de presentaciones de un código (Unidad de Medida por Distribución) -------------------------------------------------------------------------
-// Material principal > empaque primario > secundario…: cada nodo con su unidad, sus medidas (cm), su peso y a cuántas unidades principales equivale. rows = los renglones de UN código (como los manda /api/business/sku-distribution);
-// maxExtra = cuántos empaques admite (para el nodo punteado «+ Empaque…»). Lo usan la pantalla de Unidad de Medida por Distribución y la ventana «Ver UDM de distribución» de Alta Artículos.
-function udmChainHtml(rows, maxExtra = 6) {
-    const list = [...(rows || [])].sort((a, z) => a.level - z.level);
+// ---- El árbol de presentaciones de un código (Unidad de Medida por Distribución) ---------------------------------------------------------------------------
+// El material principal a la izquierda y, de él, las presentaciones que salen (empaque primario, secundario…), cada una con su nombre, sus medidas (cm), su peso y a cuántas unidades principales equivale; la línea que las une
+// dice cuántas de la anterior lleva (× 20). De una misma pueden salir varias y cada rama sigue sola. rows = los renglones de UN código (como los manda /api/business/sku-distribution, con parentId).
+// Lo usan la pantalla de Unidad de Medida por Distribución y la ventana «Ver UDM de distribución» de Alta Artículos.
+function udmChainHtml(rows) {
+    const list = [...(rows || [])];
     if (!list.length) return '';
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const fmt = (v) => (v === null || v === undefined || v === '' ? '' : String(Math.round(Number(v) * 10000) / 10000));
     const fmtWeight = (g) => { const n = Number(g) || 0; if (!n) return ''; return n >= 1000 ? `${fmt(n)} g (${fmt(n / 1000)} kg)` : `${fmt(n)} g`; };
     const levelName = (level) => t(`main.pkLevel${level}`);
-    const mainUom = list[0].uom;
+    const ids = new Set(list.map((r) => r.id));
+    const kidsOf = new Map();
+    list.forEach((r) => { if (r.parentId && ids.has(r.parentId)) { if (!kidsOf.has(r.parentId)) kidsOf.set(r.parentId, []); kidsOf.get(r.parentId).push(r); } });
+    const roots = list.filter((r) => !r.parentId || !ids.has(r.parentId));
+    const mainUom = (roots.find((r) => r.level === 0) || list[0]).uom;
     const dims = (r) => (r.shape === 'cilindrica' ? `Ø ${fmt(r.length)} × ${fmt(r.height)}` : `${fmt(r.length)} × ${fmt(r.width)} × ${fmt(r.height)}`);
-    const nodes = list.map((r, i) => {
-        const title = r.level === 0 ? (r.uom || levelName(0)) : `${r.uom || ''}${r.contains ? ` ${t('main.udmWith')} ${r.contains}` : ''}`.trim();
-        const link = i === 0 ? '' : `<div class="udm-link"><span>× ${esc(r.contains)}</span></div>`;
-        return `${link}<div class="udm-node"><span class="rel-tag rel-tag-ok">${esc(levelName(r.level))}</span><b>${esc(title)}</b><span>${esc(dims(r))} cm${r.weightG ? ` · ${esc(fmtWeight(r.weightG))}` : ''}</span><span class="udm-eq">= ${esc(r.equivalent)} ${esc(mainUom)}</span></div>`;
-    }).join('');
-    const add = list.length <= maxExtra ? `<div class="udm-link udm-link-dash"><span>× …</span></div><div class="udm-node udm-node-add"><b>+ ${esc(levelName(list.length))}</b><span>${esc(t('main.udmChainMore'))}</span></div>` : '';
-    return `<div class="udm-chain-title">${esc(t('main.udmChainTitle', { sku: `${list[0].sku} · ${list[0].description}` }))}</div><div class="udm-chain-row">${nodes}${add}</div>`;
+    const branch = (r) => {
+        const title = r.name || r.uom || levelName(r.level);
+        const node = `<div class="udm-node"><span class="rel-tag rel-tag-ok">${esc(levelName(r.level))}</span><b>${esc(title)}</b><span>${esc(dims(r))} cm${r.weightG ? ` · ${esc(fmtWeight(r.weightG))}` : ''}</span><span class="udm-eq">= ${esc(r.equivalent)} ${esc(mainUom)}</span></div>`;
+        const kids = kidsOf.get(r.id) || [];
+        if (!kids.length) return `<div class="udm-branch">${node}</div>`;
+        return `<div class="udm-branch">${node}<div class="udm-stem"></div><div class="udm-kids">${kids.map((k) => `<div class="udm-kid"><div class="udm-link"><span>× ${esc(k.contains)}</span></div>${branch(k)}</div>`).join('')}</div></div>`;
+    };
+    return `<div class="udm-chain-title">${esc(t('main.udmChainTitle', { sku: list[0].description }))}</div><div class="udm-tree-scroll">${roots.map(branch).join('')}</div>`;
 }
 
 function openColumnFilterMenu(th, tableId, key) {

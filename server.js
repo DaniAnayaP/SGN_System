@@ -6127,7 +6127,7 @@ function prepareSkuClassificationPatch(req, existing, patch) {
 
 // Presentaciones de distribución del código (tabla sku_distribution_units; ver public/PackCalc.js): el material principal y sus empaques en cadena.
 const PackCalc = require('./public/PackCalc.js');
-const PACK_ORDINALS = ['Material principal', 'Empaque primario', 'Empaque secundario', 'Empaque terciario', 'Empaque cuaternario', 'Empaque quinto', 'Empaque sexto'];
+const PACK_ORDINALS = ['Material principal', 'Empaque primario', 'Empaque secundario', 'Empaque terciario', 'Empaque cuaternario', 'Empaque quinto', 'Empaque sexto', 'Empaque séptimo', 'Empaque octavo', 'Empaque noveno', 'Empaque décimo'];
 const packLevelLabel = (level, lv) => `${PACK_ORDINALS[level] || `Empaque ${level}`}${lv && lv.name ? ` · ${lv.name}` : ''}`;
 // De los renglones de un código (de menor a mayor nivel) arma lo que lee PackCalc.levelsOf: { main: { shape, lay, name, weightG }, levels: [{ name, shape, l, w, h, pieces, lay, weightG }] }.
 // pieces = la equivalencia en unidades principales (cuántas tabletas trae): contiene × la equivalencia del nivel anterior; las medidas y el peso NO se calculan, cada nivel trae los suyos.
@@ -6137,18 +6137,49 @@ function skuDistTypesOf(row) {
     if (row.storage_types === null || row.storage_types === undefined) return [row.level === 0 ? 'principal' : 'empaque'];
     return SKU_DIST_STORAGE_TYPES.filter((k) => String(row.storage_types).split(',').includes(k));
 }
+// El nombre de una presentación: su unidad, cuántas trae y de qué unidad (la de la presentación de la que sale): «Caja con 20 Tbta», «Caja con 20 Caja». El material principal se llama como su unidad.
+const skuDistName = (row, parent) => {
+    if (row.level === 0) return row.sku_uom || '';
+    const unit = parent ? (parent.level === 0 ? (row.sku_uom || '') : (parent.uom || '')) : '';
+    return `${row.uom || ''}${row.contains ? ` con ${row.contains}${unit ? ` ${unit}` : ''}` : ''}`.trim();
+};
+// Los renglones de UN código en el orden del árbol (cada presentación antes de las que salen de ella; hermanas en el orden en que se capturaron) con lo que se calcula por el camino: «equivale a» (cuántas unidades
+// principales trae: lo que contiene × lo que equivale la que la contiene), el nombre, el camino desde el principal y lo que hace falta para dibujar el árbol en una columna (lines: por cada nivel de arriba, ¿sigue su
+// línea vertical?; last: ¿es la última hermana?).
+function skuDistTree(rows) {
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const kids = new Map();
+    rows.forEach((r) => { if (r.parent_id && byId.has(r.parent_id)) { if (!kids.has(r.parent_id)) kids.set(r.parent_id, []); kids.get(r.parent_id).push(r); } });
+    kids.forEach((list) => list.sort((a, z) => a.id - z.id));
+    const out = [];
+    const nameOf = new Map();
+    const seen = new Set();
+    const walk = (row, parent, parentEq, parentPath, lines, last) => {
+        if (seen.has(row.id)) return;
+        seen.add(row.id);
+        const equivalent = row.level === 0 ? 1 : parentEq * Math.max(1, Number(row.contains) || 1);
+        const name = skuDistName(row, parent);
+        nameOf.set(row.id, name);
+        const path = [...parentPath, name || PACK_ORDINALS[row.level] || ''];
+        const list = kids.get(row.id) || [];
+        out.push({ row, parent, parentName: parent ? (nameOf.get(parent.id) || '') : '', equivalent, name, path, lines, last, childCount: list.length });
+        const childLines = row.level === 0 ? [] : [...lines, !last];
+        list.forEach((child, i) => walk(child, row, equivalent, path, childLines, i === list.length - 1));
+    };
+    rows.filter((r) => !r.parent_id || !byId.has(r.parent_id)).sort((a, z) => a.level - z.level || a.id - z.id).forEach((r) => walk(r, null, 1, [], [], true));
+    return out;
+}
+// Lo que lee PackCalc.levelsOf: { main, levels } con una entrada por presentación (en el orden del árbol); cada una trae su id (con él se elige «Se acomoda»), su profundidad y las piezas (unidades principales) que equivale.
 function packagingFromDistribution(rows) {
     if (!rows || !rows.length) return null;
     const first = rows[0];
-    const r0 = rows.find((r) => r.level === 0);
+    const nodes = skuDistTree(rows);
+    const r0 = (nodes.find((n) => n.row.level === 0) || {}).row;
     const main = { shape: r0 && r0.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', lay: !!(r0 && r0.can_lay), types: skuDistTypesOf(r0), name: first.sku_uom || '', weightG: Math.round((Number(first.sku_weight) || 0) * 1000 * 10000) / 10000 };
-    let eq = 1;
-    const levels = [];
-    rows.filter((r) => r.level >= 1).sort((a, z) => a.level - z.level).forEach((r) => {
-        eq *= Math.max(1, Number(r.contains) || 1);
-        levels[r.level - 1] = { name: `${r.uom || ''}${r.contains ? ` con ${r.contains}` : ''}`.trim(), shape: r.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: r.length, w: r.shape === 'cilindrica' ? r.length : r.width, h: r.height, pieces: eq, lay: !!r.can_lay, weightG: r.weight_g, uom: r.uom || '', contains: r.contains, types: skuDistTypesOf(r) };
-    });
-    for (let i = 0; i < levels.length; i += 1) if (!levels[i]) levels[i] = { name: '', shape: 'rectangular', l: 0, w: 0, h: 0, pieces: 1, lay: false, weightG: 0 };
+    const levels = nodes.filter((n) => n.row.level >= 1).map(({ row: r, name, equivalent }) => ({
+        id: r.id, parentId: r.parent_id || null, depth: r.level, name, shape: r.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: r.length, w: r.shape === 'cilindrica' ? r.length : r.width, h: r.height, pieces: equivalent,
+        lay: !!r.can_lay, weightG: r.weight_g, uom: r.uom || '', contains: r.contains, types: skuDistTypesOf(r),
+    }));
     return { main, levels };
 }
 // Todos los códigos del cliente con sus presentaciones: Map(id del código -> packagingFromDistribution).
@@ -6769,7 +6800,7 @@ app.get('/api/business/layout/pieces', requireAuth, (req, res) => {
     const layout = ctx.layoutFor(center.id);
     const pieces = [];
     listCodeRelations(req.user.clientId, req.user.isTestAccount).forEach((r) => {
-        if (r.pack_level == null || !r.space_id || !r.level || !r.slot) return;
+        if (r.pack_unit_id == null || !r.space_id || !r.level || !r.slot) return;
         if (center.id && r.cost_center_id !== center.id) return;
         const nums = layout.positions.get(`${r.space_id}|${r.level}|${r.slot}`) || [];
         const posNum = r.position || (nums.length === 1 ? nums[0].num : 0);
@@ -6789,7 +6820,7 @@ app.get('/api/business/layout/pieces', requireAuth, (req, res) => {
 function locatorCodeInfo(rel) {
     return {
         relationId: rel.id, skuItemId: rel.skuItemId, sku: rel.sku, description: rel.description, spaceId: rel.spaceId, level: rel.level, slot: rel.slot, position: rel.position || 1,
-        locator: rel.locator, packLevel: rel.packLevel, packName: rel.packName || '', packShape: rel.packShape || '', packCount: rel.packCount, packCapacity: rel.packCapacity,
+        locator: rel.locator, packLevel: rel.packLevel, packUnitId: rel.packUnitId, packName: rel.packName || '', packShape: rel.packShape || '', packCount: rel.packCount, packCapacity: rel.packCapacity,
         mainUom: (rel.skuPackaging && rel.skuPackaging.main && rel.skuPackaging.main.name) || '',
     };
 }
@@ -6833,10 +6864,10 @@ app.post('/api/business/layout/locator-code', requireAuth, requireCostCenter, (r
     if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
     const body = req.body || {};
     const int = (v) => (Number.isInteger(Number(v)) && v !== '' && v !== null && v !== undefined ? Number(v) : null);
-    const skuItemId = int(body.skuItemId); const level = int(body.level); const slot = int(body.slot); const position = int(body.position); const packLevel = int(body.packLevel);
+    const skuItemId = int(body.skuItemId); const level = int(body.level); const slot = int(body.slot); const position = int(body.position); const packUnitId = int(body.packUnitId);
     const spaceId = typeof body.spaceId === 'string' ? body.spaceId : '';
     if (!skuItemId || !spaceId || !(level >= 1) || !(slot >= 1) || !(position >= 1)) return res.status(400).json({ message: 'Faltan el código o el localizador.' });
-    if (packLevel === null || packLevel < 0) return res.status(400).json({ message: 'Elige qué unidad de medida se almacena en este lugar.' });
+    if (packUnitId === null || packUnitId < 0) return res.status(400).json({ message: 'Elige qué unidad de medida se almacena en este lugar.' });
     const ctx = codeRelationContext(req);
     const layout = ctx.layoutFor(center.id);
     // el localizador tiene que estar COMPLETO y guardado: zona, huella, activo, nivel, espacio y posición
@@ -6858,7 +6889,7 @@ app.post('/api/business/layout/locator-code', requireAuth, requireCostCenter, (r
     if (!relationId && existingAtPlace) return res.status(409).json({ message: `Este localizador ya tiene el código ${padSku(existingAtPlace.sku_number)}. Usa «Cambiar».` });
     const state = {
         skuItemId, costCenterId: center.id, warehouseId: sub.parent_id, subWarehouseId: sub.id, zoneId: space.zoneId, spaceId, level, slot, position,
-        classification: existing ? (existing.classification || 'activo') : 'activo', packLevel,
+        classification: existing ? (existing.classification || 'activo') : 'activo', packUnitId,
     };
     const check = validateCodeRelationState(req, state, existing ? existing.id : 0, existing, ctx);
     if (check.error) return res.status(check.error.status).json({ message: check.error.message });
@@ -6866,7 +6897,7 @@ app.post('/api/business/layout/locator-code', requireAuth, requireCostCenter, (r
     let row;
     if (existing) {
         const patch = {};
-        ['skuItemId', 'packLevel'].forEach((key) => { const col = CODE_RELATION_PATCHABLE_FIELDS[key].column; if (String(existing[col] ?? '') !== String(state[key] ?? '')) patch[key] = state[key]; });
+        ['skuItemId', 'packUnitId'].forEach((key) => { const col = CODE_RELATION_PATCHABLE_FIELDS[key].column; if (String(existing[col] ?? '') !== String(state[key] ?? '')) patch[key] = state[key]; });
         // si el sub almacén o el almacén ya no son los mismos, también se corrigen (la zona manda)
         ['warehouseId', 'subWarehouseId'].forEach((key) => { const col = CODE_RELATION_PATCHABLE_FIELDS[key].column; if (String(existing[col] ?? '') !== String(state[key] ?? '')) patch[key] = state[key]; });
         if (Object.keys(patch).length) {
@@ -9726,12 +9757,12 @@ const CODE_RELATION_MODULE_LABEL = 'Cadena de Suministro';
 const CODE_RELATION_SCREEN_LABEL = 'Relación Código';
 const CODE_RELATION_COLS = {
     skuItemId: 'colRelSku', costCenterId: 'colRelCentroCostos', warehouseId: 'colRelAlmacen', subWarehouseId: 'colRelSubAlmacen',
-    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio', position: 'colRelProfundidad', classification: 'colRelClasificacion', packLevel: 'colRelSeAcomoda', // la posición cuelga de la hoja que era «Profundidad» (ahora «Posición»)
+    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio', position: 'colRelProfundidad', classification: 'colRelClasificacion', packUnitId: 'colRelSeAcomoda', // la posición cuelga de la hoja que era «Profundidad» (ahora «Posición»)
 };
 // Clasificación del producto en ese lugar. Se guarda la clave; sin decir nada es Producto Activo.
 const CODE_RELATION_CLASSES = { activo: 'Producto Activo', cuarentena: 'Producto Cuarentena', aclaracion: 'Producto Aclaración', consigna: 'Producto en Consigna' };
 // row y depth ya no se guardan: se siguen aceptando de las copias viejas de la App y de los archivos de antes, y se convierten en la posición (convertLegacyCell).
-const CODE_RELATION_INT_KEYS = ['skuItemId', 'costCenterId', 'warehouseId', 'subWarehouseId', 'level', 'slot', 'position', 'row', 'depth', 'packLevel'];
+const CODE_RELATION_INT_KEYS = ['skuItemId', 'costCenterId', 'warehouseId', 'subWarehouseId', 'level', 'slot', 'position', 'row', 'depth', 'packUnitId'];
 function convertLegacyCell(state, ctx, values) {
     if (state.row == null && state.depth == null) { delete state.row; delete state.depth; if (values) { delete values.row; delete values.depth; } return; }
     const layout = ctx.layoutFor(state.costCenterId);
@@ -9783,12 +9814,14 @@ function codeRelationPositionBox(layout, spaceId, level, slot, positionNum) {
 }
 // Qué se acomoda en el lugar de la relación y cuántas piezas caben (PackCalc.fit). withCells = las celdas de UNA capa, para dibujarlas en el Layout.
 function codeRelationPack(row, layout, withCells, ctx) {
-    const out = { packLevel: row.pack_level == null ? null : row.pack_level, packLabel: '', packShape: '', packCount: null, packLayers: null, packPerLayer: null, packCapacity: null, packPieces: null, packLeftH: null, packLeftD: null, packBox: null };
-    if (row.pack_level == null) return out;
+    // packUnitId = QUÉ presentación se acomoda (el id de la presentación; 0 = el material principal); packLevel = su profundidad en el árbol (0 principal, 1 sale del principal…), para el rótulo y los colores.
+    const out = { packUnitId: row.pack_unit_id == null ? null : row.pack_unit_id, packLevel: null, packLabel: '', packShape: '', packCount: null, packLayers: null, packPerLayer: null, packCapacity: null, packPieces: null, packLeftH: null, packLeftD: null, packBox: null };
+    if (row.pack_unit_id == null) return out;
     const levels = PackCalc.levelsOf({ length: row.sku_length, width: row.sku_width, height: row.sku_height, packaging: ctx.packagingOf(row.sku_item_id) });
-    const lv = levels[row.pack_level];
+    const lv = levels.find((x) => x.id === row.pack_unit_id);
     if (!lv) return out;
-    out.packLabel = packLevelLabel(row.pack_level, lv);
+    out.packLevel = lv.level;
+    out.packLabel = packLevelLabel(lv.level, lv);
     out.packName = lv.name || '';
     out.packShape = lv.shape;
     out.packPieces = lv.pieces;
@@ -9858,7 +9891,13 @@ function codeRelationSanitizers(ctx, req) {
         slot: (v) => (v == null ? '' : String(v)),
         position: (v) => (v == null ? '' : String(v)),
         classification: (v) => CODE_RELATION_CLASSES[v] || (v == null ? '' : String(v)),
-        packLevel: (v) => (v == null ? '' : (PACK_ORDINALS[Number(v)] || String(v))),
+        // lo que se acomoda: el rótulo de la presentación (su profundidad y cómo se llama), no su número
+        packUnitId: (v) => {
+            if (v == null) return '';
+            if (Number(v) === 0) return PACK_ORDINALS[0];
+            const d = getSkuDistributionById(Number(v), clientId, isTestAccount);
+            return d ? `${PACK_ORDINALS[d.level] || `Empaque ${d.level}`}${d.uom ? ` · ${d.uom}${d.contains ? ` con ${d.contains}` : ''}` : ''}` : String(v);
+        },
     };
 }
 
@@ -9888,12 +9927,12 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     const bad = (message, status = 400) => ({ error: { status, message } });
     const skuRow = state.skuItemId ? getSkuItemById(state.skuItemId, clientId, isTestAccount) : null;
     if (!skuRow) return bad('Elige un código de Alta Artículos.');
-    // «Se acomoda»: el empaque elegido tiene que existir en el código y traer sus medidas (Alta Artículos).
-    if (state.packLevel != null) {
-        const lv = PackCalc.levelsOf({ length: skuRow.length, width: skuRow.width, height: skuRow.height, packaging: ctx.packagingOf(skuRow.id) })[state.packLevel];
+    // «Se acomoda»: la presentación elegida tiene que ser de este código y traer sus medidas (Alta Artículos / Unidad de Medida por Distribución).
+    if (state.packUnitId != null) {
+        const lv = PackCalc.levelsOf({ length: skuRow.length, width: skuRow.width, height: skuRow.height, packaging: ctx.packagingOf(skuRow.id) }).find((x) => x.id === state.packUnitId);
         if (!lv || !(lv.l > 0 && lv.w > 0 && lv.h > 0)) return bad('Ese empaque no está capturado en Alta Artículos o le faltan las medidas. Captúralo primero en el código.');
         // solo se ofrecen (y se aceptan) las presentaciones con algún tipo de almacenamiento habilitado en Unidad de Medida por Distribución; una relación que ya la tenía y no la cambia se respeta
-        if (!PackCalc.enabled(lv) && !(existing && existing.pack_level === state.packLevel && existing.sku_item_id === state.skuItemId)) return bad('Esa presentación no tiene ningún tipo de almacenamiento habilitado. Habilítalo primero en Unidad de Medida por Distribución.');
+        if (!PackCalc.enabled(lv) && !(existing && existing.pack_unit_id === state.packUnitId && existing.sku_item_id === state.skuItemId)) return bad('Esa presentación no tiene ningún tipo de almacenamiento habilitado. Habilítalo primero en Unidad de Medida por Distribución.');
     }
     if (!CODE_RELATION_CLASSES[state.classification || 'activo']) return bad('La clasificación no es una de las del catálogo (Producto Activo, Cuarentena, Aclaración o en Consigna).');
     if (!state.costCenterId || !ctx.costCenters.has(state.costCenterId)) return bad('Elige un centro de costos.');
@@ -10154,7 +10193,7 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
             const place = placeNorm.values;
             const state = {
                 skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
-                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, position: existing.position, classification: existing.classification || 'activo', packLevel: existing.pack_level ?? null, ...place,
+                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, position: existing.position, classification: existing.classification || 'activo', packUnitId: existing.pack_unit_id ?? null, ...place,
             };
             convertLegacyCell(state, ctx, place);
             const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
@@ -10209,7 +10248,7 @@ app.patch('/api/business/code-relations/:id', requireAuth, requireCostCenter, (r
     const ctx = codeRelationContext(req);
     const state = {
         skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
-        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, position: existing.position, classification: existing.classification || 'activo', packLevel: existing.pack_level ?? null, ...norm.values,
+        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, position: existing.position, classification: existing.classification || 'activo', packUnitId: existing.pack_unit_id ?? null, ...norm.values,
     };
     convertLegacyCell(state, ctx, norm.values);
     const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
@@ -10242,16 +10281,19 @@ app.delete('/api/business/code-relations/:id', requireAuth, requireCostCenter, (
 });
 
 // --- Unidad de Medida por Distribución (Operaciones, C. Distribución) ---------------------------------------------------------------------------------
-// Las presentaciones en que se distribuye cada código, en cadena: nivel 0 = el material principal (sus medidas y su peso son los de Alta Artículos; aquí solo su forma y si se puede acostar) y de ahí hasta 6 empaques,
-// cada uno con su unidad del catálogo Nuestras Unidad Medida, cuántas del nivel anterior contiene y SUS PROPIAS medidas (cm) y peso (g). «Equivale a» (en unidades principales) sale de multiplicar lo que contiene cada nivel;
-// las medidas y el peso nunca se calculan. De aquí leen Relación Código («Se acomoda») y el Layout (piezas que caben).
+// Las presentaciones en que se distribuye cada código, en ÁRBOL: la raíz (nivel 0) es el material principal (sus medidas y su peso son los de Alta Artículos; aquí solo su forma y si se puede acostar) y cada presentación
+// dice de cuál sale (parent_id): de una misma pueden salir varias (la caja con 20 y la caja con 30 de la misma tableta; la caja con 20 va en cajas de 20 cajas y en cajas de 50 cajas). Cada una trae su unidad del catálogo
+// Nuestras Unidad Medida, cuántas de la que la contiene lleva y SUS PROPIAS medidas (cm) y peso (g). «Equivale a» (en unidades principales) sale de multiplicar lo que contiene cada presentación por el camino hasta el principal;
+// las medidas y el peso nunca se calculan. De aquí leen Relación Código («Se acomoda», por el id de la presentación) y el Layout (piezas que caben).
 const UDM_DIST_TABLE_KEY = 'udm-distribucion';
 const UDM_DIST_COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
 const UDM_DIST_INT_KEYS = ['unitsPerLayer', 'layersPerPallet', 'maxStack'];
 const UDM_DIST_MAIN_KEYS = ['shape', 'canLay', 'storageTypes', ...UDM_DIST_INT_KEYS]; // lo que se captura también en el material principal
-const UDM_DIST_MAX_EXTRA = 6; // empaques además del material principal
+const UDM_DIST_MAX_DEPTH = 10; // hasta 10 niveles de profundidad (sin contar el material principal)
+const UDM_DIST_MAX_CHILDREN = 10; // hasta 10 presentaciones que salen de una misma presentación
+const UDM_DIST_MAX_PER_SKU = 100; // tope de seguridad por código
 const round4 = (v) => Math.round(v * 10000) / 10000;
-function mapSkuDistribution(row, pendingByRecord, companyName, equivalent) {
+function mapSkuDistribution(row, pendingByRecord, companyName, node) {
     const principal = row.level === 0;
     const cyl = row.shape === 'cilindrica';
     const length = principal ? (row.sku_length || 0) : row.length;
@@ -10266,7 +10308,9 @@ function mapSkuDistribution(row, pendingByRecord, companyName, equivalent) {
         levelLabel: PACK_ORDINALS[row.level] || `Empaque ${row.level}`,
         uom: principal ? (row.sku_uom || '') : row.uom,
         contains: principal ? null : row.contains,
-        equivalent,
+        equivalent: node.equivalent,
+        // el árbol: de cuál sale, cómo se llama, su camino desde el principal y lo que hace falta para dibujarlo en una columna
+        parentId: row.parent_id || null, parentName: node.parentName, name: node.name, path: node.path, depth: row.level, treeLines: node.lines, treeLast: node.last, childCount: node.childCount,
         shape: cyl ? 'cilindrica' : 'rectangular',
         length,
         width: cyl ? length : (principal ? (row.sku_width || 0) : row.width),
@@ -10282,22 +10326,20 @@ function mapSkuDistribution(row, pendingByRecord, companyName, equivalent) {
         ...getSystemColumnsForRecord({ companyName, area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Unidad de Medida por Distribución', centroCostos: '', createdAt: row.created_at }),
     };
 }
-// Los renglones (de uno o de varios códigos) con su «Equivale a»: cuántas unidades principales trae cada presentación.
+// Los renglones (de uno o de varios códigos) en el orden del árbol de cada código, con su «Equivale a» y lo que hace falta para dibujar la ramificación.
 function mapSkuDistributionRows(rows, pendingByRecord, companyName) {
     const bySku = new Map();
     rows.forEach((r) => { if (!bySku.has(r.sku_item_id)) bySku.set(r.sku_item_id, []); bySku.get(r.sku_item_id).push(r); });
-    const eqByRow = new Map();
-    bySku.forEach((list) => {
-        let eq = 1;
-        [...list].sort((a, z) => a.level - z.level).forEach((r) => { if (r.level >= 1) eq *= Math.max(1, Number(r.contains) || 1); eqByRow.set(r.id, eq); });
-    });
-    return rows.map((r) => mapSkuDistribution(r, pendingByRecord, companyName, eqByRow.get(r.id)));
+    const out = [];
+    bySku.forEach((list) => skuDistTree(list).forEach((node) => out.push(mapSkuDistribution(node.row, pendingByRecord, companyName, node))));
+    return out;
 }
 // Lo que llega en el cuerpo, ya con sus tipos; null en lo que no vino.
 function normalizeSkuDistInput(body) {
     const out = {};
     const num = (v) => (v === '' || v == null ? null : Number(v));
     if (Object.prototype.hasOwnProperty.call(body, 'skuItemId')) { const n = Number(body.skuItemId); if (!Number.isInteger(n) || n < 1) return { error: 'Elige un código de Alta Artículos.' }; out.skuItemId = n; }
+    if (Object.prototype.hasOwnProperty.call(body, 'parentId')) { const n = body.parentId === '' || body.parentId == null ? null : Number(body.parentId); if (n !== null && !(Number.isInteger(n) && n > 0)) return { error: 'Elige de cuál presentación sale.' }; out.parentId = n; }
     if (Object.prototype.hasOwnProperty.call(body, 'uom')) { if (body.uom != null && (typeof body.uom !== 'string' || body.uom.length > 60)) return { error: 'La unidad de medida no es válida.' }; out.uom = (body.uom || '').trim(); }
     if (Object.prototype.hasOwnProperty.call(body, 'shape')) out.shape = body.shape;
     if (Object.prototype.hasOwnProperty.call(body, 'canLay')) out.canLay = !!body.canLay;
@@ -10355,7 +10397,8 @@ app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
     res.json({
         rows: mapSkuDistributionRows(source, pendingByRecord, client?.company_name),
         uoms: listActiveArticleCategoryNames(clientId, 'udm', isTestAccount),
-        maxExtra: UDM_DIST_MAX_EXTRA,
+        maxDepth: UDM_DIST_MAX_DEPTH,
+        maxChildren: UDM_DIST_MAX_CHILDREN,
     });
 });
 
@@ -10369,10 +10412,18 @@ app.post('/api/business/sku-distribution', requireAuth, requireCostCenter, (req,
     const sku = norm.values.skuItemId ? getSkuItemById(norm.values.skuItemId, clientId, isTestAccount) : null;
     if (!sku) return res.status(400).json({ message: 'Elige un código de Alta Artículos.' });
     const rows = listSkuDistributionBySku(clientId, isTestAccount, sku.id);
-    if (rows.length > UDM_DIST_MAX_EXTRA) return res.status(400).json({ message: `Un código lleva el material principal y hasta ${UDM_DIST_MAX_EXTRA} empaques.` });
-    // el primer renglón de un código es siempre el material principal; los demás van uno tras otro (cada uno depende del anterior)
-    const level = rows.length ? Math.max(...rows.map((r) => r.level)) + 1 : 0;
-    const state = { level, uom: '', contains: null, shape: 'rectangular', length: 0, width: 0, height: 0, weightG: 0, canLay: false, ...norm.values };
+    if (rows.length >= UDM_DIST_MAX_PER_SKU) return res.status(400).json({ message: `Un código admite hasta ${UDM_DIST_MAX_PER_SKU} presentaciones.` });
+    // el primer renglón de un código es siempre el material principal; las demás salen de una que ya existe (por defecto, del material principal)
+    let parent = null;
+    let level = 0;
+    if (rows.length) {
+        parent = norm.values.parentId ? rows.find((r) => r.id === norm.values.parentId) : rows.find((r) => r.level === 0);
+        if (!parent) return res.status(400).json({ message: 'Elige de cuál presentación de este código sale la nueva.' });
+        level = parent.level + 1;
+        if (level > UDM_DIST_MAX_DEPTH) return res.status(400).json({ message: `Una presentación admite hasta ${UDM_DIST_MAX_DEPTH} niveles.` });
+        if (rows.filter((r) => r.parent_id === parent.id).length >= UDM_DIST_MAX_CHILDREN) return res.status(400).json({ message: `De una misma presentación pueden salir hasta ${UDM_DIST_MAX_CHILDREN}.` });
+    }
+    const state = { uom: '', contains: null, shape: 'rectangular', length: 0, width: 0, height: 0, weightG: 0, canLay: false, ...norm.values, level, parentId: parent ? parent.id : null };
     if (level === 0) Object.assign(state, { uom: '', contains: null, length: 0, width: 0, height: 0, weightG: 0 });
     if (state.shape === 'cilindrica') state.width = state.length;
     if (grants) {
@@ -10406,6 +10457,7 @@ app.patch('/api/business/sku-distribution/:id', requireAuth, requireCostCenter, 
     if (!existing) return res.status(404).json({ message: 'Presentation not found.' });
     const { baseline, overrideConflicts, ...raw } = req.body || {};
     delete raw.skuItemId; // el código de una presentación no cambia
+    delete raw.parentId; // de cuál sale tampoco: se quita y se vuelve a capturar
     const norm = normalizeSkuDistInput(raw);
     if (norm.error) return res.status(400).json({ message: norm.error });
     const principal = existing.level === 0;
@@ -10428,11 +10480,12 @@ app.delete('/api/business/sku-distribution/:id', requireAuth, requireCostCenter,
     const existing = getSkuDistributionById(req.params.id, clientId, isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Presentation not found.' });
     if (!req.user.isClientAdmin && !canDeleteColumn(getUserEffectiveGrants(req.user.sub), UDM_DIST_TABLE_KEY, 'colUdmDDeleteAuth')) return res.status(403).json({ message: 'No tienes permiso para eliminar registros aquí.' });
-    // cada presentación depende de la anterior: no se quita una de en medio
+    // si salen otras de esta, no se quita: primero se quitan las que dependen de ella
     const rows = listSkuDistributionBySku(clientId, isTestAccount, existing.sku_item_id);
-    const above = rows.filter((r) => r.level > existing.level);
-    if (above.length) return res.status(409).json({ message: `Primero quita ${PACK_ORDINALS[Math.max(...above.map((r) => r.level))] || 'la presentación de arriba'}: depende de esta.`, code: 'DEPENDS' });
-    const used = listCodeRelationsBy(clientId, isTestAccount, 'sku_item_id', existing.sku_item_id).filter((r) => r.pack_level === existing.level).length;
+    const kids = rows.filter((r) => r.parent_id === existing.id);
+    if (kids.length) return res.status(409).json({ message: `Primero quita las ${kids.length} presentación(es) que salen de esta: dependen de ella.`, code: 'DEPENDS' });
+    const usedId = existing.level === 0 ? 0 : existing.id; // en Relación Código el material principal es el 0
+    const used = listCodeRelationsBy(clientId, isTestAccount, 'sku_item_id', existing.sku_item_id).filter((r) => r.pack_unit_id === usedId).length;
     if (used) return res.status(409).json({ message: `${used} lugar(es) de Relación Código almacenan esta unidad. Cámbialos primero.`, code: 'IN_USE' });
     logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: existing.id, recordLabel: skuDistLabel(existing), action: 'delete', changedBy: changedByLabel(req) });
     notifyButtonAction(req, UDM_DIST_TABLE_KEY, 'delete', `${padSku(existing.sku_number)} · ${PACK_ORDINALS[existing.level] || ''}`);
