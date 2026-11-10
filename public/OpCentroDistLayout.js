@@ -5875,9 +5875,22 @@ async function saveLayout() {
         showStep(v.section);
         renderPanel();
         refreshLive();
-        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${t(v.what === 'wall' ? 'main.layoutVioParedFueraToast' : 'main.layoutVioColumnaFueraToast', { name: v.name })}`, 'warning');
+        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${t({ wall: 'main.layoutVioParedFueraToast', column: 'main.layoutVioColumnaFueraToast', step: 'main.layoutVioDesnivelFueraToast' }[v.what] || 'main.layoutVioOtroFueraToast', { name: v.name })}`, 'warning');
         const at = state.draft.obstacles.findIndex((o) => o.id === v.id);
         const box = document.querySelector(`[data-l="obstacles"][data-i="${at}"][data-k="x"]`);
+        if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
+        return false;
+    }
+    // Objetos: nada sale del contorno de la nave; lo nuevo o lo que cambió y no cumple no se guarda: se lleva a la persona a esa fila.
+    const freshObjects = LC.newObjectInsideViolations(state.draft, state.saved);
+    if (freshObjects.length) {
+        const v = freshObjects[0];
+        showStep('objetos');
+        renderPanel();
+        refreshLive();
+        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${t('main.layoutVioObjetoFueraToast', { name: v.name })}`, 'warning');
+        const at = (state.draft.objects || []).findIndex((o) => o.id === v.id);
+        const box = document.querySelector(`[data-l="objects"][data-i="${at}"][data-k="x"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
         return false;
     }

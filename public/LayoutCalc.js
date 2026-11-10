@@ -262,9 +262,10 @@
         const before = new Set((previous ? obstacleViolations(previous) : []).map(obstacleKey));
         return obstacleViolations(next).filter((v) => !before.has(obstacleKey(v)));
     }
-    // ---- Columnas y paredes libres dentro del contorno ----------------------------------------------------------------------------------------------
-    // Nada sale de la nave: una columna (en cualquier forma de ponerla) y una pared libre (la que se pone «Dentro de la nave», no las que van sobre el contorno) tienen que caber ENTERAS adentro; pegadas a la pared de la nave
-    // cuentan como adentro. Lo que ya estaba afuera antes de esta regla solo se marca; lo NUEVO o lo que cambió (el obstáculo o el contorno) no se deja guardar (ver newObstacleInsideViolations). section = el paso donde se arregla.
+    // ---- Obstáculos y objetos dentro del contorno ---------------------------------------------------------------------------------------------------
+    // Nada sale de la nave: una columna, un desnivel, otro obstáculo (en cualquier forma de ponerlos) y una pared libre (la que se pone «Dentro de la nave», no las que van sobre el contorno) tienen que caber ENTEROS adentro; pegados a la
+    // pared de la nave cuentan como adentro. Lo que ya estaba afuera antes de esta regla solo se marca; lo NUEVO o lo que cambió (el obstáculo o el contorno) no se deja guardar (ver newObstacleInsideViolations). section = el paso donde se arregla.
+    const OBSTACLE_WORDS = { wall: ['La pared', 'Pared', 'acomódala'], column: ['La columna', 'Columna', 'acomódala'], step: ['El desnivel', 'Desnivel', 'acomódalo'], other: ['El obstáculo', 'Obstáculo', 'acomódalo'] };
     function obstacleInsideViolations(layout) {
         const out = [];
         const nave = Array.isArray(layout && layout.vertices) ? layout.vertices.map((p) => [Number(p[0]), Number(p[1])]) : [];
@@ -272,13 +273,15 @@
         layout.obstacles.forEach((o) => {
             if (!o) return;
             const isWall = o.kind === 'wall';
-            if (!(o.kind === 'column' || (isWall && o.mode !== 'contour'))) return;
+            if (isWall && o.mode === 'contour') return; // las paredes sobre el contorno SON el marco
             const g = obstacleGeometry(o, layout.vertices);
             if (!g || !(g.l > 0 && g.w > 0) || !Array.isArray(g.pts) || g.pts.length < 3) return;
             if (!zoneOutsideNave(nave, { pts: g.pts })) return;
-            const name = String(o.name || (isWall ? 'Pared' : 'Columna'));
-            out.push({ id: o.id, name, kind: 'outside', what: isWall ? 'wall' : 'column', section: isWall ? 'paredes' : 'obstaculos', sig: JSON.stringify([o.mode, g.pts, nave]),
-                message: `${isWall ? 'La pared' : 'La columna'} «${name}» sale del contorno de la nave: no es posible, acomódala o cambia sus medidas para que quede adentro.` });
+            const what = OBSTACLE_WORDS[o.kind] ? o.kind : 'other';
+            const [article, fallback, fix] = OBSTACLE_WORDS[what];
+            const name = String(o.name || fallback);
+            out.push({ id: o.id, name, kind: 'outside', what, section: isWall ? 'paredes' : 'obstaculos', sig: JSON.stringify([o.mode, g.pts, nave]),
+                message: `${article} «${name}» sale del contorno de la nave: no es posible, ${fix} o cambia sus medidas para que quede adentro.` });
         });
         return out;
     }
@@ -287,6 +290,31 @@
     function newObstacleInsideViolations(next, previous) {
         const before = new Set((previous ? obstacleInsideViolations(previous) : []).map(obstacleInsideKey));
         return obstacleInsideViolations(next).filter((v) => !before.has(obstacleInsideKey(v)));
+    }
+    // Los objetos (personas, montacargas, cajas) también van dentro de la nave: lo que ocupa cada uno es su largo × su ancho, girado su ángulo alrededor de su centro (como se dibuja en el croquis). Lo que ya estaba afuera solo se marca;
+    // lo NUEVO o lo que cambió no se deja guardar (ver newObjectInsideViolations).
+    function objectInsideViolations(layout) {
+        const out = [];
+        const nave = Array.isArray(layout && layout.vertices) ? layout.vertices.map((p) => [Number(p[0]), Number(p[1])]) : [];
+        if (nave.length < 3 || !Array.isArray(layout.objects)) return out;
+        layout.objects.forEach((o) => {
+            const l = Number(o && o.l) || 0; const w = Number(o && o.w) || 0;
+            if (!(l > 0 && w > 0)) return;
+            const a = ((Number(o.angle) || 0) * Math.PI) / 180;
+            const cos = Math.cos(a); const sin = Math.sin(a);
+            const cx = Number(o.x) || 0; const cy = Number(o.y) || 0;
+            const pts = [[-l / 2, -w / 2], [l / 2, -w / 2], [l / 2, w / 2], [-l / 2, w / 2]].map(([px, py]) => [round2(cx + px * cos - py * sin), round2(cy + px * sin + py * cos)]);
+            if (!zoneOutsideNave(nave, { pts })) return;
+            const name = String(o.name || 'Objeto');
+            out.push({ id: o.id, name, kind: 'outside', section: 'objetos', sig: JSON.stringify([o.x, o.y, o.angle, l, w, nave]),
+                message: `El objeto «${name}» sale del contorno de la nave: no es posible, acomódalo o cambia su lugar para que quede adentro.` });
+        });
+        return out;
+    }
+    const objectInsideKey = (v) => `${v.id}|${v.kind}|${v.sig}`;
+    function newObjectInsideViolations(next, previous) {
+        const before = new Set((previous ? objectInsideViolations(previous) : []).map(objectInsideKey));
+        return objectInsideViolations(next).filter((v) => !before.has(objectInsideKey(v)));
     }
     // Una pared por cada lado del contorno, de todo el lado (l 0): así un Layout de antes se ve igual y la pared se quita en los lados que solo son marco.
     function defaultWalls(vertices) {
@@ -2251,7 +2279,7 @@
     // La lista de TODO lo que hoy no cabe en lo que lo contiene, de arriba hacia abajo: la zona en la nave, la huella en su zona (o en la altura de la nave), el activo en su huella, los niveles en su activo, un espacio en su activo (o en su
     // nivel) y una posición en su espacio. Junta las faltas que ya calculan footprintViolations, spaceViolations y positionViolations (lo que ya estaba mal solo se marca; lo nuevo no se deja guardar) y las zonas que salen de la nave.
     // Cada renglón: { level, step (el paso donde se arregla), kind, id, target (lo que se señala en el croquis), vars (para el texto) }. Los activos que suman más que su huella salen UNA vez por huella.
-    const OUT_LEVELS = ['zone', 'obstacle', 'fp', 'space', 'level', 'bay', 'pos'];
+    const OUT_LEVELS = ['zone', 'obstacle', 'object', 'fp', 'space', 'level', 'bay', 'pos'];
     function outOfContainer(layout) {
         const out = [];
         if (!layout) return out;
@@ -2260,6 +2288,7 @@
             if (zoneOutsideNave(layout.vertices, z)) out.push({ level: 'zone', step: 'zonas', kind: 'nave', id: z.id, target: { kind: 'zone', id: z.id }, vars: { code: z.code || z.name || '' } });
         });
         obstacleInsideViolations(layout).forEach((v) => out.push({ level: 'obstacle', step: v.section, kind: v.what, id: v.id, target: { kind: 'obstacle', id: v.id }, vars: { name: v.name } }));
+        objectInsideViolations(layout).forEach((v) => out.push({ level: 'object', step: 'objetos', kind: 'outside', id: v.id, target: { kind: 'object', id: v.id }, vars: { name: v.name } }));
         footprintViolations(layout).forEach((v) => {
             const target = { kind: 'footprint', id: v.id };
             if (v.kind === 'nozone') out.push({ level: 'fp', step: 'espacios', kind: 'nozone', id: v.id, target, vars: { code: v.code } });
@@ -3650,7 +3679,7 @@
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
