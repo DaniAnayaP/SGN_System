@@ -8259,6 +8259,9 @@ td.cap-pick{ white-space: nowrap; }
 .layout-vstrip[hidden]{ display: none; }
 /* los botones de la barra (Ver, QR y descarga, Descartar, Guardar, Editar) viajan juntos: si no caben junto a los filtros bajan todos al renglón de abajo, nunca uno solo */
 .layout-bar-actions{ display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.6rem; margin-left: auto; }
+/* Los botones de la barra miden como los desplegables de la franja (mismo tamaño de letra y de relleno): así ocupan menos ancho y el buscador cabe en el primer renglón junto a los filtros. */
+.layout-bar-actions .btn{ padding: 0.3rem 0.8rem; font-size: 0.78rem; min-height: 0; line-height: 1.3; }
+.layout-bar-actions .btn:not(.btn-secondary){ border: 1px solid transparent; }
 /* Los desplegables, «Lo demás» y el buscador son hermanos del mismo renglón corrido de la franja (display: contents): al crecer un desplegable (el Localizador con su código largo) lo que no cabe pasa al renglón de abajo
    junto con el buscador, en vez de que «Lo demás» y el buscador ocupen un renglón cada uno. Los botones de la barra se alinean con el primer renglón, no a la mitad de una franja alta. */
 .layout-vstrip-filters{ display: contents; }
