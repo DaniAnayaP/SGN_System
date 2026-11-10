@@ -13,7 +13,7 @@
             kpiTotal: 'Superficie total', kpiOffices: 'Oficinas', kpiAisles: 'Pasillos', kpiDocks: 'Andenes', kpiStorage: 'Zonas de almacenamiento', kpiDead: 'Espacios muertos', kpiVolume: 'Volumen de la nave',
             spaces: 'espacios', noZone: 'Sin zona asignada', zoneWord: 'Zona', noCodes: 'Todavía no hay códigos en esta categoría. Aquí aparecerán con sus fotos y su ubicación.',
             zoomIn: 'Acercar', zoomOut: 'Alejar', zoomReset: 'Ver todo el croquis', codesOne: '1 código en esta zona', codesMany: '{n} códigos en esta zona',
-            metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', positions: 'Posiciones', positionsHint: '{n} activos con sus niveles, espacios y posiciones', posNote: 'Vista desde arriba de cada nivel: cada caja es una posición (P001…) dentro de su espacio (E001…). Es un esquema: el fondo puede verse exagerado.', pickAsset: 'Elige un activo', posClose: 'Quitar las posiciones del croquis', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
+            metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', positions: 'Posiciones', positionsHint: '{n} activos con sus niveles, espacios y posiciones', posNote: 'Vista desde arriba de cada nivel: cada caja es una posición (P001…) dentro de su espacio (E001…). Es un esquema: el fondo puede verse exagerado.', pickAsset: 'Elige un activo', posClose: 'Quitar las posiciones del croquis', posFaceNote: 'Línea verde punteada con flecha: por dónde se consume (la cara de consumo).', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
             restRow: 'Sin zona (espacio muerto)', transitRow: 'Pasillos fuera de toda zona', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos', zonesHintNoCodes: '{z} zonas',
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
             home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
@@ -44,7 +44,7 @@
             kpiTotal: 'Total area', kpiOffices: 'Offices', kpiAisles: 'Aisles', kpiDocks: 'Docks', kpiStorage: 'Storage zones', kpiDead: 'Dead space', kpiVolume: 'Warehouse volume',
             spaces: 'spaces', noZone: 'No zone assigned', zoneWord: 'Zone', noCodes: 'There are no codes in this category yet. They will appear here with their photos and location.',
             zoomIn: 'Zoom in', zoomOut: 'Zoom out', zoomReset: 'Show the whole map', codesOne: '1 code in this zone', codesMany: '{n} codes in this zone',
-            metrics: 'Metric data', metricsHint: '{n} m² of total area and more', positions: 'Positions', positionsHint: '{n} assets with their levels, spaces and positions', posNote: 'Each level seen from above: each box is a position (P001…) inside its space (E001…). It is a diagram: the depth may look exaggerated.', pickAsset: 'Pick an asset', posClose: 'Remove the positions from the map', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
+            metrics: 'Metric data', metricsHint: '{n} m² of total area and more', positions: 'Positions', positionsHint: '{n} assets with their levels, spaces and positions', posNote: 'Each level seen from above: each box is a position (P001…) inside its space (E001…). It is a diagram: the depth may look exaggerated.', pickAsset: 'Pick an asset', posClose: 'Remove the positions from the map', posFaceNote: 'Dashed green line with an arrow: the side it is taken from (the consumption face).', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
             restRow: 'No zone (dead space)', transitRow: 'Aisles outside any zone', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes', zonesHintNoCodes: '{z} zones',
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
             home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
@@ -331,7 +331,7 @@
         const sp = f && ((data.layout || {}).spaces || []).find((s) => s.id === f.id);
         if (!sp) return '';
         const chips = Array.from({ length: Math.max(1, Math.floor(sp.levels || 1)) }, (_, i) => `<button type="button" class="cchip" data-pos-level="${i + 1}" aria-pressed="${f.n === i + 1}">N${String(i + 1).padStart(3, '0')}</button>`).join('');
-        return `<b>${esc(sp.code || '')}</b><span class="lv">${chips}</span><button type="button" class="pclose" data-pos-clear aria-label="${esc(TEXT.posClose)}" title="${esc(TEXT.posClose)}">✕</button>`;
+        return `<b>${esc(sp.code || '')}</b><span class="lv">${chips}</span><button type="button" class="pclose" data-pos-clear aria-label="${esc(TEXT.posClose)}" title="${esc(TEXT.posClose)}">✕</button><small class="fnote">${esc(TEXT.posFaceNote)}</small>`;
     }
     function renderPosPick(data) {
         const box = document.getElementById('pos-pick');
@@ -1001,7 +1001,7 @@
         const levels = (sp.levels || 1) === 1 ? TEXT.level1 : fill(TEXT.levelsN, { n: sp.levels });
         const theme = window.LayoutMapSvg.theme(data.companyColor);
         return `<div class="info"><h2>${esc(sp.code || '')}</h2><p>${esc([zone && zone.name, fp && fp.code, levels].filter(Boolean).join(' · '))}</p></div>
-            <div class="tablebox">${window.LayoutMapSvg.assetLevelsDoc(lay, sp, { theme, width: 720 })}</div><p class="posnote">${esc(TEXT.posNote)}</p>`;
+            <div class="tablebox">${window.LayoutMapSvg.assetLevelsDoc(lay, sp, { theme, width: 720 })}</div><p class="posnote">${esc(TEXT.posNote)} ${esc(TEXT.posFaceNote)}</p>`;
     }
     function renderPositions(data, spaceId) {
         destroy3d();

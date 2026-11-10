@@ -425,6 +425,10 @@
                 const box = rectOf(spU.x, spU.y, spU.l, spU.d);
                 let g = `<g data-posbox="${f1(box.x)},${f1(box.y)},${f1(box.w)},${f1(box.h)}" pointer-events="none">`;
                 const lv = pf.n ? Math.min(Math.max(1, Math.floor(Number(pf.n))), Math.max(1, Math.floor(spU.levels || 1))) : 0;
+                // hacia dónde mira cada cara de consumo en este croquis (el lado del frente sale del pasillo principal; con el croquis girado, los vectores giran igual)
+                const faceDirs = {};
+                const faceBase = LC.faceVectors((LC.activoFront(layoutNoTurn, spU) || {}).side);
+                Object.keys(faceBase).forEach((k) => { faceDirs[k] = turn(faceBase[k][0], faceBase[k][1]); });
                 if (lv) {
                     const slots = Math.max(1, LC.levelSlots(spU, lv));
                     const slotW = spU.l / slots;
@@ -434,15 +438,21 @@
                         const kz = spU.d / Math.max(m.w, 0.01);
                         const fr = rectOf(spU.x + (c - 1) * slotW, spU.y, slotW, spU.d);
                         g += `<rect x="${f1(fr.x)}" y="${f1(fr.y)}" width="${f1(fr.w)}" height="${f1(fr.h)}" fill="none" stroke="#6B7089" stroke-width="0.9" stroke-dasharray="3 2"/>`;
+                        const bayFaces = LC.facesOfBay(spU, lv, c);
+                        if (!sameFaces(bayFaces, LC.facesOfLevel(spU, lv))) g += faceMarkSvg(fr, bayFaces, faceDirs, { width: 1.8, arrow: 3 }); // un espacio que se consume distinto que su nivel
                         (layoutNoTurn.positions || []).filter((p) => p.s === spU.id && p.n === lv && p.c === c).sort((a, z) => (a.num || 0) - (z.num || 0)).forEach((p) => {
                             const r = rectOf(spU.x + (c - 1) * slotW + p.x * kx, spU.y + p.y * kz, p.l * kx, p.w * kz);
                             g += `<rect x="${f1(r.x)}" y="${f1(r.y)}" width="${f1(Math.max(r.w, 1))}" height="${f1(Math.max(r.h, 1))}" fill="#FFFFFF" fill-opacity="0.9" stroke="#6B7089" stroke-width="0.9"/>`;
                             if (r.w >= 17 && r.h >= 8) g += `<text x="${f1(r.x + r.w / 2)}" y="${f1(r.y + r.h / 2 + 2.5)}" font-size="6.5" font-weight="600" fill="${T.chrome.ink}" text-anchor="middle">P${String(p.num).padStart(3, '0')}</text>`;
                             else if (r.w >= 8 && r.h >= 8) g += `<text x="${f1(r.x + r.w / 2)}" y="${f1(r.y + r.h / 2 + 2.3)}" font-size="5.5" font-weight="600" fill="${T.chrome.ink}" text-anchor="middle">${p.num}</text>`;
+                            if (Array.isArray(p.faces) && p.faces.length && !sameFaces(p.faces, bayFaces)) g += faceMarkSvg(r, p.faces, faceDirs, { width: 1.4, arrow: 2.5 }); // una posición que se consume distinto que su espacio
                         });
                     }
                 }
-                g += `<rect x="${f1(box.x)}" y="${f1(box.y)}" width="${f1(box.w)}" height="${f1(box.h)}" fill="none" stroke="#E8590C" stroke-width="1.8"/></g>`;
+                g += `<rect x="${f1(box.x)}" y="${f1(box.y)}" width="${f1(box.w)}" height="${f1(box.h)}" fill="none" stroke="#E8590C" stroke-width="1.8"/>`;
+                // por dónde se consume el nivel elegido (o el activo, sin nivel): línea punteada verde con flecha hacia afuera
+                g += faceMarkSvg(box, lv ? LC.facesOfLevel(spU, lv) : LC.facesOfSpace(spU), faceDirs, { width: 2.6, arrow: 4.5 });
+                g += '</g>';
                 s += g;
             }
         }
@@ -488,6 +498,31 @@
         return `${s}</svg>`;
     }
 
+    // ---- Cara de consumo: por dónde se toma lo que hay en un rectángulo (activo, nivel, espacio o posición) ---------------------------------------------------------------------------
+    // Una línea punteada verde en cada lado por donde se consume y una flecha hacia afuera. r = { x, y, w, h } en pantalla; faces = ['front', …]; dirs = { front: [dx, dy], … } ya en pantalla (LayoutCalc.faceVectors,
+    // girada si el croquis va girado); o = { width, arrow } (grosor de la línea y tamaño de la flecha).
+    function faceMarkSvg(r, faces, dirs, o = {}) {
+        const sw = o.width || 2.4;
+        const a = o.arrow || 6;
+        const f1 = (v) => v.toFixed(1);
+        let g = '';
+        (faces || []).forEach((face) => {
+            const v = dirs[face];
+            if (!v) return;
+            const horiz = Math.abs(v[0]) > Math.abs(v[1]);
+            const ex = horiz ? (v[0] > 0 ? r.x + r.w : r.x) : null;
+            const ey = horiz ? null : (v[1] > 0 ? r.y + r.h : r.y);
+            const edge = horiz ? [ex, r.y, ex, r.y + r.h] : [r.x, ey, r.x + r.w, ey];
+            g += `<line x1="${f1(edge[0])}" y1="${f1(edge[1])}" x2="${f1(edge[2])}" y2="${f1(edge[3])}" stroke="#0B8F6A" stroke-width="${sw}" stroke-dasharray="5 3"/>`;
+            const cx = (edge[0] + edge[2]) / 2;
+            const cy = (edge[1] + edge[3]) / 2;
+            const ux = horiz ? Math.sign(v[0]) : 0;
+            const uy = horiz ? 0 : Math.sign(v[1]);
+            g += `<polygon points="${f1(cx + ux * a * 1.6)},${f1(cy + uy * a * 1.6)} ${f1(cx - uy * a)},${f1(cy + ux * a)} ${f1(cx + uy * a)},${f1(cy - ux * a)}" fill="#0B8F6A"/>`;
+        });
+        return g;
+    }
+    const sameFaces = (a, b) => JSON.stringify(a || []) === JSON.stringify(b || []);
     // ---- El plano de UN activo: sus niveles vistos desde arriba, cada uno con sus espacios (E001…) y las posiciones de cada espacio (P001…) ---------------------------------------------------------------
     // Lo usan la hoja de posiciones y la página pública del QR. Cada nivel es el rectángulo del activo (largo × fondo) partido en sus espacios; adentro de cada espacio van sus posiciones con el lugar y las medidas
     // que tienen. Los niveles se apilan como en un rack visto de lado: el último arriba y el 1 abajo. layout = { positions: [{ s, n, c, num, x, y, l, w, h }] }, space = el activo, W × H = el lugar que ocupa;
@@ -513,6 +548,7 @@
         const planW = W - titleW;
         const planH = rowH - head;
         const hl = o.highlight || null;
+        const faceDirs = LC.faceVectors((LC.activoFront(layout, space) || {}).side); // el plano va sin girar: norte arriba, como el croquis
         let s = '';
         for (let n = levels; n >= 1; n -= 1) {
             const y0 = (levels - n) * (rowH + gap);
@@ -531,6 +567,8 @@
                 const chosen = hl && hl.n === n && hl.c === c;
                 if (slotW >= 16) s += `<text x="${(bx + slotW / 2).toFixed(1)}" y="${(y0 + 11).toFixed(1)}" font-size="${slotW >= 34 ? 10 : 8}" font-weight="${chosen ? 800 : 600}" fill="${chosen ? '#E8590C' : '#6B7089'}" text-anchor="middle">${slotW >= 34 ? `E${pad3(c)}` : c}</text>`;
                 s += `<rect x="${bx.toFixed(1)}" y="${(y0 + head).toFixed(1)}" width="${slotW.toFixed(1)}" height="${planH.toFixed(1)}" fill="none" stroke="${chosen ? '#E8590C' : C.frame}" stroke-width="${chosen ? 1.6 : 1}" stroke-dasharray="${chosen ? '' : '4 3'}"/>`;
+                const bayFaces = LC.facesOfBay(space, n, c);
+                if (!sameFaces(bayFaces, LC.facesOfLevel(space, n))) s += faceMarkSvg({ x: bx, y: y0 + head, w: slotW, h: planH }, bayFaces, faceDirs, { width: 1.6, arrow: 4 });
                 (byKey.get(`${n}|${c}`) || []).forEach((p) => {
                     const px = bx + p.x * kx;
                     const py = y0 + head + p.y * kz;
@@ -540,8 +578,11 @@
                     s += `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pw.toFixed(1)}" height="${ph.toFixed(1)}" rx="2" fill="${mark ? '#E8590C' : '#F4E1B8'}" fill-opacity="${mark ? 0.55 : 0.9}" stroke="${mark ? '#E8590C' : '#9A7B3C'}" stroke-width="${mark ? 1.8 : 1}"/>`;
                     if (pw >= 30 && ph >= 12) s += `<text x="${(px + pw / 2).toFixed(1)}" y="${(py + ph / 2 + 3.5).toFixed(1)}" font-size="${Math.min(11, ph * 0.55).toFixed(1)}" font-weight="600" fill="${C.ink}" text-anchor="middle">P${pad3(p.num)}</text>`;
                     else if (pw >= 9 && ph >= 9) s += `<text x="${(px + pw / 2).toFixed(1)}" y="${(py + ph / 2 + 3).toFixed(1)}" font-size="${Math.min(8, ph * 0.6).toFixed(1)}" font-weight="600" fill="${C.ink}" text-anchor="middle">${p.num}</text>`;
+                    if (Array.isArray(p.faces) && p.faces.length && !sameFaces(p.faces, bayFaces)) s += faceMarkSvg({ x: px, y: py, w: pw, h: ph }, p.faces, faceDirs, { width: 1.3, arrow: 3 });
                 });
             }
+            // por dónde se consume el nivel: línea punteada verde con flecha hacia afuera (los espacios o posiciones que se consumen distinto llevan la suya)
+            s += faceMarkSvg({ x: titleW, y: y0 + head, w: planW, h: planH }, LC.facesOfLevel(space, n), faceDirs, { width: 2.4, arrow: 5 });
         }
         return { svg: s, height: levels * rowH + gap * (levels - 1) };
     }

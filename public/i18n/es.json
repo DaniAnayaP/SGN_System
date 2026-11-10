@@ -2008,7 +2008,7 @@
     "layoutHojaPosTitulo": "Posiciones",
     "layoutHojaPosNivel1": "nivel",
     "layoutHojaPosNiveles": "niveles",
-    "layoutHojaPosNota": "Vista desde arriba de cada nivel: cada caja es una posición (P001…) dentro de su espacio (E001…). Es un esquema: el fondo puede verse exagerado para que las posiciones se alcancen a ver.",
+    "layoutHojaPosNota": "Vista desde arriba de cada nivel: cada caja es una posición (P001…) dentro de su espacio (E001…). La línea verde punteada con flecha marca por dónde se consume (la cara de consumo). Es un esquema: el fondo puede verse exagerado para que las posiciones se alcancen a ver.",
     "layoutPosHojaSinActivos": "Todavía no hay activos con posiciones guardadas.",
     "layoutHojaPre_a3h": "A3 horizontal",
     "layoutHojaPre_a4h": "A4 horizontal",

@@ -2008,7 +2008,7 @@
     "layoutHojaPosTitulo": "Positions",
     "layoutHojaPosNivel1": "level",
     "layoutHojaPosNiveles": "levels",
-    "layoutHojaPosNota": "Each level seen from above: each box is a position (P001…) inside its space (E001…). It is a diagram: the depth may look exaggerated so the positions can be seen.",
+    "layoutHojaPosNota": "Each level seen from above: each box is a position (P001…) inside its space (E001…). The dashed green line with an arrow marks the side it is taken from (the consumption face). It is a diagram: the depth may look exaggerated so the positions can be seen.",
     "layoutPosHojaSinActivos": "There are no assets with saved positions yet.",
     "layoutHojaPre_a3h": "A3 landscape",
     "layoutHojaPre_a4h": "A4 landscape",
