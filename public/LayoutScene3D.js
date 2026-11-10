@@ -69,6 +69,58 @@
             return l;
         });
 
+        // La cara de consumo de lo elegido (activo, nivel, espacio o posición): con lo demás oculto no se ve el pasillo, así que el lado por donde se consume se marca con un marco punteado y una flecha hacia afuera.
+        let frontSides = {};
+        const faceGroup = new THREE.Group();
+        scene.add(faceGroup);
+        function clearFaceMarks() {
+            while (faceGroup.children.length) {
+                const c = faceGroup.children[0];
+                faceGroup.remove(c);
+                if (c.geometry) c.geometry.dispose();
+                if (c.material) c.material.dispose();
+            }
+        }
+        function applyFaceMarks(box) {
+            clearFaceMarks();
+            const LCf = root.LayoutCalc;
+            if (!box || !hl || !lastLayout || !LCf || !LCf.faceVectors || !(hl.kind === 'space' || hl.kind === 'bay')) return;
+            const sp = (lastLayout.spaces || []).find((e) => e.id === hl.id);
+            if (!sp) return;
+            const n = Number(hl.n) || 0;
+            const c = hl.kind === 'bay' ? Number(hl.c) || 0 : 0;
+            let faces = LCf.facesOfSpace(sp);
+            if (n) faces = LCf.facesOfLevel(sp, n);
+            if (n && c) {
+                faces = LCf.facesOfBay(sp, n, c);
+                const pos = Number(hl.p) > 0 && LCf.positionsOfBay ? LCf.positionsOfBay(lastLayout, sp.id, n, c).find((q) => q.num === Number(hl.p)) : null;
+                if (pos) faces = LCf.facesOfPosition(sp, pos);
+            }
+            const dirs = LCf.faceVectors(frontSides[sp.id] || (LCf.activoFront(lastLayout, sp) || {}).side);
+            const hx = box.sx / 2; const hz = box.sz / 2;
+            const y0 = box.y - box.sy / 2; const y1 = box.y + box.sy / 2;
+            const span = Math.max(Math.min(box.sx, box.sz), 0.2);
+            const dash = clamp(span * 0.06, 0.03, 0.25);
+            faces.forEach((f) => {
+                const v = dirs[f];
+                if (!v) return;
+                const pts = v[0] !== 0
+                    ? [[box.x + v[0] * hx, y0, box.z - hz], [box.x + v[0] * hx, y0, box.z + hz], [box.x + v[0] * hx, y1, box.z + hz], [box.x + v[0] * hx, y1, box.z - hz], [box.x + v[0] * hx, y0, box.z - hz]]
+                    : [[box.x - hx, y0, box.z + v[1] * hz], [box.x + hx, y0, box.z + v[1] * hz], [box.x + hx, y1, box.z + v[1] * hz], [box.x - hx, y1, box.z + v[1] * hz], [box.x - hx, y0, box.z + v[1] * hz]];
+                const geo = new THREE.BufferGeometry().setFromPoints(pts.map((q) => new THREE.Vector3(q[0], q[1], q[2])));
+                const line = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: 0x0b8f6a, dashSize: dash, gapSize: dash * 0.6, depthTest: false, transparent: true }));
+                line.computeLineDistances();
+                line.renderOrder = 11;
+                faceGroup.add(line);
+                const r = clamp(span * 0.14, 0.05, 0.3);
+                const cone = new THREE.Mesh(new THREE.ConeGeometry(r, r * 2.2, 12), new THREE.MeshBasicMaterial({ color: 0x0b8f6a, depthTest: false, transparent: true }));
+                cone.position.set(box.x + v[0] * (hx + r * 1.2), box.y, box.z + v[1] * (hz + r * 1.2));
+                cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(v[0], 0, v[1]));
+                cone.renderOrder = 11;
+                faceGroup.add(cone);
+            });
+        }
+
         // Las zonas que mide el sensor elegido (paso Sensores): un tinte MUY tenue sobre su piso, con el borde; se arma al resaltar el sensor (ver applyMeasured).
         const measuredGroup = new THREE.Group();
         scene.add(measuredGroup);
@@ -354,6 +406,7 @@
                 l.visible = !!box && (i === 0 || hl.strong);
                 if (box) { l.position.set(box.x, box.y, box.z); l.scale.set(box.sx + grow, box.sy + grow, box.sz + grow); }
             });
+            applyFaceMarks(box);
             dirty = true;
         }
 
@@ -492,6 +545,7 @@
             if (opts && 'rampsShow' in opts) rampsShow = !!opts.rampsShow;
             if (opts && 'dimLayers' in opts) dimLayers = new Set(opts.dimLayers || []);
             if (opts && 'focusLevel' in opts) focusLevel = opts.focusLevel || null;
+            if (opts && 'fronts' in opts) frontSides = opts.fronts || {}; // el lado del frente de cada activo, sacado de TODO el Layout (el que se ve puede traer sin pasillos)
             if (opts && 'clashDoors' in opts) clashSet = new Set(opts.clashDoors || []);
             lastLayout = layout;
             fxItem = null;

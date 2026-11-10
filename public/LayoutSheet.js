@@ -285,6 +285,51 @@
         return documentSvg(options, [42, 29.7], labels, (W, H) => sheetContent(data, labels, lang, W, H));
     }
 
+    // La hoja de posiciones de UN activo (una página, A4 horizontal si no se dice otra cosa): el encabezado de siempre (logo o iniciales, Sitio, compañía y el QR del Layout), «Posiciones · R001» y el plano de sus niveles,
+    // cada uno con sus espacios (E001…) y las posiciones de cada espacio (P001…). data = lo de la hoja del Layout (companyName, siteName, logoDataUrl, logoRatio, theme, qrRows, version, updatedAt, printedAt,
+    // layout: { zones, footprints, positions }); space = el activo.
+    function positionsContent(data, space, labels, lang, W, H) {
+        const th = data.theme || window.LayoutMapSvg.DEFAULT_THEME;
+        const C = th.chrome;
+        const f = clamp(Math.min(W, H) / 794, 0.4, 1.8);
+        const m = 40 * f;
+        const lay = data.layout || {};
+        const dateFmt = (d) => d.toLocaleString(lang === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const initials = (data.companyName || '').trim().slice(0, 2).toUpperCase() || '··';
+        let s = `<rect width="${W}" height="${H}" fill="#FFFFFF"/>`;
+        const bs = 60 * f;
+        const logoW = data.logoDataUrl ? bs * clamp(Number(data.logoRatio) || 1, 0.5, 2.4) : bs;
+        if (data.logoDataUrl) s += `<image href="${esc(data.logoDataUrl)}" x="${m}" y="${m}" width="${logoW.toFixed(2)}" height="${bs}" preserveAspectRatio="xMinYMid meet"/>`;
+        else s += `<rect x="${m}" y="${m}" width="${bs}" height="${bs}" rx="${13 * f}" fill="${C.badge}"/><text x="${m + bs / 2}" y="${m + bs * 0.667}" font-size="${26 * f}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc(initials)}</text>`;
+        const qs = clamp(140 * f, 60, Math.min(H * 0.2, W * 0.2));
+        const hx = m + logoW + 18 * f;
+        const headAvail = Math.max(W - m - qs - 24 * f - hx, 60 * f);
+        const fit = (txt, size, k, min) => Math.max(min, Math.min(size, headAvail / (Math.max(String(txt).length, 1) * k)));
+        const siteText = String(data.siteName || labels.area || '');
+        const companyText = String(data.companyName || '');
+        s += `<text x="${hx}" y="${m + 28 * f}" font-size="${fit(siteText, 30 * f, 0.66, 12 * f)}" font-weight="700" fill="${C.badge}">${esc(siteText)}</text><text x="${hx}" y="${m + 54 * f}" font-size="${fit(companyText, 18 * f, 0.6, 10 * f)}" fill="#6B7089">${esc(companyText)}</text>`;
+        s += qrPath(data.qrRows, W - m - qs, m * 0.6, qs, C.ink, 3 * f);
+        const ruleY = m * 0.6 + qs + 12 * f;
+        s += `<line x1="${m}" y1="${ruleY}" x2="${W - m}" y2="${ruleY}" stroke="${C.rule}" stroke-width="${2.5 * f}"/>`;
+        const fp = (lay.footprints || []).find((x) => x.id === space.footprintId);
+        const zone = (lay.zones || []).find((z) => z.id === space.zoneId);
+        const levels = Math.max(1, Math.floor(space.levels || 1));
+        const where = [zone && zone.name, fp && fp.code].filter(Boolean).join(' · ');
+        s += `<text x="${m}" y="${ruleY + 44 * f}" font-size="${38 * f}" font-weight="700" fill="${C.ink}">${esc(labels.posTitle || 'Posiciones')} · ${esc(space.code || '')}</text>`;
+        s += `<text x="${m}" y="${ruleY + 70 * f}" font-size="${17 * f}" fill="#6B7089">${esc([where, `${levels} ${levels === 1 ? labels.posNivel1 : labels.posNiveles}`].filter(Boolean).join(' · '))}</text>`;
+        const top = ruleY + 92 * f;
+        const bottom = H - 62 * f;
+        const plan = window.LayoutMapSvg.assetLevelsSvg(lay, space, W - 2 * m, Math.max(bottom - top, 60), { theme: th });
+        s += `<g transform="translate(${m.toFixed(1)},${top.toFixed(1)})" font-family="${FONT}">${plan.svg}</g>`;
+        s += `<text x="${m}" y="${H - 38 * f}" font-size="${13 * f}" fill="#6B7089">${esc(labels.posNote || '')}</text>`;
+        const ver = [data.version != null ? `${labels.version || ''} ${data.version}`.trim() : '', data.updatedAt ? `${labels.updated || ''} ${dateFmt(data.updatedAt)}`.trim() : '', data.printedAt ? `${labels.printed || ''} ${dateFmt(data.printedAt)}`.trim() : ''].filter(Boolean).join(' · ');
+        s += `<text x="${m}" y="${H - 16 * f}" font-size="${12 * f}" fill="#8E94AB">${esc(ver)}</text>`;
+        return s;
+    }
+    function buildPositionsPageSvg(data, space, labels, lang, options = {}) {
+        return documentSvg(options, [29.7, 21], labels, (W, H) => positionsContent(data, space, labels, lang, W, H));
+    }
+
     // La tarjeta de categorías de una zona: card = { companyName, siteName (el Sitio, arriba del nombre; sin él sale labels.cardArea), logoDataUrl, logoRatio, theme, zoneName, categories: [{ name, desc, icon, color, qrRows }] }. Una columna de renglones
     // (icono, nombre, descripción y QR de cada categoría) y, si el espacio es ancho, dos columnas. Con 10.5 × 14.8 cm queda como la tarjeta impresa.
     function cardContent(card, labels, W, H) {
@@ -580,5 +625,5 @@
         setTimeout(() => URL.revokeObjectURL(a.href), 8000);
     }
 
-    window.LayoutSheet = { buildSheetSvg, buildCardSvg, renderPng, renderPdf, renderPdfPages, jpegsToPdf, saveBlob, jpegToPdf, pageFor, PRESETS, PAGES, LIMITS, PX_CM, qrPath, svgToCanvas, canvasToBlob, pageCm, clamp };
+    window.LayoutSheet = { buildSheetSvg, buildPositionsPageSvg, buildCardSvg, renderPng, renderPdf, renderPdfPages, jpegsToPdf, saveBlob, jpegToPdf, pageFor, PRESETS, PAGES, LIMITS, PX_CM, qrPath, svgToCanvas, canvasToBlob, pageCm, clamp };
 }());

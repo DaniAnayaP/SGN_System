@@ -449,5 +449,71 @@
         return `${s}</svg>`;
     }
 
-    window.LayoutMapSvg = { safetyGlyph, safetyRoute, safetyLabel, mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, defaultAssetFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
+    // ---- El plano de UN activo: sus niveles vistos desde arriba, cada uno con sus espacios (E001…) y las posiciones de cada espacio (P001…) ---------------------------------------------------------------
+    // Lo usan la hoja de posiciones y la página pública del QR. Cada nivel es el rectángulo del activo (largo × fondo) partido en sus espacios; adentro de cada espacio van sus posiciones con el lugar y las medidas
+    // que tienen. Los niveles se apilan como en un rack visto de lado: el último arriba y el 1 abajo. layout = { positions: [{ s, n, c, num, x, y, l, w, h }] }, space = el activo, W × H = el lugar que ocupa;
+    // o = { theme, highlight: { n, c, num } (lo que se marca en naranja), levelLabel (texto de «Nivel») }. Regresa { svg, height }: un grupo de SVG en coordenadas de 0,0 a W,height. El fondo se exagera si el activo
+    // es muy largo y delgado (esquema, no a escala en el fondo) para que las posiciones se alcancen a ver.
+    function assetLevelsSvg(layout, space, W, H, o = {}) {
+        const T = o.theme || DEFAULT_THEME;
+        const C = T.chrome;
+        const pad3 = (v) => String(v).padStart(3, '0');
+        const levels = Math.max(1, Math.floor(space.levels || 1));
+        const byKey = new Map();
+        (layout.positions || []).forEach((p) => {
+            if (p.s !== space.id) return;
+            const key = `${p.n}|${p.c}`;
+            if (!byKey.has(key)) byKey.set(key, []);
+            byKey.get(key).push(p);
+        });
+        byKey.forEach((list) => list.sort((a, b) => (a.num || 0) - (b.num || 0)));
+        const gap = 16;
+        const titleW = Math.min(96, Math.max(54, W * 0.11));
+        const rowH = Math.max(52, Math.min(200, (H - gap * (levels - 1)) / levels));
+        const head = 15; // el renglón de los rótulos de los espacios (E001…) arriba de cada nivel
+        const planW = W - titleW;
+        const planH = rowH - head;
+        const hl = o.highlight || null;
+        let s = '';
+        for (let n = levels; n >= 1; n -= 1) {
+            const y0 = (levels - n) * (rowH + gap);
+            const slots = Math.max(1, LC.levelSlots(space, n));
+            const slotW = planW / slots;
+            const lv = LC.levelMeasures(space, n);
+            const name = ((space.lvls || []).find((x) => x.n === n) || {}).name || '';
+            s += `<text x="0" y="${(y0 + head + 14).toFixed(1)}" font-size="15" font-weight="700" fill="${C.ink}">N${pad3(n)}</text>`;
+            if (name) s += `<text x="0" y="${(y0 + head + 30).toFixed(1)}" font-size="10.5" fill="#6B7089">${esc(String(name).slice(0, 16))}</text>`;
+            if (lv.h > 0 && rowH >= 70) s += `<text x="0" y="${(y0 + head + (name ? 44 : 30)).toFixed(1)}" font-size="10" fill="#6B7089">${esc(fmt(lv.h))} m</text>`;
+            for (let c = 1; c <= slots; c += 1) {
+                const m = LC.bayMeasures(space, n, c);
+                const kx = slotW / Math.max(m.l, 0.01);
+                const kz = planH / Math.max(m.w, 0.01);
+                const bx = titleW + (c - 1) * slotW;
+                const chosen = hl && hl.n === n && hl.c === c;
+                if (slotW >= 16) s += `<text x="${(bx + slotW / 2).toFixed(1)}" y="${(y0 + 11).toFixed(1)}" font-size="${slotW >= 34 ? 10 : 8}" font-weight="${chosen ? 800 : 600}" fill="${chosen ? '#E8590C' : '#6B7089'}" text-anchor="middle">${slotW >= 34 ? `E${pad3(c)}` : c}</text>`;
+                s += `<rect x="${bx.toFixed(1)}" y="${(y0 + head).toFixed(1)}" width="${slotW.toFixed(1)}" height="${planH.toFixed(1)}" fill="none" stroke="${chosen ? '#E8590C' : C.frame}" stroke-width="${chosen ? 1.6 : 1}" stroke-dasharray="${chosen ? '' : '4 3'}"/>`;
+                (byKey.get(`${n}|${c}`) || []).forEach((p) => {
+                    const px = bx + p.x * kx;
+                    const py = y0 + head + p.y * kz;
+                    const pw = Math.max(p.l * kx, 1);
+                    const ph = Math.max(p.w * kz, 1);
+                    const mark = chosen && hl.num === p.num;
+                    s += `<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${pw.toFixed(1)}" height="${ph.toFixed(1)}" rx="2" fill="${mark ? '#E8590C' : '#F4E1B8'}" fill-opacity="${mark ? 0.55 : 0.9}" stroke="${mark ? '#E8590C' : '#9A7B3C'}" stroke-width="${mark ? 1.8 : 1}"/>`;
+                    if (pw >= 30 && ph >= 12) s += `<text x="${(px + pw / 2).toFixed(1)}" y="${(py + ph / 2 + 3.5).toFixed(1)}" font-size="${Math.min(11, ph * 0.55).toFixed(1)}" font-weight="600" fill="${C.ink}" text-anchor="middle">P${pad3(p.num)}</text>`;
+                    else if (pw >= 9 && ph >= 9) s += `<text x="${(px + pw / 2).toFixed(1)}" y="${(py + ph / 2 + 3).toFixed(1)}" font-size="${Math.min(8, ph * 0.6).toFixed(1)}" font-weight="600" fill="${C.ink}" text-anchor="middle">${p.num}</text>`;
+                });
+            }
+        }
+        return { svg: s, height: levels * rowH + gap * (levels - 1) };
+    }
+    // El mismo plano como un SVG completo (para la página pública).
+    function assetLevelsDoc(layout, space, o = {}) {
+        const W = Math.max(320, Math.min(900, Number(o.width) || 720));
+        const levels = Math.max(1, Math.floor(space.levels || 1));
+        const H = Math.min(2400, Math.max(120, levels * 118));
+        const inner = assetLevelsSvg(layout, space, W - 16, H, o);
+        return `<svg class="aplan" viewBox="0 0 ${W} ${(inner.height + 16).toFixed(0)}" width="100%" role="img" font-family="inherit" xmlns="http://www.w3.org/2000/svg"><g transform="translate(8,8)">${inner.svg}</g></svg>`;
+    }
+
+    window.LayoutMapSvg = { assetLevelsSvg, assetLevelsDoc, safetyGlyph, safetyRoute, safetyLabel, mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, defaultAssetFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
 }());

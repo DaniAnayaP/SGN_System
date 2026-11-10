@@ -13,7 +13,7 @@
             kpiTotal: 'Superficie total', kpiOffices: 'Oficinas', kpiAisles: 'Pasillos', kpiDocks: 'Andenes', kpiStorage: 'Zonas de almacenamiento', kpiDead: 'Espacios muertos', kpiVolume: 'Volumen de la nave',
             spaces: 'espacios', noZone: 'Sin zona asignada', zoneWord: 'Zona', noCodes: 'Todavía no hay códigos en esta categoría. Aquí aparecerán con sus fotos y su ubicación.',
             zoomIn: 'Acercar', zoomOut: 'Alejar', zoomReset: 'Ver todo el croquis', codesOne: '1 código en esta zona', codesMany: '{n} códigos en esta zona',
-            metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
+            metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', positions: 'Posiciones', positionsHint: '{n} activos con sus niveles, espacios y posiciones', posNote: 'Vista desde arriba de cada nivel: cada caja es una posición (P001…) dentro de su espacio (E001…). Es un esquema: el fondo puede verse exagerado.', pickAsset: 'Elige un activo', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
             restRow: 'Sin zona (espacio muerto)', transitRow: 'Pasillos fuera de toda zona', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos', zonesHintNoCodes: '{z} zonas',
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
             home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
@@ -44,7 +44,7 @@
             kpiTotal: 'Total area', kpiOffices: 'Offices', kpiAisles: 'Aisles', kpiDocks: 'Docks', kpiStorage: 'Storage zones', kpiDead: 'Dead space', kpiVolume: 'Warehouse volume',
             spaces: 'spaces', noZone: 'No zone assigned', zoneWord: 'Zone', noCodes: 'There are no codes in this category yet. They will appear here with their photos and location.',
             zoomIn: 'Zoom in', zoomOut: 'Zoom out', zoomReset: 'Show the whole map', codesOne: '1 code in this zone', codesMany: '{n} codes in this zone',
-            metrics: 'Metric data', metricsHint: '{n} m² of total area and more', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
+            metrics: 'Metric data', metricsHint: '{n} m² of total area and more', positions: 'Positions', positionsHint: '{n} assets with their levels, spaces and positions', posNote: 'Each level seen from above: each box is a position (P001…) inside its space (E001…). It is a diagram: the depth may look exaggerated.', pickAsset: 'Pick an asset', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
             restRow: 'No zone (dead space)', transitRow: 'Aisles outside any zone', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes', zonesHintNoCodes: '{z} zones',
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
             home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
@@ -911,7 +911,7 @@
         } else {
             body = `${categoryBanner(data)}<div id="catslot"></div>
                 ${mapBlockHtml(data)}
-                <div class="zextra">${locked('metrics') ? '' : `<a class="mbtn pg-metrics" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>`}
+                <div class="zextra">${positionedSpaces(data).length && !locked('positions') ? `<a class="mbtn pg-positions" href="#posiciones">${iconSvg('layers')}<span class="t"><b>${esc(TEXT.positions)}</b><small>${esc(TEXT.positionsHint.replace('{n}', positionedSpaces(data).length))}</small></span><span class="go" aria-hidden="true">›</span></a>` : ''}${locked('metrics') ? '' : `<a class="mbtn pg-metrics" href="#datos-metricos">${iconSvg('ruler')}<span class="t"><b>${esc(TEXT.metrics)}</b><small>${esc(TEXT.metricsHint.replace('{n}', fmt(data.kpis.total)))}</small></span><span class="go" aria-hidden="true">›</span></a>`}
                 ${zonesSectionHtml(data)}</div>`;
         }
         // venir de "Distribución" en el recorrido debe mostrar su lista aunque se haya ocultado ese bloque
@@ -959,18 +959,63 @@
         applyBrand(theme);
     }
 
+    // Posiciones: la subpágina «#posiciones» (y «#posiciones/<activo>»): los activos que tienen posiciones y, del que se elija, sus niveles vistos desde arriba con sus espacios y posiciones (LayoutMapSvg.assetLevelsDoc).
+    // El candado «positions» del QR la quita (el servidor ya no manda las posiciones).
+    const positionedSpaces = (data) => {
+        const lay = data.layout || {};
+        const has = new Set((lay.positions || []).map((p) => p.s));
+        return (lay.spaces || []).filter((s) => has.has(s.id));
+    };
+    function positionsDetailHtml(data, sp) {
+        const lay = data.layout || {};
+        const fp = (lay.footprints || []).find((f) => f.id === sp.footprintId);
+        const zone = (lay.zones || []).find((z) => z.id === sp.zoneId);
+        const levels = (sp.levels || 1) === 1 ? TEXT.level1 : fill(TEXT.levelsN, { n: sp.levels });
+        const theme = window.LayoutMapSvg.theme(data.companyColor);
+        return `<div class="info"><h2>${esc(sp.code || '')}</h2><p>${esc([zone && zone.name, fp && fp.code, levels].filter(Boolean).join(' · '))}</p></div>
+            <div class="tablebox">${window.LayoutMapSvg.assetLevelsDoc(lay, sp, { theme, width: 720 })}</div><p class="posnote">${esc(TEXT.posNote)}</p>`;
+    }
+    function renderPositions(data, spaceId) {
+        destroy3d();
+        const theme = window.LayoutMapSvg.theme(data.companyColor);
+        resetSearch();
+        const spaces = positionedSpaces(data);
+        const sp = spaces.find((s) => s.id === spaceId) || spaces[0];
+        document.title = `${TEXT.positions} · ${pageTitle(data)}`;
+        const chips = spaces.map((s) => `<button type="button" class="cchip" data-pos-space="${esc(s.id)}" aria-pressed="${sp && s.id === sp.id}">${esc(s.code || '')}</button>`).join('');
+        document.getElementById('wrap').innerHTML = `
+            ${brandBar(data)}
+            <a class="back" href="#"><span aria-hidden="true">‹</span> ${esc(pageTitle(data))}</a>
+            <div class="info"><h1>${esc(TEXT.positions)}</h1></div>
+            <div class="showrow"><span>${esc(TEXT.pickAsset)}:</span>${chips}</div>
+            <div id="pos-detail">${sp ? positionsDetailHtml(data, sp) : ''}</div>
+            <div class="footer">${esc(TEXT.footer)}</div>`;
+        applyBrand(theme);
+    }
+
     const view = { data: null };
     // Las dos pantallas viven en la misma dirección del QR (que nunca cambia): "#datos-metricos" abre las cifras y "#datos-metricos/<cifra>" una cifra tocada.
     function route() {
         const data = view.data;
         if (!data) return;
         const m = /^#datos-metricos(?:\/([a-z]+))?$/.exec(locked('metrics') ? '' : window.location.hash);
+        const pm = /^#posiciones(?:\/([A-Za-z0-9_-]+))?$/.exec(locked('positions') || !positionedSpaces(data).length ? '' : window.location.hash);
         if (m) renderMetrics(data, window.LayoutCalc.METRIC_KEYS.includes(m[1]) ? m[1] : 'total');
+        else if (pm) renderPositions(data, pm[1]);
         else render(data);
         if (window.location.hash !== '#distribucion') window.scrollTo(0, 0);
     }
     window.addEventListener('hashchange', route);
     document.getElementById('wrap').addEventListener('click', (event) => {
+        const posChip = event.target.closest('[data-pos-space]');
+        if (posChip && view.data) {
+            const sp = positionedSpaces(view.data).find((s) => s.id === posChip.dataset.posSpace);
+            if (!sp) return;
+            document.querySelectorAll('#wrap [data-pos-space]').forEach((b) => b.setAttribute('aria-pressed', String(b === posChip)));
+            document.getElementById('pos-detail').innerHTML = positionsDetailHtml(view.data, sp);
+            window.history.replaceState(null, '', `#posiciones/${sp.id}`);
+            return;
+        }
         const metric = event.target.closest('[data-metric]');
         if (metric && view.data) {
             const key = metric.dataset.metric;

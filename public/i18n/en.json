@@ -1632,6 +1632,8 @@
     "layoutDescargarPdfSub": "You choose the sheet size and download it with the map and the QR, to print",
     "layoutDescargarPng": "Download PNG image",
     "layoutDescargarPngSub": "The same sheet as an image, at the size you choose, to send in a message",
+    "layoutQrPosiciones": "Positions by asset (PDF)",
+    "layoutQrPosicionesSub": "One page per asset: its levels seen from above, with their spaces and positions",
     "layoutCopiarEnlace": "Copy the QR link",
     "layoutCopiarEnlaceSub": "It is the same one the QR carries",
     "layoutRegenerarQr": "Change the QR",
@@ -2003,6 +2005,11 @@
     "layoutHojaVertical": "Portrait: cards below",
     "layoutHojaChica": "small size: only the essentials",
     "layoutHojaRecorte": "✂ Cut along the dashed line ({w} × {h} cm). Print at 100 %, without “Fit to page”.",
+    "layoutHojaPosTitulo": "Positions",
+    "layoutHojaPosNivel1": "level",
+    "layoutHojaPosNiveles": "levels",
+    "layoutHojaPosNota": "Each level seen from above: each box is a position (P001…) inside its space (E001…). It is a diagram: the depth may look exaggerated so the positions can be seen.",
+    "layoutPosHojaSinActivos": "There are no assets with saved positions yet.",
     "layoutHojaPre_a3h": "A3 landscape",
     "layoutHojaPre_a4h": "A4 landscape",
     "layoutHojaPre_cartah": "Letter landscape",
@@ -3178,6 +3185,7 @@
     "layoutLockMetricos": "See the metric data",
     "layoutLockPuertasLuz": "See doors and power connections",
     "layoutLockConteos": "See how many codes each zone has",
+    "layoutLockPosiciones": "See levels, spaces and positions",
     "layoutLockNotaLayout": "They apply to the Layout QR, the Zone QR and the Category QR, including the ones already printed. Today everything is open; a lock is closed by turning it off.",
     "colTmpFoto": "Photo",
     "colTmpOrigen": "Origin",
@@ -3388,6 +3396,7 @@
     "layoutPosM3": "m³",
     "layoutPosFilas": "Rows",
     "layoutPosProfundidad": "Depths",
+    "layoutPosCantidad": "Positions",
     "layoutPosAltura": "Height from floor (m)",
     "layoutPosLargo": "Length (m)",
     "layoutPosAncho": "Width (m)",
@@ -5077,6 +5086,10 @@
       "what": "The height of this space, in meters: the free height to store things. It cannot be more than the height of its level (Levels step). If you leave it empty it takes the level's.",
       "example": "the level is 0.65 m high: the space can be up to 0.65 m; with 0.8 it turns red and cannot be saved."
     },
+    "layoutPosCantidad": {
+      "what": "How many positions this space has. They are the rows that show up in the Positions step: when you change the number, the space is split into that many equal positions (left to right) that follow its size; if you already placed them by hand, new ones are added at the end or the last ones are removed.",
+      "example": "space R001.N001.E002 goes from 1 to 3 positions: Positions shows R001.N001.E002.P001, P002 and P003, each one third of the length."
+    },
     "layoutPosCeja": {
       "what": "The thickness of the beam (the crossbeam) of this space, in meters. It is separate from the Height: the free height (the Height) starts on top of the beam, so the Storage height is the same as the Height. If you leave it empty it takes the level's (Levels step).",
       "example": "the space has a 0.07 m beam and 0.65 m of free height: you put 0.07 in Beam and the Storage height stays at 0.65 m."
@@ -5138,7 +5151,7 @@
       "example": "level 1 of the rack has 3 spaces and level 2 only 2: Spaces shows 3 rows for level 1 and 2 for level 2."
     },
     "layoutSec_posiciones": {
-      "what": "Each row is a space: a level × a left-to-right place of an asset (a rack with 2 levels and 3 spaces per level leaves 6 spaces, ready to go). The levels come from the Assets step and the number of spaces of each level from the Levels step. Here you set the length, depth and height of each space (in meters) and which side it is taken from. The positions of each space are laid out in the Positions step. What goes inside cannot be more than what holds it: the spaces of a level do not add up to more than the asset's length, none is deeper than it, and its height is not more than the level's. m² is length × depth and m³ is length × depth × height.",
+      "what": "Each row is a space: a level × a left-to-right place of an asset (a rack with 2 levels and 3 spaces per level leaves 6 spaces, ready to go). The levels come from the Assets step and the number of spaces of each level from the Levels step. Here you set the length, depth and height of each space (in meters) and which side it is taken from. In the «Positions» column you type how many each space has: those are the rows that show up in the Positions step, where they are laid out. What goes inside cannot be more than what holds it: the spaces of a level do not add up to more than the asset's length, none is deeper than it, and its height is not more than the level's. m² is length × depth and m³ is length × depth × height.",
       "example": "space R001.N002.E003 is 3 m long, 1.2 deep and 0.65 high: 3.6 m² and 2.34 m³."
     },
     "relClass": {
@@ -5408,6 +5421,14 @@
     "layoutLock_counts": {
       "what": "Lets people see how many codes each zone, category and classification has. Off, those numbers are removed.",
       "example": "“Zone 6 · 12 codes” and “Controlled 8”; off, only the name of the zone and of the classification remains."
+    },
+    "layoutQrPosiciones": {
+      "what": "Downloads a PDF with one page per asset: its levels seen from above, each with its spaces (E001…) and the positions of each space (P001…), with the usual header and QR. It comes from the last saved Layout.",
+      "example": "rack R001 has 3 levels: its page shows the 3 levels stacked, the last one on top, and in each one its spaces with their positions."
+    },
+    "layoutLock_positions": {
+      "what": "Lets people see each asset's levels, spaces and positions on the public QR page. Off, the server no longer sends the positions and that block disappears.",
+      "example": "the page shows «Positions» with the plan of each asset; off, the page has no such block."
     },
     "layoutQrLocks": {
       "what": "The locks decide what the person scanning a QR without a session sees and can do: see the previous records, their photos and the name of who made them, how many records are shown (3, 10 or 20), see the range and the alerts (Temperatures only) and allow registering (off = the QR is for viewing only). There is one setting per QR type and it applies to all of that type in this Layout, including the ones already printed; today everything is open. The locks are enforced by the server, not only by the page. You, with your user, still see everything on the Cleaning and Temperatures screens.",

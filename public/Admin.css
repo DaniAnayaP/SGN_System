@@ -7904,6 +7904,8 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .pos-ov-pos.chosen{ fill: #e8590c; fill-opacity: 0.5; stroke: #e8590c; stroke-width: 1.8; }
 .pos-ov-t{ font: 600 6.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-primary); paint-order: stroke; stroke: var(--color-surface); stroke-width: 2px; stroke-linejoin: round; }
 .pos-ov .dim{ opacity: 0.4; }
+.pos-ov-face{ stroke: #0b8f6a; stroke-width: 3; stroke-dasharray: 6 3; stroke-linecap: butt; vector-effect: non-scaling-stroke; }
+.pos-ov-arrow{ fill: #0b8f6a; stroke: var(--color-surface); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .layout-sizebar{ display: flex; flex-direction: column; gap: 0.6rem; padding: 0.7rem 3.2rem 0.7rem 0.9rem; border-bottom: 1px solid var(--color-border); }
 .layout-sizebar[hidden], .layout-sheet-preview[hidden], .layout-canvas svg[hidden], .layout-legend[hidden]{ display: none; }
 .layout-sizebar-row{ display: flex; flex-wrap: wrap; gap: 0.5rem 0.9rem; align-items: flex-end; }

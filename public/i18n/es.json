@@ -1632,6 +1632,8 @@
     "layoutDescargarPdfSub": "Eliges el tamaño de la hoja y la bajas con el mapa y el QR, para imprimir",
     "layoutDescargarPng": "Descargar imagen PNG",
     "layoutDescargarPngSub": "La misma hoja como imagen, con el tamaño que elijas, para mandar por mensaje",
+    "layoutQrPosiciones": "Posiciones por activo (PDF)",
+    "layoutQrPosicionesSub": "Una página por activo: sus niveles vistos desde arriba, con sus espacios y sus posiciones",
     "layoutCopiarEnlace": "Copiar el enlace del QR",
     "layoutCopiarEnlaceSub": "Es el mismo que lleva el QR",
     "layoutRegenerarQr": "Cambiar el QR",
@@ -2003,6 +2005,11 @@
     "layoutHojaVertical": "Vertical: tarjetas abajo",
     "layoutHojaChica": "tamaño chico: solo lo principal",
     "layoutHojaRecorte": "✂ Recorta por la línea punteada ({w} × {h} cm). Imprime al 100 %, sin “Ajustar a la página”.",
+    "layoutHojaPosTitulo": "Posiciones",
+    "layoutHojaPosNivel1": "nivel",
+    "layoutHojaPosNiveles": "niveles",
+    "layoutHojaPosNota": "Vista desde arriba de cada nivel: cada caja es una posición (P001…) dentro de su espacio (E001…). Es un esquema: el fondo puede verse exagerado para que las posiciones se alcancen a ver.",
+    "layoutPosHojaSinActivos": "Todavía no hay activos con posiciones guardadas.",
     "layoutHojaPre_a3h": "A3 horizontal",
     "layoutHojaPre_a4h": "A4 horizontal",
     "layoutHojaPre_cartah": "Carta horizontal",
@@ -3177,6 +3184,7 @@
     "layoutLockMetricos": "Ver los datos métricos",
     "layoutLockPuertasLuz": "Ver puertas y conexiones de luz",
     "layoutLockConteos": "Ver cuántos códigos tiene cada zona",
+    "layoutLockPosiciones": "Ver niveles, espacios y posiciones",
     "layoutLockNotaLayout": "Valen para el QR del Layout, el de una Zona y el de una Categoría, también los ya impresos. Hoy todo está abierto; un candado se cierra al apagarlo.",
     "colTmpFoto": "Foto",
     "colTmpOrigen": "Origen",
@@ -3387,6 +3395,7 @@
     "layoutPosM3": "m³",
     "layoutPosFilas": "Filas",
     "layoutPosProfundidad": "Profundidad",
+    "layoutPosCantidad": "Posiciones",
     "layoutPosAltura": "Altura del piso (m)",
     "layoutPosLargo": "Largo (m)",
     "layoutPosAncho": "Ancho (m)",
@@ -5076,6 +5085,10 @@
       "what": "El alto de este espacio, en metros: la altura libre para guardar. No puede pasar del alto de su nivel (paso Niveles). Si no lo escribes toma el del nivel.",
       "example": "el alto del nivel es 0.65 m: el espacio puede medir hasta 0.65 m de alto; con 0.8 se marca en rojo y no se guarda."
     },
+    "layoutPosCantidad": {
+      "what": "Cuántas posiciones tiene este espacio. Son las que salen como renglones en el paso Posiciones: al cambiar el número, el espacio se parte en esa cantidad de posiciones iguales (de izquierda a derecha) que siguen su tamaño; si ya las acomodaste a mano, se agregan al final o se quitan las últimas.",
+      "example": "el espacio R001.N001.E002 pasa de 1 a 3 posiciones: en Posiciones salen R001.N001.E002.P001, P002 y P003, cada una de un tercio del largo."
+    },
     "layoutPosCeja": {
       "what": "El grueso de la reja (el travesaño) de este espacio, en metros. Va aparte del Alto: la altura libre (el Alto) empieza encima de la reja, así que el Alto de almacenamiento es el mismo Alto. Si no lo escribes toma el de su nivel (paso Niveles).",
       "example": "el espacio tiene una reja de 0.07 m y 0.65 m de altura libre: se pone 0.07 en Ceja y el Alto de almacenamiento queda en 0.65 m."
@@ -5137,7 +5150,7 @@
       "example": "el nivel 1 del rack lleva 3 espacios y el nivel 2 solo 2: en Espacios salen 3 renglones para el nivel 1 y 2 para el nivel 2."
     },
     "layoutSec_posiciones": {
-      "what": "Cada renglón es un espacio: un nivel × un lugar de izquierda a derecha de un activo (el rack con 2 niveles y 3 espacios por nivel deja 6 espacios, ya listos). Los niveles salen del paso Activos y la cantidad de espacios de cada nivel del paso Niveles. Aquí defines el largo, el fondo y el alto de cada espacio (en metros) y por dónde se consume. Las posiciones de cada espacio se acomodan en el paso Posiciones. Lo que va adentro no puede pasar de lo que lo contiene: los espacios de un nivel no suman más que el largo del activo, ninguno pasa de su fondo y su alto no pasa del alto del nivel. Los m² son largo × fondo y los m³ son largo × fondo × alto.",
+      "what": "Cada renglón es un espacio: un nivel × un lugar de izquierda a derecha de un activo (el rack con 2 niveles y 3 espacios por nivel deja 6 espacios, ya listos). Los niveles salen del paso Activos y la cantidad de espacios de cada nivel del paso Niveles. Aquí defines el largo, el fondo y el alto de cada espacio (en metros) y por dónde se consume. En la columna «Posiciones» escribes cuántas tiene cada espacio: esas son las que salen como renglones en el paso Posiciones, donde se acomodan. Lo que va adentro no puede pasar de lo que lo contiene: los espacios de un nivel no suman más que el largo del activo, ninguno pasa de su fondo y su alto no pasa del alto del nivel. Los m² son largo × fondo y los m³ son largo × fondo × alto.",
       "example": "el espacio R001.N002.E003 mide 3 m de largo, 1.2 de fondo y 0.65 de alto: 3.6 m² y 2.34 m³."
     },
     "relClass": {
@@ -5407,6 +5420,14 @@
     "layoutLock_counts": {
       "what": "Deja ver cuántos códigos tiene cada zona, cada categoría y cada clasificación. Apagado, se quitan esos números.",
       "example": "«Zona 6 · 12 códigos» y «Controlados 8»; apagado, solo queda el nombre de la zona y de la clasificación."
+    },
+    "layoutQrPosiciones": {
+      "what": "Baja un PDF con una página por cada activo: sus niveles vistos desde arriba, cada uno con sus espacios (E001…) y las posiciones de cada espacio (P001…), con el encabezado y el QR de siempre. Sale de lo último guardado del Layout.",
+      "example": "el rack R001 tiene 3 niveles: su página muestra los 3 niveles apilados, el último arriba, y en cada uno sus espacios con sus posiciones."
+    },
+    "layoutLock_positions": {
+      "what": "Deja ver los niveles, los espacios y las posiciones de cada activo en la página pública del QR. Apagado, el servidor ya no manda las posiciones y ese bloque desaparece.",
+      "example": "la página muestra «Posiciones» con el plano de cada activo; apagado, la página se queda sin ese bloque."
     },
     "layoutQrLocks": {
       "what": "Los candados deciden qué ve y qué puede hacer quien escanea un QR sin sesión: ver los registros anteriores, sus fotos y el nombre de quien los hizo, cuántos registros se ven (3, 10 o 20), ver el rango y las alertas (solo Temperaturas) y poder registrar (apagado = el QR solo sirve para consultar). Hay una configuración por tipo de QR y vale para todos los de ese Layout, también los ya impresos; hoy todo está abierto. Los candados los hace cumplir el servidor, no solo la página. Tú, con tu usuario, sigues viendo todo en las pantallas de Limpieza y Temperaturas.",

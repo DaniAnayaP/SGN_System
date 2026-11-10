@@ -713,8 +713,8 @@ function applyLegend() {
         sensor: () => stepOn('sensores') && some('sensors'),
         column: () => stepOn('obstaculos') && some('obstacles', (o) => o.kind === 'column' || o.kind === 'other'),
         step: () => stepOn('obstaculos') && some('obstacles', (o) => o.kind === 'step'),
-        footprint: () => (stepOn('espacios') || stepOn('activos') || stepOn('posiciones') || stepOn('niveles')) && some('footprints', (f) => f.active !== false),
-        asset: () => (stepOn('activos') || stepOn('posiciones') || stepOn('niveles')) && some('spaces', (s) => s.active !== false),
+        footprint: () => (stepOn('espacios') || stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones')) && some('footprints', (f) => f.active !== false),
+        asset: () => (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones')) && some('spaces', (s) => s.active !== false),
         object: (type) => stepOn('objetos') && some('objects', (o) => o.type === type),
         transit: (type) => stepOn('transito') && some('transit', (p) => (type === 'between' ? p.type === 'between' : p.type !== 'between')),
         safety: (type) => { const [tp, model] = String(type).split(':'); return stepOn('seguridad') && some('safety', (e) => e.type === tp && (tp !== 'hydrant' || LC.hydrantModelOf(e) === (model || 'column'))); },
@@ -1358,6 +1358,9 @@ function stepHtml(step) {
         const shown = (v) => (Number.isFinite(v) ? String(Math.round(v * 100) / 100) : '');
         const bayNum = (i, n, c, key, value, edited, step, extra = '', bad = false) => `<td><input type="number" min="0" step="${step}" data-l="bay" data-i="${i}" data-n="${n}" data-c="${c}" data-k="${key}" value="${value}"${extra}${edited || bad ? ` class="${[edited ? 'layout-edited' : '', bad ? 'layout-missing' : ''].filter(Boolean).join(' ')}"` : ''}${dis ? ' disabled' : ''}></td>`;
         const POSITION_ROWS_MAX = 1500;
+        // cuántas posiciones tiene cada espacio: las que salen en el paso Posiciones
+        const posCounts = new Map();
+        (d.positions || []).forEach((p) => { const k = `${p.spaceId}|${p.n}|${p.c}`; posCounts.set(k, (posCounts.get(k) || 0) + 1); });
         let count = 0;
         const rows = [];
         d.spaces.forEach((s, i) => {
@@ -1376,12 +1379,12 @@ function stepHtml(step) {
                     const lvName = ((s.lvls || []).find((l) => l.n === n) || {}).name || '';
                     const nameOf = s.ownName || s.name || '';
                     const pad3 = (v) => String(v).padStart(3, '0');
-                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.E${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}<td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td>${facesCellHtml('bay', i, n, c, LC.facesOfBay(s, n, c), LC.facesOfLevel(s, n), st.faces !== undefined, dis)}</tr>`);
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.E${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}<td><input type="number" min="1" max="${LC.LIMITS.slots}" step="1" data-l="bay" data-i="${i}" data-n="${n}" data-c="${c}" data-k="count" data-help-key="layoutPosCantidad" value="${posCounts.get(`${s.id}|${n}|${c}`) || 1}"${dis || !canEdit('ubicaciones') ? ' disabled' : ''}></td><td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td>${facesCellHtml('bay', i, n, c, LC.facesOfBay(s, n, c), LC.facesOfLevel(s, n), st.faces !== undefined, dis)}</tr>`);
                 }
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutPosSinActivos'))}</p>`;
-        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo'];
+        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosCantidad', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo'];
         const bayIssues = bayIssuesHtml();
         return `${table(heads, rows, 'layout-posiciones')}<div class="layout-vio" data-bay-issues${bayIssues ? '' : ' hidden'}>${bayIssues}</div>${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
@@ -1548,24 +1551,57 @@ function positionsLive(edited) {
         }
     });
 }
-// «+» de un renglón: otra posición en el MISMO espacio, junto a la última (a la derecha; si ya no cabe, en una segunda fila). Queda elegida: el croquis la marca.
+// Otra posición en un espacio, junto a la última (a la derecha; si ya no cabe, en una segunda fila). La agrega al borrador y la regresa.
+function newPositionIn(sp, n, c) {
+    const m = LC.bayMeasures(sp, n, c);
+    const items = posBayItems(sp.id, n, c);
+    const r2 = (v) => Math.round(v * 100) / 100;
+    const right = items.reduce((mx, p) => Math.max(mx, p.x + p.l), 0);
+    const l = r2(Math.min(0.4, Math.max(0.1, m.l - right)));
+    const fits = right + l <= m.l + 0.005;
+    const key = `${sp.id}|${n}|${c}`;
+    const next = Math.max((state.draft.posNext && state.draft.posNext[key]) || 0, ...items.map((p) => p.num || 0), 0) + 1;
+    const pos = { id: uid('p'), spaceId: sp.id, n, c, num: next, x: fits ? r2(right) : 0, y: fits ? 0 : r2(Math.min(0.5, m.w)), l, w: r2(Math.min(0.5, m.w)), h: r2(Math.min(0.4, m.h)) };
+    if (!state.draft.positions) state.draft.positions = [];
+    state.draft.positions.push(pos);
+    state.draft.posNext = { ...(state.draft.posNext || {}), [key]: next };
+    return pos;
+}
+// La cantidad de posiciones de un espacio (la columna «Posiciones» del paso Espacios): son las que salen en la tabla de Posiciones. Si todas siguen siendo de fábrica, el espacio se parte en esa cantidad de posiciones
+// iguales (de izquierda a derecha) que siguen su tamaño; si ya se acomodaron a mano, se agregan al final o se quitan las últimas. Regresa true si algo cambió.
+function setPositionCount(space, n, c, raw) {
+    if (!state.draft || !canEdit('posiciones') || !canEdit('ubicaciones')) return false; // las posiciones que salen son del paso Posiciones
+    const want = Math.max(1, Math.min(LC.LIMITS.slots, Math.round(Number(raw)) || 1));
+    const items = posBayItems(space.id, n, c);
+    if (want === items.length) return false;
+    if (items.every((p) => p.auto === true)) {
+        if (!space.bays) space.bays = [];
+        let bay = space.bays.find((x) => x.n === n && x.c === c);
+        if (!bay) { bay = { n, c }; space.bays.push(bay); }
+        if (want > 1) bay.rows = want; else delete bay.rows;
+        delete bay.depth;
+        if (Object.keys(bay).length <= 2) space.bays = space.bays.filter((x) => x !== bay);
+        if (!space.bays.length) delete space.bays;
+        // las de fábrica de este espacio se vuelven a generar con la cantidad nueva (LC.ensurePositions, en syncPositions)
+        state.draft.positions = (state.draft.positions || []).filter((p) => !(p.spaceId === space.id && p.n === n && p.c === c));
+        syncPositions();
+        return true;
+    }
+    if (want > items.length) {
+        for (let k = items.length; k < want; k += 1) newPositionIn(space, n, c);
+    } else {
+        const drop = new Set(items.slice(want).map((p) => p.id));
+        state.draft.positions = (state.draft.positions || []).filter((p) => !drop.has(p.id));
+    }
+    return true;
+}
+// «+» de un renglón: otra posición en el MISMO espacio, junto a la última. Queda elegida: el croquis la marca.
 function addPositionAfter(posId) {
     if (!state.draft || !canEdit('ubicaciones')) return;
     const base = (state.draft.positions || []).find((p) => p.id === posId);
     const sp = base && (state.draft.spaces || []).find((s) => s.id === base.spaceId);
     if (!sp) return;
-    const m = LC.bayMeasures(sp, base.n, base.c);
-    const items = posBayItems(sp.id, base.n, base.c);
-    const r2 = (v) => Math.round(v * 100) / 100;
-    const right = items.reduce((mx, p) => Math.max(mx, p.x + p.l), 0);
-    const l = r2(Math.min(0.4, Math.max(0.1, m.l - right)));
-    const fits = right + l <= m.l + 0.005;
-    const key = `${sp.id}|${base.n}|${base.c}`;
-    const next = Math.max((state.draft.posNext && state.draft.posNext[key]) || 0, ...items.map((p) => p.num || 0), 0) + 1;
-    const pos = { id: uid('p'), spaceId: sp.id, n: base.n, c: base.c, num: next, x: fits ? r2(right) : 0, y: fits ? 0 : r2(Math.min(0.5, m.w)), l, w: r2(Math.min(0.5, m.w)), h: r2(Math.min(0.4, m.h)) };
-    if (!state.draft.positions) state.draft.positions = [];
-    state.draft.positions.push(pos);
-    state.draft.posNext = { ...(state.draft.posNext || {}), [key]: next };
+    const pos = newPositionIn(sp, base.n, base.c);
     clearFilterOf('ubicaciones');
     state.hl = { kind: 'bay', id: sp.id, n: pos.n, c: pos.c, p: pos.num, step: state.focus };
     renderPanel();
@@ -1823,7 +1859,7 @@ function drawSensorZones(svg, sensorId) {
 function positionsOverlayTarget() {
     if (!state.draft) return null;
     const h = state.hl;
-    if (h && h.step === state.focus && h.n && (h.kind === 'bay' || h.kind === 'space')) return { id: h.id, n: h.n, c: h.kind === 'bay' ? h.c : 0, p: h.p || 0 };
+    if (h && h.step === state.focus && (h.kind === 'bay' || h.kind === 'space')) return { id: h.id, n: h.n || 0, c: h.kind === 'bay' ? h.c : 0, p: h.p || 0 };
     return null;
 }
 function drawPositionsOverlay() {
@@ -1834,8 +1870,8 @@ function drawPositionsOverlay() {
     if (!tg || !view || view.x0 === undefined) return;
     const s = (state.draft.spaces || []).find((x) => x.id === tg.id);
     if (!s || s.active === false || !(s.l > 0) || !(s.d > 0)) return;
-    const lv = Math.min(Math.max(1, Number(tg.n) || 1), s.levels || 1);
-    const slots = LC.levelSlots(s, lv);
+    const lv = tg.n ? Math.min(Math.max(1, Number(tg.n) || 1), s.levels || 1) : 0;
+    const slots = lv ? LC.levelSlots(s, lv) : 0;
     const q = ((Math.round(Number(view.rot) || 0) % 4) + 4) % 4;
     // el croquis puede estar girado (cuartos de vuelta): se gira igual que LayoutCalc.rotateLayout
     const turn = (x, y) => (q === 1 ? [-y, x] : (q === 2 ? [-x, -y] : (q === 3 ? [y, -x] : [x, y])));
@@ -1855,22 +1891,44 @@ function drawPositionsOverlay() {
         g.appendChild(el);
     };
     const f1 = (v) => v.toFixed(1);
-    const slotW = s.l / slots; // cada espacio ocupa su pedazo del largo del activo (como en el 3D); sus posiciones se acomodan dentro con las medidas del espacio
+    const slotW = slots ? s.l / slots : s.l; // cada espacio ocupa su pedazo del largo del activo (como en el 3D); sus posiciones se acomodan dentro con las medidas del espacio
+    // lo elegido y por dónde se consume: el activo, un nivel, un espacio o una posición (lo más fino que se eligió)
+    let fRect = { x: s.x, y: s.y, w: s.l, d: s.d };
+    let fFaces = lv ? LC.facesOfLevel(s, lv) : LC.facesOfSpace(s);
     for (let c = 1; c <= slots; c += 1) {
         const m = LC.bayMeasures(s, lv, c);
         const kx = slotW / Math.max(m.l, 0.01);
         const kz = s.d / Math.max(m.w, 0.01);
         const sel = tg.c === c;
         const dim = tg.c && !sel ? ' dim' : '';
+        if (sel) { fRect = { x: s.x + (c - 1) * slotW, y: s.y, w: slotW, d: s.d }; fFaces = LC.facesOfBay(s, lv, c); }
         const fr = box(s.x + (c - 1) * slotW, s.y, slotW, s.d);
         add('rect', { class: `pos-ov-bay${sel ? ' sel' : ''}${dim}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h) });
         LC.positionsOfBay(state.draft, s.id, lv, c).forEach((p) => {
             const r = box(s.x + (c - 1) * slotW + p.x * kx, s.y + p.y * kz, p.l * kx, p.w * kz);
             const chosen = sel && tg.p && p.num === tg.p;
+            if (chosen) { fRect = { x: s.x + (c - 1) * slotW + p.x * kx, y: s.y + p.y * kz, w: p.l * kx, d: p.w * kz }; fFaces = LC.facesOfPosition(s, p); }
             add('rect', { class: `pos-ov-pos${chosen ? ' chosen' : ''}${dim}`, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)) });
             if (r.w >= 17 && r.h >= 8) add('text', { class: `pos-ov-t${dim}`, x: f1(r.x + r.w / 2), y: f1(r.y + r.h / 2 + 2.5), 'text-anchor': 'middle' }, `P${ubicPad(p.num)}`);
         });
     }
+    // La cara de consumo de lo elegido: con lo demás oculto no se ve el pasillo, así que se marca el lado por donde se consume con una línea punteada y una flechita hacia afuera.
+    const dirs = LC.faceVectors((LC.activoFront(state.draft, s) || {}).side);
+    const spt = (px, py) => { const a = turn(px, py); return [view.ox + (a[0] - view.x0) * view.sc, view.oy + (a[1] - view.y0) * view.sc]; };
+    fFaces.forEach((face) => {
+        const v = dirs[face];
+        if (!v) return;
+        const x0 = fRect.x; const y0 = fRect.y; const x1 = fRect.x + fRect.w; const y1 = fRect.y + fRect.d;
+        const seg = v[0] > 0 ? [[x1, y0], [x1, y1]] : (v[0] < 0 ? [[x0, y0], [x0, y1]] : (v[1] > 0 ? [[x0, y1], [x1, y1]] : [[x0, y0], [x1, y0]]));
+        const a = spt(seg[0][0], seg[0][1]);
+        const b2 = spt(seg[1][0], seg[1][1]);
+        add('line', { class: 'pos-ov-face', x1: f1(a[0]), y1: f1(a[1]), x2: f1(b2[0]), y2: f1(b2[1]) });
+        const dv = turn(v[0], v[1]);
+        const len = Math.hypot(dv[0], dv[1]) || 1;
+        const ux = dv[0] / len; const uy = dv[1] / len;
+        const cx = (a[0] + b2[0]) / 2; const cy = (a[1] + b2[1]) / 2;
+        add('polygon', { class: 'pos-ov-arrow', points: `${f1(cx + ux * 9)},${f1(cy + uy * 9)} ${f1(cx - uy * 5)},${f1(cy + ux * 5)} ${f1(cx + uy * 5)},${f1(cy - ux * 5)}` });
+    });
     svg.appendChild(g);
 }
 // El rótulo del resaltado (el código, en naranja) mantiene su tamaño en pantalla aunque el croquis esté acercado: es texto del dibujo y se agranda con él, así que se encoge en la misma proporción.
@@ -2368,7 +2426,8 @@ function findLayout(d) {
         const clip = f.kind === 'zone' ? zones.map((z) => LC.zonePoints(z)).filter((p) => p && p.length >= 3) : null;
         return { ...base, ...common, _frame: rect, ...(clip && clip.length ? { _clip: clip } : {}), obstacles: scoped.obstacles, doors: scoped.doors, power: scoped.power, sensors: scoped.sensors };
     }
-    return { ...base, vertices: rect, obstacles: [], objects: [], doors: [], power: [] };
+    // un activo o una huella enfocados (o el renglón elegido de una tabla): solo ellos; sin pisos, rampas, pasillos, seguridad ni sensores de la nave
+    return { ...base, vertices: rect, obstacles: [], objects: [], doors: [], power: [], floors: [], ramps: [], transit: [], safety: [], sensors: [] };
 }
 // ¿Este renglón de una tabla es de lo enfocado? Los activos todavía sin huella y las huellas sin zona (recién agregados) siempre se ven, para no perderlos. Con zonas enfocadas, las paredes, puertas, luz, sensores, seguridad,
 // pasillos, objetos, obstáculos y pisos que no están en esas zonas también se esconden (inside = lo que hay dentro, ya calculado).
@@ -2622,7 +2681,8 @@ function showAllLayers() {
 // Con zonas enfocadas, «Qué ver» (los tipos de adentro) sigue a las capas encendidas: todas encendidas = todos los tipos.
 function syncFindTypesFromSteps() {
     const shown = findTypesShown().filter((ft) => ft.type !== 'zone'); // «Qué ver» no lleva las zonas: eso es del botón Zona
-    const onTypes = shown.filter((ft) => stepOn(ft.step));
+    // los pasos Espacios, Niveles y Posiciones también son capas de activos
+    const onTypes = shown.filter((ft) => stepOn(ft.step) || (ft.type === 'space' && (stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones'))));
     state.findNone = onTypes.length === 0; // ninguna capa de cosas encendida: con zonas enfocadas no se muestra nada de lo de adentro
     state.findTypes = onTypes.length === shown.length || !onTypes.length ? [] : onTypes.map((ft) => ft.type);
 }
@@ -3175,7 +3235,7 @@ function renderSvg(underlay) {
     const FOCUS_STEPS = ['paredes', 'puertas', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'pisos', 'rampas', 'espacios', 'activos'];
     const on = underlay ? () => true : (zoneFocus && !dimmed ? (step) => stepOn(step) || FOCUS_STEPS.includes(step) : stepOn);
     const showFp = finding ? (on('espacios') || activeFind().kind === 'footprint' || activeFind().kind === 'items') : on('espacios');
-    const showSp = on('activos') || on('posiciones') || on('niveles');
+    const showSp = on('activos') || on('posiciones') || on('niveles') || on('ubicaciones');
     const W = 700;
     const H = 460;
     const M = 36;
@@ -4129,6 +4189,10 @@ function onEdit(event) {
         const n = Number(el.getAttribute('data-n'));
         const c = Number(el.getAttribute('data-c'));
         const bayKey = el.getAttribute('data-k');
+        if (bayKey === 'count') { // la cantidad de posiciones del espacio se aplica al terminar de escribir (no con cada tecla)
+            if (event.type === 'change' && setPositionCount(space, n, c, value)) { renderPanel(); refreshLive(); }
+            return;
+        }
         if (!space.bays) space.bays = [];
         let bay = space.bays.find((b) => b.n === n && b.c === c);
         if (!bay) { bay = { n, c }; space.bays.push(bay); }
@@ -5193,11 +5257,11 @@ function effective3dLayers() {
     const f = activeFind();
     if (f && !state.findDim) {
         const zf = f.kind === 'zone' || f.kind === 'items';
-        return { contour: false, walls: zf && fxWant('wall'), columns: zf && fxWant('obstacle'), doors: zf && fxWant('door'), power: zf && fxWant('power'), sensors: zf && fxWant('sensor'), objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || (zf && fxWant('footprint')), assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || (zf && fxWant('space'))) };
+        return { contour: false, walls: zf && fxWant('wall'), columns: zf && fxWant('obstacle'), doors: zf && fxWant('door'), power: zf && fxWant('power'), sensors: zf && fxWant('sensor'), objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || (zf && fxWant('footprint')), assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones') || (zf && fxWant('space'))) };
     }
     const layers = {
         contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || !!(f && f.kind === 'zone'),
-        footprints: stepOn('espacios'), power: stepOn('luz'), sensors: stepOn('sensores'), assets: stepOn('activos') || stepOn('posiciones') || stepOn('niveles'),
+        footprints: stepOn('espacios'), power: stepOn('luz'), sensors: stepOn('sensores'), assets: stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones'),
     };
     // zonas enfocadas con el resto «tenue»: las capas que «Qué ver» no pidió se apagan (y se ven tenues)
     if (f && f.kind === 'zone') {
@@ -5293,7 +5357,7 @@ function refreshScene3d() {
         picker3d.setFocus(fv3.focus ? fv3.focus.spaces : null);
         scene3d.setHiddenAssets(picker3d.getHidden(), false, !!state.findDim);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');
@@ -5803,7 +5867,7 @@ const qrLocksNow = {};
 // Los candados del QR del Layout, en dos grupos: [clave, texto, ayuda] y el título de cada grupo.
 const LAYOUT_LOCK_GROUPS = [
     ['main.layoutLockGrupoCodigos', [['codes', 'main.layoutLockBuscarCodigos'], ['classifications', 'main.layoutLockClasificaciones'], ['photos', 'main.layoutLockFotosArticulos'], ['where', 'main.layoutLockDondeEsta']]],
-    ['main.layoutLockGrupoPlano', [['metrics', 'main.layoutLockMetricos'], ['doors', 'main.layoutLockPuertasLuz'], ['counts', 'main.layoutLockConteos']]],
+    ['main.layoutLockGrupoPlano', [['metrics', 'main.layoutLockMetricos'], ['doors', 'main.layoutLockPuertasLuz'], ['counts', 'main.layoutLockConteos'], ['positions', 'main.layoutLockPosiciones']]],
 ];
 // La Ficha de un código es de la empresa (no de un centro de costos): una sola pestaña con sus tres candados.
 const FICHA_LOCK_GROUPS = [['main.layoutLockGrupoFicha', [['photos', 'main.layoutLockFichaFotos'], ['measures', 'main.layoutLockFichaMedidas'], ['where', 'main.layoutLockFichaDonde']]]];
@@ -6132,7 +6196,7 @@ function buildSheetSvgFrom(loaded) {
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' || s === 'niveles' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, legend: sheetView().legend, rotation: sheetView().rotation },
+        view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' || s === 'niveles' || s === 'ubicaciones' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, legend: sheetView().legend, rotation: sheetView().rotation },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {
@@ -6301,6 +6365,7 @@ function sheetLabels() {
         ...Object.fromEntries(LC.SAFETY_TYPES.map((tp) => [`safety_${tp}`, typeLabel('safety', tp)])),
         ...Object.fromEntries(LC.HYDRANT_MODELS.map((m) => [`hydrant_${m}`, typeLabel('hydrant', m)])),
         contour: t('main.colLayoutContorno'),
+        posTitle: t('main.layoutHojaPosTitulo'), posNivel1: t('main.layoutHojaPosNivel1'), posNiveles: t('main.layoutHojaPosNiveles'), posNote: t('main.layoutHojaPosNota'),
         cutCaption: t('main.layoutHojaRecorte'), printed: t('main.layoutHojaImpreso'), snapshot: t('main.layoutHojaFoto'), updated: t('main.layoutHojaActualizado'), version: t('main.layoutHojaVersion'),
     };
 }
@@ -6319,6 +6384,26 @@ async function downloadSheet(kind) {
         console.error('Layout: la hoja no se pudo descargar', err);
         Dashboard.showToast(t('main.layoutDescargaError'), 'error');
     }
+}
+// La hoja de posiciones: una página por activo (A4 horizontal) con sus niveles vistos desde arriba, sus espacios (E001…) y sus posiciones (P001…). Sale de lo ÚLTIMO GUARDADO (el mismo Layout del QR) y se baja en un solo PDF.
+async function downloadPositionsSheet() {
+    Dashboard.showToast(t('main.layoutPreparandoHoja'), 'info');
+    const loaded = await loadSheetData();
+    if (!loaded) return;
+    const { data, logoRatio } = loaded;
+    const lay = data.layout || {};
+    const spaces = (lay.spaces || []).filter((s) => (lay.positions || []).some((p) => p.s === s.id));
+    if (!spaces.length) { Dashboard.showToast(t('main.layoutPosHojaSinActivos'), 'warning'); return; }
+    const sheetData = {
+        companyName: data.companyName, siteName: data.siteName || t('main.layoutHojaArea'), logoDataUrl: data.logoDataUrl || '', logoRatio, version: data.version,
+        updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(), qrRows: data.qrRows, theme: window.LayoutMapSvg.theme(data.companyColor), layout: lay,
+    };
+    const labels = sheetLabels();
+    const svgs = spaces.map((sp) => window.LayoutSheet.buildPositionsPageSvg(sheetData, sp, labels, Dashboard.lang, { cut: false }));
+    const blob = await window.LayoutSheet.renderPdfPages(svgs);
+    const day = new Date().toISOString().slice(0, 10);
+    window.LayoutSheet.saveBlob(blob, `Posiciones_${slug(data.companyName)}_v${data.version}_${day}.pdf`);
+    Dashboard.showToast(t('main.layoutDescargaLista'), 'success');
 }
 async function copyQrLink() {
     const data = await fetchQrData();
@@ -6353,6 +6438,7 @@ $('layout-qr-pop').addEventListener('click', async (event) => {
         if (kind === 'zone-pdf' || kind === 'zone-png') await openZoneSheetDialog();
         else if (kind === 'zone-cls') await openClassificationSheetDialog();
         else if (kind === 'pdf' || kind === 'png') await openSheetDialog(kind);
+        else if (kind === 'pos-pdf') await downloadPositionsSheet();
         else if (kind === 'link') await copyQrLink();
         else if (kind === 'clean-print') await printAssetQrCards('clean');
         else if (kind === 'clean-download') await openAssetQrDialog('clean');

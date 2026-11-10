@@ -6617,7 +6617,9 @@ function buildPublicLayoutPayload(clientId, row) {
         zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}), ...(Array.isArray(z.categories) && z.categories.length ? { categories: z.categories } : {}) })),
         // La huella (el lugar en el piso, con su color si lo tiene) se dibuja debajo y el activo, con su propio color, encima.
         footprints: (l.footprints || []).filter((f) => f.active !== false).map((f) => ({ id: f.id, code: f.code, x: f.x, y: f.y, l: f.l, d: f.d, h: f.h, ...(f.fmt ? { fmt: f.fmt } : {}) })),
-        spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, footprintId: s.footprintId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels, ...(s.slots > 1 ? { slots: s.slots } : {}), ...(Array.isArray(s.lvls) && s.lvls.length ? { lvls: s.lvls } : {}), ...(Array.isArray(s.bays) && s.bays.some((b) => b.floorH !== undefined || b.h !== undefined || b.beam !== undefined) ? { bays: s.bays.filter((b) => b.floorH !== undefined || b.h !== undefined || b.beam !== undefined).map((b) => ({ n: b.n, c: b.c, ...(b.floorH !== undefined ? { floorH: b.floorH } : {}), ...(b.h !== undefined ? { h: b.h } : {}), ...(b.beam !== undefined ? { beam: b.beam } : {}) })) } : {}), ...(s.fmt ? { fmt: s.fmt } : {}) })),
+        spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, footprintId: s.footprintId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels, ...(s.slots > 1 ? { slots: s.slots } : {}), ...(Array.isArray(s.lvls) && s.lvls.length ? { lvls: s.lvls } : {}), ...(Array.isArray(s.bays) && s.bays.some((b) => b.floorH !== undefined || b.h !== undefined || b.beam !== undefined || b.l !== undefined || b.w !== undefined) ? { bays: s.bays.filter((b) => b.floorH !== undefined || b.h !== undefined || b.beam !== undefined || b.l !== undefined || b.w !== undefined).map((b) => ({ n: b.n, c: b.c, ...(b.floorH !== undefined ? { floorH: b.floorH } : {}), ...(b.h !== undefined ? { h: b.h } : {}), ...(b.beam !== undefined ? { beam: b.beam } : {}), ...(b.l !== undefined ? { l: b.l } : {}), ...(b.w !== undefined ? { w: b.w } : {}) })) } : {}), ...(s.fmt ? { fmt: s.fmt } : {}) })),
+        // Las posiciones de los espacios de cada activo (su lugar y medidas) para dibujarlas en la hoja y en la página pública; el candado «positions» del QR las quita de la página pública.
+        positions: (() => { const live = new Set((l.spaces || []).filter((s) => s.active !== false).map((s) => s.id)); return (l.positions || []).filter((p) => live.has(p.spaceId)).map((p) => ({ s: p.spaceId, n: p.n, c: p.c, num: p.num, x: p.x, y: p.y, l: p.l, w: p.w, h: p.h })); })(),
         // Las conexiones de luz salen en la página pública (con su propia capa, apagada al entrar) porque Daniel pidió esos botones ahí; las columnas y el plano de fondo no.
         // Las paredes (obstáculos del contorno) van en la página pública porque son parte de la nave; columnas, desniveles y el plano de fondo no.
         obstacles: (l.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, name: o.name, kind: o.kind, mode: o.mode, wall: o.wall, dist: o.dist, x: o.x, y: o.y, l: o.l, w: o.w, ...(o.h > 0 ? { h: o.h } : {}), ...(o.h2 > 0 ? { h2: o.h2 } : {}), ...(o.hb > 0 ? { hb: o.hb } : {}), ...(o.hb2 > 0 ? { hb2: o.hb2 } : {}) })),
@@ -7176,8 +7178,8 @@ const QR_LOCK_TYPES = {
     temperature: { records: true, photos: true, names: true, limit: 20, register: true, range: true },
     // El QR del Layout, el de una Zona y el de una Categoría abren la MISMA página, así que comparten un solo juego de candados (si cada uno tuviera los suyos bastaría cambiar el final de la dirección para saltárselos).
     //   codes = buscar códigos (SKU, descripción, categoría) · classifications = ver las clasificaciones y sus artículos · photos = ver las fotos de los artículos · where = ver dónde está cada código
-    //   metrics = ver los datos métricos (m², volumen) · doors = ver puertas y conexiones de luz · counts = ver cuántos códigos hay por zona y por clasificación.
-    layout: { codes: true, classifications: true, photos: true, where: true, metrics: true, doors: true, counts: true },
+    //   metrics = ver los datos métricos (m², volumen) · doors = ver puertas y conexiones de luz · counts = ver cuántos códigos hay por zona y por clasificación · positions = ver los niveles, espacios y posiciones de cada activo.
+    layout: { codes: true, classifications: true, photos: true, where: true, metrics: true, doors: true, counts: true, positions: true },
     // La Ficha de un código (Ficha.html) es de la EMPRESA, no de un centro de costos: su juego de candados vale para todos los centros (se guarda con centro 0).
     //   photos = ver las fotos del artículo · measures = ver medidas y pesos · where = ver dónde está (ruta y Localizador). El nombre de la empresa, la descripción, la unidad y el tipo de artículo siempre se ven.
     ficha: { photos: true, measures: true, where: true },
@@ -7217,6 +7219,7 @@ function sanitizeQrLocks(type, body) {
 function lockedLayoutPayload(payload, locks) {
     const out = { ...payload, locks };
     if (!locks.doors) out.layout = { ...payload.layout, doors: [], power: [] };
+    if (!locks.positions) out.layout = { ...(out.layout || payload.layout), positions: [] };
     if (!locks.metrics) out.kpis = { zones: ((payload.kpis && payload.kpis.zones) || []).map((z) => ({ id: z.id, name: z.name, type: z.type })) };
     if (!locks.counts) out.zoneCodes = {};
     return out;
