@@ -7829,6 +7829,13 @@ function seedQrTemperaturasScreenGrants() {
         seedLeavesForScreenHolders(key, { ...path, submenuPrefix: `${path.submenuPrefix}/${icon}` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas'], "the QR's Temperaturas screen");
     });
 }
+// Operaciones > QR's > Seguridad: la reciben, una sola vez, quienes ya tienen el icono del QR de seguridad en el Layout (mismos niveles y reglas que los demás sembrados).
+const QR_SEGURIDAD_SCREEN_SEED_KEY = 'seed-qrs-seguridad-screen-v1';
+function seedQrSeguridadScreenGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(QR_SEGURIDAD_SCREEN_SEED_KEY, { ...path, submenuPrefix: `${path.submenuPrefix}/iconLayoutQrSeguridad` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-seguridad'], "the QR's Seguridad screen");
+}
 // Operaciones > QR's > Pedido manual: la reciben, una sola vez, quienes ya tienen el botón QR de la pantalla Pedido Manual (colPmQr).
 // Catálogos > Nuestras Marcas (2026-11-10): la pantalla nueva la reciben, una sola vez, quienes ya tienen Unidad de Medida por Distribución (ahí se eligen las marcas).
 const MARCAS_SCREEN_SEED_KEY = 'seed-marcas-catalog-screen-v1';
@@ -12491,6 +12498,7 @@ seedQrLimpiezaScreenGrants();
 seedQrTemperaturasScreenGrants();
 seedQrPedidoManualScreenGrants();
 seedMarcasScreenGrants();
+seedQrSeguridadScreenGrants();
 seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();

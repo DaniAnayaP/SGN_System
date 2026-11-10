@@ -8371,7 +8371,7 @@ app.get('/api/business/layout/cleaning-qr', requireAuth, (req, res) => {
     res.json(cleaningQrList(req, row));
 });
 // Operaciones > QR's: cada app con QR se puede hacer desde la computadora (se abre la misma pantalla que abre el QR). Cada entrada pide la hoja de su pantalla en el árbol; el administrador del cliente no depende de hojas.
-const QR_APP_SCREENS = { limpieza: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza', temperaturas: 'cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas', pedidoManual: 'cat-operaciones/cat-operaciones-centro-dist-qr-pedido-manual' };
+const QR_APP_SCREENS = { limpieza: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza', temperaturas: 'cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas', pedidoManual: 'cat-operaciones/cat-operaciones-centro-dist-qr-pedido-manual', seguridad: 'cat-operaciones/cat-operaciones-centro-dist-qr-seguridad' };
 function canUseQrApp(req, key) {
     return !!req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), 'supply-chain', 'sc-area-distribution-center', QR_APP_SCREENS[key]);
 }
@@ -8418,6 +8418,23 @@ app.get('/api/business/qr-apps/pedido-manual', requireAuth, (req, res) => {
     const center = getCostCenterAnyLane(row.costCenterId, req.user.clientId);
     res.set('Cache-Control', 'no-store');
     res.json({ siteName: row.layout.siteName || '', zones: [], spaces: [{ key: `pm:${row.costCenterId}`, id: `pm:${row.costCenterId}`, kind: 'center', code: center ? center.name : '', siteName: row.layout.siteName || '', zoneId: '', zoneName: '', locator: '', path: `/pm/${token}` }] });
+});
+// QR's > Seguridad: los elementos de seguridad del Layout (extintores, hidrantes, puertas de emergencia, botiquines…), cada uno con la dirección fija de su QR (/g/…): quien lo hace desde la computadora marca si está bien o con falla,
+// deja una nota y toma la foto con la cámara de la computadora, y queda en Operaciones > Seguridad igual que desde el celular.
+app.get('/api/business/qr-apps/seguridad', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!canUseQrApp(req, 'seguridad')) return res.status(403).json({ message: 'No tienes permiso para esta pantalla.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0);
+    const layout = row.layout;
+    const zones = (layout.zones || []).filter((z) => z.active !== false);
+    const spaces = (layout.safety || []).slice(0, 600).map((e) => {
+        const zone = zones.find((z) => z.id === e.zoneId);
+        return { key: e.id, id: e.id, code: e.code, type: e.type, name: e.name || '', zoneId: e.zoneId || '', zoneName: zone ? zone.name : '', locator: [zone && zone.code, e.code].filter(Boolean).join('.'), path: `/g/${token}/${e.id}` };
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ siteName: layout.siteName || '', zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
 });
 
 // --- Temperaturas (Operaciones > C. Distribución) ------------------------------------------------------------------------------------------------

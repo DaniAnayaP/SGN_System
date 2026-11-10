@@ -2212,6 +2212,9 @@
         },
         {
           "id": "cat-operaciones-centro-dist-qr-pedido-manual", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrPedidoManual", "icon": "bx-cart", "href": "OpCentroDistQrPedidoManual.html"
+        },
+        {
+          "id": "cat-operaciones-centro-dist-qr-seguridad", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrSeguridad", "icon": "bx-shield-quarter", "href": "OpCentroDistQrSeguridad.html"
         }
       ],
       "cat-admin": [
