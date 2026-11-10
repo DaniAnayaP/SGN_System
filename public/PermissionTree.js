@@ -1769,6 +1769,7 @@
             iconLayoutFormatoHuella: 'bx-palette',
             iconLayoutFormatoPiso: 'bx-palette',
             iconLayoutFormatoEspacio: 'bx-palette',
+            iconLayoutPiezas: 'bx-package',
             iconLayoutMedidas: 'bx-ruler',
             iconLayoutArea: 'bx-area',
             iconLayoutNombres: 'bx-rename',

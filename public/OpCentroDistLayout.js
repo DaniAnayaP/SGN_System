@@ -770,6 +770,7 @@ function applyLegend() {
         step: () => stepOn('obstaculos') && some('obstacles', (o) => o.kind === 'step'),
         footprint: () => (stepOn('espacios') || stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones')) && some('footprints', (f) => f.active !== false),
         asset: () => (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones')) && some('spaces', (s) => s.active !== false),
+        pieces: (type) => piecesVisible() && state.pieces.some((p) => (type === 'free' ? (p.leftD > 0.5 || p.leftH > 0.5) : (type === '2' ? p.level >= 2 : String(p.level) === type))),
         object: (type) => stepOn('objetos') && some('objects', (o) => o.type === type),
         transit: (type) => stepOn('transito') && some('transit', (p) => (type === 'between' ? p.type === 'between' : p.type !== 'between')),
         safety: (type) => { const [tp, model] = String(type).split(':'); return stepOn('seguridad') && some('safety', (e) => e.type === tp && (tp !== 'hydrant' || LC.hydrantModelOf(e) === (model || 'column'))); },
@@ -2003,6 +2004,32 @@ function drawPositionsOverlay() {
     };
     const f1 = (v) => v.toFixed(1);
     const spt = (px, py) => { const a = turn(px, py); return [view.ox + (a[0] - view.x0) * view.sc, view.oy + (a[1] - view.y0) * view.sc]; };
+    // Las piezas de UNA capa dentro de su posición, vistas desde arriba (las celdas vienen en cm desde la esquina del fondo-izquierda de la posición), con su rótulo «27 · 324 pz» y, punteada, la franja que sobra de fondo.
+    // x0, y0 = esquina de la posición en el plano (m) y pw, pd = lo que mide (m); r = su cuadro en pantalla.
+    const drawPieces = (pc, x0, y0, pw, pd, r) => {
+        const fx = pw / pc.box.l;
+        const fy = pd / pc.box.w;
+        const cls = `lv${Math.min(pc.level, 2)}`;
+        const k = view.sc * fx;
+        pc.cells.forEach((cell) => {
+            if (cell.r) {
+                const [cx, cy] = spt(x0 + cell.cx * fx, y0 + cell.cy * fy);
+                add('circle', { class: `pos-ov-pc ${cls}`, cx: f1(cx), cy: f1(cy), r: f1(Math.max(cell.r * k - 0.15, 0.3)) });
+            } else {
+                const a = spt(x0 + cell.x * fx, y0 + cell.y * fy);
+                const b2 = spt(x0 + (cell.x + cell.l) * fx, y0 + (cell.y + cell.w) * fy);
+                add('rect', { class: `pos-ov-pc ${cls}`, x: f1(Math.min(a[0], b2[0]) + 0.2), y: f1(Math.min(a[1], b2[1]) + 0.2), width: f1(Math.max(Math.abs(b2[0] - a[0]) - 0.4, 0.2)), height: f1(Math.max(Math.abs(b2[1] - a[1]) - 0.4, 0.2)) });
+            }
+        });
+        if (pc.leftD > 0.5) {
+            const a = spt(x0, y0 + (pc.box.w - pc.leftD) * fy);
+            const b2 = spt(x0 + pw, y0 + pd);
+            const sx = Math.min(a[0], b2[0]); const sy = Math.min(a[1], b2[1]); const sw = Math.abs(b2[0] - a[0]); const sh = Math.abs(b2[1] - a[1]);
+            add('rect', { class: 'pos-ov-free', x: f1(sx), y: f1(sy), width: f1(sw), height: f1(sh) });
+            if (sh >= 7 && sw >= 40) add('text', { class: 'pos-ov-pt', x: f1(sx + sw / 2), y: f1(sy + sh / 2 + 1.8), 'text-anchor': 'middle' }, t('main.layoutPcSobraFondo', { d: pc.leftD }));
+        }
+        if (r.w >= 34 && r.h >= 16) add('text', { class: 'pos-ov-pt', x: f1(r.x + r.w / 2), y: f1(r.y + r.h - 2.5), 'text-anchor': 'middle' }, `${pc.count} · ${pc.capacity} ${t('main.relPackPz')}`);
+    };
     // lo marcado se junta por activo y nivel: cada nivel se dibuja una vez, con todo lo marcado en él
     const canDragBays = state.mode === 'edit' && state.focus === 'posiciones' && canEdit('posiciones');
     const canDragPos = state.mode === 'edit' && state.focus === 'ubicaciones' && canEdit('ubicaciones'); // en el paso Posiciones cada posición se arrastra dentro de su espacio
@@ -2051,6 +2078,8 @@ function drawPositionsOverlay() {
                 if (chosen) faceJobs.push({ r: { x: s.x + rc.x + p.x * kx, y: s.y + rc.y + p.y * kz, w: p.l * kx, d: p.w * kz }, faces: LC.facesOfPosition(s, p) });
                 add('rect', { class: `pos-ov-pos${chosen ? ' chosen' : ''}${dim}`, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)) });
                 if (canDragPos && !ambient) add('rect', { class: 'pos-ov-hit', 'data-poshit': p.id, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)), fill: 'transparent', 'pointer-events': 'all', style: 'cursor:move' });
+                const piece = piecesVisible() ? pieceAt(s.id, lv, c, p.num) : null;
+                if (piece && Array.isArray(piece.cells)) drawPieces(piece, s.x + rc.x + p.x * kx, s.y + rc.y + p.y * kz, p.l * kx, p.w * kz, r);
                 if (r.w >= 17 && r.h >= 8) add('text', { class: `pos-ov-t${dim}`, x: f1(r.x + r.w / 2), y: f1(r.y + r.h / 2 + 2.5), 'text-anchor': 'middle' }, `P${ubicPad(p.num)}`);
             });
         }
@@ -4101,6 +4130,41 @@ Object.entries(TEXT_GROUPS).forEach(([g, o]) => {
         applyTextGroups();
     });
 });
+// Piezas que caben en cada posición (Relación Código > «Se acomoda»): se leen aparte (GET /layout/pieces, con la hoja iconLayoutPiezas) y se dibujan, en el croquis y en el 3D, con el paso Posiciones encendido.
+// El botón «Piezas que caben» del menú Textos las apaga o las enciende (se recuerda en este navegador). Es solo de pantalla: no cambia lo guardado.
+const PIECES_KEY = 'sgn_layout_pieces';
+state.pieces = [];
+state.piecesOff = false;
+try { state.piecesOff = localStorage.getItem(PIECES_KEY) === '0'; } catch (err) { /* sin almacenamiento: se ven */ }
+let pieceMap = new Map();
+const piecesVisible = () => !!(state.perms && state.perms.canTogglePieces) && !state.piecesOff && stepOn('ubicaciones') && state.pieces.length > 0;
+const pieceAt = (spaceId, n, c, p) => pieceMap.get(`${spaceId}|${n}|${c}|${p}`) || null;
+async function loadPieces() {
+    state.pieces = [];
+    pieceMap = new Map();
+    if (!(state.perms && state.perms.canTogglePieces) || !state.centerId) return;
+    try {
+        const res = await fetch(layoutUrl('/api/business/layout/pieces'), { credentials: 'include' });
+        if (!res.ok) return;
+        const body = await res.json();
+        state.pieces = Array.isArray(body.pieces) ? body.pieces : [];
+        pieceMap = new Map(state.pieces.map((p) => [`${p.spaceId}|${p.n}|${p.c}|${p.p}`, p]));
+    } catch (err) { console.error('Layout: no se pudieron cargar las piezas', err); }
+}
+function updatePiecesBtn() {
+    const btn = $('layout-pieces-btn');
+    if (!btn) return;
+    btn.hidden = !(state.perms && state.perms.canTogglePieces);
+    btn.setAttribute('aria-pressed', String(!state.piecesOff));
+    btn.classList.toggle('off', !!state.piecesOff);
+}
+$('layout-pieces-btn').addEventListener('click', () => {
+    state.piecesOff = !state.piecesOff;
+    try { localStorage.setItem(PIECES_KEY, state.piecesOff ? '0' : '1'); } catch (err) { /* no se recuerda */ }
+    updatePiecesBtn();
+    applyLegend();
+    if (state.draft) { renderSvg(); scheduleScene3d(); }
+});
 // Icono Girar el croquis: da un cuarto de vuelta a la derecha cada vez (0°, 90°, 180°, 270°); se recuerda en este navegador y la hoja que se descarga sale con ese giro.
 const ROTATION_KEY = 'sgn_layout_rotation';
 function updateRotateBtn() {
@@ -4212,6 +4276,8 @@ async function loadLayout(opts = {}) {
             }
         } catch (err) { console.error('Layout: no se pudo cargar el plano', err); }
     }
+    await loadPieces();
+    updatePiecesBtn();
     state.loaded = true;
     if (state.mode !== 'edit') showAllLayers(); // en «Ver» se ve todo el Layout al entrar
     if (state.draft) showEditor(); else showEmpty();
@@ -5796,7 +5862,7 @@ function refreshScene3d() {
         picker3d.setFocus(fv3.focus ? fv3.focus.spaces : null);
         scene3d.setHiddenAssets(picker3d.getHidden(), false, !!state.findDim);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { positions: stepOn('ubicaciones'), bayFmt: stepOn('posiciones') ? (state.draft.bayFmt || {}) : null, fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { positions: stepOn('ubicaciones'), pieces: piecesVisible() ? state.pieces : [], bayFmt: stepOn('posiciones') ? (state.draft.bayFmt || {}) : null, fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');
@@ -5878,7 +5944,7 @@ async function setView3d(on) {
 // Textos: UN solo botón con una lista en vez de un icono por cada texto que se puede ocultar. En 2D la lista trae los nombres, los m² y las medidas de las zonas; en 3D, los rótulos. Cada renglón sigue siendo el
 // mismo interruptor de siempre (con su permiso del árbol: solo lo ve quien lo tiene) y, si en la vista elegida no hay ninguno que se vea, el botón no sale.
 function updateTextsMenu() {
-    const ids = state.view3d ? ['layout-3d-labels'] : ['layout-names-btn', 'layout-area-btn', 'layout-measures-btn', ...Object.values(TEXT_GROUPS).map((o) => o.id)];
+    const ids = state.view3d ? ['layout-3d-labels', 'layout-pieces-btn'] : ['layout-names-btn', 'layout-area-btn', 'layout-measures-btn', 'layout-pieces-btn', ...Object.values(TEXT_GROUPS).map((o) => o.id)];
     const any = ids.some((id) => !$(id).hidden);
     $('layout-texts').hidden = !any;
     if (!any) closeOptMenus();

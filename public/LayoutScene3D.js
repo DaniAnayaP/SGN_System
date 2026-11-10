@@ -195,6 +195,7 @@
         let dimLayers = new Set();
         // El nivel enfocado de un activo { id, n, mode: 'dim' | 'hide' }: los demás niveles de ese activo se apagan o se quitan.
         let bayFmtOn = null; // con el paso Espacios encendido: { 'número de espacio': formato propio } (los demás llevan el de fábrica de su número); null = los espacios no llevan color propio
+        let pieceMap = new Map(); // las piezas que caben en cada posición (Relación Código): 'activo|nivel|espacio|posición' -> { level, cells (una capa, cm), layers, layerHeight, box }
         let posOn = false; // con el paso Posiciones encendido: cada posición de los anaqueles se dibuja en su lugar (caja con borde y su P001…)
         let focusLevels = []; // los niveles (o espacios o posiciones) que el Enfoque deja dibujados: [{ id, n, c, p, mode, all }]
         let focusContainer = null; // el cuadro (nivel o posición) que el Enfoque dejó dibujado: a él se acerca la cámara (con varios, el cuadro que los junta)
@@ -609,6 +610,7 @@
             if (opts && 'rampsShow' in opts) rampsShow = !!opts.rampsShow;
             if (opts && 'dimLayers' in opts) dimLayers = new Set(opts.dimLayers || []);
             if (opts && 'positions' in opts) posOn = !!opts.positions;
+            if (opts && 'pieces' in opts) pieceMap = new Map((Array.isArray(opts.pieces) ? opts.pieces : []).map((pc) => [`${pc.spaceId}|${pc.n}|${pc.c}|${pc.p}`, pc]));
             if (opts && 'bayFmt' in opts) bayFmtOn = opts.bayFmt && typeof opts.bayFmt === 'object' ? { ...opts.bayFmt } : null;
             if (opts && 'focusLevel' in opts) focusLevels = Array.isArray(opts.focusLevel) ? opts.focusLevel.filter(Boolean) : (opts.focusLevel ? [opts.focusLevel] : []);
             if (opts && 'fronts' in opts) frontSides = opts.fronts || {}; // el lado del frente de cada activo, sacado de TODO el Layout (el que se ve puede traer sin pasillos)
@@ -1331,6 +1333,24 @@
             };
             const edges = [];
             const posEdges = []; const posFill = []; const posTags = []; // las posiciones (paso Posiciones): bordes, relleno suave y rótulos
+            // Las piezas que caben en una posición: cada celda de la capa (cm) se levanta por todas sus capas; cajas instanciadas y cilindros instanciados (con un tope para no poner lenta la pantalla).
+            const pcBoxes = []; const pcCyls = []; let pcCount = 0;
+            const PIECE_COLORS = [0x2a9d8f, 0xa93fb8, 0xd98a1f];
+            const PIECE_MAX = 30000;
+            const addPieceVolumes = (pc, minX, minZ, sizeX, sizeZ, yBase) => {
+                if (!pc || !Array.isArray(pc.cells) || !pc.box || !(pc.box.l > 0) || !(pc.box.w > 0) || !(pc.layers > 0) || pcCount + pc.cells.length * pc.layers > PIECE_MAX) return false;
+                const fx = sizeX / pc.box.l; const fz = sizeZ / pc.box.w; const lh = (pc.layerHeight || 0) * 0.01;
+                const col = PIECE_COLORS[Math.min(pc.level, 2)];
+                for (let i = 0; i < pc.layers; i += 1) {
+                    const y = yBase + (i + 0.5) * lh;
+                    pc.cells.forEach((cell) => {
+                        if (cell.r) pcCyls.push({ x: minX + cell.cx * fx, y, z: minZ + cell.cy * fz, r: cell.r * Math.min(fx, fz) * 0.96, h: lh * 0.97, c: col });
+                        else pcBoxes.push({ x: minX + (cell.x + cell.l / 2) * fx, y, z: minZ + (cell.y + cell.w / 2) * fz, sx: cell.l * fx * 0.98, sy: lh * 0.97, sz: cell.w * fz * 0.98, c: col });
+                    });
+                }
+                pcCount += pc.cells.length * pc.layers;
+                return true;
+            };
             const edgeBox = (x, y, z, sx, sy, sz, into) => {
                 const x0 = x - sx / 2; const x1 = x + sx / 2; const y0 = y - sy / 2; const y1 = y + sy / 2; const z0 = z - sz / 2; const z1 = z + sz / 2;
                 [[x0, y0, z0, x1, y0, z0], [x1, y0, z0, x1, y0, z1], [x1, y0, z1, x0, y0, z1], [x0, y0, z1, x0, y0, z0], [x0, y1, z0, x1, y1, z0], [x1, y1, z0, x1, y1, z1], [x1, y1, z1, x0, y1, z1], [x0, y1, z1, x0, y1, z0],
@@ -1411,6 +1431,7 @@
                         const sxC = pp ? pp.l * sxP : (rb ? rb.l : wC); const szC = pp ? pp.w * szP : s.d;
                         const xc = PX(pp ? bx0 + (pp.x + pp.l / 2) * sxP : (rb ? s.x + rb.x + rb.l / 2 : bx0 + (ci + 0.5) * wC));
                         const zc = PZ(pp ? by0 + (pp.y + pp.w / 2) * szP : s.y + s.d / 2);
+                        if (pp && cont && !solid) { const pcF = pieceMap.get(`${s.id}|${nz}|${cont}|${pp.num}`); if (pcF) addPieceVolumes(pcF, xc - sxC / 2, zc - szC / 2, sxC, szC, yB + beamC); }
                         if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, esp || ci + 1, false);
                         else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, esp || ci + 1, false);
                         if (!solid && !contPos.length) { const dV = rb ? rb.w : s.d; bayVolume(xc, yB + beamC + hC / 2, PZ(s.y + (rb ? rb.y : 0) + dV / 2), Math.max(sxC - gx, 0.02), hC, Math.max(dV - gz, 0.02), esp || ci + 1); }
@@ -1480,7 +1501,9 @@
                                     const xP = cx - s.l / 2 + rk.x + (p.x + p.l / 2) * kxP; const zP = cz - s.d / 2 + rk.y + (p.y + p.w / 2) * kzP;
                                     const sxP2 = Math.max(p.l * kxP - 0.01, 0.02); const szP2 = Math.max(p.w * kzP - 0.01, 0.02);
                                     edgeBox(xP, yBase + hP / 2, zP, sxP2, hP, szP2, posEdges);
-                                    posFill.push({ x: xP, y: yBase + hP / 2, z: zP, sx: sxP2, sy: hP, sz: szP2, c: 0x1fa89a });
+                                    const pcA = pieceMap.get(`${s.id}|${k}|${c}|${p.num}`);
+                                    const withPieces = !!pcA && addPieceVolumes(pcA, cx - s.l / 2 + rk.x + p.x * kxP, cz - s.d / 2 + rk.y + p.y * kzP, p.l * kxP, p.w * kzP, yBase);
+                                    if (!withPieces) posFill.push({ x: xP, y: yBase + hP / 2, z: zP, sx: sxP2, sy: hP, sz: szP2, c: 0x1fa89a });
                                     posTags.push({ text: `P${String(p.num).padStart(3, '0')}`, x: xP, y: yBase + hP + 0.09, z: zP });
                                 });
                             }
@@ -1519,6 +1542,17 @@
                 mesh.position.set(pd.x, pd.y, pd.z);
                 group.assets.add(mesh);
             });
+            if (pcBoxes.length) { const pb = instanced(group.assets, pcBoxes, mat); if (pb) pb.raycast = () => {}; }
+            if (pcCyls.length) {
+                const cm = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 14), mat, pcCyls.length);
+                const dm = new THREE.Object3D();
+                const colr = new THREE.Color();
+                pcCyls.forEach((e, i) => { dm.position.set(e.x, e.y, e.z); dm.scale.set(e.r, e.h, e.r); dm.updateMatrix(); cm.setMatrixAt(i, dm.matrix); cm.setColorAt(i, colr.setHex(e.c)); });
+                cm.instanceMatrix.needsUpdate = true;
+                cm.instanceColor.needsUpdate = true;
+                cm.raycast = () => {};
+                group.assets.add(cm);
+            }
             if (posFill.length) {
                 const pf = instanced(group.assets, posFill, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false }));
                 if (pf) pf.raycast = () => {}; // las posiciones no tapan los toques al activo

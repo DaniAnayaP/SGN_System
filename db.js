@@ -2382,6 +2382,9 @@ for (const col of ['units_per_layer', 'layers_per_pallet', 'max_stack']) {
     if (!skuItemColumns.some((c) => c.name === col)) db.exec(`ALTER TABLE sku_items ADD COLUMN ${col} INTEGER NOT NULL DEFAULT 0`);
 }
 if (!skuItemColumns.some((c) => c.name === 'storage_type')) db.exec("ALTER TABLE sku_items ADD COLUMN storage_type TEXT NOT NULL DEFAULT ''");
+// Empaques del código (para saber cuántas piezas caben en una posición): JSON { main: { shape, lay }, levels: [{ name, shape, l, w, h, pieces, lay }] } (medidas en cm; ver public/PackCalc.js). '' = sin capturar.
+// Es opcional: no cuenta para los 24 datos que completan un código.
+if (!skuItemColumns.some((c) => c.name === 'packaging')) db.exec("ALTER TABLE sku_items ADD COLUMN packaging TEXT NOT NULL DEFAULT ''");
 // Un código ya completo se ve en Catálogos > Códigos (solo lectura). Al elegir Editar pasa a Operaciones > Edición Código (editing = 1), donde se corrige, y al terminar
 // la edición regresa a Códigos. Alta Nuestros Artículos solo muestra los incompletos que no están en edición.
 if (!skuItemColumns.some((c) => c.name === 'editing')) {
@@ -2436,6 +2439,8 @@ if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name ==
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'row_no')) db.exec('ALTER TABLE code_relations ADD COLUMN row_no INTEGER');
 // Clasificación del producto en ese lugar: activo | cuarentena | aclaracion | consigna (ver CODE_RELATION_CLASSES en server.js). Vive en la relación (no en el sub almacén ni en el código); lo que ya había queda como Producto Activo.
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'classification')) db.exec("ALTER TABLE code_relations ADD COLUMN classification TEXT NOT NULL DEFAULT 'activo'");
+// Qué se acomoda en el lugar de la relación: 0 = el material principal, 1… = el empaque primario, secundario… del código (ver sku_items.packaging); NULL = sin elegir. De ahí salen cuántas piezas caben.
+if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'pack_level')) db.exec('ALTER TABLE code_relations ADD COLUMN pack_level INTEGER');
 
 // public_token: set once (see maybeIssuePublicToken in server.js) the
 // instant an artículo's own 24 fields are all filled in -- the opaque id a
@@ -5213,6 +5218,8 @@ const SKU_ITEM_PATCHABLE_FIELDS = {
     maxStack: { column: 'max_stack', fieldKey: 'main.colArticuloMaxEstiba', optional: true },
     // Clasificación: opcional, no cuenta para los 24 datos que completan un código (ver isSkuItemComplete en server.js); se guarda el id (ver classification_id arriba).
     classificationId: { column: 'classification_id', fieldKey: 'main.colArticuloClasificacion', optional: true },
+    // Empaques (primario, secundario…), su forma y sus medidas: opcional, no cuenta para los 24 datos; se guarda el JSON canónico (ver sanitize en public/PackCalc.js).
+    packaging: { column: 'packaging', fieldKey: 'main.colArticuloEmpaques', optional: true },
 };
 
 // Cuántos códigos tienen una clasificación (o, con categoryName, los de esa Categoría Inventario que la tienen): impide borrarla o quitársela a su categoría con códigos puestos.
@@ -6295,8 +6302,10 @@ const CODE_RELATION_PATCHABLE_FIELDS = {
     slot: { column: 'slot', fieldKey: 'main.colRelEspacio' },
     position: { column: 'position', fieldKey: 'main.colRelPosicion' },
     classification: { column: 'classification', fieldKey: 'main.colRelClasificacion' },
+    packLevel: { column: 'pack_level', fieldKey: 'main.colRelSeAcomoda' },
 };
-const CODE_RELATION_SELECT = `SELECT r.*, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.record_number AS sku_number
+const CODE_RELATION_SELECT = `SELECT r.*, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.record_number AS sku_number,
+        s.length AS sku_length, s.width AS sku_width, s.height AS sku_height, s.packaging AS sku_packaging
     FROM code_relations r LEFT JOIN sku_items s ON s.id = r.sku_item_id`;
 
 function listCodeRelations(clientId, forTestAccount = false) {
@@ -6311,11 +6320,11 @@ function createCodeRelation({ clientId, isTestData = false, values }) {
     const recordNumber = db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM code_relations WHERE client_id = ? AND is_test_data = ?')
         .get(clientId, isTestData ? 1 : 0).n;
-    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, position, classification, is_test_data)
-        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @position, @classification, @isTestData)`).run({
+    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, position, classification, pack_level, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @position, @classification, @packLevel, @isTestData)`).run({
         clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0,
         skuItemId: values.skuItemId, costCenterId: values.costCenterId ?? null, warehouseId: values.warehouseId ?? null, subWarehouseId: values.subWarehouseId ?? null,
-        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null, position: values.position ?? null, classification: values.classification || 'activo',
+        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null, position: values.position ?? null, classification: values.classification || 'activo', packLevel: values.packLevel ?? null,
     });
     return getCodeRelationById(result.lastInsertRowid, clientId, isTestData);
 }
@@ -6359,7 +6368,7 @@ function findCodeRelationDuplicate(clientId, forTestAccount, v, exceptId = 0) {
 // Búsqueda de artículos por SKU (con ceros), UPC o descripción para el selector de código.
 function searchSkuItems(clientId, term, forTestAccount = false, limit = 20) {
     const like = `%${String(term || '').trim().replace(/[%_]/g, '')}%`;
-    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom FROM sku_items
+    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, length, width, height, packaging FROM sku_items
         WHERE client_id = ? AND is_test_data = ? AND (printf('%06d', record_number) LIKE ? OR upc LIKE ? OR unique_description LIKE ? OR known_description LIKE ? OR custom_description LIKE ?)
         ORDER BY record_number ASC LIMIT ?`).all(clientId, forTestAccount ? 1 : 0, like, like, like, like, like, limit);
 }

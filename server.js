@@ -6111,9 +6111,46 @@ function prepareSkuClassificationPatch(req, existing, patch) {
     return { patch: { ...patch, classificationId: id } };
 }
 
+// Empaques del código (JSON en sku_items.packaging; ver public/PackCalc.js): se lee siempre limpio y se valida antes de guardar.
+const PackCalc = require('./public/PackCalc.js');
+const PACK_ORDINALS = ['Material principal', 'Empaque primario', 'Empaque secundario', 'Empaque terciario', 'Empaque cuaternario', 'Empaque quinto', 'Empaque sexto'];
+function parsePackaging(text) {
+    if (!text) return null;
+    try { return PackCalc.sanitize(JSON.parse(text)); } catch { return null; }
+}
+const packLevelLabel = (level, lv) => `${PACK_ORDINALS[level] || `Empaque ${level}`}${lv && lv.name ? ` · ${lv.name}` : ''}`;
+// Lo que se escribe en el historial del cambio de empaques: un renglón corto por nivel.
+function packagingSummary(text) {
+    const p = parsePackaging(text);
+    if (!p) return '';
+    const shapeOf = (s) => (s === 'cilindrica' ? 'cilíndrica' : 'rectangular');
+    return [`Principal: ${shapeOf(p.main.shape)}${p.main.lay ? ', se puede acostar' : ''}`, ...p.levels.map((lv, i) => `${PACK_ORDINALS[i + 1]}${lv.name ? ` (${lv.name})` : ''}: ${shapeOf(lv.shape)} ${lv.shape === 'cilindrica' ? `Ø${lv.l}` : `${lv.l}×${lv.w}`}×${lv.h} cm, ${lv.pieces} pz${lv.lay ? ', se puede acostar' : ''}`)].join(' | ');
+}
+// '' / null / {} = quitar los empaques; si no, hasta 6 niveles con forma, medidas y piezas válidas (cilindro: diámetro en largo).
+function validatePackagingInput(raw) {
+    if (raw === '' || raw == null) return '';
+    if (typeof raw !== 'object' || Array.isArray(raw)) return 'Empaques: el formato no es válido.';
+    if (raw.main != null && (typeof raw.main !== 'object' || (raw.main.shape != null && !['rectangular', 'cilindrica'].includes(raw.main.shape)))) return 'Material principal: elige una forma de la lista (rectangular o cilíndrica).';
+    const levels = raw.levels == null ? [] : raw.levels;
+    if (!Array.isArray(levels) || levels.length > 6) return 'Empaques: máximo 6 niveles (primario, secundario, terciario…).';
+    for (let i = 0; i < levels.length; i += 1) {
+        const lv = levels[i];
+        const where = PACK_ORDINALS[i + 1];
+        if (!lv || typeof lv !== 'object') return `${where}: el formato no es válido.`;
+        if (!['rectangular', 'cilindrica'].includes(lv.shape)) return `${where}: elige la forma (rectangular o cilíndrica).`;
+        if (lv.name != null && (typeof lv.name !== 'string' || lv.name.length > 60)) return `${where}: el nombre es muy largo (máximo 60 letras).`;
+        const dims = lv.shape === 'cilindrica' ? [lv.l, lv.h] : [lv.l, lv.w, lv.h];
+        if (!dims.every((v) => Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) <= 100000)) return `${where}: escribe ${lv.shape === 'cilindrica' ? 'el diámetro y el alto' : 'largo, ancho y alto'} en cm, mayores a 0.`;
+        const pieces = Number(lv.pieces);
+        if (!Number.isInteger(pieces) || pieces < 1 || pieces > 1000000) return `${where}: las piezas que trae son un número entero mayor a 0.`;
+    }
+    return '';
+}
+
 function mapSkuItemRecord(row, pendingByRecord, companyName) {
     if (!row) return row;
     return {
+        packaging: parsePackaging(row.packaging),
         id: row.id,
         registroUnico: row.db_id,
         sku: String(row.record_number).padStart(6, '0'),
@@ -6417,10 +6454,17 @@ app.patch('/api/business/sku-items/:id', requireAuth, requireCostCenter, (req, r
     const { baseline, overrideConflicts, ...rawPatch } = req.body || {};
     const stackingError = validateSkuStackingPatch(rawPatch);
     if (stackingError) return res.status(400).json({ message: stackingError });
+    // Empaques: se revisa y se guarda como JSON canónico (o '' para quitarlos)
+    if (Object.prototype.hasOwnProperty.call(rawPatch, 'packaging')) {
+        const packagingError = validatePackagingInput(rawPatch.packaging);
+        if (packagingError) return res.status(400).json({ message: packagingError });
+        const clean = rawPatch.packaging ? PackCalc.sanitize(rawPatch.packaging) : null;
+        rawPatch.packaging = clean ? JSON.stringify(clean) : '';
+    }
     const prepared = prepareSkuClassificationPatch(req, existing, rawPatch);
     if (prepared.error) return res.status(prepared.error.status).json({ message: prepared.error.message });
     const { clientId: skuClientId, isTestAccount: skuIsTest } = req.user;
-    const sanitizers = { classificationId: (v) => classificationNameOf(skuClientId, skuIsTest, v) };
+    const sanitizers = { classificationId: (v) => classificationNameOf(skuClientId, skuIsTest, v), packaging: (v) => packagingSummary(v) };
     const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, SKU_ITEM_PATCHABLE_FIELDS, 'nuestros-articulos', `#${existing.id}`, sanitizers, { baseline, overrideConflicts });
     let skuItem = updateSkuItem(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
     // Si cambió la Categoría Inventario y la clasificación que tenía ya no es de esa categoría, se quita sola (y queda en el historial).
@@ -6580,6 +6624,8 @@ function layoutPermissions(req) {
         canUseSensorQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrSensores'),
         // Imprimir los QR de seguridad (uno por elemento: extintor, hidrante, puerta de emergencia…) usa el icono QR de seguridad (hoja <pantalla>/iconLayoutQrSeguridad).
         canUseSafetyQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrSeguridad'),
+        // Ver las piezas que caben en cada posición (el empaque que se acomoda, de Relación Código) en el croquis y el 3D, y apagarlas, usa el icono Piezas (hoja <pantalla>/iconLayoutPiezas).
+        canTogglePieces: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutPiezas'),
     };
 }
 
@@ -6694,6 +6740,34 @@ app.get('/api/business/layout', requireAuth, (req, res) => {
         // Las revisiones por QR de los elementos de Seguridad (la última de cada uno y el día de la última que salió bien): con eso la pantalla calcula el estado y la próxima revisión que se recorre sola.
         safetyLast: row && (row.layout.safety || []).length ? getSafetyLast(req.user.clientId, row.costCenterId || 0) : {},
     });
+});
+
+// Las piezas que caben en cada posición del Layout de un centro de costos: una por cada relación de Relación Código que ya tiene lugar completo y «Se acomoda» elegido, con las celdas de UNA capa
+// (cm, desde la esquina del fondo-izquierda de la posición) para dibujarlas en el croquis y el 3D. Es solo de lectura; pide la hoja Piezas del Layout (iconLayoutPiezas).
+app.get('/api/business/layout/pieces', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const perms = layoutPermissions(req);
+    if (!perms.canTogglePieces) return res.status(403).json({ message: 'No tienes permiso para ver las piezas en el Layout.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    const ctx = codeRelationContext(req);
+    const layout = ctx.layoutFor(center.id);
+    const pieces = [];
+    listCodeRelations(req.user.clientId, req.user.isTestAccount).forEach((r) => {
+        if (r.pack_level == null || !r.space_id || !r.level || !r.slot) return;
+        if (center.id && r.cost_center_id !== center.id) return;
+        const nums = layout.positions.get(`${r.space_id}|${r.level}|${r.slot}`) || [];
+        const posNum = r.position || (nums.length === 1 ? nums[0].num : 0);
+        const pack = codeRelationPack(r, layout, true);
+        if (!pack.packCount || !pack.packBox) return;
+        pieces.push({
+            id: r.id, sku: padSku(r.sku_number), spaceId: r.space_id, n: r.level, c: r.slot, p: posNum,
+            level: pack.packLevel, label: pack.packLabel, shape: pack.packShape, count: pack.packCount, layers: pack.packLayers, perLayer: pack.packPerLayer, pieces: pack.packPieces, capacity: pack.packCapacity,
+            leftH: pack.packLeftH, leftD: pack.packLeftD, box: pack.packBox, circle: pack.packCircle, layerHeight: pack.packLayerHeight, cells: pack.packCells,
+        });
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ pieces });
 });
 
 app.get('/api/business/layout/plan-image', requireAuth, (req, res) => {
@@ -9455,12 +9529,12 @@ const CODE_RELATION_MODULE_LABEL = 'Cadena de Suministro';
 const CODE_RELATION_SCREEN_LABEL = 'Relación Código';
 const CODE_RELATION_COLS = {
     skuItemId: 'colRelSku', costCenterId: 'colRelCentroCostos', warehouseId: 'colRelAlmacen', subWarehouseId: 'colRelSubAlmacen',
-    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio', position: 'colRelProfundidad', classification: 'colRelClasificacion', // la posición cuelga de la hoja que era «Profundidad» (ahora «Posición»)
+    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio', position: 'colRelProfundidad', classification: 'colRelClasificacion', packLevel: 'colRelSeAcomoda', // la posición cuelga de la hoja que era «Profundidad» (ahora «Posición»)
 };
 // Clasificación del producto en ese lugar. Se guarda la clave; sin decir nada es Producto Activo.
 const CODE_RELATION_CLASSES = { activo: 'Producto Activo', cuarentena: 'Producto Cuarentena', aclaracion: 'Producto Aclaración', consigna: 'Producto en Consigna' };
 // row y depth ya no se guardan: se siguen aceptando de las copias viejas de la App y de los archivos de antes, y se convierten en la posición (convertLegacyCell).
-const CODE_RELATION_INT_KEYS = ['skuItemId', 'costCenterId', 'warehouseId', 'subWarehouseId', 'level', 'slot', 'position', 'row', 'depth'];
+const CODE_RELATION_INT_KEYS = ['skuItemId', 'costCenterId', 'warehouseId', 'subWarehouseId', 'level', 'slot', 'position', 'row', 'depth', 'packLevel'];
 function convertLegacyCell(state, ctx, values) {
     if (state.row == null && state.depth == null) { delete state.row; delete state.depth; if (values) { delete values.row; delete values.depth; } return; }
     const layout = ctx.layoutFor(state.costCenterId);
@@ -9496,6 +9570,37 @@ function codeRelationContextFor(clientId, isTestAccount) {
     return { costCenters, warehouses, layoutFor, anyLayout, isCompleteCenter };
 }
 
+// La posición (largo × fondo × alto, en cm) donde está una relación: la del Layout, con el alto que tiene su espacio.
+function codeRelationPositionBox(layout, spaceId, level, slot, positionNum) {
+    const space = spaceId ? layout.spaceById.get(spaceId) : null;
+    if (!space || !level || !slot) return null;
+    const list = layout.positions.get(`${spaceId}|${level}|${slot}`) || [];
+    const p = list.find((x) => x.num === positionNum) || (list.length === 1 ? list[0] : null);
+    if (!p || !(p.l > 0) || !(p.w > 0)) return null;
+    const bm = LayoutCalc.bayMeasures(space, level, slot);
+    const h = p.h > 0 ? Math.min(p.h, bm.h) : bm.h;
+    return { l: Math.round(p.l * 1000) / 10, w: Math.round(p.w * 1000) / 10, h: Math.round(h * 1000) / 10 };
+}
+// Qué se acomoda en el lugar de la relación y cuántas piezas caben (PackCalc.fit). withCells = las celdas de UNA capa, para dibujarlas en el Layout.
+function codeRelationPack(row, layout, withCells) {
+    const out = { packLevel: row.pack_level == null ? null : row.pack_level, packLabel: '', packShape: '', packCount: null, packLayers: null, packPerLayer: null, packCapacity: null, packPieces: null, packLeftH: null, packLeftD: null, packBox: null };
+    if (row.pack_level == null) return out;
+    const levels = PackCalc.levelsOf({ length: row.sku_length, width: row.sku_width, height: row.sku_height, packaging: parsePackaging(row.sku_packaging) });
+    const lv = levels[row.pack_level];
+    if (!lv) return out;
+    out.packLabel = packLevelLabel(row.pack_level, lv);
+    out.packName = lv.name || '';
+    out.packShape = lv.shape;
+    out.packPieces = lv.pieces;
+    const nums = row.space_id && row.level && row.slot ? (layout.positions.get(`${row.space_id}|${row.level}|${row.slot}`) || []) : [];
+    const box = codeRelationPositionBox(layout, row.space_id, row.level, row.slot, row.position || (nums.length === 1 ? nums[0].num : 0));
+    if (!box) return out;
+    const f = PackCalc.fit(box, lv);
+    Object.assign(out, { packCount: f.count, packLayers: f.layers, packPerLayer: f.perLayer, packCapacity: f.capacity, packLeftH: f.leftH, packLeftD: f.leftD, packBox: box });
+    if (withCells) Object.assign(out, { packCells: f.cells, packCircle: !!f.circle, packLayerHeight: f.layerHeight || 0 });
+    return out;
+}
+
 function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
     if (!row) return row;
     const cc = ctx.costCenters.get(row.cost_center_id);
@@ -9528,6 +9633,8 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
         locator: located && space && footprint && zone ? RelTemplate.formatLocator({ zoneName: zone.name, zoneCode: zone.code, footprintCode: footprint.code, spaceType: space.type, spaceCode: space.code, level: row.level, slot: row.slot, position: posNum || 1 }) : '',
         level: row.level, slot: row.slot, position: row.position || null, positionCount: nums.length,
         classification: row.classification || 'activo', classificationName: CODE_RELATION_CLASSES[row.classification || 'activo'] || '',
+        ...codeRelationPack(row, layout, false),
+        skuLength: row.sku_length || 0, skuWidth: row.sku_width || 0, skuHeight: row.sku_height || 0, skuPackaging: parsePackaging(row.sku_packaging),
         status: located ? 'located' : 'partial',
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({
@@ -9551,6 +9658,7 @@ function codeRelationSanitizers(ctx, req) {
         slot: (v) => (v == null ? '' : String(v)),
         position: (v) => (v == null ? '' : String(v)),
         classification: (v) => CODE_RELATION_CLASSES[v] || (v == null ? '' : String(v)),
+        packLevel: (v) => (v == null ? '' : (PACK_ORDINALS[Number(v)] || String(v))),
     };
 }
 
@@ -9578,7 +9686,13 @@ function normalizeCodeRelationInput(body) {
 function validateCodeRelationState(req, state, selfId, existing, ctx) {
     const { clientId, isTestAccount } = req.user;
     const bad = (message, status = 400) => ({ error: { status, message } });
-    if (!state.skuItemId || !getSkuItemById(state.skuItemId, clientId, isTestAccount)) return bad('Elige un código de Alta Artículos.');
+    const skuRow = state.skuItemId ? getSkuItemById(state.skuItemId, clientId, isTestAccount) : null;
+    if (!skuRow) return bad('Elige un código de Alta Artículos.');
+    // «Se acomoda»: el empaque elegido tiene que existir en el código y traer sus medidas (Alta Artículos).
+    if (state.packLevel != null) {
+        const lv = PackCalc.levelsOf({ length: skuRow.length, width: skuRow.width, height: skuRow.height, packaging: parsePackaging(skuRow.packaging) })[state.packLevel];
+        if (!lv || !(lv.l > 0 && lv.w > 0 && lv.h > 0)) return bad('Ese empaque no está capturado en Alta Artículos o le faltan las medidas. Captúralo primero en el código.');
+    }
     if (!CODE_RELATION_CLASSES[state.classification || 'activo']) return bad('La clasificación no es una de las del catálogo (Producto Activo, Cuarentena, Aclaración o en Consigna).');
     if (!state.costCenterId || !ctx.costCenters.has(state.costCenterId)) return bad('Elige un centro de costos.');
     if (!(existing && existing.cost_center_id === state.costCenterId) && !ctx.isCompleteCenter(state.costCenterId)) return bad('Ese centro de costos está incompleto o inactivo. Complétalo primero en Nuestros Centros Costos.');
@@ -9706,7 +9820,7 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
             footprints: idx.footprints.filter((f) => f.zoneId === z.id).map((f) => ({ id: f.id, code: f.code })),
             spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, footprintId: s.footprintId, levels: s.levels || 1, slots: LayoutCalc.maxSlots(s), slotsByLevel: LayoutCalc.slotsByLevelOf(s), bays: s.bays || [],
                 // las posiciones de cada espacio: [{ n, c, nums: [1, 2…] }] (las copias viejas de la App siguen leyendo bays)
-                positions: [...idx.positions.entries()].filter(([key]) => key.startsWith(`${s.id}|`)).map(([key, list]) => { const [, n, c] = key.split('|'); const bm = LayoutCalc.bayMeasures(s, Number(n), Number(c)); return { n: Number(n), c: Number(c), nums: list.map((p) => p.num), bl: bm.l, bw: bm.w, boxes: list.map((p) => ({ num: p.num, x: p.x, y: p.y, l: p.l, w: p.w })) }; }) })),
+                positions: [...idx.positions.entries()].filter(([key]) => key.startsWith(`${s.id}|`)).map(([key, list]) => { const [, n, c] = key.split('|'); const bm = LayoutCalc.bayMeasures(s, Number(n), Number(c)); return { n: Number(n), c: Number(c), nums: list.map((p) => p.num), bl: bm.l, bw: bm.w, bh: bm.h, boxes: list.map((p) => ({ num: p.num, x: p.x, y: p.y, l: p.l, w: p.w, h: p.h })) }; }) })),
         }));
     };
     const zonesByCenter = {};
@@ -9732,6 +9846,7 @@ app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
     res.json({
         skus: searchSkuItems(req.user.clientId, req.query.all === '1' ? '' : term, req.user.isTestAccount, limit).map((s) => ({
             id: s.id, sku: padSku(s.record_number), upc: s.upc || '', description: s.unique_description || s.known_description || s.custom_description || '', uom: s.main_uom || '',
+            length: s.length || 0, width: s.width || 0, height: s.height || 0, packaging: parsePackaging(s.packaging),
         })),
     });
 });
@@ -9820,7 +9935,7 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
             const place = placeNorm.values;
             const state = {
                 skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
-                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, position: existing.position, classification: existing.classification || 'activo', ...place,
+                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, position: existing.position, classification: existing.classification || 'activo', packLevel: existing.pack_level ?? null, ...place,
             };
             convertLegacyCell(state, ctx, place);
             const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
@@ -9875,7 +9990,7 @@ app.patch('/api/business/code-relations/:id', requireAuth, requireCostCenter, (r
     const ctx = codeRelationContext(req);
     const state = {
         skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
-        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, position: existing.position, classification: existing.classification || 'activo', ...norm.values,
+        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, position: existing.position, classification: existing.classification || 'activo', packLevel: existing.pack_level ?? null, ...norm.values,
     };
     convertLegacyCell(state, ctx, norm.values);
     const check = validateCodeRelationState(req, state, existing.id, existing, ctx);

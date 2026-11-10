@@ -2817,6 +2817,7 @@
     "colArticuloCantidadCama": "Units per Layer (TI)",
     "colArticuloCamasPallet": "Layers per Pallet (HI)",
     "colArticuloMaxEstiba": "Max Stacking",
+    "colArticuloEmpaques": "Packaging",
     "storageType_original": "By original UOM",
     "storageType_almacenamiento": "By storage UOM",
     "storageType_compra": "By purchase UOM",
@@ -3476,6 +3477,10 @@
     "relTplErr_rowRange": "Row \"{value}\" does not exist in that bay of rack {rack} (it has {max}).",
     "relTplErr_columnNeeded": "Rack {rack} has {max} spaces: the Locator must say which one (E001, E002…).",
     "colRelClasificacion": "Classification",
+    "colRelSeAcomoda": "What is placed",
+    "colRelForma": "Shape",
+    "colRelCaben": "Fit",
+    "colRelCapacidad": "Capacity (UDM)",
     "relClass_activo": "Active Product",
     "relClass_cuarentena": "Quarantine Product",
     "relClass_aclaracion": "Clarification Product",
@@ -3529,6 +3534,53 @@
     "relStatusLocated": "Located",
     "relStatusPartial": "Partial",
     "relEdit": "Edit relation",
+    "layoutTxtPiezas": "Pieces that fit",
+    "layoutLeyendaPc2": "Secondary packaging and up",
+    "layoutLeyendaSobra": "Space left over",
+    "layoutPcSobraFondo": "{d} cm of depth left over",
+    "relPackTitle": "What is placed",
+    "relPackNoCode": "Choose the code first.",
+    "relPackNoData": "This code has no measures or packaging captured in Alta Artículos.",
+    "relPackNoPlace": "Choose the full place (asset, level, space and position) to see how many pieces fit. You can already choose what is placed.",
+    "relPackBox": "The position measures {l} × {w} × {h} cm (length × depth × height). Choose what is placed in it:",
+    "relPackSuggested": "Suggested",
+    "relPackFitsN": "{n} {u} fit",
+    "relPackUnitMain": "pieces",
+    "relPackUnitPack": "packages",
+    "relPackPieces": "pieces (UDM)",
+    "relPackPz": "pcs",
+    "relPackLayers": "{k} layer(s) of {m}",
+    "relPackLeft": "{h} cm of height and {d} cm of depth left over",
+    "relPackNoFit": "Does not fit in this position",
+    "relPackBlocked": "What is placed does not fit in this position: choose another option or another position.",
+    "relPackTop": "Top view",
+    "layoutPiezasBtn": "Pieces that fit in each position",
+    "pkOpen": "Code packaging",
+    "pkTitle": "Code packaging",
+    "pkLevel": "Level",
+    "pkName": "What it is",
+    "pkShape": "Shape",
+    "pkLength": "Length / Ø (cm)",
+    "pkWidth": "Width (cm)",
+    "pkHeight": "Height (cm)",
+    "pkPieces": "Pieces it holds",
+    "pkLay": "Can lie down",
+    "pkNamePh": "Box of 12, master box…",
+    "pkRect": "Rectangular",
+    "pkCyl": "Cylindrical",
+    "pkNote": "The main material uses the table measures: Length, Width and Height (for a cylinder the diameter is the Length). Pieces are how many pieces of the main material each package holds. Everything stands upright by default.",
+    "pkAdd": "+ Add packaging (tertiary, other…)",
+    "pkRemove": "Remove this packaging",
+    "pkSave": "Save",
+    "pkSaved": "Packaging saved.",
+    "pkSummary": "{n} packagings",
+    "pkLevel0": "Main material",
+    "pkLevel1": "Primary packaging",
+    "pkLevel2": "Secondary packaging",
+    "pkLevel3": "Tertiary packaging",
+    "pkLevel4": "Quaternary packaging",
+    "pkLevel5": "Fifth packaging",
+    "pkLevel6": "Sixth packaging",
     "relUbicar": "Locate this code",
     "relUbicarTitle": "Locate code",
     "relUbicarTabSteps": "Step by step",
@@ -5056,6 +5108,38 @@
     "relEdit": {
       "what": "Changes the location of this row in the same window. Each field needs its own leaf in the tree.",
       "example": "Move the code from level 2 to level 3."
+    },
+    "layoutTxtPiezas": {
+      "what": "Shows or hides the pieces that fit in each position: what is placed according to Code Relation (“What is placed”) drawn with its best arrangement, in the plan (one layer seen from above, with the amount and the pieces) and in 3D (all layers). They only show with the Positions step on and in positions that already have a code and what is placed.",
+      "example": "a position with 27 boxes of 12 pieces looks full of boxes and says “27 · 324 pcs”."
+    },
+    "relSeAcomoda": {
+      "what": "Choose what goes in this position: the main material or its primary, secondary, tertiary packaging… Each option shows, from above, how many pieces of that size fit in the position (with the best arrangement) and how many pieces (UDM) that is in total. The suggested one holds the most pieces. Measures and packaging are captured in Alta Artículos. Tapping the chosen option again removes it.",
+      "example": "a position of 80 × 60 × 66 cm: the box of 12 holds 27 boxes (324 pieces) and the master box 2 boxes (192 pieces)."
+    },
+    "colRelSeAcomoda": {
+      "what": "What is placed in this position: the main material or one of its packagings. It is chosen when editing the relation.",
+      "example": "Primary packaging · Box of 12."
+    },
+    "colRelCaben": {
+      "what": "How many pieces of that size fit in the position with the best arrangement.",
+      "example": "27 packages."
+    },
+    "colRelCapacidad": {
+      "what": "The pieces (UDM) that fit in the position: how many fit times what each package holds.",
+      "example": "27 boxes of 12 pieces = 324 pcs."
+    },
+    "colRelForma": {
+      "what": "The shape of what is placed: rectangular or cylindrical. It is captured in Alta Artículos, in the code packaging.",
+      "example": "Cylindrical."
+    },
+    "colArticuloEmpaques": {
+      "what": "The code packaging: the main material and its primary, secondary, tertiary packaging… Each one with its shape (rectangular or cylindrical), its measures in cm and how many pieces it holds. With that, Code Relation and the Layout work out how many pieces fit in a position. It is optional.",
+      "example": "a cylindrical bottle 6.5 cm in diameter; its primary box of 12 bottles measures 26.5 × 20 × 19.5 cm; the master box holds 8 boxes (96 pieces)."
+    },
+    "pkAdd": {
+      "what": "Adds another packaging level (up to 6): primary, secondary, tertiary…",
+      "example": "after the box of 12 you add the master box of 8 boxes."
     },
     "relUbicar": {
       "what": "Locates this code in a place of the warehouse quickly: it opens a small window where you choose the place step by step or by searching its locator, and Zone, Footprint, Asset, Level, Space and Position fill themselves. It is saved when you press Save.",

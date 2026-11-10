@@ -2816,6 +2816,7 @@
     "colArticuloCantidadCama": "Cantidad por cama (TI)",
     "colArticuloCamasPallet": "Camas por pallet (HI)",
     "colArticuloMaxEstiba": "Máxima estiba",
+    "colArticuloEmpaques": "Empaques",
     "storageType_original": "Por UDM original",
     "storageType_almacenamiento": "Por UDM de almacenamiento",
     "storageType_compra": "Por UDM de compra",
@@ -3475,6 +3476,10 @@
     "relTplErr_rowRange": "La fila «{value}» no existe en ese hueco del estante {rack} (tiene {max}).",
     "relTplErr_columnNeeded": "El estante {rack} tiene {max} espacios: el Localizador debe decir cuál (E001, E002…).",
     "colRelClasificacion": "Clasificación",
+    "colRelSeAcomoda": "Se acomoda",
+    "colRelForma": "Forma",
+    "colRelCaben": "Caben",
+    "colRelCapacidad": "Capacidad (UDM)",
     "relClass_activo": "Producto Activo",
     "relClass_cuarentena": "Producto Cuarentena",
     "relClass_aclaracion": "Producto Aclaración",
@@ -3528,6 +3533,53 @@
     "relStatusLocated": "Ubicado",
     "relStatusPartial": "A medias",
     "relEdit": "Editar relación",
+    "layoutTxtPiezas": "Piezas que caben",
+    "layoutLeyendaPc2": "Empaque secundario y siguientes",
+    "layoutLeyendaSobra": "Espacio que sobra",
+    "layoutPcSobraFondo": "sobran {d} cm de fondo",
+    "relPackTitle": "Se acomoda",
+    "relPackNoCode": "Elige primero el código.",
+    "relPackNoData": "Este código no tiene medidas ni empaques capturados en Alta Artículos.",
+    "relPackNoPlace": "Elige el lugar completo (anaquel, nivel, espacio y posición) para ver cuántas piezas caben. Ya puedes elegir qué se acomoda.",
+    "relPackBox": "La posición mide {l} × {w} × {h} cm (largo × fondo × alto). Elige qué se acomoda en ella:",
+    "relPackSuggested": "Sugerida",
+    "relPackFitsN": "Caben {n} {u}",
+    "relPackUnitMain": "piezas",
+    "relPackUnitPack": "empaques",
+    "relPackPieces": "piezas (UDM)",
+    "relPackPz": "pz",
+    "relPackLayers": "{k} capa(s) de {m}",
+    "relPackLeft": "Sobran {h} cm de alto y {d} cm de fondo",
+    "relPackNoFit": "No cabe en esta posición",
+    "relPackBlocked": "Lo que se acomoda no cabe en esta posición: elige otra opción u otra posición.",
+    "relPackTop": "Vista desde arriba",
+    "layoutPiezasBtn": "Piezas que caben en cada posición",
+    "pkOpen": "Empaques del código",
+    "pkTitle": "Empaques del código",
+    "pkLevel": "Nivel",
+    "pkName": "Qué es",
+    "pkShape": "Forma",
+    "pkLength": "Largo / Ø (cm)",
+    "pkWidth": "Ancho (cm)",
+    "pkHeight": "Alto (cm)",
+    "pkPieces": "Piezas que trae",
+    "pkLay": "Se puede acostar",
+    "pkNamePh": "Caja de 12, caja master…",
+    "pkRect": "Rectangular",
+    "pkCyl": "Cilíndrica",
+    "pkNote": "El material principal usa las medidas de la tabla: Largo, Ancho y Alto (en un cilindro el diámetro es el Largo). Las piezas son cuántas piezas del material principal trae cada empaque. Por defecto todo va de pie.",
+    "pkAdd": "+ Agregar empaque (terciario, otro…)",
+    "pkRemove": "Quitar este empaque",
+    "pkSave": "Guardar",
+    "pkSaved": "Empaques guardados.",
+    "pkSummary": "{n} empaques",
+    "pkLevel0": "Material principal",
+    "pkLevel1": "Empaque primario",
+    "pkLevel2": "Empaque secundario",
+    "pkLevel3": "Empaque terciario",
+    "pkLevel4": "Empaque cuaternario",
+    "pkLevel5": "Empaque quinto",
+    "pkLevel6": "Empaque sexto",
     "relUbicar": "Ubicar este código",
     "relUbicarTitle": "Ubicar código",
     "relUbicarTabSteps": "Paso a paso",
@@ -5055,6 +5107,38 @@
     "relEdit": {
       "what": "Cambia la ubicación de este renglón en la misma ventana. Cada dato pide su propia hoja en el árbol.",
       "example": "Pasar el código del nivel 2 al nivel 3."
+    },
+    "layoutTxtPiezas": {
+      "what": "Muestra u oculta las piezas que caben en cada posición: lo que se acomoda según Relación Código («Se acomoda») dibujado con su mejor acomodo, en el croquis (una capa vista desde arriba, con la cantidad y las piezas) y en el 3D (todas las capas). Solo se ven con el paso Posiciones encendido y en las posiciones que ya tienen código y qué se acomoda.",
+      "example": "una posición con 27 cajas de 12 piezas se ve llena de cajas y dice «27 · 324 pz»."
+    },
+    "relSeAcomoda": {
+      "what": "Elige qué se pone en esta posición: el material principal o su empaque primario, secundario, terciario… Cada opción muestra, vista desde arriba, cuántas piezas de ese tamaño caben en la posición (con el mejor acomodo) y cuántas piezas (UDM) son en total. La sugerida es la que acomoda más piezas. Las medidas y los empaques se capturan en Alta Artículos. Volver a tocar la opción elegida la quita.",
+      "example": "una posición de 80 × 60 × 66 cm: la caja de 12 acomoda 27 cajas (324 piezas) y la caja master 2 cajas (192 piezas)."
+    },
+    "colRelSeAcomoda": {
+      "what": "Qué se acomoda en esta posición: el material principal o uno de sus empaques. Se elige al editar la relación.",
+      "example": "Empaque primario · Caja de 12."
+    },
+    "colRelCaben": {
+      "what": "Cuántas piezas de ese tamaño caben en la posición con el mejor acomodo.",
+      "example": "27 empaques."
+    },
+    "colRelCapacidad": {
+      "what": "Las piezas (UDM) que caben en la posición: lo que caben por lo que trae cada empaque.",
+      "example": "27 cajas de 12 piezas = 324 pz."
+    },
+    "colRelForma": {
+      "what": "La forma de lo que se acomoda: rectangular o cilíndrica. Se captura en Alta Artículos, en los empaques del código.",
+      "example": "Cilíndrica."
+    },
+    "colArticuloEmpaques": {
+      "what": "Los empaques del código: el material principal y su empaque primario, secundario, terciario… Cada uno con su forma (rectangular o cilíndrica), sus medidas en cm y cuántas piezas trae. Con eso Relación Código y el Layout calculan cuántas piezas caben en una posición. Es opcional.",
+      "example": "un frasco cilíndrico de 6.5 cm de diámetro; su caja primaria de 12 frascos mide 26.5 × 20 × 19.5 cm; la caja master trae 8 cajas (96 piezas)."
+    },
+    "pkAdd": {
+      "what": "Agrega otro nivel de empaque (hasta 6): primario, secundario, terciario…",
+      "example": "después de la caja de 12 agregas la caja master de 8 cajas."
     },
     "relUbicar": {
       "what": "Ubica este código en un lugar del almacén de forma rápida: abre una ventanita donde eliges el lugar paso a paso o buscándolo por su localizador, y se llenan solos Zona, Huella, Activo, Nivel, Espacio y Posición. Se guarda al pulsar Guardar.",

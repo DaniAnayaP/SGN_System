@@ -551,6 +551,7 @@
                                             <button type="button" class="layout-opt-item layout-only2d" id="layout-txt-floors-btn" data-txt-group="floors" data-help-key="layoutTxtOtros" aria-pressed="true" hidden><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><span data-i18n="main.layoutTxtPisos">Floors (code and level)</span></button>
                                             <button type="button" class="layout-opt-item layout-only2d" id="layout-txt-sensors-btn" data-txt-group="sensors" data-help-key="layoutTxtOtros" aria-pressed="true" hidden><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><span data-i18n="main.layoutTxtSensores">Sensor codes</span></button>
                                             <button type="button" class="layout-opt-item layout-only2d" id="layout-txt-safety-btn" data-txt-group="safety" data-help-key="layoutTxtOtros" aria-pressed="true" hidden><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><span data-i18n="main.layoutTxtSeguridad">Safety codes</span></button>
+                                            <button type="button" class="layout-opt-item" id="layout-pieces-btn" data-help-key="layoutTxtPiezas" aria-pressed="true" hidden><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><span data-i18n="main.layoutTxtPiezas">Pieces that fit</span></button>
                                             <button type="button" class="layout-opt-item layout-only3d" id="layout-3d-labels" data-help-key="layout3dLabels" aria-pressed="true"><i class="bx bx-check layout-opt-check" aria-hidden="true"></i><span data-i18n="main.layoutTxtRotulos">3D labels</span></button>
                                         </div>
                                     </div>
@@ -584,6 +585,10 @@
                                     <span data-lg="object" data-lg-type="person" hidden><i class="lg-person"></i><span data-i18n="main.layoutLeyendaPersona">Person</span></span>
                                     <span data-lg="object" data-lg-type="forklift" hidden><i class="lg-forklift"></i><span data-i18n="main.layoutLeyendaMontacargas">Forklift</span></span>
                                     <span data-lg="asset" hidden><i class="lg-space"></i><span data-i18n="main.layoutLeyendaEspacio">Rack, cabinet or pallet</span></span>
+                                    <span data-lg="pieces" data-lg-type="0" hidden><i class="lg-pc0"></i><span data-i18n="main.pkLevel0">Main material</span></span>
+                                    <span data-lg="pieces" data-lg-type="1" hidden><i class="lg-pc1"></i><span data-i18n="main.pkLevel1">Primary packaging</span></span>
+                                    <span data-lg="pieces" data-lg-type="2" hidden><i class="lg-pc2"></i><span data-i18n="main.layoutLeyendaPc2">Secondary packaging and up</span></span>
+                                    <span data-lg="pieces" data-lg-type="free" hidden><i class="lg-pcfree"></i><span data-i18n="main.layoutLeyendaSobra">Space left over</span></span>
                                     <span data-lg="transit" data-lg-type="main" hidden><i class="lg-aisle"></i><span data-i18n="main.layoutType_zone_aisle">Main aisle</span></span>
                                     <span data-lg="transit" data-lg-type="between" hidden><i class="lg-aisle2"></i><span data-i18n="main.layoutType_zone_aisle2">Aisle between racks</span></span>
                                     <span data-lg="safety" data-lg-type="extinguisher" hidden><i class="lg-sf lg-sf-extinguisher"></i><span data-i18n="main.layoutType_safety_extinguisher">Fire extinguisher</span></span>

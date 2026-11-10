@@ -119,6 +119,10 @@ function buildRow(r) {
         cell('colRelZona', r.zoneName), cell('colRelHuella', r.footprintCode), cell('colRelEstante', r.spaceCode), cell('colRelNivel', r.level), cell('colRelEspacio', r.slot), cell('colRelProfundidad', r.position), cell('colRelLocalizador', r.locator, 'rel-locator'),
         ubicarCell(r),
         classCell(r),
+        cell('colRelSeAcomoda', r.packLevel != null ? `${t(`main.pkLevel${r.packLevel}`)}${r.packName ? ` · ${r.packName}` : ''}` : ''),
+        cell('colRelForma', r.packShape ? t(r.packShape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect') : ''),
+        cell('colRelCaben', r.packCount != null ? `${r.packCount} ${t(r.packLevel === 0 ? 'main.relPackUnitMain' : 'main.relPackUnitPack')}` : ''),
+        cell('colRelCapacidad', r.packCapacity != null ? `${r.packCapacity} ${t('main.relPackPz')}` : ''),
         statusCell(r),
     );
     tr.appendChild(actionsCell(r, tr));
@@ -258,7 +262,8 @@ function centerChoices() {
     if (editing && editing.costCenterId && !list.some((c) => c.id === editing.costCenterId)) list.push({ id: editing.costCenterId, name: editing.centroCostos });
     return list;
 }
-const blankState = () => ({ sku: null, centro: opts && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', hue: '', est: '', niv: '', esp: '', pos: '', clas: 'activo' });
+const blankState = () => ({ sku: null, centro: opts && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', hue: '', est: '', niv: '', esp: '', pos: '', clas: 'activo', pack: '' });
+const skuCache = new Map(); // los códigos del buscador con sus medidas y empaques (para «Se acomoda»)
 const $m = (id) => document.getElementById(id);
 const byId = (list, id) => (list || []).find((x) => String(x.id) === String(id));
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
@@ -298,6 +303,11 @@ function ensureModal() {
                 <div class="rel-fld"><label>${esc(t('main.relPath'))}</label><div class="rel-path" id="rel-path" data-help-key="relPath"></div></div>
             </div>
         </div>
+        <div class="rel-pack" id="rel-pack" data-help-key="relSeAcomoda">
+            <div class="rel-fld"><label>${esc(t('main.relPackTitle'))}</label></div>
+            <div class="rel-muted" id="rel-pack-hint"></div>
+            <div class="rel-pack-opts" id="rel-pack-opts"></div>
+        </div>
         <div class="rel-foot">
             <span class="rel-muted" id="rel-msg"></span>
             <button type="button" class="btn btn-secondary" id="rel-clear">${esc(t('main.relClear'))}</button>
@@ -323,9 +333,18 @@ function ensureModal() {
             renderForm();
             return;
         }
+        const packCard = event.target.closest('[data-pack]');
+        if (packCard && !packCard.disabled) {
+            const lv = Number(packCard.dataset.pack);
+            st.pack = st.pack === lv ? '' : lv; // volver a tocar el elegido lo quita
+            renderForm();
+            return;
+        }
         const pick = event.target.closest('[data-sku]');
         if (pick) {
-            st.sku = { id: Number(pick.dataset.sku), sku: pick.dataset.skuCode, description: pick.dataset.desc, upc: pick.dataset.upc, uom: pick.dataset.uom };
+            const full = skuCache.get(Number(pick.dataset.sku)) || {};
+            st.sku = { id: Number(pick.dataset.sku), sku: pick.dataset.skuCode, description: pick.dataset.desc, upc: pick.dataset.upc, uom: pick.dataset.uom, length: full.length, width: full.width, height: full.height, packaging: full.packaging };
+            if (!packLevelsOf(st.sku)[Number(st.pack)]) st.pack = '';
             $m('rel-code').value = `${st.sku.sku} · ${st.sku.description}`;
             $m('rel-results').hidden = true;
             renderForm();
@@ -369,6 +388,7 @@ async function searchCodes() {
         const res = await fetch(`${API}/skus?q=${encodeURIComponent(q)}`, { credentials: 'include' });
         if (!res.ok) return;
         const { skus } = await res.json();
+        skus.forEach((s) => skuCache.set(s.id, s));
         box.innerHTML = skus.length
             ? skus.map((s) => `<button type="button" class="rel-result" data-sku="${s.id}" data-sku-code="${esc(s.sku)}" data-desc="${esc(s.description)}" data-upc="${esc(s.upc)}" data-uom="${esc(s.uom)}"><b>${esc(s.sku)}</b> ${esc(s.description)} <span class="rel-muted">${esc(s.upc)}</span></button>`).join('')
             : `<span class="rel-muted">${esc(t('main.relNoMatches'))}</span>`;
@@ -442,13 +462,72 @@ function renderForm() {
     fillSelect('rel-pos', freeNums.map((n) => ({ value: n, label: n })), nums.length > 1 ? t('main.relPositionShort') : '—', st.pos, !freeNums.length);
     drawRack(d.rack);
     drawPath(d);
-    const ready = st.sku && st.centro && st.alm;
+    const packState = renderPack(d, hasBay ? nums : []);
+    const ready = st.sku && st.centro && st.alm && !packState.blocked;
     $m('rel-save').disabled = !ready;
     const missing = [];
     if (!st.sku) missing.push(t('main.relMissingCode'));
     if (!st.centro) missing.push(t('main.relMissingCost')); else if (!st.alm) missing.push(t('main.relMissingWarehouse'));
     const located = (d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.pos || nums.length <= 1));
-    $m('rel-msg').textContent = ready ? t(located ? 'main.relReady' : 'main.relReadyPartial') : t('main.relMissing', { x: missing.join(' / ') });
+    $m('rel-msg').textContent = packState.blocked ? t('main.relPackBlocked') : (ready ? t(located ? 'main.relReady' : 'main.relReadyPartial') : t('main.relMissing', { x: missing.join(' / ') }));
+}
+
+// ---- «Se acomoda»: qué empaque se pone en la posición (el material principal, el primario, el secundario…) y cuántas piezas caben (public/PackCalc.js) ------------------------------------
+// Los empaques y sus medidas salen de Alta Artículos; la posición (largo × fondo × alto) sale del Layout. Cada opción se ve desde arriba con las piezas de una capa; la sugerida es la que acomoda más piezas.
+function packLevelsOf(sku) {
+    return window.PackCalc && sku ? window.PackCalc.levelsOf({ length: sku.length, width: sku.width, height: sku.height, packaging: sku.packaging }).filter((lv) => lv.l > 0 && lv.w > 0 && lv.h > 0) : [];
+}
+function packBoxCm(rack, niv, esp, pos) {
+    if (!rack || !niv || !esp) return null;
+    const g = (rack.positions || []).find((x) => x.n === Number(niv) && x.c === Number(esp));
+    if (!g || !Array.isArray(g.boxes) || !g.boxes.length) return null;
+    const b = g.boxes.find((x) => x.num === Number(pos)) || (g.boxes.length === 1 ? g.boxes[0] : null);
+    if (!b || !(b.l > 0) || !(b.w > 0)) return null;
+    const h = b.h > 0 ? Math.min(b.h, g.bh || b.h) : (g.bh || 0);
+    return { l: Math.round(b.l * 1000) / 10, w: Math.round(b.w * 1000) / 10, h: Math.round(h * 1000) / 10 };
+}
+const packName = (lv) => `${t(`main.pkLevel${lv.level}`)}${lv.name ? ` · ${lv.name}` : ''}`;
+function packTopSvg(box, f, level) {
+    const cls = `lv${Math.min(level, 2)}`;
+    const body = f.cells.map((c) => (c.r ? `<circle cx="${c.cx.toFixed(2)}" cy="${c.cy.toFixed(2)}" r="${(c.r - 0.15).toFixed(2)}" class="pk-c ${cls}"/>` : `<rect x="${(c.x + 0.2).toFixed(2)}" y="${(c.y + 0.2).toFixed(2)}" width="${Math.max(c.l - 0.4, 0.1).toFixed(2)}" height="${Math.max(c.w - 0.4, 0.1).toFixed(2)}" class="pk-b ${cls}"/>`)).join('');
+    return `<svg viewBox="-1 -1 ${box.l + 2} ${box.w + 2}" class="rel-pack-svg" role="img" aria-label="${esc(t('main.relPackTop'))}"><rect x="0" y="0" width="${box.l}" height="${box.w}" class="pk-pos"/>${body}</svg>`;
+}
+// Devuelve { blocked }: true cuando el empaque elegido no cabe en la posición (no se guarda).
+function renderPack(d, nums) {
+    const opts2 = $m('rel-pack-opts');
+    const hint = $m('rel-pack-hint');
+    const levels = packLevelsOf(st.sku);
+    const out = { blocked: false };
+    opts2.innerHTML = '';
+    if (!st.sku) { hint.textContent = t('main.relPackNoCode'); return out; }
+    if (!levels.length || (levels.length === 1 && !levels[0].l)) { hint.textContent = t('main.relPackNoData'); return out; }
+    const hasBay = !!(d.rack && st.niv && st.esp);
+    const box = hasBay ? packBoxCm(d.rack, st.niv, st.esp, st.pos) : null;
+    if (!box) {
+        hint.textContent = t('main.relPackNoPlace');
+        // sin lugar todavía se puede elegir qué se acomoda; solo falta el cálculo
+        opts2.innerHTML = levels.map((lv) => `<button type="button" class="rel-pack-card${Number(st.pack) === lv.level && st.pack !== '' ? ' sel' : ''}" data-pack="${lv.level}"><span class="rel-pack-h"><b>${esc(packName(lv))}</b></span><span class="rel-pack-m">${esc(t(lv.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect'))} · ${esc(lv.shape === 'cilindrica' ? `Ø ${lv.l}` : `${lv.l} × ${lv.w}`)} × ${esc(lv.h)} cm</span></button>`).join('');
+        return out;
+    }
+    hint.textContent = t('main.relPackBox', { l: box.l, w: box.w, h: box.h });
+    const fits = levels.map((lv) => ({ lv, f: window.PackCalc.fit(box, lv) }));
+    const best = fits.filter((x) => x.f.capacity > 0).sort((a, b) => b.f.capacity - a.f.capacity || b.lv.level - a.lv.level)[0];
+    opts2.innerHTML = fits.map(({ lv, f }) => {
+        const sel = st.pack !== '' && Number(st.pack) === lv.level;
+        if (sel && !f.count) out.blocked = true;
+        const unit = t(lv.level === 0 ? 'main.relPackUnitMain' : 'main.relPackUnitPack');
+        const detail = f.count
+            ? `${t('main.relPackLayers', { k: f.layers, m: f.perLayer })}. ${t('main.relPackLeft', { h: f.leftH, d: f.leftD })}.`
+            : '';
+        return `<button type="button" class="rel-pack-card${sel ? ' sel' : ''}" data-pack="${lv.level}"${f.count ? '' : ' title="' + esc(t('main.relPackNoFit')) + '"'}>
+            <span class="rel-pack-h"><b>${esc(packName(lv))}</b>${best && best.lv.level === lv.level ? `<span class="rel-tag rel-tag-ok">${esc(t('main.relPackSuggested'))}</span>` : ''}</span>
+            <span class="rel-pack-m">${esc(t(lv.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect'))} · ${esc(lv.shape === 'cilindrica' ? `Ø ${lv.l}` : `${lv.l} × ${lv.w}`)} × ${esc(lv.h)} cm</span>
+            ${f.count ? packTopSvg(box, f, lv.level) : ''}
+            <span class="rel-pack-n">${f.count ? `<b>${f.capacity}</b><span class="rel-muted">${esc(t('main.relPackPieces'))}</span>` : `<span class="rel-pack-warn">${esc(t('main.relPackNoFit'))}</span>`}</span>
+            ${f.count ? `<span class="rel-pack-d">${esc(t('main.relPackFitsN', { n: f.count, u: unit }))}. ${esc(detail)}</span>` : ''}
+        </button>`;
+    }).join('');
+    return out;
 }
 
 function drawRack(rack) {
@@ -508,9 +587,9 @@ async function openDialog(record) {
     editing = record;
     st = record
         ? {
-            sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc, uom: '' },
+            sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc, uom: '', length: record.skuLength, width: record.skuWidth, height: record.skuHeight, packaging: record.skuPackaging },
             centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', hue: record.footprintId || '', est: record.spaceId || '',
-            niv: record.level || '', esp: record.slot || '', pos: record.position || '', clas: record.classification || 'activo',
+            niv: record.level || '', esp: record.slot || '', pos: record.position || '', clas: record.classification || 'activo', pack: record.packLevel == null ? '' : record.packLevel,
         }
         : blankState();
     $m('rel-title').textContent = t(record ? 'main.relDialogEdit' : 'main.relDialogNew');
@@ -529,7 +608,7 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && 
 async function save() {
     const values = {
         skuItemId: st.sku ? st.sku.id : null, costCenterId: st.centro || null, warehouseId: st.alm || null, subWarehouseId: st.sub || null,
-        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, position: st.pos || null, classification: st.clas || 'activo',
+        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, position: st.pos || null, classification: st.clas || 'activo', packLevel: st.pack === '' ? null : Number(st.pack),
     };
     let method = 'POST';
     let url = API;
@@ -537,7 +616,7 @@ async function save() {
     if (editing) {
         const before = {
             skuItemId: editing.skuItemId, costCenterId: editing.costCenterId, warehouseId: editing.warehouseId, subWarehouseId: editing.subWarehouseId,
-            zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, position: editing.position, classification: editing.classification || 'activo',
+            zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, position: editing.position, classification: editing.classification || 'activo', packLevel: editing.packLevel ?? null,
         };
         body = {};
         Object.keys(values).forEach((key) => { if (String(values[key] ?? '') !== String(before[key] ?? '')) body[key] = values[key]; });
