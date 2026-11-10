@@ -8377,9 +8377,11 @@ td.cap-pick{ white-space: nowrap; }
 .qrs-table{ width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 .qrs-table th{ text-align: left; padding: 0.45rem 0.7rem; font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); border-bottom: 2px solid var(--color-border); }
 .qrs-table td{ padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--color-border); }
-.qrs-win{ width: min(980px, 96vw); max-width: none; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
-.qrs-win-head{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--color-border); font-weight: 600; font-size: 0.9rem; }
-.qrs-frame{ border: 0; width: 100%; height: min(78vh, 720px); background: var(--color-surface); }
+/* La pantalla del QR abierta desde la computadora: una pantalla normal (con su ruta), no una ventana flotante. */
+.qrs-open{ display: flex; flex-direction: column; gap: 0.6rem; }
+.qrs-open-head{ display: flex; align-items: center; gap: 0.8rem; font-weight: 600; font-size: 0.95rem; }
+.qrs-open-head .btn{ width: auto; }
+.qrs-frame-page{ display: block; border: 1px solid var(--color-border); border-radius: 1rem; width: 100%; min-height: 22rem; background: var(--color-surface); }
 /* el símbolo de una unidad del SI en un encabezado se escribe como es (cm, kg…), sin pasar a mayúsculas; y la unidad de una celda editable se ve siempre después del número */
 .unit-si{ text-transform: none; }
 .editable-cell-value[data-unit]::after{ content: " " attr(data-unit); color: var(--color-text-secondary); font-size: 0.85em; }

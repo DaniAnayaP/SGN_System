@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // Operaciones > QR's: cada app que se hace escaneando un QR, pero desde la computadora (para quien no tiene celular a la mano). Se elige el sitio arriba, se busca lo que tiene QR (un activo, un refrigerador, un sensor…) y
-// «Abrir» muestra, en una ventana sobre esta página, la MISMA pantalla que abre el QR (su dirección fija): lo que se registra queda en la base de Operaciones de esa app igual que desde el celular. La foto la toma la
+// «Abrir» muestra, como una pantalla normal de esta misma página (con su ruta arriba, que termina con el sitio abierto, y «Volver a la lista»), la MISMA pantalla que abre el QR (su dirección fija): lo que se registra queda en la base de Operaciones de esa app igual que desde el celular. La foto la toma la
 // cámara de la computadora (las pantallas públicas exigen cámara en vivo). Una sola página sirve a todas las entradas del grupo: cuál es sale de data-qr-app del <body> (ver APPS).
 // Envuelto en una función: Dashboard.js ya declara globales como t.
 // ---------------------------------------------------------------------------
@@ -61,7 +61,8 @@
     let zone = '';
     let q = '';
     let qTimer = null;
-    let winEl = null;
+    let openedId = null; // el sitio abierto (null = se ve la lista)
+    let hashHandled = false;
 
     (async function init() {
         try {
@@ -72,7 +73,18 @@
             console.error('QR\'s failed to initialize:', err);
         }
     })();
-    document.addEventListener('sgn:cost-centers-changed', () => { zone = ''; q = ''; load(); });
+    // Al cambiar de centro de costos se vuelve a la lista de ese centro; si el evento llega con el mismo centro (por ejemplo, al arrancar la página), lo que está abierto se queda.
+    let loadedCenter = null;
+    document.addEventListener('sgn:cost-centers-changed', () => {
+        if (app.remote || Dashboard.getSingleSelectedCostCenterId() === loadedCenter) return;
+        zone = ''; q = '';
+        if (openedId) {
+            openedId = null;
+            Dashboard.setBreadcrumbSuffix('');
+            try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* sin historial */ }
+        }
+        load();
+    });
 
     const page = () => document.querySelector('.page-content');
     function message(icon, text, title) {
@@ -80,6 +92,7 @@
     }
     async function load() {
         const centerId = Dashboard.getSingleSelectedCostCenterId();
+        loadedCenter = centerId;
         if (!app.remote && !centerId) { message('bx-buildings', t('main.layoutElegirCentroTexto'), t('main.layoutElegirCentroTitulo')); return; }
         try {
             const res = await fetch(app.remote ? `${app.api}?q=${encodeURIComponent(q)}` : `${app.api}?costCenterId=${centerId}`, { credentials: 'include' });
@@ -111,6 +124,7 @@
             && (!q || SearchSyntax.matches('contains', q.toLowerCase(), app.haystack(s).toLowerCase())));
     }
     function render() {
+        if (openedId) return; // una lectura que llega tarde (al arrancar la página llegan dos) no tapa la pantalla que ya está abierta
         const bar = app.simple ? '' : `<div class="qrs-bar">
                 ${app.remote ? '' : `<select id="qrs-zone" aria-label="${esc(Dashboard.t('main.colLimZona'))}"><option value="">${esc(t('main.qrsTodasZonas'))}</option>${data.zones.map((z) => `<option value="${esc(z.id)}"${z.id === zone ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}</select>`}
                 <input type="search" id="qrs-q" autocomplete="off" placeholder="${esc(t(app.search))}" aria-label="${esc(t(app.search))}" value="${esc(q)}">
@@ -126,9 +140,10 @@
         }
         $('qrs-list').addEventListener('click', (event) => {
             const btn = event.target.closest('[data-open]');
-            if (btn) openWindow(btn.dataset.open);
+            if (btn) openApp(btn.dataset.open, true);
         });
         renderList();
+        if (!hashHandled) { hashHandled = true; openFromHash(); } // la dirección trae #abrir=…: se abre directo (recargar la página o compartir el enlace)
     }
     function renderList() {
         const list = shown();
@@ -145,37 +160,45 @@
                 : `<table class="qrs-table"><thead><tr><th>${esc(Dashboard.t(app.first))}</th><th>${esc(Dashboard.t('main.colLimZona'))}</th><th>${esc(Dashboard.t('main.colLimLocalizador'))}</th><th></th></tr></thead><tbody>${list.map((s) => `<tr><td>${app.label(s)}</td><td>${esc(s.zoneName || '—')}</td><td>${esc(s.locator || '—')}</td><td>${openBtn(s)}</td></tr>`).join('')}</tbody></table>`;
     }
 
-    // La misma pantalla que abre el QR, en una ventana sobre esta página (sin salir de aquí).
-    function openWindow(id) {
-        const s = data.spaces.find((x) => (x.key || x.id) === id);
-        if (!s) return;
-        if (!winEl) {
-            winEl = document.createElement('div');
-            winEl.className = 'modal-overlay';
-            winEl.hidden = true;
-            winEl.innerHTML = `<div class="modal-panel qrs-win" role="dialog" aria-modal="true" aria-labelledby="qrs-win-title">
-                <div class="qrs-win-head"><span id="qrs-win-title"></span><button type="button" class="btn btn-secondary" id="qrs-win-close"></button></div>
-                <iframe class="qrs-frame" id="qrs-frame" title="" allow="camera"></iframe>
-            </div>`;
-            document.body.appendChild(winEl);
-            winEl.addEventListener('click', (event) => { if (event.target === winEl || event.target.closest('#qrs-win-close')) closeWindow(); });
-            document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && winEl && !winEl.hidden) closeWindow(); });
-        }
-        // la página de adentro (otro documento) toma el tamaño de letra del sistema que tiene esta pantalla: las que miden en rem (Pedido Manual) crecen o se achican igual que el resto
+    // La misma pantalla que abre el QR, como una pantalla normal de esta página: la ruta de arriba termina con el sitio abierto y «Volver a la lista» regresa a la lista (también el botón Atrás del navegador).
+    function openApp(id, push) {
+        const sp = data.spaces.find((x) => (x.key || x.id) === id);
+        if (!sp) return;
+        openedId = id;
+        if (push) { try { history.pushState({ qrsOpen: id }, '', `#abrir=${encodeURIComponent(id)}`); } catch (e) { /* sin historial: igual se abre */ } }
+        const title = t(app.windowTitle, { code: sp.code });
+        page().innerHTML = `<div class="qrs-open" data-help-key="${app.help}">
+            <div class="qrs-open-head"><button type="button" class="btn btn-secondary" id="qrs-back"><i class="bx bx-arrow-back" aria-hidden="true"></i> ${esc(t('main.qrsVolver'))}</button><span class="qrs-open-title">${esc(title)}</span></div>
+            <iframe class="qrs-frame-page" id="qrs-frame" title="${esc(title)}" allow="camera"></iframe>
+        </div>`;
+        Dashboard.setBreadcrumbSuffix(sp.code);
         const frame = $('qrs-frame');
-        if (!frame.dataset.scaleSync) {
-            frame.dataset.scaleSync = '1';
-            frame.addEventListener('load', () => { try { frame.contentDocument.documentElement.style.fontSize = getComputedStyle(document.documentElement).fontSize; } catch (e) { /* sin acceso: se queda con su tamaño */ } });
-        }
-        $('qrs-win-title').textContent = t(app.windowTitle, { code: s.code });
-        $('qrs-win-close').textContent = t('main.qrsCerrar');
-        $('qrs-frame').title = t(app.windowTitle, { code: s.code });
-        $('qrs-frame').src = s.path;
-        winEl.hidden = false;
+        // la página de adentro (otro documento) toma el tamaño de letra del sistema que tiene esta pantalla: las que miden en rem (Pedido Manual) crecen o se achican igual que el resto
+        frame.addEventListener('load', () => { try { frame.contentDocument.documentElement.style.fontSize = getComputedStyle(document.documentElement).fontSize; } catch (e) { /* sin acceso: se queda con su tamaño */ } });
+        $('qrs-back').addEventListener('click', () => { if (history.state && history.state.qrsOpen) history.back(); else backToList(); });
+        frame.src = sp.path;
+        fitFrame();
     }
-    function closeWindow() {
-        if (!winEl) return;
-        winEl.hidden = true;
-        $('qrs-frame').src = 'about:blank'; // se corta la cámara y lo que se estaba haciendo
+    function backToList() {
+        openedId = null;
+        Dashboard.setBreadcrumbSuffix('');
+        if (location.hash.indexOf('#abrir=') === 0) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* sin historial */ } }
+        render(); // al salir de la pantalla se corta la cámara y lo que se estaba haciendo (el iframe desaparece)
+    }
+    // La pantalla de adentro ocupa lo que queda de la ventana desde donde empieza hasta abajo.
+    function fitFrame() {
+        const f = $('qrs-frame');
+        if (!f) return;
+        f.style.height = `${Math.max(360, Math.floor(window.innerHeight - f.getBoundingClientRect().top - 16))}px`;
+    }
+    window.addEventListener('resize', fitFrame);
+    window.addEventListener('popstate', () => {
+        const wanted = history.state && history.state.qrsOpen;
+        if (openedId && !wanted) backToList();
+        else if (!openedId && wanted) openApp(wanted, false);
+    });
+    function openFromHash() {
+        const m = /^#abrir=(.+)$/.exec(location.hash);
+        if (m) openApp(decodeURIComponent(m[1]), false);
     }
 })();

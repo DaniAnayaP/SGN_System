@@ -3702,6 +3702,7 @@
     "pmTodoPedido": "Whole order",
     "pmEliminarPedido": "Delete order {folio} with {n} item(s)? This cannot be undone.",
     "pmArticulosN": "{n} item(s)",
+    "qrsVolver": "Back to the list",
     "udmTreeOpen": "View the branching tree of this code",
     "udmNPres": "{n} presentations",
     "udmNPres0": "No presentations",

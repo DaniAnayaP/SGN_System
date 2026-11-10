@@ -3702,6 +3702,7 @@
     "pmTodoPedido": "Todo el pedido",
     "pmEliminarPedido": "¿Eliminar el pedido {folio} con {n} artículo(s)? No se puede deshacer.",
     "pmArticulosN": "{n} artículo(s)",
+    "qrsVolver": "Volver a la lista",
     "udmTreeOpen": "Ver el árbol de ramificación de este código",
     "udmNPres": "{n} presentaciones",
     "udmNPres0": "Sin presentaciones",
