@@ -2227,7 +2227,11 @@
     "layoutFormatoActivoBtn": "Formato de activo (color, rayas y borde)",
     "layoutFormatoActivo": "Formato del activo",
     "layoutFormatoPisoBtn": "Formato de piso (color, rayas y borde)",
+    "layoutFormatoEspacioBtn": "Formato de espacio (color, rayas y borde)",
     "layoutFormatoPiso": "Formato del piso",
+    "layoutFormatoEspacio": "Formato del espacio",
+    "layoutAplicarTodosEspacios": "Todos los espacios {code}",
+    "layoutAplicarTodosEspaciosSub": "En los {n} activos y niveles donde hay un {code}",
     "layoutAplicarUnaPiso": "Solo este piso",
     "layoutAplicarNivelPiso": "Los pisos de este mismo nivel",
     "layoutAplicarNivelSubPiso": "Nivel {level} m · {n} pisos",
@@ -5679,6 +5683,10 @@
     "layoutFloorFmt": {
       "what": "Elige el color, la trama (rayas, puntos, cuadrícula…) y el borde de este piso. Sin formato propio el piso lleva el color de su nivel: los que suben van de ámbar a rojo (más alto, más oscuro) y los fosos, en azul. Lo puedes aplicar solo a este piso o a todos los de su mismo nivel. Un piso a nivel (0) no se pinta.",
       "example": "pones en verde con rayas los pisos de +0.33 m para distinguirlos de la plataforma de +0.60 m."
+    },
+    "layoutBayFmt": {
+      "what": "El color, la trama y el borde de este NÚMERO de espacio: todos los espacios con el mismo número (todos los E001, o todos los E002…) llevan el mismo, y cada número el suyo, para distinguirlos en el croquis y en el 3D cuando el paso Espacios está encendido. Sin formato propio llevan el color de fábrica de su número. El cuadrito de la paleta muestra el que lleva ahora; «Quitar formato» regresa al de fábrica.",
+      "example": "al E001 le pones azul con rayas: todos los E001 de todos los niveles y activos se ven azules con rayas; el E002 sigue de su color."
     },
     "layoutAssetFmt": {
       "what": "Cambia el color, las rayas y el borde del activo (el anaquel, la gabeta o la tarima que está sobre la huella), igual que en Zonas y Huella. Sin color propio el activo sale arena, distinto del blanco de la huella, para que se distingan. En «Aplicar a» eliges si el cambio es solo para este activo, para los de su zona o para los del mismo tipo. Regla de colores: lo que va adentro de algo no puede llevar el color de lo que lo contiene (el activo no puede llevar el de su huella, ni la huella el de su zona) porque se confunde; el mismo color sí se puede usar en otro lado.",

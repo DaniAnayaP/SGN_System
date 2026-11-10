@@ -1431,12 +1431,12 @@ function stepHtml(step) {
                     const lvName = ((s.lvls || []).find((l) => l.n === n) || {}).name || '';
                     const nameOf = s.ownName || s.name || '';
                     const pad3 = (v) => String(v).padStart(3, '0');
-                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.E${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}<td class="layout-calc" data-help-key="layoutPosDesde"><span data-bay-from="${i}|${n}|${c}">${shown(m.floorH + m.beam)}</span></td><td class="layout-calc" data-help-key="layoutPosHasta"><span data-bay-to="${i}|${n}|${c}">${shown(m.floorH + m.beam + m.h)}</span></td><td><input type="number" min="1" max="${LC.LIMITS.slots}" step="1" data-l="bay" data-i="${i}" data-n="${n}" data-c="${c}" data-k="count" data-help-key="layoutPosCantidad" value="${posCounts.get(`${s.id}|${n}|${c}`) || 1}"${dis || !canEdit('ubicaciones') ? ' disabled' : ''}></td><td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td>${facesCellHtml('bay', i, n, c, LC.facesOfBay(s, n, c), LC.facesOfLevel(s, n), st.faces !== undefined, dis)}</tr>`);
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.E${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}<td class="layout-calc" data-help-key="layoutPosDesde"><span data-bay-from="${i}|${n}|${c}">${shown(m.floorH + m.beam)}</span></td><td class="layout-calc" data-help-key="layoutPosHasta"><span data-bay-to="${i}|${n}|${c}">${shown(m.floorH + m.beam + m.h)}</span></td><td><input type="number" min="1" max="${LC.LIMITS.slots}" step="1" data-l="bay" data-i="${i}" data-n="${n}" data-c="${c}" data-k="count" data-help-key="layoutPosCantidad" value="${posCounts.get(`${s.id}|${n}|${c}`) || 1}"${dis || !canEdit('ubicaciones') ? ' disabled' : ''}></td><td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td>${facesCellHtml('bay', i, n, c, LC.facesOfBay(s, n, c), LC.facesOfLevel(s, n), st.faces !== undefined, dis)}<td>${bayFmtButton(c, dis)}</td></tr>`);
                 }
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutPosSinActivos'))}</p>`;
-        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosDesde', 'main.layoutPosHasta', 'main.layoutPosCantidad', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo'];
+        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosDesde', 'main.layoutPosHasta', 'main.layoutPosCantidad', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo', ''];
         const bayIssues = bayIssuesHtml();
         return `${table(heads, rows, 'layout-posiciones')}<div class="layout-vio" data-bay-issues${bayIssues ? '' : ' hidden'}>${bayIssues}</div>${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
@@ -1974,6 +1974,8 @@ function drawPositionsOverlay() {
     const f1 = (v) => v.toFixed(1);
     const spt = (px, py) => { const a = turn(px, py); return [view.ox + (a[0] - view.x0) * view.sc, view.oy + (a[1] - view.y0) * view.sc]; };
     // lo marcado se junta por activo y nivel: cada nivel se dibuja una vez, con todo lo marcado en él
+    const bayColors = stepOn('posiciones') && !!window.LayoutMapSvg && !!LC.bayFmtOf; // con el paso Espacios encendido, cada número de espacio lleva su color y su trama
+    let paintSeq = 0;
     const groups = new Map();
     targets.forEach((tg) => {
         const key = `${tg.id}|${tg.n}`;
@@ -1998,6 +2000,12 @@ function drawPositionsOverlay() {
             const sel = grp.items.some((it) => it.c === c);
             const dim = specific && !sel ? ' dim' : '';
             const fr = box(s.x + (c - 1) * slotW, s.y, slotW, s.d);
+            if (bayColors) {
+                const paint = window.LayoutMapSvg.zonePaint(`pbay${paintSeq += 1}`, LC.bayFmtOf(state.draft, c));
+                const pts = `${f1(fr.x)},${f1(fr.y)} ${f1(fr.x + fr.w)},${f1(fr.y)} ${f1(fr.x + fr.w)},${f1(fr.y + fr.h)} ${f1(fr.x)},${f1(fr.y + fr.h)}`;
+                g.insertAdjacentHTML('beforeend', `<g opacity="${dim ? '0.25' : '0.75'}">${paint.markup(pts)}</g>`);
+                if (fr.w >= 24 && fr.h >= 12) add('text', { class: `pos-ov-t${dim}`, x: f1(fr.x + 3), y: f1(fr.y + 9), 'text-anchor': 'start' }, `E${ubicPad(c)}`);
+            }
             add('rect', { class: `pos-ov-bay${sel ? ' sel' : ''}${dim}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h) });
             if (grp.items.some((it) => it.c === c && !it.p)) faceJobs.push({ r: { x: s.x + (c - 1) * slotW, y: s.y, w: slotW, d: s.d }, faces: LC.facesOfBay(s, lv, c) });
             LC.positionsOfBay(state.draft, s.id, lv, c).forEach((p) => {
@@ -4630,6 +4638,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (fmtAsset) { openAssetFmtDialog(Number(fmtAsset.dataset.fmtasset)); return; }
     const fmtFloor = event.target.closest('[data-fmtfloor]');
     if (fmtFloor) { openFloorFmtDialog(Number(fmtFloor.dataset.fmtfloor)); return; }
+    const fmtBay = event.target.closest('[data-fmtbay]');
+    if (fmtBay) { openBayFmtDialog(Number(fmtBay.dataset.fmtbay)); return; }
     const objColor = event.target.closest('[data-objcolor]');
     if (objColor) { pickObjectColor(objColor.dataset.objcolor); return; }
     const fmtTr = event.target.closest('[data-fmttr]');
@@ -4794,6 +4804,22 @@ function floorFmtButton(f, i, dis) {
     const cur = LC.floorFmtOf(state.draft, f);
     return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${f.fmt ? ' on' : ''}" data-fmtfloor="${i}" data-help-key="layoutFloorFmt" aria-label="${esc(t('main.layoutFormatoPiso'))} ${esc(f.code || '')}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i><span class="layout-fmt-dot" style="background:${esc(cur.fill)};border-color:${esc(cur.bcolor)}"></span></button>`;
 }
+// El icono de paleta de cada renglón de Espacios (solo con la hoja del icono en el árbol): el color, la trama y el borde de ese NÚMERO de espacio (todos los E001, todos los E002…); el cuadrito muestra el color que lleva ahora.
+function bayFmtButton(c, dis) {
+    if (!(state.perms && state.perms.canFormatBays)) return '';
+    const cur = LC.bayFmtOf(state.draft, c);
+    const own = !!(state.draft.bayFmt && state.draft.bayFmt[String(c)]);
+    return `<button type="button" class="btn btn-secondary layout-toggle layout-fmt${own ? ' on' : ''}" data-fmtbay="${c}" data-help-key="layoutBayFmt" aria-label="${esc(t('main.layoutFormatoEspacio'))} E${ubicPad(c)}"${dis ? ' disabled' : ''}><i class="bx bx-palette" aria-hidden="true"></i><span class="layout-fmt-dot" style="background:${esc(cur.fill)};border-color:${esc(cur.bcolor)}"></span></button>`;
+}
+// Cuántos espacios (de todos los activos y niveles) llevan ese número.
+function bayCountOf(c) {
+    let total = 0;
+    (state.draft.spaces || []).forEach((s) => {
+        if (s.active === false) return;
+        for (let n = 1; n <= (s.levels || 1); n += 1) if (c <= LC.levelSlots(s, n)) total += 1;
+    });
+    return total;
+}
 // El icono de paleta de cada renglón de Rampas (con la misma hoja del icono en el árbol que los pisos): por defecto la rampa se difumina entre los colores de los dos pisos que toca (el cuadrito muestra ese degradado);
 // con color y trama propios se ve como un piso con formato (el cuadrito muestra su color).
 function rampFmtButton(r, i, dis) {
@@ -4872,6 +4898,13 @@ function spaceTargets(sp, scope) {
 }
 function renderFmtScope() {
     const box = $('layout-fmt-scope');
+    if (fmtDialog && fmtDialog.kind === 'bay') {
+        const c = Number(fmtDialog.targetId);
+        const code = `E${ubicPad(c)}`;
+        box.hidden = false;
+        box.innerHTML = `<legend>${esc(t('main.layoutAplicarA'))}</legend><label class="layout-fmt-opt" data-help-key="layoutBayFmt"><input type="radio" name="layout-fmt-scope" value="all" checked><b>${esc(t('main.layoutAplicarTodosEspacios', { code }))}</b><span>${esc(t('main.layoutAplicarTodosEspaciosSub', { n: String(bayCountOf(c)), code }))}</span></label>`;
+        return;
+    }
     if (fmtDialog && fmtDialog.kind === 'transit') {
         const p = (state.draft.transit || []).find((x) => x.id === fmtDialog.targetId);
         box.hidden = !p;
@@ -4968,7 +5001,7 @@ function renderFmtBody() {
     const isSpace = fmtDialog.kind !== 'zone';
     const shape = isSpace ? '60,45 170,45 170,105 60,105' : '30,20 200,20 200,70 130,70 130,130 30,130';
     const zone = isSpace ? null : state.draft.zones.find((z) => z.id === fmtDialog.targetId);
-    const space = fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'floor' ? (state.draft.floors || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'ramp' ? (state.draft.ramps || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'wall' ? (state.draft.obstacles || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'transit' ? (state.draft.transit || []).find((s) => s.id === fmtDialog.targetId) : null)))));
+    const space = fmtDialog.kind === 'bay' ? { code: `E${ubicPad(Number(fmtDialog.targetId))}` } : fmtDialog.kind === 'space' ? state.draft.footprints.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'asset' ? state.draft.spaces.find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'floor' ? (state.draft.floors || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'ramp' ? (state.draft.ramps || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'wall' ? (state.draft.obstacles || []).find((s) => s.id === fmtDialog.targetId) : (fmtDialog.kind === 'transit' ? (state.draft.transit || []).find((s) => s.id === fmtDialog.targetId) : null)))));
     const ink = isSpace ? window.LayoutMapSvg.inkFor(d) : '';
     const label = isSpace
         ? `<text class="lt3" x="115" y="78" text-anchor="middle"${ink ? ` style="fill:${ink}"` : ''}>${esc(space ? space.code : '')}</text>`
@@ -5009,7 +5042,9 @@ function ensureFmtModal() {
         }
         if (event.target.closest('#layout-fmt-cancel')) { closeFmtDialog(); return; }
         if (event.target.closest('#layout-fmt-reset')) {
-            if (fmtDialog.kind === 'floor') {
+            if (fmtDialog.kind === 'bay') {
+                if (state.draft.bayFmt) { delete state.draft.bayFmt[fmtDialog.targetId]; if (!Object.keys(state.draft.bayFmt).length) delete state.draft.bayFmt; }
+            } else if (fmtDialog.kind === 'floor') {
                 const fl = (state.draft.floors || []).find((r) => r.id === fmtDialog.targetId);
                 if (fl) floorTargets(fl, fmtDialog.scope).forEach((x) => { delete x.fmt; });
             } else if (fmtDialog.kind === 'transit') {
@@ -5039,7 +5074,14 @@ function ensureFmtModal() {
         if (event.target.closest('#layout-fmt-ok')) {
             // Se aplica y, si deja algo adentro con el color de lo que lo contiene (huella con el de su zona, activo con el de su huella), se deshace y avisa en esta misma ventana (la ventana se queda abierta).
             const applied = tryFmtChange(() => {
-                if (fmtDialog.kind === 'floor') {
+                if (fmtDialog.kind === 'bay') {
+                    // con formato propio (aunque no se haya cambiado nada) se vuelve a guardar; sin formato y sin cambios (se queda el color de fábrica de su número) no hay nada que aplicar
+                    const own = !!(state.draft.bayFmt && state.draft.bayFmt[fmtDialog.targetId]);
+                    if (own || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start)) {
+                        const next = { ...(state.draft.bayFmt || {}), [fmtDialog.targetId]: { ...fmtDialog.draft } };
+                        state.draft.bayFmt = Object.fromEntries(Object.keys(next).sort((a, z) => Number(a) - Number(z)).map((k) => [k, next[k]]));
+                    }
+                } else if (fmtDialog.kind === 'floor') {
                     const fl = (state.draft.floors || []).find((r) => r.id === fmtDialog.targetId);
                     // Con formato propio (aunque no se haya cambiado nada) se puede copiar a los demás del grupo; sin formato y sin cambios (se queda el color de su nivel) no hay nada que aplicar.
                     if (fl && (fl.fmt || JSON.stringify(fmtDialog.draft) !== JSON.stringify(fmtDialog.start))) floorTargets(fl, fmtDialog.scope).forEach((x) => { x.fmt = { ...fmtDialog.draft }; });
@@ -5107,6 +5149,18 @@ function openSpaceFmtDialog(spaceIndex) {
     const base = sp.fmt ? pickFmt(sp.fmt) : window.LayoutMapSvg.defaultSpaceFmt();
     fmtDialog = { kind: 'space', targetId: sp.id, draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'one' };
     $('layout-fmt-title').textContent = `${t('main.layoutFormatoHuella')} ${sp.code}`;
+    $('layout-fmt-namefield').hidden = true;
+    fmtModalEl.hidden = false;
+    renderFmtScope();
+    renderFmtBody();
+}
+// La ventana de formato de un NÚMERO de espacio: color, trama y borde como los pisos; se aplica a todos los espacios con ese número (no hay otro alcance).
+function openBayFmtDialog(c) {
+    if (!state.draft || !(c >= 1)) return;
+    ensureFmtModal();
+    const base = pickFmt(LC.bayFmtOf(state.draft, c));
+    fmtDialog = { kind: 'bay', targetId: String(c), draft: { ...base }, start: { ...base }, tab: 'fill', scope: 'all' };
+    $('layout-fmt-title').textContent = `${t('main.layoutFormatoEspacio')} E${ubicPad(c)}`;
     $('layout-fmt-namefield').hidden = true;
     fmtModalEl.hidden = false;
     renderFmtScope();
@@ -5582,7 +5636,7 @@ function refreshScene3d() {
         picker3d.setFocus(fv3.focus ? fv3.focus.spaces : null);
         scene3d.setHiddenAssets(picker3d.getHidden(), false, !!state.findDim);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { bayFmt: stepOn('posiciones') ? (state.draft.bayFmt || {}) : null, fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');

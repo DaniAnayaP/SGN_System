@@ -6539,6 +6539,8 @@ function layoutPermissions(req) {
         canFormatAssets: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoActivo'),
         // Y el color, la trama y el borde de un piso: el icono Formato de piso (hoja <pantalla>/iconLayoutFormatoPiso del árbol).
         canFormatFloors: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoPiso'),
+        // Y el color, la trama y el borde de cada número de espacio (todos los E001, todos los E002…): el icono Formato de espacio (hoja <pantalla>/iconLayoutFormatoEspacio del árbol).
+        canFormatBays: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutFormatoEspacio'),
         // Ver u ocultar las medidas del croquis es solo de pantalla, pero también es un icono con su propia hoja en el árbol (iconLayoutMedidas).
         canToggleMeasures: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutMedidas'),
         // Ver u ocultar los m² de cada zona en el croquis (y en la hoja que se descarga) es otro icono con su hoja (iconLayoutArea); los filtros de las tablas del panel, otro (iconLayoutFiltros).
@@ -6914,6 +6916,12 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         const beforeFloors = new Map(((existing && existing.layout.floors) || []).map((f) => [f.id, JSON.stringify(f.fmt || null)]));
         if ((next.floors || []).some((f) => JSON.stringify(f.fmt || null) !== (beforeFloors.has(f.id) ? beforeFloors.get(f.id) : 'null'))) {
             return res.status(403).json({ message: 'No tienes permiso para cambiar el formato de los pisos.', section: 'pisos' });
+        }
+    }
+    // El formato de los espacios (color, trama y borde de cada número de espacio) solo lo cambia quien tiene el icono Formato de espacio.
+    if (!perms.canFormatBays) {
+        if (JSON.stringify(next.bayFmt || null) !== JSON.stringify((existing && existing.layout.bayFmt) || null)) {
+            return res.status(403).json({ message: 'No tienes permiso para cambiar el formato de los espacios.', section: 'posiciones' });
         }
     }
     // Lo que va adentro de algo no puede llevar el color de lo que lo contiene (huella vs su zona, activo vs su huella): lo nuevo o lo que cambió y choca no se guarda; lo que ya estaba así se deja pasar.

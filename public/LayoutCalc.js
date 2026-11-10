@@ -848,6 +848,17 @@
         const fill = ends ? mixHex(ends.lo, ends.hi, 0.5) : (ramp ? mixHex(cols[lo] || FLOOR_NAVE_COLOR, cols[round2(Number(f.lvl2) || 0)] || FLOOR_NAVE_COLOR, 0.5) : (cols[lo] || FLOOR_NAVE_COLOR));
         return { fill, pattern: ramp ? 'solid' : 'diag1', pcolor: mixHex(fill, '#000000', 0.28), line: 'thin', bcolor: mixHex(fill, '#000000', 0.4) };
     }
+    // ---- Color de los espacios (el E001, el E002…) ---------------------------------------------------------------------------------------------------
+    // Todos los espacios con el MISMO número (el E001 de cada nivel de cada activo) llevan el mismo color, y cada número el suyo, para distinguirlos de un vistazo. De fábrica una paleta de 10 colores que se repite; cada número puede
+    // llevar su formato propio (color, trama y borde, como el de piso) en layout.bayFmt = { '1': { fill, pattern, pcolor, line, bcolor }, … }. Sin formato propio queda el de fábrica.
+    const BAY_COLORS = ['#4e79a7', '#f28e2b', '#59a14f', '#e15759', '#b07aa1', '#76b7b2', '#edc948', '#ff9da7', '#9c755f', '#bab0ac'];
+    function bayFmtOf(layout, c) {
+        const n = Math.max(1, Math.round(Number(c)) || 1);
+        const own = layout && layout.bayFmt && typeof layout.bayFmt === 'object' ? sanitizeFmt(layout.bayFmt[String(n)]) : null;
+        if (own) return own;
+        const fill = BAY_COLORS[(n - 1) % BAY_COLORS.length];
+        return { fill, pattern: 'solid', pcolor: mixHex(fill, '#000000', 0.28), line: 'thin', bcolor: mixHex(fill, '#000000', 0.4) };
+    }
     // Superficie que comparten dos rectángulos (m²).
     const rectShared = (a, b) => Math.max(0, Math.min(a.x + a.l, b.x + b.l) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.w, b.y + b.w) - Math.max(a.y, b.y));
     // El nivel del piso del Layout en un punto: el del piso que lo contiene (el más chico si hay varios); 0 si ninguno (a nivel con la nave).
@@ -3178,6 +3189,15 @@
         out.plan = plan ? { widthM: meters(plan.widthM, 'Plano', 0.1) } : null;
         // marca: desde aquí el color de cada activo es suyo aunque se parezca al de su huella (los Layouts de antes, sin marca, todavía traen los heredados)
         out.ownAssetFmt = true;
+        // el formato de cada número de espacio (solo los que traen uno propio y válido, en orden de número)
+        if (src.bayFmt && typeof src.bayFmt === 'object' && !Array.isArray(src.bayFmt)) {
+            const bf = {};
+            Object.keys(src.bayFmt).map((k) => Math.round(Number(k))).filter((n) => n >= 1 && n <= LIMITS.slots).sort((a, z) => a - z).forEach((n) => {
+                const f = sanitizeFmt(src.bayFmt[String(n)]);
+                if (f) bf[String(n)] = f;
+            });
+            if (Object.keys(bf).length) out.bayFmt = bf;
+        }
         return { ok: errors.length === 0, errors, layout: out };
     }
 
@@ -3713,7 +3733,7 @@
         }
         if (section === 'ubicaciones') return layout.positions || [];
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
-        if (section === 'posiciones') return (layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays }));
+        if (section === 'posiciones') return [...(layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays })), ...(layout.bayFmt && Object.keys(layout.bayFmt).length ? [{ id: '_bayFmt', bayFmt: layout.bayFmt }] : [])];
         // Niveles: solo los activos que ya tienen algún nivel con medidas propias (altura desde el piso, alto o ceja distintos de los de por defecto).
         if (section === 'niveles') return (layout.spaces || []).filter((s) => (s.lvls || []).length).map((s) => ({ id: s.id, lvls: s.lvls }));
         return null;
@@ -3737,6 +3757,6 @@
         levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
-        FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
+        FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, BAY_COLORS, bayFmtOf, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
 }));

@@ -193,6 +193,7 @@
         // Con un enfoque y el resto «tenue», las capas apagadas (sus nombres) se ven tenues en lugar de quitarse.
         let dimLayers = new Set();
         // El nivel enfocado de un activo { id, n, mode: 'dim' | 'hide' }: los demás niveles de ese activo se apagan o se quitan.
+        let bayFmtOn = null; // con el paso Espacios encendido: { 'número de espacio': formato propio } (los demás llevan el de fábrica de su número); null = los espacios no llevan color propio
         let focusLevels = []; // los niveles (o espacios o posiciones) que el Enfoque deja dibujados: [{ id, n, c, p, mode, all }]
         let focusContainer = null; // el cuadro (nivel o posición) que el Enfoque dejó dibujado: a él se acerca la cámara (con varios, el cuadro que los junta)
         function addFocusContainer(b2) {
@@ -603,6 +604,7 @@
             if (opts && 'floorsShow' in opts) floorsShow = !!opts.floorsShow;
             if (opts && 'rampsShow' in opts) rampsShow = !!opts.rampsShow;
             if (opts && 'dimLayers' in opts) dimLayers = new Set(opts.dimLayers || []);
+            if (opts && 'bayFmt' in opts) bayFmtOn = opts.bayFmt && typeof opts.bayFmt === 'object' ? { ...opts.bayFmt } : null;
             if (opts && 'focusLevel' in opts) focusLevels = Array.isArray(opts.focusLevel) ? opts.focusLevel.filter(Boolean) : (opts.focusLevel ? [opts.focusLevel] : []);
             if (opts && 'fronts' in opts) frontSides = opts.fronts || {}; // el lado del frente de cada activo, sacado de TODO el Layout (el que se ve puede traer sin pasillos)
             if (opts && 'clashDoors' in opts) clashSet = new Set(opts.clashDoors || []);
@@ -1310,6 +1312,16 @@
             // activos: anaqueles (postes y repisas por nivel), anaqueles con tarimas, gabinetes y tarimas
             focusContainer = null;
             const upr = []; const dck = []; const blk = [];
+            const patDecks = []; // los decks y bloques con trama: cada uno una caja con su textura (los de un solo color van instanciados)
+            const bayFmtFor = (c) => (bayFmtOn && root.LayoutCalc && root.LayoutCalc.bayFmtOf ? root.LayoutCalc.bayFmtOf({ bayFmt: bayFmtOn }, c) : null);
+            const hexNum = (h) => parseInt(String(h).slice(1), 16);
+            // una pieza de un espacio (deck o bloque): con formato de su número lleva su color (o su trama); sin él, el color de siempre. dimIt = apagada (Tenue).
+            const pushPiece = (list, x, y, z, sx, sy, sz, color, c, dimIt) => {
+                const bf = c ? bayFmtFor(c) : null;
+                if (!bf) { list.push({ x, y, z, sx, sy, sz, c: color }); return; }
+                if (bf.pattern !== 'solid' && bf.pattern !== 'none') { patDecks.push({ x, y, z, sx, sy, sz, fmt: bf, dim: !!dimIt }); return; }
+                list.push({ x, y, z, sx, sy, sz, c: dimIt ? mixHex(hexNum(bf.fill), 0xe4e7f0, 0.8) : hexNum(bf.fill) });
+            };
             const edges = [];
             const edgeBox = (x, y, z, sx, sy, sz) => {
                 const x0 = x - sx / 2; const x1 = x + sx / 2; const y0 = y - sy / 2; const y1 = y + sy / 2; const z0 = z - sz / 2; const z1 = z + sz / 2;
@@ -1367,8 +1379,8 @@
                                 const sxC = pp ? pp.l * kxz : slotWz; const szC = pp ? pp.w * kzz : s.d;
                                 const xc = PX(pp ? s.x + (c2 - 1) * slotWz + (pp.x + pp.l / 2) * kxz : s.x + (c2 - 0.5) * slotWz);
                                 const zc = PZ(pp ? s.y + (pp.y + pp.w / 2) * kzz : s.y + s.d / 2);
-                                if (solid) blk.push({ x: xc, y: yB + (beamC + hC) / 2, z: zc, sx: Math.max(sxC - gx, 0.02), sy: beamC + hC, sz: Math.max(szC - gz, 0.02), c: blockC });
-                                else dck.push({ x: xc, y: yB + beamC / 2, z: zc, sx: Math.max(sxC - gx, 0.02), sy: beamC, sz: Math.max(szC - gz, 0.02), c: deckZ });
+                                if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, c2, false);
+                                else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, c2, false);
                             });
                         }
                     }
@@ -1381,8 +1393,8 @@
                         const sxC = pp ? pp.l * sxP : wC; const szC = pp ? pp.w * szP : s.d;
                         const xc = PX(pp ? bx0 + (pp.x + pp.l / 2) * sxP : bx0 + (ci + 0.5) * wC);
                         const zc = PZ(pp ? s.y + (pp.y + pp.w / 2) * szP : s.y + s.d / 2);
-                        if (solid) blk.push({ x: xc, y: yB + (beamC + hC) / 2, z: zc, sx: Math.max(sxC - gx, 0.02), sy: beamC + hC, sz: Math.max(szC - gz, 0.02), c: blockC });
-                        else dck.push({ x: xc, y: yB + beamC / 2, z: zc, sx: Math.max(sxC - gx, 0.02), sy: beamC, sz: Math.max(szC - gz, 0.02), c: deckZ });
+                        if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, ci + 1, false);
+                        else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, ci + 1, false);
                     }
                     if (!solid) {
                         // postes: las cuatro esquinas del cuadro y uno delgado en cada división (adelante y atrás)
@@ -1410,7 +1422,7 @@
                     // La repisa (reja) de cada nivel va a su altura del piso (paso Niveles: la del nivel 1 se escribe y las demás se calculan) y mide de grueso lo que mide su ceja (sin ceja, 6 cm); todos los espacios del nivel van a
                     // esa misma altura (una sola repisa de todo el largo). Sin LayoutCalc se reparten parejas como siempre.
                     const LCx = root.LayoutCalc;
-                    const deckAt = (xc, sx, m, color) => { const th = m.beam > 0 ? m.beam : 0.06; dck.push({ x: xc, y: fl + Math.max(m.floorH, 0.03) + th / 2, z: cz, sx, sy: th, sz: s.d, c: color === undefined ? deckC : color }); };
+                    const deckAt = (xc, sx, m, color, bayNo, dimIt) => { const th = m.beam > 0 ? m.beam : 0.06; pushPiece(dck, xc, fl + Math.max(m.floorH, 0.03) + th / 2, cz, sx, th, s.d, color === undefined ? deckC : color, bayNo || 0, dimIt); };
                     for (let k = 1; k <= lv; k++) {
                         // con un nivel enfocado en este activo, los demás niveles se apagan (tenue) o se quitan (oculto)
                         const mineFx = focusLevels.filter((f) => f.id === s.id);
@@ -1418,8 +1430,12 @@
                         if (otherLevel && mineFx[0].mode === 'hide') continue;
                         const lvColor = otherLevel ? mixHex(deckC, 0xe4e7f0, 0.8) : deckC;
                         if (!(LCx && LCx.levelMeasures && LCx.bayMeasures)) { dck.push({ x: cx, y: 0.15 + (k - 1) * ((s.h - 0.3) / lv) + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC }); continue; }
-                        // todos los espacios de un nivel van a la misma altura (la del nivel): una sola repisa de todo el largo
-                        deckAt(cx, s.l, LCx.levelMeasures(s, k), lvColor);
+                        // todos los espacios de un nivel van a la misma altura (la del nivel): una sola repisa de todo el largo o, con el paso Espacios encendido, una por espacio con el color de su número
+                        if (bayFmtOn && LCx.levelSlots) {
+                            const slotsK = LCx.levelSlots(s, k);
+                            const mk = LCx.levelMeasures(s, k);
+                            for (let c = 1; c <= slotsK; c++) deckAt(cx - s.l / 2 + (c - 0.5) * (s.l / slotsK), s.l / slotsK, mk, lvColor, c, otherLevel);
+                        } else deckAt(cx, s.l, LCx.levelMeasures(s, k), lvColor);
                     }
                 }
                 spaceList.push({ s, x: cx, z: cz, fl });
@@ -1428,6 +1444,14 @@
             instanced(group.assets, upr, mat);
             instanced(group.assets, dck, mat);
             instanced(group.assets, blk, mat);
+            patDecks.forEach((pd) => {
+                const tex = patternTexture(pd.fmt.fill, pd.fmt.pattern, pd.fmt.pcolor);
+                const pm = new THREE.MeshLambertMaterial({ map: tex });
+                if (pd.dim) pm.color = new THREE.Color(0xdfe2ec);
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(pd.sx, pd.sy, pd.sz), pm);
+                mesh.position.set(pd.x, pd.y, pd.z);
+                group.assets.add(mesh);
+            });
             if (edges.length) {
                 const eg = new THREE.BufferGeometry();
                 eg.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
