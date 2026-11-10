@@ -8259,8 +8259,13 @@ td.cap-pick{ white-space: nowrap; }
 .layout-vstrip[hidden]{ display: none; }
 /* los botones de la barra (Ver, QR y descarga, Descartar, Guardar, Editar) viajan juntos: si no caben junto a los filtros bajan todos al renglón de abajo, nunca uno solo */
 .layout-bar-actions{ display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.6rem; margin-left: auto; }
-.layout-vstrip-filters{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
-.layout-vstrip-find{ flex: 1 1 10rem; min-width: 9rem; max-width: 18rem; position: relative; }
+/* Los desplegables, «Lo demás» y el buscador son hermanos del mismo renglón corrido de la franja (display: contents): al crecer un desplegable (el Localizador con su código largo) lo que no cabe pasa al renglón de abajo
+   junto con el buscador, en vez de que «Lo demás» y el buscador ocupen un renglón cada uno. Los botones de la barra se alinean con el primer renglón, no a la mitad de una franja alta. */
+.layout-vstrip-filters{ display: contents; }
+.layout-bar{ align-items: flex-start; }
+/* El buscador mide lo que su texto («Buscar en el Layout»): así cabe en el mismo renglón que los filtros y no baja a otro. Su lista de resultados sí se abre ancha. */
+.layout-vstrip-find{ flex: 0 1 12.5rem; min-width: 9rem; max-width: 12.5rem; position: relative; }
+.layout-vstrip-find .layout-find-list{ right: auto; width: max(100%, 22rem); }
 .layout-dd{ position: relative; }
 .layout-dd-btn{ display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.8rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); color: var(--color-text-primary); font: inherit; font-size: 0.78rem; cursor: pointer; }
 .layout-dd-btn:disabled{ opacity: 0.55; cursor: not-allowed; }
@@ -8283,8 +8288,7 @@ td.cap-pick{ white-space: nowrap; }
 /* En «Ver» el croquis ocupa todo el ancho: sin tope se agrandaba al doble (y más al enfocar una zona). Se limita al alto de la pantalla, centrado, para que se vea completo y a un tamaño como el de siempre. */
 .layout-editor.is-view .layout-map svg#layout-svg{ width: auto; max-width: 100%; max-height: max(24rem, calc(100vh - 12rem)); margin-inline: auto; }
 .layout-editor.is-view .layout-3d-stage{ max-width: calc(max(24rem, 100vh - 12rem) * 700 / 460); margin-inline: auto; }
-/* «Elegir» (modo Ver): cualquier cosa en específico; el viejo «Elegir activos» del 3D se esconde en Ver porque este lo reemplaza. */
-.layout-editor.is-view #layout-3d-assets-pick{ display: none; }
+/* «Elegir» (franja de arriba): cualquier cosa en específico; reemplazó al viejo botón «Elegir activos» del 3D, que ya no existe. */
 .layout-ch-menu, .layout-dd-menu:has(.layout-ch-search){ min-width: 22rem; max-width: 26rem; }
 .layout-ch-search{ display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.7rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); }
 .layout-ch-search input{ flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 0.78rem; color: var(--color-text-primary); }

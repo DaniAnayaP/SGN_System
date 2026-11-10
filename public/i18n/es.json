@@ -2102,6 +2102,7 @@
     "layoutFiltroNElegidos": "{n} elegidos",
     "layoutFiltroLocalizador": "Localizador",
     "layoutLocPosicion": "Espacio",
+    "layoutLocPos": "Posición",
     "layoutLocCapaApagada": "Enciende «{layer}» en Qué ver para ver esto aquí.",
     "layoutLocMedidaNivel": "{floor} m del piso · {h} m de alto",
     "layoutLocFilasProf": "filas {f} · profundidad {p}",
@@ -2109,7 +2110,8 @@
     "layoutLocElige_sp": "Elige un activo de {code}",
     "layoutLocElige_n": "Elige un nivel de {code}",
     "layoutLocElige_c": "Elige un espacio de {code}",
-    "layoutLocElige_cell": "Elige una posición de {code}",
+    "layoutLocElige_pos": "Elige una posición de {code}",
+    "layoutLocElige_cell": "Elige un localizador de {code}",
     "layoutLocNPosiciones": "{n} posiciones",
     "layoutLocListo": "Listo",
     "layoutLocListoFin": "Listo",
@@ -3564,6 +3566,10 @@
     "layoutCambiarTitulo": "Cambiar código · {loc}",
     "layoutRelacionCodigoLink": "Relación Código",
     "layoutRelGuardado": "Código relacionado.",
+    "layoutRelacionVacio": "Todavía no hay códigos relacionados con localizadores de este Layout: se relacionan con el botón «Relacionar código» del paso Localizadores.",
+    "layoutRelacionIr": "Abrir la pantalla Relación Código",
+    "layoutRelacionSinEnfoque": "Ningún código relacionado cae en lo que enfocaste arriba (Zona, Elegir o Localizador).",
+    "layoutLocalizadoresSinEnfoque": "Ningún localizador cae en lo que enfocaste arriba (Zona, Elegir o Localizador).",
     "locConCodigoItem": "{loc} (código {sku})",
     "locConCodigoMas": " y {n} más",
     "locConCodigoUno": "Este localizador ya tiene código y no se puede eliminar: {list}. Quita primero el código en Relación Código.",
@@ -5148,12 +5154,20 @@
       "what": "Cambia la ubicación de este renglón en la misma ventana. Cada dato pide su propia hoja en el árbol.",
       "example": "Pasar el código del nivel 2 al nivel 3."
     },
+    "layoutRelacionPaso": {
+      "what": "El paso Relación Código: al tocarlo se ve aquí abajo la lista de los códigos que ya están relacionados con un localizador de este Layout, con la unidad que se almacena y su capacidad máxima, solo de consulta y filtrada por Zona, Qué ver, Elegir y Localizador. Para relacionar o cambiar un código se usa el botón del paso Localizadores. La flechita de su lado abre la pantalla Relación Código completa.",
+      "example": "tocas Relación Código y ves qué códigos hay en la Zona 6; tocas la flechita y se abre la pantalla completa."
+    },
+    "layoutSec_relacion": {
+      "what": "Los códigos relacionados con localizadores de este Layout: código, unidad que se almacena, capacidad máxima y el localizador con sus piezas. Es solo de consulta y sigue los filtros de arriba (Zona, Qué ver, Elegir y Localizador, con Enfoque u Oculto). Para relacionar o cambiar un código: botón «Relacionar código» del paso Localizadores. La flechita de al lado del nombre (y la de cada renglón) abre la pantalla Relación Código ya filtrada.",
+      "example": "eliges en Localizador las posiciones P001 a P004 y aquí ves solo los códigos de esas cuatro posiciones."
+    },
     "layoutRelacionarCodigo": {
       "what": "Relaciona un código con este localizador sin salir del croquis: eliges el código y qué unidad de medida quieres almacenar en ese lugar (se ve cuántas caben). Solo un localizador completo y guardado recibe código; el sub almacén sale de la zona del localizador. Es la misma relación de Relación Código. Un localizador con código no se puede eliminar.",
       "example": "al localizador Z006.H001.R001.N001.E001.P003 le relacionas el 000521 y eliges «Caja con 12»."
     },
     "layoutRelacionLink": {
-      "what": "Abre Relación Código ya filtrada: el icono del renglón, a ese localizador; el botón de arriba, a lo que se ve en la tabla (un localizador, el Localizador elegido o todo).",
+      "what": "Abre Relación Código ya filtrada: el icono del renglón, a ese localizador; la flechita del paso Relación Código, a lo que se ve en la tabla (un localizador, el Localizador elegido o todo).",
       "example": "tocas la flecha del localizador y ves solo su relación."
     },
     "udmChain": {
@@ -5369,7 +5383,7 @@
       "example": "el nivel 2 tiene 3 espacios y uno lleva su propia ceja: aquí dice 1."
     },
     "layoutFiltroLocalizador": {
-      "what": "Te lleva paso a paso hasta un lugar exacto: huella, activo, nivel, espacio y posición. En cada paso marcas uno o VARIOS con su casilla y tocas «Listo» para bajar al paso siguiente con lo marcado; la lista de cada paso junta lo que hay dentro de todo lo marcado antes. Lo marcado se enfoca en el croquis y en el 3D (varios activos de una misma huella, varios niveles, espacios o posiciones a la vez). Va de la mano de Zona, Qué ver y Elegir: solo lista lo que esos filtros dejan ver. Puedes escribir para buscar en cada lista, y las pastillas de arriba te regresan a un paso anterior sin perder lo marcado.",
+      "what": "Te lleva paso a paso hasta un lugar exacto: huella, activo, nivel, espacio, posición y localizador. En cada paso marcas uno o VARIOS con su casilla y tocas «Listo» para bajar al paso siguiente con lo marcado; la lista de cada paso junta lo que hay dentro de todo lo marcado antes. Lo marcado se enfoca en el croquis y en el 3D (varios activos de una misma huella, varios niveles, espacios o posiciones a la vez). En Posición marcas las posiciones (P001) y en Localizador ves el código completo de cada una (Z006.H001.R001.N001.E001.P001) y puedes dejar solo algunos. Va de la mano de Zona, Qué ver y Elegir: solo lista lo que esos filtros dejan ver. Puedes escribir para buscar en cada lista, y las pastillas de arriba te regresan a un paso anterior sin perder lo marcado.",
       "example": "marcas la huella H001, en Activos marcas A020 y R001, tocas «Listo», en Nivel marcas N001 y N002 de los dos y tocas «Listo»: el croquis y el 3D muestran solo esos niveles de esos dos activos."
     },
     "layoutSaleContenedor": {
@@ -5377,7 +5391,7 @@
       "example": "dice «El activo R001 se sale de su huella H001»: tocas «Ir a verlo», cae en Activos con R001 marcado, bajas su largo o agrandas la huella y el aviso desaparece solo."
     },
     "layoutFiltroLocalizadorRuta": {
-      "what": "Los pasos del recorrido, de izquierda a derecha: Huella, Activo, Nivel, Espacio y Posición. La pastilla encendida es el paso en el que estás; las que ya tienen un código son las que ya elegiste, y al tocarlas regresas a ese paso (se quita lo que habías elegido después).",
+      "what": "Los pasos del recorrido, de izquierda a derecha: Huella, Activo, Nivel, Espacio, Posición y Localizador. La pastilla encendida es el paso en el que estás; las que ya tienen un código son las que ya elegiste, y al tocarlas regresas a ese paso (se quita lo que habías elegido después).",
       "example": "estás en Espacio y tocas «Activo A004»: vuelves a la lista de activos de la huella."
     },
     "layoutCarasConsumo": {

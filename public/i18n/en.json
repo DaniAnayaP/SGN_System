@@ -2102,6 +2102,7 @@
     "layoutFiltroNElegidos": "{n} picked",
     "layoutFiltroLocalizador": "Locator",
     "layoutLocPosicion": "Space",
+    "layoutLocPos": "Position",
     "layoutLocCapaApagada": "Turn on «{layer}» in Show to see this here.",
     "layoutLocMedidaNivel": "{floor} m from the floor · {h} m high",
     "layoutLocFilasProf": "rows {f} · depth {p}",
@@ -2109,7 +2110,8 @@
     "layoutLocElige_sp": "Pick an asset of {code}",
     "layoutLocElige_n": "Pick a level of {code}",
     "layoutLocElige_c": "Pick a space of {code}",
-    "layoutLocElige_cell": "Pick a position of {code}",
+    "layoutLocElige_pos": "Pick a position of {code}",
+    "layoutLocElige_cell": "Pick a locator of {code}",
     "layoutLocNPosiciones": "{n} positions",
     "layoutLocListo": "Done",
     "layoutLocListoFin": "Done",
@@ -3565,6 +3567,10 @@
     "layoutCambiarTitulo": "Change code · {loc}",
     "layoutRelacionCodigoLink": "Code Relation",
     "layoutRelGuardado": "Code related.",
+    "layoutRelacionVacio": "No code is related to a locator of this Layout yet: relate one with the «Relate code» button in the Locators step.",
+    "layoutRelacionIr": "Open the Code Relation screen",
+    "layoutRelacionSinEnfoque": "No related code falls in what you focused above (Zone, Pick or Locator).",
+    "layoutLocalizadoresSinEnfoque": "No locator falls in what you focused above (Zone, Pick or Locator).",
     "locConCodigoItem": "{loc} (code {sku})",
     "locConCodigoMas": " and {n} more",
     "locConCodigoUno": "This locator already has a code and cannot be deleted: {list}. Remove the code in Code Relation first.",
@@ -5149,12 +5155,20 @@
       "what": "Changes the location of this row in the same window. Each field needs its own leaf in the tree.",
       "example": "Move the code from level 2 to level 3."
     },
+    "layoutRelacionPaso": {
+      "what": "The Code Relation step: tap it to see below the list of the codes already related to a locator of this Layout, with the unit that is stored and its maximum capacity, read-only and filtered by Zone, Show, Pick and Locator. To relate or change a code use the button of the Locators step. The little arrow next to it opens the full Code Relation screen.",
+      "example": "you tap Code Relation and see which codes are in Zone 6; tap the arrow and the full screen opens."
+    },
+    "layoutSec_relacion": {
+      "what": "The codes related to locators of this Layout: code, unit that is stored, maximum capacity and the locator with its pieces. It is read-only and follows the filters above (Zone, Show, Pick and Locator, with Focus or Hidden). To relate or change a code: «Relate code» button in the Locators step. The little arrow next to the name (and the one on each row) opens the Code Relation screen already filtered.",
+      "example": "you pick positions P001 to P004 in Locator and here you see only the codes of those four positions."
+    },
     "layoutRelacionarCodigo": {
       "what": "Relates a code with this locator without leaving the plan: you choose the code and which unit of measure you want to store in that place (you see how many fit). Only a complete, saved locator takes a code; the sub-warehouse comes from the locator zone. It is the same relation as Code Relation. A locator with a code cannot be deleted.",
       "example": "to locator Z006.H001.R001.N001.E001.P003 you relate 000521 and choose “Box of 12”."
     },
     "layoutRelacionLink": {
-      "what": "Opens Code Relation already filtered: the row icon, to that locator; the button above, to what the table shows (one locator, the chosen Locator or everything).",
+      "what": "Opens Code Relation already filtered: the row icon, to that locator; the arrow of the Code Relation step, to what the table shows (one locator, the chosen Locator or everything).",
       "example": "you tap the locator arrow and see only its relation."
     },
     "udmChain": {
@@ -5370,7 +5384,7 @@
       "example": "level 2 has 3 spaces and one has its own beam: here it says 1."
     },
     "layoutFiltroLocalizador": {
-      "what": "Takes you step by step to an exact place: footprint, asset, level, space and position. In each step you tick one or SEVERAL with their checkbox and tap «Done» to go down to the next step with what is ticked; each step list gathers what is inside everything ticked before. What is ticked is focused on the plan and in 3D (several assets of the same footprint, several levels, spaces or positions at once). It goes hand in hand with Zone, Show and Pick: it only lists what those filters let you see. You can type to search each list, and the pills on top take you back to an earlier step without losing what is ticked.",
+      "what": "Takes you step by step to an exact place: footprint, asset, level, space, position and locator. In each step you tick one or SEVERAL with their checkbox and tap «Done» to go down to the next step with what is ticked; each step list gathers what is inside everything ticked before. What is ticked is focused on the plan and in 3D (several assets of the same footprint, several levels, spaces or positions at once). In Position you tick the positions (P001) and in Locator you see the complete code of each one (Z006.H001.R001.N001.E001.P001) and can keep only some. It goes hand in hand with Zone, Show and Pick: it only lists what those filters let you see. You can type to search each list, and the pills on top take you back to an earlier step without losing what is ticked.",
       "example": "you tick footprint H001, in Assets you tick A020 and R001, tap «Done», in Level you tick N001 and N002 of both and tap «Done»: the plan and the 3D show only those levels of those two assets."
     },
     "layoutSaleContenedor": {
@@ -5378,7 +5392,7 @@
       "example": "it says «Asset R001 goes outside its footprint H001»: tap «Go to it», you land in Assets with R001 marked, lower its length or enlarge the footprint and the notice disappears by itself."
     },
     "layoutFiltroLocalizadorRuta": {
-      "what": "The steps of the trip, left to right: Footprint, Asset, Level, Space and Position. The lit pill is the step you are on; the ones with a code are what you already picked, and tapping one takes you back to that step (what you picked after it is cleared).",
+      "what": "The steps of the trip, left to right: Footprint, Asset, Level, Space, Position and Locator. The lit pill is the step you are on; the ones with a code are what you already picked, and tapping one takes you back to that step (what you picked after it is cleared).",
       "example": "you are on Space and tap «Asset A004»: you are back at the list of assets of the footprint."
     },
     "layoutCarasConsumo": {

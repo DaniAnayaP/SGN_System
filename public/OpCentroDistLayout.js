@@ -10,8 +10,10 @@
 const LC = window.LayoutCalc;
 // El orden de los pasos en la barra (Localizadores, que no edita nada, siempre va al final).
 const SECTION_ORDER = ['contorno', 'pisos', 'rampas', 'paredes', 'puertas', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'zonas', 'espacios', 'activos', 'niveles', 'posiciones', 'ubicaciones'];
+// Los pasos de solo consulta (no editan nada, no llevan candado y van al final de la barra con su flechita): Localizadores y Relación Código.
+const INFO_STEPS = ['localizadores', 'relacion'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', rampas: 'main.layoutStepRampas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', ubicaciones: 'main.layoutStepUbicaciones', niveles: 'main.layoutStepNiveles', localizadores: 'main.layoutStepLocalizadores',
+    relacion: 'main.layoutRelacionCodigoLink', contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', rampas: 'main.layoutStepRampas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', ubicaciones: 'main.layoutStepUbicaciones', niveles: 'main.layoutStepNiveles', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     mode: 'view', saved: null, draft: null, version: 0, perms: null, showMeasures: true, showOpening: true, showLevels: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -57,7 +59,7 @@ const stepVisible = (section) => sectionLevel(section) !== 'none';
 function ensureVisibleSteps() {
     const visible = SECTION_ORDER.filter(stepVisible);
     if (!visible.length) return; // sin ningún paso permitido no hay nada que elegir: se deja como estaba
-    const keep = (s) => s === 'localizadores' || visible.includes(s);
+    const keep = (s) => INFO_STEPS.includes(s) || visible.includes(s);
     state.steps = state.steps.filter(keep);
     state.focusStack = state.focusStack.filter(keep);
     if (!state.steps.length) state.steps = [visible[0]];
@@ -189,7 +191,7 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-ubicaciones', 'layout-zonas', 'layout-pisos', 'layout-rampas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-niveles', 'layout-localizadores', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-objetos', 'layout-transito'];
+const FILTER_TABLE_IDS = ['layout-ubicaciones', 'layout-zonas', 'layout-pisos', 'layout-rampas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-niveles', 'layout-localizadores', 'layout-relacion', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-objetos', 'layout-transito'];
 // Qué tabla con filtro corresponde a cada lista que se agrega: al agregar un renglón se quitan sus filtros para que el nuevo siempre se vea.
 const FILTER_OF_LIST = { ubicaciones: 'layout-ubicaciones', obstacles: 'layout-obstaculos', doors: 'layout-puertas', power: 'layout-luz', sensors: 'layout-sensores', safety: 'layout-seguridad', transit: 'layout-transito', objects: 'layout-objetos', vertices: 'layout-contorno-esquinas', contornoLados: 'layout-contorno-lados' };
 function clearFilterOf(list) {
@@ -1089,13 +1091,56 @@ function applyFootprintMarks() {
 // Paso «Localizadores» (solo lectura): los localizadores que va creando este Layout con lo que se tiene capturado AHORA (también lo que todavía no se guarda): zona, huella, activo y cada posición completa. Para verlos
 // todos, con su almacén y sub almacén, está la pantalla Catálogos > Localizadores (la flechita del paso).
 const LOCATOR_PANEL_MAX = 400;
+// Cómo se escriben la zona, la huella, el activo, la unidad y la capacidad de un localizador en las tablas de los pasos Localizadores y Relación Código.
+const locZoneText = (r) => (r.zoneCode ? (r.zoneName ? `${r.zoneName} (${r.zoneCode})` : r.zoneCode) : '—');
+const locFootprintText = (r) => (r.footprintCode ? (r.footprintName ? `${r.footprintCode} · ${r.footprintName}` : r.footprintCode) : '—');
+const locAssetText = (r) => (r.spaceCode ? `${r.spaceCode} · ${typeLabel('space', r.spaceType || 'rack')}` : '—');
+const locNum = (n) => (n ? String(n) : '—');
+const locUnitHtml = (info) => (info.packLevel == null ? '—' : `<b>${esc(info.packLevel === 0 ? (info.mainUom || t('main.pkLevel0')) : info.packName)}</b> <span class="rel-tag rel-tag-ok">${esc(t(`main.pkLevel${info.packLevel}`))}</span>`);
+const locCapacityHtml = (info) => (info.packCapacity != null ? `<b>${esc(info.packCapacity)}</b> ${esc(info.mainUom)}` : '—');
+// Los pasos Localizadores y Relación Código siguen lo que enfoca la franja de arriba (Zona, Elegir y Localizador): solo salen los localizadores de lo enfocado, igual que en las demás tablas. La lista se recorta a lo
+// enfocado ANTES de poner el tope de renglones, para que lo elegido salga aunque esté lejos en la lista; por eso la tabla se vuelve a armar cuando cambia el enfoque (infoRenderedKey, ver applyFindToTables).
+let infoRenderedKey = '';
+function infoFindKey() {
+    const marked = state.hl && state.hl.loc ? highlightedList().map((e) => `${e.id}:${e.n || ''}:${e.c || ''}:${e.p || ''}`).join(',') : '';
+    const f = state.find;
+    return JSON.stringify([f ? [f.kind, f.id, (f.items || []).map((i) => `${i.type}:${i.id}`), f.ids || null] : null, !!state.findDim, marked]);
+}
+// ¿Un localizador (renglón de zona, huella, activo o posición) entra en lo enfocado? Las zonas y las huellas, con huellas o activos elegidos, solo salen si son de lo elegido (o si lo elegido está dentro de ellas); lo demás
+// lo decide inFind, como en las otras tablas (con Tenue no se filtra nada).
+function locatorInFind(r, inside) {
+    const f = state.find;
+    const d = state.draft;
+    if (!f || !d) return true;
+    const ent = r.scope === 'position' ? { kind: 'bay', id: r.spaceId, n: r.level, c: r.slot, p: r.position }
+        : r.scope === 'asset' ? { kind: 'space', id: r.spaceId }
+        : r.scope === 'footprint' ? { kind: 'footprint', id: r.footprintId }
+        : { kind: 'zone', id: r.zoneId };
+    if (!ent.id) return true; // sin zona, sin huella o sin activo (recién agregado): siempre se ve
+    if (f.kind === 'items' && !state.findDim && (r.scope === 'zone' || r.scope === 'footprint')) {
+        const fps = state.pick.filter((p) => p.type === 'footprint').map((p) => p.id);
+        const sps = state.pick.filter((p) => p.type === 'space').map((p) => p.id);
+        if (fps.length || sps.length) {
+            const fpIds = new Set([...fps, ...sps.map((id) => ((d.spaces || []).find((s) => s.id === id) || {}).footprintId).filter(Boolean)]);
+            if (r.scope === 'footprint') return fpIds.has(ent.id);
+            return [...fpIds].some((id) => ((d.footprints || []).find((x) => x.id === id) || {}).zoneId === ent.id);
+        }
+    }
+    return inFind(ent, inside);
+}
+const findInside = () => (state.find && state.draft && state.find.kind === 'zone' ? scopeInside(state.draft, zoneFocusIds(state.find)) : null);
 function locatorsStepHtml() {
-    const { rows, truncated } = LC.locatorRows(state.draft, { max: LOCATOR_PANEL_MAX });
-    if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutLocalizadoresVacio'))}</p>`;
-    const zoneText = (r) => (r.zoneCode ? (r.zoneName ? `${r.zoneName} (${r.zoneCode})` : r.zoneCode) : '—');
-    const footprintText = (r) => (r.footprintCode ? (r.footprintName ? `${r.footprintCode} · ${r.footprintName}` : r.footprintCode) : '—');
-    const assetText = (r) => (r.spaceCode ? `${r.spaceCode} · ${typeLabel('space', r.spaceType || 'rack')}` : '—');
-    const num = (n) => (n ? String(n) : '—');
+    infoRenderedKey = infoFindKey();
+    const everything = LC.locatorRows(state.draft).rows;
+    const inside = findInside();
+    const focused = state.find ? everything.filter((r) => locatorInFind(r, inside)) : everything;
+    const truncated = focused.length > LOCATOR_PANEL_MAX;
+    const rows = focused.slice(0, LOCATOR_PANEL_MAX);
+    if (!rows.length) return `<p class="layout-muted">${esc(t(state.find && everything.length ? 'main.layoutLocalizadoresSinEnfoque' : 'main.layoutLocalizadoresVacio'))}</p>`;
+    const zoneText = locZoneText;
+    const footprintText = locFootprintText;
+    const assetText = locAssetText;
+    const num = locNum;
     // Con la hoja Códigos en Localizadores: el código que tiene cada localizador completo, la unidad que se almacena y su capacidad máxima, y los botones para relacionarlo o cambiarlo sin salir del croquis.
     const showCodes = !!(state.perms && state.perms.canSeeLocatorCodes);
     const canRelate = !!(state.perms && state.perms.canRelateCode);
@@ -1110,8 +1155,8 @@ function locatorsStepHtml() {
             const btn = canRelate ? `<button type="button" class="layout-loc-btn" ${data} data-help-key="layoutRelacionarCodigo"${dirty ? ` disabled title="${esc(t('main.locGuardaPrimero'))}"` : ''}>${esc(t('main.locRelacionar'))}</button>` : '';
             return `<td class="layout-calc">—</td><td class="layout-calc">—</td><td class="layout-calc">—</td><td class="layout-calc">${btn}</td>`;
         }
-        const unit = info.packLevel == null ? '—' : `<b>${esc(info.packLevel === 0 ? (info.mainUom || t('main.pkLevel0')) : info.packName)}</b> <span class="rel-tag rel-tag-ok">${esc(t(`main.pkLevel${info.packLevel}`))}</span>`;
-        const cap = info.packCapacity != null ? `<b>${esc(info.packCapacity)}</b> ${esc(info.mainUom)}` : '—';
+        const unit = locUnitHtml(info);
+        const cap = locCapacityHtml(info);
         const change = canRelate ? `<button type="button" class="layout-loc-btn s" ${data} data-help-key="layoutRelacionarCodigo"${dirty ? ` disabled title="${esc(t('main.locGuardaPrimero'))}"` : ''}>${esc(t('main.locCambiar'))}</button>` : '';
         const go = hasRelationScreen() ? `<a class="layout-loc-go" href="${esc(relationUrl(r.locator))}" data-help-key="layoutRelacionLink" aria-label="${esc(t('main.locIrRelacion'))}" title="${esc(t('main.locIrRelacion'))}"><i class="bx bx-link-external" aria-hidden="true"></i></a>` : '';
         return `<td class="layout-calc">${esc(info.sku)} · ${esc(info.description)}</td><td class="layout-calc">${unit}</td><td class="layout-calc">${cap}</td><td class="layout-calc"><span class="layout-loc-lock" title="${esc(t('main.locCodigoNoElimina'))}"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>${change}${go}</td>`;
@@ -1121,6 +1166,22 @@ function locatorsStepHtml() {
     const heads = ['main.colLocZona', 'main.colLocHuella', 'main.colLocActivo', 'main.colLocNivel', 'main.colLocColumna', 'main.colLocProfundidad', 'main.colLocLocalizador', 'main.colLocAlcance', 'main.colLocEstado'];
     if (showCodes) heads.push('main.colLocCodigo', 'main.colLocUnidad', 'main.colLocCapacidad', 'main.colLocAcciones');
     return `${table(heads, body, 'layout-localizadores')}${note}`;
+}
+// Paso «Relación Código» (solo consulta): los códigos que ya están relacionados con un localizador de este Layout (lo mismo que se ve en Relación Código, pero aquí, viendo el croquis), con la unidad que se almacena y su capacidad
+// máxima. Está ordenado por código. Para relacionar o cambiar uno se usa el botón del paso Localizadores; la flechita de al lado del nombre abre la pantalla Relación Código completa (y la flecha de cada renglón, solo ese localizador).
+function relationStepHtml() {
+    if (!state.draft) return '';
+    infoRenderedKey = infoFindKey();
+    const { rows } = LC.locatorRows(state.draft);
+    const inside = findInside();
+    const withCode = rows.filter((r) => r.scope === 'position' && r.complete && locCodeAt(r));
+    const related = withCode.filter((r) => locatorInFind(r, inside)).map((r) => ({ r, info: locCodeAt(r) }));
+    if (!related.length) return `<p class="layout-muted">${esc(t(state.find && withCode.length ? 'main.layoutRelacionSinEnfoque' : 'main.layoutRelacionVacio'))}</p>`;
+    related.sort((a, b) => String(a.info.sku).localeCompare(String(b.info.sku), undefined, { numeric: true }));
+    const go = hasRelationScreen();
+    const body = related.map(({ r, info }) => `<tr data-locator="${esc(r.locator || '')}"><td class="layout-calc">${esc(info.sku)} · ${esc(info.description)}</td><td class="layout-calc">${locUnitHtml(info)}</td><td class="layout-calc">${locCapacityHtml(info)}</td><td class="layout-calc"><b>${esc(r.locator || '—')}</b></td><td class="layout-calc">${esc(locZoneText(r))}</td><td class="layout-calc">${esc(locFootprintText(r))}</td><td class="layout-calc">${esc(locAssetText(r))}</td><td class="layout-calc">${locNum(r.level)}</td><td class="layout-calc">${locNum(r.slot)}</td><td class="layout-calc">${locNum(r.position)}</td><td class="layout-calc">${go ? `<a class="layout-loc-go" href="${esc(relationUrl(r.locator))}" data-help-key="layoutRelacionLink" aria-label="${esc(t('main.locIrRelacion'))}" title="${esc(t('main.locIrRelacion'))}"><i class="bx bx-link-external" aria-hidden="true"></i></a>` : ''}</td></tr>`);
+    const heads = ['main.colLocCodigo', 'main.colLocUnidad', 'main.colLocCapacidad', 'main.colLocLocalizador', 'main.colLocZona', 'main.colLocHuella', 'main.colLocActivo', 'main.colLocNivel', 'main.colLocColumna', 'main.colLocProfundidad', go ? 'main.colLocAcciones' : ''];
+    return table(heads, body, 'layout-relacion');
 }
 // Un renglón de la tabla de obstáculos del contorno. Las cuatro celdas del lugar cambian con la forma de ponerlo: «Sobre el contorno» = lado, distancia, largo (vacío = todo el lado) y grosor; «Dentro de la nave» = X, Y, largo y ancho.
 // La altura solo la lleva el desnivel (su altura sobre el piso; negativa si es más bajo).
@@ -1302,6 +1363,7 @@ function setSafetyType(row, value) {
 }
 function stepHtml(step) {
     if (step === 'localizadores') return locatorsStepHtml();
+    if (step === 'relacion') return relationStepHtml();
     const d = state.draft;
     const dis = !canEdit(step);
     if (step === 'contorno') {
@@ -1878,7 +1940,7 @@ function renderPanel() {
     ensureVisibleSteps();
     const tabs = SECTION_ORDER.filter(stepVisible).map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
     const s = state.focus;
-    const isLocators = s === 'localizadores'; // este paso no edita nada: no lleva candado
+    const isLocators = INFO_STEPS.includes(s); // estos pasos no editan nada: no llevan candado
     const level = isLocators ? '' : sectionLevel(s);
     const locked = !isLocators && !canEdit(s);
     const section = `<div class="layout-section" data-help-key="layoutSec_${s}">
@@ -1890,9 +1952,13 @@ function renderPanel() {
     const locatorsLink = Dashboard.hasScreenGrant('supply-chain', 'sc-area-distribution-center', 'cat-catalogos/cat-catalogos-centro-dist-localizadores')
         ? `<span class="layout-step layout-step-split${stepOn('localizadores') ? ' active' : ''}${state.focus === 'localizadores' ? ' focus' : ''}"><button type="button" class="layout-step-main" aria-pressed="${stepOn('localizadores')}" aria-current="${state.focus === 'localizadores'}" data-step="localizadores" data-help-key="layoutLocalizadores">${esc(t('main.layoutStepLocalizadores'))}</button><a class="layout-step-arrow" href="CatCentroDistLocalizadores.html" data-help-key="layoutLocalizadoresLink" aria-label="${esc(t('main.layoutLocalizadoresIr'))}" title="${esc(t('main.layoutLocalizadoresIr'))}"><i class="bx bx-link-external" aria-hidden="true"></i></a></span>`
         : '';
-    // «Relación Código ↗»: abre esa pantalla ya filtrada a lo que se ve (un localizador, el Localizador elegido o todo). Sale con la hoja Códigos en Localizadores y el acceso a Relación Código.
-    const relationLink = state.perms && state.perms.canSeeLocatorCodes && hasRelationScreen()
-        ? `<a class="layout-step layout-step-link" href="${esc(relationUrl(''))}" data-rel-shortcut data-help-key="layoutRelacionLink">${esc(t('main.layoutRelacionCodigoLink'))} <i class="bx bx-link-external" aria-hidden="true"></i></a>`
+    // «Relación Código»: igual que Localizadores. Al tocar el nombre se ve aquí abajo la relación de códigos de este Layout (solo consulta); la flechita de su lado abre la pantalla Relación Código ya filtrada a lo que se ve
+    // (un localizador, el Localizador elegido o todo). El nombre sale con la hoja Códigos en Localizadores; la flechita, además, con el acceso a la pantalla Relación Código.
+    const relationArrow = hasRelationScreen()
+        ? `<a class="layout-step-arrow" href="${esc(relationUrl(''))}" data-rel-shortcut data-help-key="layoutRelacionLink" aria-label="${esc(t('main.layoutRelacionIr'))}" title="${esc(t('main.layoutRelacionIr'))}"><i class="bx bx-link-external" aria-hidden="true"></i></a>`
+        : '';
+    const relationLink = state.perms && state.perms.canSeeLocatorCodes
+        ? `<span class="layout-step layout-step-split${stepOn('relacion') ? ' active' : ''}${state.focus === 'relacion' ? ' focus' : ''}"><button type="button" class="layout-step-main" aria-pressed="${stepOn('relacion')}" aria-current="${state.focus === 'relacion'}" data-step="relacion" data-help-key="layoutRelacionPaso">${esc(t('main.layoutRelacionCodigoLink'))}</button>${relationArrow}</span>`
         : '';
     const allOn = SECTION_ORDER.filter(stepVisible).every((x) => stepOn(x));
     const allPill = `<button type="button" role="button" aria-pressed="${allOn}" class="layout-step layout-step-all${allOn ? ' active' : ''}" data-step-all data-help-key="layoutFxTodo">${esc(t('main.layoutFxTodo'))}</button>`;
@@ -2707,6 +2773,8 @@ function applyFindToTables() {
         const e = state.find && d ? rowEntity(tr) : null;
         tr.classList.toggle('layout-find-out', !!e && !inFind(e, inside));
     });
+    // Localizadores y Relación Código se arman ya filtrados (no con renglones escondidos): si cambió el enfoque desde que se armaron, se arman otra vez
+    if (state.mode === 'edit' && d && INFO_STEPS.includes(state.focus) && infoFindKey() !== infoRenderedKey) renderPanel();
 }
 // La lista que sale al escribir: zonas y huellas que coinciden (con el mismo motor de búsqueda de todo el sistema: coma, $ y @).
 // Los tipos en que se puede buscar (type = el de los chips, kind = como se elige la figura, step = el paso donde vive). Cada tipo solo sale si el árbol deja ver su paso. Zonas y huellas enfocan (solo se ve lo de adentro);
@@ -2899,7 +2967,7 @@ let vDropdown = ''; // el desplegable abierto de la franja: 'zone' | 'layers' | 
 function showAllLayers() {
     const visible = SECTION_ORDER.filter(stepVisible);
     if (!visible.length) return;
-    state.steps = [...visible, ...state.steps.filter((s) => s === 'localizadores')];
+    state.steps = [...visible, ...state.steps.filter((s) => INFO_STEPS.includes(s))];
     state.focusStack = [...state.focusStack.filter((s) => state.steps.includes(s))];
     if (!state.steps.includes(state.focus)) state.focus = visible[visible.length - 1];
     if (!state.focusStack.length) state.focusStack = [state.focus];
@@ -3053,7 +3121,7 @@ const chosenList = () => state.pick;
 const vChooseTypes = new Set();
 // «Localizador»: en cada paso (huella, activo, nivel, espacio, posición) se marcan UNO O VARIOS; sel guarda lo marcado de cada paso (huella: id; activo: id; nivel: «activo|nivel»; espacio: «activo|nivel|espacio»;
 // posición: «activo|nivel|espacio|número») y step es la lista que se está viendo («Listo» baja al paso siguiente con lo marcado).
-const locEmpty = () => ({ fp: [], sp: [], n: [], c: [], cell: [] });
+const locEmpty = () => ({ fp: [], sp: [], n: [], c: [], pos: [], cell: [] });
 const vLoc = { step: 'fp', sel: locEmpty(), scope: null }; // scope = lo que Elegir tenía escogido al empezar el recorrido (sigue acotando sus listas)
 const locReset = () => { vLoc.step = 'fp'; vLoc.sel = locEmpty(); vLoc.scope = null; };
 // Todo lo que se puede elegir (lo que el árbol deja ver), por tipo: las mismas listas del buscador.
@@ -3115,8 +3183,10 @@ function renderChooseBody() {
 // Un buscador que baja paso a paso por el Localizador: Huella › Activo › Nivel › Espacio › Posición. En cada paso se marcan uno o varios (casillas) y «Listo» baja al paso siguiente con lo marcado: la lista de cada paso junta lo
 // que hay dentro de todo lo marcado antes. Lo marcado más abajo se enfoca en el croquis y en el 3D: varias huellas o activos como en Elegir; varios niveles, espacios o posiciones se resaltan dentro de sus activos (state.hlList).
 // Es solo de pantalla: no cambia nada de lo guardado.
-const LOC_STEPS = ['fp', 'sp', 'n', 'c', 'cell'];
-const LOC_LABEL = { fp: 'main.colLocHuella', sp: 'main.colLocActivo', n: 'main.colLocNivel', c: 'main.layoutLocPosicion', cell: 'main.layoutFiltroLocalizador' };
+// Huella › Activo › Nivel › Espacio › Posición › Localizador. «Posición» es la pieza P de un espacio (P001); «Localizador» es el código completo de las posiciones marcadas (Z006.H001.R001.N001.E001.P001): se marcan
+// las posiciones y, en el último paso, se puede dejar solo alguno de sus localizadores (sel.cell, siempre dentro de sel.pos; vacío = todas las posiciones marcadas).
+const LOC_STEPS = ['fp', 'sp', 'n', 'c', 'pos', 'cell'];
+const LOC_LABEL = { fp: 'main.colLocHuella', sp: 'main.colLocActivo', n: 'main.colLocNivel', c: 'main.layoutLocPosicion', pos: 'main.layoutLocPos', cell: 'main.layoutFiltroLocalizador' };
 const locPad = (n) => String(n).padStart(3, '0');
 const locAny = () => LOC_STEPS.some((k) => vLoc.sel[k].length);
 const locDeepest = () => { for (let i = LOC_STEPS.length - 1; i >= 0; i -= 1) if (vLoc.sel[LOC_STEPS[i]].length) return LOC_STEPS[i]; return ''; };
@@ -3134,9 +3204,9 @@ function locCodeOfKey(step, key) {
     const f = s && (d.footprints || []).find((x) => x.id === s.footprintId);
     const z = f && (d.zones || []).find((x) => x.id === f.zoneId);
     const out = [z && z.code, f && f.code, s && s.code];
-    if (step === 'n' || step === 'c' || step === 'cell') out.push(`N${locPad(parts[1])}`);
-    if (step === 'c' || step === 'cell') out.push(`E${locPad(parts[2])}`);
-    if (step === 'cell') out.push(`P${locPad(parts[3])}`);
+    if (step === 'n' || step === 'c' || step === 'pos' || step === 'cell') out.push(`N${locPad(parts[1])}`);
+    if (step === 'c' || step === 'pos' || step === 'cell') out.push(`E${locPad(parts[2])}`);
+    if (step === 'pos' || step === 'cell') out.push(`P${locPad(parts[3])}`);
     return out.filter(Boolean).join('.');
 }
 // La pieza corta de lo marcado en un paso (H001, A004, N002, E001, P001); con varias, la primera y «+ cuántas más»
@@ -3149,6 +3219,7 @@ function locPart(step) {
         if (step === 'sp') { const s = locSpaceOf(key); return s ? (s.code || '') : ''; }
         if (step === 'n') return `N${locPad(parts[1])}`;
         if (step === 'c') return `E${locPad(parts[2])}`;
+        if (step === 'cell') return locCodeOfKey('cell', key); // el localizador es el código completo
         return `P${locPad(parts[3])}`;
     };
     return list.length > 1 ? `${short(list[0])} +${list.length - 1}` : short(list[0]);
@@ -3172,7 +3243,7 @@ function locExpectedPick() {
 // Lo que se resalta dentro de los activos (niveles, espacios o posiciones marcados): [{ kind, id, n, c, p }]
 function locHlEntities() {
     const k = locDeepest();
-    if (k !== 'n' && k !== 'c' && k !== 'cell') return [];
+    if (k !== 'n' && k !== 'c' && k !== 'pos' && k !== 'cell') return [];
     return vLoc.sel[k].map((key) => {
         const [id, n, c, p] = key.split('|');
         if (k === 'n') return { kind: 'space', id, n: Number(n) };
@@ -3186,7 +3257,8 @@ function locPrune() {
     sel.sp = sel.sp.filter((id) => { const s = locSpaceOf(id); return s && sel.fp.includes(s.footprintId); });
     sel.n = sel.n.filter((k) => sel.sp.includes(k.split('|')[0]));
     sel.c = sel.c.filter((k) => sel.n.includes(k.split('|').slice(0, 2).join('|')));
-    sel.cell = sel.cell.filter((k) => sel.c.includes(k.split('|').slice(0, 3).join('|')));
+    sel.pos = sel.pos.filter((k) => sel.c.includes(k.split('|').slice(0, 3).join('|')));
+    sel.cell = sel.cell.filter((k) => sel.pos.includes(k));
 }
 // Elegir ↔ Localizador: lo que Elegir tiene escogido (huellas o activos) acota lo que lista el Localizador, y con UNA sola huella o UN solo activo elegido el Localizador arranca ahí. Lo que marcó el propio Localizador
 // (que deja su elección como la de Elegir) no lo acota: así se puede cambiar de huella sin quitar nada.
@@ -3262,14 +3334,26 @@ function locItems(step) {
         });
         return out;
     }
-    sel.c.forEach((ck) => {
-        const [sid, nStr, cStr] = ck.split('|');
+    if (step === 'pos') {
+        sel.c.forEach((ck) => {
+            const [sid, nStr, cStr] = ck.split('|');
+            const s = locSpaceOf(sid);
+            if (!s) return;
+            LC.positionsOfBay(d, s.id, Number(nStr), Number(cStr)).forEach((p) => {
+                const key = `${ck}|${p.num}`;
+                out.push({ value: key, title: `${sel.c.length > 1 ? `${s.code}.N${locPad(nStr)}.E${locPad(cStr)} · ` : ''}P${locPad(p.num)}`, sub: `${fmt(p.l)} × ${fmt(p.w)} × ${fmt(p.h)} m`, hay: `${locCodeOfKey('pos', key)} P${locPad(p.num)}` });
+            });
+        });
+        return out;
+    }
+    // Localizador: el código completo de cada posición marcada (Z006.H001.R001.N001.E001.P001)
+    sel.pos.forEach((pk) => {
+        const [sid, nStr, cStr, pStr] = pk.split('|');
         const s = locSpaceOf(sid);
         if (!s) return;
-        LC.positionsOfBay(d, s.id, Number(nStr), Number(cStr)).forEach((p) => {
-            const key = `${ck}|${p.num}`;
-            out.push({ value: key, title: `${sel.c.length > 1 ? `${s.code}.N${locPad(nStr)}.E${locPad(cStr)} · ` : ''}P${locPad(p.num)}`, sub: `${fmt(p.l)} × ${fmt(p.w)} × ${fmt(p.h)} m · ${locCodeOfKey('cell', key)}`, hay: `${locCodeOfKey('cell', key)} P${locPad(p.num)}` });
-        });
+        const p = LC.positionsOfBay(d, s.id, Number(nStr), Number(cStr)).find((x) => x.num === Number(pStr));
+        if (!p) return;
+        out.push({ value: pk, title: locCodeOfKey('cell', pk), sub: `${fmt(p.l)} × ${fmt(p.w)} × ${fmt(p.h)} m`, hay: locCodeOfKey('cell', pk) });
     });
     return out;
 }
@@ -3281,7 +3365,7 @@ function locBodyHtml() {
         const cur = k === stepKey;
         return `<button type="button" class="layout-find-type" data-loc-crumb="${k}" aria-pressed="${cur}"${val || cur ? '' : ' disabled'}>${esc(t(LOC_LABEL[k]))}${val ? ` <span class="layout-find-n">${esc(val)}</span>` : ''}</button>`;
     }).join('')}</div>`;
-    const needLayer = { fp: 'espacios', sp: 'activos', n: 'niveles', c: 'posiciones', cell: 'posiciones' }[stepKey];
+    const needLayer = { fp: 'espacios', sp: 'activos', n: 'niveles', c: 'posiciones', pos: 'posiciones', cell: 'posiciones' }[stepKey];
     const off = state.mode !== 'edit' && !stepOn(needLayer); // Qué ver: con la capa apagada no hay nada que bajar
     const rows = off ? [] : locItems(stepKey).filter((i) => ddMatch('loc', i.hay));
     const CAP = 150;
@@ -3327,7 +3411,8 @@ function locApply() {
     // en Editar la tabla de abajo pasa al paso de lo marcado: Huella-Espacio, Activos, Niveles o Posiciones
     if (state.mode === 'edit') {
         // con posiciones marcadas la tabla es la de Posiciones; con espacios, la de Espacios; con niveles, la de Niveles
-        const tableStep = [k === 'cell' ? 'ubicaciones' : '', k === 'cell' || k === 'c' ? 'posiciones' : '', k === 'n' ? 'niveles' : '', step].find((s) => s && stepVisible(s));
+        const isPos = k === 'pos' || k === 'cell';
+        const tableStep = [isPos ? 'ubicaciones' : '', isPos || k === 'c' ? 'posiciones' : '', k === 'n' ? 'niveles' : '', step].find((s) => s && stepVisible(s));
         showStep(tableStep || step);
     }
     state.pick = locExpectedPick();
@@ -3351,6 +3436,7 @@ function locPick(step, value) {
     if (step === 'fp' && !locAny()) vLoc.scope = state.pick.length ? state.pick.map((p) => ({ ...p })) : null; // lo que Elegir tenía escogido sigue acotando las listas de los pasos que siguen
     const list = vLoc.sel[step];
     vLoc.sel[step] = list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
+    if (step === 'pos') vLoc.sel.cell = []; // al cambiar las posiciones, el Localizador vuelve a ser el de todas las marcadas
     locPrune();
     ddFocus = false;
     locApply();
@@ -3361,6 +3447,7 @@ function locNext() {
     const at = LOC_STEPS.indexOf(vLoc.step);
     if (at >= LOC_STEPS.length - 1) { vDropdown = ''; renderViewStrip(); return; }
     vLoc.step = LOC_STEPS[at + 1];
+    if (vLoc.step === 'cell' && !vLoc.sel.cell.length) vLoc.sel.cell = [...vLoc.sel.pos]; // el Localizador arranca con todas las posiciones marcadas; se pueden quitar las que no
     vSearch.loc.q = '';
     ddFocus = false;
     renderViewStrip();
@@ -3447,7 +3534,7 @@ $('layout-vstrip-filters').addEventListener('click', (event) => {
             const visible = queVerSteps();
             if (state.mode === 'edit') fxToggleAll(); // en Editar siempre queda al menos un paso encendido (Contorno)
             else {
-                if (forceNone || visible.every(stepOn)) state.steps = state.steps.filter((x) => x === 'localizadores' || x === 'zonas'); else showAllLayers(); // las zonas no se apagan aquí: se filtran con el botón Zona
+                if (forceNone || visible.every(stepOn)) state.steps = state.steps.filter((x) => INFO_STEPS.includes(x) || x === 'zonas'); else showAllLayers(); // las zonas no se apagan aquí: se filtran con el botón Zona
                 fixLayerFocus();
             }
         }
@@ -4210,8 +4297,10 @@ const hasRelationScreen = () => Dashboard.hasScreenGrant('supply-chain', 'sc-are
 const relationUrl = (q) => `OpCentroDistRelacionCodigo.html${q ? `?q=${encodeURIComponent(q)}` : ''}`;
 // A qué se filtra Relación Código desde el botón de arriba: un solo localizador a la vista, el Localizador elegido en la franja o nada.
 function relationShortcutQuery() {
-    const rowsShown = [...document.querySelectorAll('#layout-panel table[data-filter-table="layout-localizadores"] tbody tr[data-locator]')].filter((tr) => !tr.hidden && tr.dataset.locator);
-    const full = rowsShown.filter((tr) => tr.querySelector('[data-loc-rel], .layout-loc-lock'));
+    // en el paso Relación Código se ve esa tabla (cada renglón ya es un localizador con código); en los demás, la de Localizadores
+    const tableId = state.focus === 'relacion' ? 'layout-relacion' : 'layout-localizadores';
+    const rowsShown = [...document.querySelectorAll(`#layout-panel table[data-filter-table="${tableId}"] tbody tr[data-locator]`)].filter((tr) => !tr.hidden && tr.dataset.locator);
+    const full = rowsShown.filter((tr) => tr.querySelector('[data-loc-rel], .layout-loc-lock') || tableId === 'layout-relacion');
     if (full.length === 1) return full[0].dataset.locator;
     if (rowsShown.length === 1) return rowsShown[0].dataset.locator;
     const picked = typeof locCode === 'function' ? locCode() : '';
@@ -6098,18 +6187,8 @@ function updateViewBtns() {
     $('layout-mode').hidden = !allowed; // sin 3D no hay nada que elegir: el interruptor 2D | 3D no sale
     updateTextsMenu();
     [['layout-3d-zoom-in', 'main.layout3dAcercar'], ['layout-3d-zoom-out', 'main.layout3dAlejar']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
-    // Elegir los activos del 3D: un grupo con su propia hoja del árbol (iconLayout3dCapas); solo se ve quien la tiene.
-    $('layout-3d-layers').hidden = !(state.perms && state.perms.canToggle3dLayers);
+    // (El botón «Elegir activos» del 3D se quitó: «Elegir» de la franja de arriba hace lo mismo, en 2D y en 3D.)
     [['layout-texts-btn', 'main.layoutTextos']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });
-    // Elegir qué activos se ven: se marca cuando hay alguno oculto y no sirve con la capa de activos apagada
-    const pickBtn = $('layout-3d-assets-pick');
-    const hiddenCount = picker3d ? picker3d.getHidden().size : 0;
-    const pickTotal = picker3d ? picker3d.total() : 0;
-    pickBtn.disabled = effective3dLayers().assets === false;
-    pickBtn.setAttribute('aria-pressed', String(hiddenCount > 0));
-    pickBtn.setAttribute('aria-expanded', String(!!(picker3d && picker3d.isOpen())));
-    pickBtn.setAttribute('aria-label', t('main.layout3dActivosElegir') + (hiddenCount ? ` (${pickTotal - hiddenCount}/${pickTotal})` : ''));
-    pickBtn.title = pickBtn.getAttribute('aria-label');
     if (picker3d && (!state.view3d || effective3dLayers().assets === false) && picker3d.isOpen()) picker3d.hide();
     const labelsBtn = $('layout-3d-labels');
     labelsBtn.setAttribute('aria-pressed', String(scene3dLabels));
@@ -6173,7 +6252,6 @@ document.querySelectorAll('.layout-3d-view').forEach((btn) => btn.addEventListen
     document.querySelectorAll('.layout-3d-view').forEach((b) => b.classList.toggle('on', b === btn));
     scene3d.setView(btn.getAttribute('data-view'));
 }));
-$('layout-3d-assets-pick').addEventListener('click', () => { if (picker3d) picker3d.toggle(); });
 $('layout-3d-labels').addEventListener('click', () => {
     scene3dLabels = !scene3dLabels;
     updateViewBtns();
