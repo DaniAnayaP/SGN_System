@@ -1888,6 +1888,26 @@
     "layoutNivEspacio": "Alto del espacio (m)",
     "layoutNivAlto": "Alto del nivel (m)",
     "layoutNivCantPos": "Cantidad de espacios",
+    "colLayoutUbicaciones": "Posiciones",
+    "layoutStepUbicaciones": "Posiciones",
+    "layoutUbicCodigo": "Código de la posición",
+    "layoutUbicX": "X (m)",
+    "layoutUbicY": "Y (m)",
+    "layoutUbicEspacio": "Espacio",
+    "layoutUbicAgregar": "+ Agregar posición",
+    "layoutUbicQuitar": "Quitar la posición",
+    "layoutUbicSin": "Este espacio todavía no tiene posiciones. Agrega la primera.",
+    "layoutUbicSinEspacios": "Todavía no hay espacios. Agrégalos en Activos y Niveles: sus posiciones se acomodan aquí.",
+    "layoutUbicVista": "Vista desde arriba: arrastra una posición para acomodarla",
+    "layoutUbicKpiPos": "posiciones",
+    "layoutUbicKpiM2": "{used} de {total} m² acomodados ({pct} %)",
+    "layoutUbicKpiM3": "{used} de {total} m³ de volumen",
+    "layoutUbicOk": "Todas caben: ninguna se sale del espacio, pasa de su alto ni se encima con otra.",
+    "layoutUbicConteo": "{n} posiciones",
+    "layoutVioUbic_out": "La posición {code} se sale de su espacio (mide {l} × {w} m): acomódala o cambia sus medidas para poder guardar.",
+    "layoutVioUbic_tall": "La posición {code} mide {h} m de alto y su espacio solo {max} m: baja su alto para poder guardar.",
+    "layoutVioUbic_overlap": "Las posiciones {other} y {code} están encimadas: acomódalas o cambia sus medidas para poder guardar.",
+    "layoutVioUbic_faces": "La posición {code} se consume por {faces} y su espacio se consume por {has}: quita esa cara de la posición o agrégala al espacio para poder guardar.",
     "layoutCarasConsumo": "Caras de consumo",
     "layoutFrente": "Frente",
     "layoutFrenteAuto": "Automático ({side})",
@@ -5098,6 +5118,18 @@
     "layoutFrenteActivo": {
       "what": "La cara del activo que mira al pasillo principal (los pasillos «Principal» del paso Tránsito). Sale sola: si un pasillo principal toca el activo, esa es su cara frontal; si toca dos pasillos principales en esquina, es la de la izquierda al mirar la esquina desde el cruce de los pasillos; si no toca ninguno, mira al principal más cercano y, sin pasillos principales, hacia abajo del croquis. Aquí lo puedes cambiar a mano. Atrás, izquierda y derecha se cuentan desde el frente.",
       "example": "el rack tiene un pasillo principal abajo: su frente es «Abajo». Quien lo mira de frente tiene a su izquierda el lado izquierdo del croquis."
+    },
+    "layoutSec_ubicaciones": {
+      "what": "Cada espacio se puede dividir en una o más posiciones, acomodadas a mano. Elige el espacio arriba y agrega sus posiciones: cada una lleva su lugar dentro del espacio (X y Y desde la esquina de arriba a la izquierda), su largo, su fondo y su alto, y pueden medir distinto: a unas les das más lugar que a otras. Se acomodan como un activo dentro de una huella: arrástralas en el dibujo o escribe sus medidas. No pueden salirse del espacio, pasar de su alto ni encimarse; lo que no cumpla se marca en rojo y no se guarda. Cada posición también tiene sus caras de consumo, y solo puede usar las de su espacio. Su código sale del espacio y de su número.",
+      "example": "el espacio R001.N001.C001 mide 3 × 1 m: pones una posición de 0.6 × 1 m, otra de 0.9 × 0.5 m junto a ella y una tercera de 0.5 × 1 m más allá, cada una con su propio alto."
+    },
+    "layoutUbicEspacio": {
+      "what": "El espacio (un nivel × un lugar de izquierda a derecha de un activo) cuyas posiciones estás acomodando. El número entre paréntesis es cuántas posiciones tiene ya.",
+      "example": "R001.N001.C002 (3): el espacio 2 del nivel 1 del rack R001, con 3 posiciones."
+    },
+    "layoutUbicVista": {
+      "what": "El espacio visto desde arriba, con sus posiciones como cajas. Arrastra una caja para acomodarla (se acomoda de 5 en 5 cm) o escribe su X y Y en la tabla. En rojo, la que se sale del espacio, pasa de su alto o se encima con otra.",
+      "example": "arrastras la posición P002 hacia la derecha hasta que quede junto a la P001; si se encima con ella, las dos se ponen en rojo."
     },
     "layoutFiltroElegirTipos": {
       "what": "Las clasificaciones de lo que hay en el Layout (Huellas, Activos, Sensores…), una junto a otra debajo del buscador, para no recorrer una lista enorme. Toca una o varias y la lista solo trae esas; «Todo» las quita. El número es cuántas coinciden con lo que escribiste en el buscador.",

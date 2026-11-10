@@ -63,8 +63,9 @@
         activos: 'colLayoutActivos',
         posiciones: 'colLayoutPosiciones',
         niveles: 'colLayoutNiveles',
+        ubicaciones: 'colLayoutUbicaciones', // el paso «Posiciones» (lugares libres dentro de cada espacio); `posiciones` es el paso «Espacios»
     };
-    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, objects: 500, safety: 500, zones: 150, floors: 100, ramps: 100, zonePoints: 60, categories: 20, categoryText: 120, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
+    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, objects: 500, safety: 500, zones: 150, floors: 100, ramps: 100, zonePoints: 60, categories: 20, categoryText: 120, positions: 5000, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -2923,6 +2924,44 @@
         { const coded = assignItemCodes(out); ITEM_CODES.forEach(({ list, next }) => { out[list] = coded[list]; if (coded[next]) out[next] = coded[next]; else delete out[next]; }); }
         { const safe = assignSafetyCodes(deriveSafetyZones(out)); out.safety = safe.safety; if (safe.safetyNext && Object.keys(safe.safetyNext).length) out.safetyNext = safe.safetyNext; else delete out.safetyNext; }
         out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
+        // Posiciones (paso Posiciones): lugares libres dentro de un espacio (un nivel × una columna de un activo). Cada una lleva su lugar (x, y desde la esquina de arriba a la izquierda del espacio), su largo, su fondo y su alto, su número (P001…, el
+        // consecutivo dentro del espacio, que no se reusa: posNext) y, solo si las cambió, sus caras de consumo. Una posición de un espacio que ya no existe (se quitó el activo, el nivel o la columna) se descarta sin avisar.
+        {
+            const spaceById = new Map(out.spaces.map((sp) => [sp.id, sp]));
+            const seenIds = new Set();
+            const nums = new Map();
+            const given = src.posNext && typeof src.posNext === 'object' ? src.posNext : {};
+            const kept = [];
+            list(src.positions, LIMITS.positions, 'Posiciones').forEach((p, i) => {
+                const label = `Posición ${i + 1}`;
+                const sp = spaceById.get(p && p.spaceId);
+                const n = Math.round(Number(p && p.n));
+                const c = Math.round(Number(p && p.c));
+                if (!sp || !(n >= 1 && n <= (sp.levels || 1)) || !(c >= 1 && c <= levelSlots(sp, n))) return;
+                const key = `${sp.id}|${n}|${c}`;
+                const item = { id: idOf(p && p.id, seenIds, label), spaceId: sp.id, n, c, x: meters(p && p.x, label), y: meters(p && p.y, label), l: meters(p && p.l, label), w: meters(p && p.w, label), h: meters(p && p.h, label) };
+                if (!(item.l > 0 && item.w > 0 && item.h > 0)) errors.push(`${label}: el largo, el fondo y el alto deben ser mayores que 0`);
+                const posFaces = sanitizeFaces(p && p.faces);
+                if (posFaces) item.faces = posFaces;
+                const num = Math.round(Number(p && p.num));
+                const used = nums.get(key) || new Set();
+                if (Number.isFinite(num) && num >= 1 && num <= 9999 && !used.has(num)) { item.num = num; used.add(num); nums.set(key, used); }
+                kept.push({ item, key });
+            });
+            // las que no traen número (o lo repiten) reciben el siguiente después del más alto y del último que ya se dio
+            kept.forEach(({ item, key }) => {
+                if (item.num) return;
+                const used = nums.get(key) || new Set();
+                item.num = Math.max(Number(given[key]) || 0, ...used, 0) + 1;
+                used.add(item.num);
+                nums.set(key, used);
+            });
+            out.positions = kept.map((x) => x.item);
+            const counters = {};
+            nums.forEach((used, key) => { counters[key] = Math.max(Number(given[key]) || 0, ...used); });
+            Object.keys(given).forEach((key) => { if (counters[key] === undefined && spaceById.has(key.split('|')[0]) && Number(given[key]) > 0) counters[key] = Math.round(Number(given[key])); });
+            if (Object.keys(counters).length) out.posNext = counters;
+        }
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
         out.plan = plan ? { widthM: meters(plan.widthM, 'Plano', 0.1) } : null;
         // marca: desde aquí el color de cada activo es suyo aunque se parezca al de su huella (los Layouts de antes, sin marca, todavía traen los heredados)
@@ -3135,6 +3174,52 @@
         return (table[front] || table.S)[face];
     }
 
+    // ---- Posiciones: lugares libres dentro de un espacio --------------------------------------------------------------------------------------
+    // Una posición se acomoda dentro de su espacio como un activo dentro de su huella: x, y desde la esquina de arriba a la izquierda del espacio (croquis sin girar), largo, fondo y alto. Pueden medir distinto, pero no pueden salirse del espacio,
+    // pasar de su alto, encimarse con otra del mismo espacio ni usar una cara de consumo que su espacio no tiene. Su código sale del espacio (R001.N001.C001) y su número: R001.N001.C001.P001.
+    const pad3 = (n) => String(n).padStart(3, '0');
+    const positionCode = (space, p) => `${(space && space.code) || ''}.N${pad3(p.n)}.C${pad3(p.c)}.P${pad3(p.num || 1)}`;
+    function facesOfPosition(space, p) { return sanitizeFaces(p && p.faces) || facesOfBay(space, p.n, p.c); }
+    function positionViolations(layout) {
+        const out = [];
+        if (!layout || !Array.isArray(layout.positions) || !layout.positions.length || !Array.isArray(layout.spaces)) return out;
+        const L = deriveSpaces(layout);
+        const byId = new Map(L.spaces.map((s) => [s.id, s]));
+        const eps = 0.005;
+        const m2 = (v) => String(round2(v));
+        const groups = new Map();
+        layout.positions.forEach((p) => { const key = `${p.spaceId}|${p.n}|${p.c}`; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(p); });
+        groups.forEach((items, key) => {
+            const s = byId.get(key.split('|')[0]);
+            if (!s || s.off === true) return;
+            const m = bayMeasures(s, items[0].n, items[0].c);
+            items.forEach((p, i) => {
+                const code = positionCode(s, p);
+                const base = { id: p.id, spaceId: s.id, code, n: p.n, c: p.c };
+                const geo = JSON.stringify([p.x, p.y, p.l, p.w, p.h, m.l, m.w, m.h]);
+                if (p.x < -eps || p.y < -eps || p.x + p.l > m.l + eps || p.y + p.w > m.w + eps) out.push({ ...base, kind: 'out', sig: geo, vars: { code, l: m2(m.l), w: m2(m.w) }, message: `La posición ${code} se sale de su espacio (mide ${m2(m.l)} × ${m2(m.w)} m): acomódala o cambia sus medidas.` });
+                if (p.h > m.h + eps) out.push({ ...base, kind: 'tall', sig: geo, vars: { code, h: m2(p.h), max: m2(m.h) }, message: `La posición ${code} mide ${m2(p.h)} m de alto y su espacio solo ${m2(m.h)} m: baja su alto.` });
+                for (let j = 0; j < i; j++) {
+                    const o = items[j];
+                    if (p.x < o.x + o.l - eps && o.x < p.x + p.l - eps && p.y < o.y + o.w - eps && o.y < p.y + p.w - eps) {
+                        const other = positionCode(s, o);
+                        out.push({ ...base, kind: 'overlap', sig: geo + JSON.stringify([o.id, o.x, o.y, o.l, o.w]), vars: { code, other, otherId: o.id }, message: `Las posiciones ${other} y ${code} están encimadas: acomódalas o cambia sus medidas.` });
+                    }
+                }
+                const st = sanitizeFaces(p.faces);
+                const up = facesOfBay(s, p.n, p.c);
+                const extra = st ? st.filter((f) => !up.includes(f)) : [];
+                if (extra.length) out.push({ ...base, kind: 'faces', sig: JSON.stringify([p.n, p.c, st, up]), vars: { code, faces: facePhrase(extra), has: facePhrase(up), extra, up }, message: `La posición ${code} se consume por ${facePhrase(extra)} y su espacio se consume por ${facePhrase(up)}: quita esa cara de la posición o agrégala al espacio.` });
+            });
+        });
+        return out;
+    }
+    // Las faltas de posiciones que hay en next y que antes no estaban igual: solo esas no se dejan guardar (lo que ya estaba así antes solo se marca).
+    function newPositionViolations(next, previous) {
+        const before = previous ? positionViolations(previous) : [];
+        return positionViolations(next).filter((v) => !before.some((p) => p.id === v.id && p.kind === v.kind && p.sig === v.sig));
+    }
+
     // Huecos guardados de un activo: [{ n: nivel, c: columna, rows?, depth?, floorH?, l?, w?, h? }] (solo lo cambiado; lo demás es lo de por defecto). Se descartan los que ya no caben en sus niveles y columnas.
     function sanitizeBays(raw, levels, slots) {
         const out = new Map();
@@ -3319,6 +3404,7 @@
                 return !plain;
             }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, ...(s.ownName ? { ownName: s.ownName } : {}), ...(s.faces ? { faces: s.faces } : {}), ...(s.front ? { front: s.front } : {}), type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax', ...OWN_SPACE_KEYS].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
         }
+        if (section === 'ubicaciones') return layout.positions || [];
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
         if (section === 'posiciones') return (layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays }));
         // Niveles: solo los activos que ya tienen algún nivel con medidas propias (altura desde el piso, alto o ceja distintos de los de por defecto).
@@ -3341,7 +3427,7 @@
         storageLocations, huellasThatFit, capacityOf,
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
-        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
+        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, positionCode, positionViolations, newPositionViolations, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

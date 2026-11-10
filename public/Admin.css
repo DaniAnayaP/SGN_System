@@ -8207,6 +8207,31 @@ td.cap-pick{ white-space: nowrap; }
 .layout-ch-head{ position: sticky; top: 0; z-index: 2; background: var(--color-surface); }
 .layout-ch-head .layout-find-types{ padding: 0.1rem 0 0.4rem; }
 .layout-find-type:disabled{ opacity: 0.45; cursor: not-allowed; }
+/* Paso Posiciones: el espacio visto desde arriba con sus posiciones (cajas que se arrastran) y su tabla */
+.layout-pos{ display: flex; flex-direction: column; gap: 0.7rem; }
+.layout-pos-bar{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem 1rem; }
+.layout-pos-pick{ display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 600; color: var(--color-text-secondary); }
+.layout-pos-pick select{ font: inherit; font-size: 0.8rem; max-width: 22rem; }
+.layout-pos-dims{ font-size: 0.76rem; color: var(--color-text-secondary); margin-right: auto; }
+.layout-pos-dims b{ color: var(--color-text-primary); }
+.layout-pos-grid{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 0.9rem; align-items: start; }
+@media (max-width: 900px){ .layout-pos-grid{ grid-template-columns: minmax(0, 1fr); } }
+.layout-pos-view{ border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); padding: 0.5rem; min-width: 0; }
+.layout-pos-view h4{ margin: 0 0 0.3rem; font-size: 0.72rem; font-weight: 600; color: var(--color-text-secondary); }
+.layout-pos-svg{ width: 100%; height: auto; display: block; touch-action: none; user-select: none; }
+.layout-pos-svg text{ font-family: inherit; }
+.lp-space{ fill: color-mix(in srgb, var(--color-text-primary) 7%, var(--color-surface)); stroke: var(--color-border); stroke-width: 1.5; }
+.lp-dim{ font-size: 11px; fill: var(--color-text-secondary); }
+.lp-pos{ cursor: grab; }
+.lp-pos rect{ fill: var(--color-surface); stroke: #e8590c; stroke-width: 1.4; }
+.lp-pos.sel rect{ stroke-width: 3; }
+.lp-pos.bad rect{ fill: color-mix(in srgb, #c0392b 16%, var(--color-surface)); stroke: #c0392b; }
+.lp-code{ font-size: 12px; font-weight: 700; fill: var(--color-text-primary); pointer-events: none; }
+.lp-meas{ font-size: 9.5px; fill: var(--color-text-secondary); pointer-events: none; }
+.layout-pos-kpis{ display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.layout-pos-kpi{ border: 1px solid var(--color-border); border-radius: 0.8rem; padding: 0.3rem 0.8rem; font-size: 0.74rem; color: var(--color-text-secondary); display: flex; flex-direction: column; }
+.layout-pos-kpi b{ color: var(--color-text-primary); font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+.layout-pos-list .layout-table input[type="number"]{ width: 4.6rem; text-align: right; }
 /* Caras de consumo: las 4 caras (frente, atrás, izquierda, derecha) como botones que se prenden; en rojo la que lo que lo contiene no tiene */
 .layout-faces{ display: inline-flex; flex-wrap: nowrap; gap: 0.2rem; }
 .layout-face{ font: inherit; font-size: 0.66rem; font-weight: 600; padding: 0.1rem 0.5rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; white-space: nowrap; }

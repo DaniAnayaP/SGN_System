@@ -1888,6 +1888,26 @@
     "layoutNivEspacio": "Space height (m)",
     "layoutNivAlto": "Level height (m)",
     "layoutNivCantPos": "Number of spaces",
+    "colLayoutUbicaciones": "Positions",
+    "layoutStepUbicaciones": "Positions",
+    "layoutUbicCodigo": "Position code",
+    "layoutUbicX": "X (m)",
+    "layoutUbicY": "Y (m)",
+    "layoutUbicEspacio": "Space",
+    "layoutUbicAgregar": "+ Add position",
+    "layoutUbicQuitar": "Remove the position",
+    "layoutUbicSin": "This space has no positions yet. Add the first one.",
+    "layoutUbicSinEspacios": "There are no spaces yet. Add them in Assets and Levels: their positions are arranged here.",
+    "layoutUbicVista": "Top view: drag a position to place it",
+    "layoutUbicKpiPos": "positions",
+    "layoutUbicKpiM2": "{used} of {total} m² placed ({pct} %)",
+    "layoutUbicKpiM3": "{used} of {total} m³ of volume",
+    "layoutUbicOk": "They all fit: none goes outside the space, is taller than it or overlaps another.",
+    "layoutUbicConteo": "{n} positions",
+    "layoutVioUbic_out": "Position {code} goes outside its space ({l} × {w} m): move it or change its measures so you can save.",
+    "layoutVioUbic_tall": "Position {code} is {h} m high and its space only {max} m: lower its height so you can save.",
+    "layoutVioUbic_overlap": "Positions {other} and {code} overlap: move them or change their measures so you can save.",
+    "layoutVioUbic_faces": "Position {code} is consumed from {faces} and its space is consumed from {has}: remove that face from the position or add it to the space so you can save.",
     "layoutCarasConsumo": "Consumption faces",
     "layoutFrente": "Front",
     "layoutFrenteAuto": "Automatic ({side})",
@@ -5099,6 +5119,18 @@
     "layoutFrenteActivo": {
       "what": "The face of the asset that looks at the main aisle (the «Main» aisles of the Transit step). It comes by itself: if a main aisle touches the asset, that is its front face; if it touches two main aisles at a corner, it is the one on the left when looking at the corner from where the aisles cross; if it touches none, it looks at the nearest main one and, with no main aisles, down on the plan. You can change it by hand here. Back, left and right are counted from the front.",
       "example": "the rack has a main aisle below: its front is «Down». Someone looking at it from the front has the left side of the plan on their left."
+    },
+    "layoutSec_ubicaciones": {
+      "what": "Each space can be divided into one or more positions, placed by hand. Pick the space above and add its positions: each one has its place inside the space (X and Y from the top-left corner), its length, its depth and its height, and they can measure differently: some get more room than others. They are placed like an asset inside a footprint: drag them in the drawing or type their measures. They cannot go outside the space, be taller than it or overlap; what does not comply turns red and cannot be saved. Each position also has its consumption faces, and it can only use those of its space. Its code comes from the space and its number.",
+      "example": "space R001.N001.C001 is 3 × 1 m: you place a 0.6 × 1 m position, a 0.9 × 0.5 m one next to it and a third of 0.5 × 1 m further on, each with its own height."
+    },
+    "layoutUbicEspacio": {
+      "what": "The space (a level × a left-to-right place of an asset) whose positions you are placing. The number in parentheses is how many positions it already has.",
+      "example": "R001.N001.C002 (3): space 2 of level 1 of rack R001, with 3 positions."
+    },
+    "layoutUbicVista": {
+      "what": "The space seen from above, with its positions as boxes. Drag a box to place it (it snaps every 5 cm) or type its X and Y in the table. In red, the one that goes outside the space, is taller than it or overlaps another.",
+      "example": "you drag position P002 to the right until it sits next to P001; if it overlaps it, both turn red."
     },
     "layoutFiltroElegirTipos": {
       "what": "The classifications of what is in the Layout (Footprints, Assets, Sensors…), side by side under the search box, so you do not have to go through a huge list. Tap one or several and the list only shows those; «All» clears them. The number is how many match what you typed in the search.",

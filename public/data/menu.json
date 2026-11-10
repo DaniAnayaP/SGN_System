@@ -1849,6 +1849,7 @@
             { "id": "colLayoutActivos", "labelKey": "main.colLayoutActivos", "permissionOnly": true },
             { "id": "colLayoutPosiciones", "labelKey": "main.colLayoutPosiciones", "permissionOnly": true },
             { "id": "colLayoutNiveles", "labelKey": "main.colLayoutNiveles", "permissionOnly": true },
+            { "id": "colLayoutUbicaciones", "labelKey": "main.colLayoutUbicaciones", "permissionOnly": true },
             { "id": "colLayoutQr", "labelKey": "main.colLayoutQr", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,

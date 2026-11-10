@@ -6512,7 +6512,7 @@ const LayoutCalc = require('./public/LayoutCalc.js');
 const RelTemplate = require('./public/RelTemplate.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
-const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', paredes: 'Paredes', obstaculos: 'Obstáculos', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', pisos: 'Pisos', rampas: 'Rampas', espacios: 'Huella', activos: 'Activos', posiciones: 'Espacios', niveles: 'Niveles' };
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', paredes: 'Paredes', obstaculos: 'Obstáculos', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', pisos: 'Pisos', rampas: 'Rampas', espacios: 'Huella', activos: 'Activos', posiciones: 'Espacios', niveles: 'Niveles', ubicaciones: 'Posiciones' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 
 function layoutPermissions(req) {
@@ -6654,6 +6654,7 @@ function layoutSummary(layout, section) {
     if (section === 'activos') return `${(layout.spaces || []).length} activos, ${(layout.spaces || []).filter((s) => s.assetClassId || s.assetId).length} con clasificación o tipo, ${(layout.spaces || []).filter((s) => s.fmt).length} con formato propio`;
     if (section === 'posiciones') return `${(layout.spaces || []).reduce((n, s) => n + (s.bays || []).length, 0)} huecos con datos propios`;
     if (section === 'niveles') return `${(layout.spaces || []).reduce((n, s) => n + (s.lvls || []).length, 0)} niveles con datos propios`;
+    if (section === 'ubicaciones') return `${(layout.positions || []).length} posiciones`;
     // el formato propio de las huellas (color, rayas, borde) cuenta como parte de Huella-Espacio: sin esto un cambio de color dejaba el mismo texto en el historial
     const painted = (layout.footprints || []).filter((f) => f.fmt).length;
     return `${(layout.footprints || []).length} huellas${painted ? `, ${painted} con formato propio` : ''}`;
@@ -6776,6 +6777,11 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     {
         const freshSpaces = LayoutCalc.newSpaceViolations(next, existing ? existing.layout : null);
         if (freshSpaces.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSpaces.map((v) => v.message), section: ['levels', 'facesLevel'].includes(freshSpaces[0].kind) ? 'niveles' : (['bayl', 'bayw', 'bayh', 'baysum', 'facesBay'].includes(freshSpaces[0].kind) ? 'posiciones' : 'activos') });
+    }
+    // Posiciones: cada una va dentro de su espacio, no pasa de su alto, no se encima con otra y usa solo caras de consumo de su espacio. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
+    {
+        const freshPositions = LayoutCalc.newPositionViolations(next, existing ? existing.layout : null);
+        if (freshPositions.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshPositions.map((v) => v.message), section: 'ubicaciones' });
     }
     // Tránsito: un pasillo va dentro de una zona, lo que transita por él tiene que caber y nada (huella, columna, pared, desnivel) puede ir adentro. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
     {

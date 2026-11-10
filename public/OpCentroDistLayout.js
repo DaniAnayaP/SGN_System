@@ -9,9 +9,9 @@
 (function () {
 const LC = window.LayoutCalc;
 // El orden de los pasos en la barra (Localizadores, que no edita nada, siempre va al final).
-const SECTION_ORDER = ['contorno', 'pisos', 'rampas', 'paredes', 'puertas', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'zonas', 'espacios', 'activos', 'niveles', 'posiciones'];
+const SECTION_ORDER = ['contorno', 'pisos', 'rampas', 'paredes', 'puertas', 'obstaculos', 'seguridad', 'sensores', 'luz', 'transito', 'objetos', 'zonas', 'espacios', 'activos', 'niveles', 'posiciones', 'ubicaciones'];
 const SECTION_LABEL_KEYS = {
-    contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', rampas: 'main.layoutStepRampas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', niveles: 'main.layoutStepNiveles', localizadores: 'main.layoutStepLocalizadores',
+    contorno: 'main.layoutStepContorno', paredes: 'main.layoutStepParedes', obstaculos: 'main.layoutStepObstaculos', puertas: 'main.layoutStepPuertas', luz: 'main.layoutStepLuz', sensores: 'main.layoutStepSensores', seguridad: 'main.layoutStepSeguridad', transito: 'main.layoutStepTransito', objetos: 'main.layoutStepObjetos', zonas: 'main.layoutStepZonas', pisos: 'main.layoutStepPisos', rampas: 'main.layoutStepRampas', espacios: 'main.layoutStepEspacios', activos: 'main.layoutStepActivos', posiciones: 'main.layoutStepPosiciones', ubicaciones: 'main.layoutStepUbicaciones', niveles: 'main.layoutStepNiveles', localizadores: 'main.layoutStepLocalizadores',
 };
 const state = {
     mode: 'view', saved: null, draft: null, version: 0, perms: null, showMeasures: true, showOpening: true, showLevels: true, showArea: true, showNames: true, rotation: 0, steps: ['contorno'], focus: 'contorno', focusStack: ['contorno'], catsOpen: null, catEdit: null, creating: false,
@@ -1351,6 +1351,7 @@ function stepHtml(step) {
         const list = rows.length ? table(['main.layoutCodigoRampa', 'main.layoutNombre', 'main.layoutRampaDe', 'main.layoutRampaA', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutNivelAbajo', 'main.layoutNivelArriba', 'main.layoutLadoAlto', ''], rows, 'layout-rampas') : `<p class="layout-muted">${esc(t('main.layoutRampasVacio'))}</p>`;
         return `${addButton('ramps', 'main.layoutAgregarRampa', dis, true)}${list}`;
     }
+    if (step === 'ubicaciones') return positionsStepHtml(dis);
     if (step === 'posiciones') {
         // Cada renglón es una POSICIÓN (un nivel × una columna) de un activo: salen solas con los niveles (Activos) y la cantidad de posiciones de cada nivel (Niveles). De cada una se define el largo, el fondo y el alto (en metros) y
         // cuántas filas y cuántas profundidades tiene (de ahí salen sus localizadores); los m² y los m³ salen solos. La altura del piso y la ceja son del nivel (paso Niveles). Lo que no se cambia queda como lo de por defecto y no se guarda aparte.
@@ -1461,13 +1462,215 @@ function focusStep(step) {
     state.focusStack = [...state.focusStack.filter((x) => x !== step), step];
 }
 function showStep(step) { if (!stepOn(step)) state.steps = [...state.steps, step]; focusStep(step); }
+// ---- Paso «Posiciones» --------------------------------------------------------------------------------------------------------------------------------
+// Cada espacio (un nivel × una columna de un activo) se divide en posiciones acomodadas a mano, como un activo dentro de una huella: X y Y desde la esquina de arriba a la izquierda del espacio, largo, fondo y alto. Se ve el espacio desde arriba con
+// sus posiciones como cajas que se arrastran (de 5 en 5 cm) y su tabla. Lo que se sale del espacio, pasa de su alto o se encima con otra se marca en rojo y no se guarda (LayoutCalc.positionViolations).
+const POS_W = 640;
+const POS_M = 28;
+const ubicPad = (v) => String(v).padStart(3, '0');
+function posEspacios() {
+    const out = [];
+    (state.draft.spaces || []).forEach((s, i) => {
+        if (s.off === true || s.active === false) return;
+        for (let n = 1; n <= (s.levels || 1); n += 1) {
+            const slots = LC.levelSlots(s, n);
+            for (let c = 1; c <= slots; c += 1) out.push({ i, s, n, c, key: `${s.id}|${n}|${c}` });
+        }
+    });
+    return out;
+}
+function posCurrent() {
+    const list = posEspacios();
+    if (!list.length) return null;
+    let cur = list.find((x) => x.key === state.posSel);
+    if (!cur) { cur = list[0]; state.posSel = cur.key; }
+    return { list, cur };
+}
+const posItems = (cur) => (state.draft.positions || []).filter((p) => p.spaceId === cur.s.id && p.n === cur.n && p.c === cur.c);
+const posScale = (m) => Math.min((POS_W - 2 * POS_M) / Math.max(m.l, 0.01), 240 / Math.max(m.w, 0.01));
+function posVioText(v) {
+    if (v.kind === 'faces') return t('main.layoutVioUbic_faces', { ...v.vars, faces: facesText(v.vars.extra), has: facesText(v.vars.up) });
+    return t(`main.layoutVioUbic_${v.kind}`, v.vars);
+}
+// Las faltas de las posiciones de un espacio: id de la posición -> { out, tall, overlap, faces }
+function posViolationsOf(cur) {
+    const map = new Map();
+    const list = LC.positionViolations(state.draft).filter((v) => v.spaceId === cur.s.id && v.n === cur.n && v.c === cur.c);
+    list.forEach((v) => {
+        const m = map.get(v.id) || {}; m[v.kind] = true; map.set(v.id, m);
+        if (v.kind === 'overlap' && v.vars.otherId) { const o = map.get(v.vars.otherId) || {}; o.overlap = true; map.set(v.vars.otherId, o); } // las dos que se encima se marcan
+    });
+    return { map, list };
+}
+function positionsSvgHtml(cur, m, items, bad) {
+    const sc = posScale(m);
+    const H = Math.round(m.w * sc + 2 * POS_M);
+    let g = `<svg id="layout-pos-svg-el" class="layout-pos-svg" viewBox="0 0 ${POS_W} ${H}" role="img" aria-label="${esc(t('main.layoutUbicVista'))}">`;
+    g += `<rect class="lp-space" x="${POS_M}" y="${POS_M}" width="${(m.l * sc).toFixed(1)}" height="${(m.w * sc).toFixed(1)}" rx="4"/>`;
+    g += `<text class="lp-dim" x="${POS_M}" y="${POS_M - 10}">${esc(fmt(m.l))} m</text>`;
+    g += `<text class="lp-dim" x="${POS_M - 8}" y="${(POS_M + (m.w * sc) / 2).toFixed(1)}" text-anchor="middle" transform="rotate(-90 ${POS_M - 8} ${(POS_M + (m.w * sc) / 2).toFixed(1)})">${esc(fmt(m.w))} m</text>`;
+    items.forEach((p) => {
+        const b = bad.get(p.id);
+        const x = POS_M + p.x * sc; const y = POS_M + p.y * sc; const w = p.l * sc; const h = p.w * sc;
+        g += `<g class="lp-pos${b ? ' bad' : ''}${state.posPick === p.id ? ' sel' : ''}" data-pid="${esc(p.id)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="4"/>`
+            + `<text class="lp-code" x="${(x + w / 2).toFixed(1)}" y="${(y + h / 2 - 2).toFixed(1)}" text-anchor="middle">P${ubicPad(p.num || 1)}</text>`
+            + `<text class="lp-meas" x="${(x + w / 2).toFixed(1)}" y="${(y + h / 2 + 12).toFixed(1)}" text-anchor="middle">${esc(fmt(p.l))} × ${esc(fmt(p.w))} × ${esc(fmt(p.h))}</text></g>`;
+    });
+    return `${g}</svg>`;
+}
+function positionsKpisHtml(m, items) {
+    const used = items.reduce((s, p) => s + p.l * p.w, 0);
+    const vol = items.reduce((s, p) => s + p.l * p.w * p.h, 0);
+    const total = m.l * m.w;
+    return `<div class="layout-pos-kpi"><b>${items.length}</b><span>${esc(t('main.layoutUbicKpiPos'))}</span></div><div class="layout-pos-kpi"><b>${esc(t('main.layoutUbicKpiM2', { used: fmt(used), total: fmt(total), pct: total > 0 ? Math.round((used / total) * 100) : 0 }))}</b></div><div class="layout-pos-kpi"><b>${esc(t('main.layoutUbicKpiM3', { used: fmt(vol), total: fmt(total * m.h) }))}</b></div>`;
+}
+function positionsStepHtml(dis) {
+    const pc = posCurrent();
+    if (!pc) return `<p class="layout-muted">${esc(t('main.layoutUbicSinEspacios'))}</p>`;
+    const { list, cur } = pc;
+    const s = cur.s;
+    const m = LC.bayMeasures(s, cur.n, cur.c);
+    const items = posItems(cur);
+    const counts = new Map();
+    (state.draft.positions || []).forEach((p) => { const k = `${p.spaceId}|${p.n}|${p.c}`; counts.set(k, (counts.get(k) || 0) + 1); });
+    const options = list.map((x) => `<option value="${esc(x.key)}"${x.key === cur.key ? ' selected' : ''}>${esc(`${x.s.code}.N${ubicPad(x.n)}.C${ubicPad(x.c)}`)}${x.s.ownName ? ` · ${esc(x.s.ownName)}` : ''} (${counts.get(x.key) || 0})</option>`).join('');
+    const { map: bad, list: vios } = posViolationsOf(cur);
+    const upFaces = LC.facesOfBay(s, cur.n, cur.c);
+    const num = (p, k, extra = '') => `<td><input type="number" step="0.01" min="0" data-pk="${k}" data-pid="${esc(p.id)}"${extra} value="${Math.round(p[k] * 100) / 100}"${dis ? ' disabled' : ''}></td>`;
+    const rows = items.map((p) => `<tr data-pid="${esc(p.id)}" class="${state.posPick === p.id ? 'layout-row-sel' : ''}"><td class="layout-calc"><b>${esc(LC.positionCode(s, p))}</b></td>${num(p, 'x')}${num(p, 'y')}${num(p, 'l')}${num(p, 'w')}${num(p, 'h')}<td class="layout-calc" data-pos-m2>${fmt(p.l * p.w)}</td><td class="layout-calc" data-pos-m3>${fmt(p.l * p.w * p.h)}</td>${facesCellHtml('pos', cur.i, p.n, p.c, LC.facesOfPosition(s, p), upFaces, p.faces !== undefined, dis, p.id)}<td><button type="button" class="layout-x" data-pos-del="${esc(p.id)}" aria-label="${esc(t('main.layoutUbicQuitar'))}"${dis ? ' disabled' : ''}>✕</button></td></tr>`);
+    const heads = ['main.layoutUbicCodigo', 'main.layoutUbicX', 'main.layoutUbicY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo', ''];
+    const dims = `${esc(t('main.layoutLargo'))} <b>${esc(fmt(m.l))}</b> · ${esc(t('main.layoutFondo'))} <b>${esc(fmt(m.w))}</b> · ${esc(t('main.layoutAlto'))} <b>${esc(fmt(m.h))}</b>`;
+    return `<div class="layout-pos">`
+        + `<div class="layout-pos-bar"><label class="layout-pos-pick" data-help-key="layoutUbicEspacio"><span>${esc(t('main.layoutUbicEspacio'))}</span><select id="layout-pos-sel">${options}</select></label><span class="layout-pos-dims">${dims}</span>`
+        + `<button type="button" class="btn btn-secondary layout-add" data-pos-add data-help-key="layoutAddRow"${dis ? ' disabled' : ''}>${esc(t('main.layoutUbicAgregar'))}</button></div>`
+        + `<div class="layout-pos-grid"><div class="layout-pos-view" data-help-key="layoutUbicVista"><h4>${esc(t('main.layoutUbicVista'))}</h4><div id="layout-pos-svg">${positionsSvgHtml(cur, m, items, bad)}</div></div>`
+        + `<div class="layout-pos-list">${items.length ? table(heads, rows, '') : `<p class="layout-muted">${esc(t('main.layoutUbicSin'))}</p>`}</div></div>`
+        + `<div class="layout-pos-kpis" id="layout-pos-kpis">${positionsKpisHtml(m, items)}</div>`
+        + `<div class="layout-vio" id="layout-pos-issues"${vios.length ? '' : ' hidden'}>${vios.slice(0, 6).map((v) => `<p>${esc(posVioText(v))}</p>`).join('')}</div>`
+        + `</div>`;
+}
+// Al mover una posición o escribir una medida solo se vuelven a dibujar el dibujo, los totales, los avisos y las marcas (el resto de la tabla se queda: así no se pierde el cursor).
+function positionsLive() {
+    const pc = posCurrent();
+    if (!pc || !$('layout-pos-svg')) return;
+    const { cur } = pc;
+    const m = LC.bayMeasures(cur.s, cur.n, cur.c);
+    const items = posItems(cur);
+    const { map: bad, list: vios } = posViolationsOf(cur);
+    $('layout-pos-svg').innerHTML = positionsSvgHtml(cur, m, items, bad);
+    $('layout-pos-kpis').innerHTML = positionsKpisHtml(m, items);
+    const box = $('layout-pos-issues');
+    box.hidden = !vios.length;
+    box.innerHTML = vios.slice(0, 6).map((v) => `<p>${esc(posVioText(v))}</p>`).join('');
+    items.forEach((p) => {
+        const tr = document.querySelector(`#layout-panel tr[data-pid="${CSS.escape(p.id)}"]`);
+        if (!tr) return;
+        const b = bad.get(p.id) || {};
+        tr.classList.toggle('layout-row-sel', state.posPick === p.id);
+        const mark = (k, on) => { const input = tr.querySelector(`[data-pk="${k}"]`); if (input) input.classList.toggle('layout-missing', !!on); };
+        mark('x', b.out); mark('y', b.out); mark('l', b.out || b.overlap); mark('w', b.out || b.overlap); mark('h', b.tall);
+        const set = (k) => { const input = tr.querySelector(`[data-pk="${k}"]`); if (input && document.activeElement !== input) input.value = String(Math.round(p[k] * 100) / 100); };
+        ['x', 'y', 'l', 'w', 'h'].forEach(set);
+        const m2 = tr.querySelector('[data-pos-m2]'); if (m2) m2.textContent = fmt(p.l * p.w);
+        const m3 = tr.querySelector('[data-pos-m3]'); if (m3) m3.textContent = fmt(p.l * p.w * p.h);
+    });
+}
+function addPosition() {
+    const pc = posCurrent();
+    if (!pc || !canEdit('ubicaciones')) return;
+    const { cur } = pc;
+    const m = LC.bayMeasures(cur.s, cur.n, cur.c);
+    const items = posItems(cur);
+    const r2 = (v) => Math.round(v * 100) / 100;
+    // la nueva queda junto a la última (a la derecha; si ya no cabe, en una segunda fila)
+    const right = items.reduce((mx, p) => Math.max(mx, p.x + p.l), 0);
+    const l = r2(Math.min(0.4, Math.max(0.1, m.l - right)));
+    const fits = right + l <= m.l + 0.005;
+    const key = cur.key;
+    const next = Math.max((state.draft.posNext && state.draft.posNext[key]) || 0, ...items.map((p) => p.num || 0), 0) + 1;
+    const pos = { id: uid('p'), spaceId: cur.s.id, n: cur.n, c: cur.c, num: next, x: fits ? r2(right) : 0, y: fits ? 0 : r2(Math.min(0.5, m.w)), l, w: r2(Math.min(0.5, m.w)), h: r2(Math.min(0.4, m.h)) };
+    if (!state.draft.positions) state.draft.positions = [];
+    state.draft.positions.push(pos);
+    state.draft.posNext = { ...(state.draft.posNext || {}), [key]: next };
+    state.posPick = pos.id;
+    renderPanel();
+    refreshLive();
+}
+$('layout-panel').addEventListener('click', (event) => {
+    const add = event.target.closest('[data-pos-add]');
+    if (add && !add.disabled) { addPosition(); return; }
+    const del = event.target.closest('[data-pos-del]');
+    if (del && !del.disabled && state.draft) {
+        state.draft.positions = (state.draft.positions || []).filter((p) => p.id !== del.getAttribute('data-pos-del'));
+        if (!state.draft.positions.length) delete state.draft.positions;
+        renderPanel();
+        refreshLive();
+        return;
+    }
+    const row = event.target.closest('tr[data-pid]');
+    if (row && !event.target.closest('input, button')) { state.posPick = row.getAttribute('data-pid'); positionsLive(); }
+});
+$('layout-panel').addEventListener('change', (event) => {
+    const sel = event.target.closest('#layout-pos-sel');
+    if (sel) { state.posSel = sel.value; state.posPick = ''; renderPanel(); return; }
+    if (event.target.closest('[data-pk]')) renderPanel();
+});
+$('layout-panel').addEventListener('input', (event) => {
+    const input = event.target.closest('[data-pk]');
+    if (!input || !state.draft) return;
+    const pos = (state.draft.positions || []).find((p) => p.id === input.getAttribute('data-pid'));
+    if (!pos) return;
+    const k = input.getAttribute('data-pk');
+    const v = parseFloat(input.value);
+    if (!Number.isFinite(v) || v < 0 || (k !== 'x' && k !== 'y' && v <= 0)) return;
+    pos[k] = v;
+    state.posPick = pos.id;
+    positionsLive();
+    refreshLive();
+});
+// Arrastrar una caja en el dibujo: se acomoda de 5 en 5 cm y no baja de 0 (lo que se sale del espacio se marca en rojo).
+let posDrag = null;
+$('layout-panel').addEventListener('pointerdown', (event) => {
+    const g = event.target.closest('#layout-pos-svg .lp-pos');
+    if (!g || !state.draft) return;
+    const pos = (state.draft.positions || []).find((p) => p.id === g.getAttribute('data-pid'));
+    if (!pos) return;
+    state.posPick = pos.id;
+    if (!canEdit('ubicaciones')) { positionsLive(); return; }
+    const pc = posCurrent();
+    const m = LC.bayMeasures(pc.cur.s, pc.cur.n, pc.cur.c);
+    const svg = $('layout-pos-svg-el');
+    const pt = svg.createSVGPoint(); pt.x = event.clientX; pt.y = event.clientY;
+    const at = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const sc = posScale(m);
+    posDrag = { pos, sc, dx: at.x - (POS_M + pos.x * sc), dy: at.y - (POS_M + pos.y * sc), moved: false };
+    try { $('layout-pos-svg').setPointerCapture(event.pointerId); } catch (err) { /* sin captura el arrastre sigue dentro del dibujo */ }
+    positionsLive();
+});
+$('layout-panel').addEventListener('pointermove', (event) => {
+    if (!posDrag) return;
+    const svg = $('layout-pos-svg-el');
+    if (!svg) { posDrag = null; return; }
+    const pt = svg.createSVGPoint(); pt.x = event.clientX; pt.y = event.clientY;
+    const at = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const snap = (v) => Math.max(0, Math.round(v / 0.05) * 0.05);
+    const nx = Math.round(snap((at.x - posDrag.dx - POS_M) / posDrag.sc) * 100) / 100;
+    const ny = Math.round(snap((at.y - posDrag.dy - POS_M) / posDrag.sc) * 100) / 100;
+    if (nx === posDrag.pos.x && ny === posDrag.pos.y) return;
+    posDrag.pos.x = nx; posDrag.pos.y = ny; posDrag.moved = true;
+    positionsLive();
+});
+const endPosDrag = () => { if (!posDrag) return; const moved = posDrag.moved; posDrag = null; if (moved) { renderPanel(); refreshLive(); } };
+$('layout-panel').addEventListener('pointerup', endPosDrag);
+$('layout-panel').addEventListener('pointercancel', endPosDrag);
+
 // Caras de consumo: las 4 caras de un activo, un nivel o un espacio como botones que se prenden y se apagan. up = las caras que tiene lo que lo contiene (las demás no se pueden prender); stored = ya cambió las suyas.
-function facesCellHtml(kind, i, n, c, now, up, stored, dis) {
+function facesCellHtml(kind, i, n, c, now, up, stored, dis, pid = '') {
     const buttons = LC.FACES.map((f) => {
         const on = now.includes(f);
         const allowed = !up || up.includes(f);
         const bad = on && !allowed;
-        return `<button type="button" class="layout-face${on ? ' on' : ''}${bad ? ' bad' : ''}" data-face="${f}" data-fk="${kind}" data-i="${i}" data-n="${n || 0}" data-c="${c || 0}" aria-pressed="${on}" title="${esc(t(`main.layoutCara_${f}`))}"${dis || (!allowed && !on) ? ' disabled' : ''}>${esc(t(`main.layoutCaraCorta_${f}`))}</button>`;
+        return `<button type="button" class="layout-face${on ? ' on' : ''}${bad ? ' bad' : ''}" data-face="${f}" data-fk="${kind}" data-i="${i}" data-n="${n || 0}" data-c="${c || 0}" data-pid="${esc(pid)}" aria-pressed="${on}" title="${esc(t(`main.layoutCara_${f}`))}"${dis || (!allowed && !on) ? ' disabled' : ''}>${esc(t(`main.layoutCaraCorta_${f}`))}</button>`;
     }).join('');
     return `<td><span class="layout-faces${stored ? ' layout-edited' : ''}" role="group" data-help-key="layoutCarasConsumo">${buttons}</span></td>`;
 }
@@ -1498,6 +1701,18 @@ function toggleFace(btn) {
     const face = btn.getAttribute('data-face');
     const space = state.draft.spaces[i];
     if (!space) return;
+    if (kind === 'pos') {
+        const pos = (state.draft.positions || []).find((p) => p.id === btn.getAttribute('data-pid'));
+        if (!pos) return;
+        const nowP = LC.facesOfPosition(space, pos);
+        const baseP = LC.facesOfBay(space, pos.n, pos.c);
+        const nextP = nowP.includes(face) ? nowP.filter((f) => f !== face) : LC.FACES.filter((f) => f === face || nowP.includes(f));
+        if (!nextP.length) return;
+        if (nextP.length === baseP.length && nextP.every((f, k) => f === baseP[k])) delete pos.faces; else pos.faces = nextP;
+        renderPanel();
+        refreshLive();
+        return;
+    }
     const now = kind === 'space' ? LC.facesOfSpace(space) : (kind === 'lvl' ? LC.facesOfLevel(space, n) : LC.facesOfBay(space, n, c));
     const base = kind === 'space' ? ['front'] : (kind === 'lvl' ? LC.facesOfSpace(space) : LC.facesOfLevel(space, n));
     const next = now.includes(face) ? now.filter((f) => f !== face) : LC.FACES.filter((f) => f === face || now.includes(f));
@@ -5346,6 +5561,14 @@ async function saveLayout() {
             ? (document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"].layout-missing`) || document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"]`))
             : document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
+        return false;
+    }
+    // Posiciones: lo nuevo o lo que cambió y no cumple (se sale de su espacio, pasa de su alto, se encima con otra o usa una cara que su espacio no tiene) no se guarda.
+    const freshPositions = LC.newPositionViolations(state.draft, state.saved);
+    if (freshPositions.length) {
+        const v = freshPositions[0];
+        if (stepVisible('ubicaciones')) { showStep('ubicaciones'); state.posSel = `${v.spaceId}|${v.n}|${v.c}`; state.posPick = v.id; renderPanel(); }
+        Dashboard.showToast(posVioText(v), 'warning');
         return false;
     }
     // Tránsito: lo nuevo o lo que cambió y no cumple (fuera de zona, no cabe en su zona, lo que transita no cabe, o algo adentro del pasillo) no se guarda.
