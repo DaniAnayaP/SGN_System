@@ -7561,7 +7561,9 @@ function seedColumnSearchOptionGrants() {
 // (schema_migrations_data): quien después quite un icono a propósito no lo recupera en el siguiente reinicio.
 // Siembra de una sola vez: da unas hojas nuevas (submenuIds completos) a quien YA tiene una pantalla en cada nivel por el que pasa el acceso (ver el comentario de arriba).
 // screenPath = { sectionId, itemId, submenuPrefix } de la pantalla que se toma como "ya la tiene"; leafSubmenuIds = lo que se da (las hojas pueden estar en otra pantalla).
-function seedLeavesForScreenHolders(seedKey, screenPath, leafSubmenuIds, label) {
+// contractOnly = true: solo se agrega a lo contratado (planes, adicionales del cliente y giros), no a puestos ni usuarios. Sirve para una hoja que ESCRIBE datos: queda disponible para el cliente, pero
+// quien la reciba en su puesto o usuario lo decide el administrador desde el árbol.
+function seedLeavesForScreenHolders(seedKey, screenPath, leafSubmenuIds, label, { contractOnly = false } = {}) {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(seedKey)) return;
     const path = screenPath;
     if (!path) return;
@@ -7573,6 +7575,7 @@ function seedLeavesForScreenHolders(seedKey, screenPath, leafSubmenuIds, label) 
             ['job_position_grants', 'job_position_id', false], ['user_grants', 'user_id', false],
             ['plan_grants', 'plan_id', true], ['client_permission_grants', 'client_id', true], ['sector_grants', 'business_sector_id', true],
         ]) {
+            if (contractOnly && !contract) continue;
             const hasGrant = db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
             const insertGrant = db.prepare(`INSERT INTO ${table} (${ownerColumn}, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)`);
             const withScreen = db.prepare(`
@@ -7688,6 +7691,24 @@ function cleanupLayoutCardCenterGrants() {
         db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(LAYOUT_CARD_CENTER_CLEANUP_KEY);
     })();
     console.log(`[db] Removed the retired Layout card-centering icon grants (one-time cleanup): ${JSON.stringify(counts)}.`);
+}
+// --- Siembra única (2026-11-10): lo nuevo de Unidad de Medida por Distribución y de los códigos en el Layout -------------------------------------------------------------------------
+// La pantalla Operaciones > Unidad de Medida por Distribución reemplaza la columna «Empaques» de Alta Nuestros Artículos: la reciben, una sola vez, quienes ya tienen Alta (mismos niveles y reglas que Códigos y
+// Edición Código). Sus columnas no necesitan hoja: sin permiso suelto una columna es «solo ver». Los iconos nuevos del Layout (Códigos en Localizadores y Piezas) los reciben quienes ya tienen el Layout; el de
+// Relacionar código escribe datos: solo queda disponible en lo contratado (el administrador lo asigna a puestos y usuarios).
+const UDM_SCREEN_SEED_KEY = 'seed-udm-distribucion-screen-v1';
+function seedUdmDistribucionScreenGrants() {
+    const path = TABLE_GRANT_PATHS['nuestros-articulos'];
+    if (!path) return;
+    seedLeavesForScreenHolders(UDM_SCREEN_SEED_KEY, path, ['cat-operaciones/cat-operaciones-centro-dist-udm-distribucion'], 'the Unidad de Medida por Distribución screen');
+}
+const LAYOUT_CODES_ICONS_SEED_KEY = 'seed-layout-codes-icons-v1';
+const LAYOUT_RELATE_ICON_SEED_KEY = 'seed-layout-relate-icon-contract-v1';
+function seedLayoutCodesIconGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(LAYOUT_CODES_ICONS_SEED_KEY, path, ['iconLayoutCodigosLocalizador', 'iconLayoutPiezas'].map((leaf) => `${path.submenuPrefix}/${leaf}`), 'the Layout codes-in-locators and pieces icons');
+    seedLeavesForScreenHolders(LAYOUT_RELATE_ICON_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutRelacionarCodigo`], 'the Layout relate-code icon (contract only)', { contractOnly: true });
 }
 const CODIGOS_SCREENS_SEED_KEY = 'seed-codigos-edicion-screens-v1';
 function seedCodigosScreensGrants() {
@@ -12306,6 +12327,8 @@ function seedActivosFijosValuesOnce() {
 seedColumnSearchOptionGrants();
 seedLayoutNewIconGrants();
 seedCodigosScreensGrants();
+seedUdmDistribucionScreenGrants();
+seedLayoutCodesIconGrants();
 seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();
