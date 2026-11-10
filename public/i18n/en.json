@@ -1776,6 +1776,7 @@
     "layoutVioAct_bayw": "Space {c} of level {n} of asset {code} is {value} m wide and the asset is only {max} m deep: lower its width so you can save.",
     "layoutVioAct_baysum": "The spaces of level {n} of asset {code} add up to {sum} m long and the asset is {max} m: lower the length of one space so you can save.",
     "layoutVioAct_bayout": "Space {c} of level {n} of asset {code} goes outside the asset (it sits at X {x} · Y {y}, measures {l} × {w} m and the asset {L} × {D} m): move it to be able to save.",
+    "layoutVioAct_bayoverlap": "Spaces {other} and {c} of level {n} of asset {code} overlap: move them to be able to save.",
     "layoutVioAct_levels": "The levels of asset {code} reach {top} m and the asset is {h} m tall: lower the height of a level or raise the asset height so you can save.",
     "layoutVioAct_overlap": "Assets {other} and {code} overlap inside {fcode}: change their position or size to be able to save.",
     "layoutFondo": "Depth (m)",
@@ -5692,11 +5693,11 @@
       "example": "you give E001 blue with stripes: every E001 of every level and asset looks blue with stripes; E002 keeps its own color."
     },
     "layoutBayX": {
-      "what": "Where this space is inside its asset, left to right: the distance from the left side of the asset to the left side of the space. Type it here or drag the space box on the plan (in Edit with the Spaces step). It cannot go outside the asset. Empty = the space stays in its usual place: one next to the other, by length; moving one does not push the others.",
+      "what": "Where this space is inside its asset, left to right: the distance from the left side of the asset to the left side of the space. Type it here or drag the space box on the plan (in Edit with the Spaces step). It cannot go outside the asset or overlap another space of the level. Empty = the space stays in its usual place: one next to the other, by length; moving one does not push the others.",
       "example": "the asset is 0.93 m and the space 0.47 m: with X = 0.3 it has 0.3 m free on its left and 0.16 on its right; with X = 0.6 it would go outside the asset and cannot be saved."
     },
     "layoutBayY": {
-      "what": "Where this space is inside its asset, back to front: the distance from the back of the asset to the back of the space. Type it here or drag the space box on the plan. It cannot go outside the asset. Empty = against the back (0).",
+      "what": "Where this space is inside its asset, back to front: the distance from the back of the asset to the back of the space. Type it here or drag the space box on the plan. It cannot go outside the asset or overlap another space of the level. Empty = against the back (0).",
       "example": "the asset is 1.26 m deep and the space 0.68 m: with Y = 0.58 it sits against the front."
     },
     "layoutAssetFmt": {

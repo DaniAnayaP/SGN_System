@@ -6780,7 +6780,7 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     // Los activos de una huella van uno junto al otro y ninguno se sale de ella, es más alto que ella ni se encima con otro: lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
     {
         const freshSpaces = LayoutCalc.newSpaceViolations(next, existing ? existing.layout : null);
-        if (freshSpaces.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSpaces.map((v) => v.message), section: ['levels', 'facesLevel'].includes(freshSpaces[0].kind) ? 'niveles' : (['bayl', 'bayw', 'bayh', 'baysum', 'bayout', 'facesBay'].includes(freshSpaces[0].kind) ? 'posiciones' : 'activos') });
+        if (freshSpaces.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSpaces.map((v) => v.message), section: ['levels', 'facesLevel'].includes(freshSpaces[0].kind) ? 'niveles' : (['bayl', 'bayw', 'bayh', 'baysum', 'bayout', 'bayoverlap', 'facesBay'].includes(freshSpaces[0].kind) ? 'posiciones' : 'activos') });
     }
     // Posiciones: cada una va dentro de su espacio, no pasa de su alto, no se encima con otra y usa solo caras de consumo de su espacio. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
     {

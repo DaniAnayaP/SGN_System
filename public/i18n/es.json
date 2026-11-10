@@ -1776,6 +1776,7 @@
     "layoutVioAct_bayw": "El espacio {c} del nivel {n} del activo {code} mide {value} m de ancho y el activo solo {max} m de fondo: baja su ancho para poder guardar.",
     "layoutVioAct_baysum": "Los espacios del nivel {n} del activo {code} suman {sum} m de largo y el activo mide {max} m: baja el largo de algún espacio para poder guardar.",
     "layoutVioAct_bayout": "El espacio {c} del nivel {n} del activo {code} se sale del activo (queda en X {x} · Y {y}, mide {l} × {w} m y el activo {L} × {D} m): acomódalo para poder guardar.",
+    "layoutVioAct_bayoverlap": "Los espacios {other} y {c} del nivel {n} del activo {code} se enciman: acomódalos para poder guardar.",
     "layoutVioAct_levels": "Los niveles del activo {code} llegan a {top} m y el activo mide {h} m: baja el alto de algún nivel o sube el alto del activo para poder guardar.",
     "layoutVioAct_overlap": "Los activos {other} y {code} están encimados dentro de {fcode}: cambia su posición o sus medidas para poder guardar.",
     "layoutFondo": "Fondo (m)",
@@ -5691,11 +5692,11 @@
       "example": "al E001 le pones azul con rayas: todos los E001 de todos los niveles y activos se ven azules con rayas; el E002 sigue de su color."
     },
     "layoutBayX": {
-      "what": "Dónde está este espacio dentro de su activo, de izquierda a derecha: la distancia desde el lado izquierdo del activo hasta el lado izquierdo del espacio. Se escribe aquí o se arrastra el cuadro del espacio en el croquis (en Editar y con el paso Espacios). No puede salirse del activo. Vacío = el espacio va en su lugar de siempre: uno junto al otro, según su largo; moverlo no empuja a los demás.",
+      "what": "Dónde está este espacio dentro de su activo, de izquierda a derecha: la distancia desde el lado izquierdo del activo hasta el lado izquierdo del espacio. Se escribe aquí o se arrastra el cuadro del espacio en el croquis (en Editar y con el paso Espacios). No puede salirse del activo ni encimarse con otro espacio del nivel. Vacío = el espacio va en su lugar de siempre: uno junto al otro, según su largo; moverlo no empuja a los demás.",
       "example": "el activo mide 0.93 m y el espacio 0.47 m: con X = 0.3 queda con 0.3 m libres a su izquierda y 0.16 a su derecha; con X = 0.6 se saldría del activo y no se deja guardar."
     },
     "layoutBayY": {
-      "what": "Dónde está este espacio dentro de su activo, de atrás hacia adelante: la distancia desde el fondo del activo hasta el fondo del espacio. Se escribe aquí o se arrastra el cuadro del espacio en el croquis. No puede salirse del activo. Vacío = pegado al fondo (0).",
+      "what": "Dónde está este espacio dentro de su activo, de atrás hacia adelante: la distancia desde el fondo del activo hasta el fondo del espacio. Se escribe aquí o se arrastra el cuadro del espacio en el croquis. No puede salirse del activo ni encimarse con otro espacio del nivel. Vacío = pegado al fondo (0).",
       "example": "el activo mide 1.26 m de fondo y el espacio 0.68 m: con Y = 0.58 queda pegado al frente."
     },
     "layoutAssetFmt": {

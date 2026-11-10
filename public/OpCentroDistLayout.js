@@ -1014,15 +1014,16 @@ function applyLevelToAll(key) {
 }
 // Paso Posiciones: el aviso de los huecos cuyo largo o ancho pasa del largo o el fondo de su activo (los primeros 6) y su actualización al teclear.
 function bayIssuesHtml() {
-    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum' || v.kind === 'bayout' || v.kind === 'facesBay');
+    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum' || v.kind === 'bayout' || v.kind === 'bayoverlap' || v.kind === 'facesBay');
     return list.slice(0, 6).map((v) => `<p>${esc(vioActText(v))}</p>`).join('') + (list.length > 6 ? '<p>…</p>' : '');
 }
 // Pone al día los X y Y que muestra la tabla para los espacios de un nivel (sin tocar el campo que se está escribiendo) y marca en rojo los que se salen del activo.
 function syncBayXY(space, n, skip) {
     const i = state.draft.spaces.indexOf(space);
     const placed = LC.levelHasPlaced(space, n);
+    const clashes = LC.levelBayClashes(space, n);
     LC.levelBayRects(space, n).forEach((r) => {
-        const out = placed && (r.x < -0.005 || r.y < -0.005 || r.x + r.l > space.l + 0.005 || r.y + r.w > space.d + 0.005);
+        const out = placed && (r.x < -0.005 || r.y < -0.005 || r.x + r.l > space.l + 0.005 || r.y + r.w > space.d + 0.005 || clashes.has(r.c));
         ['x', 'y'].forEach((k) => {
             const input = document.querySelector(`[data-l="bay"][data-i="${i}"][data-n="${n}"][data-c="${r.c}"][data-k="${k}"]`);
             if (!input) return;
@@ -1439,11 +1440,12 @@ function stepHtml(step) {
                 const slots = LC.levelSlots(s, n); // las posiciones que se le pusieron a ESTE nivel en Niveles
                 const sumOver = LC.levelLengthSum(s, n).over;
                 const rcsL = LC.levelBayRects(s, n); // dónde cae cada espacio del nivel (su X y su Y dentro del activo)
+                const clashL = LC.levelBayClashes(s, n); // los que se enciman con otro espacio del nivel
                 for (let c = 1; c <= slots; c += 1) {
                     if (count >= POSITION_ROWS_MAX) return;
                     count += 1;
                     const rcL = rcsL[c - 1];
-                    const outL = rcL.x + rcL.l > s.l + 0.005 || rcL.y + rcL.w > s.d + 0.005 || rcL.x < -0.005 || rcL.y < -0.005;
+                    const outL = rcL.x + rcL.l > s.l + 0.005 || rcL.y + rcL.w > s.d + 0.005 || rcL.x < -0.005 || rcL.y < -0.005 || clashL.has(c);
                     const bay = LC.bayOf(s, n, c);
                     const m = LC.bayMeasures(s, n, c);
                     const st = bay.stored;
@@ -5974,7 +5976,7 @@ async function saveLayout() {
     if (freshSpaces.length) {
         const v = freshSpaces[0];
         // los niveles que suben más que el activo se arreglan en Niveles (si la cuenta lo ve; si no, en Activos con el alto del activo)
-        const bayKind = v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum' || v.kind === 'bayout' || v.kind === 'facesBay';
+        const bayKind = v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum' || v.kind === 'bayout' || v.kind === 'bayoverlap' || v.kind === 'facesBay';
         const stepName = (v.kind === 'levels' || v.kind === 'facesLevel') && stepVisible('niveles') ? 'niveles' : (bayKind && stepVisible('posiciones') ? 'posiciones' : 'activos');
         showStep(stepName);
         renderPanel();
@@ -5985,7 +5987,7 @@ async function saveLayout() {
             : v.kind === 'facesLevel' && stepName === 'niveles'
             ? (document.querySelector(`button.layout-face.bad[data-fk="lvl"][data-i="${at}"][data-n="${v.vars.n}"]`) || document.querySelector(`button.layout-face[data-fk="lvl"][data-i="${at}"][data-n="${v.vars.n}"]`))
             : stepName === 'posiciones'
-            ? document.querySelector(v.kind === 'baysum' ? `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-k="l"]` : `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"][data-k="${{ bayl: 'l', bayw: 'w', bayh: 'h', bayout: 'x' }[v.kind]}"]`)
+            ? document.querySelector(v.kind === 'baysum' ? `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-k="l"]` : `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"][data-k="${{ bayl: 'l', bayw: 'w', bayh: 'h', bayout: 'x', bayoverlap: 'x' }[v.kind]}"]`)
             : stepName === 'niveles'
             ? (document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"].layout-missing`) || document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"]`))
             : document.querySelector(`[data-l="spaces"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'oh' : 'ol'}"]`);

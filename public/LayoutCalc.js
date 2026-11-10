@@ -2332,6 +2332,18 @@
                         }
                     });
                 }
+                // dos espacios del mismo nivel no pueden encimarse (solo con espacios acomodados a mano: los que van uno junto al otro no se enciman)
+                for (let n = 1; n <= (s.levels || 1); n += 1) {
+                    if (!levelHasPlaced(s, n)) continue;
+                    const rs = levelBayRects(s, n);
+                    for (let i = 0; i < rs.length; i += 1) {
+                        for (let j = i + 1; j < rs.length; j += 1) {
+                            if (!bayRectsOverlap(rs[i], rs[j])) continue;
+                            out.push({ ...base, kind: 'bayoverlap', sig: JSON.stringify([n, rs[i].c, rs[i].x, rs[i].y, rs[i].l, rs[i].w, rs[j].c, rs[j].x, rs[j].y, rs[j].l, rs[j].w]), vars: { code: s.code, n, c: rs[j].c, other: rs[i].c },
+                                message: `Los espacios ${rs[i].c} y ${rs[j].c} del nivel ${n} del activo ${s.code} se enciman: acomódalos para poder guardar.` });
+                        }
+                    }
+                }
                 // los niveles no pueden subir más que el activo (solo si el activo trae medidas de niveles o huecos propias: sin ellas los niveles se reparten justo en su alto)
                 const ownBays = (s.bays || []).filter((b) => b.h !== undefined);
                 if (s.h > 0 && ((s.lvls || []).length || ownBays.length)) {
@@ -3731,6 +3743,16 @@
         }
         return out;
     }
+    // ¿Dos espacios (rectángulos de levelBayRects) se enciman? Que se toquen en la orilla sí se puede; se tolera medio centímetro.
+    const bayRectsOverlap = (a, z) => Math.min(a.x + a.l, z.x + z.l) - Math.max(a.x, z.x) > 0.005 && Math.min(a.y + a.w, z.y + z.w) - Math.max(a.y, z.y) > 0.005;
+    // Las columnas (números de espacio) de un nivel que se enciman con otro espacio del mismo nivel; vacío si el nivel no trae espacios acomodados a mano (los que van uno junto al otro no se enciman).
+    function levelBayClashes(space, level) {
+        const out = new Set();
+        if (!levelHasPlaced(space, level)) return out;
+        const rects = levelBayRects(space, level);
+        for (let i = 0; i < rects.length; i += 1) for (let j = i + 1; j < rects.length; j += 1) if (bayRectsOverlap(rects[i], rects[j])) { out.add(rects[i].c); out.add(rects[j].c); }
+        return out;
+    }
     // ¿Algún espacio de ese nivel trae su lugar propio? (entonces el nivel ya no es una fila de espacios pegados: cada uno solo tiene que caber dentro del activo)
     function levelHasPlaced(space, level) {
         return ((space && space.bays) || []).some((b) => b.n === Number(level) && (b.x !== undefined || b.y !== undefined));
@@ -3796,6 +3818,6 @@
         levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
-        FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, BAY_COLORS, bayFmtOf, levelBayRects, levelHasPlaced, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
+        FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, BAY_COLORS, bayFmtOf, levelBayRects, levelHasPlaced, levelBayClashes, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };
 }));
