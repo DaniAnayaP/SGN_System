@@ -2255,6 +2255,7 @@ function applyHighlight(reveal) {
     // croquis (strong): dos contornos encimados (uno ancho del color de la hoja y otro naranja) para que se vea sobre cualquier color de zona, en claro y en oscuro.
     parts.forEach((part) => {
         const pb = bboxOf(part.shapes);
+        if (part.e.kind === 'object') addObjectDisc(svg, pb, 'hl-shape');
         (h.strong ? ['hl-under', 'hl-ring'] : ['hl-soft']).forEach((cls) => {
             let ring;
             if (part.e.kind === 'footprint') {
@@ -2600,6 +2601,19 @@ function findView3d() {
     return { shown: findLayout(state.draft), focus: null };
 }
 // Con el resto «tenue»: lo que no es de lo enfocado se ve apagado (las figuras y los textos de lo enfocado llevan la clase find-on).
+// El «giro» de un objeto elegido en el croquis: un disco naranja con un anillo punteado que gira alrededor (box = lo que ocupa el objeto; cls = find-mark o hl-shape para que se borre con lo suyo).
+function addObjectDisc(svg, box, cls) {
+    const cx = box.x + box.width / 2; const cy = box.y + box.height / 2;
+    const r = Math.max(Math.hypot(box.width, box.height) / 2 * 1.15, 6);
+    const mk = (extra, rr) => {
+        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('cx', cx.toFixed(2)); c.setAttribute('cy', cy.toFixed(2)); c.setAttribute('r', rr.toFixed(2));
+        c.setAttribute('class', `${cls} ${extra}`);
+        svg.appendChild(c);
+    };
+    mk('obj-disc', r);
+    mk('obj-ring', r * 1.14);
+}
 function applyFindDim(dimmed) {
     const svg = $('layout-svg');
     svg.classList.remove('find-dimmed');
@@ -2616,6 +2630,11 @@ function applyFindDim(dimmed) {
     svg.classList.add('find-dimmed');
     // lo elegido lleva el contorno punteado naranja que gira (como el del renglón elegido): una caja por huella, activo o zona
     const groups = new Map();
+    // un objeto (montacargas, persona…) elegido lleva su «giro»: un disco naranja con un anillo punteado que gira
+    svg.querySelectorAll('[data-oid].find-on').forEach((el) => {
+        const shape = el.matches('rect, polygon, circle, path') ? el : el.querySelector('rect, polygon, circle, path');
+        if (shape) addObjectDisc(svg, shape.getBBox(), 'find-mark');
+    });
     svg.querySelectorAll('[data-fid].find-on, [data-sid].find-on, [data-zid].find-on').forEach((el) => {
         const key = el.hasAttribute('data-fid') ? `f:${el.getAttribute('data-fid')}` : (el.hasAttribute('data-sid') ? `s:${el.getAttribute('data-sid')}` : `z:${el.getAttribute('data-zid')}`);
         const shape = el.matches('rect, polygon') ? el : el.querySelector('polygon, rect');
@@ -6202,7 +6221,7 @@ function find3dMarks() {
     if (f.kind === 'zone') return zoneFocusIds(f).map((id) => ({ kind: 'zone', id }));
     if (f.kind === 'spaces') return (f.ids || []).map((id) => ({ kind: 'space', id }));
     if (f.kind === 'footprint') return [{ kind: 'footprint', id: f.id }];
-    if (f.kind === 'items') return (f.items || []).filter((it) => it.type === 'footprint' || it.type === 'space' || it.type === 'zone').map((it) => ({ kind: it.type, id: it.id }));
+    if (f.kind === 'items') return (f.items || []).filter((it) => it.type === 'footprint' || it.type === 'space' || it.type === 'zone' || it.type === 'object').map((it) => ({ kind: it.type, id: it.id }));
     return [];
 }
 function refreshScene3d() {

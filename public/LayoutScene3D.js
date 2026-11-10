@@ -63,6 +63,34 @@
         scene.add(outline);
         // Lo elegido en las tablas del editor (highlight): el mismo contorno naranja, siempre a la vista aunque otro activo lo tape; el fuerte lleva un segundo contorno más ancho.
         // Un par de contornos (el fino y el fuerte) por cada cosa resaltada: la lista crece según hace falta.
+        // El «giro» de un objeto elegido (montacargas, persona…): un disco naranja bajo el objeto con un anillo punteado que gira alrededor, como en la imagen que Daniel mostró. spinMarker lo arma y guarda su anillo en
+        // la lista que se hace girar en cada cuadro (markSpin = lo elegido con Tenue; hlSpin = el renglón elegido en una tabla).
+        let markSpin = []; let hlSpin = [];
+        const hlDiscs = new THREE.Group();
+        scene.add(hlDiscs);
+        function spinMarker(parent, x, y, z, r, track) {
+            const g = new THREE.Group();
+            g.position.set(x, y, z);
+            const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 56), new THREE.MeshBasicMaterial({ color: 0xe8890c, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide }));
+            disc.rotation.x = -Math.PI / 2;
+            disc.renderOrder = 6;
+            const edge = new THREE.Mesh(new THREE.RingGeometry(r * 0.9, r, 56), new THREE.MeshBasicMaterial({ color: 0xc2410c, transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide }));
+            edge.rotation.x = -Math.PI / 2;
+            edge.position.y = 0.002;
+            edge.renderOrder = 7;
+            const pts = [];
+            for (let i = 0; i < 72; i++) { const a = (i / 72) * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * r * 1.14, 0.004, Math.sin(a) * r * 1.14)); }
+            const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: 0xe8590c, dashSize: 0.14, gapSize: 0.1, depthTest: false, transparent: true }));
+            ring.computeLineDistances();
+            ring.renderOrder = 12;
+            const spin = new THREE.Group();
+            spin.add(ring);
+            g.add(disc, edge, spin);
+            [disc, edge, ring].forEach((m) => { m.raycast = () => {}; }); // no tapa los toques
+            parent.add(g);
+            track.push(spin);
+            return g;
+        }
         const hlPool = [];
         function hlPair(k) {
             while (hlPool.length <= k) {
@@ -463,6 +491,8 @@
             });
             hl = first;
             hlPool.forEach((pair) => pair.forEach((l) => { l.visible = false; }));
+            while (hlDiscs.children.length) { const c = hlDiscs.children[0]; hlDiscs.remove(c); c.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); }
+            hlSpin = [];
             boxes.forEach(({ e, bx }, k) => {
                 // El contorno de un espacio o una posición (y de un nivel) va pegado a su medida: con la holgura de siempre (6 y 20 cm) una posición chica parecía salirse de su espacio.
                 const tight = e.kind === 'bay' || (e.kind === 'space' && !!e.n);
@@ -475,6 +505,7 @@
                 });
                 hl = e;
                 applyFaceMarks(bx);
+                if (e.kind === 'object') spinMarker(hlDiscs, bx.x, 0.1, bx.z, Math.max(Math.hypot(bx.sx, bx.sz) / 2 + 0.3, 0.6), hlSpin);
             });
             hl = first;
             dirty = true;
@@ -1699,8 +1730,17 @@
 
             // lo elegido: un contorno punteado naranja que gira, sobre la caja de cada huella, activo o zona (por encima de lo demás, para verlo aunque esté tapado)
             marchMats = [];
+            markSpin = [];
             (marks || []).forEach((m) => {
                 let geo = null; let pos = null; let loop = false;
+                if (m.kind === 'object') {
+                    const o = (layout.objects || []).find((x) => x.id === m.id);
+                    if (!o) return;
+                    const ol = Math.max(Number(o.l) || 0.3, 0.1); const ow = Math.max(Number(o.w) || 0.3, 0.1);
+                    const ext = o.type === 'forklift' ? ol * 1.2 : ol;
+                    spinMarker(group.marks, PX(Number(o.x) || 0), 0.1 + FL(Number(o.x) || 0, Number(o.y) || 0), PZ(Number(o.y) || 0), Math.max(Math.hypot(ext, ow) / 2 + 0.3, 0.6), markSpin);
+                    return;
+                }
                 if (m.kind === 'footprint') {
                     const f = (layout.footprints || []).find((x) => x.id === m.id);
                     if (!f || f.active === false || !(f.l > 0) || !(f.d > 0)) return;
@@ -1853,6 +1893,7 @@
         const loop = () => {
             if (destroyed) return;
             if (marchMats.length) { marchMats.forEach((m) => { m.dashOffset -= 0.012; }); dirty = true; } // el punteado de lo elegido gira
+            if (markSpin.length || hlSpin.length) { markSpin.forEach((g) => { g.rotation.y -= 0.022; }); hlSpin.forEach((g) => { g.rotation.y -= 0.022; }); dirty = true; } // y el anillo del giro de los objetos
             if (dirty) { dirty = false; renderer.render(scene, cam); }
             requestAnimationFrame(loop);
         };
