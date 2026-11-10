@@ -2122,6 +2122,7 @@
             { "id": "colPmUdm", "labelKey": "main.colPmUdm", "permissionOnly": true },
             { "id": "colPmCategoria", "labelKey": "main.colPmCategoria", "permissionOnly": true },
             { "id": "colPmCantidad", "labelKey": "main.colPmCantidad", "permissionOnly": true },
+            { "id": "colPmFechaRequerida", "labelKey": "main.colPmFechaRequerida", "permissionOnly": true },
             { "id": "colPmEstatus", "labelKey": "main.colPmEstatus", "permissionOnly": true },
             { "id": "colPmOrigen", "labelKey": "main.colPmOrigen", "permissionOnly": true },
             {

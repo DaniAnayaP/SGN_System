@@ -163,6 +163,13 @@ function actionsCell(r, tr) {
     }
     return td;
 }
+// Para cuándo se quiere ese renglón: un día (AAAA-MM-DD, sin hora ni zona) o «Lo antes posible».
+function needByText(day) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day || '')) return t('main.pmLoAntesPosible');
+    const d = new Date(`${day}T00:00:00Z`);
+    const mon = new Intl.DateTimeFormat(document.documentElement.lang === 'en' ? 'en-US' : 'es-MX', { timeZone: 'UTC', month: 'short' }).format(d).replace('.', '');
+    return `${String(d.getUTCDate()).padStart(2, '0')}/${mon}/${d.getUTCFullYear()}`;
+}
 function buildRow(r) {
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(r.id);
@@ -171,7 +178,7 @@ function buildRow(r) {
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, system[key], 'col-system')),
         cell('colCatRegistroUnico', `${r.folio}-${r.lineNo}`, 'col-system'),
         cell('colPmFolio', r.folio), timeCell('colPmFechaHora', r.requestedAt, r.receivedAt), cell('colPmSolicitante', r.name), cell('colPmCodigo', r.code), cell('colPmDescripcion', r.description), cell('colPmUdm', r.uom),
-        cell('colPmCategoria', r.categories), cell('colPmCantidad', quantityText(r.quantity), 'col-number'), statusCell(r, tr),
+        cell('colPmCategoria', r.categories), cell('colPmCantidad', quantityText(r.quantity), 'col-number'), cell('colPmFechaRequerida', needByText(r.needBy)), statusCell(r, tr),
         originCell('colPmOrigen', t(r.source === 'qr' ? 'main.pmOrigenQr' : (r.source === 'app' ? 'main.pmOrigenApp' : 'main.pmOrigenUsuario')), r),
     );
     tr.appendChild(actionsCell(r, tr));

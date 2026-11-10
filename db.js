@@ -5594,6 +5594,8 @@ db.exec(`
 if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'received_at')) db.exec('ALTER TABLE manual_orders ADD COLUMN received_at TEXT');
 // client_ref: la clave que la App le pone a cada pedido al armarlo; si el celular reenvía el mismo pedido (se cortó la señal justo al responder) el servidor lo reconoce y no lo duplica.
 if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'client_ref')) db.exec('ALTER TABLE manual_orders ADD COLUMN client_ref TEXT');
+// need_by: para cuándo se quiere ese renglón (el día en la zona del cliente, AAAA-MM-DD; '' = lo antes posible). Un artículo pedido para dos días son dos renglones del mismo folio, uno por fecha.
+if (!db.prepare('PRAGMA table_info(manual_order_lines)').all().some((c) => c.name === 'need_by')) db.exec("ALTER TABLE manual_order_lines ADD COLUMN need_by TEXT NOT NULL DEFAULT ''");
 const MANUAL_ORDER_STATUSES = ['pending', 'supplied'];
 // Lo que se puede corregir de un pedido ya enviado: quién lo pidió (vale para todo el pedido) y la cantidad de un renglón. La hora, el artículo y el centro nunca cambian. El estatus se cambia aparte (setManualOrderLineStatus).
 const MANUAL_ORDER_PATCHABLE_FIELDS = {
@@ -5617,15 +5619,15 @@ function getManualOrderItem(clientId, id, isTest = false) {
     return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id = ?`)
         .get(clientId, isTest ? 1 : 0, id);
 }
-// Guarda un pedido con todos sus renglones en una sola operación. lines = [{ skuItemId, code, description, uom, categories, quantity }]. La hora la pone el servidor.
+// Guarda un pedido con todos sus renglones en una sola operación. lines = [{ skuItemId, code, description, uom, categories, quantity, needBy }]. La hora la pone el servidor.
 function createManualOrder({ clientId, costCenterId, requesterName, requesterUserId = null, source = 'qr', lines, createdAt = null, clientRef = null }) {
     return db.transaction(() => {
         // createdAt (UTC 'YYYY-MM-DD HH:MM:SS') solo viene de la App cuando el pedido se mandó sin señal: se guarda como hora del pedido y la del servidor como hora recibida.
         const info = db.prepare("INSERT INTO manual_orders (client_id, cost_center_id, requester_name, requester_user_id, source, created_at, received_at, client_ref) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')), CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?)")
             .run(clientId, costCenterId || 0, requesterName || '', requesterUserId, source, createdAt, createdAt, clientRef);
         const orderId = Number(info.lastInsertRowid);
-        const insert = db.prepare('INSERT INTO manual_order_lines (order_id, client_id, line_no, sku_item_id, code, description, uom, categories, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-        lines.forEach((l, i) => insert.run(orderId, clientId, i + 1, l.skuItemId || null, l.code || '', l.description || '', l.uom || '', l.categories || '', l.quantity));
+        const insert = db.prepare('INSERT INTO manual_order_lines (order_id, client_id, line_no, sku_item_id, code, description, uom, categories, quantity, need_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        lines.forEach((l, i) => insert.run(orderId, clientId, i + 1, l.skuItemId || null, l.code || '', l.description || '', l.uom || '', l.categories || '', l.quantity, l.needBy || ''));
         const row = db.prepare('SELECT created_at FROM manual_orders WHERE id = ?').get(orderId);
         return { id: orderId, createdAt: row.created_at, lines: lines.length };
     })();

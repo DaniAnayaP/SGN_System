@@ -7773,6 +7773,7 @@ app.delete('/api/business/cleanings/:id', requireAuth, (req, res) => {
 const MANUAL_ORDER_TABLE_KEY = 'pedido-manual';
 const MANUAL_ORDER_SCREEN_LABEL = 'Pedido Manual';
 const MANUAL_ORDER_MAX_LINES = 40;
+const MANUAL_ORDER_MAX_DAYS = 14; // para cuándo: desde mañana y hasta 14 días (o «lo antes posible»)
 const MANUAL_ORDER_SEARCH_FIELDS = ['code', 'desc', 'uom', 'cat'];
 const MANUAL_ORDER_STATUS_LABELS = { pending: 'Pendiente', supplied: 'Surtido' };
 const publicManualOrderLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
@@ -7808,28 +7809,42 @@ function manualItemsFor(clientId, isTest, costCenterId = 0) {
     if (manualItemsCache.size > 200) manualItemsCache.delete(manualItemsCache.keys().next().value);
     return items;
 }
-// Los renglones de un pedido a partir de lo que llega (artículos y cantidades): cada artículo debe existir en la empresa, las cantidades van de 0 a 999999 y los repetidos se suman. { lines } o { error }.
+const manualAddDays = (day, n) => { const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+// Los renglones de un pedido a partir de lo que llega (artículos, cantidades y para cuándo): cada artículo debe existir en la empresa, las cantidades van de 0 a 999999 y los repetidos (mismo artículo y misma fecha) se suman.
+// needBy = AAAA-MM-DD, desde mañana y hasta 14 días en la zona horaria del cliente; vacío (o «asap») = lo antes posible. Un artículo para dos fechas son dos renglones. { lines } o { error }.
 function manualLinesFrom(rawItems, clientId, isTest, costCenterId = 0) {
     const raw = Array.isArray(rawItems) ? rawItems : [];
     if (!raw.length) return { error: { message: 'El pedido no trae artículos.', code: 'ITEMS' } };
     if (raw.length > MANUAL_ORDER_MAX_LINES) return { error: { message: `Un pedido lleva hasta ${MANUAL_ORDER_MAX_LINES} artículos.`, code: 'TOOMANY' } };
+    const today = clientLocalDay(clientId);
+    const minDay = manualAddDays(today, 1);
+    const maxDay = manualAddDays(today, MANUAL_ORDER_MAX_DAYS);
     const wanted = new Map();
     for (const it of raw) {
         const id = Number(it && it.id);
         const quantity = Number(it && it.quantity);
         if (!Number.isInteger(id) || id < 1 || !Number.isFinite(quantity) || quantity <= 0 || quantity > 999999) return { error: { message: 'Una cantidad no es válida.', code: 'QTY' } };
-        wanted.set(id, Math.round(((wanted.get(id) || 0) + quantity) * 1000) / 1000);
+        let needBy = '';
+        const rawBy = it && it.needBy;
+        if (rawBy !== undefined && rawBy !== null && rawBy !== '' && rawBy !== 'asap') {
+            needBy = String(rawBy);
+            const real = /^\d{4}-\d{2}-\d{2}$/.test(needBy) && !Number.isNaN(Date.parse(`${needBy}T00:00:00Z`)) && new Date(`${needBy}T00:00:00Z`).toISOString().slice(0, 10) === needBy;
+            if (!real || needBy < minDay || needBy > maxDay) return { error: { message: `La fecha no es válida: elige desde mañana y hasta ${MANUAL_ORDER_MAX_DAYS} días.`, code: 'DATE' } };
+        }
+        const key = `${id}|${needBy}`;
+        const prev = wanted.get(key);
+        wanted.set(key, { id, needBy, quantity: Math.round((((prev && prev.quantity) || 0) + quantity) * 1000) / 1000 });
     }
     const view = new Map(manualItemsFor(clientId, isTest, costCenterId).map((it) => [it.id, it]));
     const lines = [];
-    for (const [id, quantity] of wanted) {
+    for (const { id, needBy, quantity } of wanted.values()) {
         const it = view.get(id);
         if (!it) {
             // existe en la empresa pero ya no está relacionado con este centro de costos
             if (costCenterId && manualItemsFor(clientId, isTest).some((x) => x.id === id)) return { error: { message: 'Un artículo no está relacionado con este centro de costos.', code: 'RELATED' } };
             return { error: { message: 'Un artículo ya no existe.', code: 'ITEM' } };
         }
-        lines.push({ skuItemId: it.id, code: it.code, description: it.description, uom: it.uom, categories: it.categories, quantity });
+        lines.push({ skuItemId: it.id, code: it.code, description: it.description, uom: it.uom, categories: it.categories, quantity, needBy });
     }
     return { lines };
 }
@@ -7857,6 +7872,8 @@ app.get('/api/public/pedido-manual/:token', publicLayoutLimiter, (req, res) => {
         companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
         costCenter: center ? { id: center.id, name: center.name, code: center.code || '' } : null,
         locks, signedIn, userName: signedIn ? changedByLabel({ user }) : '', now: new Date().toISOString(),
+        // para cuándo: el día de hoy en la zona del cliente y hasta cuántos días adelante se puede pedir (desde mañana)
+        today: clientLocalDay(row.clientId), maxDays: MANUAL_ORDER_MAX_DAYS,
         relatedCount: manualItemsFor(row.clientId, isTest, row.costCenterId || 0).length,
     });
 });
@@ -7902,7 +7919,7 @@ function manualOrderRowOf(r, centers, client) {
     const cc = centers.get(r.cost_center_id);
     return {
         id: r.id, orderId: r.order_id, folio: manualFolio(r.order_id), lineNo: r.line_no, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
-        name: r.requester_name, code: r.code, description: r.description, uom: r.uom, categories: r.categories, quantity: r.quantity,
+        name: r.requester_name, code: r.code, description: r.description, uom: r.uom, categories: r.categories, quantity: r.quantity, needBy: r.need_by || '',
         status: r.status, statusAt: sqlUtcIso(r.status_at), statusBy: r.status_by || '', requestedAt: sqlUtcIso(r.order_created_at), receivedAt: sqlUtcIso(r.order_received_at), source: r.source,
         editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: MANUAL_ORDER_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.order_created_at }),

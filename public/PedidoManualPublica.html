@@ -101,6 +101,53 @@
         .copt.all{ font-weight:700; border-bottom:1px solid var(--line); border-radius:9px 9px 0 0; margin-bottom:2px; }
         mark{ background:var(--soft); color:inherit; border-radius:3px; padding:0 1px; box-shadow:0 0 0 1px var(--line); }
         mark.aux{ background:transparent; }
+        /* Para cuándo: lista en el celular y tabla por día en pantalla ancha (mismo pedido armado) */
+        main.wide{ max-width:1000px; }
+        .chips{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+        .dchip{ font:600 13px system-ui,sans-serif; border:1px solid var(--line); border-radius:999px; padding:6px 12px; background:var(--surface); color:var(--ink); cursor:pointer; display:flex; flex-direction:column; align-items:center; line-height:1.15; }
+        .dchip small{ font-weight:400; font-size:11px; color:var(--muted); }
+        .dchip[aria-pressed="true"]{ background:var(--accent); border-color:var(--accent); color:var(--surface); }
+        .dchip[aria-pressed="true"] small{ color:var(--surface); opacity:.85; }
+        select.dsel, select.when{ font:600 13px system-ui,sans-serif; border:1px solid var(--line); border-radius:12px; padding:6px 10px; background:var(--surface); color:var(--ink); max-width:100%; }
+        select.dsel.on, select.when.diff{ border-color:var(--accent); background:var(--soft); }
+        .oline{ display:flex; flex-direction:column; gap:6px; padding:10px 0; border-bottom:1px solid var(--line); }
+        .oline .top{ display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+        .oline .top span{ font-size:14px; }
+        .oline .top small{ display:block; color:var(--muted); font-size:12px; }
+        .oline .sub{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+        .oline .q{ display:flex; align-items:center; gap:6px; }
+        .oline .q button{ width:30px; height:30px; border-radius:50%; border:1px solid var(--line); background:var(--surface); color:var(--ink); font-size:18px; cursor:pointer; }
+        .oline .q b{ min-width:40px; text-align:center; font-variant-numeric:tabular-nums; }
+        .oline .q .u{ font-size:12px; color:var(--muted); }
+        .oline select.when{ margin-left:auto; }
+        .oline .rm, .art .rm{ border:0; background:none; color:var(--warn); font-size:12px; cursor:pointer; padding:2px 6px; }
+        .split{ font:600 13px system-ui,sans-serif; color:var(--accent); background:none; border:0; cursor:pointer; padding:0; text-align:left; width:max-content; }
+        .pickwhen{ display:flex; align-items:center; gap:8px; justify-content:center; }
+        .pickwhen label{ margin:0; }
+        .scroll{ overflow-x:auto; border:1px solid var(--line); border-radius:16px; }
+        table.dias{ border-collapse:separate; border-spacing:0; width:100%; min-width:760px; font-size:13px; }
+        .dias th, .dias td{ padding:6px 5px; border-bottom:1px solid var(--line); text-align:center; vertical-align:middle; background:var(--surface); }
+        .dias tr:last-child td{ border-bottom:0; }
+        .dias th.art, .dias td.art{ position:sticky; left:0; z-index:1; text-align:left; min-width:210px; max-width:230px; padding-left:12px; border-right:1px solid var(--line); }
+        .dias td.art b{ display:block; font-size:13px; line-height:1.25; }
+        .dias td.art small{ display:block; color:var(--muted); font-size:11px; }
+        .dias .wk{ background:var(--bg); }
+        .dh{ display:flex; flex-direction:column; align-items:center; line-height:1.15; padding:2px 0; }
+        .dh span{ font-size:10px; font-weight:800; letter-spacing:.08em; color:var(--muted); }
+        .dh b{ font-size:16px; }
+        .dh b.asap{ font-size:12px; max-width:80px; }
+        .dh small{ font-size:11px; color:var(--muted); }
+        .dh em{ font-style:normal; font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ok); border:1px solid var(--ok); border-radius:999px; padding:0 7px; margin-top:2px; }
+        .qc{ width:60px; text-align:center; font:600 15px system-ui,sans-serif; padding:7px 2px; border:1px dashed var(--line); border-radius:10px; background:transparent; color:var(--ink); -moz-appearance:textfield; }
+        .qc::-webkit-inner-spin-button, .qc::-webkit-outer-spin-button{ -webkit-appearance:none; margin:0; }
+        .qc::placeholder{ color:var(--line); font-weight:400; }
+        .qc.on{ border:1.5px solid var(--accent); background:var(--soft); }
+        .tot{ font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+        .tot small{ display:block; font-weight:400; color:var(--muted); font-size:11px; }
+        .sumbar{ display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
+        .pill{ display:flex; flex-direction:column; border:1px solid var(--line); border-radius:14px; padding:6px 12px; background:var(--bg); font-size:12px; min-width:110px; }
+        .pill b{ font-size:13px; }
+        .pill.empty{ opacity:.6; }
         @media (prefers-reduced-motion: no-preference){ .card{ animation:rise .25s ease-out; } @keyframes rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } } }
     </style>
 </head>
@@ -128,6 +175,7 @@ const TEXT = {
         needName: 'Escribe el nombre de quien pide para enviar.', errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errQty: 'Una cantidad no es válida.', errItems: 'Agrega al menos un artículo.',
         sentTitle: 'Pedido enviado', folio: 'Número de pedido', by: 'Pidió', at: 'Hora', list: 'Artículos del pedido', newOrder: 'Nuevo pedido', viewOnly: 'Este QR solo sirve para consultar.', loginNeeded: 'Este QR pide iniciar sesión para enviar pedidos.',
         login: 'Iniciar sesión', loginHint: 'Inicia sesión en el sistema y vuelve a abrir este QR.', locked: 'Este QR ya no permite enviar pedidos.', tooMany: 'Un pedido lleva hasta 40 artículos.',
+        whenTitle: 'Todo el pedido para', asap: 'Lo antes posible', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.',
     },
     en: {
         title: 'Manual Order', loading: 'Loading…', notFound: 'This QR no longer matches any cost center.', searchTitle: 'Find an item', searchPlaceholder: 'Code, description, UoM or category',
@@ -141,6 +189,7 @@ const TEXT = {
         needName: 'Type the name of who is ordering to send.', errGeneric: 'It could not be sent. Check your connection and try again.', errQty: 'A quantity is not valid.', errItems: 'Add at least one item.',
         sentTitle: 'Order sent', folio: 'Order number', by: 'Ordered by', at: 'Time', list: 'Items in the order', newOrder: 'New order', viewOnly: 'This QR is for viewing only.', loginNeeded: 'This QR requires signing in to send orders.',
         login: 'Sign in', loginHint: 'Sign in to the system and open this QR again.', locked: 'This QR no longer allows sending orders.', tooMany: 'An order takes up to 40 items.',
+        whenTitle: 'The whole order for', asap: 'As soon as possible', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.',
     },
 }[LANG];
 document.documentElement.lang = LANG;
@@ -172,6 +221,9 @@ let results = [];
 let total = 0;
 let picked = null;
 let cart = [];
+let defaultWhen = '';           // para cuándo se pide todo el pedido ('' = lo antes posible)
+let wide = false;               // pantalla ancha: la tabla por día; angosta (celular): la lista
+let extraCols = [];             // días de más (después de los primeros 7) que se agregaron a la tabla
 let sentInfo = null;
 let timer = null;
 let seq = 0;
@@ -237,21 +289,121 @@ function drawSel() {
     if (!box) return;
     box.innerHTML = picked ? `<div class="card"><div class="sel"><b>${esc(picked.description)}</b><small>${esc([picked.code, picked.uom, picked.categories].filter(Boolean).join(' · '))}</small>
         <div class="qty"><button type="button" id="dec" aria-label="−">−</button><input type="number" id="qty" inputmode="decimal" step="any" min="0" value="${esc(picked.qty)}" aria-label="${esc(TEXT.qtyTitle)}"><button type="button" id="inc" aria-label="+">+</button><span>${esc(picked.uom)}</span></div>
+        <div class="pickwhen"><label for="pickwhen">${esc(TEXT.needBy)}</label><select id="pickwhen" class="when">${whenOptions(picked.when || '')}</select></div>
         <button type="button" class="btn" id="add">${esc(TEXT.add)}</button><button type="button" class="link" id="cancel">${esc(TEXT.cancel)}</button></div></div>` : '';
+}
+// El pedido: SIEMPRE pide el nombre de quien pide (con sesión ya viene escrito el de la cuenta y se puede cambiar: quien manda no siempre es quien pide) y lo armado queda en un solo número de pedido con su lista de artículos.
+// ---- Para cuándo: cada cantidad lleva su fecha (desde mañana y hasta 14 días, o «lo antes posible»). La lista del celular y la tabla por día de la pantalla ancha arman el MISMO pedido: cart = [{ id, code, description, uom, parts: [{ when, quantity }] }] ('' = lo antes posible).
+const locale = LANG === 'en' ? 'en-US' : 'es-MX';
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+const dayDate = (iso) => new Date(`${iso}T00:00:00Z`);
+const addDaysIso = (iso, n) => { const d = dayDate(iso); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const todayIso = () => (info && info.today) || new Date().toISOString().slice(0, 10);
+const allDays = () => Array.from({ length: (info && info.maxDays) || 14 }, (_, i) => addDaysIso(todayIso(), i + 1));
+const dayParts = (iso) => {
+    const d = dayDate(iso);
+    const f = (o) => new Intl.DateTimeFormat(locale, { timeZone: 'UTC', ...o }).format(d).replace('.', '');
+    return { dow: f({ weekday: 'short' }), day: d.getUTCDate(), mon: f({ month: 'short' }), weekend: [0, 6].includes(d.getUTCDay()) };
+};
+const dayShort = (iso) => { const p = dayParts(iso); return `${cap(p.dow)} ${p.day} ${p.mon}`; };
+const whenLabel = (w) => (w ? dayShort(w) : TEXT.asap);
+const whenOptions = (selected) => `<option value=""${selected === '' ? ' selected' : ''}>${esc(TEXT.asap)}</option>${allDays().map((d) => `<option value="${d}"${selected === d ? ' selected' : ''}>${esc(dayShort(d))}</option>`).join('')}`;
+const partOf = (c, when) => c.parts.find((p) => p.when === when);
+const totalOf = (c) => Math.round(c.parts.reduce((s, p) => s + p.quantity, 0) * 1000) / 1000;
+const articleCount = () => cart.filter((c) => c.parts.length).length;
+const headText = () => { const n = articleCount(); return `${esc(TEXT.yourOrder)} · ${esc(n === 1 ? TEXT.item1 : TEXT.items.replace('{n}', n))}`; };
+function setQty(c, when, quantity) {
+    const p = partOf(c, when);
+    if (!(quantity > 0)) { if (p) c.parts.splice(c.parts.indexOf(p), 1); return; }
+    if (p) p.quantity = quantity; else c.parts.push({ when, quantity });
+}
+// Lo que se manda: un renglón por artículo y fecha.
+function flatLines() {
+    const out = [];
+    cart.forEach((c) => c.parts.forEach((p) => { if (p.quantity > 0) out.push({ id: c.id, code: c.code, description: c.description, uom: c.uom, quantity: p.quantity, needBy: p.when }); }));
+    return out;
+}
+// Cambiar la fecha de todo el pedido: lo que iba a la fecha de antes se pasa a la nueva (lo que se puso aparte se respeta) y las cantidades de una misma fecha se juntan.
+function setDefault(when) {
+    const prev = defaultWhen;
+    defaultWhen = when;
+    cart.forEach((c) => {
+        c.parts.forEach((p) => { if (p.when === prev) p.when = when; });
+        const merged = [];
+        c.parts.forEach((p) => { const same = merged.find((x) => x.when === p.when); if (same) same.quantity = Math.round((same.quantity + p.quantity) * 1000) / 1000; else merged.push(p); });
+        c.parts = merged;
+    });
+    drawOrder();
+}
+// Lista (celular): fecha de todo el pedido arriba y, en cada artículo, su cantidad con su fecha; «+ Otra fecha» reparte el artículo en dos.
+function drawOrderList() {
+    const days = allDays();
+    const chip = (when, label, sub) => `<button type="button" class="dchip" data-defwhen="${when}" aria-pressed="${defaultWhen === when}">${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ''}</button>`;
+    const rest = days.slice(3);
+    const chips = chip('', TEXT.asap, '') + days.slice(0, 3).map((d, i) => { const p = dayParts(d); return i === 0 ? chip(d, TEXT.tomorrow, `${p.dow} ${p.day}`) : chip(d, `${cap(p.dow)} ${p.day}`, ''); }).join('')
+        + `<select class="dsel${rest.includes(defaultWhen) ? ' on' : ''}" id="defother" aria-label="${esc(TEXT.otherDate)}"><option value="">${esc(TEXT.otherDate)}</option>${rest.map((d) => `<option value="${d}"${defaultWhen === d ? ' selected' : ''}>${esc(dayShort(d))}</option>`).join('')}</select>`;
+    const top = `<div><label>${esc(TEXT.whenTitle)}</label><div class="chips">${chips}</div></div>`;
+    const lines = cart.map((c, i) => `<div class="oline"><div class="top"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small></span><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></div>`
+        + c.parts.map((p, j) => `<div class="sub"><div class="q"><button type="button" data-pdec="${i}:${j}" aria-label="−">−</button><b>${esc(fmtQty(p.quantity))}</b><button type="button" data-pinc="${i}:${j}" aria-label="+">+</button><span class="u">${esc(c.uom)}</span></div><select class="when${p.when !== defaultWhen ? ' diff' : ''}" data-part="${i}:${j}" aria-label="${esc(TEXT.needBy)}">${whenOptions(p.when)}</select>${c.parts.length > 1 ? `<button type="button" class="rm" data-prm="${i}:${j}" aria-label="${esc(TEXT.remove)}">×</button>` : ''}</div>`).join('')
+        + `<button type="button" class="split" data-addpart="${i}">${esc(TEXT.addDate)}</button></div>`).join('');
+    return `${top}<div>${lines}</div>`;
+}
+// Tabla por día (pantalla ancha): un renglón por artículo y una columna por día; «Lo antes posible» es la primera. Los primeros 7 días siempre se ven; los demás salen al usarlos o con «+ Otra fecha».
+function tableCols() {
+    const days = allDays();
+    const base = days.slice(0, 7);
+    const used = new Set();
+    cart.forEach((c) => c.parts.forEach((p) => { if (p.when) used.add(p.when); }));
+    return ['', ...base, ...days.filter((d) => !base.includes(d) && (used.has(d) || extraCols.includes(d)))];
+}
+function summaryHtml() {
+    const by = new Map();
+    flatLines().forEach((l) => { const s = by.get(l.needBy) || new Set(); s.add(l.id); by.set(l.needBy, s); });
+    if (!by.size) return `<div class="pill empty">${esc(TEXT.nothingYet)}</div>`;
+    return [...by.entries()].sort((a, z) => a[0].localeCompare(z[0])).map(([w, ids]) => `<div class="pill"><b>${esc(whenLabel(w))}</b>${esc(ids.size === 1 ? TEXT.item1 : TEXT.items.replace('{n}', ids.size))}</div>`).join('');
+}
+function drawOrderTable() {
+    const cols = tableCols();
+    const days = allDays();
+    const more = days.filter((d) => !cols.includes(d));
+    const head = cols.map((w) => {
+        if (w === '') return `<th><div class="dh"><b class="asap">${esc(TEXT.asap)}</b></div></th>`;
+        const p = dayParts(w);
+        return `<th${p.weekend ? ' class="wk"' : ''}><div class="dh"><span>${esc(p.dow.toUpperCase())}</span><b>${p.day}</b><small>${esc(p.mon)}</small>${w === days[0] ? `<em>${esc(TEXT.tomorrow)}</em>` : ''}</div></th>`;
+    }).join('');
+    const addCol = more.length ? `<select class="dsel" id="addcol" aria-label="${esc(TEXT.addColumn)}"><option value="">${esc(TEXT.addColumn)}</option>${more.map((d) => `<option value="${d}">${esc(dayShort(d))}</option>`).join('')}</select>` : '';
+    const rows = cart.map((c, i) => `<tr><td class="art"><b>${esc(c.description)}</b><small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></td>${cols.map((w) => {
+        const p = partOf(c, w);
+        const weekend = w && dayParts(w).weekend;
+        return `<td${weekend ? ' class="wk"' : ''}><input class="qc${p ? ' on' : ''}" type="number" min="0" step="any" inputmode="decimal" placeholder="–" data-cell="${i}|${w}" value="${esc(p ? p.quantity : '')}" aria-label="${esc(`${c.description}, ${whenLabel(w)}`)}"></td>`;
+    }).join('')}<td class="tot" id="tot-${i}"></td></tr>`).join('');
+    return `<div class="scroll" role="region" tabindex="0" aria-label="${esc(TEXT.yourOrder)}"><table class="dias"><thead><tr><th class="art">${esc(TEXT.article)}</th>${head}<th>${addCol}</th><th>${esc(TEXT.total)}</th></tr></thead><tbody>${rows}</tbody></table></div><div><div class="muted">${esc(TEXT.perDay)}</div><div class="sumbar" id="sumbar">${summaryHtml()}</div></div>`;
+}
+// Al escribir en una casilla solo se ponen al día los totales, el resumen por día y el título: así no se pierde el cursor.
+function refreshTable() {
+    cart.forEach((c, i) => { const el = $(`tot-${i}`); if (el) el.innerHTML = totalOf(c) > 0 ? `${esc(fmtQty(totalOf(c)))}<small>${esc(c.uom)}</small>` : '–'; });
+    const bar = $('sumbar');
+    if (bar) bar.innerHTML = summaryHtml();
+    const head = $('ohead');
+    if (head) head.innerHTML = headText();
 }
 // El pedido: SIEMPRE pide el nombre de quien pide (con sesión ya viene escrito el de la cuenta y se puede cambiar: quien manda no siempre es quien pide) y lo armado queda en un solo número de pedido con su lista de artículos.
 function drawOrder() {
     const box = $('orderbox');
     if (!box) return;
-    const lines = cart.length ? cart.map((c, i) => `<div class="line"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small></span><div class="q"><button type="button" data-dec="${i}" aria-label="−">−</button><b>${esc(fmtQty(c.quantity))}</b><button type="button" data-inc="${i}" aria-label="+">+</button><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></div></div>`).join('') : `<div class="msg">${esc(TEXT.empty)}</div>`;
+    const body = cart.length ? (wide ? drawOrderTable() : drawOrderList()) : `<div class="msg">${esc(TEXT.empty)}</div>`;
     const who = `<div><label for="name">${esc(TEXT.yourName)} <span class="req" aria-hidden="true">*</span></label><input type="text" id="name" maxlength="60" autocomplete="name" required placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(nameValue)}"></div>`;
-    box.innerHTML = `<h2>${esc(TEXT.yourOrder)} · ${esc(cart.length === 1 ? TEXT.item1 : TEXT.items.replace('{n}', cart.length))}</h2>${who}${lines}${cart.length ? `<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}`;
+    box.innerHTML = `<h2 id="ohead">${headText()}</h2>${who}${body}${cart.length ? `<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}`;
+    if (cart.length && wide) refreshTable();
 }
 function addPicked() {
     const n = Number(String(picked.qty).replace(',', '.'));
     if (!Number.isFinite(n) || n <= 0) { $('qty').focus(); return; }
+    const q = Math.round(n * 1000) / 1000;
+    const when = picked.when || '';
     const found = cart.find((c) => c.id === picked.id);
-    if (found) found.quantity = Math.round((found.quantity + n) * 1000) / 1000; else cart.push({ id: picked.id, code: picked.code, description: picked.description, uom: picked.uom, quantity: Math.round(n * 1000) / 1000 });
+    if (found) { const p = partOf(found, when); if (p) p.quantity = Math.round((p.quantity + q) * 1000) / 1000; else found.parts.push({ when, quantity: q }); }
+    else cart.push({ id: picked.id, code: picked.code, description: picked.description, uom: picked.uom, parts: [{ when, quantity: q }] });
     picked = null;
     drawSel(); drawOrder();
 }
@@ -322,15 +474,29 @@ $('view').addEventListener('click', (event) => {
     if (toggle) { const list = $('fields'); list.hidden = !list.hidden; toggle.setAttribute('aria-expanded', String(!list.hidden)); return; }
     if (t.closest('#qclear')) { const q = $('q'); q.value = ''; query = ''; queueSearch(); q.focus(); return; }
     const pick = t.closest('[data-pick]');
-    if (pick) { picked = { ...results[Number(pick.getAttribute('data-pick'))], qty: 1 }; drawSel(); const qi = $('qty'); if (qi) { qi.focus(); qi.select(); } return; }
+    if (pick) { picked = { ...results[Number(pick.getAttribute('data-pick'))], qty: 1, when: defaultWhen }; drawSel(); const qi = $('qty'); if (qi) { qi.focus(); qi.select(); } return; }
     if (t.closest('#dec')) { picked.qty = Math.max(1, Math.round((Number(picked.qty) || 1) - 1)); $('qty').value = picked.qty; return; }
     if (t.closest('#inc')) { picked.qty = Math.round((Number(picked.qty) || 0) + 1); $('qty').value = picked.qty; return; }
     if (t.closest('#add')) { addPicked(); return; }
     if (t.closest('#cancel')) { picked = null; drawSel(); return; }
-    const dec = t.closest('[data-dec]');
-    if (dec) { const c = cart[Number(dec.getAttribute('data-dec'))]; c.quantity = Math.max(1, Math.round(c.quantity - 1)); drawOrder(); return; }
-    const inc = t.closest('[data-inc]');
-    if (inc) { const c = cart[Number(inc.getAttribute('data-inc'))]; c.quantity = Math.round(c.quantity + 1); drawOrder(); return; }
+    // una cantidad con su fecha (lista del celular): data-attr="artículo:renglón"
+    const part = (attr) => { const el = t.closest(`[${attr}]`); if (!el) return null; const [i, j] = el.getAttribute(attr).split(':').map(Number); const c = cart[i]; return c && c.parts[j] ? { c, p: c.parts[j], j } : null; };
+    const pdec = part('data-pdec');
+    if (pdec) { pdec.p.quantity = Math.max(1, Math.round(pdec.p.quantity - 1)); drawOrder(); return; }
+    const pinc = part('data-pinc');
+    if (pinc) { pinc.p.quantity = Math.round(pinc.p.quantity + 1); drawOrder(); return; }
+    const prm = part('data-prm');
+    if (prm) { prm.c.parts.splice(prm.j, 1); drawOrder(); return; }
+    const addpart = t.closest('[data-addpart]');
+    if (addpart) {
+        const c = cart[Number(addpart.getAttribute('data-addpart'))];
+        // la fecha de la nueva cantidad: el primer día que ese artículo todavía no tiene
+        const free = ['', ...allDays()].find((w) => !partOf(c, w));
+        if (c && free !== undefined) { c.parts.push({ when: free, quantity: 1 }); drawOrder(); }
+        return;
+    }
+    const defwhen = t.closest('[data-defwhen]');
+    if (defwhen) { setDefault(defwhen.getAttribute('data-defwhen')); return; }
     const rm = t.closest('[data-rm]');
     if (rm) { cart.splice(Number(rm.getAttribute('data-rm')), 1); drawOrder(); return; }
     if (t.closest('#send')) sendOrder();
@@ -340,10 +506,36 @@ $('view').addEventListener('input', (event) => {
     if (t.id === 'q') { query = t.value; queueSearch(); }
     else if (t.id === 'qty' && picked) picked.qty = t.value;
     else if (t.id === 'name') nameValue = t.value;
+    else if (t.dataset && t.dataset.cell !== undefined) {
+        // una casilla de la tabla por día: artículo|fecha
+        const [i, w] = t.dataset.cell.split('|');
+        const c = cart[Number(i)];
+        if (!c) return;
+        const n = Number(String(t.value).replace(',', '.'));
+        const q = Number.isFinite(n) && n > 0 ? Math.round(n * 1000) / 1000 : 0;
+        setQty(c, w, q);
+        t.classList.toggle('on', q > 0);
+        refreshTable();
+    }
 });
 $('view').addEventListener('change', (event) => {
-    const box = event.target.closest('[data-field]');
-    if (box) setField(box.getAttribute('data-field'), box.checked);
+    const t = event.target;
+    const box = t.closest('[data-field]');
+    if (box) { setField(box.getAttribute('data-field'), box.checked); return; }
+    if (t.id === 'pickwhen' && picked) { picked.when = t.value; return; }
+    if (t.id === 'defother') { setDefault(t.value); return; }
+    if (t.id === 'addcol') { if (t.value) { extraCols.push(t.value); drawOrder(); } return; }
+    const pw = t.getAttribute && t.getAttribute('data-part');
+    if (pw) {
+        // otra fecha para esa cantidad; si el artículo ya tiene cantidad en esa fecha, se juntan
+        const [i, j] = pw.split(':').map(Number);
+        const c = cart[i];
+        const p = c && c.parts[j];
+        if (!p) return;
+        const same = c.parts.find((x, k) => k !== j && x.when === t.value);
+        if (same) { same.quantity = Math.round((same.quantity + p.quantity) * 1000) / 1000; c.parts.splice(j, 1); } else p.when = t.value;
+        drawOrder();
+    }
 });
 
 async function sendOrder() {
@@ -352,18 +544,19 @@ async function sendOrder() {
     err.hidden = true;
     const name = nameValue.replace(/\s+/g, ' ').trim();
     if (!name) { fail(TEXT.needName); $('name').focus(); return; }
+    if (!flatLines().length) { fail(TEXT.errItems); return; }
     const btn = $('send');
     btn.disabled = true;
     btn.textContent = TEXT.sending;
-    const items = cart.map((c) => ({ ...c }));
+    const items = flatLines();
     try {
-        const res = await fetch(`${API}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, items: items.map((c) => ({ id: c.id, quantity: c.quantity })) }) });
+        const res = await fetch(`${API}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, items: items.map((c) => ({ id: c.id, quantity: c.quantity, needBy: c.needBy })) }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
             btn.disabled = false; btn.textContent = TEXT.send;
             if (body.code === 'LOCKED') { info.locks.register = false; view(); return; }
             if (body.code === 'LOGIN') { info.locks.signin = true; info.signedIn = false; view(); return; }
-            fail(body.code === 'NAME' ? TEXT.needName : (body.code === 'QTY' ? TEXT.errQty : (body.code === 'ITEMS' ? TEXT.errItems : (body.code === 'TOOMANY' ? TEXT.tooMany : (body.code === 'RELATED' ? TEXT.errRelated : TEXT.errGeneric)))));
+            fail(body.code === 'NAME' ? TEXT.needName : (body.code === 'QTY' ? TEXT.errQty : (body.code === 'ITEMS' ? TEXT.errItems : (body.code === 'TOOMANY' ? TEXT.tooMany : (body.code === 'RELATED' ? TEXT.errRelated : (body.code === 'DATE' ? TEXT.errDate : TEXT.errGeneric))))));
             return;
         }
         store.set(KEY_NAME, name);
@@ -378,7 +571,7 @@ async function sendOrder() {
 // Lo enviado: el número de pedido y su lista de artículos.
 function viewSent() {
     const when = new Date(sentInfo.createdAt).toLocaleString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const lines = sentInfo.items.map((c) => `<div class="line"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small></span><div class="q"><b>${esc(fmtQty(c.quantity))}</b></div></div>`).join('');
+    const lines = sentInfo.items.map((c) => `<div class="line"><span>${esc(c.description)}<small>${esc([c.code, c.uom, `${TEXT.needBy}: ${whenLabel(c.needBy)}`].filter(Boolean).join(' · '))}</small></span><div class="q"><b>${esc(fmtQty(c.quantity))}</b></div></div>`).join('');
     $('view').innerHTML = `<div class="card done"><div class="tick" aria-hidden="true">✓</div><h1>${esc(TEXT.sentTitle)}</h1><div class="muted">${esc(TEXT.folio)}</div><div class="folio">${esc(sentInfo.folio)}</div>
         <div>${esc(TEXT.by)}: <b>${esc(sentInfo.name)}</b></div><div>${esc(TEXT.at)}: <b>${esc(when)}</b></div>
         <div class="items"><h2>${esc(TEXT.list)} · ${esc(sentInfo.items.length === 1 ? TEXT.item1 : TEXT.items.replace('{n}', sentInfo.items.length))}</h2>${lines}</div>
@@ -396,6 +589,11 @@ function viewSent() {
     // el mismo encabezado del Layout: logo (o iniciales), tipo de página, Sitio y empresa
     window.QrBrandHeader.mount($('qr-brand'), { kind: TEXT.title, siteName: info.siteName, companyName: info.companyName, hasLogo: info.hasLogo, companyColor: info.companyColor, logoUrl: `/api/public/layout/${encodeURIComponent(TOKEN)}/logo` });
     if (!nameValue && info.signedIn) nameValue = info.userName || '';
+    // pantalla ancha (la computadora, la ventana de QR's): la tabla por día; angosta (el celular): la lista. Al cambiar el ancho se vuelve a dibujar el mismo pedido.
+    const mq = window.matchMedia('(min-width: 780px)');
+    const applyWide = () => { wide = mq.matches; const m = document.querySelector('main'); if (m) m.classList.toggle('wide', wide); };
+    applyWide();
+    mq.addEventListener('change', () => { applyWide(); drawOrder(); });
     view();
 })();
 })();

@@ -3159,6 +3159,8 @@
     "colPmUdm": "UoM",
     "colPmCategoria": "Categories",
     "colPmCantidad": "Quantity",
+    "colPmFechaRequerida": "Required date",
+    "pmLoAntesPosible": "As soon as possible",
     "colPmEstatus": "Status",
     "colPmOrigen": "Origin",
     "colPmQr": "QR code",

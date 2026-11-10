@@ -3158,6 +3158,8 @@
     "colPmUdm": "UdM",
     "colPmCategoria": "Categorías",
     "colPmCantidad": "Cantidad",
+    "colPmFechaRequerida": "Fecha requerida",
+    "pmLoAntesPosible": "Lo antes posible",
     "colPmEstatus": "Estatus",
     "colPmOrigen": "Origen",
     "colPmQr": "Código QR",
