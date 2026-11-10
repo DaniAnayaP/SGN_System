@@ -1944,6 +1944,16 @@ function drawPositionsOverlay() {
     }
     svg.appendChild(g);
 }
+// El rótulo del resaltado (el código, en naranja) mantiene su tamaño en pantalla aunque el croquis esté acercado: es texto del dibujo y se agranda con él, así que se encoge en la misma proporción.
+function scaleHlTags() {
+    const k = zoom.s > 1 ? zoom.s : 1;
+    document.querySelectorAll('#layout-svg .hl-tag').forEach((tag) => {
+        tag.style.fontSize = `${(9.5 / k).toFixed(3)}px`;
+        tag.style.strokeWidth = `${(3 / k).toFixed(3)}px`;
+        const ay = Number(tag.getAttribute('data-ay'));
+        if (Number.isFinite(ay)) tag.setAttribute('y', (tag.getAttribute('data-above') === '1' ? ay - 5 / k : ay + 12 / k).toFixed(2));
+    });
+}
 // reveal = true cuando se acaba de elegir el renglón: si el croquis está acercado y lo elegido queda fuera de lo que se ve, se recorre para mostrarlo.
 function applyHighlight(reveal) {
     applyHighlight3d();
@@ -1993,9 +2003,11 @@ function applyHighlight(reveal) {
         tag.setAttribute('text-anchor', 'middle');
         tag.setAttribute('x', (box.x + box.width / 2).toFixed(1));
         const above = box.y >= 14;
-        tag.setAttribute('y', (above ? box.y - 5 : box.y + box.height + 12).toFixed(1));
+        tag.setAttribute('data-ay', (above ? box.y : box.y + box.height).toFixed(1));
+        tag.setAttribute('data-above', above ? '1' : '0');
         tag.textContent = h.loc || `${t('main.layoutPosNivel')} ${h.n} · ${t('main.layoutPosColumna')} ${h.c}`;
         svg.appendChild(tag);
+        scaleHlTags();
     }
     // reveal === 'zoom' (se eligió desde el buscador): el croquis se acerca para que la figura ocupe más o menos un tercio de lo que se ve, centrada (solo si la cuenta puede acercar)
     if (reveal === 'zoom' && canZoomMap()) {
@@ -2899,7 +2911,7 @@ function chooseBodyHtml() {
         const items = rows.filter((i) => i.type === ty).slice(0, Math.max(0, CAP - shown));
         if (!items.length) return;
         shown += items.length;
-        list += `<div class="layout-ch-grp">${esc(t(`main.layoutFindTipo_${ty}`))}</div>` + items.map((i) => ddItem(`data-ch-pick data-ch-kind="${esc(i.type)}" data-ch-id="${esc(i.id)}" data-ch-step="${esc(i.step || '')}"`, chosen.some((c) => c.type === i.type && c.id === i.id), `${esc(i.title)} <small>${esc(i.sub || '')}</small>`)).join('');
+        list += items.map((i) => ddItem(`data-ch-pick data-ch-kind="${esc(i.type)}" data-ch-id="${esc(i.id)}" data-ch-step="${esc(i.step || '')}"`, chosen.some((c) => c.type === i.type && c.id === i.id), `${esc(i.title)} <small>${esc(i.sub || '')}</small>`)).join('');
     });
     if (!cat.length) list = `<div class="layout-find-empty">${esc(t('main.layoutElegirNada'))}</div>`;
     else if (!rows.length) list = `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`;
@@ -5532,6 +5544,7 @@ function applyZoom() {
     const zoomed = zoom.s > 1.001;
     svg.classList.toggle('zoomed', zoomed);
     $('layout-zoom-reset').hidden = !zoomed;
+    scaleHlTags();
 }
 function updateZoomUi() {
     const allowed = canZoomMap();

@@ -8175,8 +8175,10 @@ td.cap-pick{ white-space: nowrap; }
 .layout-mode-edit.is-locked{ opacity: 0.55; cursor: not-allowed; }
 .layout-bar{ flex-wrap: wrap; }
 /* En «Ver» la franja de filtros va en la misma línea que «QR y descarga» y «Editar» (no ocupa un renglón aparte). */
-.layout-vstrip{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-right: auto; }
+.layout-vstrip{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; flex: 1 1 62rem; min-width: 0; } /* los botones (Ver, QR, Descartar, Guardar) se quedan en el primer renglón junto a la franja de filtros, que se acomoda en el espacio que sobra (el buscador baja a un segundo renglón si no cabe); si ni así caben, los botones bajan todos juntos */
 .layout-vstrip[hidden]{ display: none; }
+/* los botones de la barra (Ver, QR y descarga, Descartar, Guardar, Editar) viajan juntos: si no caben junto a los filtros bajan todos al renglón de abajo, nunca uno solo */
+.layout-bar-actions{ display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.6rem; margin-left: auto; }
 .layout-vstrip-filters{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
 .layout-vstrip-find{ flex: 1 1 10rem; min-width: 9rem; max-width: 18rem; position: relative; }
 .layout-dd{ position: relative; }

@@ -413,85 +413,87 @@
                         <div class="layout-vstrip-find" id="layout-vstrip-find"></div>
                     </div>
                     <span class="layout-dirty" id="layout-dirty" hidden data-i18n="main.layoutSinGuardar">Unsaved changes</span>
-                    <button type="button" class="btn btn-secondary" id="layout-mode-view" data-help-key="layoutModoVer" hidden><i class="bx bx-show" aria-hidden="true"></i> <span data-i18n="main.layoutVer">View</span></button>
-                    <div class="layout-qrmenu" id="layout-qrmenu" hidden>
-                        <button type="button" class="btn btn-secondary" id="layout-qr-btn" aria-haspopup="true" aria-expanded="false" data-help-key="layoutQrMenu">
-                            <i class="bx bx-qr" aria-hidden="true"></i>
-                            <span data-i18n="main.layoutQrMenu">QR and download</span>
-                            <i class="bx bx-chevron-down" aria-hidden="true"></i>
-                        </button>
-                        <div class="layout-qr-pop" id="layout-qr-pop" hidden>
-                            <div class="layout-qr-by" id="layout-qr-by" data-help-key="layoutQrBy" hidden>
-                                <span data-i18n="main.layoutQrPor">By</span>
-                                <div class="layout-seg" role="group" data-help-key="layoutQrBy">
-                                    <button type="button" class="layout-seg-btn active" id="layout-qr-by-layout" data-qrby="layout" aria-pressed="true" data-i18n="main.layoutQrPorLayout">Layout</button>
-                                    <button type="button" class="layout-seg-btn" id="layout-qr-by-zone" data-qrby="zone" aria-pressed="false" data-i18n="main.layoutQrPorZona">Zone</button>
-                                    <button type="button" class="layout-seg-btn" id="layout-qr-by-clean" data-qrby="clean" aria-pressed="false" data-i18n="main.layoutQrPorLimpieza">Cleaning</button>
-                                    <button type="button" class="layout-seg-btn" id="layout-qr-by-temp" data-qrby="temp" aria-pressed="false" data-i18n="main.layoutQrPorTemperaturas">Temperatures</button>
-                                    <button type="button" class="layout-seg-btn" id="layout-qr-by-sensor" data-qrby="sensor" aria-pressed="false" data-i18n="main.layoutQrPorSensores">Sensors</button>
-                                    <button type="button" class="layout-seg-btn" id="layout-qr-by-safety" data-qrby="safety" aria-pressed="false" data-i18n="main.layoutQrPorSeguridad">Safety</button>
-                                    <button type="button" class="layout-seg-btn" id="layout-qr-by-ficha" data-qrby="ficha" aria-pressed="false" data-i18n="main.layoutQrPorFicha">Sheet</button>
+                    <div class="layout-bar-actions">
+                        <button type="button" class="btn btn-secondary" id="layout-mode-view" data-help-key="layoutModoVer" hidden><i class="bx bx-show" aria-hidden="true"></i> <span data-i18n="main.layoutVer">View</span></button>
+                        <div class="layout-qrmenu" id="layout-qrmenu" hidden>
+                            <button type="button" class="btn btn-secondary" id="layout-qr-btn" aria-haspopup="true" aria-expanded="false" data-help-key="layoutQrMenu">
+                                <i class="bx bx-qr" aria-hidden="true"></i>
+                                <span data-i18n="main.layoutQrMenu">QR and download</span>
+                                <i class="bx bx-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <div class="layout-qr-pop" id="layout-qr-pop" hidden>
+                                <div class="layout-qr-by" id="layout-qr-by" data-help-key="layoutQrBy" hidden>
+                                    <span data-i18n="main.layoutQrPor">By</span>
+                                    <div class="layout-seg" role="group" data-help-key="layoutQrBy">
+                                        <button type="button" class="layout-seg-btn active" id="layout-qr-by-layout" data-qrby="layout" aria-pressed="true" data-i18n="main.layoutQrPorLayout">Layout</button>
+                                        <button type="button" class="layout-seg-btn" id="layout-qr-by-zone" data-qrby="zone" aria-pressed="false" data-i18n="main.layoutQrPorZona">Zone</button>
+                                        <button type="button" class="layout-seg-btn" id="layout-qr-by-clean" data-qrby="clean" aria-pressed="false" data-i18n="main.layoutQrPorLimpieza">Cleaning</button>
+                                        <button type="button" class="layout-seg-btn" id="layout-qr-by-temp" data-qrby="temp" aria-pressed="false" data-i18n="main.layoutQrPorTemperaturas">Temperatures</button>
+                                        <button type="button" class="layout-seg-btn" id="layout-qr-by-sensor" data-qrby="sensor" aria-pressed="false" data-i18n="main.layoutQrPorSensores">Sensors</button>
+                                        <button type="button" class="layout-seg-btn" id="layout-qr-by-safety" data-qrby="safety" aria-pressed="false" data-i18n="main.layoutQrPorSeguridad">Safety</button>
+                                        <button type="button" class="layout-seg-btn" id="layout-qr-by-ficha" data-qrby="ficha" aria-pressed="false" data-i18n="main.layoutQrPorFicha">Sheet</button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="layout-qr-pane" id="layout-qr-pane-layout" role="menu">
-                                <button type="button" role="menuitem" data-qr="pdf" data-help-key="layoutQrPdf"><b data-i18n="main.layoutDescargarPdf">Download PDF</b><span data-i18n="main.layoutDescargarPdfSub">A3 landscape sheet with the map and the QR, to print</span></button>
-                                <button type="button" role="menuitem" data-qr="png" data-help-key="layoutQrPng"><b data-i18n="main.layoutDescargarPng">Download PNG image</b><span data-i18n="main.layoutDescargarPngSub">The same sheet as an image, to send in a message</span></button>
-                                <button type="button" role="menuitem" data-qr="link" data-help-key="layoutQrLink"><b data-i18n="main.layoutCopiarEnlace">Copy the QR link</b><span data-i18n="main.layoutCopiarEnlaceSub">It is the same one the QR carries</span></button>
-                                <button type="button" role="menuitem" data-qr="regen" id="layout-qr-regen" data-help-key="layoutQrRegen" hidden><b data-i18n="main.layoutRegenerarQr">Change the QR</b><span data-i18n="main.layoutRegenerarQrSub">The current QR will stop working</span></button>
-                                <div class="layout-qr-locks" id="layout-qr-locks-layout" hidden></div>
-                            </div>
-                            <div class="layout-qr-pane" id="layout-qr-pane-clean" hidden>
-                                <div class="layout-qr-fields"><label data-help-key="layoutQrClean"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-clean-zone"></select></label></div>
-                                <p class="layout-qr-fine" id="layout-qr-clean-fine"></p>
-                                <button type="button" data-qr="clean-download" id="layout-qr-clean-download" data-help-key="layoutQrClean"><b data-i18n="main.layoutQrAssetDescargar">Download PDF or image</b><span data-i18n="main.layoutQrAssetDescargarSub">Choose the card size; the PDF has one per asset</span></button>
-                                <button type="button" data-qr="clean-print" id="layout-qr-clean-print" data-help-key="layoutQrClean"><b data-i18n="main.layoutQrLimpiezaImprimir">Print the QR codes</b><span data-i18n="main.layoutQrLimpiezaImprimirSub">One QR per asset, ready to cut and stick</span></button>
-                                <div class="layout-qr-locks" id="layout-qr-locks-clean" hidden></div>
-                            </div>
-                            <div class="layout-qr-pane" id="layout-qr-pane-temp" hidden>
-                                <div class="layout-qr-fields"><label data-help-key="layoutQrTemp"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-temp-zone"></select></label></div>
-                                <p class="layout-qr-fine" id="layout-qr-temp-fine"></p>
-                                <button type="button" data-qr="temp-download" id="layout-qr-temp-download" data-help-key="layoutQrTemp"><b data-i18n="main.layoutQrAssetDescargar">Download PDF or image</b><span data-i18n="main.layoutQrAssetDescargarSub">Choose the card size; the PDF has one per asset</span></button>
-                                <button type="button" data-qr="temp-print" id="layout-qr-temp-print" data-help-key="layoutQrTemp"><b data-i18n="main.layoutQrTemperaturasImprimir">Print the QR codes</b><span data-i18n="main.layoutQrTemperaturasImprimirSub">One QR per refrigerator, ready to cut and stick</span></button>
-                                <div class="layout-qr-locks" id="layout-qr-locks-temp" hidden></div>
-                            </div>
-                            <div class="layout-qr-pane" id="layout-qr-pane-sensor" hidden>
-                                <div class="layout-qr-fields"><label data-help-key="layoutQrSensor"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-sensor-zone"></select></label></div>
-                                <p class="layout-qr-fine" id="layout-qr-sensor-fine"></p>
-                                <button type="button" data-qr="sensor-download" id="layout-qr-sensor-download" data-help-key="layoutQrSensor"><b data-i18n="main.layoutQrAssetDescargar">Download PDF or image</b><span data-i18n="main.layoutQrSensoresDescargarSub">Choose the card size; the PDF has one per sensor</span></button>
-                                <button type="button" data-qr="sensor-print" id="layout-qr-sensor-print" data-help-key="layoutQrSensor"><b data-i18n="main.layoutQrSensoresImprimir">Print the QR codes</b><span data-i18n="main.layoutQrSensoresImprimirSub">Four per Letter page, ready to cut and stick next to each sensor</span></button>
-                                <div class="layout-qr-locks" id="layout-qr-locks-sensor" hidden></div>
-                            </div>
-                            <div class="layout-qr-pane" id="layout-qr-pane-safety" hidden>
-                                <div class="layout-qr-fields"><label data-help-key="layoutQrSeguridad"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-safety-zone"></select></label></div>
-                                <p class="layout-qr-fine" id="layout-qr-safety-fine"></p>
-                                <button type="button" data-qr="safety-download" id="layout-qr-safety-download" data-help-key="layoutQrSeguridad"><b data-i18n="main.layoutQrAssetDescargar">Download PDF or image</b><span data-i18n="main.layoutQrSeguridadDescargarSub">Choose the card size; the PDF has one per element</span></button>
-                                <button type="button" data-qr="safety-print" id="layout-qr-safety-print" data-help-key="layoutQrSeguridad"><b data-i18n="main.layoutQrSeguridadImprimir">Print the QR codes</b><span data-i18n="main.layoutQrSeguridadImprimirSub">Four per Letter page, ready to cut and stick next to each element</span></button>
-                                <div class="layout-qr-locks" id="layout-qr-locks-safety" hidden></div>
-                            </div>
-                            <div class="layout-qr-pane" id="layout-qr-pane-ficha" hidden>
-                                <div class="layout-qr-locks" id="layout-qr-locks-ficha" hidden></div>
-                            </div>
-                            <div class="layout-qr-pane" id="layout-qr-pane-zone" hidden>
-                                <div class="layout-qr-fields">
-                                    <label data-help-key="layoutQrZonePick"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-zone"></select></label>
-                                    <label data-help-key="layoutQrZoneKind"><span data-i18n="main.layoutTipoZona">Zone type</span><input type="text" id="layout-qr-zone-kind" readonly tabindex="-1"></label>
-                                    <label data-help-key="layoutQrZoneType"><span data-i18n="main.layoutQrCategoriasSegun">Categories by</span><select id="layout-qr-type"></select></label>
+                                <div class="layout-qr-pane" id="layout-qr-pane-layout" role="menu">
+                                    <button type="button" role="menuitem" data-qr="pdf" data-help-key="layoutQrPdf"><b data-i18n="main.layoutDescargarPdf">Download PDF</b><span data-i18n="main.layoutDescargarPdfSub">A3 landscape sheet with the map and the QR, to print</span></button>
+                                    <button type="button" role="menuitem" data-qr="png" data-help-key="layoutQrPng"><b data-i18n="main.layoutDescargarPng">Download PNG image</b><span data-i18n="main.layoutDescargarPngSub">The same sheet as an image, to send in a message</span></button>
+                                    <button type="button" role="menuitem" data-qr="link" data-help-key="layoutQrLink"><b data-i18n="main.layoutCopiarEnlace">Copy the QR link</b><span data-i18n="main.layoutCopiarEnlaceSub">It is the same one the QR carries</span></button>
+                                    <button type="button" role="menuitem" data-qr="regen" id="layout-qr-regen" data-help-key="layoutQrRegen" hidden><b data-i18n="main.layoutRegenerarQr">Change the QR</b><span data-i18n="main.layoutRegenerarQrSub">The current QR will stop working</span></button>
+                                    <div class="layout-qr-locks" id="layout-qr-locks-layout" hidden></div>
                                 </div>
-                                <div class="layout-qr-chips" id="layout-qr-chips" aria-live="polite"></div>
-                                <p class="layout-qr-fine" id="layout-qr-fine"></p>
-                                <button type="button" data-qr="zone-pdf" id="layout-qr-zone-pdf" data-help-key="layoutQrZoneSheet"><b data-i18n="main.layoutDescargarPdf">Download PDF</b><span data-i18n="main.layoutQrZonaSub">The zone sheet, in the size you choose</span></button>
-                                <button type="button" data-qr="zone-png" id="layout-qr-zone-png" data-help-key="layoutQrZoneSheet"><b data-i18n="main.layoutDescargarPng">Download PNG image</b><span data-i18n="main.layoutQrZonaPngSub">The same sheet as an image</span></button>
-                                <div class="layout-qr-cls" id="layout-qr-cls" hidden>
-                                    <div class="layout-qr-fields"><label data-help-key="layoutQrCls"><span data-i18n="main.layoutQrClsLabel">Classification sheet of</span><select id="layout-qr-cls-cat"></select></label></div>
-                                    <button type="button" data-qr="zone-cls" id="layout-qr-zone-cls" data-help-key="layoutQrCls"><b data-i18n="main.layoutQrClsBtn">Classification sheet</b><span data-i18n="main.layoutQrClsSub">One QR for each classification, for this zone</span></button>
+                                <div class="layout-qr-pane" id="layout-qr-pane-clean" hidden>
+                                    <div class="layout-qr-fields"><label data-help-key="layoutQrClean"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-clean-zone"></select></label></div>
+                                    <p class="layout-qr-fine" id="layout-qr-clean-fine"></p>
+                                    <button type="button" data-qr="clean-download" id="layout-qr-clean-download" data-help-key="layoutQrClean"><b data-i18n="main.layoutQrAssetDescargar">Download PDF or image</b><span data-i18n="main.layoutQrAssetDescargarSub">Choose the card size; the PDF has one per asset</span></button>
+                                    <button type="button" data-qr="clean-print" id="layout-qr-clean-print" data-help-key="layoutQrClean"><b data-i18n="main.layoutQrLimpiezaImprimir">Print the QR codes</b><span data-i18n="main.layoutQrLimpiezaImprimirSub">One QR per asset, ready to cut and stick</span></button>
+                                    <div class="layout-qr-locks" id="layout-qr-locks-clean" hidden></div>
                                 </div>
-                                <div class="layout-qr-locks" id="layout-qr-locks-zone" hidden></div>
+                                <div class="layout-qr-pane" id="layout-qr-pane-temp" hidden>
+                                    <div class="layout-qr-fields"><label data-help-key="layoutQrTemp"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-temp-zone"></select></label></div>
+                                    <p class="layout-qr-fine" id="layout-qr-temp-fine"></p>
+                                    <button type="button" data-qr="temp-download" id="layout-qr-temp-download" data-help-key="layoutQrTemp"><b data-i18n="main.layoutQrAssetDescargar">Download PDF or image</b><span data-i18n="main.layoutQrAssetDescargarSub">Choose the card size; the PDF has one per asset</span></button>
+                                    <button type="button" data-qr="temp-print" id="layout-qr-temp-print" data-help-key="layoutQrTemp"><b data-i18n="main.layoutQrTemperaturasImprimir">Print the QR codes</b><span data-i18n="main.layoutQrTemperaturasImprimirSub">One QR per refrigerator, ready to cut and stick</span></button>
+                                    <div class="layout-qr-locks" id="layout-qr-locks-temp" hidden></div>
+                                </div>
+                                <div class="layout-qr-pane" id="layout-qr-pane-sensor" hidden>
+                                    <div class="layout-qr-fields"><label data-help-key="layoutQrSensor"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-sensor-zone"></select></label></div>
+                                    <p class="layout-qr-fine" id="layout-qr-sensor-fine"></p>
+                                    <button type="button" data-qr="sensor-download" id="layout-qr-sensor-download" data-help-key="layoutQrSensor"><b data-i18n="main.layoutQrAssetDescargar">Download PDF or image</b><span data-i18n="main.layoutQrSensoresDescargarSub">Choose the card size; the PDF has one per sensor</span></button>
+                                    <button type="button" data-qr="sensor-print" id="layout-qr-sensor-print" data-help-key="layoutQrSensor"><b data-i18n="main.layoutQrSensoresImprimir">Print the QR codes</b><span data-i18n="main.layoutQrSensoresImprimirSub">Four per Letter page, ready to cut and stick next to each sensor</span></button>
+                                    <div class="layout-qr-locks" id="layout-qr-locks-sensor" hidden></div>
+                                </div>
+                                <div class="layout-qr-pane" id="layout-qr-pane-safety" hidden>
+                                    <div class="layout-qr-fields"><label data-help-key="layoutQrSeguridad"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-safety-zone"></select></label></div>
+                                    <p class="layout-qr-fine" id="layout-qr-safety-fine"></p>
+                                    <button type="button" data-qr="safety-download" id="layout-qr-safety-download" data-help-key="layoutQrSeguridad"><b data-i18n="main.layoutQrAssetDescargar">Download PDF or image</b><span data-i18n="main.layoutQrSeguridadDescargarSub">Choose the card size; the PDF has one per element</span></button>
+                                    <button type="button" data-qr="safety-print" id="layout-qr-safety-print" data-help-key="layoutQrSeguridad"><b data-i18n="main.layoutQrSeguridadImprimir">Print the QR codes</b><span data-i18n="main.layoutQrSeguridadImprimirSub">Four per Letter page, ready to cut and stick next to each element</span></button>
+                                    <div class="layout-qr-locks" id="layout-qr-locks-safety" hidden></div>
+                                </div>
+                                <div class="layout-qr-pane" id="layout-qr-pane-ficha" hidden>
+                                    <div class="layout-qr-locks" id="layout-qr-locks-ficha" hidden></div>
+                                </div>
+                                <div class="layout-qr-pane" id="layout-qr-pane-zone" hidden>
+                                    <div class="layout-qr-fields">
+                                        <label data-help-key="layoutQrZonePick"><span data-i18n="main.layoutQrZona">Zone</span><select id="layout-qr-zone"></select></label>
+                                        <label data-help-key="layoutQrZoneKind"><span data-i18n="main.layoutTipoZona">Zone type</span><input type="text" id="layout-qr-zone-kind" readonly tabindex="-1"></label>
+                                        <label data-help-key="layoutQrZoneType"><span data-i18n="main.layoutQrCategoriasSegun">Categories by</span><select id="layout-qr-type"></select></label>
+                                    </div>
+                                    <div class="layout-qr-chips" id="layout-qr-chips" aria-live="polite"></div>
+                                    <p class="layout-qr-fine" id="layout-qr-fine"></p>
+                                    <button type="button" data-qr="zone-pdf" id="layout-qr-zone-pdf" data-help-key="layoutQrZoneSheet"><b data-i18n="main.layoutDescargarPdf">Download PDF</b><span data-i18n="main.layoutQrZonaSub">The zone sheet, in the size you choose</span></button>
+                                    <button type="button" data-qr="zone-png" id="layout-qr-zone-png" data-help-key="layoutQrZoneSheet"><b data-i18n="main.layoutDescargarPng">Download PNG image</b><span data-i18n="main.layoutQrZonaPngSub">The same sheet as an image</span></button>
+                                    <div class="layout-qr-cls" id="layout-qr-cls" hidden>
+                                        <div class="layout-qr-fields"><label data-help-key="layoutQrCls"><span data-i18n="main.layoutQrClsLabel">Classification sheet of</span><select id="layout-qr-cls-cat"></select></label></div>
+                                        <button type="button" data-qr="zone-cls" id="layout-qr-zone-cls" data-help-key="layoutQrCls"><b data-i18n="main.layoutQrClsBtn">Classification sheet</b><span data-i18n="main.layoutQrClsSub">One QR for each classification, for this zone</span></button>
+                                    </div>
+                                    <div class="layout-qr-locks" id="layout-qr-locks-zone" hidden></div>
+                                </div>
                             </div>
                         </div>
+                        <button type="button" class="btn btn-secondary" id="layout-discard" data-help-key="layoutDiscard" disabled data-i18n="main.layoutDescartar">Discard changes</button>
+                        <button type="button" class="btn" id="layout-save" data-help-key="layoutSave" disabled data-i18n="main.layoutGuardar">Save</button>
+                        <button type="button" class="btn layout-mode-edit" id="layout-mode-edit" data-help-key="layoutModoEditar"><i class="bx bx-pencil" aria-hidden="true"></i> <span data-i18n="main.layoutEditar">Edit</span></button>
                     </div>
-                    <button type="button" class="btn btn-secondary" id="layout-discard" data-help-key="layoutDiscard" disabled data-i18n="main.layoutDescartar">Discard changes</button>
-                    <button type="button" class="btn" id="layout-save" data-help-key="layoutSave" disabled data-i18n="main.layoutGuardar">Save</button>
-                    <button type="button" class="btn layout-mode-edit" id="layout-mode-edit" data-help-key="layoutModoEditar"><i class="bx bx-pencil" aria-hidden="true"></i> <span data-i18n="main.layoutEditar">Edit</span></button>
                 </div>
                 <div class="layout-studio">
                     <div class="layout-panel" id="layout-panel"></div>
