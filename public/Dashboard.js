@@ -4396,10 +4396,10 @@ function attachSearchOptions(input) {
 }
 const searchModeOf = (input) => (input && input.dataset && input.dataset.searchMode) || 'contains';
 
-// ---- El árbol de presentaciones de un código (Unidad de Medida por Distribución) ---------------------------------------------------------------------------
+// ---- El árbol de presentaciones de un código (Presentaciones de Distribución) ---------------------------------------------------------------------------
 // El material principal a la izquierda y, de él, las presentaciones que salen (empaque primario, secundario…), cada una con su nombre, sus medidas (cm), su peso y a cuántas unidades principales equivale; la línea que las une
 // dice cuántas de la anterior lleva (× 20). De una misma pueden salir varias y cada rama sigue sola. rows = los renglones de UN código (como los manda /api/business/sku-distribution, con parentId).
-// Lo usan la pantalla de Unidad de Medida por Distribución y la ventana «Ver UDM de distribución» de Alta Artículos.
+// Lo usan la pantalla de Presentaciones de Distribución y la ventana «Ver presentaciones de distribución» de Alta Artículos.
 function udmChainHtml(rows) {
     const list = [...(rows || [])];
     if (!list.length) return '';
@@ -12848,6 +12848,7 @@ const TABLE_GRANT_PATHS = {
     'categorias-tipocodigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-tipocodigo' },
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
     'marcas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-marcas' },
+    'lugares-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-lugares-envio' },
     'clasificaciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },

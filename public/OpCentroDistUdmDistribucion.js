@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Unidad de Medida por Distribución (Operaciones, C. Distribución): las presentaciones en que se distribuye cada código, en ÁRBOL. La raíz (nivel 0) es el material principal (su unidad, sus medidas y su peso son los de
+// Presentaciones de Distribución (Operaciones, C. Distribución): las presentaciones en que se distribuye cada código, en ÁRBOL. La raíz (nivel 0) es el material principal (su unidad, sus medidas y su peso son los de
 // Alta Artículos; aquí solo su forma y si se puede acostar) y cada presentación dice de cuál sale («Sale de»): de una misma pueden salir varias (hasta 10) y hay hasta 10 niveles. Cada una tiene su unidad del catálogo
 // Nuestras Unidad Medida, cuántas de la que la contiene lleva y SUS PROPIAS medidas (cm) y peso (g): nada se calcula multiplicando. «Equivale a» sí se calcula (cuántas unidades principales trae, por su camino).
 // La columna «Ramificación» dibuja el árbol y, arriba de la tabla, con un solo código a la vista, se dibuja completo. De aquí leen Relación Código («Se acomoda») y el Layout (piezas que caben).
@@ -17,7 +17,7 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
-const COLS = { classification: 'colUdmDClasificacion', brandId: 'colUdmDMarca', uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
+const COLS = { classification: 'colUdmDClasificacion', brandId: 'colUdmDMarca', uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', shipTo: 'colUdmDEnvios', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
 // Tipo de almacenamiento de cada presentación (una, varias o todas): para qué se puede acomodar; solo las que tienen alguno se ofrecen al relacionar un código con una posición. El orden es el de la lista.
 const STORAGE_KEYS = ['principal', 'original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
 const typeName = (k) => Dashboard.t(`main.storageType_${k}`);
@@ -40,6 +40,8 @@ let uoms = [];
 let maxDepth = 10;
 let maxChildren = 10;
 let brands = []; // las marcas activas del catálogo Nuestras Marcas: [{ id, name }]
+let places = []; // los lugares de envío del catálogo Lugares de Envío: [{ id, name, active }] (los inactivos solo para nombrar los que una presentación ya traía)
+const placeName = (id) => (places.find((p) => p.id === id) || {}).name || `#${id}`;
 
 (async function init() {
     try {
@@ -48,13 +50,14 @@ let brands = []; // las marcas activas del catálogo Nuestras Marcas: [{ id, nam
         renderNewRecordButton();
         await refreshTable();
     } catch (err) {
-        console.error('Unidad de Medida por Distribución failed to initialize:', err);
+        console.error('Presentaciones de Distribución failed to initialize:', err);
     }
 })();
 
 // ---- datos de cada código --------------------------------------------------------------------------------------------------------------
-const rowsOfSku = (skuId) => rows.filter((r) => r.skuItemId === skuId); // en el orden del árbol que manda el servidor (cada una antes de las que salen de ella)
-const mainUomOf = (skuId) => (rowsOfSku(skuId)[0] || {}).uom || '';
+// Los códigos que todavía no tienen presentaciones salen igual, con su material principal (virtual = renglón sin guardar): para el árbol y las reglas del código cuentan solo los renglones guardados.
+const rowsOfSku = (skuId) => rows.filter((r) => r.skuItemId === skuId && !r.virtual); // en el orden del árbol que manda el servidor (cada una antes de las que salen de ella)
+const mainUomOf = (skuId) => (rows.find((r) => r.skuItemId === skuId && r.level === 0) || {}).uom || '';
 const parentRowOf = (r) => rows.find((x) => x.id === r.parentId);
 const childCountOf = (id) => rows.filter((r) => r.parentId === id).length;
 // El rótulo del nivel de un renglón: «Marca» para el de una marca; para las demás, «Empaque primario»… (el nivel entre las presentaciones: la marca no cuenta).
@@ -88,8 +91,15 @@ function actionsCell(r, tr) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
     td.className = 'admin-table-actions';
+    // Un código sin presentaciones guardadas (renglón virtual): no tiene historial ni se borra; el lápiz abre la captura de su material principal.
+    if (r.virtual) {
+        if (Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '')) td.appendChild(iconButton('admin-icon-btn', 'bx-edit', t('main.udmCapture'), 'udmCapture', () => openForCode(r, null)));
+        return td;
+    }
     td.appendChild(iconButton('admin-icon-btn', 'bx-history', t('main.changeHistoryTitleRecord'), 'changeHistory', () => Dashboard.openChangeHistory(TABLE_KEY, r.id)));
     if (!r.isBrand && canTouchAnyColumn()) td.appendChild(iconButton('admin-icon-btn', 'bx-edit', t('main.udmEdit'), 'udmEdit', () => openDialog(r)));
+    // «+»: agregar una presentación que sale de este renglón (el código ya viene elegido)
+    if (Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '')) td.appendChild(iconButton('admin-icon-btn', 'bx-plus', t('main.udmAddUnder'), 'udmAddUnder', () => openForCode(r, r)));
     if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) td.appendChild(iconButton('admin-icon-btn admin-icon-btn-danger', 'bx-trash', t('admin.delete'), 'delete', () => deletePresentation(r)));
     return td;
 }
@@ -100,13 +110,15 @@ function treeCell(r) {
     td.className = 'udm-tree-cell';
     const name = r.name || rowLevelName(r);
     td.title = (r.path && r.path.length ? r.path : [name]).join(' › ');
-    td.innerHTML = `<div class="udm-tree">${(r.treeLines || []).map((on) => `<i class="udm-tl${on ? ' on' : ''}"></i>`).join('')}${r.depth >= 1 ? `<i class="udm-te${r.treeLast ? ' last' : ''}"></i>` : ''}<span class="udm-tnode${r.depth === 0 ? ' root' : ''}${r.isBrand ? ` brand ${r.classification === 'patente' ? 'pat' : 'gen'}` : ''}">${esc(name)}</span></div>`;
+    td.innerHTML = `<div class="udm-tree">${(r.treeLines || []).map((on) => `<i class="udm-tl${on ? ' on' : ''}"></i>`).join('')}${r.depth >= 1 ? `<i class="udm-te${r.treeLast ? ' last' : ''}"></i>` : ''}<span class="udm-tnode${r.depth === 0 ? ' root' : ''}${r.isBrand ? ` brand ${r.classification === 'patente' ? 'pat' : 'gen'}` : ''}">${esc(name)}</span><button type="button" class="udm-tree-open" data-help-key="udmArbol" aria-label="${esc(t('main.udmTreeOpen'))}" title="${esc(t('main.udmTreeOpen'))}"><i class="bx bx-sitemap" aria-hidden="true"></i></button></div>`;
+    td.addEventListener('click', () => openTreeModal(r.skuItemId)); // tocar la columna abre el árbol completo del código en una pantalla flotante
     return td;
 }
 // repeatCode: la presentación anterior es del mismo código; su descripción se queda en el renglón (para buscar y filtrar) pero sin verse: el código sale una sola vez, con sus presentaciones debajo.
 function buildRow(r, repeatCode) {
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(r.id);
+    if (r.level === 0) tr.className = 'udm-main-row'; // la fila del material principal (la UDM principal del producto) va marcada con un color suave
     tr.dataset.sku = String(r.skuItemId);
     tr.dataset.skuCode = r.sku || '';
     tr.dataset.upc = r.upc || '';
@@ -134,6 +146,7 @@ function buildRow(r, repeatCode) {
         cell('colUdmDPeso', blank(fmtWeight(r.weightG)), principal ? 'udm-ro' : '', fromArticle),
         cell('colUdmDAcostar', blank(t(r.canLay ? 'main.udmYes' : 'main.udmNo'))),
         cell('colUdmDTipo', brandRow ? '' : ((r.storageTypes || []).length ? r.storageTypes.map(typeName).join(' · ') : t('main.udmTipoNinguno')), (r.storageTypes || []).length ? '' : 'udm-ro'),
+        cell('colUdmDEnvios', brandRow ? '' : ((r.shipTo || []).length ? r.shipTo.map(placeName).join(' · ') : t('main.udmEnviosNinguno')), (r.shipTo || []).length ? '' : 'udm-ro'),
         cell('colUdmDCantidadCama', blank(r.unitsPerLayer || '')), cell('colUdmDCamasPallet', blank(r.layersPerPallet || '')), cell('colUdmDMaxEstiba', blank(r.maxStack || '')),
     );
     tr.appendChild(actionsCell(r, tr));
@@ -165,6 +178,7 @@ async function refreshTable() {
         rows = body.rows || [];
         uoms = body.uoms || [];
         brands = body.brands || [];
+        places = body.places || [];
         maxDepth = body.maxDepth || 10;
         maxChildren = body.maxChildren || 10;
         tbody.innerHTML = '';
@@ -174,7 +188,7 @@ async function refreshTable() {
         tbody.appendChild(fragment);
         applyFilters();
     } catch (err) {
-        console.error('Unidad de Medida por Distribución: failed to load records', err);
+        console.error('Presentaciones de Distribución: failed to load records', err);
     }
 }
 function applyFilters() {
@@ -193,6 +207,32 @@ function applyFilters() {
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFilters);
 
+// ---- el árbol del código en una pantalla flotante (se abre desde la columna Ramificación) ------------------------------------------------------------
+let treeModalEl = null;
+function openTreeModal(skuId) {
+    const list = rows.filter((r) => r.skuItemId === skuId); // con el material principal aunque todavía no se guarde (renglón virtual)
+    if (!list.length) return;
+    if (!treeModalEl) {
+        treeModalEl = document.createElement('div');
+        treeModalEl.className = 'modal-overlay';
+        treeModalEl.id = 'udm-tree-modal';
+        treeModalEl.hidden = true;
+        treeModalEl.innerHTML = `<div class="modal-panel udm-tree-panel" role="dialog" aria-modal="true" aria-labelledby="udm-tree-title">
+            <h3 id="udm-tree-title"></h3>
+            <div class="udm-chain udm-chain-float" id="udm-tree-body"></div>
+            <div class="rel-foot"><span class="rel-muted" id="udm-tree-note"></span><button type="button" class="btn btn-secondary" id="udm-tree-close">${esc(t('main.whClose'))}</button></div>
+        </div>`;
+        document.body.appendChild(treeModalEl);
+        treeModalEl.addEventListener('click', (event) => { if (event.target === treeModalEl || event.target.closest('#udm-tree-close')) treeModalEl.hidden = true; });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && treeModalEl && !treeModalEl.hidden) treeModalEl.hidden = true; });
+    }
+    $('udm-tree-title').textContent = t('main.udmTreeTitle', { sku: list[0].sku });
+    $('udm-tree-body').innerHTML = Dashboard.udmChainHtml(list);
+    $('udm-tree-note').textContent = list.every((r) => r.virtual) ? t('main.udmTreeNone') : '';
+    treeModalEl.hidden = false;
+    $('udm-tree-close').focus();
+}
+
 // ---- la secuencia (arriba de la tabla, con UN código a la vista) ------------------------------------------------------------------------
 function renderChain() {
     const box = $('udm-chain');
@@ -201,7 +241,7 @@ function renderChain() {
     if (ids.length !== 1) { box.hidden = true; box.innerHTML = ''; return; }
     const list = rowsOfSku(ids[0]);
     if (!list.length) { box.hidden = true; return; }
-    box.innerHTML = Dashboard.udmChainHtml(list); // el mismo árbol que se ve desde Alta Artículos (Ver UDM de distribución)
+    box.innerHTML = Dashboard.udmChainHtml(list); // el mismo árbol que se ve desde Alta Artículos (Ver presentaciones de distribución)
     box.hidden = false;
 }
 
@@ -273,6 +313,14 @@ function ensureModal() {
             renderForm();
             return;
         }
+        // las casillas de «Envíos a»: «Todos» marca o quita todos los lugares activos; cada una se suma o se quita
+        if (f && el.dataset && (el.dataset.ship || el.dataset.shipAll)) {
+            const activeIds = places.filter((p) => p.active).map((p) => p.id);
+            if (el.dataset.shipAll) f.shipTo = el.checked ? [...new Set([...f.shipTo, ...activeIds])].sort((a, z) => a - z) : f.shipTo.filter((id) => !activeIds.includes(id)); // quitar «Todos» deja solo los inactivos que ya traía
+            else { const set = new Set(f.shipTo); const id = Number(el.dataset.ship); if (el.checked) set.add(id); else set.delete(id); f.shipTo = [...set].sort((a, z) => a - z); }
+            renderForm();
+            return;
+        }
         if (f && el.dataset && el.dataset.parent) { f.parentId = el.value === '' ? null : Number(el.value); recompute(); renderForm(); return; } // «Sale de»
         if (f && el.dataset && el.dataset.cls) { // clasificación: Patente o Genérico (o sin marca)
             f.classification = el.value;
@@ -299,6 +347,7 @@ function openDialog(record) {
         uom: record ? record.uom : '', contains: record && record.contains != null ? record.contains : '', shape: record ? record.shape : 'rectangular',
         length: record ? record.length : '', width: record ? record.width : '', height: record ? record.height : '', weightG: record ? record.weightG : '', canLay: record ? record.canLay : false,
         storageTypes: record ? [...(record.storageTypes || [])] : [],
+        shipTo: record ? [...(record.shipTo || [])] : [],
         unitsPerLayer: record && record.unitsPerLayer ? record.unitsPerLayer : '', layersPerPallet: record && record.layersPerPallet ? record.layersPerPallet : '', maxStack: record && record.maxStack ? record.maxStack : '',
     };
     $('udm-title').textContent = t(record ? 'main.udmDialogEdit' : 'main.udmDialogNew');
@@ -311,6 +360,19 @@ function openDialog(record) {
     if (!record) $('udm-code').focus();
 }
 function closeDialog() { if (modalEl) modalEl.hidden = true; f = null; }
+// Desde un renglón de la tabla: se abre «Nueva presentación» con el código ya elegido. parentRow = el renglón del que sale la nueva (null = la captura del material principal de un código sin presentaciones).
+function openForCode(r, parentRow) {
+    const main = rows.find((x) => x.skuItemId === r.skuItemId && x.level === 0) || r;
+    openDialog(null);
+    pickSku({ id: r.skuItemId, sku: r.sku, description: r.description, uom: main.uom || '', length: main.length || 0, width: main.width || 0, height: main.height || 0 });
+    if (parentRow && !parentRow.virtual && f && f.level !== 0) {
+        if (parentRow.isBrand) { f.classification = parentRow.classification; f.brandId = parentRow.brandId; f.parentId = null; } // directo de la marca
+        else { f.classification = parentRow.classification || ''; f.brandId = parentRow.brandId || null; f.parentId = parentRow.id; }
+        recompute();
+        renderForm();
+    }
+    $('udm-save').focus();
+}
 
 async function searchCodes() {
     const q = $('udm-code').value.trim();
@@ -325,7 +387,7 @@ async function searchCodes() {
             : `<span class="rel-muted">${esc(t('main.relNoMatches'))}</span>`;
         box.hidden = false;
     } catch (err) {
-        console.error('Unidad de Medida por Distribución: code search failed', err);
+        console.error('Presentaciones de Distribución: code search failed', err);
     }
 }
 // Al elegir el código: si todavía no tiene presentaciones, la primera es el material principal; si ya tiene, la nueva sale (de partida) del material principal (sin marca) y se puede cambiar eligiendo clasificación y marca o «Sale de».
@@ -388,6 +450,11 @@ function renderForm() {
     const shapeSel = `<select id="udm-f-shape" data-k="shape"${dis(COLS.shape, 'shape')}><option value="rectangular"${f.shape === 'rectangular' ? ' selected' : ''}>${esc(t('main.pkRect'))}</option><option value="cilindrica"${f.shape === 'cilindrica' ? ' selected' : ''}>${esc(t('main.pkCyl'))}</option></select>`;
     const layBox = `<label class="udm-check"><input type="checkbox" id="udm-f-canLay" data-k="canLay"${f.canLay ? ' checked' : ''}${dis(COLS.canLay, 'canLay')}> ${esc(t('main.colUdmDAcostar'))}</label>`;
     const typesDis = dis(COLS.storageTypes, 'storageTypes');
+    const shipDis = dis(COLS.shipTo, 'shipTo');
+    // «Envíos a»: los lugares activos del catálogo Lugares de Envío (más los que la presentación ya traía aunque hayan quedado inactivos), con «Todos» arriba
+    const shipChoices = places.filter((p) => p.active || f.shipTo.includes(p.id));
+    const shipActive = places.filter((p) => p.active);
+    const shipField = `<div class="rel-fld" data-help-key="udmEnvios"><label>${esc(t('main.colUdmDEnvios'))}</label>${shipChoices.length ? `<div class="udm-types"><label class="udm-check udm-check-all"><input type="checkbox" data-ship-all="1"${shipActive.length && shipActive.every((p) => f.shipTo.includes(p.id)) ? ' checked' : ''}${shipDis}> <b>${esc(t('main.udmEnviosTodos'))}</b></label>${shipChoices.map((p) => `<label class="udm-check"><input type="checkbox" data-ship="${p.id}"${f.shipTo.includes(p.id) ? ' checked' : ''}${shipDis}> ${esc(p.name)}${p.active ? '' : ' ·'}</label>`).join('')}</div>` : `<span class="rel-muted">${esc(t('main.udmEnviosVacio'))}</span>`}</div>`;
     const intInput = (key) => `<input type="number" id="udm-f-${key}" data-k="${key}" step="1" min="0" value="${esc(f[key])}"${dis(COLS[key], key)}>`;
     const estibaField = `<div class="rel-three" data-help-key="udmEstiba">${fieldHtml('unitsPerLayer', 'main.colUdmDCantidadCama', intInput('unitsPerLayer'))}${fieldHtml('layersPerPallet', 'main.colUdmDCamasPallet', intInput('layersPerPallet'))}${fieldHtml('maxStack', 'main.colUdmDMaxEstiba', intInput('maxStack'))}</div>`;
     const typesField = `<div class="rel-fld" data-help-key="udmTipo"><label>${esc(t('main.colUdmDTipo'))}</label><div class="udm-types"><label class="udm-check udm-check-all"><input type="checkbox" data-type-all="1"${STORAGE_KEYS.every((k) => f.storageTypes.includes(k)) ? ' checked' : ''}${typesDis}> <b>${esc(t('main.udmTiposTodos'))}</b></label>${STORAGE_KEYS.map((k) => `<label class="udm-check"><input type="checkbox" data-type="${k}"${f.storageTypes.includes(k) ? ' checked' : ''}${typesDis}> ${esc(typeName(k))}</label>`).join('')}</div></div>`;
@@ -395,6 +462,7 @@ function renderForm() {
         box.innerHTML = `<div class="rel-two">${fieldHtml('shape', 'main.colUdmDForma', shapeSel)}<div class="rel-fld"><label>&nbsp;</label>${layBox}</div></div>
             <div class="rel-muted">${esc(t('main.udmMainMeasures', { uom: f.sku.uom || '—', l: fmt(f.sku.length) || '—', w: fmt(f.sku.width) || '—', h: fmt(f.sku.height) || '—' }))}</div>
             ${typesField}
+            ${shipField}
             ${estibaField}`;
         save.disabled = false;
         return;
@@ -441,6 +509,7 @@ function renderForm() {
         <div class="rel-three">${fieldHtml('length', 'main.colUdmDLargo', num('length', COLS.length))}${cyl ? '<div class="rel-fld"><label>&nbsp;</label><span class="rel-muted">= Ø</span></div>' : fieldHtml('width', 'main.colUdmDAncho', num('width', COLS.width))}${fieldHtml('height', 'main.colUdmDAlto', num('height', COLS.height))}</div>
         ${fieldHtml('weightG', 'main.colUdmDPeso', num('weightG', COLS.weightG), 'main.udmWeightHint')}
         ${typesField}
+        ${shipField}
         ${estibaField}`;
     $('udm-fields').dataset.prev = prevName;
     updateEquivalence();
@@ -461,10 +530,10 @@ async function save() {
     if (!f || !f.sku) return;
     const principal = f.level === 0;
     const estibaBody = { unitsPerLayer: f.unitsPerLayer === '' ? 0 : Number(f.unitsPerLayer), layersPerPallet: f.layersPerPallet === '' ? 0 : Number(f.layersPerPallet), maxStack: f.maxStack === '' ? 0 : Number(f.maxStack) };
-    const body = principal ? { shape: f.shape, canLay: !!f.canLay, storageTypes: f.storageTypes.join(','), ...estibaBody } : {
+    const body = principal ? { shape: f.shape, canLay: !!f.canLay, storageTypes: f.storageTypes.join(','), shipTo: f.shipTo.join(','), ...estibaBody } : {
         uom: f.uom, contains: f.contains === '' ? null : Number(f.contains), shape: f.shape, length: f.length === '' ? null : Number(f.length),
         width: f.shape === 'cilindrica' ? (f.length === '' ? null : Number(f.length)) : (f.width === '' ? null : Number(f.width)), height: f.height === '' ? null : Number(f.height),
-        weightG: f.weightG === '' ? null : Number(f.weightG), canLay: !!f.canLay, storageTypes: f.storageTypes.join(','), ...estibaBody,
+        weightG: f.weightG === '' ? null : Number(f.weightG), canLay: !!f.canLay, storageTypes: f.storageTypes.join(','), shipTo: f.shipTo.join(','), ...estibaBody,
     };
     let method = 'POST';
     let url = API;
@@ -493,7 +562,7 @@ async function save() {
         closeDialog();
         await refreshTable();
     } catch (err) {
-        console.error('Unidad de Medida por Distribución: failed to save', err);
+        console.error('Presentaciones de Distribución: failed to save', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
         $('udm-save').disabled = false;
     }
@@ -510,7 +579,7 @@ async function deletePresentation(r) {
         }
         await refreshTable();
     } catch (err) {
-        console.error('Unidad de Medida por Distribución: failed to delete', err);
+        console.error('Presentaciones de Distribución: failed to delete', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }

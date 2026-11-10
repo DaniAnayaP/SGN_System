@@ -407,7 +407,7 @@ function buildArticleTypeCell(record) {
     return td;
 }
 
-// «Ver UDM de distribución»: abre, en una ventana, la secuencia de presentaciones del código (material principal > empaques) como se ve en Unidad de Medida por Distribución, solo para verla.
+// «Ver presentaciones de distribución»: abre, en una ventana, la secuencia de presentaciones del código (material principal > empaques) como se ve en Presentaciones de Distribución, solo para verla.
 let udmViewEl = null;
 function buildUdmDistCell(record) {
     const td = document.createElement('td');
@@ -446,7 +446,7 @@ async function openUdmDistView(record) {
         const safe = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         body.innerHTML = rows.length ? Dashboard.udmChainHtml(rows) : `<div class="udm-chain-title">${safe(Dashboard.t('main.udmChainTitle').replace('{sku}', `${record.uniqueDescription || record.knownDescription || record.customDescription || ''}`))}</div><p class="rel-muted">${safe(Dashboard.t('main.udmVerVacio'))}</p>`;
     } catch (err) {
-        console.error('Alta Artículos: no se pudo cargar la UDM de distribución', err);
+        console.error('Alta Artículos: no se pudieron cargar las presentaciones de distribución', err);
         body.innerHTML = `<p class="rel-muted">${Dashboard.t('admin.saveError')}</p>`;
     }
 }
@@ -609,13 +609,13 @@ function buildRow(record) {
         cells.colArticuloDescPersonalizada,
         buildCategorySelectCell(record, 'colArticuloUdm', 'mainUom', 'udm'),
         buildArticleTypeCell(record),
-        ...(!CODES_MODE && !EDIT_MODE ? [buildUdmDistCell(record)] : []), // Alta: «Ver UDM de distribución» (la secuencia de presentaciones del código)
+        ...(!CODES_MODE && !EDIT_MODE ? [buildUdmDistCell(record)] : []), // Alta: «Ver presentaciones de distribución» (la secuencia de presentaciones del código)
         cells.colArticuloAlto,
         cells.colArticuloLargo,
         cells.colArticuloAncho,
         cells.colArticuloPesoArticulo,
         cells.colArticuloPesoEmpaque,
-        // «Almacenamiento Artículo» (tipo de almacenamiento, cantidad por cama, camas por pallet, máxima estiba) ya no se captura en Alta: pasa a Unidad de Medida por Distribución (en Alta solo se configura la UDM original del
+        // «Almacenamiento Artículo» (tipo de almacenamiento, cantidad por cama, camas por pallet, máxima estiba) ya no se captura en Alta: pasa a Presentaciones de Distribución (en Alta solo se configura la UDM original del
         // producto). Mientras tanto Catálogos > Códigos y Edición Código lo siguen mostrando para no perder lo ya capturado.
         ...(CODES_MODE || EDIT_MODE ? [buildStorageTypeCell(record), cells.colArticuloCantidadCama, cells.colArticuloCamasPallet, cells.colArticuloMaxEstiba] : []),
         buildEvidenceCell(record, 'evidenceFront', 'colArticuloEvidenceFront'),

@@ -2445,7 +2445,7 @@ if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name ==
 // que ya no dice cuál (de un mismo nivel pueden salir varias). pack_level queda solo como rastro de lo anterior y ya nadie lo lee.
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'pack_unit_id')) db.exec('ALTER TABLE code_relations ADD COLUMN pack_unit_id INTEGER');
 
-// Unidad de Medida por Distribución (Operaciones, C. Distribución): las presentaciones en que se distribuye cada código, en cadena (principal > empaque 1 > empaque 2…). Cada nivel lleva su unidad del
+// Presentaciones de Distribución (Operaciones, C. Distribución): las presentaciones en que se distribuye cada código, en cadena (principal > empaque 1 > empaque 2…). Cada nivel lleva su unidad del
 // catálogo Nuestras Unidad Medida, cuántas del nivel anterior contiene y SUS PROPIAS medidas (cm) y peso (g): nada se calcula multiplicando. Nivel 0 = el material principal (sus medidas y su peso salen de
 // Alta Artículos; aquí solo se guarda su forma y si se puede acostar). Lo capturado antes en sku_items.packaging («Empaques») se pasa solo a esta tabla (migrateSkuPackagingToDistribution).
 db.exec(`
@@ -2524,6 +2524,9 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_sku_distribution_sku ON sku_distribution
 for (const [col, ddl] of [['kind', "TEXT NOT NULL DEFAULT 'presentacion'"], ['classification', "TEXT NOT NULL DEFAULT ''"], ['brand_id', 'INTEGER']]) {
     if (!db.prepare('PRAGMA table_info(sku_distribution_units)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE sku_distribution_units ADD COLUMN ${col} ${ddl}`);
 }
+// Envíos a (2026-11-10): a qué lugares del catálogo Lugares de Envío (article_categories.id, separados por coma, de menor a mayor) se envía esta presentación; NULL o '' = a ninguno. Va en cada presentación y no en el código
+// porque de algunos productos a un lugar solo se envía un tipo de presentación.
+if (!db.prepare('PRAGMA table_info(sku_distribution_units)').all().some((c) => c.name === 'ship_to')) db.exec('ALTER TABLE sku_distribution_units ADD COLUMN ship_to TEXT');
 // Una sola vez: lo capturado como cadena (empaque primario, secundario…) se borra para volver a capturarlo como árbol (decisión de Daniel, 2026-11-10: «empezar de cero»). Se quedan los renglones del material principal
 // (su forma, tipos y estiba) y las relaciones que acomodaban el material principal; las que acomodaban un empaque quedan sin «Se acomoda» (se vuelve a elegir con las presentaciones nuevas).
 const SKU_DIST_TREE_RESET_KEY = 'seed-udm-presentation-tree-reset-v1';
@@ -3333,7 +3336,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'roles': { area: '', modulo: 'Administración del Negocio', pantalla: 'Roles' },
     'layout': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Layout' },
     'relacion-codigo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código' },
-    'udm-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Unidad de Medida por Distribución' },
+    'udm-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones de Distribución' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
     'capacidad-almacenamiento': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Capacidad Almacenamiento' },
     'incidentes': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Incidentes' },
@@ -3693,6 +3696,7 @@ const TABLE_GRANT_PATHS = {
     'categorias-tipocodigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-tipocodigo' },
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
     'marcas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-marcas' },
+    'lugares-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-lugares-envio' },
     'clasificaciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
@@ -3891,6 +3895,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'categorias-tipocodigo': CATEGORY_BUTTON_NOTIFY,
     'unidad-medida': CATEGORY_BUTTON_NOTIFY,
     'marcas': CATEGORY_BUTTON_NOTIFY,
+    'lugares-envio': CATEGORY_BUTTON_NOTIFY,
     'clasificaciones': CATEGORY_BUTTON_NOTIFY,
     'almacenes': CATEGORY_BUTTON_NOTIFY,
     'sub-almacenes': CATEGORY_BUTTON_NOTIFY,
@@ -5596,6 +5601,9 @@ if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name ===
 if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'client_ref')) db.exec('ALTER TABLE manual_orders ADD COLUMN client_ref TEXT');
 // need_by: para cuándo se quiere ese renglón (el día en la zona del cliente, AAAA-MM-DD; '' = lo antes posible). Un artículo pedido para dos días son dos renglones del mismo folio, uno por fecha.
 if (!db.prepare('PRAGMA table_info(manual_order_lines)').all().some((c) => c.name === 'need_by')) db.exec("ALTER TABLE manual_order_lines ADD COLUMN need_by TEXT NOT NULL DEFAULT ''");
+// place_id / place_name: el «Lugar que solicita» (un lugar del catálogo Lugares de Envío; el nombre se guarda tal como estaba al pedir). 0 / '' = el pedido no lo trae (los de antes y los de la App, por ahora).
+if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'place_id')) db.exec('ALTER TABLE manual_orders ADD COLUMN place_id INTEGER NOT NULL DEFAULT 0');
+if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'place_name')) db.exec("ALTER TABLE manual_orders ADD COLUMN place_name TEXT NOT NULL DEFAULT ''");
 const MANUAL_ORDER_STATUSES = ['pending', 'supplied'];
 // Lo que se puede corregir de un pedido ya enviado: quién lo pidió (vale para todo el pedido) y la cantidad de un renglón. La hora, el artículo y el centro nunca cambian. El estatus se cambia aparte (setManualOrderLineStatus).
 const MANUAL_ORDER_PATCHABLE_FIELDS = {
@@ -5620,11 +5628,11 @@ function getManualOrderItem(clientId, id, isTest = false) {
         .get(clientId, isTest ? 1 : 0, id);
 }
 // Guarda un pedido con todos sus renglones en una sola operación. lines = [{ skuItemId, code, description, uom, categories, quantity, needBy }]. La hora la pone el servidor.
-function createManualOrder({ clientId, costCenterId, requesterName, requesterUserId = null, source = 'qr', lines, createdAt = null, clientRef = null }) {
+function createManualOrder({ clientId, costCenterId, requesterName, requesterUserId = null, source = 'qr', lines, createdAt = null, clientRef = null, placeId = 0, placeName = '' }) {
     return db.transaction(() => {
         // createdAt (UTC 'YYYY-MM-DD HH:MM:SS') solo viene de la App cuando el pedido se mandó sin señal: se guarda como hora del pedido y la del servidor como hora recibida.
-        const info = db.prepare("INSERT INTO manual_orders (client_id, cost_center_id, requester_name, requester_user_id, source, created_at, received_at, client_ref) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')), CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?)")
-            .run(clientId, costCenterId || 0, requesterName || '', requesterUserId, source, createdAt, createdAt, clientRef);
+        const info = db.prepare("INSERT INTO manual_orders (client_id, cost_center_id, requester_name, requester_user_id, source, created_at, received_at, client_ref, place_id, place_name) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')), CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?, ?, ?)")
+            .run(clientId, costCenterId || 0, requesterName || '', requesterUserId, source, createdAt, createdAt, clientRef, Number(placeId) || 0, String(placeName || '').slice(0, 120));
         const orderId = Number(info.lastInsertRowid);
         const insert = db.prepare('INSERT INTO manual_order_lines (order_id, client_id, line_no, sku_item_id, code, description, uom, categories, quantity, need_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         lines.forEach((l, i) => insert.run(orderId, clientId, i + 1, l.skuItemId || null, l.code || '', l.description || '', l.uom || '', l.categories || '', l.quantity, l.needBy || ''));
@@ -6227,8 +6235,10 @@ const ARTICLE_CATEGORY_TYPES = {
     // Artículos) -- reuses this same table/routes/screen instead of a
     // near-duplicate units_of_measure setup, same reasoning as the 7 above.
     udm: { prefix: 'UDM', tableKey: 'unidad-medida', pantalla: 'Nuestras Unidad Medida' },
-    // Marcas (BAYER, PISA, SANAFI…): misma forma (código, nombre, descripción, estatus). Las eligen las presentaciones de Unidad de Medida por Distribución (después de la clasificación Patente o Genérico).
+    // Marcas (BAYER, PISA, SANAFI…): misma forma (código, nombre, descripción, estatus). Las eligen las presentaciones de Presentaciones de Distribución (después de la clasificación Patente o Genérico).
     marcas: { prefix: 'MAR', tableKey: 'marcas', pantalla: 'Nuestras Marcas' },
+    // Lugares de Envío (hospitales y otros sitios fuera del CEDIS, 2026-11-10): misma forma (código, nombre, descripción, estatus). Cada presentación de Presentaciones de Distribución dice a cuáles se envía («Envíos a») y el QR de Pedido Manual pide el «Lugar que solicita».
+    'lugares-envio': { prefix: 'LUG', tableKey: 'lugares-envio', pantalla: 'Lugares de Envío' },
     // Lives under Transporte Volumen (like Tipos de Unidad), not Centro de
     // Distribución like the 8 above -- `area` overrides
     // ARTICLE_CATEGORY_AREA_LABEL's own default for this one (see
@@ -6447,7 +6457,7 @@ function deleteCodeRelation(id, clientId) {
 }
 
 // Filas que usan un valor (para no borrar un almacén, un sub almacén, un centro de costos o un código que ya está en Relación Código). Solo columnas conocidas.
-// --- Unidad de Medida por Distribución ---------------------------------------------------------------------------------------------------------
+// --- Presentaciones de Distribución ---------------------------------------------------------------------------------------------------------
 const SKU_DIST_PATCHABLE_FIELDS = {
     uom: { column: 'uom', fieldKey: 'main.colUdmDUnidad' },
     contains: { column: 'contains', fieldKey: 'main.colUdmDContiene' },
@@ -6458,6 +6468,7 @@ const SKU_DIST_PATCHABLE_FIELDS = {
     weightG: { column: 'weight_g', fieldKey: 'main.colUdmDPeso' },
     canLay: { column: 'can_lay', fieldKey: 'main.colUdmDAcostar' },
     storageTypes: { column: 'storage_types', fieldKey: 'main.colUdmDTipo' },
+    shipTo: { column: 'ship_to', fieldKey: 'main.colUdmDEnvios' },
     unitsPerLayer: { column: 'units_per_layer', fieldKey: 'main.colUdmDCantidadCama' },
     layersPerPallet: { column: 'layers_per_pallet', fieldKey: 'main.colUdmDCamasPallet' },
     maxStack: { column: 'max_stack', fieldKey: 'main.colUdmDMaxEstiba' },
@@ -6475,17 +6486,23 @@ function listSkuDistribution(clientId, forTestAccount = false) {
 function listSkuDistributionBySku(clientId, forTestAccount, skuItemId) {
     return db.prepare(`${SKU_DIST_SELECT} WHERE d.client_id = ? AND d.is_test_data = ? AND d.sku_item_id = ? ORDER BY d.level ASC, d.id ASC`).all(clientId, forTestAccount ? 1 : 0, skuItemId);
 }
+// Los códigos de Alta Artículos que todavía no tienen ningún renglón en Presentaciones de Distribución (la pantalla los lista desde el inicio con su unidad de medida principal; el renglón se guarda al capturarlo).
+function listSkuItemsWithoutDistribution(clientId, forTestAccount = false) {
+    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, length, width, height, article_weight, created_at FROM sku_items
+        WHERE client_id = ? AND is_test_data = ? AND id NOT IN (SELECT sku_item_id FROM sku_distribution_units WHERE client_id = ? AND is_test_data = ?) ORDER BY record_number ASC`).all(clientId, forTestAccount ? 1 : 0, clientId, forTestAccount ? 1 : 0);
+}
 function getSkuDistributionById(id, clientId, forTestAccount = false) {
     return db.prepare(`${SKU_DIST_SELECT} WHERE d.id = ? AND d.client_id = ? AND d.is_test_data = ?`).get(id, clientId, forTestAccount ? 1 : 0);
 }
 function createSkuDistribution({ clientId, isTestData = false, values }) {
     const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM sku_distribution_units WHERE client_id = ? AND is_test_data = ?').get(clientId, isTestData ? 1 : 0).n;
-    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, parent_id, kind, classification, brand_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, storage_types, units_per_layer, layers_per_pallet, max_stack, is_test_data)
-        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @parentId, @kind, @classification, @brandId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @storageTypes, @unitsPerLayer, @layersPerPallet, @maxStack, @isTestData)`).run({
+    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, parent_id, kind, classification, brand_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, storage_types, ship_to, units_per_layer, layers_per_pallet, max_stack, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @parentId, @kind, @classification, @brandId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @storageTypes, @shipTo, @unitsPerLayer, @layersPerPallet, @maxStack, @isTestData)`).run({
         clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuItemId: values.skuItemId, parentId: values.parentId ?? null, kind: values.kind === 'marca' ? 'marca' : 'presentacion', classification: values.kind === 'marca' ? String(values.classification || '') : '', brandId: values.kind === 'marca' ? (values.brandId ?? null) : null, level: values.level,
         uom: values.uom || '', contains: values.contains ?? null, shape: values.shape === 'cilindrica' ? 'cilindrica' : 'rectangular',
         length: Number(values.length) || 0, width: Number(values.width) || 0, height: Number(values.height) || 0, weightG: Number(values.weightG) || 0, canLay: values.canLay ? 1 : 0,
         storageTypes: values.storageTypes === undefined || values.storageTypes === null ? null : String(values.storageTypes),
+        shipTo: values.shipTo === undefined || values.shipTo === null ? null : String(values.shipTo),
         unitsPerLayer: Math.round(Number(values.unitsPerLayer)) || 0, layersPerPallet: Math.round(Number(values.layersPerPallet)) || 0, maxStack: Math.round(Number(values.maxStack)) || 0,
     });
     return getSkuDistributionById(result.lastInsertRowid, clientId, isTestData);
@@ -6516,9 +6533,14 @@ function createSkuDistributionUnderNewBrand({ clientId, isTestData = false, bran
     })();
     return out;
 }
-// Cuántos renglones de Unidad de Medida por Distribución usan una marca del catálogo (para no borrarla mientras se use).
+// Cuántos renglones de Presentaciones de Distribución usan una marca del catálogo (para no borrarla mientras se use).
 function countSkuDistributionByBrand(clientId, brandId) {
     return db.prepare("SELECT COUNT(DISTINCT sku_item_id) AS n FROM sku_distribution_units WHERE client_id = ? AND kind = 'marca' AND brand_id = ?").get(clientId, brandId).n;
+}
+// Cuántas presentaciones envían a un lugar del catálogo Lugares de Envío (para no borrarlo mientras se use).
+function countSkuDistributionByShipTo(clientId, placeId) {
+    const wanted = String(placeId);
+    return db.prepare("SELECT ship_to FROM sku_distribution_units WHERE client_id = ? AND ship_to IS NOT NULL AND ship_to != ''").all(clientId).filter((r) => String(r.ship_to).split(',').includes(wanted)).length;
 }
 // Lo que se capturó en la columna «Empaques» de Alta Artículos (sku_items.packaging, JSON con las piezas TOTALES de cada nivel) pasa a esta tabla: nivel 0 con su forma y su se-puede-acostar y un renglón por empaque,
 // con «contiene» = piezas del nivel / piezas del nivel anterior (si no sale entero se redondea). La unidad queda vacía (el nombre libre no es del catálogo) y el peso en 0: se completan en la pantalla nueva. Solo se pasa
@@ -7796,15 +7818,15 @@ function cleanupLayoutCardCenterGrants() {
     })();
     console.log(`[db] Removed the retired Layout card-centering icon grants (one-time cleanup): ${JSON.stringify(counts)}.`);
 }
-// --- Siembra única (2026-11-10): lo nuevo de Unidad de Medida por Distribución y de los códigos en el Layout -------------------------------------------------------------------------
-// La pantalla Operaciones > Unidad de Medida por Distribución reemplaza la columna «Empaques» de Alta Nuestros Artículos: la reciben, una sola vez, quienes ya tienen Alta (mismos niveles y reglas que Códigos y
+// --- Siembra única (2026-11-10): lo nuevo de Presentaciones de Distribución y de los códigos en el Layout -------------------------------------------------------------------------
+// La pantalla Operaciones > Presentaciones de Distribución reemplaza la columna «Empaques» de Alta Nuestros Artículos: la reciben, una sola vez, quienes ya tienen Alta (mismos niveles y reglas que Códigos y
 // Edición Código). Sus columnas no necesitan hoja: sin permiso suelto una columna es «solo ver». Los iconos nuevos del Layout (Códigos en Localizadores y Piezas) los reciben quienes ya tienen el Layout; el de
 // Relacionar código escribe datos: solo queda disponible en lo contratado (el administrador lo asigna a puestos y usuarios).
 const UDM_SCREEN_SEED_KEY = 'seed-udm-distribucion-screen-v1';
 function seedUdmDistribucionScreenGrants() {
     const path = TABLE_GRANT_PATHS['nuestros-articulos'];
     if (!path) return;
-    seedLeavesForScreenHolders(UDM_SCREEN_SEED_KEY, path, ['cat-operaciones/cat-operaciones-centro-dist-udm-distribucion'], 'the Unidad de Medida por Distribución screen');
+    seedLeavesForScreenHolders(UDM_SCREEN_SEED_KEY, path, ['cat-operaciones/cat-operaciones-centro-dist-udm-distribucion'], 'the Presentaciones de Distribución screen');
 }
 const LAYOUT_CODES_ICONS_SEED_KEY = 'seed-layout-codes-icons-v1';
 const LAYOUT_RELATE_ICON_SEED_KEY = 'seed-layout-relate-icon-contract-v1';
@@ -7862,12 +7884,19 @@ function seedQrSeguridadScreenGrants() {
     seedLeavesForScreenHolders(QR_SEGURIDAD_SCREEN_SEED_KEY, { ...path, submenuPrefix: `${path.submenuPrefix}/iconLayoutQrSeguridad` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-seguridad'], "the QR's Seguridad screen");
 }
 // Operaciones > QR's > Pedido manual: la reciben, una sola vez, quienes ya tienen el botón QR de la pantalla Pedido Manual (colPmQr).
-// Catálogos > Nuestras Marcas (2026-11-10): la pantalla nueva la reciben, una sola vez, quienes ya tienen Unidad de Medida por Distribución (ahí se eligen las marcas).
+// Catálogos > Nuestras Marcas (2026-11-10): la pantalla nueva la reciben, una sola vez, quienes ya tienen Presentaciones de Distribución (ahí se eligen las marcas).
 const MARCAS_SCREEN_SEED_KEY = 'seed-marcas-catalog-screen-v1';
 function seedMarcasScreenGrants() {
     const path = TABLE_GRANT_PATHS['udm-distribucion'];
     if (!path) return;
     seedLeavesForScreenHolders(MARCAS_SCREEN_SEED_KEY, path, ['cat-catalogos/cat-catalogos-centro-dist-marcas'], 'the Marcas catalog screen');
+}
+// Catálogos > Lugares de Envío (2026-11-10): la pantalla nueva la reciben, una sola vez, quienes ya tienen Presentaciones de Distribución (ahí se elige a qué lugares se envía cada presentación).
+const LUGARES_ENVIO_SCREEN_SEED_KEY = 'seed-lugares-envio-catalog-screen-v1';
+function seedLugaresEnvioScreenGrants() {
+    const path = TABLE_GRANT_PATHS['udm-distribucion'];
+    if (!path) return;
+    seedLeavesForScreenHolders(LUGARES_ENVIO_SCREEN_SEED_KEY, path, ['cat-catalogos/cat-catalogos-centro-dist-lugares-envio'], 'the Lugares de Envío catalog screen');
 }
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
@@ -8183,6 +8212,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'categorias-tipocodigo', labelKey: 'menu.catCentroDistCategoriasTipocodigo' },
     { key: 'unidad-medida', labelKey: 'menu.catCentroDistUnidadMedida' },
     { key: 'marcas', labelKey: 'menu.catCentroDistMarcas' },
+    { key: 'lugares-envio', labelKey: 'menu.catCentroDistLugaresEnvio' },
     { key: 'clasificaciones', labelKey: 'menu.catCentroDistClasificaciones' },
     { key: 'almacenes', labelKey: 'menu.catCentroDistAlmacenes' },
     { key: 'sub-almacenes', labelKey: 'menu.catCentroDistSubAlmacenes' },
@@ -12523,6 +12553,7 @@ seedQrLimpiezaScreenGrants();
 seedQrTemperaturasScreenGrants();
 seedQrPedidoManualScreenGrants();
 seedMarcasScreenGrants();
+seedLugaresEnvioScreenGrants();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
@@ -12729,6 +12760,8 @@ module.exports = {
     deleteSkuDistribution,
     createSkuDistributionUnderNewBrand,
     countSkuDistributionByBrand,
+    countSkuDistributionByShipTo,
+    listSkuItemsWithoutDistribution,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,

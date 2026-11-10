@@ -49,7 +49,7 @@
     const LAYERS_PER_PALLET_COLUMN = { key: 'layersPerPallet', es: 'Camas por pallet (HI)', en: 'Layers per Pallet (HI)', col: 'colArticuloCamasPallet', kind: 'number', integer: true, aliases: ['camas por pallet', 'camas por pallets', 'camas x pallets', 'camas x pallet', 'hi', 'layers per pallet'] };
     const MAX_STACK_COLUMN = { key: 'maxStack', es: 'Máxima estiba', en: 'Max Stacking', col: 'colArticuloMaxEstiba', kind: 'number', integer: true, aliases: ['maxima estiba', 'estiba maxima', 'estiba', 'max stacking'] };
     const TIPO_CODIGO_COLUMN = { key: 'categoryTipoCodigo', es: 'Tipo Código', en: 'Code Type', col: 'colArticuloCategoriaTipoCodigo', kind: 'category', type: 'tipocodigo', aliases: ['tipo de codigo', 'tipo codigo'] };
-    // Tipo de almacenamiento y estiba (STORAGE_COLUMN, UNITS_PER_LAYER_COLUMN, LAYERS_PER_PALLET_COLUMN, MAX_STACK_COLUMN) ya no se capturan en Alta ni en su plantilla: pasan a Unidad de Medida por Distribución. Se dejan definidas
+    // Tipo de almacenamiento y estiba (STORAGE_COLUMN, UNITS_PER_LAYER_COLUMN, LAYERS_PER_PALLET_COLUMN, MAX_STACK_COLUMN) ya no se capturan en Alta ni en su plantilla: pasan a Presentaciones de Distribución. Se dejan definidas
     // aquí para cuando se necesiten de nuevo; un archivo que las traiga solo las ignora (no son columnas conocidas).
     const ALL_COLUMNS = [SKU_COLUMN, ...COLUMNS, TIPO_CODIGO_COLUMN, CLASSIFICATION_COLUMN];
     const BY_KEY_ALL = Object.fromEntries(ALL_COLUMNS.map((c) => [c.key, c]));

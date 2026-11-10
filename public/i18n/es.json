@@ -327,6 +327,9 @@
     "catCentroDistMarcas": "Nuestras Marcas",
     "catCentroDistMarcasAbbr1": "Marcas",
     "catCentroDistMarcasAbbr2": "Marcas",
+    "catCentroDistLugaresEnvio": "Lugares de Envío",
+    "catCentroDistLugaresEnvioAbbr1": "Lugares",
+    "catCentroDistLugaresEnvioAbbr2": "Lug. Envío",
     "catCentroDistClasificaciones": "Nuestras Clasificaciones",
     "catCentroDistClasificacionesAbbr1": "Clasificaciones",
     "catCentroDistClasificacionesAbbr2": "Clasif.",
@@ -384,8 +387,8 @@
     "catMaterialApoyoFuncionalidadAbbr2": "Func. Pant.",
     "opCentroDistLayout": "Layout",
     "opCentroDistRelacionCodigo": "Relación Código",
-    "opCentroDistUdmDistribucion": "Unidad de Medida por Distribución",
-    "opCentroDistUdmDistribucionAbbr1": "UDM",
+    "opCentroDistUdmDistribucion": "Presentaciones de Distribución",
+    "opCentroDistUdmDistribucionAbbr1": "Present.",
     "opCentroDistUdmDistribucionAbbr2": "Distrib.",
     "opCentroDistRelacionCodigoAbbr1": "Relación Código",
     "opCentroDistRelacionCodigoAbbr2": "Rel. Código",
@@ -2199,10 +2202,10 @@
     "qrsPrimeros": "Primeros {m} de {n} códigos: afina la búsqueda",
     "qrsVentanaPm": "Pedido manual · {code}",
     "qrsCuantosCentros": "{n} centro",
-    "colArticuloUdmDist": "UDM de distribución",
-    "udmVerDist": "Ver UDM de distribución",
-    "udmVerVacio": "Este código todavía no tiene presentaciones. Se capturan en Unidad de Medida por Distribución.",
-    "udmVerIr": "Abrir Unidad de Medida por Distribución",
+    "colArticuloUdmDist": "Presentaciones de distribución",
+    "udmVerDist": "Ver presentaciones de distribución",
+    "udmVerVacio": "Este código todavía no tiene presentaciones. Se capturan en Presentaciones de Distribución.",
+    "udmVerIr": "Abrir Presentaciones de Distribución",
     "qrsEquipo": "Equipo",
     "qrsBuscarEquipo": "Buscar un refrigerador o sensor…",
     "qrsVacioTemp": "Este sitio no tiene refrigeradores ni sensores con QR.",
@@ -2949,6 +2952,7 @@
     "colCatCreateAuth": "Autorización para Crear",
     "newArticleCategory": "Nueva Categoría",
     "newBrand": "Nueva marca",
+    "newShipPlace": "Nuevo lugar de envío",
     "vfPlaceholder": "Escribe o escanea un SKU, UPC o descripción",
     "vfNoResults": "Sin resultados",
     "vfWhere": "Dónde está",
@@ -3572,7 +3576,11 @@
     "storageType_principal": "Por UDM producto principal",
     "udmTipoNinguno": "Ninguno",
     "udmTiposTodos": "Todos",
-    "relPackNoTypes": "Las presentaciones de este código no tienen ningún tipo de almacenamiento habilitado. Habilítalo en Unidad de Medida por Distribución.",
+    "colUdmDEnvios": "Envíos a",
+    "udmEnviosNinguno": "Ninguno",
+    "udmEnviosTodos": "Todos",
+    "udmEnviosVacio": "Todavía no hay lugares de envío. Dalos de alta en Catálogos > Lugares de Envío.",
+    "relPackNoTypes": "Las presentaciones de este código no tienen ningún tipo de almacenamiento habilitado. Habilítalo en Presentaciones de Distribución.",
     "colUdmDCreateAuth": "Autorización para Nueva Presentación",
     "colUdmDDeleteAuth": "Autorización para Eliminar Presentaciones",
     "colRelForma": "Forma",
@@ -3660,6 +3668,8 @@
     "layoutRelacionarCodigoBtn": "Relacionar código desde el Layout",
     "udmNew": "Nueva presentación",
     "udmEdit": "Editar presentación",
+    "udmAddUnder": "Agregar presentación que sale de esta",
+    "udmCapture": "Capturar el material principal de este código",
     "udmDialogNew": "Nueva presentación",
     "udmDialogEdit": "Editar presentación",
     "udmCode": "Código",
@@ -3671,6 +3681,9 @@
     "udmFromArticle": "Se captura en Alta Artículos",
     "udmFromArticleLong": "su unidad, medidas y peso se capturan en Alta Artículos",
     "udmChainTitle": "Las ramificaciones de {sku}",
+    "udmTreeOpen": "Ver el árbol de ramificación de este código",
+    "udmTreeTitle": "Árbol de ramificación · código {sku}",
+    "udmTreeNone": "Este código todavía no tiene presentaciones guardadas: aquí solo se ve su material principal.",
     "udmChainMore": "tarima, bulto… y así sucesivamente",
     "udmNoCode": "Elige primero el código.",
     "udmMaxLevels": "Una presentación admite hasta {n} niveles.",
@@ -3695,7 +3708,7 @@
     "layoutPcSobraFondo": "sobran {d} cm de fondo",
     "relPackTitle": "¿Qué unidad de medida quieres almacenar para este código en este lugar?",
     "relPackNoCode": "Elige primero el código.",
-    "relPackNoData": "Este código no tiene presentaciones capturadas en Unidad de Medida por Distribución.",
+    "relPackNoData": "Este código no tiene presentaciones capturadas en Presentaciones de Distribución.",
     "relPackNoPlace": "Elige el lugar completo (anaquel, nivel, espacio y posición) para ver cuántas piezas caben. Ya puedes elegir qué se acomoda.",
     "relPackBox": "La posición mide {l} × {w} × {h} cm (largo × fondo × alto). Elige qué se acomoda en ella:",
     "relPackSuggested": "Sugerida",
@@ -5282,6 +5295,18 @@
       "what": "Agrega una presentación de un código. La primera es el material principal (solo eliges su forma). Las demás: eliges la clasificación (Patente o Genérico) y la marca si el código las usa, y de cuál presentación sale («Sale de»; de una misma pueden salir varias), con su unidad del catálogo, cuántas de esa lleva, sus medidas en cm y su peso en gramos. Eliges el código por su descripción única y luego las opciones que piden.",
       "example": "genérico PISA, caja con 24 tabletas: 5 × 4 × 2 cm, 1100 g; luego la caja con 10 cajas de 24 sale de esa caja."
     },
+    "udmArbol": {
+      "what": "Abre, en una pantalla flotante, el árbol de ramificación completo de este código: el material principal y, de él, todas las presentaciones que salen (con su unidad, medidas, peso, a cuántas unidades principales equivale cada una y cuántas de la anterior lleva). Se abre al tocar la columna Ramificación del renglón.",
+      "example": "tocas el renglón de la tableta y ves la caja con 12 y, de ella, la caja con 10 cajas."
+    },
+    "udmAddUnder": {
+      "what": "Agrega una presentación que sale de este renglón: el código ya viene elegido y solo capturas la unidad, cuántas de este renglón lleva, sus medidas y su peso.",
+      "example": "en el renglón de la tableta agregas la caja con 12; en el de la caja con 12 agregas la caja con 10 cajas."
+    },
+    "udmCapture": {
+      "what": "Todos los códigos de Alta Artículos aparecen aquí desde el inicio con su unidad de medida principal. Este lápiz abre la captura del material principal del código (su forma, para qué se usa y a dónde se envía); después se le agregan sus presentaciones con el «+» de su renglón.",
+      "example": "la tableta: forma rectangular, tipo de almacenamiento principal, y se envía al Hospital Central."
+    },
     "udmEdit": {
       "what": "Cambia los datos de esta presentación. Las medidas y el peso del material principal se capturan en Alta Artículos.",
       "example": "corriges el peso de la caja con 12 de 1.1 a 1.3 g."
@@ -5311,7 +5336,7 @@
       "example": "una posición con 27 cajas de 12 piezas se ve llena de cajas y dice «27 · 324 pz»."
     },
     "relSeAcomoda": {
-      "what": "Elige qué se pone en esta posición: el material principal o su empaque primario, secundario, terciario… Cada opción muestra, vista desde arriba, cuántas piezas de ese tamaño caben en la posición (con el mejor acomodo) y cuántas piezas (UDM) son en total. La sugerida es la que acomoda más piezas. Las presentaciones, sus medidas y su peso se capturan en Unidad de Medida por Distribución. Volver a tocar la opción elegida la quita.",
+      "what": "Elige qué se pone en esta posición: el material principal o su empaque primario, secundario, terciario… Cada opción muestra, vista desde arriba, cuántas piezas de ese tamaño caben en la posición (con el mejor acomodo) y cuántas piezas (UDM) son en total. La sugerida es la que acomoda más piezas. Las presentaciones, sus medidas y su peso se capturan en Presentaciones de Distribución. Volver a tocar la opción elegida la quita.",
       "example": "una posición de 80 × 60 × 66 cm: la caja de 12 acomoda 27 cajas (324 piezas) y la caja master 2 cajas (192 piezas)."
     },
     "colRelSeAcomoda": {
@@ -5327,7 +5352,7 @@
       "example": "27 cajas de 12 piezas = 324 pz."
     },
     "colRelForma": {
-      "what": "La forma de lo que se acomoda: rectangular o cilíndrica. Se captura en Unidad de Medida por Distribución, en cada presentación del código.",
+      "what": "La forma de lo que se acomoda: rectangular o cilíndrica. Se captura en Presentaciones de Distribución, en cada presentación del código.",
       "example": "Cilíndrica."
     },
     "relUbicar": {
@@ -6210,9 +6235,10 @@
     "layoutCuelgaA": {"what": "La altura, medida desde el piso, a la que queda este aparato colgado del techo. Si la dejas vacía queda pegado al techo. No puede pasar de «Techo ahí», que es lo que mide la nave en ese punto (el techo no es plano).", "example": "una cámara colgada a 6.5 m donde el techo está a 8.9 m."},
     "menuResize": {"what": "Esquina de abajo a la derecha del desplegable: al jalarla se amplía (más ancho y con la lista más alta) para leer las descripciones completas. Siempre abre con su tamaño de siempre y solo se puede agrandar.", "example": "jalarla hacia abajo y a la derecha para ver el nombre completo de un medicamento que sale cortado."},
     "udmTipo": {"what": "Para qué se puede usar esta presentación: elige una, varias o todas las opciones (UDM producto principal, original, de almacenamiento, de compra, de empaque o de pallets). Solo las presentaciones que tienen al menos un tipo se ofrecen cuando relacionas un código con una posición; si no marcas ninguna, esa presentación no se ofrece. De partida, el material principal trae «UDM producto principal» y cada empaque trae «UDM de empaque».", "example": "la tableta con «UDM producto principal», la caja con 12 con «UDM de empaque» y «UDM de compra», y la caja con 50 con «UDM de pallets»."},
+    "udmEnvios": {"what": "A qué lugares de envío (hospitales y otros sitios fuera del CEDIS, del catálogo Lugares de Envío) se puede enviar esta presentación: marca uno, varios o todos. Hay productos de los que a un lugar solo se envía un tipo de presentación; por eso se elige en cada presentación y no en el código. Si no marcas ninguno, esa presentación no se envía a ningún lugar.", "example": "la caja con 12 se envía al Hospital Central y al Hospital Norte, pero la caja con 50 solo al Hospital Central."},
     "udmEstiba": {"what": "Los datos de estiba de esta presentación cuando va en un pallet: cuántas lleva cada cama (TI), cuántas camas lleva el pallet (HI) y cuántos pallets se pueden apilar (máxima estiba). Son números enteros; vacío o 0 es «sin capturar». De la presentación con tipo «UDM de pallets» salen la base y los datos que usa Capacidad Almacenamiento (si el código no tiene una, usa lo que ya traía).", "example": "la caja con 50 con tipo «UDM de pallets»: 12 por cama, 5 camas por pallet y estiba máxima de 3."},
     "qrsLimpieza": {"what": "La app de Limpieza que normalmente se hace escaneando el QR de cada activo, pero desde la computadora: eliges el sitio arriba, buscas el activo y tocas «Abrir». Se abre la misma pantalla que abre el QR (tu nombre, foto de antes, empezar, foto de después, terminar) en una ventana sobre esta página, y lo que registres queda en Operaciones > Limpieza igual que si lo hicieras con el celular. La foto se toma con la cámara de la computadora.", "example": "abrir el activo R001, escribir tu nombre, tomar la foto de antes y tocar «Empezar»; al terminar, la foto de después y «Terminar»."},
-    "udmVerDist": {"what": "Muestra, solo para verla, la secuencia de presentaciones de este código (el material principal, el empaque primario, el secundario…) con su unidad, sus medidas, su peso y a cuántas unidades principales equivale cada una. Se captura y se cambia en Operaciones > Unidad de Medida por Distribución.", "example": "ver que una tableta de 1 × 1 × 0.4 cm y 50 g tiene un empaque primario de caja con 12."},
+    "udmVerDist": {"what": "Muestra, solo para verla, la secuencia de presentaciones de este código (el material principal, el empaque primario, el secundario…) con su unidad, sus medidas, su peso y a cuántas unidades principales equivale cada una. Se captura y se cambia en Operaciones > Presentaciones de Distribución.", "example": "ver que una tableta de 1 × 1 × 0.4 cm y 50 g tiene un empaque primario de caja con 12."},
     "qrsTemperaturas": {"what": "La app de Temperaturas que normalmente se hace escaneando el QR de cada refrigerador o sensor, pero desde la computadora: eliges el sitio arriba, buscas el equipo y tocas «Abrir». Se abre la misma pantalla que abre el QR (tu nombre, la temperatura y la humedad que marca, y la foto de la lectura) en una ventana sobre esta página, y lo que registres queda en Operaciones > Temperaturas igual que si lo hicieras con el celular. La foto se toma con la cámara de la computadora.", "example": "abrir el refrigerador F001, escribir tu nombre, la temperatura de 4 °C y la humedad, tomar la foto de la lectura y guardar."},
     "qrsPedidoManual": {"what": "El QR de Pedido Manual del centro de costos que elegiste arriba, pero desde la computadora: toca «Abrir» y se muestra, en una ventana sobre esta página, la misma pantalla que abre el QR (buscar el artículo por código, descripción, unidad de medida o categoría, poner la cantidad, escribir quién pide y enviar). El pedido llega a Operaciones > Pedido Manual con su número, quién lo pidió y la hora, igual que si lo hicieras con el celular. Necesita que el sitio ya tenga un Layout guardado: de ahí sale la dirección del QR.", "example": "abrir el QR del centro, buscar «paracetamol», pedir 20, escribir tu nombre y enviar: aparece como PM-0007 en Pedido Manual."},
     "qrsSeguridad": {"what": "La app de Seguridad que normalmente se hace escaneando el QR de cada elemento (extintor, hidrante, puerta de emergencia, botiquín…), pero desde la computadora: eliges el sitio arriba, buscas el elemento y tocas «Abrir». Se abre la misma pantalla que abre el QR (tu nombre, si está bien o con falla, una nota y la foto) en una ventana sobre esta página, y lo que registres queda en Operaciones > Seguridad igual que si lo hicieras con el celular. La foto se toma con la cámara de la computadora.", "example": "abrir el extintor E001, escribir tu nombre, marcar «Bien», tomar la foto y guardar."},

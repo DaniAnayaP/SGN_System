@@ -8103,7 +8103,12 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .udm-link-dash::before{ border-top-style: dashed; }
 .udm-link span{ position: relative; z-index: 1; font-size: 0.74rem; font-weight: 700; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 999px; padding: 0.05rem 0.55rem; }
 /* Ramificación: el árbol de presentaciones dibujado en una columna de la tabla (líneas de los niveles de arriba, el codo y el nombre) */
-td.udm-tree-cell{ padding-top: 0; padding-bottom: 0; height: 1px; min-width: 17rem; max-width: none; overflow: visible; text-overflow: clip; }
+td.udm-tree-cell{ padding-top: 0; padding-bottom: 0; height: 1px; min-width: 17rem; max-width: none; overflow: visible; text-overflow: clip; cursor: pointer; }
+.udm-tree-open{ align-self: center; margin-left: auto; flex: none; border: 0; background: transparent; color: var(--color-text-secondary); cursor: pointer; padding: 0.2rem 0.35rem; border-radius: 0.5rem; font-size: 1.05rem; line-height: 1; }
+.udm-tree-open:hover, .udm-tree-open:focus-visible{ background: color-mix(in srgb, var(--color-accent) 14%, transparent); color: var(--color-accent); }
+.udm-tree-panel{ width: min(72rem, 94vw); max-width: 94vw; display: flex; flex-direction: column; gap: 0.75rem; }
+.udm-chain-float{ margin: 0; border: 0; padding: 0; background: transparent; }
+.udm-chain-float .udm-tree-scroll{ max-height: 70vh; }
 th[data-col="colUdmDRamificacion"]{ min-width: 17rem; }
 .udm-tree{ display: flex; align-items: stretch; height: 100%; min-height: 2.5rem; }
 .udm-tl, .udm-te{ flex: none; width: 1.3rem; position: relative; }
@@ -8112,6 +8117,8 @@ th[data-col="colUdmDRamificacion"]{ min-width: 17rem; }
 .udm-te:not(.last)::after{ content: ""; position: absolute; left: 50%; top: 50%; bottom: 0; border-left: 2px solid var(--color-text-secondary); }
 .udm-tnode{ align-self: center; border: 1px solid var(--color-border); border-radius: 0.6rem; padding: 0.1rem 0.6rem; font-size: 0.78rem; white-space: nowrap; background: var(--color-surface); }
 .udm-tnode.root{ font-weight: 700; }
+/* La fila del material principal (la UDM principal del producto) lleva un tinte suave del color de acento en toda la fila, para distinguirla de sus presentaciones. Va como capa sobre el fondo (no lo reemplaza): también se ve en las columnas fijas y en los tres estilos (claro, oscuro, institucional). */
+tr.udm-main-row > td{ background-image: linear-gradient(color-mix(in srgb, var(--color-accent) 11%, transparent), color-mix(in srgb, var(--color-accent) 11%, transparent)); }
 .udm-dup{ visibility: hidden; }
 .udm-from{ font-size: 0.85rem; font-weight: 600; min-height: 2rem; display: flex; align-items: center; }
 .udm-dialog{ max-width: 40rem; display: flex; flex-direction: column; gap: 0.75rem; }

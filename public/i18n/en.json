@@ -323,6 +323,9 @@
     "catCentroDistMarcas": "Our Brands",
     "catCentroDistMarcasAbbr1": "Brands",
     "catCentroDistMarcasAbbr2": "Brands",
+    "catCentroDistLugaresEnvio": "Shipping Places",
+    "catCentroDistLugaresEnvioAbbr1": "Places",
+    "catCentroDistLugaresEnvioAbbr2": "Ship Places",
     "catCentroDistClasificaciones": "Our Classifications",
     "catCentroDistClasificacionesAbbr1": "Classifications",
     "catCentroDistClasificacionesAbbr2": "Classif.",
@@ -384,8 +387,8 @@
     "catMaterialApoyoFuncionalidadAbbr2": "Screen Func.",
     "opCentroDistLayout": "Layout",
     "opCentroDistRelacionCodigo": "Code Relation",
-    "opCentroDistUdmDistribucion": "Unit of Measure by Distribution",
-    "opCentroDistUdmDistribucionAbbr1": "UoM",
+    "opCentroDistUdmDistribucion": "Distribution Presentations",
+    "opCentroDistUdmDistribucionAbbr1": "Pres.",
     "opCentroDistUdmDistribucionAbbr2": "Distr.",
     "opCentroDistRelacionCodigoAbbr1": "Code Relation",
     "opCentroDistRelacionCodigoAbbr2": "Code Rel.",
@@ -2199,10 +2202,10 @@
     "qrsPrimeros": "First {m} of {n} codes: narrow the search",
     "qrsVentanaPm": "Manual order · {code}",
     "qrsCuantosCentros": "{n} center",
-    "colArticuloUdmDist": "Distribution UOM",
-    "udmVerDist": "View distribution UOM",
-    "udmVerVacio": "This code has no presentations yet. They are captured in Unit of Measure by Distribution.",
-    "udmVerIr": "Open Unit of Measure by Distribution",
+    "colArticuloUdmDist": "Distribution presentations",
+    "udmVerDist": "View distribution presentations",
+    "udmVerVacio": "This code has no presentations yet. They are captured in Distribution Presentations.",
+    "udmVerIr": "Open Distribution Presentations",
     "qrsEquipo": "Equipment",
     "qrsBuscarEquipo": "Search a refrigerator or sensor…",
     "qrsVacioTemp": "This site has no refrigerators or sensors with a QR.",
@@ -2950,6 +2953,7 @@
     "colCatCreateAuth": "Create Authorization",
     "newArticleCategory": "New Category",
     "newBrand": "New brand",
+    "newShipPlace": "New shipping place",
     "vfPlaceholder": "Type or scan a SKU, UPC or description",
     "vfNoResults": "No matches",
     "vfWhere": "Where it is",
@@ -3573,7 +3577,11 @@
     "storageType_principal": "By main product UOM",
     "udmTipoNinguno": "None",
     "udmTiposTodos": "All",
-    "relPackNoTypes": "None of this code's presentations has a storage type enabled. Enable one in Unit of Measure by Distribution.",
+    "colUdmDEnvios": "Ships to",
+    "udmEnviosNinguno": "None",
+    "udmEnviosTodos": "All",
+    "udmEnviosVacio": "There are no shipping places yet. Add them in Catalogs > Shipping Places.",
+    "relPackNoTypes": "None of this code's presentations has a storage type enabled. Enable one in Distribution Presentations.",
     "colUdmDCreateAuth": "Authorization for New Presentation",
     "colUdmDDeleteAuth": "Authorization to Delete Presentations",
     "colRelForma": "Shape",
@@ -3661,6 +3669,8 @@
     "layoutRelacionarCodigoBtn": "Relate code from the Layout",
     "udmNew": "New presentation",
     "udmEdit": "Edit presentation",
+    "udmAddUnder": "Add a presentation that comes from this one",
+    "udmCapture": "Capture this code's main material",
     "udmDialogNew": "New presentation",
     "udmDialogEdit": "Edit presentation",
     "udmCode": "Code",
@@ -3671,6 +3681,9 @@
     "udmWith": "with",
     "udmFromArticle": "Captured in Alta Artículos",
     "udmFromArticleLong": "its unit, measures and weight are captured in Alta Artículos",
+    "udmTreeOpen": "View the branching tree of this code",
+    "udmTreeTitle": "Branching tree · code {sku}",
+    "udmTreeNone": "This code has no saved presentations yet: only its main material is shown here.",
     "udmChainTitle": "The branches of {sku}",
     "udmChainMore": "pallet, bundle… and so on",
     "udmNoCode": "Choose the code first.",
@@ -3696,7 +3709,7 @@
     "layoutPcSobraFondo": "{d} cm of depth left over",
     "relPackTitle": "Which unit of measure do you want to store for this code in this place?",
     "relPackNoCode": "Choose the code first.",
-    "relPackNoData": "This code has no presentations captured in Unit of Measure by Distribution.",
+    "relPackNoData": "This code has no presentations captured in Distribution Presentations.",
     "relPackNoPlace": "Choose the full place (asset, level, space and position) to see how many pieces fit. You can already choose what is placed.",
     "relPackBox": "The position measures {l} × {w} × {h} cm (length × depth × height). Choose what is placed in it:",
     "relPackSuggested": "Suggested",
@@ -5283,6 +5296,18 @@
       "what": "Adds a presentation of a code. The first is the main material (you only choose its shape). The others: you choose the classification (Patent or Generic) and the brand if the code uses them, and which presentation it comes from («Comes from»; several can come out of the same one), with its catalog unit, how many of that one it holds, its measures in cm and its weight in grams. You choose the code by its unique description and then the options asked.",
       "example": "generic PISA, box of 24 tablets: 5 × 4 × 2 cm, 1100 g; then the box of 10 boxes of 24 comes out of that box."
     },
+    "udmArbol": {
+      "what": "Opens, in a floating window, the complete branching tree of this code: the main material and all the presentations that come from it (with their unit, measures, weight, how many main units each equals and how many of the previous one it holds). It opens when you tap the Branching column of the row.",
+      "example": "you tap the tablet row and see the box of 12 and, from it, the box of 10 boxes."
+    },
+    "udmAddUnder": {
+      "what": "Adds a presentation that comes from this row: the code is already chosen and you only capture the unit, how many of this row it holds, its measures and its weight.",
+      "example": "on the tablet row you add the box of 12; on the box-of-12 row you add the box of 10 boxes."
+    },
+    "udmCapture": {
+      "what": "Every code from Alta Artículos appears here from the start with its main unit of measure. This pencil opens the capture of the code's main material (its shape, what it is used for and where it ships to); afterwards its presentations are added with the «+» of its row.",
+      "example": "the tablet: rectangular shape, main storage type, and it ships to Central Hospital."
+    },
     "udmEdit": {
       "what": "Changes the data of this presentation. The measures and weight of the main material are captured in Alta Artículos.",
       "example": "you correct the weight of the box of 12 from 1.1 to 1.3 g."
@@ -5312,7 +5337,7 @@
       "example": "a position with 27 boxes of 12 pieces looks full of boxes and says “27 · 324 pcs”."
     },
     "relSeAcomoda": {
-      "what": "Choose what goes in this position: the main material or its primary, secondary, tertiary packaging… Each option shows, from above, how many pieces of that size fit in the position (with the best arrangement) and how many pieces (UDM) that is in total. The suggested one holds the most pieces. Presentations, their measures and weight are captured in Unit of Measure by Distribution. Tapping the chosen option again removes it.",
+      "what": "Choose what goes in this position: the main material or its primary, secondary, tertiary packaging… Each option shows, from above, how many pieces of that size fit in the position (with the best arrangement) and how many pieces (UDM) that is in total. The suggested one holds the most pieces. Presentations, their measures and weight are captured in Distribution Presentations. Tapping the chosen option again removes it.",
       "example": "a position of 80 × 60 × 66 cm: the box of 12 holds 27 boxes (324 pieces) and the master box 2 boxes (192 pieces)."
     },
     "colRelSeAcomoda": {
@@ -5328,7 +5353,7 @@
       "example": "27 boxes of 12 pieces = 324 pcs."
     },
     "colRelForma": {
-      "what": "The shape of what is placed: rectangular or cylindrical. It is captured in Unit of Measure by Distribution, in each presentation of the code.",
+      "what": "The shape of what is placed: rectangular or cylindrical. It is captured in Distribution Presentations, in each presentation of the code.",
       "example": "Cylindrical."
     },
     "relUbicar": {
@@ -6211,9 +6236,10 @@
     "layoutCuelgaA": {"what": "The height, measured from the floor, where this ceiling-hung device sits. If you leave it empty it sits against the ceiling. It cannot go above «Ceiling there», which is how tall the building is at that point (the ceiling is not flat).", "example": "a camera hanging at 6.5 m where the ceiling is 8.9 m high."},
     "menuResize": {"what": "Bottom-right corner of the dropdown: drag it to enlarge the dropdown (wider and with a taller list) and read the full descriptions. It always opens at its usual size and can only be made bigger.", "example": "drag it down and to the right to see the full name of a medicine that appears cut off."},
     "udmTipo": {"what": "What this presentation can be used for: choose one, several or all options (main product UOM, original, storage, purchase, packaging or pallet UOM). Only presentations with at least one type are offered when you relate a code to a position; if you check none, that presentation is not offered. By default the main material comes with «main product UOM» and each package with «packaging UOM».", "example": "the tablet with «main product UOM», the box of 12 with «packaging UOM» and «purchase UOM», and the box of 50 with «pallet UOM»."},
+    "udmEnvios": {"what": "Which shipping places (hospitals and other sites outside the DC, from the Shipping Places catalog) this presentation can be shipped to: check one, several or all. For some products only one type of presentation is shipped to a place, so it is chosen on each presentation and not on the code. If you check none, this presentation is not shipped anywhere.", "example": "the box of 12 ships to Central Hospital and North Hospital, but the box of 50 only to Central Hospital."},
     "udmEstiba": {"what": "The stacking data of this presentation when it goes on a pallet: how many each layer holds (TI), how many layers a pallet has (HI) and how many pallets can be stacked (max stacking). Whole numbers; empty or 0 means not captured. The presentation with the «pallet UOM» type provides the base and the data used by Storage Capacity (if the code has none, it uses what it already had).", "example": "the box of 50 with the «pallet UOM» type: 12 per layer, 5 layers per pallet and a maximum stacking of 3."},
     "qrsLimpieza": {"what": "The Cleaning app that is normally done by scanning each asset's QR, but from the computer: choose the site above, find the asset and tap «Open». The same screen the QR opens (your name, before photo, start, after photo, finish) appears in a window over this page, and what you register lands in Operations > Cleaning just as if you had done it with a phone. The photo is taken with the computer's camera.", "example": "open asset R001, type your name, take the before photo and tap «Start»; when you finish, the after photo and «Finish»."},
-    "udmVerDist": {"what": "Shows, view only, the sequence of presentations of this code (the main material, the primary package, the secondary one…) with its unit, measures, weight and how many main units each one equals. It is captured and changed in Operations > Unit of Measure by Distribution.", "example": "see that a tablet of 1 × 1 × 0.4 cm and 50 g has a primary package of a box of 12."},
+    "udmVerDist": {"what": "Shows, view only, the sequence of presentations of this code (the main material, the primary package, the secondary one…) with its unit, measures, weight and how many main units each one equals. It is captured and changed in Operations > Distribution Presentations.", "example": "see that a tablet of 1 × 1 × 0.4 cm and 50 g has a primary package of a box of 12."},
     "qrsTemperaturas": {"what": "The Temperatures app that is normally done by scanning the QR of each refrigerator or sensor, but from the computer: choose the site above, find the equipment and tap «Open». The same screen the QR opens (your name, the temperature and humidity it shows, and the photo of the reading) appears in a window over this page, and what you register lands in Operations > Temperatures just as if you had done it with a phone. The photo is taken with the computer's camera.", "example": "open refrigerator F001, type your name, the temperature of 4 °C and the humidity, take the photo of the reading and save."},
     "qrsPedidoManual": {"what": "The Manual Order QR of the cost center you chose above, but from the computer: tap «Open» and the same screen the QR opens appears in a window over this page (search the item by code, description, unit of measure or category, set the quantity, type who is ordering and send). The order lands in Operations > Manual Order with its number, who ordered it and the time, just as if you had done it with a phone. The site must already have a saved Layout: the QR address comes from there.", "example": "open the center's QR, search «paracetamol», order 20, type your name and send: it shows as PM-0007 in Manual Order."},
     "qrsSeguridad": {"what": "The Safety app that is normally done by scanning the QR of each element (extinguisher, hydrant, emergency door, first-aid kit…), but from the computer: choose the site above, find the element and tap «Open». The same screen the QR opens (your name, whether it is fine or faulty, a note and the photo) appears in a window over this page, and what you register lands in Operations > Safety just as if you had done it with a phone. The photo is taken with the computer's camera.", "example": "open extinguisher E001, type your name, mark «Fine», take the photo and save."},

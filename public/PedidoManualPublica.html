@@ -155,6 +155,12 @@
         .dchip small{ font-weight:400; font-size:11px; color:var(--muted); }
         .dchip[aria-pressed="true"]{ background:var(--accent); border-color:var(--accent); color:var(--surface); }
         .dchip[aria-pressed="true"] small{ color:var(--surface); opacity:.85; }
+        .sendbox{ display:flex; flex-direction:column; gap:10px; }
+        .sendbox[hidden]{ display:none; }
+        .whorow{ display:grid; grid-template-columns:1fr; gap:12px; }
+        main.wide .whorow{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+        select.place{ width:100%; font:500 16px system-ui,sans-serif; padding:11px 14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--ink); }
+        main.compact select.place{ font-size:.85rem; padding:.55rem .8rem; border-radius:.8rem; }
         select.dsel, select.when{ font:600 13px system-ui,sans-serif; border:1px solid var(--line); border-radius:12px; padding:6px 10px; background:var(--surface); color:var(--ink); max-width:100%; }
         select.dsel.on, select.when.diff{ border-color:var(--accent); background:var(--soft); }
         .oline{ display:flex; flex-direction:column; gap:6px; padding:10px 0; border-bottom:1px solid var(--line); }
@@ -275,7 +281,7 @@ const TEXT = {
         searchSignHelp: { before: 'Otra palabra ANTES · rack$cajón', after: 'Otra palabra DESPUÉS · rack@cajón', comma: 'Sirve cualquiera de las dos · rack, estante' },
         typeMore: 'Escribe al menos 2 letras o números.', typeOne: 'Escribe al menos 1 letra o número.', none: 'No se encontró nada con eso.', noRelated: 'Este centro de costos todavía no tiene códigos relacionados (Relación Código): no hay nada que pedir.', errRelated: 'Un artículo ya no está relacionado con este centro de costos: quítalo del pedido.', more: 'Hay más resultados: escribe más para acotar.',
         qtyTitle: 'Cantidad', add: 'Agregar al pedido', cancel: 'Cancelar', yourOrder: 'Tu pedido', items: '{n} artículos', item1: '1 artículo', empty: 'Todavía no agregas nada. Busca un artículo y elige la cantidad.', remove: 'Quitar',
-        yourName: 'Quién pide', namePlaceholder: 'Nombre de quien pide', signedAs: 'Pides como', send: 'Enviar pedido', sending: 'Enviando…', stamp: 'Se guarda en un número de pedido con el nombre de quien pide, la lista de artículos y la hora en que lo envías.',
+        yourName: 'Quién pide', placeLabel: 'Lugar que solicita', placeChoose: 'Elige un lugar', needPlace: 'Elige el lugar que solicita para enviar.', placeAt: 'Lugar que solicita', namePlaceholder: 'Nombre de quien pide', signedAs: 'Pides como', send: 'Enviar pedido', sending: 'Enviando…', stamp: 'Se guarda en un número de pedido con el nombre de quien pide, la lista de artículos y la hora en que lo envías.',
         needName: 'Escribe el nombre de quien pide para enviar.', errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errQty: 'Una cantidad no es válida.', errItems: 'Agrega al menos un artículo.',
         sentTitle: 'Pedido enviado', folio: 'Número de pedido', by: 'Pidió', at: 'Hora', list: 'Artículos del pedido', newOrder: 'Nuevo pedido', viewOnly: 'Este QR solo sirve para consultar.', loginNeeded: 'Este QR pide iniciar sesión para enviar pedidos.',
         login: 'Iniciar sesión', loginHint: 'Inicia sesión en el sistema y vuelve a abrir este QR.', locked: 'Este QR ya no permite enviar pedidos.', tooMany: 'Un pedido lleva hasta 40 artículos.',
@@ -289,7 +295,7 @@ const TEXT = {
         searchSignHelp: { before: 'Another word BEFORE · rack$drawer', after: 'Another word AFTER · rack@drawer', comma: 'Either one matches · rack, shelf' },
         typeMore: 'Type at least 2 letters or numbers.', typeOne: 'Type at least 1 letter or number.', none: 'Nothing was found.', noRelated: 'This cost center has no related codes yet (Code Relation): there is nothing to order.', errRelated: 'An item is no longer related to this cost center: remove it from the order.', more: 'There are more results: type more to narrow them.',
         qtyTitle: 'Quantity', add: 'Add to the order', cancel: 'Cancel', yourOrder: 'Your order', items: '{n} items', item1: '1 item', empty: 'You have not added anything yet. Find an item and choose the quantity.', remove: 'Remove',
-        yourName: 'Who is ordering', namePlaceholder: 'Name of who is ordering', signedAs: 'Ordering as', send: 'Send order', sending: 'Sending…', stamp: 'It is saved under one order number with the name of who is ordering, the list of items and the time you send it.',
+        yourName: 'Who is ordering', placeLabel: 'Requesting place', placeChoose: 'Choose a place', needPlace: 'Choose the requesting place to send.', placeAt: 'Requesting place', namePlaceholder: 'Name of who is ordering', signedAs: 'Ordering as', send: 'Send order', sending: 'Sending…', stamp: 'It is saved under one order number with the name of who is ordering, the list of items and the time you send it.',
         needName: 'Type the name of who is ordering to send.', errGeneric: 'It could not be sent. Check your connection and try again.', errQty: 'A quantity is not valid.', errItems: 'Add at least one item.',
         sentTitle: 'Order sent', folio: 'Order number', by: 'Ordered by', at: 'Time', list: 'Items in the order', newOrder: 'New order', viewOnly: 'This QR is for viewing only.', loginNeeded: 'This QR requires signing in to send orders.',
         login: 'Sign in', loginHint: 'Sign in to the system and open this QR again.', locked: 'This QR no longer allows sending orders.', tooMany: 'An order takes up to 40 items.',
@@ -322,6 +328,8 @@ let query = '';
 let mode = 'contains';          // el «Tipo de Filtro» de las tablas: Inicia con, Contiene o Igual que
 let fields = [];                // en qué se busca; vacío = en todo (código, descripción, UdM y categoría)
 let nameValue = store.get(KEY_NAME);
+const KEY_PLACE = 'sgn_pm_place';   // el último lugar que solicita elegido en este aparato (si todavía existe en el catálogo)
+let placeId = Number(store.get(KEY_PLACE)) || 0;
 let results = [];
 let total = 0;
 let picked = null;
@@ -570,6 +578,8 @@ function drawOrderTable() {
 }
 // Al escribir en una casilla solo se ponen al día los totales, el resumen por día y el título: así no se pierde el cursor.
 function refreshTable() {
+    const sb = $('sendbox');
+    if (sb) sb.hidden = !cart.length; // «Enviar pedido» aparece en cuanto hay algo que enviar, sin redibujar (así no se pierde el cursor al escribir)
     document.querySelectorAll('button.rm[data-clear]').forEach((b) => { const c = entryOf(Number(b.getAttribute('data-clear'))); b.hidden = !(c && c.parts.length); });
     document.querySelectorAll('td.tot').forEach((td) => {
         const c = entryOf(Number(td.getAttribute('data-id')));
@@ -618,8 +628,11 @@ function drawOrder() {
     if (!box) return;
     const body = wide ? drawOrderTable() : drawOrderList(); // con el pedido vacío también se ve la tabla (o las fechas de la lista), con su aviso
     const who = `<div><label for="name">${esc(TEXT.yourName)} <span class="req" aria-hidden="true">*</span></label><input type="text" id="name" maxlength="60" autocomplete="name" required placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(nameValue)}"></div>`;
+    // Lugar que solicita: hospitales y otros sitios fuera del CEDIS del catálogo Lugares de Envío; si no hay ninguno dado de alta, el QR no lo pide
+    const places = info.places || [];
+    const placeField = places.length ? `<div><label for="place">${esc(TEXT.placeLabel)} <span class="req" aria-hidden="true">*</span></label><select id="place" class="place" required><option value="">${esc(TEXT.placeChoose)}</option>${places.map((p) => `<option value="${p.id}"${p.id === placeId ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>` : '';
     const today = wide ? `<span class="muted">${esc(fill(TEXT.todayIs, { d: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(dayDate(todayIso())) }))}</span>` : '';
-    box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${layoutToggle()}</div>${who}${body}${cart.length ? `<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}`;
+    box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${layoutToggle()}</div><div class="whorow">${who}${placeField}</div>${body}<div class="sendbox" id="sendbox"${cart.length ? '' : ' hidden'}><button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div></div>`;
     if (wide) { refreshTable(); if (!catalog.loaded && !catalog.loading) loadCatalog(false); }
     if (pop) { const a = document.querySelector(`[data-filter="${pop.kind}"]`); if (a) { pop.anchor = a; placePop(); } else closePop(); }
 }
@@ -742,6 +755,7 @@ $('view').addEventListener('input', (event) => {
     if (t.id === 'q') { query = t.value; queueSearch(); }
     else if (t.id === 'qty' && picked) picked.qty = t.value;
     else if (t.id === 'name') nameValue = t.value;
+    else if (t.id === 'place') { placeId = Number(t.value) || 0; store.set(KEY_PLACE, String(placeId || '')); }
     else if (t.dataset && t.dataset.item !== undefined) {
         // una casilla de la tabla por día: código y fecha; el código entra al pedido al ponerle una cantidad y sale si se queda sin ninguna
         const id = Number(t.dataset.item);
@@ -785,23 +799,24 @@ async function sendOrder() {
     err.hidden = true;
     const name = nameValue.replace(/\s+/g, ' ').trim();
     if (!name) { fail(TEXT.needName); $('name').focus(); return; }
+    if ((info.places || []).length && !placeId) { fail(TEXT.needPlace); $('place').focus(); return; }
     if (!flatLines().length) { fail(TEXT.errItems); return; }
     const btn = $('send');
     btn.disabled = true;
     btn.textContent = TEXT.sending;
     const items = flatLines();
     try {
-        const res = await fetch(`${API}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, items: items.map((c) => ({ id: c.id, quantity: c.quantity, needBy: c.needBy })) }) });
+        const res = await fetch(`${API}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, ...((info.places || []).length ? { placeId } : {}), items: items.map((c) => ({ id: c.id, quantity: c.quantity, needBy: c.needBy })) }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
             btn.disabled = false; btn.textContent = TEXT.send;
             if (body.code === 'LOCKED') { info.locks.register = false; view(); return; }
             if (body.code === 'LOGIN') { info.locks.signin = true; info.signedIn = false; view(); return; }
-            fail(body.code === 'NAME' ? TEXT.needName : (body.code === 'QTY' ? TEXT.errQty : (body.code === 'ITEMS' ? TEXT.errItems : (body.code === 'TOOMANY' ? TEXT.tooMany : (body.code === 'RELATED' ? TEXT.errRelated : (body.code === 'DATE' ? TEXT.errDate : TEXT.errGeneric))))));
+            fail(body.code === 'NAME' ? TEXT.needName : (body.code === 'PLACE' ? TEXT.needPlace : (body.code === 'QTY' ? TEXT.errQty : (body.code === 'ITEMS' ? TEXT.errItems : (body.code === 'TOOMANY' ? TEXT.tooMany : (body.code === 'RELATED' ? TEXT.errRelated : (body.code === 'DATE' ? TEXT.errDate : TEXT.errGeneric)))))));
             return;
         }
         store.set(KEY_NAME, name);
-        sentInfo = { folio: body.folio, name: body.name, createdAt: body.createdAt, items };
+        sentInfo = { folio: body.folio, name: body.name, place: body.place || '', createdAt: body.createdAt, items };
         cart = [];
         view();
     } catch (e) {
@@ -814,7 +829,7 @@ function viewSent() {
     const when = new Date(sentInfo.createdAt).toLocaleString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const lines = sentInfo.items.map((c) => `<div class="line"><span>${esc(c.description)}<small>${esc([c.code, c.uom, `${TEXT.needBy}: ${whenLabel(c.needBy)}`].filter(Boolean).join(' · '))}</small></span><div class="q"><b>${esc(fmtQty(c.quantity))}</b></div></div>`).join('');
     $('view').innerHTML = `<div class="card done"><div class="tick" aria-hidden="true">✓</div><h1>${esc(TEXT.sentTitle)}</h1><div class="muted">${esc(TEXT.folio)}</div><div class="folio">${esc(sentInfo.folio)}</div>
-        <div>${esc(TEXT.by)}: <b>${esc(sentInfo.name)}</b></div><div>${esc(TEXT.at)}: <b>${esc(when)}</b></div>
+        <div>${esc(TEXT.by)}: <b>${esc(sentInfo.name)}</b></div>${sentInfo.place ? `<div>${esc(TEXT.placeAt)}: <b>${esc(sentInfo.place)}</b></div>` : ''}<div>${esc(TEXT.at)}: <b>${esc(when)}</b></div>
         <div class="items"><h2>${esc(TEXT.list)} · ${esc(sentInfo.items.length === 1 ? TEXT.item1 : TEXT.items.replace('{n}', sentInfo.items.length))}</h2>${lines}</div>
         <button type="button" class="btn" id="again">${esc(TEXT.newOrder)}</button></div>`;
     $('again').addEventListener('click', () => { sentInfo = null; query = ''; results = []; total = 0; picked = null; view(); });
@@ -830,6 +845,7 @@ function viewSent() {
     // el mismo encabezado del Layout: logo (o iniciales), tipo de página, Sitio y empresa
     window.QrBrandHeader.mount($('qr-brand'), { kind: TEXT.title, siteName: info.siteName, companyName: info.companyName, hasLogo: info.hasLogo, companyColor: info.companyColor, logoUrl: `/api/public/layout/${encodeURIComponent(TOKEN)}/logo` });
     if (!nameValue && info.signedIn) nameValue = info.userName || '';
+    if (!(info.places || []).some((p) => p.id === placeId)) placeId = 0; // el lugar que se recordaba ya no está en el catálogo (o está inactivo)
     // pantalla ancha (la computadora, la ventana de QR's): la tabla por día; angosta (el celular): la lista. Al cambiar el ancho se vuelve a dibujar el mismo pedido.
     mq = window.matchMedia('(min-width: 780px)');
     applyWide();

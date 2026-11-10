@@ -479,7 +479,7 @@ function renderForm() {
 
 // ---- «Se acomoda»: qué empaque se pone en la posición (el material principal, el primario, el secundario…) y cuántas piezas caben (public/PackCalc.js) ------------------------------------
 // Los empaques y sus medidas salen de Alta Artículos; la posición (largo × fondo × alto) sale del Layout. Cada opción se ve desde arriba con las piezas de una capa; la sugerida es la que acomoda más piezas.
-// Solo se ofrecen las presentaciones con algún tipo de almacenamiento habilitado en Unidad de Medida por Distribución (all = con las que no, para decir por qué no sale ninguna).
+// Solo se ofrecen las presentaciones con algún tipo de almacenamiento habilitado en Presentaciones de Distribución (all = con las que no, para decir por qué no sale ninguna).
 function packLevelsOf(sku, all) {
     const levels = window.PackCalc && sku ? window.PackCalc.levelsOf({ length: sku.length, width: sku.width, height: sku.height, packaging: sku.packaging }).filter((lv) => lv.l > 0 && lv.w > 0 && lv.h > 0) : [];
     return all ? levels : levels.filter((lv) => window.PackCalc.enabled(lv));

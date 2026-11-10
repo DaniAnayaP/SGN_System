@@ -115,11 +115,11 @@
     }
 
     // Las presentaciones de un artículo, en el orden del árbol (primero el principal): [{ id, level, name, shape, l, w, h, pieces, lay }, …]
-    //   id = cuál presentación es (0 = el material principal; las demás, el id de su renglón en Unidad de Medida por Distribución: con él se elige «Se acomoda»),
+    //   id = cuál presentación es (0 = el material principal; las demás, el id de su renglón en Presentaciones de Distribución: con él se elige «Se acomoda»),
     //   level = su profundidad en el árbol (0 principal, 1 sale del principal, 2 sale de una de nivel 1…), pieces = cuántas unidades principales trae.
     // art = { dims: { length, width, height }, packaging: { main: { shape, lay }, levels: [{ id, parentId, depth, name, shape, l, w, h, pieces, lay }] } }
     // (Un levels sin id ni depth, como el que se guardaba antes, se lee como una cadena: id y profundidad = su lugar en la lista.)
-    // ¿Esta presentación se puede acomodar? Sin tipos capturados (datos de antes) sí; con tipos, solo si tiene al menos uno habilitado (Unidad de Medida por Distribución).
+    // ¿Esta presentación se puede acomodar? Sin tipos capturados (datos de antes) sí; con tipos, solo si tiene al menos uno habilitado (Presentaciones de Distribución).
     const enabled = (lv) => !Array.isArray(lv && lv.types) || lv.types.length > 0;
     function levelsOf(art) {
         const p = (art && art.packaging) || {};

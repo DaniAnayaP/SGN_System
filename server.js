@@ -194,6 +194,8 @@ const {
     deleteSkuDistribution,
     createSkuDistributionUnderNewBrand,
     countSkuDistributionByBrand,
+    countSkuDistributionByShipTo,
+    listSkuItemsWithoutDistribution,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,
@@ -7874,6 +7876,8 @@ app.get('/api/public/pedido-manual/:token', publicLayoutLimiter, (req, res) => {
         locks, signedIn, userName: signedIn ? changedByLabel({ user }) : '', now: new Date().toISOString(),
         // para cuándo: el día de hoy en la zona del cliente y hasta cuántos días adelante se puede pedir (desde mañana)
         today: clientLocalDay(row.clientId), maxDays: MANUAL_ORDER_MAX_DAYS,
+        // «Lugar que solicita»: los lugares de envío activos del catálogo (si no hay ninguno, el QR no lo pide)
+        places: listArticleCategories(row.clientId, 'lugares-envio', isTest).filter((r) => r.status === 'active' && r.name).map((r) => ({ id: r.id, name: r.name })),
         relatedCount: manualItemsFor(row.clientId, isTest, row.costCenterId || 0).length,
     });
 });
@@ -7927,12 +7931,19 @@ app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req
     const typed = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
     const name = typed || (signedIn ? String(changedByLabel({ user }) || '').replace(/\s+/g, ' ').trim().slice(0, 60) : '');
     if (!name) return res.status(400).json({ message: 'Falta el nombre de quien pide.', code: 'NAME' });
+    // Lugar que solicita: si el catálogo Lugares de Envío tiene lugares activos, el pedido tiene que traer uno de ellos
+    const activePlaces = listArticleCategories(row.clientId, 'lugares-envio', isTest).filter((r) => r.status === 'active' && r.name);
+    let place = null;
+    if (activePlaces.length) {
+        place = activePlaces.find((p) => p.id === Number(req.body && req.body.placeId)) || null;
+        if (!place) return res.status(400).json({ message: 'Falta el lugar que solicita.', code: 'PLACE' });
+    }
     const built = manualLinesFrom(req.body && req.body.items, row.clientId, isTest, row.costCenterId || 0);
     if (built.error) return res.status(400).json(built.error);
     const lines = built.lines;
-    const out = createManualOrder({ clientId: row.clientId, costCenterId: row.costCenterId || 0, requesterName: name, requesterUserId: signedIn ? user.sub : null, source: signedIn ? 'user' : 'qr', lines });
+    const out = createManualOrder({ clientId: row.clientId, costCenterId: row.costCenterId || 0, requesterName: name, requesterUserId: signedIn ? user.sub : null, source: signedIn ? 'user' : 'qr', lines, placeId: place ? place.id : 0, placeName: place ? place.name : '' });
     res.set('Cache-Control', 'no-store');
-    res.status(201).json({ folio: manualFolio(out.id), createdAt: sqlUtcIso(out.createdAt), lines: out.lines, name, now: new Date().toISOString() });
+    res.status(201).json({ folio: manualFolio(out.id), createdAt: sqlUtcIso(out.createdAt), lines: out.lines, name, place: place ? place.name : '', now: new Date().toISOString() });
 });
 
 // La pantalla (con usuario): TODOS los pedidos de la empresa, un renglón por artículo, con las columnas de Control Interno por fila.
@@ -9809,10 +9820,15 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, re
         const used = countIncidentsByCriterion(req.user.clientId, existing.id);
         if (used) return res.status(409).json({ message: `Hay ${used === 1 ? 'un reporte' : `${used} reportes`} de Incidentes con este criterio. Márcalo como Inactivo en vez de eliminarlo.` });
     }
-    // Una marca que alguna presentación de Unidad de Medida por Distribución ya usa no se borra (se deja Inactiva): esas presentaciones perderían su marca.
+    // Una marca que alguna presentación de Presentaciones de Distribución ya usa no se borra (se deja Inactiva): esas presentaciones perderían su marca.
     if (req.params.categoryType === 'marcas') {
         const used = countSkuDistributionByBrand(req.user.clientId, existing.id);
-        if (used) return res.status(409).json({ message: `Hay ${used === 1 ? 'un código' : `${used} códigos`} con esta marca en Unidad de Medida por Distribución. Quita la marca de ahí primero o márcala como Inactiva.` });
+        if (used) return res.status(409).json({ message: `Hay ${used === 1 ? 'un código' : `${used} códigos`} con esta marca en Presentaciones de Distribución. Quita la marca de ahí primero o márcala como Inactiva.` });
+    }
+    // Un lugar de envío al que alguna presentación envía no se borra (se deja Inactivo): esas presentaciones perderían el lugar.
+    if (req.params.categoryType === 'lugares-envio') {
+        const used = countSkuDistributionByShipTo(req.user.clientId, existing.id);
+        if (used) return res.status(409).json({ message: `Hay ${used === 1 ? 'una presentación' : `${used} presentaciones`} que se envían a este lugar en Presentaciones de Distribución. Quítalo de ahí primero o márcalo como Inactivo.` });
     }
     // Un almacén con sub almacenes no se borra (se deja Inactivo): los sub almacenes quedarían sin almacén.
     if (req.params.categoryType === 'almacenes'
@@ -9925,7 +9941,7 @@ function codeRelationContextFor(clientId, isTestAccount) {
     };
     let complete = null;
     const isCompleteCenter = (id) => { if (!complete) complete = new Set(listCompleteCostCenterIds(clientId, isTestAccount)); return complete.has(id); };
-    // las presentaciones de distribución de cada código (Unidad de Medida por Distribución), leídas una sola vez
+    // las presentaciones de distribución de cada código (Presentaciones de Distribución), leídas una sola vez
     let packMap = null;
     const packagingOf = (skuItemId) => { if (!packMap) packMap = packagingMapFor(clientId, isTestAccount); return packMap.get(skuItemId) || null; };
     return { costCenters, warehouses, layoutFor, anyLayout, isCompleteCenter, packagingOf };
@@ -10058,12 +10074,12 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     const bad = (message, status = 400) => ({ error: { status, message } });
     const skuRow = state.skuItemId ? getSkuItemById(state.skuItemId, clientId, isTestAccount) : null;
     if (!skuRow) return bad('Elige un código de Alta Artículos.');
-    // «Se acomoda»: la presentación elegida tiene que ser de este código y traer sus medidas (Alta Artículos / Unidad de Medida por Distribución).
+    // «Se acomoda»: la presentación elegida tiene que ser de este código y traer sus medidas (Alta Artículos / Presentaciones de Distribución).
     if (state.packUnitId != null) {
         const lv = PackCalc.levelsOf({ length: skuRow.length, width: skuRow.width, height: skuRow.height, packaging: ctx.packagingOf(skuRow.id) }).find((x) => x.id === state.packUnitId);
         if (!lv || !(lv.l > 0 && lv.w > 0 && lv.h > 0)) return bad('Ese empaque no está capturado en Alta Artículos o le faltan las medidas. Captúralo primero en el código.');
-        // solo se ofrecen (y se aceptan) las presentaciones con algún tipo de almacenamiento habilitado en Unidad de Medida por Distribución; una relación que ya la tenía y no la cambia se respeta
-        if (!PackCalc.enabled(lv) && !(existing && existing.pack_unit_id === state.packUnitId && existing.sku_item_id === state.skuItemId)) return bad('Esa presentación no tiene ningún tipo de almacenamiento habilitado. Habilítalo primero en Unidad de Medida por Distribución.');
+        // solo se ofrecen (y se aceptan) las presentaciones con algún tipo de almacenamiento habilitado en Presentaciones de Distribución; una relación que ya la tenía y no la cambia se respeta
+        if (!PackCalc.enabled(lv) && !(existing && existing.pack_unit_id === state.packUnitId && existing.sku_item_id === state.skuItemId)) return bad('Esa presentación no tiene ningún tipo de almacenamiento habilitado. Habilítalo primero en Presentaciones de Distribución.');
     }
     if (!CODE_RELATION_CLASSES[state.classification || 'activo']) return bad('La clasificación no es una de las del catálogo (Producto Activo, Cuarentena, Aclaración o en Consigna).');
     if (!state.costCenterId || !ctx.costCenters.has(state.costCenterId)) return bad('Elige un centro de costos.');
@@ -10411,15 +10427,15 @@ app.delete('/api/business/code-relations/:id', requireAuth, requireCostCenter, (
     res.status(204).end();
 });
 
-// --- Unidad de Medida por Distribución (Operaciones, C. Distribución) ---------------------------------------------------------------------------------
+// --- Presentaciones de Distribución (Operaciones, C. Distribución) ---------------------------------------------------------------------------------
 // Las presentaciones en que se distribuye cada código, en ÁRBOL: la raíz (nivel 0) es el material principal (sus medidas y su peso son los de Alta Artículos; aquí solo su forma y si se puede acostar) y cada presentación
 // dice de cuál sale (parent_id): de una misma pueden salir varias (la caja con 20 y la caja con 30 de la misma tableta; la caja con 20 va en cajas de 20 cajas y en cajas de 50 cajas). Cada una trae su unidad del catálogo
 // Nuestras Unidad Medida, cuántas de la que la contiene lleva y SUS PROPIAS medidas (cm) y peso (g). «Equivale a» (en unidades principales) sale de multiplicar lo que contiene cada presentación por el camino hasta el principal;
 // las medidas y el peso nunca se calculan. De aquí leen Relación Código («Se acomoda», por el id de la presentación) y el Layout (piezas que caben).
 const UDM_DIST_TABLE_KEY = 'udm-distribucion';
-const UDM_DIST_COLS = { classification: 'colUdmDClasificacion', brandId: 'colUdmDMarca', uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
+const UDM_DIST_COLS = { classification: 'colUdmDClasificacion', brandId: 'colUdmDMarca', uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', shipTo: 'colUdmDEnvios', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
 const UDM_DIST_INT_KEYS = ['unitsPerLayer', 'layersPerPallet', 'maxStack'];
-const UDM_DIST_MAIN_KEYS = ['shape', 'canLay', 'storageTypes', ...UDM_DIST_INT_KEYS]; // lo que se captura también en el material principal
+const UDM_DIST_MAIN_KEYS = ['shape', 'canLay', 'storageTypes', 'shipTo', ...UDM_DIST_INT_KEYS]; // lo que se captura también en el material principal
 const UDM_DIST_MAX_DEPTH = 10; // hasta 10 niveles de profundidad (sin contar el material principal)
 const UDM_DIST_MAX_CHILDREN = 10; // hasta 10 presentaciones que salen de una misma presentación
 const UDM_DIST_MAX_PER_SKU = 100; // tope de seguridad por código
@@ -10435,7 +10451,7 @@ function mapSkuDistribution(row, pendingByRecord, companyName, node) {
         skuItemId: row.sku_item_id,
         sku: padSku(row.sku_number),
         upc: row.sku_upc || '',
-        description: row.sku_custom || row.sku_known || row.sku_description || '',
+        description: row.sku_description || row.sku_known || row.sku_custom || '', // la columna se llama «Descripción única»: sale la descripción única del código (no la personalizada)
         level: row.level,
         levelLabel: isBrand ? 'Marca' : (PACK_ORDINALS[node.plevel] || `Empaque ${node.plevel}`),
         uom: principal ? (row.sku_uom || '') : row.uom,
@@ -10452,12 +10468,22 @@ function mapSkuDistribution(row, pendingByRecord, companyName, node) {
         weightG: principal ? round4((Number(row.sku_weight) || 0) * 1000) : row.weight_g,
         canLay: !!row.can_lay,
         storageTypes: skuDistTypesOf(row),
+        shipTo: String(row.ship_to || '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0), // los lugares de envío (catálogo Lugares de Envío) a los que se envía esta presentación
         unitsPerLayer: row.units_per_layer || 0,
         layersPerPallet: row.layers_per_pallet || 0,
         maxStack: row.max_stack || 0,
         fromArticle: principal, // sus medidas y su peso se capturan en Alta Artículos
         pendingFields: pendingByRecord?.get(row.id) || [],
-        ...getSystemColumnsForRecord({ companyName, area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Unidad de Medida por Distribución', centroCostos: '', createdAt: row.created_at }),
+        ...getSystemColumnsForRecord({ companyName, area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones de Distribución', centroCostos: '', createdAt: row.created_at }),
+    };
+}
+// Un código que todavía no tiene presentaciones se lista igual, con su material principal (unidad, medidas y peso de Alta Artículos) y lo demás de partida: es un renglón SIN GUARDAR (id negativo, virtual = true); al
+// capturarlo se crea el renglón del material principal de verdad (la primera presentación de un código es siempre su material principal).
+function skuDistPlaceholderRow(s) {
+    return {
+        id: -s.id, db_id: '', record_number: 0, sku_item_id: s.id, parent_id: null, level: 0, kind: 'presentacion', classification: '', brand_id: null, uom: '', contains: null, shape: 'rectangular', length: 0, width: 0, height: 0, weight_g: 0, can_lay: 0,
+        storage_types: null, ship_to: null, units_per_layer: 0, layers_per_pallet: 0, max_stack: 0, created_at: s.created_at, sku_number: s.record_number, sku_upc: s.upc, sku_description: s.unique_description, sku_known: s.known_description,
+        sku_custom: s.custom_description, sku_uom: s.main_uom, sku_length: s.length, sku_width: s.width, sku_height: s.height, sku_weight: s.article_weight, brand_name: null,
     };
 }
 // Los renglones (de uno o de varios códigos) en el orden del árbol de cada código, con su «Equivale a» y lo que hace falta para dibujar la ramificación.
@@ -10485,6 +10511,12 @@ function normalizeSkuDistInput(body) {
         if (!picked.every((k) => SKU_DIST_STORAGE_TYPES.includes(k))) return { error: 'Tipo de almacenamiento: elige opciones de la lista.' };
         out.storageTypes = SKU_DIST_STORAGE_TYPES.filter((k) => picked.includes(k)).join(',');
     }
+    // Envíos a: los lugares del catálogo Lugares de Envío (ids), de menor a mayor y sin repetir; vacío = a ninguno (que existan y estén activos se revisa en validateSkuDistState)
+    if (Object.prototype.hasOwnProperty.call(body, 'shipTo')) {
+        const picked = (Array.isArray(body.shipTo) ? body.shipTo : String(body.shipTo || '').split(',')).map((k) => String(k).trim()).filter(Boolean).map(Number);
+        if (!picked.every((n) => Number.isInteger(n) && n > 0)) return { error: 'Envíos a: elige lugares de la lista.' };
+        out.shipTo = [...new Set(picked)].sort((a, z) => a - z).join(',');
+    }
     // Datos de estiba: enteros de 0 a 1,000,000 (vacío o 0 = sin capturar)
     for (const key of UDM_DIST_INT_KEYS) {
         if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
@@ -10505,6 +10537,12 @@ function normalizeSkuDistInput(body) {
 function validateSkuDistState(req, state, existing) {
     const bad = (message, status = 400) => ({ error: { status, message } });
     if (!['rectangular', 'cilindrica'].includes(state.shape)) return bad('Elige la forma (rectangular o cilíndrica).');
+    // Envíos a: cada lugar tiene que estar en el catálogo Lugares de Envío y activo (uno que ya traía la presentación y quedó inactivo se respeta)
+    if (state.shipTo) {
+        const kept = new Set(String((existing && existing.ship_to) || '').split(','));
+        const active = new Set(listArticleCategories(req.user.clientId, 'lugares-envio', req.user.isTestAccount).filter((r) => r.status === 'active').map((r) => String(r.id)));
+        if (!String(state.shipTo).split(',').every((k) => active.has(k) || kept.has(k))) return bad('Envíos a: uno de los lugares no está en el catálogo Lugares de Envío (o está inactivo). Elige de la lista.');
+    }
     if (state.level === 0) return { ok: true }; // el principal solo lleva forma y se-puede-acostar; lo demás sale de Alta Artículos
     if (!state.uom) return bad('Elige la unidad de medida del catálogo.');
     const active = listActiveArticleCategoryNames(req.user.clientId, 'udm', req.user.isTestAccount);
@@ -10516,9 +10554,10 @@ function validateSkuDistState(req, state, existing) {
     return { ok: true };
 }
 const skuDistLabel = (row) => `#${row.id}`;
-function skuDistSanitizers() {
+function skuDistSanitizers(req) {
+    const places = new Map(req ? listArticleCategories(req.user.clientId, 'lugares-envio', req.user.isTestAccount).map((r) => [String(r.id), r.name]) : []);
     const typeNames = { principal: 'Por UDM producto principal', original: 'Por UDM original', almacenamiento: 'Por UDM de almacenamiento', compra: 'Por UDM de compra', empaque: 'Por UDM de empaque', pallet: 'Por UDM de pallets' };
-    return { canLay: (v) => (v ? 'Sí' : 'No'), shape: (v) => (v === 'cilindrica' ? 'Cilíndrica' : 'Rectangular'), storageTypes: (v) => (v === null || v === undefined || v === '' ? 'Ninguno' : String(v).split(',').map((k) => typeNames[k] || k).join(', ')) };
+    return { canLay: (v) => (v ? 'Sí' : 'No'), shape: (v) => (v === 'cilindrica' ? 'Cilíndrica' : 'Rectangular'), storageTypes: (v) => (v === null || v === undefined || v === '' ? 'Ninguno' : String(v).split(',').map((k) => typeNames[k] || k).join(', ')), shipTo: (v) => (v === null || v === undefined || v === '' ? 'Ninguno' : String(v).split(',').map((k) => places.get(k) || `#${k}`).join(', ')) };
 }
 
 app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
@@ -10527,14 +10566,21 @@ app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
     const client = getClientById(clientId);
     const pendingByRecord = getPendingColumnsByRecord(clientId, UDM_DIST_TABLE_KEY);
     res.set('Cache-Control', 'no-store');
-    // skuItemId: solo las presentaciones de ese código (la ventana «Ver UDM de distribución» de Alta Artículos)
+    // skuItemId: solo las presentaciones de ese código (la ventana «Ver presentaciones de distribución» de Alta Artículos)
     const onlySku = Number(req.query.skuItemId);
-    const source = Number.isInteger(onlySku) && onlySku > 0 ? listSkuDistributionBySku(clientId, isTestAccount, onlySku) : listSkuDistribution(clientId, isTestAccount);
+    let source = Number.isInteger(onlySku) && onlySku > 0 ? listSkuDistributionBySku(clientId, isTestAccount, onlySku) : listSkuDistribution(clientId, isTestAccount);
+    // la pantalla lista TODOS los códigos de Alta Artículos desde el inicio: los que todavía no tienen presentaciones salen con su material principal (renglón sin guardar); la ventana de un solo código (Alta) no los lleva
+    if (!(Number.isInteger(onlySku) && onlySku > 0)) {
+        const bare = listSkuItemsWithoutDistribution(clientId, isTestAccount).map(skuDistPlaceholderRow);
+        if (bare.length) source = source.concat(bare).sort((a, z) => a.sku_number - z.sku_number);
+    }
     res.json({
-        rows: mapSkuDistributionRows(source, pendingByRecord, client?.company_name),
+        rows: mapSkuDistributionRows(source, pendingByRecord, client?.company_name).map((r) => (r.id < 0 ? { ...r, virtual: true, registroUnico: '' } : r)),
         uoms: listActiveArticleCategoryNames(clientId, 'udm', isTestAccount),
         // las marcas activas del catálogo Nuestras Marcas (para elegir la de una presentación)
         brands: listArticleCategories(clientId, 'marcas', isTestAccount).filter((r) => r.status === 'active' && r.name).map((r) => ({ id: r.id, name: r.name })),
+        // los lugares de envío del catálogo (todos, para poder nombrar uno que ya quedó inactivo; los activos son los que se pueden elegir)
+        places: listArticleCategories(clientId, 'lugares-envio', isTestAccount).filter((r) => r.name).map((r) => ({ id: r.id, name: r.name, active: r.status === 'active' })),
         maxDepth: UDM_DIST_MAX_DEPTH,
         maxChildren: UDM_DIST_MAX_CHILDREN,
     });
@@ -10625,7 +10671,7 @@ app.post('/api/business/sku-distribution', requireAuth, requireCostCenter, (req,
         logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: made.brandRow.id, recordLabel: skuDistLabel(made.brandRow), action: 'update', fieldKey: SKU_DIST_PATCHABLE_FIELDS.brandId.fieldKey, oldValue: '', newValue: newBrand.name, changedBy: changedByLabel(req) });
     } else row = createSkuDistribution({ clientId, isTestData: isTestAccount, values: { skuItemId: sku.id, ...state } });
     logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: row.id, recordLabel: skuDistLabel(row), action: 'create', changedBy: changedByLabel(req) });
-    const san = skuDistSanitizers();
+    const san = skuDistSanitizers(req);
     Object.entries(SKU_DIST_PATCHABLE_FIELDS).forEach(([key, { fieldKey }]) => {
         const v = state[key];
         if (v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v) || (UDM_DIST_INT_KEYS.includes(key) && !v) || (level === 0 && !UDM_DIST_MAIN_KEYS.includes(key))) return;
@@ -10657,7 +10703,7 @@ app.patch('/api/business/sku-distribution/:id', requireAuth, requireCostCenter, 
     if (state.shape === 'cilindrica') { state.width = state.length; if ('length' in patch || 'shape' in patch) patch.width = state.length; }
     const check = validateSkuDistState(req, state, existing);
     if (check.error) return res.status(check.error.status).json({ message: check.error.message });
-    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, SKU_DIST_PATCHABLE_FIELDS, UDM_DIST_TABLE_KEY, skuDistLabel(existing), skuDistSanitizers(), { baseline, overrideConflicts });
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, patch, SKU_DIST_PATCHABLE_FIELDS, UDM_DIST_TABLE_KEY, skuDistLabel(existing), skuDistSanitizers(req), { baseline, overrideConflicts });
     updateSkuDistribution(existing.id, clientId, appliedPatch, isTestAccount);
     const client = getClientById(clientId);
     const mapped = mapSkuDistributionRows(listSkuDistributionBySku(clientId, isTestAccount, existing.sku_item_id), null, client?.company_name).find((r) => r.id === existing.id);
@@ -12075,7 +12121,7 @@ const PENDING_CHANGE_APPLIERS = {
     'incidentes': (recordId, clientId, patch, extra) => updateIncident(recordId, clientId, patch, extra),
     'temperaturas': (recordId, clientId, patch, extra) => updateTemperatureRecord(recordId, clientId, patch, extra),
     'seguridad': (recordId, clientId, patch, extra) => updateSafetyCheck(recordId, clientId, patch, extra),
-    // Cambiar un dato de una presentación de Unidad de Medida por Distribución cuando lo autoriza otra persona.
+    // Cambiar un dato de una presentación de Presentaciones de Distribución cuando lo autoriza otra persona.
     'udm-distribucion': (recordId, clientId, patch) => updateSkuDistribution(recordId, clientId, patch),
 };
 const PENDING_CHANGE_SANITIZERS = {
