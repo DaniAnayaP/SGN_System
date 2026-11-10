@@ -270,6 +270,7 @@
     "opCentroDistQrPedidoManual": "Pedido manual",
     "opCentroDistQrSeguridad": "Seguridad",
     "opCentroDistQrIncidentes": "Incidentes",
+    "opCentroDistQrDondeEsta": "Dónde está",
     "opCentroDistTemperaturas": "Temperaturas",
     "opCentroDistSeguridad": "Seguridad",
     "adminMapaCalor": "Mapa de calor",
@@ -2188,6 +2189,7 @@
     "qrsVentanaSeg": "Seguridad · {code}",
     "qrsCuantosElementos": "{n} elementos",
     "qrsVentanaInc": "Incidentes · {code}",
+    "qrsVentanaDonde": "Dónde está · {code}",
     "qrsVentanaPm": "Pedido manual · {code}",
     "qrsCuantosCentros": "{n} centro",
     "colArticuloUdmDist": "UDM de distribución",
@@ -6208,6 +6210,7 @@
     "qrsPedidoManual": {"what": "El QR de Pedido Manual del centro de costos que elegiste arriba, pero desde la computadora: toca «Abrir» y se muestra, en una ventana sobre esta página, la misma pantalla que abre el QR (buscar el artículo por código, descripción, unidad de medida o categoría, poner la cantidad, escribir quién pide y enviar). El pedido llega a Operaciones > Pedido Manual con su número, quién lo pidió y la hora, igual que si lo hicieras con el celular. Necesita que el sitio ya tenga un Layout guardado: de ahí sale la dirección del QR.", "example": "abrir el QR del centro, buscar «paracetamol», pedir 20, escribir tu nombre y enviar: aparece como PM-0007 en Pedido Manual."},
     "qrsSeguridad": {"what": "La app de Seguridad que normalmente se hace escaneando el QR de cada elemento (extintor, hidrante, puerta de emergencia, botiquín…), pero desde la computadora: eliges el sitio arriba, buscas el elemento y tocas «Abrir». Se abre la misma pantalla que abre el QR (tu nombre, si está bien o con falla, una nota y la foto) en una ventana sobre esta página, y lo que registres queda en Operaciones > Seguridad igual que si lo hicieras con el celular. La foto se toma con la cámara de la computadora.", "example": "abrir el extintor E001, escribir tu nombre, marcar «Bien», tomar la foto y guardar."},
     "qrsIncidentes": {"what": "El QR de Incidentes del centro de costos que elegiste arriba, pero desde la computadora: toca «Abrir» y se muestra, en una ventana sobre esta página, la misma pantalla que abre el QR (quién reporta, la zona donde pasó, la categoría y el criterio, la situación contada con tus palabras y las evidencias, mínimo una foto). El reporte llega a Operaciones > Incidentes con su hora, igual que si lo hicieras con el celular. Las evidencias son fotos que se eligen como archivos de imagen de la computadora (no se toman con su cámara). Necesita que el sitio ya tenga un Layout guardado: de ahí sale la dirección del QR.", "example": "abrir el QR del centro, elegir la zona 1, el criterio «Pickeo cruzado», contar qué pasó, elegir la foto de la evidencia y enviar."},
+    "qrsDondeEsta": {"what": "La página que abre el QR del Layout del sitio, pero desde la computadora: toca «Abrir» y se muestra, en una ventana sobre esta página, el croquis del sitio con su buscador (se busca un código y dice dónde está: zona, anaquel, nivel, espacio…) y sus zonas con sus categorías. Es solo para consultar: no registra nada. Necesita que el sitio ya tenga un Layout guardado: de ahí sale la dirección del QR.", "example": "abrir el QR del centro, buscar el código de un medicamento y ver en qué zona y anaquel está."},
     "layoutSec_objetos": {
       "what": "Las personas y los montacargas dibujados en el plano, a escala, como una foto fija de cómo está la nave (no sigue a nadie en vivo). Cada uno tiene su lugar (X e Y son su centro, en metros), hacia dónde mira (giro en grados) y su equipo o persona, elegido del catálogo «Lo que transita»: de ahí salen su dibujo y sus medidas, y si cambian en el catálogo cambian aquí. Se ven en el croquis y en el 3D mientras este paso esté encendido.",
       "example": "un montacargas en el pasillo central, a 12 m en X y 9.5 m en Y, mirando hacia la derecha (giro 0), y una persona junto a él."

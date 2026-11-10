@@ -7831,6 +7831,15 @@ function seedQrTemperaturasScreenGrants() {
         seedLeavesForScreenHolders(key, { ...path, submenuPrefix: `${path.submenuPrefix}/${icon}` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas'], "the QR's Temperaturas screen");
     });
 }
+// Operaciones > QR's > Dónde está: la reciben, una sola vez, quienes ya pueden usar el QR del Layout (Ver y Operar o Modificar en la columna Códigos QR del Layout; con solo Ver no se puede usar el QR).
+const QR_DONDE_ESTA_SCREEN_SEEDS = [['seed-qrs-donde-esta-screen-v1', 'ver-y-operar'], ['seed-qrs-donde-esta-screen-editar-v1', 'editar']];
+function seedQrDondeEstaScreenGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    QR_DONDE_ESTA_SCREEN_SEEDS.forEach(([key, level]) => {
+        seedLeavesForScreenHolders(key, { ...path, submenuPrefix: `${path.submenuPrefix}/colLayoutQr/${level}` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-donde-esta'], "the QR's Dónde está screen");
+    });
+}
 // Operaciones > QR's > Incidentes: la reciben, una sola vez, quienes ya tienen el botón QR de la pantalla Incidentes (colIncQr).
 const QR_INCIDENTES_SCREEN_SEED_KEY = 'seed-qrs-incidentes-screen-v1';
 function seedQrIncidentesScreenGrants() {
@@ -12509,6 +12518,7 @@ seedQrPedidoManualScreenGrants();
 seedMarcasScreenGrants();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
+seedQrDondeEstaScreenGrants();
 seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();

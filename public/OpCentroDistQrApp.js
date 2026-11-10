@@ -32,6 +32,11 @@
             first: 'main.qrsCentro', windowTitle: 'main.qrsVentanaPm', count: 'main.qrsCuantosCentros',
             label: (s) => `<b>${esc(s.code)}</b>${s.siteName ? ` · ${esc(s.siteName)}` : ''}`,
         },
+        dondeEsta: {
+            page: 'cat-operaciones-centro-dist-qr-donde-esta', api: '/api/business/qr-apps/donde-esta', help: 'qrsDondeEsta', simple: true,
+            first: 'main.qrsCentro', windowTitle: 'main.qrsVentanaDonde', count: 'main.qrsCuantosCentros',
+            label: (s) => `<b>${esc(s.code)}</b>${s.siteName ? ` · ${esc(s.siteName)}` : ''}`,
+        },
         incidentes: {
             page: 'cat-operaciones-centro-dist-qr-incidentes', api: '/api/business/qr-apps/incidentes', help: 'qrsIncidentes', simple: true,
             first: 'main.qrsCentro', windowTitle: 'main.qrsVentanaInc', count: 'main.qrsCuantosCentros',
