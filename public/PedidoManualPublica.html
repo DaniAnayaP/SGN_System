@@ -395,7 +395,9 @@ function view() {
     closePop();
     if (sentInfo) { viewSent(); return; }
     const locks = info.locks || {};
-    const header = `<div class="card"><h1>${esc(TEXT.title)}</h1>${info.costCenter ? `<span class="chip">${esc((info.costCenter.code ? `${info.costCenter.code} · ` : '') + info.costCenter.name)}</span>` : ''}</div>`;
+    // Dentro de la pantalla de Operaciones > QR's (la computadora) la ruta y el encabezado de arriba ya dicen qué pantalla es y de qué centro: la tarjeta con el título y el centro sobra. En el celular se queda.
+    const embedded = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+    const header = embedded ? '' : `<div class="card"><h1>${esc(TEXT.title)}</h1>${info.costCenter ? `<span class="chip">${esc((info.costCenter.code ? `${info.costCenter.code} · ` : '') + info.costCenter.name)}</span>` : ''}</div>`;
     if (!locks.register) { $('view').innerHTML = `${header}<div class="card"><div class="msg">${esc(TEXT.viewOnly)}</div></div>`; return; }
     if (locks.signin && !info.signedIn) { $('view').innerHTML = `${header}<div class="card"><div class="msg">${esc(TEXT.loginNeeded)}</div><a class="btn alt" style="text-align:center;text-decoration:none" href="/">${esc(TEXT.login)}</a><div class="muted" style="text-align:center">${esc(TEXT.loginHint)}</div></div>`; return; }
     // Lista (celular): el buscador es una tarjeta aparte y el artículo elegido se afina abajo. Tabla: el buscador va DENTRO de la celda «Artículo» de la tabla y al elegir un artículo se agrega su renglón para escribir cuánto quieres cada día.
