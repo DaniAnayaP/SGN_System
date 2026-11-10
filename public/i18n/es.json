@@ -2490,6 +2490,7 @@
     "layoutType_space_cabinet": "Gabeta",
     "layoutType_space_pallet": "Tarima en piso",
     "layoutType_space_cold": "Frío",
+    "layoutType_space_cart": "Rack móvil",
     "layoutType_door_dock": "Andén",
     "layoutType_door_staff": "Acceso de personal",
     "layoutType_door_emergency": "Salida de emergencia",
@@ -5037,7 +5038,7 @@
       "example": "una huella de 3 × 1.1 m puesta al borde de la Zona 6 de modo que 40 cm quedan afuera dice «Zona 6 · no cabe»; la mueves hacia adentro y se pone normal. Si pones la Zona 3 encima de la huella H005 de la Zona 6, al Guardar dice «Z006.H005 → Z007.H001» y tú decides."
     },
     "layoutSpaceLetter": {
-      "what": "La letra con la que empieza el código del activo y su Localizador. Sale del Tipo de activo (catálogo Nuestros Activos Fijos): Rack (R), Estante (A), Gabinete (G), Tarima en piso (T) o Refrigerador (F). El sistema pone el número, consecutivo por zona y por letra, así que el código (R001, R002…) no se escribe ni se repite. Si cambias el tipo de un activo ya guardado, toma la letra nueva con el siguiente número libre.",
+      "what": "La letra con la que empieza el código del activo y su Localizador. Sale del Tipo de activo (catálogo Nuestros Activos Fijos): Rack (R), Rack móvil (M), Estante (A), Gabinete (G), Tarima en piso (T) o Refrigerador (F). El sistema pone el número, consecutivo por zona y por letra, así que el código (R001, R002…) no se escribe ni se repite. Si cambias el tipo de un activo ya guardado, toma la letra nueva con el siguiente número libre.",
       "example": "eliges el tipo Gabinete en el primer activo de la Zona 6: el sistema le pone G001; el siguiente Estante que agregues en esa zona será A001."
     },
     "layoutActivoNombre": {
@@ -5274,7 +5275,7 @@
     },
     "assetTypeLetter": {
       "what": "La letra con la que empiezan los códigos de los activos de este tipo y su Localizador (R001, A001…). Sale del tipo de activo: ya no se elige en cada activo. Sin letra, el activo conserva la que ya tenía.",
-      "example": "Rack lleva la R, Estante la A, Gabinete la G, Refrigerador la F y Tarima en piso la T."
+      "example": "Rack lleva la R, Rack móvil la M, Estante la A, Gabinete la G, Refrigerador la F y Tarima en piso la T."
     },
     "incQr": {
       "what": "Muestra el QR de Incidentes del centro de costos que tienes marcado arriba. Pégalo en la nave: quien lo escanea escribe su nombre, elige la zona donde pasó, la categoría y el criterio, cuenta la situación con sus palabras y sube sus evidencias (fotos, mínimo una y sin máximo); el reporte llega aquí con su número y la hora. Desde la misma ventana se descarga la imagen y se cierran o abren los candados del QR.",

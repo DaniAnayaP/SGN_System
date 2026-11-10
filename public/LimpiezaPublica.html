@@ -135,7 +135,7 @@ function stopCamera() { if (stream) { stream.getTracks().forEach((t) => t.stop()
 function stopTick() { if (tick) { clearInterval(tick); tick = null; } }
 function show(html) { stopTick(); $('view').innerHTML = html; }
 const placeHtml = () => `<span class="chip">${esc(info.space.code)} · ${esc(typeName(info.space.type))}</span>${info.space.locator ? `<div class="loc">${esc(info.space.locator)}${info.space.zoneName ? ` · ${esc(info.space.zoneName)}` : ''}</div>` : ''}`;
-const TYPE_NAMES = { es: { rack: 'Anaquel', rackpal: 'Rack', cabinet: 'Gabeta', pallet: 'Tarima en piso', cold: 'Frío' }, en: { rack: 'Rack (shelf)', rackpal: 'Pallet rack', cabinet: 'Cabinet', pallet: 'Floor pallet', cold: 'Cold' } }[LANG];
+const TYPE_NAMES = { es: { rack: 'Anaquel', rackpal: 'Rack', cabinet: 'Gabeta', pallet: 'Tarima en piso', cold: 'Frío', cart: 'Rack móvil' }, en: { rack: 'Rack (shelf)', rackpal: 'Pallet rack', cabinet: 'Cabinet', pallet: 'Floor pallet', cold: 'Cold', cart: 'Mobile rack' } }[LANG];
 const typeName = (type) => TYPE_NAMES[type] || type;
 const errBox = () => (note ? `<div class="err" role="alert">${esc(note)}</div>` : '');
 

@@ -570,7 +570,7 @@ function buildExtraCells(record) {
     }
     if (CATEGORY_TYPE === 'activos-fijos') {
         // La letra del Localizador del tipo (la que lleva el código de sus activos: R001, A001…): es el tipo de espacio del Layout que le toca. Sin letra, su activo conserva la que ya tenía.
-        const letters = { rackpal: 'R', rack: 'A', cabinet: 'G', pallet: 'T', cold: 'F' };
+        const letters = { rackpal: 'R', rack: 'A', cabinet: 'G', pallet: 'T', cold: 'F', cart: 'M' };
         return [buildOptionCell(record, 'colActivoFijoLetra', 'kind', 'assetTypeLetter',
             Object.keys(letters).map((k) => ({ value: k, label: `${letters[k]} · ${Dashboard.t(`main.layoutType_space_${k}`)}` })), record.kind || '', '',
             (v) => ({ kind: v }))];

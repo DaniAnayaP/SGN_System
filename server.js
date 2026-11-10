@@ -9445,11 +9445,11 @@ function prepareClassificationPatch(req, categoryType, existing, patch) {
 // Clasificación de Activos: su campo propio es la métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
 const ASSET_CLASS_METRIC_LABELS = { m2: 'm² (activo para operar)', m3: 'm³ (activo para almacenar)' };
 // Tipo de activo: su campo propio es la LETRA del Localizador (kind = el tipo de espacio del Layout que le toca; vacío = sin letra todavía).
-const ASSET_TYPE_LETTER_LABELS = { rack: 'A · Anaquel', rackpal: 'R · Rack', cabinet: 'G · Gabeta', pallet: 'T · Tarima en piso', cold: 'F · Frío' };
+const ASSET_TYPE_LETTER_LABELS = { rack: 'A · Anaquel', rackpal: 'R · Rack', cabinet: 'G · Gabeta', pallet: 'T · Tarima en piso', cold: 'F · Frío', cart: 'M · Rack móvil' };
 function prepareFixedAssetPatch(categoryType, patch) {
     if ((categoryType !== 'activos-clasificacion' && categoryType !== 'activos-fijos') || !Object.prototype.hasOwnProperty.call(patch, 'kind')) return { patch, sanitizers: {} };
     if (categoryType === 'activos-fijos') {
-        if (patch.kind !== '' && !ASSET_TYPE_LETTER_LABELS[patch.kind]) return { error: { status: 400, message: 'La letra debe ser A, R, G, T o F (o quedar vacía).' } };
+        if (patch.kind !== '' && !ASSET_TYPE_LETTER_LABELS[patch.kind]) return { error: { status: 400, message: 'La letra debe ser A, R, G, T, F o M (o quedar vacía).' } };
         return { patch, sanitizers: { kind: (v) => ASSET_TYPE_LETTER_LABELS[v] || '' } };
     }
     if (!['', 'm2', 'm3'].includes(patch.kind)) return { error: { status: 400, message: 'La métrica debe ser m² o m³.' } };

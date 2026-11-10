@@ -97,7 +97,7 @@
     // hay dentro de él (Layout > Posiciones). Z = el número con que termina el nombre de la zona; H = el del código de la huella (R-05 -> H005); la letra del activo dice qué tipo de espacio del Layout es
     // (A anaquel, R rack, G gabeta, T tarima en piso, F frío) y su número es el del código del activo (A-05 -> A005). La forma de antes, con 7 piezas (…C001.F001.P001: columna, fila y profundidad), también se entiende: la columna es el
     // espacio y la celda fila × profundidad es la posición que le tocó (legacy: true).
-    const ASSET_TYPES = { A: 'rack', R: 'rackpal', G: 'cabinet', T: 'pallet', F: 'cold' };
+    const ASSET_TYPES = { A: 'rack', R: 'rackpal', G: 'cabinet', T: 'pallet', F: 'cold', M: 'cart' };
     const LETTER_OF_TYPE = Object.fromEntries(Object.entries(ASSET_TYPES).map(([letter, type]) => [type, letter]));
     const pad3 = (n) => String(n).padStart(3, '0');
     function parseLocator(raw) {

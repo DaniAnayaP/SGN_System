@@ -2490,6 +2490,7 @@
     "layoutType_space_cabinet": "Cabinet",
     "layoutType_space_pallet": "Floor pallet",
     "layoutType_space_cold": "Cold",
+    "layoutType_space_cart": "Mobile rack",
     "layoutType_door_dock": "Dock",
     "layoutType_door_staff": "Staff access",
     "layoutType_door_emergency": "Emergency exit",
@@ -5038,7 +5039,7 @@
       "example": "a 3 × 1.1 m footprint placed at the edge of Zone 6 so that 40 cm stick out says \"Zone 6 · does not fit\"; you move it inside and it turns normal. If you put Zone 3 on top of footprint H005 of Zone 6, on Save it says \"Z006.H005 → Z007.H001\" and you decide."
     },
     "layoutSpaceLetter": {
-      "what": "The letter the asset's code and its Locator start with. It comes from the Asset type (Our Fixed Assets catalog): Rack (R), Shelf (A), Cabinet (G), Floor pallet (T) or Refrigerator (F). The system adds the number, consecutive per zone and per letter, so the code (R001, R002…) is never typed or repeated. If you change the type of an asset that is already saved, it takes the new letter with the next free number.",
+      "what": "The letter the asset's code and its Locator start with. It comes from the Asset type (Our Fixed Assets catalog): Rack (R), Mobile rack (M), Shelf (A), Cabinet (G), Floor pallet (T) or Refrigerator (F). The system adds the number, consecutive per zone and per letter, so the code (R001, R002…) is never typed or repeated. If you change the type of an asset that is already saved, it takes the new letter with the next free number.",
       "example": "you pick the Cabinet type on the first asset of Zone 6: the system names it G001; the next Shelf you add in that zone will be A001."
     },
     "layoutActivoNombre": {
@@ -5275,7 +5276,7 @@
     },
     "assetTypeLetter": {
       "what": "The letter the codes of this type's assets and their Locator start with (R001, A001…). It comes from the asset type: it is no longer chosen on each asset. With no letter, the asset keeps the one it already had.",
-      "example": "Rack uses R, Shelf uses A, Cabinet uses G, Refrigerator uses F and Floor pallet uses T."
+      "example": "Rack uses R, Mobile rack uses M, Shelf uses A, Cabinet uses G, Refrigerator uses F and Floor pallet uses T."
     },
     "incQr": {
       "what": "Shows the Incidents QR of the cost center you have selected above. Stick it up in the facility: whoever scans it types their name, picks the zone where it happened, the category and the criterion, describes the situation in their own words and uploads their evidence (photos, at least one and no maximum); the report arrives here with its number and the time. From the same window you download the image and open or close the QR locks.",

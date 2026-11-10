@@ -1426,6 +1426,43 @@
                 }
                 edgeBox(cx, fl + H / 2, cz, s.l, H, s.d, cabEdges); // el contorno del gabinete
             };
+            // Rack móvil: un carrito de repisas de alambre cromado con ruedas (más ligero que el rack): cuatro postes delgados, una repisa de alambre por nivel (marco, hilos a lo largo y a lo ancho), la de arriba con borde de canasta,
+            // un asa en un extremo del lado largo y cuatro ruedas con su base. Se arma dentro de su caja (largo × fondo × alto); el eje largo es el del carrito.
+            const CART = { chrome: 0xc3cad6, rim: 0xaab3c3, handle: 0x9aa4b4, wheel: 0x474c57, hub: 0xb0b6c2 };
+            const addCart3d = (s, cx, cz, fl, lv, own, mute) => {
+                const LCc = root.LayoutCalc;
+                const alongX = s.l >= s.d; // el eje largo del carrito
+                const L = alongX ? s.l : s.d; const Wd = alongX ? s.d : s.l; const H = s.h;
+                const put = (u, y, v, a, h, b, c) => cabParts.push({ x: cx + (alongX ? u : v), y: fl + y, z: cz + (alongX ? v : u), sx: alongX ? a : b, sy: h, sz: alongX ? b : a, c: mute(c) }); // u a lo largo, v a lo ancho
+                const wheelH = Math.min(0.16, H * 0.14);
+                const px = Math.max(L / 2 - 0.03, 0.02); const pz = Math.max(Wd / 2 - 0.03, 0.02);
+                [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([iu, iv]) => {
+                    put(iu * px, wheelH + (H - wheelH) / 2, iv * pz, 0.026, H - wheelH, 0.026, CART.chrome); // poste
+                    put(iu * px, wheelH * 0.46, iv * pz, 0.13, wheelH * 0.9, 0.035, CART.wheel); // rueda
+                    put(iu * px, wheelH * 0.46, iv * pz, 0.04, 0.04, 0.045, CART.hub); // su eje
+                    put(iu * px, wheelH * 0.96, iv * pz, 0.06, 0.02, 0.06, CART.chrome); // la base giratoria
+                });
+                const rimC = own !== null ? own : CART.rim;
+                for (let k = 1; k <= lv; k++) {
+                    let y;
+                    if (LCc && LCc.levelMeasures) y = Math.max(LCc.levelMeasures(s, k).floorH, wheelH + 0.03);
+                    else y = wheelH + 0.03 + ((k - 1) * (H - wheelH - 0.06)) / Math.max(lv, 1);
+                    if (y > H - 0.02) y = H - 0.02;
+                    const top = k === lv;
+                    put(0, y, -pz, L - 0.04, 0.014, 0.014, rimC); put(0, y, pz, L - 0.04, 0.014, 0.014, rimC); // el marco de la repisa
+                    put(-px, y, 0, 0.014, 0.014, Wd - 0.04, rimC); put(px, y, 0, 0.014, 0.014, Wd - 0.04, rimC);
+                    for (let j = 1; j <= 3; j++) put(0, y, -pz + (j / 4) * 2 * pz, L - 0.04, 0.008, 0.008, CART.chrome); // los hilos a lo largo
+                    for (let i = 1; i <= 5; i++) put(-px + (i / 6) * 2 * px, y, 0, 0.008, 0.008, Wd - 0.04, CART.chrome); // y a lo ancho
+                    if (top) { // la repisa de arriba lleva un borde de canasta
+                        const bh = Math.min(0.07, H * 0.06);
+                        put(0, y + bh, -pz, L - 0.04, 0.012, 0.012, rimC); put(0, y + bh, pz, L - 0.04, 0.012, 0.012, rimC);
+                        put(-px, y + bh, 0, 0.012, 0.012, Wd - 0.04, rimC); put(px, y + bh, 0, 0.012, 0.012, Wd - 0.04, rimC);
+                        [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([iu, iv]) => put(iu * px, y + bh / 2, iv * pz, 0.012, bh, 0.012, rimC));
+                    }
+                }
+                put(-L / 2 + 0.015, H - 0.03, 0, 0.026, 0.026, Math.max(Wd - 0.04, 0.02), CART.handle); // el asa: una barra en el extremo corto
+                [-1, 1].forEach((iv) => put(-L / 2 + 0.015, H - 0.12, iv * pz, 0.026, 0.18, 0.026, CART.handle));
+            };
             (layout.spaces || []).forEach((s) => {
                 if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || (hiddenAssets.has(s.id) && !dimHidden)) return;
                 const cx = PX(s.x + s.l / 2); const cz = PZ(s.y + s.d / 2);
@@ -1467,8 +1504,8 @@
                     const yBot = fl + Math.max(mAll.floorH, 0.03);
                     const yTop = yBot + (mAll.beam > 0 ? mAll.beam : 0.06) + Math.max(mAll.h, 0.1);
                     const solid = s.type === 'pallet' || s.type === 'cabinet' || s.type === 'cold';
-                    const postC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
-                    const deckZ = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
+                    const postC = mute(s.type === 'rackpal' ? 0x3f6fb5 : (s.type === 'cart' ? 0xc3cad6 : 0x5d6b86));
+                    const deckZ = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : (s.type === 'cart' ? 0xd3d9e3 : 0x93a0ba)));
                     const blockC = mute(own !== null ? own : (s.type === 'pallet' ? WOOD : (s.type === 'cold' ? 0x8cc7e6 : 0xdfe3ea)));
                     const wC = blen / cols;
                     const gx = Math.min(0.02, wC * 0.1); const gz = 0.02;
@@ -1528,6 +1565,8 @@
                     if (!dimS) for (let k = 0; k < lv; k++) edgeBox(cx, fl + 0.14 + k * loadH + loadH / 2, cz, s.l - 0.04, loadH - 0.04, s.d - 0.04);
                 } else if (s.type === 'cabinet') {
                     addCabinet3d(s, cx, cz, fl, lv, own, mute);
+                } else if (s.type === 'cart') {
+                    addCart3d(s, cx, cz, fl, lv, own, mute);
                 } else if (s.type === 'cold') {
                     blk.push({ x: cx, y: s.h / 2 + fl, z: cz, sx: s.l, sy: s.h, sz: s.d, c: mute(own !== null ? own : 0x8cc7e6) });
                 } else {

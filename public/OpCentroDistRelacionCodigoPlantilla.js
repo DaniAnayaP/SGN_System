@@ -59,7 +59,7 @@
     const EXAMPLE = { sku: '195201', locator: 'Z001.H001.A001.N002.E003.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos', zone: 'Zona 1', footprint: 'R-01', rack: 'R-01', level: '2', slot: '3', position: '1', classification: 'Producto Activo' };
     // la fila de ejemplo de la plantilla usa el Localizador (las columnas Zona a Espacio son la otra forma de decir lo mismo y no se llenan junto con él)
     const EXAMPLE_ROW = { sku: '195201', locator: 'Z001.H001.A001.N002.E003.P001', classification: 'Producto Activo', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos' };
-    const LETTER = { rack: 'A', rackpal: 'R', cabinet: 'G', pallet: 'T', cold: 'F' }; // el mismo mapa de RelTemplate.ASSET_TYPES al revés: tipo de espacio del Layout -> letra del Localizador
+    const LETTER = { rack: 'A', rackpal: 'R', cabinet: 'G', pallet: 'T', cold: 'F', cart: 'M' }; // el mismo mapa de RelTemplate.ASSET_TYPES al revés: tipo de espacio del Layout -> letra del Localizador
     const pad3 = (n) => String(n).padStart(3, '0');
     const zoneNo = (name) => { const m = String(name || '').match(/(\d+)\s*$/); return m ? Number(m[1]) : null; };
     const spaceNo = (code) => { const m = String(code || '').match(/(\d+)\s*$/); return m ? Number(m[1]) : null; };

@@ -12148,10 +12148,10 @@ function seedTipoCodigoValuesOnce() {
 
 // Activos Fijos (el TIPO de activo): el catálogo arranca con la lista de Daniel (rack, gabinete, refrigerador, estante, escritorio, mesa); el cliente agrega los suyos desde su pantalla. Se siembra
 // una vez para cada cliente que ya existe y al crear uno nuevo. (La primera siembra, v1, solo puso Rack y Escritorio y con un «Uso» que ya no existe; la v2 completa la lista y lo limpia.)
-const ACTIVOS_FIJOS_DEFAULTS = ['Rack', 'Gabinete', 'Refrigerador', 'Estante', 'Tarima en piso', 'Escritorio', 'Mesa'];
+const ACTIVOS_FIJOS_DEFAULTS = ['Rack', 'Rack móvil', 'Gabinete', 'Refrigerador', 'Estante', 'Tarima en piso', 'Escritorio', 'Mesa'];
 // La LETRA del Localizador sale del tipo de activo: el tipo de espacio del Layout que le toca (rackpal = R · Rack, rack = A · Anaquel, cabinet = G · Gabeta, pallet = T · Tarima en piso, cold = F · Frío). Se guarda en el campo «kind» del
 // catálogo. Escritorio y Mesa todavía no traen letra (su activo conserva la que ya tenía).
-const ACTIVOS_FIJOS_LETRAS = { rack: 'rackpal', estante: 'rack', gabinete: 'cabinet', refrigerador: 'cold', tarima: 'pallet', 'tarima en piso': 'pallet' };
+const ACTIVOS_FIJOS_LETRAS = { rack: 'rackpal', 'rack móvil': 'cart', 'rack movil': 'cart', estante: 'rack', gabinete: 'cabinet', refrigerador: 'cold', tarima: 'pallet', 'tarima en piso': 'pallet' };
 const activoFijoKindOf = (name) => ACTIVOS_FIJOS_LETRAS[String(name || '').trim().toLowerCase()] || '';
 const ACTIVOS_FIJOS_SEED_KEY = 'seed-activos-fijos-values-v1';
 const ACTIVOS_FIJOS_TIPOS_SEED_KEY = 'seed-activos-fijos-tipos-v2';
@@ -12203,6 +12203,23 @@ function seedActivosFijosLetrasOnce() {
         db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_FIJOS_LETRAS_SEED_KEY);
     })();
     console.log(`[db] Activos Fijos: ${set} types got their locator letter and ${added} «Tarima en piso» types were added (one-time).`);
+}
+// v4: «Rack móvil» (carrito de repisas con ruedas, letra M): a cada cliente que ya tiene el catálogo y todavía no trae un tipo con ese nombre se le agrega. No toca nombres ni estatus de lo que ya había.
+const ACTIVOS_FIJOS_RACK_MOVIL_SEED_KEY = 'seed-activos-fijos-rack-movil-v4';
+function seedActivosFijosRackMovilOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_RACK_MOVIL_SEED_KEY)) return;
+    let added = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => {
+            const rows = db.prepare("SELECT name FROM article_categories WHERE client_id = ? AND category_type = 'activos-fijos'").all(c.id);
+            if (!rows.length || rows.some((r) => /m[oó]vil/i.test(String(r.name || '')))) return;
+            const row = createArticleCategory({ clientId: c.id, categoryType: 'activos-fijos', isTestData: false });
+            db.prepare("UPDATE article_categories SET name = 'Rack móvil', kind = 'cart', status = 'active' WHERE id = ?").run(row.id);
+            added += 1;
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_FIJOS_RACK_MOVIL_SEED_KEY);
+    })();
+    console.log(`[db] Activos Fijos: ${added} «Rack móvil» types were added (one-time).`);
 }
 // La fila y la profundidad de cada relación pasan a ser la POSICIÓN que les tocó (el número que el Layout les da a las celdas de antes: (fila − 1) × profundidades + profundidad). Solo las relaciones cuya celda estaba completa (con fila y profundidad,
 // o en un hueco de una sola fila y profundidad con alguna de las dos dicha); las que no, siguen «A medias» como estaban. row_no y depth se conservan sin tocar (ya no se usan).
@@ -12356,6 +12373,7 @@ seedTipoCodigoValuesOnce();
 seedActivosFijosValuesOnce();
 seedActivosFijosTiposOnce();
 seedActivosFijosLetrasOnce();
+seedActivosFijosRackMovilOnce();
 seedActivosClasificacionValuesOnce();
 seedActivosClasificacionNombresOnce();
 migrateCodeRelationPositionsOnce();
