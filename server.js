@@ -192,6 +192,8 @@ const {
     createSkuDistribution,
     updateSkuDistribution,
     deleteSkuDistribution,
+    createSkuDistributionUnderNewBrand,
+    countSkuDistributionByBrand,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,
@@ -6128,19 +6130,21 @@ function prepareSkuClassificationPatch(req, existing, patch) {
 // Presentaciones de distribución del código (tabla sku_distribution_units; ver public/PackCalc.js): el material principal y sus empaques en cadena.
 const PackCalc = require('./public/PackCalc.js');
 const PACK_ORDINALS = ['Material principal', 'Empaque primario', 'Empaque secundario', 'Empaque terciario', 'Empaque cuaternario', 'Empaque quinto', 'Empaque sexto', 'Empaque séptimo', 'Empaque octavo', 'Empaque noveno', 'Empaque décimo'];
-const packLevelLabel = (level, lv) => `${PACK_ORDINALS[level] || `Empaque ${level}`}${lv && lv.name ? ` · ${lv.name}` : ''}`;
+const packLevelLabel = (level, lv) => `${PACK_ORDINALS[level] || `Empaque ${level}`}${lv && lv.brand ? ` · ${lv.brand}` : ''}${lv && lv.name ? ` · ${lv.name}` : ''}`;
 // De los renglones de un código (de menor a mayor nivel) arma lo que lee PackCalc.levelsOf: { main: { shape, lay, name, weightG }, levels: [{ name, shape, l, w, h, pieces, lay, weightG }] }.
 // pieces = la equivalencia en unidades principales (cuántas tabletas trae): contiene × la equivalencia del nivel anterior; las medidas y el peso NO se calculan, cada nivel trae los suyos.
 // Los tipos de almacenamiento de una presentación: NULL (sin elegir) = el de siempre según su nivel; '' = ninguno a propósito.
 function skuDistTypesOf(row) {
     if (!row) return [];
+    if (row.kind === 'marca') return []; // el renglón de una marca solo agrupa: no se acomoda
     if (row.storage_types === null || row.storage_types === undefined) return [row.level === 0 ? 'principal' : 'empaque'];
     return SKU_DIST_STORAGE_TYPES.filter((k) => String(row.storage_types).split(',').includes(k));
 }
 // El nombre de una presentación: su unidad, cuántas trae y de qué unidad (la de la presentación de la que sale): «Caja con 20 Tbta», «Caja con 20 Caja». El material principal se llama como su unidad.
 const skuDistName = (row, parent) => {
     if (row.level === 0) return row.sku_uom || '';
-    const unit = parent ? (parent.level === 0 ? (row.sku_uom || '') : (parent.uom || '')) : '';
+    if (row.kind === 'marca') return row.brand_name || '';
+    const unit = parent ? ((parent.level === 0 || parent.kind === 'marca') ? (row.sku_uom || '') : (parent.uom || '')) : '';
     return `${row.uom || ''}${row.contains ? ` con ${row.contains}${unit ? ` ${unit}` : ''}` : ''}`.trim();
 };
 // Los renglones de UN código en el orden del árbol (cada presentación antes de las que salen de ella; hermanas en el orden en que se capturaron) con lo que se calcula por el camino: «equivale a» (cuántas unidades
@@ -6154,19 +6158,24 @@ function skuDistTree(rows) {
     const out = [];
     const nameOf = new Map();
     const seen = new Set();
-    const walk = (row, parent, parentEq, parentPath, lines, last) => {
+    // plevel = la profundidad entre las PRESENTACIONES (0 el principal y las marcas, 1 las que salen de ellos…): con ella se rotula «Empaque primario»; la marca no cuenta como nivel.
+    // brand = la marca de la rama ({ id, classification, name, brandId }) o null si la presentación no es de una marca.
+    const walk = (row, parent, parentEq, parentPath, lines, last, parentPlevel, parentBrand) => {
         if (seen.has(row.id)) return;
         seen.add(row.id);
-        const equivalent = row.level === 0 ? 1 : parentEq * Math.max(1, Number(row.contains) || 1);
+        const isBrand = row.kind === 'marca';
+        const equivalent = row.level === 0 || isBrand ? (row.level === 0 ? 1 : parentEq) : parentEq * Math.max(1, Number(row.contains) || 1);
         const name = skuDistName(row, parent);
         nameOf.set(row.id, name);
-        const path = [...parentPath, name || PACK_ORDINALS[row.level] || ''];
+        const plevel = row.level === 0 || isBrand ? 0 : parentPlevel + 1;
+        const brand = isBrand ? { id: row.id, classification: row.classification || '', name: row.brand_name || '', brandId: row.brand_id || null } : parentBrand;
+        const path = [...parentPath, name || PACK_ORDINALS[plevel] || ''];
         const list = kids.get(row.id) || [];
-        out.push({ row, parent, parentName: parent ? (nameOf.get(parent.id) || '') : '', equivalent, name, path, lines, last, childCount: list.length });
+        out.push({ row, parent, parentName: parent ? (nameOf.get(parent.id) || '') : '', equivalent, name, path, lines, last, childCount: list.length, plevel, brand, isBrand });
         const childLines = row.level === 0 ? [] : [...lines, !last];
-        list.forEach((child, i) => walk(child, row, equivalent, path, childLines, i === list.length - 1));
+        list.forEach((child, i) => walk(child, row, equivalent, path, childLines, i === list.length - 1, plevel, brand));
     };
-    rows.filter((r) => !r.parent_id || !byId.has(r.parent_id)).sort((a, z) => a.level - z.level || a.id - z.id).forEach((r) => walk(r, null, 1, [], [], true));
+    rows.filter((r) => !r.parent_id || !byId.has(r.parent_id)).sort((a, z) => a.level - z.level || a.id - z.id).forEach((r) => walk(r, null, 1, [], [], true, 0, null));
     return out;
 }
 // Lo que lee PackCalc.levelsOf: { main, levels } con una entrada por presentación (en el orden del árbol); cada una trae su id (con él se elige «Se acomoda»), su profundidad y las piezas (unidades principales) que equivale.
@@ -6176,8 +6185,8 @@ function packagingFromDistribution(rows) {
     const nodes = skuDistTree(rows);
     const r0 = (nodes.find((n) => n.row.level === 0) || {}).row;
     const main = { shape: r0 && r0.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', lay: !!(r0 && r0.can_lay), types: skuDistTypesOf(r0), name: first.sku_uom || '', weightG: Math.round((Number(first.sku_weight) || 0) * 1000 * 10000) / 10000 };
-    const levels = nodes.filter((n) => n.row.level >= 1).map(({ row: r, name, equivalent }) => ({
-        id: r.id, parentId: r.parent_id || null, depth: r.level, name, shape: r.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: r.length, w: r.shape === 'cilindrica' ? r.length : r.width, h: r.height, pieces: equivalent,
+    const levels = nodes.filter((n) => n.row.level >= 1 && !n.isBrand).map(({ row: r, name, equivalent, plevel, brand }) => ({
+        id: r.id, parentId: r.parent_id || null, depth: plevel, brand: brand ? brand.name : '', classification: brand ? brand.classification : '', name, shape: r.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: r.length, w: r.shape === 'cilindrica' ? r.length : r.width, h: r.height, pieces: equivalent,
         lay: !!r.can_lay, weightG: r.weight_g, uom: r.uom || '', contains: r.contains, types: skuDistTypesOf(r),
     }));
     return { main, levels };
@@ -9697,6 +9706,11 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, re
         const used = countIncidentsByCriterion(req.user.clientId, existing.id);
         if (used) return res.status(409).json({ message: `Hay ${used === 1 ? 'un reporte' : `${used} reportes`} de Incidentes con este criterio. Márcalo como Inactivo en vez de eliminarlo.` });
     }
+    // Una marca que alguna presentación de Unidad de Medida por Distribución ya usa no se borra (se deja Inactiva): esas presentaciones perderían su marca.
+    if (req.params.categoryType === 'marcas') {
+        const used = countSkuDistributionByBrand(req.user.clientId, existing.id);
+        if (used) return res.status(409).json({ message: `Hay ${used === 1 ? 'un código' : `${used} códigos`} con esta marca en Unidad de Medida por Distribución. Quita la marca de ahí primero o márcala como Inactiva.` });
+    }
     // Un almacén con sub almacenes no se borra (se deja Inactivo): los sub almacenes quedarían sin almacén.
     if (req.params.categoryType === 'almacenes'
         && listArticleCategories(req.user.clientId, 'sub-almacenes', req.user.isTestAccount).some((r) => r.parent_id === existing.id)) {
@@ -9835,7 +9849,7 @@ function codeRelationPack(row, layout, withCells, ctx) {
     if (!lv) return out;
     out.packLevel = lv.level;
     out.packLabel = packLevelLabel(lv.level, lv);
-    out.packName = lv.name || '';
+    out.packName = [lv.brand, lv.name].filter(Boolean).join(' · ');
     out.packShape = lv.shape;
     out.packPieces = lv.pieces;
     const nums = row.space_id && row.level && row.slot ? (layout.positions.get(`${row.space_id}|${row.level}|${row.slot}`) || []) : [];
@@ -9909,7 +9923,8 @@ function codeRelationSanitizers(ctx, req) {
             if (v == null) return '';
             if (Number(v) === 0) return PACK_ORDINALS[0];
             const d = getSkuDistributionById(Number(v), clientId, isTestAccount);
-            return d ? `${PACK_ORDINALS[d.level] || `Empaque ${d.level}`}${d.uom ? ` · ${d.uom}${d.contains ? ` con ${d.contains}` : ''}` : ''}` : String(v);
+            const node = d ? skuDistTree(listSkuDistributionBySku(clientId, isTestAccount, d.sku_item_id)).find((n) => n.row.id === d.id) : null;
+            return node ? packLevelLabel(node.plevel, { brand: node.brand ? node.brand.name : '', name: node.name }) : String(v);
         },
     };
 }
@@ -10299,7 +10314,7 @@ app.delete('/api/business/code-relations/:id', requireAuth, requireCostCenter, (
 // Nuestras Unidad Medida, cuántas de la que la contiene lleva y SUS PROPIAS medidas (cm) y peso (g). «Equivale a» (en unidades principales) sale de multiplicar lo que contiene cada presentación por el camino hasta el principal;
 // las medidas y el peso nunca se calculan. De aquí leen Relación Código («Se acomoda», por el id de la presentación) y el Layout (piezas que caben).
 const UDM_DIST_TABLE_KEY = 'udm-distribucion';
-const UDM_DIST_COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
+const UDM_DIST_COLS = { classification: 'colUdmDClasificacion', brandId: 'colUdmDMarca', uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
 const UDM_DIST_INT_KEYS = ['unitsPerLayer', 'layersPerPallet', 'maxStack'];
 const UDM_DIST_MAIN_KEYS = ['shape', 'canLay', 'storageTypes', ...UDM_DIST_INT_KEYS]; // lo que se captura también en el material principal
 const UDM_DIST_MAX_DEPTH = 10; // hasta 10 niveles de profundidad (sin contar el material principal)
@@ -10308,6 +10323,7 @@ const UDM_DIST_MAX_PER_SKU = 100; // tope de seguridad por código
 const round4 = (v) => Math.round(v * 10000) / 10000;
 function mapSkuDistribution(row, pendingByRecord, companyName, node) {
     const principal = row.level === 0;
+    const isBrand = row.kind === 'marca';
     const cyl = row.shape === 'cilindrica';
     const length = principal ? (row.sku_length || 0) : row.length;
     return {
@@ -10318,12 +10334,14 @@ function mapSkuDistribution(row, pendingByRecord, companyName, node) {
         upc: row.sku_upc || '',
         description: row.sku_custom || row.sku_known || row.sku_description || '',
         level: row.level,
-        levelLabel: PACK_ORDINALS[row.level] || `Empaque ${row.level}`,
+        levelLabel: isBrand ? 'Marca' : (PACK_ORDINALS[node.plevel] || `Empaque ${node.plevel}`),
         uom: principal ? (row.sku_uom || '') : row.uom,
         contains: principal ? null : row.contains,
         equivalent: node.equivalent,
         // el árbol: de cuál sale, cómo se llama, su camino desde el principal y lo que hace falta para dibujarlo en una columna
         parentId: row.parent_id || null, parentName: node.parentName, name: node.name, path: node.path, depth: row.level, treeLines: node.lines, treeLast: node.last, childCount: node.childCount,
+        // la marca: un renglón sin medidas ni peso que agrupa (isBrand); sus presentaciones heredan su clasificación y su marca. packLevel = el nivel entre las presentaciones (para «Empaque primario»…)
+        kind: isBrand ? 'marca' : 'presentacion', isBrand, packLevel: node.plevel, classification: node.brand ? node.brand.classification : '', brandId: node.brand ? node.brand.brandId : null, brand: node.brand ? node.brand.name : '',
         shape: cyl ? 'cilindrica' : 'rectangular',
         length,
         width: cyl ? length : (principal ? (row.sku_width || 0) : row.width),
@@ -10353,6 +10371,8 @@ function normalizeSkuDistInput(body) {
     const num = (v) => (v === '' || v == null ? null : Number(v));
     if (Object.prototype.hasOwnProperty.call(body, 'skuItemId')) { const n = Number(body.skuItemId); if (!Number.isInteger(n) || n < 1) return { error: 'Elige un código de Alta Artículos.' }; out.skuItemId = n; }
     if (Object.prototype.hasOwnProperty.call(body, 'parentId')) { const n = body.parentId === '' || body.parentId == null ? null : Number(body.parentId); if (n !== null && !(Number.isInteger(n) && n > 0)) return { error: 'Elige de cuál presentación sale.' }; out.parentId = n; }
+    if (Object.prototype.hasOwnProperty.call(body, 'classification')) { const c = String(body.classification || ''); if (c && !['patente', 'generico'].includes(c)) return { error: 'La clasificación es Patente o Genérico.' }; out.classification = c; }
+    if (Object.prototype.hasOwnProperty.call(body, 'brandId')) { const n = body.brandId === '' || body.brandId == null ? null : Number(body.brandId); if (n !== null && !(Number.isInteger(n) && n > 0)) return { error: 'Elige la marca del catálogo.' }; out.brandId = n; }
     if (Object.prototype.hasOwnProperty.call(body, 'uom')) { if (body.uom != null && (typeof body.uom !== 'string' || body.uom.length > 60)) return { error: 'La unidad de medida no es válida.' }; out.uom = (body.uom || '').trim(); }
     if (Object.prototype.hasOwnProperty.call(body, 'shape')) out.shape = body.shape;
     if (Object.prototype.hasOwnProperty.call(body, 'canLay')) out.canLay = !!body.canLay;
@@ -10410,6 +10430,8 @@ app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
     res.json({
         rows: mapSkuDistributionRows(source, pendingByRecord, client?.company_name),
         uoms: listActiveArticleCategoryNames(clientId, 'udm', isTestAccount),
+        // las marcas activas del catálogo Nuestras Marcas (para elegir la de una presentación)
+        brands: listArticleCategories(clientId, 'marcas', isTestAccount).filter((r) => r.status === 'active' && r.name).map((r) => ({ id: r.id, name: r.name })),
         maxDepth: UDM_DIST_MAX_DEPTH,
         maxChildren: UDM_DIST_MAX_CHILDREN,
     });
@@ -10426,30 +10448,79 @@ app.post('/api/business/sku-distribution', requireAuth, requireCostCenter, (req,
     if (!sku) return res.status(400).json({ message: 'Elige un código de Alta Artículos.' });
     const rows = listSkuDistributionBySku(clientId, isTestAccount, sku.id);
     if (rows.length >= UDM_DIST_MAX_PER_SKU) return res.status(400).json({ message: `Un código admite hasta ${UDM_DIST_MAX_PER_SKU} presentaciones.` });
-    // el primer renglón de un código es siempre el material principal; las demás salen de una que ya existe (por defecto, del material principal)
+    // el primer renglón de un código es siempre el material principal; las demás salen de una que ya existe (por defecto, del material principal) o, si traen clasificación y marca, de esa marca
+    const treeNodes = skuDistTree(rows);
+    const plevelOf = (row) => ((treeNodes.find((n) => n.row.id === row.id) || {}).plevel || 0);
+    const wantsBrand = !!norm.values.classification;
+    if (wantsBrand !== (norm.values.brandId != null)) return res.status(400).json({ message: 'Elige la clasificación y la marca juntas (o ninguna de las dos).' });
+    if (!rows.length && wantsBrand) return res.status(400).json({ message: 'La primera presentación de un código es su material principal: ahí no va marca.' });
     let parent = null;
     let level = 0;
+    let plevel = 0; // profundidad entre las presentaciones (la marca no cuenta como nivel)
+    let newBrand = null; // { classification, brandId, name }: la marca todavía no está en este código, se crea junto con la presentación
     if (rows.length) {
-        parent = norm.values.parentId ? rows.find((r) => r.id === norm.values.parentId) : rows.find((r) => r.level === 0);
-        if (!parent) return res.status(400).json({ message: 'Elige de cuál presentación de este código sale la nueva.' });
-        level = parent.level + 1;
-        if (level > UDM_DIST_MAX_DEPTH) return res.status(400).json({ message: `Una presentación admite hasta ${UDM_DIST_MAX_DEPTH} niveles.` });
-        if (rows.filter((r) => r.parent_id === parent.id).length >= UDM_DIST_MAX_CHILDREN) return res.status(400).json({ message: `De una misma presentación pueden salir hasta ${UDM_DIST_MAX_CHILDREN}.` });
+        const main = rows.find((r) => r.level === 0);
+        const brandNodes = rows.filter((r) => r.kind === 'marca');
+        if (wantsBrand) {
+            const { classification, brandId } = norm.values;
+            const brandNode = brandNodes.find((r) => r.brand_id === brandId) || null;
+            if (brandNode) {
+                if (brandNode.classification !== classification) return res.status(400).json({ message: `${brandNode.brand_name} ya está en este código como ${brandNode.classification === 'patente' ? 'Patente' : 'Genérico'}.` });
+                parent = norm.values.parentId ? rows.find((r) => r.id === norm.values.parentId) : brandNode;
+                const inBrand = (r) => { for (let cur = r, guard = 0; cur && guard < 50; guard += 1) { if (cur.id === brandNode.id) return true; cur = cur.parent_id ? rows.find((x) => x.id === cur.parent_id) : null; } return false; };
+                if (!parent || !inBrand(parent)) return res.status(400).json({ message: `Elige una presentación de la marca ${brandNode.brand_name} (o que salga directo de la marca).` });
+                level = parent.level + 1;
+                plevel = plevelOf(parent) + 1;
+            } else {
+                const cat = getArticleCategoryById(brandId, clientId, isTestAccount);
+                if (!cat || cat.category_type !== 'marcas') return res.status(400).json({ message: 'La marca no está en el catálogo Nuestras Marcas.' });
+                if (cat.status !== 'active') return res.status(400).json({ message: 'Esa marca está inactiva. Elige una activa.' });
+                if (rows.some((r) => r.kind !== 'marca' && r.parent_id === main.id)) return res.status(400).json({ message: 'Este código ya tiene presentaciones sin marca: quítalas para usar marcas.' });
+                if (classification === 'patente') {
+                    const pat = brandNodes.find((r) => r.classification === 'patente');
+                    if (pat) return res.status(400).json({ message: `Este código ya tiene una patente (${pat.brand_name}). De una patente solo puede haber una marca.` });
+                }
+                if (brandNodes.length >= UDM_DIST_MAX_CHILDREN) return res.status(400).json({ message: `Un código admite hasta ${UDM_DIST_MAX_CHILDREN} marcas.` });
+                if (norm.values.parentId) return res.status(400).json({ message: 'La marca es nueva en este código: la presentación sale directo de ella.' });
+                newBrand = { classification, brandId, name: cat.name };
+                level = main.level + 2; // principal > marca > presentación
+                plevel = 1;
+            }
+        } else {
+            parent = norm.values.parentId ? rows.find((r) => r.id === norm.values.parentId) : main;
+            if (!parent) return res.status(400).json({ message: 'Elige de cuál presentación de este código sale la nueva.' });
+            if (parent.level === 0 && brandNodes.length) return res.status(400).json({ message: 'Este código usa marcas: elige la clasificación y la marca de la presentación.' });
+            level = parent.level + 1;
+            plevel = plevelOf(parent) + 1;
+        }
+        if (plevel > UDM_DIST_MAX_DEPTH) return res.status(400).json({ message: `Una presentación admite hasta ${UDM_DIST_MAX_DEPTH} niveles.` });
+        if (parent && rows.filter((r) => r.parent_id === parent.id).length >= UDM_DIST_MAX_CHILDREN) return res.status(400).json({ message: `De una misma presentación pueden salir hasta ${UDM_DIST_MAX_CHILDREN}.` });
     }
     const state = { uom: '', contains: null, shape: 'rectangular', length: 0, width: 0, height: 0, weightG: 0, canLay: false, ...norm.values, level, parentId: parent ? parent.id : null };
+    const brandFields = { classification: norm.values.classification, brandId: norm.values.brandId };
+    delete state.classification; // son del renglón de la marca, no de la presentación
+    delete state.brandId;
     if (level === 0) Object.assign(state, { uom: '', contains: null, length: 0, width: 0, height: 0, weightG: 0 });
     if (state.shape === 'cilindrica') state.width = state.length;
     if (grants) {
         const missing = Object.entries(UDM_DIST_COLS)
             .filter(([key]) => (level === 0 ? UDM_DIST_MAIN_KEYS.includes(key) : true))
-            .filter(([key]) => { const v = state[key]; return !(v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v) || (UDM_DIST_INT_KEYS.includes(key) && !v)); })
+            .filter(([key]) => { const v = key in brandFields ? brandFields[key] : state[key]; return !(v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v) || (UDM_DIST_INT_KEYS.includes(key) && !v)); })
             .filter(([, colKey]) => !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, UDM_DIST_TABLE_KEY, colKey)))
             .map(([key]) => SKU_DIST_PATCHABLE_FIELDS[key].fieldKey);
         if (missing.length) return res.status(403).json({ message: 'No tienes permiso para llenar uno de los datos de esta presentación.', fields: missing });
     }
     const check = validateSkuDistState(req, state, null);
     if (check.error) return res.status(check.error.status).json({ message: check.error.message });
-    const row = createSkuDistribution({ clientId, isTestData: isTestAccount, values: { skuItemId: sku.id, ...state } });
+    let row;
+    if (newBrand) {
+        // la marca nueva y su primera presentación se crean juntas (o ninguna)
+        const made = createSkuDistributionUnderNewBrand({ clientId, isTestData: isTestAccount, brand: { skuItemId: sku.id, parentId: rows.find((r) => r.level === 0).id, level: 1, classification: newBrand.classification, brandId: newBrand.brandId }, values: { skuItemId: sku.id, ...state } });
+        row = made.row;
+        logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: made.brandRow.id, recordLabel: skuDistLabel(made.brandRow), action: 'create', changedBy: changedByLabel(req) });
+        logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: made.brandRow.id, recordLabel: skuDistLabel(made.brandRow), action: 'update', fieldKey: SKU_DIST_PATCHABLE_FIELDS.classification.fieldKey, oldValue: '', newValue: newBrand.classification === 'patente' ? 'Patente' : 'Genérico', changedBy: changedByLabel(req) });
+        logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: made.brandRow.id, recordLabel: skuDistLabel(made.brandRow), action: 'update', fieldKey: SKU_DIST_PATCHABLE_FIELDS.brandId.fieldKey, oldValue: '', newValue: newBrand.name, changedBy: changedByLabel(req) });
+    } else row = createSkuDistribution({ clientId, isTestData: isTestAccount, values: { skuItemId: sku.id, ...state } });
     logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: row.id, recordLabel: skuDistLabel(row), action: 'create', changedBy: changedByLabel(req) });
     const san = skuDistSanitizers();
     Object.entries(SKU_DIST_PATCHABLE_FIELDS).forEach(([key, { fieldKey }]) => {
@@ -10468,9 +10539,12 @@ app.patch('/api/business/sku-distribution/:id', requireAuth, requireCostCenter, 
     const { clientId, isTestAccount } = req.user;
     const existing = getSkuDistributionById(req.params.id, clientId, isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Presentation not found.' });
+    if (existing.kind === 'marca') return res.status(400).json({ message: 'La marca no se cambia: quita sus presentaciones y la marca, y vuelve a capturarla.' });
     const { baseline, overrideConflicts, ...raw } = req.body || {};
     delete raw.skuItemId; // el código de una presentación no cambia
     delete raw.parentId; // de cuál sale tampoco: se quita y se vuelve a capturar
+    delete raw.classification; // ni su clasificación ni su marca (son las de la marca de la que sale)
+    delete raw.brandId;
     const norm = normalizeSkuDistInput(raw);
     if (norm.error) return res.status(400).json({ message: norm.error });
     const principal = existing.level === 0;

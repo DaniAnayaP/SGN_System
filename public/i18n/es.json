@@ -3535,6 +3535,8 @@
     "colUdmDUpc": "UPC",
     "colUdmDDescripcion": "Descripción única",
     "colUdmDRamificacion": "Ramificación",
+    "colUdmDClasificacion": "Clasificación",
+    "colUdmDMarca": "Marca",
     "colUdmDNivel": "Presentación",
     "colUdmDUnidad": "Unidad de medida",
     "colUdmDContiene": "Contiene",
@@ -3657,6 +3659,15 @@
     "udmMainMeasures": "Unidad: {uom} · medidas de Alta Artículos: largo {l} × ancho {w} × alto {h} cm. Aquí solo eliges su forma y si se puede acostar.",
     "udmContainsLbl": "Cuántas lleva de la presentación de la que sale",
     "udmSaleDe": "Sale de",
+    "udmClase_patente": "Patente",
+    "udmClase_generico": "Genérico",
+    "udmMarcaNode": "Marca",
+    "udmSinMarca": "Sin marca",
+    "udmElige": "Elige…",
+    "udmDirectoMarca": "Directo de la marca {b}",
+    "udmMarcasVacio": "No hay marcas activas. Agrégalas en Catálogos > Nuestras Marcas.",
+    "udmMarcaMezcla": "Este código ya tiene presentaciones sin marca: quítalas para usar marcas.",
+    "udmChainPres": "{n} presentaciones",
     "udmNoParentRoom": "Todas las presentaciones de este código ya tienen el máximo de {c} ramificaciones o llegaron al último nivel ({d}). Quita alguna para agregar otra.",
     "udmWeightHint": "En gramos: 1.5 kg se escribe 1500.",
     "udmEquiv": "Equivale a {n} {u} ({c} {p}).",
@@ -5247,9 +5258,11 @@
     },
     "udmRamificacion": {"what": "Dibuja el árbol de presentaciones del código en la columna: el material principal arriba y, con líneas, las presentaciones que salen de él y las que salen de esas. Cada renglón es una presentación y su línea la une a la de la que sale. Pasa el cursor sobre el nombre para ver su camino completo.", "example": "Tbta › Caja con 20 Tbta › Caja con 50 Caja."},
     "udmSaleDe": {"what": "De cuál presentación del código sale la nueva: «cuántas lleva» se cuenta de esa. De una misma pueden salir hasta 10 y hay hasta 10 niveles. No se cambia después: se quita y se vuelve a capturar.", "example": "la caja con 50 sale de la caja con 20 (lleva 50 cajas de 20)."},
+    "udmClasificacion": {"what": "Si el código se vende con marcas: Patente o Genérico. De una patente solo puede haber una marca por código; de genéricos, las que sean, cada una con sus propias presentaciones. Es opcional: sin ella, la presentación sale directo del material principal. Pero cuando un código ya usa marcas, todas sus presentaciones van en una marca.", "example": "ASPIRINA PROTECT: Patente BAYER; Genérico PISA y Genérico SANAFI."},
+    "udmMarca": {"what": "La marca de la presentación, elegida del catálogo Catálogos > Nuestras Marcas (BAYER, PISA…). La marca se crea sola en el código con su primera presentación y de ahí salen todas las cajas de esa marca; no cambia lo que equivale cada caja ni lleva medidas o peso.", "example": "Genérico › PISA: caja con 24, caja con 30 y caja con 84."},
     "udmNew": {
-      "what": "Agrega una presentación de un código. La primera es el material principal (solo eliges su forma); las demás salen de una presentación que ya existe («Sale de»; de una misma pueden salir varias), cada una con su unidad del catálogo, cuántas de esa lleva, sus medidas en cm y su peso en gramos. Eliges el código por su descripción única y luego las opciones que piden.",
-      "example": "la caja con 50 sale de la caja con 20: contiene 50 cajas, 40 × 20 × 15 cm, 1500 g."
+      "what": "Agrega una presentación de un código. La primera es el material principal (solo eliges su forma). Las demás: eliges la clasificación (Patente o Genérico) y la marca si el código las usa, y de cuál presentación sale («Sale de»; de una misma pueden salir varias), con su unidad del catálogo, cuántas de esa lleva, sus medidas en cm y su peso en gramos. Eliges el código por su descripción única y luego las opciones que piden.",
+      "example": "genérico PISA, caja con 24 tabletas: 5 × 4 × 2 cm, 1100 g; luego la caja con 10 cajas de 24 sale de esa caja."
     },
     "udmEdit": {
       "what": "Cambia los datos de esta presentación. Las medidas y el peso del material principal se capturan en Alta Artículos.",

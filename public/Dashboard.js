@@ -4414,11 +4414,14 @@ function udmChainHtml(rows) {
     const mainUom = (roots.find((r) => r.level === 0) || list[0]).uom;
     const dims = (r) => (r.shape === 'cilindrica' ? `Ø ${fmt(r.length)} × ${fmt(r.height)}` : `${fmt(r.length)} × ${fmt(r.width)} × ${fmt(r.height)}`);
     const branch = (r) => {
-        const title = r.name || r.uom || levelName(r.level);
-        const node = `<div class="udm-node"><span class="rel-tag rel-tag-ok">${esc(levelName(r.level))}</span><b>${esc(title)}</b><span>${esc(dims(r))} cm${r.weightG ? ` · ${esc(fmtWeight(r.weightG))}` : ''}</span><span class="udm-eq">= ${esc(r.equivalent)} ${esc(mainUom)}</span></div>`;
+        const title = r.name || r.uom || levelName(r.packLevel);
+        // la marca (Patente o Genérico) es un nodo que agrupa: sin medidas ni peso, con cuántas presentaciones tiene
+        const node = r.isBrand
+            ? `<div class="udm-node udm-brand ${r.classification === 'patente' ? 'pat' : 'gen'}"><span class="udm-ctag">${esc(t(`main.udmClase_${r.classification}`))}</span><b>${esc(title)}</b><span>${esc(t('main.udmChainPres', { n: r.childCount }))}</span></div>`
+            : `<div class="udm-node"><span class="rel-tag rel-tag-ok">${esc(levelName(r.packLevel))}</span><b>${esc(title)}</b><span>${esc(dims(r))} cm${r.weightG ? ` · ${esc(fmtWeight(r.weightG))}` : ''}</span><span class="udm-eq">= ${esc(r.equivalent)} ${esc(mainUom)}</span></div>`;
         const kids = kidsOf.get(r.id) || [];
         if (!kids.length) return `<div class="udm-branch">${node}</div>`;
-        return `<div class="udm-branch">${node}<div class="udm-stem"></div><div class="udm-kids">${kids.map((k) => `<div class="udm-kid"><div class="udm-link"><span>× ${esc(k.contains)}</span></div>${branch(k)}</div>`).join('')}</div></div>`;
+        return `<div class="udm-branch">${node}<div class="udm-stem"></div><div class="udm-kids">${kids.map((k) => `<div class="udm-kid"><div class="udm-link">${k.isBrand ? '' : `<span>× ${esc(k.contains)}</span>`}</div>${branch(k)}</div>`).join('')}</div></div>`;
     };
     return `<div class="udm-chain-title">${esc(t('main.udmChainTitle', { sku: list[0].description }))}</div><div class="udm-tree-scroll">${roots.map(branch).join('')}</div>`;
 }

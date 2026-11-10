@@ -17,7 +17,7 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
-const COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
+const COLS = { classification: 'colUdmDClasificacion', brandId: 'colUdmDMarca', uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
 // Tipo de almacenamiento de cada presentación (una, varias o todas): para qué se puede acomodar; solo las que tienen alguno se ofrecen al relacionar un código con una posición. El orden es el de la lista.
 const STORAGE_KEYS = ['principal', 'original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
 const typeName = (k) => Dashboard.t(`main.storageType_${k}`);
@@ -39,6 +39,7 @@ let rows = [];
 let uoms = [];
 let maxDepth = 10;
 let maxChildren = 10;
+let brands = []; // las marcas activas del catálogo Nuestras Marcas: [{ id, name }]
 
 (async function init() {
     try {
@@ -56,6 +57,9 @@ const rowsOfSku = (skuId) => rows.filter((r) => r.skuItemId === skuId); // en el
 const mainUomOf = (skuId) => (rowsOfSku(skuId)[0] || {}).uom || '';
 const parentRowOf = (r) => rows.find((x) => x.id === r.parentId);
 const childCountOf = (id) => rows.filter((r) => r.parentId === id).length;
+// El rótulo del nivel de un renglón: «Marca» para el de una marca; para las demás, «Empaque primario»… (el nivel entre las presentaciones: la marca no cuenta).
+const rowLevelName = (r) => (r.isBrand ? t('main.udmMarcaNode') : levelName(r.packLevel));
+const claseName = (c) => (c ? t(`main.udmClase_${c}`) : '');
 
 // ---- tabla --------------------------------------------------------------------------------------------------------------------------
 function cell(col, value, extraClass, title) {
@@ -85,7 +89,7 @@ function actionsCell(r, tr) {
     td.dataset.col = 'actions';
     td.className = 'admin-table-actions';
     td.appendChild(iconButton('admin-icon-btn', 'bx-history', t('main.changeHistoryTitleRecord'), 'changeHistory', () => Dashboard.openChangeHistory(TABLE_KEY, r.id)));
-    if (canTouchAnyColumn()) td.appendChild(iconButton('admin-icon-btn', 'bx-edit', t('main.udmEdit'), 'udmEdit', () => openDialog(r)));
+    if (!r.isBrand && canTouchAnyColumn()) td.appendChild(iconButton('admin-icon-btn', 'bx-edit', t('main.udmEdit'), 'udmEdit', () => openDialog(r)));
     if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) td.appendChild(iconButton('admin-icon-btn admin-icon-btn-danger', 'bx-trash', t('admin.delete'), 'delete', () => deletePresentation(r)));
     return td;
 }
@@ -94,9 +98,9 @@ function treeCell(r) {
     const td = document.createElement('td');
     td.dataset.col = 'colUdmDRamificacion';
     td.className = 'udm-tree-cell';
-    const name = r.name || levelName(r.level);
+    const name = r.name || rowLevelName(r);
     td.title = (r.path && r.path.length ? r.path : [name]).join(' › ');
-    td.innerHTML = `<div class="udm-tree">${(r.treeLines || []).map((on) => `<i class="udm-tl${on ? ' on' : ''}"></i>`).join('')}${r.depth >= 1 ? `<i class="udm-te${r.treeLast ? ' last' : ''}"></i>` : ''}<span class="udm-tnode${r.depth === 0 ? ' root' : ''}">${esc(name)}</span></div>`;
+    td.innerHTML = `<div class="udm-tree">${(r.treeLines || []).map((on) => `<i class="udm-tl${on ? ' on' : ''}"></i>`).join('')}${r.depth >= 1 ? `<i class="udm-te${r.treeLast ? ' last' : ''}"></i>` : ''}<span class="udm-tnode${r.depth === 0 ? ' root' : ''}${r.isBrand ? ` brand ${r.classification === 'patente' ? 'pat' : 'gen'}` : ''}">${esc(name)}</span></div>`;
     return td;
 }
 // repeatCode: la presentación anterior es del mismo código; su descripción se queda en el renglón (para buscar y filtrar) pero sin verse: el código sale una sola vez, con sus presentaciones debajo.
@@ -110,24 +114,27 @@ function buildRow(r, repeatCode) {
     const fromArticle = principal ? t('main.udmFromArticle') : '';
     const mainUom = mainUomOf(r.skuItemId);
     const parent = parentRowOf(r);
+    const brandRow = !!r.isBrand; // el renglón de una marca solo agrupa: sin medidas, peso ni tipos
+    const blank = (v) => (brandRow ? '' : v);
     const descCell = cell('colUdmDDescripcion', r.description);
     if (repeatCode && r.description) descCell.innerHTML = `<span class="udm-dup">${esc(r.description)}</span>`;
     tr.append(
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, r[key], 'col-system')),
         cell('colCatRegistroUnico', r.registroUnico, 'col-system'),
         descCell, treeCell(r),
-        cell('colUdmDNivel', levelName(r.level)),
-        cell('colUdmDUnidad', r.uom, principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDContiene', principal ? '' : `${r.contains} ${parent ? parent.uom : ''}`.trim()),
-        cell('colUdmDEquivale', `${r.equivalent} ${mainUom}`.trim()),
-        cell('colUdmDForma', t(r.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect')),
-        cell('colUdmDLargo', fmt(r.length), principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDAncho', r.shape === 'cilindrica' ? '= Ø' : fmt(r.width), principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDAlto', fmt(r.height), principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDPeso', fmtWeight(r.weightG), principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDAcostar', t(r.canLay ? 'main.udmYes' : 'main.udmNo')),
-        cell('colUdmDTipo', (r.storageTypes || []).length ? r.storageTypes.map(typeName).join(' · ') : t('main.udmTipoNinguno'), (r.storageTypes || []).length ? '' : 'udm-ro'),
-        cell('colUdmDCantidadCama', r.unitsPerLayer || ''), cell('colUdmDCamasPallet', r.layersPerPallet || ''), cell('colUdmDMaxEstiba', r.maxStack || ''),
+        cell('colUdmDClasificacion', claseName(r.classification)), cell('colUdmDMarca', r.brand),
+        cell('colUdmDNivel', rowLevelName(r)),
+        cell('colUdmDUnidad', blank(r.uom), principal ? 'udm-ro' : '', fromArticle),
+        cell('colUdmDContiene', principal || brandRow ? '' : `${r.contains} ${parent && !parent.isBrand ? parent.uom : mainUom}`.trim()),
+        cell('colUdmDEquivale', blank(`${r.equivalent} ${mainUom}`.trim())),
+        cell('colUdmDForma', blank(t(r.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect'))),
+        cell('colUdmDLargo', blank(fmt(r.length)), principal ? 'udm-ro' : '', fromArticle),
+        cell('colUdmDAncho', blank(r.shape === 'cilindrica' ? '= Ø' : fmt(r.width)), principal ? 'udm-ro' : '', fromArticle),
+        cell('colUdmDAlto', blank(fmt(r.height)), principal ? 'udm-ro' : '', fromArticle),
+        cell('colUdmDPeso', blank(fmtWeight(r.weightG)), principal ? 'udm-ro' : '', fromArticle),
+        cell('colUdmDAcostar', blank(t(r.canLay ? 'main.udmYes' : 'main.udmNo'))),
+        cell('colUdmDTipo', brandRow ? '' : ((r.storageTypes || []).length ? r.storageTypes.map(typeName).join(' · ') : t('main.udmTipoNinguno')), (r.storageTypes || []).length ? '' : 'udm-ro'),
+        cell('colUdmDCantidadCama', blank(r.unitsPerLayer || '')), cell('colUdmDCamasPallet', blank(r.layersPerPallet || '')), cell('colUdmDMaxEstiba', blank(r.maxStack || '')),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
@@ -157,6 +164,7 @@ async function refreshTable() {
         const body = await res.json();
         rows = body.rows || [];
         uoms = body.uoms || [];
+        brands = body.brands || [];
         maxDepth = body.maxDepth || 10;
         maxChildren = body.maxChildren || 10;
         tbody.innerHTML = '';
@@ -174,7 +182,7 @@ function applyFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colUdmDDescripcion', 'colUdmDRamificacion', 'colUdmDNivel', 'colUdmDUnidad']
+        const haystack = ['colUdmDDescripcion', 'colUdmDRamificacion', 'colUdmDClasificacion', 'colUdmDMarca', 'colUdmDNivel', 'colUdmDUnidad']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .concat([(tr.dataset.skuCode || '').toLowerCase(), (tr.dataset.upc || '').toLowerCase()])
             .join(' ');
@@ -250,7 +258,7 @@ function ensureModal() {
     });
     modalEl.addEventListener('input', (event) => {
         const el = event.target;
-        if (el.id === 'udm-code') { f.sku = null; f.level = null; f.parentId = null; clearTimeout(searchTimer); searchTimer = setTimeout(searchCodes, 220); renderForm(); return; }
+        if (el.id === 'udm-code') { f.sku = null; f.level = null; f.parentId = null; f.classification = ''; f.brandId = null; clearTimeout(searchTimer); searchTimer = setTimeout(searchCodes, 220); renderForm(); return; }
         const k = el.dataset && el.dataset.k;
         if (!k || !f) return;
         f[k] = el.type === 'checkbox' ? el.checked : el.value;
@@ -265,7 +273,15 @@ function ensureModal() {
             renderForm();
             return;
         }
-        if (f && el.dataset && el.dataset.parent) { setParent(Number(el.value)); renderForm(); return; } // «Sale de»
+        if (f && el.dataset && el.dataset.parent) { f.parentId = el.value === '' ? null : Number(el.value); recompute(); renderForm(); return; } // «Sale de»
+        if (f && el.dataset && el.dataset.cls) { // clasificación: Patente o Genérico (o sin marca)
+            f.classification = el.value;
+            const patente = rowsOfSku(f.sku.id).find((r) => r.isBrand && r.classification === 'patente');
+            f.brandId = el.value === 'patente' && patente ? patente.brandId : null; // de una patente solo hay una marca por código
+            f.parentId = null;
+            recompute(); renderForm(); return;
+        }
+        if (f && el.dataset && el.dataset.brand) { f.brandId = el.value === '' ? null : Number(el.value); f.parentId = null; recompute(); renderForm(); return; } // marca
         const k = el.dataset && el.dataset.k;
         if (!k || !f || el.type === 'checkbox') return;
         f[k] = el.value;
@@ -278,7 +294,8 @@ function openDialog(record) {
     ensureModal();
     const sku = record ? { id: record.skuItemId, sku: record.sku, description: record.description, uom: mainUomOf(record.skuItemId), length: 0, width: 0, height: 0 } : null;
     f = {
-        rec: record, sku, level: record ? record.level : null, parentId: record ? record.parentId : null,
+        rec: record, sku, level: record ? record.level : null, parentId: record ? record.parentId : null, pLevel: record ? record.packLevel : 0, noRoom: false,
+        classification: record ? (record.classification || '') : '', brandId: record ? (record.brandId || null) : null,
         uom: record ? record.uom : '', contains: record && record.contains != null ? record.contains : '', shape: record ? record.shape : 'rectangular',
         length: record ? record.length : '', width: record ? record.width : '', height: record ? record.height : '', weightG: record ? record.weightG : '', canLay: record ? record.canLay : false,
         storageTypes: record ? [...(record.storageTypes || [])] : [],
@@ -311,26 +328,45 @@ async function searchCodes() {
         console.error('Unidad de Medida por Distribución: code search failed', err);
     }
 }
-// Al elegir el código: si todavía no tiene presentaciones, la primera es el material principal; si ya tiene, la nueva sale (de partida) del material principal y se puede cambiar en «Sale de».
+// Al elegir el código: si todavía no tiene presentaciones, la primera es el material principal; si ya tiene, la nueva sale (de partida) del material principal (sin marca) y se puede cambiar eligiendo clasificación y marca o «Sale de».
 function pickSku(s) {
     f.sku = s;
     $('udm-code').value = s.description;
     $('udm-results').hidden = true;
-    const have = rowsOfSku(s.id);
-    if (!have.length) { f.level = 0; f.parentId = null; f.storageTypes = ['principal']; } // de partida el de siempre; se puede cambiar abajo
-    else {
-        const open = have.filter((r) => r.level < maxDepth && childCountOf(r.id) < maxChildren);
-        const first = open.find((r) => r.level === 0) || open[0] || null;
-        setParent(first ? first.id : null);
-        f.storageTypes = ['empaque'];
-    }
+    f.classification = '';
+    f.brandId = null;
+    f.parentId = null;
+    f.storageTypes = [rowsOfSku(s.id).length ? 'empaque' : 'principal']; // de partida el de siempre; se puede cambiar abajo
+    recompute();
     renderForm();
 }
-// De cuál presentación sale la nueva: su nivel es el de esa + 1 (null = ya no hay dónde ponerla).
-function setParent(id) {
-    const p = rows.find((r) => r.id === id);
-    f.parentId = p ? p.id : null;
-    f.level = p ? p.level + 1 : null;
+// De cuál renglón sale la nueva y en qué nivel queda. Con clasificación y marca sale de esa marca (si todavía no está en el código, se crea sola con esta presentación); sin ellas, de una presentación sin marca
+// (de partida, el material principal). f.parentId = null con marca = directo de la marca. f.level: 0 = el material principal (la primera), null = ya no hay dónde ponerla, 1 = una presentación; f.pLevel = su nivel entre las presentaciones.
+function recompute() {
+    if (!f || !f.sku || f.rec) return;
+    const have = rowsOfSku(f.sku.id);
+    if (!have.length) { f.level = 0; f.pLevel = 0; f.noRoom = false; f.parentId = null; return; }
+    const full = (r) => r.packLevel >= maxDepth || childCountOf(r.id) >= maxChildren;
+    let room = true;
+    if (f.classification && f.brandId) {
+        const bn = have.find((r) => r.isBrand && r.brandId === f.brandId);
+        if (bn) {
+            const chosen = f.parentId ? have.find((r) => r.id === f.parentId && !r.isBrand && r.brandId === f.brandId) : null;
+            if (!chosen) f.parentId = null;
+            const parent = chosen || bn;
+            room = !full(parent);
+            f.pLevel = parent.packLevel + 1;
+        } else { f.parentId = null; f.pLevel = 1; room = have.filter((r) => r.isBrand).length < maxChildren; }
+    } else {
+        const plain = have.filter((r) => !r.isBrand && !r.brandId);
+        let chosen = f.parentId ? plain.find((r) => r.id === f.parentId) : null;
+        if (!chosen) chosen = plain.find((r) => r.level === 0 && !full(r)) || plain.find((r) => !full(r)) || null;
+        f.parentId = chosen ? chosen.id : null;
+        room = !!chosen;
+        f.pLevel = chosen ? chosen.packLevel + 1 : 1;
+    }
+    f.noRoom = !room;
+    f.level = room ? 1 : null;
 }
 
 const canField = (col, value) => Dashboard.canEditField(TABLE_KEY, col, f.rec ? String(value ?? '') : '');
@@ -347,7 +383,7 @@ function renderForm() {
     const have = rowsOfSku(f.sku.id);
     if (!f.rec && f.level === null) { info.textContent = t('main.udmNoParentRoom', { d: maxDepth, c: maxChildren }); box.innerHTML = ''; save.disabled = true; return; }
     const principal = f.level === 0;
-    info.innerHTML = `<b>${esc(f.sku.description)}</b><span>${esc(levelName(f.level))}${principal ? ` · ${esc(t('main.udmFromArticleLong'))}` : ''}</span>`;
+    info.innerHTML = `<b>${esc(f.sku.description)}</b><span>${esc(levelName(f.rec ? f.pLevel : (f.level === 0 ? 0 : f.pLevel)))}${principal ? ` · ${esc(t('main.udmFromArticleLong'))}` : ''}</span>`;
     const dis = (col, key) => (canField(col, f.rec ? f.rec[key] : '') ? '' : ' disabled');
     const shapeSel = `<select id="udm-f-shape" data-k="shape"${dis(COLS.shape, 'shape')}><option value="rectangular"${f.shape === 'rectangular' ? ' selected' : ''}>${esc(t('main.pkRect'))}</option><option value="cilindrica"${f.shape === 'cilindrica' ? ' selected' : ''}>${esc(t('main.pkCyl'))}</option></select>`;
     const layBox = `<label class="udm-check"><input type="checkbox" id="udm-f-canLay" data-k="canLay"${f.canLay ? ' checked' : ''}${dis(COLS.canLay, 'canLay')}> ${esc(t('main.colUdmDAcostar'))}</label>`;
@@ -364,12 +400,33 @@ function renderForm() {
         return;
     }
     const prev = have.find((r) => r.id === f.parentId);
-    const prevName = prev ? (prev.name || prev.uom || levelName(prev.level)) : '';
-    // «Sale de»: cualquiera de las presentaciones del código (en el orden del árbol), menos las que ya tienen el máximo de ramificaciones o están en el último nivel
-    const parentOpts = have.map((r) => {
-        const full = r.level >= maxDepth || childCountOf(r.id) >= maxChildren;
-        return `<option value="${r.id}"${r.id === f.parentId ? ' selected' : ''}${full && r.id !== f.parentId ? ' disabled' : ''}>${'\u00a0\u00a0'.repeat(r.depth)}${r.depth ? '└ ' : ''}${esc(r.name || levelName(r.level))}</option>`;
-    }).join('');
+    const prevName = prev ? (prev.isBrand ? t('main.udmDirectoMarca', { b: prev.name }) : (prev.name || prev.uom || rowLevelName(prev))) : '';
+    // Clasificación y marca (opcionales): Patente o Genérico y la marca del catálogo; de una patente solo una marca por código, de genéricos las que sean. Con marcas, todas las presentaciones del código van en una marca.
+    const brandNodes = have.filter((r) => r.isBrand);
+    const usesBrands = brandNodes.length > 0;
+    const hasDirect = have.some((r) => !r.isBrand && r.depth === 1 && !r.brandId); // ya tiene presentaciones sin marca (salen directo del principal)
+    const patente = brandNodes.find((r) => r.classification === 'patente');
+    const clsOff = hasDirect || !Dashboard.canEditField(TABLE_KEY, COLS.classification, '');
+    const brandOff = !Dashboard.canEditField(TABLE_KEY, COLS.brandId, '');
+    const choices = [...brands, ...brandNodes.filter((b) => !brands.some((x) => x.id === b.brandId)).map((b) => ({ id: b.brandId, name: b.name }))];
+    const clsSel = `<select id="udm-f-cls" data-cls="1"${clsOff ? ' disabled' : ''}><option value="">${esc(t(usesBrands ? 'main.udmElige' : 'main.udmSinMarca'))}</option><option value="patente"${f.classification === 'patente' ? ' selected' : ''}>${esc(claseName('patente'))}</option><option value="generico"${f.classification === 'generico' ? ' selected' : ''}>${esc(claseName('generico'))}</option></select>`;
+    const brandSel = `<select id="udm-f-brand" data-brand="1"${brandOff || !f.classification ? ' disabled' : ''}><option value="">${esc(t('main.articleTypeSelect'))}</option>${choices.map((b) => {
+        const used = brandNodes.find((r) => r.brandId === b.id);
+        const off = (f.classification === 'patente' && patente && patente.brandId !== b.id) || (f.classification === 'generico' && patente && patente.brandId === b.id) || (used && used.classification !== f.classification);
+        return `<option value="${b.id}"${b.id === f.brandId ? ' selected' : ''}${off && b.id !== f.brandId ? ' disabled' : ''}>${esc(b.name)}</option>`;
+    }).join('')}</select>`;
+    const brandHint = hasDirect ? t('main.udmMarcaMezcla') : (!choices.length ? t('main.udmMarcasVacio') : '');
+    const brandFields = f.rec
+        ? (f.brandId ? `<div class="rel-two"><div class="rel-fld"><label>${esc(t('main.colUdmDClasificacion'))}</label><div class="udm-from">${esc(claseName(f.classification))}</div></div><div class="rel-fld"><label>${esc(t('main.colUdmDMarca'))}</label><div class="udm-from">${esc((have.find((r) => r.isBrand && r.brandId === f.brandId) || {}).name || '')}</div></div></div>` : '')
+        : `<div class="rel-two"><div class="rel-fld" data-help-key="udmClasificacion"><label for="udm-f-cls">${esc(t('main.colUdmDClasificacion'))}</label>${clsSel}</div><div class="rel-fld" data-help-key="udmMarca"><label for="udm-f-brand">${esc(t('main.colUdmDMarca'))}</label>${brandSel}</div></div>${brandHint ? `<div class="rel-muted">${esc(brandHint)}</div>` : ''}`;
+    // «Sale de»: con marca, directo de la marca o de una presentación de esa marca; sin marca, cualquiera de las que no tienen marca (en el orden del árbol); se quitan las que ya tienen el máximo de ramificaciones o están en el último nivel
+    const optFull = (r) => r.packLevel >= maxDepth || childCountOf(r.id) >= maxChildren;
+    const brandName = (choices.find((b) => b.id === f.brandId) || {}).name || '';
+    const withBrand = !!(f.classification && f.brandId);
+    const bnode = withBrand ? have.find((r) => r.isBrand && r.brandId === f.brandId) : null;
+    const parentRows = withBrand ? have.filter((r) => !r.isBrand && r.brandId === f.brandId) : have.filter((r) => !r.isBrand && !r.brandId);
+    const parentOpts = (withBrand ? `<option value=""${f.parentId === null ? ' selected' : ''}${bnode && optFull(bnode) ? ' disabled' : ''}>${esc(t('main.udmDirectoMarca', { b: brandName }))}</option>` : '')
+        + parentRows.map((r) => `<option value="${r.id}"${r.id === f.parentId ? ' selected' : ''}${optFull(r) && r.id !== f.parentId ? ' disabled' : ''}>${'\u00a0\u00a0'.repeat(r.packLevel)}${r.packLevel ? '└ ' : ''}${esc(r.name || rowLevelName(r))}</option>`).join('');
     const parentField = f.rec
         ? `<div class="rel-fld"><label>${esc(t('main.udmSaleDe'))}</label><div class="udm-from">${esc(prevName)}</div></div>`
         : `<div class="rel-fld" data-help-key="udmSaleDe"><label for="udm-f-parent">${esc(t('main.udmSaleDe'))}</label><select id="udm-f-parent" data-parent="1">${parentOpts}</select></div>`;
@@ -377,7 +434,7 @@ function renderForm() {
     const uomSel = `<select id="udm-f-uom" data-k="uom"${dis(COLS.uom, 'uom')}><option value="">${esc(t('main.articleTypeSelect'))}</option>${uomOptions.map((u) => `<option value="${esc(u)}"${u === f.uom ? ' selected' : ''}>${esc(u)}</option>`).join('')}</select>`;
     const num = (key, col, step) => `<input type="number" id="udm-f-${key}" data-k="${key}" step="${step || 'any'}" min="0" value="${esc(f[key])}"${dis(col, key)}>`;
     const cyl = f.shape === 'cilindrica';
-    box.innerHTML = `${parentField}
+    box.innerHTML = `${brandFields}${parentField}
         <div class="rel-two">${fieldHtml('uom', 'main.colUdmDUnidad', uomSel)}${fieldHtml('contains', 'main.udmContainsLbl', num('contains', COLS.contains, '1'))}</div>
         <div class="rel-muted" id="udm-equiv"></div>
         <div class="rel-two">${fieldHtml('shape', 'main.colUdmDForma', shapeSel)}<div class="rel-fld"><label>&nbsp;</label>${layBox}</div></div>
@@ -387,15 +444,17 @@ function renderForm() {
         ${estibaField}`;
     $('udm-fields').dataset.prev = prevName;
     updateEquivalence();
-    save.disabled = false;
+    // con marcas, la presentación va en una marca: sin elegirla no se guarda
+    save.disabled = !f.rec && ((usesBrands && !f.classification) || (!!f.classification && !f.brandId));
 }
 // «Equivale a»: cuántas unidades principales trae esta presentación (lo que contiene × lo que equivale la de abajo).
 function updateEquivalence() {
     const el = $('udm-equiv');
     if (!el || !f || !f.sku || f.level === 0) return;
     const prev = rowsOfSku(f.sku.id).find((r) => r.id === f.parentId);
+    const base = prev && !prev.isBrand ? prev : null; // la marca no multiplica: lo que sale directo de ella (o del principal) cuenta unidades principales
     const n = Number(f.contains);
-    el.textContent = prev && Number.isInteger(n) && n >= 1 ? t('main.udmEquiv', { n: n * prev.equivalent, u: mainUomOf(f.sku.id), c: n, p: prev.name || prev.uom || levelName(prev.level) }) : '';
+    el.textContent = Number.isInteger(n) && n >= 1 ? t('main.udmEquiv', { n: n * (base ? base.equivalent : 1), u: mainUomOf(f.sku.id), c: n, p: base ? (base.name || base.uom || rowLevelName(base)) : mainUomOf(f.sku.id) }) : '';
 }
 
 async function save() {
@@ -409,7 +468,7 @@ async function save() {
     };
     let method = 'POST';
     let url = API;
-    let payload = { skuItemId: f.sku.id, ...(f.level >= 1 ? { parentId: f.parentId } : {}), ...body };
+    let payload = { skuItemId: f.sku.id, ...(f.level >= 1 && f.parentId != null ? { parentId: f.parentId } : {}), ...(f.level >= 1 && f.classification && f.brandId ? { classification: f.classification, brandId: f.brandId } : {}), ...body };
     if (f.rec) {
         const before = f.rec;
         const changed = {};

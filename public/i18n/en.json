@@ -3536,6 +3536,8 @@
     "colUdmDUpc": "UPC",
     "colUdmDDescripcion": "Unique Description",
     "colUdmDRamificacion": "Branching",
+    "colUdmDClasificacion": "Classification",
+    "colUdmDMarca": "Brand",
     "colUdmDNivel": "Presentation",
     "colUdmDUnidad": "Unit of Measure",
     "colUdmDContiene": "Contains",
@@ -3658,6 +3660,15 @@
     "udmMainMeasures": "Unit: {uom} · measures from Alta Artículos: length {l} × width {w} × height {h} cm. Here you only choose its shape and whether it can lie down.",
     "udmContainsLbl": "How many of the presentation it comes from it holds",
     "udmSaleDe": "Comes from",
+    "udmClase_patente": "Patent",
+    "udmClase_generico": "Generic",
+    "udmMarcaNode": "Brand",
+    "udmSinMarca": "No brand",
+    "udmElige": "Choose…",
+    "udmDirectoMarca": "Straight from brand {b}",
+    "udmMarcasVacio": "There are no active brands. Add them in Catalogs > Our Brands.",
+    "udmMarcaMezcla": "This code already has presentations without a brand: remove them to use brands.",
+    "udmChainPres": "{n} presentations",
     "udmNoParentRoom": "Every presentation of this code already has the maximum of {c} branches or reached the last level ({d}). Remove one to add another.",
     "udmWeightHint": "In grams: 1.5 kg is written 1500.",
     "udmEquiv": "Equals {n} {u} ({c} {p}).",
@@ -5248,9 +5259,11 @@
     },
     "udmRamificacion": {"what": "Draws the code's presentation tree in the column: the main material on top and, with lines, the presentations that come out of it and those that come out of them. Each row is a presentation and its line joins it to the one it comes from. Hover over the name to see its whole path.", "example": "Tbta › Box of 20 Tbta › Box of 50 Box."},
     "udmSaleDe": {"what": "Which presentation of the code the new one comes from: «how many it holds» is counted from that one. Up to 10 can come out of the same one and there are up to 10 levels. It is not changed afterwards: remove it and capture it again.", "example": "the box of 50 comes out of the box of 20 (it holds 50 boxes of 20)."},
+    "udmClasificacion": {"what": "If the code is sold with brands: Patent or Generic. Only one brand of a patent per code; as many generic brands as needed, each with its own presentations. It is optional: without it the presentation comes straight from the main material. But once a code uses brands, all its presentations go under a brand.", "example": "ASPIRINA PROTECT: Patent BAYER; Generic PISA and Generic SANAFI."},
+    "udmMarca": {"what": "The presentation's brand, chosen from Catalogs > Our Brands (BAYER, PISA…). The brand is created in the code with its first presentation and every box of that brand comes out of it; it does not change what each box equals and has no measures or weight.", "example": "Generic › PISA: box of 24, box of 30 and box of 84."},
     "udmNew": {
-      "what": "Adds a presentation of a code. The first is the main material (you only choose its shape); the rest come out of a presentation that already exists («Comes from»; several can come out of the same one), each with its catalog unit, how many of that one it holds, its measures in cm and its weight in grams. You choose the code by its unique description and then the options asked.",
-      "example": "the box of 50 comes out of the box of 20: it holds 50 boxes, 40 × 20 × 15 cm, 1500 g."
+      "what": "Adds a presentation of a code. The first is the main material (you only choose its shape). The others: you choose the classification (Patent or Generic) and the brand if the code uses them, and which presentation it comes from («Comes from»; several can come out of the same one), with its catalog unit, how many of that one it holds, its measures in cm and its weight in grams. You choose the code by its unique description and then the options asked.",
+      "example": "generic PISA, box of 24 tablets: 5 × 4 × 2 cm, 1100 g; then the box of 10 boxes of 24 comes out of that box."
     },
     "udmEdit": {
       "what": "Changes the data of this presentation. The measures and weight of the main material are captured in Alta Artículos.",

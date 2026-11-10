@@ -4541,7 +4541,7 @@ const relLevelsOf = (sku, all) => {
     const levels = window.PackCalc && sku ? window.PackCalc.levelsOf({ length: sku.length, width: sku.width, height: sku.height, packaging: sku.packaging }).filter((lv) => lv.l > 0 && lv.w > 0 && lv.h > 0) : [];
     return all ? levels : levels.filter((lv) => window.PackCalc.enabled(lv));
 };
-const relPackName = (lv) => `${t(`main.pkLevel${lv.level}`)}${lv.name ? ` · ${lv.name}` : ''}`;
+const relPackName = (lv) => `${t(`main.pkLevel${lv.level}`)}${lv.brand ? ` · ${lv.brand}` : ''}${lv.name ? ` · ${lv.name}` : ''}`;
 function ensureRelateModal() {
     if (relEl) return;
     relEl = document.createElement('div');

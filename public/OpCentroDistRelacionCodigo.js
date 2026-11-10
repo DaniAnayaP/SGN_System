@@ -493,7 +493,7 @@ function packBoxCm(rack, niv, esp, pos) {
     const h = b.h > 0 ? Math.min(b.h, g.bh || b.h) : (g.bh || 0);
     return { l: Math.round(b.l * 1000) / 10, w: Math.round(b.w * 1000) / 10, h: Math.round(h * 1000) / 10 };
 }
-const packName = (lv) => `${t(`main.pkLevel${lv.level}`)}${lv.name ? ` · ${lv.name}` : ''}`;
+const packName = (lv) => `${t(`main.pkLevel${lv.level}`)}${lv.brand ? ` · ${lv.brand}` : ''}${lv.name ? ` · ${lv.name}` : ''}`;
 function packTopSvg(box, f, level) {
     const cls = `lv${Math.min(level, 2)}`;
     const body = f.cells.map((c) => (c.r ? `<circle cx="${c.cx.toFixed(2)}" cy="${c.cy.toFixed(2)}" r="${(c.r - 0.15).toFixed(2)}" class="pk-c ${cls}"/>` : `<rect x="${(c.x + 0.2).toFixed(2)}" y="${(c.y + 0.2).toFixed(2)}" width="${Math.max(c.l - 0.4, 0.1).toFixed(2)}" height="${Math.max(c.w - 0.4, 0.1).toFixed(2)}" class="pk-b ${cls}"/>`)).join('');

@@ -1676,6 +1676,8 @@
             },
             { "id": "colUdmDDescripcion", "labelKey": "main.colUdmDDescripcion", "permissionOnly": true },
             { "id": "colUdmDRamificacion", "labelKey": "main.colUdmDRamificacion", "permissionOnly": true },
+            { "id": "colUdmDClasificacion", "labelKey": "main.colUdmDClasificacion", "permissionOnly": true },
+            { "id": "colUdmDMarca", "labelKey": "main.colUdmDMarca", "permissionOnly": true },
             { "id": "colUdmDNivel", "labelKey": "main.colUdmDNivel", "permissionOnly": true },
             { "id": "colUdmDUnidad", "labelKey": "main.colUdmDUnidad", "permissionOnly": true },
             { "id": "colUdmDContiene", "labelKey": "main.colUdmDContiene", "permissionOnly": true },

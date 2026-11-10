@@ -8072,10 +8072,20 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .udm-chain{ border: 1px solid var(--color-border); border-radius: 0.9rem; background: var(--color-surface); padding: 0.75rem 1rem; margin: 0 0 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; }
 .udm-chain[hidden]{ display: none; }
 .udm-chain-title{ font-size: 0.78rem; font-weight: 600; color: var(--color-text-secondary); }
-.udm-tree-scroll{ overflow-x: auto; padding-bottom: 0.3rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.udm-tree-scroll{ overflow: auto; max-height: 24rem; padding-bottom: 0.3rem; display: flex; flex-direction: column; gap: 0.6rem; }
 /* el árbol: cada rama es [presentación][tallo][ramas que salen de ella]; cada rama lleva su línea con «× N» */
 .udm-branch{ display: flex; align-items: center; min-width: max-content; }
 .udm-branch > .udm-node{ flex: none; width: 12.5rem; }
+/* la marca (Patente o Genérico): un nodo que agrupa, con su color */
+.udm-node.udm-brand{ border-width: 2px; }
+.udm-node.udm-brand.pat{ border-color: #c98a1f; }
+.udm-node.udm-brand.gen{ border-color: #2a7fb8; }
+.udm-ctag{ align-self: flex-start; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.05rem 0.55rem; border-radius: 999px; border: 1px solid currentColor; }
+.udm-brand.pat .udm-ctag{ color: #b57512; }
+.udm-brand.gen .udm-ctag{ color: #2a7fb8; }
+.udm-tnode.brand{ font-weight: 700; border-width: 2px; }
+.udm-tnode.brand.pat{ border-color: #c98a1f; }
+.udm-tnode.brand.gen{ border-color: #2a7fb8; }
 .udm-stem{ flex: none; width: 1.1rem; border-top: 2px solid var(--color-text-secondary); }
 .udm-kids{ display: flex; flex-direction: column; }
 .udm-kid{ display: flex; align-items: center; position: relative; padding: 0.3rem 0; }

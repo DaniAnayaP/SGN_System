@@ -2519,6 +2519,11 @@ if (!db.prepare('PRAGMA table_info(sku_distribution_units)').all().some((c) => c
     }
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_sku_distribution_sku ON sku_distribution_units (sku_item_id, parent_id)');
+// Clasificación y marca (2026-11-10): entre el material principal y las presentaciones puede ir un nivel «marca»: un renglón con kind = 'marca' (sin medidas ni peso), su clasificación (patente | generico) y la marca
+// elegida del catálogo Nuestras Marcas (brand_id = article_categories.id). De una patente solo una marca por código; de genéricos, las que sean. Las presentaciones de esa marca salen de ese renglón.
+for (const [col, ddl] of [['kind', "TEXT NOT NULL DEFAULT 'presentacion'"], ['classification', "TEXT NOT NULL DEFAULT ''"], ['brand_id', 'INTEGER']]) {
+    if (!db.prepare('PRAGMA table_info(sku_distribution_units)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE sku_distribution_units ADD COLUMN ${col} ${ddl}`);
+}
 // Una sola vez: lo capturado como cadena (empaque primario, secundario…) se borra para volver a capturarlo como árbol (decisión de Daniel, 2026-11-10: «empezar de cero»). Se quedan los renglones del material principal
 // (su forma, tipos y estiba) y las relaciones que acomodaban el material principal; las que acomodaban un empaque quedan sin «Se acomoda» (se vuelve a elegir con las presentaciones nuevas).
 const SKU_DIST_TREE_RESET_KEY = 'seed-udm-presentation-tree-reset-v1';
@@ -6454,11 +6459,14 @@ const SKU_DIST_PATCHABLE_FIELDS = {
     unitsPerLayer: { column: 'units_per_layer', fieldKey: 'main.colUdmDCantidadCama' },
     layersPerPallet: { column: 'layers_per_pallet', fieldKey: 'main.colUdmDCamasPallet' },
     maxStack: { column: 'max_stack', fieldKey: 'main.colUdmDMaxEstiba' },
+    // solo al crear (el renglón de la marca y sus presentaciones no las cambian): sirven para pedir la hoja de cada columna y para el historial
+    classification: { column: 'classification', fieldKey: 'main.colUdmDClasificacion' },
+    brandId: { column: 'brand_id', fieldKey: 'main.colUdmDMarca' },
 };
 const SKU_DIST_STORAGE_TYPES = ['principal', 'original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
 const SKU_DIST_SELECT = `SELECT d.*, s.record_number AS sku_number, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.custom_description AS sku_custom,
-        s.main_uom AS sku_uom, s.length AS sku_length, s.width AS sku_width, s.height AS sku_height, s.article_weight AS sku_weight
-    FROM sku_distribution_units d JOIN sku_items s ON s.id = d.sku_item_id`;
+        s.main_uom AS sku_uom, s.length AS sku_length, s.width AS sku_width, s.height AS sku_height, s.article_weight AS sku_weight, b.name AS brand_name
+    FROM sku_distribution_units d JOIN sku_items s ON s.id = d.sku_item_id LEFT JOIN article_categories b ON b.id = d.brand_id`;
 function listSkuDistribution(clientId, forTestAccount = false) {
     return db.prepare(`${SKU_DIST_SELECT} WHERE d.client_id = ? AND d.is_test_data = ? ORDER BY s.record_number ASC, d.level ASC, d.id ASC`).all(clientId, forTestAccount ? 1 : 0);
 }
@@ -6470,9 +6478,9 @@ function getSkuDistributionById(id, clientId, forTestAccount = false) {
 }
 function createSkuDistribution({ clientId, isTestData = false, values }) {
     const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM sku_distribution_units WHERE client_id = ? AND is_test_data = ?').get(clientId, isTestData ? 1 : 0).n;
-    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, parent_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, storage_types, units_per_layer, layers_per_pallet, max_stack, is_test_data)
-        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @parentId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @storageTypes, @unitsPerLayer, @layersPerPallet, @maxStack, @isTestData)`).run({
-        clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuItemId: values.skuItemId, parentId: values.parentId ?? null, level: values.level,
+    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, parent_id, kind, classification, brand_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, storage_types, units_per_layer, layers_per_pallet, max_stack, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @parentId, @kind, @classification, @brandId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @storageTypes, @unitsPerLayer, @layersPerPallet, @maxStack, @isTestData)`).run({
+        clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuItemId: values.skuItemId, parentId: values.parentId ?? null, kind: values.kind === 'marca' ? 'marca' : 'presentacion', classification: values.kind === 'marca' ? String(values.classification || '') : '', brandId: values.kind === 'marca' ? (values.brandId ?? null) : null, level: values.level,
         uom: values.uom || '', contains: values.contains ?? null, shape: values.shape === 'cilindrica' ? 'cilindrica' : 'rectangular',
         length: Number(values.length) || 0, width: Number(values.width) || 0, height: Number(values.height) || 0, weightG: Number(values.weightG) || 0, canLay: values.canLay ? 1 : 0,
         storageTypes: values.storageTypes === undefined || values.storageTypes === null ? null : String(values.storageTypes),
@@ -6494,6 +6502,21 @@ function updateSkuDistribution(id, clientId, patch, forTestAccount = false) {
 }
 function deleteSkuDistribution(id, clientId) {
     db.prepare('DELETE FROM sku_distribution_units WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+// Una presentación de una marca que todavía no está en el código: se crea el renglón de la marca (nivel 1, debajo del material principal) y la presentación debajo de él, las dos o ninguna.
+// brand = { skuItemId, parentId (el material principal), level (1), classification, brandId }; values = la presentación (su parentId y su level se ponen aquí).
+function createSkuDistributionUnderNewBrand({ clientId, isTestData = false, brand, values }) {
+    let out = null;
+    db.transaction(() => {
+        const brandRow = createSkuDistribution({ clientId, isTestData, values: { skuItemId: brand.skuItemId, parentId: brand.parentId, level: brand.level, kind: 'marca', classification: brand.classification, brandId: brand.brandId } });
+        const row = createSkuDistribution({ clientId, isTestData, values: { ...values, kind: 'presentacion', parentId: brandRow.id, level: brandRow.level + 1 } });
+        out = { brandRow, row };
+    })();
+    return out;
+}
+// Cuántos renglones de Unidad de Medida por Distribución usan una marca del catálogo (para no borrarla mientras se use).
+function countSkuDistributionByBrand(clientId, brandId) {
+    return db.prepare("SELECT COUNT(DISTINCT sku_item_id) AS n FROM sku_distribution_units WHERE client_id = ? AND kind = 'marca' AND brand_id = ?").get(clientId, brandId).n;
 }
 // Lo que se capturó en la columna «Empaques» de Alta Artículos (sku_items.packaging, JSON con las piezas TOTALES de cada nivel) pasa a esta tabla: nivel 0 con su forma y su se-puede-acostar y un renglón por empaque,
 // con «contiene» = piezas del nivel / piezas del nivel anterior (si no sale entero se redondea). La unidad queda vacía (el nombre libre no es del catálogo) y el peso en 0: se completan en la pantalla nueva. Solo se pasa
@@ -12668,6 +12691,8 @@ module.exports = {
     createSkuDistribution,
     updateSkuDistribution,
     deleteSkuDistribution,
+    createSkuDistributionUnderNewBrand,
+    countSkuDistributionByBrand,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,

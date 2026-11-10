@@ -125,7 +125,7 @@
         const p = (art && art.packaging) || {};
         const main = p.main || {};
         const out = [{ id: 0, parentId: null, level: 0, name: String(main.name || ''), shape: main.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(art && art.length), w: num(art && art.width), h: num(art && art.height), pieces: 1, lay: !!main.lay, weightG: num(main.weightG), types: Array.isArray(main.types) ? main.types : null }];
-        (Array.isArray(p.levels) ? p.levels : []).forEach((lv, i) => out.push({ id: Number.isInteger(lv.id) && lv.id > 0 ? lv.id : i + 1, parentId: lv.parentId || null, level: Number.isInteger(lv.depth) && lv.depth >= 1 ? lv.depth : i + 1, name: String(lv.name || ''), shape: lv.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(lv.l), w: num(lv.w), h: num(lv.h), pieces: Math.max(1, Math.floor(num(lv.pieces)) || 1), lay: !!lv.lay, weightG: num(lv.weightG), types: Array.isArray(lv.types) ? lv.types : null }));
+        (Array.isArray(p.levels) ? p.levels : []).forEach((lv, i) => out.push({ id: Number.isInteger(lv.id) && lv.id > 0 ? lv.id : i + 1, parentId: lv.parentId || null, level: Number.isInteger(lv.depth) && lv.depth >= 1 ? lv.depth : i + 1, name: String(lv.name || ''), shape: lv.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(lv.l), w: num(lv.w), h: num(lv.h), pieces: Math.max(1, Math.floor(num(lv.pieces)) || 1), lay: !!lv.lay, weightG: num(lv.weightG), types: Array.isArray(lv.types) ? lv.types : null, brand: String(lv.brand || ''), classification: String(lv.classification || '') }));
         return out;
     }
 
