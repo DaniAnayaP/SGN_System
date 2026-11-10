@@ -17,7 +17,7 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
-const COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo' };
+const COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
 // Tipo de almacenamiento de cada presentación (una, varias o todas): para qué se puede acomodar; solo las que tienen alguno se ofrecen al relacionar un código con una posición. El orden es el de la lista.
 const STORAGE_KEYS = ['principal', 'original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
 const typeName = (k) => Dashboard.t(`main.storageType_${k}`);
@@ -110,6 +110,7 @@ function buildRow(r) {
         cell('colUdmDPeso', fmtWeight(r.weightG), principal ? 'udm-ro' : '', fromArticle),
         cell('colUdmDAcostar', t(r.canLay ? 'main.udmYes' : 'main.udmNo')),
         cell('colUdmDTipo', (r.storageTypes || []).length ? r.storageTypes.map(typeName).join(' · ') : t('main.udmTipoNinguno'), (r.storageTypes || []).length ? '' : 'udm-ro'),
+        cell('colUdmDCantidadCama', r.unitsPerLayer || ''), cell('colUdmDCamasPallet', r.layersPerPallet || ''), cell('colUdmDMaxEstiba', r.maxStack || ''),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
@@ -268,6 +269,7 @@ function openDialog(record) {
         uom: record ? record.uom : '', contains: record && record.contains != null ? record.contains : '', shape: record ? record.shape : 'rectangular',
         length: record ? record.length : '', width: record ? record.width : '', height: record ? record.height : '', weightG: record ? record.weightG : '', canLay: record ? record.canLay : false,
         storageTypes: record ? [...(record.storageTypes || [])] : [],
+        unitsPerLayer: record && record.unitsPerLayer ? record.unitsPerLayer : '', layersPerPallet: record && record.layersPerPallet ? record.layersPerPallet : '', maxStack: record && record.maxStack ? record.maxStack : '',
     };
     $('udm-title').textContent = t(record ? 'main.udmDialogEdit' : 'main.udmDialogNew');
     $('udm-code').value = record ? `${record.sku} · ${record.description}` : '';
@@ -326,11 +328,14 @@ function renderForm() {
     const shapeSel = `<select id="udm-f-shape" data-k="shape"${dis(COLS.shape, 'shape')}><option value="rectangular"${f.shape === 'rectangular' ? ' selected' : ''}>${esc(t('main.pkRect'))}</option><option value="cilindrica"${f.shape === 'cilindrica' ? ' selected' : ''}>${esc(t('main.pkCyl'))}</option></select>`;
     const layBox = `<label class="udm-check"><input type="checkbox" id="udm-f-canLay" data-k="canLay"${f.canLay ? ' checked' : ''}${dis(COLS.canLay, 'canLay')}> ${esc(t('main.colUdmDAcostar'))}</label>`;
     const typesDis = dis(COLS.storageTypes, 'storageTypes');
+    const intInput = (key) => `<input type="number" id="udm-f-${key}" data-k="${key}" step="1" min="0" value="${esc(f[key])}"${dis(COLS[key], key)}>`;
+    const estibaField = `<div class="rel-three" data-help-key="udmEstiba">${fieldHtml('unitsPerLayer', 'main.colUdmDCantidadCama', intInput('unitsPerLayer'))}${fieldHtml('layersPerPallet', 'main.colUdmDCamasPallet', intInput('layersPerPallet'))}${fieldHtml('maxStack', 'main.colUdmDMaxEstiba', intInput('maxStack'))}</div>`;
     const typesField = `<div class="rel-fld" data-help-key="udmTipo"><label>${esc(t('main.colUdmDTipo'))}</label><div class="udm-types"><label class="udm-check udm-check-all"><input type="checkbox" data-type-all="1"${STORAGE_KEYS.every((k) => f.storageTypes.includes(k)) ? ' checked' : ''}${typesDis}> <b>${esc(t('main.udmTiposTodos'))}</b></label>${STORAGE_KEYS.map((k) => `<label class="udm-check"><input type="checkbox" data-type="${k}"${f.storageTypes.includes(k) ? ' checked' : ''}${typesDis}> ${esc(typeName(k))}</label>`).join('')}</div></div>`;
     if (principal) {
         box.innerHTML = `<div class="rel-two">${fieldHtml('shape', 'main.colUdmDForma', shapeSel)}<div class="rel-fld"><label>&nbsp;</label>${layBox}</div></div>
             <div class="rel-muted">${esc(t('main.udmMainMeasures', { uom: f.sku.uom || '—', l: fmt(f.sku.length) || '—', w: fmt(f.sku.width) || '—', h: fmt(f.sku.height) || '—' }))}</div>
-            ${typesField}`;
+            ${typesField}
+            ${estibaField}`;
         save.disabled = false;
         return;
     }
@@ -345,7 +350,8 @@ function renderForm() {
         <div class="rel-two">${fieldHtml('shape', 'main.colUdmDForma', shapeSel)}<div class="rel-fld"><label>&nbsp;</label>${layBox}</div></div>
         <div class="rel-three">${fieldHtml('length', 'main.colUdmDLargo', num('length', COLS.length))}${cyl ? '<div class="rel-fld"><label>&nbsp;</label><span class="rel-muted">= Ø</span></div>' : fieldHtml('width', 'main.colUdmDAncho', num('width', COLS.width))}${fieldHtml('height', 'main.colUdmDAlto', num('height', COLS.height))}</div>
         ${fieldHtml('weightG', 'main.colUdmDPeso', num('weightG', COLS.weightG), 'main.udmWeightHint')}
-        ${typesField}`;
+        ${typesField}
+        ${estibaField}`;
     $('udm-fields').dataset.prev = prevName;
     updateEquivalence();
     save.disabled = false;
@@ -363,10 +369,11 @@ function updateEquivalence() {
 async function save() {
     if (!f || !f.sku) return;
     const principal = f.level === 0;
-    const body = principal ? { shape: f.shape, canLay: !!f.canLay, storageTypes: f.storageTypes.join(',') } : {
+    const estibaBody = { unitsPerLayer: f.unitsPerLayer === '' ? 0 : Number(f.unitsPerLayer), layersPerPallet: f.layersPerPallet === '' ? 0 : Number(f.layersPerPallet), maxStack: f.maxStack === '' ? 0 : Number(f.maxStack) };
+    const body = principal ? { shape: f.shape, canLay: !!f.canLay, storageTypes: f.storageTypes.join(','), ...estibaBody } : {
         uom: f.uom, contains: f.contains === '' ? null : Number(f.contains), shape: f.shape, length: f.length === '' ? null : Number(f.length),
         width: f.shape === 'cilindrica' ? (f.length === '' ? null : Number(f.length)) : (f.width === '' ? null : Number(f.width)), height: f.height === '' ? null : Number(f.height),
-        weightG: f.weightG === '' ? null : Number(f.weightG), canLay: !!f.canLay, storageTypes: f.storageTypes.join(','),
+        weightG: f.weightG === '' ? null : Number(f.weightG), canLay: !!f.canLay, storageTypes: f.storageTypes.join(','), ...estibaBody,
     };
     let method = 'POST';
     let url = API;

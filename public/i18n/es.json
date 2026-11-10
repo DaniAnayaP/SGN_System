@@ -3513,6 +3513,9 @@
     "colUdmDPeso": "Peso (g)",
     "colUdmDAcostar": "Se puede acostar",
     "colUdmDTipo": "Tipo de almacenamiento",
+    "colUdmDCantidadCama": "Cantidad por cama (TI)",
+    "colUdmDCamasPallet": "Camas por pallet (HI)",
+    "colUdmDMaxEstiba": "Máxima estiba",
     "storageType_principal": "Por UDM producto principal",
     "udmTipoNinguno": "Ninguno",
     "udmTiposTodos": "Todos",
@@ -6135,6 +6138,7 @@
     "layoutCuelgaA": {"what": "La altura, medida desde el piso, a la que queda este aparato colgado del techo. Si la dejas vacía queda pegado al techo. No puede pasar de «Techo ahí», que es lo que mide la nave en ese punto (el techo no es plano).", "example": "una cámara colgada a 6.5 m donde el techo está a 8.9 m."},
     "menuResize": {"what": "Esquina de abajo a la derecha del desplegable: al jalarla se amplía (más ancho y con la lista más alta) para leer las descripciones completas. Siempre abre con su tamaño de siempre y solo se puede agrandar.", "example": "jalarla hacia abajo y a la derecha para ver el nombre completo de un medicamento que sale cortado."},
     "udmTipo": {"what": "Para qué se puede usar esta presentación: elige una, varias o todas las opciones (UDM producto principal, original, de almacenamiento, de compra, de empaque o de pallets). Solo las presentaciones que tienen al menos un tipo se ofrecen cuando relacionas un código con una posición; si no marcas ninguna, esa presentación no se ofrece. De partida, el material principal trae «UDM producto principal» y cada empaque trae «UDM de empaque».", "example": "la tableta con «UDM producto principal», la caja con 12 con «UDM de empaque» y «UDM de compra», y la caja con 50 con «UDM de pallets»."},
+    "udmEstiba": {"what": "Los datos de estiba de esta presentación cuando va en un pallet: cuántas lleva cada cama (TI), cuántas camas lleva el pallet (HI) y cuántos pallets se pueden apilar (máxima estiba). Son números enteros; vacío o 0 es «sin capturar». De la presentación con tipo «UDM de pallets» salen la base y los datos que usa Capacidad Almacenamiento (si el código no tiene una, usa lo que ya traía).", "example": "la caja con 50 con tipo «UDM de pallets»: 12 por cama, 5 camas por pallet y estiba máxima de 3."},
     "layoutSec_objetos": {
       "what": "Las personas y los montacargas dibujados en el plano, a escala, como una foto fija de cómo está la nave (no sigue a nadie en vivo). Cada uno tiene su lugar (X e Y son su centro, en metros), hacia dónde mira (giro en grados) y su equipo o persona, elegido del catálogo «Lo que transita»: de ahí salen su dibujo y sus medidas, y si cambian en el catálogo cambian aquí. Se ven en el croquis y en el 3D mientras este paso esté encendido.",
       "example": "un montacargas en el pasillo central, a 12 m en X y 9.5 m en Y, mirando hacia la derecha (giro 0), y una persona junto a él."

@@ -3514,6 +3514,9 @@
     "colUdmDPeso": "Weight (g)",
     "colUdmDAcostar": "Can lie down",
     "colUdmDTipo": "Storage Type",
+    "colUdmDCantidadCama": "Units per Layer (TI)",
+    "colUdmDCamasPallet": "Layers per Pallet (HI)",
+    "colUdmDMaxEstiba": "Max Stacking",
     "storageType_principal": "By main product UOM",
     "udmTipoNinguno": "None",
     "udmTiposTodos": "All",
@@ -6136,6 +6139,7 @@
     "layoutCuelgaA": {"what": "The height, measured from the floor, where this ceiling-hung device sits. If you leave it empty it sits against the ceiling. It cannot go above «Ceiling there», which is how tall the building is at that point (the ceiling is not flat).", "example": "a camera hanging at 6.5 m where the ceiling is 8.9 m high."},
     "menuResize": {"what": "Bottom-right corner of the dropdown: drag it to enlarge the dropdown (wider and with a taller list) and read the full descriptions. It always opens at its usual size and can only be made bigger.", "example": "drag it down and to the right to see the full name of a medicine that appears cut off."},
     "udmTipo": {"what": "What this presentation can be used for: choose one, several or all options (main product UOM, original, storage, purchase, packaging or pallet UOM). Only presentations with at least one type are offered when you relate a code to a position; if you check none, that presentation is not offered. By default the main material comes with «main product UOM» and each package with «packaging UOM».", "example": "the tablet with «main product UOM», the box of 12 with «packaging UOM» and «purchase UOM», and the box of 50 with «pallet UOM»."},
+    "udmEstiba": {"what": "The stacking data of this presentation when it goes on a pallet: how many each layer holds (TI), how many layers a pallet has (HI) and how many pallets can be stacked (max stacking). Whole numbers; empty or 0 means not captured. The presentation with the «pallet UOM» type provides the base and the data used by Storage Capacity (if the code has none, it uses what it already had).", "example": "the box of 50 with the «pallet UOM» type: 12 per layer, 5 layers per pallet and a maximum stacking of 3."},
     "layoutSec_objetos": {
       "what": "The people and forklifts drawn on the plan, to scale, as a still picture of how the warehouse is (it does not follow anyone live). Each one has its place (X and Y are its center, in meters), where it faces (turn in degrees) and its equipment or person, chosen from the «What Passes» catalog: its drawing and sizes come from there, and if they change in the catalog they change here. They show on the sketch and in 3D while this step is on.",
       "example": "a forklift in the central aisle, 12 m in X and 9.5 m in Y, facing right (turn 0), and a person next to it."

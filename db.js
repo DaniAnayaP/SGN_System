@@ -2470,6 +2470,11 @@ db.exec(`
 // Tipo de almacenamiento de cada presentación (una, varias o todas): principal | original | almacenamiento | compra | empaque | pallet, separadas por coma y en ese orden. NULL = todavía sin elegir (vale lo de siempre:
 // el material principal es «principal» y los empaques son «empaque»); '' = ninguno a propósito (esa presentación no se ofrece al relacionar un código con una posición).
 if (!db.prepare('PRAGMA table_info(sku_distribution_units)').all().some((c) => c.name === 'storage_types')) db.exec('ALTER TABLE sku_distribution_units ADD COLUMN storage_types TEXT');
+// Datos de estiba de cada presentación (enteros; 0 = sin capturar): cuántas trae cada cama (TI), cuántas camas lleva un pallet (HI) y cuántos pallets se pueden apilar (máxima estiba). De la presentación «pallet»
+// salen los de Capacidad Almacenamiento (antes eran del código, en Alta Artículos).
+for (const col of ['units_per_layer', 'layers_per_pallet', 'max_stack']) {
+    if (!db.prepare('PRAGMA table_info(sku_distribution_units)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE sku_distribution_units ADD COLUMN ${col} INTEGER NOT NULL DEFAULT 0`);
+}
 
 // public_token: set once (see maybeIssuePublicToken in server.js) the
 // instant an artículo's own 24 fields are all filled in -- the opaque id a
@@ -6388,6 +6393,9 @@ const SKU_DIST_PATCHABLE_FIELDS = {
     weightG: { column: 'weight_g', fieldKey: 'main.colUdmDPeso' },
     canLay: { column: 'can_lay', fieldKey: 'main.colUdmDAcostar' },
     storageTypes: { column: 'storage_types', fieldKey: 'main.colUdmDTipo' },
+    unitsPerLayer: { column: 'units_per_layer', fieldKey: 'main.colUdmDCantidadCama' },
+    layersPerPallet: { column: 'layers_per_pallet', fieldKey: 'main.colUdmDCamasPallet' },
+    maxStack: { column: 'max_stack', fieldKey: 'main.colUdmDMaxEstiba' },
 };
 const SKU_DIST_STORAGE_TYPES = ['principal', 'original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
 const SKU_DIST_SELECT = `SELECT d.*, s.record_number AS sku_number, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.custom_description AS sku_custom,
@@ -6404,12 +6412,13 @@ function getSkuDistributionById(id, clientId, forTestAccount = false) {
 }
 function createSkuDistribution({ clientId, isTestData = false, values }) {
     const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM sku_distribution_units WHERE client_id = ? AND is_test_data = ?').get(clientId, isTestData ? 1 : 0).n;
-    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, storage_types, is_test_data)
-        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @storageTypes, @isTestData)`).run({
+    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, storage_types, units_per_layer, layers_per_pallet, max_stack, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @storageTypes, @unitsPerLayer, @layersPerPallet, @maxStack, @isTestData)`).run({
         clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuItemId: values.skuItemId, level: values.level,
         uom: values.uom || '', contains: values.contains ?? null, shape: values.shape === 'cilindrica' ? 'cilindrica' : 'rectangular',
         length: Number(values.length) || 0, width: Number(values.width) || 0, height: Number(values.height) || 0, weightG: Number(values.weightG) || 0, canLay: values.canLay ? 1 : 0,
         storageTypes: values.storageTypes === undefined || values.storageTypes === null ? null : String(values.storageTypes),
+        unitsPerLayer: Math.round(Number(values.unitsPerLayer)) || 0, layersPerPallet: Math.round(Number(values.layersPerPallet)) || 0, maxStack: Math.round(Number(values.maxStack)) || 0,
     });
     return getSkuDistributionById(result.lastInsertRowid, clientId, isTestData);
 }
@@ -6419,7 +6428,7 @@ function updateSkuDistribution(id, clientId, patch, forTestAccount = false) {
     for (const [key, { column }] of Object.entries(SKU_DIST_PATCHABLE_FIELDS)) {
         if (Object.prototype.hasOwnProperty.call(patch, key)) {
             sets.push(`${column} = @${key}`);
-            params[key] = key === 'canLay' ? (patch[key] ? 1 : 0) : patch[key];
+            params[key] = key === 'canLay' ? (patch[key] ? 1 : 0) : (['unitsPerLayer', 'layersPerPallet', 'maxStack'].includes(key) ? (Math.round(Number(patch[key])) || 0) : patch[key]);
         }
     }
     if (sets.length) db.prepare(`UPDATE sku_distribution_units SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);

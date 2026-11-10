@@ -93,7 +93,7 @@ function buildRow(r) {
         cell('colCatRegistroUnico', r.locator, 'col-system'),
         cell('colCapUbicacion', r.locator), cell('colCapActivo', r.typeName), cell('colCapLargo', num(r.l), 'col-number'), cell('colCapFondo', num(r.w), 'col-number'), cell('colCapAlto', r.h > 0 ? num(r.h) : null, 'col-number'), cell('colCapM2', num(r.m2), 'col-number'),
         codeCell(r, tr), cell('colCapDescripcion', c ? c.description : null), cell('colCapUdm', c ? c.uom : null),
-        cell('colCapTipoAlm', c && c.storageType ? t(`main.storageType_${c.storageType}`) : null), cell('colCapBase', c && c.length > 0 && c.width > 0 ? `${num(c.length, 1)} × ${num(c.width, 1)}` : null, 'col-number'),
+        cell('colCapTipoAlm', c && ((c.storageTypes && c.storageTypes.length) || c.storageType) ? ((c.storageTypes && c.storageTypes.length) ? c.storageTypes : [c.storageType]).map((k) => t(`main.storageType_${k}`)).join(' · ') : null), cell('colCapBase', c && c.length > 0 && c.width > 0 ? `${num(c.length, 1)} × ${num(c.width, 1)}` : null, 'col-number'),
         cell('colCapTi', c ? intText(c.ti) : null, 'col-number'), cell('colCapHi', c ? intText(c.hi) : null, 'col-number'), cell('colCapEstiba', c ? intText(c.stack) : null, 'col-number'),
         calcCell('colCapHuellas', huellasText),
         calcCell('colCapPorPallet', k && k.perPallet !== null ? num(k.perPallet, 0) : null), calcCell('colCapPorHuella', k && k.perHuella !== null ? num(k.perHuella, 0) : null), calcCell('colCapMaxima', k && k.max !== null ? num(k.max, 0) : null),

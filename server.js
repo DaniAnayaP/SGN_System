@@ -10190,7 +10190,9 @@ app.delete('/api/business/code-relations/:id', requireAuth, requireCostCenter, (
 // cada uno con su unidad del catálogo Nuestras Unidad Medida, cuántas del nivel anterior contiene y SUS PROPIAS medidas (cm) y peso (g). «Equivale a» (en unidades principales) sale de multiplicar lo que contiene cada nivel;
 // las medidas y el peso nunca se calculan. De aquí leen Relación Código («Se acomoda») y el Layout (piezas que caben).
 const UDM_DIST_TABLE_KEY = 'udm-distribucion';
-const UDM_DIST_COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo' };
+const UDM_DIST_COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo', unitsPerLayer: 'colUdmDCantidadCama', layersPerPallet: 'colUdmDCamasPallet', maxStack: 'colUdmDMaxEstiba' };
+const UDM_DIST_INT_KEYS = ['unitsPerLayer', 'layersPerPallet', 'maxStack'];
+const UDM_DIST_MAIN_KEYS = ['shape', 'canLay', 'storageTypes', ...UDM_DIST_INT_KEYS]; // lo que se captura también en el material principal
 const UDM_DIST_MAX_EXTRA = 6; // empaques además del material principal
 const round4 = (v) => Math.round(v * 10000) / 10000;
 function mapSkuDistribution(row, pendingByRecord, companyName, equivalent) {
@@ -10216,6 +10218,9 @@ function mapSkuDistribution(row, pendingByRecord, companyName, equivalent) {
         weightG: principal ? round4((Number(row.sku_weight) || 0) * 1000) : row.weight_g,
         canLay: !!row.can_lay,
         storageTypes: skuDistTypesOf(row),
+        unitsPerLayer: row.units_per_layer || 0,
+        layersPerPallet: row.layers_per_pallet || 0,
+        maxStack: row.max_stack || 0,
         fromArticle: principal, // sus medidas y su peso se capturan en Alta Artículos
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({ companyName, area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Unidad de Medida por Distribución', centroCostos: '', createdAt: row.created_at }),
@@ -10245,6 +10250,14 @@ function normalizeSkuDistInput(body) {
         const picked = (Array.isArray(body.storageTypes) ? body.storageTypes : String(body.storageTypes || '').split(',')).map((k) => String(k).trim()).filter(Boolean);
         if (!picked.every((k) => SKU_DIST_STORAGE_TYPES.includes(k))) return { error: 'Tipo de almacenamiento: elige opciones de la lista.' };
         out.storageTypes = SKU_DIST_STORAGE_TYPES.filter((k) => picked.includes(k)).join(',');
+    }
+    // Datos de estiba: enteros de 0 a 1,000,000 (vacío o 0 = sin capturar)
+    for (const key of UDM_DIST_INT_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+        const raw = body[key];
+        const n = raw === '' || raw == null ? 0 : Number(raw);
+        if (!Number.isInteger(n) || n < 0 || n > 1000000) return { error: 'Cantidad por cama, camas por pallet y máxima estiba: escribe un número entero (0 = sin capturar).' };
+        out[key] = n;
     }
     for (const key of ['contains', 'length', 'width', 'height', 'weightG']) {
         if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
@@ -10305,8 +10318,8 @@ app.post('/api/business/sku-distribution', requireAuth, requireCostCenter, (req,
     if (state.shape === 'cilindrica') state.width = state.length;
     if (grants) {
         const missing = Object.entries(UDM_DIST_COLS)
-            .filter(([key]) => (level === 0 ? ['shape', 'canLay', 'storageTypes'].includes(key) : true))
-            .filter(([key]) => { const v = state[key]; return !(v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v)); })
+            .filter(([key]) => (level === 0 ? UDM_DIST_MAIN_KEYS.includes(key) : true))
+            .filter(([key]) => { const v = state[key]; return !(v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v) || (UDM_DIST_INT_KEYS.includes(key) && !v)); })
             .filter(([, colKey]) => !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, UDM_DIST_TABLE_KEY, colKey)))
             .map(([key]) => SKU_DIST_PATCHABLE_FIELDS[key].fieldKey);
         if (missing.length) return res.status(403).json({ message: 'No tienes permiso para llenar uno de los datos de esta presentación.', fields: missing });
@@ -10318,7 +10331,7 @@ app.post('/api/business/sku-distribution', requireAuth, requireCostCenter, (req,
     const san = skuDistSanitizers();
     Object.entries(SKU_DIST_PATCHABLE_FIELDS).forEach(([key, { fieldKey }]) => {
         const v = state[key];
-        if (v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v) || (level === 0 && !['shape', 'canLay', 'storageTypes'].includes(key))) return;
+        if (v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v) || (UDM_DIST_INT_KEYS.includes(key) && !v) || (level === 0 && !UDM_DIST_MAIN_KEYS.includes(key))) return;
         logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: row.id, recordLabel: skuDistLabel(row), action: 'update', fieldKey, oldValue: '', newValue: san[key] ? san[key](v) : String(v), changedBy: changedByLabel(req) });
     });
     notifyButtonAction(req, UDM_DIST_TABLE_KEY, 'create', `${padSku(row.sku_number)} · ${PACK_ORDINALS[row.level] || ''}`);
@@ -10337,7 +10350,7 @@ app.patch('/api/business/sku-distribution/:id', requireAuth, requireCostCenter, 
     const norm = normalizeSkuDistInput(raw);
     if (norm.error) return res.status(400).json({ message: norm.error });
     const principal = existing.level === 0;
-    if (principal && Object.keys(norm.values).some((k) => !['shape', 'canLay', 'storageTypes'].includes(k))) return res.status(400).json({ message: 'Las medidas y el peso del material principal se capturan en Alta Artículos. Aquí solo su forma y si se puede acostar.' });
+    if (principal && Object.keys(norm.values).some((k) => !UDM_DIST_MAIN_KEYS.includes(k))) return res.status(400).json({ message: 'Las medidas y el peso del material principal se capturan en Alta Artículos. Aquí solo su forma y si se puede acostar.' });
     const patch = { ...norm.values };
     const state = { level: existing.level, uom: existing.uom, contains: existing.contains, shape: existing.shape, length: existing.length, width: existing.width, height: existing.height, weightG: existing.weight_g, canLay: !!existing.can_lay, ...patch };
     if (state.shape === 'cilindrica') { state.width = state.length; if ('length' in patch || 'shape' in patch) patch.width = state.length; }
@@ -10389,10 +10402,29 @@ function storageCapRights(req) {
     const level = getColumnGrantLevel(getUserEffectiveGrants(req.user.sub), STORAGE_CAP_TABLE_KEY, 'colCapCodigo');
     return { canFill: level === 'ver-y-operar' || level === 'editar', canChange: level === 'editar' };
 }
+// De dónde salen la base de la tarima y los datos de estiba de un código para Capacidad Almacenamiento: de su presentación con tipo «pallet» (con varias, la de más arriba que ya trae algún dato de estiba, con SUS medidas);
+// si no tiene una, de lo que el código traía antes (Alta Artículos). storageType (uno solo) se conserva para las Apps que ya están instaladas; storageTypes trae todos los de la presentación.
+function skuCapacityEffective(sku, presRows) {
+    const pallets = (presRows || []).filter((r) => skuDistTypesOf(r).includes('pallet')).sort((a, z) => z.level - a.level);
+    const chosen = pallets.find((r) => r.units_per_layer > 0 || r.layers_per_pallet > 0 || r.max_stack > 0);
+    if (!chosen) return { ...sku, storageTypes: sku.storage_type ? [sku.storage_type] : [] };
+    const cyl = chosen.level > 0 && chosen.shape === 'cilindrica';
+    return {
+        ...sku, storage_type: 'pallet', storageTypes: skuDistTypesOf(chosen),
+        length: chosen.level === 0 ? sku.length : chosen.length, width: chosen.level === 0 ? sku.width : (cyl ? chosen.length : chosen.width),
+        units_per_layer: chosen.units_per_layer, layers_per_pallet: chosen.layers_per_pallet, max_stack: chosen.max_stack,
+    };
+}
+function capacityPresentationsMap(clientId, isTest) {
+    const bySku = new Map();
+    listSkuDistribution(clientId, isTest).forEach((r) => { if (!bySku.has(r.sku_item_id)) bySku.set(r.sku_item_id, []); bySku.get(r.sku_item_id).push(r); });
+    return bySku;
+}
 function storageCapRows(ctx, { costCenterId, key, max = STORAGE_CAP_MAX_ROWS } = {}) {
     const client = getClientById(ctx.clientId);
     const assigned = new Map(listStorageCapacity(ctx.clientId, ctx.isTest).map((r) => [`${r.cost_center_id}|${r.location_key}`, r]));
-    const skus = new Map(listSkuCapacityData(ctx.clientId, ctx.isTest, [...assigned.values()].map((r) => r.sku_item_id).filter(Boolean)).map((r) => [r.id, r]));
+    const presBySku = capacityPresentationsMap(ctx.clientId, ctx.isTest);
+    const skus = new Map(listSkuCapacityData(ctx.clientId, ctx.isTest, [...assigned.values()].map((r) => r.sku_item_id).filter(Boolean)).map((r) => [r.id, skuCapacityEffective(r, presBySku.get(r.id))]));
     const centers = {};
     const rows = [];
     let truncated = false;
@@ -10409,7 +10441,7 @@ function storageCapRows(ctx, { costCenterId, key, max = STORAGE_CAP_MAX_ROWS } =
             if (key && loc.key !== key) continue;
             const rec = assigned.get(`${cc.id}|${loc.key}`);
             const sku = rec && rec.sku_item_id ? skus.get(rec.sku_item_id) : null;
-            const code = sku ? { id: sku.id, sku: padSku(sku.record_number), upc: sku.upc || '', description: sku.custom_description || sku.known_description || sku.unique_description || '', uom: sku.main_uom || '', storageType: sku.storage_type || '', length: sku.length || 0, width: sku.width || 0, height: sku.height || 0, ti: sku.units_per_layer || 0, hi: sku.layers_per_pallet || 0, stack: sku.max_stack || 0 } : null;
+            const code = sku ? { id: sku.id, sku: padSku(sku.record_number), upc: sku.upc || '', description: sku.custom_description || sku.known_description || sku.unique_description || '', uom: sku.main_uom || '', storageType: sku.storage_type || '', storageTypes: sku.storageTypes || [], length: sku.length || 0, width: sku.width || 0, height: sku.height || 0, ti: sku.units_per_layer || 0, hi: sku.layers_per_pallet || 0, stack: sku.max_stack || 0 } : null;
             rows.push({
                 cc: cc.id, id: rec ? rec.id : null, key: loc.key, locator: loc.locator, zoneName: loc.zoneName, spaceCode: loc.spaceCode, level: loc.multi ? loc.level : 0, slot: loc.multi ? loc.slot : 0,
                 className: ctx.className.get(loc.assetClassId) || '', typeName: ctx.typeName.get(loc.assetId) || '', l: loc.l, w: loc.w, h: loc.h, m2: loc.m2,
@@ -10432,8 +10464,9 @@ app.get('/api/business/storage-capacity/codes', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
     const ids = searchSkuItems(clientId, '', isTestAccount, 5000).map((r) => r.id);
-    const codes = listSkuCapacityData(clientId, isTestAccount, ids).map((r) => ({
-        id: r.id, sku: padSku(r.record_number), upc: r.upc || '', description: r.custom_description || r.known_description || r.unique_description || '', uom: r.main_uom || '',
+    const presBySku = capacityPresentationsMap(clientId, isTestAccount);
+    const codes = listSkuCapacityData(clientId, isTestAccount, ids).map((raw) => skuCapacityEffective(raw, presBySku.get(raw.id))).map((r) => ({
+        id: r.id, storageTypes: r.storageTypes || [], sku: padSku(r.record_number), upc: r.upc || '', description: r.custom_description || r.known_description || r.unique_description || '', uom: r.main_uom || '',
         storageType: r.storage_type || '', length: r.length || 0, width: r.width || 0, height: r.height || 0, ti: r.units_per_layer || 0, hi: r.layers_per_pallet || 0, stack: r.max_stack || 0,
     }));
     res.set('Cache-Control', 'no-store');

@@ -415,7 +415,7 @@ function renderDetail() {
     codeBox.className = 'pm-app-card';
     codeBox.innerHTML = `<h4 class="pm-app-title">${esc(t('main.colCapCodigo'))}${r.pending ? ` · ${esc(t('home.capSavedOffline'))}` : ''}</h4>`;
     if (c) {
-        const lines = [[t('main.colCapCodigo'), c.sku], [t('main.colCapDescripcion'), c.description], [t('main.colCapUdm'), c.uom || '—'], [t('main.colCapTipoAlm'), c.storageType ? t(`main.storageType_${c.storageType}`) : '—'], [t('main.colCapBase'), c.length > 0 && c.width > 0 ? `${num(c.length, 1)} × ${num(c.width, 1)}` : '—'], [t('main.colCapTi'), c.ti > 0 ? num(c.ti, 0) : '—'], [t('main.colCapHi'), c.hi > 0 ? num(c.hi, 0) : '—'], [t('main.colCapEstiba'), c.stack > 0 ? num(c.stack, 0) : '—']];
+        const lines = [[t('main.colCapCodigo'), c.sku], [t('main.colCapDescripcion'), c.description], [t('main.colCapUdm'), c.uom || '—'], [t('main.colCapTipoAlm'), (c.storageTypes && c.storageTypes.length) || c.storageType ? ((c.storageTypes && c.storageTypes.length) ? c.storageTypes : [c.storageType]).map((k) => t(`main.storageType_${k}`)).join(' · ') : '—'], [t('main.colCapBase'), c.length > 0 && c.width > 0 ? `${num(c.length, 1)} × ${num(c.width, 1)}` : '—'], [t('main.colCapTi'), c.ti > 0 ? num(c.ti, 0) : '—'], [t('main.colCapHi'), c.hi > 0 ? num(c.hi, 0) : '—'], [t('main.colCapEstiba'), c.stack > 0 ? num(c.stack, 0) : '—']];
         const meta = document.createElement('div');
         meta.className = 'pm-app-meta pm-app-meta-flat';
         meta.innerHTML = lines.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
