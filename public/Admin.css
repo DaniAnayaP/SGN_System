@@ -7512,6 +7512,8 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 @media (prefers-reduced-motion: reduce){ .hl-ring, .hl-soft{ animation: none; } }
 .hl-tag{ font: 700 9.5px var(--font-family, system-ui, sans-serif); fill: #e8590c; paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 .layout-table tr.layout-row-sel td{ background: rgba(232, 89, 12, 0.1); }
+/* los renglones de la tabla de Localizadores se pueden elegir con un toque */
+.layout-table tr[data-locator]{ cursor: pointer; }
 .layout-table tr.layout-row-sel td:first-child{ box-shadow: inset 3px 0 0 #e8590c; }
 
 /* zonas de cualquier forma, lados y zonas sin asignar */

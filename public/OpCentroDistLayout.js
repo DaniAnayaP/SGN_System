@@ -1199,7 +1199,8 @@ function locatorsStepHtml() {
         const go = hasRelationScreen() ? `<a class="layout-loc-go" href="${esc(relationUrl(r.locator))}" data-help-key="layoutRelacionLink" aria-label="${esc(t('main.locIrRelacion'))}" title="${esc(t('main.locIrRelacion'))}"><i class="bx bx-link-external" aria-hidden="true"></i></a>` : '';
         return `<td class="layout-calc">${esc(info.sku)} · ${esc(info.description)}</td><td class="layout-calc">${unit}</td><td class="layout-calc">${cap}</td><td class="layout-calc"><span class="layout-loc-lock" title="${esc(t('main.locCodigoNoElimina'))}"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>${change}${go}</td>`;
     };
-    const body = rows.map((r) => `<tr data-locator="${esc(r.locator || '')}"><td class="layout-calc">${esc(zoneText(r))}</td><td class="layout-calc">${esc(footprintText(r))}</td><td class="layout-calc">${esc(assetText(r))}</td><td class="layout-calc">${num(r.level)}</td><td class="layout-calc">${num(r.slot)}</td><td class="layout-calc">${num(r.position)}</td><td class="layout-calc"><b>${esc(r.locator || '—')}</b></td><td class="layout-calc">${esc(t(`main.locAlcance_${r.scope}`))}</td><td class="layout-calc"><span class="rel-tag ${r.complete ? 'rel-tag-ok' : 'rel-tag-partial'}">${esc(t(r.complete ? 'main.locEstadoCompleto' : 'main.locEstadoAMedias'))}</span></td>${codeCells(r)}</tr>`);
+    const marked = locAny() ? locCode().replace(/\s\+\d+$/, '') : '';
+    const body = rows.map((r) => `<tr data-locator="${esc(r.locator || '')}"${r.locator && r.locator === marked ? ' class="layout-row-sel"' : ''}><td class="layout-calc">${esc(zoneText(r))}</td><td class="layout-calc">${esc(footprintText(r))}</td><td class="layout-calc">${esc(assetText(r))}</td><td class="layout-calc">${num(r.level)}</td><td class="layout-calc">${num(r.slot)}</td><td class="layout-calc">${num(r.position)}</td><td class="layout-calc"><b>${esc(r.locator || '—')}</b></td><td class="layout-calc">${esc(t(`main.locAlcance_${r.scope}`))}</td><td class="layout-calc"><span class="rel-tag ${r.complete ? 'rel-tag-ok' : 'rel-tag-partial'}">${esc(t(r.complete ? 'main.locEstadoCompleto' : 'main.locEstadoAMedias'))}</span></td>${codeCells(r)}</tr>`);
     const note = truncated ? `<p class="layout-muted">${esc(t('main.layoutLocalizadoresCorte', { n: LOCATOR_PANEL_MAX }))}</p>` : '';
     const heads = ['main.colLocZona', 'main.colLocHuella', 'main.colLocActivo', 'main.colLocNivel', 'main.colLocColumna', 'main.colLocProfundidad', 'main.colLocLocalizador', 'main.colLocAlcance', 'main.colLocEstado'];
     if (showCodes) heads.push('main.colLocCodigo', 'main.colLocUnidad', 'main.colLocCapacidad', 'main.colLocAcciones');
@@ -2085,6 +2086,9 @@ function rowEntity(tr) {
     if (list === 'bay' && state.draft.spaces[i]) return { kind: 'bay', id: state.draft.spaces[i].id, n: Number(ctl.getAttribute('data-n')), c: Number(ctl.getAttribute('data-c')) };
     return null;
 }
+// El resaltado que deja el botón «Localizador» (hl.loc) vive en el paso de su renglón (Posiciones, Niveles…), pero lo elegido es el mismo al pasar a Localizadores o Relación Código (pasos de solo consulta): ahí también
+// se sigue viendo y enfocando solo lo elegido, no el activo entero.
+const hlOnStep = (h) => !!h && (h.step === state.focus || (!!h.loc && INFO_STEPS.includes(state.focus)));
 const sameHighlight = (a, b) => !!a && !!b && a.kind === b.kind && a.id === b.id && a.n === b.n && a.c === b.c && a.p === b.p && a.step === b.step;
 // El renglón de la tabla que corresponde a lo resaltado (por id: el número de renglón cambia al quitar o agregar).
 function highlightedRow() {
@@ -2096,6 +2100,12 @@ function markSelectedRow() {
     document.querySelectorAll('#layout-panel tr.layout-row-sel').forEach((tr) => tr.classList.remove('layout-row-sel'));
     const tr = highlightedRow();
     if (tr) tr.classList.add('layout-row-sel');
+    else if (state.focus === 'localizadores' && locAny()) {
+        // en el paso Localizadores el renglón elegido es el del localizador que se lleva marcado
+        const code = locCode().replace(/\s\+\d+$/, '');
+        const row = Array.from(document.querySelectorAll('#layout-panel tr[data-locator]')).find((r) => r.getAttribute('data-locator') === code);
+        if (row) row.classList.add('layout-row-sel');
+    }
 }
 // Al elegir un sensor (paso Sensores) las zonas que MIDE se marcan muy tenue en el croquis (un tinte suave con el borde punteado), aunque el paso Zonas esté apagado: así se ve qué zonas quedan cubiertas, no solo dónde está
 // el sensor. Se arma con la geometría del último dibujo (view) y se quita junto con el resto del resaltado (lleva la clase hl-shape).
@@ -2135,7 +2145,7 @@ function ambientPositionTargets() {
 function positionsOverlayTargets() {
     if (!state.draft) return [];
     const h = state.hl;
-    if (!h || h.step !== state.focus) return ambientPositionTargets();
+    if (!hlOnStep(h)) return ambientPositionTargets();
     return highlightedList().filter((e) => e.kind === 'bay' || e.kind === 'space').map((e) => ({ id: e.id, n: e.n || 0, c: e.kind === 'bay' ? e.c : 0, p: e.p || 0 }));
 }
 function drawPositionsOverlay() {
@@ -2282,7 +2292,7 @@ function applyHighlight(reveal) {
     svg.classList.remove('has-hl', 'hl-soft-mode');
     drawPositionsOverlay();
     const h = state.hl;
-    if (!h || h.step !== state.focus || !state.draft) return;
+    if (!hlOnStep(h) || !state.draft) return;
     if (h.kind === 'sensor') drawSensorZones(svg, h.id);
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
     const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', ceiling: 'data-clid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid', side: 'data-sin-figura', corner: 'data-sin-figura', floor: 'data-sin-figura' };
@@ -3531,14 +3541,15 @@ function locSync() {
     if (state.hlList || (state.hl && state.hl.loc)) { state.hl = null; state.hlList = null; applyHighlight(false); }
 }
 // Enfocar lo que se lleva marcado: las huellas o los activos y, con niveles, espacios o posiciones, resaltarlos dentro de sus activos (croquis y 3D).
-function locApply() {
+function locApply(opts) {
+    const stay = !!(opts && opts.stay); // desde la tabla de Localizadores: la tabla de abajo se queda en ese paso
     const k = locDeepest();
     if (!k) { state.pick = []; state.hl = null; state.hlList = null; applyViewFocus(); renderViewStrip(); return; }
     const inSpace = k !== 'fp';
     const step = inSpace ? 'activos' : 'espacios';
     if (!stepOn(step)) { state.steps = [...state.steps, step]; fixLayerFocus(); } // la capa de lo enfocado se enciende si estaba apagada
     // en Editar la tabla de abajo pasa al paso de lo marcado: Huella-Espacio, Activos, Niveles o Posiciones
-    if (state.mode === 'edit') {
+    if (state.mode === 'edit' && !stay) {
         // con posiciones marcadas la tabla es la de Posiciones; con espacios, la de Espacios; con niveles, la de Niveles
         const isPos = k === 'pos' || k === 'cell';
         const tableStep = [isPos ? 'ubicaciones' : '', isPos || k === 'c' ? 'posiciones' : '', k === 'n' ? 'niveles' : '', step].find((s) => s && stepVisible(s));
@@ -3559,6 +3570,31 @@ function locApply() {
     }
     if (state.mode === 'edit') renderPanel();
     renderViewStrip();
+}
+// Paso Localizadores: tocar un renglón elige ESE localizador (lo mismo que bajarlo con el botón «Localizador» de arriba): en el croquis, el 3D y la tabla solo se ve lo suyo. Tocarlo otra vez lo suelta.
+// Zona, huella, activo o posición: el renglón dice hasta dónde llega. Las zonas se eligen con el botón Zona.
+function locatorRowPick(code) {
+    if (!state.draft || !code) return;
+    const r = LC.locatorRows(state.draft).rows.find((x) => x.locator === code);
+    if (!r || r.scope === 'zone') return;
+    const was = locAny() ? locCode().replace(/\s\+\d+$/, '') : '';
+    if (was === code) {
+        locReset();
+        locApply({ stay: true });
+        if (state.mode === 'edit') renderPanel();
+        return;
+    }
+    locReset();
+    vLoc.sel.fp = [r.footprintId];
+    if (r.scope !== 'footprint') vLoc.sel.sp = [r.spaceId];
+    if (r.scope === 'position') {
+        const n = `${r.spaceId}|${r.level}`;
+        const c = `${n}|${r.slot}`;
+        const p = `${c}|${r.position}`;
+        vLoc.sel.n = [n]; vLoc.sel.c = [c]; vLoc.sel.pos = [p]; vLoc.sel.cell = [p];
+    }
+    vLoc.step = r.scope === 'position' ? 'cell' : (r.scope === 'asset' ? 'n' : 'sp');
+    locApply({ stay: true });
 }
 // Marcar o desmarcar una opción de la lista del paso (casilla); lo que ya no cabe en los pasos de abajo se quita.
 function locPick(step, value) {
@@ -5146,6 +5182,11 @@ function onEdit(event) {
 }
 $('layout-panel').addEventListener('focusin', (event) => selectRowFrom(event.target));
 $('layout-panel').addEventListener('click', (event) => selectRowFrom(event.target));
+$('layout-panel').addEventListener('click', (event) => {
+    if (state.focus !== 'localizadores' || event.target.closest('button, a, input, select, label')) return;
+    const tr = event.target.closest('tr[data-locator]');
+    if (tr) locatorRowPick(tr.getAttribute('data-locator'));
+});
 $('layout-panel').addEventListener('input', onEdit);
 $('layout-panel').addEventListener('change', onEdit);
 $('layout-panel').addEventListener('click', (event) => {
@@ -6251,17 +6292,17 @@ function dim3dLayers() {
 function fxFocusLevel() {
     // «Localizador»: con Enfoque u Oculto solo se ve el nivel, la posición o el localizador elegido; con Tenue, los demás niveles se apagan
     const h = state.hl;
-    if (h && h.loc && h.step === state.focus) {
+    if (h && h.loc && hlOnStep(h)) {
         const picked = new Set(state.pick.filter((x) => x.type === 'space').map((x) => x.id));
         // un espacio marcado (sin posición) se dibuja solo, sin los demás espacios de su nivel (only)
-        const out = highlightedList().filter((e) => e.n && picked.has(e.id)).map((e) => ({ id: e.id, n: e.n, c: e.c, f: e.f, p: e.p, only: !!(e.c && !e.p), mode: state.findDim ? 'dim' : 'hide' }));
+        const out = highlightedList().filter((e) => e.n && picked.has(e.id)).map((e) => ({ id: e.id, n: e.n, c: e.c, f: e.f, p: e.p, only: !!(e.c && !e.p), solo: !!e.p, mode: state.findDim ? 'dim' : 'hide' }));
         if (out.length) return out;
     }
     const v = virtualFind();
-    if (v && v.n) return [{ id: v.ids[0], n: v.n, c: v.c, p: v.p, mode: state.findDim ? 'dim' : 'hide' }];
+    if (v && v.n) return [{ id: v.ids[0], n: v.n, c: v.c, p: v.p, solo: !!v.p, mode: state.findDim ? 'dim' : 'hide' }];
     // con un filtro de la franja (Elegir, Localizador, Zona o la búsqueda) el renglón elegido de Niveles, Espacios o Posiciones también enfoca su nivel
     const rl = rowLevelFocus();
-    return rl ? [{ id: rl.id, n: rl.n, c: rl.c, p: rl.p, mode: state.findDim ? 'dim' : 'hide' }] : null;
+    return rl ? [{ id: rl.id, n: rl.n, c: rl.c, p: rl.p, solo: !!rl.p, mode: state.findDim ? 'dim' : 'hide' }] : null;
 }
 // Con un filtro de la franja puesto (Elegir, Localizador, Zona o la búsqueda) virtualFind no aplica, pero el renglón que se elige en Niveles, Espacios o Posiciones sigue enfocando SU nivel en el 3D: solo se ve ese nivel con sus
 // espacios (o el espacio con sus posiciones), no todos los niveles del activo. Sin filtro lo hace virtualFind.
@@ -6364,7 +6405,7 @@ function refreshScene3d() {
 function applyHighlight3d() {
     if (!scene3d || !scene3d.highlight) return; // el 3D viejo que quedó en la memoria del navegador aún no la trae
     const h = state.hl;
-    scene3d.highlight(h && h.step === state.focus && state.draft ? highlightedList().map((e) => ({ kind: e.kind, id: e.id, strong: !!h.strong, n: e.n, c: e.c, f: e.f, p: e.p })) : null);
+    scene3d.highlight(hlOnStep(h) && state.draft ? highlightedList().map((e) => ({ kind: e.kind, id: e.id, strong: !!h.strong, n: e.n, c: e.c, f: e.f, p: e.p })) : null);
 }
 function scheduleScene3d() {
     if (!state.view3d) return;

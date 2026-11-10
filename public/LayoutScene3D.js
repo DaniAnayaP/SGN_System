@@ -1617,7 +1617,8 @@
                     const by0 = rc ? s.y + rc.y : s.y; // y desde dónde empieza ese cuadro
                     const mAll = one ? LCz.bayMeasures(s, nz, one) : LCz.levelMeasures(s, nz);
                     // con un localizador se dibuja la distribución de las posiciones del espacio (cada una en su lugar y con sus medidas); si no, las divisiones del nivel
-                    const contPos = cont && lastLayout ? posOf(s.id, nz, cont) : [];
+                    // con una posición o un localizador elegido en el editor (solo) se dibuja ESA posición y no las demás de su espacio; la página pública sigue mostrando las del espacio con la suya marcada
+                    const contPos = cont && lastLayout ? posOf(s.id, nz, cont).filter((q) => !fzm.solo || q.num === Number(fzm.p)) : [];
                     const allMode = !!fzm.all && !cont; // el nivel entero con las posiciones de todos sus espacios (página pública)
                     const cols = contPos.length ? contPos.length : (esp ? 1 : slotsZ);
                     const sxP = blen / Math.max(mAll.l, 0.01); const szP = depthZ / Math.max(mAll.w, 0.01);
