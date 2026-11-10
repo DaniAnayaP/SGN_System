@@ -2248,8 +2248,9 @@ function fxReframe() { resetZoom(); find3dReframe = true; }
 // Cambió el renglón elegido: el croquis y el 3D se vuelven a armar con lo enfocado (el activo, su nivel, su espacio y su posición); si ya no hay renglón enfocado, vuelven a verse completos.
 function fxAfterSelect() {
     const v = virtualFind();
-    const key = v ? v.ids.join(',') : '';
-    if (!v && !fxLastKey) return; // sin enfoque antes ni ahora: nada que redibujar
+    const rl = v ? null : rowLevelFocus();
+    const key = v ? v.ids.join(',') : (rl ? `${rl.id}|${rl.n}` : '');
+    if (!v && !rl && !fxLastKey) return; // sin enfoque antes ni ahora: nada que redibujar
     if (key !== fxLastKey) fxReframe();
     fxLastKey = key;
     renderSvg();
@@ -5490,7 +5491,17 @@ function fxFocusLevel() {
         if (out.length) return out;
     }
     const v = virtualFind();
-    return v && v.n ? [{ id: v.ids[0], n: v.n, c: v.c, p: v.p, mode: state.findDim ? 'dim' : 'hide' }] : null;
+    if (v && v.n) return [{ id: v.ids[0], n: v.n, c: v.c, p: v.p, mode: state.findDim ? 'dim' : 'hide' }];
+    // con un filtro de la franja (Elegir, Localizador, Zona o la búsqueda) el renglón elegido de Niveles, Espacios o Posiciones también enfoca su nivel
+    const rl = rowLevelFocus();
+    return rl ? [{ id: rl.id, n: rl.n, c: rl.c, p: rl.p, mode: state.findDim ? 'dim' : 'hide' }] : null;
+}
+// Con un filtro de la franja puesto (Elegir, Localizador, Zona o la búsqueda) virtualFind no aplica, pero el renglón que se elige en Niveles, Espacios o Posiciones sigue enfocando SU nivel en el 3D: solo se ve ese nivel con sus
+// espacios (o el espacio con sus posiciones), no todos los niveles del activo. Sin filtro lo hace virtualFind.
+function rowLevelFocus() {
+    if (!state.find) return null;
+    const c = fxCandidate();
+    return c && c.n ? c : null;
 }
 const lazyScripts = {};
 const can3d = () => !!(state.perms && state.perms.canView3D);
