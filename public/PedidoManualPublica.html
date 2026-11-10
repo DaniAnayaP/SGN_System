@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"> <!-- sin zoom automático al tocar un campo: todos los textos miden igual -->
     <meta name="robots" content="noindex, nofollow">
     <meta name="referrer" content="no-referrer">
     <title>Pedido Manual</title>
@@ -102,7 +102,54 @@
         mark{ background:var(--soft); color:inherit; border-radius:3px; padding:0 1px; box-shadow:0 0 0 1px var(--line); }
         mark.aux{ background:transparent; }
         /* Para cuándo: lista en el celular y tabla por día en pantalla ancha (mismo pedido armado) */
-        main.wide{ max-width:1100px; }
+        main.wide{ max-width:75rem; }
+        /* Letras y controles en rem, tanto en la computadora (la ventana de QR's toma el tamaño de letra del sistema) como en el celular (sigue el tamaño de texto del aparato): todo se acomoda al tamaño y se ve igual en los dos. */
+        main.compact{ font-size:.85rem; }
+        main.compact h1{ font-size:1.2rem; }
+        main.compact h2{ font-size:.95rem; }
+        main.compact label{ font-size:.72rem; }
+        main.compact .chip{ font-size:.8rem; padding:.15rem .7rem; }
+        main.compact input[type=text], main.compact input[type=search], main.compact input[type=number]{ font-size:.85rem; padding:.55rem .8rem; border-radius:.8rem; }
+        main.compact .btn{ font-size:.9rem; padding:.7rem 1rem; border-radius:.9rem; }
+        main.compact .link{ font-size:.8rem; }
+        main.compact .card{ padding:.9rem 1rem; border-radius:1.2rem; gap:.7rem; }
+        main.compact .msg, main.compact .muted{ font-size:.78rem; }
+        main.compact .res b{ font-size:.78rem; }
+        main.compact .res span{ font-size:.85rem; }
+        main.compact .res small{ font-size:.72rem; }
+        main.compact .plus{ width:2rem; height:2rem; font-size:1.1rem; }
+        main.compact .sbox{ padding:.5rem .7rem; }
+        main.compact .sbox input[type=search]{ font-size:.85rem; }
+        main.compact .sbox svg{ width:1rem; height:1rem; }
+        main.compact .fmode{ width:2.3rem; height:2.3rem; border-radius:.7rem; }
+        main.compact .fmode svg{ width:1rem; height:1rem; }
+        main.compact .fsign span{ font-size:.8rem; }
+        main.compact .mcur{ font-size:.62rem; }
+        main.compact .sumrow{ padding:.5rem .65rem; }
+        main.compact .sumrow b{ font-size:.8rem; }
+        main.compact .sumrow .lbl{ font-size:.62rem; }
+        main.compact .copt{ font-size:.82rem; }
+        main.compact .mopt{ font-size:.8rem; }
+        main.compact .sel b{ font-size:.95rem; }
+        main.compact .qty input{ font-size:1.3rem; width:6rem; }
+        main.compact .qty button{ width:2.4rem; height:2.4rem; font-size:1.2rem; }
+        main.compact .line span, main.compact .oline .top span{ font-size:.85rem; }
+        main.compact .line small, main.compact .oline .top small{ font-size:.72rem; }
+        main.compact .oline .q button{ width:1.8rem; height:1.8rem; font-size:1rem; }
+        main.compact .dchip, main.compact select.dsel, main.compact select.when, main.compact .split{ font-size:.78rem; }
+        main.compact .seg button{ font-size:.72rem; }
+        main.compact .done .folio{ font-size:1.8rem; }
+        main.compact table.dias{ font-size:.8rem; }
+        main.compact .dias td.art b{ font-size:.82rem; }
+        main.compact .dias td.art small{ font-size:.68rem; }
+        main.compact .dh span{ font-size:.6rem; }
+        main.compact .dh b{ font-size:1rem; }
+        main.compact .dh small{ font-size:.66rem; }
+        main.compact .dh em{ font-size:.56rem; }
+        main.compact .dh b.asap{ font-size:.75rem; }
+        main.compact .qc{ font-size:.85rem; }
+        main.compact .tot small, main.compact .pill{ font-size:.68rem; }
+        main.compact .pill b{ font-size:.8rem; }
         .chips{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
         .dchip{ font:600 13px system-ui,sans-serif; border:1px solid var(--line); border-radius:999px; padding:6px 12px; background:var(--surface); color:var(--ink); cursor:pointer; display:flex; flex-direction:column; align-items:center; line-height:1.15; }
         .dchip small{ font-weight:400; font-size:11px; color:var(--muted); }
@@ -144,6 +191,18 @@
         .dias .mpop.sign{ min-width:0; left:auto; }
         .dias td.resrow{ text-align:left; padding:8px 12px; }
         .dias .list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
+        /* tabla uniforme: columnas de ancho fijo (el artículo, lo antes posible, cada día, otra fecha y el total) y encabezados alineados arriba */
+        table.dias{ table-layout:fixed; min-width:0; }
+        .dias thead th:not(.art){ vertical-align:top; padding-top:12px; }
+        .dias th.dc .dh{ height:4.75rem; justify-content:flex-start; }
+        .dias .dh b.asap{ font-size:12px; line-height:1.2; max-width:5.2rem; text-align:center; }
+        .dias .qc{ width:100%; max-width:3.75rem; }
+        .dias select.dsel{ width:100%; }
+        .dias th.art, .dias td.art{ min-width:0; max-width:none; }
+        .dias .arttitle{ font-size:.95rem; font-weight:700; margin-bottom:.35rem; color:var(--ink); }
+        .dias th.art .fmenu{ gap:.4rem; }
+        .dias th.art .sumrow{ padding:.35rem .6rem; }
+        .dias th.art .mcur{ margin-bottom:-.1rem; }
         .sr{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
         .dh{ display:flex; flex-direction:column; align-items:center; line-height:1.15; padding:2px 0; }
         .dh span{ font-size:10px; font-weight:800; letter-spacing:.08em; color:var(--muted); }
@@ -165,7 +224,7 @@
     </style>
 </head>
 <body>
-<main>
+<main class="compact">
     <div id="qr-brand"></div>
     <div id="view"></div>
 </main>
@@ -391,18 +450,21 @@ function drawOrderTable() {
     const cols = tableCols();
     const days = allDays();
     const more = days.filter((d) => !cols.includes(d));
+    // Todas las columnas de días miden lo mismo y sus encabezados se alinean arriba (la etiqueta «Mañana» va debajo y no mueve a los demás). Los anchos van en rem: crecen y se achican con el tamaño del sistema.
     const head = cols.map((w) => {
-        if (w === '') return `<th><div class="dh"><b class="asap">${esc(TEXT.asap)}</b></div></th>`;
+        if (w === '') return `<th class="dc"><div class="dh"><span>&nbsp;</span><b class="asap">${esc(TEXT.asap)}</b></div></th>`;
         const p = dayParts(w);
-        return `<th${p.weekend ? ' class="wk"' : ''}><div class="dh"><span>${esc(p.dow.toUpperCase())}</span><b>${p.day}</b><small>${esc(p.mon)}</small>${w === days[0] ? `<em>${esc(TEXT.tomorrow)}</em>` : ''}</div></th>`;
+        return `<th class="dc${p.weekend ? ' wk' : ''}"><div class="dh"><span>${esc(p.dow.toUpperCase())}</span><b>${p.day}</b><small>${esc(p.mon)}</small>${w === days[0] ? `<em>${esc(TEXT.tomorrow)}</em>` : ''}</div></th>`;
     }).join('');
+    const tableW = 24 + 5.75 + (cols.length - 1) * 4.5 + 7.75 + 5.25;
+    const colgroup = `<colgroup><col style="width:24rem"><col style="width:5.75rem">${cols.slice(1).map(() => '<col style="width:4.5rem">').join('')}<col style="width:7.75rem"><col style="width:5.25rem"></colgroup>`;
     const addCol = more.length ? `<select class="dsel" id="addcol" aria-label="${esc(TEXT.addColumn)}"><option value="">${esc(TEXT.addColumn)}</option>${more.map((d) => `<option value="${d}">${esc(dayShort(d))}</option>`).join('')}</select>` : '';
     const rows = !cart.length ? `<tr><td colspan="${cols.length + 3}" class="emptyrow">${esc(TEXT.emptyTable)}</td></tr>` : cart.map((c, i) => `<tr><td class="art"><b>${esc(c.description)}</b><small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></td>${cols.map((w) => {
         const p = partOf(c, w);
         const weekend = w && dayParts(w).weekend;
         return `<td${weekend ? ' class="wk"' : ''}><input class="qc${p ? ' on' : ''}" type="number" min="0" step="any" inputmode="decimal" placeholder="–" data-cell="${i}|${w}" value="${esc(p ? p.quantity : '')}" aria-label="${esc(`${c.description}, ${whenLabel(w)}`)}"></td>`;
     }).join('')}<td class="tot" id="tot-${i}"></td></tr>`).join('');
-    return `<div class="scroll" role="region" tabindex="0" aria-label="${esc(TEXT.yourOrder)}"><table class="dias"><thead><tr><th class="art"><span class="sr">${esc(TEXT.article)}</span>${panelHtml()}</th>${head}<th>${addCol}</th><th>${esc(TEXT.total)}</th></tr></thead><tbody><tr class="resrow"><td colspan="${cols.length + 3}"><div id="results"></div></td></tr>${rows}</tbody></table></div><div><div class="muted">${esc(TEXT.perDay)}</div><div class="sumbar" id="sumbar">${summaryHtml()}</div></div>`;
+    return `<div class="scroll" role="region" tabindex="0" aria-label="${esc(TEXT.yourOrder)}"><table class="dias" style="width:${tableW}rem">${colgroup}<thead><tr><th class="art"><div class="arttitle">${esc(TEXT.article)}</div>${panelHtml()}</th>${head}<th>${addCol}</th><th>${esc(TEXT.total)}</th></tr></thead><tbody><tr class="resrow"><td colspan="${cols.length + 3}"><div id="results"></div></td></tr>${rows}</tbody></table></div><div><div class="muted">${esc(TEXT.perDay)}</div><div class="sumbar" id="sumbar">${summaryHtml()}</div></div>`;
 }
 // Al escribir en una casilla solo se ponen al día los totales, el resumen por día y el título: así no se pierde el cursor.
 function refreshTable() {
