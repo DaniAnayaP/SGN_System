@@ -1963,10 +1963,18 @@ function highlightedList() {
     if (!h) return [];
     return h.loc && Array.isArray(state.hlList) && state.hlList.length ? state.hlList : [h];
 }
+// Con el paso Posiciones encendido y nada elegido, el croquis plano dibuja las posiciones (nivel 1: en planta los niveles quedan uno sobre otro) de todos los anaqueles que se ven; lo macizo (tarima, gabinete, cámara) no lleva.
+function ambientPositionTargets() {
+    const d = state.draft;
+    if (!d || !stepOn('ubicaciones')) return [];
+    const fv = findView(d);
+    const only = fv.dimmed ? findIds().spaces : null;
+    return (fv.d.spaces || []).filter((s) => s.active !== false && s.l > 0 && s.d > 0 && s.type !== 'pallet' && s.type !== 'cabinet' && s.type !== 'cold' && (!only || only.has(s.id))).map((s) => ({ id: s.id, n: 1, c: 0, p: 0, ambient: true }));
+}
 function positionsOverlayTargets() {
     if (!state.draft) return [];
     const h = state.hl;
-    if (!h || h.step !== state.focus) return [];
+    if (!h || h.step !== state.focus) return ambientPositionTargets();
     return highlightedList().filter((e) => e.kind === 'bay' || e.kind === 'space').map((e) => ({ id: e.id, n: e.n || 0, c: e.kind === 'bay' ? e.c : 0, p: e.p || 0 }));
 }
 function drawPositionsOverlay() {
@@ -2009,6 +2017,7 @@ function drawPositionsOverlay() {
     groups.forEach((grp) => {
         const s = (state.draft.spaces || []).find((x) => x.id === grp.id);
         if (!s || s.active === false || !(s.l > 0) || !(s.d > 0)) return;
+        const ambient = grp.items.every((it) => it.ambient); // las que dibuja el paso encendido (sin elegir nada): sin flechas de consumo ni arrastre
         const lv = grp.n ? Math.min(Math.max(1, Number(grp.n) || 1), s.levels || 1) : 0;
         const slots = lv ? LC.levelSlots(s, lv) : 0;
         const rcs = slots ? LC.levelBayRects(s, lv) : []; // cada espacio donde cae de verdad: su largo y su fondo propios, uno junto al otro
@@ -2017,7 +2026,7 @@ function drawPositionsOverlay() {
         const specific = grp.items.some((it) => it.c);
         // por dónde se consume lo marcado: el activo o el nivel (sin espacio marcado), un espacio o una posición; con lo demás oculto no se ve el pasillo
         const faceJobs = [];
-        if (grp.items.some((it) => !it.c)) faceJobs.push({ r: { x: s.x, y: s.y, w: s.l, d: s.d }, faces: lv ? LC.facesOfLevel(s, lv) : LC.facesOfSpace(s) });
+        if (!ambient && grp.items.some((it) => !it.c)) faceJobs.push({ r: { x: s.x, y: s.y, w: s.l, d: s.d }, faces: lv ? LC.facesOfLevel(s, lv) : LC.facesOfSpace(s) });
         for (let c = 1; c <= slots; c += 1) {
             const m = LC.bayMeasures(s, lv, c);
             const rc = rcs[c - 1];
@@ -2034,14 +2043,14 @@ function drawPositionsOverlay() {
             }
             add('rect', { class: `pos-ov-bay${sel ? ' sel' : ''}${dim}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h) });
             // en Editar y en el paso Espacios el espacio se arrastra con el dedo o el mouse (sin salirse del activo)
-            if (canDragBays) add('rect', { class: 'pos-ov-hit', 'data-bayhit': `${s.id}|${lv}|${c}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h), fill: 'transparent', 'pointer-events': 'all', style: 'cursor:move' });
+            if (canDragBays && !ambient) add('rect', { class: 'pos-ov-hit', 'data-bayhit': `${s.id}|${lv}|${c}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h), fill: 'transparent', 'pointer-events': 'all', style: 'cursor:move' });
             if (grp.items.some((it) => it.c === c && !it.p)) faceJobs.push({ r: { x: s.x + rc.x, y: s.y + rc.y, w: rc.l, d: rc.w }, faces: LC.facesOfBay(s, lv, c) });
             LC.positionsOfBay(state.draft, s.id, lv, c).forEach((p) => {
                 const r = box(s.x + rc.x + p.x * kx, s.y + rc.y + p.y * kz, p.l * kx, p.w * kz);
                 const chosen = grp.items.some((it) => it.c === c && it.p === p.num);
                 if (chosen) faceJobs.push({ r: { x: s.x + rc.x + p.x * kx, y: s.y + rc.y + p.y * kz, w: p.l * kx, d: p.w * kz }, faces: LC.facesOfPosition(s, p) });
                 add('rect', { class: `pos-ov-pos${chosen ? ' chosen' : ''}${dim}`, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)) });
-                if (canDragPos) add('rect', { class: 'pos-ov-hit', 'data-poshit': p.id, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)), fill: 'transparent', 'pointer-events': 'all', style: 'cursor:move' });
+                if (canDragPos && !ambient) add('rect', { class: 'pos-ov-hit', 'data-poshit': p.id, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)), fill: 'transparent', 'pointer-events': 'all', style: 'cursor:move' });
                 if (r.w >= 17 && r.h >= 8) add('text', { class: `pos-ov-t${dim}`, x: f1(r.x + r.w / 2), y: f1(r.y + r.h / 2 + 2.5), 'text-anchor': 'middle' }, `P${ubicPad(p.num)}`);
             });
         }
@@ -5787,7 +5796,7 @@ function refreshScene3d() {
         picker3d.setFocus(fv3.focus ? fv3.focus.spaces : null);
         scene3d.setHiddenAssets(picker3d.getHidden(), false, !!state.findDim);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { bayFmt: stepOn('posiciones') ? (state.draft.bayFmt || {}) : null, fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { positions: stepOn('ubicaciones'), bayFmt: stepOn('posiciones') ? (state.draft.bayFmt || {}) : null, fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');

@@ -16,6 +16,7 @@
     const POWER_COLOR = { panel: 0x6b6f7c, outlet110: 0xf1c232, outlet220: 0xe8892b, 'three-phase': 0xd93a2f };
     const WOOD = 0xb98a52;
     const MAX_SPACE_LABELS = 300;
+    const MAX_POS_LABELS = 80; // con el paso Posiciones encendido, hasta cuántos rótulos P001… se dibujan en el 3D
     const LAYER_NAMES = ['contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety'];
     // El color de cada elemento de Seguridad (los mismos del croquis: rojo del fuego, verde de emergencia, naranja de alarma, azul del agua).
     const SAFETY_COLOR = { extinguisher: 0xd9443a, hydrant: 0xd9443a, emergency_door: 0x2e9e5b, firstaid: 0x2e9e5b, alarm: 0xe8892b, eyewash: 0x2f7fc7, assembly: 0x2e9e5b, route: 0x2e9e5b };
@@ -194,6 +195,7 @@
         let dimLayers = new Set();
         // El nivel enfocado de un activo { id, n, mode: 'dim' | 'hide' }: los demás niveles de ese activo se apagan o se quitan.
         let bayFmtOn = null; // con el paso Espacios encendido: { 'número de espacio': formato propio } (los demás llevan el de fábrica de su número); null = los espacios no llevan color propio
+        let posOn = false; // con el paso Posiciones encendido: cada posición de los anaqueles se dibuja en su lugar (caja con borde y su P001…)
         let focusLevels = []; // los niveles (o espacios o posiciones) que el Enfoque deja dibujados: [{ id, n, c, p, mode, all }]
         let focusContainer = null; // el cuadro (nivel o posición) que el Enfoque dejó dibujado: a él se acerca la cámara (con varios, el cuadro que los junta)
         // El cuadro que cubre a dos cuadros {x, y, z, sx, sy, sz} (centro y medidas); sin el primero, el segundo.
@@ -606,6 +608,7 @@
             if (opts && 'floorsShow' in opts) floorsShow = !!opts.floorsShow;
             if (opts && 'rampsShow' in opts) rampsShow = !!opts.rampsShow;
             if (opts && 'dimLayers' in opts) dimLayers = new Set(opts.dimLayers || []);
+            if (opts && 'positions' in opts) posOn = !!opts.positions;
             if (opts && 'bayFmt' in opts) bayFmtOn = opts.bayFmt && typeof opts.bayFmt === 'object' ? { ...opts.bayFmt } : null;
             if (opts && 'focusLevel' in opts) focusLevels = Array.isArray(opts.focusLevel) ? opts.focusLevel.filter(Boolean) : (opts.focusLevel ? [opts.focusLevel] : []);
             if (opts && 'fronts' in opts) frontSides = opts.fronts || {}; // el lado del frente de cada activo, sacado de TODO el Layout (el que se ve puede traer sin pasillos)
@@ -1327,10 +1330,11 @@
                 list.push({ x, y, z, sx, sy, sz, c: dimIt ? mixHex(hexNum(bf.fill), 0xe4e7f0, 0.8) : hexNum(bf.fill) });
             };
             const edges = [];
-            const edgeBox = (x, y, z, sx, sy, sz) => {
+            const posEdges = []; const posFill = []; const posTags = []; // las posiciones (paso Posiciones): bordes, relleno suave y rótulos
+            const edgeBox = (x, y, z, sx, sy, sz, into) => {
                 const x0 = x - sx / 2; const x1 = x + sx / 2; const y0 = y - sy / 2; const y1 = y + sy / 2; const z0 = z - sz / 2; const z1 = z + sz / 2;
                 [[x0, y0, z0, x1, y0, z0], [x1, y0, z0, x1, y0, z1], [x1, y0, z1, x0, y0, z1], [x0, y0, z1, x0, y0, z0], [x0, y1, z0, x1, y1, z0], [x1, y1, z0, x1, y1, z1], [x1, y1, z1, x0, y1, z1], [x0, y1, z1, x0, y1, z0],
-                    [x0, y0, z0, x0, y1, z0], [x1, y0, z0, x1, y1, z0], [x1, y0, z1, x1, y1, z1], [x0, y0, z1, x0, y1, z1]].forEach((e) => edges.push(...e));
+                    [x0, y0, z0, x0, y1, z0], [x1, y0, z0, x1, y1, z0], [x1, y0, z1, x1, y1, z1], [x0, y0, z1, x0, y1, z1]].forEach((e) => (into || edges).push(...e));
             };
             (layout.spaces || []).forEach((s) => {
                 if (s.active === false || !(s.l > 0) || !(s.d > 0) || !(s.h > 0) || (hiddenAssets.has(s.id) && !dimHidden)) return;
@@ -1462,6 +1466,25 @@
                                 bayVolume(cx - s.l / 2 + rk.x + rk.l / 2, fl + Math.max(mb.floorH, 0.03) + thB + hB / 2, cz - s.d / 2 + rk.y + rk.w / 2, Math.max(rk.l - 0.02, 0.02), hB, Math.max(rk.w - 0.02, 0.02), c);
                             }
                         }
+                        // con el paso Posiciones encendido cada posición se ve en su lugar y con sus medidas (largo × fondo × alto, sobre la ceja de su nivel), con su rótulo P001…
+                        if (posOn && LCx.levelSlots && LCx.bayMeasures && !otherLevel) {
+                            const slotsP = LCx.levelSlots(s, k);
+                            const rectsP = LCx.levelBayRects ? LCx.levelBayRects(s, k) : null;
+                            for (let c = 1; c <= slotsP; c++) {
+                                const mb = LCx.bayMeasures(s, k, c);
+                                const rk = rectsP ? rectsP[c - 1] : { x: (c - 1) * (s.l / slotsP), y: 0, l: s.l / slotsP, w: s.d };
+                                const kxP = rk.l / Math.max(mb.l, 0.01); const kzP = rk.w / Math.max(mb.w, 0.01);
+                                const yBase = fl + Math.max(mb.floorH, 0.03) + (mb.beam > 0 ? mb.beam : 0.06);
+                                posOf(s.id, k, c).forEach((p) => {
+                                    const hP = Math.max(Math.min(p.h, mb.h), 0.05);
+                                    const xP = cx - s.l / 2 + rk.x + (p.x + p.l / 2) * kxP; const zP = cz - s.d / 2 + rk.y + (p.y + p.w / 2) * kzP;
+                                    const sxP2 = Math.max(p.l * kxP - 0.01, 0.02); const szP2 = Math.max(p.w * kzP - 0.01, 0.02);
+                                    edgeBox(xP, yBase + hP / 2, zP, sxP2, hP, szP2, posEdges);
+                                    posFill.push({ x: xP, y: yBase + hP / 2, z: zP, sx: sxP2, sy: hP, sz: szP2, c: 0x1fa89a });
+                                    posTags.push({ text: `P${String(p.num).padStart(3, '0')}`, x: xP, y: yBase + hP + 0.09, z: zP });
+                                });
+                            }
+                        }
                     }
                 }
                 spaceList.push({ s, x: cx, z: cz, fl });
@@ -1496,6 +1519,17 @@
                 mesh.position.set(pd.x, pd.y, pd.z);
                 group.assets.add(mesh);
             });
+            if (posFill.length) {
+                const pf = instanced(group.assets, posFill, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false }));
+                if (pf) pf.raycast = () => {}; // las posiciones no tapan los toques al activo
+                const pg = new THREE.BufferGeometry();
+                pg.setAttribute('position', new THREE.Float32BufferAttribute(posEdges, 3));
+                const pl = new THREE.LineSegments(pg, new THREE.LineBasicMaterial({ color: 0x0e7c70 }));
+                pl.raycast = () => {};
+                group.assets.add(pl);
+                // los rótulos solo cuando son pocos (con muchas posiciones taparían todo; en el croquis plano se ven al acercarse)
+                if (posTags.length <= MAX_POS_LABELS) posTags.forEach((tg) => addLabel(group.spaceLabels, tg.text, tg.x, tg.y, tg.z, 0.14, false));
+            }
             if (edges.length) {
                 const eg = new THREE.BufferGeometry();
                 eg.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
