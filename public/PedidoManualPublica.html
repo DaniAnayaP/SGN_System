@@ -203,6 +203,34 @@
         .dias th.art .fmenu{ gap:.4rem; }
         .dias th.art .sumrow{ padding:.35rem .6rem; }
         .dias th.art .mcur{ margin-bottom:-.1rem; }
+        /* tabla como la maqueta: encabezado limpio con su embudo, renglones altos, casillas grandes y columnas de fin de semana sombreadas */
+        table.dias{ table-layout:fixed; min-width:0; }
+        main.compact .dias th, main.compact .dias td{ padding:.5rem .3rem; }
+        main.compact .dias thead th{ position:relative; vertical-align:middle; }
+        main.compact .dias th.art, main.compact .dias td.art{ min-width:0; max-width:none; padding-left:.9rem; text-align:left; vertical-align:middle; }
+        main.compact .dias .arthd{ display:flex; align-items:center; justify-content:space-between; gap:.4rem; margin:0; }
+        main.compact .dias .arttitle{ font-size:.95rem; font-weight:600; margin:0; }
+        main.compact .dias th.totalh{ padding-right:.6rem; }
+        main.compact .dias th.dc .dh{ height:auto; min-height:4.4rem; justify-content:center; }
+        main.compact .dias th.dc .dh span{ font-size:.62rem; }
+        main.compact .dias th.dc .dh b{ font-size:1.2rem; }
+        main.compact .dias th.dc .dh small{ font-size:.68rem; }
+        main.compact .dias th.dc .dh em{ font-size:.55rem; }
+        main.compact .dias .dh b.asap{ font-size:.72rem; }
+        main.compact .dias .qc{ width:4.2rem; max-width:none; height:2.5rem; padding:0; font-size:.95rem; border-radius:.8rem; }
+        main.compact .dias td.art b{ font-size:.85rem; }
+        main.compact .dias td.art small{ font-size:.7rem; }
+        main.compact .dias .tot{ font-size:.95rem; }
+        main.compact .dias .tot small{ font-size:.66rem; }
+        .fbtn{ border:0; background:transparent; padding:.2rem; border-radius:.45rem; cursor:pointer; color:var(--muted); line-height:0; }
+        .fbtn svg{ width:.95rem; height:.95rem; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linejoin:round; }
+        .fbtn.on{ color:var(--accent); background:var(--soft); }
+        .dias th.dc .fbtn{ position:absolute; top:.2rem; right:.1rem; }
+        .fpop{ position:fixed; z-index:30; width:min(23rem, calc(100vw - 1rem)); max-height:75vh; overflow:auto; background:var(--surface); border:1px solid var(--line); border-radius:1rem; box-shadow:var(--shadow); padding:.8rem; display:flex; flex-direction:column; gap:.6rem; }
+        .fpop-h{ font-weight:700; font-size:.9rem; }
+        .fpop .mpop{ position:static; box-shadow:none; margin-top:.3rem; }
+        .fpop .mpop.sign{ min-width:0; left:auto; }
+        .fpop .list{ display:grid; grid-template-columns:1fr; }
         .sr{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
         .dh{ display:flex; flex-direction:column; align-items:center; line-height:1.15; padding:2px 0; }
         .dh span{ font-size:10px; font-weight:800; letter-spacing:.08em; color:var(--muted); }
@@ -247,7 +275,7 @@ const TEXT = {
         needName: 'Escribe el nombre de quien pide para enviar.', errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errQty: 'Una cantidad no es válida.', errItems: 'Agrega al menos un artículo.',
         sentTitle: 'Pedido enviado', folio: 'Número de pedido', by: 'Pidió', at: 'Hora', list: 'Artículos del pedido', newOrder: 'Nuevo pedido', viewOnly: 'Este QR solo sirve para consultar.', loginNeeded: 'Este QR pide iniciar sesión para enviar pedidos.',
         login: 'Iniciar sesión', loginHint: 'Inicia sesión en el sistema y vuelve a abrir este QR.', locked: 'Este QR ya no permite enviar pedidos.', tooMany: 'Un pedido lleva hasta 40 artículos.',
-        whenTitle: 'Todo el pedido para', asap: 'Lo antes posible', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.', layoutTitle: 'Ver el pedido como', layoutList: 'Lista', layoutTable: 'Tabla', todayIs: 'Hoy es {d}', emptyTable: 'Todavía no agregas nada. Busca un artículo arriba, en la columna Artículo, y escribe cuántos quieres en cada día.',
+        whenTitle: 'Todo el pedido para', asap: 'Lo antes posible', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.', layoutTitle: 'Ver el pedido como', layoutList: 'Lista', layoutTable: 'Tabla', todayIs: 'Hoy es {d}', emptyTable: 'Todavía no agregas nada. Toca el embudo de la columna Artículo para buscar un artículo y escribe cuántos quieres en cada día.', noMatch: 'Ningún artículo cumple el filtro.', inTotal: 'en total', onlyWithQty: 'Solo lo que lleva cantidad', onlyWithQtyDay: 'Solo artículos con cantidad este día',
     },
     en: {
         title: 'Manual Order', loading: 'Loading…', notFound: 'This QR no longer matches any cost center.', searchTitle: 'Find an item', searchPlaceholder: 'Code, description, UoM or category',
@@ -261,7 +289,7 @@ const TEXT = {
         needName: 'Type the name of who is ordering to send.', errGeneric: 'It could not be sent. Check your connection and try again.', errQty: 'A quantity is not valid.', errItems: 'Add at least one item.',
         sentTitle: 'Order sent', folio: 'Order number', by: 'Ordered by', at: 'Time', list: 'Items in the order', newOrder: 'New order', viewOnly: 'This QR is for viewing only.', loginNeeded: 'This QR requires signing in to send orders.',
         login: 'Sign in', loginHint: 'Sign in to the system and open this QR again.', locked: 'This QR no longer allows sending orders.', tooMany: 'An order takes up to 40 items.',
-        whenTitle: 'The whole order for', asap: 'As soon as possible', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.', layoutTitle: 'View the order as', layoutList: 'List', layoutTable: 'Table', todayIs: 'Today is {d}', emptyTable: 'You have not added anything yet. Find an item above, in the Item column, and type how many you want on each day.',
+        whenTitle: 'The whole order for', asap: 'As soon as possible', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.', layoutTitle: 'View the order as', layoutList: 'List', layoutTable: 'Table', todayIs: 'Today is {d}', emptyTable: 'You have not added anything yet. Tap the funnel of the Item column to find an item and type how many you want on each day.', noMatch: 'No item meets the filter.', inTotal: 'in total', onlyWithQty: 'Only what has a quantity', onlyWithQtyDay: 'Only items with a quantity on this day',
     },
 }[LANG];
 document.documentElement.lang = LANG;
@@ -343,6 +371,7 @@ function panelHtml() {
 
 // La página se arma una sola vez (encabezado, buscador, pedido) y después solo se redibujan resultados, cantidad elegida y pedido: así no se cierran los menús ni se pierde el cursor.
 function view() {
+    closePop();
     if (sentInfo) { viewSent(); return; }
     const locks = info.locks || {};
     const header = `<div class="card"><h1>${esc(TEXT.title)}</h1>${info.costCenter ? `<span class="chip">${esc((info.costCenter.code ? `${info.costCenter.code} · ` : '') + info.costCenter.name)}</span>` : ''}</div>`;
@@ -432,48 +461,94 @@ function drawOrderList() {
         + `<button type="button" class="split" data-addpart="${i}">${esc(TEXT.addDate)}</button></div>`).join('');
     return `${top}<div>${lines}</div>`;
 }
-// Tabla por día (pantalla ancha): un renglón por artículo y una columna por día; «Lo antes posible» es la primera. Los primeros 7 días siempre se ven; los demás salen al usarlos o con «+ Otra fecha».
+// Tabla por día (pantalla ancha), como la maqueta: un renglón por artículo y una columna por día (los próximos 7; «+ Otra fecha» agrega más, hasta 14). «Lo antes posible» sale como columna solo si se usa o se agrega.
+// Cada encabezado lleva su filtro (el embudo): Artículo = buscar un artículo (Contiene, Inicia con, Igual que, signos, «Buscar en») y agregarlo; cada día y Total = ver solo los artículos que llevan cantidad.
+let showAsap = false;
+let tblFilter = { days: new Set(), total: false };
+let pop = null; // el filtro abierto: { kind: 'art' | 'total' | 'day:AAAA-MM-DD', anchor }
+const FUNNEL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.2 7.2V18l-3.6-1.8v-4z"/></svg>';
+const fbtn = (kind, active, label) => `<button type="button" class="fbtn${active ? ' on' : ''}" data-filter="${esc(kind)}" aria-label="${esc(label)}" title="${esc(label)}">${FUNNEL}</button>`;
 function tableCols() {
     const days = allDays();
-    const base = days.slice(0, 6); // se ven los próximos 6 días; «+ Otra fecha» agrega más (hasta 14)
+    const base = days.slice(0, 7);
     const used = new Set();
-    cart.forEach((c) => c.parts.forEach((p) => { if (p.when) used.add(p.when); }));
-    return ['', ...base, ...days.filter((d) => !base.includes(d) && (used.has(d) || extraCols.includes(d) || d === defaultWhen))];
+    cart.forEach((c) => c.parts.forEach((p) => used.add(p.when)));
+    const cols = [];
+    if (showAsap || used.has('')) cols.push('');
+    cols.push(...base);
+    days.forEach((d) => { if (!base.includes(d) && (used.has(d) || extraCols.includes(d))) cols.push(d); });
+    return cols;
 }
 function summaryHtml() {
     const by = new Map();
-    flatLines().forEach((l) => { const s = by.get(l.needBy) || new Set(); s.add(l.id); by.set(l.needBy, s); });
+    flatLines().forEach((l) => { const set = by.get(l.needBy) || new Set(); set.add(l.id); by.set(l.needBy, set); });
     if (!by.size) return `<div class="pill empty">${esc(TEXT.nothingYet)}</div>`;
     return [...by.entries()].sort((a, z) => a[0].localeCompare(z[0])).map(([w, ids]) => `<div class="pill"><b>${esc(whenLabel(w))}</b>${esc(ids.size === 1 ? TEXT.item1 : TEXT.items.replace('{n}', ids.size))}</div>`).join('');
 }
+// ¿El artículo pasa los filtros de los encabezados? (solo se revisa al dibujar la tabla, no al escribir: un renglón no desaparece mientras se le escribe)
+const rowVisible = (c) => (!tblFilter.total || totalOf(c) > 0) && [...tblFilter.days].every((w) => { const part = partOf(c, w); return !!part && part.quantity > 0; });
 function drawOrderTable() {
     const cols = tableCols();
     const days = allDays();
     const more = days.filter((d) => !cols.includes(d));
-    // Todas las columnas de días miden lo mismo y sus encabezados se alinean arriba (la etiqueta «Mañana» va debajo y no mueve a los demás). Los anchos van en rem: crecen y se achican con el tamaño del sistema.
     const head = cols.map((w) => {
-        if (w === '') return `<th class="dc"><div class="dh"><span>&nbsp;</span><b class="asap">${esc(TEXT.asap)}</b></div></th>`;
-        const p = dayParts(w);
-        return `<th class="dc${p.weekend ? ' wk' : ''}"><div class="dh"><span>${esc(p.dow.toUpperCase())}</span><b>${p.day}</b><small>${esc(p.mon)}</small>${w === days[0] ? `<em>${esc(TEXT.tomorrow)}</em>` : ''}</div></th>`;
+        if (w === '') return `<th class="dc">${fbtn('day:', tblFilter.days.has(''), TEXT.asap)}<div class="dh"><span>&nbsp;</span><b class="asap">${esc(TEXT.asap)}</b></div></th>`;
+        const d = dayParts(w);
+        return `<th class="dc${d.weekend ? ' wk' : ''}">${fbtn(`day:${w}`, tblFilter.days.has(w), whenLabel(w))}<div class="dh"><span>${esc(d.dow.toUpperCase())}</span><b>${d.day}</b><small>${esc(d.mon)}</small>${w === days[0] ? `<em>${esc(TEXT.tomorrow)}</em>` : ''}</div></th>`;
     }).join('');
-    const tableW = 24 + 5.75 + (cols.length - 1) * 4.5 + 7.75 + 5.25;
-    const colgroup = `<colgroup><col style="width:24rem"><col style="width:5.75rem">${cols.slice(1).map(() => '<col style="width:4.5rem">').join('')}<col style="width:7.75rem"><col style="width:5.25rem"></colgroup>`;
-    const addCol = more.length ? `<select class="dsel" id="addcol" aria-label="${esc(TEXT.addColumn)}"><option value="">${esc(TEXT.addColumn)}</option>${more.map((d) => `<option value="${d}">${esc(dayShort(d))}</option>`).join('')}</select>` : '';
-    const rows = !cart.length ? `<tr><td colspan="${cols.length + 3}" class="emptyrow">${esc(TEXT.emptyTable)}</td></tr>` : cart.map((c, i) => `<tr><td class="art"><b>${esc(c.description)}</b><small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></td>${cols.map((w) => {
-        const p = partOf(c, w);
+    const tableW = 17 + cols.length * 5.5 + 7.5 + 5.5;
+    const colgroup = `<colgroup><col style="width:17rem">${cols.map(() => '<col style="width:5.5rem">').join('')}<col style="width:7.5rem"><col style="width:5.5rem"></colgroup>`;
+    const addOptions = `${cols.includes('') ? '' : `<option value="__asap">${esc(TEXT.asap)}</option>`}${more.map((d) => `<option value="${d}">${esc(dayShort(d))}</option>`).join('')}`;
+    const addCol = addOptions ? `<select class="dsel" id="addcol" aria-label="${esc(TEXT.addColumn)}"><option value="">${esc(TEXT.addColumn)}</option>${addOptions}</select>` : '';
+    const visible = cart.filter(rowVisible).length;
+    const msg = !cart.length ? TEXT.emptyTable : (!visible ? TEXT.noMatch : '');
+    const rows = cart.map((c, i) => `<tr${rowVisible(c) ? '' : ' hidden'}><td class="art"><b>${esc(c.description)}</b><small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></td>${cols.map((w) => {
+        const part = partOf(c, w);
         const weekend = w && dayParts(w).weekend;
-        return `<td${weekend ? ' class="wk"' : ''}><input class="qc${p ? ' on' : ''}" type="number" min="0" step="any" inputmode="decimal" placeholder="–" data-cell="${i}|${w}" value="${esc(p ? p.quantity : '')}" aria-label="${esc(`${c.description}, ${whenLabel(w)}`)}"></td>`;
-    }).join('')}<td class="tot" id="tot-${i}"></td></tr>`).join('');
-    return `<div class="scroll" role="region" tabindex="0" aria-label="${esc(TEXT.yourOrder)}"><table class="dias" style="width:${tableW}rem">${colgroup}<thead><tr><th class="art"><div class="arttitle">${esc(TEXT.article)}</div>${panelHtml()}</th>${head}<th>${addCol}</th><th>${esc(TEXT.total)}</th></tr></thead><tbody><tr class="resrow"><td colspan="${cols.length + 3}"><div id="results"></div></td></tr>${rows}</tbody></table></div><div><div class="muted">${esc(TEXT.perDay)}</div><div class="sumbar" id="sumbar">${summaryHtml()}</div></div>`;
+        return `<td${weekend ? ' class="wk"' : ''}><input class="qc${part ? ' on' : ''}" type="number" min="0" step="any" inputmode="decimal" placeholder="–" data-cell="${i}|${w}" value="${esc(part ? part.quantity : '')}" aria-label="${esc(`${c.description}, ${whenLabel(w)}`)}"></td>`;
+    }).join('')}<td></td><td class="tot" id="tot-${i}"></td></tr>`).join('');
+    const emptyRow = msg ? `<tr><td colspan="${cols.length + 3}" class="emptyrow">${esc(msg)}</td></tr>` : '';
+    return `<div class="scroll" role="region" tabindex="0" aria-label="${esc(TEXT.yourOrder)}"><table class="dias" style="width:100%;min-width:${tableW}rem">${colgroup}<thead><tr><th class="art"><div class="arthd"><span class="arttitle">${esc(TEXT.article)}</span>${fbtn('art', false, TEXT.searchTitle)}</div></th>${head}<th>${addCol}</th><th class="totalh"><div class="arthd"><span class="arttitle">${esc(TEXT.total)}</span>${fbtn('total', tblFilter.total, TEXT.total)}</div></th></tr></thead><tbody>${rows}${emptyRow}</tbody></table></div><div><div class="muted">${esc(TEXT.perDay)}</div><div class="sumbar" id="sumbar">${summaryHtml()}</div></div>`;
 }
 // Al escribir en una casilla solo se ponen al día los totales, el resumen por día y el título: así no se pierde el cursor.
 function refreshTable() {
-    cart.forEach((c, i) => { const el = $(`tot-${i}`); if (el) el.innerHTML = totalOf(c) > 0 ? `${esc(fmtQty(totalOf(c)))}<small>${esc(c.uom)}</small>` : '–'; });
+    cart.forEach((c, i) => { const el = $(`tot-${i}`); if (el) el.innerHTML = totalOf(c) > 0 ? `${esc(fmtQty(totalOf(c)))}<small>${esc(TEXT.inTotal)}</small>` : '–'; });
     const bar = $('sumbar');
     if (bar) bar.innerHTML = summaryHtml();
     const head = $('ohead');
     if (head) head.innerHTML = headText();
 }
+// El filtro de un encabezado se abre en una ventanita junto al embudo (así no ensancha la tabla ni se corta con su desplazamiento).
+function popBody(kind) {
+    if (kind === 'art') return `<div class="fpop-h">${esc(TEXT.searchTitle)}</div>${panelHtml()}<div id="results"></div>`;
+    if (kind === 'total') return `<div class="fpop-h">${esc(TEXT.total)}</div><label class="copt"><input type="checkbox" data-totalfilter${tblFilter.total ? ' checked' : ''}><span class="box"></span><span>${esc(TEXT.onlyWithQty)}</span></label>`;
+    const w = kind.slice(4);
+    return `<div class="fpop-h">${esc(whenLabel(w))}</div><label class="copt"><input type="checkbox" data-dayfilter="${esc(w)}"${tblFilter.days.has(w) ? ' checked' : ''}><span class="box"></span><span>${esc(TEXT.onlyWithQtyDay)}</span></label>`;
+}
+function placePop() {
+    const el = $('fpop');
+    if (!el || !pop || !pop.anchor) return;
+    const a = pop.anchor.getBoundingClientRect();
+    el.style.top = `${Math.round(a.bottom + 6)}px`;
+    el.style.left = `${Math.max(8, Math.min(a.left, window.innerWidth - el.offsetWidth - 8))}px`;
+}
+function closePop() { const el = $('fpop'); if (el) el.remove(); pop = null; }
+function openPop(kind, anchor) {
+    closePop();
+    const el = document.createElement('div');
+    el.id = 'fpop';
+    el.className = 'fpop';
+    el.setAttribute('role', 'dialog');
+    el.innerHTML = popBody(kind);
+    $('view').appendChild(el);
+    pop = { kind, anchor };
+    placePop();
+    if (kind === 'art') { drawResults(); const q = $('q'); if (q) q.focus(); }
+}
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePop(); });
+document.addEventListener('click', (event) => { if (pop && !event.target.closest('#fpop') && !event.target.closest('[data-filter]')) closePop(); }); // un toque fuera de la ventanita la cierra
+window.addEventListener('scroll', (event) => { const t = event.target; if (t && t.nodeType === 1 && t.closest && t.closest('#fpop')) return; closePop(); }, true);
+window.addEventListener('resize', closePop);
 // El pedido: SIEMPRE pide el nombre de quien pide (con sesión ya viene escrito el de la cuenta y se puede cambiar: quien manda no siempre es quien pide) y lo armado queda en un solo número de pedido con su lista de artículos.
 function drawOrder() {
     const box = $('orderbox');
@@ -482,15 +557,16 @@ function drawOrder() {
     const who = `<div><label for="name">${esc(TEXT.yourName)} <span class="req" aria-hidden="true">*</span></label><input type="text" id="name" maxlength="60" autocomplete="name" required placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(nameValue)}"></div>`;
     const today = wide ? `<span class="muted">${esc(fill(TEXT.todayIs, { d: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(dayDate(todayIso())) }))}</span>` : '';
     box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${layoutToggle()}</div>${who}${body}${cart.length ? `<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}`;
-    if (wide) { refreshTable(); drawResults(); } // el buscador de la tabla se vuelve a dibujar con la tabla
+    if (wide) refreshTable();
+    if (pop) { const a = document.querySelector(`[data-filter="${pop.kind}"]`); if (a) { pop.anchor = a; placePop(); } else closePop(); }
 }
 // Tabla: al elegir un artículo del buscador se agrega su renglón (sin cantidad) y el cursor queda en la casilla del día de partida.
 function addRow(r) {
     let idx = cart.findIndex((c) => c.id === r.id);
     if (idx < 0) { cart.push({ id: r.id, code: r.code, description: r.description, uom: r.uom, parts: [] }); idx = cart.length - 1; }
     drawOrder();
-    const cell = document.querySelector(`[data-cell="${idx}|${defaultWhen}"]`);
-    if (cell) { cell.focus(); cell.select(); }
+    const cell = document.querySelector(`input[data-cell^="${idx}|"]`);
+    if (cell) { cell.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
 }
 function addPicked() {
     const n = Number(String(picked.qty).replace(',', '.'));
@@ -556,6 +632,9 @@ function setField(key, checked) {
 // Un solo oyente para todo lo que se toca en la página.
 $('view').addEventListener('click', (event) => {
     const t = event.target;
+    const fb = t.closest('[data-filter]');
+    if (fb) { const kind = fb.getAttribute('data-filter'); if (pop && pop.kind === kind) closePop(); else openPop(kind, fb); return; }
+    if (pop && !t.closest('#fpop')) closePop();
     const modePop = $('modepop');
     const signPop = $('signpop');
     if (modePop && !modePop.hidden && !t.closest('#modebtn') && !t.closest('#modepop')) modePop.hidden = true;
@@ -623,7 +702,10 @@ $('view').addEventListener('change', (event) => {
     if (box) { setField(box.getAttribute('data-field'), box.checked); return; }
     if (t.id === 'pickwhen' && picked) { picked.when = t.value; return; }
     if (t.id === 'defother') { setDefault(t.value); return; }
-    if (t.id === 'addcol') { if (t.value) { extraCols.push(t.value); drawOrder(); } return; }
+    if (t.id === 'addcol') { if (t.value === '__asap') showAsap = true; else if (t.value) extraCols.push(t.value); if (t.value) drawOrder(); return; }
+    const dayFilter = t.getAttribute && t.getAttribute('data-dayfilter');
+    if (dayFilter !== null && dayFilter !== undefined) { if (t.checked) tblFilter.days.add(dayFilter); else tblFilter.days.delete(dayFilter); drawOrder(); return; }
+    if (t.hasAttribute && t.hasAttribute('data-totalfilter')) { tblFilter.total = t.checked; drawOrder(); return; }
     const pw = t.getAttribute && t.getAttribute('data-part');
     if (pw) {
         // otra fecha para esa cantidad; si el artículo ya tiene cantidad en esa fecha, se juntan
