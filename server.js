@@ -8306,11 +8306,8 @@ app.post('/api/business/incidentes/reports/:clientRef/photos', requireAuth, (req
 });
 
 // Hoja de QR de limpieza: un QR por activo (de una zona o de todas) con su dirección fija; la hoja se imprime desde el Layout.
-app.get('/api/business/layout/cleaning-qr', requireAuth, (req, res) => {
-    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    if (!layoutPermissions(req).canUseCleaningQr) return res.status(403).json({ message: 'No tienes permiso para usar los QR de limpieza.' });
-    const row = layoutRowForRequest(req, res);
-    if (!row) return;
+// La lista de los activos con QR de limpieza de un Layout (con la dirección fija de cada uno); la usan la hoja de QR del Layout y Operaciones > QR's > Limpieza.
+function cleaningQrList(req, row) {
     const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0);
     const base = `${req.protocol}://${req.get('host')}/l/${token}`;
     const layout = row.layout;
@@ -8320,11 +8317,32 @@ app.get('/api/business/layout/cleaning-qr', requireAuth, (req, res) => {
         const fp = (layout.footprints || []).find((f) => f.id === s.footprintId);
         const zone = zones.find((z) => z.id === s.zoneId);
         const url = `${base}/${s.id}`;
-        return { id: s.id, code: s.code, type: s.type, zoneId: s.zoneId || '', zoneName: zone ? zone.name : '', locator: zone && fp ? [zone.code, fp.code, s.code].join('.') : '', url, qrRows: layoutQrRows(url) };
+        return { id: s.id, code: s.code, type: s.type, zoneId: s.zoneId || '', zoneName: zone ? zone.name : '', locator: zone && fp ? [zone.code, fp.code, s.code].join('.') : '', url, path: `/l/${token}/${s.id}`, qrRows: layoutQrRows(url) };
     });
     const client = getClientById(req.user.clientId);
+    return { companyName: (client && client.company_name) || '', siteName: layout.siteName || '', ...qrBranding(req.user.clientId), zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces };
+}
+app.get('/api/business/layout/cleaning-qr', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canUseCleaningQr) return res.status(403).json({ message: 'No tienes permiso para usar los QR de limpieza.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
     res.set('Cache-Control', 'no-store');
-    res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', ...qrBranding(req.user.clientId), zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
+    res.json(cleaningQrList(req, row));
+});
+// Operaciones > QR's: cada app con QR se puede hacer desde la computadora (se abre la misma pantalla que abre el QR). Cada entrada pide la hoja de su pantalla en el árbol; el administrador del cliente no depende de hojas.
+const QR_APP_SCREENS = { limpieza: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza' };
+function canUseQrApp(req, key) {
+    return !!req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), 'supply-chain', 'sc-area-distribution-center', QR_APP_SCREENS[key]);
+}
+app.get('/api/business/qr-apps/limpieza', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!canUseQrApp(req, 'limpieza')) return res.status(403).json({ message: 'No tienes permiso para esta pantalla.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const list = cleaningQrList(req, row);
+    res.set('Cache-Control', 'no-store');
+    res.json({ siteName: list.siteName, zones: list.zones, spaces: list.spaces.map(({ qrRows, url, ...rest }) => rest) });
 });
 
 // --- Temperaturas (Operaciones > C. Distribución) ------------------------------------------------------------------------------------------------

@@ -1336,8 +1336,10 @@ function applyAreaFilter(data) {
 // menú con el nombre del grupo, cerrado por defecto, para no ver toda la lista cuando no se necesita (Daniel, 2026-10-31: las 7 categorías de
 // Catálogos de C. Distribución bajo "Categorías"). El árbol de permisos, Panel y la ruta de arriba siguen con las pantallas sueltas: no cambia ninguna
 // llave de permiso. Se arma después del filtro de permisos, así cuenta solo lo que esa persona sí ve; con menos de 2 pantallas visibles no se agrupa.
+// minItems: cuántas pantallas visibles hacen falta para que se junten en el grupo (de fábrica 2; el grupo «QR's» sale desde la primera).
 const SIDEBAR_GROUPS = {
     categorias: { labelKey: 'menu.catCentroDistCategorias', icon: 'bx-category' },
+    qrs: { labelKey: 'menu.opCentroDistQrs', icon: 'bx-qr', minItems: 1 },
 };
 function groupSidebarScreens(pantallas, categoryId) {
     const counts = {};
@@ -1346,7 +1348,7 @@ function groupSidebarScreens(pantallas, categoryId) {
     const out = [];
     pantallas.forEach((p) => {
         const key = p.sidebarGroup;
-        if (!key || !SIDEBAR_GROUPS[key] || counts[key] < 2) { out.push(p); return; }
+        if (!key || !SIDEBAR_GROUPS[key] || counts[key] < (SIDEBAR_GROUPS[key].minItems || 2)) { out.push(p); return; }
         if (placed.has(key)) return;
         placed.add(key);
         out.push({
@@ -12789,6 +12791,8 @@ const SCREEN_GRANT_PATHS = {
     'cat-catalogos-centro-dist-localizadores': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-localizadores' },
     // Operaciones > Limpieza: la base de registros de las limpiezas con QR (con usuario).
     'cat-operaciones-centro-dist-limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
+    // Operaciones > QR's > Limpieza: la app de limpieza con QR, desde la computadora.
+    'cat-operaciones-centro-dist-qr-limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza' },
     // Operaciones > Pedido Manual: los pedidos que llegan del QR de cada centro de costos (con usuario).
     'cat-operaciones-centro-dist-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
     // Operaciones > Incidentes: los reportes que llegan del QR de cada centro de costos (con usuario).

@@ -7732,6 +7732,13 @@ function seedLayoutCodesIconGrants() {
     seedLeavesForScreenHolders(LAYOUT_RELATE_ICON_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutRelacionarCodigo`], 'the Layout relate-code icon (contract only)', { contractOnly: true });
 }
 // El icono Techo (iconLayoutTecho) se da igual, una sola vez, a quien ya tiene la pantalla Layout.
+// Operaciones > QR's > Limpieza (2026-11-10): la pantalla nueva la reciben, una sola vez, quienes ya tienen el icono del QR de limpieza en el Layout (mismos niveles y reglas que los demás sembrados).
+const QR_LIMPIEZA_SCREEN_SEED_KEY = 'seed-qrs-limpieza-screen-v1';
+function seedQrLimpiezaScreenGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(QR_LIMPIEZA_SCREEN_SEED_KEY, { ...path, submenuPrefix: `${path.submenuPrefix}/iconLayoutQrLimpieza` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-limpieza'], "the QR's Limpieza screen");
+}
 const LAYOUT_ROOF_SEED_KEY = 'seed-layout-roof-icon-v1';
 function seedLayoutRoofIconGrants() {
     const path = TABLE_GRANT_PATHS.layout;
@@ -12375,6 +12382,7 @@ seedCodigosScreensGrants();
 seedUdmDistribucionScreenGrants();
 seedLayoutCodesIconGrants();
 seedLayoutRoofIconGrants();
+seedQrLimpiezaScreenGrants();
 seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();

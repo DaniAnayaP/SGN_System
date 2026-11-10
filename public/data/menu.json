@@ -2154,6 +2154,9 @@
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
             { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
           ]
+        },
+        {
+          "id": "cat-operaciones-centro-dist-qr-limpieza", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrLimpieza", "icon": "bx-brush-alt", "href": "OpCentroDistQrLimpieza.html"
         }
       ],
       "cat-admin": [

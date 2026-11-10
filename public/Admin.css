@@ -8299,6 +8299,18 @@ td.cap-pick{ white-space: nowrap; }
 .layout-dd.open .layout-dd-btn{ border-color: var(--color-accent, var(--color-text-primary)); }
 .layout-dd-menu{ position: absolute; z-index: 40; top: calc(100% + 0.3rem); left: 0; min-width: 14rem; max-height: 18rem; overflow: auto; padding: 0.35rem; display: flex; flex-direction: column; gap: 0.1rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); box-shadow: 0 10px 26px rgba(60, 20, 70, 0.22); }
 /* El filtro de cada columna, los de la franja de búsqueda y los de «Ver» del Layout se amplían jalando la esquina de abajo a la derecha. */
+/* Operaciones > QR's: la lista de lo que tiene QR y la ventana con la misma pantalla que abre el QR */
+.qrs{ display: flex; flex-direction: column; gap: 0.8rem; }
+.qrs-bar{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.qrs-bar select, .qrs-bar input{ padding: 0.4rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); color: var(--color-text-primary); font: inherit; font-size: 0.82rem; }
+.qrs-bar input{ min-width: 14rem; }
+.qrs-count{ color: var(--color-text-secondary); font-size: 0.78rem; }
+.qrs-table{ width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.qrs-table th{ text-align: left; padding: 0.45rem 0.7rem; font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-text-secondary); border-bottom: 2px solid var(--color-border); }
+.qrs-table td{ padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--color-border); }
+.qrs-win{ width: min(980px, 96vw); max-width: none; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.qrs-win-head{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--color-border); font-weight: 600; font-size: 0.9rem; }
+.qrs-frame{ border: 0; width: 100%; height: min(78vh, 720px); background: var(--color-surface); }
 /* el símbolo de una unidad del SI en un encabezado se escribe como es (cm, kg…), sin pasar a mayúsculas; y la unidad de una celda editable se ve siempre después del número */
 .unit-si{ text-transform: none; }
 .editable-cell-value[data-unit]::after{ content: " " attr(data-unit); color: var(--color-text-secondary); font-size: 0.85em; }
