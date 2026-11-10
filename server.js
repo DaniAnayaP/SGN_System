@@ -10349,8 +10349,11 @@ app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
     const client = getClientById(clientId);
     const pendingByRecord = getPendingColumnsByRecord(clientId, UDM_DIST_TABLE_KEY);
     res.set('Cache-Control', 'no-store');
+    // skuItemId: solo las presentaciones de ese código (la ventana «Ver UDM de distribución» de Alta Artículos)
+    const onlySku = Number(req.query.skuItemId);
+    const source = Number.isInteger(onlySku) && onlySku > 0 ? listSkuDistributionBySku(clientId, isTestAccount, onlySku) : listSkuDistribution(clientId, isTestAccount);
     res.json({
-        rows: mapSkuDistributionRows(listSkuDistribution(clientId, isTestAccount), pendingByRecord, client?.company_name),
+        rows: mapSkuDistributionRows(source, pendingByRecord, client?.company_name),
         uoms: listActiveArticleCategoryNames(clientId, 'udm', isTestAccount),
         maxExtra: UDM_DIST_MAX_EXTRA,
     });

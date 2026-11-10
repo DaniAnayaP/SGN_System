@@ -407,6 +407,49 @@ function buildArticleTypeCell(record) {
     return td;
 }
 
+// «Ver UDM de distribución»: abre, en una ventana, la secuencia de presentaciones del código (material principal > empaques) como se ve en Unidad de Medida por Distribución, solo para verla.
+let udmViewEl = null;
+function buildUdmDistCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colArticuloUdmDist';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-secondary';
+    btn.dataset.helpKey = 'udmVerDist';
+    btn.textContent = Dashboard.t('main.udmVerDist');
+    btn.disabled = record.id == null;
+    btn.addEventListener('click', () => openUdmDistView(record));
+    td.appendChild(btn);
+    return td;
+}
+async function openUdmDistView(record) {
+    if (!udmViewEl) {
+        udmViewEl = document.createElement('div');
+        udmViewEl.className = 'modal-overlay';
+        udmViewEl.hidden = true;
+        udmViewEl.innerHTML = '<div class="modal-panel udm-view-win" role="dialog" aria-modal="true"><div id="udm-view-body" class="udm-chain"></div><div class="rel-foot"><a class="btn btn-secondary" id="udm-view-go" href="OpCentroDistUdmDistribucion.html" hidden></a><button type="button" class="btn btn-secondary" id="udm-view-close"></button></div></div>';
+        document.body.appendChild(udmViewEl);
+        udmViewEl.addEventListener('click', (event) => { if (event.target === udmViewEl || event.target.closest('#udm-view-close')) udmViewEl.hidden = true; });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && udmViewEl && !udmViewEl.hidden) udmViewEl.hidden = true; });
+    }
+    const body = udmViewEl.querySelector('#udm-view-body');
+    body.innerHTML = `<p class="rel-muted">${Dashboard.t('main.qrsCargando')}</p>`;
+    udmViewEl.querySelector('#udm-view-close').textContent = Dashboard.t('main.qrsCerrar');
+    const go = udmViewEl.querySelector('#udm-view-go');
+    go.textContent = Dashboard.t('main.udmVerIr');
+    go.hidden = !Dashboard.hasScreenGrant('supply-chain', 'sc-area-distribution-center', 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion');
+    udmViewEl.hidden = false;
+    try {
+        const res = await fetch(`/api/business/sku-distribution?skuItemId=${encodeURIComponent(record.id)}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { rows, maxExtra } = await res.json();
+        const safe = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        body.innerHTML = rows.length ? Dashboard.udmChainHtml(rows, maxExtra) : `<div class="udm-chain-title">${safe(Dashboard.t('main.udmChainTitle').replace('{sku}', `${record.sku} · ${record.uniqueDescription || record.knownDescription || record.customDescription || ''}`))}</div><p class="rel-muted">${safe(Dashboard.t('main.udmVerVacio'))}</p>`;
+    } catch (err) {
+        console.error('Alta Artículos: no se pudo cargar la UDM de distribución', err);
+        body.innerHTML = `<p class="rel-muted">${Dashboard.t('admin.saveError')}</p>`;
+    }
+}
 // Tipo de almacenamiento: a qué UDM corresponden las medidas del código y su capacidad (lista fija; opcional).
 const STORAGE_TYPE_KEYS = ['original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
 function buildStorageTypeCell(record) {
@@ -566,6 +609,7 @@ function buildRow(record) {
         cells.colArticuloDescPersonalizada,
         buildCategorySelectCell(record, 'colArticuloUdm', 'mainUom', 'udm'),
         buildArticleTypeCell(record),
+        ...(!CODES_MODE && !EDIT_MODE ? [buildUdmDistCell(record)] : []), // Alta: «Ver UDM de distribución» (la secuencia de presentaciones del código)
         cells.colArticuloAlto,
         cells.colArticuloLargo,
         cells.colArticuloAncho,

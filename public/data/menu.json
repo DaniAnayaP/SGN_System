@@ -1557,6 +1557,7 @@
             { "id": "colArticuloDescPersonalizada", "labelKey": "main.colArticuloDescPersonalizada", "permissionOnly": true },
             { "id": "colArticuloUdm", "labelKey": "main.colArticuloUdm", "permissionOnly": true },
             { "id": "colArticuloTipo", "labelKey": "main.colArticuloTipo", "permissionOnly": true },
+            { "id": "colArticuloUdmDist", "labelKey": "main.colArticuloUdmDist", "permissionOnly": true },
             { "id": "colArticuloAlto", "labelKey": "main.colArticuloAlto", "permissionOnly": true },
             { "id": "colArticuloLargo", "labelKey": "main.colArticuloLargo", "permissionOnly": true },
             { "id": "colArticuloAncho", "labelKey": "main.colArticuloAncho", "permissionOnly": true },

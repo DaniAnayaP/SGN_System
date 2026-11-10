@@ -174,15 +174,7 @@ function renderChain() {
     if (ids.length !== 1) { box.hidden = true; box.innerHTML = ''; return; }
     const list = rowsOfSku(ids[0]);
     if (!list.length) { box.hidden = true; return; }
-    const mainUom = list[0].uom;
-    const dims = (r) => (r.shape === 'cilindrica' ? `Ø ${fmt(r.length)} × ${fmt(r.height)}` : `${fmt(r.length)} × ${fmt(r.width)} × ${fmt(r.height)}`);
-    const nodes = list.map((r, i) => {
-        const title = r.level === 0 ? (r.uom || levelName(0)) : `${r.uom || ''}${r.contains ? ` ${t('main.udmWith')} ${r.contains}` : ''}`.trim();
-        const link = i === 0 ? '' : `<div class="udm-link"><span>× ${esc(r.contains)}</span></div>`;
-        return `${link}<div class="udm-node"><span class="rel-tag rel-tag-ok">${esc(levelName(r.level))}</span><b>${esc(title)}</b><span>${esc(dims(r))} cm${r.weightG ? ` · ${esc(fmtWeight(r.weightG))}` : ''}</span><span class="udm-eq">= ${esc(r.equivalent)} ${esc(mainUom)}</span></div>`;
-    }).join('');
-    const add = list.length <= maxExtra ? `<div class="udm-link udm-link-dash"><span>× …</span></div><div class="udm-node udm-node-add"><b>+ ${esc(levelName(list.length))}</b><span>${esc(t('main.udmChainMore'))}</span></div>` : '';
-    box.innerHTML = `<div class="udm-chain-title">${esc(t('main.udmChainTitle', { sku: `${list[0].sku} · ${list[0].description}` }))}</div><div class="udm-chain-row">${nodes}${add}</div>`;
+    box.innerHTML = Dashboard.udmChainHtml(list, maxExtra); // la misma secuencia que se ve desde Alta Artículos (Ver UDM de distribución)
     box.hidden = false;
 }
 
