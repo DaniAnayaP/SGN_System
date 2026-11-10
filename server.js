@@ -5381,6 +5381,11 @@ function buildContentDisposition(filename) {
 const EXPORT_MAX_ROWS = 20000;
 const EXPORT_MAX_COLUMNS = 200;
 
+// Los datos que van arriba de la tabla exportada (opcional): hasta 30 pares [etiqueta, valor].
+function exportHeaderPairs(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw.slice(0, 30).filter((p) => Array.isArray(p)).map((p) => [String(p[0] ?? '').slice(0, 120), String(p[1] ?? '').slice(0, 400)]);
+}
 function validateExportPayload(req, res) {
     const { columns, rows } = req.body || {};
     if (!Array.isArray(columns) || !columns.length || !Array.isArray(rows)) {
@@ -5399,20 +5404,36 @@ app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
     if (!payload) return;
     const { columns, rows } = payload;
     const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
+    const fileBase = String(req.body.filename || title).trim() || title;
+    const header = exportHeaderPairs(req.body.header); // datos que van ARRIBA de la tabla (por ejemplo, los del pedido): [[etiqueta, valor], ...]
     const workbook = new ExcelJS.Workbook();
     // Excel sheet names: max 31 chars, can't contain \ / * ? : [ ]
     const sheet = workbook.addWorksheet(title.replace(/[\\/*?:[\]]/g, ' ').slice(0, 31) || 'Reporte');
-    sheet.columns = columns.map((col) => {
-        const label = String(col?.label ?? '');
-        return { header: label, width: Math.max(12, label.length + 4) };
-    });
-    rows.forEach((row) => {
-        sheet.addRow(Array.isArray(row) ? row.map((cell) => (cell == null ? '' : String(cell))) : []);
-    });
-    sheet.getRow(1).font = { bold: true };
+    const cellText = (cell) => (cell == null ? '' : String(cell));
+    if (!header.length) {
+        sheet.columns = columns.map((col) => {
+            const label = String(col?.label ?? '');
+            return { header: label, width: Math.max(12, label.length + 4) };
+        });
+        rows.forEach((row) => {
+            sheet.addRow(Array.isArray(row) ? row.map(cellText) : []);
+        });
+        sheet.getRow(1).font = { bold: true };
+    } else {
+        header.forEach(([label, value]) => { const r = sheet.addRow([label, value]); r.getCell(1).font = { bold: true }; });
+        sheet.addRow([]);
+        const head = sheet.addRow(columns.map((col) => String(col?.label ?? '')));
+        head.font = { bold: true };
+        head.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE7F2' } }; });
+        rows.forEach((row) => { sheet.addRow(Array.isArray(row) ? row.map(cellText) : []); });
+        columns.forEach((col, i) => {
+            const widest = rows.reduce((m, row) => Math.max(m, cellText(Array.isArray(row) ? row[i] : '').length), String(col?.label ?? '').length);
+            sheet.getColumn(i + 1).width = Math.min(60, Math.max(12, widest + 3));
+        });
+    }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', buildContentDisposition(`${title}.xlsx`));
+    res.setHeader('Content-Disposition', buildContentDisposition(`${fileBase}.xlsx`));
     await workbook.xlsx.write(res);
     res.end();
 });
@@ -5450,19 +5471,61 @@ function drawPdfTable(doc, columns, rows) {
     rows.forEach((row) => drawRow(row, false));
 }
 
+// Tabla para listas de texto largo (por ejemplo, los artículos de un pedido): las columnas se reparten por pesos (widths) y el texto se parte en renglones; el encabezado se repite en cada hoja.
+function drawPdfTableWrapped(doc, columns, rows, weights) {
+    const startX = doc.page.margins.left;
+    const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const w = columns.map((_, i) => Math.max(0.2, Number(weights && weights[i]) || 1));
+    const total = w.reduce((a, b) => a + b, 0);
+    const widths = w.map((x) => (x / total) * pageWidth);
+    const pad = 3;
+    const labels = columns.map((c) => String(c?.label ?? ''));
+    let y = doc.y;
+    function drawRow(values, isHeader) {
+        doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
+        const cells = values.map((val) => String(val ?? ''));
+        const h = Math.max(...cells.map((txt, i) => doc.heightOfString(txt, { width: widths[i] - pad * 2 })), 8) + pad * 2;
+        if (y + h > doc.page.height - doc.page.margins.bottom) {
+            doc.addPage();
+            y = doc.page.margins.top;
+            if (!isHeader) drawRow(labels, true);
+            doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
+        }
+        let x = startX;
+        cells.forEach((txt, i) => {
+            if (isHeader) doc.rect(x, y, widths[i], h).fillAndStroke('#EDE7F2', '#CCCCCC'); else doc.rect(x, y, widths[i], h).stroke('#CCCCCC');
+            doc.fillColor('#000000').text(txt, x + pad, y + pad, { width: widths[i] - pad * 2 });
+            x += widths[i];
+        });
+        y += h;
+    }
+    drawRow(labels, true);
+    rows.forEach((row) => drawRow(Array.isArray(row) ? row : [], false));
+    doc.y = y;
+}
+
 app.post('/api/business/export/pdf', requireAuth, (req, res) => {
     const payload = validateExportPayload(req, res);
     if (!payload) return;
     const { columns, rows } = payload;
     const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
+    const fileBase = String(req.body.filename || title).trim() || title;
+    const header = exportHeaderPairs(req.body.header);
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', buildContentDisposition(`${title}.pdf`));
+    res.setHeader('Content-Disposition', buildContentDisposition(`${fileBase}.pdf`));
     const doc = new PDFDocument({ margin: 30, size: 'A4', layout: columns.length > 5 ? 'landscape' : 'portrait' });
     doc.pipe(res);
-    doc.fontSize(14).text(title, { align: 'center' });
-    doc.moveDown();
-    drawPdfTable(doc, columns, rows);
+    doc.font('Helvetica-Bold').fontSize(14).text(title, { align: 'center' });
+    doc.moveDown(0.6);
+    if (header.length) {
+        header.forEach(([label, value]) => {
+            doc.font('Helvetica-Bold').fontSize(9).text(`${label}: `, { continued: true }).font('Helvetica').text(value);
+        });
+        doc.moveDown(0.8);
+    }
+    if (req.body.wrap) drawPdfTableWrapped(doc, columns, rows, Array.isArray(req.body.widths) ? req.body.widths : null);
+    else drawPdfTable(doc, columns, rows);
     doc.end();
 });
 
@@ -7951,7 +8014,7 @@ function manualOrderRowOf(r, centers, client) {
     const cc = centers.get(r.cost_center_id);
     return {
         id: r.id, orderId: r.order_id, folio: manualFolio(r.order_id), lineNo: r.line_no, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
-        name: r.requester_name, code: r.code, description: r.description, uom: r.uom, categories: r.categories, quantity: r.quantity, needBy: r.need_by || '',
+        name: r.requester_name, placeId: r.place_id || 0, placeName: r.place_name || '', code: r.code, description: r.description, uom: r.uom, categories: r.categories, quantity: r.quantity, needBy: r.need_by || '',
         status: r.status, statusAt: sqlUtcIso(r.status_at), statusBy: r.status_by || '', requestedAt: sqlUtcIso(r.order_created_at), receivedAt: sqlUtcIso(r.order_received_at), source: r.source,
         editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: MANUAL_ORDER_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.order_created_at }),
@@ -7988,7 +8051,7 @@ app.get('/api/business/pedido-manual', requireAuth, (req, res) => {
     res.json({
         truncated: rows.length >= LIMIT, max: LIMIT,
         canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), MANUAL_ORDER_TABLE_KEY, 'colPmDeleteAuth'),
-        canQr: manualCan(req, 'colPmQr'), canLock: manualCan(req, 'colPmQrLock'), canStatus: manualCan(req, 'colPmEstatus'),
+        canQr: manualCan(req, 'colPmQr'), canLock: manualCan(req, 'colPmQrLock'), canStatus: manualCan(req, 'colPmEstatus'), canDownload: manualCan(req, 'colPmDescargar'),
         editable: manualEditable(req),
         orders: rows.map((r) => { const o = manualOrderRowOf(r, centers, client); if (lite) delete o.system; return o; }),
     });

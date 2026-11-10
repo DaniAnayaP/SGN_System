@@ -382,6 +382,7 @@
 
             <div class="pm-bar">
                 <button type="button" class="btn" id="pm-qr-btn" data-help-key="pmQr" hidden><i class="bx bx-qr" aria-hidden="true"></i> <span data-i18n="main.pmQrBoton">QR</span></button>
+                <button type="button" class="btn btn-secondary" id="pm-dl-btn" data-help-key="pmDescargar" hidden><i class="bx bx-download" aria-hidden="true"></i> <span data-i18n="main.pmListaBarra">Download order list</span></button>
             </div>
             <div class="data-table-wrapper" data-table-id="pedido-manual">
                 <table class="data-table">
@@ -404,12 +405,9 @@
                             <th data-i18n="main.colPmFolio" data-col="colPmFolio" data-group="menu.opCentroDistPedidoManual">Folio</th>
                             <th data-i18n="main.colPmFechaHora" data-col="colPmFechaHora" data-group="menu.opCentroDistPedidoManual">Date and time</th>
                             <th data-i18n="main.colPmSolicitante" data-col="colPmSolicitante" data-group="menu.opCentroDistPedidoManual">Requested by</th>
-                            <th data-i18n="main.colPmCodigo" data-col="colPmCodigo" data-group="menu.opCentroDistPedidoManual">Code</th>
-                            <th data-i18n="main.colPmDescripcion" data-col="colPmDescripcion" data-group="menu.opCentroDistPedidoManual">Description</th>
-                            <th data-i18n="main.colPmUdm" data-col="colPmUdm" data-group="menu.opCentroDistPedidoManual">UoM</th>
-                            <th data-i18n="main.colPmCategoria" data-col="colPmCategoria" data-group="menu.opCentroDistPedidoManual">Categories</th>
-                            <th data-i18n="main.colPmCantidad" data-col="colPmCantidad" data-group="menu.opCentroDistPedidoManual">Quantity</th>
-                            <th data-i18n="main.colPmFechaRequerida" data-col="colPmFechaRequerida" data-group="menu.opCentroDistPedidoManual">Required date</th>
+                            <th data-i18n="main.colPmLugar" data-col="colPmLugar" data-group="menu.opCentroDistPedidoManual">Requesting place</th>
+                            <th data-i18n="main.colPmArticulos" data-col="colPmArticulos" data-group="menu.opCentroDistPedidoManual">Items</th>
+                            <th data-i18n="main.colPmVerSku" data-col="colPmVerSku" data-group="menu.opCentroDistPedidoManual" data-help-key="pmVerLista">View requested SKU</th>
                             <th data-i18n="main.colPmEstatus" data-col="colPmEstatus" data-group="menu.opCentroDistPedidoManual">Status</th>
                             <th data-i18n="main.colPmOrigen" data-col="colPmOrigen" data-group="menu.opCentroDistPedidoManual">Origin</th>
                             <th data-i18n="main.colActions" data-col="actions">Actions</th>
@@ -417,7 +415,7 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="data-table-empty-cell" colspan="26">
+                            <td class="data-table-empty-cell" colspan="24">
                                 <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
                             </td>
                         </tr>

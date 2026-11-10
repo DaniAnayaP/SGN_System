@@ -3681,6 +3681,27 @@
     "udmWith": "with",
     "udmFromArticle": "Captured in Alta Artículos",
     "udmFromArticleLong": "its unit, measures and weight are captured in Alta Artículos",
+    "colPmLugar": "Requesting place",
+    "colPmArticulos": "Items",
+    "colPmVerSku": "View requested SKU",
+    "pmListaTitulo": "Requested SKU · Order {folio}",
+    "pmListaBarra": "Download order list",
+    "pmBajarPedidos": "Orders, as you see them in the table",
+    "pmBajarMaterial": "Material and requested day (one row per SKU)",
+    "colPmDescargar": "Download order list",
+    "pmEstatus_partial": "Partial",
+    "pmVerLista": "View the order list",
+    "pmDescargarLista": "Download the order list",
+    "pmFormatoXlsx": "Excel (.xlsx)",
+    "pmFormatoPdf": "PDF (.pdf)",
+    "pmFormatoCsv": "CSV (.csv)",
+    "pmFormatoTxt": "Text (.txt)",
+    "pmFormatoJson": "JSON (.json)",
+    "pmPedidoTitulo": "Order",
+    "pmListaNum": "No.",
+    "pmTodoPedido": "Whole order",
+    "pmEliminarPedido": "Delete order {folio} with {n} item(s)? This cannot be undone.",
+    "pmArticulosN": "{n} item(s)",
     "udmTreeOpen": "View the branching tree of this code",
     "udmNPres": "{n} presentations",
     "udmNPres0": "No presentations",
@@ -5301,6 +5322,18 @@
     "udmArbol": {
       "what": "Opens, in a floating window, the complete branching tree of this code: the main material and all the presentations that come from it (with their unit, measures, weight, what it is used for, where it ships to and how many main units each equals). There you also see each one's history, edit it, add one that comes from it with the + and remove it. It opens when you tap the Branching column of the row.",
       "example": "you tap the tablet row and see the box of 12 and, from it, the box of 10 boxes."
+    },
+    "pmVerLista": {
+      "what": "The «View requested SKU» column opens, in a separate window, the material list of this order: the SKU, its description, unit, categories, the quantity and the day it was requested for, with the status of each one. There you change each item's status, correct its quantity, remove it and download the list.",
+      "example": "order PM-0003 from Christus Muguerza with 4 items: you see the 4 and mark Supplied the ones you already sent."
+    },
+    "pmDescargar": {
+      "what": "Downloads this order's list (its data on top and its items below) in the format you choose: Excel, PDF, CSV, text or JSON.",
+      "example": "download order PM-0003 as Excel to send it to the warehouse."
+    },
+    "pmEstatusPedido": {
+      "what": "The status of the whole order: Pending if no item has been supplied, Supplied if all have and Partial if only some. Changing it changes all its items; to mark just one, open the order list.",
+      "example": "you mark the whole order Supplied once you have sent everything."
     },
     "udmAddUnder": {
       "what": "Adds a presentation that comes from this row: the code is already chosen and you only capture the unit, how many of this row it holds, its measures and its weight.",

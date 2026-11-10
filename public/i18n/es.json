@@ -3681,6 +3681,27 @@
     "udmFromArticle": "Se captura en Alta Artículos",
     "udmFromArticleLong": "su unidad, medidas y peso se capturan en Alta Artículos",
     "udmChainTitle": "Las ramificaciones de {sku}",
+    "colPmLugar": "Lugar que solicita",
+    "colPmArticulos": "Artículos",
+    "colPmVerSku": "Ver SKU solicitado",
+    "pmListaTitulo": "SKU solicitado · Pedido {folio}",
+    "pmListaBarra": "Descargar lista de pedidos",
+    "pmBajarPedidos": "Pedidos, como los ves en la tabla",
+    "pmBajarMaterial": "Material y día solicitado (un renglón por SKU)",
+    "colPmDescargar": "Descargar lista del pedido",
+    "pmEstatus_partial": "Parcial",
+    "pmVerLista": "Ver la lista del pedido",
+    "pmDescargarLista": "Descargar la lista del pedido",
+    "pmFormatoXlsx": "Excel (.xlsx)",
+    "pmFormatoPdf": "PDF (.pdf)",
+    "pmFormatoCsv": "CSV (.csv)",
+    "pmFormatoTxt": "Texto (.txt)",
+    "pmFormatoJson": "JSON (.json)",
+    "pmPedidoTitulo": "Pedido",
+    "pmListaNum": "No.",
+    "pmTodoPedido": "Todo el pedido",
+    "pmEliminarPedido": "¿Eliminar el pedido {folio} con {n} artículo(s)? No se puede deshacer.",
+    "pmArticulosN": "{n} artículo(s)",
     "udmTreeOpen": "Ver el árbol de ramificación de este código",
     "udmNPres": "{n} presentaciones",
     "udmNPres0": "Sin presentaciones",
@@ -5300,6 +5321,18 @@
     "udmArbol": {
       "what": "Abre, en una pantalla flotante, el árbol de ramificación completo de este código: el material principal y, de él, todas las presentaciones que salen (con su unidad, medidas, peso, para qué se usa, a dónde se envía y cuántas unidades principales equivale cada una). Ahí mismo se ve el historial de cada una, se edita, se agrega una que salga de ella con el «+» y se quita. Se abre al tocar la columna Ramificación del renglón.",
       "example": "tocas el renglón de la tableta y ves la caja con 12 y, de ella, la caja con 10 cajas."
+    },
+    "pmVerLista": {
+      "what": "La columna «Ver SKU solicitado» abre, en una pantalla aparte, la lista de material de este pedido: el SKU, su descripción, unidad, categorías, la cantidad y el día para el que lo pidió, con el estatus de cada uno. Ahí mismo se cambia el estatus de cada artículo, se corrige su cantidad, se quita y se descarga la lista.",
+      "example": "el pedido PM-0003 de Christus Muguerza con 4 artículos: ves los 4 y marcas Surtido los que ya enviaste."
+    },
+    "pmDescargar": {
+      "what": "Baja la lista de este pedido (sus datos arriba y sus artículos abajo) en el formato que elijas: Excel, PDF, CSV, texto o JSON.",
+      "example": "descargar el pedido PM-0003 en Excel para mandarlo al almacén."
+    },
+    "pmEstatusPedido": {
+      "what": "El estatus de todo el pedido: Pendiente si ningún artículo se ha surtido, Surtido si ya se surtieron todos y Parcial si solo algunos. Al cambiarlo se cambian todos sus artículos; para marcar uno solo, abre la lista del pedido.",
+      "example": "marcas Surtido el pedido completo cuando ya enviaste todo."
     },
     "udmAddUnder": {
       "what": "Agrega una presentación que sale de este renglón: el código ya viene elegido y solo capturas la unidad, cuántas de este renglón lleva, sus medidas y su peso.",

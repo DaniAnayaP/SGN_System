@@ -7756,6 +7756,27 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .pm-status{ font: inherit; font-size: 0.78rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 999px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-primary); }
 .pm-status[data-s="pending"]{ border-color: #c98a00; color: #8a5d00; }
 .pm-status[data-s="supplied"]{ border-color: #1e7e34; color: #1e7e34; }
+.pm-status[data-s="partial"]{ border-color: #2a7fb8; color: #2a7fb8; }
+/* La lista de un pedido en una pantalla flotante: los datos del pedido arriba y sus artículos abajo, con barra desplazadora y encabezados fijos. Por debajo de las demás ventanas (100): editar, historial y confirmar se abren encima. */
+#pm-list-modal{ z-index: 95; }
+.pm-list-panel{ width: min(76rem, 96vw); max-width: 96vw; display: flex; flex-direction: column; gap: 0.75rem; }
+.pm-list-meta{ display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.5rem 1rem; }
+.pm-list-meta > div{ display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.86rem; }
+.pm-list-meta label{ font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-secondary); }
+.pm-list-scroll{ overflow: auto; max-height: min(55vh, 34rem); border: 1px solid var(--color-border); border-radius: 0.8rem; }
+.pm-list-table{ width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.82rem; }
+.pm-list-table th, .pm-list-table td{ padding: 0.45rem 0.6rem; text-align: left; border-bottom: 1px solid var(--color-border); vertical-align: middle; background: var(--color-surface); }
+.pm-list-table thead th{ position: sticky; top: 0; z-index: 1; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-secondary); }
+.pm-list-table td.num{ text-align: right; font-variant-numeric: tabular-nums; }
+.pm-list-actions{ white-space: nowrap; }
+.pm-link{ display: inline-flex; align-items: center; gap: 0.35rem; border: 0; background: transparent; color: var(--color-accent); font: inherit; font-size: inherit; font-weight: 600; cursor: pointer; padding: 0.1rem 0.2rem; border-radius: 0.4rem; white-space: nowrap; }
+.pm-link:hover, .pm-link:focus-visible{ background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+.pm-dl-label{ padding: 0.35rem 0.6rem 0.15rem; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-secondary); }
+.pm-list-formats{ display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.pm-list-formats .btn{ width: auto; padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+.pm-dl-menu{ position: fixed; z-index: 130; min-width: 12.5rem; padding: 0.35rem; display: flex; flex-direction: column; gap: 0.1rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); box-shadow: 0 10px 26px rgba(60, 20, 70, 0.22); }
+.pm-dl-menu button{ display: flex; align-items: center; gap: 0.5rem; border: 0; background: transparent; color: var(--color-text-primary); font: inherit; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 0.55rem; cursor: pointer; text-align: left; }
+.pm-dl-menu button:hover, .pm-dl-menu button:focus-visible{ background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
 .pm-qr-panel{ display: flex; flex-direction: column; gap: 0.7rem; max-width: 26rem; }
 .pm-qr-card{ padding: 0.6rem; background: var(--color-bg, var(--color-surface)); border: 1px solid var(--color-border); border-radius: 0.8rem; }
 .pm-qr-card svg{ display: block; width: 100%; max-width: 15rem; height: auto; margin: 0 auto; background: #fff; box-shadow: 0 4px 16px rgba(20, 22, 31, 0.16); }

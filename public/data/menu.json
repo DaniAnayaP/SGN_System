@@ -2165,6 +2165,9 @@
             { "id": "colPmFolio", "labelKey": "main.colPmFolio", "permissionOnly": true },
             { "id": "colPmFechaHora", "labelKey": "main.colPmFechaHora", "permissionOnly": true },
             { "id": "colPmSolicitante", "labelKey": "main.colPmSolicitante", "permissionOnly": true },
+            { "id": "colPmLugar", "labelKey": "main.colPmLugar", "permissionOnly": true },
+            { "id": "colPmArticulos", "labelKey": "main.colPmArticulos", "permissionOnly": true },
+            { "id": "colPmVerSku", "labelKey": "main.colPmVerSku", "permissionOnly": true },
             { "id": "colPmCodigo", "labelKey": "main.colPmCodigo", "permissionOnly": true },
             { "id": "colPmDescripcion", "labelKey": "main.colPmDescripcion", "permissionOnly": true },
             { "id": "colPmUdm", "labelKey": "main.colPmUdm", "permissionOnly": true },
@@ -2178,6 +2181,7 @@
               "submenu": [
                 { "id": "colPmQr", "labelKey": "main.colPmQr", "permissionOnly": true },
                 { "id": "colPmQrLock", "labelKey": "main.colPmQrLock", "permissionOnly": true },
+                { "id": "colPmDescargar", "labelKey": "main.colPmDescargar", "permissionOnly": true },
                 { "id": "colPmDeleteAuth", "labelKey": "main.colPmDeleteAuth", "permissionOnly": true }
               ]
             }

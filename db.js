@@ -5610,7 +5610,7 @@ const MANUAL_ORDER_PATCHABLE_FIELDS = {
     name: { column: 'requester_name', fieldKey: 'main.colPmSolicitante' },
     quantity: { column: 'quantity', fieldKey: 'main.colPmCantidad' },
 };
-const MANUAL_LINE_SELECT = `SELECT l.*, o.cost_center_id, o.requester_name, o.requester_user_id, o.source, o.created_at AS order_created_at, o.received_at AS order_received_at FROM manual_order_lines l JOIN manual_orders o ON o.id = l.order_id`;
+const MANUAL_LINE_SELECT = `SELECT l.*, o.cost_center_id, o.requester_name, o.requester_user_id, o.source, o.place_id, o.place_name, o.created_at AS order_created_at, o.received_at AS order_received_at FROM manual_order_lines l JOIN manual_orders o ON o.id = l.order_id`;
 const MANUAL_CATEGORY_COLUMNS = ['category_inventario', 'category_compra', 'category_almacenamiento', 'category_rotacion', 'category_manejo', 'category_riesgo', 'category_vidautil'];
 // Los artículos con los que se puede pedir: los de la empresa, con su código, descripciones, UdM y categorías (las siete listas de Alta Nuestros Artículos).
 // costCenterId > 0: solo los códigos RELACIONADOS con ese centro de costos en Relación Código (de cualquier almacén, zona o clasificación); sin centro, todos los de la empresa.
@@ -7897,6 +7897,13 @@ function seedLugaresEnvioScreenGrants() {
     const path = TABLE_GRANT_PATHS['udm-distribucion'];
     if (!path) return;
     seedLeavesForScreenHolders(LUGARES_ENVIO_SCREEN_SEED_KEY, path, ['cat-catalogos/cat-catalogos-centro-dist-lugares-envio'], 'the Lugares de Envío catalog screen');
+}
+// Pedido Manual > botón «Descargar lista del pedido» (2026-11-10): lo reciben, una sola vez, quienes ya tienen la pantalla (bajar la lista de un pedido no muestra nada que no vean ya).
+const PM_DESCARGAR_SEED_KEY = 'seed-pm-descargar-button-v1';
+function seedPmDescargarGrants() {
+    const path = TABLE_GRANT_PATHS['pedido-manual'];
+    if (!path) return;
+    seedLeavesForScreenHolders(PM_DESCARGAR_SEED_KEY, path, [`${path.submenuPrefix}/class-botones/colPmDescargar/ver-y-operar`], 'the Pedido Manual download button');
 }
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
@@ -12554,6 +12561,7 @@ seedQrTemperaturasScreenGrants();
 seedQrPedidoManualScreenGrants();
 seedMarcasScreenGrants();
 seedLugaresEnvioScreenGrants();
+seedPmDescargarGrants();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
