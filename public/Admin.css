@@ -8075,7 +8075,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .udm-tree-scroll{ overflow: auto; max-height: 24rem; padding-bottom: 0.3rem; display: flex; flex-direction: column; gap: 0.6rem; }
 /* el árbol: cada rama es [presentación][tallo][ramas que salen de ella]; cada rama lleva su línea con «× N» */
 .udm-branch{ display: flex; align-items: center; min-width: max-content; }
-.udm-branch > .udm-node{ flex: none; width: 12.5rem; }
+.udm-branch > .udm-node{ flex: none; width: 15rem; }
 /* la marca (Patente o Genérico): un nodo que agrupa, con su color */
 .udm-node.udm-brand{ border-width: 2px; }
 .udm-node.udm-brand.pat{ border-color: #c98a1f; }
@@ -8093,7 +8093,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .udm-kid:first-child::before{ top: 50%; }
 .udm-kid:last-child::before{ bottom: 50%; }
 .udm-kid:only-child::before{ display: none; }
-.udm-node{ border: 1px solid var(--color-border); border-radius: 0.7rem; padding: 0.5rem 0.7rem; display: flex; flex-direction: column; gap: 0.15rem; min-width: 11.5rem; flex: 1 1 11.5rem; max-width: 16rem; }
+.udm-node{ border: 1px solid var(--color-border); border-radius: 0.7rem; padding: 0.5rem 0.7rem; display: flex; flex-direction: column; gap: 0.15rem; min-width: 11.5rem; flex: 1 1 11.5rem; max-width: 18rem; }
 .udm-node b{ font-size: 0.86rem; }
 .udm-node span{ font-size: 0.72rem; color: var(--color-text-secondary); }
 .udm-node .rel-tag{ align-self: flex-start; }
@@ -8117,8 +8117,17 @@ th[data-col="colUdmDRamificacion"]{ min-width: 17rem; }
 .udm-te:not(.last)::after{ content: ""; position: absolute; left: 50%; top: 50%; bottom: 0; border-left: 2px solid var(--color-text-secondary); }
 .udm-tnode{ align-self: center; border: 1px solid var(--color-border); border-radius: 0.6rem; padding: 0.1rem 0.6rem; font-size: 0.78rem; white-space: nowrap; background: var(--color-surface); }
 .udm-tnode.root{ font-weight: 700; }
-/* La fila del material principal (la UDM principal del producto) lleva un tinte suave del color de acento en toda la fila, para distinguirla de sus presentaciones. Va como capa sobre el fondo (no lo reemplaza): también se ve en las columnas fijas y en los tres estilos (claro, oscuro, institucional). */
-tr.udm-main-row > td{ background-image: linear-gradient(color-mix(in srgb, var(--color-accent) 11%, transparent), color-mix(in srgb, var(--color-accent) 11%, transparent)); }
+/* El nodo del material principal (la UDM principal del producto) lleva un tinte suave del color de acento, para distinguirlo de sus presentaciones en el árbol. Se ve igual en los tres estilos (claro, oscuro, institucional). */
+.udm-node.udm-main{ background-color: color-mix(in srgb, var(--color-accent) 11%, var(--color-surface)); }
+.udm-tcount{ align-self: center; margin-left: 0.5rem; font-size: 0.74rem; color: var(--color-text-secondary); white-space: nowrap; }
+.udm-tcount.none{ font-style: italic; }
+.udm-nx{ line-height: 1.25; }
+.udm-nx b{ color: var(--color-text-primary); font-weight: 600; }
+.udm-nacts{ display: flex; gap: 0.15rem; margin-top: 0.2rem; }
+.udm-nact{ border: 0; background: transparent; color: var(--color-text-secondary); cursor: pointer; padding: 0.15rem 0.3rem; border-radius: 0.45rem; font-size: 1rem; line-height: 1; }
+.udm-nact:hover, .udm-nact:focus-visible{ background: color-mix(in srgb, var(--color-accent) 14%, transparent); color: var(--color-accent); }
+.udm-nact.danger:hover, .udm-nact.danger:focus-visible{ background: rgba(200, 60, 60, 0.14); color: #c83c3c; }
+#udm-tree-modal{ z-index: 95; } /* por debajo de las demás ventanas (100): editar, historial y confirmar se abren encima del árbol */
 .udm-dup{ visibility: hidden; }
 .udm-from{ font-size: 0.85rem; font-weight: 600; min-height: 2rem; display: flex; align-items: center; }
 .udm-dialog{ max-width: 40rem; display: flex; flex-direction: column; gap: 0.75rem; }

@@ -4400,8 +4400,9 @@ const searchModeOf = (input) => (input && input.dataset && input.dataset.searchM
 // El material principal a la izquierda y, de él, las presentaciones que salen (empaque primario, secundario…), cada una con su nombre, sus medidas (cm), su peso y a cuántas unidades principales equivale; la línea que las une
 // dice cuántas de la anterior lleva (× 20). De una misma pueden salir varias y cada rama sigue sola. rows = los renglones de UN código (como los manda /api/business/sku-distribution, con parentId).
 // Lo usan la pantalla de Presentaciones de Distribución y la ventana «Ver presentaciones de distribución» de Alta Artículos.
-function udmChainHtml(rows) {
+function udmChainHtml(rows, opts) {
     const list = [...(rows || [])];
+    const extra = (opts && typeof opts.extra === 'function') ? opts.extra : null; // lo que la pantalla quiere agregar dentro de cada nodo (detalles y botones)
     if (!list.length) return '';
     const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const fmt = (v) => (v === null || v === undefined || v === '' ? '' : String(Math.round(Number(v) * 10000) / 10000));
@@ -4417,8 +4418,8 @@ function udmChainHtml(rows) {
         const title = r.name || r.uom || levelName(r.packLevel);
         // la marca (Patente o Genérico) es un nodo que agrupa: sin medidas ni peso, con cuántas presentaciones tiene
         const node = r.isBrand
-            ? `<div class="udm-node udm-brand ${r.classification === 'patente' ? 'pat' : 'gen'}"><span class="udm-ctag">${esc(t(`main.udmClase_${r.classification}`))}</span><b>${esc(title)}</b><span>${esc(t('main.udmChainPres', { n: r.childCount }))}</span></div>`
-            : `<div class="udm-node"><span class="rel-tag rel-tag-ok">${esc(levelName(r.packLevel))}</span><b>${esc(title)}</b><span>${esc(dims(r))} cm${r.weightG ? ` · ${esc(fmtWeight(r.weightG))}` : ''}</span><span class="udm-eq">= ${esc(r.equivalent)} ${esc(mainUom)}</span></div>`;
+            ? `<div class="udm-node udm-brand ${r.classification === 'patente' ? 'pat' : 'gen'}"><span class="udm-ctag">${esc(t(`main.udmClase_${r.classification}`))}</span><b>${esc(title)}</b><span>${esc(t('main.udmChainPres', { n: r.childCount }))}</span>${extra ? extra(r) : ''}</div>`
+            : `<div class="udm-node${r.level === 0 ? ' udm-main' : ''}"><span class="rel-tag rel-tag-ok">${esc(levelName(r.packLevel))}</span><b>${esc(title)}</b><span>${esc(dims(r))} cm${r.weightG ? ` · ${esc(fmtWeight(r.weightG))}` : ''}</span><span class="udm-eq">= ${esc(r.equivalent)} ${esc(mainUom)}</span>${extra ? extra(r) : ''}</div>`;
         const kids = kidsOf.get(r.id) || [];
         if (!kids.length) return `<div class="udm-branch">${node}</div>`;
         return `<div class="udm-branch">${node}<div class="udm-stem"></div><div class="udm-kids">${kids.map((k) => `<div class="udm-kid"><div class="udm-link">${k.isBrand ? '' : `<span>× ${esc(k.contains)}</span>`}</div>${branch(k)}</div>`).join('')}</div></div>`;

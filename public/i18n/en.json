@@ -3682,6 +3682,8 @@
     "udmFromArticle": "Captured in Alta Artículos",
     "udmFromArticleLong": "its unit, measures and weight are captured in Alta Artículos",
     "udmTreeOpen": "View the branching tree of this code",
+    "udmNPres": "{n} presentations",
+    "udmNPres0": "No presentations",
     "udmTreeTitle": "Branching tree · code {sku}",
     "udmTreeNone": "This code has no saved presentations yet: only its main material is shown here.",
     "udmChainTitle": "The branches of {sku}",
@@ -5285,10 +5287,10 @@
       "example": "you tap the locator arrow and see only its relation."
     },
     "udmChain": {
-      "what": "The presentation tree of this code: the main material on the left and, from it, the presentations that come out of it (each with its name, measures, weight and how many main units it equals). The line joining them says how many of the previous one it holds. Several can come out of the same one and each branch goes on by itself. It shows when the table shows a single code.",
+      "what": "The presentation tree of this code: the main material on the left and, from it, the presentations that come out of it (each with its name, measures, weight and how many main units it equals). The line joining them says how many of the previous one it holds. Several can come out of the same one and each branch goes on by itself. It opens from the Branching column.",
       "example": "tablet → box of 20 (× 20) → box of 20 boxes (× 20) and box of 50 boxes (× 50); and apart, tablet → box of 30 (× 30)."
     },
-    "udmRamificacion": {"what": "Draws the code's presentation tree in the column: the main material on top and, with lines, the presentations that come out of it and those that come out of them. Each row is a presentation and its line joins it to the one it comes from. Hover over the name to see its whole path.", "example": "Tbta › Box of 20 Tbta › Box of 50 Box."},
+    "udmRamificacion": {"what": "Summarizes the code in one row: its main material and how many presentations it has. Tapping the cell opens the branching tree in a floating window, where its presentations are seen, added, edited and removed.", "example": "Tablet · 3 presentations: tapping it you see the box of 12, the box of 24 and the box of 10 boxes."},
     "udmSaleDe": {"what": "Which presentation of the code the new one comes from: «how many it holds» is counted from that one. Up to 10 can come out of the same one and there are up to 10 levels. It is not changed afterwards: remove it and capture it again.", "example": "the box of 50 comes out of the box of 20 (it holds 50 boxes of 20)."},
     "udmClasificacion": {"what": "If the code is sold with brands: Patent or Generic. Only one brand of a patent per code; as many generic brands as needed, each with its own presentations. It is optional: without it the presentation comes straight from the main material. But once a code uses brands, all its presentations go under a brand.", "example": "ASPIRINA PROTECT: Patent BAYER; Generic PISA and Generic SANAFI."},
     "udmMarca": {"what": "The presentation's brand, chosen from Catalogs > Our Brands (BAYER, PISA…). The brand is created in the code with its first presentation and every box of that brand comes out of it; it does not change what each box equals and has no measures or weight.", "example": "Generic › PISA: box of 24, box of 30 and box of 84."},
@@ -5297,7 +5299,7 @@
       "example": "generic PISA, box of 24 tablets: 5 × 4 × 2 cm, 1100 g; then the box of 10 boxes of 24 comes out of that box."
     },
     "udmArbol": {
-      "what": "Opens, in a floating window, the complete branching tree of this code: the main material and all the presentations that come from it (with their unit, measures, weight, how many main units each equals and how many of the previous one it holds). It opens when you tap the Branching column of the row.",
+      "what": "Opens, in a floating window, the complete branching tree of this code: the main material and all the presentations that come from it (with their unit, measures, weight, what it is used for, where it ships to and how many main units each equals). There you also see each one's history, edit it, add one that comes from it with the + and remove it. It opens when you tap the Branching column of the row.",
       "example": "you tap the tablet row and see the box of 12 and, from it, the box of 10 boxes."
     },
     "udmAddUnder": {

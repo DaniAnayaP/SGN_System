@@ -56,8 +56,10 @@ const placeName = (id) => (places.find((p) => p.id === id) || {}).name || `#${id
 
 // ---- datos de cada código --------------------------------------------------------------------------------------------------------------
 // Los códigos que todavía no tienen presentaciones salen igual, con su material principal (virtual = renglón sin guardar): para el árbol y las reglas del código cuentan solo los renglones guardados.
-const rowsOfSku = (skuId) => rows.filter((r) => r.skuItemId === skuId && !r.virtual); // en el orden del árbol que manda el servidor (cada una antes de las que salen de ella)
-const mainUomOf = (skuId) => (rows.find((r) => r.skuItemId === skuId && r.level === 0) || {}).uom || '';
+let rowsBySku = new Map(); // los renglones de cada código, en el orden del árbol que manda el servidor (cada una antes de las que salen de ella)
+let presCounts = new Map(); // cuántas presentaciones tiene cada código
+const rowsOfSku = (skuId) => (rowsBySku.get(skuId) || []).filter((r) => !r.virtual);
+const mainUomOf = (skuId) => ((rowsBySku.get(skuId) || []).find((r) => r.level === 0) || {}).uom || '';
 const parentRowOf = (r) => rows.find((x) => x.id === r.parentId);
 const childCountOf = (id) => rows.filter((r) => r.parentId === id).length;
 // El rótulo del nivel de un renglón: «Marca» para el de una marca; para las demás, «Empaque primario»… (el nivel entre las presentaciones: la marca no cuenta).
@@ -103,51 +105,42 @@ function actionsCell(r, tr) {
     if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) td.appendChild(iconButton('admin-icon-btn admin-icon-btn-danger', 'bx-trash', t('admin.delete'), 'delete', () => deletePresentation(r)));
     return td;
 }
-// Ramificación: el árbol de presentaciones del código dibujado en la columna (las líneas de los niveles de arriba, el codo hacia esta presentación y su nombre).
+// Cuántas presentaciones (sin contar el material principal ni los renglones de marca) tiene un código.
+const presCountOf = (skuId) => presCounts.get(skuId) || 0;
+// Ramificación: un resumen del código (su material principal y cuántas presentaciones tiene); al tocar la celda se abre el árbol completo en una pantalla flotante, donde se ven, se agregan, se editan y se quitan las presentaciones.
 function treeCell(r) {
     const td = document.createElement('td');
     td.dataset.col = 'colUdmDRamificacion';
     td.className = 'udm-tree-cell';
-    const name = r.name || rowLevelName(r);
-    td.title = (r.path && r.path.length ? r.path : [name]).join(' › ');
-    td.innerHTML = `<div class="udm-tree">${(r.treeLines || []).map((on) => `<i class="udm-tl${on ? ' on' : ''}"></i>`).join('')}${r.depth >= 1 ? `<i class="udm-te${r.treeLast ? ' last' : ''}"></i>` : ''}<span class="udm-tnode${r.depth === 0 ? ' root' : ''}${r.isBrand ? ` brand ${r.classification === 'patente' ? 'pat' : 'gen'}` : ''}">${esc(name)}</span><button type="button" class="udm-tree-open" data-help-key="udmArbol" aria-label="${esc(t('main.udmTreeOpen'))}" title="${esc(t('main.udmTreeOpen'))}"><i class="bx bx-sitemap" aria-hidden="true"></i></button></div>`;
+    const n = presCountOf(r.skuItemId);
+    td.title = t('main.udmTreeOpen');
+    td.innerHTML = `<div class="udm-tree"><span class="udm-tnode root">${esc(r.name || r.uom || rowLevelName(r))}</span><span class="udm-tcount${n ? '' : ' none'}">${esc(n ? t('main.udmNPres', { n }) : t('main.udmNPres0'))}</span><button type="button" class="udm-tree-open" data-help-key="udmArbol" aria-label="${esc(t('main.udmTreeOpen'))}" title="${esc(t('main.udmTreeOpen'))}"><i class="bx bx-sitemap" aria-hidden="true"></i></button></div>`;
     td.addEventListener('click', () => openTreeModal(r.skuItemId)); // tocar la columna abre el árbol completo del código en una pantalla flotante
     return td;
 }
-// repeatCode: la presentación anterior es del mismo código; su descripción se queda en el renglón (para buscar y filtrar) pero sin verse: el código sale una sola vez, con sus presentaciones debajo.
-function buildRow(r, repeatCode) {
+// UN renglón por código (r = su material principal, guardado o no): su unidad de medida principal, su forma, medidas y peso (de Alta), para qué se usa y a dónde se envía; las presentaciones que salen de él se ven, se agregan
+// y se editan en el árbol flotante de la columna Ramificación.
+function buildRow(r) {
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(r.id);
-    if (r.level === 0) tr.className = 'udm-main-row'; // la fila del material principal (la UDM principal del producto) va marcada con un color suave
     tr.dataset.sku = String(r.skuItemId);
     tr.dataset.skuCode = r.sku || '';
     tr.dataset.upc = r.upc || '';
-    const principal = r.level === 0;
-    const fromArticle = principal ? t('main.udmFromArticle') : '';
-    const mainUom = mainUomOf(r.skuItemId);
-    const parent = parentRowOf(r);
-    const brandRow = !!r.isBrand; // el renglón de una marca solo agrupa: sin medidas, peso ni tipos
-    const blank = (v) => (brandRow ? '' : v);
-    const descCell = cell('colUdmDDescripcion', r.description);
-    if (repeatCode && r.description) descCell.innerHTML = `<span class="udm-dup">${esc(r.description)}</span>`;
+    const fromArticle = t('main.udmFromArticle');
     tr.append(
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, r[key], 'col-system')),
         cell('colCatRegistroUnico', r.registroUnico, 'col-system'),
-        descCell, treeCell(r),
-        cell('colUdmDClasificacion', claseName(r.classification)), cell('colUdmDMarca', r.brand),
-        cell('colUdmDNivel', rowLevelName(r)),
-        cell('colUdmDUnidad', blank(r.uom), principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDContiene', principal || brandRow ? '' : `${r.contains} ${parent && !parent.isBrand ? parent.uom : mainUom}`.trim()),
-        cell('colUdmDEquivale', blank(`${r.equivalent} ${mainUom}`.trim())),
-        cell('colUdmDForma', blank(t(r.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect'))),
-        cell('colUdmDLargo', blank(fmt(r.length)), principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDAncho', blank(r.shape === 'cilindrica' ? '= Ø' : fmt(r.width)), principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDAlto', blank(fmt(r.height)), principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDPeso', blank(fmtWeight(r.weightG)), principal ? 'udm-ro' : '', fromArticle),
-        cell('colUdmDAcostar', blank(t(r.canLay ? 'main.udmYes' : 'main.udmNo'))),
-        cell('colUdmDTipo', brandRow ? '' : ((r.storageTypes || []).length ? r.storageTypes.map(typeName).join(' · ') : t('main.udmTipoNinguno')), (r.storageTypes || []).length ? '' : 'udm-ro'),
-        cell('colUdmDEnvios', brandRow ? '' : ((r.shipTo || []).length ? r.shipTo.map(placeName).join(' · ') : t('main.udmEnviosNinguno')), (r.shipTo || []).length ? '' : 'udm-ro'),
-        cell('colUdmDCantidadCama', blank(r.unitsPerLayer || '')), cell('colUdmDCamasPallet', blank(r.layersPerPallet || '')), cell('colUdmDMaxEstiba', blank(r.maxStack || '')),
+        cell('colUdmDDescripcion', r.description), treeCell(r),
+        cell('colUdmDUnidad', r.uom, 'udm-ro', fromArticle),
+        cell('colUdmDForma', t(r.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect')),
+        cell('colUdmDLargo', fmt(r.length), 'udm-ro', fromArticle),
+        cell('colUdmDAncho', r.shape === 'cilindrica' ? '= Ø' : fmt(r.width), 'udm-ro', fromArticle),
+        cell('colUdmDAlto', fmt(r.height), 'udm-ro', fromArticle),
+        cell('colUdmDPeso', fmtWeight(r.weightG), 'udm-ro', fromArticle),
+        cell('colUdmDAcostar', t(r.canLay ? 'main.udmYes' : 'main.udmNo')),
+        cell('colUdmDTipo', (r.storageTypes || []).length ? r.storageTypes.map(typeName).join(' · ') : t('main.udmTipoNinguno'), (r.storageTypes || []).length ? '' : 'udm-ro'),
+        cell('colUdmDEnvios', (r.shipTo || []).length ? r.shipTo.map(placeName).join(' · ') : t('main.udmEnviosNinguno'), (r.shipTo || []).length ? '' : 'udm-ro'),
+        cell('colUdmDCantidadCama', r.unitsPerLayer || ''), cell('colUdmDCamasPallet', r.layersPerPallet || ''), cell('colUdmDMaxEstiba', r.maxStack || ''),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
@@ -169,49 +162,191 @@ function ensureEmptyState() {
     tr.appendChild(td);
     tbody.appendChild(tr);
 }
+// La pantalla lista TODOS los códigos de Alta desde el inicio: con miles, dibujar todos los renglones de un golpe congelaba la página. Se dibujan los primeros al entrar y el resto sale al bajar (o con «Mostrar más» /
+// «Mostrar todos»), igual que en Alta Artículos. Todo lo que llegó del servidor queda en memoria: la búsqueda de texto trabaja sobre esos datos y no sobre los renglones dibujados, y lo que lee todas las filas del DOM
+// (ordenar o filtrar por columna) pide primero dibujar el resto (Dashboard.registerPartialTable). Al guardar, solo se vuelve a leer y a dibujar el código que cambió.
+const UDM_FIRST_ROWS = 100; // los que se dibujan al entrar
+const UDM_NEXT_ROWS = 200; // los que se agregan al bajar o con «Mostrar más»
+let codeList = []; // el renglón del material principal de cada código (guardado o no)
+let codeView = []; // los que cumplen la búsqueda de texto (todos, si no hay búsqueda)
+let codeDrawn = 0; // cuántos de codeView ya están dibujados
+let codeDrawing = null; // la tanda que se está dibujando (promesa)
+let codeToken = 0; // una recarga o una búsqueda nueva cancela la tanda anterior
+let fetchToken = 0;
+const searchText = () => (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+function indexRows() {
+    rowsBySku = new Map();
+    presCounts = new Map();
+    rows.forEach((r) => {
+        if (!rowsBySku.has(r.skuItemId)) rowsBySku.set(r.skuItemId, []);
+        rowsBySku.get(r.skuItemId).push(r);
+        if (r.level >= 1 && !r.isBrand) presCounts.set(r.skuItemId, (presCounts.get(r.skuItemId) || 0) + 1);
+    });
+    codeList = rows.filter((r) => r.level === 0);
+    // para buscar: el código, su descripción, su unidad y todo lo que cuelga de él (presentaciones, marcas y clasificaciones)
+    codeList.forEach((m) => { m._search = [m.sku, m.upc, m.description, m.uom, ...(rowsBySku.get(m.skuItemId) || []).filter((x) => x.level >= 1).flatMap((x) => [x.name, x.brand, claseName(x.classification)])].filter(Boolean).join(' ').toLowerCase(); });
+}
+function computeView() {
+    const text = searchText();
+    codeView = text ? codeList.filter((m) => SearchSyntax.matches('contains', text, m._search || '')) : codeList.slice();
+}
+function drawCodeRows(count) {
+    if (codeDrawing) return codeDrawing;
+    if (codeDrawn >= codeView.length) return Promise.resolve(true);
+    const token = codeToken;
+    const from = codeDrawn;
+    const slice = codeView.slice(from, from + count);
+    const run = (async () => {
+        const finished = await Dashboard.renderTableRowsInChunks({ tableKey: TABLE_KEY, tbody: getTbody(), records: slice, buildRow, isStale: () => token !== codeToken });
+        if (token === codeToken) {
+            if (finished) codeDrawn = from + slice.length;
+            codeDrawing = null;
+            updateMoreBar();
+        }
+        return finished;
+    })();
+    codeDrawing = run;
+    return run;
+}
+// Dibuja todo lo que falta (para ordenar o filtrar por columna, o con «Mostrar todos»).
+async function drawAllCodeRows() {
+    while (codeDrawn < codeView.length) {
+        const ok = await drawCodeRows(codeView.length - codeDrawn);
+        if (!ok) return false;
+    }
+    return true;
+}
+function resetCodeRows() {
+    codeToken += 1;
+    codeDrawing = null;
+    codeDrawn = 0;
+    getTbody().innerHTML = '';
+    if (!codeView.length) { ensureEmptyState(); updateMoreBar(); return Promise.resolve(true); }
+    return drawCodeRows(UDM_FIRST_ROWS);
+}
+const udmToolbar = () => document.querySelector(`[data-table-id="${TABLE_KEY}"]`)?.previousElementSibling || null;
+// «Mostrando X de Y» con los botones para dibujar más; solo sale cuando falta algo por dibujar.
+function updateMoreBar() {
+    const toolbar = udmToolbar();
+    if (!toolbar) return;
+    let bar = toolbar.querySelector('.sku-more-bar');
+    if (codeDrawn >= codeView.length) { if (bar) bar.remove(); return; }
+    if (!bar) {
+        bar = document.createElement('span');
+        bar.className = 'sku-more-bar tpl-muted';
+        bar.innerHTML = '<span class="sku-more-text" aria-live="polite"></span><button type="button" class="btn btn-secondary sku-more-btn" data-udm-more></button><button type="button" class="btn btn-secondary sku-more-btn" data-udm-all></button>';
+        bar.querySelector('[data-udm-more]').addEventListener('click', () => drawCodeRows(UDM_NEXT_ROWS));
+        bar.querySelector('[data-udm-all]').addEventListener('click', () => drawAllCodeRows());
+        toolbar.prepend(bar);
+    }
+    bar.querySelector('.sku-more-text').textContent = Dashboard.t('main.skuMostrando').replace('{shown}', String(codeDrawn)).replace('{total}', String(codeView.length));
+    bar.querySelector('[data-udm-more]').textContent = Dashboard.t('main.skuMostrarMas');
+    bar.querySelector('[data-udm-all]').textContent = Dashboard.t('main.skuMostrarTodos');
+}
+// Al bajar casi hasta el final de lo dibujado, se dibujan más renglones.
+function watchCodeScroll() {
+    const wrapper = document.querySelector(`[data-table-id="${TABLE_KEY}"]`);
+    if (!wrapper || wrapper.dataset.udmScrollBound) return;
+    wrapper.dataset.udmScrollBound = '1';
+    wrapper.addEventListener('scroll', () => {
+        if (codeDrawing || codeDrawn >= codeView.length) return;
+        if (wrapper.scrollTop + wrapper.clientHeight >= wrapper.scrollHeight - 800) drawCodeRows(UDM_NEXT_ROWS);
+    }, { passive: true });
+}
+function applyServerData(body) {
+    rows = body.rows || [];
+    uoms = body.uoms || [];
+    brands = body.brands || [];
+    places = body.places || [];
+    maxDepth = body.maxDepth || 10;
+    maxChildren = body.maxChildren || 10;
+    indexRows();
+}
 async function refreshTable() {
-    const tbody = getTbody();
+    const token = ++fetchToken;
     try {
         const res = await fetch(API, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const body = await res.json();
-        rows = body.rows || [];
-        uoms = body.uoms || [];
-        brands = body.brands || [];
-        places = body.places || [];
-        maxDepth = body.maxDepth || 10;
-        maxChildren = body.maxChildren || 10;
-        tbody.innerHTML = '';
-        if (!rows.length) { ensureEmptyState(); renderChain(); return; }
-        const fragment = document.createDocumentFragment();
-        rows.forEach((r, i) => fragment.appendChild(buildRow(r, i > 0 && rows[i - 1].skuItemId === r.skuItemId)));
-        tbody.appendChild(fragment);
-        applyFilters();
+        if (token !== fetchToken) return; // llegó otra recarga después de esta
+        applyServerData(body);
+        computeView();
+        watchCodeScroll();
+        const finished = await resetCodeRows();
+        if (finished && token === fetchToken && Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(TABLE_KEY);
+        renderTreeModal(); // si el árbol flotante está abierto, se pone al día con lo que se acaba de leer
     } catch (err) {
         console.error('Presentaciones de Distribución: failed to load records', err);
     }
 }
+// Después de guardar o quitar una presentación solo se vuelve a leer (y a dibujar) ese código, no toda la tabla.
+async function refreshCode(skuId) {
+    try {
+        const res = await fetch(`${API}?skuItemId=${encodeURIComponent(skuId)}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const body = await res.json();
+        const at = rows.findIndex((r) => r.skuItemId === skuId);
+        if (!(body.rows || []).length || at < 0) { await refreshTable(); return; } // ya no tiene renglones guardados (vuelve a salir como renglón sin guardar) o es nuevo: se lee todo
+        const rest = rows.filter((r) => r.skuItemId !== skuId);
+        rows = [...rest.slice(0, at), ...body.rows, ...rest.slice(at)]; // los renglones de un código van juntos y en su lugar
+        places = body.places || places;
+        brands = body.brands || brands;
+        indexRows();
+        const before = codeView.length;
+        computeView();
+        const main = codeList.find((m) => m.skuItemId === skuId);
+        const tr = getTbody().querySelector(`tr[data-sku="${skuId}"]`);
+        if (tr && main) tr.replaceWith(buildRow(main));
+        else if (codeView.length !== before) { await resetCodeRows(); }
+        renderTreeModal();
+    } catch (err) {
+        console.error('Presentaciones de Distribución: failed to refresh a code', err);
+        await refreshTable();
+    }
+}
 function applyFilters() {
-    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
-    getTbody().querySelectorAll('tr').forEach((tr) => {
-        if (tr.querySelector('td.data-table-empty-cell')) return;
-        if (!text) { tr.hidden = false; return; }
-        const haystack = ['colUdmDDescripcion', 'colUdmDRamificacion', 'colUdmDClasificacion', 'colUdmDMarca', 'colUdmDNivel', 'colUdmDUnidad']
-            .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
-            .concat([(tr.dataset.skuCode || '').toLowerCase(), (tr.dataset.upc || '').toLowerCase()])
-            .join(' ');
-        tr.hidden = !SearchSyntax.matches('contains', text, haystack);
-    });
-    renderChain();
+    computeView();
+    resetCodeRows().then((finished) => { if (finished && Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(TABLE_KEY); });
 }
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFilters);
+if (window.Dashboard && Dashboard.registerPartialTable) Dashboard.registerPartialTable(TABLE_KEY, { isComplete: () => codeDrawn >= codeView.length, loadAll: drawAllCodeRows });
 
 // ---- el árbol del código en una pantalla flotante (se abre desde la columna Ramificación) ------------------------------------------------------------
+// Es donde se trabaja con las presentaciones de un código: el material principal a la izquierda y, de él, todas las que salen; cada nodo trae sus datos y sus botones (historial, editar, agregar una que salga de él, quitar).
 let treeModalEl = null;
+let treeSku = null; // el código cuyo árbol está abierto
+function nodeExtraHtml(r) {
+    const act = (name, icon, label, danger) => `<button type="button" class="udm-nact${danger ? ' danger' : ''}" data-act="${name}" data-id="${r.id}" title="${esc(label)}" aria-label="${esc(label)}"><i class="bx ${icon}" aria-hidden="true"></i></button>`;
+    const canCreate = Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '');
+    const buttons = [];
+    if (r.virtual) { if (canCreate) buttons.push(act('capture', 'bx-edit', t('main.udmCapture'))); } else {
+        buttons.push(act('hist', 'bx-history', t('main.changeHistoryTitleRecord')));
+        if (!r.isBrand && canTouchAnyColumn()) buttons.push(act('edit', 'bx-edit', t('main.udmEdit')));
+        if (canCreate) buttons.push(act('add', 'bx-plus', t('main.udmAddUnder')));
+        if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) buttons.push(act('del', 'bx-trash', t('admin.delete'), true));
+    }
+    let lines = '';
+    if (!r.isBrand) {
+        const types = (r.storageTypes || []).length ? r.storageTypes.map(typeName).join(' · ') : t('main.udmTipoNinguno');
+        const ships = (r.shipTo || []).length ? r.shipTo.map(placeName).join(' · ') : t('main.udmEnviosNinguno');
+        const stack = [r.unitsPerLayer && `TI ${r.unitsPerLayer}`, r.layersPerPallet && `HI ${r.layersPerPallet}`, r.maxStack && `${t('main.colUdmDMaxEstiba')} ${r.maxStack}`].filter(Boolean).join(' · ');
+        lines = `<span class="udm-nx"><b>${esc(t('main.colUdmDTipo'))}:</b> ${esc(types)}</span><span class="udm-nx"><b>${esc(t('main.colUdmDEnvios'))}:</b> ${esc(ships)}</span>${stack ? `<span class="udm-nx">${esc(stack)}</span>` : ''}`;
+    }
+    return `${lines}${buttons.length ? `<div class="udm-nacts">${buttons.join('')}</div>` : ''}`;
+}
+function renderTreeModal() {
+    if (!treeModalEl || treeModalEl.hidden || treeSku === null) return;
+    const list = rows.filter((r) => r.skuItemId === treeSku); // con el material principal aunque todavía no se guarde (renglón virtual)
+    if (!list.length) { treeModalEl.hidden = true; return; }
+    const main = list.find((r) => r.level === 0) || list[0];
+    $('udm-tree-title').textContent = t('main.udmTreeTitle', { sku: main.sku });
+    $('udm-tree-body').innerHTML = Dashboard.udmChainHtml(list, { extra: nodeExtraHtml });
+    $('udm-tree-note').textContent = list.every((r) => r.virtual) ? t('main.udmTreeNone') : '';
+    $('udm-tree-add').hidden = !Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '');
+}
 function openTreeModal(skuId) {
-    const list = rows.filter((r) => r.skuItemId === skuId); // con el material principal aunque todavía no se guarde (renglón virtual)
-    if (!list.length) return;
+    if (!rows.some((r) => r.skuItemId === skuId)) return;
     if (!treeModalEl) {
         treeModalEl = document.createElement('div');
         treeModalEl.className = 'modal-overlay';
@@ -220,29 +355,33 @@ function openTreeModal(skuId) {
         treeModalEl.innerHTML = `<div class="modal-panel udm-tree-panel" role="dialog" aria-modal="true" aria-labelledby="udm-tree-title">
             <h3 id="udm-tree-title"></h3>
             <div class="udm-chain udm-chain-float" id="udm-tree-body"></div>
-            <div class="rel-foot"><span class="rel-muted" id="udm-tree-note"></span><button type="button" class="btn btn-secondary" id="udm-tree-close">${esc(t('main.whClose'))}</button></div>
+            <div class="rel-foot"><span class="rel-muted" id="udm-tree-note"></span><button type="button" class="btn" id="udm-tree-add" data-help-key="udmNew"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.udmNew'))}</button><button type="button" class="btn btn-secondary" id="udm-tree-close">${esc(t('main.whClose'))}</button></div>
         </div>`;
         document.body.appendChild(treeModalEl);
-        treeModalEl.addEventListener('click', (event) => { if (event.target === treeModalEl || event.target.closest('#udm-tree-close')) treeModalEl.hidden = true; });
-        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && treeModalEl && !treeModalEl.hidden) treeModalEl.hidden = true; });
+        treeModalEl.addEventListener('click', (event) => {
+            if (event.target === treeModalEl || event.target.closest('#udm-tree-close')) { treeModalEl.hidden = true; return; }
+            if (event.target.closest('#udm-tree-add')) { // una presentación que sale del material principal (con el código ya elegido)
+                const main = rows.find((r) => r.skuItemId === treeSku && r.level === 0);
+                if (main) openForCode(main, main.virtual ? null : main);
+                return;
+            }
+            const btn = event.target.closest('[data-act]');
+            if (!btn) return;
+            const r = rows.find((x) => String(x.id) === btn.dataset.id);
+            if (!r) return;
+            const act = btn.dataset.act;
+            if (act === 'hist') Dashboard.openChangeHistory(TABLE_KEY, r.id);
+            else if (act === 'edit') openDialog(r);
+            else if (act === 'add') openForCode(r, r);
+            else if (act === 'capture') openForCode(r, null);
+            else if (act === 'del') deletePresentation(r);
+        });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && treeModalEl && !treeModalEl.hidden && (!modalEl || modalEl.hidden)) treeModalEl.hidden = true; }, true); // en la fase de captura: si la ventana de editar está abierta, el Esc es de ella y no cierra el árbol
     }
-    $('udm-tree-title').textContent = t('main.udmTreeTitle', { sku: list[0].sku });
-    $('udm-tree-body').innerHTML = Dashboard.udmChainHtml(list);
-    $('udm-tree-note').textContent = list.every((r) => r.virtual) ? t('main.udmTreeNone') : '';
+    treeSku = skuId;
     treeModalEl.hidden = false;
+    renderTreeModal();
     $('udm-tree-close').focus();
-}
-
-// ---- la secuencia (arriba de la tabla, con UN código a la vista) ------------------------------------------------------------------------
-function renderChain() {
-    const box = $('udm-chain');
-    if (!box) return;
-    const ids = [...new Set([...getTbody().querySelectorAll('tr[data-sku]')].filter((tr) => !tr.hidden).map((tr) => Number(tr.dataset.sku)))];
-    if (ids.length !== 1) { box.hidden = true; box.innerHTML = ''; return; }
-    const list = rowsOfSku(ids[0]);
-    if (!list.length) { box.hidden = true; return; }
-    box.innerHTML = Dashboard.udmChainHtml(list); // el mismo árbol que se ve desde Alta Artículos (Ver presentaciones de distribución)
-    box.hidden = false;
 }
 
 // ---- botón «Nueva presentación» ----------------------------------------------------------------------------------------------------------
@@ -559,8 +698,9 @@ async function save() {
         if (json.rejectedFields?.length) Dashboard.showToast(`${Dashboard.t('main.fieldLocked')}: ${json.rejectedFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'warning');
         else if (json.pendingFields?.length) Dashboard.showToast(`${Dashboard.t('main.changePending')}: ${json.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'info');
         else Dashboard.showToast(t('main.udmSaved'), 'success');
+        const savedSku = f.sku.id;
         closeDialog();
-        await refreshTable();
+        await refreshCode(savedSku);
     } catch (err) {
         console.error('Presentaciones de Distribución: failed to save', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
@@ -577,7 +717,7 @@ async function deletePresentation(r) {
             Dashboard.showToast(body.message || Dashboard.t('main.fieldLocked'), 'warning');
             return;
         }
-        await refreshTable();
+        await refreshCode(r.skuItemId);
     } catch (err) {
         console.error('Presentaciones de Distribución: failed to delete', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
