@@ -1997,6 +1997,7 @@ function drawPositionsOverlay() {
     const spt = (px, py) => { const a = turn(px, py); return [view.ox + (a[0] - view.x0) * view.sc, view.oy + (a[1] - view.y0) * view.sc]; };
     // lo marcado se junta por activo y nivel: cada nivel se dibuja una vez, con todo lo marcado en él
     const canDragBays = state.mode === 'edit' && state.focus === 'posiciones' && canEdit('posiciones');
+    const canDragPos = state.mode === 'edit' && state.focus === 'ubicaciones' && canEdit('ubicaciones'); // en el paso Posiciones cada posición se arrastra dentro de su espacio
     const bayColors = stepOn('posiciones') && !!window.LayoutMapSvg && !!LC.bayFmtOf; // con el paso Espacios encendido, cada número de espacio lleva su color y su trama
     let paintSeq = 0;
     const groups = new Map();
@@ -2040,6 +2041,7 @@ function drawPositionsOverlay() {
                 const chosen = grp.items.some((it) => it.c === c && it.p === p.num);
                 if (chosen) faceJobs.push({ r: { x: s.x + rc.x + p.x * kx, y: s.y + rc.y + p.y * kz, w: p.l * kx, d: p.w * kz }, faces: LC.facesOfPosition(s, p) });
                 add('rect', { class: `pos-ov-pos${chosen ? ' chosen' : ''}${dim}`, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)) });
+                if (canDragPos) add('rect', { class: 'pos-ov-hit', 'data-poshit': p.id, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)), fill: 'transparent', 'pointer-events': 'all', style: 'cursor:move' });
                 if (r.w >= 17 && r.h >= 8) add('text', { class: `pos-ov-t${dim}`, x: f1(r.x + r.w / 2), y: f1(r.y + r.h / 2 + 2.5), 'text-anchor': 'middle' }, `P${ubicPad(p.num)}`);
             });
         }
@@ -5526,6 +5528,63 @@ window.addEventListener('pointerup', () => {
     if (!bayDrag) return;
     const moved = bayDrag.moved;
     bayDrag = null;
+    if (moved && state.draft) { renderPanel(); refreshLive(); }
+});
+
+// ---- acomodar una posición arrastrándola sobre el croquis -----------------------------------------------------------------------------------
+// Lo mismo que con los espacios dentro del activo, ahora con las posiciones dentro de su espacio: en Editar y en el paso Posiciones cada posición del nivel elegido se arrastra con el dedo o el mouse a donde se quiera DENTRO de su
+// espacio (no se sale de él); se pega a menos de 3 cm de los lados de las demás posiciones y del espacio, y su X y su Y se escriben solos en la tabla. Si se encima con otra queda en rojo y no se deja guardar.
+const POS_SNAP_M = 0.03;
+let posDrag = null;
+$('layout-svg').addEventListener('pointerdown', (event) => {
+    const el = event.target.closest('[data-poshit]');
+    if (!el || !state.draft || !canEdit('ubicaciones')) return;
+    const p = (state.draft.positions || []).find((x) => x.id === el.getAttribute('data-poshit'));
+    if (!p) return;
+    posDrag = { id: p.id, px: event.clientX, py: event.clientY, x0: p.x, y0: p.y, moved: false };
+    event.preventDefault();
+});
+window.addEventListener('pointermove', (event) => {
+    if (!posDrag || !view || !state.draft) return;
+    const p = (state.draft.positions || []).find((x) => x.id === posDrag.id);
+    const space = p ? state.draft.spaces.find((x) => x.id === p.spaceId) : null;
+    if (!p || !space) { posDrag = null; return; }
+    const m = LC.bayMeasures(space, p.n, p.c);
+    const box = $('layout-svg').getBoundingClientRect();
+    const k = (view.W / zoom.s) / box.width / view.sc;
+    let dx = (event.clientX - posDrag.px) * k;
+    let dy = (event.clientY - posDrag.py) * k;
+    // Con el croquis girado, el movimiento que se ve en pantalla se regresa a los ejes del Layout (giro inverso), igual que con las zonas y los espacios.
+    if (view.rot === 1) [dx, dy] = [dy, -dx];
+    else if (view.rot === 2) [dx, dy] = [-dx, -dy];
+    else if (view.rot === 3) [dx, dy] = [-dy, dx];
+    if (!posDrag.moved && Math.abs(dx) + Math.abs(dy) < 0.02) return;
+    posDrag.moved = true;
+    const xs = [0, m.l];
+    const ys = [0, m.w];
+    posBayItems(p.spaceId, p.n, p.c).forEach((o) => { if (o.id !== p.id) { xs.push(o.x, o.x + o.l); ys.push(o.y, o.y + o.w); } });
+    const snap = (lo, size, list) => {
+        let best = null;
+        list.forEach((v) => [lo, lo + size].forEach((edge) => { const d = v - edge; if (Math.abs(d) < POS_SNAP_M && (best === null || Math.abs(d) < Math.abs(best))) best = d; }));
+        return best === null ? 0 : best;
+    };
+    let nx = posDrag.x0 + dx;
+    let ny = posDrag.y0 + dy;
+    nx += snap(nx, p.l, xs);
+    ny += snap(ny, p.w, ys);
+    nx = Math.min(Math.max(nx, 0), Math.max(m.l - p.l, 0)); // sin salirse del espacio
+    ny = Math.min(Math.max(ny, 0), Math.max(m.w - p.w, 0));
+    p.x = Math.min(round2(nx), Math.max(Math.floor((m.l - p.l) * 100) / 100, 0)); // a 2 decimales y sin pasar del borde
+    p.y = Math.min(round2(ny), Math.max(Math.floor((m.w - p.w) * 100) / 100, 0));
+    delete p.auto; // ya no es la de fábrica: deja de seguir el tamaño de su espacio
+    ['x', 'y'].forEach((key) => { const input = document.querySelector(`#layout-panel [data-pk="${key}"][data-pid="${CSS.escape(p.id)}"]`); if (input && document.activeElement !== input) input.value = String(p[key]); });
+    positionsLive(p);
+    refreshLive();
+});
+window.addEventListener('pointerup', () => {
+    if (!posDrag) return;
+    const moved = posDrag.moved;
+    posDrag = null;
     if (moved && state.draft) { renderPanel(); refreshLive(); }
 });
 
