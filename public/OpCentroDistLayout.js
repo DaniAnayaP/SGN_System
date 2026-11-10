@@ -446,12 +446,15 @@ function onSidesEdit(el) {
     refreshLive();
 }
 // Al empezar a editar: nada está abierto y el contorno se captura por lados (también se puede por esquinas con X, Y).
-function initEditState() {
+// keepView = lo que se hace después de GUARDAR: la persona sigue configurando, así que se queda todo lo que tenía abierto y elegido (la zona abierta, Elegir, el Localizador, el renglón elegido, el acercamiento del croquis y del 3D);
+// solo cambia lo que ya no aplica (renumerar). Sin keepView (abrir, descartar, otro centro) el estado empieza limpio.
+function initEditState(keepView) {
+    state.renumber = false;
+    if (keepView) return;
     state.open = { contorno: false, zones: {} };
     state.zoneOpen = null;
     state.contornoMode = 'sides';
     state.hl = null;
-    state.renumber = false;
     locReset();
     clearFind();
 }
@@ -4146,7 +4149,7 @@ function showChooseCenter() {
     $('layout-choose-center').hidden = false;
     renderKpis();
 }
-async function loadLayout() {
+async function loadLayout(opts = {}) {
     await loadAssetLists();
     state.centerId = Dashboard.getSingleSelectedCostCenterId();
     if (!state.centerId) { showChooseCenter(); return; }
@@ -4165,7 +4168,7 @@ async function loadLayout() {
     state.planNew = false;
     state.planImage = '';
     state.draft = body.layout ? clone(body.layout) : null;
-    initEditState();
+    initEditState(!!opts.keepView && !!state.draft);
     if (body.layout && body.hasPlanImage) {
         try {
             const imgRes = await fetch(layoutUrl('/api/business/layout/plan-image'), { credentials: 'include' });
@@ -6048,7 +6051,7 @@ async function saveLayout() {
         const keepSteps = state.steps;
         const keepFocus = state.focus;
         const keepStack = state.focusStack;
-        await loadLayout();
+        await loadLayout({ keepView: true }); // guardar no cambia de pantalla ni de enfoque: la persona sigue configurando
         state.steps = keepSteps;
         state.focus = keepFocus;
         state.focusStack = keepStack;
