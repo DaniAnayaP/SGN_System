@@ -102,7 +102,7 @@
         mark{ background:var(--soft); color:inherit; border-radius:3px; padding:0 1px; box-shadow:0 0 0 1px var(--line); }
         mark.aux{ background:transparent; }
         /* Para cuándo: lista en el celular y tabla por día en pantalla ancha (mismo pedido armado) */
-        main.wide{ max-width:1000px; }
+        main.wide{ max-width:1100px; }
         .chips{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
         .dchip{ font:600 13px system-ui,sans-serif; border:1px solid var(--line); border-radius:999px; padding:6px 12px; background:var(--surface); color:var(--ink); cursor:pointer; display:flex; flex-direction:column; align-items:center; line-height:1.15; }
         .dchip small{ font-weight:400; font-size:11px; color:var(--muted); }
@@ -136,6 +136,15 @@
         .dias td.art b{ display:block; font-size:13px; line-height:1.25; }
         .dias td.art small{ display:block; color:var(--muted); font-size:11px; }
         .dias .wk{ background:var(--bg); }
+        .dias td.emptyrow{ text-align:center; color:var(--muted); font-size:13px; padding:16px 12px; }
+        /* tabla: el buscador vive en la celda «Artículo» del encabezado; sus menús se abren hacia abajo dentro de la celda y los resultados salen en el primer renglón */
+        .dias th.art{ min-width:330px; max-width:380px; vertical-align:top; padding:10px 12px; }
+        .dias td.art{ min-width:330px; max-width:380px; }
+        .dias .mpop{ position:static; box-shadow:none; margin-top:6px; }
+        .dias .mpop.sign{ min-width:0; left:auto; }
+        .dias td.resrow{ text-align:left; padding:8px 12px; }
+        .dias .list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
+        .sr{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
         .dh{ display:flex; flex-direction:column; align-items:center; line-height:1.15; padding:2px 0; }
         .dh span{ font-size:10px; font-weight:800; letter-spacing:.08em; color:var(--muted); }
         .dh b{ font-size:16px; }
@@ -179,7 +188,7 @@ const TEXT = {
         needName: 'Escribe el nombre de quien pide para enviar.', errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errQty: 'Una cantidad no es válida.', errItems: 'Agrega al menos un artículo.',
         sentTitle: 'Pedido enviado', folio: 'Número de pedido', by: 'Pidió', at: 'Hora', list: 'Artículos del pedido', newOrder: 'Nuevo pedido', viewOnly: 'Este QR solo sirve para consultar.', loginNeeded: 'Este QR pide iniciar sesión para enviar pedidos.',
         login: 'Iniciar sesión', loginHint: 'Inicia sesión en el sistema y vuelve a abrir este QR.', locked: 'Este QR ya no permite enviar pedidos.', tooMany: 'Un pedido lleva hasta 40 artículos.',
-        whenTitle: 'Todo el pedido para', asap: 'Lo antes posible', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.', layoutTitle: 'Ver el pedido como', layoutList: 'Lista', layoutTable: 'Tabla',
+        whenTitle: 'Todo el pedido para', asap: 'Lo antes posible', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.', layoutTitle: 'Ver el pedido como', layoutList: 'Lista', layoutTable: 'Tabla', todayIs: 'Hoy es {d}', emptyTable: 'Todavía no agregas nada. Busca un artículo arriba, en la columna Artículo, y escribe cuántos quieres en cada día.',
     },
     en: {
         title: 'Manual Order', loading: 'Loading…', notFound: 'This QR no longer matches any cost center.', searchTitle: 'Find an item', searchPlaceholder: 'Code, description, UoM or category',
@@ -193,7 +202,7 @@ const TEXT = {
         needName: 'Type the name of who is ordering to send.', errGeneric: 'It could not be sent. Check your connection and try again.', errQty: 'A quantity is not valid.', errItems: 'Add at least one item.',
         sentTitle: 'Order sent', folio: 'Order number', by: 'Ordered by', at: 'Time', list: 'Items in the order', newOrder: 'New order', viewOnly: 'This QR is for viewing only.', loginNeeded: 'This QR requires signing in to send orders.',
         login: 'Sign in', loginHint: 'Sign in to the system and open this QR again.', locked: 'This QR no longer allows sending orders.', tooMany: 'An order takes up to 40 items.',
-        whenTitle: 'The whole order for', asap: 'As soon as possible', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.', layoutTitle: 'View the order as', layoutList: 'List', layoutTable: 'Table',
+        whenTitle: 'The whole order for', asap: 'As soon as possible', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.', layoutTitle: 'View the order as', layoutList: 'List', layoutTable: 'Table', todayIs: 'Today is {d}', emptyTable: 'You have not added anything yet. Find an item above, in the Item column, and type how many you want on each day.',
     },
 }[LANG];
 document.documentElement.lang = LANG;
@@ -280,7 +289,9 @@ function view() {
     const header = `<div class="card"><h1>${esc(TEXT.title)}</h1>${info.costCenter ? `<span class="chip">${esc((info.costCenter.code ? `${info.costCenter.code} · ` : '') + info.costCenter.name)}</span>` : ''}</div>`;
     if (!locks.register) { $('view').innerHTML = `${header}<div class="card"><div class="msg">${esc(TEXT.viewOnly)}</div></div>`; return; }
     if (locks.signin && !info.signedIn) { $('view').innerHTML = `${header}<div class="card"><div class="msg">${esc(TEXT.loginNeeded)}</div><a class="btn alt" style="text-align:center;text-decoration:none" href="/">${esc(TEXT.login)}</a><div class="muted" style="text-align:center">${esc(TEXT.loginHint)}</div></div>`; return; }
-    $('view').innerHTML = `${header}<div class="card"><h2>${esc(TEXT.searchTitle)}</h2>${panelHtml()}<div id="results"></div></div><div id="selbox"></div><div class="card" id="orderbox"></div>`;
+    // Lista (celular): el buscador es una tarjeta aparte y el artículo elegido se afina abajo. Tabla: el buscador va DENTRO de la celda «Artículo» de la tabla y al elegir un artículo se agrega su renglón para escribir cuánto quieres cada día.
+    const searchCard = wide ? '' : `<div class="card"><h2>${esc(TEXT.searchTitle)}</h2>${panelHtml()}<div id="results"></div></div><div id="selbox"></div>`;
+    $('view').innerHTML = `${header}${searchCard}<div class="card" id="orderbox"></div>`;
     drawResults(); drawSel(); drawOrder();
 }
 function drawResults() {
@@ -357,7 +368,7 @@ function drawOrderList() {
     const chips = chip('', TEXT.asap, '') + days.slice(0, 3).map((d, i) => { const p = dayParts(d); return i === 0 ? chip(d, TEXT.tomorrow, `${p.dow} ${p.day}`) : chip(d, `${cap(p.dow)} ${p.day}`, ''); }).join('')
         + `<select class="dsel${rest.includes(defaultWhen) ? ' on' : ''}" id="defother" aria-label="${esc(TEXT.otherDate)}"><option value="">${esc(TEXT.otherDate)}</option>${rest.map((d) => `<option value="${d}"${defaultWhen === d ? ' selected' : ''}>${esc(dayShort(d))}</option>`).join('')}</select>`;
     const top = `<div><label>${esc(TEXT.whenTitle)}</label><div class="chips">${chips}</div></div>`;
-    const lines = cart.map((c, i) => `<div class="oline"><div class="top"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small></span><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></div>`
+    const lines = !cart.length ? `<div class="msg">${esc(TEXT.empty)}</div>` : cart.map((c, i) => `<div class="oline"><div class="top"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small></span><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></div>`
         + c.parts.map((p, j) => `<div class="sub"><div class="q"><button type="button" data-pdec="${i}:${j}" aria-label="−">−</button><b>${esc(fmtQty(p.quantity))}</b><button type="button" data-pinc="${i}:${j}" aria-label="+">+</button><span class="u">${esc(c.uom)}</span></div><select class="when${p.when !== defaultWhen ? ' diff' : ''}" data-part="${i}:${j}" aria-label="${esc(TEXT.needBy)}">${whenOptions(p.when)}</select>${c.parts.length > 1 ? `<button type="button" class="rm" data-prm="${i}:${j}" aria-label="${esc(TEXT.remove)}">×</button>` : ''}</div>`).join('')
         + `<button type="button" class="split" data-addpart="${i}">${esc(TEXT.addDate)}</button></div>`).join('');
     return `${top}<div>${lines}</div>`;
@@ -365,10 +376,10 @@ function drawOrderList() {
 // Tabla por día (pantalla ancha): un renglón por artículo y una columna por día; «Lo antes posible» es la primera. Los primeros 7 días siempre se ven; los demás salen al usarlos o con «+ Otra fecha».
 function tableCols() {
     const days = allDays();
-    const base = days.slice(0, 7);
+    const base = days.slice(0, 6); // se ven los próximos 6 días; «+ Otra fecha» agrega más (hasta 14)
     const used = new Set();
     cart.forEach((c) => c.parts.forEach((p) => { if (p.when) used.add(p.when); }));
-    return ['', ...base, ...days.filter((d) => !base.includes(d) && (used.has(d) || extraCols.includes(d)))];
+    return ['', ...base, ...days.filter((d) => !base.includes(d) && (used.has(d) || extraCols.includes(d) || d === defaultWhen))];
 }
 function summaryHtml() {
     const by = new Map();
@@ -386,12 +397,12 @@ function drawOrderTable() {
         return `<th${p.weekend ? ' class="wk"' : ''}><div class="dh"><span>${esc(p.dow.toUpperCase())}</span><b>${p.day}</b><small>${esc(p.mon)}</small>${w === days[0] ? `<em>${esc(TEXT.tomorrow)}</em>` : ''}</div></th>`;
     }).join('');
     const addCol = more.length ? `<select class="dsel" id="addcol" aria-label="${esc(TEXT.addColumn)}"><option value="">${esc(TEXT.addColumn)}</option>${more.map((d) => `<option value="${d}">${esc(dayShort(d))}</option>`).join('')}</select>` : '';
-    const rows = cart.map((c, i) => `<tr><td class="art"><b>${esc(c.description)}</b><small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></td>${cols.map((w) => {
+    const rows = !cart.length ? `<tr><td colspan="${cols.length + 3}" class="emptyrow">${esc(TEXT.emptyTable)}</td></tr>` : cart.map((c, i) => `<tr><td class="art"><b>${esc(c.description)}</b><small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></td>${cols.map((w) => {
         const p = partOf(c, w);
         const weekend = w && dayParts(w).weekend;
         return `<td${weekend ? ' class="wk"' : ''}><input class="qc${p ? ' on' : ''}" type="number" min="0" step="any" inputmode="decimal" placeholder="–" data-cell="${i}|${w}" value="${esc(p ? p.quantity : '')}" aria-label="${esc(`${c.description}, ${whenLabel(w)}`)}"></td>`;
     }).join('')}<td class="tot" id="tot-${i}"></td></tr>`).join('');
-    return `<div class="scroll" role="region" tabindex="0" aria-label="${esc(TEXT.yourOrder)}"><table class="dias"><thead><tr><th class="art">${esc(TEXT.article)}</th>${head}<th>${addCol}</th><th>${esc(TEXT.total)}</th></tr></thead><tbody>${rows}</tbody></table></div><div><div class="muted">${esc(TEXT.perDay)}</div><div class="sumbar" id="sumbar">${summaryHtml()}</div></div>`;
+    return `<div class="scroll" role="region" tabindex="0" aria-label="${esc(TEXT.yourOrder)}"><table class="dias"><thead><tr><th class="art"><span class="sr">${esc(TEXT.article)}</span>${panelHtml()}</th>${head}<th>${addCol}</th><th>${esc(TEXT.total)}</th></tr></thead><tbody><tr class="resrow"><td colspan="${cols.length + 3}"><div id="results"></div></td></tr>${rows}</tbody></table></div><div><div class="muted">${esc(TEXT.perDay)}</div><div class="sumbar" id="sumbar">${summaryHtml()}</div></div>`;
 }
 // Al escribir en una casilla solo se ponen al día los totales, el resumen por día y el título: así no se pierde el cursor.
 function refreshTable() {
@@ -405,10 +416,19 @@ function refreshTable() {
 function drawOrder() {
     const box = $('orderbox');
     if (!box) return;
-    const body = cart.length ? (wide ? drawOrderTable() : drawOrderList()) : `<div class="msg">${esc(TEXT.empty)}</div>`;
+    const body = wide ? drawOrderTable() : drawOrderList(); // con el pedido vacío también se ve la tabla (o las fechas de la lista), con su aviso
     const who = `<div><label for="name">${esc(TEXT.yourName)} <span class="req" aria-hidden="true">*</span></label><input type="text" id="name" maxlength="60" autocomplete="name" required placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(nameValue)}"></div>`;
-    box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${layoutToggle()}</div>${who}${body}${cart.length ? `<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}`;
-    if (cart.length && wide) refreshTable();
+    const today = wide ? `<span class="muted">${esc(fill(TEXT.todayIs, { d: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(dayDate(todayIso())) }))}</span>` : '';
+    box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${layoutToggle()}</div>${who}${body}${cart.length ? `<button type="button" class="btn ok" id="send">${esc(TEXT.send)}</button><div class="muted" style="text-align:center">${esc(TEXT.stamp)}</div><div class="err" id="err" role="alert" hidden></div>` : ''}`;
+    if (wide) { refreshTable(); drawResults(); } // el buscador de la tabla se vuelve a dibujar con la tabla
+}
+// Tabla: al elegir un artículo del buscador se agrega su renglón (sin cantidad) y el cursor queda en la casilla del día de partida.
+function addRow(r) {
+    let idx = cart.findIndex((c) => c.id === r.id);
+    if (idx < 0) { cart.push({ id: r.id, code: r.code, description: r.description, uom: r.uom, parts: [] }); idx = cart.length - 1; }
+    drawOrder();
+    const cell = document.querySelector(`[data-cell="${idx}|${defaultWhen}"]`);
+    if (cell) { cell.focus(); cell.select(); }
 }
 function addPicked() {
     const n = Number(String(picked.qty).replace(',', '.'));
@@ -488,6 +508,7 @@ $('view').addEventListener('click', (event) => {
     if (toggle) { const list = $('fields'); list.hidden = !list.hidden; toggle.setAttribute('aria-expanded', String(!list.hidden)); return; }
     if (t.closest('#qclear')) { const q = $('q'); q.value = ''; query = ''; queueSearch(); q.focus(); return; }
     const pick = t.closest('[data-pick]');
+    if (pick && wide) { addRow(results[Number(pick.getAttribute('data-pick'))]); return; }
     if (pick) { picked = { ...results[Number(pick.getAttribute('data-pick'))], qty: 1, when: defaultWhen }; drawSel(); const qi = $('qty'); if (qi) { qi.focus(); qi.select(); } return; }
     if (t.closest('#dec')) { picked.qty = Math.max(1, Math.round((Number(picked.qty) || 1) - 1)); $('qty').value = picked.qty; return; }
     if (t.closest('#inc')) { picked.qty = Math.round((Number(picked.qty) || 0) + 1); $('qty').value = picked.qty; return; }
@@ -510,7 +531,7 @@ $('view').addEventListener('click', (event) => {
         return;
     }
     const lay = t.closest('[data-layout]');
-    if (lay) { layoutPref = lay.getAttribute('data-layout'); store.set(KEY_LAYOUT, layoutPref); applyWide(); drawOrder(); return; }
+    if (lay) { layoutPref = lay.getAttribute('data-layout'); store.set(KEY_LAYOUT, layoutPref); applyWide(); view(); return; }
     const defwhen = t.closest('[data-defwhen]');
     if (defwhen) { setDefault(defwhen.getAttribute('data-defwhen')); return; }
     const rm = t.closest('[data-rm]');
@@ -608,7 +629,7 @@ function viewSent() {
     // pantalla ancha (la computadora, la ventana de QR's): la tabla por día; angosta (el celular): la lista. Al cambiar el ancho se vuelve a dibujar el mismo pedido.
     mq = window.matchMedia('(min-width: 780px)');
     applyWide();
-    mq.addEventListener('change', () => { if (!layoutPref) { applyWide(); drawOrder(); } });
+    mq.addEventListener('change', () => { if (!layoutPref) { applyWide(); view(); } });
     view();
 })();
 })();
