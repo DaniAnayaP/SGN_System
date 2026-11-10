@@ -272,6 +272,13 @@
         .tablebox{ margin:0 16px; overflow-x:auto; }
         .aplan{ display:block; min-width:520px; max-width:100%; }
         .posnote{ margin:8px 16px 0; font-size:11px; color:var(--text-muted); }
+        .pospick{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:8px 16px 0; padding:6px 10px; border:1px solid var(--brand-line, var(--border)); border-radius:12px; background:var(--brand-soft, #fff); }
+        .pospick[hidden]{ display:none; }
+        .pospick b{ font-size:13px; }
+        .pospick .lv{ display:flex; flex-wrap:wrap; gap:5px; flex:1; }
+        .pospick .pclose{ font:inherit; font-size:13px; width:26px; height:26px; border-radius:50%; border:1px solid var(--brand-line, var(--border)); background:#fff; color:var(--text-secondary); cursor:pointer; }
+        .nomap .pospick{ display:none; }
+        .map svg [data-sid]{ cursor:pointer; }
         .tablebox table{ width:100%; border-collapse:collapse; font-size:12.5px; }
         .tablebox th{ text-align:left; font-size:11px; color:var(--text-muted); font-weight:700; padding:6px; border-bottom:1.5px solid var(--brand-line, var(--border)); }
         .tablebox td{ padding:8px 6px; border-bottom:1px solid var(--brand-line, var(--border)); color:var(--text-secondary); }

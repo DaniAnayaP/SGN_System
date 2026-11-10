@@ -13,7 +13,7 @@
             kpiTotal: 'Superficie total', kpiOffices: 'Oficinas', kpiAisles: 'Pasillos', kpiDocks: 'Andenes', kpiStorage: 'Zonas de almacenamiento', kpiDead: 'Espacios muertos', kpiVolume: 'Volumen de la nave',
             spaces: 'espacios', noZone: 'Sin zona asignada', zoneWord: 'Zona', noCodes: 'Todavía no hay códigos en esta categoría. Aquí aparecerán con sus fotos y su ubicación.',
             zoomIn: 'Acercar', zoomOut: 'Alejar', zoomReset: 'Ver todo el croquis', codesOne: '1 código en esta zona', codesMany: '{n} códigos en esta zona',
-            metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', positions: 'Posiciones', positionsHint: '{n} activos con sus niveles, espacios y posiciones', posNote: 'Vista desde arriba de cada nivel: cada caja es una posición (P001…) dentro de su espacio (E001…). Es un esquema: el fondo puede verse exagerado.', pickAsset: 'Elige un activo', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
+            metrics: 'Datos métricos', metricsHint: '{n} m² de superficie total y más', positions: 'Posiciones', positionsHint: '{n} activos con sus niveles, espacios y posiciones', posNote: 'Vista desde arriba de cada nivel: cada caja es una posición (P001…) dentro de su espacio (E001…). Es un esquema: el fondo puede verse exagerado.', pickAsset: 'Elige un activo', posClose: 'Quitar las posiciones del croquis', byZone: 'Por zona', colZone: 'Zona', colType: 'Tipo de zona', colArea: 'Superficie', colVolume: 'Volumen', sum: 'Suma',
             restRow: 'Sin zona (espacio muerto)', transitRow: 'Pasillos fuera de toda zona', overlapRow: 'Zonas encimadas o fuera de la nave', zonesHint: '{z} zonas · {c} códigos', zonesHintNoCodes: '{z} zonas',
             codeWordOne: 'código', codeWordMany: 'códigos', noZonesInMetric: 'Ninguna zona suma en esta cifra.',
             home: 'Ir al Layout principal', here: 'Dónde estás', categories: 'Categorías', noCats: 'Esta zona todavía no tiene categorías.',
@@ -44,7 +44,7 @@
             kpiTotal: 'Total area', kpiOffices: 'Offices', kpiAisles: 'Aisles', kpiDocks: 'Docks', kpiStorage: 'Storage zones', kpiDead: 'Dead space', kpiVolume: 'Warehouse volume',
             spaces: 'spaces', noZone: 'No zone assigned', zoneWord: 'Zone', noCodes: 'There are no codes in this category yet. They will appear here with their photos and location.',
             zoomIn: 'Zoom in', zoomOut: 'Zoom out', zoomReset: 'Show the whole map', codesOne: '1 code in this zone', codesMany: '{n} codes in this zone',
-            metrics: 'Metric data', metricsHint: '{n} m² of total area and more', positions: 'Positions', positionsHint: '{n} assets with their levels, spaces and positions', posNote: 'Each level seen from above: each box is a position (P001…) inside its space (E001…). It is a diagram: the depth may look exaggerated.', pickAsset: 'Pick an asset', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
+            metrics: 'Metric data', metricsHint: '{n} m² of total area and more', positions: 'Positions', positionsHint: '{n} assets with their levels, spaces and positions', posNote: 'Each level seen from above: each box is a position (P001…) inside its space (E001…). It is a diagram: the depth may look exaggerated.', pickAsset: 'Pick an asset', posClose: 'Remove the positions from the map', byZone: 'By zone', colZone: 'Zone', colType: 'Zone type', colArea: 'Area', colVolume: 'Volume', sum: 'Total',
             restRow: 'No zone (dead space)', transitRow: 'Aisles outside any zone', overlapRow: 'Overlapping or outside the building', zonesHint: '{z} zones · {c} codes', zonesHintNoCodes: '{z} zones',
             codeWordOne: 'code', codeWordMany: 'codes', noZonesInMetric: 'No zone adds up to this figure.',
             home: 'Go to the main Layout', here: 'Where you are', categories: 'Categories', noCats: 'This zone has no categories yet.',
@@ -147,6 +147,7 @@
         const btn = (key, label, hidden) => `<button type="button" data-zoom="${key}" aria-label="${esc(label)}" title="${esc(label)}"${hidden ? ' hidden' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ZOOM_ICONS[key]}</svg></button>`;
         return `<div class="map-tools">${btn('in', TEXT.zoomIn)}${btn('out', TEXT.zoomOut)}${btn('reset', TEXT.zoomReset, true)}</div>`;
     }
+    let mapMoved = false; // el croquis se acaba de arrastrar: ese toque no cuenta como elegir un activo
     function enableMapZoom() {
         const box = document.querySelector('#wrap .map');
         const svg = box && box.querySelector('svg');
@@ -160,6 +161,7 @@
         const pts = new Map();
         let pinch = null;
         const resetBtn = box.querySelector('[data-zoom="reset"]');
+        mapMoved = false;
         function apply() {
             const w = W / s;
             const h = H / s;
@@ -212,6 +214,7 @@
                 const [a, b] = [...pts.values()];
                 zoomTo(pinch.s * (Math.hypot(a.x - b.x, a.y - b.y) / pinch.d), (a.x + b.x) / 2, (a.y + b.y) / 2);
             } else if (pts.size === 1 && s > 1.001) {
+                mapMoved = true;
                 const rect = svg.getBoundingClientRect();
                 x -= ((cur.x - prev.x) * (W / s)) / rect.width;
                 y -= ((cur.y - prev.y) * (H / s)) / rect.height;
@@ -221,6 +224,16 @@
         const release = (event) => { pts.delete(event.pointerId); if (pts.size < 2) pinch = null; };
         svg.addEventListener('pointerup', release);
         svg.addEventListener('pointercancel', release);
+        // con un activo elegido (posiciones) el croquis arranca acercado a él
+        const pb = svg.querySelector('[data-posbox]');
+        if (pb) {
+            const [bx, by, bw, bh] = pb.getAttribute('data-posbox').split(',').map(Number);
+            if (bw > 0 && bh > 0) {
+                s = Math.min(Math.max(Math.min(W / (bw * 1.7), H / (bh * 1.7)), 1.5), MAX);
+                x = bx + bw / 2 - W / s / 2;
+                y = by + bh / 2 - H / s / 2;
+            }
+        }
         apply();
     }
 
@@ -253,7 +266,7 @@
     // La capa Tránsito (los pasillos) solo se ofrece si el Layout trae pasillos.
     // La capa Seguridad (extintores, hidrantes, puertas de emergencia…) tampoco se ofrece si el Layout no trae elementos de seguridad.
     const layerShown = (key) => !(locked('doors') && (key === 'puertas' || key === 'luz')) && !(key === 'niveles' && !((((view.data || {}).layout) || {}).floors || []).length && !((((view.data || {}).layout) || {}).ramps || []).length) && !(key === 'transito' && !((((view.data || {}).layout) || {}).transit || []).length) && !(key === 'seguridad' && !((((view.data || {}).layout) || {}).safety || []).length);
-    const mapView = { layers: ['contorno', 'puertas', 'zonas', 'niveles', 'transito', 'seguridad', 'espacios'], measures: true, area: true, names: true, rotation: 0, mode3d: false, walls: true };
+    const mapView = { layers: ['contorno', 'puertas', 'zonas', 'niveles', 'transito', 'seguridad', 'espacios'], measures: true, area: true, names: true, rotation: 0, mode3d: false, walls: true, posFocus: null };
     // Lo que se está buscando en el croquis ({ zones: { id: color } }): la zona de la categoría que se escaneó sale sombreada y el resto tenue.
     // value = lo que se dibuja ahora (el croquis base o el de la búsqueda); base = lo que corresponde a la página sin buscar; key = lo ya dibujado, para no redibujar sin necesidad.
     const viewFocus = { value: null, base: null, key: 'null' };
@@ -311,14 +324,29 @@
         <div class="showrow"><span>${esc(TEXT.showLabel)}</span>${chips}</div>
         <div class="mpanel" id="map-panel">${mapPanelHtml()}</div>${searchPanelHtml()}`;
     }
+    // Posiciones sobre el croquis: al tocar un activo se marca y se dibuja encima de él el nivel elegido (la barra de abajo cambia de nivel o lo quita); las posiciones solo se dibujan con el candado «positions» abierto.
+    const positionsOn = () => !!(view.data && !locked('positions') && ((view.data.layout || {}).positions || []).length);
+    function posPickInner(data) {
+        const f = mapView.posFocus;
+        const sp = f && ((data.layout || {}).spaces || []).find((s) => s.id === f.id);
+        if (!sp) return '';
+        const chips = Array.from({ length: Math.max(1, Math.floor(sp.levels || 1)) }, (_, i) => `<button type="button" class="cchip" data-pos-level="${i + 1}" aria-pressed="${f.n === i + 1}">N${String(i + 1).padStart(3, '0')}</button>`).join('');
+        return `<b>${esc(sp.code || '')}</b><span class="lv">${chips}</span><button type="button" class="pclose" data-pos-clear aria-label="${esc(TEXT.posClose)}" title="${esc(TEXT.posClose)}">✕</button>`;
+    }
+    function renderPosPick(data) {
+        const box = document.getElementById('pos-pick');
+        if (!box) return;
+        box.hidden = !(positionsOn() && mapView.posFocus);
+        box.innerHTML = posPickInner(data);
+    }
     function mapInnerHtml(data) {
         if (mapView.mode3d) return map3dHtml();
         const theme = window.LayoutMapSvg.theme(data.companyColor);
         viewFocus.key = JSON.stringify(viewFocus.value);
-        return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, layers: [...mapView.layers, 'paredes'], measures: mapView.measures, area: mapView.area, names: mapView.names, rotation: mapView.rotation, focus: viewFocus.value })}${mapToolsHtml()}`;
+        return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, layers: [...mapView.layers, 'paredes'], measures: mapView.measures, area: mapView.area, names: mapView.names, rotation: mapView.rotation, focus: viewFocus.value, posFocus: positionsOn() ? mapView.posFocus : null })}${mapToolsHtml()}`;
     }
     // Barra de botones + croquis + el lugar donde salen los resultados del buscador (la lupa); igual en el Layout general, en una zona y en una categoría.
-    const mapBlockHtml = (data) => `${mapToolbarHtml()}<div class="map">${mapInnerHtml(data)}</div><div id="sres" class="sres" aria-live="polite"></div>`;
+    const mapBlockHtml = (data) => `${mapToolbarHtml()}<div class="map">${mapInnerHtml(data)}</div><div id="pos-pick" class="pospick"${positionsOn() && mapView.posFocus ? '' : ' hidden'}>${posPickInner(data)}</div><div id="sres" class="sres" aria-live="polite"></div>`;
     // El croquis se vuelve a dibujar con los botones; el contenedor es nuevo para que el zoom empiece limpio y no se acumulen sus escuchas. Con el 3D ya abierto no se reconstruye: solo se ajustan sus capas.
     function redrawMap(data) {
         if (mapView.mode3d && scene3d) { sync3d(); return; }
@@ -1007,6 +1035,29 @@
     }
     window.addEventListener('hashchange', route);
     document.getElementById('wrap').addEventListener('click', (event) => {
+        // Posiciones en el croquis: tocar un activo (sin haber arrastrado), cambiar de nivel o quitar
+        const tapSp = view.data && positionsOn() && !mapView.mode3d ? event.target.closest('#wrap .map [data-sid]') : null;
+        if (tapSp && !mapMoved) {
+            const id = tapSp.getAttribute('data-sid');
+            const same = mapView.posFocus && mapView.posFocus.id === id;
+            mapView.posFocus = same ? null : { id, n: 1 };
+            renderPosPick(view.data);
+            replaceMap(view.data);
+            return;
+        }
+        const lvBtn = event.target.closest('[data-pos-level]');
+        if (lvBtn && view.data && mapView.posFocus) {
+            mapView.posFocus = { id: mapView.posFocus.id, n: Number(lvBtn.dataset.posLevel) };
+            renderPosPick(view.data);
+            replaceMap(view.data);
+            return;
+        }
+        if (event.target.closest('[data-pos-clear]') && view.data) {
+            mapView.posFocus = null;
+            renderPosPick(view.data);
+            replaceMap(view.data);
+            return;
+        }
         const posChip = event.target.closest('[data-pos-space]');
         if (posChip && view.data) {
             const sp = positionedSpaces(view.data).find((s) => s.id === posChip.dataset.posSpace);

@@ -401,12 +401,51 @@
             const own = sp.fmt || (legacy ? null : LC.FMT_ASSET_DEFAULT);
             // Con formato propio (color, rayas o borde del activo) se pinta con él; un activo que se está buscando (focus) sigue con el color de la búsqueda.
             if (own && !hit) {
-                s += `<g${dim ? ' opacity="0.3"' : ''}>${zonePaint(`sf-${sp.id}`, own).markup(quad(ax, ay, aw, ah))}</g>`;
+                s += `<g data-sid="${esc(sp.id)}"${dim ? ' opacity="0.3"' : ''}>${zonePaint(`sf-${sp.id}`, own).markup(quad(ax, ay, aw, ah))}</g>`;
             } else {
-                s += `<rect x="${ax}" y="${ay}" width="${aw}" height="${ah}" rx="2" fill="${hit ? esc(hit) : '#FFFFFF'}" stroke="${hit ? esc(hit) : T.chrome.line}" stroke-width="${hit ? 2.2 : 1}"${dim ? ' opacity="0.3"' : ''}/>`;
+                s += `<rect data-sid="${esc(sp.id)}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" rx="2" fill="${hit ? esc(hit) : '#FFFFFF'}" stroke="${hit ? esc(hit) : T.chrome.line}" stroke-width="${hit ? 2.2 : 1}"${dim ? ' opacity="0.3"' : ''}/>`;
             }
             if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="${hit ? 800 : 600}" fill="${hit ? '#FFFFFF' : (own && inkFor(own)) || T.chrome.cardInk}" text-anchor="middle"${dim ? ' opacity="0.4"' : ''}>${esc(sp.code)}</text>`;
         });
+        // Las posiciones sobre el croquis: al tocar un activo (options.posFocus = { id, n }) se marca con un contorno naranja y, con un nivel elegido (n), se dibuja ENCIMA de él la distribución de ese nivel: cada espacio
+        // con sus posiciones (P001…) en su lugar y con sus medidas. Las posiciones salen de layout.positions ({ s, n, c, num, x, y, l, w, h }); el croquis puede estar girado. data-posbox lleva el cuadro del activo
+        // (para que la página acerque el croquis a él).
+        if (options.posFocus && options.posFocus.id) {
+            const pf = options.posFocus;
+            const spU = (layoutNoTurn.spaces || []).find((x) => x.id === pf.id);
+            if (spU && Number(spU.l) > 0 && Number(spU.d) > 0) {
+                const q = ((Math.round(Number(options.rotation) || 0) % 4) + 4) % 4;
+                const turn = (px, py) => (q === 1 ? [-py, px] : (q === 2 ? [-px, -py] : (q === 3 ? [py, -px] : [px, py])));
+                const rectOf = (px, py, pw, pd) => {
+                    const a = turn(px, py);
+                    const b2 = turn(px + pw, py + pd);
+                    return { x: X(Math.min(a[0], b2[0])), y: Y(Math.min(a[1], b2[1])), w: Math.abs(b2[0] - a[0]) * sc, h: Math.abs(b2[1] - a[1]) * sc };
+                };
+                const f1 = (v) => v.toFixed(1);
+                const box = rectOf(spU.x, spU.y, spU.l, spU.d);
+                let g = `<g data-posbox="${f1(box.x)},${f1(box.y)},${f1(box.w)},${f1(box.h)}" pointer-events="none">`;
+                const lv = pf.n ? Math.min(Math.max(1, Math.floor(Number(pf.n))), Math.max(1, Math.floor(spU.levels || 1))) : 0;
+                if (lv) {
+                    const slots = Math.max(1, LC.levelSlots(spU, lv));
+                    const slotW = spU.l / slots;
+                    for (let c = 1; c <= slots; c += 1) {
+                        const m = LC.bayMeasures(spU, lv, c);
+                        const kx = slotW / Math.max(m.l, 0.01);
+                        const kz = spU.d / Math.max(m.w, 0.01);
+                        const fr = rectOf(spU.x + (c - 1) * slotW, spU.y, slotW, spU.d);
+                        g += `<rect x="${f1(fr.x)}" y="${f1(fr.y)}" width="${f1(fr.w)}" height="${f1(fr.h)}" fill="none" stroke="#6B7089" stroke-width="0.9" stroke-dasharray="3 2"/>`;
+                        (layoutNoTurn.positions || []).filter((p) => p.s === spU.id && p.n === lv && p.c === c).sort((a, z) => (a.num || 0) - (z.num || 0)).forEach((p) => {
+                            const r = rectOf(spU.x + (c - 1) * slotW + p.x * kx, spU.y + p.y * kz, p.l * kx, p.w * kz);
+                            g += `<rect x="${f1(r.x)}" y="${f1(r.y)}" width="${f1(Math.max(r.w, 1))}" height="${f1(Math.max(r.h, 1))}" fill="#FFFFFF" fill-opacity="0.9" stroke="#6B7089" stroke-width="0.9"/>`;
+                            if (r.w >= 17 && r.h >= 8) g += `<text x="${f1(r.x + r.w / 2)}" y="${f1(r.y + r.h / 2 + 2.5)}" font-size="6.5" font-weight="600" fill="${T.chrome.ink}" text-anchor="middle">P${String(p.num).padStart(3, '0')}</text>`;
+                            else if (r.w >= 8 && r.h >= 8) g += `<text x="${f1(r.x + r.w / 2)}" y="${f1(r.y + r.h / 2 + 2.3)}" font-size="5.5" font-weight="600" fill="${T.chrome.ink}" text-anchor="middle">${p.num}</text>`;
+                        });
+                    }
+                }
+                g += `<rect x="${f1(box.x)}" y="${f1(box.y)}" width="${f1(box.w)}" height="${f1(box.h)}" fill="none" stroke="#E8590C" stroke-width="1.8"/></g>`;
+                s += g;
+            }
+        }
         s += zoneHalos + measureHalos + zoneLabels + measureLabels;
         // Una puerta va sobre su pared: se dibuja por el centro de la pared, a lo largo de ella.
         (on('puertas') ? (layout.doors || []) : []).forEach((d) => {
