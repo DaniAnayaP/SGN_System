@@ -8207,6 +8207,13 @@ td.cap-pick{ white-space: nowrap; }
 .layout-ch-head{ position: sticky; top: 0; z-index: 2; background: var(--color-surface); }
 .layout-ch-head .layout-find-types{ padding: 0.1rem 0 0.4rem; }
 .layout-find-type:disabled{ opacity: 0.45; cursor: not-allowed; }
+/* Caras de consumo: las 4 caras (frente, atrás, izquierda, derecha) como botones que se prenden; en rojo la que lo que lo contiene no tiene */
+.layout-faces{ display: inline-flex; flex-wrap: nowrap; gap: 0.2rem; }
+.layout-face{ font: inherit; font-size: 0.66rem; font-weight: 600; padding: 0.1rem 0.5rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; white-space: nowrap; }
+.layout-face.on{ background: var(--color-accent, var(--color-text-primary)); border-color: var(--color-accent, var(--color-text-primary)); color: var(--color-accent-contrast, #fff); }
+.layout-face.bad{ background: #c0392b; border-color: #c0392b; color: #fff; }
+.layout-face:disabled{ opacity: 0.4; cursor: not-allowed; }
+.layout-face:focus-visible{ outline: 2px solid var(--color-accent, var(--color-text-primary)); outline-offset: 2px; }
 .layout-dd-item[aria-current="true"]{ background: color-mix(in srgb, var(--color-accent, var(--color-text-primary)) 14%, transparent); }
 .layout-dd-menu:has(.layout-ch-head){ min-width: 21rem; max-width: 26rem; max-height: 30rem; }
 .layout-ch-grp{ margin-top: 0.3rem; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-secondary); }

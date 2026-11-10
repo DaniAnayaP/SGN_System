@@ -1888,6 +1888,29 @@
     "layoutNivEspacio": "Alto del espacio (m)",
     "layoutNivAlto": "Alto del nivel (m)",
     "layoutNivCantPos": "Cantidad de espacios",
+    "layoutCarasConsumo": "Caras de consumo",
+    "layoutFrente": "Frente",
+    "layoutFrenteAuto": "Automático ({side})",
+    "layoutLado_N": "Arriba",
+    "layoutLado_S": "Abajo",
+    "layoutLado_W": "Izquierda",
+    "layoutLado_E": "Derecha",
+    "layoutCara_front": "Frente: la cara que mira al pasillo principal",
+    "layoutCara_back": "Atrás: la cara de enfrente al frente",
+    "layoutCara_left": "Izquierda, como la ve quien mira el activo de frente",
+    "layoutCara_right": "Derecha, como la ve quien mira el activo de frente",
+    "layoutCaraCorta_front": "Frente",
+    "layoutCaraCorta_back": "Atrás",
+    "layoutCaraCorta_left": "Izq.",
+    "layoutCaraCorta_right": "Der.",
+    "layoutCaraAdj_front": "frontal",
+    "layoutCaraAdj_back": "trasera",
+    "layoutCaraAdj_left": "izquierda",
+    "layoutCaraAdj_right": "derecha",
+    "layoutCarasTexto_una": "la cara {list}",
+    "layoutCarasTexto_varias": "las caras {list}",
+    "layoutVioAct_facesLevel": "El nivel {n} del activo {code} se consume por {faces} y el activo se consume por {has}: quita esa cara del nivel o agrégala al activo para poder guardar.",
+    "layoutVioAct_facesBay": "El espacio {c} del nivel {n} del activo {code} se consume por {faces} y su nivel se consume por {has}: quita esa cara del espacio o agrégala al nivel para poder guardar.",
     "layoutEspaciosNivel": "Espacios (izq. a der.)",
     "layoutCajones": "Cajones (filas × columnas)",
     "layoutHuellaVolumen": "Huella y volumen",
@@ -5067,6 +5090,14 @@
     "layoutFiltroLocalizadorRuta": {
       "what": "Los pasos del recorrido, de izquierda a derecha: Huella, Activo, Nivel, Espacio y Localizador. La pastilla encendida es el paso en el que estás; las que ya tienen un código son las que ya elegiste, y al tocarlas regresas a ese paso (se quita lo que habías elegido después).",
       "example": "estás en Espacio y tocas «Activo A004»: vuelves a la lista de activos de la huella."
+    },
+    "layoutCarasConsumo": {
+      "what": "Por qué cara o caras se consume (se toma) lo que hay ahí: frente, atrás, izquierda o derecha (la izquierda y la derecha son las de quien mira el activo de frente). Puede ser una o varias. Lo de adentro solo puede usar caras que lo que lo contiene tiene: si el rack solo se consume por el frente, un nivel o un espacio no puede declarar la cara trasera; sí puede quitar caras (un nivel por las 4 y un espacio solo por el frente). Si no las cambias, cada nivel y cada espacio usa las de lo que lo contiene; el activo, sin cambios, se consume por el frente. Lo que no cumpla se marca en rojo y no se guarda.",
+      "example": "el rack se consume por el frente y por atrás; el nivel 1 usa las dos y el espacio 2 de ese nivel solo por atrás. Si le quitas «Atrás» al rack, el espacio 2 se marca en rojo."
+    },
+    "layoutFrenteActivo": {
+      "what": "La cara del activo que mira al pasillo principal (los pasillos «Principal» del paso Tránsito). Sale sola: si un pasillo principal toca el activo, esa es su cara frontal; si toca dos pasillos principales en esquina, es la de la izquierda al mirar la esquina desde el cruce de los pasillos; si no toca ninguno, mira al principal más cercano y, sin pasillos principales, hacia abajo del croquis. Aquí lo puedes cambiar a mano. Atrás, izquierda y derecha se cuentan desde el frente.",
+      "example": "el rack tiene un pasillo principal abajo: su frente es «Abajo». Quien lo mira de frente tiene a su izquierda el lado izquierdo del croquis."
     },
     "layoutFiltroElegirTipos": {
       "what": "Las clasificaciones de lo que hay en el Layout (Huellas, Activos, Sensores…), una junto a otra debajo del buscador, para no recorrer una lista enorme. Toca una o varias y la lista solo trae esas; «Todo» las quita. El número es cuántas coinciden con lo que escribiste en el buscador.",

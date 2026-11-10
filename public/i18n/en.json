@@ -1888,6 +1888,29 @@
     "layoutNivEspacio": "Space height (m)",
     "layoutNivAlto": "Level height (m)",
     "layoutNivCantPos": "Number of spaces",
+    "layoutCarasConsumo": "Consumption faces",
+    "layoutFrente": "Front",
+    "layoutFrenteAuto": "Automatic ({side})",
+    "layoutLado_N": "Up",
+    "layoutLado_S": "Down",
+    "layoutLado_W": "Left",
+    "layoutLado_E": "Right",
+    "layoutCara_front": "Front: the face that looks at the main aisle",
+    "layoutCara_back": "Back: the face opposite the front",
+    "layoutCara_left": "Left, as seen by someone looking at the asset from the front",
+    "layoutCara_right": "Right, as seen by someone looking at the asset from the front",
+    "layoutCaraCorta_front": "Front",
+    "layoutCaraCorta_back": "Back",
+    "layoutCaraCorta_left": "Left",
+    "layoutCaraCorta_right": "Right",
+    "layoutCaraAdj_front": "front",
+    "layoutCaraAdj_back": "back",
+    "layoutCaraAdj_left": "left",
+    "layoutCaraAdj_right": "right",
+    "layoutCarasTexto_una": "the {list} face",
+    "layoutCarasTexto_varias": "the {list} faces",
+    "layoutVioAct_facesLevel": "Level {n} of asset {code} is consumed from {faces} and the asset is consumed from {has}: remove that face from the level or add it to the asset so you can save.",
+    "layoutVioAct_facesBay": "Space {c} of level {n} of asset {code} is consumed from {faces} and its level is consumed from {has}: remove that face from the space or add it to the level so you can save.",
     "layoutEspaciosNivel": "Spaces (left to right)",
     "layoutCajones": "Drawers (rows × columns)",
     "layoutHuellaVolumen": "Footprint and volume",
@@ -5068,6 +5091,14 @@
     "layoutFiltroLocalizadorRuta": {
       "what": "The steps of the trip, left to right: Footprint, Asset, Level, Space and Locator. The lit pill is the step you are on; the ones with a code are what you already picked, and tapping one takes you back to that step (what you picked after it is cleared).",
       "example": "you are on Space and tap «Asset A004»: you are back at the list of assets of the footprint."
+    },
+    "layoutCarasConsumo": {
+      "what": "From which face or faces what is there is consumed (taken): front, back, left or right (left and right are the ones of someone looking at the asset from the front). It can be one or several. What is inside can only use faces that what holds it has: if the rack is only consumed from the front, a level or a space cannot declare the back face; it can remove faces (a level from all 4 and a space only from the front). If you do not change them, each level and each space uses those of what holds it; the asset, unchanged, is consumed from the front. What does not comply turns red and cannot be saved.",
+      "example": "the rack is consumed from the front and the back; level 1 uses both and space 2 of that level only the back. If you remove «Back» from the rack, space 2 turns red."
+    },
+    "layoutFrenteActivo": {
+      "what": "The face of the asset that looks at the main aisle (the «Main» aisles of the Transit step). It comes by itself: if a main aisle touches the asset, that is its front face; if it touches two main aisles at a corner, it is the one on the left when looking at the corner from where the aisles cross; if it touches none, it looks at the nearest main one and, with no main aisles, down on the plan. You can change it by hand here. Back, left and right are counted from the front.",
+      "example": "the rack has a main aisle below: its front is «Down». Someone looking at it from the front has the left side of the plan on their left."
     },
     "layoutFiltroElegirTipos": {
       "what": "The classifications of what is in the Layout (Footprints, Assets, Sensors…), side by side under the search box, so you do not have to go through a huge list. Tap one or several and the list only shows those; «All» clears them. The number is how many match what you typed in the search.",

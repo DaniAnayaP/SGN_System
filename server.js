@@ -6775,7 +6775,7 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     // Los activos de una huella van uno junto al otro y ninguno se sale de ella, es más alto que ella ni se encima con otro: lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
     {
         const freshSpaces = LayoutCalc.newSpaceViolations(next, existing ? existing.layout : null);
-        if (freshSpaces.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSpaces.map((v) => v.message), section: freshSpaces[0].kind === 'levels' ? 'niveles' : (['bayl', 'bayw', 'bayh', 'baysum'].includes(freshSpaces[0].kind) ? 'posiciones' : 'activos') });
+        if (freshSpaces.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSpaces.map((v) => v.message), section: ['levels', 'facesLevel'].includes(freshSpaces[0].kind) ? 'niveles' : (['bayl', 'bayw', 'bayh', 'baysum', 'facesBay'].includes(freshSpaces[0].kind) ? 'posiciones' : 'activos') });
     }
     // Tránsito: un pasillo va dentro de una zona, lo que transita por él tiene que caber y nada (huella, columna, pared, desnivel) puede ir adentro. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
     {

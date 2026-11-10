@@ -959,8 +959,8 @@ function applyLevelToAll(key) {
 }
 // Paso Posiciones: el aviso de los huecos cuyo largo o ancho pasa del largo o el fondo de su activo (los primeros 6) y su actualización al teclear.
 function bayIssuesHtml() {
-    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum');
-    return list.slice(0, 6).map((v) => `<p>${esc(t(`main.layoutVioAct_${v.kind}`, v.vars))}</p>`).join('') + (list.length > 6 ? '<p>…</p>' : '');
+    const list = LC.spaceViolations(state.draft).filter((v) => v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum' || v.kind === 'facesBay');
+    return list.slice(0, 6).map((v) => `<p>${esc(vioActText(v))}</p>`).join('') + (list.length > 6 ? '<p>…</p>' : '');
 }
 function applyBayMarks() {
     const box = document.querySelector('[data-bay-issues]');
@@ -971,7 +971,8 @@ function applyBayMarks() {
 }
 // Paso Niveles: el aviso (uno por activo) de los niveles que suben más que su activo, y las marcas en rojo de sus renglones (se actualizan al teclear).
 function levelIssuesHtml() {
-    return (state.draft.spaces || []).map((s) => (spIssues.get(s.id) || {}).levels).filter(Boolean).map((v) => `<p>${esc(t('main.layoutVioAct_levels', v.vars))}</p>`).join('');
+    const faces = LC.spaceViolations(state.draft).filter((v) => v.kind === 'facesLevel').map((v) => `<p>${esc(vioActText(v))}</p>`).join('');
+    return (state.draft.spaces || []).map((s) => (spIssues.get(s.id) || {}).levels).filter(Boolean).map((v) => `<p>${esc(t('main.layoutVioAct_levels', v.vars))}</p>`).join('') + faces;
 }
 function applyLevelMarks() {
     const box = document.querySelector('[data-lvl-issues]');
@@ -1374,12 +1375,12 @@ function stepHtml(step) {
                     const lvName = ((s.lvls || []).find((l) => l.n === n) || {}).name || '';
                     const nameOf = s.ownName || s.name || '';
                     const pad3 = (v) => String(v).padStart(3, '0');
-                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.C${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}<td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}" data-help-key="layoutPosLocalizadores">${bay.rows * bay.depth}</span></td><td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td></tr>`);
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.C${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}<td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}" data-help-key="layoutPosLocalizadores">${bay.rows * bay.depth}</span></td><td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td>${facesCellHtml('bay', i, n, c, LC.facesOfBay(s, n, c), LC.facesOfLevel(s, n), st.faces !== undefined, dis)}</tr>`);
                 }
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutPosSinActivos'))}</p>`;
-        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosFilas', 'main.layoutPosProfundidad', 'main.layoutPosLocalizadores', 'main.layoutPosM2', 'main.layoutPosM3'];
+        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosFilas', 'main.layoutPosProfundidad', 'main.layoutPosLocalizadores', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo'];
         const bayIssues = bayIssuesHtml();
         return `${table(heads, rows, 'layout-posiciones')}<div class="layout-vio" data-bay-issues${bayIssues ? '' : ' hidden'}>${bayIssues}</div>${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
@@ -1404,11 +1405,11 @@ function stepHtml(step) {
                 const over = s.h > 0 && m.floorH + m.beam + m.h > s.h + 0.005;
                 const total = m.beam + m.h;
                 const nameOf = s.ownName || s.name || '';
-                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${String(n).padStart(3, '0')}</b></td><td><input type="text" maxlength="${LC.LIMITS.text}" data-l="lvl" data-i="${i}" data-n="${n}" data-k="name" data-help-key="layoutNivNombre" value="${esc(st.name || '')}" placeholder="${esc(t('main.layoutNivNombrePh'))}"${dis ? ' disabled' : ''}></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td>${n === 1 ? lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined, ' data-help-key="layoutNivArranque"', over) : `<td class="layout-calc${over ? ' layout-bad' : ''}"><span data-lvl-floor="${i}|${n}" data-help-key="layoutNivAuto">${shown(m.floorH)}</span></td>`}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"')}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined, '', over)}<td class="layout-calc"><span data-lvl-total="${i}|${n}">${shown(total)}</span></td><td><input type="number" min="1" max="${LC.LIMITS.slots}" step="1" data-l="lvl" data-i="${i}" data-n="${n}" data-k="slots" data-help-key="layoutNivPosiciones" value="${LC.levelSlots(s, n)}"${st.slots !== undefined ? ' class="layout-edited"' : ''}${dis ? ' disabled' : ''}></td><td><button type="button" class="btn btn-secondary layout-toggle" data-lvl-apply="${i}|${n}" data-help-key="layoutNivAplicar" title="${esc(t('main.layoutNivAplicarTip'))}"${dis || levels < 2 ? ' disabled' : ''}>${esc(t('main.layoutNivAplicar'))}</button></td></tr>`);
+                rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${String(n).padStart(3, '0')}</b></td><td><input type="text" maxlength="${LC.LIMITS.text}" data-l="lvl" data-i="${i}" data-n="${n}" data-k="name" data-help-key="layoutNivNombre" value="${esc(st.name || '')}" placeholder="${esc(t('main.layoutNivNombrePh'))}"${dis ? ' disabled' : ''}></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td>${n === 1 ? lvlNum(i, n, 'floorH', shown(m.floorH), st.floorH !== undefined, ' data-help-key="layoutNivArranque"', over) : `<td class="layout-calc${over ? ' layout-bad' : ''}"><span data-lvl-floor="${i}|${n}" data-help-key="layoutNivAuto">${shown(m.floorH)}</span></td>`}${lvlNum(i, n, 'beam', shown(m.beam), st.beam !== undefined, ' data-help-key="layoutNivCeja"')}${lvlNum(i, n, 'h', shown(m.h), st.h !== undefined, '', over)}<td class="layout-calc"><span data-lvl-total="${i}|${n}">${shown(total)}</span></td><td><input type="number" min="1" max="${LC.LIMITS.slots}" step="1" data-l="lvl" data-i="${i}" data-n="${n}" data-k="slots" data-help-key="layoutNivPosiciones" value="${LC.levelSlots(s, n)}"${st.slots !== undefined ? ' class="layout-edited"' : ''}${dis ? ' disabled' : ''}></td>${facesCellHtml('lvl', i, n, 0, LC.facesOfLevel(s, n), LC.facesOfSpace(s), st.faces !== undefined, dis)}<td><button type="button" class="btn btn-secondary layout-toggle" data-lvl-apply="${i}|${n}" data-help-key="layoutNivAplicar" title="${esc(t('main.layoutNivAplicarTip'))}"${dis || levels < 2 ? ' disabled' : ''}>${esc(t('main.layoutNivAplicar'))}</button></td></tr>`);
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutNivSinActivos'))}</p>`;
-        const heads = ['main.layoutNivCodigo', 'main.layoutNivNombreCol', 'main.layoutNivActivo', 'main.layoutNivBase', 'main.layoutNivCejaCol', 'main.layoutNivEspacio', 'main.layoutNivAlto', 'main.layoutNivCantPos', ''];
+        const heads = ['main.layoutNivCodigo', 'main.layoutNivNombreCol', 'main.layoutNivActivo', 'main.layoutNivBase', 'main.layoutNivCejaCol', 'main.layoutNivEspacio', 'main.layoutNivAlto', 'main.layoutNivCantPos', 'main.layoutCarasConsumo', ''];
         const issues = levelIssuesHtml();
         return `${table(heads, rows, 'layout-niveles')}<div class="layout-vio" data-lvl-issues${issues ? '' : ' hidden'}>${issues}</div>${count >= LEVEL_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutNivMuchos').replace('{n}', LEVEL_ROWS_MAX))}</p>` : ''}`;
     }
@@ -1438,9 +1439,9 @@ function stepHtml(step) {
             const levelsCell = metricOf(s.assetClassId) === 'm2'
                 ? `<td><input type="number" step="1" data-l="spaces" data-i="${i}" data-k="levels" data-help-key="layoutActivoNivelFijo" value="${s.levels || 1}" title="${esc(t('main.layoutActivoNivelFijo'))}" disabled></td>`
                 : cellNum('spaces', i, 'levels', s.levels || 1, dis, '1');
-            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td>${nameCell}<td><select data-zone-pick="${esc(s.id)}" data-help-key="layoutActivoZona"${dis ? ' disabled' : ''}>${zoneOptions(zone)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId" data-help-key="layoutActivoZona"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptionsIn(zone, s.footprintId)}</select></td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}<td class="layout-calc" data-help-key="layoutSpaceLetter"><b>${esc(letter)}</b></td>${levelsCell}${ownCells(s, i, dis, ['ol', 'od', 'oh'])}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
+            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td>${nameCell}<td><select data-zone-pick="${esc(s.id)}" data-help-key="layoutActivoZona"${dis ? ' disabled' : ''}>${zoneOptions(zone)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId" data-help-key="layoutActivoZona"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptionsIn(zone, s.footprintId)}</select></td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}<td class="layout-calc" data-help-key="layoutSpaceLetter"><b>${esc(letter)}</b></td>${levelsCell}${ownCells(s, i, dis, ['ol', 'od', 'oh'])}${frontCellHtml(s, i, dis)}${facesCellHtml('space', i, 0, 0, LC.facesOfSpace(s), null, s.faces !== undefined, dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
         });
-        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutHuellaCol', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutActivoLetra', 'main.layoutNiveles', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', ''], rows, 'layout-activos')}${state.perms && state.perms.canRenumber && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutHuellaCol', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutActivoLetra', 'main.layoutNiveles', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutFrente', 'main.layoutCarasConsumo', ''], rows, 'layout-activos')}${state.perms && state.perms.canRenumber && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}${addButton('spaces', 'main.layoutAgregarActivo', dis, true)}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una se crea solo la huella (sin activos); los activos que se pongan encima se dan de alta después, en el paso Activos.
@@ -1460,6 +1461,81 @@ function focusStep(step) {
     state.focusStack = [...state.focusStack.filter((x) => x !== step), step];
 }
 function showStep(step) { if (!stepOn(step)) state.steps = [...state.steps, step]; focusStep(step); }
+// Caras de consumo: las 4 caras de un activo, un nivel o un espacio como botones que se prenden y se apagan. up = las caras que tiene lo que lo contiene (las demás no se pueden prender); stored = ya cambió las suyas.
+function facesCellHtml(kind, i, n, c, now, up, stored, dis) {
+    const buttons = LC.FACES.map((f) => {
+        const on = now.includes(f);
+        const allowed = !up || up.includes(f);
+        const bad = on && !allowed;
+        return `<button type="button" class="layout-face${on ? ' on' : ''}${bad ? ' bad' : ''}" data-face="${f}" data-fk="${kind}" data-i="${i}" data-n="${n || 0}" data-c="${c || 0}" aria-pressed="${on}" title="${esc(t(`main.layoutCara_${f}`))}"${dis || (!allowed && !on) ? ' disabled' : ''}>${esc(t(`main.layoutCaraCorta_${f}`))}</button>`;
+    }).join('');
+    return `<td><span class="layout-faces${stored ? ' layout-edited' : ''}" role="group" data-help-key="layoutCarasConsumo">${buttons}</span></td>`;
+}
+// El frente de un activo: sale solo del pasillo principal y se puede cambiar a mano. Los lados son los del croquis sin girar.
+function frontCellHtml(s, i, dis) {
+    const sideName = (side) => t(`main.layoutLado_${side}`);
+    const auto = LC.activoFront(state.draft, { ...s, front: undefined });
+    const options = ['N', 'S', 'W', 'E'].map((k) => `<option value="${k}"${s.front === k ? ' selected' : ''}>${esc(sideName(k))}</option>`).join('');
+    return `<td><select data-front="${i}" data-help-key="layoutFrenteActivo"${s.front ? ' class="layout-edited"' : ''}${dis ? ' disabled' : ''}><option value=""${s.front ? '' : ' selected'}>${esc(t('main.layoutFrenteAuto', { side: sideName(auto.side).toLowerCase() }))}</option>${options}</select></td>`;
+}
+// «la cara trasera» / «las caras frontal, izquierda»
+function facesText(list) {
+    const names = (list || []).map((f) => t(`main.layoutCaraAdj_${f}`)).join(', ');
+    return t((list || []).length === 1 ? 'main.layoutCarasTexto_una' : 'main.layoutCarasTexto_varias', { list: names });
+}
+// El texto de una falta de medidas o de caras de un activo, en el idioma de la pantalla.
+function vioActText(v) {
+    if (v.kind === 'facesLevel' || v.kind === 'facesBay') return t(`main.layoutVioAct_${v.kind}`, { ...v.vars, faces: facesText(v.vars.extra), has: facesText(v.vars.up) });
+    return t(`main.layoutVioAct_${v.kind}`, v.vars);
+}
+// Prender o apagar una cara: siempre queda al menos una; en un nivel o un espacio solo se guarda lo que cambia respecto a lo que lo contiene (en el activo, respecto al frente).
+function toggleFace(btn) {
+    if (!state.draft) return;
+    const kind = btn.getAttribute('data-fk');
+    const i = Number(btn.getAttribute('data-i'));
+    const n = Number(btn.getAttribute('data-n'));
+    const c = Number(btn.getAttribute('data-c'));
+    const face = btn.getAttribute('data-face');
+    const space = state.draft.spaces[i];
+    if (!space) return;
+    const now = kind === 'space' ? LC.facesOfSpace(space) : (kind === 'lvl' ? LC.facesOfLevel(space, n) : LC.facesOfBay(space, n, c));
+    const base = kind === 'space' ? ['front'] : (kind === 'lvl' ? LC.facesOfSpace(space) : LC.facesOfLevel(space, n));
+    const next = now.includes(face) ? now.filter((f) => f !== face) : LC.FACES.filter((f) => f === face || now.includes(f));
+    if (!next.length) return;
+    const store = !(next.length === base.length && next.every((f, k) => f === base[k]));
+    if (kind === 'space') {
+        if (store) space.faces = next; else delete space.faces;
+    } else if (kind === 'lvl') {
+        if (!space.lvls) space.lvls = [];
+        let lv = space.lvls.find((l) => l.n === n);
+        if (!lv) { lv = { n }; space.lvls.push(lv); }
+        if (store) lv.faces = next; else delete lv.faces;
+        if (Object.keys(lv).length <= 1) space.lvls = space.lvls.filter((l) => l !== lv);
+        if (!space.lvls.length) delete space.lvls;
+    } else {
+        if (!space.bays) space.bays = [];
+        let bay = space.bays.find((b) => b.n === n && b.c === c);
+        if (!bay) { bay = { n, c }; space.bays.push(bay); }
+        if (store) bay.faces = next; else delete bay.faces;
+        if (Object.keys(bay).length <= 2) space.bays = space.bays.filter((b) => b !== bay);
+        if (!space.bays.length) delete space.bays;
+    }
+    renderPanel();
+    refreshLive();
+}
+$('layout-panel').addEventListener('click', (event) => {
+    const btn = event.target.closest('button.layout-face');
+    if (btn && !btn.disabled) toggleFace(btn);
+});
+$('layout-panel').addEventListener('change', (event) => {
+    const sel = event.target.closest('select[data-front]');
+    if (!sel || !state.draft) return;
+    const space = state.draft.spaces[Number(sel.getAttribute('data-front'))];
+    if (!space) return;
+    if (sel.value) space.front = sel.value; else delete space.front;
+    renderPanel();
+    refreshLive();
+});
 function pressStep(step) {
     if (!stepOn(step)) { showStep(step); return; }
     if (state.focus !== step) { focusStep(step); return; }
@@ -5254,13 +5330,17 @@ async function saveLayout() {
     if (freshSpaces.length) {
         const v = freshSpaces[0];
         // los niveles que suben más que el activo se arreglan en Niveles (si la cuenta lo ve; si no, en Activos con el alto del activo)
-        const bayKind = v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum';
-        const stepName = v.kind === 'levels' && stepVisible('niveles') ? 'niveles' : (bayKind && stepVisible('posiciones') ? 'posiciones' : 'activos');
+        const bayKind = v.kind === 'bayl' || v.kind === 'bayw' || v.kind === 'bayh' || v.kind === 'baysum' || v.kind === 'facesBay';
+        const stepName = (v.kind === 'levels' || v.kind === 'facesLevel') && stepVisible('niveles') ? 'niveles' : (bayKind && stepVisible('posiciones') ? 'posiciones' : 'activos');
         showStep(stepName);
         renderPanel();
-        Dashboard.showToast(t(`main.layoutVioAct_${v.kind}`, v.vars), 'warning');
+        Dashboard.showToast(vioActText(v), 'warning');
         const at = state.draft.spaces.findIndex((s) => s.id === v.id);
-        const box = stepName === 'posiciones'
+        const box = v.kind === 'facesBay' && stepName === 'posiciones'
+            ? (document.querySelector(`button.layout-face.bad[data-fk="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"]`) || document.querySelector(`button.layout-face[data-fk="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"]`))
+            : v.kind === 'facesLevel' && stepName === 'niveles'
+            ? (document.querySelector(`button.layout-face.bad[data-fk="lvl"][data-i="${at}"][data-n="${v.vars.n}"]`) || document.querySelector(`button.layout-face[data-fk="lvl"][data-i="${at}"][data-n="${v.vars.n}"]`))
+            : stepName === 'posiciones'
             ? document.querySelector(v.kind === 'baysum' ? `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-k="l"]` : `[data-l="bay"][data-i="${at}"][data-n="${v.vars.n}"][data-c="${v.vars.c}"][data-k="${{ bayl: 'l', bayw: 'w', bayh: 'h' }[v.kind]}"]`)
             : stepName === 'niveles'
             ? (document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"].layout-missing`) || document.querySelector(`[data-l="lvl"][data-i="${at}"][data-k="h"]`))

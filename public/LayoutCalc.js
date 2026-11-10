@@ -2130,6 +2130,19 @@
                     }
                     if (b.w !== undefined && s.d > 0 && b.w > s.d + eps) out.push({ ...base, kind: 'bayw', sig: JSON.stringify([b.n, b.c, 'w', b.w, s.d]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.w), max: m(s.d) }, message: `El espacio ${b.c} del nivel ${b.n} del activo ${s.code} mide ${m(b.w)} m de ancho y el activo solo ${m(s.d)} m de fondo: baja su ancho.` });
                 });
+                // las caras de consumo de un nivel o de un espacio solo pueden ser caras que lo que los contiene tiene
+                const upSpace = facesOfSpace(s);
+                for (let n = 1; n <= (s.levels || 1); n += 1) {
+                    const st = sanitizeFaces(levelOf(s, n).faces);
+                    const extra = st ? st.filter((f) => !upSpace.includes(f)) : [];
+                    if (extra.length) out.push({ ...base, kind: 'facesLevel', sig: JSON.stringify([n, st, upSpace]), vars: { code: s.code, n, faces: facePhrase(extra), has: facePhrase(upSpace), extra, up: upSpace }, message: `El nivel ${n} del activo ${s.code} se consume por ${facePhrase(extra)} y el activo se consume por ${facePhrase(upSpace)}: quita esa cara del nivel o agrégala al activo.` });
+                }
+                (s.bays || []).forEach((b) => {
+                    const st = sanitizeFaces(b.faces);
+                    const upLevel = facesOfLevel(s, b.n);
+                    const extra = st ? st.filter((f) => !upLevel.includes(f)) : [];
+                    if (extra.length) out.push({ ...base, kind: 'facesBay', sig: JSON.stringify([b.n, b.c, st, upLevel]), vars: { code: s.code, n: b.n, c: b.c, faces: facePhrase(extra), has: facePhrase(upLevel), extra, up: upLevel }, message: `El espacio ${b.c} del nivel ${b.n} del activo ${s.code} se consume por ${facePhrase(extra)} y su nivel se consume por ${facePhrase(upLevel)}: quita esa cara del espacio o agrégala al nivel.` });
+                });
                 // las columnas de un nivel no pueden sumar más que el largo del activo (se suma lo que muestra Posiciones: el largo propio de cada hueco o, sin él, el largo del activo entre sus columnas)
                 for (let n = 1; n <= (s.levels || 1); n += 1) {
                     const ls = levelLengthSum(s, n);
@@ -2871,9 +2884,13 @@
                 if (!Number.isFinite(n) || n < min || n > LIMITS.maxM) { errors.push(`${label}: ${what} debe ser ${min === 0 ? 'cero o más' : 'mayor que 0'} (máximo ${LIMITS.maxM} m)`); return; }
                 own[key] = round2(n);
             });
+            const spaceFaces = sanitizeFaces(s && s.faces); // sus caras de consumo (sin guardar: el frente)
+            const spaceFront = s && ['N', 'S', 'E', 'W'].includes(s.front) ? s.front : ''; // el frente puesto a mano (sin él sale del pasillo principal)
             return {
                 id: idOf(s && s.id, spaceIds, label), footprintId, type, code,
                 ...(ownName ? { ownName } : {}),
+                ...(spaceFaces ? { faces: spaceFaces } : {}),
+                ...(spaceFront ? { front: spaceFront } : {}),
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
                 ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
                 ...(bays.length ? { bays } : {}),
@@ -3042,6 +3059,82 @@
         };
     }
 
+    // ---- Caras de consumo ---------------------------------------------------------------------------------------------------------------------
+    // Por qué cara o caras se consume (se toma) un activo, un nivel o un espacio: una o más de las 4 (frente, atrás, izquierda, derecha; izquierda y derecha como las ve quien mira el activo de frente). Regla de Daniel: lo de adentro solo puede
+    // usar caras que lo que lo contiene tiene (si el activo solo tiene el frente, un espacio no puede declarar la trasera; puede reducir, nunca ampliar). Se guarda solo lo que cambia: sin lo guardado vale lo de lo que lo contiene
+    // y el activo, sin nada, se consume por el frente.
+    const FACES = ['front', 'back', 'left', 'right'];
+    const FACE_NAMES_ES = { front: 'frontal', back: 'trasera', left: 'izquierda', right: 'derecha' };
+    function sanitizeFaces(raw) {
+        if (!Array.isArray(raw)) return null;
+        const out = FACES.filter((f) => raw.includes(f));
+        return out.length ? out : null;
+    }
+    const facePhrase = (arr) => `${arr.length === 1 ? 'la cara' : 'las caras'} ${arr.map((f) => FACE_NAMES_ES[f]).join(', ')}`;
+    function facesOfSpace(space) { return sanitizeFaces(space && space.faces) || ['front']; }
+    function facesOfLevel(space, level) { return sanitizeFaces(levelOf(space, level).faces) || facesOfSpace(space); }
+    function facesOfBay(space, level, column) { return sanitizeFaces(bayOf(space, level, column).stored.faces) || facesOfLevel(space, level); }
+    // El FRENTE de un activo es la cara que mira al pasillo principal (los pasillos de Tránsito de tipo «Principal»). Con dos pasillos principales en esquina, el frente es la cara de la IZQUIERDA al mirar la esquina del activo desde el cruce de
+    // los pasillos (esquina abajo-derecha: la de abajo; abajo-izquierda: la izquierda; arriba-izquierda: la de arriba; arriba-derecha: la derecha). Si ningún pasillo principal lo toca mira al más cercano y, sin pasillos principales, hacia abajo
+    // del croquis. Se puede cambiar a mano (space.front). Lados del croquis sin girar: N arriba, S abajo, W izquierda, E derecha. Devuelve { side, source: manual | aisle | corner | nearest | default }.
+    function activoFront(layout, space) {
+        if (space && ['N', 'S', 'E', 'W'].includes(space.front)) return { side: space.front, source: 'manual' };
+        const mains = ((layout && layout.transit) || []).filter((p) => p && p.active !== false && p.type !== 'between' && Number(p.l) > 0 && Number(p.w) > 0);
+        if (!space || !(Number(space.l) > 0) || !(Number(space.d) > 0) || !mains.length) return { side: 'S', source: 'default' };
+        const TOL = 0.5; const eps = 0.01;
+        const sx0 = space.x; const sx1 = space.x + space.l; const sy0 = space.y; const sy1 = space.y + space.d;
+        const found = {};
+        const put = (side, gap) => { if (found[side] === undefined || gap < found[side]) found[side] = gap; };
+        mains.forEach((a) => {
+            const ax1 = a.x + a.l; const ay1 = a.y + a.w;
+            const ox = Math.min(sx1, ax1) - Math.max(sx0, a.x);
+            const oy = Math.min(sy1, ay1) - Math.max(sy0, a.y);
+            if (ox > eps) {
+                const gs = a.y - sy1; if (gs >= -0.05 && gs <= TOL) put('S', Math.max(gs, 0));
+                const gn = sy0 - ay1; if (gn >= -0.05 && gn <= TOL) put('N', Math.max(gn, 0));
+            }
+            if (oy > eps) {
+                const ge = a.x - sx1; if (ge >= -0.05 && ge <= TOL) put('E', Math.max(ge, 0));
+                const gw = sx0 - ax1; if (gw >= -0.05 && gw <= TOL) put('W', Math.max(gw, 0));
+            }
+        });
+        const sides = Object.keys(found);
+        if (sides.length === 1) return { side: sides[0], source: 'aisle' };
+        if (sides.length >= 2) {
+            const has = (p, q) => sides.includes(p) && sides.includes(q);
+            if (sides.length === 2) {
+                if (has('S', 'E')) return { side: 'S', source: 'corner' };
+                if (has('S', 'W')) return { side: 'W', source: 'corner' };
+                if (has('N', 'W')) return { side: 'N', source: 'corner' };
+                if (has('N', 'E')) return { side: 'E', source: 'corner' };
+            }
+            const order = ['S', 'W', 'N', 'E']; // pasillos de lados opuestos o tres lados: el más pegado; igual de pegados, abajo, izquierda, arriba, derecha
+            sides.sort((p, q) => found[p] - found[q] || order.indexOf(p) - order.indexOf(q));
+            return { side: sides[0], source: 'aisle' };
+        }
+        // ningún pasillo principal lo toca: mira al más cercano (hacia donde más lo separa)
+        let best = null;
+        mains.forEach((a) => {
+            const gx = a.x >= sx1 ? a.x - sx1 : (sx0 >= a.x + a.l ? sx0 - (a.x + a.l) : 0);
+            const gy = a.y >= sy1 ? a.y - sy1 : (sy0 >= a.y + a.w ? sy0 - (a.y + a.w) : 0);
+            const dist = Math.hypot(gx, gy);
+            if (!best || dist < best.dist) best = { dist, a, gx, gy };
+        });
+        const cx = space.x + space.l / 2; const cy = space.y + space.d / 2;
+        const side = best.gy >= best.gx ? (best.a.y + best.a.w / 2 >= cy ? 'S' : 'N') : (best.a.x + best.a.l / 2 >= cx ? 'E' : 'W');
+        return { side, source: 'nearest' };
+    }
+    // A qué lado del croquis cae una cara (frente, atrás, izquierda o derecha) de un activo cuyo frente mira al lado `front`. La izquierda y la derecha son las de quien mira el activo de frente.
+    function faceSide(front, face) {
+        const table = {
+            S: { front: 'S', back: 'N', left: 'W', right: 'E' },
+            N: { front: 'N', back: 'S', left: 'E', right: 'W' },
+            E: { front: 'E', back: 'W', left: 'S', right: 'N' },
+            W: { front: 'W', back: 'E', left: 'N', right: 'S' },
+        };
+        return (table[front] || table.S)[face];
+    }
+
     // Huecos guardados de un activo: [{ n: nivel, c: columna, rows?, depth?, floorH?, l?, w?, h? }] (solo lo cambiado; lo demás es lo de por defecto). Se descartan los que ya no caben en sus niveles y columnas.
     function sanitizeBays(raw, levels, slots) {
         const out = new Map();
@@ -3058,6 +3151,8 @@
                 const v = Number(b[k]);
                 if (Number.isFinite(v) && v > 0 && v <= LIMITS.maxM) bay[k] = Math.round(v * 1000) / 1000;
             });
+            const bayFaces = sanitizeFaces(b.faces); // sus caras de consumo (solo si las cambió)
+            if (bayFaces) bay.faces = bayFaces;
             if (Object.keys(bay).length > 2) out.set(`${n}|${c}`, bay);
         });
         return [...out.values()].sort((a, b) => a.n - b.n || a.c - b.c);
@@ -3080,6 +3175,8 @@
             if (name) lv.name = name;
             const slots = Math.round(Number(b && b.slots));
             if (Number.isFinite(slots) && slots >= 1) lv.slots = Math.min(slots, LIMITS.slots);
+            const lvFaces = sanitizeFaces(b && b.faces); // sus caras de consumo (solo si las cambió)
+            if (lvFaces) lv.faces = lvFaces;
             if (Object.keys(lv).length > 1) out.set(n, lv);
         });
         return [...out.values()].sort((a, b) => a.n - b.n);
@@ -3218,9 +3315,9 @@
                 const first = !seen.has(s.footprintId);
                 seen.add(s.footprintId);
                 const f = byId.get(s.footprintId);
-                const plain = first && f && (s.type || 'rack') === 'rack' && !s.ownName && !s.fmt && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off && !OWN_SPACE_KEYS.some((k) => s[k] !== undefined);
+                const plain = first && f && (s.type || 'rack') === 'rack' && !s.ownName && !s.faces && !s.front && !s.fmt && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off && !OWN_SPACE_KEYS.some((k) => s[k] !== undefined);
                 return !plain;
-            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, ...(s.ownName ? { ownName: s.ownName } : {}), type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax', ...OWN_SPACE_KEYS].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
+            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, ...(s.ownName ? { ownName: s.ownName } : {}), ...(s.faces ? { faces: s.faces } : {}), ...(s.front ? { front: s.front } : {}), type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax', ...OWN_SPACE_KEYS].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
         }
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
         if (section === 'posiciones') return (layout.spaces || []).filter((s) => (s.bays || []).length).map((s) => ({ id: s.id, bays: s.bays }));
@@ -3244,7 +3341,7 @@
         storageLocations, huellasThatFit, capacityOf,
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
-        levelSlots, slotsByLevelOf, maxSlots, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
+        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
