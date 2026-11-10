@@ -4103,6 +4103,7 @@ function refreshLive() {
     $('layout-save').disabled = !dirty;
     $('layout-discard').disabled = !dirty;
     $('layout-dirty').hidden = !dirty;
+    $('layout-save').title = dirty ? t('main.layoutSinGuardar') : '';
     state.draft.vertices.forEach((_, i) => {
         const cell = document.querySelector(`[data-wall-len="${i}"]`);
         if (cell) cell.textContent = `${t('main.layoutPared')} ${i + 1}: ${fmt(LC.wallSegment(state.draft.vertices, i + 1).length)} m`;

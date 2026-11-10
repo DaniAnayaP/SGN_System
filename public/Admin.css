@@ -6983,14 +6983,23 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
     gap: 0.6rem;
     margin-bottom: 0.75rem;
 }
+/* «Cambios sin guardar»: un puntito en la esquina del botón Guardar (el texto queda para lectores de pantalla y como ayuda al pasar el mouse por Guardar); así el aviso no ocupa ancho y la barra no cambia de alto al empezar a editar. */
+.layout-save-wrap{ position: relative; display: inline-flex; }
 .layout-dirty{
-    margin-right: auto;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--color-report-calc-text);
-    background: var(--color-report-calc-bg);
-    border-radius: 999px;
-    padding: 0.15rem 0.7rem;
+    position: absolute;
+    top: -0.3rem;
+    right: -0.3rem;
+    z-index: 1;
+    width: 0.7rem;
+    height: 0.7rem;
+    box-sizing: border-box;
+    overflow: hidden;
+    font-size: 0;
+    color: transparent;
+    background: var(--color-report-calc-text);
+    border: 2px solid var(--color-bg);
+    border-radius: 50%;
+    pointer-events: none;
 }
 .layout-studio{
     display: grid;
