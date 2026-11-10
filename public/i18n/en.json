@@ -3714,6 +3714,9 @@
     "udmMainMeasures": "Unit: {uom} · measures from Alta Artículos: length {l} × width {w} × height {h} cm. Here you only choose its shape and whether it can lie down.",
     "udmContainsLbl": "How many of the presentation it comes from it holds",
     "udmSaleDe": "Comes from",
+    "udmSaleDeAdd": "Which UoM does it come from? (the ones this code already has)",
+    "udmContainsDyn": "How many «{p}» does this presentation hold?",
+    "udmQuedaComo": "It will be: {l}",
     "udmClase_patente": "Patent",
     "udmClase_generico": "Generic",
     "udmMarcaNode": "Brand",
@@ -5312,7 +5315,7 @@
       "example": "tablet → box of 20 (× 20) → box of 20 boxes (× 20) and box of 50 boxes (× 50); and apart, tablet → box of 30 (× 30)."
     },
     "udmRamificacion": {"what": "Summarizes the code in one row: its main material and how many presentations it has. Tapping the cell opens the branching tree in a floating window, where its presentations are seen, added, edited and removed.", "example": "Tablet · 3 presentations: tapping it you see the box of 12, the box of 24 and the box of 10 boxes."},
-    "udmSaleDe": {"what": "Which presentation of the code the new one comes from: «how many it holds» is counted from that one. Up to 10 can come out of the same one and there are up to 10 levels. It is not changed afterwards: remove it and capture it again.", "example": "the box of 50 comes out of the box of 20 (it holds 50 boxes of 20)."},
+    "udmSaleDe": {"what": "The list has the UoMs this code already has captured (the main material and its presentations): choose which one the new one comes from. The first one comes from the main material; if there is already a primary package and you want the secondary, choose the primary. «How many it holds» is counted from the one you choose and below it says what the new one will be (primary, secondary packaging…). Up to 10 can come out of the same one and there are up to 10 levels. It is not changed afterwards: remove it and capture it again.", "example": "the box of 50 comes out of the box of 20 (it holds 50 boxes of 20)."},
     "udmClasificacion": {"what": "If the code is sold with brands: Patent or Generic. Only one brand of a patent per code; as many generic brands as needed, each with its own presentations. It is optional: without it the presentation comes straight from the main material. But once a code uses brands, all its presentations go under a brand.", "example": "ASPIRINA PROTECT: Patent BAYER; Generic PISA and Generic SANAFI."},
     "udmMarca": {"what": "The presentation's brand, chosen from Catalogs > Our Brands (BAYER, PISA…). The brand is created in the code with its first presentation and every box of that brand comes out of it; it does not change what each box equals and has no measures or weight.", "example": "Generic › PISA: box of 24, box of 30 and box of 84."},
     "udmNew": {

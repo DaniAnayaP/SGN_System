@@ -571,6 +571,9 @@ function recompute() {
 }
 
 const canField = (col, value) => Dashboard.canEditField(TABLE_KEY, col, f.rec ? String(value ?? '') : '');
+function fieldHtmlText(key, labelText, inner) {
+    return `<div class="rel-fld"><label for="udm-f-${key}">${esc(labelText)}</label>${inner}</div>`;
+}
 function fieldHtml(key, labelKey, inner, hintKey) {
     return `<div class="rel-fld"><label for="udm-f-${key}">${esc(t(labelKey))}</label>${inner}${hintKey ? `<span class="rel-muted">${esc(t(hintKey))}</span>` : ''}</div>`;
 }
@@ -633,16 +636,18 @@ function renderForm() {
     const bnode = withBrand ? have.find((r) => r.isBrand && r.brandId === f.brandId) : null;
     const parentRows = withBrand ? have.filter((r) => !r.isBrand && r.brandId === f.brandId) : have.filter((r) => !r.isBrand && !r.brandId);
     const parentOpts = (withBrand ? `<option value=""${f.parentId === null ? ' selected' : ''}${bnode && optFull(bnode) ? ' disabled' : ''}>${esc(t('main.udmDirectoMarca', { b: brandName }))}</option>` : '')
-        + parentRows.map((r) => `<option value="${r.id}"${r.id === f.parentId ? ' selected' : ''}${optFull(r) && r.id !== f.parentId ? ' disabled' : ''}>${'\u00a0\u00a0'.repeat(r.packLevel)}${r.packLevel ? '└ ' : ''}${esc(r.name || rowLevelName(r))}</option>`).join('');
+        + parentRows.map((r) => `<option value="${r.id}"${r.id === f.parentId ? ' selected' : ''}${optFull(r) && r.id !== f.parentId ? ' disabled' : ''}>${'\u00a0\u00a0'.repeat(r.packLevel)}${r.packLevel ? '└ ' : ''}${esc(rowLevelName(r))} · ${esc(r.name || r.uom)}</option>`).join('');
+    // de cuál UDM viene (para decir cuántas lleva y cómo queda): la unidad en la que se cuenta «cuántas lleva» es la de la UDM elegida; si sale directo de la marca o del principal, la unidad principal del producto
+    const countUnit = (prev && !prev.isBrand) ? (prev.name || prev.uom || rowLevelName(prev)) : mainUomOf(f.sku.id);
     const parentField = f.rec
         ? `<div class="rel-fld"><label>${esc(t('main.udmSaleDe'))}</label><div class="udm-from">${esc(prevName)}</div></div>`
-        : `<div class="rel-fld" data-help-key="udmSaleDe"><label for="udm-f-parent">${esc(t('main.udmSaleDe'))}</label><select id="udm-f-parent" data-parent="1">${parentOpts}</select></div>`;
+        : `<div class="rel-fld" data-help-key="udmSaleDe"><label for="udm-f-parent">${esc(t('main.udmSaleDeAdd'))}</label><select id="udm-f-parent" data-parent="1">${parentOpts}</select><span class="rel-muted">${esc(t('main.udmQuedaComo', { l: levelName(f.pLevel) }))}</span></div>`;
     const uomOptions = [...new Set([...(f.uom ? [f.uom] : []), ...uoms])];
     const uomSel = `<select id="udm-f-uom" data-k="uom"${dis(COLS.uom, 'uom')}><option value="">${esc(t('main.articleTypeSelect'))}</option>${uomOptions.map((u) => `<option value="${esc(u)}"${u === f.uom ? ' selected' : ''}>${esc(u)}</option>`).join('')}</select>`;
     const num = (key, col, step) => `<input type="number" id="udm-f-${key}" data-k="${key}" step="${step || 'any'}" min="0" value="${esc(f[key])}"${dis(col, key)}>`;
     const cyl = f.shape === 'cilindrica';
     box.innerHTML = `${brandFields}${parentField}
-        <div class="rel-two">${fieldHtml('uom', 'main.colUdmDUnidad', uomSel)}${fieldHtml('contains', 'main.udmContainsLbl', num('contains', COLS.contains, '1'))}</div>
+        <div class="rel-two">${fieldHtml('uom', 'main.colUdmDUnidad', uomSel)}${fieldHtmlText('contains', t('main.udmContainsDyn', { p: countUnit }), num('contains', COLS.contains, '1'))}</div>
         <div class="rel-muted" id="udm-equiv"></div>
         <div class="rel-two">${fieldHtml('shape', 'main.colUdmDForma', shapeSel)}<div class="rel-fld"><label>&nbsp;</label>${layBox}</div></div>
         <div class="rel-three">${fieldHtml('length', 'main.colUdmDLargo', num('length', COLS.length))}${cyl ? '<div class="rel-fld"><label>&nbsp;</label><span class="rel-muted">= Ø</span></div>' : fieldHtml('width', 'main.colUdmDAncho', num('width', COLS.width))}${fieldHtml('height', 'main.colUdmDAlto', num('height', COLS.height))}</div>
