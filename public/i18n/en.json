@@ -3551,6 +3551,26 @@
     "relStatusLocated": "Located",
     "relStatusPartial": "Partial",
     "relEdit": "Edit relation",
+    "colLocCodigo": "Code",
+    "colLocUnidad": "Unit stored",
+    "colLocCapacidad": "Maximum capacity",
+    "colLocAcciones": "Actions",
+    "locCompleta": "Complete the locator",
+    "locRelacionar": "Relate code",
+    "locCambiar": "Change",
+    "locIrRelacion": "See in Code Relation",
+    "locCodigoNoElimina": "It has a code: it cannot be deleted",
+    "locGuardaPrimero": "Save the Layout first to relate a code.",
+    "layoutRelacionarTitulo": "Relate code · {loc}",
+    "layoutCambiarTitulo": "Change code · {loc}",
+    "layoutRelacionCodigoLink": "Code Relation",
+    "layoutRelGuardado": "Code related.",
+    "locConCodigoItem": "{loc} (code {sku})",
+    "locConCodigoMas": " and {n} more",
+    "locConCodigoUno": "This locator already has a code and cannot be deleted: {list}. Remove the code in Code Relation first.",
+    "locConCodigoVarios": "These locators already have a code and cannot be deleted: {list}. Remove the code in Code Relation first.",
+    "layoutCodigosLocalizadorBtn": "Codes in Locators (code, unit and maximum capacity)",
+    "layoutRelacionarCodigoBtn": "Relate code from the Layout",
     "udmNew": "New presentation",
     "udmEdit": "Edit presentation",
     "udmDialogNew": "New presentation",
@@ -5128,6 +5148,14 @@
     "relEdit": {
       "what": "Changes the location of this row in the same window. Each field needs its own leaf in the tree.",
       "example": "Move the code from level 2 to level 3."
+    },
+    "layoutRelacionarCodigo": {
+      "what": "Relates a code with this locator without leaving the plan: you choose the code and which unit of measure you want to store in that place (you see how many fit). Only a complete, saved locator takes a code; the sub-warehouse comes from the locator zone. It is the same relation as Code Relation. A locator with a code cannot be deleted.",
+      "example": "to locator Z006.H001.R001.N001.E001.P003 you relate 000521 and choose “Box of 12”."
+    },
+    "layoutRelacionLink": {
+      "what": "Opens Code Relation already filtered: the row icon, to that locator; the button above, to what the table shows (one locator, the chosen Locator or everything).",
+      "example": "you tap the locator arrow and see only its relation."
     },
     "udmChain": {
       "what": "The sequence of presentations of this code, from the main unit outward: each depends on the previous one (what it contains) and shows its own measures and weight, and how many main units it equals. It shows when the table shows a single code.",

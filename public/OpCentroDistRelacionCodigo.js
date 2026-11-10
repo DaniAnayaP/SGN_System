@@ -31,6 +31,10 @@ const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': 
         if (!role) return;
         renderNewRecordButton();
         await refreshTable();
+        // Desde el Layout se abre ya filtrada al localizador (o a lo que se veía): ?q=
+        const q = new URLSearchParams(window.location.search).get('q');
+        const box = document.getElementById('filter-search-text');
+        if (q && box) { box.value = q; applyFilters(); }
     } catch (err) {
         console.error('Relación Código failed to initialize:', err);
     }

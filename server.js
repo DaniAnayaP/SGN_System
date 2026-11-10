@@ -6616,6 +6616,10 @@ function layoutPermissions(req) {
         canUseSafetyQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrSeguridad'),
         // Ver las piezas que caben en cada posición (el empaque que se acomoda, de Relación Código) en el croquis y el 3D, y apagarlas, usa el icono Piezas (hoja <pantalla>/iconLayoutPiezas).
         canTogglePieces: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutPiezas'),
+        // Ver en el paso Localizadores qué código tiene cada localizador, con su unidad y su capacidad máxima, usa el icono Códigos en Localizadores (hoja <pantalla>/iconLayoutCodigosLocalizador);
+        // relacionar un código con un localizador completo (o cambiarlo) desde el Layout, el icono Relacionar código (hoja <pantalla>/iconLayoutRelacionarCodigo).
+        canSeeLocatorCodes: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutCodigosLocalizador'),
+        canRelateCode: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutRelacionarCodigo'),
     };
 }
 
@@ -6760,6 +6764,112 @@ app.get('/api/business/layout/pieces', requireAuth, (req, res) => {
     res.json({ pieces });
 });
 
+// Lo que cada localizador completo tiene relacionado en Relación Código: el código, la unidad que se almacena y su capacidad máxima. Pide la hoja Códigos en Localizadores (iconLayoutCodigosLocalizador).
+function locatorCodeInfo(rel) {
+    return {
+        relationId: rel.id, skuItemId: rel.skuItemId, sku: rel.sku, description: rel.description, spaceId: rel.spaceId, level: rel.level, slot: rel.slot, position: rel.position || 1,
+        locator: rel.locator, packLevel: rel.packLevel, packName: rel.packName || '', packShape: rel.packShape || '', packCount: rel.packCount, packCapacity: rel.packCapacity,
+        mainUom: (rel.skuPackaging && rel.skuPackaging.main && rel.skuPackaging.main.name) || '',
+    };
+}
+app.get('/api/business/layout/locator-codes', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const perms = layoutPermissions(req);
+    if (!perms.canSeeLocatorCodes) return res.status(403).json({ message: 'No tienes permiso para ver los códigos de los localizadores.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    const ctx = codeRelationContext(req);
+    const locators = [];
+    listCodeRelations(req.user.clientId, req.user.isTestAccount).forEach((r) => {
+        if (!r.space_id || !r.level || !r.slot) return;
+        if (center.id && r.cost_center_id !== center.id) return;
+        const rel = mapCodeRelation(r, null, '', ctx);
+        if (rel.status !== 'located' || !rel.locator) return;
+        locators.push(locatorCodeInfo(rel));
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ locators });
+});
+// El sub almacén físico (activo) cuya zona (y anaquel, si solo se le asignaron unos) es el de este localizador: de ahí salen el almacén y el centro de costos de la relación.
+function subWarehouseForLocator(ctx, centerId, space) {
+    const matches = [...ctx.warehouses.values()].filter((w) => {
+        if (w.category_type !== 'sub-almacenes' || w.kind !== 'physical' || w.status !== 'active') return false;
+        const wh = ctx.warehouses.get(w.parent_id);
+        if (!wh || wh.parent_id !== centerId) return false;
+        return parseWarehouseLocations(w.locations).some((e) => e.zoneId === space.zoneId && (!e.spaceIds.length || e.spaceIds.includes(space.id)));
+    });
+    return matches;
+}
+// Relacionar un código con un localizador COMPLETO desde el Layout (o cambiar el código o la unidad que ya tiene): la misma relación de Relación Código, con las mismas revisiones (lugar libre, código y unidad válidos).
+// Pide la hoja Relacionar código del Layout (iconLayoutRelacionarCodigo); esa hoja es la autorización de este botón.
+app.post('/api/business/layout/locator-code', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const perms = layoutPermissions(req);
+    if (!perms.canRelateCode) return res.status(403).json({ message: 'No tienes permiso para relacionar códigos desde el Layout.' });
+    const center = layoutCenter(req);
+    if (center.error) return res.status(center.error.status).json(center.error.body);
+    if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
+    const body = req.body || {};
+    const int = (v) => (Number.isInteger(Number(v)) && v !== '' && v !== null && v !== undefined ? Number(v) : null);
+    const skuItemId = int(body.skuItemId); const level = int(body.level); const slot = int(body.slot); const position = int(body.position); const packLevel = int(body.packLevel);
+    const spaceId = typeof body.spaceId === 'string' ? body.spaceId : '';
+    if (!skuItemId || !spaceId || !(level >= 1) || !(slot >= 1) || !(position >= 1)) return res.status(400).json({ message: 'Faltan el código o el localizador.' });
+    if (packLevel === null || packLevel < 0) return res.status(400).json({ message: 'Elige qué unidad de medida se almacena en este lugar.' });
+    const ctx = codeRelationContext(req);
+    const layout = ctx.layoutFor(center.id);
+    // el localizador tiene que estar COMPLETO y guardado: zona, huella, activo, nivel, espacio y posición
+    const space = layout.spaceById.get(spaceId);
+    const posList = space ? (layout.positions.get(`${spaceId}|${level}|${slot}`) || []) : [];
+    const zone = space && space.zoneId ? layout.zoneById.get(space.zoneId) : null;
+    const footprint = space ? layout.footprintById.get(space.footprintId) : null;
+    if (!space || !zone || !footprint || level > (space.levels || 1) || slot > LayoutCalc.levelSlots(space, level) || !posList.some((p) => p.num === position)) {
+        return res.status(409).json({ code: 'INCOMPLETE', message: 'Este localizador todavía no está completo o no está guardado: completa y guarda el Layout primero.' });
+    }
+    const subs = subWarehouseForLocator(ctx, center.id, space);
+    if (!subs.length) return res.status(409).json({ code: 'NO_SUB', message: 'La zona de este localizador no está asignada a ningún sub almacén físico activo. Asígnala en Catálogos > Nuestros Sub Almacenes.' });
+    if (subs.length > 1) return res.status(409).json({ code: 'MANY_SUB', message: 'La zona de este localizador está en más de un sub almacén físico activo. Deja uno solo en Catálogos > Nuestros Sub Almacenes.' });
+    const sub = subs[0];
+    const existingAtPlace = listCodeRelations(clientId, isTestAccount).find((r) => r.space_id === spaceId && r.level === level && r.slot === slot && (r.position || (posList.length === 1 ? posList[0].num : 0)) === position);
+    const relationId = int(body.relationId);
+    const existing = relationId ? getCodeRelationById(relationId, clientId, isTestAccount) : null;
+    if (relationId && (!existing || !existingAtPlace || existing.id !== existingAtPlace.id)) return res.status(404).json({ message: 'La relación de este localizador ya no existe. Vuelve a abrir el Layout.' });
+    if (!relationId && existingAtPlace) return res.status(409).json({ message: `Este localizador ya tiene el código ${padSku(existingAtPlace.sku_number)}. Usa «Cambiar».` });
+    const state = {
+        skuItemId, costCenterId: center.id, warehouseId: sub.parent_id, subWarehouseId: sub.id, zoneId: space.zoneId, spaceId, level, slot, position,
+        classification: existing ? (existing.classification || 'activo') : 'activo', packLevel,
+    };
+    const check = validateCodeRelationState(req, state, existing ? existing.id : 0, existing, ctx);
+    if (check.error) return res.status(check.error.status).json({ message: check.error.message });
+    const san = codeRelationSanitizers(ctx, req);
+    let row;
+    if (existing) {
+        const patch = {};
+        ['skuItemId', 'packLevel'].forEach((key) => { const col = CODE_RELATION_PATCHABLE_FIELDS[key].column; if (String(existing[col] ?? '') !== String(state[key] ?? '')) patch[key] = state[key]; });
+        // si el sub almacén o el almacén ya no son los mismos, también se corrigen (la zona manda)
+        ['warehouseId', 'subWarehouseId'].forEach((key) => { const col = CODE_RELATION_PATCHABLE_FIELDS[key].column; if (String(existing[col] ?? '') !== String(state[key] ?? '')) patch[key] = state[key]; });
+        if (Object.keys(patch).length) {
+            Object.entries(patch).forEach(([key, v]) => {
+                const col = CODE_RELATION_PATCHABLE_FIELDS[key].column;
+                logTableChange({ clientId, tableKey: CODE_RELATION_TABLE_KEY, recordId: existing.id, recordLabel: `#${existing.id}`, action: 'update', fieldKey: CODE_RELATION_PATCHABLE_FIELDS[key].fieldKey, oldValue: san[key](existing[col]), newValue: san[key](v), changedBy: changedByLabel(req) });
+            });
+            row = updateCodeRelation(existing.id, clientId, patch, isTestAccount);
+        } else row = existing;
+    } else {
+        row = createCodeRelation({ clientId, isTestData: isTestAccount, values: state });
+        logTableChange({ clientId, tableKey: CODE_RELATION_TABLE_KEY, recordId: row.id, recordLabel: `#${row.id}`, action: 'create', changedBy: changedByLabel(req) });
+        Object.entries(CODE_RELATION_PATCHABLE_FIELDS).forEach(([key, { fieldKey }]) => {
+            if (state[key] === null || state[key] === '') return;
+            logTableChange({ clientId, tableKey: CODE_RELATION_TABLE_KEY, recordId: row.id, recordLabel: `#${row.id}`, action: 'update', fieldKey, oldValue: '', newValue: san[key](state[key]), changedBy: changedByLabel(req) });
+        });
+        notifyButtonAction(req, CODE_RELATION_TABLE_KEY, 'create', `#${row.id}`);
+    }
+    const client = getClientById(clientId);
+    const ctx2 = codeRelationContext(req);
+    const rel = mapCodeRelation(getCodeRelationById(row.id, clientId, isTestAccount), null, client?.company_name, ctx2);
+    res.status(existing ? 200 : 201).json({ locator: locatorCodeInfo(rel) });
+});
+
 app.get('/api/business/layout/plan-image', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const center = layoutCenter(req);
@@ -6768,6 +6878,30 @@ app.get('/api/business/layout/plan-image', requireAuth, (req, res) => {
     if (!row || !row.planImage) return res.status(404).json({ message: 'Plan not found.' });
     res.json({ image: row.planImage });
 });
+
+// Un localizador que ya tiene código (Relación Código) NO se puede eliminar: quitar o desactivar su posición, bajar los niveles o los espacios del activo, desactivar el activo o borrar su huella lo dejaría sin lugar.
+// Se compara lo guardado con lo que llega (por identificadores, así que mover o renombrar no cuenta). Devuelve [{ locator, sku }] de los que se perderían; un lugar que ya no existía antes no cuenta.
+function locatorsWithCodeRemoved(clientId, isTestAccount, centerId, prevLayout, nextLayout) {
+    const rels = listCodeRelations(clientId, isTestAccount).filter((r) => r.cost_center_id === centerId && r.space_id && r.level && r.slot);
+    if (!rels.length || !prevLayout) return [];
+    const prev = layoutIndexOf({ layout: prevLayout });
+    const nxt = layoutIndexOf({ layout: nextLayout });
+    const out = [];
+    for (const r of rels) {
+        const key = `${r.space_id}|${r.level}|${r.slot}`;
+        const before = prev.positions.get(key) || [];
+        const posNum = r.position || (before.length === 1 ? before[0].num : 0);
+        if (!posNum || !prev.spaceById.has(r.space_id) || !before.some((p) => p.num === posNum)) continue;
+        const after = nxt.positions.get(key) || [];
+        if (nxt.spaceById.has(r.space_id) && after.some((p) => p.num === posNum)) continue;
+        const space = prev.spaceById.get(r.space_id);
+        const zone = prev.zoneById.get(space.zoneId);
+        const footprint = prev.footprintById.get(space.footprintId);
+        const locator = zone && footprint ? RelTemplate.formatLocator({ zoneCode: zone.code, zoneName: zone.name, footprintCode: footprint.code, spaceType: space.type, spaceCode: space.code, level: r.level, slot: r.slot, position: posNum }) : '';
+        out.push({ locator: locator || `${space.code} N${r.level} E${r.slot} P${posNum}`, sku: padSku(r.sku_number) });
+    }
+    return out;
+}
 
 app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -6804,6 +6938,16 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
     const expectedVersion = Number(body.baseVersion) || 0;
     if ((existing ? existing.version : 0) !== expectedVersion) {
         return res.status(409).json({ message: 'El Layout cambió mientras lo editabas. Vuelve a abrirlo.', currentVersion: existing ? existing.version : 0 });
+    }
+
+    // Un localizador con código no se elimina (ver locatorsWithCodeRemoved): se rechaza el guardado diciendo cuáles y qué código los ocupa.
+    if (existing) {
+        const removed = locatorsWithCodeRemoved(req.user.clientId, !!req.user.isTestAccount, targetCenterId, existing.layout, next);
+        if (removed.length) {
+            const list = removed.slice(0, 3).map((x) => `${x.locator} (código ${x.sku})`).join(', ');
+            const more = removed.length > 3 ? ` y ${removed.length - 3} más` : '';
+            return res.status(409).json({ code: 'LOCATOR_WITH_CODE', message: `${removed.length === 1 ? 'Este localizador ya tiene código y no se puede eliminar' : 'Estos localizadores ya tienen código y no se pueden eliminar'}: ${list}${more}. Quita primero el código en Relación Código.`, locators: removed });
+        }
     }
 
     // Lo que transita sale del catálogo de la empresa: los pasillos y los objetos solo pueden usar renglones que existen (y activos, salvo que ya los tuvieran). Las claves de antes (people, forklift…) que mande una pantalla vieja pasan a los

@@ -3550,6 +3550,26 @@
     "relStatusLocated": "Ubicado",
     "relStatusPartial": "A medias",
     "relEdit": "Editar relación",
+    "colLocCodigo": "Código",
+    "colLocUnidad": "Unidad que se almacena",
+    "colLocCapacidad": "Capacidad máxima",
+    "colLocAcciones": "Acciones",
+    "locCompleta": "Completa el localizador",
+    "locRelacionar": "Relacionar código",
+    "locCambiar": "Cambiar",
+    "locIrRelacion": "Ver en Relación Código",
+    "locCodigoNoElimina": "Tiene código: no se puede eliminar",
+    "locGuardaPrimero": "Guarda el Layout primero para relacionar un código.",
+    "layoutRelacionarTitulo": "Relacionar código · {loc}",
+    "layoutCambiarTitulo": "Cambiar código · {loc}",
+    "layoutRelacionCodigoLink": "Relación Código",
+    "layoutRelGuardado": "Código relacionado.",
+    "locConCodigoItem": "{loc} (código {sku})",
+    "locConCodigoMas": " y {n} más",
+    "locConCodigoUno": "Este localizador ya tiene código y no se puede eliminar: {list}. Quita primero el código en Relación Código.",
+    "locConCodigoVarios": "Estos localizadores ya tienen código y no se pueden eliminar: {list}. Quita primero el código en Relación Código.",
+    "layoutCodigosLocalizadorBtn": "Códigos en Localizadores (código, unidad y capacidad máxima)",
+    "layoutRelacionarCodigoBtn": "Relacionar código desde el Layout",
     "udmNew": "Nueva presentación",
     "udmEdit": "Editar presentación",
     "udmDialogNew": "Nueva presentación",
@@ -5127,6 +5147,14 @@
     "relEdit": {
       "what": "Cambia la ubicación de este renglón en la misma ventana. Cada dato pide su propia hoja en el árbol.",
       "example": "Pasar el código del nivel 2 al nivel 3."
+    },
+    "layoutRelacionarCodigo": {
+      "what": "Relaciona un código con este localizador sin salir del croquis: eliges el código y qué unidad de medida quieres almacenar en ese lugar (se ve cuántas caben). Solo un localizador completo y guardado recibe código; el sub almacén sale de la zona del localizador. Es la misma relación de Relación Código. Un localizador con código no se puede eliminar.",
+      "example": "al localizador Z006.H001.R001.N001.E001.P003 le relacionas el 000521 y eliges «Caja con 12»."
+    },
+    "layoutRelacionLink": {
+      "what": "Abre Relación Código ya filtrada: el icono del renglón, a ese localizador; el botón de arriba, a lo que se ve en la tabla (un localizador, el Localizador elegido o todo).",
+      "example": "tocas la flecha del localizador y ves solo su relación."
     },
     "udmChain": {
       "what": "La secuencia de presentaciones de este código, de la unidad principal hacia afuera: cada una depende de la anterior (lo que contiene) y muestra sus propias medidas y peso, y cuántas unidades principales equivale. Sale cuando en la tabla se ve un solo código.",

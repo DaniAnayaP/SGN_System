@@ -1926,6 +1926,8 @@
             { "id": "iconLayoutFormatoPiso", "labelKey": "main.layoutFormatoPisoBtn", "permissionOnly": true },
             { "id": "iconLayoutFormatoEspacio", "labelKey": "main.layoutFormatoEspacioBtn", "permissionOnly": true },
             { "id": "iconLayoutPiezas", "labelKey": "main.layoutPiezasBtn", "permissionOnly": true },
+            { "id": "iconLayoutCodigosLocalizador", "labelKey": "main.layoutCodigosLocalizadorBtn", "permissionOnly": true },
+            { "id": "iconLayoutRelacionarCodigo", "labelKey": "main.layoutRelacionarCodigoBtn", "permissionOnly": true },
             { "id": "iconLayoutQrLimpieza", "labelKey": "main.layoutQrLimpiezaBtn", "permissionOnly": true },
             { "id": "iconLayoutQrTemperaturas", "labelKey": "main.layoutQrTemperaturasBtn", "permissionOnly": true },
             { "id": "iconLayoutQrSensores", "labelKey": "main.layoutQrSensoresBtn", "permissionOnly": true },

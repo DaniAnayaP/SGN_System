@@ -7914,6 +7914,12 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .pos-ov-bay.sel{ stroke: #e8590c; stroke-width: 1.5; stroke-dasharray: none; }
 .pos-ov-pos{ fill: var(--color-surface); fill-opacity: 0.86; stroke: var(--color-text-secondary); stroke-width: 0.9; vector-effect: non-scaling-stroke; }
 .pos-ov-pos.chosen{ fill: #e8590c; fill-opacity: 0.5; stroke: #e8590c; stroke-width: 1.8; }
+.layout-loc-btn{ font: inherit; font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.7rem; border-radius: 999px; border: 1px solid var(--color-text-primary); background: var(--color-text-primary); color: var(--color-surface); cursor: pointer; white-space: nowrap; }
+.layout-loc-btn.s{ background: transparent; color: var(--color-text-primary); border-color: var(--color-border); }
+.layout-loc-btn:disabled{ opacity: 0.5; cursor: not-allowed; }
+.layout-loc-lock{ color: #9A2A1F; margin-right: 0.3rem; }
+.layout-loc-go{ display: inline-flex; width: 1.5rem; height: 1.5rem; align-items: center; justify-content: center; border: 1px solid var(--color-border); border-radius: 50%; color: var(--color-text-primary); text-decoration: none; margin-left: 0.3rem; vertical-align: middle; }
+.layout-step-link{ display: inline-flex; align-items: center; gap: 0.3rem; text-decoration: none; }
 .pos-ov-pc{ stroke-width: 0.6; vector-effect: non-scaling-stroke; }
 .pos-ov-pc.lv0{ fill: rgba(42, 157, 143, 0.4); stroke: #2a9d8f; }
 .pos-ov-pc.lv1{ fill: rgba(169, 63, 184, 0.36); stroke: #a93fb8; }

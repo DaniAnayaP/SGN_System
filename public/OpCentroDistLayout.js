@@ -1096,9 +1096,31 @@ function locatorsStepHtml() {
     const footprintText = (r) => (r.footprintCode ? (r.footprintName ? `${r.footprintCode} · ${r.footprintName}` : r.footprintCode) : '—');
     const assetText = (r) => (r.spaceCode ? `${r.spaceCode} · ${typeLabel('space', r.spaceType || 'rack')}` : '—');
     const num = (n) => (n ? String(n) : '—');
-    const body = rows.map((r) => `<tr><td class="layout-calc">${esc(zoneText(r))}</td><td class="layout-calc">${esc(footprintText(r))}</td><td class="layout-calc">${esc(assetText(r))}</td><td class="layout-calc">${num(r.level)}</td><td class="layout-calc">${num(r.slot)}</td><td class="layout-calc">${num(r.position)}</td><td class="layout-calc"><b>${esc(r.locator || '—')}</b></td><td class="layout-calc">${esc(t(`main.locAlcance_${r.scope}`))}</td><td class="layout-calc"><span class="rel-tag ${r.complete ? 'rel-tag-ok' : 'rel-tag-partial'}">${esc(t(r.complete ? 'main.locEstadoCompleto' : 'main.locEstadoAMedias'))}</span></td></tr>`);
+    // Con la hoja Códigos en Localizadores: el código que tiene cada localizador completo, la unidad que se almacena y su capacidad máxima, y los botones para relacionarlo o cambiarlo sin salir del croquis.
+    const showCodes = !!(state.perms && state.perms.canSeeLocatorCodes);
+    const canRelate = !!(state.perms && state.perms.canRelateCode);
+    const dirty = isDirty();
+    const codeCells = (r) => {
+        if (!showCodes) return '';
+        if (r.scope !== 'position' || !r.complete) return `<td class="layout-calc">—</td><td class="layout-calc">—</td><td class="layout-calc">—</td><td class="layout-calc"><span class="layout-muted">${esc(t('main.locCompleta'))}</span></td>`;
+        const key = `${r.spaceId}|${r.level}|${r.slot}|${r.position}`;
+        const info = locCodeAt(r);
+        const data = `data-loc-rel="${esc(key)}" data-loc-text="${esc(r.locator)}"`;
+        if (!info) {
+            const btn = canRelate ? `<button type="button" class="layout-loc-btn" ${data} data-help-key="layoutRelacionarCodigo"${dirty ? ` disabled title="${esc(t('main.locGuardaPrimero'))}"` : ''}>${esc(t('main.locRelacionar'))}</button>` : '';
+            return `<td class="layout-calc">—</td><td class="layout-calc">—</td><td class="layout-calc">—</td><td class="layout-calc">${btn}</td>`;
+        }
+        const unit = info.packLevel == null ? '—' : `<b>${esc(info.packLevel === 0 ? (info.mainUom || t('main.pkLevel0')) : info.packName)}</b> <span class="rel-tag rel-tag-ok">${esc(t(`main.pkLevel${info.packLevel}`))}</span>`;
+        const cap = info.packCapacity != null ? `<b>${esc(info.packCapacity)}</b> ${esc(info.mainUom)}` : '—';
+        const change = canRelate ? `<button type="button" class="layout-loc-btn s" ${data} data-help-key="layoutRelacionarCodigo"${dirty ? ` disabled title="${esc(t('main.locGuardaPrimero'))}"` : ''}>${esc(t('main.locCambiar'))}</button>` : '';
+        const go = hasRelationScreen() ? `<a class="layout-loc-go" href="${esc(relationUrl(r.locator))}" data-help-key="layoutRelacionLink" aria-label="${esc(t('main.locIrRelacion'))}" title="${esc(t('main.locIrRelacion'))}"><i class="bx bx-link-external" aria-hidden="true"></i></a>` : '';
+        return `<td class="layout-calc">${esc(info.sku)} · ${esc(info.description)}</td><td class="layout-calc">${unit}</td><td class="layout-calc">${cap}</td><td class="layout-calc"><span class="layout-loc-lock" title="${esc(t('main.locCodigoNoElimina'))}"><i class="bx bx-lock-alt" aria-hidden="true"></i></span>${change}${go}</td>`;
+    };
+    const body = rows.map((r) => `<tr data-locator="${esc(r.locator || '')}"><td class="layout-calc">${esc(zoneText(r))}</td><td class="layout-calc">${esc(footprintText(r))}</td><td class="layout-calc">${esc(assetText(r))}</td><td class="layout-calc">${num(r.level)}</td><td class="layout-calc">${num(r.slot)}</td><td class="layout-calc">${num(r.position)}</td><td class="layout-calc"><b>${esc(r.locator || '—')}</b></td><td class="layout-calc">${esc(t(`main.locAlcance_${r.scope}`))}</td><td class="layout-calc"><span class="rel-tag ${r.complete ? 'rel-tag-ok' : 'rel-tag-partial'}">${esc(t(r.complete ? 'main.locEstadoCompleto' : 'main.locEstadoAMedias'))}</span></td>${codeCells(r)}</tr>`);
     const note = truncated ? `<p class="layout-muted">${esc(t('main.layoutLocalizadoresCorte', { n: LOCATOR_PANEL_MAX }))}</p>` : '';
-    return `${table(['main.colLocZona', 'main.colLocHuella', 'main.colLocActivo', 'main.colLocNivel', 'main.colLocColumna', 'main.colLocProfundidad', 'main.colLocLocalizador', 'main.colLocAlcance', 'main.colLocEstado'], body, 'layout-localizadores')}${note}`;
+    const heads = ['main.colLocZona', 'main.colLocHuella', 'main.colLocActivo', 'main.colLocNivel', 'main.colLocColumna', 'main.colLocProfundidad', 'main.colLocLocalizador', 'main.colLocAlcance', 'main.colLocEstado'];
+    if (showCodes) heads.push('main.colLocCodigo', 'main.colLocUnidad', 'main.colLocCapacidad', 'main.colLocAcciones');
+    return `${table(heads, body, 'layout-localizadores')}${note}`;
 }
 // Un renglón de la tabla de obstáculos del contorno. Las cuatro celdas del lugar cambian con la forma de ponerlo: «Sobre el contorno» = lado, distancia, largo (vacío = todo el lado) y grosor; «Dentro de la nave» = X, Y, largo y ancho.
 // La altura solo la lleva el desnivel (su altura sobre el piso; negativa si es más bajo).
@@ -1868,9 +1890,13 @@ function renderPanel() {
     const locatorsLink = Dashboard.hasScreenGrant('supply-chain', 'sc-area-distribution-center', 'cat-catalogos/cat-catalogos-centro-dist-localizadores')
         ? `<span class="layout-step layout-step-split${stepOn('localizadores') ? ' active' : ''}${state.focus === 'localizadores' ? ' focus' : ''}"><button type="button" class="layout-step-main" aria-pressed="${stepOn('localizadores')}" aria-current="${state.focus === 'localizadores'}" data-step="localizadores" data-help-key="layoutLocalizadores">${esc(t('main.layoutStepLocalizadores'))}</button><a class="layout-step-arrow" href="CatCentroDistLocalizadores.html" data-help-key="layoutLocalizadoresLink" aria-label="${esc(t('main.layoutLocalizadoresIr'))}" title="${esc(t('main.layoutLocalizadoresIr'))}"><i class="bx bx-link-external" aria-hidden="true"></i></a></span>`
         : '';
+    // «Relación Código ↗»: abre esa pantalla ya filtrada a lo que se ve (un localizador, el Localizador elegido o todo). Sale con la hoja Códigos en Localizadores y el acceso a Relación Código.
+    const relationLink = state.perms && state.perms.canSeeLocatorCodes && hasRelationScreen()
+        ? `<a class="layout-step layout-step-link" href="${esc(relationUrl(''))}" data-rel-shortcut data-help-key="layoutRelacionLink">${esc(t('main.layoutRelacionCodigoLink'))} <i class="bx bx-link-external" aria-hidden="true"></i></a>`
+        : '';
     const allOn = SECTION_ORDER.filter(stepVisible).every((x) => stepOn(x));
     const allPill = `<button type="button" role="button" aria-pressed="${allOn}" class="layout-step layout-step-all${allOn ? ' active' : ''}" data-step-all data-help-key="layoutFxTodo">${esc(t('main.layoutFxTodo'))}</button>`;
-    $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${allPill}${tabs}${locatorsLink}</div>${section}`;
+    $('layout-panel').innerHTML = `<div class="layout-steps" role="group" data-help-key="layoutSteps">${allPill}${tabs}${locatorsLink}${relationLink}</div>${section}`;
     // Los botones de agregar del paso suben a la fila del título, pegados a la derecha (siguen siendo los mismos botones: el clic se atiende igual).
     const headActions = document.querySelector('#layout-panel .layout-head-actions');
     if (headActions) document.querySelectorAll('#layout-panel [data-main-add]').forEach((btn) => headActions.appendChild(btn));
@@ -4165,6 +4191,178 @@ $('layout-pieces-btn').addEventListener('click', () => {
     applyLegend();
     if (state.draft) { renderSvg(); scheduleScene3d(); }
 });
+// Códigos en Localizadores (paso Localizadores): qué código tiene cada localizador completo, la unidad que se almacena y su capacidad máxima (de Relación Código), y desde aquí se relaciona un código con un localizador
+// completo sin salir del croquis. La relación que se crea es la misma de Relación Código (su sub almacén sale de la zona del localizador). Un localizador con código no se puede eliminar: el servidor rechaza guardar un Layout
+// que lo quite. Solo un localizador COMPLETO y guardado recibe código.
+state.locCodes = new Map(); // 'activo|nivel|espacio|posición' -> { relationId, sku, description, packLevel, packName, packCapacity, mainUom… }
+async function loadLocatorCodes() {
+    state.locCodes = new Map();
+    if (!(state.perms && state.perms.canSeeLocatorCodes) || !state.centerId) return;
+    try {
+        const res = await fetch(layoutUrl('/api/business/layout/locator-codes'), { credentials: 'include' });
+        if (!res.ok) return;
+        const body = await res.json();
+        (body.locators || []).forEach((l) => state.locCodes.set(`${l.spaceId}|${l.level}|${l.slot}|${l.position}`, l));
+    } catch (err) { console.error('Layout: no se pudieron cargar los códigos de los localizadores', err); }
+}
+const locCodeAt = (r) => state.locCodes.get(`${r.spaceId}|${r.level}|${r.slot}|${r.position}`) || null;
+const hasRelationScreen = () => Dashboard.hasScreenGrant('supply-chain', 'sc-area-distribution-center', 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo');
+const relationUrl = (q) => `OpCentroDistRelacionCodigo.html${q ? `?q=${encodeURIComponent(q)}` : ''}`;
+// A qué se filtra Relación Código desde el botón de arriba: un solo localizador a la vista, el Localizador elegido en la franja o nada.
+function relationShortcutQuery() {
+    const rowsShown = [...document.querySelectorAll('#layout-panel table[data-filter-table="layout-localizadores"] tbody tr[data-locator]')].filter((tr) => !tr.hidden && tr.dataset.locator);
+    const full = rowsShown.filter((tr) => tr.querySelector('[data-loc-rel], .layout-loc-lock'));
+    if (full.length === 1) return full[0].dataset.locator;
+    if (rowsShown.length === 1) return rowsShown[0].dataset.locator;
+    const picked = typeof locCode === 'function' ? locCode() : '';
+    return picked ? picked.replace(/\s\+\d+$/, '') : '';
+}
+document.addEventListener('click', (event) => {
+    const link = event.target.closest('[data-rel-shortcut]');
+    if (link) { event.preventDefault(); window.location.href = relationUrl(relationShortcutQuery()); return; }
+    const rel = event.target.closest('[data-loc-rel]');
+    if (rel && !rel.disabled) openRelateDialog(rel.dataset.locRel, rel.dataset.locText);
+});
+let relEl = null;
+let rd = null; // { spaceId, level, slot, position, locator, info, sku, packLevel, box }
+let relSearchTimer = null;
+const relSkuCache = new Map();
+const round1 = (v) => Math.round(v * 10) / 10;
+// La posición (largo × fondo × alto, en cm) del borrador.
+function relPositionBox(spaceId, level, slot, pos) {
+    const s = (state.draft.spaces || []).find((x) => x.id === spaceId);
+    if (!s) return null;
+    const p = LC.positionsOfBay(state.draft, spaceId, level, slot).find((x) => x.num === pos);
+    if (!p || !(p.l > 0) || !(p.w > 0)) return null;
+    const m = LC.bayMeasures(s, level, slot);
+    return { l: round1(p.l * 100), w: round1(p.w * 100), h: round1((p.h > 0 ? Math.min(p.h, m.h) : m.h) * 100) };
+}
+const relLevelsOf = (sku) => (window.PackCalc && sku ? window.PackCalc.levelsOf({ length: sku.length, width: sku.width, height: sku.height, packaging: sku.packaging }).filter((lv) => lv.l > 0 && lv.w > 0 && lv.h > 0) : []);
+const relPackName = (lv) => `${t(`main.pkLevel${lv.level}`)}${lv.name ? ` · ${lv.name}` : ''}`;
+function ensureRelateModal() {
+    if (relEl) return;
+    relEl = document.createElement('div');
+    relEl.className = 'modal-overlay';
+    relEl.id = 'layout-relate-modal';
+    relEl.hidden = true;
+    relEl.innerHTML = `<div class="modal-panel rel-dialog udm-dialog" role="dialog" aria-modal="true" aria-labelledby="lrel-title">
+        <h3 id="lrel-title"></h3>
+        <div class="rel-fld">
+            <label for="lrel-code">${esc(t('main.udmCode'))}</label>
+            <input type="search" id="lrel-code" autocomplete="off" placeholder="${esc(t('main.relSearchPlaceholder'))}" data-help-key="relCodeSearch">
+            <div class="rel-results" id="lrel-results" hidden></div>
+        </div>
+        <div class="rel-muted" id="lrel-hint"></div>
+        <div class="rel-pack-opts" id="lrel-opts"></div>
+        <div class="rel-foot">
+            <span class="rel-muted" id="lrel-msg"></span>
+            <button type="button" class="btn" id="lrel-save">${esc(t('main.udmSave'))}</button>
+            <button type="button" class="btn btn-secondary" id="lrel-close">${esc(t('main.whClose'))}</button>
+        </div>
+    </div>`;
+    document.body.appendChild(relEl);
+    relEl.addEventListener('click', (event) => {
+        if (event.target === relEl || event.target.closest('#lrel-close')) { closeRelateDialog(); return; }
+        if (event.target.closest('#lrel-save')) { saveRelate(); return; }
+        const card = event.target.closest('[data-lrel-pack]');
+        if (card && !card.disabled) { rd.packLevel = Number(card.dataset.lrelPack); renderRelate(); return; }
+        const pick = event.target.closest('[data-lrel-sku]');
+        if (pick) {
+            rd.sku = relSkuCache.get(Number(pick.dataset.lrelSku)) || null;
+            if (rd.sku) { $('lrel-code').value = `${rd.sku.sku} · ${rd.sku.description}`; $('lrel-results').hidden = true; if (!relLevelsOf(rd.sku).some((lv) => lv.level === rd.packLevel)) rd.packLevel = null; renderRelate(); }
+        }
+    });
+    $('lrel-code').addEventListener('input', () => { rd.sku = null; rd.packLevel = null; clearTimeout(relSearchTimer); relSearchTimer = setTimeout(relSearchCodes, 220); renderRelate(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && relEl && !relEl.hidden) closeRelateDialog(); });
+}
+async function relSearchCodes() {
+    const q = $('lrel-code').value.trim();
+    const box = $('lrel-results');
+    if (!q || !rd) { box.hidden = true; return; }
+    try {
+        const res = await fetch(`/api/business/code-relations/skus?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+        if (!res.ok) return;
+        const { skus } = await res.json();
+        skus.forEach((s) => relSkuCache.set(s.id, s));
+        box.innerHTML = skus.length
+            ? skus.map((s) => `<button type="button" class="rel-result" data-lrel-sku="${s.id}"><b>${esc(s.sku)}</b> ${esc(s.description)} <span class="rel-muted">${esc(s.upc)}</span></button>`).join('')
+            : `<span class="rel-muted">${esc(t('main.relNoMatches'))}</span>`;
+        box.hidden = false;
+    } catch (err) { console.error('Layout: la búsqueda de códigos falló', err); }
+}
+function openRelateDialog(key, locator) {
+    if (!state.draft || isDirty()) { Dashboard.showToast(t('main.locGuardaPrimero'), 'warning'); return; }
+    const [spaceId, level, slot, position] = key.split('|');
+    const info = state.locCodes.get(key) || null;
+    ensureRelateModal();
+    rd = { spaceId, level: Number(level), slot: Number(slot), position: Number(position), locator, info, sku: null, packLevel: info && info.packLevel != null ? info.packLevel : null };
+    rd.box = relPositionBox(rd.spaceId, rd.level, rd.slot, rd.position);
+    $('lrel-title').textContent = t(info ? 'main.layoutCambiarTitulo' : 'main.layoutRelacionarTitulo', { loc: locator });
+    $('lrel-code').value = info ? `${info.sku} · ${info.description}` : '';
+    $('lrel-results').hidden = true;
+    relEl.hidden = false;
+    if (info) {
+        // el código que ya tiene: se trae con sus medidas y empaques para ofrecer sus unidades
+        fetch(`/api/business/code-relations/skus?q=${encodeURIComponent(info.sku)}`, { credentials: 'include' }).then((r) => r.json()).then(({ skus }) => {
+            const hit = (skus || []).find((s) => s.id === info.skuItemId);
+            if (hit && rd && rd.info === info) { relSkuCache.set(hit.id, hit); rd.sku = hit; renderRelate(); }
+        }).catch(() => {});
+    } else $('lrel-code').focus();
+    renderRelate();
+}
+function closeRelateDialog() { if (relEl) relEl.hidden = true; rd = null; }
+function renderRelate() {
+    if (!rd) return;
+    const opts = $('lrel-opts');
+    const hint = $('lrel-hint');
+    const save = $('lrel-save');
+    opts.innerHTML = '';
+    $('lrel-msg').textContent = '';
+    save.disabled = true;
+    if (!rd.sku) { hint.textContent = t('main.relPackNoCode'); return; }
+    const levels = relLevelsOf(rd.sku);
+    if (!levels.length) { hint.textContent = t('main.relPackNoData'); return; }
+    if (!rd.box) { hint.textContent = t('main.locGuardaPrimero'); return; }
+    hint.textContent = `${t('main.relPackTitle')} ${t('main.relPackBox', { l: rd.box.l, w: rd.box.w, h: rd.box.h })}`;
+    const fits = levels.map((lv) => ({ lv, f: window.PackCalc.fit(rd.box, lv) }));
+    const best = fits.filter((x) => x.f.capacity > 0).sort((a, b) => b.f.capacity - a.f.capacity || b.lv.level - a.lv.level)[0];
+    opts.innerHTML = fits.map(({ lv, f }) => {
+        const sel = rd.packLevel === lv.level;
+        const unit = t(lv.level === 0 ? 'main.relPackUnitMain' : 'main.relPackUnitPack');
+        const top = f.count ? `<svg viewBox="-1 -1 ${rd.box.l + 2} ${rd.box.w + 2}" class="rel-pack-svg" role="img" aria-label="${esc(t('main.relPackTop'))}"><rect x="0" y="0" width="${rd.box.l}" height="${rd.box.w}" class="pk-pos"/>${f.cells.map((c) => (c.r ? `<circle cx="${c.cx.toFixed(2)}" cy="${c.cy.toFixed(2)}" r="${(c.r - 0.15).toFixed(2)}" class="pk-c lv${Math.min(lv.level, 2)}"/>` : `<rect x="${(c.x + 0.2).toFixed(2)}" y="${(c.y + 0.2).toFixed(2)}" width="${Math.max(c.l - 0.4, 0.1).toFixed(2)}" height="${Math.max(c.w - 0.4, 0.1).toFixed(2)}" class="pk-b lv${Math.min(lv.level, 2)}"/>`)).join('')}</svg>` : '';
+        return `<button type="button" class="rel-pack-card${sel ? ' sel' : ''}" data-lrel-pack="${lv.level}"${f.count ? '' : ' disabled'}>
+            <span class="rel-pack-h"><b>${esc(relPackName(lv))}</b>${best && best.lv.level === lv.level ? `<span class="rel-tag rel-tag-ok">${esc(t('main.relPackSuggested'))}</span>` : ''}</span>
+            <span class="rel-pack-m">${esc(t(lv.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect'))} · ${esc(lv.shape === 'cilindrica' ? `Ø ${lv.l}` : `${lv.l} × ${lv.w}`)} × ${esc(lv.h)} cm</span>
+            ${top}
+            <span class="rel-pack-n">${f.count ? `<b>${f.capacity}</b><span class="rel-muted">${esc(t('main.relPackPieces'))}</span>` : `<span class="rel-pack-warn">${esc(t('main.relPackNoFit'))}</span>`}</span>
+            ${f.count ? `<span class="rel-pack-d">${esc(t('main.relPackFitsN', { n: f.count, u: unit }))}. ${esc(t('main.relPackLayers', { k: f.layers, m: f.perLayer }))}. ${esc(t('main.relPackLeft', { h: f.leftH, d: f.leftD }))}.</span>` : ''}
+        </button>`;
+    }).join('');
+    const chosen = fits.find((x) => x.lv.level === rd.packLevel);
+    save.disabled = !(chosen && chosen.f.count);
+}
+async function saveRelate() {
+    if (!rd || !rd.sku || rd.packLevel === null) return;
+    $('lrel-save').disabled = true;
+    try {
+        const res = await fetch(layoutUrl('/api/business/layout/locator-code'), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ skuItemId: rd.sku.id, spaceId: rd.spaceId, level: rd.level, slot: rd.slot, position: rd.position, packLevel: rd.packLevel, relationId: rd.info ? rd.info.relationId : undefined }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) { Dashboard.showToast(json.message || Dashboard.t('admin.saveError'), res.status === 403 ? 'warning' : 'error'); $('lrel-save').disabled = false; return; }
+        Dashboard.showToast(t('main.layoutRelGuardado'), 'success');
+        closeRelateDialog();
+        await loadLocatorCodes();
+        await loadPieces();
+        renderPanel();
+        refreshLive();
+    } catch (err) {
+        console.error('Layout: no se pudo relacionar el código', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        $('lrel-save').disabled = false;
+    }
+}
 // Icono Girar el croquis: da un cuarto de vuelta a la derecha cada vez (0°, 90°, 180°, 270°); se recuerda en este navegador y la hoja que se descarga sale con ese giro.
 const ROTATION_KEY = 'sgn_layout_rotation';
 function updateRotateBtn() {
@@ -4277,6 +4475,7 @@ async function loadLayout(opts = {}) {
         } catch (err) { console.error('Layout: no se pudo cargar el plano', err); }
     }
     await loadPieces();
+    await loadLocatorCodes();
     updatePiecesBtn();
     state.loaded = true;
     if (state.mode !== 'edit') showAllLayers(); // en «Ver» se ve todo el Layout al entrar
@@ -6265,6 +6464,13 @@ async function saveLayout() {
         if (state.renumber) body.renumberCodes = true;
         const res = await fetch('/api/business/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
         const payload = await res.json().catch(() => ({}));
+        if (res.status === 409 && payload.code === 'LOCATOR_WITH_CODE') {
+            // Un localizador con código no se elimina: se dice cuál y qué código tiene, y el borrador se conserva para que la persona lo corrija.
+            const gone = Array.isArray(payload.locators) ? payload.locators : [];
+            const list = gone.slice(0, 3).map((x) => t('main.locConCodigoItem', { loc: x.locator, sku: x.sku })).join(', ') + (gone.length > 3 ? t('main.locConCodigoMas', { n: String(gone.length - 3) }) : '');
+            Dashboard.showToast(t(gone.length === 1 ? 'main.locConCodigoUno' : 'main.locConCodigoVarios', { list }), 'warning');
+            return false;
+        }
         if (res.status === 409) { Dashboard.showToast(t('main.layoutConflicto'), 'warning'); await loadLayout(); return false; }
         if (res.status === 403) { Dashboard.showToast(t('main.layoutSinPermiso'), 'warning'); return false; }
         if (res.status === 400) { Dashboard.showToast(`${t('main.layoutDatosInvalidos')} ${(payload.errors && payload.errors[0]) || ''}`.trim(), 'warning'); return false; }
