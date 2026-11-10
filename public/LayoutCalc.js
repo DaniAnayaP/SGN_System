@@ -1770,6 +1770,11 @@
                     out.push({ ...base, kind: 'out', zoneId: z.id, zoneName: z.name, sig: geo + JSON.stringify([z.id, pts]), message: `La huella ${f.code} no cabe dentro de su zona ${z.name}: cambia su lugar o sus medidas, o agranda la zona.` });
                 }
             }
+            // el alto de su zona (si lo trae) también cuenta: una huella no puede ser más alta que la zona donde está
+            if (z && z.h > 0 && f.h > z.h + 0.001) {
+                out.push({ ...base, kind: 'tall', by: 'zone', h: f.h, maxH: z.h, zoneName: z.name, sig: geo + JSON.stringify(['z', z.h]), message: `La huella ${f.code} mide ${f.h} m de alto y su zona ${z.name} solo ${z.h} m.` });
+                return;
+            }
             // el piso de su zona cuenta: una huella de 3 m sobre un piso a +1.2 m llega a 4.2 m
             const lvl = round2(floorLevelAt(layout, f.x + f.l / 2, f.y + f.d / 2));
             const top = round2(f.h + lvl);
@@ -2173,6 +2178,16 @@
         if (Object.keys(floors).length) base.safetyNext = cleanSafetyNext(floors); else delete base.safetyNext;
         return assignSafetyCodes(base);
     }
+    // La altura libre de una zona: lo que queda entre su piso (los niveles del paso Pisos) y el techo de la nave (que sigue las alturas de las esquinas del contorno), medido en cada una de sus esquinas y en su centro.
+    // min = el punto más bajo (hasta ahí puede llegar la altura de la zona); avg = el promedio. null si la zona todavía no tiene forma o la nave no tiene techo.
+    function zoneClearHeights(layout, z) {
+        const pts = z ? zonePoints(z) : [];
+        if (!layout || !Array.isArray(layout.vertices) || layout.vertices.length < 3 || !pts || pts.length < 3) return null;
+        const samples = [...pts, polygonCentroid(pts)];
+        const hs = samples.map((p) => naveHeightAt(layout, p[0], p[1]) - floorLevelAt(layout, p[0], p[1])).filter((v) => Number.isFinite(v) && v > 0);
+        if (!hs.length) return null;
+        return { min: round2(Math.min(...hs)), avg: round2(hs.reduce((a, b) => a + b, 0) / hs.length) };
+    }
     // La altura de la nave en un punto: la del contorno en su punto más cercano (entre las dos esquinas de ese lado se reparte de una a otra).
     function naveHeightAt(layout, x, y) {
         const v = (layout && layout.vertices) || [];
@@ -2384,6 +2399,7 @@
             const target = { kind: 'footprint', id: v.id };
             if (v.kind === 'nozone') out.push({ level: 'fp', step: 'espacios', kind: 'nozone', id: v.id, target, vars: { code: v.code } });
             else if (v.kind === 'out') out.push({ level: 'fp', step: 'espacios', kind: 'out', id: v.id, target, vars: { code: v.code, zone: v.zoneName || '' } });
+            else if (v.kind === 'tall' && v.by === 'zone') out.push({ level: 'fp', step: 'espacios', kind: 'tall_zone', id: v.id, target, vars: { code: v.code, h: String(round2(v.h)), maxH: String(round2(v.maxH)), zone: v.zoneName || '' } });
             else if (v.kind === 'tall') {
                 const lvl = v.level !== undefined;
                 out.push({ level: 'fp', step: 'espacios', kind: lvl ? 'tall_lvl' : 'tall', id: v.id, target, vars: { code: v.code, h: String(round2(v.h)), maxH: String(round2(v.maxH)), ...(lvl ? { level: `${v.level > 0 ? '+' : ''}${round2(v.level)}`, top: String(round2(v.top)) } : {}) } });
@@ -2971,6 +2987,8 @@
             // type '' = zona sin asignar todavía; una zona de antes sin tipo se queda como seca, como siempre.
             const type = z && z.type === '' ? '' : oneOf(z && z.type, ZONE_TYPES, 'dry');
             const planM2 = z && z.planM2 != null && z.planM2 !== '' ? meters(z.planM2, label) : 0;
+            // Alto de la zona (opcional): su altura libre desde su piso; vacío = el techo de la nave en ese lugar. No puede pasar del techo (se revisa más abajo, cuando ya están los pisos).
+            const zoneH = z && z.h != null && z.h !== '' ? meters(z.h, label) : 0;
             const use = oneOf(z && z.use, ZONE_USES, '');
             const fmt = sanitizeFmt(z && z.fmt);
             // Categorías de la zona: solo se guardan si hay (una zona de antes sin categorías se guarda exactamente igual).
@@ -2983,7 +3001,7 @@
                 return { id: idOf(c && c.id, catIds, cl), name: text(c && c.name, cl, true), desc: desc.slice(0, LIMITS.categoryText), icon: oneOf(c && c.icon, CATEGORY_ICONS, 'tag'), color };
             });
             // El nivel del piso ya no se guarda en la zona: vive en el paso Pisos (los de antes pasaron solos a un piso, ver migrateFloors).
-            const extra = { ...(use ? { use } : {}), ...(planM2 > 0 ? { planM2 } : {}), ...(fmt ? { fmt } : {}), ...(categories.length ? { categories } : {}) };
+            const extra = { ...(use ? { use } : {}), ...(planM2 > 0 ? { planM2 } : {}), ...(zoneH > 0 ? { h: zoneH } : {}), ...(fmt ? { fmt } : {}), ...(categories.length ? { categories } : {}) };
             const active = !(z && z.active === false);
             if (z && z.pts != null) {
                 // Zona de cualquier forma: sus esquinas son la verdad; x, y, largo y ancho son el recuadro que la envuelve.
@@ -3059,6 +3077,12 @@
             const top = Math.max(Number(ff.lvl) || 0, ff.lvl2 != null ? Number(ff.lvl2) : 0);
             const lim = naveHeightAt(out, ff.x + ff.l / 2, ff.y + ff.w / 2);
             if (lim > 0 && top >= lim - 1e-9) errors.push(`${ff.code} ${ff.name}: su nivel (a ${top > 0 ? '+' : ''}${top} m) queda tan arriba como el techo de la nave (${round2(lim)} m): bájalo`);
+        });
+        // El alto de una zona (si lo trae) no puede pasar del techo de la nave: desde su piso, en cada una de sus esquinas y en su centro.
+        out.zones.forEach((z) => {
+            if (!(z.h > 0) || z.active === false) return;
+            const clear = zoneClearHeights(out, z);
+            if (clear && z.h > clear.min + 0.005) errors.push(`${z.name}: su alto (${z.h} m) pasa del techo de la nave (${clear.min} m en su punto más bajo)`);
         });
         // Dos pisos no se pueden encimar (que se toquen en la orilla sí): así cada punto de la nave tiene un solo nivel.
         floorOverlaps(out).forEach(({ a, b, area }) => errors.push(`Los pisos ${a.code} ${a.name} y ${b.code} ${b.name} se enciman (${area} m²): cada uno tiene que quedar aparte`));
@@ -3813,7 +3837,7 @@
     return {
         sensorZoneIds,
         storageLocations, huellasThatFit, capacityOf,
-        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
+        ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, zoneClearHeights, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,

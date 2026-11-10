@@ -1361,6 +1361,12 @@ function setSafetyType(row, value) {
         if (row.y2 === undefined) row.y2 = round2(Number(row.y) || 0);
     } else { delete row.x2; delete row.y2; }
 }
+// El volumen de una zona: su superficie por su alto (el suyo o, vacío, el promedio de lo que queda bajo el techo de la nave en su lugar).
+function zoneVolText(z) {
+    const clear = state.draft ? LC.zoneClearHeights(state.draft, z) : null;
+    const h = z.h > 0 ? z.h : (clear ? clear.avg : 0);
+    return h > 0 ? `${fmt(LC.zoneArea(z) * h)} m³` : '';
+}
 function stepHtml(step) {
     if (step === 'localizadores') return locatorsStepHtml();
     if (step === 'relacion') return relationStepHtml();
@@ -1466,15 +1472,18 @@ function stepHtml(step) {
             const catButton = state.perms && state.perms.canEditCategories
                 ? `<button type="button" class="btn btn-secondary layout-toggle layout-cats${state.catsOpen === z.id ? ' on' : ''}" data-catszone="${esc(z.id)}" data-help-key="layoutZoneCats" aria-label="${esc(t('main.layoutCatDe').replace('{name}', z.name))}"><i class="bx bx-purchase-tag-alt" aria-hidden="true"></i>${catCount ? `<span class="layout-cats-n">${catCount}</span>` : ''}</button>`
                 : '';
+            // Alto de la zona (opcional): vacío = el techo de la nave en ese lugar (se ve de sugerencia); su volumen sale de su superficie por esa altura.
+            const clearH = LC.zoneClearHeights(d, z);
+            const hBox = `<td><input type="number" step="0.05" min="0" data-l="zones" data-i="${i}" data-k="h" data-help-key="layoutZoneAlto" placeholder="${clearH ? clearH.min : ''}" value="${z.h > 0 ? z.h : ''}"${dis ? ' disabled' : ''}></td>`;
             const planBox = `<td><input type="number" step="0.01" min="0" data-l="zones" data-i="${i}" data-k="planM2" data-help-key="layoutZonePlanM2" value="${z.planM2 > 0 ? z.planM2 : ''}"${dis ? ' disabled' : ''}></td>`;
             // Los pisos que toca la zona (los niveles viven en el paso Pisos; aquí solo se lee): una zona puede tocar varios sin partirse.
             const floorsCell = `<td class="layout-calc"><span data-zone-floors="${i}" data-help-key="layoutPisosQueToca">${esc(LC.floorsOfZone(d, z).map((f) => f.code).join(' · ') || '—')}</span></td>`;
             // Uso de la zona (aparte del tipo): almacenamiento, operaciones o instalaciones. Se puede dejar sin definir.
             const useOptions = `<option value=""${z.use ? '' : ' selected'}>${esc(t('main.layoutUsoSinDefinir'))}</option>${optionsHtml('use', LC.ZONE_USES, z.use)}`;
             const useBox = `<td><select data-l="zones" data-i="${i}" data-k="use" data-help-key="layoutZoneUse"${dis ? ' disabled' : ''}>${useOptions}</select></td>`;
-            return `<tr class="${z.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-zone-code="${i}">${esc(z.code || '')}</b></td>${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${useBox}${position}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${floorsCell}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + catButton + shapeButton) : removeCell('zones', i, dis, fmtButton + catButton + shapeButton)}</tr>`;
+            return `<tr class="${z.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-zone-code="${i}">${esc(z.code || '')}</b></td>${cellText('zones', i, 'name', z.name, dis)}${cellSelect('zones', i, 'type', typeOptions, dis)}${useBox}${position}${hBox}<td class="layout-calc"><span data-zone-area="${i}">${fmt(LC.zoneArea(z))} m²</span><div class="layout-muted" data-zone-vol="${i}">${zoneVolText(z)}</div><div data-zone-chips="${i}">${zoneChipsHtml(z)}</div></td>${planBox}${floorsCell}${saved ? savedRowButtons('zones', i, z.active, dis, fmtButton + catButton + shapeButton) : removeCell('zones', i, dis, fmtButton + catButton + shapeButton)}</tr>`;
         });
-        return `${table(['main.layoutCodigoZona', 'main.layoutNombre', 'main.layoutTipo', 'main.layoutUsoZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutSuperficie', 'main.layoutPlanM2', 'main.layoutPisosQueToca', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis, true)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis, true)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
+        return `${table(['main.layoutCodigoZona', 'main.layoutNombre', 'main.layoutTipo', 'main.layoutUsoZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutSuperficie', 'main.layoutPlanM2', 'main.layoutPisosQueToca', ''], rows, 'layout-zonas')}<div class="layout-sidesbar">${addButton('zones', 'main.layoutAgregarZona', dis, true)}${addButton('zonesFree', 'main.layoutAgregarZonaLibre', dis, true)}</div>${zoneSidesPanelHtml(dis)}${zoneCatsPanelHtml(dis)}`;
     }
     if (step === 'pisos') {
         // Un piso es un rectángulo del croquis más alto o más bajo que el piso de la nave (plataforma o foso), aparte de las zonas: una zona puede tocar varios pisos. Nivel del piso (0 = a nivel; negativo = foso). Las rampas que unen
@@ -4164,6 +4173,8 @@ function refreshLive() {
     state.draft.zones.forEach((z, i) => {
         const c = document.querySelector(`[data-zone-area="${i}"]`);
         if (c) c.textContent = `${fmt(LC.zoneArea(z))} m²`;
+        const vol = document.querySelector(`[data-zone-vol="${i}"]`);
+        if (vol) vol.textContent = zoneVolText(z);
         const chips = document.querySelector(`[data-zone-chips="${i}"]`);
         if (chips) chips.innerHTML = zoneChipsHtml(z);
     });
@@ -5002,6 +5013,8 @@ function onEdit(event) {
             if (raw !== '' && Number.isFinite(n)) row[key] = n; else delete row[key];
         } else if (key === 'planM2') {
             if (value > 0) row.planM2 = value; else delete row.planM2;
+        } else if (list === 'zones' && key === 'h') {
+            if (value > 0) row.h = value; else delete row.h; // vacío = el techo de la nave en ese lugar
         } else if (list === 'footprints' && key === 'name') {
             if (String(value).trim()) row.name = String(value); else delete row.name; // sin nombre = la huella se guarda sin ese campo
         } else if (key === 'use') {
@@ -6462,7 +6475,7 @@ async function saveLayout() {
         const v = fresh[0];
         showStep('espacios');
         renderPanel();
-        Dashboard.showToast(t(`main.layoutVio_${v.kind}${v.kind === 'tall' && v.level ? 'Level' : ''}`, { code: v.code, zone: v.zoneName || '', h: v.h, maxH: v.maxH, level: v.level, top: v.top }), 'warning');
+        Dashboard.showToast(t(`main.layoutVio_${v.kind}${v.kind === 'tall' ? (v.by === 'zone' ? 'Zone' : (v.level ? 'Level' : '')) : ''}`, { code: v.code, zone: v.zoneName || '', h: v.h, maxH: v.maxH, level: v.level, top: v.top }), 'warning');
         const at = state.draft.footprints.findIndex((f) => f.id === v.id);
         const box = document.querySelector(`[data-l="footprints"][data-i="${at}"][data-k="${v.kind === 'tall' ? 'h' : 'x'}"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }

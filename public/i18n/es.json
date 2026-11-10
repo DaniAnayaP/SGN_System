@@ -1641,6 +1641,7 @@
     "layoutSale_fp_nozone": "La huella {code} queda fuera de toda zona.",
     "layoutSale_fp_out": "La huella {code} no cabe dentro de su zona {zone}.",
     "layoutSale_fp_tall": "La huella {code} mide {h} m de alto y la nave solo {maxH} m.",
+    "layoutSale_fp_tall_zone": "La huella {code} mide {h} m de alto y su zona {zone} solo {maxH} m.",
     "layoutSale_fp_tall_lvl": "La huella {code} mide {h} m de alto sobre un piso a {level} m (llega a {top} m) y la nave solo {maxH} m.",
     "layoutSale_space_out": "El activo {code} se sale de su huella {fcode}.",
     "layoutSale_space_sum": "Los activos de la huella {fcode} suman {sum} m y la huella mide {len} m.",
@@ -1750,6 +1751,7 @@
     "layoutVio_nozone": "La huella {code} queda fuera de toda zona: acomódala dentro de una zona para poder guardar.",
     "layoutVio_out": "La huella {code} no cabe dentro de su zona {zone}: cambia su lugar o sus medidas, o agranda la zona, para poder guardar.",
     "layoutVio_tallLevel": "La huella {code} mide {h} m de alto sobre un piso a {level} m (llega a {top} m) y la nave solo {maxH} m: baja su alto para poder guardar.",
+    "layoutVio_tallZone": "La huella {code} mide {h} m de alto y su zona {zone} solo {maxH} m: baja el alto de la huella o sube el de la zona para poder guardar.",
     "layoutVio_tall": "La huella {code} mide {h} m de alto y la nave solo {maxH} m: baja su alto para poder guardar.",
     "layoutAltura": "Altura libre (m)",
     "layoutAlturaEsquina": "Altura (m)",
@@ -5932,6 +5934,10 @@
     "layoutFmtReset": {
       "what": "Quita el formato propio de esta zona: vuelve a verse con el color de su tipo.",
       "example": "la zona ya no necesita color propio y vuelve a verse como las demás secas."
+    },
+    "layoutZoneAlto": {
+      "what": "El alto de la zona: cuánto mide de alto desde su piso. Es opcional: vacío vale lo que mide el techo de la nave en ese lugar (el número gris de sugerencia es el punto más bajo del techo sobre la zona). El techo sigue la altura de pared de cada esquina del contorno, así que una zona no puede ser más alta que el techo ahí. Lo que va adentro (una huella, y los activos de la huella) no puede pasar del alto de su zona. Con el alto se calcula el volumen de la zona (superficie por alto).",
+      "example": "la Zona 1 está en la parte baja del techo (2.5 m): le pones 2.4 y una huella de 3 m de alto dentro de ella ya no se deja guardar."
     },
     "layoutZonePlanM2": {
       "what": "Los m² que dice tu plano para este cuarto. El sistema compara lo dibujado contra ese número y avisa si no coinciden (más de 3 %). Es opcional.",

@@ -1641,6 +1641,7 @@
     "layoutSale_fp_nozone": "Footprint {code} is outside every zone.",
     "layoutSale_fp_out": "Footprint {code} does not fit inside its zone {zone}.",
     "layoutSale_fp_tall": "Footprint {code} is {h} m high and the warehouse only {maxH} m.",
+    "layoutSale_fp_tall_zone": "Footprint {code} is {h} m high and its zone {zone} only {maxH} m.",
     "layoutSale_fp_tall_lvl": "Footprint {code} is {h} m high on a floor at {level} m (it reaches {top} m) and the warehouse only {maxH} m.",
     "layoutSale_space_out": "Asset {code} goes outside its footprint {fcode}.",
     "layoutSale_space_sum": "The assets of footprint {fcode} add up to {sum} m and the footprint is {len} m.",
@@ -1750,6 +1751,7 @@
     "layoutVio_nozone": "Footprint {code} is outside every zone: place it inside a zone to be able to save.",
     "layoutVio_out": "Footprint {code} does not fit inside its zone {zone}: change its place or its size, or make the zone bigger, to be able to save.",
     "layoutVio_tallLevel": "The footprint {code} is {h} m high on a floor at {level} m (reaches {top} m) and the building is only {maxH} m: lower its height to save.",
+    "layoutVio_tallZone": "Footprint {code} is {h} m tall and its zone {zone} only {maxH} m: lower the footprint height or raise the zone height to be able to save.",
     "layoutVio_tall": "Footprint {code} is {h} m tall and the warehouse only {maxH} m: lower its height to be able to save.",
     "layoutAltura": "Clear height (m)",
     "layoutAlturaEsquina": "Height (m)",
@@ -5933,6 +5935,10 @@
     "layoutFmtReset": {
       "what": "Removes this zone's own format: it goes back to its type color.",
       "example": "the zone no longer needs its own color and looks like the other dry zones again."
+    },
+    "layoutZoneAlto": {
+      "what": "The height of the zone: how tall it is from its floor. It is optional: empty means what the warehouse roof measures at that place (the gray suggestion is the lowest point of the roof over the zone). The roof follows the wall height at each corner of the outline, so a zone cannot be taller than the roof there. What goes inside (a footprint, and its assets) cannot pass the height of its zone. The height gives the zone volume (area times height).",
+      "example": "Zone 1 sits under the low part of the roof (2.5 m): you set 2.4 and a 3 m tall footprint inside it can no longer be saved."
     },
     "layoutZonePlanM2": {
       "what": "The m² your plan states for this room. The system compares what you drew against that number and warns if they differ (more than 3%). It is optional.",
