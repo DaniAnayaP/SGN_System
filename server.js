@@ -185,6 +185,7 @@ const {
     updateArticleCategory,
     CODE_RELATION_PATCHABLE_FIELDS,
     SKU_DIST_PATCHABLE_FIELDS,
+    SKU_DIST_STORAGE_TYPES,
     listSkuDistribution,
     listSkuDistributionBySku,
     getSkuDistributionById,
@@ -6130,16 +6131,22 @@ const PACK_ORDINALS = ['Material principal', 'Empaque primario', 'Empaque secund
 const packLevelLabel = (level, lv) => `${PACK_ORDINALS[level] || `Empaque ${level}`}${lv && lv.name ? ` · ${lv.name}` : ''}`;
 // De los renglones de un código (de menor a mayor nivel) arma lo que lee PackCalc.levelsOf: { main: { shape, lay, name, weightG }, levels: [{ name, shape, l, w, h, pieces, lay, weightG }] }.
 // pieces = la equivalencia en unidades principales (cuántas tabletas trae): contiene × la equivalencia del nivel anterior; las medidas y el peso NO se calculan, cada nivel trae los suyos.
+// Los tipos de almacenamiento de una presentación: NULL (sin elegir) = el de siempre según su nivel; '' = ninguno a propósito.
+function skuDistTypesOf(row) {
+    if (!row) return [];
+    if (row.storage_types === null || row.storage_types === undefined) return [row.level === 0 ? 'principal' : 'empaque'];
+    return SKU_DIST_STORAGE_TYPES.filter((k) => String(row.storage_types).split(',').includes(k));
+}
 function packagingFromDistribution(rows) {
     if (!rows || !rows.length) return null;
     const first = rows[0];
     const r0 = rows.find((r) => r.level === 0);
-    const main = { shape: r0 && r0.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', lay: !!(r0 && r0.can_lay), name: first.sku_uom || '', weightG: Math.round((Number(first.sku_weight) || 0) * 1000 * 10000) / 10000 };
+    const main = { shape: r0 && r0.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', lay: !!(r0 && r0.can_lay), types: skuDistTypesOf(r0), name: first.sku_uom || '', weightG: Math.round((Number(first.sku_weight) || 0) * 1000 * 10000) / 10000 };
     let eq = 1;
     const levels = [];
     rows.filter((r) => r.level >= 1).sort((a, z) => a.level - z.level).forEach((r) => {
         eq *= Math.max(1, Number(r.contains) || 1);
-        levels[r.level - 1] = { name: `${r.uom || ''}${r.contains ? ` con ${r.contains}` : ''}`.trim(), shape: r.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: r.length, w: r.shape === 'cilindrica' ? r.length : r.width, h: r.height, pieces: eq, lay: !!r.can_lay, weightG: r.weight_g, uom: r.uom || '', contains: r.contains };
+        levels[r.level - 1] = { name: `${r.uom || ''}${r.contains ? ` con ${r.contains}` : ''}`.trim(), shape: r.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: r.length, w: r.shape === 'cilindrica' ? r.length : r.width, h: r.height, pieces: eq, lay: !!r.can_lay, weightG: r.weight_g, uom: r.uom || '', contains: r.contains, types: skuDistTypesOf(r) };
     });
     for (let i = 0; i < levels.length; i += 1) if (!levels[i]) levels[i] = { name: '', shape: 'rectangular', l: 0, w: 0, h: 0, pieces: 1, lay: false, weightG: 0 };
     return { main, levels };
@@ -9845,6 +9852,8 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     if (state.packLevel != null) {
         const lv = PackCalc.levelsOf({ length: skuRow.length, width: skuRow.width, height: skuRow.height, packaging: ctx.packagingOf(skuRow.id) })[state.packLevel];
         if (!lv || !(lv.l > 0 && lv.w > 0 && lv.h > 0)) return bad('Ese empaque no está capturado en Alta Artículos o le faltan las medidas. Captúralo primero en el código.');
+        // solo se ofrecen (y se aceptan) las presentaciones con algún tipo de almacenamiento habilitado en Unidad de Medida por Distribución; una relación que ya la tenía y no la cambia se respeta
+        if (!PackCalc.enabled(lv) && !(existing && existing.pack_level === state.packLevel && existing.sku_item_id === state.skuItemId)) return bad('Esa presentación no tiene ningún tipo de almacenamiento habilitado. Habilítalo primero en Unidad de Medida por Distribución.');
     }
     if (!CODE_RELATION_CLASSES[state.classification || 'activo']) return bad('La clasificación no es una de las del catálogo (Producto Activo, Cuarentena, Aclaración o en Consigna).');
     if (!state.costCenterId || !ctx.costCenters.has(state.costCenterId)) return bad('Elige un centro de costos.');
@@ -10181,7 +10190,7 @@ app.delete('/api/business/code-relations/:id', requireAuth, requireCostCenter, (
 // cada uno con su unidad del catálogo Nuestras Unidad Medida, cuántas del nivel anterior contiene y SUS PROPIAS medidas (cm) y peso (g). «Equivale a» (en unidades principales) sale de multiplicar lo que contiene cada nivel;
 // las medidas y el peso nunca se calculan. De aquí leen Relación Código («Se acomoda») y el Layout (piezas que caben).
 const UDM_DIST_TABLE_KEY = 'udm-distribucion';
-const UDM_DIST_COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar' };
+const UDM_DIST_COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo' };
 const UDM_DIST_MAX_EXTRA = 6; // empaques además del material principal
 const round4 = (v) => Math.round(v * 10000) / 10000;
 function mapSkuDistribution(row, pendingByRecord, companyName, equivalent) {
@@ -10206,6 +10215,7 @@ function mapSkuDistribution(row, pendingByRecord, companyName, equivalent) {
         height: principal ? (row.sku_height || 0) : row.height,
         weightG: principal ? round4((Number(row.sku_weight) || 0) * 1000) : row.weight_g,
         canLay: !!row.can_lay,
+        storageTypes: skuDistTypesOf(row),
         fromArticle: principal, // sus medidas y su peso se capturan en Alta Artículos
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({ companyName, area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Unidad de Medida por Distribución', centroCostos: '', createdAt: row.created_at }),
@@ -10230,6 +10240,12 @@ function normalizeSkuDistInput(body) {
     if (Object.prototype.hasOwnProperty.call(body, 'uom')) { if (body.uom != null && (typeof body.uom !== 'string' || body.uom.length > 60)) return { error: 'La unidad de medida no es válida.' }; out.uom = (body.uom || '').trim(); }
     if (Object.prototype.hasOwnProperty.call(body, 'shape')) out.shape = body.shape;
     if (Object.prototype.hasOwnProperty.call(body, 'canLay')) out.canLay = !!body.canLay;
+    // Tipo de almacenamiento: una, varias o todas las opciones de la lista (o ninguna); se guarda en el orden de la lista
+    if (Object.prototype.hasOwnProperty.call(body, 'storageTypes')) {
+        const picked = (Array.isArray(body.storageTypes) ? body.storageTypes : String(body.storageTypes || '').split(',')).map((k) => String(k).trim()).filter(Boolean);
+        if (!picked.every((k) => SKU_DIST_STORAGE_TYPES.includes(k))) return { error: 'Tipo de almacenamiento: elige opciones de la lista.' };
+        out.storageTypes = SKU_DIST_STORAGE_TYPES.filter((k) => picked.includes(k)).join(',');
+    }
     for (const key of ['contains', 'length', 'width', 'height', 'weightG']) {
         if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
         const n = num(body[key]);
@@ -10254,7 +10270,8 @@ function validateSkuDistState(req, state, existing) {
 }
 const skuDistLabel = (row) => `#${row.id}`;
 function skuDistSanitizers() {
-    return { canLay: (v) => (v ? 'Sí' : 'No'), shape: (v) => (v === 'cilindrica' ? 'Cilíndrica' : 'Rectangular') };
+    const typeNames = { principal: 'Por UDM producto principal', original: 'Por UDM original', almacenamiento: 'Por UDM de almacenamiento', compra: 'Por UDM de compra', empaque: 'Por UDM de empaque', pallet: 'Por UDM de pallets' };
+    return { canLay: (v) => (v ? 'Sí' : 'No'), shape: (v) => (v === 'cilindrica' ? 'Cilíndrica' : 'Rectangular'), storageTypes: (v) => (v === null || v === undefined || v === '' ? 'Ninguno' : String(v).split(',').map((k) => typeNames[k] || k).join(', ')) };
 }
 
 app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
@@ -10288,7 +10305,7 @@ app.post('/api/business/sku-distribution', requireAuth, requireCostCenter, (req,
     if (state.shape === 'cilindrica') state.width = state.length;
     if (grants) {
         const missing = Object.entries(UDM_DIST_COLS)
-            .filter(([key]) => (level === 0 ? ['shape', 'canLay'].includes(key) : true))
+            .filter(([key]) => (level === 0 ? ['shape', 'canLay', 'storageTypes'].includes(key) : true))
             .filter(([key]) => { const v = state[key]; return !(v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v)); })
             .filter(([, colKey]) => !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, UDM_DIST_TABLE_KEY, colKey)))
             .map(([key]) => SKU_DIST_PATCHABLE_FIELDS[key].fieldKey);
@@ -10301,7 +10318,7 @@ app.post('/api/business/sku-distribution', requireAuth, requireCostCenter, (req,
     const san = skuDistSanitizers();
     Object.entries(SKU_DIST_PATCHABLE_FIELDS).forEach(([key, { fieldKey }]) => {
         const v = state[key];
-        if (v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v) || (level === 0 && !['shape', 'canLay'].includes(key))) return;
+        if (v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v) || (level === 0 && !['shape', 'canLay', 'storageTypes'].includes(key))) return;
         logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: row.id, recordLabel: skuDistLabel(row), action: 'update', fieldKey, oldValue: '', newValue: san[key] ? san[key](v) : String(v), changedBy: changedByLabel(req) });
     });
     notifyButtonAction(req, UDM_DIST_TABLE_KEY, 'create', `${padSku(row.sku_number)} · ${PACK_ORDINALS[row.level] || ''}`);
@@ -10320,7 +10337,7 @@ app.patch('/api/business/sku-distribution/:id', requireAuth, requireCostCenter, 
     const norm = normalizeSkuDistInput(raw);
     if (norm.error) return res.status(400).json({ message: norm.error });
     const principal = existing.level === 0;
-    if (principal && Object.keys(norm.values).some((k) => !['shape', 'canLay'].includes(k))) return res.status(400).json({ message: 'Las medidas y el peso del material principal se capturan en Alta Artículos. Aquí solo su forma y si se puede acostar.' });
+    if (principal && Object.keys(norm.values).some((k) => !['shape', 'canLay', 'storageTypes'].includes(k))) return res.status(400).json({ message: 'Las medidas y el peso del material principal se capturan en Alta Artículos. Aquí solo su forma y si se puede acostar.' });
     const patch = { ...norm.values };
     const state = { level: existing.level, uom: existing.uom, contains: existing.contains, shape: existing.shape, length: existing.length, width: existing.width, height: existing.height, weightG: existing.weight_g, canLay: !!existing.can_lay, ...patch };
     if (state.shape === 'cilindrica') { state.width = state.length; if ('length' in patch || 'shape' in patch) patch.width = state.length; }

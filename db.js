@@ -2467,6 +2467,9 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_sku_distribution_client ON sku_distribution_units (client_id, is_test_data);
 `);
+// Tipo de almacenamiento de cada presentación (una, varias o todas): principal | original | almacenamiento | compra | empaque | pallet, separadas por coma y en ese orden. NULL = todavía sin elegir (vale lo de siempre:
+// el material principal es «principal» y los empaques son «empaque»); '' = ninguno a propósito (esa presentación no se ofrece al relacionar un código con una posición).
+if (!db.prepare('PRAGMA table_info(sku_distribution_units)').all().some((c) => c.name === 'storage_types')) db.exec('ALTER TABLE sku_distribution_units ADD COLUMN storage_types TEXT');
 
 // public_token: set once (see maybeIssuePublicToken in server.js) the
 // instant an artículo's own 24 fields are all filled in -- the opaque id a
@@ -6384,7 +6387,9 @@ const SKU_DIST_PATCHABLE_FIELDS = {
     height: { column: 'height', fieldKey: 'main.colUdmDAlto' },
     weightG: { column: 'weight_g', fieldKey: 'main.colUdmDPeso' },
     canLay: { column: 'can_lay', fieldKey: 'main.colUdmDAcostar' },
+    storageTypes: { column: 'storage_types', fieldKey: 'main.colUdmDTipo' },
 };
+const SKU_DIST_STORAGE_TYPES = ['principal', 'original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
 const SKU_DIST_SELECT = `SELECT d.*, s.record_number AS sku_number, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.custom_description AS sku_custom,
         s.main_uom AS sku_uom, s.length AS sku_length, s.width AS sku_width, s.height AS sku_height, s.article_weight AS sku_weight
     FROM sku_distribution_units d JOIN sku_items s ON s.id = d.sku_item_id`;
@@ -6399,11 +6404,12 @@ function getSkuDistributionById(id, clientId, forTestAccount = false) {
 }
 function createSkuDistribution({ clientId, isTestData = false, values }) {
     const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM sku_distribution_units WHERE client_id = ? AND is_test_data = ?').get(clientId, isTestData ? 1 : 0).n;
-    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, is_test_data)
-        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @isTestData)`).run({
+    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, storage_types, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @storageTypes, @isTestData)`).run({
         clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuItemId: values.skuItemId, level: values.level,
         uom: values.uom || '', contains: values.contains ?? null, shape: values.shape === 'cilindrica' ? 'cilindrica' : 'rectangular',
         length: Number(values.length) || 0, width: Number(values.width) || 0, height: Number(values.height) || 0, weightG: Number(values.weightG) || 0, canLay: values.canLay ? 1 : 0,
+        storageTypes: values.storageTypes === undefined || values.storageTypes === null ? null : String(values.storageTypes),
     });
     return getSkuDistributionById(result.lastInsertRowid, clientId, isTestData);
 }
@@ -12553,6 +12559,7 @@ module.exports = {
     updateArticleCategory,
     CODE_RELATION_PATCHABLE_FIELDS,
     SKU_DIST_PATCHABLE_FIELDS,
+    SKU_DIST_STORAGE_TYPES,
     listSkuDistribution,
     listSkuDistributionBySku,
     getSkuDistributionById,

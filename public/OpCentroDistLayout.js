@@ -4536,7 +4536,11 @@ function relPositionBox(spaceId, level, slot, pos) {
     const m = LC.bayMeasures(s, level, slot);
     return { l: round1(p.l * 100), w: round1(p.w * 100), h: round1((p.h > 0 ? Math.min(p.h, m.h) : m.h) * 100) };
 }
-const relLevelsOf = (sku) => (window.PackCalc && sku ? window.PackCalc.levelsOf({ length: sku.length, width: sku.width, height: sku.height, packaging: sku.packaging }).filter((lv) => lv.l > 0 && lv.w > 0 && lv.h > 0) : []);
+// Solo se ofrecen las presentaciones con algún tipo de almacenamiento habilitado en Unidad de Medida por Distribución (all = con las que no, para decir por qué no sale ninguna).
+const relLevelsOf = (sku, all) => {
+    const levels = window.PackCalc && sku ? window.PackCalc.levelsOf({ length: sku.length, width: sku.width, height: sku.height, packaging: sku.packaging }).filter((lv) => lv.l > 0 && lv.w > 0 && lv.h > 0) : [];
+    return all ? levels : levels.filter((lv) => window.PackCalc.enabled(lv));
+};
 const relPackName = (lv) => `${t(`main.pkLevel${lv.level}`)}${lv.name ? ` · ${lv.name}` : ''}`;
 function ensureRelateModal() {
     if (relEl) return;
@@ -4620,7 +4624,7 @@ function renderRelate() {
     save.disabled = true;
     if (!rd.sku) { hint.textContent = t('main.relPackNoCode'); return; }
     const levels = relLevelsOf(rd.sku);
-    if (!levels.length) { hint.textContent = t('main.relPackNoData'); return; }
+    if (!levels.length) { hint.textContent = t(relLevelsOf(rd.sku, true).length ? 'main.relPackNoTypes' : 'main.relPackNoData'); return; }
     if (!rd.box) { hint.textContent = t('main.locGuardaPrimero'); return; }
     hint.textContent = `${t('main.relPackTitle')} ${t('main.relPackBox', { l: rd.box.l, w: rd.box.w, h: rd.box.h })}`;
     const fits = levels.map((lv) => ({ lv, f: window.PackCalc.fit(rd.box, lv) }));

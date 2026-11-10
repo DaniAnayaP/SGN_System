@@ -116,11 +116,13 @@
 
     // Los niveles de empaque de un artículo, del principal hacia afuera: [{ level: 0, name, shape, l, w, h, pieces, lay }, …]
     // art = { dims: { length, width, height }, packaging: { main: { shape, lay }, levels: [{ name, shape, l, w, h, pieces, lay }] } }
+    // ¿Esta presentación se puede acomodar? Sin tipos capturados (datos de antes) sí; con tipos, solo si tiene al menos uno habilitado (Unidad de Medida por Distribución).
+    const enabled = (lv) => !Array.isArray(lv && lv.types) || lv.types.length > 0;
     function levelsOf(art) {
         const p = (art && art.packaging) || {};
         const main = p.main || {};
-        const out = [{ level: 0, name: String(main.name || ''), shape: main.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(art && art.length), w: num(art && art.width), h: num(art && art.height), pieces: 1, lay: !!main.lay, weightG: num(main.weightG) }];
-        (Array.isArray(p.levels) ? p.levels : []).forEach((lv, i) => out.push({ level: i + 1, name: String(lv.name || ''), shape: lv.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(lv.l), w: num(lv.w), h: num(lv.h), pieces: Math.max(1, Math.floor(num(lv.pieces)) || 1), lay: !!lv.lay, weightG: num(lv.weightG) }));
+        const out = [{ level: 0, name: String(main.name || ''), shape: main.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(art && art.length), w: num(art && art.width), h: num(art && art.height), pieces: 1, lay: !!main.lay, weightG: num(main.weightG), types: Array.isArray(main.types) ? main.types : null }];
+        (Array.isArray(p.levels) ? p.levels : []).forEach((lv, i) => out.push({ level: i + 1, name: String(lv.name || ''), shape: lv.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(lv.l), w: num(lv.w), h: num(lv.h), pieces: Math.max(1, Math.floor(num(lv.pieces)) || 1), lay: !!lv.lay, weightG: num(lv.weightG), types: Array.isArray(lv.types) ? lv.types : null }));
         return out;
     }
 
@@ -139,5 +141,5 @@
         return { main: main || { shape: 'rectangular', lay: false }, levels };
     }
 
-    return { fit, levelsOf, sanitize, circleCells, bestRectFloor };
+    return { fit, levelsOf, enabled, sanitize, circleCells, bestRectFloor };
 }));

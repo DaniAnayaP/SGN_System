@@ -17,7 +17,10 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
-const COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar' };
+const COLS = { uom: 'colUdmDUnidad', contains: 'colUdmDContiene', shape: 'colUdmDForma', length: 'colUdmDLargo', width: 'colUdmDAncho', height: 'colUdmDAlto', weightG: 'colUdmDPeso', canLay: 'colUdmDAcostar', storageTypes: 'colUdmDTipo' };
+// Tipo de almacenamiento de cada presentación (una, varias o todas): para qué se puede acomodar; solo las que tienen alguno se ofrecen al relacionar un código con una posición. El orden es el de la lista.
+const STORAGE_KEYS = ['principal', 'original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
+const typeName = (k) => Dashboard.t(`main.storageType_${k}`);
 const EDITABLE_COLS = Object.values(COLS);
 
 const t = (key, params) => {
@@ -106,6 +109,7 @@ function buildRow(r) {
         cell('colUdmDAlto', fmt(r.height), principal ? 'udm-ro' : '', fromArticle),
         cell('colUdmDPeso', fmtWeight(r.weightG), principal ? 'udm-ro' : '', fromArticle),
         cell('colUdmDAcostar', t(r.canLay ? 'main.udmYes' : 'main.udmNo')),
+        cell('colUdmDTipo', (r.storageTypes || []).length ? r.storageTypes.map(typeName).join(' · ') : t('main.udmTipoNinguno'), (r.storageTypes || []).length ? '' : 'udm-ro'),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
@@ -241,6 +245,13 @@ function ensureModal() {
     });
     modalEl.addEventListener('change', (event) => {
         const el = event.target;
+        // las casillas del tipo de almacenamiento: «Todos» marca o quita todas; cada una se suma o se quita (siempre en el orden de la lista)
+        if (f && el.dataset && (el.dataset.type || el.dataset.typeAll)) {
+            if (el.dataset.typeAll) f.storageTypes = el.checked ? [...STORAGE_KEYS] : [];
+            else { const set = new Set(f.storageTypes); if (el.checked) set.add(el.dataset.type); else set.delete(el.dataset.type); f.storageTypes = STORAGE_KEYS.filter((k) => set.has(k)); }
+            renderForm();
+            return;
+        }
         const k = el.dataset && el.dataset.k;
         if (!k || !f || el.type === 'checkbox') return;
         f[k] = el.value;
@@ -256,6 +267,7 @@ function openDialog(record) {
         rec: record, sku, level: record ? record.level : null,
         uom: record ? record.uom : '', contains: record && record.contains != null ? record.contains : '', shape: record ? record.shape : 'rectangular',
         length: record ? record.length : '', width: record ? record.width : '', height: record ? record.height : '', weightG: record ? record.weightG : '', canLay: record ? record.canLay : false,
+        storageTypes: record ? [...(record.storageTypes || [])] : [],
     };
     $('udm-title').textContent = t(record ? 'main.udmDialogEdit' : 'main.udmDialogNew');
     $('udm-code').value = record ? `${record.sku} · ${record.description}` : '';
@@ -291,6 +303,7 @@ function pickSku(s) {
     $('udm-results').hidden = true;
     const have = rowsOfSku(s.id);
     f.level = have.length ? Math.max(...have.map((r) => r.level)) + 1 : 0;
+    f.storageTypes = [f.level === 0 ? 'principal' : 'empaque']; // de partida el de siempre; se puede cambiar abajo
     renderForm();
 }
 
@@ -312,9 +325,12 @@ function renderForm() {
     const dis = (col, key) => (canField(col, f.rec ? f.rec[key] : '') ? '' : ' disabled');
     const shapeSel = `<select id="udm-f-shape" data-k="shape"${dis(COLS.shape, 'shape')}><option value="rectangular"${f.shape === 'rectangular' ? ' selected' : ''}>${esc(t('main.pkRect'))}</option><option value="cilindrica"${f.shape === 'cilindrica' ? ' selected' : ''}>${esc(t('main.pkCyl'))}</option></select>`;
     const layBox = `<label class="udm-check"><input type="checkbox" id="udm-f-canLay" data-k="canLay"${f.canLay ? ' checked' : ''}${dis(COLS.canLay, 'canLay')}> ${esc(t('main.colUdmDAcostar'))}</label>`;
+    const typesDis = dis(COLS.storageTypes, 'storageTypes');
+    const typesField = `<div class="rel-fld" data-help-key="udmTipo"><label>${esc(t('main.colUdmDTipo'))}</label><div class="udm-types"><label class="udm-check udm-check-all"><input type="checkbox" data-type-all="1"${STORAGE_KEYS.every((k) => f.storageTypes.includes(k)) ? ' checked' : ''}${typesDis}> <b>${esc(t('main.udmTiposTodos'))}</b></label>${STORAGE_KEYS.map((k) => `<label class="udm-check"><input type="checkbox" data-type="${k}"${f.storageTypes.includes(k) ? ' checked' : ''}${typesDis}> ${esc(typeName(k))}</label>`).join('')}</div></div>`;
     if (principal) {
         box.innerHTML = `<div class="rel-two">${fieldHtml('shape', 'main.colUdmDForma', shapeSel)}<div class="rel-fld"><label>&nbsp;</label>${layBox}</div></div>
-            <div class="rel-muted">${esc(t('main.udmMainMeasures', { uom: f.sku.uom || '—', l: fmt(f.sku.length) || '—', w: fmt(f.sku.width) || '—', h: fmt(f.sku.height) || '—' }))}</div>`;
+            <div class="rel-muted">${esc(t('main.udmMainMeasures', { uom: f.sku.uom || '—', l: fmt(f.sku.length) || '—', w: fmt(f.sku.width) || '—', h: fmt(f.sku.height) || '—' }))}</div>
+            ${typesField}`;
         save.disabled = false;
         return;
     }
@@ -328,7 +344,8 @@ function renderForm() {
         <div class="rel-muted" id="udm-equiv"></div>
         <div class="rel-two">${fieldHtml('shape', 'main.colUdmDForma', shapeSel)}<div class="rel-fld"><label>&nbsp;</label>${layBox}</div></div>
         <div class="rel-three">${fieldHtml('length', 'main.colUdmDLargo', num('length', COLS.length))}${cyl ? '<div class="rel-fld"><label>&nbsp;</label><span class="rel-muted">= Ø</span></div>' : fieldHtml('width', 'main.colUdmDAncho', num('width', COLS.width))}${fieldHtml('height', 'main.colUdmDAlto', num('height', COLS.height))}</div>
-        ${fieldHtml('weightG', 'main.colUdmDPeso', num('weightG', COLS.weightG), 'main.udmWeightHint')}`;
+        ${fieldHtml('weightG', 'main.colUdmDPeso', num('weightG', COLS.weightG), 'main.udmWeightHint')}
+        ${typesField}`;
     $('udm-fields').dataset.prev = prevName;
     updateEquivalence();
     save.disabled = false;
@@ -346,10 +363,10 @@ function updateEquivalence() {
 async function save() {
     if (!f || !f.sku) return;
     const principal = f.level === 0;
-    const body = principal ? { shape: f.shape, canLay: !!f.canLay } : {
+    const body = principal ? { shape: f.shape, canLay: !!f.canLay, storageTypes: f.storageTypes.join(',') } : {
         uom: f.uom, contains: f.contains === '' ? null : Number(f.contains), shape: f.shape, length: f.length === '' ? null : Number(f.length),
         width: f.shape === 'cilindrica' ? (f.length === '' ? null : Number(f.length)) : (f.width === '' ? null : Number(f.width)), height: f.height === '' ? null : Number(f.height),
-        weightG: f.weightG === '' ? null : Number(f.weightG), canLay: !!f.canLay,
+        weightG: f.weightG === '' ? null : Number(f.weightG), canLay: !!f.canLay, storageTypes: f.storageTypes.join(','),
     };
     let method = 'POST';
     let url = API;

@@ -8087,6 +8087,9 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 #udm-fields{ display: flex; flex-direction: column; gap: 0.75rem; }
 .udm-check{ display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; min-height: 2rem; }
 .udm-check input{ width: auto; }
+/* Tipo de almacenamiento de una presentación: «Todos» arriba y las opciones en columnas */
+.udm-types{ display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0 0.8rem; }
+.udm-check-all{ grid-column: 1 / -1; }
 td.udm-ro{ color: var(--color-text-secondary); }
 /* Relación Código: ventanita «Ubicar» (Paso a paso | Buscar) */
 .rel-loc{ max-width: 36rem; display: flex; flex-direction: column; gap: 0.75rem; }

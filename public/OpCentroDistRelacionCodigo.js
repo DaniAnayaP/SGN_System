@@ -348,7 +348,7 @@ function ensureModal() {
         if (pick) {
             const full = skuCache.get(Number(pick.dataset.sku)) || {};
             st.sku = { id: Number(pick.dataset.sku), sku: pick.dataset.skuCode, description: pick.dataset.desc, upc: pick.dataset.upc, uom: pick.dataset.uom, length: full.length, width: full.width, height: full.height, packaging: full.packaging };
-            if (!packLevelsOf(st.sku)[Number(st.pack)]) st.pack = '';
+            if (!packLevelsOf(st.sku).some((lv) => lv.level === Number(st.pack))) st.pack = '';
             $m('rel-code').value = `${st.sku.sku} · ${st.sku.description}`;
             $m('rel-results').hidden = true;
             renderForm();
@@ -478,8 +478,10 @@ function renderForm() {
 
 // ---- «Se acomoda»: qué empaque se pone en la posición (el material principal, el primario, el secundario…) y cuántas piezas caben (public/PackCalc.js) ------------------------------------
 // Los empaques y sus medidas salen de Alta Artículos; la posición (largo × fondo × alto) sale del Layout. Cada opción se ve desde arriba con las piezas de una capa; la sugerida es la que acomoda más piezas.
-function packLevelsOf(sku) {
-    return window.PackCalc && sku ? window.PackCalc.levelsOf({ length: sku.length, width: sku.width, height: sku.height, packaging: sku.packaging }).filter((lv) => lv.l > 0 && lv.w > 0 && lv.h > 0) : [];
+// Solo se ofrecen las presentaciones con algún tipo de almacenamiento habilitado en Unidad de Medida por Distribución (all = con las que no, para decir por qué no sale ninguna).
+function packLevelsOf(sku, all) {
+    const levels = window.PackCalc && sku ? window.PackCalc.levelsOf({ length: sku.length, width: sku.width, height: sku.height, packaging: sku.packaging }).filter((lv) => lv.l > 0 && lv.w > 0 && lv.h > 0) : [];
+    return all ? levels : levels.filter((lv) => window.PackCalc.enabled(lv));
 }
 function packBoxCm(rack, niv, esp, pos) {
     if (!rack || !niv || !esp) return null;
@@ -504,7 +506,7 @@ function renderPack(d, nums) {
     const out = { blocked: false };
     opts2.innerHTML = '';
     if (!st.sku) { hint.textContent = t('main.relPackNoCode'); return out; }
-    if (!levels.length || (levels.length === 1 && !levels[0].l)) { hint.textContent = t('main.relPackNoData'); return out; }
+    if (!levels.length || (levels.length === 1 && !levels[0].l)) { hint.textContent = t(!levels.length && packLevelsOf(st.sku, true).length ? 'main.relPackNoTypes' : 'main.relPackNoData'); return out; }
     const hasBay = !!(d.rack && st.niv && st.esp);
     const box = hasBay ? packBoxCm(d.rack, st.niv, st.esp, st.pos) : null;
     if (!box) {

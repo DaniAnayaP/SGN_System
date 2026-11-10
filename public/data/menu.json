@@ -1639,6 +1639,7 @@
             { "id": "colUdmDAlto", "labelKey": "main.colUdmDAlto", "permissionOnly": true },
             { "id": "colUdmDPeso", "labelKey": "main.colUdmDPeso", "permissionOnly": true },
             { "id": "colUdmDAcostar", "labelKey": "main.colUdmDAcostar", "permissionOnly": true },
+            { "id": "colUdmDTipo", "labelKey": "main.colUdmDTipo", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
