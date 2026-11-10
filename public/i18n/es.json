@@ -2070,6 +2070,8 @@
     "layoutLocElige_c": "Elige un espacio de {code}",
     "layoutLocElige_cell": "Elige una posición de {code}",
     "layoutLocNPosiciones": "{n} posiciones",
+    "layoutLocListo": "Listo",
+    "layoutLocListoFin": "Listo",
     "layoutElegirBuscar": "Buscar una pared, un hidrante, un piso, una zona…",
     "layoutElegirLimpiar": "Limpiar",
     "layoutElegirMas": "Hay más: escribe para acotar la lista.",
@@ -5118,8 +5120,8 @@
       "example": "el nivel 2 tiene 3 espacios y uno lleva su propia ceja: aquí dice 1."
     },
     "layoutFiltroLocalizador": {
-      "what": "Te lleva paso a paso hasta un lugar exacto: eliges la huella, luego uno de sus activos, un nivel, un espacio y, al final, la posición (que es el localizador completo). Va de la mano de Zona, Qué ver y Elegir: solo lista lo que esos filtros dejan ver, y si en Elegir escogiste una sola huella o un solo activo, el recorrido arranca ahí. Puedes escribir para buscar en cada lista. Cada elección enfoca lo que escogiste en el croquis y en el 3D, y las pastillas de arriba te regresan a un paso anterior.",
-      "example": "eliges la huella H001, el rack A004, el nivel N002, el espacio E001 y la posición P001: el croquis y el 3D te muestran ese lugar y arriba queda su código Z001.H001.A004.N002.E001.P001."
+      "what": "Te lleva paso a paso hasta un lugar exacto: huella, activo, nivel, espacio y posición. En cada paso marcas uno o VARIOS con su casilla y tocas «Listo» para bajar al paso siguiente con lo marcado; la lista de cada paso junta lo que hay dentro de todo lo marcado antes. Lo marcado se enfoca en el croquis y en el 3D (varios activos de una misma huella, varios niveles, espacios o posiciones a la vez). Va de la mano de Zona, Qué ver y Elegir: solo lista lo que esos filtros dejan ver. Puedes escribir para buscar en cada lista, y las pastillas de arriba te regresan a un paso anterior sin perder lo marcado.",
+      "example": "marcas la huella H001, en Activos marcas A020 y R001, tocas «Listo», en Nivel marcas N001 y N002 de los dos y tocas «Listo»: el croquis y el 3D muestran solo esos niveles de esos dos activos."
     },
     "layoutFiltroLocalizadorRuta": {
       "what": "Los pasos del recorrido, de izquierda a derecha: Huella, Activo, Nivel, Espacio y Posición. La pastilla encendida es el paso en el que estás; las que ya tienen un código son las que ya elegiste, y al tocarlas regresas a ese paso (se quita lo que habías elegido después).",

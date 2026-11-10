@@ -2070,6 +2070,8 @@
     "layoutLocElige_c": "Pick a space of {code}",
     "layoutLocElige_cell": "Pick a position of {code}",
     "layoutLocNPosiciones": "{n} positions",
+    "layoutLocListo": "Done",
+    "layoutLocListoFin": "Done",
     "layoutElegirBuscar": "Search a wall, a hydrant, a floor, a zone…",
     "layoutElegirLimpiar": "Clear",
     "layoutElegirMas": "There are more: type to narrow the list.",
@@ -5119,8 +5121,8 @@
       "example": "level 2 has 3 spaces and one has its own beam: here it says 1."
     },
     "layoutFiltroLocalizador": {
-      "what": "Takes you step by step to an exact place: pick the footprint, then one of its assets, a level, a space and, last, the position (which is the complete locator). It goes hand in hand with Zone, Show and Pick: it only lists what those filters let you see, and if you picked a single footprint or a single asset in Pick, the trip starts there. You can type to search each list. Each choice focuses what you picked on the plan and in 3D, and the pills on top take you back to an earlier step.",
-      "example": "you pick footprint H001, rack A004, level N002, space E001 and position P001: the plan and the 3D show that place and its code Z001.H001.A004.N002.E001.P001 stays on top."
+      "what": "Takes you step by step to an exact place: footprint, asset, level, space and position. In each step you tick one or SEVERAL with their checkbox and tap «Done» to go down to the next step with what is ticked; each step list gathers what is inside everything ticked before. What is ticked is focused on the plan and in 3D (several assets of the same footprint, several levels, spaces or positions at once). It goes hand in hand with Zone, Show and Pick: it only lists what those filters let you see. You can type to search each list, and the pills on top take you back to an earlier step without losing what is ticked.",
+      "example": "you tick footprint H001, in Assets you tick A020 and R001, tap «Done», in Level you tick N001 and N002 of both and tap «Done»: the plan and the 3D show only those levels of those two assets."
     },
     "layoutFiltroLocalizadorRuta": {
       "what": "The steps of the trip, left to right: Footprint, Asset, Level, Space and Position. The lit pill is the step you are on; the ones with a code are what you already picked, and tapping one takes you back to that step (what you picked after it is cleared).",

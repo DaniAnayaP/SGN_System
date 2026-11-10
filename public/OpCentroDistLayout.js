@@ -1856,29 +1856,31 @@ function drawSensorZones(svg, sensorId) {
 }
 // Las posiciones en el croquis: al enfocar un nivel, un espacio o una posición (el renglón de Niveles o de Espacios, el botón Localizador o el paso Posiciones) se dibuja, encima del activo, la distribución de ESE nivel:
 // cada espacio con sus posiciones (P001…) y lo elegido marcado. En planta los niveles quedan uno sobre otro, por eso solo se ve el que se enfocó. Es solo de pantalla: no cambia nada de lo guardado.
-function positionsOverlayTarget() {
-    if (!state.draft) return null;
+// Lo resaltado en el croquis: una cosa (el renglón elegido de una tabla) o varias (los niveles, espacios o posiciones que marcó el Localizador, en state.hlList).
+function highlightedList() {
     const h = state.hl;
-    if (h && h.step === state.focus && (h.kind === 'bay' || h.kind === 'space')) return { id: h.id, n: h.n || 0, c: h.kind === 'bay' ? h.c : 0, p: h.p || 0 };
-    return null;
+    if (!h) return [];
+    return h.loc && Array.isArray(state.hlList) && state.hlList.length ? state.hlList : [h];
+}
+function positionsOverlayTargets() {
+    if (!state.draft) return [];
+    const h = state.hl;
+    if (!h || h.step !== state.focus) return [];
+    return highlightedList().filter((e) => e.kind === 'bay' || e.kind === 'space').map((e) => ({ id: e.id, n: e.n || 0, c: e.kind === 'bay' ? e.c : 0, p: e.p || 0 }));
 }
 function drawPositionsOverlay() {
     const svg = $('layout-svg');
     if (!svg) return;
     svg.querySelectorAll('.pos-ov').forEach((n) => n.remove());
-    const tg = positionsOverlayTarget();
-    if (!tg || !view || view.x0 === undefined) return;
-    const s = (state.draft.spaces || []).find((x) => x.id === tg.id);
-    if (!s || s.active === false || !(s.l > 0) || !(s.d > 0)) return;
-    const lv = tg.n ? Math.min(Math.max(1, Number(tg.n) || 1), s.levels || 1) : 0;
-    const slots = lv ? LC.levelSlots(s, lv) : 0;
+    const targets = positionsOverlayTargets();
+    if (!targets.length || !view || view.x0 === undefined) return;
     const q = ((Math.round(Number(view.rot) || 0) % 4) + 4) % 4;
     // el croquis puede estar girado (cuartos de vuelta): se gira igual que LayoutCalc.rotateLayout
     const turn = (x, y) => (q === 1 ? [-y, x] : (q === 2 ? [-x, -y] : (q === 3 ? [y, -x] : [x, y])));
     const box = (x, y, w, d) => {
         const a = turn(x, y);
-        const b = turn(x + w, y + d);
-        return { x: view.ox + (Math.min(a[0], b[0]) - view.x0) * view.sc, y: view.oy + (Math.min(a[1], b[1]) - view.y0) * view.sc, w: Math.abs(b[0] - a[0]) * view.sc, h: Math.abs(b[1] - a[1]) * view.sc };
+        const b2 = turn(x + w, y + d);
+        return { x: view.ox + (Math.min(a[0], b2[0]) - view.x0) * view.sc, y: view.oy + (Math.min(a[1], b2[1]) - view.y0) * view.sc, w: Math.abs(b2[0] - a[0]) * view.sc, h: Math.abs(b2[1] - a[1]) * view.sc };
     };
     const NS = 'http://www.w3.org/2000/svg';
     const g = document.createElementNS(NS, 'g');
@@ -1891,43 +1893,58 @@ function drawPositionsOverlay() {
         g.appendChild(el);
     };
     const f1 = (v) => v.toFixed(1);
-    const slotW = slots ? s.l / slots : s.l; // cada espacio ocupa su pedazo del largo del activo (como en el 3D); sus posiciones se acomodan dentro con las medidas del espacio
-    // lo elegido y por dónde se consume: el activo, un nivel, un espacio o una posición (lo más fino que se eligió)
-    let fRect = { x: s.x, y: s.y, w: s.l, d: s.d };
-    let fFaces = lv ? LC.facesOfLevel(s, lv) : LC.facesOfSpace(s);
-    for (let c = 1; c <= slots; c += 1) {
-        const m = LC.bayMeasures(s, lv, c);
-        const kx = slotW / Math.max(m.l, 0.01);
-        const kz = s.d / Math.max(m.w, 0.01);
-        const sel = tg.c === c;
-        const dim = tg.c && !sel ? ' dim' : '';
-        if (sel) { fRect = { x: s.x + (c - 1) * slotW, y: s.y, w: slotW, d: s.d }; fFaces = LC.facesOfBay(s, lv, c); }
-        const fr = box(s.x + (c - 1) * slotW, s.y, slotW, s.d);
-        add('rect', { class: `pos-ov-bay${sel ? ' sel' : ''}${dim}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h) });
-        LC.positionsOfBay(state.draft, s.id, lv, c).forEach((p) => {
-            const r = box(s.x + (c - 1) * slotW + p.x * kx, s.y + p.y * kz, p.l * kx, p.w * kz);
-            const chosen = sel && tg.p && p.num === tg.p;
-            if (chosen) { fRect = { x: s.x + (c - 1) * slotW + p.x * kx, y: s.y + p.y * kz, w: p.l * kx, d: p.w * kz }; fFaces = LC.facesOfPosition(s, p); }
-            add('rect', { class: `pos-ov-pos${chosen ? ' chosen' : ''}${dim}`, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)) });
-            if (r.w >= 17 && r.h >= 8) add('text', { class: `pos-ov-t${dim}`, x: f1(r.x + r.w / 2), y: f1(r.y + r.h / 2 + 2.5), 'text-anchor': 'middle' }, `P${ubicPad(p.num)}`);
-        });
-    }
-    // La cara de consumo de lo elegido: con lo demás oculto no se ve el pasillo, así que se marca el lado por donde se consume con una línea punteada y una flechita hacia afuera.
-    const dirs = LC.faceVectors((LC.activoFront(state.draft, s) || {}).side);
     const spt = (px, py) => { const a = turn(px, py); return [view.ox + (a[0] - view.x0) * view.sc, view.oy + (a[1] - view.y0) * view.sc]; };
-    fFaces.forEach((face) => {
-        const v = dirs[face];
-        if (!v) return;
-        const x0 = fRect.x; const y0 = fRect.y; const x1 = fRect.x + fRect.w; const y1 = fRect.y + fRect.d;
-        const seg = v[0] > 0 ? [[x1, y0], [x1, y1]] : (v[0] < 0 ? [[x0, y0], [x0, y1]] : (v[1] > 0 ? [[x0, y1], [x1, y1]] : [[x0, y0], [x1, y0]]));
-        const a = spt(seg[0][0], seg[0][1]);
-        const b2 = spt(seg[1][0], seg[1][1]);
-        add('line', { class: 'pos-ov-face', x1: f1(a[0]), y1: f1(a[1]), x2: f1(b2[0]), y2: f1(b2[1]) });
-        const dv = turn(v[0], v[1]);
-        const len = Math.hypot(dv[0], dv[1]) || 1;
-        const ux = dv[0] / len; const uy = dv[1] / len;
-        const cx = (a[0] + b2[0]) / 2; const cy = (a[1] + b2[1]) / 2;
-        add('polygon', { class: 'pos-ov-arrow', points: `${f1(cx + ux * 9)},${f1(cy + uy * 9)} ${f1(cx - uy * 5)},${f1(cy + ux * 5)} ${f1(cx + uy * 5)},${f1(cy - ux * 5)}` });
+    // lo marcado se junta por activo y nivel: cada nivel se dibuja una vez, con todo lo marcado en él
+    const groups = new Map();
+    targets.forEach((tg) => {
+        const key = `${tg.id}|${tg.n}`;
+        if (!groups.has(key)) groups.set(key, { id: tg.id, n: tg.n, items: [] });
+        groups.get(key).items.push(tg);
+    });
+    groups.forEach((grp) => {
+        const s = (state.draft.spaces || []).find((x) => x.id === grp.id);
+        if (!s || s.active === false || !(s.l > 0) || !(s.d > 0)) return;
+        const lv = grp.n ? Math.min(Math.max(1, Number(grp.n) || 1), s.levels || 1) : 0;
+        const slots = lv ? LC.levelSlots(s, lv) : 0;
+        const slotW = slots ? s.l / slots : s.l; // cada espacio ocupa su pedazo del largo del activo (como en el 3D); sus posiciones se acomodan dentro con las medidas del espacio
+        const dirs = LC.faceVectors((LC.activoFront(state.draft, s) || {}).side);
+        const specific = grp.items.some((it) => it.c);
+        // por dónde se consume lo marcado: el activo o el nivel (sin espacio marcado), un espacio o una posición; con lo demás oculto no se ve el pasillo
+        const faceJobs = [];
+        if (grp.items.some((it) => !it.c)) faceJobs.push({ r: { x: s.x, y: s.y, w: s.l, d: s.d }, faces: lv ? LC.facesOfLevel(s, lv) : LC.facesOfSpace(s) });
+        for (let c = 1; c <= slots; c += 1) {
+            const m = LC.bayMeasures(s, lv, c);
+            const kx = slotW / Math.max(m.l, 0.01);
+            const kz = s.d / Math.max(m.w, 0.01);
+            const sel = grp.items.some((it) => it.c === c);
+            const dim = specific && !sel ? ' dim' : '';
+            const fr = box(s.x + (c - 1) * slotW, s.y, slotW, s.d);
+            add('rect', { class: `pos-ov-bay${sel ? ' sel' : ''}${dim}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h) });
+            if (grp.items.some((it) => it.c === c && !it.p)) faceJobs.push({ r: { x: s.x + (c - 1) * slotW, y: s.y, w: slotW, d: s.d }, faces: LC.facesOfBay(s, lv, c) });
+            LC.positionsOfBay(state.draft, s.id, lv, c).forEach((p) => {
+                const r = box(s.x + (c - 1) * slotW + p.x * kx, s.y + p.y * kz, p.l * kx, p.w * kz);
+                const chosen = grp.items.some((it) => it.c === c && it.p === p.num);
+                if (chosen) faceJobs.push({ r: { x: s.x + (c - 1) * slotW + p.x * kx, y: s.y + p.y * kz, w: p.l * kx, d: p.w * kz }, faces: LC.facesOfPosition(s, p) });
+                add('rect', { class: `pos-ov-pos${chosen ? ' chosen' : ''}${dim}`, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)) });
+                if (r.w >= 17 && r.h >= 8) add('text', { class: `pos-ov-t${dim}`, x: f1(r.x + r.w / 2), y: f1(r.y + r.h / 2 + 2.5), 'text-anchor': 'middle' }, `P${ubicPad(p.num)}`);
+            });
+        }
+        faceJobs.forEach((job) => {
+            job.faces.forEach((face) => {
+                const v = dirs[face];
+                if (!v) return;
+                const x0 = job.r.x; const y0 = job.r.y; const x1 = job.r.x + job.r.w; const y1 = job.r.y + job.r.d;
+                const seg = v[0] > 0 ? [[x1, y0], [x1, y1]] : (v[0] < 0 ? [[x0, y0], [x0, y1]] : (v[1] > 0 ? [[x0, y1], [x1, y1]] : [[x0, y0], [x1, y0]]));
+                const a = spt(seg[0][0], seg[0][1]);
+                const b2 = spt(seg[1][0], seg[1][1]);
+                add('line', { class: 'pos-ov-face', x1: f1(a[0]), y1: f1(a[1]), x2: f1(b2[0]), y2: f1(b2[1]) });
+                const dv = turn(v[0], v[1]);
+                const len = Math.hypot(dv[0], dv[1]) || 1;
+                const ux = dv[0] / len; const uy = dv[1] / len;
+                const cx = (a[0] + b2[0]) / 2; const cy = (a[1] + b2[1]) / 2;
+                add('polygon', { class: 'pos-ov-arrow', points: `${f1(cx + ux * 9)},${f1(cy + uy * 9)} ${f1(cx - uy * 5)},${f1(cy + ux * 5)} ${f1(cx + uy * 5)},${f1(cy - ux * 5)}` });
+            });
+        });
     });
     svg.appendChild(g);
 }
@@ -1941,6 +1958,7 @@ function scaleHlTags() {
         if (Number.isFinite(ay)) tag.setAttribute('y', (tag.getAttribute('data-above') === '1' ? ay - 5 / k : ay + 12 / k).toFixed(2));
     });
 }
+let pendingZoom = false; // se eligió algo desde el buscador o el Localizador con el 3D abierto: al volver al croquis se acerca a eso
 // reveal = true cuando se acaba de elegir el renglón: si el croquis está acercado y lo elegido queda fuera de lo que se ve, se recorre para mostrarlo.
 function applyHighlight(reveal) {
     applyHighlight3d();
@@ -1954,35 +1972,48 @@ function applyHighlight(reveal) {
     if (h.kind === 'sensor') drawSensorZones(svg, h.id);
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
     const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid', side: 'data-sin-figura', corner: 'data-sin-figura', floor: 'data-sin-figura' };
-    const els = Array.from(svg.querySelectorAll(`[${HL_ATTR[h.kind] || 'data-sid'}="${CSS.escape(h.id)}"]`));
     // un elemento de seguridad, un objeto, una puerta, una conexión de luz o un sensor son figuras sueltas (línea, símbolo, giro, etiqueta): su contorno sale de un cuadro invisible que se dibuja junto a ellos
-    const shapes = ['safety', 'object', 'door', 'power', 'sensor', 'side', 'corner', 'floor'].includes(h.kind)
-        ? Array.from(svg.querySelectorAll(`[data-hlbox="${h.kind}:${CSS.escape(h.id)}"]`))
-        : els.map((el) => (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'))).filter(Boolean);
-    if (!shapes.length) return;
-    els.forEach((el) => el.classList.add('hl-on'));
+    const BOX_KINDS = ['safety', 'object', 'door', 'power', 'sensor', 'side', 'corner', 'floor'];
+    // lo resaltado es una cosa (el renglón elegido) o varias (lo que marcó el Localizador: varios activos de una huella, varios niveles, espacios o posiciones); cada una se contornea una sola vez
+    const entries = [];
+    highlightedList().forEach((e) => { if (!entries.some((x) => x.kind === e.kind && x.id === e.id)) entries.push(e); });
+    const parts = entries.map((e) => {
+        const els = Array.from(svg.querySelectorAll(`[${HL_ATTR[e.kind] || 'data-sid'}="${CSS.escape(e.id)}"]`));
+        const shapes = BOX_KINDS.includes(e.kind)
+            ? Array.from(svg.querySelectorAll(`[data-hlbox="${e.kind}:${CSS.escape(e.id)}"]`))
+            : els.map((el) => (el.matches('rect, polygon') ? el : el.querySelector('polygon, rect'))).filter(Boolean);
+        return { e, els, shapes };
+    }).filter((part) => part.shapes.length);
+    if (!parts.length) return;
+    parts.forEach((part) => part.els.forEach((el) => el.classList.add('hl-on')));
     svg.classList.add('has-hl');
     svg.classList.toggle('hl-soft-mode', !h.strong);
-    const boxes = shapes.map((s) => s.getBBox());
-    const x0 = Math.min(...boxes.map((b) => b.x));
-    const y0 = Math.min(...boxes.map((b) => b.y));
-    const x1 = Math.max(...boxes.map((b) => b.x + b.width));
-    const y1 = Math.max(...boxes.map((b) => b.y + b.height));
-    const box = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+    const bboxOf = (shapes) => {
+        const boxes = shapes.map((s) => s.getBBox());
+        const x0 = Math.min(...boxes.map((bx) => bx.x));
+        const y0 = Math.min(...boxes.map((bx) => bx.y));
+        const x1 = Math.max(...boxes.map((bx) => bx.x + bx.width));
+        const y1 = Math.max(...boxes.map((bx) => bx.y + bx.height));
+        return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+    };
+    const box = bboxOf(parts.flatMap((part) => part.shapes));
     // Al tocar un renglón: un contorno delgado, punteado y girando (con el grosor de las líneas del dibujo), así se siguen viendo las medidas y qué tan pegada está la figura a las otras. Al tocar la figura en el
     // croquis (strong): dos contornos encimados (uno ancho del color de la hoja y otro naranja) para que se vea sobre cualquier color de zona, en claro y en oscuro.
-    (h.strong ? ['hl-under', 'hl-ring'] : ['hl-soft']).forEach((cls) => {
-        let ring;
-        if (h.kind === 'footprint') {
-            ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            ring.setAttribute('x', box.x); ring.setAttribute('y', box.y); ring.setAttribute('width', box.width); ring.setAttribute('height', box.height);
-        } else {
-            ring = shapes[0].cloneNode(false);
-            ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'data-fid', 'data-obid', 'data-tid', 'data-hlbox', 'data-did', 'data-pid', 'data-nid', 'id'].forEach((a) => ring.removeAttribute(a));
-        }
-        // una pared, una columna o un lado del contorno es delgado: su contorno de resaltado es más grueso para que se vea
-        ring.setAttribute('class', `hl-shape ${cls}${h.kind === 'obstacle' || h.kind === 'side' ? ' hl-obs' : ''}`);
-        svg.appendChild(ring);
+    parts.forEach((part) => {
+        const pb = bboxOf(part.shapes);
+        (h.strong ? ['hl-under', 'hl-ring'] : ['hl-soft']).forEach((cls) => {
+            let ring;
+            if (part.e.kind === 'footprint') {
+                ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                ring.setAttribute('x', pb.x); ring.setAttribute('y', pb.y); ring.setAttribute('width', pb.width); ring.setAttribute('height', pb.height);
+            } else {
+                ring = part.shapes[0].cloneNode(false);
+                ['class', 'style', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'mask', 'filter', 'data-zid', 'data-sid', 'data-fid', 'data-obid', 'data-tid', 'data-hlbox', 'data-did', 'data-pid', 'data-nid', 'id'].forEach((a) => ring.removeAttribute(a));
+            }
+            // una pared, una columna o un lado del contorno es delgado: su contorno de resaltado es más grueso para que se vea
+            ring.setAttribute('class', `hl-shape ${cls}${part.e.kind === 'obstacle' || part.e.kind === 'side' ? ' hl-obs' : ''}`);
+            svg.appendChild(ring);
+        });
     });
     if (h.kind === 'bay' || h.loc) {
         const tag = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -1996,7 +2027,12 @@ function applyHighlight(reveal) {
         svg.appendChild(tag);
         scaleHlTags();
     }
-    // reveal === 'zoom' (se eligió desde el buscador): el croquis se acerca para que la figura ocupe más o menos un tercio de lo que se ve, centrada (solo si la cuenta puede acercar)
+    // Con el 3D abierto el croquis está escondido (sin medidas): no se acerca ahora, se acerca al volver al 2D (pendingZoom).
+    if (!svg.getBoundingClientRect().width) {
+        if (reveal === 'zoom') pendingZoom = true;
+        return;
+    }
+    // reveal === 'zoom' (se eligió desde el buscador): el croquis se acerca para que la figura (o todo lo marcado) ocupe más o menos un tercio de lo que se ve, centrada (solo si la cuenta puede acercar)
     if (reveal === 'zoom' && canZoomMap()) {
         zoom.s = Math.min(ZOOM_MAX, Math.max(1.5, Math.min(MAP_W / (Math.max(box.width, 24) * 3), MAP_H / (Math.max(box.height, 24) * 3))));
         zoom.x = box.x + box.width / 2 - MAP_W / zoom.s / 2;
@@ -2439,14 +2475,24 @@ function pickTypeOfRow(e) {
     if (e.kind === 'obstacle') { const o = (d.obstacles || []).find((x) => x.id === e.id); return o ? (o.kind === 'wall' ? 'wall' : 'obstacle') : null; }
     return ['door', 'power', 'sensor', 'safety', 'transit', 'object', 'floor'].includes(e.kind) ? e.kind : null;
 }
-// Con cosas elegidas: de cada tipo que tiene algo elegido solo salen esos renglones (los tipos sin nada elegido salen completos); con un nivel o una posición del «Localizador», solo salen los renglones de ese nivel o esa posición.
+// Con cosas elegidas: de cada tipo que tiene algo elegido solo salen esos renglones (los tipos sin nada elegido salen completos); lo que va DENTRO de lo elegido sale solo de eso (con una huella elegida, los activos, niveles,
+// espacios y posiciones de esa huella; con activos elegidos, los de esos activos; con un nivel, un espacio o una posición del «Localizador», solo los de lo marcado).
 function itemRowShown(e) {
     const ty = pickTypeOfRow(e);
     if (ty && state.pick.some((p) => p.type === ty) && !state.pick.some((p) => p.type === ty && p.id === e.id)) return false;
+    if ((e.kind === 'space' || e.kind === 'bay') && !state.pick.some((p) => p.type === 'space')) {
+        // con huellas elegidas (y ningún activo elegido): de los activos hacia abajo solo salen los de esas huellas
+        const fps = state.pick.filter((p) => p.type === 'footprint');
+        if (fps.length) {
+            const sp = (state.draft.spaces || []).find((x) => x.id === e.id);
+            if (sp && !fps.some((p) => p.id === sp.footprintId)) return false;
+        }
+    }
     const h = state.hl;
-    if (h && h.loc && e.id === h.id && (e.kind === 'space' || e.kind === 'bay')) {
-        if (e.n !== undefined && h.n && e.n !== h.n) return false;
-        if (e.kind === 'bay' && h.c && e.c !== h.c) return false;
+    if (h && h.loc && (e.kind === 'space' || e.kind === 'bay')) {
+        // los renglones de un activo del que se marcó algo en el Localizador: solo los de lo marcado (varios niveles, espacios o posiciones valen todos)
+        const mine = highlightedList().filter((x) => x.id === e.id);
+        if (mine.length && !mine.some((x) => (e.n === undefined || !x.n || x.n === e.n) && (e.kind !== 'bay' || !x.c || x.c === e.c) && (e.p === undefined || !x.p || x.p === e.p))) return false;
     }
     return true;
 }
@@ -2808,7 +2854,7 @@ function renderViewStrip() {
     const keep = vDropdown && vDropdown === ddRendered ? { menu: (box.querySelector('.layout-dd-menu') || {}).scrollTop || 0, list: (box.querySelector('#layout-ch-list') || {}).scrollTop || 0 } : null;
     // Localizador: baja por Huella › Activo › Nivel › Posición › Localizador (cada paso enfoca o resalta lo elegido); pide el icono Buscar y que se vean las huellas y los activos
     locSync();
-    const locDd = ddHtml('loc', 'layoutFiltroLocalizador', t('main.layoutFiltroLocalizador'), vLoc.fp ? locCode() : t('main.layoutFiltroNinguno'), vDropdown === 'loc', !(canFind() && stepVisible('espacios') && stepVisible('activos')), locMenuHtml());
+    const locDd = ddHtml('loc', 'layoutFiltroLocalizador', t('main.layoutFiltroLocalizador'), locAny() ? locCode() : t('main.layoutFiltroNinguno'), vDropdown === 'loc', !(canFind() && stepVisible('espacios') && stepVisible('activos')), locMenuHtml());
     box.innerHTML = zoneDd + layersDd + chooseDd + locDd + rest;
     ddRendered = vDropdown;
     // un menú que no cabe a la derecha (los botones de más a la derecha en una pantalla angosta) se abre hacia la izquierda, pegado al borde de su botón
@@ -2824,9 +2870,11 @@ function renderViewStrip() {
 const chosenList = () => state.pick;
 // «Elegir»: las clasificaciones (tipos) prendidas en las pastillas de abajo del buscador; vacío = todas. Se pueden prender varias a la vez.
 const vChooseTypes = new Set();
-// «Localizador»: hasta dónde se ha bajado: huella, activo, nivel, posición (columna) y celda (fila y profundidad, «F001.P001»). Vacío = ese paso sigue.
-const vLoc = { fp: '', sp: '', n: 0, c: 0, cell: '', scope: null }; // scope = lo que Elegir tenía escogido al empezar el recorrido (sigue acotando sus listas)
-const locReset = () => { vLoc.fp = ''; vLoc.sp = ''; vLoc.n = 0; vLoc.c = 0; vLoc.cell = ''; vLoc.scope = null; };
+// «Localizador»: en cada paso (huella, activo, nivel, espacio, posición) se marcan UNO O VARIOS; sel guarda lo marcado de cada paso (huella: id; activo: id; nivel: «activo|nivel»; espacio: «activo|nivel|espacio»;
+// posición: «activo|nivel|espacio|número») y step es la lista que se está viendo («Listo» baja al paso siguiente con lo marcado).
+const locEmpty = () => ({ fp: [], sp: [], n: [], c: [], cell: [] });
+const vLoc = { step: 'fp', sel: locEmpty(), scope: null }; // scope = lo que Elegir tenía escogido al empezar el recorrido (sigue acotando sus listas)
+const locReset = () => { vLoc.step = 'fp'; vLoc.sel = locEmpty(); vLoc.scope = null; };
 // Todo lo que se puede elegir (lo que el árbol deja ver), por tipo: las mismas listas del buscador.
 function chooseCatalog() {
     const d = state.draft;
@@ -2883,47 +2931,98 @@ function renderChooseBody() {
     if (count) count.textContent = b.count;
 }
 // ---- «Localizador» ---------------------------------------------------------------------------------------------------------------------------------
-// Un buscador que baja paso a paso por el Localizador: Huella › Activo › Nivel › Posición › Localizador (fila y profundidad). Cada elección enfoca lo elegido en el croquis y en el 3D y abre la lista del paso que sigue; las pastillas de
-// arriba regresan a un paso anterior. La huella y el activo se enfocan (como en Elegir); el nivel, la posición y el localizador se resaltan dentro del activo. Es solo de pantalla: no cambia nada de lo guardado.
+// Un buscador que baja paso a paso por el Localizador: Huella › Activo › Nivel › Espacio › Posición. En cada paso se marcan uno o varios (casillas) y «Listo» baja al paso siguiente con lo marcado: la lista de cada paso junta lo
+// que hay dentro de todo lo marcado antes. Lo marcado más abajo se enfoca en el croquis y en el 3D: varias huellas o activos como en Elegir; varios niveles, espacios o posiciones se resaltan dentro de sus activos (state.hlList).
+// Es solo de pantalla: no cambia nada de lo guardado.
 const LOC_STEPS = ['fp', 'sp', 'n', 'c', 'cell'];
 const LOC_LABEL = { fp: 'main.colLocHuella', sp: 'main.colLocActivo', n: 'main.colLocNivel', c: 'main.layoutLocPosicion', cell: 'main.layoutFiltroLocalizador' };
 const locPad = (n) => String(n).padStart(3, '0');
-const locStep = () => (!vLoc.fp ? 'fp' : !vLoc.sp ? 'sp' : !vLoc.n ? 'n' : !vLoc.c ? 'c' : !vLoc.cell ? 'cell' : 'done');
-function locEntities() {
+const locAny = () => LOC_STEPS.some((k) => vLoc.sel[k].length);
+const locDeepest = () => { for (let i = LOC_STEPS.length - 1; i >= 0; i -= 1) if (vLoc.sel[LOC_STEPS[i]].length) return LOC_STEPS[i]; return ''; };
+const locSpaceOf = (id) => (state.draft.spaces || []).find((x) => x.id === id) || null;
+// El código completo de lo marcado en un paso (Z006.H001.A020.N001.E001.P001 hasta donde llegue ese paso)
+function locCodeOfKey(step, key) {
     const d = state.draft;
-    return { f: (d.footprints || []).find((x) => x.id === vLoc.fp) || null, s: (d.spaces || []).find((x) => x.id === vLoc.sp) || null };
+    const parts = String(key).split('|');
+    if (step === 'fp') {
+        const f = (d.footprints || []).find((x) => x.id === key);
+        const z = f && (d.zones || []).find((x) => x.id === f.zoneId);
+        return [z && z.code, f && f.code].filter(Boolean).join('.');
+    }
+    const s = locSpaceOf(parts[0]);
+    const f = s && (d.footprints || []).find((x) => x.id === s.footprintId);
+    const z = f && (d.zones || []).find((x) => x.id === f.zoneId);
+    const out = [z && z.code, f && f.code, s && s.code];
+    if (step === 'n' || step === 'c' || step === 'cell') out.push(`N${locPad(parts[1])}`);
+    if (step === 'c' || step === 'cell') out.push(`E${locPad(parts[2])}`);
+    if (step === 'cell') out.push(`P${locPad(parts[3])}`);
+    return out.filter(Boolean).join('.');
 }
-// La pieza del código de cada paso ya elegido: H001, A004, N002, E001, P001 (vacía si ese paso sigue sin elegirse)
+// La pieza corta de lo marcado en un paso (H001, A004, N002, E001, P001); con varias, la primera y «+ cuántas más»
 function locPart(step) {
-    const { f, s } = locEntities();
-    if (step === 'fp') return f ? (f.code || '') : '';
-    if (step === 'sp') return s ? (s.code || '') : '';
-    if (step === 'n') return vLoc.n ? `N${locPad(vLoc.n)}` : '';
-    if (step === 'c') return vLoc.c ? `E${locPad(vLoc.c)}` : '';
-    return vLoc.cell;
+    const list = vLoc.sel[step];
+    if (!list.length) return '';
+    const short = (key) => {
+        const parts = String(key).split('|');
+        if (step === 'fp') { const f = (state.draft.footprints || []).find((x) => x.id === key); return f ? (f.code || '') : ''; }
+        if (step === 'sp') { const s = locSpaceOf(key); return s ? (s.code || '') : ''; }
+        if (step === 'n') return `N${locPad(parts[1])}`;
+        if (step === 'c') return `E${locPad(parts[2])}`;
+        return `P${locPad(parts[3])}`;
+    };
+    return list.length > 1 ? `${short(list[0])} +${list.length - 1}` : short(list[0]);
 }
-// El localizador armado hasta donde se ha bajado: Z001.H001.A004.N002.E001.P001
+// El localizador de lo más fino que se marcó: con varias cosas, el de la primera y «+ cuántas más»
 function locCode() {
-    const { f } = locEntities();
-    if (!f) return '';
-    const z = (state.draft.zones || []).find((x) => x.id === f.zoneId);
-    return [z && z.code, ...LOC_STEPS.map(locPart)].filter(Boolean).join('.');
+    const k = locDeepest();
+    if (!k) return '';
+    const list = vLoc.sel[k];
+    const first = locCodeOfKey(k, list[0]);
+    return list.length > 1 ? `${first} +${list.length - 1}` : first;
 }
-// Elegir ↔ Localizador: lo que Elegir tiene escogido (huellas o activos) acota lo que lista el Localizador, y con UNA sola huella o UN solo activo elegido el Localizador arranca ahí. Lo que escogió el propio Localizador
+// Lo que el Localizador deja enfocado en Elegir: las huellas marcadas, los activos marcados o, con niveles, espacios o posiciones, los activos que los llevan.
+function locExpectedPick() {
+    const k = locDeepest();
+    if (!k) return [];
+    if (k === 'fp') return vLoc.sel.fp.map((id) => ({ type: 'footprint', id }));
+    if (k === 'sp') return vLoc.sel.sp.map((id) => ({ type: 'space', id }));
+    return [...new Set(vLoc.sel[k].map((key) => key.split('|')[0]))].map((id) => ({ type: 'space', id }));
+}
+// Lo que se resalta dentro de los activos (niveles, espacios o posiciones marcados): [{ kind, id, n, c, p }]
+function locHlEntities() {
+    const k = locDeepest();
+    if (k !== 'n' && k !== 'c' && k !== 'cell') return [];
+    return vLoc.sel[k].map((key) => {
+        const [id, n, c, p] = key.split('|');
+        if (k === 'n') return { kind: 'space', id, n: Number(n) };
+        if (k === 'c') return { kind: 'bay', id, n: Number(n), c: Number(c) };
+        return { kind: 'bay', id, n: Number(n), c: Number(c), p: Number(p) };
+    });
+}
+// Lo marcado de cada paso solo vale si lo de arriba sigue marcado (al cambiar una marca se quitan las de abajo que ya no caben).
+function locPrune() {
+    const sel = vLoc.sel;
+    sel.sp = sel.sp.filter((id) => { const s = locSpaceOf(id); return s && sel.fp.includes(s.footprintId); });
+    sel.n = sel.n.filter((k) => sel.sp.includes(k.split('|')[0]));
+    sel.c = sel.c.filter((k) => sel.n.includes(k.split('|').slice(0, 2).join('|')));
+    sel.cell = sel.cell.filter((k) => sel.c.includes(k.split('|').slice(0, 3).join('|')));
+}
+// Elegir ↔ Localizador: lo que Elegir tiene escogido (huellas o activos) acota lo que lista el Localizador, y con UNA sola huella o UN solo activo elegido el Localizador arranca ahí. Lo que marcó el propio Localizador
 // (que deja su elección como la de Elegir) no lo acota: así se puede cambiar de huella sin quitar nada.
 function locAdopt() {
-    if (vLoc.fp || !state.draft || state.pick.length !== 1) return;
+    if (locAny() || !state.draft || state.pick.length !== 1) return;
     const p = state.pick[0];
-    if (p.type === 'footprint' && (state.draft.footprints || []).some((f) => f.id === p.id)) vLoc.fp = p.id;
+    if (p.type === 'footprint' && (state.draft.footprints || []).some((f) => f.id === p.id)) { vLoc.sel.fp = [p.id]; vLoc.step = 'sp'; }
     else if (p.type === 'space') {
-        const s = (state.draft.spaces || []).find((x) => x.id === p.id);
-        if (s && s.footprintId) { vLoc.fp = s.footprintId; vLoc.sp = s.id; }
+        const s = locSpaceOf(p.id);
+        if (s && s.footprintId) { vLoc.sel.fp = [s.footprintId]; vLoc.sel.sp = [s.id]; vLoc.step = 'n'; }
     }
 }
+const locSameSets = (a, z) => a.length === z.length && a.every((x) => z.some((y) => y.type === x.type && y.id === x.id));
 function locLimits() {
-    const own = vLoc.fp ? (vLoc.sp ? ['space', vLoc.sp] : ['footprint', vLoc.fp]) : null;
-    const owned = own && state.pick.length === 1 && state.pick[0].type === own[0] && state.pick[0].id === own[1];
-    const picks = vLoc.fp && vLoc.scope ? vLoc.scope : (owned ? [] : state.pick);
+    const own = locExpectedPick();
+    const owned = own.length && locSameSets(state.pick, own);
+    const picks = locAny() && vLoc.scope ? vLoc.scope : (owned ? [] : state.pick);
     const spaces = state.draft.spaces || [];
     const fp = new Set();
     const sp = new Set();
@@ -2931,55 +3030,71 @@ function locLimits() {
         if (p.type === 'footprint') fp.add(p.id);
         if (p.type === 'space') { sp.add(p.id); const s = spaces.find((x) => x.id === p.id); if (s) fp.add(s.footprintId); }
     });
-    // los activos elegidos solo acotan la lista de la huella en la que hay alguno elegido
-    const spOfFp = sp.size ? new Set([...sp].filter((id) => { const s = spaces.find((x) => x.id === id); return s && s.footprintId === vLoc.fp; })) : new Set();
+    // los activos elegidos solo acotan la lista de las huellas en las que hay alguno elegido
+    const spOfFp = sp.size ? new Set([...sp].filter((id) => { const s = spaces.find((x) => x.id === id); return s && vLoc.sel.fp.includes(s.footprintId); })) : new Set();
     return { fp: fp.size ? fp : null, sp: spOfFp.size ? spOfFp : null };
 }
-// Lo que sale en la lista del paso en el que se va: { value, title, sub, hay }
+// Lo que sale en la lista del paso en el que se va: { value, title, sub, hay }. Cada paso junta lo que hay dentro de TODO lo marcado en el anterior.
 function locItems(step) {
     const d = state.draft;
-    const { s } = locEntities();
-    const prefix = locCode(); // lo que ya se eligió, para poder buscar también por el código completo
     const zoneOf = (id) => (d.zones || []).find((z) => z.id === id) || {};
     const limits = locLimits();
+    const sel = vLoc.sel;
     if (step === 'fp') {
         const inside = state.zoneScope.length ? scopeInside(d, state.zoneScope) : null; // el botón Zona acota lo que se puede bajar
         return (d.footprints || []).filter((x) => x.active !== false && (!inside || inside.footprint.has(x.id)) && (!limits.fp || limits.fp.has(x.id))).map((x) => {
             const z = zoneOf(x.zoneId);
-            return { value: x.id, title: x.code || '', sub: [x.name, z.name].filter(Boolean).join(' · '), hay: `${[z.code, x.code].filter(Boolean).join('.')} ${x.code || ''} ${x.name || ''} ${z.name || ''}` };
+            return { value: x.id, title: x.code || '', sub: [x.name, z.name].filter(Boolean).join(' · '), hay: `${locCodeOfKey('fp', x.id)} ${x.code || ''} ${x.name || ''} ${z.name || ''}` };
         });
     }
     if (step === 'sp') {
-        return (d.spaces || []).filter((x) => x.active !== false && x.footprintId === vLoc.fp && (!limits.sp || limits.sp.has(x.id))).map((x) => ({
-            value: x.id, title: x.code || '', sub: [x.ownName, typeLabel('space', x.type)].filter(Boolean).join(' · '), hay: `${prefix}.${x.code || ''} ${x.code || ''} ${x.ownName || ''} ${x.name || ''} ${typeLabel('space', x.type)}`,
+        return (d.spaces || []).filter((x) => x.active !== false && sel.fp.includes(x.footprintId) && (!limits.sp || limits.sp.has(x.id))).map((x) => ({
+            value: x.id, title: x.code || '', sub: [x.ownName, typeLabel('space', x.type)].filter(Boolean).join(' · '), hay: `${locCodeOfKey('sp', x.id)} ${x.code || ''} ${x.ownName || ''} ${x.name || ''} ${typeLabel('space', x.type)}`,
         }));
     }
-    if (!s) return [];
+    const out = [];
     if (step === 'n') {
-        return Array.from({ length: s.levels || 1 }, (_, i) => {
-            const n = i + 1;
-            const m = LC.levelMeasures(s, n);
-            const lv = (s.lvls || []).find((l) => l.n === n) || {};
-            return { value: String(n), title: `N${locPad(n)}`, sub: [lv.name, t('main.layoutLocMedidaNivel', { floor: fmt(m.floorH), h: fmt(m.h) })].filter(Boolean).join(' · '), hay: `${prefix}.N${locPad(n)} N${locPad(n)} ${lv.name || ''}` };
+        sel.sp.forEach((sid) => {
+            const s = locSpaceOf(sid);
+            if (!s) return;
+            for (let n = 1; n <= (s.levels || 1); n += 1) {
+                const m = LC.levelMeasures(s, n);
+                const lv = (s.lvls || []).find((l) => l.n === n) || {};
+                const key = `${sid}|${n}`;
+                out.push({ value: key, title: `${sel.sp.length > 1 ? `${s.code} · ` : ''}N${locPad(n)}`, sub: [lv.name, t('main.layoutLocMedidaNivel', { floor: fmt(m.floorH), h: fmt(m.h) })].filter(Boolean).join(' · '), hay: `${locCodeOfKey('n', key)} N${locPad(n)} ${lv.name || ''}` });
+            }
         });
+        return out;
     }
     if (step === 'c') {
-        return Array.from({ length: LC.levelSlots(s, vLoc.n) }, (_, i) => {
-            const c = i + 1;
-            const m = LC.bayMeasures(s, vLoc.n, c);
-            const nPos = LC.positionsOfBay(d, s.id, vLoc.n, c).length;
-            return { value: String(c), title: `E${locPad(c)}`, sub: `${fmt(m.l)} × ${fmt(m.w)} × ${fmt(m.h)} m · ${t('main.layoutLocNPosiciones', { n: nPos })}`, hay: `${prefix}.E${locPad(c)} E${locPad(c)}` };
+        sel.n.forEach((nk) => {
+            const [sid, nStr] = nk.split('|');
+            const s = locSpaceOf(sid);
+            if (!s) return;
+            const n = Number(nStr);
+            for (let c = 1; c <= LC.levelSlots(s, n); c += 1) {
+                const m = LC.bayMeasures(s, n, c);
+                const nPos = LC.positionsOfBay(d, s.id, n, c).length;
+                const key = `${nk}|${c}`;
+                out.push({ value: key, title: `${sel.n.length > 1 ? `${s.code}.N${locPad(n)} · ` : ''}E${locPad(c)}`, sub: `${fmt(m.l)} × ${fmt(m.w)} × ${fmt(m.h)} m · ${t('main.layoutLocNPosiciones', { n: nPos })}`, hay: `${locCodeOfKey('c', key)} E${locPad(c)}` });
+            }
         });
+        return out;
     }
-    return LC.positionsOfBay(d, s.id, vLoc.n, vLoc.c).map((p) => {
-        const cell = `P${locPad(p.num)}`;
-        return { value: cell, title: cell, sub: `${fmt(p.l)} × ${fmt(p.w)} × ${fmt(p.h)} m · ${prefix}.${cell}`, hay: `${prefix}.${cell} ${cell}` };
+    sel.c.forEach((ck) => {
+        const [sid, nStr, cStr] = ck.split('|');
+        const s = locSpaceOf(sid);
+        if (!s) return;
+        LC.positionsOfBay(d, s.id, Number(nStr), Number(cStr)).forEach((p) => {
+            const key = `${ck}|${p.num}`;
+            out.push({ value: key, title: `${sel.c.length > 1 ? `${s.code}.N${locPad(nStr)}.E${locPad(cStr)} · ` : ''}P${locPad(p.num)}`, sub: `${fmt(p.l)} × ${fmt(p.w)} × ${fmt(p.h)} m · ${locCodeOfKey('cell', key)}`, hay: `${locCodeOfKey('cell', key)} P${locPad(p.num)}` });
+        });
     });
+    return out;
 }
 // La lista del paso en el que se va (el buscador del desplegable la filtra) y el código que se lleva armado
 function locBodyHtml() {
-    const step = locStep();
-    const stepKey = step === 'done' ? 'cell' : step;
+    const stepKey = vLoc.step;
     const crumbs = `<div class="layout-find-types" role="group" data-help-key="layoutFiltroLocalizadorRuta">${LOC_STEPS.map((k) => {
         const val = locPart(k);
         const cur = k === stepKey;
@@ -2994,14 +3109,15 @@ function locBodyHtml() {
     const list = head + (off
         ? `<div class="layout-find-empty">${esc(t('main.layoutLocCapaApagada', { layer: t(SECTION_LABEL_KEYS[needLayer]) }))}</div>`
         : rows.length
-        ? rows.slice(0, CAP).map((i) => `<button type="button" class="layout-dd-item" role="menuitem" data-loc-pick="${stepKey}" data-loc-val="${esc(i.value)}"${step === 'done' && i.value === vLoc.cell ? ' aria-current="true"' : ''}><span><b>${esc(i.title)}</b> <small>${esc(i.sub || '')}</small></span></button>`).join('') + (rows.length > CAP ? `<div class="layout-find-empty">${esc(t('main.layoutElegirMas'))}</div>` : '')
+        ? rows.slice(0, CAP).map((i) => ddItem(`data-loc-pick="${stepKey}" data-loc-val="${esc(i.value)}"`, vLoc.sel[stepKey].includes(i.value), `<b>${esc(i.title)}</b> <small>${esc(i.sub || '')}</small>`)).join('') + (rows.length > CAP ? `<div class="layout-find-empty">${esc(t('main.layoutElegirMas'))}</div>` : '')
         : `<div class="layout-find-empty">${esc(t('main.layoutFindSin'))}</div>`);
-    return { crumbs, list, code: locCode() };
+    return { crumbs, list, code: locCode(), canNext: vLoc.sel[stepKey].length > 0 };
 }
 function locMenuHtml() {
     if (vDropdown !== 'loc' || !state.draft) return '';
     const b = locBodyHtml();
-    return `<div class="layout-ch-head">${searchRowHtml('loc')}<div id="layout-loc-chips">${b.crumbs}</div></div><div class="layout-ch-list" id="layout-loc-list">${b.list}</div><div class="layout-ch-foot"><span id="layout-loc-code">${esc(b.code || '—')}</span><button type="button" data-loc-clear>${esc(t('main.layoutElegirLimpiar'))}</button></div>`;
+    const last = vLoc.step === 'cell';
+    return `<div class="layout-ch-head">${searchRowHtml('loc')}<div id="layout-loc-chips">${b.crumbs}</div></div><div class="layout-ch-list" id="layout-loc-list">${b.list}</div><div class="layout-ch-foot"><span id="layout-loc-code">${esc(b.code || '—')}</span><span class="layout-ch-acts"><button type="button" data-loc-next${b.canNext ? '' : ' disabled'}>${esc(t(last ? 'main.layoutLocListoFin' : 'main.layoutLocListo'))}</button><button type="button" data-loc-clear>${esc(t('main.layoutElegirLimpiar'))}</button></span></div>`;
 }
 // Mientras se escribe solo se vuelve a dibujar la lista (la caja no se toca para no perder el cursor).
 function renderLocBody() {
@@ -3012,60 +3128,68 @@ function renderLocBody() {
 // Si lo que se enfocó cambió por otro lado (Elegir, Zona, otro Layout), el recorrido empieza de nuevo y su resaltado se quita.
 function locSync() {
     locAdopt();
-    if (!vLoc.fp || !state.draft) return;
+    if (!locAny() || !state.draft) return;
     const d = state.draft;
-    const want = vLoc.sp ? ['space', vLoc.sp] : ['footprint', vLoc.fp];
-    const alive = (d.footprints || []).some((x) => x.id === vLoc.fp) && (!vLoc.sp || (d.spaces || []).some((x) => x.id === vLoc.sp));
-    const same = state.pick.length === 1 && state.pick[0].type === want[0] && state.pick[0].id === want[1];
-    if (alive && same) return;
+    const alive = vLoc.sel.fp.every((id) => (d.footprints || []).some((x) => x.id === id)) && vLoc.sel.sp.every((id) => (d.spaces || []).some((x) => x.id === id));
+    const exp = locExpectedPick();
+    if (alive && locSameSets(state.pick, exp)) return;
     locReset();
-    if (state.hl && state.hl.loc) { state.hl = null; applyHighlight(false); }
+    if (state.hlList || (state.hl && state.hl.loc)) { state.hl = null; state.hlList = null; applyHighlight(false); }
 }
-// Enfocar lo que se lleva elegido: la huella (o, ya con activo, el activo) y, con nivel, posición o localizador, resaltarlo dentro del activo (croquis y 3D).
+// Enfocar lo que se lleva marcado: las huellas o los activos y, con niveles, espacios o posiciones, resaltarlos dentro de sus activos (croquis y 3D).
 function locApply() {
-    if (!vLoc.fp) { state.pick = []; state.hl = null; applyViewFocus(); return; }
-    const inSpace = !!vLoc.sp;
+    const k = locDeepest();
+    if (!k) { state.pick = []; state.hl = null; state.hlList = null; applyViewFocus(); renderViewStrip(); return; }
+    const inSpace = k !== 'fp';
     const step = inSpace ? 'activos' : 'espacios';
     if (!stepOn(step)) { state.steps = [...state.steps, step]; fixLayerFocus(); } // la capa de lo enfocado se enciende si estaba apagada
-    // en Editar la tabla de abajo pasa al paso de lo elegido: Huella-Espacio, Activos, Niveles o Posiciones
+    // en Editar la tabla de abajo pasa al paso de lo marcado: Huella-Espacio, Activos, Niveles o Posiciones
     if (state.mode === 'edit') {
-        const tableStep = vLoc.cell || vLoc.c ? 'posiciones' : (vLoc.n ? 'niveles' : step);
-        showStep(stepVisible(tableStep) ? tableStep : step);
+        // con posiciones marcadas la tabla es la de Posiciones; con espacios, la de Espacios; con niveles, la de Niveles
+        const tableStep = [k === 'cell' ? 'ubicaciones' : '', k === 'cell' || k === 'c' ? 'posiciones' : '', k === 'n' ? 'niveles' : '', step].find((s) => s && stepVisible(s));
+        showStep(tableStep || step);
     }
-    state.pick = [{ type: inSpace ? 'space' : 'footprint', id: inSpace ? vLoc.sp : vLoc.fp }];
+    state.pick = locExpectedPick();
     state.hl = null;
+    state.hlList = null;
     applyViewFocus();
-    if (inSpace && vLoc.n) {
-        const cell = /^P(\d+)$/.exec(vLoc.cell || '');
-        selectEntity({ kind: vLoc.c ? 'bay' : 'space', id: vLoc.sp, n: vLoc.n, c: vLoc.c || undefined, p: cell ? Number(cell[1]) : undefined, loc: locCode() }, 'zoom');
+    const ents = locHlEntities();
+    if (ents.length) {
+        const label = locCode();
+        selectEntity({ ...ents[0], loc: label }, 'zoom');
+        state.hlList = ents.map((e) => ({ ...e, loc: label, step: state.hl.step, strong: state.hl.strong }));
+        applyHighlight(false);
         loc3dFocus = !!state.view3d;
         scheduleScene3d();
     }
     if (state.mode === 'edit') renderPanel();
     renderViewStrip();
 }
+// Marcar o desmarcar una opción de la lista del paso (casilla); lo que ya no cabe en los pasos de abajo se quita.
 function locPick(step, value) {
-    if (step === 'fp' && !vLoc.fp) vLoc.scope = state.pick.length ? state.pick.map((p) => ({ ...p })) : null; // lo que Elegir tenía escogido sigue acotando las listas de los pasos que siguen
-    if (step === 'fp') Object.assign(vLoc, { fp: value, sp: '', n: 0, c: 0, cell: '' });
-    else if (step === 'sp') Object.assign(vLoc, { sp: value, n: 0, c: 0, cell: '' });
-    else if (step === 'n') Object.assign(vLoc, { n: Number(value), c: 0, cell: '' });
-    else if (step === 'c') Object.assign(vLoc, { c: Number(value), cell: '' });
-    else vLoc.cell = value;
-    vSearch.loc.q = '';
+    if (step === 'fp' && !locAny()) vLoc.scope = state.pick.length ? state.pick.map((p) => ({ ...p })) : null; // lo que Elegir tenía escogido sigue acotando las listas de los pasos que siguen
+    const list = vLoc.sel[step];
+    vLoc.sel[step] = list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
+    locPrune();
     ddFocus = false;
-    if (step === 'cell') vDropdown = ''; // llegó hasta el final: se cierra para ver dónde cayó
     locApply();
 }
-// Regresar a un paso: se quita lo elegido desde ahí en adelante.
-function locBack(step) {
-    const from = LOC_STEPS.indexOf(step);
-    LOC_STEPS.forEach((k, i) => {
-        if (i < from) return;
-        if (k === 'fp') vLoc.fp = ''; else if (k === 'sp') vLoc.sp = ''; else if (k === 'n') vLoc.n = 0; else if (k === 'c') vLoc.c = 0; else vLoc.cell = '';
-    });
+// «Listo»: baja al paso siguiente con lo marcado (en el último, cierra el desplegable para ver dónde cayó).
+function locNext() {
+    if (!vLoc.sel[vLoc.step].length) return;
+    const at = LOC_STEPS.indexOf(vLoc.step);
+    if (at >= LOC_STEPS.length - 1) { vDropdown = ''; renderViewStrip(); return; }
+    vLoc.step = LOC_STEPS[at + 1];
     vSearch.loc.q = '';
     ddFocus = false;
-    locApply();
+    renderViewStrip();
+}
+// Regresar a un paso: se ve su lista otra vez (lo marcado sigue marcado).
+function locBack(step) {
+    vLoc.step = step;
+    vSearch.loc.q = '';
+    ddFocus = false;
+    renderViewStrip();
 }
 function fixLayerFocus() {
     if (state.steps.length && !state.steps.includes(state.focus)) state.focus = state.steps[state.steps.length - 1];
@@ -3178,6 +3302,7 @@ $('layout-vstrip-filters').addEventListener('click', (event) => {
     // «Localizador»: elegir en la lista del paso, regresar a un paso con las pastillas o quitar todo. La lista se vuelve a dibujar: sin stopPropagation el clic parecería de afuera y cerraría el desplegable.
     const locPickBtn = event.target.closest('[data-loc-pick]');
     if (locPickBtn) { event.stopPropagation(); locPick(locPickBtn.getAttribute('data-loc-pick'), locPickBtn.getAttribute('data-loc-val')); return; }
+    if (event.target.closest('[data-loc-next]')) { event.stopPropagation(); locNext(); return; }
     const locCrumb = event.target.closest('[data-loc-crumb]');
     if (locCrumb) { event.stopPropagation(); if (!locCrumb.disabled) locBack(locCrumb.getAttribute('data-loc-crumb')); return; }
     if (event.target.closest('[data-loc-clear]')) { event.stopPropagation(); locReset(); vSearch.loc.q = ''; ddFocus = false; locApply(); return; }
@@ -5283,9 +5408,13 @@ function dim3dLayers() {
 function fxFocusLevel() {
     // «Localizador»: con Enfoque u Oculto solo se ve el nivel, la posición o el localizador elegido; con Tenue, los demás niveles se apagan
     const h = state.hl;
-    if (h && h.loc && h.step === state.focus && state.pick.length === 1 && state.pick[0].id === h.id) return { id: h.id, n: h.n, c: h.c, f: h.f, p: h.p, mode: state.findDim ? 'dim' : 'hide' };
+    if (h && h.loc && h.step === state.focus) {
+        const picked = new Set(state.pick.filter((x) => x.type === 'space').map((x) => x.id));
+        const out = highlightedList().filter((e) => e.n && picked.has(e.id)).map((e) => ({ id: e.id, n: e.n, c: e.c, f: e.f, p: e.p, mode: state.findDim ? 'dim' : 'hide' }));
+        if (out.length) return out;
+    }
     const v = virtualFind();
-    return v && v.n ? { id: v.ids[0], n: v.n, c: v.c, p: v.p, mode: state.findDim ? 'dim' : 'hide' } : null;
+    return v && v.n ? [{ id: v.ids[0], n: v.n, c: v.c, p: v.p, mode: state.findDim ? 'dim' : 'hide' }] : null;
 }
 const lazyScripts = {};
 const can3d = () => !!(state.perms && state.perms.canView3D);
@@ -5371,7 +5500,7 @@ function refreshScene3d() {
 function applyHighlight3d() {
     if (!scene3d || !scene3d.highlight) return; // el 3D viejo que quedó en la memoria del navegador aún no la trae
     const h = state.hl;
-    scene3d.highlight(h && h.step === state.focus && state.draft ? { kind: h.kind, id: h.id, strong: !!h.strong, n: h.n, c: h.c, f: h.f, p: h.p } : null);
+    scene3d.highlight(h && h.step === state.focus && state.draft ? highlightedList().map((e) => ({ kind: e.kind, id: e.id, strong: !!h.strong, n: e.n, c: e.c, f: e.f, p: e.p })) : null);
 }
 function scheduleScene3d() {
     if (!state.view3d) return;
@@ -5417,7 +5546,10 @@ async function setView3d(on) {
     if (on && !can3d()) return;
     state.view3d = on;
     updateViewBtns();
-    if (!on) return;
+    if (!on) {
+        if (state.hl && state.draft) { const zoomNow = pendingZoom; pendingZoom = false; applyHighlight(zoomNow ? 'zoom' : false); }
+        return;
+    }
     const msg = $('layout-3d-msg');
     msg.textContent = t('main.layout3dCargando');
     msg.hidden = false;

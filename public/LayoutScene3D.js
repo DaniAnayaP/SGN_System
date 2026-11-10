@@ -61,13 +61,20 @@
         outline.visible = false;
         scene.add(outline);
         // Lo elegido en las tablas del editor (highlight): el mismo contorno naranja, siempre a la vista aunque otro activo lo tape; el fuerte lleva un segundo contorno más ancho.
-        const hlLines = [0, 1].map(() => {
-            const l = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a, depthTest: false, transparent: true }));
-            l.visible = false;
-            l.renderOrder = 10;
-            scene.add(l);
-            return l;
-        });
+        // Un par de contornos (el fino y el fuerte) por cada cosa resaltada: la lista crece según hace falta.
+        const hlPool = [];
+        function hlPair(k) {
+            while (hlPool.length <= k) {
+                hlPool.push([0, 1].map(() => {
+                    const l = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xff7a1a, depthTest: false, transparent: true }));
+                    l.visible = false;
+                    l.renderOrder = 10;
+                    scene.add(l);
+                    return l;
+                }));
+            }
+            return hlPool[k];
+        }
 
         // La cara de consumo de lo elegido (activo, nivel, espacio o posición): con lo demás oculto no se ve el pasillo, así que el lado por donde se consume se marca con un marco punteado y una flecha hacia afuera.
         let frontSides = {};
@@ -84,7 +91,6 @@
             }
         }
         function applyFaceMarks(box) {
-            clearFaceMarks();
             const LCf = root.LayoutCalc;
             if (!box || !hl || !lastLayout || !LCf || !LCf.faceVectors || !(hl.kind === 'space' || hl.kind === 'bay')) return;
             const sp = (lastLayout.spaces || []).find((e) => e.id === hl.id);
@@ -187,8 +193,17 @@
         // Con un enfoque y el resto «tenue», las capas apagadas (sus nombres) se ven tenues en lugar de quitarse.
         let dimLayers = new Set();
         // El nivel enfocado de un activo { id, n, mode: 'dim' | 'hide' }: los demás niveles de ese activo se apagan o se quitan.
-        let focusLevel = null;
-        let focusContainer = null; // el cuadro (nivel o posición) que el Enfoque dejó dibujado: a él se acerca la cámara
+        let focusLevels = []; // los niveles (o espacios o posiciones) que el Enfoque deja dibujados: [{ id, n, c, p, mode, all }]
+        let focusContainer = null; // el cuadro (nivel o posición) que el Enfoque dejó dibujado: a él se acerca la cámara (con varios, el cuadro que los junta)
+        function addFocusContainer(b2) {
+            if (!focusContainer) { focusContainer = b2; return; }
+            const a = focusContainer;
+            const x0 = Math.min(a.x - a.sx / 2, b2.x - b2.sx / 2); const x1 = Math.max(a.x + a.sx / 2, b2.x + b2.sx / 2);
+            const y0 = Math.min(a.y - a.sy / 2, b2.y - b2.sy / 2); const y1 = Math.max(a.y + a.sy / 2, b2.y + b2.sy / 2);
+            const z0 = Math.min(a.z - a.sz / 2, b2.z - b2.sz / 2); const z1 = Math.max(a.z + a.sz / 2, b2.z + b2.sz / 2);
+            focusContainer = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: (z0 + z1) / 2, sx: x1 - x0, sy: y1 - y0, sz: z1 - z0 };
+        }
+        let hls = []; // todo lo resaltado (puede ser más de una cosa); hl es la primera
         let hl = null; // lo resaltado: { kind: 'zone' | 'floor' | 'footprint' | 'space' | 'bay', id, strong }
         const textureCache = new Map();
 
@@ -426,16 +441,31 @@
         }
         function applyHl() {
             applyMeasured();
-            const box = hlBox();
-            // El contorno de un espacio o una posición (y de un nivel) va pegado a su medida: con la holgura de siempre (6 y 20 cm) una posición chica parecía salirse de su espacio.
-            const tight = !!hl && (hl.kind === 'bay' || (hl.kind === 'space' && !!hl.n));
-            const minDim = box ? Math.max(Math.min(box.sx, box.sy, box.sz), 0.05) : 1;
-            hlLines.forEach((l, i) => {
-                const grow = tight ? (i === 0 ? 0 : Math.min(0.2, minDim * 0.05)) : (i === 0 ? 0.06 : 0.2);
-                l.visible = !!box && (i === 0 || hl.strong);
-                if (box) { l.position.set(box.x, box.y, box.z); l.scale.set(box.sx + grow, box.sy + grow, box.sz + grow); }
+            clearFaceMarks();
+            // cada cosa resaltada (hls) tiene su cuadro; hl es la que se está calculando (la primera para lo demás)
+            const first = hls[0] || null;
+            const boxes = [];
+            hls.forEach((e) => {
+                hl = e;
+                const bx = hlBox();
+                if (bx) boxes.push({ e, bx });
             });
-            applyFaceMarks(box);
+            hl = first;
+            hlPool.forEach((pair) => pair.forEach((l) => { l.visible = false; }));
+            boxes.forEach(({ e, bx }, k) => {
+                // El contorno de un espacio o una posición (y de un nivel) va pegado a su medida: con la holgura de siempre (6 y 20 cm) una posición chica parecía salirse de su espacio.
+                const tight = e.kind === 'bay' || (e.kind === 'space' && !!e.n);
+                const minDim = Math.max(Math.min(bx.sx, bx.sy, bx.sz), 0.05);
+                hlPair(k).forEach((l, i) => {
+                    const grow = tight ? (i === 0 ? 0 : Math.min(0.2, minDim * 0.05)) : (i === 0 ? 0.06 : 0.2);
+                    l.visible = i === 0 || !!e.strong;
+                    l.position.set(bx.x, bx.y, bx.z);
+                    l.scale.set(bx.sx + grow, bx.sy + grow, bx.sz + grow);
+                });
+                hl = e;
+                applyFaceMarks(bx);
+            });
+            hl = first;
             dirty = true;
         }
 
@@ -573,7 +603,7 @@
             if (opts && 'floorsShow' in opts) floorsShow = !!opts.floorsShow;
             if (opts && 'rampsShow' in opts) rampsShow = !!opts.rampsShow;
             if (opts && 'dimLayers' in opts) dimLayers = new Set(opts.dimLayers || []);
-            if (opts && 'focusLevel' in opts) focusLevel = opts.focusLevel || null;
+            if (opts && 'focusLevel' in opts) focusLevels = Array.isArray(opts.focusLevel) ? opts.focusLevel.filter(Boolean) : (opts.focusLevel ? [opts.focusLevel] : []);
             if (opts && 'fronts' in opts) frontSides = opts.fronts || {}; // el lado del frente de cada activo, sacado de TODO el Layout (el que se ve puede traer sin pasillos)
             if (opts && 'clashDoors' in opts) clashSet = new Set(opts.clashDoors || []);
             lastLayout = layout;
@@ -1297,8 +1327,12 @@
                 const own = s.fmt && s.fmt.pattern !== 'none' && /^#[0-9a-fA-F]{6}$/.test(s.fmt.fill || '') ? parseInt(s.fmt.fill.slice(1), 16) : null;
                 // Enfoque u Oculto con un nivel, una posición o un localizador elegido: de ESE activo solo se dibuja el nivel con la distribución de sus posiciones o, con un localizador, su posición con la distribución
                 // de sus filas y profundidades, a la altura que tienen. Lo elegido se marca con el cuadro naranja de siempre (hlBox).
-                const fzm = focusLevel && focusLevel.mode === 'hide' && focusLevel.id === s.id && root.LayoutCalc && root.LayoutCalc.levelMeasures && root.LayoutCalc.bayMeasures ? focusLevel : null;
-                if (fzm) {
+                // varios niveles (o espacios o posiciones) del mismo activo: cada uno se dibuja una vez (los repetidos se juntan)
+                const fzsAll = focusLevels.filter((f) => f.mode === 'hide' && f.id === s.id);
+                const fzKey = (f) => `${Number(f.n) || 1}|${Number(f.p) > 0 ? Number(f.c) || 0 : 0}|${Number(f.p) > 0 ? Number(f.p) : 0}`;
+                const fzs = root.LayoutCalc && root.LayoutCalc.levelMeasures && root.LayoutCalc.bayMeasures ? fzsAll.filter((f, i) => fzsAll.findIndex((g2) => fzKey(g2) === fzKey(f)) === i) : [];
+                if (fzs.length) {
+                  fzs.forEach((fzm) => {
                     const LCz = root.LayoutCalc;
                     const nz = Math.min(Math.max(1, Number(fzm.n) || 1), lv);
                     const slotsZ = LCz.levelSlots ? LCz.levelSlots(s, nz) : Math.max(1, Math.floor(s.slots || 1));
@@ -1358,7 +1392,8 @@
                             [s.y, s.y + s.d].forEach((zEdge, zi) => upr.push({ x: PX(bx0 + xi * (blen / postCols)) + (xi === 0 ? 0.03 : (xi === postCols ? -0.03 : 0)), y: (yBot + yTop) / 2, z: PZ(zEdge) + (zi === 0 ? 0.03 : -0.03), sx: edge ? 0.06 : 0.04, sy: yTop - yBot, sz: edge ? 0.06 : 0.04, c: postC }));
                         }
                     }
-                    focusContainer = { x: PX(bx0 + blen / 2), y: (yBot + yTop) / 2, z: PZ(s.y + s.d / 2), sx: blen, sy: yTop - yBot, sz: s.d };
+                    addFocusContainer({ x: PX(bx0 + blen / 2), y: (yBot + yTop) / 2, z: PZ(s.y + s.d / 2), sx: blen, sy: yTop - yBot, sz: s.d });
+                  });
                     spaceList.push({ s, x: cx, z: cz, fl });
                     return;
                 }
@@ -1379,8 +1414,9 @@
                     const deckAt = (xc, sx, m, color) => { const th = m.beam > 0 ? m.beam : 0.06; dck.push({ x: xc, y: fl + Math.max(m.floorH, 0.03) + th / 2, z: cz, sx, sy: th, sz: s.d, c: color === undefined ? deckC : color }); };
                     for (let k = 1; k <= lv; k++) {
                         // con un nivel enfocado en este activo, los demás niveles se apagan (tenue) o se quitan (oculto)
-                        const otherLevel = !!focusLevel && focusLevel.id === s.id && focusLevel.n !== k;
-                        if (otherLevel && focusLevel.mode === 'hide') continue;
+                        const mineFx = focusLevels.filter((f) => f.id === s.id);
+                        const otherLevel = mineFx.length > 0 && !mineFx.some((f) => (Number(f.n) || 1) === k);
+                        if (otherLevel && mineFx[0].mode === 'hide') continue;
                         const lvColor = otherLevel ? mixHex(deckC, 0xe4e7f0, 0.8) : deckC;
                         if (!(LCx && LCx.levelMeasures && LCx.bayMeasures)) { dck.push({ x: cx, y: 0.15 + (k - 1) * ((s.h - 0.3) / lv) + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC }); continue; }
                         if ((s.bays || []).some((b) => b.n === k && (b.floorH !== undefined || b.beam !== undefined))) {
@@ -1422,7 +1458,12 @@
             if (rebuild !== false && lastLayout) update(lastLayout);
         }
         // Marcar lo que se eligió en una tabla del editor (sel = { kind, id, strong }) o quitar la marca (null).
-        function highlight(sel) { hl = sel && sel.id ? { kind: sel.kind, id: sel.id, strong: !!sel.strong, n: sel.n, c: sel.c, f: sel.f, p: sel.p, all: !!sel.all } : null; applyHl(); }
+        function highlight(sel) {
+            const list = Array.isArray(sel) ? sel : (sel ? [sel] : []);
+            hls = list.filter((e) => e && e.id).map((e) => ({ kind: e.kind, id: e.id, strong: !!e.strong, n: e.n, c: e.c, f: e.f, p: e.p, all: !!e.all }));
+            hl = hls[0] || null;
+            applyHl();
+        }
         // Acercar la cámara a lo que está marcado (un nivel, una posición o un localizador): la distancia sale de lo que mide.
         function focusOn() {
             const b = focusContainer || hlBox();
