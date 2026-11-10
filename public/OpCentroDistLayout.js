@@ -1987,6 +1987,7 @@ function drawPositionsOverlay() {
         if (!s || s.active === false || !(s.l > 0) || !(s.d > 0)) return;
         const lv = grp.n ? Math.min(Math.max(1, Number(grp.n) || 1), s.levels || 1) : 0;
         const slots = lv ? LC.levelSlots(s, lv) : 0;
+        const rcs = slots ? LC.levelBayRects(s, lv) : []; // cada espacio donde cae de verdad: su largo y su fondo propios, uno junto al otro
         const slotW = slots ? s.l / slots : s.l; // cada espacio ocupa su pedazo del largo del activo (como en el 3D); sus posiciones se acomodan dentro con las medidas del espacio
         const dirs = LC.faceVectors((LC.activoFront(state.draft, s) || {}).side);
         const specific = grp.items.some((it) => it.c);
@@ -1995,11 +1996,12 @@ function drawPositionsOverlay() {
         if (grp.items.some((it) => !it.c)) faceJobs.push({ r: { x: s.x, y: s.y, w: s.l, d: s.d }, faces: lv ? LC.facesOfLevel(s, lv) : LC.facesOfSpace(s) });
         for (let c = 1; c <= slots; c += 1) {
             const m = LC.bayMeasures(s, lv, c);
-            const kx = slotW / Math.max(m.l, 0.01);
-            const kz = s.d / Math.max(m.w, 0.01);
+            const rc = rcs[c - 1];
+            const kx = rc.l / Math.max(m.l, 0.01);
+            const kz = rc.w / Math.max(m.w, 0.01);
             const sel = grp.items.some((it) => it.c === c);
             const dim = specific && !sel ? ' dim' : '';
-            const fr = box(s.x + (c - 1) * slotW, s.y, slotW, s.d);
+            const fr = box(s.x + rc.x, s.y, rc.l, rc.w);
             if (bayColors) {
                 const paint = window.LayoutMapSvg.zonePaint(`pbay${paintSeq += 1}`, LC.bayFmtOf(state.draft, c));
                 const pts = `${f1(fr.x)},${f1(fr.y)} ${f1(fr.x + fr.w)},${f1(fr.y)} ${f1(fr.x + fr.w)},${f1(fr.y + fr.h)} ${f1(fr.x)},${f1(fr.y + fr.h)}`;
@@ -2007,11 +2009,11 @@ function drawPositionsOverlay() {
                 if (fr.w >= 24 && fr.h >= 12) add('text', { class: `pos-ov-t${dim}`, x: f1(fr.x + 3), y: f1(fr.y + 9), 'text-anchor': 'start' }, `E${ubicPad(c)}`);
             }
             add('rect', { class: `pos-ov-bay${sel ? ' sel' : ''}${dim}`, x: f1(fr.x), y: f1(fr.y), width: f1(fr.w), height: f1(fr.h) });
-            if (grp.items.some((it) => it.c === c && !it.p)) faceJobs.push({ r: { x: s.x + (c - 1) * slotW, y: s.y, w: slotW, d: s.d }, faces: LC.facesOfBay(s, lv, c) });
+            if (grp.items.some((it) => it.c === c && !it.p)) faceJobs.push({ r: { x: s.x + rc.x, y: s.y, w: rc.l, d: rc.w }, faces: LC.facesOfBay(s, lv, c) });
             LC.positionsOfBay(state.draft, s.id, lv, c).forEach((p) => {
-                const r = box(s.x + (c - 1) * slotW + p.x * kx, s.y + p.y * kz, p.l * kx, p.w * kz);
+                const r = box(s.x + rc.x + p.x * kx, s.y + p.y * kz, p.l * kx, p.w * kz);
                 const chosen = grp.items.some((it) => it.c === c && it.p === p.num);
-                if (chosen) faceJobs.push({ r: { x: s.x + (c - 1) * slotW + p.x * kx, y: s.y + p.y * kz, w: p.l * kx, d: p.w * kz }, faces: LC.facesOfPosition(s, p) });
+                if (chosen) faceJobs.push({ r: { x: s.x + rc.x + p.x * kx, y: s.y + p.y * kz, w: p.l * kx, d: p.w * kz }, faces: LC.facesOfPosition(s, p) });
                 add('rect', { class: `pos-ov-pos${chosen ? ' chosen' : ''}${dim}`, x: f1(r.x), y: f1(r.y), width: f1(Math.max(r.w, 1)), height: f1(Math.max(r.h, 1)) });
                 if (r.w >= 17 && r.h >= 8) add('text', { class: `pos-ov-t${dim}`, x: f1(r.x + r.w / 2), y: f1(r.y + r.h / 2 + 2.5), 'text-anchor': 'middle' }, `P${ubicPad(p.num)}`);
             });
