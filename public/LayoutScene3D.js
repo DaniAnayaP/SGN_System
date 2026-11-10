@@ -1503,8 +1503,8 @@
             // Gabinete (gabeta): cuerpo blanco con costados, tapa y zócalo grises, un cajón (frente blanco con su jaladera) por nivel y por espacio en la cara que mira al pasillo (su frente), y un contorno fino: así se ve limpio,
             // se distinguen los cajones y un gabinete del que está pegado a él. Se arma en un marco propio (u = a lo ancho de la cara, v = hacia afuera del frente) para cualquier lado del frente.
             const cabParts = []; const cabEdges = []; const cabEdgesDim = []; // el contorno de los gabinetes tenues va aparte, en un gris claro
-            const CAB = { core: 0xd3d8e2, frame: 0xb6bdcc, plinth: 0x98a1b3, drawer: 0xffffff, handle: 0x465065 };
-            const addCabinet3d = (s, cx, cz, fl, lv, own, mute, dimIt) => {
+            const CAB = { core: 0xd3d8e2, frame: 0xb6bdcc, plinth: 0x98a1b3, drawer: 0xffffff, handle: 0x465065, hi: 0xffb865 }; // hi = el cajón (nivel) que se enfocó
+            const addCabinet3d = (s, cx, cz, fl, lv, own, mute, dimIt, hiLevels) => {
                 const LCc = root.LayoutCalc;
                 const side = frontSides[s.id] || (LCc && LCc.activoFront ? (LCc.activoFront(layout, s) || {}).side : '') || 'S';
                 const dirs = LCc && LCc.faceVectors ? LCc.faceVectors(side) : { front: [0, 1], back: [0, -1], left: [-1, 0], right: [1, 0] };
@@ -1539,7 +1539,7 @@
                         const cols = rects && rects.length ? rects.map((r) => ({ u: r.x + r.l / 2 - s.l / 2, w: r.l })) : [{ u: 0, w: fr.W - 2 * tsF }];
                         cols.forEach((cl) => {
                             const wD = Math.max(cl.w - 0.016, 0.03);
-                            fr.put(cl.u, yc, fr.D / 2 + 0.006, wD, hD, 0.02, own !== null ? own : CAB.drawer); // el frente del cajón
+                            fr.put(cl.u, yc, fr.D / 2 + 0.006, wD, hD, 0.02, own !== null ? own : (hiLevels && hiLevels.has(k) ? CAB.hi : CAB.drawer)); // el frente del cajón (el del nivel enfocado, en naranja claro)
                             fr.put(cl.u, yc + Math.min(hD * 0.25, 0.05), fr.D / 2 + 0.03, Math.min(0.14, wD * 0.5), 0.018, 0.03, CAB.handle); // su jaladera
                         });
                     });
@@ -1644,7 +1644,7 @@
                                 const sxC = pp ? pp.l * kxz : slotWz; const szC = pp ? pp.w * kzz : s.d;
                                 const xc = PX(pp ? s.x + r2.x + (pp.x + pp.l / 2) * kxz : s.x + r2.x + slotWz / 2);
                                 const zc = PZ(pp ? s.y + r2.y + (pp.y + pp.w / 2) * kzz : s.y + s.d / 2);
-                                if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, c2, false);
+                                if (s.type === 'cabinet') { /* un gabinete se dibuja entero (con sus cajones) al terminar este bloque */ } else if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, c2, false);
                                 else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, c2, false);
                             });
                         }
@@ -1660,7 +1660,7 @@
                         const xc = PX(pp ? bx0 + (pp.x + pp.l / 2) * sxP : (rb ? s.x + rb.x + rb.l / 2 : bx0 + (ci + 0.5) * wC));
                         const zc = PZ(pp ? by0 + (pp.y + pp.w / 2) * szP : s.y + s.d / 2);
                         if (pp && cont && !solid) { const pcF = pieceMap.get(`${s.id}|${nz}|${cont}|${pp.num}`); if (pcF) addPieceVolumes(pcF, xc - sxC / 2, zc - szC / 2, sxC, szC, yB + beamC); }
-                        if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, esp || ci + 1, false);
+                        if (s.type === 'cabinet') { /* idem */ } else if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, esp || ci + 1, false);
                         else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, esp || ci + 1, false);
                         if (!solid && !contPos.length) { const dV = rb ? rb.w : s.d; bayVolume(xc, yB + beamC + hC / 2, PZ(s.y + (rb ? rb.y : 0) + dV / 2), Math.max(sxC - gx, 0.02), hC, Math.max(dV - gz, 0.02), esp || ci + 1); }
                     }
@@ -1677,6 +1677,8 @@
                     drawnBox = mergeBox(drawnBox, cage);
                     addFocusContainer(cage);
                   });
+                    // Un gabinete con un nivel (cajón), espacio o posición enfocado se ve entero, con sus cajones como los demás gabinetes; el cajón enfocado va en naranja claro (el cuadro naranja sigue marcando lo elegido).
+                    if (s.type === 'cabinet') addCabinet3d(s, cx, cz, fl, lv, own, dimS ? (c) => mixHex(c, 0xe4e7f0, 0.8) : mute, dimS, new Set(fzs.map((f2) => Math.min(Math.max(1, Number(f2.n) || 1), lv))));
                     spaceList.push({ s, x: cx, z: cz, fl, box: drawnBox });
                     return;
                 }
