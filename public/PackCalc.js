@@ -119,8 +119,8 @@
     function levelsOf(art) {
         const p = (art && art.packaging) || {};
         const main = p.main || {};
-        const out = [{ level: 0, name: '', shape: main.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(art && art.length), w: num(art && art.width), h: num(art && art.height), pieces: 1, lay: !!main.lay }];
-        (Array.isArray(p.levels) ? p.levels : []).forEach((lv, i) => out.push({ level: i + 1, name: String(lv.name || ''), shape: lv.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(lv.l), w: num(lv.w), h: num(lv.h), pieces: Math.max(1, Math.floor(num(lv.pieces)) || 1), lay: !!lv.lay }));
+        const out = [{ level: 0, name: String(main.name || ''), shape: main.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(art && art.length), w: num(art && art.width), h: num(art && art.height), pieces: 1, lay: !!main.lay, weightG: num(main.weightG) }];
+        (Array.isArray(p.levels) ? p.levels : []).forEach((lv, i) => out.push({ level: i + 1, name: String(lv.name || ''), shape: lv.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', l: num(lv.l), w: num(lv.w), h: num(lv.h), pieces: Math.max(1, Math.floor(num(lv.pieces)) || 1), lay: !!lv.lay, weightG: num(lv.weightG) }));
         return out;
     }
 

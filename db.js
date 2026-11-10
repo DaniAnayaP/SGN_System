@@ -2442,6 +2442,32 @@ if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name ==
 // Qué se acomoda en el lugar de la relación: 0 = el material principal, 1… = el empaque primario, secundario… del código (ver sku_items.packaging); NULL = sin elegir. De ahí salen cuántas piezas caben.
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'pack_level')) db.exec('ALTER TABLE code_relations ADD COLUMN pack_level INTEGER');
 
+// Unidad de Medida por Distribución (Operaciones, C. Distribución): las presentaciones en que se distribuye cada código, en cadena (principal > empaque 1 > empaque 2…). Cada nivel lleva su unidad del
+// catálogo Nuestras Unidad Medida, cuántas del nivel anterior contiene y SUS PROPIAS medidas (cm) y peso (g): nada se calcula multiplicando. Nivel 0 = el material principal (sus medidas y su peso salen de
+// Alta Artículos; aquí solo se guarda su forma y si se puede acostar). Lo capturado antes en sku_items.packaging («Empaques») se pasa solo a esta tabla (migrateSkuPackagingToDistribution).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS sku_distribution_units (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id         TEXT NOT NULL,
+        record_number INTEGER NOT NULL,
+        sku_item_id   INTEGER NOT NULL REFERENCES sku_items(id) ON DELETE CASCADE,
+        level         INTEGER NOT NULL,
+        uom           TEXT NOT NULL DEFAULT '',
+        contains      INTEGER,
+        shape         TEXT NOT NULL DEFAULT 'rectangular',
+        length        REAL NOT NULL DEFAULT 0,
+        width         REAL NOT NULL DEFAULT 0,
+        height        REAL NOT NULL DEFAULT 0,
+        weight_g      REAL NOT NULL DEFAULT 0,
+        can_lay       INTEGER NOT NULL DEFAULT 0,
+        is_test_data  INTEGER NOT NULL DEFAULT 0,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (sku_item_id, level)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sku_distribution_client ON sku_distribution_units (client_id, is_test_data);
+`);
+
 // public_token: set once (see maybeIssuePublicToken in server.js) the
 // instant an artículo's own 24 fields are all filled in -- the opaque id a
 // QR code encodes to reach its public, no-login ficha (Ficha.html). Random,
@@ -3240,6 +3266,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'roles': { area: '', modulo: 'Administración del Negocio', pantalla: 'Roles' },
     'layout': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Layout' },
     'relacion-codigo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código' },
+    'udm-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Unidad de Medida por Distribución' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
     'capacidad-almacenamiento': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Capacidad Almacenamiento' },
     'incidentes': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Incidentes' },
@@ -3578,6 +3605,7 @@ const TABLE_GRANT_PATHS = {
     // Admin > Mapa de calor (sus iconos: Temperatura | Humedad y Reproducir)
     'mapa-calor': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-mapa-calor' },
     'relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
+    'udm-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion' },
     // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
@@ -3803,6 +3831,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'incidentes-criterios': CATEGORY_BUTTON_NOTIFY,
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
+    'udm-distribucion': { create: 'colUdmDCreateAuth', delete: 'colUdmDDeleteAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -5218,8 +5247,6 @@ const SKU_ITEM_PATCHABLE_FIELDS = {
     maxStack: { column: 'max_stack', fieldKey: 'main.colArticuloMaxEstiba', optional: true },
     // Clasificación: opcional, no cuenta para los 24 datos que completan un código (ver isSkuItemComplete en server.js); se guarda el id (ver classification_id arriba).
     classificationId: { column: 'classification_id', fieldKey: 'main.colArticuloClasificacion', optional: true },
-    // Empaques (primario, secundario…), su forma y sus medidas: opcional, no cuenta para los 24 datos; se guarda el JSON canónico (ver sanitize en public/PackCalc.js).
-    packaging: { column: 'packaging', fieldKey: 'main.colArticuloEmpaques', optional: true },
 };
 
 // Cuántos códigos tienen una clasificación (o, con categoryName, los de esa Categoría Inventario que la tienen): impide borrarla o quitársela a su categoría con códigos puestos.
@@ -6347,6 +6374,91 @@ function deleteCodeRelation(id, clientId) {
 }
 
 // Filas que usan un valor (para no borrar un almacén, un sub almacén, un centro de costos o un código que ya está en Relación Código). Solo columnas conocidas.
+// --- Unidad de Medida por Distribución ---------------------------------------------------------------------------------------------------------
+const SKU_DIST_PATCHABLE_FIELDS = {
+    uom: { column: 'uom', fieldKey: 'main.colUdmDUnidad' },
+    contains: { column: 'contains', fieldKey: 'main.colUdmDContiene' },
+    shape: { column: 'shape', fieldKey: 'main.colUdmDForma' },
+    length: { column: 'length', fieldKey: 'main.colUdmDLargo' },
+    width: { column: 'width', fieldKey: 'main.colUdmDAncho' },
+    height: { column: 'height', fieldKey: 'main.colUdmDAlto' },
+    weightG: { column: 'weight_g', fieldKey: 'main.colUdmDPeso' },
+    canLay: { column: 'can_lay', fieldKey: 'main.colUdmDAcostar' },
+};
+const SKU_DIST_SELECT = `SELECT d.*, s.record_number AS sku_number, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.custom_description AS sku_custom,
+        s.main_uom AS sku_uom, s.length AS sku_length, s.width AS sku_width, s.height AS sku_height, s.article_weight AS sku_weight
+    FROM sku_distribution_units d JOIN sku_items s ON s.id = d.sku_item_id`;
+function listSkuDistribution(clientId, forTestAccount = false) {
+    return db.prepare(`${SKU_DIST_SELECT} WHERE d.client_id = ? AND d.is_test_data = ? ORDER BY s.record_number ASC, d.level ASC`).all(clientId, forTestAccount ? 1 : 0);
+}
+function listSkuDistributionBySku(clientId, forTestAccount, skuItemId) {
+    return db.prepare(`${SKU_DIST_SELECT} WHERE d.client_id = ? AND d.is_test_data = ? AND d.sku_item_id = ? ORDER BY d.level ASC`).all(clientId, forTestAccount ? 1 : 0, skuItemId);
+}
+function getSkuDistributionById(id, clientId, forTestAccount = false) {
+    return db.prepare(`${SKU_DIST_SELECT} WHERE d.id = ? AND d.client_id = ? AND d.is_test_data = ?`).get(id, clientId, forTestAccount ? 1 : 0);
+}
+function createSkuDistribution({ clientId, isTestData = false, values }) {
+    const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM sku_distribution_units WHERE client_id = ? AND is_test_data = ?').get(clientId, isTestData ? 1 : 0).n;
+    const result = db.prepare(`INSERT INTO sku_distribution_units (client_id, db_id, record_number, sku_item_id, level, uom, contains, shape, length, width, height, weight_g, can_lay, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @level, @uom, @contains, @shape, @length, @width, @height, @weightG, @canLay, @isTestData)`).run({
+        clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuItemId: values.skuItemId, level: values.level,
+        uom: values.uom || '', contains: values.contains ?? null, shape: values.shape === 'cilindrica' ? 'cilindrica' : 'rectangular',
+        length: Number(values.length) || 0, width: Number(values.width) || 0, height: Number(values.height) || 0, weightG: Number(values.weightG) || 0, canLay: values.canLay ? 1 : 0,
+    });
+    return getSkuDistributionById(result.lastInsertRowid, clientId, isTestData);
+}
+function updateSkuDistribution(id, clientId, patch, forTestAccount = false) {
+    const sets = [];
+    const params = { id, clientId };
+    for (const [key, { column }] of Object.entries(SKU_DIST_PATCHABLE_FIELDS)) {
+        if (Object.prototype.hasOwnProperty.call(patch, key)) {
+            sets.push(`${column} = @${key}`);
+            params[key] = key === 'canLay' ? (patch[key] ? 1 : 0) : patch[key];
+        }
+    }
+    if (sets.length) db.prepare(`UPDATE sku_distribution_units SET ${sets.join(', ')} WHERE id = @id AND client_id = @clientId`).run(params);
+    return getSkuDistributionById(id, clientId, forTestAccount);
+}
+function deleteSkuDistribution(id, clientId) {
+    db.prepare('DELETE FROM sku_distribution_units WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+// Lo que se capturó en la columna «Empaques» de Alta Artículos (sku_items.packaging, JSON con las piezas TOTALES de cada nivel) pasa a esta tabla: nivel 0 con su forma y su se-puede-acostar y un renglón por empaque,
+// con «contiene» = piezas del nivel / piezas del nivel anterior (si no sale entero se redondea). La unidad queda vacía (el nombre libre no es del catálogo) y el peso en 0: se completan en la pantalla nueva. Solo se pasa
+// un código que todavía no tiene renglones aquí, así que correrlo otra vez no repite nada.
+function migrateSkuPackagingToDistribution() {
+    const rows = db.prepare("SELECT id, client_id, is_test_data, packaging FROM sku_items WHERE packaging != ''").all();
+    if (!rows.length) return 0;
+    const has = db.prepare('SELECT 1 FROM sku_distribution_units WHERE sku_item_id = ? LIMIT 1');
+    let moved = 0;
+    const run = db.transaction(() => {
+        for (const r of rows) {
+            if (has.get(r.id)) continue;
+            let p = null;
+            try { p = JSON.parse(r.packaging); } catch { p = null; }
+            if (!p || typeof p !== 'object') continue;
+            const levels = Array.isArray(p.levels) ? p.levels.filter((lv) => lv && Number(lv.l) > 0 && Number(lv.h) > 0) : [];
+            const main = p.main && typeof p.main === 'object' ? p.main : {};
+            if (!levels.length && main.shape !== 'cilindrica' && !main.lay) continue;
+            const isTest = !!r.is_test_data;
+            createSkuDistribution({ clientId: r.client_id, isTestData: isTest, values: { skuItemId: r.id, level: 0, shape: main.shape, canLay: !!main.lay } });
+            let prev = 1;
+            levels.slice(0, 6).forEach((lv, i) => {
+                const total = Math.max(1, Math.floor(Number(lv.pieces)) || 1);
+                const contains = Math.max(1, Math.round(total / prev));
+                createSkuDistribution({
+                    clientId: r.client_id, isTestData: isTest,
+                    values: { skuItemId: r.id, level: i + 1, uom: '', contains, shape: lv.shape, length: lv.l, width: lv.shape === 'cilindrica' ? lv.l : lv.w, height: lv.h, weightG: 0, canLay: !!lv.lay },
+                });
+                prev = prev * contains;
+            });
+            moved += 1;
+        }
+    });
+    run();
+    return moved;
+}
+migrateSkuPackagingToDistribution();
+
 function listCodeRelationsBy(clientId, forTestAccount, column, value) {
     if (!['sku_item_id', 'cost_center_id', 'warehouse_id', 'sub_warehouse_id'].includes(column)) return [];
     return db.prepare(`SELECT * FROM code_relations WHERE client_id = ? AND is_test_data = ? AND ${column} = ?`).all(clientId, forTestAccount ? 1 : 0, value);
@@ -12385,6 +12497,13 @@ module.exports = {
     articleCategoryPatchableFields,
     updateArticleCategory,
     CODE_RELATION_PATCHABLE_FIELDS,
+    SKU_DIST_PATCHABLE_FIELDS,
+    listSkuDistribution,
+    listSkuDistributionBySku,
+    getSkuDistributionById,
+    createSkuDistribution,
+    updateSkuDistribution,
+    deleteSkuDistribution,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,

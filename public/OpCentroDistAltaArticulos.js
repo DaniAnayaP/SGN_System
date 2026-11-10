@@ -572,7 +572,6 @@ function buildRow(record) {
         cells.colArticuloCantidadCama,
         cells.colArticuloCamasPallet,
         cells.colArticuloMaxEstiba,
-        buildPackagingCell(record),
         buildEvidenceCell(record, 'evidenceFront', 'colArticuloEvidenceFront'),
         buildEvidenceCell(record, 'evidenceBack', 'colArticuloEvidenceBack'),
         buildEvidenceCell(record, 'evidenceLeft', 'colArticuloEvidenceLeft'),
@@ -596,157 +595,13 @@ function getTbody() {
     return document.querySelector('[data-table-id="nuestros-articulos"] table.data-table').tBodies[0];
 }
 
-// --- Empaques del código (primario, secundario, terciario…) --------------------------------------------------------------------------------------------
-// Cada nivel de empaque tiene su forma (rectangular o cilíndrica), sus medidas en cm y las piezas que trae; así Relación Código y el Layout saben cuántas caben en una posición (public/PackCalc.js).
-// El material principal usa las medidas de la tabla (Alto, Largo y Ancho; en un cilindro el diámetro es el Largo). Por defecto todo va de pie: «Se puede acostar» deja probar también las otras vueltas.
-const PK_MAX_LEVELS = 6;
-const pkText = (key, params) => { let text = Dashboard.t(key); Object.entries(params || {}).forEach(([k, v]) => { text = text.split(`{${k}}`).join(String(v)); }); return text; };
-const pkEsc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-let pkModal = null;
-let pkState = null; // { record, main: { shape, lay }, levels: [{ name, shape, l, w, h, pieces, lay }], editable }
-
-function packagingSummaryText(record) {
-    const p = record.packaging;
-    if (!p) return '';
-    const n = (p.levels || []).length;
-    const shape = pkText(p.main && p.main.shape === 'cilindrica' ? 'main.pkCyl' : 'main.pkRect');
-    return n ? `${shape} · ${pkText('main.pkSummary', { n })}` : shape;
-}
-function buildPackagingCell(record) {
-    const td = document.createElement('td');
-    td.dataset.col = 'colArticuloEmpaques';
-    const wrap = document.createElement('div');
-    wrap.style.display = 'flex';
-    wrap.style.alignItems = 'center';
-    wrap.style.gap = '6px';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'admin-icon-btn';
-    btn.setAttribute('data-help-key', 'colArticuloEmpaques');
-    const label = pkText('main.pkOpen');
-    btn.setAttribute('aria-label', label);
-    btn.title = label;
-    btn.innerHTML = '<i class="bx bx-package" aria-hidden="true"></i>';
-    btn.addEventListener('click', () => openPackagingDialog(record));
-    const text = document.createElement('span');
-    text.textContent = packagingSummaryText(record) || '—';
-    wrap.append(btn, text);
-    td.appendChild(wrap);
-    return td;
-}
-
-function ensurePackagingModal() {
-    if (pkModal) return;
-    pkModal = document.createElement('div');
-    pkModal.className = 'modal-overlay';
-    pkModal.id = 'pk-modal';
-    pkModal.hidden = true;
-    pkModal.innerHTML = `<div class="modal-panel pk-dialog" role="dialog" aria-modal="true" aria-labelledby="pk-title">
-        <h3 id="pk-title">${pkEsc(pkText('main.pkTitle'))}</h3>
-        <p class="pk-art" id="pk-art"></p>
-        <div class="pk-scroll"><table class="pk-table">
-            <thead><tr><th>${pkEsc(pkText('main.pkLevel'))}</th><th>${pkEsc(pkText('main.pkName'))}</th><th>${pkEsc(pkText('main.pkShape'))}</th><th>${pkEsc(pkText('main.pkLength'))}</th><th>${pkEsc(pkText('main.pkWidth'))}</th><th>${pkEsc(pkText('main.pkHeight'))}</th><th>${pkEsc(pkText('main.pkPieces'))}</th><th>${pkEsc(pkText('main.pkLay'))}</th><th></th></tr></thead>
-            <tbody id="pk-body"></tbody>
-        </table></div>
-        <p class="pk-note">${pkEsc(pkText('main.pkNote'))}</p>
-        <button type="button" class="pk-add" id="pk-add" data-help-key="pkAdd">${pkEsc(pkText('main.pkAdd'))}</button>
-        <div class="rel-foot"><span class="rel-muted" id="pk-msg"></span><button type="button" class="btn" id="pk-save">${pkEsc(pkText('main.pkSave'))}</button><button type="button" class="btn btn-secondary" id="pk-close">${pkEsc(pkText('main.whClose'))}</button></div>
-    </div>`;
-    document.body.appendChild(pkModal);
-    pkModal.addEventListener('click', (event) => {
-        if (event.target === pkModal || event.target.closest('#pk-close')) { closePackagingDialog(); return; }
-        if (event.target.closest('#pk-save')) { savePackaging(); return; }
-        if (event.target.closest('#pk-add')) { if (pkState.levels.length < PK_MAX_LEVELS) { pkState.levels.push({ name: '', shape: 'rectangular', l: '', w: '', h: '', pieces: '', lay: false }); renderPackaging(); } return; }
-        const rm = event.target.closest('[data-pk-del]');
-        if (rm) { pkState.levels.splice(Number(rm.dataset.pkDel), 1); renderPackaging(); }
-    });
-    pkModal.addEventListener('input', (event) => {
-        const el = event.target;
-        if (!pkState || !el.dataset || el.dataset.pkKey === undefined) return;
-        const i = Number(el.dataset.pkI);
-        const target = i < 0 ? pkState.main : pkState.levels[i];
-        if (!target) return;
-        const key = el.dataset.pkKey;
-        target[key] = el.type === 'checkbox' ? el.checked : el.value;
-        if (key === 'shape') renderPackaging();
-    });
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && pkModal && !pkModal.hidden) closePackagingDialog(); });
-}
-
-function openPackagingDialog(record) {
-    ensurePackagingModal();
-    const p = record.packaging || {};
-    const editable = !CODES_MODE && !isPending(record, 'packaging') && Dashboard.canEditField(TABLE_KEY, 'colArticuloEmpaques', record.packaging ? '1' : '');
-    pkState = {
-        record, editable,
-        main: { shape: p.main && p.main.shape === 'cilindrica' ? 'cilindrica' : 'rectangular', lay: !!(p.main && p.main.lay) },
-        levels: (p.levels || []).map((lv) => ({ name: lv.name || '', shape: lv.shape, l: lv.l, w: lv.shape === 'cilindrica' ? lv.l : lv.w, h: lv.h, pieces: lv.pieces, lay: !!lv.lay })),
-    };
-    document.getElementById('pk-art').textContent = `${record.sku} · ${record.customDescription || record.knownDescription || record.uniqueDescription || ''}`;
-    renderPackaging();
-    pkModal.hidden = false;
-}
-function closePackagingDialog() { if (pkModal) pkModal.hidden = true; pkState = null; }
-
-function renderPackaging() {
-    const s = pkState;
-    const dis = s.editable ? '' : ' disabled';
-    const shapeSel = (i, shape) => `<select data-pk-i="${i}" data-pk-key="shape"${dis}><option value="rectangular"${shape === 'rectangular' ? ' selected' : ''}>${pkEsc(pkText('main.pkRect'))}</option><option value="cilindrica"${shape === 'cilindrica' ? ' selected' : ''}>${pkEsc(pkText('main.pkCyl'))}</option></select>`;
-    const rec = s.record;
-    const mainCyl = s.main.shape === 'cilindrica';
-    let html = `<tr><td><b>${pkEsc(pkText('main.pkLevel0'))}</b></td><td class="pk-ro">${pkEsc(rec.mainUom || '')}</td><td>${shapeSel(-1, s.main.shape)}</td>
-        <td class="pk-ro">${pkEsc(rec.length || '—')}${mainCyl ? ' Ø' : ''}</td><td class="pk-ro">${mainCyl ? '= Ø' : pkEsc(rec.width || '—')}</td><td class="pk-ro">${pkEsc(rec.height || '—')}</td><td class="pk-ro">1</td>
-        <td><input type="checkbox" data-pk-i="-1" data-pk-key="lay"${s.main.lay ? ' checked' : ''}${dis}></td><td></td></tr>`;
-    s.levels.forEach((lv, i) => {
-        const cyl = lv.shape === 'cilindrica';
-        const num = (key, extra) => `<input type="number" step="any" min="0" value="${pkEsc(lv[key])}" data-pk-i="${i}" data-pk-key="${key}"${dis}${extra || ''}>`;
-        html += `<tr><td><b>${pkEsc(pkText(`main.pkLevel${i + 1}`))}</b></td>
-            <td><input type="text" maxlength="60" value="${pkEsc(lv.name)}" placeholder="${pkEsc(pkText('main.pkNamePh'))}" data-pk-i="${i}" data-pk-key="name"${dis}></td>
-            <td>${shapeSel(i, lv.shape)}</td>
-            <td>${num('l')}</td><td>${cyl ? '<span class="pk-ro">= Ø</span>' : num('w')}</td><td>${num('h')}</td>
-            <td><input type="number" step="1" min="1" value="${pkEsc(lv.pieces)}" data-pk-i="${i}" data-pk-key="pieces"${dis}></td>
-            <td><input type="checkbox" data-pk-i="${i}" data-pk-key="lay"${lv.lay ? ' checked' : ''}${dis}></td>
-            <td>${s.editable ? `<button type="button" class="admin-icon-btn admin-icon-btn-danger" data-pk-del="${i}" aria-label="${pkEsc(pkText('main.pkRemove'))}" title="${pkEsc(pkText('main.pkRemove'))}"><i class="bx bx-trash" aria-hidden="true"></i></button>` : ''}</td></tr>`;
-    });
-    document.getElementById('pk-body').innerHTML = html;
-    document.getElementById('pk-add').disabled = !s.editable || s.levels.length >= PK_MAX_LEVELS;
-    document.getElementById('pk-save').hidden = !s.editable;
-    document.getElementById('pk-msg').textContent = s.editable ? '' : pkText('main.fieldLocked');
-}
-
-async function savePackaging() {
-    const s = pkState;
-    if (!s || !s.editable) return;
-    const levels = s.levels.map((lv) => ({
-        name: String(lv.name || '').trim(), shape: lv.shape,
-        l: Number(lv.l), w: lv.shape === 'cilindrica' ? Number(lv.l) : Number(lv.w), h: Number(lv.h), pieces: Number(lv.pieces), lay: !!lv.lay,
-    }));
-    const body = { packaging: levels.length || s.main.shape === 'cilindrica' || s.main.lay ? { main: { shape: s.main.shape, lay: !!s.main.lay }, levels } : null };
-    const btn = document.getElementById('pk-save');
-    btn.disabled = true;
-    try {
-        const res = await fetch(`/api/business/sku-items/${s.record.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) { Dashboard.showToast(json.message || Dashboard.t('admin.saveError'), 'error'); btn.disabled = false; return; }
-        if (json.rejectedFields?.length) Dashboard.showToast(`${Dashboard.t('main.fieldLocked')}: ${json.rejectedFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'warning');
-        else if (json.pendingFields?.length) Dashboard.showToast(`${Dashboard.t('main.changePending')}: ${json.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'info');
-        else Dashboard.showToast(pkText('main.pkSaved'), 'success');
-        closePackagingDialog();
-        await refreshTable();
-    } catch (err) {
-        console.error('Alta Nuestros Artículos: failed to save packaging', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
-        btn.disabled = false;
-    }
-}
-
 function ensureEmptyState() {
     const tbody = getTbody();
     if (tbody.querySelectorAll('tr').length) return;
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = 48;
+    td.colSpan = 47;
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');

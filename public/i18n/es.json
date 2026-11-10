@@ -373,6 +373,9 @@
     "catMaterialApoyoFuncionalidadAbbr2": "Func. Pant.",
     "opCentroDistLayout": "Layout",
     "opCentroDistRelacionCodigo": "Relación Código",
+    "opCentroDistUdmDistribucion": "Unidad de Medida por Distribución",
+    "opCentroDistUdmDistribucionAbbr1": "UDM",
+    "opCentroDistUdmDistribucionAbbr2": "Distrib.",
     "opCentroDistRelacionCodigoAbbr1": "Relación Código",
     "opCentroDistRelacionCodigoAbbr2": "Rel. Código",
     "opCentroDistVerificadorSku": "Verificador Código (SKU)",
@@ -2816,7 +2819,6 @@
     "colArticuloCantidadCama": "Cantidad por cama (TI)",
     "colArticuloCamasPallet": "Camas por pallet (HI)",
     "colArticuloMaxEstiba": "Máxima estiba",
-    "colArticuloEmpaques": "Empaques",
     "storageType_original": "Por UDM original",
     "storageType_almacenamiento": "Por UDM de almacenamiento",
     "storageType_compra": "Por UDM de compra",
@@ -3477,6 +3479,21 @@
     "relTplErr_columnNeeded": "El estante {rack} tiene {max} espacios: el Localizador debe decir cuál (E001, E002…).",
     "colRelClasificacion": "Clasificación",
     "colRelSeAcomoda": "Se acomoda",
+    "colUdmDSku": "Código (SKU)",
+    "colUdmDUpc": "UPC",
+    "colUdmDDescripcion": "Descripción única",
+    "colUdmDNivel": "Presentación",
+    "colUdmDUnidad": "Unidad de medida",
+    "colUdmDContiene": "Contiene",
+    "colUdmDEquivale": "Equivale a",
+    "colUdmDForma": "Forma",
+    "colUdmDLargo": "Largo / Ø (cm)",
+    "colUdmDAncho": "Ancho (cm)",
+    "colUdmDAlto": "Alto (cm)",
+    "colUdmDPeso": "Peso (g)",
+    "colUdmDAcostar": "Se puede acostar",
+    "colUdmDCreateAuth": "Autorización para Nueva Presentación",
+    "colUdmDDeleteAuth": "Autorización para Eliminar Presentaciones",
     "colRelForma": "Forma",
     "colRelCaben": "Caben",
     "colRelCapacidad": "Capacidad (UDM)",
@@ -3533,13 +3550,33 @@
     "relStatusLocated": "Ubicado",
     "relStatusPartial": "A medias",
     "relEdit": "Editar relación",
+    "udmNew": "Nueva presentación",
+    "udmEdit": "Editar presentación",
+    "udmDialogNew": "Nueva presentación",
+    "udmDialogEdit": "Editar presentación",
+    "udmCode": "Código",
+    "udmSave": "Guardar",
+    "udmSaved": "Presentación guardada.",
+    "udmYes": "Sí",
+    "udmNo": "No",
+    "udmWith": "con",
+    "udmFromArticle": "Se captura en Alta Artículos",
+    "udmFromArticleLong": "su unidad, medidas y peso se capturan en Alta Artículos",
+    "udmChainTitle": "La secuencia de {sku}",
+    "udmChainMore": "tarima, bulto… y así sucesivamente",
+    "udmNoCode": "Elige primero el código.",
+    "udmMaxLevels": "Un código lleva el material principal y hasta {n} empaques.",
+    "udmMainMeasures": "Unidad: {uom} · medidas de Alta Artículos: largo {l} × ancho {w} × alto {h} cm. Aquí solo eliges su forma y si se puede acostar.",
+    "udmContainsLbl": "Cuántas de la presentación anterior contiene",
+    "udmWeightHint": "En gramos: 1.5 kg se escribe 1500.",
+    "udmEquiv": "Equivale a {n} {u}: {c} {p} de la presentación anterior.",
     "layoutTxtPiezas": "Piezas que caben",
     "layoutLeyendaPc2": "Empaque secundario y siguientes",
     "layoutLeyendaSobra": "Espacio que sobra",
     "layoutPcSobraFondo": "sobran {d} cm de fondo",
-    "relPackTitle": "Se acomoda",
+    "relPackTitle": "¿Qué unidad de medida quieres almacenar para este código en este lugar?",
     "relPackNoCode": "Elige primero el código.",
-    "relPackNoData": "Este código no tiene medidas ni empaques capturados en Alta Artículos.",
+    "relPackNoData": "Este código no tiene presentaciones capturadas en Unidad de Medida por Distribución.",
     "relPackNoPlace": "Elige el lugar completo (anaquel, nivel, espacio y posición) para ver cuántas piezas caben. Ya puedes elegir qué se acomoda.",
     "relPackBox": "La posición mide {l} × {w} × {h} cm (largo × fondo × alto). Elige qué se acomoda en ella:",
     "relPackSuggested": "Sugerida",
@@ -3554,25 +3591,8 @@
     "relPackBlocked": "Lo que se acomoda no cabe en esta posición: elige otra opción u otra posición.",
     "relPackTop": "Vista desde arriba",
     "layoutPiezasBtn": "Piezas que caben en cada posición",
-    "pkOpen": "Empaques del código",
-    "pkTitle": "Empaques del código",
-    "pkLevel": "Nivel",
-    "pkName": "Qué es",
-    "pkShape": "Forma",
-    "pkLength": "Largo / Ø (cm)",
-    "pkWidth": "Ancho (cm)",
-    "pkHeight": "Alto (cm)",
-    "pkPieces": "Piezas que trae",
-    "pkLay": "Se puede acostar",
-    "pkNamePh": "Caja de 12, caja master…",
     "pkRect": "Rectangular",
     "pkCyl": "Cilíndrica",
-    "pkNote": "El material principal usa las medidas de la tabla: Largo, Ancho y Alto (en un cilindro el diámetro es el Largo). Las piezas son cuántas piezas del material principal trae cada empaque. Por defecto todo va de pie.",
-    "pkAdd": "+ Agregar empaque (terciario, otro…)",
-    "pkRemove": "Quitar este empaque",
-    "pkSave": "Guardar",
-    "pkSaved": "Empaques guardados.",
-    "pkSummary": "{n} empaques",
     "pkLevel0": "Material principal",
     "pkLevel1": "Empaque primario",
     "pkLevel2": "Empaque secundario",
@@ -5108,12 +5128,40 @@
       "what": "Cambia la ubicación de este renglón en la misma ventana. Cada dato pide su propia hoja en el árbol.",
       "example": "Pasar el código del nivel 2 al nivel 3."
     },
+    "udmChain": {
+      "what": "La secuencia de presentaciones de este código, de la unidad principal hacia afuera: cada una depende de la anterior (lo que contiene) y muestra sus propias medidas y peso, y cuántas unidades principales equivale. Sale cuando en la tabla se ve un solo código.",
+      "example": "tableta × 12 → caja con 12 × 50 → caja con 50 = 600 tabletas."
+    },
+    "udmNew": {
+      "what": "Agrega la siguiente presentación de un código. La primera es el material principal (solo eliges su forma); las demás son empaques, cada uno con su unidad del catálogo, cuántas del nivel anterior contiene, sus medidas en cm y su peso en gramos.",
+      "example": "después de la caja con 12 agregas la caja con 50: contiene 50 cajas, 40 × 20 × 15 cm, 1500 g."
+    },
+    "udmEdit": {
+      "what": "Cambia los datos de esta presentación. Las medidas y el peso del material principal se capturan en Alta Artículos.",
+      "example": "corriges el peso de la caja con 12 de 1.1 a 1.3 g."
+    },
+    "colUdmDUnidad": {
+      "what": "La unidad de medida de esta presentación, elegida del catálogo Nuestras Unidad Medida.",
+      "example": "Caja."
+    },
+    "colUdmDContiene": {
+      "what": "Cuántas de la presentación anterior contiene esta. Número entero.",
+      "example": "50 cajas."
+    },
+    "colUdmDEquivale": {
+      "what": "Cuántas unidades principales trae esta presentación. Lo calcula el sistema multiplicando lo que contiene cada nivel; las medidas y el peso no se calculan.",
+      "example": "50 cajas × 12 tabletas = 600 tabletas."
+    },
+    "colUdmDPeso": {
+      "what": "El peso de esta presentación completa, en gramos (1.5 kg se escribe 1500). Cada presentación lleva el suyo: no es la suma de las de abajo.",
+      "example": "0.05 g la tableta; 1500 g la caja con 50."
+    },
     "layoutTxtPiezas": {
       "what": "Muestra u oculta las piezas que caben en cada posición: lo que se acomoda según Relación Código («Se acomoda») dibujado con su mejor acomodo, en el croquis (una capa vista desde arriba, con la cantidad y las piezas) y en el 3D (todas las capas). Solo se ven con el paso Posiciones encendido y en las posiciones que ya tienen código y qué se acomoda.",
       "example": "una posición con 27 cajas de 12 piezas se ve llena de cajas y dice «27 · 324 pz»."
     },
     "relSeAcomoda": {
-      "what": "Elige qué se pone en esta posición: el material principal o su empaque primario, secundario, terciario… Cada opción muestra, vista desde arriba, cuántas piezas de ese tamaño caben en la posición (con el mejor acomodo) y cuántas piezas (UDM) son en total. La sugerida es la que acomoda más piezas. Las medidas y los empaques se capturan en Alta Artículos. Volver a tocar la opción elegida la quita.",
+      "what": "Elige qué se pone en esta posición: el material principal o su empaque primario, secundario, terciario… Cada opción muestra, vista desde arriba, cuántas piezas de ese tamaño caben en la posición (con el mejor acomodo) y cuántas piezas (UDM) son en total. La sugerida es la que acomoda más piezas. Las presentaciones, sus medidas y su peso se capturan en Unidad de Medida por Distribución. Volver a tocar la opción elegida la quita.",
       "example": "una posición de 80 × 60 × 66 cm: la caja de 12 acomoda 27 cajas (324 piezas) y la caja master 2 cajas (192 piezas)."
     },
     "colRelSeAcomoda": {
@@ -5129,16 +5177,8 @@
       "example": "27 cajas de 12 piezas = 324 pz."
     },
     "colRelForma": {
-      "what": "La forma de lo que se acomoda: rectangular o cilíndrica. Se captura en Alta Artículos, en los empaques del código.",
+      "what": "La forma de lo que se acomoda: rectangular o cilíndrica. Se captura en Unidad de Medida por Distribución, en cada presentación del código.",
       "example": "Cilíndrica."
-    },
-    "colArticuloEmpaques": {
-      "what": "Los empaques del código: el material principal y su empaque primario, secundario, terciario… Cada uno con su forma (rectangular o cilíndrica), sus medidas en cm y cuántas piezas trae. Con eso Relación Código y el Layout calculan cuántas piezas caben en una posición. Es opcional.",
-      "example": "un frasco cilíndrico de 6.5 cm de diámetro; su caja primaria de 12 frascos mide 26.5 × 20 × 19.5 cm; la caja master trae 8 cajas (96 piezas)."
-    },
-    "pkAdd": {
-      "what": "Agrega otro nivel de empaque (hasta 6): primario, secundario, terciario…",
-      "example": "después de la caja de 12 agregas la caja master de 8 cajas."
     },
     "relUbicar": {
       "what": "Ubica este código en un lugar del almacén de forma rápida: abre una ventanita donde eliges el lugar paso a paso o buscándolo por su localizador, y se llenan solos Zona, Huella, Activo, Nivel, Espacio y Posición. Se guarda al pulsar Guardar.",

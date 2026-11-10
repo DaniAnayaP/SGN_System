@@ -8043,22 +8043,26 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .rel-pack-n b{ font-size: 1.35rem; line-height: 1; font-variant-numeric: tabular-nums; }
 .rel-pack-d{ font-size: 0.68rem; color: var(--color-text-secondary); }
 .rel-pack-warn{ color: #9A2A1F; }
-/* Alta Artículos: ventana «Empaques del código» */
-.pk-dialog{ max-width: 62rem; width: 100%; max-height: calc(100vh - 2rem); overflow: auto; display: flex; flex-direction: column; gap: 0.75rem; }
-.pk-art{ margin: 0; font-size: 0.8rem; color: var(--color-text-secondary); }
-.pk-scroll{ overflow-x: auto; }
-.pk-table{ border-collapse: collapse; width: 100%; min-width: 46rem; font-size: 0.8rem; }
-.pk-table th{ font-size: 0.64rem; letter-spacing: 0.05em; text-transform: uppercase; text-align: left; color: var(--color-text-secondary); padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
-.pk-table td{ padding: 0.35rem 0.4rem; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
-.pk-table input[type="text"], .pk-table input[type="number"], .pk-table select{ font: inherit; font-size: 0.78rem; width: 100%; min-width: 4.5rem; padding: 0.3rem 0.45rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); }
-.pk-table input:disabled, .pk-table select:disabled{ opacity: 0.55; cursor: not-allowed; }
-.pk-table select{ min-width: 7.5rem; }
-.pk-table input[type="text"]{ min-width: 8rem; }
-.pk-table td.pk-ro{ color: var(--color-text-secondary); white-space: nowrap; }
-.pk-note{ margin: 0; font-size: 0.74rem; color: var(--color-text-secondary); }
-.pk-add{ align-self: flex-start; font: inherit; font-size: 0.78rem; font-weight: 600; color: var(--color-text-primary); background: transparent; border: 1px dashed var(--color-border); border-radius: 999px; padding: 0.3rem 0.9rem; cursor: pointer; }
-.pk-add:disabled{ opacity: 0.5; cursor: not-allowed; }
-.pk-sum{ font-size: 0.74rem; color: var(--color-text-secondary); }
+/* Unidad de Medida por Distribución: la secuencia de presentaciones de un código y su ventana */
+.udm-chain{ border: 1px solid var(--color-border); border-radius: 0.9rem; background: var(--color-surface); padding: 0.75rem 1rem; margin: 0 0 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.udm-chain[hidden]{ display: none; }
+.udm-chain-title{ font-size: 0.78rem; font-weight: 600; color: var(--color-text-secondary); }
+.udm-chain-row{ display: flex; flex-wrap: wrap; align-items: stretch; gap: 0.5rem 0; }
+.udm-node{ border: 1px solid var(--color-border); border-radius: 0.7rem; padding: 0.5rem 0.7rem; display: flex; flex-direction: column; gap: 0.15rem; min-width: 11.5rem; flex: 1 1 11.5rem; max-width: 16rem; }
+.udm-node b{ font-size: 0.86rem; }
+.udm-node span{ font-size: 0.72rem; color: var(--color-text-secondary); }
+.udm-node .rel-tag{ align-self: flex-start; }
+.udm-node .udm-eq{ color: var(--color-text-primary); font-weight: 600; font-size: 0.76rem; }
+.udm-node-add{ border-style: dashed; justify-content: center; }
+.udm-link{ display: flex; align-items: center; justify-content: center; padding: 0 0.4rem; min-width: 3.2rem; position: relative; }
+.udm-link::before{ content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px solid var(--color-text-secondary); }
+.udm-link-dash::before{ border-top-style: dashed; }
+.udm-link span{ position: relative; z-index: 1; font-size: 0.74rem; font-weight: 700; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 999px; padding: 0.05rem 0.55rem; }
+.udm-dialog{ max-width: 40rem; display: flex; flex-direction: column; gap: 0.75rem; }
+#udm-fields{ display: flex; flex-direction: column; gap: 0.75rem; }
+.udm-check{ display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; min-height: 2rem; }
+.udm-check input{ width: auto; }
+td.udm-ro{ color: var(--color-text-secondary); }
 /* Relación Código: ventanita «Ubicar» (Paso a paso | Buscar) */
 .rel-loc{ max-width: 36rem; display: flex; flex-direction: column; gap: 0.75rem; }
 .rel-loc-tabs{ display: flex; gap: 0.35rem; border-bottom: 1px solid var(--color-border); }
