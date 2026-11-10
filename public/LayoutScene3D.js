@@ -196,14 +196,15 @@
         let bayFmtOn = null; // con el paso Espacios encendido: { 'número de espacio': formato propio } (los demás llevan el de fábrica de su número); null = los espacios no llevan color propio
         let focusLevels = []; // los niveles (o espacios o posiciones) que el Enfoque deja dibujados: [{ id, n, c, p, mode, all }]
         let focusContainer = null; // el cuadro (nivel o posición) que el Enfoque dejó dibujado: a él se acerca la cámara (con varios, el cuadro que los junta)
-        function addFocusContainer(b2) {
-            if (!focusContainer) { focusContainer = b2; return; }
-            const a = focusContainer;
+        // El cuadro que cubre a dos cuadros {x, y, z, sx, sy, sz} (centro y medidas); sin el primero, el segundo.
+        function mergeBox(a, b2) {
+            if (!a) return b2;
             const x0 = Math.min(a.x - a.sx / 2, b2.x - b2.sx / 2); const x1 = Math.max(a.x + a.sx / 2, b2.x + b2.sx / 2);
             const y0 = Math.min(a.y - a.sy / 2, b2.y - b2.sy / 2); const y1 = Math.max(a.y + a.sy / 2, b2.y + b2.sy / 2);
             const z0 = Math.min(a.z - a.sz / 2, b2.z - b2.sz / 2); const z1 = Math.max(a.z + a.sz / 2, b2.z + b2.sz / 2);
-            focusContainer = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: (z0 + z1) / 2, sx: x1 - x0, sy: y1 - y0, sz: z1 - z0 };
+            return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: (z0 + z1) / 2, sx: x1 - x0, sy: y1 - y0, sz: z1 - z0 };
         }
+        function addFocusContainer(b2) { focusContainer = mergeBox(focusContainer, b2); }
         let hls = []; // todo lo resaltado (puede ser más de una cosa); hl es la primera
         let hl = null; // lo resaltado: { kind: 'zone' | 'floor' | 'footprint' | 'space' | 'bay', id, strong }
         const textureCache = new Map();
@@ -1347,6 +1348,7 @@
                 const fzKey = (f) => `${Number(f.n) || 1}|${Number(f.p) > 0 || f.only ? Number(f.c) || 0 : 0}|${Number(f.p) > 0 ? Number(f.p) : 0}`;
                 const fzs = root.LayoutCalc && root.LayoutCalc.levelMeasures && root.LayoutCalc.bayMeasures ? fzsAll.filter((f, i) => fzsAll.findIndex((g2) => fzKey(g2) === fzKey(f)) === i) : [];
                 if (fzs.length) {
+                  let drawnBox = null; // lo que de este activo quedó dibujado: a eso se le toca y eso se marca al tocarlo (no el activo entero)
                   fzs.forEach((fzm) => {
                     const LCz = root.LayoutCalc;
                     const nz = Math.min(Math.max(1, Number(fzm.n) || 1), lv);
@@ -1418,9 +1420,11 @@
                             [by0, by0 + depthZ].forEach((zEdge, zi) => upr.push({ x: PX(edgeAt(xi)) + (xi === 0 ? 0.03 : (xi === postCols ? -0.03 : 0)), y: (yBot + yTop) / 2, z: PZ(zEdge) + (zi === 0 ? 0.03 : -0.03), sx: edge ? 0.06 : 0.04, sy: yTop - yBot, sz: edge ? 0.06 : 0.04, c: postC }));
                         }
                     }
-                    addFocusContainer({ x: PX(bx0 + blen / 2), y: (yBot + yTop) / 2, z: PZ(by0 + depthZ / 2), sx: blen, sy: yTop - yBot, sz: depthZ });
+                    const cage = { x: PX(bx0 + blen / 2), y: (yBot + yTop) / 2, z: PZ(by0 + depthZ / 2), sx: blen, sy: yTop - yBot, sz: depthZ };
+                    drawnBox = mergeBox(drawnBox, cage);
+                    addFocusContainer(cage);
                   });
-                    spaceList.push({ s, x: cx, z: cz, fl });
+                    spaceList.push({ s, x: cx, z: cz, fl, box: drawnBox });
                     return;
                 }
                 if (s.type === 'pallet') {
@@ -1500,7 +1504,7 @@
             if (spaceList.length) {
                 hitSpaces = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ visible: false }), spaceList.length);
                 const dummy = new THREE.Object3D();
-                spaceList.forEach((e, i) => { dummy.position.set(e.x, e.s.h / 2 + e.fl, e.z); dummy.scale.set(e.s.l, e.s.h, e.s.d); dummy.updateMatrix(); hitSpaces.setMatrixAt(i, dummy.matrix); });
+                spaceList.forEach((e, i) => { if (e.box) { dummy.position.set(e.box.x, e.box.y, e.box.z); dummy.scale.set(e.box.sx, e.box.sy, e.box.sz); } else { dummy.position.set(e.x, e.s.h / 2 + e.fl, e.z); dummy.scale.set(e.s.l, e.s.h, e.s.d); } dummy.updateMatrix(); hitSpaces.setMatrixAt(i, dummy.matrix); });
                 hitSpaces.instanceMatrix.needsUpdate = true;
                 group.assets.add(hitSpaces);
             }
@@ -1574,7 +1578,7 @@
             if (hit && hit.instanceId !== undefined) {
                 const e2 = spaceList[hit.instanceId];
                 payload = { kind: 'space', space: e2.s };
-                box = { x: e2.x, y: e2.s.h / 2, z: e2.z, sx: e2.s.l, sy: e2.s.h, sz: e2.s.d };
+                box = e2.box ? { ...e2.box } : { x: e2.x, y: e2.s.h / 2 + e2.fl, z: e2.z, sx: e2.s.l, sy: e2.s.h, sz: e2.s.d };
             } else {
                 // sin activo debajo del toque: la losa de una huella y, si no, la de una zona (una capa oculta no se puede tocar)
                 const fh = layerOn.footprints && fpMeshes.length ? raycaster.intersectObjects(fpMeshes)[0] : null;
