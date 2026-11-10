@@ -6627,6 +6627,8 @@ function layoutPermissions(req) {
         canUseSafetyQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrSeguridad'),
         // Ver las piezas que caben en cada posición (el empaque que se acomoda, de Relación Código) en el croquis y el 3D, y apagarlas, usa el icono Piezas (hoja <pantalla>/iconLayoutPiezas).
         canTogglePieces: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutPiezas'),
+        // Ver el techo en el 3D (la losa que se apoya sobre la altura de pared de cada esquina) usa el icono Techo (hoja <pantalla>/iconLayoutTecho).
+        canToggleRoof: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutTecho'),
         // Ver en el paso Localizadores qué código tiene cada localizador, con su unidad y su capacidad máxima, usa el icono Códigos en Localizadores (hoja <pantalla>/iconLayoutCodigosLocalizador);
         // relacionar un código con un localizador completo (o cambiarlo) desde el Layout, el icono Relacionar código (hoja <pantalla>/iconLayoutRelacionarCodigo).
         canSeeLocatorCodes: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutCodigosLocalizador'),

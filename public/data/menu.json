@@ -1926,6 +1926,7 @@
             { "id": "iconLayoutFormatoPiso", "labelKey": "main.layoutFormatoPisoBtn", "permissionOnly": true },
             { "id": "iconLayoutFormatoEspacio", "labelKey": "main.layoutFormatoEspacioBtn", "permissionOnly": true },
             { "id": "iconLayoutPiezas", "labelKey": "main.layoutPiezasBtn", "permissionOnly": true },
+            { "id": "iconLayoutTecho", "labelKey": "main.layoutTechoBtn", "permissionOnly": true },
             { "id": "iconLayoutCodigosLocalizador", "labelKey": "main.layoutCodigosLocalizadorBtn", "permissionOnly": true },
             { "id": "iconLayoutRelacionarCodigo", "labelKey": "main.layoutRelacionarCodigoBtn", "permissionOnly": true },
             { "id": "iconLayoutQrLimpieza", "labelKey": "main.layoutQrLimpiezaBtn", "permissionOnly": true },

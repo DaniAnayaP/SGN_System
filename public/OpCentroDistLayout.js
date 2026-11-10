@@ -4158,6 +4158,25 @@ $('layout-measures-btn').addEventListener('click', () => {
     if (state.draft) renderSvg();
 });
 // Icono Niveles: muestra u oculta lo de los pisos a desnivel (rayas, rampa y el nivel de cada zona en el croquis; el nivel en el rótulo del 3D); se recuerda en este navegador y solo lo ve quien lo tiene en el árbol.
+// Techo (solo 3D): ver u ocultar la losa del techo, que se apoya sobre la altura de pared de cada esquina (alturas distintas = techo inclinado). Empieza oculto y se recuerda en este navegador; es solo de pantalla.
+const ROOF_KEY = 'sgn_layout_roof';
+state.showRoof = false;
+try { state.showRoof = localStorage.getItem(ROOF_KEY) === '1'; } catch (err) { /* sin almacenamiento: oculto */ }
+function updateRoofBtn() {
+    const btn = $('layout-roof-btn');
+    btn.hidden = !(state.perms && state.perms.canToggleRoof);
+    btn.setAttribute('aria-pressed', String(state.showRoof));
+    btn.classList.toggle('off', !state.showRoof);
+    const label = t(state.showRoof ? 'main.layoutTechoOcultar' : 'main.layoutTechoVer');
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+}
+$('layout-roof-btn').addEventListener('click', () => {
+    state.showRoof = !state.showRoof;
+    try { localStorage.setItem(ROOF_KEY, state.showRoof ? '1' : '0'); } catch (err) { /* no se recuerda */ }
+    updateRoofBtn();
+    scheduleScene3d();
+});
 const LEVELS_KEY = 'sgn_layout_levels';
 function updateLevelsBtn() {
     const btn = $('layout-levels-btn');
@@ -4496,6 +4515,7 @@ function showEditor() {
     updateRotateBtn();
     updateOpeningBtn();
     updateLevelsBtn();
+    updateRoofBtn();
     updateTextsMenu();
     updateZoomUi();
     $('layout-empty').hidden = true;
@@ -6159,7 +6179,7 @@ function refreshScene3d() {
         picker3d.setFocus(fv3.focus ? fv3.focus.spaces : null);
         scene3d.setHiddenAssets(picker3d.getHidden(), false, !!state.findDim);
     }
-    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { positions: stepOn('ubicaciones'), pieces: piecesVisible() ? state.pieces : [], bayFmt: stepOn('posiciones') ? (state.draft.bayFmt || {}) : null, fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
+    scene3d.update({ ...shown, safetyLast: state.safetyLast || {} }, { positions: stepOn('ubicaciones'), pieces: piecesVisible() ? state.pieces : [], bayFmt: stepOn('posiciones') ? (state.draft.bayFmt || {}) : null, fronts: Object.fromEntries((state.draft.spaces || []).map((s) => [s.id, (LC.activoFront(state.draft, s) || {}).side])), labels: scene3dLabels, layers: effective3dLayers(), openings: !!state.showOpening, levels: !!state.showLevels, roof: !!state.showRoof && !!(state.perms && state.perms.canToggleRoof), floorsShow: stepOn('pisos') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), rampsShow: stepOn('rampas') || stepOn('zonas') || !!(activeFind() && activeFind().kind === 'zone'), neutralZones: (stepOn('pisos') || stepOn('rampas')) && !stepOn('zonas') && !(state.find && state.find.kind === 'zone'), clashDoors: state.showOpening ? doorClashIds() : [], focus: fv3.focus, dimLayers: dim3dLayers(), focusLevel: fxFocusLevel(), contourPick: state.focus === 'contorno' ? state.contornoMode : null });
     if (find3dReframe) {
         find3dReframe = false;
         scene3d.setView('general');

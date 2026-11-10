@@ -3621,6 +3621,9 @@
     "relPackBlocked": "What is placed does not fit in this position: choose another option or another position.",
     "relPackTop": "Top view",
     "layoutPiezasBtn": "Pieces that fit in each position",
+    "layoutTechoBtn": "See the roof in 3D",
+    "layoutTechoVer": "Show the roof",
+    "layoutTechoOcultar": "Hide the roof",
     "pkRect": "Rectangular",
     "pkCyl": "Cylindrical",
     "pkLevel0": "Main material",
@@ -5201,6 +5204,10 @@
     "colUdmDPeso": {
       "what": "The weight of this whole presentation, in grams (1.5 kg is written 1500). Each presentation has its own: it is not the sum of the ones below.",
       "example": "0.05 g the tablet; 1500 g the box of 50."
+    },
+    "layoutTecho": {
+      "what": "Shows or hides the roof in 3D. The roof rests on the wall measure given in Outline: each corner sets its height and the roof follows them, so if two walls are 3 m and the other two 2.5 m the roof looks tilted. It is translucent so you can see what is inside and it only appears in the 3D of the whole building (not with a zone in focus). It is screen-only: it does not change what is saved.",
+      "example": "you set the top wall to 3 m and the bottom one to 2.5 m, turn the roof on and see the slab slope from one side to the other."
     },
     "layoutTxtPiezas": {
       "what": "Shows or hides the pieces that fit in each position: what is placed according to Code Relation (“What is placed”) drawn with its best arrangement, in the plan (one layer seen from above, with the amount and the pieces) and in 3D (all layers). They only show with the Positions step on and in positions that already have a code and what is placed.",

@@ -3620,6 +3620,9 @@
     "relPackBlocked": "Lo que se acomoda no cabe en esta posición: elige otra opción u otra posición.",
     "relPackTop": "Vista desde arriba",
     "layoutPiezasBtn": "Piezas que caben en cada posición",
+    "layoutTechoBtn": "Ver el techo en el 3D",
+    "layoutTechoVer": "Ver el techo",
+    "layoutTechoOcultar": "Ocultar el techo",
     "pkRect": "Rectangular",
     "pkCyl": "Cilíndrica",
     "pkLevel0": "Material principal",
@@ -5200,6 +5203,10 @@
     "colUdmDPeso": {
       "what": "El peso de esta presentación completa, en gramos (1.5 kg se escribe 1500). Cada presentación lleva el suyo: no es la suma de las de abajo.",
       "example": "0.05 g la tableta; 1500 g la caja con 50."
+    },
+    "layoutTecho": {
+      "what": "Muestra u oculta el techo en el 3D. El techo se apoya sobre la medida de pared que se da en Contorno: cada esquina fija su altura y el techo se acomoda a ellas, así que si dos paredes miden 3 m y las otras dos 2.5 m el techo se ve inclinado. Es translúcido para que se vea lo de adentro y solo está en el 3D de toda la nave (con una zona enfocada no se dibuja). Es solo de pantalla: no cambia lo guardado.",
+      "example": "pones la pared de arriba a 3 m y la de abajo a 2.5 m, enciendes el techo y ves la losa bajar de un lado al otro."
     },
     "layoutTxtPiezas": {
       "what": "Muestra u oculta las piezas que caben en cada posición: lo que se acomoda según Relación Código («Se acomoda») dibujado con su mejor acomodo, en el croquis (una capa vista desde arriba, con la cantidad y las piezas) y en el 3D (todas las capas). Solo se ven con el paso Posiciones encendido y en las posiciones que ya tienen código y qué se acomoda.",

@@ -1770,6 +1770,7 @@
             iconLayoutFormatoPiso: 'bx-palette',
             iconLayoutFormatoEspacio: 'bx-palette',
             iconLayoutPiezas: 'bx-package',
+            iconLayoutTecho: 'bx-building-house',
             iconLayoutCodigosLocalizador: 'bx-barcode',
             iconLayoutRelacionarCodigo: 'bx-link',
             iconLayoutMedidas: 'bx-ruler',

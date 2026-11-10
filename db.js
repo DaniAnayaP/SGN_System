@@ -7716,6 +7716,13 @@ function seedLayoutCodesIconGrants() {
     seedLeavesForScreenHolders(LAYOUT_CODES_ICONS_SEED_KEY, path, ['iconLayoutCodigosLocalizador', 'iconLayoutPiezas'].map((leaf) => `${path.submenuPrefix}/${leaf}`), 'the Layout codes-in-locators and pieces icons');
     seedLeavesForScreenHolders(LAYOUT_RELATE_ICON_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutRelacionarCodigo`], 'the Layout relate-code icon (contract only)', { contractOnly: true });
 }
+// El icono Techo (iconLayoutTecho) se da igual, una sola vez, a quien ya tiene la pantalla Layout.
+const LAYOUT_ROOF_SEED_KEY = 'seed-layout-roof-icon-v1';
+function seedLayoutRoofIconGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(LAYOUT_ROOF_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutTecho`], 'the Layout roof icon');
+}
 const CODIGOS_SCREENS_SEED_KEY = 'seed-codigos-edicion-screens-v1';
 function seedCodigosScreensGrants() {
     const path = TABLE_GRANT_PATHS['nuestros-articulos'];
@@ -12335,6 +12342,7 @@ seedLayoutNewIconGrants();
 seedCodigosScreensGrants();
 seedUdmDistribucionScreenGrants();
 seedLayoutCodesIconGrants();
+seedLayoutRoofIconGrants();
 seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();

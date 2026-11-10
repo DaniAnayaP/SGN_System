@@ -49,7 +49,7 @@
         scene.add(sun);
         // Un grupo por capa: así cada una se muestra u oculta sola.
         const group = {};
-        ['floor', 'contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels', 'sensorLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
+        ['floor', 'roof', 'contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'zoneLabels', 'spaceLabels', 'sensorLabels'].forEach((name) => { group[name] = new THREE.Group(); scene.add(group[name]); });
         // Con zonas enfocadas y el resto «tenue», lo que no es de lo enfocado se apaga pieza por pieza: lo que se agrega a estas capas mientras se arma un elemento (fxItem) lleva su tipo y su id (userData.fx).
         let fxItem = null;
         ['walls', 'doors', 'power', 'sensors', 'columns', 'transit', 'safety', 'objects'].forEach((n) => {
@@ -184,6 +184,8 @@
         let clashSet = new Set();
         // Zonas a desnivel: con levelsOn el nivel de cada zona se escribe junto a su nombre.
         let levelsOn = true;
+        // Techo: la losa que se apoya sobre la altura de pared de cada esquina del contorno (con alturas distintas queda inclinada). Es una opción aparte (roofOn), no una capa.
+        let roofOn = false;
         // Zonas en gris neutro (paso Pisos sin el chip Zonas): no llevan su color y lo que cae sobre un piso lleva el tinte del piso.
         let neutralZones = false;
         // Qué losas de nivel se dibujan: los pisos con el paso Pisos (o Zonas) y las rampas con el paso Rampas (o Zonas), igual que el croquis; sin decir nada (la página pública) se ven los dos.
@@ -605,6 +607,7 @@
             if (opts && 'focus' in opts) focusSet = opts.focus || null;
             if (opts && 'openings' in opts) openingsOn = !!opts.openings;
             if (opts && 'levels' in opts) levelsOn = !!opts.levels;
+            if (opts && 'roof' in opts) roofOn = !!opts.roof;
             if (opts && 'neutralZones' in opts) neutralZones = !!opts.neutralZones;
             if (opts && 'floorsShow' in opts) floorsShow = !!opts.floorsShow;
             if (opts && 'rampsShow' in opts) rampsShow = !!opts.rampsShow;
@@ -759,6 +762,34 @@
             const lg = new THREE.BufferGeometry();
             lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
             group.contour.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x4a5f8f })));
+            // El techo: va ARRIBA de la medida que se da de pared. Por debajo mide la altura de cada esquina (con 2 paredes a 3 m y 2 a 2.5 m el techo queda inclinado) y encima lleva su grueso; translúcido para ver lo de adentro.
+            if (roofOn && frame.length < 3) { // con un enfoque (zonas) el techo de toda la nave taparía lo enfocado: no se dibuja
+                try {
+                    const RT = 0.14; // grueso de la losa (m)
+                    const tri = THREE.ShapeUtils.triangulateShape(V.map((p) => new THREE.Vector2(PX(p[0]), PZ(p[1]))), []);
+                    const n = V.length;
+                    const pos = [];
+                    V.forEach((p, i) => pos.push(PX(p[0]), cornerH[i], PZ(p[1]))); // abajo: la altura de pared de cada esquina
+                    V.forEach((p, i) => pos.push(PX(p[0]), cornerH[i] + RT, PZ(p[1]))); // arriba: más el grueso
+                    const idx = [];
+                    tri.forEach(([a, b, c]) => { idx.push(a, b, c, n + a, n + c, n + b); });
+                    for (let i = 0; i < n; i++) { const j = (i + 1) % n; idx.push(i, j, n + j, i, n + j, n + i); }
+                    const rg = new THREE.BufferGeometry();
+                    rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+                    rg.setIndex(idx);
+                    rg.computeVertexNormals();
+                    const roofMesh = new THREE.Mesh(rg, new THREE.MeshLambertMaterial({ color: 0xd9dde6, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }));
+                    roofMesh.raycast = () => {}; // el techo no tapa los toques a lo de abajo
+                    group.roof.add(roofMesh);
+                    const topEdges = [];
+                    for (let i = 0; i < n; i++) { const j = (i + 1) % n; topEdges.push(PX(V[i][0]), cornerH[i] + RT, PZ(V[i][1]), PX(V[j][0]), cornerH[j] + RT, PZ(V[j][1])); }
+                    const eg = new THREE.BufferGeometry();
+                    eg.setAttribute('position', new THREE.Float32BufferAttribute(topEdges, 3));
+                    const roofEdges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0x6f778a }));
+                    roofEdges.raycast = () => {};
+                    group.roof.add(roofEdges);
+                } catch (err) { /* contorno que no se puede triangular: no se dibuja el techo */ }
+            }
             // Zonas de toque del contorno (solo las pide el editor, con el paso Contorno): una cortina invisible sobre cada lado («Por lados») o un poste sobre cada esquina («Por esquinas»); tocarlas elige su renglón.
             if (contourPickMode) {
                 const hitMat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
