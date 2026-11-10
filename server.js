@@ -6800,6 +6800,11 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         const freshObstacles = LayoutCalc.newObstacleViolations(next, existing ? existing.layout : null);
         if (freshObstacles.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshObstacles.map((v) => v.message), section: 'obstaculos' });
     }
+    // Columnas y paredes libres: nada sale del contorno de la nave. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba afuera y no se tocó se deja pasar.
+    {
+        const freshInside = LayoutCalc.newObstacleInsideViolations(next, existing ? existing.layout : null);
+        if (freshInside.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshInside.map((v) => v.message), section: freshInside[0].section });
+    }
     // Pisos y rampas: nada sale del contorno de la nave. Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba afuera y no se tocó se deja pasar.
     {
         const freshFloors = LayoutCalc.newFloorViolations(next, existing ? existing.layout : null);
