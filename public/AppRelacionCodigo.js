@@ -488,7 +488,9 @@ function drawRack(rack) {
     sub.textContent = t('main.relRackSub', { levels: rack.levels, slots: rack.slots });
     let html = '';
     for (let n = rack.levels; n >= 1; n -= 1) {
-        html += `<div class="relapp-lv" style="--cols:${slotsAt(rack, n)}"><span class="relapp-ln">${n}</span>`;
+        // cada espacio ocupa lo que mide de largo (bl, de las opciones); sin ese dato (opciones guardadas por una copia vieja de la App), partes iguales; nunca más angosto que un dedo
+        const lens = range(slotsAt(rack, n)).map((e) => { const g = ((rack.positions) || []).find((x) => x.n === n && x.c === e); return g && g.bl > 0 ? g.bl : 1; });
+        html += `<div class="relapp-lv" style="--cols:${lens.length};grid-template-columns:1.4rem ${lens.map((l) => `minmax(1.8rem,${l.toFixed(3)}fr)`).join(' ')}"><span class="relapp-ln">${n}</span>`;
         for (let e = 1; e <= slotsAt(rack, n); e += 1) {
             const occs = positionsAt(rack, n, e).map((p) => occupiedBy(rack.id, n, e, p));
             const occ = occs.every(Boolean) ? occs[0] : '';

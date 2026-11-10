@@ -430,18 +430,18 @@
                 const faceBase = LC.faceVectors((LC.activoFront(layoutNoTurn, spU) || {}).side);
                 Object.keys(faceBase).forEach((k) => { faceDirs[k] = turn(faceBase[k][0], faceBase[k][1]); });
                 if (lv) {
-                    const slots = Math.max(1, LC.levelSlots(spU, lv));
-                    const slotW = spU.l / slots;
-                    for (let c = 1; c <= slots; c += 1) {
+                    const rcs = LC.levelBayRects(spU, lv); // cada espacio donde cae de verdad: su largo y su fondo propios, uno junto al otro
+                    for (let c = 1; c <= rcs.length; c += 1) {
                         const m = LC.bayMeasures(spU, lv, c);
-                        const kx = slotW / Math.max(m.l, 0.01);
-                        const kz = spU.d / Math.max(m.w, 0.01);
-                        const fr = rectOf(spU.x + (c - 1) * slotW, spU.y, slotW, spU.d);
+                        const rc = rcs[c - 1];
+                        const kx = rc.l / Math.max(m.l, 0.01);
+                        const kz = rc.w / Math.max(m.w, 0.01);
+                        const fr = rectOf(spU.x + rc.x, spU.y, rc.l, rc.w);
                         g += `<rect x="${f1(fr.x)}" y="${f1(fr.y)}" width="${f1(fr.w)}" height="${f1(fr.h)}" fill="none" stroke="#6B7089" stroke-width="0.9" stroke-dasharray="3 2"/>`;
                         const bayFaces = LC.facesOfBay(spU, lv, c);
                         if (!sameFaces(bayFaces, LC.facesOfLevel(spU, lv))) g += faceMarkSvg(fr, bayFaces, faceDirs, { width: 1.8, arrow: 3 }); // un espacio que se consume distinto que su nivel
                         (layoutNoTurn.positions || []).filter((p) => p.s === spU.id && p.n === lv && p.c === c).sort((a, z) => (a.num || 0) - (z.num || 0)).forEach((p) => {
-                            const r = rectOf(spU.x + (c - 1) * slotW + p.x * kx, spU.y + p.y * kz, p.l * kx, p.w * kz);
+                            const r = rectOf(spU.x + rc.x + p.x * kx, spU.y + p.y * kz, p.l * kx, p.w * kz);
                             g += `<rect x="${f1(r.x)}" y="${f1(r.y)}" width="${f1(Math.max(r.w, 1))}" height="${f1(Math.max(r.h, 1))}" fill="#FFFFFF" fill-opacity="0.9" stroke="#6B7089" stroke-width="0.9"/>`;
                             if (r.w >= 17 && r.h >= 8) g += `<text x="${f1(r.x + r.w / 2)}" y="${f1(r.y + r.h / 2 + 2.5)}" font-size="6.5" font-weight="600" fill="${T.chrome.ink}" text-anchor="middle">P${String(p.num).padStart(3, '0')}</text>`;
                             else if (r.w >= 8 && r.h >= 8) g += `<text x="${f1(r.x + r.w / 2)}" y="${f1(r.y + r.h / 2 + 2.3)}" font-size="5.5" font-weight="600" fill="${T.chrome.ink}" text-anchor="middle">${p.num}</text>`;
@@ -552,8 +552,10 @@
         let s = '';
         for (let n = levels; n >= 1; n -= 1) {
             const y0 = (levels - n) * (rowH + gap);
-            const slots = Math.max(1, LC.levelSlots(space, n));
-            const slotW = planW / slots;
+            const rcs = LC.levelBayRects(space, n);
+            const slots = rcs.length;
+            const totalL = Math.max(Number(space.l) || 0, rcs.reduce((acc, r) => acc + r.l, 0), 0.01); // lo que mide el activo (o lo que suman sus espacios, si pasan)
+            const spaceD = Math.max(Number(space.d) || 0, ...rcs.map((r) => r.w), 0.01);
             const lv = LC.levelMeasures(space, n);
             const name = ((space.lvls || []).find((x) => x.n === n) || {}).name || '';
             s += `<text x="0" y="${(y0 + head + 14).toFixed(1)}" font-size="15" font-weight="700" fill="${C.ink}">N${pad3(n)}</text>`;
@@ -561,14 +563,17 @@
             if (lv.h > 0 && rowH >= 70) s += `<text x="0" y="${(y0 + head + (name ? 44 : 30)).toFixed(1)}" font-size="10" fill="#6B7089">${esc(fmt(lv.h))} m</text>`;
             for (let c = 1; c <= slots; c += 1) {
                 const m = LC.bayMeasures(space, n, c);
+                const rc = rcs[c - 1];
+                const slotW = (rc.l / totalL) * planW; // este espacio ocupa lo que mide
+                const bayH = (rc.w / spaceD) * planH;
                 const kx = slotW / Math.max(m.l, 0.01);
-                const kz = planH / Math.max(m.w, 0.01);
-                const bx = titleW + (c - 1) * slotW;
+                const kz = bayH / Math.max(m.w, 0.01);
+                const bx = titleW + (rc.x / totalL) * planW;
                 const chosen = hl && hl.n === n && hl.c === c;
                 if (slotW >= 16) s += `<text x="${(bx + slotW / 2).toFixed(1)}" y="${(y0 + 11).toFixed(1)}" font-size="${slotW >= 34 ? 10 : 8}" font-weight="${chosen ? 800 : 600}" fill="${chosen ? '#E8590C' : '#6B7089'}" text-anchor="middle">${slotW >= 34 ? `E${pad3(c)}` : c}</text>`;
-                s += `<rect x="${bx.toFixed(1)}" y="${(y0 + head).toFixed(1)}" width="${slotW.toFixed(1)}" height="${planH.toFixed(1)}" fill="none" stroke="${chosen ? '#E8590C' : C.frame}" stroke-width="${chosen ? 1.6 : 1}" stroke-dasharray="${chosen ? '' : '4 3'}"/>`;
+                s += `<rect x="${bx.toFixed(1)}" y="${(y0 + head).toFixed(1)}" width="${slotW.toFixed(1)}" height="${bayH.toFixed(1)}" fill="none" stroke="${chosen ? '#E8590C' : C.frame}" stroke-width="${chosen ? 1.6 : 1}" stroke-dasharray="${chosen ? '' : '4 3'}"/>`;
                 const bayFaces = LC.facesOfBay(space, n, c);
-                if (!sameFaces(bayFaces, LC.facesOfLevel(space, n))) s += faceMarkSvg({ x: bx, y: y0 + head, w: slotW, h: planH }, bayFaces, faceDirs, { width: 1.6, arrow: 4 });
+                if (!sameFaces(bayFaces, LC.facesOfLevel(space, n))) s += faceMarkSvg({ x: bx, y: y0 + head, w: slotW, h: bayH }, bayFaces, faceDirs, { width: 1.6, arrow: 4 });
                 (byKey.get(`${n}|${c}`) || []).forEach((p) => {
                     const px = bx + p.x * kx;
                     const py = y0 + head + p.y * kz;
