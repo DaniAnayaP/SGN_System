@@ -8388,7 +8388,7 @@ app.get('/api/business/layout/cleaning-qr', requireAuth, (req, res) => {
     res.json(cleaningQrList(req, row));
 });
 // Operaciones > QR's: cada app con QR se puede hacer desde la computadora (se abre la misma pantalla que abre el QR). Cada entrada pide la hoja de su pantalla en el árbol; el administrador del cliente no depende de hojas.
-const QR_APP_SCREENS = { limpieza: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza', temperaturas: 'cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas', pedidoManual: 'cat-operaciones/cat-operaciones-centro-dist-qr-pedido-manual', seguridad: 'cat-operaciones/cat-operaciones-centro-dist-qr-seguridad', incidentes: 'cat-operaciones/cat-operaciones-centro-dist-qr-incidentes', dondeEsta: 'cat-operaciones/cat-operaciones-centro-dist-qr-donde-esta' };
+const QR_APP_SCREENS = { limpieza: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza', temperaturas: 'cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas', pedidoManual: 'cat-operaciones/cat-operaciones-centro-dist-qr-pedido-manual', seguridad: 'cat-operaciones/cat-operaciones-centro-dist-qr-seguridad', incidentes: 'cat-operaciones/cat-operaciones-centro-dist-qr-incidentes', dondeEsta: 'cat-operaciones/cat-operaciones-centro-dist-qr-donde-esta', ficha: 'cat-operaciones/cat-operaciones-centro-dist-qr-ficha' };
 function canUseQrApp(req, key) {
     return !!req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), 'supply-chain', 'sc-area-distribution-center', QR_APP_SCREENS[key]);
 }
@@ -8478,6 +8478,28 @@ app.get('/api/business/qr-apps/donde-esta', requireAuth, (req, res) => {
     const center = getCostCenterAnyLane(row.costCenterId, req.user.clientId);
     res.set('Cache-Control', 'no-store');
     res.json({ siteName: row.layout.siteName || '', zones: [], spaces: [{ key: `q:${row.costCenterId}`, id: `q:${row.costCenterId}`, kind: 'center', code: center ? center.name : '', siteName: row.layout.siteName || '', zoneId: '', zoneName: '', locator: '', path: `/q/${token}` }] });
+});
+// QR's > Ficha del código: la ficha pública (Ficha.html?token=…) es UNA POR CÓDIGO (solo los códigos ya completos en Alta Artículos traen su QR), así que aquí va una lista de códigos con buscador (SKU, UPC o descripción; el mismo
+// motor de búsqueda de todo el sistema) y «Abrir» muestra la misma ficha que abre el QR del código. No depende de un centro de costos. Se mandan los primeros 100 que cumplan; con más, se afina la búsqueda.
+const QR_FICHA_LIMIT = 100;
+app.get('/api/business/qr-apps/ficha', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!canUseQrApp(req, 'ficha')) return res.status(403).json({ message: 'No tienes permiso para esta pantalla.' });
+    const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
+    const query = publicSearchQuery(req.query.q);
+    let list = listSkuItems(req.user.clientId, !!req.user.isTestAccount).filter((r) => r.public_token);
+    if (query) {
+        if (!SearchSyntax.ready(mode, query)) list = [];
+        else {
+            const matches = publicSearchMatcher(mode, query);
+            list = list.filter((r) => matches([padSku(r.record_number), r.upc, r.unique_description, r.known_description, r.custom_description]));
+        }
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        siteName: '', zones: [], total: list.length,
+        spaces: list.slice(0, QR_FICHA_LIMIT).map((r) => ({ key: String(r.id), id: String(r.id), code: padSku(r.record_number), name: r.custom_description || r.known_description || r.unique_description || '', upc: r.upc || '', zoneId: '', zoneName: '', locator: '', path: `/Ficha.html?token=${encodeURIComponent(r.public_token)}` })),
+    });
 });
 
 // --- Temperaturas (Operaciones > C. Distribución) ------------------------------------------------------------------------------------------------

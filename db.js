@@ -7831,6 +7831,13 @@ function seedQrTemperaturasScreenGrants() {
         seedLeavesForScreenHolders(key, { ...path, submenuPrefix: `${path.submenuPrefix}/${icon}` }, ['cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas'], "the QR's Temperaturas screen");
     });
 }
+// Operaciones > QR's > Ficha del código: la reciben, una sola vez, quienes ya tienen Alta Artículos (ahí está la columna Código QR de cada código).
+const QR_FICHA_SCREEN_SEED_KEY = 'seed-qrs-ficha-screen-v1';
+function seedQrFichaScreenGrants() {
+    const path = TABLE_GRANT_PATHS['nuestros-articulos'];
+    if (!path) return;
+    seedLeavesForScreenHolders(QR_FICHA_SCREEN_SEED_KEY, path, ['cat-operaciones/cat-operaciones-centro-dist-qr-ficha'], "the QR's Ficha del código screen");
+}
 // Operaciones > QR's > Dónde está: la reciben, una sola vez, quienes ya pueden usar el QR del Layout (Ver y Operar o Modificar en la columna Códigos QR del Layout; con solo Ver no se puede usar el QR).
 const QR_DONDE_ESTA_SCREEN_SEEDS = [['seed-qrs-donde-esta-screen-v1', 'ver-y-operar'], ['seed-qrs-donde-esta-screen-editar-v1', 'editar']];
 function seedQrDondeEstaScreenGrants() {
@@ -12519,6 +12526,7 @@ seedMarcasScreenGrants();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
+seedQrFichaScreenGrants();
 seedLayoutRotateIconGrants();
 seedLayoutNamesIconGrants();
 seedLayoutZoomIconGrants();

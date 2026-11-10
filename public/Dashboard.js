@@ -12898,6 +12898,8 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-centro-dist-qr-limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-qr-limpieza' },
     // Operaciones > QR's > Temperaturas: la app de temperaturas con QR (refrigeradores y sensores), desde la computadora.
     'cat-operaciones-centro-dist-qr-temperaturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-qr-temperaturas' },
+    // Operaciones > QR's > Ficha del código: la ficha pública de cada código (el QR de la columna Código QR de Alta Artículos), desde la computadora.
+    'cat-operaciones-centro-dist-qr-ficha': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-qr-ficha' },
     // Operaciones > QR's > Dónde está: la página pública del Layout (el QR del sitio), desde la computadora.
     'cat-operaciones-centro-dist-qr-donde-esta': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-qr-donde-esta' },
     // Operaciones > QR's > Incidentes: el QR de Incidentes del centro de costos, desde la computadora.

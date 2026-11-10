@@ -2222,6 +2222,9 @@
         },
         {
           "id": "cat-operaciones-centro-dist-qr-donde-esta", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrDondeEsta", "icon": "bx-map-pin", "href": "OpCentroDistQrDondeEsta.html"
+        },
+        {
+          "id": "cat-operaciones-centro-dist-qr-ficha", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrFicha", "icon": "bx-id-card", "href": "OpCentroDistQrFicha.html"
         }
       ],
       "cat-admin": [

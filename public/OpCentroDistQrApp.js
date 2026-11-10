@@ -48,12 +48,19 @@
             label: (s) => `<b>${esc(s.code)}</b> · ${esc(typeName('safety', s.type))}${s.name ? ` · ${esc(s.name)}` : ''}`,
             haystack: (s) => `${s.code} ${typeName('safety', s.type)} ${s.name} ${s.zoneName} ${s.locator}`,
         },
+        // remote: la lista de códigos puede ser enorme, así que el buscador pide al servidor (los primeros 100 que cumplan) y no depende de un centro de costos (la ficha es una por código).
+        ficha: {
+            page: 'cat-operaciones-centro-dist-qr-ficha', api: '/api/business/qr-apps/ficha', help: 'qrsFicha', remote: true,
+            first: 'main.qrsCodigo', search: 'main.qrsBuscarCodigo', empty: 'main.qrsVacioFicha', windowTitle: 'main.qrsVentanaFicha', count: 'main.qrsCuantosCodigos',
+            label: (s) => `<b>${esc(s.code)}</b>${s.name ? ` · ${esc(s.name)}` : ''}`,
+        },
     };
     const app = APPS[document.body.dataset.qrApp];
     if (!app) return;
     let data = { zones: [], spaces: [] };
     let zone = '';
     let q = '';
+    let qTimer = null;
     let winEl = null;
 
     (async function init() {
@@ -73,9 +80,9 @@
     }
     async function load() {
         const centerId = Dashboard.getSingleSelectedCostCenterId();
-        if (!centerId) { message('bx-buildings', t('main.layoutElegirCentroTexto'), t('main.layoutElegirCentroTitulo')); return; }
+        if (!app.remote && !centerId) { message('bx-buildings', t('main.layoutElegirCentroTexto'), t('main.layoutElegirCentroTitulo')); return; }
         try {
-            const res = await fetch(`${app.api}?costCenterId=${centerId}`, { credentials: 'include' });
+            const res = await fetch(app.remote ? `${app.api}?q=${encodeURIComponent(q)}` : `${app.api}?costCenterId=${centerId}`, { credentials: 'include' });
             if (res.status === 404) { message('bx-map-alt', t('main.qrsSinLayout')); return; }
             if (res.status === 403) { message('bx-lock-alt', t('main.qrsSinPermiso')); return; }
             if (!res.ok) throw new Error('load failed');
@@ -87,20 +94,35 @@
         }
     }
 
+    // Búsqueda en el servidor (ficha): se vuelve a pedir la lista al escribir, sin volver a dibujar la caja (no se pierde el cursor).
+    async function refetch() {
+        try {
+            const res = await fetch(`${app.api}?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+            if (!res.ok) return;
+            data = await res.json();
+            renderList();
+        } catch (err) {
+            console.error('QR\'s: failed to search', err);
+        }
+    }
     function shown() {
+        if (app.remote) return data.spaces;
         return data.spaces.filter((s) => (!zone || s.zoneId === zone)
             && (!q || SearchSyntax.matches('contains', q.toLowerCase(), app.haystack(s).toLowerCase())));
     }
     function render() {
         const bar = app.simple ? '' : `<div class="qrs-bar">
-                <select id="qrs-zone" aria-label="${esc(Dashboard.t('main.colLimZona'))}"><option value="">${esc(t('main.qrsTodasZonas'))}</option>${data.zones.map((z) => `<option value="${esc(z.id)}"${z.id === zone ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}</select>
+                ${app.remote ? '' : `<select id="qrs-zone" aria-label="${esc(Dashboard.t('main.colLimZona'))}"><option value="">${esc(t('main.qrsTodasZonas'))}</option>${data.zones.map((z) => `<option value="${esc(z.id)}"${z.id === zone ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}</select>`}
                 <input type="search" id="qrs-q" autocomplete="off" placeholder="${esc(t(app.search))}" aria-label="${esc(t(app.search))}" value="${esc(q)}">
                 <span class="qrs-count" id="qrs-count"></span>
             </div>`;
         page().innerHTML = `<div class="qrs" data-help-key="${app.help}">${bar}<div id="qrs-list"></div></div>`;
         if (!app.simple) {
-            $('qrs-zone').addEventListener('change', (event) => { zone = event.target.value; renderList(); });
-            $('qrs-q').addEventListener('input', (event) => { q = event.target.value.trim(); renderList(); });
+            if (!app.remote) $('qrs-zone').addEventListener('change', (event) => { zone = event.target.value; renderList(); });
+            $('qrs-q').addEventListener('input', (event) => {
+                q = event.target.value.trim();
+                if (app.remote) { clearTimeout(qTimer); qTimer = setTimeout(refetch, 250); } else renderList();
+            });
         }
         $('qrs-list').addEventListener('click', (event) => {
             const btn = event.target.closest('[data-open]');
@@ -110,12 +132,17 @@
     }
     function renderList() {
         const list = shown();
-        if ($('qrs-count')) $('qrs-count').textContent = t(app.count, { n: list.length });
+        if ($('qrs-count')) {
+            const n = app.remote && Number.isFinite(data.total) ? data.total : list.length;
+            $('qrs-count').textContent = app.remote && n > list.length ? t('main.qrsPrimeros', { m: list.length, n }) : t(app.count, { n });
+        }
         if (!list.length) { $('qrs-list').innerHTML = `<div class="empty-state"><i class="bx bx-qr" aria-hidden="true"></i><p>${esc(t(app.empty || 'main.qrsVacio'))}</p></div>`; return; }
         const openBtn = (s) => `<button type="button" class="btn btn-secondary" data-open="${esc(s.key || s.id)}" data-help-key="qrsAbrir">${esc(t('main.qrsAbrir'))}</button>`;
         $('qrs-list').innerHTML = app.simple
             ? `<table class="qrs-table"><thead><tr><th>${esc(Dashboard.t(app.first))}</th><th></th></tr></thead><tbody>${list.map((s) => `<tr><td>${app.label(s)}</td><td>${openBtn(s)}</td></tr>`).join('')}</tbody></table>`
-            : `<table class="qrs-table"><thead><tr><th>${esc(Dashboard.t(app.first))}</th><th>${esc(Dashboard.t('main.colLimZona'))}</th><th>${esc(Dashboard.t('main.colLimLocalizador'))}</th><th></th></tr></thead><tbody>${list.map((s) => `<tr><td>${app.label(s)}</td><td>${esc(s.zoneName || '—')}</td><td>${esc(s.locator || '—')}</td><td>${openBtn(s)}</td></tr>`).join('')}</tbody></table>`;
+            : app.remote
+                ? `<table class="qrs-table"><thead><tr><th>${esc(Dashboard.t(app.first))}</th><th>${esc(Dashboard.t('main.colArticuloUpc'))}</th><th></th></tr></thead><tbody>${list.map((s) => `<tr><td>${app.label(s)}</td><td>${esc(s.upc || '—')}</td><td>${openBtn(s)}</td></tr>`).join('')}</tbody></table>`
+                : `<table class="qrs-table"><thead><tr><th>${esc(Dashboard.t(app.first))}</th><th>${esc(Dashboard.t('main.colLimZona'))}</th><th>${esc(Dashboard.t('main.colLimLocalizador'))}</th><th></th></tr></thead><tbody>${list.map((s) => `<tr><td>${app.label(s)}</td><td>${esc(s.zoneName || '—')}</td><td>${esc(s.locator || '—')}</td><td>${openBtn(s)}</td></tr>`).join('')}</tbody></table>`;
     }
 
     // La misma pantalla que abre el QR, en una ventana sobre esta página (sin salir de aquí).
@@ -133,6 +160,12 @@
             document.body.appendChild(winEl);
             winEl.addEventListener('click', (event) => { if (event.target === winEl || event.target.closest('#qrs-win-close')) closeWindow(); });
             document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && winEl && !winEl.hidden) closeWindow(); });
+        }
+        // la página de adentro (otro documento) toma el tamaño de letra del sistema que tiene esta pantalla: las que miden en rem (Pedido Manual) crecen o se achican igual que el resto
+        const frame = $('qrs-frame');
+        if (!frame.dataset.scaleSync) {
+            frame.dataset.scaleSync = '1';
+            frame.addEventListener('load', () => { try { frame.contentDocument.documentElement.style.fontSize = getComputedStyle(document.documentElement).fontSize; } catch (e) { /* sin acceso: se queda con su tamaño */ } });
         }
         $('qrs-win-title').textContent = t(app.windowTitle, { code: s.code });
         $('qrs-win-close').textContent = t('main.qrsCerrar');
