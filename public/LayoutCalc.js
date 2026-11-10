@@ -262,6 +262,62 @@
         const before = new Set((previous ? obstacleViolations(previous) : []).map(obstacleKey));
         return obstacleViolations(next).filter((v) => !before.has(obstacleKey(v)));
     }
+    // ---- Zonas que no se enciman --------------------------------------------------------------------------------------------------------------------
+    // Cada metro de la nave es de UNA zona: dos zonas (rectángulos o formas libres) no pueden encimarse; que se toquen en la orilla sí. Mira las zonas activas con tipo y ya dibujadas (las demás no cubren piso, igual que en los KPIs).
+    // Lo que ya estaba encimado antes de esta regla solo se marca; lo NUEVO o lo que cambió (una de las dos zonas) no se deja guardar (ver newZoneOverlapViolations).
+    const ZONE_OVERLAP_MIN = 0.01; // m² que se tolera (por redondeos al capturar)
+    // Recorta un polígono con un polígono CONVEXO (Sutherland–Hodgman): el pedazo que queda adentro de clip. Los dos con las esquinas en el mismo sentido.
+    function convexClip(subject, clip) {
+        let output = subject;
+        for (let i = 0; i < clip.length && output.length; i++) {
+            const a = clip[i]; const b2 = clip[(i + 1) % clip.length];
+            const side = (p) => (b2[0] - a[0]) * (p[1] - a[1]) - (b2[1] - a[1]) * (p[0] - a[0]);
+            const input = output;
+            output = [];
+            for (let j = 0; j < input.length; j++) {
+                const p = input[j]; const q = input[(j + 1) % input.length];
+                const sp = side(p); const sq = side(q);
+                if (sp >= 0) output.push(p);
+                if ((sp >= 0) !== (sq >= 0)) { const t = sp / (sp - sq); output.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]); }
+            }
+        }
+        return output;
+    }
+    // Los m² que dos polígonos (cualquier forma sin cruzarse a sí misma) tienen en común: cada uno se parte en triángulos y se suman los pedazos de cada par.
+    function polygonOverlapArea(a, b2) {
+        const bb = (pts) => ({ x0: Math.min(...pts.map((p) => p[0])), x1: Math.max(...pts.map((p) => p[0])), y0: Math.min(...pts.map((p) => p[1])), y1: Math.max(...pts.map((p) => p[1])) });
+        const A = bb(a); const B = bb(b2);
+        if (A.x1 <= B.x0 || B.x1 <= A.x0 || A.y1 <= B.y0 || B.y1 <= A.y0) return 0;
+        const triangles = (pts) => { const t = triangulate(pts); return t ? t.map(([i, j, k]) => [pts[i], pts[j], pts[k]]) : [pts]; };
+        const ccw = (poly) => (signedArea(poly) < 0 ? poly.slice().reverse() : poly);
+        const ta = triangles(a).map(ccw); const tb = triangles(b2).map(ccw);
+        let area = 0;
+        ta.forEach((x) => tb.forEach((y) => { const c = convexClip(x, y); if (c.length >= 3) area += polygonArea(c); }));
+        return area;
+    }
+    function zoneOverlapViolations(layout) {
+        const out = [];
+        const zs = ((layout && layout.zones) || []).filter((z) => z && z.active !== false && z.type && zonePoints(z).length >= 3);
+        for (let i = 0; i < zs.length; i++) {
+            for (let j = i + 1; j < zs.length; j++) {
+                const a = zs[i]; const b2 = zs[j];
+                const area = !hasPoints(a) && !hasPoints(b2) ? rectShared(a, b2) : polygonOverlapArea(zonePoints(a), zonePoints(b2));
+                if (!(area > ZONE_OVERLAP_MIN)) continue;
+                const la = `${a.code ? `${a.code} ` : ''}${a.name || ''}`.trim() || 'Zona';
+                const lb = `${b2.code ? `${b2.code} ` : ''}${b2.name || ''}`.trim() || 'Zona';
+                out.push({ id: a.id, otherId: b2.id, kind: 'overlap', section: 'zonas', area: round2(area), a: la, b: lb, codeA: a.code || a.name || '', codeB: b2.code || b2.name || '',
+                    sig: JSON.stringify([zonePoints(a), zonePoints(b2)]),
+                    message: `Las zonas ${la} y ${lb} se enciman (${round2(area)} m²): no es posible, acomoda una de las dos o cambia sus medidas para que quede cada una aparte.` });
+            }
+        }
+        return out;
+    }
+    const zoneOverlapKey = (v) => `${v.id}|${v.otherId}|${v.sig}`;
+    // Las faltas que hay en next y que antes no estaban igual: una zona nueva, o que se movió o cambió de medidas y se enciman. Esas no se dejan guardar.
+    function newZoneOverlapViolations(next, previous) {
+        const before = new Set((previous ? zoneOverlapViolations(previous) : []).map(zoneOverlapKey));
+        return zoneOverlapViolations(next).filter((v) => !before.has(zoneOverlapKey(v)));
+    }
     // ---- Obstáculos y objetos dentro del contorno ---------------------------------------------------------------------------------------------------
     // Nada sale de la nave: una columna, un desnivel, otro obstáculo (en cualquier forma de ponerlos) y una pared libre (la que se pone «Dentro de la nave», no las que van sobre el contorno) tienen que caber ENTEROS adentro; pegados a la
     // pared de la nave cuentan como adentro. Lo que ya estaba afuera antes de esta regla solo se marca; lo NUEVO o lo que cambió (el obstáculo o el contorno) no se deja guardar (ver newObstacleInsideViolations). section = el paso donde se arregla.
@@ -3679,7 +3735,7 @@
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

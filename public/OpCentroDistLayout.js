@@ -352,6 +352,7 @@ function zoneChipsHtml(z) {
     if (Array.isArray(z.pts) && z.pts.length < 3) return `<span class="layout-chip warn">${esc(t('main.layoutPorDibujar'))}</span>`;
     const chips = [];
     if (LC.zoneOutsideNave(state.draft.vertices, z)) chips.push(`<span class="layout-chip warn">${esc(t('main.layoutSaleDeNave'))}</span>`);
+    if (zoneClash.has(z.id)) chips.push(`<span class="layout-chip warn">${esc(t('main.layoutZonaSeEnciman', { codes: zoneClash.get(z.id).join(', ') }))}</span>`);
     if (z.planM2 > 0) {
         const d = ((LC.zoneArea(z) - z.planM2) / z.planM2) * 100;
         const v = Math.round(d * 10) / 10;
@@ -507,8 +508,16 @@ function footprintZoneName(f) {
 // Una huella siempre va dentro de una zona y debe caber completa: las que no cumplen se marcan en rojo (la zona, su altura si pasa la de la nave y un contorno punteado en el croquis). fpIssues: id de la huella ->
 // { nozone | out | tall }. Se vuelve a calcular con cada cambio del borrador (renderPanel y refreshLive).
 let fpIssues = new Map();
+// Las zonas que se enciman con otra: id de la zona -> los códigos (o nombres) de las que se le enciman. Se calcula junto con lo de las huellas, antes de dibujar las marcas de cada zona.
+let zoneClash = new Map();
 function computeFootprintIssues() {
     fpIssues = new Map();
+    zoneClash = new Map();
+    if (state.draft) {
+        LC.zoneOverlapViolations(state.draft).forEach((v) => {
+            [[v.id, v.codeB], [v.otherId, v.codeA]].forEach(([id, other]) => { const list = zoneClash.get(id) || []; list.push(other); zoneClash.set(id, list); });
+        });
+    }
     if (!state.draft) return;
     LC.footprintViolations(state.draft).forEach((v) => { const m = fpIssues.get(v.id) || {}; m[v.kind] = v; fpIssues.set(v.id, m); });
 }
@@ -5926,6 +5935,19 @@ async function saveLayout() {
         renderPanel();
         refreshLive();
         Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${t('main.layoutVioZonaFueraToast', { code: v.code, name: v.name })}`, 'warning');
+        const at = (state.draft.zones || []).findIndex((z) => z.id === v.id);
+        const box = document.querySelector(`[data-l="zones"][data-i="${at}"][data-k="x"]`);
+        if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
+        return false;
+    }
+    // Zonas que no se enciman: lo nuevo o lo que cambió y no cumple no se guarda: se lleva a la persona a la primera de las dos.
+    const freshOverlap = LC.newZoneOverlapViolations(state.draft, state.saved);
+    if (freshOverlap.length) {
+        const v = freshOverlap[0];
+        showStep('zonas');
+        renderPanel();
+        refreshLive();
+        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${t('main.layoutVioZonasEncimadasToast', { a: v.a, b: v.b, area: String(v.area) })}`, 'warning');
         const at = (state.draft.zones || []).findIndex((z) => z.id === v.id);
         const box = document.querySelector(`[data-l="zones"][data-i="${at}"][data-k="x"]`);
         if (box) { box.scrollIntoView({ block: 'center' }); box.focus(); }
