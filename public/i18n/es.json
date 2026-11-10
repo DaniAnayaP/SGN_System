@@ -1896,6 +1896,7 @@
     "layoutUbicEspacio": "Espacio",
     "layoutUbicAgregar": "+ Agregar posición",
     "layoutUbicQuitar": "Quitar la posición",
+    "layoutUbicMas": "Agregar otra posición en este espacio",
     "layoutUbicUltima": "Un espacio siempre tiene al menos una posición: esta es la última y no se puede quitar.",
     "layoutUbicSin": "Este espacio todavía no tiene posiciones. Agrega la primera.",
     "layoutUbicSinEspacios": "Todavía no hay espacios. Agrégalos en Activos y Niveles: sus posiciones se acomodan aquí.",
@@ -5120,16 +5121,8 @@
       "example": "el rack tiene un pasillo principal abajo: su frente es «Abajo». Quien lo mira de frente tiene a su izquierda el lado izquierdo del croquis."
     },
     "layoutSec_ubicaciones": {
-      "what": "Cada espacio se puede dividir en una o más posiciones, acomodadas a mano. Elige el espacio arriba y agrega sus posiciones: cada una lleva su lugar dentro del espacio (X y Y desde la esquina de arriba a la izquierda), su largo, su fondo y su alto, y pueden medir distinto: a unas les das más lugar que a otras. Se acomodan como un activo dentro de una huella: arrástralas en el dibujo o escribe sus medidas. No pueden salirse del espacio, pasar de su alto ni encimarse; lo que no cumpla se marca en rojo y no se guarda. Cada posición también tiene sus caras de consumo, y solo puede usar las de su espacio. Su código sale del espacio y de su número.",
-      "example": "el espacio R001.N001.E001 mide 3 × 1 m: pones una posición de 0.6 × 1 m, otra de 0.9 × 0.5 m junto a ella y una tercera de 0.5 × 1 m más allá, cada una con su propio alto."
-    },
-    "layoutUbicEspacio": {
-      "what": "El espacio (un nivel × un lugar de izquierda a derecha de un activo) cuyas posiciones estás acomodando. El número entre paréntesis es cuántas posiciones tiene ya.",
-      "example": "R001.N001.E002 (3): el espacio 2 del nivel 1 del rack R001, con 3 posiciones."
-    },
-    "layoutUbicVista": {
-      "what": "El espacio visto desde arriba, con sus posiciones como cajas. Arrastra una caja para acomodarla (se acomoda de 5 en 5 cm) o escribe su X y Y en la tabla. En rojo, la que se sale del espacio, pasa de su alto o se encima con otra.",
-      "example": "arrastras la posición P002 hacia la derecha hasta que quede junto a la P001; si se encima con ella, las dos se ponen en rojo."
+      "what": "Cada espacio se puede dividir en una o más posiciones, acomodadas a mano. Es una tabla con un renglón por posición: con el «+» de un renglón agregas otra en ese mismo espacio. Cada una lleva su lugar dentro del espacio (X y Y desde la esquina de arriba a la izquierda), su largo, su fondo y su alto, y pueden medir distinto: a unas les das más lugar que a otras. Escribe sus medidas y mira cómo quedan en el croquis: al elegir un renglón se dibuja el nivel con sus posiciones (Tenue, Oculto o Enfoque). No pueden salirse del espacio, pasar de su alto ni encimarse; lo que no cumpla se marca en rojo y no se guarda. Cada posición también tiene sus caras de consumo, y solo puede usar las de su espacio. Su código sale del espacio y de su número.",
+      "example": "el espacio R001.N001.E001 mide 3 × 1 m: pones una posición de 0.6 × 1 m, con el «+» otra de 0.9 × 0.5 m junto a ella y una tercera de 0.5 × 1 m más allá, cada una con su propio alto."
     },
     "layoutFiltroElegirTipos": {
       "what": "Las clasificaciones de lo que hay en el Layout (Huellas, Activos, Sensores…), una junto a otra debajo del buscador, para no recorrer una lista enorme. Toca una o varias y la lista solo trae esas; «Todo» las quita. El número es cuántas coinciden con lo que escribiste en el buscador.",

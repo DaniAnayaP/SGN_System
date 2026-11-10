@@ -146,9 +146,9 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-zonas', 'layout-pisos', 'layout-rampas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-niveles', 'layout-localizadores', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-objetos', 'layout-transito'];
+const FILTER_TABLE_IDS = ['layout-ubicaciones', 'layout-zonas', 'layout-pisos', 'layout-rampas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-niveles', 'layout-localizadores', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-objetos', 'layout-transito'];
 // Qué tabla con filtro corresponde a cada lista que se agrega: al agregar un renglón se quitan sus filtros para que el nuevo siempre se vea.
-const FILTER_OF_LIST = { obstacles: 'layout-obstaculos', doors: 'layout-puertas', power: 'layout-luz', sensors: 'layout-sensores', safety: 'layout-seguridad', transit: 'layout-transito', objects: 'layout-objetos', vertices: 'layout-contorno-esquinas', contornoLados: 'layout-contorno-lados' };
+const FILTER_OF_LIST = { ubicaciones: 'layout-ubicaciones', obstacles: 'layout-obstaculos', doors: 'layout-puertas', power: 'layout-luz', sensors: 'layout-sensores', safety: 'layout-seguridad', transit: 'layout-transito', objects: 'layout-objetos', vertices: 'layout-contorno-esquinas', contornoLados: 'layout-contorno-lados' };
 function clearFilterOf(list) {
     if (window.Dashboard && Dashboard.clearExternalColumnFilters && FILTER_OF_LIST[list]) Dashboard.clearExternalColumnFilters(FILTER_OF_LIST[list]);
 }
@@ -1462,11 +1462,10 @@ function focusStep(step) {
     state.focusStack = [...state.focusStack.filter((x) => x !== step), step];
 }
 function showStep(step) { if (!stepOn(step)) state.steps = [...state.steps, step]; focusStep(step); }
-// ---- Paso «Posiciones» --------------------------------------------------------------------------------------------------------------------------------
-// Cada espacio (un nivel × una columna de un activo) se divide en posiciones acomodadas a mano, como un activo dentro de una huella: X y Y desde la esquina de arriba a la izquierda del espacio, largo, fondo y alto. Se ve el espacio desde arriba con
-// sus posiciones como cajas que se arrastran (de 5 en 5 cm) y su tabla. Lo que se sale del espacio, pasa de su alto o se encima con otra se marca en rojo y no se guarda (LayoutCalc.positionViolations).
-const POS_W = 640;
-const POS_M = 28;
+// ---- Paso «Posiciones» --------------------------------------------------------------------------------------------
+// Cada espacio (un nivel × un espacio de un activo) se divide en posiciones acomodadas a mano, como un activo dentro de una huella: X y Y desde la esquina de arriba a la izquierda del espacio, largo, fondo y alto.
+// Es una TABLA, un renglón por posición (las de todos los espacios): lo que se ve se ve en el croquis (2D y 3D) al elegir el renglón, con Tenue, Oculto y Enfoque. Lo que se sale del espacio, pasa de su alto o se encima con
+// otra se marca en rojo y no se guarda (LayoutCalc.positionViolations).
 const ubicPad = (v) => String(v).padStart(3, '0');
 function posEspacios() {
     const out = [];
@@ -1487,143 +1486,109 @@ function syncPositions() {
     state.draft.positions = ens.positions;
     if (ens.posNext) state.draft.posNext = ens.posNext;
 }
-function posCurrent() {
-    const list = posEspacios();
-    if (!list.length) return null;
-    let cur = list.find((x) => x.key === state.posSel);
-    if (!cur) { cur = list[0]; state.posSel = cur.key; }
-    return { list, cur };
-}
-const posItems = (cur) => (state.draft.positions || []).filter((p) => p.spaceId === cur.s.id && p.n === cur.n && p.c === cur.c);
-const posScale = (m) => Math.min((POS_W - 2 * POS_M) / Math.max(m.l, 0.01), 240 / Math.max(m.w, 0.01));
+const posBayItems = (spaceId, n, c) => (state.draft.positions || []).filter((p) => p.spaceId === spaceId && p.n === n && p.c === c).sort((a, b) => (a.num || 0) - (b.num || 0));
 function posVioText(v) {
     if (v.kind === 'faces') return t('main.layoutVioUbic_faces', { ...v.vars, faces: facesText(v.vars.extra), has: facesText(v.vars.up) });
     return t(`main.layoutVioUbic_${v.kind}`, v.vars);
 }
-// Las faltas de las posiciones de un espacio: id de la posición -> { out, tall, overlap, faces }
-function posViolationsOf(cur) {
+// Las faltas de TODAS las posiciones: id de la posición -> { out, tall, overlap, faces }
+function posViolationsAll() {
     const map = new Map();
-    const list = LC.positionViolations(state.draft).filter((v) => v.spaceId === cur.s.id && v.n === cur.n && v.c === cur.c);
+    const list = LC.positionViolations(state.draft);
     list.forEach((v) => {
         const m = map.get(v.id) || {}; m[v.kind] = true; map.set(v.id, m);
         if (v.kind === 'overlap' && v.vars.otherId) { const o = map.get(v.vars.otherId) || {}; o.overlap = true; map.set(v.vars.otherId, o); } // las dos que se encima se marcan
     });
     return { map, list };
 }
-function positionsSvgHtml(cur, m, items, bad) {
-    const sc = posScale(m);
-    const H = Math.round(m.w * sc + 2 * POS_M);
-    let g = `<svg id="layout-pos-svg-el" class="layout-pos-svg" viewBox="0 0 ${POS_W} ${H}" role="img" aria-label="${esc(t('main.layoutUbicVista'))}">`;
-    g += `<rect class="lp-space" x="${POS_M}" y="${POS_M}" width="${(m.l * sc).toFixed(1)}" height="${(m.w * sc).toFixed(1)}" rx="4"/>`;
-    g += `<text class="lp-dim" x="${POS_M}" y="${POS_M - 10}">${esc(fmt(m.l))} m</text>`;
-    g += `<text class="lp-dim" x="${POS_M - 8}" y="${(POS_M + (m.w * sc) / 2).toFixed(1)}" text-anchor="middle" transform="rotate(-90 ${POS_M - 8} ${(POS_M + (m.w * sc) / 2).toFixed(1)})">${esc(fmt(m.w))} m</text>`;
-    items.forEach((p) => {
-        const b = bad.get(p.id);
-        const x = POS_M + p.x * sc; const y = POS_M + p.y * sc; const w = p.l * sc; const h = p.w * sc;
-        g += `<g class="lp-pos${b ? ' bad' : ''}${state.posPick === p.id ? ' sel' : ''}" data-pid="${esc(p.id)}"><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="4"/>`
-            + `<text class="lp-code" x="${(x + w / 2).toFixed(1)}" y="${(y + h / 2 - 2).toFixed(1)}" text-anchor="middle">P${ubicPad(p.num || 1)}</text>`
-            + `<text class="lp-meas" x="${(x + w / 2).toFixed(1)}" y="${(y + h / 2 + 12).toFixed(1)}" text-anchor="middle">${esc(fmt(p.l))} × ${esc(fmt(p.w))} × ${esc(fmt(p.h))}</text></g>`;
-    });
-    return `${g}</svg>`;
-}
-function positionsKpisHtml(m, items) {
-    const used = items.reduce((s, p) => s + p.l * p.w, 0);
-    const vol = items.reduce((s, p) => s + p.l * p.w * p.h, 0);
-    const total = m.l * m.w;
-    return `<div class="layout-pos-kpi"><b>${items.length}</b><span>${esc(t('main.layoutUbicKpiPos'))}</span></div><div class="layout-pos-kpi"><b>${esc(t('main.layoutUbicKpiM2', { used: fmt(used), total: fmt(total), pct: total > 0 ? Math.round((used / total) * 100) : 0 }))}</b></div><div class="layout-pos-kpi"><b>${esc(t('main.layoutUbicKpiM3', { used: fmt(vol), total: fmt(total * m.h) }))}</b></div>`;
-}
+const POS_ROWS_MAX = 1500;
 function positionsStepHtml(dis) {
-    const pc = posCurrent();
-    if (!pc) return `<p class="layout-muted">${esc(t('main.layoutUbicSinEspacios'))}</p>`;
-    const { list, cur } = pc;
-    const s = cur.s;
-    const m = LC.bayMeasures(s, cur.n, cur.c);
-    const items = posItems(cur);
-    const counts = new Map();
-    (state.draft.positions || []).forEach((p) => { const k = `${p.spaceId}|${p.n}|${p.c}`; counts.set(k, (counts.get(k) || 0) + 1); });
-    const options = list.map((x) => `<option value="${esc(x.key)}"${x.key === cur.key ? ' selected' : ''}>${esc(`${x.s.code}.N${ubicPad(x.n)}.E${ubicPad(x.c)}`)}${x.s.ownName ? ` · ${esc(x.s.ownName)}` : ''} (${counts.get(x.key) || 0})</option>`).join('');
-    const { map: bad, list: vios } = posViolationsOf(cur);
-    const upFaces = LC.facesOfBay(s, cur.n, cur.c);
-    const num = (p, k, extra = '') => `<td><input type="number" step="0.01" min="0" data-pk="${k}" data-pid="${esc(p.id)}"${extra} value="${Math.round(p[k] * 100) / 100}"${dis ? ' disabled' : ''}></td>`;
-    const rows = items.map((p) => `<tr data-pid="${esc(p.id)}" class="${state.posPick === p.id ? 'layout-row-sel' : ''}"><td class="layout-calc"><b>${esc(LC.positionCode(s, p))}</b></td>${num(p, 'x')}${num(p, 'y')}${num(p, 'l')}${num(p, 'w')}${num(p, 'h')}<td class="layout-calc" data-pos-m2>${fmt(p.l * p.w)}</td><td class="layout-calc" data-pos-m3>${fmt(p.l * p.w * p.h)}</td>${facesCellHtml('pos', cur.i, p.n, p.c, LC.facesOfPosition(s, p), upFaces, p.faces !== undefined, dis, p.id)}<td><button type="button" class="layout-x" data-pos-del="${esc(p.id)}" aria-label="${esc(t('main.layoutUbicQuitar'))}"${items.length <= 1 ? ` title="${esc(t('main.layoutUbicUltima'))}"` : ''}${dis || items.length <= 1 ? ' disabled' : ''}>✕</button></td></tr>`);
-    const heads = ['main.layoutUbicCodigo', 'main.layoutUbicX', 'main.layoutUbicY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo', ''];
-    const dims = `${esc(t('main.layoutLargo'))} <b>${esc(fmt(m.l))}</b> · ${esc(t('main.layoutFondo'))} <b>${esc(fmt(m.w))}</b> · ${esc(t('main.layoutAlto'))} <b>${esc(fmt(m.h))}</b>`;
-    return `<div class="layout-pos">`
-        + `<div class="layout-pos-bar"><label class="layout-pos-pick" data-help-key="layoutUbicEspacio"><span>${esc(t('main.layoutUbicEspacio'))}</span><select id="layout-pos-sel">${options}</select></label><span class="layout-pos-dims">${dims}</span>`
-        + `<button type="button" class="btn btn-secondary layout-add" data-pos-add data-help-key="layoutAddRow"${dis ? ' disabled' : ''}>${esc(t('main.layoutUbicAgregar'))}</button></div>`
-        + `<div class="layout-pos-grid"><div class="layout-pos-view" data-help-key="layoutUbicVista"><h4>${esc(t('main.layoutUbicVista'))}</h4><div id="layout-pos-svg">${positionsSvgHtml(cur, m, items, bad)}</div></div>`
-        + `<div class="layout-pos-list">${items.length ? table(heads, rows, '') : `<p class="layout-muted">${esc(t('main.layoutUbicSin'))}</p>`}</div></div>`
-        + `<div class="layout-pos-kpis" id="layout-pos-kpis">${positionsKpisHtml(m, items)}</div>`
-        + `<div class="layout-vio" id="layout-pos-issues"${vios.length ? '' : ' hidden'}>${vios.slice(0, 6).map((v) => `<p>${esc(posVioText(v))}</p>`).join('')}</div>`
-        + `</div>`;
+    const bays = posEspacios();
+    if (!bays.length) return `<p class="layout-muted">${esc(t('main.layoutUbicSinEspacios'))}</p>`;
+    const { map: bad, list: vios } = posViolationsAll();
+    const num = (p, k, isBad) => `<td><input type="number" step="0.01" min="0" data-pk="${k}" data-pid="${esc(p.id)}" value="${Math.round(p[k] * 100) / 100}"${isBad ? ' class="layout-missing"' : ''}${dis ? ' disabled' : ''}></td>`;
+    const rows = [];
+    let count = 0;
+    bays.forEach((x) => {
+        const items = posBayItems(x.s.id, x.n, x.c);
+        const upFaces = LC.facesOfBay(x.s, x.n, x.c);
+        const nameOf = x.s.ownName || x.s.name || '';
+        items.forEach((p) => {
+            if (count >= POS_ROWS_MAX) return;
+            count += 1;
+            const b = bad.get(p.id) || {};
+            rows.push(`<tr data-posid="${esc(p.id)}"><td class="layout-calc"><b>${esc(LC.positionCode(x.s, p))}</b></td><td class="layout-calc">${esc(x.s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${ubicPad(x.n)}</td><td class="layout-calc">E${ubicPad(x.c)}</td>`
+                + `${num(p, 'x', b.out)}${num(p, 'y', b.out)}${num(p, 'l', b.out || b.overlap)}${num(p, 'w', b.out || b.overlap)}${num(p, 'h', b.tall)}`
+                + `<td class="layout-calc" data-pos-m2>${fmt(p.l * p.w)}</td><td class="layout-calc" data-pos-m3>${fmt(p.l * p.w * p.h)}</td>${facesCellHtml('pos', x.i, p.n, p.c, LC.facesOfPosition(x.s, p), upFaces, p.faces !== undefined, dis, p.id)}`
+                + `<td><button type="button" class="layout-x" data-pos-add="${esc(p.id)}" aria-label="${esc(t('main.layoutUbicMas'))}" title="${esc(t('main.layoutUbicMas'))}"${dis ? ' disabled' : ''}>+</button></td>`
+                + `<td><button type="button" class="layout-x" data-pos-del="${esc(p.id)}" aria-label="${esc(t('main.layoutUbicQuitar'))}"${items.length <= 1 ? ` title="${esc(t('main.layoutUbicUltima'))}"` : ''}${dis || items.length <= 1 ? ' disabled' : ''}>✕</button></td></tr>`);
+        });
+    });
+    const heads = ['main.layoutUbicCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutPosColumna', 'main.layoutUbicX', 'main.layoutUbicY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo', '', ''];
+    return `${table(heads, rows, 'layout-ubicaciones')}<div class="layout-vio" id="layout-pos-issues"${vios.length ? '' : ' hidden'}>${vios.slice(0, 6).map((v) => `<p>${esc(posVioText(v))}</p>`).join('')}</div>${count >= POS_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POS_ROWS_MAX))}</p>` : ''}`;
 }
-// Al mover una posición o escribir una medida solo se vuelven a dibujar el dibujo, los totales, los avisos y las marcas (el resto de la tabla se queda: así no se pierde el cursor).
-function positionsLive() {
-    const pc = posCurrent();
-    if (!pc || !$('layout-pos-svg')) return;
-    const { cur } = pc;
-    const m = LC.bayMeasures(cur.s, cur.n, cur.c);
-    const items = posItems(cur);
-    const { map: bad, list: vios } = posViolationsOf(cur);
-    $('layout-pos-svg').innerHTML = positionsSvgHtml(cur, m, items, bad);
-    drawPositionsOverlay();
-    $('layout-pos-kpis').innerHTML = positionsKpisHtml(m, items);
+// Al escribir una medida solo se vuelven a pintar las marcas en rojo, el aviso y los m² y m³ de ese renglón (el resto de la tabla se queda: así no se pierde el cursor).
+function positionsLive(edited) {
     const box = $('layout-pos-issues');
+    if (!box || !state.draft) return;
+    const { map: bad, list: vios } = posViolationsAll();
     box.hidden = !vios.length;
     box.innerHTML = vios.slice(0, 6).map((v) => `<p>${esc(posVioText(v))}</p>`).join('');
-    items.forEach((p) => {
-        const tr = document.querySelector(`#layout-panel tr[data-pid="${CSS.escape(p.id)}"]`);
+    const trs = new Map();
+    document.querySelectorAll('#layout-panel tr[data-posid]').forEach((tr) => trs.set(tr.getAttribute('data-posid'), tr));
+    (state.draft.positions || []).forEach((p) => {
+        const tr = trs.get(p.id);
         if (!tr) return;
         const b = bad.get(p.id) || {};
-        tr.classList.toggle('layout-row-sel', state.posPick === p.id);
         const mark = (k, on) => { const input = tr.querySelector(`[data-pk="${k}"]`); if (input) input.classList.toggle('layout-missing', !!on); };
         mark('x', b.out); mark('y', b.out); mark('l', b.out || b.overlap); mark('w', b.out || b.overlap); mark('h', b.tall);
-        const set = (k) => { const input = tr.querySelector(`[data-pk="${k}"]`); if (input && document.activeElement !== input) input.value = String(Math.round(p[k] * 100) / 100); };
-        ['x', 'y', 'l', 'w', 'h'].forEach(set);
-        const m2 = tr.querySelector('[data-pos-m2]'); if (m2) m2.textContent = fmt(p.l * p.w);
-        const m3 = tr.querySelector('[data-pos-m3]'); if (m3) m3.textContent = fmt(p.l * p.w * p.h);
+        if (edited && edited.id === p.id) {
+            const m2 = tr.querySelector('[data-pos-m2]'); if (m2) m2.textContent = fmt(p.l * p.w);
+            const m3 = tr.querySelector('[data-pos-m3]'); if (m3) m3.textContent = fmt(p.l * p.w * p.h);
+        }
     });
 }
-function addPosition() {
-    const pc = posCurrent();
-    if (!pc || !canEdit('ubicaciones')) return;
-    const { cur } = pc;
-    const m = LC.bayMeasures(cur.s, cur.n, cur.c);
-    const items = posItems(cur);
+// «+» de un renglón: otra posición en el MISMO espacio, junto a la última (a la derecha; si ya no cabe, en una segunda fila). Queda elegida: el croquis la marca.
+function addPositionAfter(posId) {
+    if (!state.draft || !canEdit('ubicaciones')) return;
+    const base = (state.draft.positions || []).find((p) => p.id === posId);
+    const sp = base && (state.draft.spaces || []).find((s) => s.id === base.spaceId);
+    if (!sp) return;
+    const m = LC.bayMeasures(sp, base.n, base.c);
+    const items = posBayItems(sp.id, base.n, base.c);
     const r2 = (v) => Math.round(v * 100) / 100;
-    // la nueva queda junto a la última (a la derecha; si ya no cabe, en una segunda fila)
     const right = items.reduce((mx, p) => Math.max(mx, p.x + p.l), 0);
     const l = r2(Math.min(0.4, Math.max(0.1, m.l - right)));
     const fits = right + l <= m.l + 0.005;
-    const key = cur.key;
+    const key = `${sp.id}|${base.n}|${base.c}`;
     const next = Math.max((state.draft.posNext && state.draft.posNext[key]) || 0, ...items.map((p) => p.num || 0), 0) + 1;
-    const pos = { id: uid('p'), spaceId: cur.s.id, n: cur.n, c: cur.c, num: next, x: fits ? r2(right) : 0, y: fits ? 0 : r2(Math.min(0.5, m.w)), l, w: r2(Math.min(0.5, m.w)), h: r2(Math.min(0.4, m.h)) };
+    const pos = { id: uid('p'), spaceId: sp.id, n: base.n, c: base.c, num: next, x: fits ? r2(right) : 0, y: fits ? 0 : r2(Math.min(0.5, m.w)), l, w: r2(Math.min(0.5, m.w)), h: r2(Math.min(0.4, m.h)) };
     if (!state.draft.positions) state.draft.positions = [];
     state.draft.positions.push(pos);
     state.draft.posNext = { ...(state.draft.posNext || {}), [key]: next };
-    state.posPick = pos.id;
+    clearFilterOf('ubicaciones');
+    state.hl = { kind: 'bay', id: sp.id, n: pos.n, c: pos.c, p: pos.num, step: state.focus };
     renderPanel();
     refreshLive();
+    markSelectedRow();
+    const row = highlightedRow();
+    if (row) row.scrollIntoView({ block: 'nearest' });
 }
 $('layout-panel').addEventListener('click', (event) => {
     const add = event.target.closest('[data-pos-add]');
-    if (add && !add.disabled) { addPosition(); return; }
+    if (add && !add.disabled) { addPositionAfter(add.getAttribute('data-pos-add')); return; }
     const del = event.target.closest('[data-pos-del]');
     if (del && !del.disabled && state.draft) {
         const gone = (state.draft.positions || []).find((p) => p.id === del.getAttribute('data-pos-del'));
         if (gone && (state.draft.positions || []).filter((p) => p.spaceId === gone.spaceId && p.n === gone.n && p.c === gone.c).length <= 1) return; // un espacio siempre tiene al menos una posición
         state.draft.positions = (state.draft.positions || []).filter((p) => p.id !== del.getAttribute('data-pos-del'));
         if (!state.draft.positions.length) delete state.draft.positions;
+        if (gone && state.hl && state.hl.kind === 'bay' && state.hl.id === gone.spaceId && state.hl.n === gone.n && state.hl.c === gone.c && state.hl.p === gone.num) state.hl = { ...state.hl, p: undefined }; // el espacio queda elegido
         renderPanel();
         refreshLive();
-        return;
     }
-    const row = event.target.closest('tr[data-pid]');
-    if (row && !event.target.closest('input, button')) { state.posPick = row.getAttribute('data-pid'); positionsLive(); }
 });
 $('layout-panel').addEventListener('change', (event) => {
-    const sel = event.target.closest('#layout-pos-sel');
-    if (sel) { state.posSel = sel.value; state.posPick = ''; renderPanel(); drawPositionsOverlay(); return; }
     if (event.target.closest('[data-pk]')) renderPanel();
 });
 $('layout-panel').addEventListener('input', (event) => {
@@ -1636,45 +1601,9 @@ $('layout-panel').addEventListener('input', (event) => {
     if (!Number.isFinite(v) || v < 0 || (k !== 'x' && k !== 'y' && v <= 0)) return;
     pos[k] = v;
     delete pos.auto; // ya no es la de fábrica: deja de seguir el tamaño de su espacio
-    state.posPick = pos.id;
-    positionsLive();
+    positionsLive(pos);
     refreshLive();
 });
-// Arrastrar una caja en el dibujo: se acomoda de 5 en 5 cm y no baja de 0 (lo que se sale del espacio se marca en rojo).
-let posDrag = null;
-$('layout-panel').addEventListener('pointerdown', (event) => {
-    const g = event.target.closest('#layout-pos-svg .lp-pos');
-    if (!g || !state.draft) return;
-    const pos = (state.draft.positions || []).find((p) => p.id === g.getAttribute('data-pid'));
-    if (!pos) return;
-    state.posPick = pos.id;
-    if (!canEdit('ubicaciones')) { positionsLive(); return; }
-    const pc = posCurrent();
-    const m = LC.bayMeasures(pc.cur.s, pc.cur.n, pc.cur.c);
-    const svg = $('layout-pos-svg-el');
-    const pt = svg.createSVGPoint(); pt.x = event.clientX; pt.y = event.clientY;
-    const at = pt.matrixTransform(svg.getScreenCTM().inverse());
-    const sc = posScale(m);
-    posDrag = { pos, sc, dx: at.x - (POS_M + pos.x * sc), dy: at.y - (POS_M + pos.y * sc), moved: false };
-    try { $('layout-pos-svg').setPointerCapture(event.pointerId); } catch (err) { /* sin captura el arrastre sigue dentro del dibujo */ }
-    positionsLive();
-});
-$('layout-panel').addEventListener('pointermove', (event) => {
-    if (!posDrag) return;
-    const svg = $('layout-pos-svg-el');
-    if (!svg) { posDrag = null; return; }
-    const pt = svg.createSVGPoint(); pt.x = event.clientX; pt.y = event.clientY;
-    const at = pt.matrixTransform(svg.getScreenCTM().inverse());
-    const snap = (v) => Math.max(0, Math.round(v / 0.05) * 0.05);
-    const nx = Math.round(snap((at.x - posDrag.dx - POS_M) / posDrag.sc) * 100) / 100;
-    const ny = Math.round(snap((at.y - posDrag.dy - POS_M) / posDrag.sc) * 100) / 100;
-    if (nx === posDrag.pos.x && ny === posDrag.pos.y) return;
-    posDrag.pos.x = nx; posDrag.pos.y = ny; posDrag.moved = true; delete posDrag.pos.auto;
-    positionsLive();
-});
-const endPosDrag = () => { if (!posDrag) return; const moved = posDrag.moved; posDrag = null; if (moved) { renderPanel(); refreshLive(); } };
-$('layout-panel').addEventListener('pointerup', endPosDrag);
-$('layout-panel').addEventListener('pointercancel', endPosDrag);
 
 // Caras de consumo: las 4 caras de un activo, un nivel o un espacio como botones que se prenden y se apagan. up = las caras que tiene lo que lo contiene (las demás no se pueden prender); stored = ya cambió las suyas.
 function facesCellHtml(kind, i, n, c, now, up, stored, dis, pid = '') {
@@ -1823,6 +1752,12 @@ function renderPanel() {
 // nivel y la columna. Es solo de pantalla (no cambia lo guardado ni la hoja que se descarga) y no hace falta redibujar el croquis: se pone y se quita sobre el dibujo que ya está.
 const HL_ROW_SELECTOR = '#layout-panel .layout-table tbody tr';
 function rowEntity(tr) {
+    // paso Posiciones: el renglón es una posición (de su espacio): se marca el espacio y la posición en el croquis y en el 3D
+    const posId = tr.getAttribute('data-posid');
+    if (posId && state.draft) {
+        const p = (state.draft.positions || []).find((x) => x.id === posId);
+        return p && (state.draft.spaces || []).some((s) => s.id === p.spaceId) ? { kind: 'bay', id: p.spaceId, n: p.n, c: p.c, p: p.num } : null;
+    }
     // Contorno por lados: los campos del renglón «Lado N» llevan data-cs="dir:N-1" (o tilt, len, h); el lado es el que va de la esquina N a la N+1
     const cs = tr.querySelector('[data-cs]');
     if (cs && state.draft) {
@@ -1852,7 +1787,7 @@ function rowEntity(tr) {
     if (list === 'bay' && state.draft.spaces[i]) return { kind: 'bay', id: state.draft.spaces[i].id, n: Number(ctl.getAttribute('data-n')), c: Number(ctl.getAttribute('data-c')) };
     return null;
 }
-const sameHighlight = (a, b) => !!a && !!b && a.kind === b.kind && a.id === b.id && a.n === b.n && a.c === b.c && a.step === b.step;
+const sameHighlight = (a, b) => !!a && !!b && a.kind === b.kind && a.id === b.id && a.n === b.n && a.c === b.c && a.p === b.p && a.step === b.step;
 // El renglón de la tabla que corresponde a lo resaltado (por id: el número de renglón cambia al quitar o agregar).
 function highlightedRow() {
     const h = state.hl;
@@ -1889,12 +1824,6 @@ function positionsOverlayTarget() {
     if (!state.draft) return null;
     const h = state.hl;
     if (h && h.step === state.focus && h.n && (h.kind === 'bay' || h.kind === 'space')) return { id: h.id, n: h.n, c: h.kind === 'bay' ? h.c : 0, p: h.p || 0 };
-    if (state.focus === 'ubicaciones') {
-        const pc = posCurrent();
-        if (!pc) return null;
-        const pick = (state.draft.positions || []).find((p) => p.id === state.posPick && p.spaceId === pc.cur.s.id && p.n === pc.cur.n && p.c === pc.cur.c);
-        return { id: pc.cur.s.id, n: pc.cur.n, c: pc.cur.c, p: pick ? pick.num : 0 };
-    }
     return null;
 }
 function drawPositionsOverlay() {
@@ -2124,23 +2053,23 @@ function clearFind() { state.find = null; state.findScope = 'all'; state.findNon
 // ---- franja de enfoque (arriba del panel de pasos) -------------------------------------------------------------------------------------
 // «Ver»: las opciones (pasos) de abajo, con «Todo». «Enfocado»: el enfoque del buscador (zona o huella) o el activo, nivel o posición del renglón que se eligió en Activos, Niveles o Posiciones. «Resto»: qué pasa con lo
 // que no es de lo enfocado, oculto o tenue (una sola elección, la misma del buscador, que se recuerda en este navegador). El enfoque de un renglón es solo del dibujo (croquis y 3D): las tablas no pierden renglones.
-// state.fxOn = la persona ya eligió Oculto o Tenue para el renglón elegido (sin eso el renglón solo se resalta, como siempre).
+// El renglón elegido en Activos, Niveles, Espacios o Posiciones enfoca el croquis y el 3D igual que lo elegido arriba (Elegir, Localizador, buscador): lo demás se ve Tenue, Oculto o con Enfoque según «Lo demás» de arriba.
 let fxLastKey = '';
-const FX_STEPS = ['activos', 'niveles', 'posiciones'];
+const FX_STEPS = ['activos', 'niveles', 'posiciones', 'ubicaciones'];
 // El activo (con su nivel o hueco) del renglón elegido en Activos, Niveles o Posiciones; null si no hay.
 function fxCandidate() {
     const h = state.hl;
     if (!h || !state.draft || h.step !== state.focus || !FX_STEPS.includes(state.focus) || !(h.kind === 'space' || h.kind === 'bay')) return null;
     const sp = state.draft.spaces.find((x) => x.id === h.id);
     if (!sp) return null;
-    const tail = h.kind === 'bay' ? ` · ${t('main.layoutPosNivel')} ${h.n} · ${t('main.layoutPosColumna')} ${h.c}` : (h.n ? ` · ${t('main.layoutPosNivel')} ${h.n}` : '');
-    return { id: sp.id, label: `${sp.code || ''}${tail}`, n: h.n || 0 };
+    const tail = h.kind === 'bay' ? ` · ${t('main.layoutPosNivel')} ${h.n} · ${t('main.layoutPosColumna')} ${h.c}${h.p ? ` · P${ubicPad(h.p)}` : ''}` : (h.n ? ` · ${t('main.layoutPosNivel')} ${h.n}` : '');
+    return { id: sp.id, label: `${sp.code || ''}${tail}`, n: h.n || 0, c: h.kind === 'bay' ? h.c : 0, p: h.p || 0 };
 }
-// El enfoque que no viene del buscador: el activo del renglón elegido, cuando ya se eligió Oculto o Tenue.
+// El enfoque que no viene del buscador: el activo (con su nivel, espacio y posición) del renglón elegido de la tabla.
 function virtualFind() {
-    if (state.find || !state.fxOn || !state.draft) return null;
+    if (state.find || !state.draft) return null;
     const c = fxCandidate();
-    return c ? { kind: 'spaces', ids: [c.id], n: c.n, from: 'row' } : null;
+    return c ? { kind: 'spaces', ids: [c.id], n: c.n, c: c.c, p: c.p, from: 'row' } : null;
 }
 const activeFind = () => state.find || virtualFind();
 // Lo que se eligió en «Elegir activos» (solo en el 3D): cuántos de cuántos; null si se ven todos.
@@ -2152,39 +2081,14 @@ function pickerFocus() {
     return { shown: total - hid, total };
 }
 function fxReframe() { resetZoom(); find3dReframe = true; }
-// Cambió el renglón elegido: con el enfoque puesto el croquis y el 3D se vuelven a armar con el activo nuevo; la franja siempre se actualiza.
+// Cambió el renglón elegido: el croquis y el 3D se vuelven a armar con lo enfocado (el activo, su nivel, su espacio y su posición); si ya no hay renglón enfocado, vuelven a verse completos.
 function fxAfterSelect() {
-    if (state.fxOn) {
-        const v = virtualFind();
-        const key = v ? v.ids.join(',') : '';
-        if (key !== fxLastKey) fxReframe();
-        fxLastKey = key;
-        renderSvg();
-    }
-}
-function fxSetRest(dim) {
-    // lo elegido en «Elegir activos»: la misma elección Oculto o Tenue vale para los activos que no se eligieron
-    if (!state.find && !fxCandidate() && pickerFocus()) {
-        setFindMode(dim ? 'tenue' : 'enfoque');
-        scheduleScene3d();
-        return;
-    }
-    if (state.find) {
-        if (state.findDim !== dim) {
-            setFindMode(dim ? 'tenue' : 'enfoque');
-            applyFind(true);
-        }
-        return;
-    }
-    if (state.fxOn && state.findDim === dim) state.fxOn = false;
-    else { state.fxOn = true; setFindMode(dim ? 'tenue' : 'enfoque'); }
-    fxLastKey = '';
-    fxReframe();
+    const v = virtualFind();
+    const key = v ? v.ids.join(',') : '';
+    if (!v && !fxLastKey) return; // sin enfoque antes ni ahora: nada que redibujar
+    if (key !== fxLastKey) fxReframe();
+    fxLastKey = key;
     renderSvg();
-}
-function fxClear() {
-    if (!state.find && !fxCandidate() && pickerFocus()) { picker3d.setHidden(new Set()); scheduleScene3d(); updateViewBtns(); return; }
-    if (state.find) { clearFind(); applyFind(true); } else { state.fxOn = false; fxLastKey = ''; fxReframe(); renderSvg(); }
 }
 // «Todo»: enciende todas las opciones; si ya están todas encendidas, las apaga y regresa a «Contorno» (el punto de partida) como la única seleccionada.
 function fxToggleAll() {
@@ -2445,7 +2349,7 @@ function findLayout(d) {
     const pad = Math.max(0.5, Math.max(x1 - x0, y1 - y0) * 0.06);
     const h = Number(d.heightM) > 0 ? d.heightM : 4;
     let rect = [[x0 - pad, y0 - pad, h], [x1 + pad, y0 - pad, h], [x1 + pad, y1 + pad, h], [x0 - pad, y1 + pad, h]];
-    if (scoped && state.mode !== 'edit' && state.findMode === 'oculto') {
+    if ((scoped || f.kind === 'spaces') && state.findMode === 'oculto') {
         // Oculto (modo Ver): solo lo elegido, centrado y al mismo tamaño que en el Layout completo (el recuadro mide lo que mide la nave, así la escala y la cámara no se acercan)
         const vx = (d.vertices || []).map((p) => p[0]);
         const vy = (d.vertices || []).map((p) => p[1]);
@@ -3126,7 +3030,7 @@ function applyViewFocus() {
 function setRest(mode) {
     if (state.findMode === mode) return;
     setFindMode(mode);
-    if (state.find) applyFind(true); else if (picker3d && pickerFocus()) scheduleScene3d();
+    if (state.find) applyFind(true); else if (virtualFind()) { fxLastKey = ''; fxReframe(); renderSvg(); } else if (picker3d && pickerFocus()) scheduleScene3d();
     renderViewStrip();
 }
 $('layout-mode-edit').addEventListener('click', goEdit);
@@ -5317,7 +5221,7 @@ function fxFocusLevel() {
     const h = state.hl;
     if (h && h.loc && h.step === state.focus && state.pick.length === 1 && state.pick[0].id === h.id) return { id: h.id, n: h.n, c: h.c, f: h.f, p: h.p, mode: state.findDim ? 'dim' : 'hide' };
     const v = virtualFind();
-    return v && v.n ? { id: v.ids[0], n: v.n, mode: state.findDim ? 'dim' : 'hide' } : null;
+    return v && v.n ? { id: v.ids[0], n: v.n, c: v.c, p: v.p, mode: state.findDim ? 'dim' : 'hide' } : null;
 }
 const lazyScripts = {};
 const can3d = () => !!(state.perms && state.perms.canView3D);
@@ -5657,7 +5561,16 @@ async function saveLayout() {
     const freshPositions = LC.newPositionViolations(state.draft, state.saved);
     if (freshPositions.length) {
         const v = freshPositions[0];
-        if (stepVisible('ubicaciones')) { showStep('ubicaciones'); state.posSel = `${v.spaceId}|${v.n}|${v.c}`; state.posPick = v.id; renderPanel(); }
+        if (stepVisible('ubicaciones')) {
+            showStep('ubicaciones');
+            const bp = (state.draft.positions || []).find((p) => p.id === v.id);
+            state.hl = { kind: 'bay', id: v.spaceId, n: v.n, c: v.c, p: bp ? bp.num : undefined, step: 'ubicaciones' };
+            renderPanel();
+            markSelectedRow();
+            const bRow = highlightedRow();
+            if (bRow) bRow.scrollIntoView({ block: 'center' });
+            applyHighlight(true);
+        }
         Dashboard.showToast(posVioText(v), 'warning');
         return false;
     }

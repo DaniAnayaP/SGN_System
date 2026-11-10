@@ -1896,6 +1896,7 @@
     "layoutUbicEspacio": "Space",
     "layoutUbicAgregar": "+ Add position",
     "layoutUbicQuitar": "Remove the position",
+    "layoutUbicMas": "Add another position in this space",
     "layoutUbicUltima": "A space always has at least one position: this is the last one and it cannot be removed.",
     "layoutUbicSin": "This space has no positions yet. Add the first one.",
     "layoutUbicSinEspacios": "There are no spaces yet. Add them in Assets and Levels: their positions are arranged here.",
@@ -5121,16 +5122,8 @@
       "example": "the rack has a main aisle below: its front is «Down». Someone looking at it from the front has the left side of the plan on their left."
     },
     "layoutSec_ubicaciones": {
-      "what": "Each space can be divided into one or more positions, placed by hand. Pick the space above and add its positions: each one has its place inside the space (X and Y from the top-left corner), its length, its depth and its height, and they can measure differently: some get more room than others. They are placed like an asset inside a footprint: drag them in the drawing or type their measures. They cannot go outside the space, be taller than it or overlap; what does not comply turns red and cannot be saved. Each position also has its consumption faces, and it can only use those of its space. Its code comes from the space and its number.",
-      "example": "space R001.N001.E001 is 3 × 1 m: you place a 0.6 × 1 m position, a 0.9 × 0.5 m one next to it and a third of 0.5 × 1 m further on, each with its own height."
-    },
-    "layoutUbicEspacio": {
-      "what": "The space (a level × a left-to-right place of an asset) whose positions you are placing. The number in parentheses is how many positions it already has.",
-      "example": "R001.N001.E002 (3): space 2 of level 1 of rack R001, with 3 positions."
-    },
-    "layoutUbicVista": {
-      "what": "The space seen from above, with its positions as boxes. Drag a box to place it (it snaps every 5 cm) or type its X and Y in the table. In red, the one that goes outside the space, is taller than it or overlaps another.",
-      "example": "you drag position P002 to the right until it sits next to P001; if it overlaps it, both turn red."
+      "what": "Each space can be divided into one or more positions, placed by hand. It is a table with one row per position: the «+» of a row adds another one in that same space. Each one has its place inside the space (X and Y from the top-left corner), its length, its depth and its height, and they can measure differently: some get more room than others. Type their measures and see how they look on the sketch: picking a row draws the level with its positions (Faded, Hidden or Focus). They cannot go outside the space, be taller than it or overlap; what does not comply turns red and cannot be saved. Each position also has its consumption faces, and it can only use those of its space. Its code comes from the space and its number.",
+      "example": "space R001.N001.E001 is 3 × 1 m: you place a 0.6 × 1 m position, with the «+» a 0.9 × 0.5 m one next to it and a third of 0.5 × 1 m further on, each with its own height."
     },
     "layoutFiltroElegirTipos": {
       "what": "The classifications of what is in the Layout (Footprints, Assets, Sensors…), side by side under the search box, so you do not have to go through a huge list. Tap one or several and the list only shows those; «All» clears them. The number is how many match what you typed in the search.",
