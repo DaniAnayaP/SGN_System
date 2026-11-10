@@ -10,7 +10,7 @@
 }(typeof self !== 'undefined' ? self : this, function () {
     const MAX_ROWS = 500; // filas por petición al servidor (la ventana parte los archivos más grandes en tandas)
 
-    // key = dato de la fila; col = hoja de permisos de esa columna en el árbol (las mismas de Relación Código). El Localizador (siempre con las 7 piezas) reúne zona, huella, activo, nivel, columna, fila y profundidad en una sola celda.
+    // key = dato de la fila; col = hoja de permisos de esa columna en el árbol (las mismas de Relación Código). El Localizador (siempre con las 6 piezas) reúne zona, huella, activo, nivel, espacio y posición (los de 7 de antes también se entienden); antes: zona, huella, activo, nivel, columna, fila y profundidad en una sola celda.
     const COLUMNS = [
         { key: 'sku', es: 'Código SKU', en: 'SKU Code', col: 'colRelSku', required: true, aliases: ['sku', 'articulo', 'codigo', 'codigo sku', 'registro unico', 'upc', 'codigo de barras'] },
         { key: 'locator', es: 'Localizador', en: 'Locator', col: 'colRelEstante', aliases: ['localizador', 'localizacion', 'ubicacion', 'locator'] },
@@ -22,9 +22,11 @@
         { key: 'footprint', es: 'Huella', en: 'Footprint', col: 'colRelHuella', aliases: ['footprint', 'huella espacio'] },
         { key: 'rack', es: 'Activo', en: 'Asset', col: 'colRelEstante', aliases: ['estante', 'anaquel', 'estanteria', 'rack', 'asset'] },
         { key: 'level', es: 'Nivel', en: 'Level', col: 'colRelNivel', aliases: ['level'] },
-        { key: 'slot', es: 'Columna', en: 'Column', col: 'colRelEspacio', aliases: ['espacio', 'slot', 'column', 'col'] },
-        { key: 'row', es: 'Fila', en: 'Row', col: 'colRelFila', aliases: ['row'] },
-        { key: 'depth', es: 'Profundidad', en: 'Depth', col: 'colRelProfundidad', aliases: ['prof', 'fondo', 'depth'] },
+        { key: 'slot', es: 'Espacio', en: 'Space', col: 'colRelEspacio', aliases: ['columna', 'slot', 'column', 'col', 'space'] },
+        { key: 'position', es: 'Posición', en: 'Position', col: 'colRelProfundidad', aliases: ['posicion', 'pos', 'position'] },
+        // Fila y Profundidad son de la forma de antes: ya no están en la plantilla, pero un archivo viejo que las traiga se sigue entendiendo (la celda fila × profundidad pasó a ser una posición).
+        { key: 'row', es: 'Fila', en: 'Row', col: 'colRelProfundidad', legacy: true, aliases: ['row'] },
+        { key: 'depth', es: 'Profundidad', en: 'Depth', col: 'colRelProfundidad', legacy: true, aliases: ['prof', 'fondo', 'depth'] },
     ];
     const BY_KEY = Object.fromEntries(COLUMNS.map((c) => [c.key, c]));
     // Clasificación del producto en ese lugar (se guarda la clave); se reconoce el nombre completo, el corto y la sigla.
@@ -66,7 +68,7 @@
             keys = head.keys;
             start = first + 1;
         } else if (/^\d/.test(String(matrix[first][0] == null ? '' : matrix[first][0]).trim()) && (matrix[first] || []).length >= 2) {
-            keys = COLUMNS.map((c) => c.key);
+            keys = COLUMNS.filter((c) => !c.legacy).map((c) => c.key);
             start = first;
         } else return { error: 'columns', rows: [] };
         const rows = [];
@@ -91,16 +93,19 @@
     const zoneNo = (z) => trailingNumber(z && z.code ? z.code : (z && z.name));
     const trailingNumber = (text) => { const m = String(text == null ? '' : text).match(/(\d+)\s*$/); return m ? Number(m[1]) : NaN; };
 
-    // El Localizador va SIEMPRE completo, con las 7 piezas: Z006.H005.A005.N003.C001.F001.P001 = Zona 6 · Huella 5 · Activo A5 · Nivel 3 · Columna 1 · Fila 1 · Profundidad 1. El hueco es nivel × columna;
-    // dentro de él están la fila y la profundidad. Z = el número con que termina el nombre de la zona; H = el del código de la huella (R-05 -> H005); la letra del activo dice qué tipo de espacio del Layout es
-    // (A anaquel, R rack, G gabeta, T tarima en piso, F frío) y su número es el del código del activo (A-05 -> A005). Ya no existe la forma corta sin la H: así el Localizador completo es el mismo en todas partes.
+    // El Localizador va SIEMPRE completo, con las 6 piezas: Z006.H005.A005.N003.E001.P001 = Zona 6 · Huella 5 · Activo A5 · Nivel 3 · Espacio 1 · Posición 1. El espacio es el lugar de izquierda a derecha de un nivel y la posición es lo que
+    // hay dentro de él (Layout > Posiciones). Z = el número con que termina el nombre de la zona; H = el del código de la huella (R-05 -> H005); la letra del activo dice qué tipo de espacio del Layout es
+    // (A anaquel, R rack, G gabeta, T tarima en piso, F frío) y su número es el del código del activo (A-05 -> A005). La forma de antes, con 7 piezas (…C001.F001.P001: columna, fila y profundidad), también se entiende: la columna es el
+    // espacio y la celda fila × profundidad es la posición que le tocó (legacy: true).
     const ASSET_TYPES = { A: 'rack', R: 'rackpal', G: 'cabinet', T: 'pallet', F: 'cold' };
     const LETTER_OF_TYPE = Object.fromEntries(Object.entries(ASSET_TYPES).map(([letter, type]) => [type, letter]));
     const pad3 = (n) => String(n).padStart(3, '0');
     function parseLocator(raw) {
         const parts = String(raw).split('.').map((s) => s.trim()).filter(Boolean);
-        const out = { zone: null, footprint: null, asset: null, level: null, column: null, row: null, depth: null };
+        const out = { zone: null, footprint: null, asset: null, level: null, column: null, position: null, row: null, depth: null, legacy: false };
         if (!parts.length || parts.length > 7) return { error: 'locatorFormat' };
+        // con alguna C (columna) o F (fila) es la forma de antes: ahí la P es la profundidad
+        out.legacy = parts.some((part) => /^[CcFf]\s*\d+$/.test(part));
         for (const part of parts) {
             const m = part.match(/^([A-Za-z])\s*(\d+)$/);
             if (!m) return { error: 'locatorFormat' };
@@ -110,13 +115,17 @@
             if (letter === 'Z') { if (out.zone !== null) return { error: 'locatorFormat' }; out.zone = n; }
             else if (letter === 'H') { if (out.footprint !== null) return { error: 'locatorFormat' }; out.footprint = n; }
             else if (letter === 'N') { if (out.level !== null) return { error: 'locatorFormat' }; out.level = n; }
-            else if (letter === 'C') { if (out.column !== null) return { error: 'locatorFormat' }; out.column = n; }
-            else if (letter === 'F') { if (out.row !== null) return { error: 'locatorFormat' }; out.row = n; }
-            else if (letter === 'P') { if (out.depth !== null) return { error: 'locatorFormat' }; out.depth = n; }
+            else if (letter === 'E' && !out.legacy) { if (out.column !== null) return { error: 'locatorFormat' }; out.column = n; }
+            else if (letter === 'C' && out.legacy) { if (out.column !== null) return { error: 'locatorFormat' }; out.column = n; }
+            else if (letter === 'F' && out.legacy) { if (out.row !== null) return { error: 'locatorFormat' }; out.row = n; }
+            else if (letter === 'P') { if (out.legacy) { if (out.depth !== null) return { error: 'locatorFormat' }; out.depth = n; } else { if (out.position !== null) return { error: 'locatorFormat' }; out.position = n; } }
             else { if (out.asset) return { error: 'locatorFormat' }; out.asset = { letter, num: n }; }
         }
-        // las 7 piezas son obligatorias: si falta alguna se dice cuáles
-        const missing = [['Z', out.zone], ['H', out.footprint], ['A', out.asset], ['N', out.level], ['C', out.column], ['F', out.row], ['P', out.depth]].filter(([, value]) => value === null).map(([name]) => name);
+        // todas las piezas son obligatorias: si falta alguna se dice cuáles
+        const pieces = out.legacy
+            ? [['Z', out.zone], ['H', out.footprint], ['A', out.asset], ['N', out.level], ['C', out.column], ['F', out.row], ['P', out.depth]]
+            : [['Z', out.zone], ['H', out.footprint], ['A', out.asset], ['N', out.level], ['E', out.column], ['P', out.position]];
+        const missing = pieces.filter(([, value]) => value === null).map(([name]) => name);
         if (missing.length) return { error: 'locatorIncomplete', missing: missing.join(', ') };
         return out;
     }
@@ -127,16 +136,26 @@
         const a = trailingNumber(p.spaceCode);
         const letter = LETTER_OF_TYPE[p.spaceType];
         if (!(z >= 1) || !(h >= 1) || !(a >= 1) || !letter || !(p.level >= 1) || !(p.slot >= 1)) return '';
-        return `Z${pad3(z)}.H${pad3(h)}.${letter}${pad3(a)}.N${pad3(p.level)}.C${pad3(p.slot)}.F${pad3(p.row || 1)}.P${pad3(p.depth || 1)}`;
+        return `Z${pad3(z)}.H${pad3(h)}.${letter}${pad3(a)}.N${pad3(p.level)}.E${pad3(p.slot)}.P${pad3(p.position || 1)}`;
     }
+    // Las posiciones de un espacio (un nivel × un espacio de un activo): [1, 2…]. rack.positions = [{ n, c, nums }] (lo manda el servidor); sin eso (opciones viejas guardadas en el celular) se supone una sola.
+    const positionsOfBay = (rack, n, c) => {
+        const hit = ((rack && rack.positions) || []).find((x) => x.n === n && x.c === c);
+        return hit ? hit.nums : [1];
+    };
+    // La celda (fila, profundidad) de la forma de antes -> la posición que le tocó: (fila − 1) × profundidades + profundidad, con las filas y profundidades que el espacio todavía trae guardadas.
+    const legacyNum = (rack, n, c, row, depth) => {
+        const b = ((rack && rack.bays) || []).find((x) => x.n === n && x.c === c) || {};
+        return (Math.max(1, row || 1) - 1) * Math.max(1, b.depth || 1) + Math.max(1, depth || 1);
+    };
 
     // ctx = {
     //   itemBySku(n) / itemByUpc(upc) -> { id, sku, ... } | null,
     //   centers: [{ id, code, name }] (completos), selectedIds: null (todos) | [ids] (los marcados arriba),
     //   warehouses: [{ id, name, parentId, status }], subWarehouses: [{ id, name, parentId, status, kind, locations: [{ zoneId, spaceIds }] }],
-    //   zonesByCenter: { centro: [{ id, name, footprints: [{ id, code }], spaces: [{ id, code, type, footprintId, levels, slots, bays: [{ n, c, rows?, depth? }] }] }] }  (spaces = los activos),
+    //   zonesByCenter: { centro: [{ id, name, footprints: [{ id, code }], spaces: [{ id, code, type, footprintId, levels, slots, bays: [{ n, c, rows?, depth? }], positions: [{ n, c, nums }] }] }] }  (spaces = los activos),
     //   relationsOf(itemId) -> las relaciones que ese código ya tiene [{ id, costCenterId, warehouseId, subWarehouseId, zoneId, spaceId, level, slot }],
-    //   occupiedBy(spaceId, nivel, columna, fila, profundidad) -> SKU que lo ocupa ('' = libre), existingKey(key) -> ya existe esa misma relación,
+    //   occupiedBy(spaceId, nivel, espacio, posición) -> SKU que lo ocupa ('' = libre), existingKey(key) -> ya existe esa misma relación,
     //   priorRowWithKey(key, row) -> número de otra fila anterior del archivo con lo mismo (0 = ninguna)
     // }
     // Regresa { error: { field, code, params } } o { action: 'create' | 'complete' | 'reclass' | 'same', values, relationId?, keys, located, route }. existingRelation(key) -> { id, classification } | null.
@@ -163,15 +182,16 @@
         const rackRaw = text('rack');
         const levelRaw = text('level');
         const slotRaw = text('slot');
-        const rowRaw = text('row');
-        const depthRaw = text('depth');
+        const positionRaw = text('position');
+        const rowRaw = text('row'); // (de la forma de antes)
+        const depthRaw = text('depth'); // (de la forma de antes)
         let loc = null;
         if (locRaw) {
-            if (zoneRaw || footprintRaw || rackRaw || levelRaw || slotRaw || rowRaw || depthRaw) return err('locator', 'locatorAndColumns');
+            if (zoneRaw || footprintRaw || rackRaw || levelRaw || slotRaw || positionRaw || rowRaw || depthRaw) return err('locator', 'locatorAndColumns');
             loc = parseLocator(locRaw);
             if (loc.error) return err('locator', loc.error, { value: locRaw, missing: loc.missing || '' });
         }
-        const hasPlace = !!(locRaw || zoneRaw || footprintRaw || rackRaw || levelRaw || slotRaw || rowRaw || depthRaw);
+        const hasPlace = !!(locRaw || zoneRaw || footprintRaw || rackRaw || levelRaw || slotRaw || positionRaw || rowRaw || depthRaw);
         const claimed = (rel) => ctx.priorRowWithKey(`upd|${rel.id}`, row) > 0;
         const partialOf = (rel) => !rel.zoneId && !rel.spaceId && !rel.level && !rel.slot && !!rel.subWarehouseId;
 
@@ -221,16 +241,14 @@
             if (sub.status !== 'active') return err('sub', 'subInactive', { value: sub.name });
         } else return err('warehouse', 'warehouseMissing');
 
-        // ---- el lugar: zona > estante > nivel > columna > fila > profundidad (por columnas o por Localizador). El hueco es nivel × columna; dentro del hueco están las filas y las profundidades (Layout > Posiciones).
+        // ---- el lugar: zona > estante > nivel > espacio > posición (por columnas o por Localizador). El espacio es un nivel × un lugar de izquierda a derecha; dentro de él están sus posiciones (Layout > Posiciones).
         let zone = null;
         let footprint = null;
         let rack = null;
         let level = null;
         let slot = null;
-        let rowNo = null;
-        let depth = null;
-        let bay = { rows: 1, depth: 1 };
-        const bayOfRack = (r, n, c) => { const b = ((r && r.bays) || []).find((x) => x.n === n && x.c === c) || {}; return { rows: b.rows || 1, depth: b.depth || 1 }; };
+        let position = null;
+        let positionCount = 1;
         if (hasPlace) {
             if (sub.kind !== 'physical') return err(loc ? 'locator' : 'zone', 'subNotPhysical', { sub: sub.name });
             const entries = sub.locations || [];
@@ -238,8 +256,8 @@
             const F = (field) => (loc ? 'locator' : field); // en qué dato se marca el error
             let levelGiven = null;
             let columnGiven = null;
-            let rowGiven = null;
-            let depthGiven = null;
+            let positionGiven = null;
+            let legacyCell = null; // { row, depth } de la forma de antes: se convierte en posición cuando ya se sabe el espacio
             if (loc) {
                 const zones = assigned.filter((z) => zoneNo(z) === loc.zone);
                 if (!zones.length) return err('locator', 'locatorZone', { value: locRaw, zone: loc.zone, sub: sub.name });
@@ -257,8 +275,7 @@
                 rack = found[0];
                 levelGiven = loc.level;
                 columnGiven = loc.column;
-                rowGiven = loc.row;
-                depthGiven = loc.depth;
+                if (loc.legacy) legacyCell = { row: loc.row, depth: loc.depth }; else positionGiven = loc.position;
             } else {
                 if (!zoneRaw) return err('zone', 'zoneMissing');
                 zone = assigned.find((z) => norm(z.name) === norm(zoneRaw) || (z.code && norm(z.code) === norm(zoneRaw))) || null;
@@ -278,56 +295,54 @@
                 const asNum = (raw) => (raw === '' ? null : intOf(raw));
                 levelGiven = asNum(levelRaw);
                 columnGiven = asNum(slotRaw);
-                rowGiven = asNum(rowRaw);
-                depthGiven = asNum(depthRaw);
+                positionGiven = asNum(positionRaw);
+                if (rowRaw || depthRaw) legacyCell = { row: asNum(rowRaw), depth: asNum(depthRaw) };
             }
             footprint = rack && zone ? ((zone.footprints || []).find((f) => f.id === rack.footprintId) || null) : null;
             const given = (n) => n !== null; // NaN también cuenta como «dicho» (texto que no es un número): falla el rango
+            const hasCell = given(positionGiven) || !!legacyCell;
             if (!rack) {
-                if (given(levelGiven) || given(columnGiven) || given(rowGiven) || given(depthGiven)) return err(F('rack'), 'rackMissing');
+                if (given(levelGiven) || given(columnGiven) || hasCell) return err(F('rack'), 'rackMissing');
             } else if (!given(levelGiven)) {
-                if (given(columnGiven) || given(rowGiven) || given(depthGiven)) return err(F('level'), 'levelMissing');
+                if (given(columnGiven) || hasCell) return err(F('level'), 'levelMissing');
             } else {
                 const levels = rack.levels || 1;
                 let slots = rack.slots || 1;
                 if (!(levelGiven >= 1 && levelGiven <= levels)) return err(F('level'), 'levelRange', { value: loc ? `N${String(levelGiven).padStart(3, '0')}` : levelRaw, max: levels, rack: rack.code });
                 level = levelGiven;
-                slots = (Array.isArray(rack.slotsByLevel) && rack.slotsByLevel[levelGiven - 1]) || slots; // las posiciones de ESE nivel
+                slots = (Array.isArray(rack.slotsByLevel) && rack.slotsByLevel[levelGiven - 1]) || slots; // los espacios de ESE nivel
                 if (given(columnGiven)) {
-                    if (!(columnGiven >= 1 && columnGiven <= slots)) return err(F('slot'), 'slotRange', { value: loc ? `C${String(columnGiven).padStart(3, '0')}` : slotRaw, max: slots, rack: rack.code });
+                    if (!(columnGiven >= 1 && columnGiven <= slots)) return err(F('slot'), 'slotRange', { value: loc ? `E${String(columnGiven).padStart(3, '0')}` : slotRaw, max: slots, rack: rack.code });
                     slot = columnGiven;
-                } else if (slots <= 1) slot = 1; // un estante de una sola columna no necesita que se diga
-                else if (loc || given(rowGiven) || given(depthGiven)) return err(F('slot'), loc ? 'columnNeeded' : 'slotMissing', { rack: rack.code, max: slots });
+                } else if (slots <= 1) slot = 1; // un estante de un solo espacio no necesita que se diga
+                else if (loc || hasCell) return err(F('slot'), loc ? 'columnNeeded' : 'slotMissing', { rack: rack.code, max: slots });
                 if (slot !== null) {
-                    bay = bayOfRack(rack, level, slot);
-                    if (given(rowGiven)) {
-                        if (!(rowGiven >= 1 && rowGiven <= bay.rows)) return err(F('row'), 'rowRange', { value: loc ? `F${String(rowGiven).padStart(3, '0')}` : rowRaw, max: bay.rows, rack: rack.code });
-                        rowNo = rowGiven;
-                    }
-                    if (given(depthGiven)) {
-                        if (!(depthGiven >= 1 && depthGiven <= bay.depth)) return err(F('depth'), 'depthRange', { value: loc ? `P${String(depthGiven).padStart(3, '0')}` : depthRaw, max: bay.depth, rack: rack.code });
-                        depth = depthGiven;
+                    const nums = positionsOfBay(rack, level, slot);
+                    positionCount = nums.length;
+                    if (legacyCell && !given(positionGiven)) positionGiven = legacyNum(rack, level, slot, legacyCell.row, legacyCell.depth);
+                    if (given(positionGiven)) {
+                        if (!nums.includes(positionGiven)) return err(F('position'), 'positionRange', { value: loc ? `P${String(positionGiven).padStart(3, '0')}` : (positionRaw || String(positionGiven)), max: nums.length, rack: rack.code });
+                        position = positionGiven;
                     }
                 }
             }
         }
 
-        // La fila y la profundidad de un hueco de una sola fila / una sola profundidad están implícitas y no se guardan; si tiene más de una hay que decir cuál (si no, la relación queda A medias).
-        if (rowNo !== null && bay.rows <= 1) rowNo = null;
-        if (depth !== null && bay.depth <= 1) depth = null;
-        const key = [item.id, center.id, wh.id, sub ? sub.id : 0, zone ? zone.id : '', rack ? rack.id : '', level || 0, slot || 0, rowNo || 0, depth || 0].join('|');
-        const located = !!sub && (sub.kind === 'virtual' || !!(rack && level && slot && (rowNo || bay.rows <= 1) && (depth || bay.depth <= 1)));
+        // La posición de un espacio de una sola posición está implícita y no se guarda; si tiene más de una hay que decir cuál (si no, la relación queda A medias).
+        if (position !== null && positionCount <= 1) position = null;
+        const key = [item.id, center.id, wh.id, sub ? sub.id : 0, zone ? zone.id : '', rack ? rack.id : '', level || 0, slot || 0, position || 0].join('|');
+        const located = !!sub && (sub.kind === 'virtual' || !!(rack && level && slot && (position || positionCount <= 1)));
         const values = {
             skuItemId: item.id, costCenterId: center.id, warehouseId: wh.id, subWarehouseId: sub ? sub.id : null,
-            zoneId: zone ? zone.id : '', spaceId: rack ? rack.id : '', level, slot, row: rowNo, depth,
+            zoneId: zone ? zone.id : '', spaceId: rack ? rack.id : '', level, slot, position,
             classification: cls || (target ? undefined : 'activo'), // al completar una relación sin decir la clasificación, conserva la que tenía
         };
         const route = [center.name, wh.name, sub ? sub.name : '', zone ? zone.name : '', footprint ? footprint.code : '', rack ? rack.code : ''].filter(Boolean);
-        const base = { values, route, keys: { place: `rel|${key}`, slot: rack && level && slot ? `slot|${rack.id}|${level}|${slot}|${rowNo || 1}|${depth || 1}` : '', claim: target ? `upd|${target.id}` : '' }, located, item };
+        const base = { values, route, keys: { place: `rel|${key}`, slot: rack && level && slot ? `slot|${rack.id}|${level}|${slot}|${position || 1}` : '', claim: target ? `upd|${target.id}` : '' }, located, item };
         // ¿ese lugar ya es de este código? (existingRelation = su relación, con su clasificación; existingKey = solo que existe)
         const existingRel = ctx.existingRelation ? ctx.existingRelation(key) : (ctx.existingKey && ctx.existingKey(key) ? {} : null);
         if (base.keys.slot) {
-            const occupant = ctx.occupiedBy(rack.id, level, slot, rowNo || 1, depth || 1);
+            const occupant = ctx.occupiedBy(rack.id, level, slot, position || 1);
             if (occupant && !existingRel) return err(loc ? 'locator' : 'slot', 'occupied', { sku: occupant });
         }
         if (existingRel) {

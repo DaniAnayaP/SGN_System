@@ -1896,6 +1896,7 @@
     "layoutUbicEspacio": "Space",
     "layoutUbicAgregar": "+ Add position",
     "layoutUbicQuitar": "Remove the position",
+    "layoutUbicUltima": "A space always has at least one position: this is the last one and it cannot be removed.",
     "layoutUbicSin": "This space has no positions yet. Add the first one.",
     "layoutUbicSinEspacios": "There are no spaces yet. Add them in Assets and Levels: their positions are arranged here.",
     "layoutUbicVista": "Top view: drag a position to place it",
@@ -2059,7 +2060,8 @@
     "layoutLocElige_sp": "Pick an asset of {code}",
     "layoutLocElige_n": "Pick a level of {code}",
     "layoutLocElige_c": "Pick a space of {code}",
-    "layoutLocElige_cell": "Pick a locator of {code}",
+    "layoutLocElige_cell": "Pick a position of {code}",
+    "layoutLocNPosiciones": "{n} positions",
     "layoutElegirBuscar": "Search a wall, a hydrant, a floor, a zone…",
     "layoutElegirLimpiar": "Clear",
     "layoutElegirMas": "There are more: type to narrow the list.",
@@ -2972,7 +2974,7 @@
     "colRelZona": "Zone",
     "colRelEstante": "Asset",
     "colRelNivel": "Level",
-    "colRelEspacio": "Column",
+    "colRelEspacio": "Space",
     "colRelEstado": "Location",
     "colLimZona": "Zone",
     "colLimHuella": "Footprint",
@@ -3264,9 +3266,9 @@
     "colLocHuella": "Footprint",
     "colLocActivo": "Asset",
     "colLocNivel": "Level",
-    "colLocColumna": "Column",
+    "colLocColumna": "Space",
     "colLocFila": "Row",
-    "colLocProfundidad": "Depth",
+    "colLocProfundidad": "Position",
     "colLocLocalizador": "Locator",
     "colLocAlcance": "Goes down to",
     "colLocEstado": "Status",
@@ -3286,7 +3288,7 @@
     "relTplFileName": "Code_Relation_Template",
     "relTplSheetOptions": "Options",
     "relTplLevels": "Levels",
-    "relTplSlots": "Columns per level",
+    "relTplSlots": "Spaces per level",
     "relTplRulesTitle": "Rules",
     "relTplRule1": "Each row is ONE place of a code. If a code is in several places, add several rows.",
     "relTplRule2": "If you checked a single cost center above, you can leave the Cost Center column empty: it loads into that center. If you checked several, put the center on each row (its code or its name).",
@@ -3298,7 +3300,8 @@
     "relTplInst_zone": "The name of a zone assigned to that sub-warehouse (only if it is physical). Optional.",
     "relTplInst_rack": "The code of the asset (the rack, the shelf, the cabinet…) in that zone. If you also fill the Footprint, the asset has to be on top of it. Optional.",
     "relTplInst_level": "The level number of the rack (1 is the bottom). Optional.",
-    "relTplInst_slot": "The column number within the level (left to right, seen from the front). Optional; on a rack with a single column it can be left empty.",
+    "relTplInst_slot": "The space number within the level (left to right, seen from the front). Optional; on a rack with a single space it can be left empty.",
+    "relTplInst_position": "The position number within the space (the P of the Locator). Optional; if the space has a single position put 1 or leave it empty.",
     "relTplNeedColumns": "The file needs the SKU Code column and the Warehouse or Locator column. Download the template to see how it goes.",
     "relTplNoWarehouses": "There are no warehouses yet. Create them in Catalogs > Our Warehouses (each in its cost center) and load again.",
     "relTplCenterOne": "Cost center checked above: {center}. Rows without a center load there, and rows of another center are not loaded.",
@@ -3322,22 +3325,23 @@
     "relTplErr_warehouseMissing": "The warehouse is missing.",
     "relTplErr_warehouseNotFound": "\"{value}\" is not a warehouse of the center \"{center}\".",
     "relTplErr_warehouseInactive": "The warehouse \"{value}\" is inactive.",
-    "relTplErr_subMissing": "The sub-warehouse is missing: the zone, rack, level, column, row and depth depend on it.",
+    "relTplErr_subMissing": "The sub-warehouse is missing: the zone, rack, level, space and position depend on it.",
     "relTplErr_subNotFound": "\"{value}\" is not a sub-warehouse of the warehouse \"{warehouse}\".",
     "relTplErr_subInactive": "The sub-warehouse \"{value}\" is inactive.",
-    "relTplErr_subNotPhysical": "The sub-warehouse \"{sub}\" is not physical: it has no zone, rack, level, column, row or depth.",
+    "relTplErr_subNotPhysical": "The sub-warehouse \"{sub}\" is not physical: it has no zone, rack, level, space or position.",
     "relTplErr_zoneMissing": "The zone is missing.",
     "relTplErr_zoneNotFound": "\"{value}\" is not a zone assigned to the sub-warehouse \"{sub}\".",
     "relTplErr_rackMissing": "The asset is missing.",
     "relTplErr_rackNotFound": "«{value}» is not an asset of zone «{zone}» (or it is not assigned to that sub-warehouse).",
     "relTplErr_levelMissing": "The level is missing.",
     "relTplErr_levelRange": "Level \"{value}\" does not exist in rack {rack} (it has {max}).",
-    "relTplErr_slotRange": "Column \"{value}\" does not exist on that level of rack {rack} (it has {max}).",
-    "relTplErr_occupied": "That slot is already taken by code {sku}.",
-    "relTplErr_occupiedInFile": "That slot is already used by row {row} of this file.",
+    "relTplErr_slotRange": "Space \"{value}\" does not exist on that level of rack {rack} (it has {max}).",
+    "relTplErr_positionRange": "Position \"{value}\" does not exist in that space of rack {rack} (it has {max}).",
+    "relTplErr_occupied": "That position is already taken by code {sku}.",
+    "relTplErr_occupiedInFile": "That position is already used by row {row} of this file.",
     "relTplErr_duplicateInFile": "This same location of the code is already in row {row}.",
     "relTplLocatorShort": "Locator (zone, footprint and asset)",
-    "relTplInst_locator": "The whole place in a single cell, always with the 7 pieces: Z006.H005.A005.N003.C001.F001.P001 = zone 6, footprint 5, asset A5, level 3, column 1, row 1, depth 1. The zone and the footprint carry the number their name or code ends with (R-05 is H005). The asset letter is A shelf, R rack, G cabinet or T floor pallet and its number is the one in its code (A-05 is A005). If you fill it, leave the Zone to Depth columns empty. Optional.",
+    "relTplInst_locator": "The whole place in a single cell, always with the 6 pieces: Z006.H005.A005.N003.E001.P001 = zone 6, footprint 5, asset A5, level 3, space 1, position 1. The zone and the footprint carry the number their name or code ends with (R-05 is H005). The asset letter is A shelf, R rack, G cabinet or T floor pallet and its number is the one in its code (A-05 is A005). If you fill it, leave the Zone to Position columns empty. Optional.",
     "relTplRule4": "If the code already has a \"Partial\" relation (with center, warehouse and sub-warehouse but no place), the row with a Locator COMPLETES it instead of creating another; in that case Warehouse and Sub-warehouse can be empty.",
     "relTplStateComplete": "Completes",
     "relTplCountComplete": "complete",
@@ -3345,14 +3349,14 @@
     "relTplResultDetail": "{c} new and {u} completed. ",
     "relTplErr_noPartial": "This code has no \"Partial\" relation to complete: add the Warehouse and the Sub-warehouse.",
     "relTplErr_severalPartial": "This code has {n} \"Partial\" relations: add the Warehouse and the Sub-warehouse to choose which one is completed.",
-    "relTplErr_locatorFormat": "I do not understand the Locator «{value}». It is always complete: Z006.H005.A005.N003.C001.F001.P001 (zone, footprint, asset, level, column, row and depth).",
-    "relTplErr_locatorAndColumns": "Put the place in the Locator or in the Zone, Footprint, Asset, Level, Column, Row and Depth columns, but not in both.",
+    "relTplErr_locatorFormat": "I do not understand the Locator «{value}». It is always complete: Z006.H005.A005.N003.E001.P001 (zone, footprint, asset, level, space and position).",
+    "relTplErr_locatorAndColumns": "Put the place in the Locator or in the Zone, Footprint, Asset, Level, Space and Position columns, but not in both.",
     "relTplErr_locatorDepth": "Depth greater than 1 (P001) is not supported yet: \"{value}\".",
     "relTplErr_locatorZone": "There is no zone {zone} assigned to the sub-warehouse \"{sub}\" (the Locator \"{value}\").",
-    "relTplErr_locatorAmbiguous": "The Locator «{value}» matches more than one place. Use the Zone, Footprint, Asset, Level, Column, Row and Depth columns.",
+    "relTplErr_locatorAmbiguous": "The Locator «{value}» matches more than one place. Use the Zone, Footprint, Asset, Level, Space and Position columns.",
     "relTplErr_locatorAsset": "The letter \"{letter}\" of the Locator is not a known asset: use A shelf, R rack, G cabinet, T floor pallet or F cold.",
     "relTplErr_locatorRack": "There is no such asset in the zone \"{zone}\" (or it is not assigned to that sub-warehouse): \"{value}\".",
-    "relTplErr_locatorIncomplete": "The Locator «{value}» is missing pieces ({missing}). It is always complete: Z006.H005.A005.N003.C001.F001.P001.",
+    "relTplErr_locatorIncomplete": "The Locator «{value}» is missing pieces ({missing}). It is always complete: Z006.H005.A005.N003.E001.P001.",
     "relTplErr_locatorFootprint": "There is no footprint {footprint} in zone «{zone}» (the Locator «{value}»).",
     "relTplErr_footprintNotFound": "«{value}» is not a footprint of zone «{zone}».",
     "relTplErr_rackNotInFootprint": "The asset «{value}» is not on footprint «{footprint}» of zone «{zone}».",
@@ -3361,15 +3365,18 @@
     "colRelLocalizador": "Locator",
     "sessionExpired": "Your session has ended (it lasts 8 hours). Reload the page and sign in again.",
     "relLoadingRows": "Loading rows… {done} of {total}",
-    "colRelProfundidad": "Depth",
+    "colRelProfundidad": "Position",
     "relDepthShort": "Depth",
     "relDepthN": "Depth {n}",
+    "colRelPosicion": "Position",
+    "relPositionShort": "Position",
+    "relPositionN": "Position {n}",
     "layoutProfundidad": "Depth (front to back)",
     "relTplDepths": "Depths",
     "relTplInst_depth": "The depth number within the bay (front to back). Optional; if the bay has a single depth put 1 or leave it empty.",
     "relTplErr_depthRange": "Depth \"{value}\" does not exist in that bay of rack {rack} (it has {max}).",
     "relTplErr_depthMissing": "Rack {rack} is {max} deep: say which one (P001, P002…).",
-    "relTplErr_slotMissing": "The column is missing: rack {rack} has {max} and the row and the depth depend on it.",
+    "relTplErr_slotMissing": "The space is missing: rack {rack} has {max} and the position depends on it.",
     "layoutStepPosiciones": "Spaces",
     "colLayoutPosiciones": "Spaces",
     "layoutPosNivel": "Level",
@@ -3402,7 +3409,7 @@
     "relRowN": "Row {n}",
     "relTplInst_row": "The row number within the bay (level × column). Optional; if the bay has a single row put 1 or leave it empty.",
     "relTplErr_rowRange": "Row \"{value}\" does not exist in that bay of rack {rack} (it has {max}).",
-    "relTplErr_columnNeeded": "Rack {rack} has {max} columns: the Locator must say which one (C001, C002…).",
+    "relTplErr_columnNeeded": "Rack {rack} has {max} spaces: the Locator must say which one (E001, E002…).",
     "colRelClasificacion": "Classification",
     "relClass_activo": "Active Product",
     "relClass_cuarentena": "Quarantine Product",
@@ -3428,7 +3435,7 @@
     "relChooseZone": "Choose a zone",
     "relChooseRack": "Choose an asset",
     "relLevelShort": "Level",
-    "relSlotShort": "Column",
+    "relSlotShort": "Space",
     "relFirstCost": "Cost center first",
     "relFirstWarehouse": "Warehouse first",
     "relFirstSub": "Sub-warehouse first",
@@ -3459,7 +3466,7 @@
     "relEdit": "Edit relation",
     "relSaved": "Relation saved.",
     "relLevelN": "Level {n}",
-    "relSlotN": "Column {n}",
+    "relSlotN": "Space {n}",
     "relOccupiedBy": "Taken by {sku}",
     "colAlmCentroCostos": "Cost Center",
     "colSubAlmAlmacen": "Warehouse",
@@ -4953,13 +4960,9 @@
       "what": "The column: the position within the level, left to right looking at the rack from the front. One level × one column is a bay; each rack has the columns the Layout says.",
       "example": "Column 3."
     },
-    "relRow": {
-      "what": "The row within the bay (level × column). It is only asked if the bay has more than one; how many it has is set in the Layout, under Positions. Each space (level, column, row and depth) can only hold one code.",
-      "example": "Row 2: the second row of the bay."
-    },
-    "relDepth": {
-      "what": "The depth within the bay, front to back. It is only asked if the bay has more than one (the Layout says it, under Positions); on a single-depth bay it is not needed.",
-      "example": "Depth 2: the second one, behind the first."
+    "relPosition": {
+      "what": "The position inside the space: the final place where the code lives. It is only asked for when the space has more than one; the Layout, in Positions, says how many it has. Each position can only hold one code.",
+      "example": "Position 2: the second position of the space."
     },
     "relPath": {
       "what": "The full route built from what you choose, from cost center down to slot.",
@@ -5073,10 +5076,6 @@
       "what": "The height of this space, in meters: the free height to store things. It cannot be more than the height of its level (Levels step). If you leave it empty it takes the level's.",
       "example": "the level is 0.65 m high: the space can be up to 0.65 m; with 0.8 it turns red and cannot be saved."
     },
-    "layoutPosLocalizadores": {
-      "what": "How many locators this space has: its rows times its depths. Each one is a cell with its own code (F001.P001, F001.P002…).",
-      "example": "2 rows and 3 depths give 6 locators."
-    },
     "layoutPosCeja": {
       "what": "The thickness of the beam (the crossbeam) of this space, in meters. It is separate from the Height: the free height (the Height) starts on top of the beam, so the Storage height is the same as the Height. If you leave it empty it takes the level's (Levels step).",
       "example": "the space has a 0.07 m beam and 0.65 m of free height: you put 0.07 in Beam and the Storage height stays at 0.65 m."
@@ -5106,11 +5105,11 @@
       "example": "level 2 has 3 spaces and one has its own beam: here it says 1."
     },
     "layoutFiltroLocalizador": {
-      "what": "Takes you step by step to an exact place: pick the footprint, then one of its assets, a level, a space and, last, the locator (row and depth). It goes hand in hand with Zone, Show and Pick: it only lists what those filters let you see, and if you picked a single footprint or a single asset in Pick, the trip starts there. You can type to search each list. Each choice focuses what you picked on the plan and in 3D, and the pills on top take you back to an earlier step.",
-      "example": "you pick footprint H001, rack A004, level N002, space C001 and locator F001.P001: the plan and the 3D show that place and its code Z001.H001.A004.N002.C001.F001.P001 stays on top."
+      "what": "Takes you step by step to an exact place: pick the footprint, then one of its assets, a level, a space and, last, the position (which is the complete locator). It goes hand in hand with Zone, Show and Pick: it only lists what those filters let you see, and if you picked a single footprint or a single asset in Pick, the trip starts there. You can type to search each list. Each choice focuses what you picked on the plan and in 3D, and the pills on top take you back to an earlier step.",
+      "example": "you pick footprint H001, rack A004, level N002, space E001 and position P001: the plan and the 3D show that place and its code Z001.H001.A004.N002.E001.P001 stays on top."
     },
     "layoutFiltroLocalizadorRuta": {
-      "what": "The steps of the trip, left to right: Footprint, Asset, Level, Space and Locator. The lit pill is the step you are on; the ones with a code are what you already picked, and tapping one takes you back to that step (what you picked after it is cleared).",
+      "what": "The steps of the trip, left to right: Footprint, Asset, Level, Space and Position. The lit pill is the step you are on; the ones with a code are what you already picked, and tapping one takes you back to that step (what you picked after it is cleared).",
       "example": "you are on Space and tap «Asset A004»: you are back at the list of assets of the footprint."
     },
     "layoutCarasConsumo": {
@@ -5123,11 +5122,11 @@
     },
     "layoutSec_ubicaciones": {
       "what": "Each space can be divided into one or more positions, placed by hand. Pick the space above and add its positions: each one has its place inside the space (X and Y from the top-left corner), its length, its depth and its height, and they can measure differently: some get more room than others. They are placed like an asset inside a footprint: drag them in the drawing or type their measures. They cannot go outside the space, be taller than it or overlap; what does not comply turns red and cannot be saved. Each position also has its consumption faces, and it can only use those of its space. Its code comes from the space and its number.",
-      "example": "space R001.N001.C001 is 3 × 1 m: you place a 0.6 × 1 m position, a 0.9 × 0.5 m one next to it and a third of 0.5 × 1 m further on, each with its own height."
+      "example": "space R001.N001.E001 is 3 × 1 m: you place a 0.6 × 1 m position, a 0.9 × 0.5 m one next to it and a third of 0.5 × 1 m further on, each with its own height."
     },
     "layoutUbicEspacio": {
       "what": "The space (a level × a left-to-right place of an asset) whose positions you are placing. The number in parentheses is how many positions it already has.",
-      "example": "R001.N001.C002 (3): space 2 of level 1 of rack R001, with 3 positions."
+      "example": "R001.N001.E002 (3): space 2 of level 1 of rack R001, with 3 positions."
     },
     "layoutUbicVista": {
       "what": "The space seen from above, with its positions as boxes. Drag a box to place it (it snaps every 5 cm) or type its X and Y in the table. In red, the one that goes outside the space, is taller than it or overlaps another.",
@@ -5146,8 +5145,8 @@
       "example": "level 1 of the rack has 3 spaces and level 2 only 2: Spaces shows 3 rows for level 1 and 2 for level 2."
     },
     "layoutSec_posiciones": {
-      "what": "Each row is a space: a level × a left-to-right place of an asset (a rack with 2 levels and 3 spaces per level leaves 6 spaces, ready to go). The levels come from the Assets step and the number of spaces of each level from the Levels step. Here you set the length, depth and height of each space (in meters) and, for now, how many rows and how many depths it has. What goes inside cannot be more than what holds it: the spaces of a level do not add up to more than the asset's length, none is deeper than it, and its height is not more than the level's. m² is length × depth and m³ is length × depth × height.",
-      "example": "space R001.N002.C003 is 3 m long, 1.2 deep and 0.65 high: 3.6 m² and 2.34 m³."
+      "what": "Each row is a space: a level × a left-to-right place of an asset (a rack with 2 levels and 3 spaces per level leaves 6 spaces, ready to go). The levels come from the Assets step and the number of spaces of each level from the Levels step. Here you set the length, depth and height of each space (in meters) and which side it is taken from. The positions of each space are laid out in the Positions step. What goes inside cannot be more than what holds it: the spaces of a level do not add up to more than the asset's length, none is deeper than it, and its height is not more than the level's. m² is length × depth and m³ is length × depth × height.",
+      "example": "space R001.N002.E003 is 3 m long, 1.2 deep and 0.65 high: 3.6 m² and 2.34 m³."
     },
     "relClass": {
       "what": "Says what the product is in this place: Active Product (the normal one), Quarantine Product, Clarification Product or Consignment Product. The same place can change classification over time; only one code per space is still allowed. Empty is Active Product.",
@@ -5534,7 +5533,7 @@
       "example": "you tap Locators and see the list of this Layout; you tap the arrow and the full screen opens."
     },
     "layoutSec_localizadores": {
-      "what": "The locators this Layout is creating, complete or partial, with what you have entered right now (also what is not saved yet): one per zone, per footprint, per asset and per complete 7-piece position. It is view-only: a locator is changed in the other steps. The arrow next to the name opens the Locators screen, with all the cost centers, the warehouse and the sub-warehouse.",
+      "what": "The locators this Layout is creating, complete or partial, with what you have entered right now (also what is not saved yet): one per zone, per footprint, per asset and per complete 6-piece position (zone, footprint, asset, level, space and position). It is view-only: a locator is changed in the other steps. The arrow next to the name opens the Locators screen, with all the cost centers, the warehouse and the sub-warehouse.",
       "example": "you finish placing the racks of Zone 6, tap Locators and see the new locators right away; if you want the full screen, you tap the arrow."
     },
     "layoutLocalizadoresLink": {
@@ -5618,8 +5617,8 @@
       "example": "you choose «Those of the same asset type» with type Rack and every rack gets the same color."
     },
     "vfLocator": {
-      "what": "The complete Locator of this place, always with the 7 pieces: zone, footprint, asset, level, column, row and depth. It is the same one used in the Code Relation template and can be copied as it is.",
-      "example": "Z006.H005.A005.N003.C001.F001.P001 is zone 6, footprint 5, asset A5, level 3, column 1, row 1 and depth 1."
+      "what": "The complete Locator of this place, always with the 6 pieces: zone, footprint, asset, level, space and position. It is the same one used in the Code Relation template and can be copied as it is.",
+      "example": "Z006.H005.A005.N003.E001.P001 is zone 6, footprint 5, asset A5, level 3, space 1 and position 1."
     },
     "relFootprint": {
       "what": "The footprint (the place on the floor) of that zone where what you are about to place is. Only footprints that have assets in this sub-warehouse appear. If the zone has a single footprint, or the footprint a single asset, they are chosen by themselves.",

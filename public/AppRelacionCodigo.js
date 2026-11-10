@@ -164,7 +164,7 @@ function centerChoices() {
     }
     return list;
 }
-const blankState = () => ({ sku: null, centro: options && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', hue: '', est: '', niv: '', esp: '', fila: '', prof: '', clas: 'activo' });
+const blankState = () => ({ sku: null, centro: options && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', hue: '', est: '', niv: '', esp: '', pos: '', clas: 'activo' });
 const readCache = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 const writeCache = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* sin espacio: se pide otra vez con señal */ } };
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -289,7 +289,7 @@ function openForm(record) {
     st = record
         ? {
             sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc },
-            centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', hue: record.footprintId || '', est: record.spaceId || '', niv: record.level || '', esp: record.slot || '', fila: record.row || '', prof: record.depth || '', clas: record.classification || 'activo',
+            centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', hue: record.footprintId || '', est: record.spaceId || '', niv: record.level || '', esp: record.slot || '', pos: record.position || '', clas: record.classification || 'activo',
         }
         : blankState();
     view = 'form';
@@ -297,7 +297,7 @@ function openForm(record) {
 }
 
 function cutBelow(key) {
-    const order = ['centro', 'alm', 'sub', 'zona', 'hue', 'est', 'niv', 'esp', 'fila', 'prof'];
+    const order = ['centro', 'alm', 'sub', 'zona', 'hue', 'est', 'niv', 'esp', 'pos'];
     for (let i = order.indexOf(key) + 1; i < order.length; i += 1) st[order[i]] = '';
 }
 
@@ -319,15 +319,16 @@ function derived() {
     const racks = legacy ? allowed : (footprint ? allowed.filter((s) => s.footprintId === footprint.id) : []);
     return { sub, physical, zones, zone, legacy, footprints, footprint, racks, rack: byId(racks, st.est) };
 }
-// Un espacio es anaquel + nivel + columna + fila + profundidad (sin fila o sin profundidad cuenta como la 1).
+// Una posición es activo + nivel + espacio + posición (sin posición cuenta como la 1: un espacio con una sola posición no la pide).
 // Cuántas posiciones (columnas) tiene un nivel del anaquel: las que se le pusieron en Layout > Niveles (slotsByLevel) o, de una lista vieja sin ellas, las del anaquel.
 const slotsAt = (rack, level) => (Array.isArray(rack.slotsByLevel) && rack.slotsByLevel[level - 1]) || rack.slots || 1;
-function bayInfo(rack, level, column) {
-    const b = ((rack && rack.bays) || []).find((x) => x.n === Number(level) && x.c === Number(column)) || {};
-    return { rows: b.rows || 1, depth: b.depth || 1 };
+// Los números de las posiciones de un espacio (nivel × espacio) de un activo; sin datos propios (opciones guardadas por una copia vieja de la App), solo la 1.
+function positionsAt(rack, level, column) {
+    const g = ((rack && rack.positions) || []).find((x) => x.n === Number(level) && x.c === Number(column));
+    return g && Array.isArray(g.nums) && g.nums.length ? g.nums : [1];
 }
-function occupiedBy(spaceId, level, slot, row, depth) {
-    const hit = options.occupied.find((o) => o.spaceId === spaceId && o.level === level && o.slot === slot && (o.row || 1) === (row || 1) && (o.depth || 1) === (depth || 1) && !(editing && o.id === editing.id));
+function occupiedBy(spaceId, level, slot, position) {
+    const hit = options.occupied.find((o) => o.spaceId === spaceId && o.level === level && o.slot === slot && (o.position || 1) === (position || 1) && !(editing && o.id === editing.id));
     return hit ? hit.sku : '';
 }
 function selectField(id, labelKey, helpKey) {
@@ -358,7 +359,7 @@ function renderForm() {
         ${selectField('rel-zona', 'main.colRelZona', 'relZone')}
         ${selectField('rel-hue', 'main.colRelHuella', 'relFootprint')}
         ${selectField('rel-est', 'main.colRelEstante', 'relRack')}
-        <div class="relapp-four">${selectField('rel-niv', 'main.colRelNivel', 'relLevel')}${selectField('rel-esp', 'main.colRelEspacio', 'relSlot')}${selectField('rel-fila', 'main.colRelFila', 'relRow')}${selectField('rel-prof', 'main.colRelProfundidad', 'relDepth')}</div>
+        <div class="relapp-four">${selectField('rel-niv', 'main.colRelNivel', 'relLevel')}${selectField('rel-esp', 'main.colRelEspacio', 'relSlot')}${selectField('rel-pos', 'main.colRelProfundidad', 'relPosition')}</div>
         <div class="relapp-rack"><div class="relapp-rack-head"><b id="rel-rack-title"></b><span id="rel-rack-sub"></span></div><div class="relapp-frame" id="rel-frame"></div></div>
         <div class="relapp-field"><label>${esc(t('main.relPath'))}</label><div class="relapp-path" id="rel-path" data-help-key="relPath"></div></div>
         <p class="relapp-msg" id="rel-msg"></p>
@@ -380,7 +381,7 @@ function renderForm() {
     };
     document.getElementById('rel-zona').addEventListener('change', (event) => { st.zona = event.target.value; cutBelow('zona'); autoPick(); refreshForm(); });
     document.getElementById('rel-hue').addEventListener('change', (event) => { st.hue = event.target.value; cutBelow('hue'); autoPick(); refreshForm(); });
-    bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-fila', 'fila', true); bind('rel-prof', 'prof', true);
+    bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-pos', 'pos', true);
     document.getElementById('rel-clas').addEventListener('change', (event) => { st.clas = event.target.value; });
     document.getElementById('rel-code').addEventListener('input', () => { st.sku = null; searchCodes(); refreshForm(true); });
     document.getElementById('rel-results').addEventListener('click', (event) => {
@@ -393,11 +394,9 @@ function renderForm() {
             st.niv = Number(cell.dataset.n);
             st.esp = Number(cell.dataset.e);
             const rack = derived().rack;
-            const bay = rack ? bayInfo(rack, st.niv, st.esp) : { rows: 1, depth: 1 };
-            let free = null;
-            for (let r = 1; r <= bay.rows && !free; r += 1) for (let dd = 1; dd <= bay.depth && !free; dd += 1) if (!occupiedBy(rack.id, st.niv, st.esp, r, dd)) free = { r, dd };
-            st.fila = bay.rows > 1 && free ? free.r : '';
-            st.prof = bay.depth > 1 && free ? free.dd : '';
+            const nums = rack ? positionsAt(rack, st.niv, st.esp) : [1];
+            const free = nums.find((p) => !occupiedBy(rack.id, st.niv, st.esp, p));
+            st.pos = nums.length > 1 && free ? free : '';
             refreshForm();
         }
     });
@@ -448,12 +447,9 @@ function refreshForm(keepInput) {
     fillSelect('rel-niv', d.rack ? range(d.rack.levels).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relLevelShort') : '—', st.niv, !d.rack);
     fillSelect('rel-esp', d.rack && st.niv ? range(slotsAt(d.rack, st.niv)).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relSlotShort') : '—', st.esp, !(d.rack && st.niv));
     const hasBay = !!(d.rack && st.niv && st.esp);
-    const bay = hasBay ? bayInfo(d.rack, st.niv, st.esp) : { rows: 1, depth: 1 };
-    const slotFree = (r, dd) => !occupiedBy(d.rack.id, Number(st.niv), Number(st.esp), r, dd);
-    const freeRows = hasBay && bay.rows > 1 ? range(bay.rows).filter((r) => range(bay.depth).some((dd) => slotFree(r, dd))) : [];
-    const freeDepths = hasBay && bay.depth > 1 ? range(bay.depth).filter((dd) => range(bay.rows).some((r) => (!st.fila || r === Number(st.fila)) && slotFree(r, dd))) : [];
-    fillSelect('rel-fila', freeRows.map((n) => ({ value: n, label: n })), bay.rows > 1 ? t('main.relRowShort') : '—', st.fila, !freeRows.length);
-    fillSelect('rel-prof', freeDepths.map((n) => ({ value: n, label: n })), bay.depth > 1 ? t('main.relDepthShort') : '—', st.prof, !freeDepths.length);
+    const nums = hasBay ? positionsAt(d.rack, st.niv, st.esp) : [1];
+    const freeNums = hasBay && nums.length > 1 ? nums.filter((p) => !occupiedBy(d.rack.id, Number(st.niv), Number(st.esp), p)) : [];
+    fillSelect('rel-pos', freeNums.map((n) => ({ value: n, label: n })), nums.length > 1 ? t('main.relPositionShort') : '—', st.pos, !freeNums.length);
     drawRack(d.rack);
     drawPath(d);
     const ready = !!(st.sku && st.centro && st.alm);
@@ -461,7 +457,7 @@ function refreshForm(keepInput) {
     const missing = [];
     if (!st.sku) missing.push(t('main.relMissingCode'));
     if (!st.centro) missing.push(t('main.relMissingCost')); else if (!st.alm) missing.push(t('main.relMissingWarehouse'));
-    const located = (d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.fila || bay.rows <= 1) && (st.prof || bay.depth <= 1));
+    const located = (d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.pos || nums.length <= 1));
     document.getElementById('rel-msg').textContent = ready ? t(located ? 'main.relReady' : 'main.relReadyPartial') : t('main.relMissing', { x: missing.join(' / ') });
 }
 
@@ -481,9 +477,7 @@ function drawRack(rack) {
     for (let n = rack.levels; n >= 1; n -= 1) {
         html += `<div class="relapp-lv" style="--cols:${slotsAt(rack, n)}"><span class="relapp-ln">${n}</span>`;
         for (let e = 1; e <= slotsAt(rack, n); e += 1) {
-            const bay = bayInfo(rack, n, e);
-            const occs = [];
-            for (let r = 1; r <= bay.rows; r += 1) for (let dd = 1; dd <= bay.depth; dd += 1) occs.push(occupiedBy(rack.id, n, e, r, dd));
+            const occs = positionsAt(rack, n, e).map((p) => occupiedBy(rack.id, n, e, p));
             const occ = occs.every(Boolean) ? occs[0] : '';
             const sel = Number(st.niv) === n && Number(st.esp) === e;
             html += occ
@@ -499,8 +493,7 @@ function drawPath(d) {
         [t('main.colRelCentroCostos'), (byId(options.costCenters, st.centro) || {}).name], [t('main.colRelAlmacen'), (byId(options.warehouses, st.alm) || {}).name],
         [t('main.colRelSubAlmacen'), d.sub && d.sub.name], [t('main.colRelZona'), d.zone && d.zone.name], [t('main.colRelHuella'), d.footprint && d.footprint.code], [t('main.colRelEstante'), d.rack && d.rack.code],
         [t('main.colRelNivel'), st.niv ? t('main.relLevelN', { n: st.niv }) : ''], [t('main.colRelEspacio'), st.esp ? t('main.relSlotN', { n: st.esp }) : ''],
-        [t('main.colRelFila'), st.fila ? t('main.relRowN', { n: st.fila }) : ''],
-        [t('main.colRelProfundidad'), st.prof ? t('main.relDepthN', { n: st.prof }) : ''],
+        [t('main.colRelProfundidad'), st.pos ? t('main.relPositionN', { n: st.pos }) : ''],
     ];
     document.getElementById('rel-path').innerHTML = parts.map(([label, value], i) => `${i ? '<span class="relapp-arrow">›</span>' : ''}<span class="relapp-step${value ? ' on' : ''}">${esc(value || label)}</span>`).join('');
 }
@@ -509,7 +502,7 @@ function drawPath(d) {
 async function save() {
     const values = {
         skuItemId: st.sku ? st.sku.id : null, costCenterId: st.centro || null, warehouseId: st.alm || null, subWarehouseId: st.sub || null,
-        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, row: st.fila || null, depth: st.prof || null, classification: st.clas || 'activo',
+        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, position: st.pos || null, classification: st.clas || 'activo',
     };
     const isEdit = !!(editing && editing.id && !editing.local);
     let method = 'POST';
@@ -517,7 +510,7 @@ async function save() {
     let body = values;
     let baseline = null;
     if (isEdit) {
-        const before = { skuItemId: editing.skuItemId, costCenterId: editing.costCenterId, warehouseId: editing.warehouseId, subWarehouseId: editing.subWarehouseId, zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, row: editing.row, depth: editing.depth, classification: editing.classification || 'activo' };
+        const before = { skuItemId: editing.skuItemId, costCenterId: editing.costCenterId, warehouseId: editing.warehouseId, subWarehouseId: editing.subWarehouseId, zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, position: editing.position, classification: editing.classification || 'activo' };
         body = {};
         baseline = {};
         Object.keys(values).forEach((key) => { if (String(values[key] ?? '') !== String(before[key] ?? '')) { body[key] = values[key]; baseline[key] = before[key]; } });
@@ -533,15 +526,15 @@ async function save() {
         if (result.queued) {
             // Se guardó en el celular: se ve ya como si estuviera, con su nube, y el espacio queda tomado mientras llega la señal.
             const d = derived();
-            const lbay = d.rack && st.niv && st.esp ? bayInfo(d.rack, st.niv, st.esp) : { rows: 1, depth: 1 };
+            const lnums = d.rack && st.niv && st.esp ? positionsAt(d.rack, st.niv, st.esp) : [1];
             const local = {
                 id: isEdit ? editing.id : null, local: true, skuItemId: st.sku.id, sku: st.sku.sku, upc: st.sku.upc, description: st.sku.description,
                 costCenterId: st.centro || null, centroCostos: (byId(options.costCenters, st.centro) || {}).name || '', warehouseId: st.alm || null, warehouseName: (byId(options.warehouses, st.alm) || {}).name || '',
                 subWarehouseId: st.sub || null, subWarehouseName: d.sub ? d.sub.name : '', zoneId: st.zona || '', zoneName: d.zone ? d.zone.name : '', spaceId: st.est || '', spaceCode: d.rack ? d.rack.code : '', footprintId: d.footprint ? d.footprint.id : '', footprintCode: d.footprint ? d.footprint.code : '', locator: '',
-                level: st.niv || null, slot: st.esp || null, row: st.fila || null, depth: st.prof || null, classification: st.clas || 'activo', status: ((d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.fila || lbay.rows <= 1) && (st.prof || lbay.depth <= 1))) ? 'located' : 'partial',
+                level: st.niv || null, slot: st.esp || null, position: st.pos || null, classification: st.clas || 'activo', status: ((d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.pos || lnums.length <= 1))) ? 'located' : 'partial',
             };
             relations = isEdit ? relations.map((r) => (r.id === editing.id ? { ...r, ...local } : r)) : [local, ...relations];
-            if (local.spaceId && local.level && local.slot) options.occupied.push({ id: local.id || 0, spaceId: local.spaceId, level: local.level, slot: local.slot, row: local.row || 1, depth: local.depth || 1, sku: local.sku });
+            if (local.spaceId && local.level && local.slot) options.occupied.push({ id: local.id || 0, spaceId: local.spaceId, level: local.level, slot: local.slot, position: local.position || 1, sku: local.sku });
             await refreshPending();
             showToast(t('home.cargaSavedOffline'));
             view = 'list';

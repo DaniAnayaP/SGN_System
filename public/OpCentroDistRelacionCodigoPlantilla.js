@@ -14,7 +14,7 @@
     const R = window.RelTemplate;
     const X = window.SimpleXlsx;
     const T = window.SkuTemplate; // solo para leer el texto pegado (parseDelimited)
-    const COLS = R.COLUMNS;
+    const COLS = R.COLUMNS.filter((c) => !c.legacy); // Fila y Profundidad de antes ya no se muestran: si un archivo viejo las trae, se leen y se convierten en la posición
 
     const t = (key, params) => {
         let text = Dashboard.t(key);
@@ -56,9 +56,9 @@
     }
 
     // ---- plantilla para bajar ---------------------------------------------------------------------------------------------------------
-    const EXAMPLE = { sku: '195201', locator: 'Z001.H001.A001.N002.C003.F001.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos', zone: 'Zona 1', footprint: 'R-01', rack: 'R-01', level: '2', slot: '3', row: '1', depth: '1', classification: 'Producto Activo' };
+    const EXAMPLE = { sku: '195201', locator: 'Z001.H001.A001.N002.E003.P001', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos', zone: 'Zona 1', footprint: 'R-01', rack: 'R-01', level: '2', slot: '3', position: '1', classification: 'Producto Activo' };
     // la fila de ejemplo de la plantilla usa el Localizador (las columnas Zona a Espacio son la otra forma de decir lo mismo y no se llenan junto con él)
-    const EXAMPLE_ROW = { sku: '195201', locator: 'Z001.H001.A001.N002.C003.F001.P001', classification: 'Producto Activo', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos' };
+    const EXAMPLE_ROW = { sku: '195201', locator: 'Z001.H001.A001.N002.E003.P001', classification: 'Producto Activo', center: 'CMCCCDC', warehouse: 'Almacén General', sub: 'Medicamentos' };
     const LETTER = { rack: 'A', rackpal: 'R', cabinet: 'G', pallet: 'T', cold: 'F' }; // el mismo mapa de RelTemplate.ASSET_TYPES al revés: tipo de espacio del Layout -> letra del Localizador
     const pad3 = (n) => String(n).padStart(3, '0');
     const zoneNo = (name) => { const m = String(name || '').match(/(\d+)\s*$/); return m ? Number(m[1]) : null; };
@@ -216,9 +216,9 @@
             const items = skus.skus || [];
             const bySku = new Map(items.map((i) => [Number(i.sku), i]));
             const byUpc = new Map(items.filter((i) => i.upc).map((i) => [i.upc, i]));
-            const placeKey = (r) => [r.skuItemId, r.costCenterId, r.warehouseId, r.subWarehouseId || 0, r.zoneId || '', r.spaceId || '', r.level || 0, r.slot || 0, r.row || 0, r.depth || 0].join('|');
+            const placeKey = (r) => [r.skuItemId, r.costCenterId, r.warehouseId, r.subWarehouseId || 0, r.zoneId || '', r.spaceId || '', r.level || 0, r.slot || 0, r.positionCount > 1 ? (r.position || 0) : 0].join('|'); // un espacio con una sola posición no la distingue
             const existing = new Map((list.relations || []).map((r) => [placeKey(r), { id: r.id, classification: r.classification || 'activo' }]));
-            const occupied = new Map((options.occupied || []).map((o) => [`${o.spaceId}|${o.level}|${o.slot}|${o.row || 1}|${o.depth || 1}`, o.sku]));
+            const occupied = new Map((options.occupied || []).map((o) => [`${o.spaceId}|${o.level}|${o.slot}|${o.position || 1}`, o.sku]));
             const byItem = new Map();
             (list.relations || []).forEach((r) => { if (!byItem.has(r.skuItemId)) byItem.set(r.skuItemId, []); byItem.get(r.skuItemId).push(r); });
             ctx = { options, bySku, byUpc, existing, occupied, byItem };
@@ -307,7 +307,7 @@
             centers: ctx.options.costCenters || [], selectedIds: selected,
             warehouses: ctx.options.warehouses || [], subWarehouses: ctx.options.subWarehouses || [], zonesByCenter: ctx.options.zonesByCenter || {},
             itemBySku: (n) => ctx.bySku.get(n) || null, itemByUpc: (upc) => ctx.byUpc.get(upc) || null,
-            occupiedBy: (spaceId, level, slot, row, depth) => ctx.occupied.get(`${spaceId}|${level}|${slot}|${row || 1}|${depth || 1}`) || '',
+            occupiedBy: (spaceId, level, slot, position) => ctx.occupied.get(`${spaceId}|${level}|${slot}|${position || 1}`) || '',
             existingRelation: (key) => ctx.existing.get(key) || null,
             relationsOf: (itemId) => ctx.byItem.get(itemId) || [],
             priorRowWithKey: (key, row) => { const n = accepted.get(key); return n && n !== row.n ? n : 0; },
@@ -319,7 +319,7 @@
             if (!r.err && (r.plan.action === 'create' || r.plan.action === 'complete' || r.plan.action === 'reclass')) { accepted.set(r.plan.keys.place, r.n); if (r.plan.keys.slot) accepted.set(r.plan.keys.slot, r.n); if (r.plan.keys.claim) accepted.set(r.plan.keys.claim, r.n); }
         });
     }
-    const routeText = (plan) => [...plan.route, plan.values.level ? t('main.relLevelN', { n: plan.values.level }) : '', plan.values.slot ? t('main.relSlotN', { n: plan.values.slot }) : '', plan.values.row ? t('main.relRowN', { n: plan.values.row }) : '', plan.values.depth ? t('main.relDepthN', { n: plan.values.depth }) : ''].filter(Boolean).join(' › ');
+    const routeText = (plan) => [...plan.route, plan.values.level ? t('main.relLevelN', { n: plan.values.level }) : '', plan.values.slot ? t('main.relSlotN', { n: plan.values.slot }) : '', plan.values.position ? t('main.relPositionN', { n: plan.values.position }) : ''].filter(Boolean).join(' › ');
     function paintRow(r) {
         const tr = r.tr;
         const tag = tr.querySelector('.tpl-tag');

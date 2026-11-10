@@ -6490,7 +6490,7 @@ app.get('/api/public/ficha/:token', (req, res) => {
                 locations: !locks.where ? [] : (() => {
                     const ctx = codeRelationContextFor(skuItem.client_id, !!skuItem.is_test_data);
                     return listCodeRelations(skuItem.client_id, !!skuItem.is_test_data).filter((r) => r.sku_item_id === skuItem.id).map((r) => mapCodeRelation(r, null, '', ctx)).map((loc) => ({
-                        route: [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.footprintCode, loc.spaceCode, loc.level ? `Nivel ${loc.level}` : '', loc.slot ? `Columna ${loc.slot}` : '', loc.row && loc.bayRows > 1 ? `Fila ${loc.row}` : '', loc.depth && loc.bayDepth > 1 ? `Profundidad ${loc.depth}` : ''].filter(Boolean),
+                        route: [loc.centroCostos, loc.warehouseName, loc.subWarehouseName, loc.zoneName, loc.footprintCode, loc.spaceCode, loc.level ? `Nivel ${loc.level}` : '', loc.slot ? `Espacio ${loc.slot}` : '', loc.position && loc.positionCount > 1 ? `Posición ${loc.position}` : ''].filter(Boolean),
                         locator: loc.locator, virtual: loc.subKind === 'virtual', located: loc.status === 'located',
                     }));
                 })(),
@@ -8976,7 +8976,8 @@ function layoutIndexOf(row) {
     const zones = ((row && row.layout.zones) || []).filter((z) => z.active !== false);
     const spaces = ((row && row.layout.spaces) || []).filter((s) => s.active !== false);
     const footprints = ((row && row.layout.footprints) || []).filter((f) => f.active !== false);
-    return { zones, spaces, footprints, zoneById: new Map(zones.map((z) => [z.id, z])), spaceById: new Map(spaces.map((s) => [s.id, s])), footprintById: new Map(footprints.map((f) => [f.id, f])) };
+    // positions: las posiciones de cada espacio («activo|nivel|espacio» -> [{ id, num… }] por número), con las de fábrica incluidas
+    return { zones, spaces, footprints, positions: row ? LayoutCalc.positionIndex(row.layout) : new Map(), zoneById: new Map(zones.map((z) => [z.id, z])), spaceById: new Map(spaces.map((s) => [s.id, s])), footprintById: new Map(footprints.map((f) => [f.id, f])) };
 }
 // El Layout es de un centro de costos: costCenterId sin indicar = el primer Layout del cliente (las pantallas que todavía no eligen centro).
 function warehouseLayoutIndex(clientId, costCenterId) {
@@ -9423,11 +9424,20 @@ const CODE_RELATION_MODULE_LABEL = 'Cadena de Suministro';
 const CODE_RELATION_SCREEN_LABEL = 'Relación Código';
 const CODE_RELATION_COLS = {
     skuItemId: 'colRelSku', costCenterId: 'colRelCentroCostos', warehouseId: 'colRelAlmacen', subWarehouseId: 'colRelSubAlmacen',
-    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio', row: 'colRelFila', depth: 'colRelProfundidad', classification: 'colRelClasificacion',
+    zoneId: 'colRelZona', spaceId: 'colRelEstante', level: 'colRelNivel', slot: 'colRelEspacio', position: 'colRelProfundidad', classification: 'colRelClasificacion', // la posición cuelga de la hoja que era «Profundidad» (ahora «Posición»)
 };
 // Clasificación del producto en ese lugar. Se guarda la clave; sin decir nada es Producto Activo.
 const CODE_RELATION_CLASSES = { activo: 'Producto Activo', cuarentena: 'Producto Cuarentena', aclaracion: 'Producto Aclaración', consigna: 'Producto en Consigna' };
-const CODE_RELATION_INT_KEYS = ['skuItemId', 'costCenterId', 'warehouseId', 'subWarehouseId', 'level', 'slot', 'row', 'depth'];
+// row y depth ya no se guardan: se siguen aceptando de las copias viejas de la App y de los archivos de antes, y se convierten en la posición (convertLegacyCell).
+const CODE_RELATION_INT_KEYS = ['skuItemId', 'costCenterId', 'warehouseId', 'subWarehouseId', 'level', 'slot', 'position', 'row', 'depth'];
+function convertLegacyCell(state, ctx, values) {
+    if (state.row == null && state.depth == null) { delete state.row; delete state.depth; if (values) { delete values.row; delete values.depth; } return; }
+    const layout = ctx.layoutFor(state.costCenterId);
+    const space = state.spaceId ? layout.spaceById.get(state.spaceId) : null;
+    if (state.position == null && space && state.level && state.slot) state.position = LayoutCalc.legacyPositionNum(space, state.level, state.slot, state.row, state.depth);
+    delete state.row; delete state.depth;
+    if (values) { delete values.row; delete values.depth; if (state.position != null) values.position = state.position; }
+}
 const CODE_RELATION_TEXT_KEYS = ['zoneId', 'spaceId', 'classification'];
 const padSku = (n) => String(n || 0).padStart(6, '0');
 
@@ -9465,9 +9475,11 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
     // La zona de una relación con activo es la de ESE activo hoy (la zona de una huella sale de dónde está en el croquis); la que se guardó solo se usa mientras no hay activo.
     const zone = space && space.zoneId ? layout.zoneById.get(space.zoneId) : layout.zoneById.get(row.zone_id);
     const footprint = space ? layout.footprintById.get(space.footprintId) : null;
-    // Ubicado = un sub almacén virtual (no tiene dónde más) o el camino físico completo hasta el hueco (anaquel, nivel y columna) y, si ese hueco tiene más de una fila o más de una profundidad, cuál fila y cuál profundidad; lo demás queda A medias.
-    const bay = row.space_id && row.level && row.slot ? LayoutCalc.bayOf(space, row.level, row.slot) : { rows: 1, depth: 1 };
-    const located = !!row.sub_warehouse_id && ((sub && sub.kind === 'virtual') || (row.space_id && row.level && row.slot && (row.row_no || bay.rows <= 1) && (row.depth || bay.depth <= 1)));
+    // Ubicado = un sub almacén virtual (no tiene dónde más) o el camino físico completo hasta el espacio (anaquel, nivel y espacio) y, si ese espacio tiene más de una posición, cuál posición; lo demás queda A medias.
+    const nums = space && row.level && row.slot ? (layout.positions.get(`${row.space_id}|${row.level}|${row.slot}`) || []) : [];
+    const posOk = row.position ? nums.some((p) => p.num === row.position) : nums.length === 1;
+    const located = !!row.sub_warehouse_id && ((sub && sub.kind === 'virtual') || (row.space_id && row.level && row.slot && posOk));
+    const posNum = row.position || (nums.length === 1 ? nums[0].num : 0);
     return {
         id: row.id,
         registroUnico: row.db_id,
@@ -9481,9 +9493,9 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
         zoneId: zone ? zone.id : row.zone_id, zoneName: zone ? zone.name : '',
         spaceId: row.space_id, spaceCode: space ? space.code : '',
         footprintId: footprint ? footprint.id : '', footprintCode: footprint ? footprint.code : '',
-        // El Localizador completo (las 7 piezas) solo existe cuando el lugar está completo.
-        locator: located && space && footprint && zone ? RelTemplate.formatLocator({ zoneName: zone.name, zoneCode: zone.code, footprintCode: footprint.code, spaceType: space.type, spaceCode: space.code, level: row.level, slot: row.slot, row: row.row_no, depth: row.depth }) : '',
-        level: row.level, slot: row.slot, row: row.row_no, depth: row.depth, bayRows: bay.rows, bayDepth: bay.depth,
+        // El Localizador completo (las 6 piezas) solo existe cuando el lugar está completo.
+        locator: located && space && footprint && zone ? RelTemplate.formatLocator({ zoneName: zone.name, zoneCode: zone.code, footprintCode: footprint.code, spaceType: space.type, spaceCode: space.code, level: row.level, slot: row.slot, position: posNum || 1 }) : '',
+        level: row.level, slot: row.slot, position: row.position || null, positionCount: nums.length,
         classification: row.classification || 'activo', classificationName: CODE_RELATION_CLASSES[row.classification || 'activo'] || '',
         status: located ? 'located' : 'partial',
         pendingFields: pendingByRecord?.get(row.id) || [],
@@ -9506,8 +9518,7 @@ function codeRelationSanitizers(ctx, req) {
         spaceId: (v) => { const s = ctx.anyLayout((l) => l.spaceById.get(v)); return s ? s.code : (v || ''); },
         level: (v) => (v == null ? '' : String(v)),
         slot: (v) => (v == null ? '' : String(v)),
-        row: (v) => (v == null ? '' : String(v)),
-        depth: (v) => (v == null ? '' : String(v)),
+        position: (v) => (v == null ? '' : String(v)),
         classification: (v) => CODE_RELATION_CLASSES[v] || (v == null ? '' : String(v)),
     };
 }
@@ -9552,9 +9563,8 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     const hasSpace = !!state.spaceId;
     const hasLevel = state.level != null;
     const hasSlot = state.slot != null;
-    const hasRow = state.row != null;
-    const hasDepth = state.depth != null;
-    if (!hasSub && (hasZone || hasSpace || hasLevel || hasSlot || hasRow || hasDepth)) return bad('Falta el sub almacén.');
+    const hasPos = state.position != null;
+    if (!hasSub && (hasZone || hasSpace || hasLevel || hasSlot || hasPos)) return bad('Falta el sub almacén.');
     let sub = null;
     if (hasSub) {
         sub = ctx.warehouses.get(state.subWarehouseId);
@@ -9562,9 +9572,9 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
         if (sub.parent_id !== state.warehouseId) return bad('Ese sub almacén no pertenece a ese almacén.');
         if (sub.status !== 'active' && !(existing && existing.sub_warehouse_id === sub.id)) return bad('Ese sub almacén está inactivo. Elige uno activo.');
     }
-    if (!hasZone && (hasSpace || hasLevel || hasSlot || hasRow || hasDepth)) return bad('Falta la zona.');
+    if (!hasZone && (hasSpace || hasLevel || hasSlot || hasPos)) return bad('Falta la zona.');
     if (hasZone) {
-        if (!sub || sub.kind !== 'physical') return bad('Este sub almacén no es físico: no lleva zona, anaquel, nivel, columna, fila ni profundidad.');
+        if (!sub || sub.kind !== 'physical') return bad('Este sub almacén no es físico: no lleva zona, anaquel, nivel, espacio ni posición.');
         const entry = parseWarehouseLocations(sub.locations).find((e) => e.zoneId === state.zoneId);
         if (!entry || !layout.zoneById.has(state.zoneId)) return bad('Esa zona no está asignada a ese sub almacén.');
         if (hasSpace) {
@@ -9573,20 +9583,19 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
             if (entry.spaceIds.length && !entry.spaceIds.includes(state.spaceId)) return bad('Ese anaquel no está asignado a ese sub almacén.');
             if (hasLevel) {
                 if (state.level < 1 || state.level > (space.levels || 1)) return bad('Ese nivel no existe en ese anaquel.');
-                if (hasSlot && (state.slot < 1 || state.slot > LayoutCalc.levelSlots(space, state.level))) return bad('Esa columna no existe en ese nivel.');
-                if ((hasRow || hasDepth) && !hasSlot) return bad('Falta la columna.');
-                if (hasRow || hasDepth) {
-                    // dentro del hueco (nivel × columna) están sus filas y sus profundidades (Layout > Posiciones)
-                    const bay = LayoutCalc.bayOf(space, state.level, state.slot);
-                    if (hasRow && (state.row < 1 || state.row > bay.rows)) return bad('Esa fila no existe en ese hueco.');
-                    if (hasDepth && (state.depth < 1 || state.depth > bay.depth)) return bad('Esa profundidad no existe en ese hueco.');
+                if (hasSlot && (state.slot < 1 || state.slot > LayoutCalc.levelSlots(space, state.level))) return bad('Ese espacio no existe en ese nivel.');
+                if (hasPos && !hasSlot) return bad('Falta el espacio.');
+                if (hasPos) {
+                    // dentro del espacio (nivel × espacio) están sus posiciones (Layout > Posiciones)
+                    const nums = layout.positions.get(`${space.id}|${state.level}|${state.slot}`) || [];
+                    if (!nums.some((p) => p.num === state.position)) return bad('Esa posición no existe en ese espacio.');
                 }
-            } else if (hasSlot || hasRow || hasDepth) return bad('Falta el nivel.');
-        } else if (hasLevel || hasSlot || hasRow || hasDepth) return bad('Falta el anaquel.');
+            } else if (hasSlot || hasPos) return bad('Falta el nivel.');
+        } else if (hasLevel || hasSlot || hasPos) return bad('Falta el anaquel.');
     }
     if (hasSpace && hasLevel && hasSlot) {
-        const occupant = findCodeRelationInSlot(clientId, isTestAccount, state.spaceId, state.level, state.slot, selfId || 0, state.row, state.depth);
-        if (occupant) return bad(`Ese espacio ya lo ocupa el código ${padSku(occupant.sku_number)}. Elige otro espacio.`, 409);
+        const occupant = findCodeRelationInSlot(clientId, isTestAccount, state.spaceId, state.level, state.slot, selfId || 0, state.position);
+        if (occupant) return bad(`Esa posición ya la ocupa el código ${padSku(occupant.sku_number)}. Elige otra posición.`, 409);
     }
     if (findCodeRelationDuplicate(clientId, isTestAccount, state, selfId || 0)) return bad('Este código ya tiene esa misma ubicación.', 409);
     return { ok: true };
@@ -9643,7 +9652,7 @@ app.get('/api/business/locators', requireAuth, (req, res) => {
             locators.push({
                 cc: cc.id, scope: r.scope, complete: r.complete, locator: r.locator,
                 zoneCode: r.zoneCode, zoneName: r.zoneName, footprintId: r.footprintId || '', footprintCode: r.footprintCode || '', footprintName: r.footprintName || '',
-                spaceCode: r.spaceCode || '', spaceType: r.spaceType || '', level: r.level || 0, slot: r.slot || 0, row: r.row || 0, depth: r.depth || 0,
+                spaceCode: r.spaceCode || '', spaceType: r.spaceType || '', level: r.level || 0, slot: r.slot || 0, position: r.position || 0,
                 warehouse: [...new Set(at.map((h) => h.wh.name))].join(', '), subWarehouse: [...new Set(at.map((h) => h.sub.name))].join(', '),
             });
         }
@@ -9664,7 +9673,9 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
         return idx.zones.map((z) => ({
             id: z.id, name: z.name, code: z.code,
             footprints: idx.footprints.filter((f) => f.zoneId === z.id).map((f) => ({ id: f.id, code: f.code })),
-            spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, footprintId: s.footprintId, levels: s.levels || 1, slots: LayoutCalc.maxSlots(s), slotsByLevel: LayoutCalc.slotsByLevelOf(s), bays: s.bays || [] })),
+            spaces: idx.spaces.filter((s) => s.zoneId === z.id).map((s) => ({ id: s.id, code: s.code, type: s.type, footprintId: s.footprintId, levels: s.levels || 1, slots: LayoutCalc.maxSlots(s), slotsByLevel: LayoutCalc.slotsByLevelOf(s), bays: s.bays || [],
+                // las posiciones de cada espacio: [{ n, c, nums: [1, 2…] }] (las copias viejas de la App siguen leyendo bays)
+                positions: [...idx.positions.entries()].filter(([key]) => key.startsWith(`${s.id}|`)).map(([key, list]) => { const [, n, c] = key.split('|'); return { n: Number(n), c: Number(c), nums: list.map((p) => p.num) }; }) })),
         }));
     };
     const zonesByCenter = {};
@@ -9676,7 +9687,7 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
         subWarehouses: sub.map((r) => ({ id: r.id, name: r.name, parentId: r.parent_id, status: r.status, kind: r.kind, locations: r.kind === 'physical' ? parseWarehouseLocations(r.locations) : [] })),
         zonesByCenter,
         zones: layouts.length ? zonesOf(layouts[0]) : [],
-        occupied: listCodeRelations(clientId, isTestAccount).filter((r) => r.space_id && r.level && r.slot).map((r) => ({ id: r.id, spaceId: r.space_id, level: r.level, slot: r.slot, row: r.row_no || 1, depth: r.depth || 1, sku: padSku(r.sku_number) })),
+        occupied: listCodeRelations(clientId, isTestAccount).filter((r) => r.space_id && r.level && r.slot).map((r) => ({ id: r.id, spaceId: r.space_id, level: r.level, slot: r.slot, position: r.position || 1, sku: padSku(r.sku_number) })),
     });
 });
 
@@ -9703,7 +9714,9 @@ app.post('/api/business/code-relations', requireAuth, requireCostCenter, (req, r
     }
     const norm = normalizeCodeRelationInput(req.body || {});
     if (norm.error) return res.status(400).json({ message: norm.error });
-    const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, row: null, depth: null, classification: 'activo', ...norm.values };
+    const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, position: null, classification: 'activo', ...norm.values };
+    const ctx = codeRelationContext(req);
+    convertLegacyCell(state, ctx, null);
     // Llenar un dato vacío pide su propia hoja (Ver y Operar o Modificar), igual que al llenar una celda de otra tabla.
     if (grants) {
         const missing = Object.entries(CODE_RELATION_COLS)
@@ -9711,7 +9724,6 @@ app.post('/api/business/code-relations', requireAuth, requireCostCenter, (req, r
             .map(([key]) => CODE_RELATION_PATCHABLE_FIELDS[key].fieldKey);
         if (missing.length) return res.status(403).json({ message: 'No tienes permiso para llenar uno de los datos de esta relación.', fields: missing });
     }
-    const ctx = codeRelationContext(req);
     const check = validateCodeRelationState(req, state, 0, null, ctx);
     if (check.error) return res.status(check.error.status).json({ message: check.error.message });
     const row = createCodeRelation({ clientId, isTestData: isTestAccount, values: state });
@@ -9769,16 +9781,17 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
         if (raw && raw.relationId != null) {
             const existing = getCodeRelationById(raw.relationId, clientId, isTestAccount);
             if (!existing) { fail('Esa relación ya no existe.'); return; }
-            if (existing.zone_id || existing.space_id || existing.level || existing.slot || existing.row_no || existing.depth) { fail('Esa relación ya tiene lugar: no se completa otra vez.'); return; }
+            if (existing.zone_id || existing.space_id || existing.level || existing.slot || existing.position) { fail('Esa relación ya tiene lugar: no se completa otra vez.'); return; }
             // la clasificación solo viaja si la fila la trae (sin decirla, la relación conserva la que tenía)
-            const placeKeys = ['zoneId', 'spaceId', 'level', 'slot', 'row', 'depth'].concat(raw.values && raw.values.classification ? ['classification'] : []);
+            const placeKeys = ['zoneId', 'spaceId', 'level', 'slot', 'position', 'row', 'depth'].concat(raw.values && raw.values.classification ? ['classification'] : []);
             const placeNorm = normalizeCodeRelationInput(Object.fromEntries(placeKeys.map((k) => [k, raw.values ? raw.values[k] : null])));
             if (placeNorm.error) { fail(placeNorm.error); return; }
             const place = placeNorm.values;
             const state = {
                 skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
-                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, row: existing.row_no, depth: existing.depth, classification: existing.classification || 'activo', ...place,
+                zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, position: existing.position, classification: existing.classification || 'activo', ...place,
             };
+            convertLegacyCell(state, ctx, place);
             const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
             if (check.error) { fail(check.error.message); return; }
             const changedKeys = Object.keys(place).filter((key) => String(existing[CODE_RELATION_PATCHABLE_FIELDS[key].column] ?? '') !== String(place[key] ?? ''));
@@ -9795,7 +9808,8 @@ app.post('/api/business/code-relations/import', requireAuth, requireCostCenter, 
         }
         const norm = normalizeCodeRelationInput(raw && typeof raw.values === 'object' && raw.values ? raw.values : {});
         if (norm.error) { fail(norm.error); return; }
-        const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, row: null, depth: null, classification: 'activo', ...norm.values };
+        const state = { skuItemId: null, costCenterId: null, warehouseId: null, subWarehouseId: null, zoneId: '', spaceId: '', level: null, slot: null, position: null, classification: 'activo', ...norm.values };
+        convertLegacyCell(state, ctx, null);
         if (grants) {
             const denied = Object.entries(CODE_RELATION_COLS).find(([key, colKey]) => state[key] !== null && state[key] !== '' && !(key === 'classification' && state[key] === 'activo') && !['ver-y-operar', 'editar'].includes(getColumnGrantLevel(grants, CODE_RELATION_TABLE_KEY, colKey)));
             if (denied) { fail('No tienes permiso para llenar uno de los datos de esta relación.'); return; }
@@ -9830,8 +9844,9 @@ app.patch('/api/business/code-relations/:id', requireAuth, requireCostCenter, (r
     const ctx = codeRelationContext(req);
     const state = {
         skuItemId: existing.sku_item_id, costCenterId: existing.cost_center_id, warehouseId: existing.warehouse_id, subWarehouseId: existing.sub_warehouse_id,
-        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, row: existing.row_no, depth: existing.depth, classification: existing.classification || 'activo', ...norm.values,
+        zoneId: existing.zone_id, spaceId: existing.space_id, level: existing.level, slot: existing.slot, position: existing.position, classification: existing.classification || 'activo', ...norm.values,
     };
+    convertLegacyCell(state, ctx, norm.values);
     const check = validateCodeRelationState(req, state, existing.id, existing, ctx);
     if (check.error) return res.status(check.error.status).json({ message: check.error.message });
     // Cuando cambian varios datos a la vez (la ubicación depende de ella misma) no se permite que unos se apliquen y otros queden pendientes o rechazados.

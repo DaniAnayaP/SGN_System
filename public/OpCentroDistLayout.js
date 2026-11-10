@@ -1025,9 +1025,9 @@ function locatorsStepHtml() {
     const footprintText = (r) => (r.footprintCode ? (r.footprintName ? `${r.footprintCode} · ${r.footprintName}` : r.footprintCode) : '—');
     const assetText = (r) => (r.spaceCode ? `${r.spaceCode} · ${typeLabel('space', r.spaceType || 'rack')}` : '—');
     const num = (n) => (n ? String(n) : '—');
-    const body = rows.map((r) => `<tr><td class="layout-calc">${esc(zoneText(r))}</td><td class="layout-calc">${esc(footprintText(r))}</td><td class="layout-calc">${esc(assetText(r))}</td><td class="layout-calc">${num(r.level)}</td><td class="layout-calc">${num(r.slot)}</td><td class="layout-calc">${num(r.row)}</td><td class="layout-calc">${num(r.depth)}</td><td class="layout-calc"><b>${esc(r.locator || '—')}</b></td><td class="layout-calc">${esc(t(`main.locAlcance_${r.scope}`))}</td><td class="layout-calc"><span class="rel-tag ${r.complete ? 'rel-tag-ok' : 'rel-tag-partial'}">${esc(t(r.complete ? 'main.locEstadoCompleto' : 'main.locEstadoAMedias'))}</span></td></tr>`);
+    const body = rows.map((r) => `<tr><td class="layout-calc">${esc(zoneText(r))}</td><td class="layout-calc">${esc(footprintText(r))}</td><td class="layout-calc">${esc(assetText(r))}</td><td class="layout-calc">${num(r.level)}</td><td class="layout-calc">${num(r.slot)}</td><td class="layout-calc">${num(r.position)}</td><td class="layout-calc"><b>${esc(r.locator || '—')}</b></td><td class="layout-calc">${esc(t(`main.locAlcance_${r.scope}`))}</td><td class="layout-calc"><span class="rel-tag ${r.complete ? 'rel-tag-ok' : 'rel-tag-partial'}">${esc(t(r.complete ? 'main.locEstadoCompleto' : 'main.locEstadoAMedias'))}</span></td></tr>`);
     const note = truncated ? `<p class="layout-muted">${esc(t('main.layoutLocalizadoresCorte', { n: LOCATOR_PANEL_MAX }))}</p>` : '';
-    return `${table(['main.colLocZona', 'main.colLocHuella', 'main.colLocActivo', 'main.colLocNivel', 'main.colLocColumna', 'main.colLocFila', 'main.colLocProfundidad', 'main.colLocLocalizador', 'main.colLocAlcance', 'main.colLocEstado'], body, 'layout-localizadores')}${note}`;
+    return `${table(['main.colLocZona', 'main.colLocHuella', 'main.colLocActivo', 'main.colLocNivel', 'main.colLocColumna', 'main.colLocProfundidad', 'main.colLocLocalizador', 'main.colLocAlcance', 'main.colLocEstado'], body, 'layout-localizadores')}${note}`;
 }
 // Un renglón de la tabla de obstáculos del contorno. Las cuatro celdas del lugar cambian con la forma de ponerlo: «Sobre el contorno» = lado, distancia, largo (vacío = todo el lado) y grosor; «Dentro de la nave» = X, Y, largo y ancho.
 // La altura solo la lleva el desnivel (su altura sobre el piso; negativa si es más bajo).
@@ -1376,12 +1376,12 @@ function stepHtml(step) {
                     const lvName = ((s.lvls || []).find((l) => l.n === n) || {}).name || '';
                     const nameOf = s.ownName || s.name || '';
                     const pad3 = (v) => String(v).padStart(3, '0');
-                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.C${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}${bayNum(i, n, c, 'rows', bay.rows, st.rows !== undefined, '1')}${bayNum(i, n, c, 'depth', bay.depth, st.depth !== undefined, '1')}<td class="layout-calc"><span data-bay-cap="${i}|${n}|${c}" data-help-key="layoutPosLocalizadores">${bay.rows * bay.depth}</span></td><td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td>${facesCellHtml('bay', i, n, c, LC.facesOfBay(s, n, c), LC.facesOfLevel(s, n), st.faces !== undefined, dis)}</tr>`);
+                    rows.push(`<tr><td class="layout-calc"><b>${esc(s.code)}.N${pad3(n)}.E${pad3(c)}</b></td><td class="layout-calc">${esc(s.code)}${nameOf ? ` · ${esc(nameOf)}` : ''}</td><td class="layout-calc">N${pad3(n)}${lvName ? ` · ${esc(lvName)}` : ''}</td>${bayNum(i, n, c, 'l', shown(m.l), st.l !== undefined, '0.01', '', (s.l > 0 && m.l > s.l + 0.005) || sumOver)}${bayNum(i, n, c, 'w', shown(m.w), st.w !== undefined, '0.01', ' data-help-key="layoutPosFondo"', s.d > 0 && m.w > s.d + 0.005)}${bayNum(i, n, c, 'h', shown(m.h), st.h !== undefined, '0.01', ' data-help-key="layoutPosAlto"', st.h !== undefined && lvH > 0 && m.h > lvH + 0.005)}<td class="layout-calc"><span data-bay-m2="${i}|${n}|${c}">${shown(m.l * m.w)}</span></td><td class="layout-calc"><span data-bay-m3="${i}|${n}|${c}">${shown(m.l * m.w * m.h)}</span></td>${facesCellHtml('bay', i, n, c, LC.facesOfBay(s, n, c), LC.facesOfLevel(s, n), st.faces !== undefined, dis)}</tr>`);
                 }
             }
         });
         if (!rows.length) return `<p class="layout-muted">${esc(t('main.layoutPosSinActivos'))}</p>`;
-        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosFilas', 'main.layoutPosProfundidad', 'main.layoutPosLocalizadores', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo'];
+        const heads = ['main.layoutPosCodigo', 'main.layoutNivActivo', 'main.layoutPosNivel', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo'];
         const bayIssues = bayIssuesHtml();
         return `${table(heads, rows, 'layout-posiciones')}<div class="layout-vio" data-bay-issues${bayIssues ? '' : ' hidden'}>${bayIssues}</div>${count >= POSITION_ROWS_MAX ? `<p class="layout-muted">${esc(t('main.layoutPosMuchos').replace('{n}', POSITION_ROWS_MAX))}</p>` : ''}`;
     }
@@ -1479,6 +1479,14 @@ function posEspacios() {
     });
     return out;
 }
+// Todo espacio (nivel × espacio de un activo) tiene al menos una posición: las que faltan las genera el sistema (una que cubre todo el espacio) y las de fábrica siguen el tamaño de su espacio.
+function syncPositions() {
+    if (!state.draft) return;
+    const ens = LC.ensurePositions(state.draft);
+    if (ens === state.draft) return;
+    state.draft.positions = ens.positions;
+    if (ens.posNext) state.draft.posNext = ens.posNext;
+}
 function posCurrent() {
     const list = posEspacios();
     if (!list.length) return null;
@@ -1533,11 +1541,11 @@ function positionsStepHtml(dis) {
     const items = posItems(cur);
     const counts = new Map();
     (state.draft.positions || []).forEach((p) => { const k = `${p.spaceId}|${p.n}|${p.c}`; counts.set(k, (counts.get(k) || 0) + 1); });
-    const options = list.map((x) => `<option value="${esc(x.key)}"${x.key === cur.key ? ' selected' : ''}>${esc(`${x.s.code}.N${ubicPad(x.n)}.C${ubicPad(x.c)}`)}${x.s.ownName ? ` · ${esc(x.s.ownName)}` : ''} (${counts.get(x.key) || 0})</option>`).join('');
+    const options = list.map((x) => `<option value="${esc(x.key)}"${x.key === cur.key ? ' selected' : ''}>${esc(`${x.s.code}.N${ubicPad(x.n)}.E${ubicPad(x.c)}`)}${x.s.ownName ? ` · ${esc(x.s.ownName)}` : ''} (${counts.get(x.key) || 0})</option>`).join('');
     const { map: bad, list: vios } = posViolationsOf(cur);
     const upFaces = LC.facesOfBay(s, cur.n, cur.c);
     const num = (p, k, extra = '') => `<td><input type="number" step="0.01" min="0" data-pk="${k}" data-pid="${esc(p.id)}"${extra} value="${Math.round(p[k] * 100) / 100}"${dis ? ' disabled' : ''}></td>`;
-    const rows = items.map((p) => `<tr data-pid="${esc(p.id)}" class="${state.posPick === p.id ? 'layout-row-sel' : ''}"><td class="layout-calc"><b>${esc(LC.positionCode(s, p))}</b></td>${num(p, 'x')}${num(p, 'y')}${num(p, 'l')}${num(p, 'w')}${num(p, 'h')}<td class="layout-calc" data-pos-m2>${fmt(p.l * p.w)}</td><td class="layout-calc" data-pos-m3>${fmt(p.l * p.w * p.h)}</td>${facesCellHtml('pos', cur.i, p.n, p.c, LC.facesOfPosition(s, p), upFaces, p.faces !== undefined, dis, p.id)}<td><button type="button" class="layout-x" data-pos-del="${esc(p.id)}" aria-label="${esc(t('main.layoutUbicQuitar'))}"${dis ? ' disabled' : ''}>✕</button></td></tr>`);
+    const rows = items.map((p) => `<tr data-pid="${esc(p.id)}" class="${state.posPick === p.id ? 'layout-row-sel' : ''}"><td class="layout-calc"><b>${esc(LC.positionCode(s, p))}</b></td>${num(p, 'x')}${num(p, 'y')}${num(p, 'l')}${num(p, 'w')}${num(p, 'h')}<td class="layout-calc" data-pos-m2>${fmt(p.l * p.w)}</td><td class="layout-calc" data-pos-m3>${fmt(p.l * p.w * p.h)}</td>${facesCellHtml('pos', cur.i, p.n, p.c, LC.facesOfPosition(s, p), upFaces, p.faces !== undefined, dis, p.id)}<td><button type="button" class="layout-x" data-pos-del="${esc(p.id)}" aria-label="${esc(t('main.layoutUbicQuitar'))}"${items.length <= 1 ? ` title="${esc(t('main.layoutUbicUltima'))}"` : ''}${dis || items.length <= 1 ? ' disabled' : ''}>✕</button></td></tr>`);
     const heads = ['main.layoutUbicCodigo', 'main.layoutUbicX', 'main.layoutUbicY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutPosM2', 'main.layoutPosM3', 'main.layoutCarasConsumo', ''];
     const dims = `${esc(t('main.layoutLargo'))} <b>${esc(fmt(m.l))}</b> · ${esc(t('main.layoutFondo'))} <b>${esc(fmt(m.w))}</b> · ${esc(t('main.layoutAlto'))} <b>${esc(fmt(m.h))}</b>`;
     return `<div class="layout-pos">`
@@ -1601,6 +1609,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (add && !add.disabled) { addPosition(); return; }
     const del = event.target.closest('[data-pos-del]');
     if (del && !del.disabled && state.draft) {
+        const gone = (state.draft.positions || []).find((p) => p.id === del.getAttribute('data-pos-del'));
+        if (gone && (state.draft.positions || []).filter((p) => p.spaceId === gone.spaceId && p.n === gone.n && p.c === gone.c).length <= 1) return; // un espacio siempre tiene al menos una posición
         state.draft.positions = (state.draft.positions || []).filter((p) => p.id !== del.getAttribute('data-pos-del'));
         if (!state.draft.positions.length) delete state.draft.positions;
         renderPanel();
@@ -1624,6 +1634,7 @@ $('layout-panel').addEventListener('input', (event) => {
     const v = parseFloat(input.value);
     if (!Number.isFinite(v) || v < 0 || (k !== 'x' && k !== 'y' && v <= 0)) return;
     pos[k] = v;
+    delete pos.auto; // ya no es la de fábrica: deja de seguir el tamaño de su espacio
     state.posPick = pos.id;
     positionsLive();
     refreshLive();
@@ -1657,7 +1668,7 @@ $('layout-panel').addEventListener('pointermove', (event) => {
     const nx = Math.round(snap((at.x - posDrag.dx - POS_M) / posDrag.sc) * 100) / 100;
     const ny = Math.round(snap((at.y - posDrag.dy - POS_M) / posDrag.sc) * 100) / 100;
     if (nx === posDrag.pos.x && ny === posDrag.pos.y) return;
-    posDrag.pos.x = nx; posDrag.pos.y = ny; posDrag.moved = true;
+    posDrag.pos.x = nx; posDrag.pos.y = ny; posDrag.moved = true; delete posDrag.pos.auto;
     positionsLive();
 });
 const endPosDrag = () => { if (!posDrag) return; const moved = posDrag.moved; posDrag = null; if (moved) { renderPanel(); refreshLive(); } };
@@ -1772,7 +1783,7 @@ const panelScrollers = () => Array.from(document.querySelectorAll('#layout-panel
 function renderPanel() {
     closeWhoPop();
     // el panel también se dibuja con lo que sale de la huella (zona de cada activo, si está activo): se saca antes de dibujarlo, no solo en refreshLive
-    if (state.draft) { syncWallItems(); syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; computeFootprintIssues(); computeSpaceIssues(); computeTransitIssues(); }
+    if (state.draft) { syncWallItems(); syncHuellas(); state.draft.spaces = LC.deriveSpaces(state.draft).spaces; syncPositions(); computeFootprintIssues(); computeSpaceIssues(); computeTransitIssues(); }
     const keepTops = panelScrollStep === state.focus ? panelScrollers().map((el) => el.scrollTop) : [];
     ensureVisibleSteps();
     const tabs = SECTION_ORDER.filter(stepVisible).map((s) => `<button type="button" role="button" aria-pressed="${stepOn(s)}" aria-current="${s === state.focus}" class="layout-step${stepOn(s) ? ' active' : ''}${s === state.focus ? ' focus' : ''}" data-step="${s}">${esc(t(SECTION_LABEL_KEYS[s]))}</button>`).join('');
@@ -2861,16 +2872,16 @@ function locEntities() {
     const d = state.draft;
     return { f: (d.footprints || []).find((x) => x.id === vLoc.fp) || null, s: (d.spaces || []).find((x) => x.id === vLoc.sp) || null };
 }
-// La pieza del código de cada paso ya elegido: H001, A004, N002, C001, F001.P001 (vacía si ese paso sigue sin elegirse)
+// La pieza del código de cada paso ya elegido: H001, A004, N002, E001, P001 (vacía si ese paso sigue sin elegirse)
 function locPart(step) {
     const { f, s } = locEntities();
     if (step === 'fp') return f ? (f.code || '') : '';
     if (step === 'sp') return s ? (s.code || '') : '';
     if (step === 'n') return vLoc.n ? `N${locPad(vLoc.n)}` : '';
-    if (step === 'c') return vLoc.c ? `C${locPad(vLoc.c)}` : '';
+    if (step === 'c') return vLoc.c ? `E${locPad(vLoc.c)}` : '';
     return vLoc.cell;
 }
-// El localizador armado hasta donde se ha bajado: Z001.H001.A004.N002.C001.F001.P001
+// El localizador armado hasta donde se ha bajado: Z001.H001.A004.N002.E001.P001
 function locCode() {
     const { f } = locEntities();
     if (!f) return '';
@@ -2935,19 +2946,14 @@ function locItems(step) {
         return Array.from({ length: LC.levelSlots(s, vLoc.n) }, (_, i) => {
             const c = i + 1;
             const m = LC.bayMeasures(s, vLoc.n, c);
-            const b = LC.bayOf(s, vLoc.n, c);
-            return { value: String(c), title: `C${locPad(c)}`, sub: `${fmt(m.l)} × ${fmt(m.w)} × ${fmt(m.h)} m · ${t('main.layoutLocFilasProf', { f: b.rows, p: b.depth })}`, hay: `${prefix}.C${locPad(c)} C${locPad(c)}` };
+            const nPos = LC.positionsOfBay(d, s.id, vLoc.n, c).length;
+            return { value: String(c), title: `E${locPad(c)}`, sub: `${fmt(m.l)} × ${fmt(m.w)} × ${fmt(m.h)} m · ${t('main.layoutLocNPosiciones', { n: nPos })}`, hay: `${prefix}.E${locPad(c)} E${locPad(c)}` };
         });
     }
-    const b = LC.bayOf(s, vLoc.n, vLoc.c);
-    const out = [];
-    for (let r = 1; r <= b.rows; r += 1) {
-        for (let p = 1; p <= b.depth; p += 1) {
-            const cell = `F${locPad(r)}.P${locPad(p)}`;
-            out.push({ value: cell, title: cell, sub: `${prefix}.${cell}`, hay: `${prefix}.${cell} ${cell}` });
-        }
-    }
-    return out;
+    return LC.positionsOfBay(d, s.id, vLoc.n, vLoc.c).map((p) => {
+        const cell = `P${locPad(p.num)}`;
+        return { value: cell, title: cell, sub: `${fmt(p.l)} × ${fmt(p.w)} × ${fmt(p.h)} m · ${prefix}.${cell}`, hay: `${prefix}.${cell} ${cell}` };
+    });
 }
 // La lista del paso en el que se va (el buscador del desplegable la filtra) y el código que se lleva armado
 function locBodyHtml() {
@@ -3009,8 +3015,8 @@ function locApply() {
     state.hl = null;
     applyViewFocus();
     if (inSpace && vLoc.n) {
-        const cell = /^F(\d+)\.P(\d+)$/.exec(vLoc.cell || '');
-        selectEntity({ kind: vLoc.c ? 'bay' : 'space', id: vLoc.sp, n: vLoc.n, c: vLoc.c || undefined, f: cell ? Number(cell[1]) : undefined, p: cell ? Number(cell[2]) : undefined, loc: locCode() }, 'zoom');
+        const cell = /^P(\d+)$/.exec(vLoc.cell || '');
+        selectEntity({ kind: vLoc.c ? 'bay' : 'space', id: vLoc.sp, n: vLoc.n, c: vLoc.c || undefined, p: cell ? Number(cell[1]) : undefined, loc: locCode() }, 'zoom');
         loc3dFocus = !!state.view3d;
         scheduleScene3d();
     }
@@ -3626,6 +3632,7 @@ function refreshLive() {
     syncWallItems();
     syncHuellas();
     state.draft.spaces = LC.deriveSpaces(state.draft).spaces;
+    syncPositions();
     computeFootprintIssues();
     computeSpaceIssues();
     state.draft.footprints.forEach((f, i) => {
@@ -4157,7 +4164,7 @@ function onEdit(event) {
         if (row.lvl2 === undefined) delete row.rise;
         if (event.type === 'change') renderPanel();
     } else if (list === 'bay') {
-        // Un hueco (nivel × columna) de un activo: solo se guarda lo que se cambió; lo que vuelve a ser como lo de por defecto (1 fila, 1 profundidad) se quita.
+        // Un espacio (nivel × espacio) de un activo: solo se guarda lo que se cambió; lo que vuelve a ser como lo de por defecto se quita.
         const space = state.draft.spaces[Number(el.getAttribute('data-i'))];
         const n = Number(el.getAttribute('data-n'));
         const c = Number(el.getAttribute('data-c'));
@@ -4165,15 +4172,9 @@ function onEdit(event) {
         if (!space.bays) space.bays = [];
         let bay = space.bays.find((b) => b.n === n && b.c === c);
         if (!bay) { bay = { n, c }; space.bays.push(bay); }
-        if (bayKey === 'rows' || bayKey === 'depth') {
-            const v = Math.max(1, Math.round(value) || 1);
-            if (v > 1) bay[bayKey] = Math.min(v, bayKey === 'rows' ? LC.LIMITS.slots : LC.LIMITS.depth); else delete bay[bayKey];
-        } else if (value > 0) bay[bayKey] = value; else delete bay[bayKey];
+        if (value > 0) bay[bayKey] = value; else delete bay[bayKey];
         if (Object.keys(bay).length <= 2) space.bays = space.bays.filter((b) => b !== bay);
         if (!space.bays.length) delete space.bays;
-        const shownBay = LC.bayOf(space, n, c);
-        const cap = document.querySelector(`[data-bay-cap="${el.getAttribute('data-i')}|${n}|${c}"]`);
-        if (cap) cap.textContent = String(shownBay.rows * shownBay.depth);
         // los m² (largo × fondo) y los m³ (× alto) se recalculan al momento
         const mBay = LC.bayMeasures(space, n, c);
         const setBayCell = (attr, v) => { const cell = document.querySelector(`[${attr}="${el.getAttribute('data-i')}|${n}|${c}"]`); if (cell) cell.textContent = String(Math.round(v * 100) / 100); };

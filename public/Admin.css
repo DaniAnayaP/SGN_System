@@ -7966,7 +7966,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .rel-fld select:disabled{ opacity: 0.55; cursor: not-allowed; }
 .rel-two{ display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; min-width: 0; }
 .rel-three{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.6rem; min-width: 0; }
-.rel-four{ display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 0.5rem; min-width: 0; }
+.rel-four{ display: grid; grid-template-columns: 1fr 1fr 1.7fr; gap: 0.5rem; min-width: 0; }
 .rel-results{ display: flex; flex-direction: column; max-height: 11rem; overflow: auto; border: 1px solid var(--color-border); border-radius: 0.55rem; background: var(--color-surface); }
 .rel-result{ font: inherit; font-size: 0.78rem; text-align: left; border: 0; border-bottom: 1px solid var(--color-border); background: transparent; color: var(--color-text-primary); padding: 0.4rem 0.6rem; cursor: pointer; }
 .rel-result:hover{ background: var(--color-surface-alt, rgba(120, 125, 150, 0.12)); }

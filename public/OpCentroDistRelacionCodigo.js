@@ -78,7 +78,7 @@ function iconButton(className, icon, label, helpKey, onClick) {
     return btn;
 }
 
-const EDITABLE_COLS = ['colRelSku', 'colRelCentroCostos', 'colRelAlmacen', 'colRelSubAlmacen', 'colRelZona', 'colRelEstante', 'colRelNivel', 'colRelEspacio', 'colRelFila', 'colRelProfundidad', 'colRelClasificacion'];
+const EDITABLE_COLS = ['colRelSku', 'colRelCentroCostos', 'colRelAlmacen', 'colRelSubAlmacen', 'colRelZona', 'colRelEstante', 'colRelNivel', 'colRelEspacio', 'colRelProfundidad', 'colRelClasificacion'];
 const CLASS_KEYS = ['activo', 'cuarentena', 'aclaracion', 'consigna'];
 function canTouchAnyColumn() {
     return EDITABLE_COLS.some((col) => Dashboard.canEditField(TABLE_KEY, col, '') || Dashboard.canEditField(TABLE_KEY, col, '1'));
@@ -105,7 +105,7 @@ function buildRow(r) {
         cell('colCatRegistroUnico', r.registroUnico, 'col-system'),
         cell('colRelSku', r.sku), cell('colRelUpc', r.upc), cell('colRelDescripcion', r.description),
         cell('colRelCentroCostos', r.centroCostos), cell('colRelAlmacen', r.warehouseName), cell('colRelSubAlmacen', r.subWarehouseName),
-        cell('colRelZona', r.zoneName), cell('colRelHuella', r.footprintCode), cell('colRelEstante', r.spaceCode), cell('colRelNivel', r.level), cell('colRelEspacio', r.slot), cell('colRelFila', r.row), cell('colRelProfundidad', r.depth), cell('colRelLocalizador', r.locator, 'rel-locator'),
+        cell('colRelZona', r.zoneName), cell('colRelHuella', r.footprintCode), cell('colRelEstante', r.spaceCode), cell('colRelNivel', r.level), cell('colRelEspacio', r.slot), cell('colRelProfundidad', r.position), cell('colRelLocalizador', r.locator, 'rel-locator'),
         classCell(r),
         statusCell(r),
     );
@@ -246,7 +246,7 @@ function centerChoices() {
     if (editing && editing.costCenterId && !list.some((c) => c.id === editing.costCenterId)) list.push({ id: editing.costCenterId, name: editing.centroCostos });
     return list;
 }
-const blankState = () => ({ sku: null, centro: opts && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', hue: '', est: '', niv: '', esp: '', fila: '', prof: '', clas: 'activo' });
+const blankState = () => ({ sku: null, centro: opts && centerChoices().length === 1 ? centerChoices()[0].id : '', alm: '', sub: '', zona: '', hue: '', est: '', niv: '', esp: '', pos: '', clas: 'activo' });
 const $m = (id) => document.getElementById(id);
 const byId = (list, id) => (list || []).find((x) => String(x.id) === String(id));
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
@@ -274,7 +274,7 @@ function ensureModal() {
                 <div class="rel-two">${field('rel-zona', 'main.colRelZona', 'relZone')}${field('rel-hue', 'main.colRelHuella', 'relFootprint')}</div>
                 <div class="rel-two">
                     ${field('rel-est', 'main.colRelEstante', 'relRack')}
-                    <div class="rel-four">${field('rel-niv', 'main.colRelNivel', 'relLevel')}${field('rel-esp', 'main.colRelEspacio', 'relSlot')}${field('rel-fila', 'main.colRelFila', 'relRow')}${field('rel-prof', 'main.colRelProfundidad', 'relDepth')}</div>
+                    <div class="rel-four">${field('rel-niv', 'main.colRelNivel', 'relLevel')}${field('rel-esp', 'main.colRelEspacio', 'relSlot')}${field('rel-pos', 'main.colRelProfundidad', 'relPosition')}</div>
                 </div>
             </div>
             <div class="rel-col">
@@ -303,13 +303,11 @@ function ensureModal() {
         if (cellBtn) {
             st.niv = Number(cellBtn.dataset.n);
             st.esp = Number(cellBtn.dataset.e);
-            // si el hueco tiene más de una fila o profundidad se propone la primera combinación libre
+            // si el espacio tiene más de una posición se propone la primera libre
             const rack = derived().rack;
-            const bay = rack ? bayInfo(rack, st.niv, st.esp) : { rows: 1, depth: 1 };
-            let free = null;
-            for (let r = 1; r <= bay.rows && !free; r += 1) for (let dd = 1; dd <= bay.depth && !free; dd += 1) if (!occupiedBy(rack.id, st.niv, st.esp, r, dd)) free = { r, dd };
-            st.fila = bay.rows > 1 && free ? free.r : '';
-            st.prof = bay.depth > 1 && free ? free.dd : '';
+            const nums = rack ? positionsAt(rack, st.niv, st.esp) : [1];
+            const free = nums.find((p) => !occupiedBy(rack.id, st.niv, st.esp, p));
+            st.pos = nums.length > 1 && free ? free : '';
             renderForm();
             return;
         }
@@ -336,7 +334,7 @@ function ensureModal() {
     };
     $m('rel-zona').addEventListener('change', (event) => { st.zona = event.target.value; cutBelow('zona'); autoPick(); renderForm(); });
     $m('rel-hue').addEventListener('change', (event) => { st.hue = event.target.value; cutBelow('hue'); autoPick(); renderForm(); });
-    bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-fila', 'fila', true); bind('rel-prof', 'prof', true);
+    bind('rel-est', 'est'); bind('rel-niv', 'niv', true); bind('rel-esp', 'esp', true); bind('rel-pos', 'pos', true);
     $m('rel-clas').addEventListener('change', (event) => { st.clas = event.target.value; renderForm(); });
     $m('rel-code').addEventListener('input', () => {
         st.sku = null;
@@ -347,7 +345,7 @@ function ensureModal() {
 }
 
 function cutBelow(key) {
-    const order = ['centro', 'alm', 'sub', 'zona', 'hue', 'est', 'niv', 'esp', 'fila', 'prof'];
+    const order = ['centro', 'alm', 'sub', 'zona', 'hue', 'est', 'niv', 'esp', 'pos'];
     for (let i = order.indexOf(key) + 1; i < order.length; i += 1) st[order[i]] = '';
 }
 
@@ -392,17 +390,17 @@ function derived() {
     return { sub, physical, zones, zone, footprints, footprint, racks, rack };
 }
 
-// Un espacio es anaquel + nivel + columna + fila + profundidad (sin fila o sin profundidad cuenta como la 1).
-function occupiedBy(spaceId, level, slot, row, depth) {
-    const hit = opts.occupied.find((o) => o.spaceId === spaceId && o.level === level && o.slot === slot && (o.row || 1) === (row || 1) && (o.depth || 1) === (depth || 1) && !(editing && o.id === editing.id));
+// Una posición es activo + nivel + espacio + posición (sin posición cuenta como la 1: un espacio con una sola posición no la pide).
+function occupiedBy(spaceId, level, slot, position) {
+    const hit = opts.occupied.find((o) => o.spaceId === spaceId && o.level === level && o.slot === slot && (o.position || 1) === (position || 1) && !(editing && o.id === editing.id));
     return hit ? hit.sku : '';
 }
-// Cuántas filas y cuántas profundidades tiene el hueco (nivel × columna) de un estante (Layout > Posiciones); sin datos propios, 1 y 1.
+// Los números de las posiciones de un espacio (nivel × espacio) de un activo (Layout > Posiciones); sin datos propios (una copia vieja de las opciones), solo la 1.
 // Cuántas posiciones (columnas) tiene un nivel del anaquel: las que se le pusieron en Layout > Niveles (slotsByLevel) o, de una lista vieja sin ellas, las del anaquel.
 const slotsAt = (rack, level) => (Array.isArray(rack.slotsByLevel) && rack.slotsByLevel[level - 1]) || rack.slots || 1;
-function bayInfo(rack, level, column) {
-    const b = ((rack && rack.bays) || []).find((x) => x.n === Number(level) && x.c === Number(column)) || {};
-    return { rows: b.rows || 1, depth: b.depth || 1 };
+function positionsAt(rack, level, column) {
+    const g = ((rack && rack.positions) || []).find((x) => x.n === Number(level) && x.c === Number(column));
+    return g && Array.isArray(g.nums) && g.nums.length ? g.nums : [1];
 }
 
 function renderForm() {
@@ -425,14 +423,11 @@ function renderForm() {
     fillSelect('rel-est', d.racks.map((r) => ({ value: r.id, label: r.code })), d.footprint ? t('main.relChooseRack') : t('main.relFirstFootprint'), st.est, !d.racks.length);
     fillSelect('rel-niv', d.rack ? range(d.rack.levels).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relLevelShort') : '—', st.niv, !d.rack);
     fillSelect('rel-esp', d.rack && st.niv ? range(slotsAt(d.rack, st.niv)).map((n) => ({ value: n, label: n })) : [], d.rack ? t('main.relSlotShort') : '—', st.esp, !(d.rack && st.niv));
-    // Dentro del hueco (nivel × columna) están sus filas y sus profundidades: solo se piden si tiene más de una, y se ofrecen las que están libres (más las de esta misma relación, que occupiedBy no cuenta).
+    // Dentro del espacio (nivel × espacio) están sus posiciones: solo se pide una si tiene más de una, y se ofrecen las libres (más la de esta misma relación, que occupiedBy no cuenta).
     const hasBay = !!(d.rack && st.niv && st.esp);
-    const bay = hasBay ? bayInfo(d.rack, st.niv, st.esp) : { rows: 1, depth: 1 };
-    const slotFree = (r, dd) => !occupiedBy(d.rack.id, Number(st.niv), Number(st.esp), r, dd);
-    const freeRows = hasBay && bay.rows > 1 ? range(bay.rows).filter((r) => range(bay.depth).some((dd) => slotFree(r, dd))) : [];
-    const freeDepths = hasBay && bay.depth > 1 ? range(bay.depth).filter((dd) => range(bay.rows).some((r) => (!st.fila || r === Number(st.fila)) && slotFree(r, dd))) : [];
-    fillSelect('rel-fila', freeRows.map((n) => ({ value: n, label: n })), bay.rows > 1 ? t('main.relRowShort') : '—', st.fila, !freeRows.length);
-    fillSelect('rel-prof', freeDepths.map((n) => ({ value: n, label: n })), bay.depth > 1 ? t('main.relDepthShort') : '—', st.prof, !freeDepths.length);
+    const nums = hasBay ? positionsAt(d.rack, st.niv, st.esp) : [1];
+    const freeNums = hasBay && nums.length > 1 ? nums.filter((p) => !occupiedBy(d.rack.id, Number(st.niv), Number(st.esp), p)) : [];
+    fillSelect('rel-pos', freeNums.map((n) => ({ value: n, label: n })), nums.length > 1 ? t('main.relPositionShort') : '—', st.pos, !freeNums.length);
     drawRack(d.rack);
     drawPath(d);
     const ready = st.sku && st.centro && st.alm;
@@ -440,7 +435,7 @@ function renderForm() {
     const missing = [];
     if (!st.sku) missing.push(t('main.relMissingCode'));
     if (!st.centro) missing.push(t('main.relMissingCost')); else if (!st.alm) missing.push(t('main.relMissingWarehouse'));
-    const located = (d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.fila || bay.rows <= 1) && (st.prof || bay.depth <= 1));
+    const located = (d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.pos || nums.length <= 1));
     $m('rel-msg').textContent = ready ? t(located ? 'main.relReady' : 'main.relReadyPartial') : t('main.relMissing', { x: missing.join(' / ') });
 }
 
@@ -458,10 +453,8 @@ function drawRack(rack) {
     for (let n = rack.levels; n >= 1; n -= 1) {
         html += `<div class="rel-lv" style="--cols:${slotsAt(rack, n)}"><span class="rel-ln">${esc(t('main.relLevelN', { n }))}</span>`;
         for (let e = 1; e <= slotsAt(rack, n); e += 1) {
-            // el hueco está ocupado cuando lo están todas sus filas y profundidades
-            const bay = bayInfo(rack, n, e);
-            const occs = [];
-            for (let r = 1; r <= bay.rows; r += 1) for (let dd = 1; dd <= bay.depth; dd += 1) occs.push(occupiedBy(rack.id, n, e, r, dd));
+            // el espacio está ocupado cuando lo están todas sus posiciones
+            const occs = positionsAt(rack, n, e).map((p) => occupiedBy(rack.id, n, e, p));
             const occ = occs.every(Boolean) ? occs[0] : '';
             const sel = Number(st.niv) === n && Number(st.esp) === e;
             html += occ
@@ -483,8 +476,7 @@ function drawPath(d) {
         [t('main.colRelEstante'), d.rack && d.rack.code],
         [t('main.colRelNivel'), st.niv ? t('main.relLevelN', { n: st.niv }) : ''],
         [t('main.colRelEspacio'), st.esp ? t('main.relSlotN', { n: st.esp }) : ''],
-        [t('main.colRelFila'), st.fila ? t('main.relRowN', { n: st.fila }) : ''],
-        [t('main.colRelProfundidad'), st.prof ? t('main.relDepthN', { n: st.prof }) : ''],
+        [t('main.colRelProfundidad'), st.pos ? t('main.relPositionN', { n: st.pos }) : ''],
     ];
     $m('rel-path').innerHTML = parts.map(([label, value], i) => `${i ? '<span class="rel-arrow">›</span>' : ''}<span class="rel-step${value ? ' rel-step-on' : ''}">${esc(value || label)}</span>`).join('');
 }
@@ -506,7 +498,7 @@ async function openDialog(record) {
         ? {
             sku: { id: record.skuItemId, sku: record.sku, description: record.description, upc: record.upc, uom: '' },
             centro: record.costCenterId || '', alm: record.warehouseId || '', sub: record.subWarehouseId || '', zona: record.zoneId || '', hue: record.footprintId || '', est: record.spaceId || '',
-            niv: record.level || '', esp: record.slot || '', fila: record.row || '', prof: record.depth || '', clas: record.classification || 'activo',
+            niv: record.level || '', esp: record.slot || '', pos: record.position || '', clas: record.classification || 'activo',
         }
         : blankState();
     $m('rel-title').textContent = t(record ? 'main.relDialogEdit' : 'main.relDialogNew');
@@ -525,7 +517,7 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && 
 async function save() {
     const values = {
         skuItemId: st.sku ? st.sku.id : null, costCenterId: st.centro || null, warehouseId: st.alm || null, subWarehouseId: st.sub || null,
-        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, row: st.fila || null, depth: st.prof || null, classification: st.clas || 'activo',
+        zoneId: st.zona || '', spaceId: st.est || '', level: st.niv || null, slot: st.esp || null, position: st.pos || null, classification: st.clas || 'activo',
     };
     let method = 'POST';
     let url = API;
@@ -533,7 +525,7 @@ async function save() {
     if (editing) {
         const before = {
             skuItemId: editing.skuItemId, costCenterId: editing.costCenterId, warehouseId: editing.warehouseId, subWarehouseId: editing.subWarehouseId,
-            zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, row: editing.row, depth: editing.depth, classification: editing.classification || 'activo',
+            zoneId: editing.zoneId || '', spaceId: editing.spaceId || '', level: editing.level, slot: editing.slot, position: editing.position, classification: editing.classification || 'activo',
         };
         body = {};
         Object.keys(values).forEach((key) => { if (String(values[key] ?? '') !== String(before[key] ?? '')) body[key] = values[key]; });

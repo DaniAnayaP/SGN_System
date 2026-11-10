@@ -114,7 +114,8 @@
         });
         const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateDoors(migrateWalls(migrateFloors({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))))));
         // Seguridad: la zona de cada elemento sale de su lugar y su código (E001…) lo pone el sistema.
-        return assignItemCodes(assignRampCodes(assignFloorCodes(assignWallCodes(assignSafetyCodes(deriveSafetyZones(normalized))))));
+        // Todo espacio tiene al menos una posición: las que no están guardadas (los Layouts de antes, con sus filas y profundidades) se generan aquí, siempre iguales (ensurePositions)
+        return ensurePositions(assignItemCodes(assignRampCodes(assignFloorCodes(assignWallCodes(assignSafetyCodes(deriveSafetyZones(normalized)))))));
     }
     // Triangulación por "orejas": sirve para contornos con esquinas hacia adentro (en L, en U). null si el contorno se cruza a sí mismo.
     function triangulate(pts) {
@@ -2215,8 +2216,8 @@
     }
 
     // ---- Lista de localizadores --------------------------------------------------------------------------------------------------------------
-    // Todos los localizadores que el Layout va creando, completos o a medias: una fila por zona (Z006), por huella (Z006.H003), por activo (Z006.H003.A003) y por cada POSICIÓN completa (Z006.H003.A003.N004.C001.F001.P001,
-    // las 7 piezas). Solo cuenta lo activo. Los códigos de la zona, la huella y el activo ya son las piezas del Localizador, así que se arma uniéndolos; una huella que no está en ninguna zona (de antes de la regla) no
+    // Todos los localizadores que el Layout va creando, completos o a medias: una fila por zona (Z006), por huella (Z006.H003), por activo (Z006.H003.A003) y por cada POSICIÓN completa (Z006.H003.A003.N004.E001.P001,
+    // las 6 piezas: zona, huella, activo, nivel, espacio y posición). Solo cuenta lo activo. Los códigos de la zona, la huella y el activo ya son las piezas del Localizador, así que se arma uniéndolos; una huella que no está en ninguna zona (de antes de la regla) no
     // tiene localizador. Salen en orden de lectura (la zona, sus huellas, los activos de cada una y sus posiciones). max = tope de filas (las posiciones pueden ser muchísimas): con el tope, truncated = true.
     function locatorRows(layout, { max = 60000 } = {}) {
         const rows = [];
@@ -2234,6 +2235,9 @@
         const spByFp = new Map();
         spaces.forEach((s) => { if (!spByFp.has(s.footprintId)) spByFp.set(s.footprintId, []); spByFp.get(s.footprintId).push(s); });
         const push = (row) => { if (rows.length >= max) { truncated = true; return false; } rows.push(row); return true; };
+        const posByKey = new Map();
+        (ensurePositions(layout).positions || []).forEach((p) => { const key = `${p.spaceId}|${p.n}|${p.c}`; if (!posByKey.has(key)) posByKey.set(key, []); posByKey.get(key).push(p); });
+        posByKey.forEach((list) => list.sort((a, b) => a.num - b.num));
         const groups = [...zones.map((z) => ({ zone: z, fps: fpByZone.get(z.id) || [] })), { zone: null, fps: fpByZone.get('') || [] }];
         for (const { zone, fps } of groups) {
             const z = zone ? { zoneId: zone.id, zoneCode: zone.code || '', zoneName: zone.name || '' } : { zoneId: '', zoneCode: '', zoneName: '' };
@@ -2248,12 +2252,9 @@
                     if (!zone) continue; // sin zona no hay localizador completo: no se listan sus posiciones
                     for (let n = 1; n <= (s.levels || 1); n++) {
                         for (let c = 1; c <= levelSlots(s, n); c++) {
-                            const bay = bayOf(s, n, c);
-                            for (let r = 1; r <= bay.rows; r++) {
-                                for (let p = 1; p <= bay.depth; p++) {
-                                    const locator = upTo(fp.footprintCode, sp.spaceCode, `N${pad(n)}`, `C${pad(c)}`, `F${pad(r)}`, `P${pad(p)}`);
-                                    if (!push({ scope: 'position', complete: true, locator, ...z, ...fp, ...sp, level: n, slot: c, row: r, depth: p })) return { rows, truncated };
-                                }
+                            for (const pos of (posByKey.get(`${s.id}|${n}|${c}`) || [])) {
+                                const locator = upTo(fp.footprintCode, sp.spaceCode, `N${pad(n)}`, `E${pad(c)}`, `P${pad(pos.num)}`);
+                                if (!push({ scope: 'position', complete: true, locator, ...z, ...fp, ...sp, level: n, slot: c, position: pos.num, positionId: pos.id })) return { rows, truncated };
                             }
                         }
                     }
@@ -2292,7 +2293,7 @@
                                 key: `${sp.id}|${n}|${c}`, spaceId: sp.id, level: n, slot: c, multi,
                                 zoneId: z.id, zoneCode: z.code || '', zoneName: z.name || '', footprintCode: f.code || '', spaceCode: sp.code || '',
                                 assetClassId: sp.assetClassId || 0, assetId: sp.assetId || 0,
-                                locator: multi ? `${base}.N${pad(n)}.C${pad(c)}` : base,
+                                locator: multi ? `${base}.N${pad(n)}.E${pad(c)}` : base,
                                 l: m.l, w: m.w, h: m.useful || m.h, m2: round2(m.l * m.w),
                             });
                         }
@@ -2943,6 +2944,7 @@
                 if (!(item.l > 0 && item.w > 0 && item.h > 0)) errors.push(`${label}: el largo, el fondo y el alto deben ser mayores que 0`);
                 const posFaces = sanitizeFaces(p && p.faces);
                 if (posFaces) item.faces = posFaces;
+                if (p && p.auto === true) item.auto = true; // la generó el sistema (de las filas y profundidades de antes o la de fábrica) y nadie la ha tocado: sigue el tamaño de su espacio
                 const num = Math.round(Number(p && p.num));
                 const used = nums.get(key) || new Set();
                 if (Number.isFinite(num) && num >= 1 && num <= 9999 && !used.has(num)) { item.num = num; used.add(num); nums.set(key, used); }
@@ -2956,11 +2958,16 @@
                 used.add(item.num);
                 nums.set(key, used);
             });
-            out.positions = kept.map((x) => x.item);
+            out.positions = kept.map((x) => canonPos(x.item));
             const counters = {};
             nums.forEach((used, key) => { counters[key] = Math.max(Number(given[key]) || 0, ...used); });
             Object.keys(given).forEach((key) => { if (counters[key] === undefined && spaceById.has(key.split('|')[0]) && Number(given[key]) > 0) counters[key] = Math.round(Number(given[key])); });
             if (Object.keys(counters).length) out.posNext = counters;
+            // todo espacio tiene al menos una posición (la de fábrica cubre todo el espacio; las celdas fila × profundidad de antes pasan a ser posiciones)
+            const ensured = ensurePositions(out);
+            out.positions = ensured.positions;
+            if (ensured.posNext && Object.keys(ensured.posNext).length) out.posNext = ensured.posNext; else delete out.posNext;
+            if (!out.positions.length) delete out.positions;
         }
         const plan = src.plan && typeof src.plan === 'object' ? src.plan : null;
         out.plan = plan ? { widthM: meters(plan.widthM, 'Plano', 0.1) } : null;
@@ -3176,9 +3183,9 @@
 
     // ---- Posiciones: lugares libres dentro de un espacio --------------------------------------------------------------------------------------
     // Una posición se acomoda dentro de su espacio como un activo dentro de su huella: x, y desde la esquina de arriba a la izquierda del espacio (croquis sin girar), largo, fondo y alto. Pueden medir distinto, pero no pueden salirse del espacio,
-    // pasar de su alto, encimarse con otra del mismo espacio ni usar una cara de consumo que su espacio no tiene. Su código sale del espacio (R001.N001.C001) y su número: R001.N001.C001.P001.
+    // pasar de su alto, encimarse con otra del mismo espacio ni usar una cara de consumo que su espacio no tiene. Su código sale del espacio (R001.N001.E001) y su número: R001.N001.E001.P001.
     const pad3 = (n) => String(n).padStart(3, '0');
-    const positionCode = (space, p) => `${(space && space.code) || ''}.N${pad3(p.n)}.C${pad3(p.c)}.P${pad3(p.num || 1)}`;
+    const positionCode = (space, p) => `${(space && space.code) || ''}.N${pad3(p.n)}.E${pad3(p.c)}.P${pad3(p.num || 1)}`;
     function facesOfPosition(space, p) { return sanitizeFaces(p && p.faces) || facesOfBay(space, p.n, p.c); }
     function positionViolations(layout) {
         const out = [];
@@ -3214,6 +3221,92 @@
         });
         return out;
     }
+    // ---- Posiciones por defecto ---------------------------------------------------------------------------------------------------------------
+    // Todo espacio tiene al menos una posición. Sin ninguna, el sistema genera las suyas: una que cubre todo el espacio o, si el espacio traía filas y profundidades (la forma de antes), una por cada celda fila × profundidad, con el mismo tamaño
+    // que tenía (las filas de izquierda a derecha y la profundidad 1 al frente). Número = (fila − 1) × profundidades + profundidad. Llevan `auto: true` mientras nadie las toca (siguen el tamaño de su espacio) y un id que sale del
+    // espacio (id_nivel_columna_número), así que no cambia entre cargas ni entre migraciones.
+    // Las posiciones se guardan siempre con las llaves en el mismo orden (así lo guardado y lo generado se comparan igual).
+    const canonPos = (p) => ({ id: p.id, spaceId: p.spaceId, n: p.n, c: p.c, num: p.num, x: p.x, y: p.y, l: p.l, w: p.w, h: p.h, ...(p.faces ? { faces: p.faces } : {}), ...(p.auto ? { auto: true } : {}) });
+    const splitLen = (total, k) => {
+        const out = [];
+        let acc = 0;
+        for (let i = 0; i < k; i += 1) {
+            const v = i < k - 1 ? round2(total / k) : round2(total - acc);
+            out.push(Math.max(v, 0.01));
+            acc += out[i];
+        }
+        return out;
+    };
+    function defaultPositions(space, n, c) {
+        const m = bayMeasures(space, n, c);
+        const bay = bayOf(space, n, c);
+        const rows = Math.max(1, bay.rows);
+        const depth = Math.max(1, bay.depth);
+        const widths = splitLen(m.l, rows);
+        const deeps = splitLen(m.w, depth);
+        const h = m.h > 0 ? round2(m.h) : 0.1;
+        const out = [];
+        let x = 0;
+        for (let r = 0; r < rows; r += 1) {
+            let y = m.w;
+            for (let p = 0; p < depth; p += 1) {
+                y = round2(y - deeps[p]);
+                const num = r * depth + p + 1;
+                out.push(canonPos({ id: `${space.id}_${n}_${c}_${num}`, spaceId: space.id, n, c, num, x: round2(x), y: Math.max(0, y), l: widths[r], w: deeps[p], h, auto: true }));
+            }
+            x += widths[r];
+        }
+        return out;
+    }
+    // El Layout con las posiciones de fábrica de los espacios que no tienen ninguna (y, en los espacios donde todas son de fábrica, con el tamaño al día). Devuelve el mismo Layout si no hay nada que agregar.
+    function ensurePositions(layout) {
+        if (!layout || !Array.isArray(layout.spaces) || !layout.spaces.length) return layout;
+        const derived = deriveSpaces(layout).spaces;
+        const byKey = new Map();
+        (layout.positions || []).forEach((p) => { const key = `${p.spaceId}|${p.n}|${p.c}`; if (!byKey.has(key)) byKey.set(key, []); byKey.get(key).push(p); });
+        const fresh = new Map(); // espacio -> sus posiciones de fábrica (nuevas o al día)
+        derived.forEach((s) => {
+            if (s.off === true) return;
+            for (let n = 1; n <= (s.levels || 1); n += 1) {
+                for (let c = 1; c <= levelSlots(s, n); c += 1) {
+                    const key = `${s.id}|${n}|${c}`;
+                    const stored = byKey.get(key) || [];
+                    if (!stored.length) { fresh.set(key, defaultPositions(s, n, c)); continue; }
+                    if (stored.every((p) => p.auto === true)) {
+                        const gen = defaultPositions(s, n, c);
+                        const same = gen.length === stored.length && gen.every((g) => { const o = stored.find((p) => p.num === g.num); return o && o.x === g.x && o.y === g.y && o.l === g.l && o.w === g.w && o.h === g.h; });
+                        if (gen.length === stored.length && !same) fresh.set(key, gen.map((g) => { const o = stored.find((p) => p.num === g.num); return canonPos({ ...g, ...(o && o.faces ? { faces: o.faces } : {}) }); }));
+                    }
+                }
+            }
+        });
+        if (!fresh.size) return layout;
+        const positions = (layout.positions || []).filter((p) => !fresh.has(`${p.spaceId}|${p.n}|${p.c}`));
+        const counters = { ...(layout.posNext || {}) };
+        fresh.forEach((list, key) => { positions.push(...list); counters[key] = Math.max(Number(counters[key]) || 0, ...list.map((p) => p.num)); });
+        return { ...layout, positions, posNext: counters };
+    }
+    // Las posiciones de un espacio, por número; con ensurePositions, aunque el Layout todavía no las traiga guardadas.
+    function positionsOfBay(layout, spaceId, n, c) {
+        return (ensurePositions(layout).positions || []).filter((p) => p.spaceId === spaceId && p.n === Number(n) && p.c === Number(c)).sort((a, b) => a.num - b.num);
+    }
+    // Las posiciones de todos los espacios de un Layout que YA NO CAMBIA (los que lee el servidor), por «activo|nivel|columna» y ordenadas por número; se calcula una sola vez por Layout.
+    const posIndexMemo = new WeakMap();
+    function positionIndex(layout) {
+        if (!layout || typeof layout !== 'object') return new Map();
+        if (posIndexMemo.has(layout)) return posIndexMemo.get(layout);
+        const index = new Map();
+        (ensurePositions(layout).positions || []).forEach((p) => { const key = `${p.spaceId}|${p.n}|${p.c}`; if (!index.has(key)) index.set(key, []); index.get(key).push(p); });
+        index.forEach((list) => list.sort((a, b) => a.num - b.num));
+        posIndexMemo.set(layout, index);
+        return index;
+    }
+    // La posición de hoy que era la celda (fila, profundidad) de un espacio en la forma de antes (las filas y profundidades que quedan guardadas en el hueco).
+    function legacyPositionNum(space, level, column, row, depth) {
+        const bay = bayOf(space, level, column);
+        return (Math.max(1, Number(row) || 1) - 1) * Math.max(1, bay.depth) + Math.max(1, Number(depth) || 1);
+    }
+
     // Las faltas de posiciones que hay en next y que antes no estaban igual: solo esas no se dejan guardar (lo que ya estaba así antes solo se marca).
     function newPositionViolations(next, previous) {
         const before = previous ? positionViolations(previous) : [];
@@ -3427,7 +3520,7 @@
         storageLocations, huellasThatFit, capacityOf,
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
-        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, positionCode, positionViolations, newPositionViolations, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
+        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, zoneOutsideNave, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

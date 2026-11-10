@@ -1896,6 +1896,7 @@
     "layoutUbicEspacio": "Espacio",
     "layoutUbicAgregar": "+ Agregar posición",
     "layoutUbicQuitar": "Quitar la posición",
+    "layoutUbicUltima": "Un espacio siempre tiene al menos una posición: esta es la última y no se puede quitar.",
     "layoutUbicSin": "Este espacio todavía no tiene posiciones. Agrega la primera.",
     "layoutUbicSinEspacios": "Todavía no hay espacios. Agrégalos en Activos y Niveles: sus posiciones se acomodan aquí.",
     "layoutUbicVista": "Vista desde arriba: arrastra una posición para acomodarla",
@@ -2059,7 +2060,8 @@
     "layoutLocElige_sp": "Elige un activo de {code}",
     "layoutLocElige_n": "Elige un nivel de {code}",
     "layoutLocElige_c": "Elige un espacio de {code}",
-    "layoutLocElige_cell": "Elige un localizador de {code}",
+    "layoutLocElige_cell": "Elige una posición de {code}",
+    "layoutLocNPosiciones": "{n} posiciones",
     "layoutElegirBuscar": "Buscar una pared, un hidrante, un piso, una zona…",
     "layoutElegirLimpiar": "Limpiar",
     "layoutElegirMas": "Hay más: escribe para acotar la lista.",
@@ -2971,7 +2973,7 @@
     "colRelZona": "Zona",
     "colRelEstante": "Activo",
     "colRelNivel": "Nivel",
-    "colRelEspacio": "Columna",
+    "colRelEspacio": "Espacio",
     "colRelEstado": "Ubicación",
     "colLimZona": "Zona",
     "colLimHuella": "Huella",
@@ -3263,9 +3265,9 @@
     "colLocHuella": "Huella",
     "colLocActivo": "Activo",
     "colLocNivel": "Nivel",
-    "colLocColumna": "Columna",
+    "colLocColumna": "Espacio",
     "colLocFila": "Fila",
-    "colLocProfundidad": "Profundidad",
+    "colLocProfundidad": "Posición",
     "colLocLocalizador": "Localizador",
     "colLocAlcance": "Llega hasta",
     "colLocEstado": "Estado",
@@ -3285,7 +3287,7 @@
     "relTplFileName": "Plantilla_Relacion_Codigo",
     "relTplSheetOptions": "Opciones",
     "relTplLevels": "Niveles",
-    "relTplSlots": "Columnas por nivel",
+    "relTplSlots": "Espacios por nivel",
     "relTplRulesTitle": "Reglas",
     "relTplRule1": "Cada fila es UN lugar de un código. Si un código está en varios lugares, pon varias filas.",
     "relTplRule2": "Si marcaste un solo centro de costos arriba, puedes dejar vacía la columna Centro de Costos: se carga en ese centro. Si marcaste varios, pon el centro en cada fila (su código o su nombre).",
@@ -3297,7 +3299,8 @@
     "relTplInst_zone": "El nombre de una zona asignada a ese sub almacén (solo si es físico). Opcional.",
     "relTplInst_rack": "El código del activo (el rack, el anaquel, la gabeta…) de esa zona. Si también pones la Huella, el activo tiene que estar encima de ella. Opcional.",
     "relTplInst_level": "El número de nivel del estante (1 es el de abajo). Opcional.",
-    "relTplInst_slot": "El número de columna dentro del nivel (de izquierda a derecha, de frente). Opcional; en un estante de una sola columna se puede dejar vacío.",
+    "relTplInst_slot": "El número de espacio dentro del nivel (de izquierda a derecha, de frente). Opcional; en un estante de un solo espacio se puede dejar vacío.",
+    "relTplInst_position": "El número de posición dentro del espacio (la P del Localizador). Opcional; si el espacio tiene una sola posición va 1 o se deja vacío.",
     "relTplNeedColumns": "El archivo necesita la columna Código SKU y la columna Almacén o Localizador. Descarga la plantilla para ver cómo va.",
     "relTplNoWarehouses": "Todavía no hay almacenes. Créalos en Catálogos > Nuestros Almacenes (cada uno en su centro de costos) y vuelve a cargar.",
     "relTplCenterOne": "Centro de costos marcado arriba: {center}. Las filas sin centro se cargan ahí y no se cargan filas de otro centro.",
@@ -3321,22 +3324,23 @@
     "relTplErr_warehouseMissing": "Falta el almacén.",
     "relTplErr_warehouseNotFound": "«{value}» no es un almacén del centro «{center}».",
     "relTplErr_warehouseInactive": "El almacén «{value}» está inactivo.",
-    "relTplErr_subMissing": "Falta el sub almacén: la zona, el estante, el nivel, la columna, la fila y la profundidad dependen de él.",
+    "relTplErr_subMissing": "Falta el sub almacén: la zona, el estante, el nivel, el espacio y la posición dependen de él.",
     "relTplErr_subNotFound": "«{value}» no es un sub almacén del almacén «{warehouse}».",
     "relTplErr_subInactive": "El sub almacén «{value}» está inactivo.",
-    "relTplErr_subNotPhysical": "El sub almacén «{sub}» no es físico: no lleva zona, estante, nivel, columna, fila ni profundidad.",
+    "relTplErr_subNotPhysical": "El sub almacén «{sub}» no es físico: no lleva zona, estante, nivel, espacio ni posición.",
     "relTplErr_zoneMissing": "Falta la zona.",
     "relTplErr_zoneNotFound": "«{value}» no es una zona asignada al sub almacén «{sub}».",
     "relTplErr_rackMissing": "Falta el activo.",
     "relTplErr_rackNotFound": "«{value}» no es un activo de la zona «{zone}» (o no está asignado a ese sub almacén).",
     "relTplErr_levelMissing": "Falta el nivel.",
     "relTplErr_levelRange": "El nivel «{value}» no existe en el estante {rack} (tiene {max}).",
-    "relTplErr_slotRange": "La columna «{value}» no existe en ese nivel del estante {rack} (tiene {max}).",
-    "relTplErr_occupied": "Ese espacio ya lo ocupa el código {sku}.",
-    "relTplErr_occupiedInFile": "Ese espacio ya lo usa la fila {row} de este archivo.",
+    "relTplErr_slotRange": "El espacio «{value}» no existe en ese nivel del estante {rack} (tiene {max}).",
+    "relTplErr_positionRange": "La posición «{value}» no existe en ese espacio del estante {rack} (tiene {max}).",
+    "relTplErr_occupied": "Esa posición ya la ocupa el código {sku}.",
+    "relTplErr_occupiedInFile": "Esa posición ya la usa la fila {row} de este archivo.",
     "relTplErr_duplicateInFile": "Esta misma ubicación del código ya está en la fila {row}.",
     "relTplLocatorShort": "Localizador (zona, huella y activo)",
-    "relTplInst_locator": "El lugar completo en una sola celda, siempre con las 7 piezas: Z006.H005.A005.N003.C001.F001.P001 = zona 6, huella 5, activo A5, nivel 3, columna 1, fila 1, profundidad 1. La zona y la huella llevan el número con que termina su nombre o su código (R-05 es H005). La letra del activo es A anaquel, R rack, G gabeta o T tarima en piso y su número es el de su código (A-05 es A005). Si lo llenas no llenes las columnas Zona a Profundidad. Opcional.",
+    "relTplInst_locator": "El lugar completo en una sola celda, siempre con las 6 piezas: Z006.H005.A005.N003.E001.P001 = zona 6, huella 5, activo A5, nivel 3, espacio 1, posición 1. La zona y la huella llevan el número con que termina su nombre o su código (R-05 es H005). La letra del activo es A anaquel, R rack, G gabeta o T tarima en piso y su número es el de su código (A-05 es A005). Si lo llenas no llenes las columnas Zona a Posición. Opcional.",
     "relTplRule4": "Si el código ya tiene una relación «A medias» (con centro, almacén y sub almacén pero sin lugar), la fila con Localizador la COMPLETA en vez de crear otra; en ese caso Almacén y Sub almacén pueden ir vacíos.",
     "relTplStateComplete": "Completa",
     "relTplCountComplete": "completan",
@@ -3344,14 +3348,14 @@
     "relTplResultDetail": "{c} nuevas y {u} completadas. ",
     "relTplErr_noPartial": "Este código no tiene una relación «A medias» para completar: pon el Almacén y el Sub almacén.",
     "relTplErr_severalPartial": "Este código tiene {n} relaciones «A medias»: pon el Almacén y el Sub almacén para elegir cuál se completa.",
-    "relTplErr_locatorFormat": "No entiendo el Localizador «{value}». Va siempre completo: Z006.H005.A005.N003.C001.F001.P001 (zona, huella, activo, nivel, columna, fila y profundidad).",
-    "relTplErr_locatorAndColumns": "Pon el lugar en el Localizador o en las columnas Zona, Huella, Activo, Nivel, Columna, Fila y Profundidad, pero no en los dos.",
+    "relTplErr_locatorFormat": "No entiendo el Localizador «{value}». Va siempre completo: Z006.H005.A005.N003.E001.P001 (zona, huella, activo, nivel, espacio y posición).",
+    "relTplErr_locatorAndColumns": "Pon el lugar en el Localizador o en las columnas Zona, Huella, Activo, Nivel, Espacio y Posición, pero no en los dos.",
     "relTplErr_locatorDepth": "Todavía no se maneja la profundidad mayor a 1 (P001): «{value}».",
     "relTplErr_locatorZone": "No hay una zona {zone} asignada al sub almacén «{sub}» (el Localizador «{value}»).",
-    "relTplErr_locatorAmbiguous": "El Localizador «{value}» coincide con más de un lugar. Usa las columnas Zona, Huella, Activo, Nivel, Columna, Fila y Profundidad.",
+    "relTplErr_locatorAmbiguous": "El Localizador «{value}» coincide con más de un lugar. Usa las columnas Zona, Huella, Activo, Nivel, Espacio y Posición.",
     "relTplErr_locatorAsset": "La letra «{letter}» del Localizador no es un activo conocido: usa A anaquel, R rack, G gabeta, T tarima en piso o F frío.",
     "relTplErr_locatorRack": "No hay ese activo en la zona «{zone}» (o no está asignado a ese sub almacén): «{value}».",
-    "relTplErr_locatorIncomplete": "Al Localizador «{value}» le faltan piezas ({missing}). Va siempre completo: Z006.H005.A005.N003.C001.F001.P001.",
+    "relTplErr_locatorIncomplete": "Al Localizador «{value}» le faltan piezas ({missing}). Va siempre completo: Z006.H005.A005.N003.E001.P001.",
     "relTplErr_locatorFootprint": "No hay una huella {footprint} en la zona «{zone}» (el Localizador «{value}»).",
     "relTplErr_footprintNotFound": "«{value}» no es una huella de la zona «{zone}».",
     "relTplErr_rackNotInFootprint": "El activo «{value}» no está sobre la huella «{footprint}» de la zona «{zone}».",
@@ -3360,15 +3364,18 @@
     "colRelLocalizador": "Localizador",
     "sessionExpired": "Tu sesión terminó (dura 8 horas). Recarga la página e inicia sesión otra vez.",
     "relLoadingRows": "Cargando filas… {done} de {total}",
-    "colRelProfundidad": "Profundidad",
+    "colRelProfundidad": "Posición",
     "relDepthShort": "Prof.",
     "relDepthN": "Profundidad {n}",
+    "colRelPosicion": "Posición",
+    "relPositionShort": "Posición",
+    "relPositionN": "Posición {n}",
     "layoutProfundidad": "Profundidad (frente al fondo)",
     "relTplDepths": "Profundidades",
     "relTplInst_depth": "El número de profundidad dentro del hueco (del frente al fondo). Opcional; si el hueco tiene una sola profundidad va 1 o se deja vacío.",
     "relTplErr_depthRange": "La profundidad «{value}» no existe en ese hueco del estante {rack} (tiene {max}).",
     "relTplErr_depthMissing": "El estante {rack} tiene {max} de profundidad: falta decir en cuál (P001, P002…).",
-    "relTplErr_slotMissing": "Falta la columna: el estante {rack} tiene {max} y la fila y la profundidad dependen de ella.",
+    "relTplErr_slotMissing": "Falta el espacio: el estante {rack} tiene {max} y la posición depende de él.",
     "layoutStepPosiciones": "Espacios",
     "colLayoutPosiciones": "Espacios",
     "layoutPosNivel": "Nivel",
@@ -3401,7 +3408,7 @@
     "relRowN": "Fila {n}",
     "relTplInst_row": "El número de fila dentro del hueco (nivel × columna). Opcional; si el hueco tiene una sola fila va 1 o se deja vacío.",
     "relTplErr_rowRange": "La fila «{value}» no existe en ese hueco del estante {rack} (tiene {max}).",
-    "relTplErr_columnNeeded": "El estante {rack} tiene {max} columnas: el Localizador debe decir cuál (C001, C002…).",
+    "relTplErr_columnNeeded": "El estante {rack} tiene {max} espacios: el Localizador debe decir cuál (E001, E002…).",
     "colRelClasificacion": "Clasificación",
     "relClass_activo": "Producto Activo",
     "relClass_cuarentena": "Producto Cuarentena",
@@ -3427,7 +3434,7 @@
     "relChooseZone": "Elige una zona",
     "relChooseRack": "Elige un activo",
     "relLevelShort": "Nivel",
-    "relSlotShort": "Columna",
+    "relSlotShort": "Espacio",
     "relFirstCost": "Primero el centro de costos",
     "relFirstWarehouse": "Primero el almacén",
     "relFirstSub": "Primero el sub almacén",
@@ -3458,7 +3465,7 @@
     "relEdit": "Editar relación",
     "relSaved": "Relación guardada.",
     "relLevelN": "Nivel {n}",
-    "relSlotN": "Columna {n}",
+    "relSlotN": "Espacio {n}",
     "relOccupiedBy": "Ocupado por {sku}",
     "colAlmCentroCostos": "Centro de Costos",
     "colSubAlmAlmacen": "Almacén",
@@ -4952,13 +4959,9 @@
       "what": "La columna: la posición dentro del nivel, de izquierda a derecha mirando el estante de frente. Un nivel × una columna es un hueco; cada estante tiene las columnas que dice el Layout.",
       "example": "Columna 3."
     },
-    "relRow": {
-      "what": "La fila dentro del hueco (nivel × columna). Solo se pide si el hueco tiene más de una; cuántas tiene lo dice el Layout, en Posiciones. Cada espacio (nivel, columna, fila y profundidad) solo puede tener un código.",
-      "example": "Fila 2: la segunda fila del hueco."
-    },
-    "relDepth": {
-      "what": "La profundidad dentro del hueco, del frente al fondo. Solo se pide si el hueco tiene más de una (lo dice el Layout, en Posiciones); en un hueco de una sola profundidad no hace falta.",
-      "example": "Profundidad 2: el segundo, detrás del primero."
+    "relPosition": {
+      "what": "La posición dentro del espacio: el lugar final donde vive el código. Solo se pide si el espacio tiene más de una; cuántas tiene lo dice el Layout, en Posiciones. Cada posición solo puede tener un código.",
+      "example": "Posición 2: la segunda posición del espacio."
     },
     "relPath": {
       "what": "La ruta completa que se va armando con lo que eliges, de centro de costos hasta espacio.",
@@ -5072,10 +5075,6 @@
       "what": "El alto de este espacio, en metros: la altura libre para guardar. No puede pasar del alto de su nivel (paso Niveles). Si no lo escribes toma el del nivel.",
       "example": "el alto del nivel es 0.65 m: el espacio puede medir hasta 0.65 m de alto; con 0.8 se marca en rojo y no se guarda."
     },
-    "layoutPosLocalizadores": {
-      "what": "Cuántos localizadores tiene este espacio: sus filas por sus profundidades. Cada uno es una celda con su propio código (F001.P001, F001.P002…).",
-      "example": "2 filas y 3 profundidades dan 6 localizadores."
-    },
     "layoutPosCeja": {
       "what": "El grueso de la reja (el travesaño) de este espacio, en metros. Va aparte del Alto: la altura libre (el Alto) empieza encima de la reja, así que el Alto de almacenamiento es el mismo Alto. Si no lo escribes toma el de su nivel (paso Niveles).",
       "example": "el espacio tiene una reja de 0.07 m y 0.65 m de altura libre: se pone 0.07 en Ceja y el Alto de almacenamiento queda en 0.65 m."
@@ -5105,11 +5104,11 @@
       "example": "el nivel 2 tiene 3 espacios y uno lleva su propia ceja: aquí dice 1."
     },
     "layoutFiltroLocalizador": {
-      "what": "Te lleva paso a paso hasta un lugar exacto: eliges la huella, luego uno de sus activos, un nivel, un espacio y, al final, el localizador (la fila y la profundidad). Va de la mano de Zona, Qué ver y Elegir: solo lista lo que esos filtros dejan ver, y si en Elegir escogiste una sola huella o un solo activo, el recorrido arranca ahí. Puedes escribir para buscar en cada lista. Cada elección enfoca lo que escogiste en el croquis y en el 3D, y las pastillas de arriba te regresan a un paso anterior.",
-      "example": "eliges la huella H001, el rack A004, el nivel N002, el espacio C001 y el localizador F001.P001: el croquis y el 3D te muestran ese lugar y arriba queda su código Z001.H001.A004.N002.C001.F001.P001."
+      "what": "Te lleva paso a paso hasta un lugar exacto: eliges la huella, luego uno de sus activos, un nivel, un espacio y, al final, la posición (que es el localizador completo). Va de la mano de Zona, Qué ver y Elegir: solo lista lo que esos filtros dejan ver, y si en Elegir escogiste una sola huella o un solo activo, el recorrido arranca ahí. Puedes escribir para buscar en cada lista. Cada elección enfoca lo que escogiste en el croquis y en el 3D, y las pastillas de arriba te regresan a un paso anterior.",
+      "example": "eliges la huella H001, el rack A004, el nivel N002, el espacio E001 y la posición P001: el croquis y el 3D te muestran ese lugar y arriba queda su código Z001.H001.A004.N002.E001.P001."
     },
     "layoutFiltroLocalizadorRuta": {
-      "what": "Los pasos del recorrido, de izquierda a derecha: Huella, Activo, Nivel, Espacio y Localizador. La pastilla encendida es el paso en el que estás; las que ya tienen un código son las que ya elegiste, y al tocarlas regresas a ese paso (se quita lo que habías elegido después).",
+      "what": "Los pasos del recorrido, de izquierda a derecha: Huella, Activo, Nivel, Espacio y Posición. La pastilla encendida es el paso en el que estás; las que ya tienen un código son las que ya elegiste, y al tocarlas regresas a ese paso (se quita lo que habías elegido después).",
       "example": "estás en Espacio y tocas «Activo A004»: vuelves a la lista de activos de la huella."
     },
     "layoutCarasConsumo": {
@@ -5122,11 +5121,11 @@
     },
     "layoutSec_ubicaciones": {
       "what": "Cada espacio se puede dividir en una o más posiciones, acomodadas a mano. Elige el espacio arriba y agrega sus posiciones: cada una lleva su lugar dentro del espacio (X y Y desde la esquina de arriba a la izquierda), su largo, su fondo y su alto, y pueden medir distinto: a unas les das más lugar que a otras. Se acomodan como un activo dentro de una huella: arrástralas en el dibujo o escribe sus medidas. No pueden salirse del espacio, pasar de su alto ni encimarse; lo que no cumpla se marca en rojo y no se guarda. Cada posición también tiene sus caras de consumo, y solo puede usar las de su espacio. Su código sale del espacio y de su número.",
-      "example": "el espacio R001.N001.C001 mide 3 × 1 m: pones una posición de 0.6 × 1 m, otra de 0.9 × 0.5 m junto a ella y una tercera de 0.5 × 1 m más allá, cada una con su propio alto."
+      "example": "el espacio R001.N001.E001 mide 3 × 1 m: pones una posición de 0.6 × 1 m, otra de 0.9 × 0.5 m junto a ella y una tercera de 0.5 × 1 m más allá, cada una con su propio alto."
     },
     "layoutUbicEspacio": {
       "what": "El espacio (un nivel × un lugar de izquierda a derecha de un activo) cuyas posiciones estás acomodando. El número entre paréntesis es cuántas posiciones tiene ya.",
-      "example": "R001.N001.C002 (3): el espacio 2 del nivel 1 del rack R001, con 3 posiciones."
+      "example": "R001.N001.E002 (3): el espacio 2 del nivel 1 del rack R001, con 3 posiciones."
     },
     "layoutUbicVista": {
       "what": "El espacio visto desde arriba, con sus posiciones como cajas. Arrastra una caja para acomodarla (se acomoda de 5 en 5 cm) o escribe su X y Y en la tabla. En rojo, la que se sale del espacio, pasa de su alto o se encima con otra.",
@@ -5145,8 +5144,8 @@
       "example": "el nivel 1 del rack lleva 3 espacios y el nivel 2 solo 2: en Espacios salen 3 renglones para el nivel 1 y 2 para el nivel 2."
     },
     "layoutSec_posiciones": {
-      "what": "Cada renglón es un espacio: un nivel × un lugar de izquierda a derecha de un activo (el rack con 2 niveles y 3 espacios por nivel deja 6 espacios, ya listos). Los niveles salen del paso Activos y la cantidad de espacios de cada nivel del paso Niveles. Aquí defines el largo, el fondo y el alto de cada espacio (en metros) y, por ahora, cuántas filas y cuántas profundidades tiene. Lo que va adentro no puede pasar de lo que lo contiene: los espacios de un nivel no suman más que el largo del activo, ninguno pasa de su fondo y su alto no pasa del alto del nivel. Los m² son largo × fondo y los m³ son largo × fondo × alto.",
-      "example": "el espacio R001.N002.C003 mide 3 m de largo, 1.2 de fondo y 0.65 de alto: 3.6 m² y 2.34 m³."
+      "what": "Cada renglón es un espacio: un nivel × un lugar de izquierda a derecha de un activo (el rack con 2 niveles y 3 espacios por nivel deja 6 espacios, ya listos). Los niveles salen del paso Activos y la cantidad de espacios de cada nivel del paso Niveles. Aquí defines el largo, el fondo y el alto de cada espacio (en metros) y por dónde se consume. Las posiciones de cada espacio se acomodan en el paso Posiciones. Lo que va adentro no puede pasar de lo que lo contiene: los espacios de un nivel no suman más que el largo del activo, ninguno pasa de su fondo y su alto no pasa del alto del nivel. Los m² son largo × fondo y los m³ son largo × fondo × alto.",
+      "example": "el espacio R001.N002.E003 mide 3 m de largo, 1.2 de fondo y 0.65 de alto: 3.6 m² y 2.34 m³."
     },
     "relClass": {
       "what": "Dice qué es el producto en este lugar: Producto Activo (el normal), Producto Cuarentena, Producto Aclaración o Producto en Consigna. Un mismo lugar puede cambiar de clasificación con el tiempo; sigue valiendo un solo código por espacio. Vacío es Producto Activo.",
@@ -5533,7 +5532,7 @@
       "example": "tocas Localizadores y ves la lista de este Layout; tocas la flechita y se abre la pantalla completa."
     },
     "layoutSec_localizadores": {
-      "what": "Los localizadores que va creando este Layout, completos o a medias, con lo que tienes capturado ahora (también lo que todavía no guardas): uno por zona, por huella, por activo y por cada posición completa de 7 piezas. Es solo de consulta: un localizador se modifica en los demás pasos. La flechita de al lado del nombre abre la pantalla Localizadores, con todos los centros de costos, el almacén y el sub almacén.",
+      "what": "Los localizadores que va creando este Layout, completos o a medias, con lo que tienes capturado ahora (también lo que todavía no guardas): uno por zona, por huella, por activo y por cada posición completa de 6 piezas (zona, huella, activo, nivel, espacio y posición). Es solo de consulta: un localizador se modifica en los demás pasos. La flechita de al lado del nombre abre la pantalla Localizadores, con todos los centros de costos, el almacén y el sub almacén.",
       "example": "terminas de acomodar los anaqueles de la Zona 6, tocas Localizadores y ves de una vez los localizadores nuevos; si quieres ir directo a la pantalla completa, tocas la flechita."
     },
     "layoutLocalizadoresLink": {
@@ -5617,8 +5616,8 @@
       "example": "eliges «Las del mismo tipo de activo» con el tipo Rack y todos los racks quedan del mismo color."
     },
     "vfLocator": {
-      "what": "El Localizador completo de este lugar, siempre con las 7 piezas: zona, huella, activo, nivel, columna, fila y profundidad. Es el mismo que se usa en la plantilla de Relación Código y se puede copiar tal cual.",
-      "example": "Z006.H005.A005.N003.C001.F001.P001 es la zona 6, la huella 5, el activo A5, el nivel 3, la columna 1, la fila 1 y la profundidad 1."
+      "what": "El Localizador completo de este lugar, siempre con las 6 piezas: zona, huella, activo, nivel, espacio y posición. Es el mismo que se usa en la plantilla de Relación Código y se puede copiar tal cual.",
+      "example": "Z006.H005.A005.N003.E001.P001 es la zona 6, la huella 5, el activo A5, el nivel 3, el espacio 1 y la posición 1."
     },
     "relFootprint": {
       "what": "La huella (el lugar en el piso) de esa zona donde está lo que vas a ubicar. Solo salen las huellas que tienen activos en este sub almacén. Si la zona tiene una sola huella, o la huella un solo activo, se eligen solas.",

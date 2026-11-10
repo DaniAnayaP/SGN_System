@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Localizadores (Catálogos, C. Distribución): la lista de TODOS los localizadores que el Layout de cada centro de costos va creando, completos o a medias
-// (una fila por zona, por huella, por activo y por cada posición completa de 7 piezas), con toda la estructura: compañía, centro de costos, almacén, sub almacén,
-// zona, huella, activo, nivel, columna, fila y profundidad. Es SOLO LECTURA: un localizador se modifica únicamente desde el Layout (por eso aquí no hay Nuevo ni
+// (una fila por zona, por huella, por activo y por cada posición completa de 6 piezas), con toda la estructura: compañía, centro de costos, almacén, sub almacén,
+// zona, huella, activo, nivel, espacio y posición. Es SOLO LECTURA: un localizador se modifica únicamente desde el Layout (por eso aquí no hay Nuevo ni
 // Editar); el paso «Localizadores» del Layout trae a esta pantalla. Las filas salen del servidor (GET /api/business/locators).
 // ---------------------------------------------------------------------------
 
@@ -65,7 +65,7 @@ function buildRow(r, center, index) {
         cell('colCatRegistroUnico', `L${r.cc}-${r.locator || r.footprintId || index}`, 'col-system'),
         cell('colLocCompania', center.company), cell('colLocCentroCostos', center.name), cell('colLocAlmacen', r.warehouse), cell('colLocSubAlmacen', r.subWarehouse),
         cell('colLocZona', zoneText(r)), cell('colLocHuella', footprintText(r)), cell('colLocActivo', assetText(r)),
-        cell('colLocNivel', r.level), cell('colLocColumna', r.slot), cell('colLocFila', r.row), cell('colLocProfundidad', r.depth),
+        cell('colLocNivel', r.level), cell('colLocColumna', r.slot), cell('colLocProfundidad', r.position),
         cell('colLocLocalizador', r.locator, 'rel-locator'),
         cell('colLocAlcance', t(`main.locAlcance_${r.scope}`)),
         tagCell('colLocEstado', r.complete ? 'rel-tag-ok' : 'rel-tag-partial', t(r.complete ? 'main.locEstadoCompleto' : 'main.locEstadoAMedias')),

@@ -2430,7 +2430,9 @@ db.exec(`
 `);
 // Profundidad (del frente al fondo de un anaquel): nivel > fila > profundidad. Vacía = la relación no dice en cuál; en un anaquel de profundidad 1 (lo normal) no hace falta.
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'depth')) db.exec('ALTER TABLE code_relations ADD COLUMN depth INTEGER');
-// Lugar de un código: anaquel > nivel > COLUMNA (slot) > FILA (row_no) > profundidad. El hueco es nivel × columna; dentro del hueco están las filas y las profundidades (Layout > Posiciones). Vacías cuentan como 1.
+// Posición (el número dentro del espacio): el lugar de un código es anaquel > nivel > ESPACIO (slot) > POSICIÓN (position). La fila y la profundidad de antes (row_no, depth) ya no se usan: lo que traían pasó a position (migrateCodeRelationPositionsOnce).
+if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'position')) db.exec('ALTER TABLE code_relations ADD COLUMN position INTEGER');
+// (antes) Lugar de un código: anaquel > nivel > COLUMNA (slot) > FILA (row_no) > profundidad. El hueco es nivel × columna; dentro del hueco están las filas y las profundidades (Layout > Posiciones). Vacías cuentan como 1.
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'row_no')) db.exec('ALTER TABLE code_relations ADD COLUMN row_no INTEGER');
 // Clasificación del producto en ese lugar: activo | cuarentena | aclaracion | consigna (ver CODE_RELATION_CLASSES en server.js). Vive en la relación (no en el sub almacén ni en el código); lo que ya había queda como Producto Activo.
 if (!db.prepare('PRAGMA table_info(code_relations)').all().some((c) => c.name === 'classification')) db.exec("ALTER TABLE code_relations ADD COLUMN classification TEXT NOT NULL DEFAULT 'activo'");
@@ -6291,8 +6293,7 @@ const CODE_RELATION_PATCHABLE_FIELDS = {
     spaceId: { column: 'space_id', fieldKey: 'main.colRelEstante' },
     level: { column: 'level', fieldKey: 'main.colRelNivel' },
     slot: { column: 'slot', fieldKey: 'main.colRelEspacio' },
-    row: { column: 'row_no', fieldKey: 'main.colRelFila' },
-    depth: { column: 'depth', fieldKey: 'main.colRelProfundidad' },
+    position: { column: 'position', fieldKey: 'main.colRelPosicion' },
     classification: { column: 'classification', fieldKey: 'main.colRelClasificacion' },
 };
 const CODE_RELATION_SELECT = `SELECT r.*, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.record_number AS sku_number
@@ -6310,11 +6311,11 @@ function createCodeRelation({ clientId, isTestData = false, values }) {
     const recordNumber = db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM code_relations WHERE client_id = ? AND is_test_data = ?')
         .get(clientId, isTestData ? 1 : 0).n;
-    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, row_no, depth, classification, is_test_data)
-        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @row, @depth, @classification, @isTestData)`).run({
+    const result = db.prepare(`INSERT INTO code_relations (client_id, db_id, record_number, sku_item_id, cost_center_id, warehouse_id, sub_warehouse_id, zone_id, space_id, level, slot, position, classification, is_test_data)
+        VALUES (@clientId, @dbId, @recordNumber, @skuItemId, @costCenterId, @warehouseId, @subWarehouseId, @zoneId, @spaceId, @level, @slot, @position, @classification, @isTestData)`).run({
         clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0,
         skuItemId: values.skuItemId, costCenterId: values.costCenterId ?? null, warehouseId: values.warehouseId ?? null, subWarehouseId: values.subWarehouseId ?? null,
-        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null, row: values.row ?? null, depth: values.depth ?? null, classification: values.classification || 'activo',
+        zoneId: values.zoneId || '', spaceId: values.spaceId || '', level: values.level ?? null, slot: values.slot ?? null, position: values.position ?? null, classification: values.classification || 'activo',
     });
     return getCodeRelationById(result.lastInsertRowid, clientId, isTestData);
 }
@@ -6342,17 +6343,17 @@ function listCodeRelationsBy(clientId, forTestAccount, column, value) {
     return db.prepare(`SELECT * FROM code_relations WHERE client_id = ? AND is_test_data = ? AND ${column} = ?`).all(clientId, forTestAccount ? 1 : 0, value);
 }
 
-// ¿Ya hay otro código exactamente en ese espacio (anaquel + nivel + columna + fila + profundidad; una fila o profundidad vacía cuenta como 1)? Devuelve la fila (con su SKU) o undefined.
-function findCodeRelationInSlot(clientId, forTestAccount, spaceId, level, slot, exceptId = 0, row = null, depth = null) {
-    return db.prepare(`${CODE_RELATION_SELECT} WHERE r.client_id = ? AND r.is_test_data = ? AND r.space_id = ? AND r.level = ? AND r.slot = ? AND COALESCE(r.row_no, 1) = ? AND COALESCE(r.depth, 1) = ? AND r.id != ?`)
-        .get(clientId, forTestAccount ? 1 : 0, spaceId, level, slot, row || 1, depth || 1, exceptId);
+// ¿Ya hay otro código exactamente en esa posición (anaquel + nivel + espacio + posición; una posición vacía cuenta como la 1)? Devuelve la fila (con su SKU) o undefined.
+function findCodeRelationInSlot(clientId, forTestAccount, spaceId, level, slot, exceptId = 0, position = null) {
+    return db.prepare(`${CODE_RELATION_SELECT} WHERE r.client_id = ? AND r.is_test_data = ? AND r.space_id = ? AND r.level = ? AND r.slot = ? AND COALESCE(r.position, 1) = ? AND r.id != ?`)
+        .get(clientId, forTestAccount ? 1 : 0, spaceId, level, slot, position || 1, exceptId);
 }
 
 // ¿Ya existe esta misma relación completa para el mismo código?
 function findCodeRelationDuplicate(clientId, forTestAccount, v, exceptId = 0) {
     return db.prepare(`SELECT id FROM code_relations WHERE client_id = @clientId AND is_test_data = @isTest AND sku_item_id = @skuItemId AND cost_center_id IS @costCenterId AND warehouse_id IS @warehouseId
-        AND sub_warehouse_id IS @subWarehouseId AND zone_id = @zoneId AND space_id = @spaceId AND level IS @level AND slot IS @slot AND row_no IS @row AND depth IS @depth AND id != @exceptId`)
-        .get({ clientId, isTest: forTestAccount ? 1 : 0, skuItemId: v.skuItemId, costCenterId: v.costCenterId ?? null, warehouseId: v.warehouseId ?? null, subWarehouseId: v.subWarehouseId ?? null, zoneId: v.zoneId || '', spaceId: v.spaceId || '', level: v.level ?? null, slot: v.slot ?? null, row: v.row ?? null, depth: v.depth ?? null, exceptId });
+        AND sub_warehouse_id IS @subWarehouseId AND zone_id = @zoneId AND space_id = @spaceId AND level IS @level AND slot IS @slot AND position IS @position AND id != @exceptId`)
+        .get({ clientId, isTest: forTestAccount ? 1 : 0, skuItemId: v.skuItemId, costCenterId: v.costCenterId ?? null, warehouseId: v.warehouseId ?? null, subWarehouseId: v.subWarehouseId ?? null, zoneId: v.zoneId || '', spaceId: v.spaceId || '', level: v.level ?? null, slot: v.slot ?? null, position: v.position ?? null, exceptId });
 }
 
 // Búsqueda de artículos por SKU (con ceros), UPC o descripción para el selector de código.
@@ -12048,6 +12049,33 @@ function seedActivosFijosLetrasOnce() {
     })();
     console.log(`[db] Activos Fijos: ${set} types got their locator letter and ${added} «Tarima en piso» types were added (one-time).`);
 }
+// La fila y la profundidad de cada relación pasan a ser la POSICIÓN que les tocó (el número que el Layout les da a las celdas de antes: (fila − 1) × profundidades + profundidad). Solo las relaciones cuya celda estaba completa (con fila y profundidad,
+// o en un hueco de una sola fila y profundidad con alguna de las dos dicha); las que no, siguen «A medias» como estaban. row_no y depth se conservan sin tocar (ya no se usan).
+const CODE_RELATION_POSITIONS_KEY = 'code-relation-positions-v1';
+function migrateCodeRelationPositionsOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CODE_RELATION_POSITIONS_KEY)) return;
+    let moved = 0;
+    db.transaction(() => {
+        const layouts = new Map();
+        const spaceOf = (clientId, centerId, spaceId) => {
+            const key = `${clientId}|${centerId || 0}`;
+            if (!layouts.has(key)) { const row = getClientLayout(clientId, { costCenterId: centerId || 0 }); layouts.set(key, row ? new Map((row.layout.spaces || []).map((s) => [s.id, s])) : new Map()); }
+            return layouts.get(key).get(spaceId) || null;
+        };
+        db.prepare("SELECT id, client_id, cost_center_id, space_id, level, slot, row_no, depth FROM code_relations WHERE space_id != '' AND level IS NOT NULL AND slot IS NOT NULL AND position IS NULL").all().forEach((r) => {
+            const space = spaceOf(r.client_id, r.cost_center_id, r.space_id);
+            if (!space) return;
+            const bay = LayoutCalc.bayOf(space, r.level, r.slot);
+            const rowOk = !!r.row_no || bay.rows <= 1;
+            const depthOk = !!r.depth || bay.depth <= 1;
+            if (!(r.row_no || r.depth) || !rowOk || !depthOk) return;
+            db.prepare('UPDATE code_relations SET position = ? WHERE id = ?').run(LayoutCalc.legacyPositionNum(space, r.level, r.slot, r.row_no, r.depth), r.id);
+            moved += 1;
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(CODE_RELATION_POSITIONS_KEY);
+    })();
+    console.log(`[db] Relación Código: ${moved} relations moved from (row, depth) to position (one-time).`);
+}
 // Clasificación de Activos: solo hay DOS, fijas: «Activo para operar» (m²) y «Activo para almacenar» (m³). Antes se llamaban Mobiliario operativo y Mobiliario almacenamiento.
 const ACTIVOS_CLASIFICACION_DEFAULTS = [{ name: 'Activo para operar', kind: 'm2' }, { name: 'Activo para almacenar', kind: 'm3' }];
 const ACTIVOS_CLASIFICACION_NAMES_KEY = 'seed-activos-clasificacion-nombres-v2';
@@ -12172,6 +12200,7 @@ seedActivosFijosTiposOnce();
 seedActivosFijosLetrasOnce();
 seedActivosClasificacionValuesOnce();
 seedActivosClasificacionNombresOnce();
+migrateCodeRelationPositionsOnce();
 seedTransitoEquiposValuesOnce();
 seedIncidentesCriteriosValuesOnce();
 

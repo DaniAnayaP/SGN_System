@@ -298,15 +298,20 @@
                 let len = c ? s.l / slots : s.l;
                 let x0 = c ? s.x + (c - 1) * (s.l / slots) : s.x;
                 let z0 = s.y; let dep = s.d;
-                // un localizador (fila y profundidad) es un pedazo de su posición: las filas de izquierda a derecha y la profundidad 1 es la del frente
-                if (c && Number(hl.f) > 0 && Number(hl.p) > 0 && LCx.bayOf) {
-                    const bz = LCx.bayOf(s, n, c);
-                    const rowsZ = Math.max(1, bz.rows); const depthZ = Math.max(1, bz.depth);
-                    x0 += (Math.min(Number(hl.f), rowsZ) - 1) * (len / rowsZ); len /= rowsZ;
-                    dep = s.d / depthZ; z0 = s.y + s.d - Math.min(Number(hl.p), depthZ) * dep;
+                // un localizador es una posición del espacio: ocupa su lugar y sus medidas dentro del espacio (x de izquierda a derecha, y desde el fondo hacia el frente)
+                let posAlto = 0;
+                if (c && Number(hl.p) > 0 && LCx.positionsOfBay && lastLayout) {
+                    const pp = LCx.positionsOfBay(lastLayout, s.id, n, c).find((q) => q.num === Number(hl.p));
+                    if (pp) {
+                        const sxP = len / Math.max(m.l, 0.01); const szP = s.d / Math.max(m.w, 0.01);
+                        x0 += pp.x * sxP; len = pp.l * sxP;
+                        z0 = s.y + pp.y * szP; dep = pp.w * szP;
+                        posAlto = Math.min(pp.h, m.h);
+                    }
                 }
                 const fz = LCx.floorLevelAt ? LCx.floorLevelAt(lastLayout, s.x + s.l / 2, s.y + s.d / 2) : 0;
-                return { x: PX(x0 + len / 2), y: bottom + height / 2 + fz, z: PZ(z0 + dep / 2), sx: len, sy: height, sz: dep };
+                const hBox = posAlto > 0 ? Math.max(posAlto, 0.1) : height;
+                return { x: PX(x0 + len / 2), y: bottom + hBox / 2 + fz, z: PZ(z0 + dep / 2), sx: len, sy: hBox, sz: dep };
             }
             const sz0 = root.LayoutCalc && root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, s.x + s.l / 2, s.y + s.d / 2) : 0;
             return { x: PX(s.x + s.l / 2), y: s.h / 2 + sz0, z: PZ(s.y + s.d / 2), sx: s.l, sy: s.h, sz: s.d };
@@ -1215,37 +1220,40 @@
                     const nz = Math.min(Math.max(1, Number(fzm.n) || 1), lv);
                     const slotsZ = LCz.levelSlots ? LCz.levelSlots(s, nz) : Math.max(1, Math.floor(s.slots || 1));
                     const cz1 = fzm.c ? Math.min(Math.max(1, Number(fzm.c) || 1), slotsZ) : 0;
-                    const cont = cz1 && Number(fzm.f) > 0 && Number(fzm.p) > 0 && LCz.bayOf ? cz1 : 0; // con un localizador el cuadro es la posición; si no, el nivel entero
-                    const contBay = cont ? LCz.bayOf(s, nz, cont) : null;
+                    const cont = cz1 && Number(fzm.p) > 0 && LCz.bayOf ? cz1 : 0; // con un localizador el cuadro es el espacio; si no, el nivel entero
                     const bx0 = cont ? s.x + (cont - 1) * (s.l / slotsZ) : s.x;
                     const blen = cont ? s.l / slotsZ : s.l;
-                    const cols = cont ? Math.max(1, contBay.rows) : slotsZ; // las posiciones del nivel (o las filas de la posición)
-                    const depthN = cont ? Math.max(1, contBay.depth) : 1; // la profundidad solo parte una posición
                     const mAll = cont ? LCz.bayMeasures(s, nz, cont) : LCz.levelMeasures(s, nz);
+                    // con un localizador se dibuja la distribución de las posiciones del espacio (cada una en su lugar y con sus medidas); si no, las divisiones del nivel
+                    const contPos = cont && LCz.positionsOfBay && lastLayout ? LCz.positionsOfBay(lastLayout, s.id, nz, cont) : [];
+                    const cols = contPos.length ? contPos.length : slotsZ;
+                    const sxP = blen / Math.max(mAll.l, 0.01); const szP = s.d / Math.max(mAll.w, 0.01);
                     const yBot = fl + Math.max(mAll.floorH, 0.03);
                     const yTop = yBot + (mAll.beam > 0 ? mAll.beam : 0.06) + Math.max(mAll.h, 0.1);
                     const solid = s.type === 'pallet' || s.type === 'cabinet' || s.type === 'cold';
                     const postC = mute(s.type === 'rackpal' ? 0x3f6fb5 : 0x5d6b86);
                     const deckZ = mute(own !== null ? own : (s.type === 'rackpal' ? 0xe8892b : 0x93a0ba));
                     const blockC = mute(own !== null ? own : (s.type === 'pallet' ? WOOD : (s.type === 'cold' ? 0x8cc7e6 : 0x7f8c8d)));
-                    const wC = blen / cols; const dC = s.d / depthN;
-                    const gx = Math.min(0.02, wC * 0.1); const gz = Math.min(0.02, dC * 0.1);
+                    const wC = blen / cols;
+                    const gx = Math.min(0.02, wC * 0.1); const gz = 0.02;
                     for (let ci = 0; ci < cols; ci++) {
-                        const mm = cont ? mAll : LCz.bayMeasures(s, nz, ci + 1); // cada posición del nivel con sus propias medidas
+                        const mm = cont ? mAll : LCz.bayMeasures(s, nz, ci + 1); // cada espacio del nivel con sus propias medidas
                         const beamC = mm.beam > 0 ? mm.beam : 0.06;
                         const yB = fl + Math.max(mm.floorH, 0.03);
-                        const hC = Math.max(mm.h, 0.1);
-                        for (let dj = 0; dj < depthN; dj++) {
-                            const xc = PX(bx0 + (ci + 0.5) * wC); const zc = PZ(s.y + s.d - (dj + 0.5) * dC); // la profundidad 1 es la del frente
-                            if (solid) blk.push({ x: xc, y: yB + (beamC + hC) / 2, z: zc, sx: wC - gx, sy: beamC + hC, sz: dC - gz, c: blockC });
-                            else dck.push({ x: xc, y: yB + beamC / 2, z: zc, sx: wC - gx, sy: beamC, sz: dC - gz, c: deckZ });
-                        }
+                        const pp = contPos[ci] || null; // la posición (en su lugar y con sus medidas) o, sin ella, todo el espacio
+                        const hC = Math.max(pp ? Math.min(pp.h, mm.h) : mm.h, 0.1);
+                        const sxC = pp ? pp.l * sxP : wC; const szC = pp ? pp.w * szP : s.d;
+                        const xc = PX(pp ? bx0 + (pp.x + pp.l / 2) * sxP : bx0 + (ci + 0.5) * wC);
+                        const zc = PZ(pp ? s.y + (pp.y + pp.w / 2) * szP : s.y + s.d / 2);
+                        if (solid) blk.push({ x: xc, y: yB + (beamC + hC) / 2, z: zc, sx: Math.max(sxC - gx, 0.02), sy: beamC + hC, sz: Math.max(szC - gz, 0.02), c: blockC });
+                        else dck.push({ x: xc, y: yB + beamC / 2, z: zc, sx: Math.max(sxC - gx, 0.02), sy: beamC, sz: Math.max(szC - gz, 0.02), c: deckZ });
                     }
                     if (!solid) {
                         // postes: las cuatro esquinas del cuadro y uno delgado en cada división (adelante y atrás)
-                        for (let xi = 0; xi <= cols; xi++) {
-                            const edge = xi === 0 || xi === cols;
-                            [s.y, s.y + s.d].forEach((zEdge, zi) => upr.push({ x: PX(bx0 + xi * wC) + (xi === 0 ? 0.03 : (xi === cols ? -0.03 : 0)), y: (yBot + yTop) / 2, z: PZ(zEdge) + (zi === 0 ? 0.03 : -0.03), sx: edge ? 0.06 : 0.04, sy: yTop - yBot, sz: edge ? 0.06 : 0.04, c: postC }));
+                        const postCols = contPos.length ? 1 : cols; // con las posiciones del espacio, solo las cuatro esquinas del cuadro
+                        for (let xi = 0; xi <= postCols; xi++) {
+                            const edge = xi === 0 || xi === postCols;
+                            [s.y, s.y + s.d].forEach((zEdge, zi) => upr.push({ x: PX(bx0 + xi * (blen / postCols)) + (xi === 0 ? 0.03 : (xi === postCols ? -0.03 : 0)), y: (yBot + yTop) / 2, z: PZ(zEdge) + (zi === 0 ? 0.03 : -0.03), sx: edge ? 0.06 : 0.04, sy: yTop - yBot, sz: edge ? 0.06 : 0.04, c: postC }));
                         }
                     }
                     focusContainer = { x: PX(bx0 + blen / 2), y: (yBot + yTop) / 2, z: PZ(s.y + s.d / 2), sx: blen, sy: yTop - yBot, sz: s.d };
