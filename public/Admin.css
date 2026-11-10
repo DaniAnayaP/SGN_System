@@ -8295,6 +8295,11 @@ td.cap-pick{ white-space: nowrap; }
 .layout-dd-k{ color: var(--color-text-secondary); font-weight: 600; }
 .layout-dd.open .layout-dd-btn{ border-color: var(--color-accent, var(--color-text-primary)); }
 .layout-dd-menu{ position: absolute; z-index: 40; top: calc(100% + 0.3rem); left: 0; min-width: 14rem; max-height: 18rem; overflow: auto; padding: 0.35rem; display: flex; flex-direction: column; gap: 0.1rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); box-shadow: 0 10px 26px rgba(60, 20, 70, 0.22); }
+/* El filtro de cada columna, los de la franja de búsqueda y los de «Ver» del Layout se amplían jalando la esquina de abajo a la derecha. */
+.menu-resize-grip{ position: absolute; right: 3px; bottom: 3px; width: 14px; height: 14px; cursor: nwse-resize; touch-action: none; opacity: 0.55; color: var(--color-text-secondary); background: linear-gradient(135deg, transparent 0 42%, currentColor 42% 50%, transparent 50% 62%, currentColor 62% 70%, transparent 70% 82%, currentColor 82% 90%, transparent 90%); }
+.menu-resize-grip:hover{ opacity: 1; }
+.data-table-col-filter-menu.has-resize-grip{ padding-bottom: 1rem; }
+.layout-dd-menu .menu-resize-grip{ position: sticky; bottom: 0; align-self: flex-end; flex: none; margin: -0.2rem -0.2rem -0.2rem 0; }
 .layout-dd-item{ display: flex; align-items: center; gap: 0.5rem; width: 100%; padding: 0.35rem 0.55rem; border: 0; border-radius: 0.5rem; background: transparent; color: var(--color-text-primary); font: inherit; font-size: 0.78rem; text-align: left; cursor: pointer; }
 .layout-dd-item:hover{ background: color-mix(in srgb, var(--color-text-primary) 7%, transparent); }
 .layout-dd-item small{ color: var(--color-text-secondary); }

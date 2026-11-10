@@ -4250,6 +4250,67 @@ function handleColumnFilterOutsideClick(event) {
     }
 }
 
+// ---- Desplegables de búsqueda que se pueden ampliar ---------------------------------------------------------------------------------------------------
+// El filtro de cada columna, los de la franja de búsqueda de las tablas y los desplegables de «Ver» del Layout salen con el tamaño de siempre; jalando la esquina de abajo a la derecha se amplían (más ancho y con la lista más
+// alta) para leer las descripciones largas. Solo amplían (nunca quedan más chicos que de partida) y no se salen de la pantalla. opts.lists = selectores de las listas de adentro (su alto máximo crece igual que el del menú);
+// opts.state = { dw, dh } para conservar el tamaño cuando el menú se vuelve a dibujar mientras sigue abierto; opts.keepInView = el menú está pegado al borde izquierdo y se recorre si al ampliarlo se sale por la derecha.
+function addMenuResizeGrip(menu, opts = {}) {
+    if (!menu || menu.querySelector(':scope > .menu-resize-grip')) return;
+    const lists = (opts.lists || []).length ? Array.from(menu.querySelectorAll(opts.lists.join(','))) : [];
+    const state = opts.state || { dw: 0, dh: 0 };
+    const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+    const base = {
+        w: menu.getBoundingClientRect().width,
+        menuMaxH: num(getComputedStyle(menu).maxHeight),
+        menuInlineMaxH: menu.style.maxHeight,
+        lists: lists.map((el) => num(getComputedStyle(el).maxHeight) ?? el.getBoundingClientRect().height),
+        left: num(menu.style.left),
+    };
+    const apply = () => {
+        const vw = document.documentElement.clientWidth;
+        state.dw = Math.max(0, Math.min(state.dw, vw - 16 - base.w));
+        state.dh = Math.max(0, Math.min(state.dh, 1200));
+        menu.style.maxWidth = state.dw ? 'none' : '';
+        menu.style.width = state.dw ? `${base.w + state.dw}px` : '';
+        if (base.menuMaxH != null) menu.style.maxHeight = state.dh ? `${base.menuMaxH + state.dh}px` : base.menuInlineMaxH;
+        lists.forEach((el, i) => { el.style.maxHeight = state.dh ? `${base.lists[i] + state.dh}px` : ''; });
+        if (opts.keepInView && base.left != null) {
+            const room = window.scrollX + vw - (base.w + state.dw) - 8;
+            menu.style.left = `${Math.max(8, Math.min(base.left, room))}px`;
+        }
+    };
+    const grip = document.createElement('div');
+    grip.className = 'menu-resize-grip';
+    grip.dataset.helpKey = 'menuResize';
+    grip.title = t('main.menuResizeTitle');
+    menu.classList.add('has-resize-grip');
+    menu.appendChild(grip);
+    grip.addEventListener('pointerdown', (event) => {
+        if (event.button !== undefined && event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const x0 = event.clientX;
+        const y0 = event.clientY;
+        const dw0 = state.dw;
+        const dh0 = state.dh;
+        let moved = false;
+        try { grip.setPointerCapture(event.pointerId); } catch (err) { /* sin captura: se sigue con lo que llegue */ }
+        const move = (ev) => { moved = true; state.dw = dw0 + (ev.clientX - x0); state.dh = dh0 + (ev.clientY - y0); apply(); };
+        const up = (ev) => {
+            grip.removeEventListener('pointermove', move);
+            grip.removeEventListener('pointerup', up);
+            grip.removeEventListener('pointercancel', up);
+            try { grip.releasePointerCapture(ev.pointerId); } catch (err) { /* ya soltado */ }
+            // el toque que cierra el arrastre no debe contar como un clic de afuera (cerraría el menú)
+            if (moved) { const stop = (e) => e.stopPropagation(); document.addEventListener('click', stop, true); setTimeout(() => document.removeEventListener('click', stop, true), 0); }
+        };
+        grip.addEventListener('pointermove', move);
+        grip.addEventListener('pointerup', up);
+        grip.addEventListener('pointercancel', up);
+    });
+    if (state.dw || state.dh) apply();
+}
+
 function openColumnFilterMenu(th, tableId, key) {
     const reopening = dataTableFilterMenuTableId === tableId && dataTableFilterMenuEl?.dataset.col === key;
     closeColumnFilterMenu();
@@ -4583,6 +4644,7 @@ function openColumnFilterMenu(th, tableId, key) {
     const left = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - menuWidth - 8);
     menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
     menu.style.left = `${Math.max(8, left)}px`;
+    addMenuResizeGrip(menu, { lists: ['.data-table-col-filter-list'], keepInView: true });
     dataTableFilterMenuEl = menu;
     dataTableFilterMenuTableId = tableId;
     (searchMode === 'range' ? rangeBox : searchRow).querySelector('input, select')?.focus();
@@ -8716,6 +8778,7 @@ function openPanelPopover(menu, anchor) {
     const left = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - menuWidth - 8);
     menu.style.top = `${top + window.scrollY}px`;
     menu.style.left = `${Math.max(8, left)}px`;
+    addMenuResizeGrip(menu, { lists: ['.data-table-col-filter-list'], keepInView: true });
     panelPopoverEl = menu;
     panelPopoverAnchor = anchor;
     setTimeout(() => {
@@ -13281,6 +13344,7 @@ window.Dashboard = {
     initDataTableColumns,
     getVisibleTableSnapshot,
     showToast,
+    addMenuResizeGrip,
     limitErrorMessage,
     limitDroppedMessage,
     buildGrantLimits,

@@ -3245,6 +3245,10 @@ function renderViewStrip() {
     const locDd = ddHtml('loc', 'layoutFiltroLocalizador', t('main.layoutFiltroLocalizador'), locAny() ? locCode() : t('main.layoutFiltroNinguno'), vDropdown === 'loc', !(canFind() && stepVisible('espacios') && stepVisible('activos')), locMenuHtml());
     box.innerHTML = zoneDd + layersDd + chooseDd + locDd + rest;
     ddRendered = vDropdown;
+    // el desplegable abierto se puede ampliar jalando su esquina de abajo a la derecha; el tamaño se conserva mientras siga abierto y el de partida es el de siempre
+    if (ddSize.key !== vDropdown) { ddSize.key = vDropdown; ddSize.dw = 0; ddSize.dh = 0; }
+    const ddMenu = box.querySelector('.layout-dd-menu');
+    if (ddMenu && window.Dashboard && Dashboard.addMenuResizeGrip) Dashboard.addMenuResizeGrip(ddMenu, { lists: ['.layout-ch-list'], state: ddSize });
     // un menú que no cabe a la derecha (los botones de más a la derecha en una pantalla angosta) se abre hacia la izquierda, pegado al borde de su botón
     const menuNow = box.querySelector('.layout-dd-menu');
     if (menuNow && menuNow.getBoundingClientRect().right > document.documentElement.clientWidth - 8) { menuNow.style.left = 'auto'; menuNow.style.right = '0'; }
@@ -3254,6 +3258,7 @@ function renderViewStrip() {
         if (inp) { inp.focus({ preventScroll: true }); inp.setSelectionRange(inp.value.length, inp.value.length); } // preventScroll: enfocar la caja de arriba no debe subir la lista
     }
 }
+const ddSize = { key: '', dw: 0, dh: 0 }; // lo que se amplió el desplegable abierto de la franja (ancho y alto de más)
 // ---- «Elegir» ---------------------------------------------------------------------------------------------------------------------------------------------
 const chosenList = () => state.pick;
 // «Elegir»: las clasificaciones (tipos) prendidas en las pastillas de abajo del buscador; vacío = todas. Se pueden prender varias a la vez.

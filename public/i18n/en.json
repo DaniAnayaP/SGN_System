@@ -2162,6 +2162,7 @@
     "layoutVioCl_outside": "{code} is outside the building outline: move it inside.",
     "layoutVioCl_tall": "{code} hangs at {top} m and the ceiling there is only {height} m high: lower it.",
     "layoutFindTipo_ceiling": "Ceiling",
+    "menuResizeTitle": "Drag the corner to enlarge",
     "layoutFindTipo_sensor": "Sensors",
     "layoutFindTipo_power": "Power",
     "layoutFindTipo_obstacle": "Obstacles",
@@ -6128,6 +6129,7 @@
     },
     "layoutSec_techos": {"what": "What hangs from the warehouse ceiling placed on the plan: cameras, speakers, ventilation, extractors or other (with its name). Each one is a point (X and Y, in meters) with its type and name. «Hangs at» is the height, measured from the floor, where the device sits; if you leave it empty it sits against the ceiling. The ceiling is not flat (it follows the heights of the outline corners), so «Ceiling there» tells you how tall the building is at that point and «Hangs at» cannot go above it: if it does, it shows in red and can't be saved. The system sets the code: each type with its own letter and count (Q001, N001, W001, X001, Y001), and a number is never used again even if you delete the item. The zone comes from its place. Everything must be inside the building outline. It shows on the sketch (inside a dotted circle, meaning it is up high) and in 3D, hanging from the ceiling, while this step is on. Ceiling sensors will go in the Sensors step.", "example": "a camera at the entrance at 5 m in X and 2.8 m in Y, hanging at 6.5 m (Q001); an extractor in the middle of the warehouse hanging at 7.5 m (X001), where the ceiling is 9.4 m high."},
     "layoutCuelgaA": {"what": "The height, measured from the floor, where this ceiling-hung device sits. If you leave it empty it sits against the ceiling. It cannot go above «Ceiling there», which is how tall the building is at that point (the ceiling is not flat).", "example": "a camera hanging at 6.5 m where the ceiling is 8.9 m high."},
+    "menuResize": {"what": "Bottom-right corner of the dropdown: drag it to enlarge the dropdown (wider and with a taller list) and read the full descriptions. It always opens at its usual size and can only be made bigger.", "example": "drag it down and to the right to see the full name of a medicine that appears cut off."},
     "layoutSec_objetos": {
       "what": "The people and forklifts drawn on the plan, to scale, as a still picture of how the warehouse is (it does not follow anyone live). Each one has its place (X and Y are its center, in meters), where it faces (turn in degrees) and its equipment or person, chosen from the «What Passes» catalog: its drawing and sizes come from there, and if they change in the catalog they change here. They show on the sketch and in 3D while this step is on.",
       "example": "a forklift in the central aisle, 12 m in X and 9.5 m in Y, facing right (turn 0), and a person next to it."
