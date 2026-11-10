@@ -2215,6 +2215,9 @@
         },
         {
           "id": "cat-operaciones-centro-dist-qr-seguridad", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrSeguridad", "icon": "bx-shield-quarter", "href": "OpCentroDistQrSeguridad.html"
+        },
+        {
+          "id": "cat-operaciones-centro-dist-qr-incidentes", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrIncidentes", "icon": "bx-error-circle", "href": "OpCentroDistQrIncidentes.html"
         }
       ],
       "cat-admin": [

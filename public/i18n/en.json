@@ -269,6 +269,7 @@
     "opCentroDistQrTemperaturas": "Temperatures",
     "opCentroDistQrPedidoManual": "Manual order",
     "opCentroDistQrSeguridad": "Safety",
+    "opCentroDistQrIncidentes": "Incidents",
     "opCentroDistTemperaturas": "Temperatures",
     "opCentroDistSeguridad": "Safety",
     "adminMapaCalor": "Heat map",
@@ -2186,6 +2187,7 @@
     "qrsVacioSeg": "This site has no safety elements with a QR. They are added in Layout > Safety.",
     "qrsVentanaSeg": "Safety · {code}",
     "qrsCuantosElementos": "{n} items",
+    "qrsVentanaInc": "Incidents · {code}",
     "qrsVentanaPm": "Manual order · {code}",
     "qrsCuantosCentros": "{n} center",
     "colArticuloUdmDist": "Distribution UOM",
@@ -6204,6 +6206,7 @@
     "qrsTemperaturas": {"what": "The Temperatures app that is normally done by scanning the QR of each refrigerator or sensor, but from the computer: choose the site above, find the equipment and tap «Open». The same screen the QR opens (your name, the temperature and humidity it shows, and the photo of the reading) appears in a window over this page, and what you register lands in Operations > Temperatures just as if you had done it with a phone. The photo is taken with the computer's camera.", "example": "open refrigerator F001, type your name, the temperature of 4 °C and the humidity, take the photo of the reading and save."},
     "qrsPedidoManual": {"what": "The Manual Order QR of the cost center you chose above, but from the computer: tap «Open» and the same screen the QR opens appears in a window over this page (search the item by code, description, unit of measure or category, set the quantity, type who is ordering and send). The order lands in Operations > Manual Order with its number, who ordered it and the time, just as if you had done it with a phone. The site must already have a saved Layout: the QR address comes from there.", "example": "open the center's QR, search «paracetamol», order 20, type your name and send: it shows as PM-0007 in Manual Order."},
     "qrsSeguridad": {"what": "The Safety app that is normally done by scanning the QR of each element (extinguisher, hydrant, emergency door, first-aid kit…), but from the computer: choose the site above, find the element and tap «Open». The same screen the QR opens (your name, whether it is fine or faulty, a note and the photo) appears in a window over this page, and what you register lands in Operations > Safety just as if you had done it with a phone. The photo is taken with the computer's camera.", "example": "open extinguisher E001, type your name, mark «Fine», take the photo and save."},
+    "qrsIncidentes": {"what": "The Incidents QR of the cost center you chose above, but from the computer: tap «Open» and the same screen the QR opens appears in a window over this page (who reports, the zone where it happened, the category and criterion, the situation in your own words and the evidence, at least one photo). The report lands in Operations > Incidents with its time, just as if you had done it with a phone. The evidence is photos chosen as image files from the computer (they are not taken with its camera). The site must already have a saved Layout: the QR address comes from there.", "example": "open the center's QR, choose zone 1, the criterion «Cross picking», tell what happened, choose the evidence photo and send."},
     "layoutSec_objetos": {
       "what": "The people and forklifts drawn on the plan, to scale, as a still picture of how the warehouse is (it does not follow anyone live). Each one has its place (X and Y are its center, in meters), where it faces (turn in degrees) and its equipment or person, chosen from the «What Passes» catalog: its drawing and sizes come from there, and if they change in the catalog they change here. They show on the sketch and in 3D while this step is on.",
       "example": "a forklift in the central aisle, 12 m in X and 9.5 m in Y, facing right (turn 0), and a person next to it."
