@@ -1606,7 +1606,7 @@
     "colLayoutLuz": "Energía Eléctrica",
     "colLayoutSensores": "Sensores",
     "colLayoutZonas": "Zonas",
-    "colLayoutEspacios": "Huella-Espacio",
+    "colLayoutEspacios": "Huella",
     "colLayoutQr": "Códigos QR",
     "colLayoutKpis": "Resumen de m²",
     "colLayoutCargarPlano": "Cargar plano",
@@ -1687,13 +1687,13 @@
     "layoutType_sensor_temp": "Temperatura",
     "layoutType_sensor_hum": "Humedad",
     "layoutStepZonas": "Zonas",
-    "layoutStepEspacios": "Huella-Espacio",
+    "layoutStepEspacios": "Huella",
     "layoutStepActivos": "Activos",
     "colLayoutActivos": "Activos",
     "layoutActivoClase": "Clasificación del activo",
     "layoutActivoTipo": "Tipo de activo",
     "layoutActivoElegir": "Elige…",
-    "layoutActivosSinEspacios": "Todavía no hay huellas. Agrégalas en Huella-Espacio y aquí se ponen sus activos.",
+    "layoutActivosSinEspacios": "Todavía no hay huellas. Agrégalas en Huella y aquí se ponen sus activos.",
     "layoutHuellaCol": "Huella",
     "layoutCodigoHuella": "Código de huella",
     "layoutCodigoZona": "Código de zona",
@@ -1733,10 +1733,10 @@
     "layoutVioAct_sum": "Los activos de {fcode} suman {sum} m y la huella mide {len} m: acorta alguno o agranda la huella para poder guardar.",
     "layoutVioAct_out": "El activo {code} se sale de su huella {fcode}: cambia sus medidas o su posición, o agranda la huella, para poder guardar.",
     "layoutVioAct_tall": "El activo {code} mide {h} m de alto y su huella {fcode} solo {fh} m: baja su alto para poder guardar.",
-    "layoutVioAct_bayl": "El hueco del nivel {n}, columna {c} del activo {code} mide {value} m de largo y el activo solo {max} m: baja su largo para poder guardar.",
-    "layoutVioAct_bayh": "La posición del nivel {n}, columna {c} del activo {code} mide {value} m de alto y el espacio de su nivel solo {max} m: baja su alto para poder guardar.",
-    "layoutVioAct_bayw": "El hueco del nivel {n}, columna {c} del activo {code} mide {value} m de ancho y el activo solo {max} m de fondo: baja su ancho para poder guardar.",
-    "layoutVioAct_baysum": "Las columnas del nivel {n} del activo {code} suman {sum} m de largo y el activo mide {max} m: baja el largo de alguna columna para poder guardar.",
+    "layoutVioAct_bayl": "El espacio {c} del nivel {n} del activo {code} mide {value} m de largo y el activo solo {max} m: baja su largo para poder guardar.",
+    "layoutVioAct_bayh": "El espacio {c} del nivel {n} del activo {code} mide {value} m de alto y el nivel solo {max} m: baja su alto para poder guardar.",
+    "layoutVioAct_bayw": "El espacio {c} del nivel {n} del activo {code} mide {value} m de ancho y el activo solo {max} m de fondo: baja su ancho para poder guardar.",
+    "layoutVioAct_baysum": "Los espacios del nivel {n} del activo {code} suman {sum} m de largo y el activo mide {max} m: baja el largo de algún espacio para poder guardar.",
     "layoutVioAct_levels": "Los niveles del activo {code} llegan a {top} m y el activo mide {h} m: baja el alto de algún nivel o sube el alto del activo para poder guardar.",
     "layoutVioAct_overlap": "Los activos {other} y {code} están encimados dentro de {fcode}: cambia su posición o sus medidas para poder guardar.",
     "layoutFondo": "Fondo (m)",
@@ -1887,8 +1887,8 @@
     "layoutNivCejaCol": "Alto de la ceja (m)",
     "layoutNivEspacio": "Alto del espacio (m)",
     "layoutNivAlto": "Alto del nivel (m)",
-    "layoutNivCantPos": "Cantidad de posiciones",
-    "layoutEspaciosNivel": "Columnas (izq. a der.)",
+    "layoutNivCantPos": "Cantidad de espacios",
+    "layoutEspaciosNivel": "Espacios (izq. a der.)",
     "layoutCajones": "Cajones (filas × columnas)",
     "layoutHuellaVolumen": "Huella y volumen",
     "layoutAgregarEspacio": "+ Agregar espacio",
@@ -2008,13 +2008,13 @@
     "layoutFiltroNinguno": "Ninguno",
     "layoutFiltroNElegidos": "{n} elegidos",
     "layoutFiltroLocalizador": "Localizador",
-    "layoutLocPosicion": "Posición",
+    "layoutLocPosicion": "Espacio",
     "layoutLocMedidaNivel": "{floor} m del piso · {h} m de alto",
     "layoutLocFilasProf": "filas {f} · profundidad {p}",
     "layoutLocElige_fp": "Elige una huella",
     "layoutLocElige_sp": "Elige un activo de {code}",
     "layoutLocElige_n": "Elige un nivel de {code}",
-    "layoutLocElige_c": "Elige una posición de {code}",
+    "layoutLocElige_c": "Elige un espacio de {code}",
     "layoutLocElige_cell": "Elige un localizador de {code}",
     "layoutElegirBuscar": "Buscar una pared, un hidrante, un piso, una zona…",
     "layoutElegirLimpiar": "Limpiar",
@@ -3325,11 +3325,11 @@
     "relTplErr_depthRange": "La profundidad «{value}» no existe en ese hueco del estante {rack} (tiene {max}).",
     "relTplErr_depthMissing": "El estante {rack} tiene {max} de profundidad: falta decir en cuál (P001, P002…).",
     "relTplErr_slotMissing": "Falta la columna: el estante {rack} tiene {max} y la fila y la profundidad dependen de ella.",
-    "layoutStepPosiciones": "Posiciones",
-    "colLayoutPosiciones": "Posiciones",
+    "layoutStepPosiciones": "Espacios",
+    "colLayoutPosiciones": "Espacios",
     "layoutPosNivel": "Nivel",
-    "layoutPosColumna": "Columna",
-    "layoutPosCodigo": "Código de la posición",
+    "layoutPosColumna": "Espacio",
+    "layoutPosCodigo": "Código del espacio",
     "layoutPosLocalizadores": "Localizadores",
     "layoutPosM2": "m²",
     "layoutPosM3": "m³",
@@ -3342,12 +3342,12 @@
     "layoutPosCeja": "Ceja (m)",
     "layoutPosAltoUtil": "Alto de almacenamiento (m)",
     "layoutPosCapacidad": "Capacidad",
-    "layoutPosSinActivos": "Todavía no hay activos. Agrégalos en Huella-Espacio y ponles sus niveles y columnas en Activos: sus huecos salen aquí solos.",
-    "layoutPosMuchos": "Se muestran los primeros {n} huecos.",
+    "layoutPosSinActivos": "Todavía no hay activos. Agrégalos en Huella y ponles sus niveles en Activos; cuántos espacios tiene cada nivel se pone en Niveles. Sus espacios salen aquí solos.",
+    "layoutPosMuchos": "Se muestran los primeros {n} espacios.",
     "layoutStepNiveles": "Niveles",
     "colLayoutNiveles": "Niveles",
-    "layoutNivHuecosPropios": "Huecos con medida propia",
-    "layoutNivSinActivos": "Todavía no hay activos. Agrégalos en Huella-Espacio y ponles sus niveles en Activos: sus niveles salen aquí solos.",
+    "layoutNivHuecosPropios": "Espacios con medida propia",
+    "layoutNivSinActivos": "Todavía no hay activos. Agrégalos en Huella y ponles sus niveles en Activos: sus niveles salen aquí solos.",
     "layoutNivMuchos": "Se muestran los primeros {n} niveles.",
     "layoutNivAplicar": "Aplicar a todos",
     "layoutNivAplicarTip": "Pasa el alto y la ceja de este nivel a todos los demás niveles de este activo",
@@ -4781,7 +4781,7 @@
       "example": "un sensor de temperatura y humedad en la «Pared 1», a 4.7 metros de su inicio y a 2.5 metros del piso: queda como S001 en la zona que toca esa parte de la pared."
     },
     "layoutSec_luz": {
-      "what": "La energía eléctrica de la nave: los tableros y contactos de luz, en qué pared están (siempre van sobre una pared, de las del paso Paredes), a qué distancia del inicio de esa pared y a qué altura del piso; la pared dice cuánto mide y qué tan alta es, y la conexión no puede pasarse de ninguna de las dos. Este paso va después de Huella-Espacio y antes de Activos porque un activo que lleva luz (un refrigerador, por ejemplo) debe quedar cerca de una conexión eléctrica. Si la pared separa pisos a distinto nivel (paso Pisos), la altura se cuenta desde el piso más alto de sus dos lados y debe caber bajo el remate más bajo de la pared.",
+      "what": "La energía eléctrica de la nave: los tableros y contactos de luz, en qué pared están (siempre van sobre una pared, de las del paso Paredes), a qué distancia del inicio de esa pared y a qué altura del piso; la pared dice cuánto mide y qué tan alta es, y la conexión no puede pasarse de ninguna de las dos. Este paso va después de Huella y antes de Activos porque un activo que lleva luz (un refrigerador, por ejemplo) debe quedar cerca de una conexión eléctrica. Si la pared separa pisos a distinto nivel (paso Pisos), la altura se cuenta desde el piso más alto de sus dos lados y debe caber bajo el remate más bajo de la pared.",
       "example": "un contacto de 220 V en la «Pared 3», a 20 metros de su inicio y a 1.2 metros del piso."
     },
     "layoutSec_zonas": {
@@ -4789,7 +4789,7 @@
       "example": "defines la Zona A, de producto seco, de 22 por 11 metros: el sistema le pone Z001 y la siguiente que crees será Z002."
     },
     "layoutSec_activos": {
-      "what": "Cada renglón es un activo: lo que hay encima de una huella. Un activo siempre va DENTRO de una huella: «+ Agregar activo» crea el renglón con la huella vacía (en rojo) y no se puede guardar hasta que elijas en cuál va; una huella puede tener varios (por ejemplo dos racks sobre la misma tarima) y cada activo se da de alta aquí: al agregar una huella se crea solo la huella, sin activos. En los refrigeradores (tipo Frío) también capturas su rango de temperatura y de humedad (mínimo y máximo, opcionales), con el que se marcan las alertas de Temperaturas. El código del activo lo pone el sistema y no se edita: la letra la da su tipo (A anaquel, R rack, G gabeta, T tarima en piso, F frío) y el número es consecutivo por zona y por tipo (A001, A002… de cada zona); es la pieza del activo en el Localizador. Aquí eliges el tipo, la huella, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo de activo (rack, estante, escritorio…), sus niveles, sus columnas y sus cajones. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
+      "what": "Cada renglón es un activo: lo que hay encima de una huella. Un activo siempre va DENTRO de una huella: «+ Agregar activo» crea el renglón con la huella vacía (en rojo) y no se puede guardar hasta que elijas en cuál va; una huella puede tener varios (por ejemplo dos racks sobre la misma tarima) y cada activo se da de alta aquí: al agregar una huella se crea solo la huella, sin activos. En los refrigeradores (tipo Frío) también capturas su rango de temperatura y de humedad (mínimo y máximo, opcionales), con el que se marcan las alertas de Temperaturas. El código del activo lo pone el sistema y no se edita: la letra la da su tipo (A anaquel, R rack, G gabeta, T tarima en piso, F frío) y el número es consecutivo por zona y por tipo (A001, A002… de cada zona); es la pieza del activo en el Localizador. Aquí eliges el tipo, la huella, la clasificación (Mobiliario operativo, Mobiliario almacenamiento…), el tipo de activo (rack, estante, escritorio…) y sus niveles. Cuántos espacios tiene cada nivel se pone en Niveles. Las dos listas las administra el cliente en Catálogos. La zona sale de la huella.",
       "example": "agregas un activo, eliges la huella H002 de la Zona 6 y el sistema le pone A001 (o A002 si ya había un anaquel en esa zona); si no eliges la huella, no te deja guardar."
     },
     "layoutAssetClass": {
@@ -4813,7 +4813,7 @@
       "example": "eliges Zona 6 y las huellas que salen son solo las de la Zona 6 (H001, H003…)."
     },
     "layoutActivoNivelFijo": {
-      "what": "Un activo para operar (clasificación Activo para operar, que se mide en m²) siempre tiene 1 nivel y no se edita. Los niveles, posiciones y localizadores son de los activos para almacenar.",
+      "what": "Un activo para operar (clasificación Activo para operar, que se mide en m²) siempre tiene 1 nivel y no se edita. Los niveles, espacios y posiciones son de los activos para almacenar.",
       "example": "un escritorio tiene 1 nivel; un rack para almacenar puede tener 4."
     },
     "layoutAssetType": {
@@ -5021,31 +5021,31 @@
       "example": "cargas 280 de 300 filas y bajas las 20 que no se cargaron."
     },
     "layoutPosFondo": {
-      "what": "El fondo (lo que mide de adelante hacia atrás) de esta posición, en metros. No puede pasar del fondo del activo. Si no lo escribes toma el fondo del activo.",
-      "example": "el rack mide 1.2 m de fondo: ninguna de sus posiciones puede medir más de 1.2 m de fondo."
+      "what": "El fondo (lo que mide de adelante hacia atrás) de este espacio, en metros. No puede pasar del fondo del activo. Si no lo escribes toma el fondo del activo.",
+      "example": "el rack mide 1.2 m de fondo: ninguno de sus espacios puede medir más de 1.2 m de fondo."
     },
     "layoutPosAlto": {
-      "what": "El alto de esta posición, en metros: el espacio libre para guardar. No puede pasar del alto del espacio de su nivel (paso Niveles). Si no lo escribes toma el del nivel.",
-      "example": "el espacio del nivel mide 0.65 m: la posición puede medir hasta 0.65 m de alto; con 0.8 se marca en rojo y no se guarda."
+      "what": "El alto de este espacio, en metros: la altura libre para guardar. No puede pasar del alto de su nivel (paso Niveles). Si no lo escribes toma el del nivel.",
+      "example": "el alto del nivel es 0.65 m: el espacio puede medir hasta 0.65 m de alto; con 0.8 se marca en rojo y no se guarda."
     },
     "layoutPosLocalizadores": {
-      "what": "Cuántos localizadores tiene esta posición: sus filas por sus profundidades. Cada uno es una celda con su propio código (F001.P001, F001.P002…).",
+      "what": "Cuántos localizadores tiene este espacio: sus filas por sus profundidades. Cada uno es una celda con su propio código (F001.P001, F001.P002…).",
       "example": "2 filas y 3 profundidades dan 6 localizadores."
     },
     "layoutPosCeja": {
-      "what": "El grueso de la reja (el travesaño) de este hueco, en metros. Va aparte del Alto: el espacio libre (el Alto) empieza encima de la reja, así que el Alto de almacenamiento es el mismo Alto. Si no lo escribes toma el de su nivel (paso Niveles).",
-      "example": "el hueco tiene una reja de 0.07 m y 0.65 m de espacio: se pone 0.07 en Ceja y el Alto de almacenamiento queda en 0.65 m."
+      "what": "El grueso de la reja (el travesaño) de este espacio, en metros. Va aparte del Alto: la altura libre (el Alto) empieza encima de la reja, así que el Alto de almacenamiento es el mismo Alto. Si no lo escribes toma el de su nivel (paso Niveles).",
+      "example": "el espacio tiene una reja de 0.07 m y 0.65 m de altura libre: se pone 0.07 en Ceja y el Alto de almacenamiento queda en 0.65 m."
     },
     "layoutSec_niveles": {
-      "what": "Cada renglón es un nivel de un activo (el rack con 3 niveles deja 3 renglones, ya listos). Solo escribes la altura del piso del nivel 1 (hasta dónde empieza la primera reja); la de los demás niveles se calcula sola: la del nivel de abajo + su reja (ceja) + su alto. El Alto es el espacio libre donde se almacena y la Ceja es el grueso de la reja, que va aparte; por eso el Alto de almacenamiento es el mismo Alto. Las medidas salen calculadas con las del activo y solo corriges las que cambien; si cambia el alto o la ceja de un nivel, los de arriba se acomodan solos. Un hueco en particular que sea distinto se ajusta en Posiciones: lo que se anote ahí manda sobre el nivel. En el 3D, la reja de cada nivel se dibuja a su altura y con su grueso, y el espacio libre va encima. Si los niveles (reja + espacio) de un activo suben más que el alto del activo, se marcan en rojo y no se puede guardar hasta corregirlo (baja el alto de algún nivel o sube el alto del activo). Con «Aplicar a todos» pasas el alto y la ceja de un nivel a los demás niveles del activo.",
+      "what": "Cada renglón es un nivel de un activo (el rack con 3 niveles deja 3 renglones, ya listos). Solo escribes la altura del piso del nivel 1 (hasta dónde empieza la primera reja); la de los demás niveles se calcula sola: la del nivel de abajo + su reja (ceja) + su alto. El Alto es el espacio libre donde se almacena y la Ceja es el grueso de la reja, que va aparte; por eso el Alto de almacenamiento es el mismo Alto. Las medidas salen calculadas con las del activo y solo corriges las que cambien; si cambia el alto o la ceja de un nivel, los de arriba se acomodan solos. Un espacio en particular que sea distinto se ajusta en Espacios: lo que se anote ahí manda sobre el nivel. En el 3D, la reja de cada nivel se dibuja a su altura y con su grueso, y el espacio libre va encima. Si los niveles (reja + espacio) de un activo suben más que el alto del activo, se marcan en rojo y no se puede guardar hasta corregirlo (baja el alto de algún nivel o sube el alto del activo). Con «Aplicar a todos» pasas el alto y la ceja de un nivel a los demás niveles del activo.",
       "example": "el rack empieza en 0.15 m, con una reja de 0.07 y un espacio de 0.65: el nivel 2 arranca solo en 0.87 m (0.15 + 0.07 + 0.65)."
     },
     "layoutNivCeja": {
-      "what": "El grueso de la reja (el travesaño) de este nivel, en metros, igual para todas sus columnas. Va aparte del Alto: la reja ocupa su grueso desde la altura del piso del nivel y el espacio libre (el Alto) empieza encima de ella. Con 0 no hay reja.",
+      "what": "El grueso de la reja (el travesaño) de este nivel, en metros, igual para todos sus espacios. Va aparte del Alto: la reja ocupa su grueso desde la altura del piso del nivel y el espacio libre (el Alto) empieza encima de ella. Con 0 no hay reja.",
       "example": "la reja mide 0.07 m y el espacio 0.65 m: el nivel de arriba arranca 0.72 m más arriba."
     },
     "layoutNivAplicar": {
-      "what": "Pasa el alto y la ceja de este nivel a todos los demás niveles de este mismo activo, para no capturarlos nivel por nivel. La altura desde el piso de cada nivel no se toca (sigue acomodándose encima del anterior) y los huecos con medida propia en Posiciones se quedan como están. Se ve en la tabla y se aplica al guardar.",
+      "what": "Pasa el alto y la ceja de este nivel a todos los demás niveles de este mismo activo, para no capturarlos nivel por nivel. La altura desde el piso de cada nivel no se toca (sigue acomodándose encima del anterior) y los espacios con medida propia en Espacios se quedan como están. Se ve en la tabla y se aplica al guardar.",
       "example": "el rack de 4 niveles lleva 0.9 m de alto y 0.07 m de ceja en cada uno: lo anotas en el nivel 1, tocas Aplicar a todos y los otros 3 niveles quedan igual."
     },
     "layoutNivArranque": {
@@ -5057,16 +5057,16 @@
       "example": "0.15 + 0.07 + 0.65 = 0.87 m para el nivel 2."
     },
     "layoutNivHuecos": {
-      "what": "Cuántos huecos (columnas) de este nivel traen en Posiciones su propia altura desde el piso, alto o ceja. A esos no les cambia lo que anotes aquí.",
-      "example": "el nivel 2 tiene 3 columnas y una lleva su propia ceja: aquí dice 1."
+      "what": "Cuántos espacios de este nivel traen en el paso Espacios su propia altura desde el piso, alto o ceja. A esos no les cambia lo que anotes aquí.",
+      "example": "el nivel 2 tiene 3 espacios y uno lleva su propia ceja: aquí dice 1."
     },
     "layoutFiltroLocalizador": {
-      "what": "Te lleva paso a paso hasta un lugar exacto: eliges la huella, luego uno de sus activos, un nivel, una posición y, al final, el localizador (la fila y la profundidad). Puedes escribir para buscar en cada lista. Cada elección enfoca lo que escogiste en el croquis y en el 3D, y las pastillas de arriba te regresan a un paso anterior.",
-      "example": "eliges la huella H001, el rack A004, el nivel N002, la posición C001 y el localizador F001.P001: el croquis y el 3D te muestran ese lugar y arriba queda su código Z001.H001.A004.N002.C001.F001.P001."
+      "what": "Te lleva paso a paso hasta un lugar exacto: eliges la huella, luego uno de sus activos, un nivel, un espacio y, al final, el localizador (la fila y la profundidad). Puedes escribir para buscar en cada lista. Cada elección enfoca lo que escogiste en el croquis y en el 3D, y las pastillas de arriba te regresan a un paso anterior.",
+      "example": "eliges la huella H001, el rack A004, el nivel N002, el espacio C001 y el localizador F001.P001: el croquis y el 3D te muestran ese lugar y arriba queda su código Z001.H001.A004.N002.C001.F001.P001."
     },
     "layoutFiltroLocalizadorRuta": {
-      "what": "Los pasos del recorrido, de izquierda a derecha: Huella, Activo, Nivel, Posición y Localizador. La pastilla encendida es el paso en el que estás; las que ya tienen un código son las que ya elegiste, y al tocarlas regresas a ese paso (se quita lo que habías elegido después).",
-      "example": "estás en Posición y tocas «Activo A004»: vuelves a la lista de activos de la huella."
+      "what": "Los pasos del recorrido, de izquierda a derecha: Huella, Activo, Nivel, Espacio y Localizador. La pastilla encendida es el paso en el que estás; las que ya tienen un código son las que ya elegiste, y al tocarlas regresas a ese paso (se quita lo que habías elegido después).",
+      "example": "estás en Espacio y tocas «Activo A004»: vuelves a la lista de activos de la huella."
     },
     "layoutFiltroElegirTipos": {
       "what": "Las clasificaciones de lo que hay en el Layout (Huellas, Activos, Sensores…), una junto a otra debajo del buscador, para no recorrer una lista enorme. Toca una o varias y la lista solo trae esas; «Todo» las quita. El número es cuántas coinciden con lo que escribiste en el buscador.",
@@ -5077,12 +5077,12 @@
       "example": "«Piso de lácteos» para el nivel 1 del rack R001 (R001.N001)."
     },
     "layoutNivPosiciones": {
-      "what": "Cuántas posiciones (columnas, de izquierda a derecha) tiene ESTE nivel. Cada nivel puede tener las suyas. Las posiciones salen solas en el paso Posiciones, donde defines el largo, el fondo y el alto de cada una. Los niveles no se agregan aquí: salen de la columna Niveles del paso Activos.",
-      "example": "el nivel 1 del rack lleva 3 posiciones y el nivel 2 solo 2: en Posiciones salen 3 renglones para el nivel 1 y 2 para el nivel 2."
+      "what": "Cuántos espacios (de izquierda a derecha) tiene ESTE nivel. Cada nivel puede tener los suyos. Los espacios salen solos en el paso Espacios, donde defines el largo, el fondo y el alto de cada uno. Los niveles no se agregan aquí: salen de la columna Niveles del paso Activos.",
+      "example": "el nivel 1 del rack lleva 3 espacios y el nivel 2 solo 2: en Espacios salen 3 renglones para el nivel 1 y 2 para el nivel 2."
     },
     "layoutSec_posiciones": {
-      "what": "Cada renglón es una posición: un nivel × una columna de un activo (el rack con 2 niveles y 3 posiciones por nivel deja 6 posiciones, ya listas); los niveles salen del paso Activos y las posiciones de cada nivel del paso Niveles. Aquí defines el largo, el fondo y el alto de cada una (en metros) y cuántas filas y cuántas profundidades tiene: de ahí salen sus localizadores. Lo que va adentro no puede pasar de lo que lo contiene: las posiciones de un nivel no suman más que el largo del activo, ninguna pasa de su fondo y su alto no pasa del espacio del nivel. Los m² son largo × fondo y los m³ son largo × fondo × alto.",
-      "example": "la posición R001.N002.C003 mide 3 m de largo, 1.2 de fondo y 0.65 de alto, con 2 filas y 3 profundidades: 6 localizadores, 3.6 m² y 2.34 m³."
+      "what": "Cada renglón es un espacio: un nivel × un lugar de izquierda a derecha de un activo (el rack con 2 niveles y 3 espacios por nivel deja 6 espacios, ya listos). Los niveles salen del paso Activos y la cantidad de espacios de cada nivel del paso Niveles. Aquí defines el largo, el fondo y el alto de cada espacio (en metros) y, por ahora, cuántas filas y cuántas profundidades tiene. Lo que va adentro no puede pasar de lo que lo contiene: los espacios de un nivel no suman más que el largo del activo, ninguno pasa de su fondo y su alto no pasa del alto del nivel. Los m² son largo × fondo y los m³ son largo × fondo × alto.",
+      "example": "el espacio R001.N002.C003 mide 3 m de largo, 1.2 de fondo y 0.65 de alto: 3.6 m² y 2.34 m³."
     },
     "relClass": {
       "what": "Dice qué es el producto en este lugar: Producto Activo (el normal), Producto Cuarentena, Producto Aclaración o Producto en Consigna. Un mismo lugar puede cambiar de clasificación con el tiempo; sigue valiendo un solo código por espacio. Vacío es Producto Activo.",
@@ -5258,7 +5258,7 @@
     },
     "layoutView3d": {
       "what": "Cambia entre el croquis plano (2D) y el Layout levantado en 3D con las mismas medidas, alturas y niveles. En 3D arrastras para girar, con Shift o clic derecho lo mueves y tocas un anaquel o una zona para ver sus datos. Lo que cambias en el panel se ve en el 3D al momento. El 3D no guarda nada: solo es para ver.",
-      "example": "quieres revisar si las tarimas tienen el alto correcto: pasas a 3D y, si se ven como torres, corriges su alto en Huella-Espacio."
+      "example": "quieres revisar si las tarimas tienen el alto correcto: pasas a 3D y, si se ven como torres, corriges su alto en Huella."
     },
     "layoutChooseCenter": {
       "what": "El Layout es de UN centro de costos (un sitio) a la vez. Aquí aparece cuando en el selector de centros de costos de arriba hay varios marcados o ninguno. Deja marcado uno solo para ver su Layout; si ese centro todavía no tiene Layout, podrás crearlo desde cero o cargar su plano, y quedará ligado a él. Lo que captures en un centro no aparece en los demás.",
@@ -5421,7 +5421,7 @@
       "example": "tocas Todo para ver paredes, puertas, zonas y activos juntos; lo tocas otra vez para quedarte solo con el paso que editas."
     },
     "layoutFxEnfocado": {
-      "what": "Lo que estás enfocando: la zona o huella que buscaste, o el activo, nivel o posición del renglón que elegiste. Toca Oculto o Tenue para que el resto de la nave se quite o se apague; tócalo otra vez para dejarlo como estaba, o toca la X para quitar el enfoque. Las tablas no pierden renglones: solo cambia el dibujo. Con Tenue las opciones apagadas también se ven apagadas en lugar de quitarse, y los activos que marcas en «Elegir activos» salen aquí («3 de 14 activos elegidos»): los demás se quitan (Oculto) o se apagan (Tenue).",
+      "what": "Lo que estás enfocando: la zona o huella que buscaste, o el activo, nivel o espacio del renglón que elegiste. Toca Oculto o Tenue para que el resto de la nave se quite o se apague; tócalo otra vez para dejarlo como estaba, o toca la X para quitar el enfoque. Las tablas no pierden renglones: solo cambia el dibujo. Con Tenue las opciones apagadas también se ven apagadas en lugar de quitarse, y los activos que marcas en «Elegir activos» salen aquí («3 de 14 activos elegidos»): los demás se quitan (Oculto) o se apagan (Tenue).",
       "example": "eliges el nivel 2 del rack A013 y tocas Tenue: el 3D deja toda la nave apagada y el nivel 2 marcado en naranja."
     },
     "layoutFindDonde": {
@@ -5437,7 +5437,7 @@
       "example": "eliges Zona 6 y Recepción y marcas Paredes y Puertas: la lista y el croquis solo traen las paredes y puertas de esas dos zonas."
     },
     "layout3dLayers": {
-      "what": "En 3D, las capas siguen los mismos pasos que el croquis: cuando enciendes un paso (Contorno, Puertas, Zonas, Huella-Espacio, Energía Eléctrica, Activos) se ve su capa y cuando lo apagas se oculta. La lista Capas solo trae lo que no tiene un paso propio: Paredes y Columnas, para esconderlas aunque Contorno esté encendido. Lo que ocultas deja de verse y de poder tocarse. La lista se recuerda en este navegador.",
+      "what": "En 3D, las capas siguen los mismos pasos que el croquis: cuando enciendes un paso (Contorno, Puertas, Zonas, Huella, Energía Eléctrica, Activos) se ve su capa y cuando lo apagas se oculta. La lista Capas solo trae lo que no tiene un paso propio: Paredes y Columnas, para esconderlas aunque Contorno esté encendido. Lo que ocultas deja de verse y de poder tocarse. La lista se recuerda en este navegador.",
       "example": "enciendes Zonas y se ven las zonas en el 3D; apagas Zonas y se ocultan; para ver todo el piso sin estorbos, quitas la palomita de Paredes en la lista Capas."
     },
     "layout3dViews": {
@@ -5453,7 +5453,7 @@
       "example": "acerca para ver un anaquel de cerca y toca su código para ver sus medidas."
     },
     "layout3dStage": {
-      "what": "El Layout en 3D. Arrastra para girar, Shift o clic derecho para mover, Ctrl y rueda (o dos dedos) para acercar. Toca un activo, una huella o una zona para ver su nombre, medidas y niveles; además, en el paso que estás editando (Zonas, Huella-Espacio o Activos) se marca su renglón en la tabla y se baja hasta él, como al tocarlo en el croquis.",
+      "what": "El Layout en 3D. Arrastra para girar, Shift o clic derecho para mover, Ctrl y rueda (o dos dedos) para acercar. Toca un activo, una huella o una zona para ver su nombre, medidas y niveles; además, en el paso que estás editando (Zonas, Huella o Activos) se marca su renglón en la tabla y se baja hasta él, como al tocarlo en el croquis.",
       "example": "toca el anaquel R-07 y debajo del dibujo sale su tipo, su zona, sus medidas y cuántos niveles tiene."
     },
     "layoutViews": {
@@ -5541,7 +5541,7 @@
       "example": "pones en verde con rayas los pisos de +0.33 m para distinguirlos de la plataforma de +0.60 m."
     },
     "layoutAssetFmt": {
-      "what": "Cambia el color, las rayas y el borde del activo (el anaquel, la gabeta o la tarima que está sobre la huella), igual que en Zonas y Huella-Espacio. Sin color propio el activo sale arena, distinto del blanco de la huella, para que se distingan. En «Aplicar a» eliges si el cambio es solo para este activo, para los de su zona o para los del mismo tipo. Regla de colores: lo que va adentro de algo no puede llevar el color de lo que lo contiene (el activo no puede llevar el de su huella, ni la huella el de su zona) porque se confunde; el mismo color sí se puede usar en otro lado.",
+      "what": "Cambia el color, las rayas y el borde del activo (el anaquel, la gabeta o la tarima que está sobre la huella), igual que en Zonas y Huella. Sin color propio el activo sale arena, distinto del blanco de la huella, para que se distingan. En «Aplicar a» eliges si el cambio es solo para este activo, para los de su zona o para los del mismo tipo. Regla de colores: lo que va adentro de algo no puede llevar el color de lo que lo contiene (el activo no puede llevar el de su huella, ni la huella el de su zona) porque se confunde; el mismo color sí se puede usar en otro lado.",
       "example": "pintas de azul los anaqueles de la Zona 6 con «Los del mismo tipo»; si la huella ya fuera azul, el sistema te pide elegir otro azul distinto."
     },
     "layoutSpaceFmt": {
@@ -5749,7 +5749,7 @@
       "example": "la nave empieza en 0, 0."
     },
     "layoutCanvas": {
-      "what": "El croquis de la nave, que se dibuja solo con los datos que capturas: paredes, zonas, anaqueles, puertas y conexiones de luz. Al tocar un renglón de Zonas, Huella-Espacio, Activos o Posiciones, lo que ese renglón es se resalta aquí con un contorno delgado, punteado y que va girando (así se siguen viendo las medidas y qué tan pegado está a lo demás) y el renglón queda marcado en la tabla; de una posición se marca su anaquel y se escribe el nivel y la columna. Si tocas la figura en el croquis (sin arrastrarla), se resalta con el contorno grueso naranja y se marca su renglón; vuelve a tocarla para regresar al punteado. En el 3D, el renglón que eliges también se marca con un contorno naranja alrededor de su figura, y la marca se quita al cambiar de paso.",
+      "what": "El croquis de la nave, que se dibuja solo con los datos que capturas: paredes, zonas, anaqueles, puertas y conexiones de luz. Al tocar un renglón de Zonas, Huella, Activos o Espacios, lo que ese renglón es se resalta aquí con un contorno delgado, punteado y que va girando (así se siguen viendo las medidas y qué tan pegado está a lo demás) y el renglón queda marcado en la tabla; de un espacio se marca su anaquel y se escribe el nivel y el espacio. Si tocas la figura en el croquis (sin arrastrarla), se resalta con el contorno grueso naranja y se marca su renglón; vuelve a tocarla para regresar al punteado. En el 3D, el renglón que eliges también se marca con un contorno naranja alrededor de su figura, y la marca se quita al cambiar de paso.",
       "example": "cambias el ancho de una zona y el croquis se actualiza al instante; tocas el renglón R-03 y el anaquel R-03 se marca con su contorno punteado; tocas el anaquel en el croquis y se marca grueso para ubicarlo de un vistazo."
     },
     "layoutSave": {

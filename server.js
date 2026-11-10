@@ -6512,7 +6512,7 @@ const LayoutCalc = require('./public/LayoutCalc.js');
 const RelTemplate = require('./public/RelTemplate.js');
 const QRCode = require('qrcode');
 const LAYOUT_TABLE_KEY = 'layout';
-const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', paredes: 'Paredes', obstaculos: 'Obstáculos', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', pisos: 'Pisos', rampas: 'Rampas', espacios: 'Huella-Espacio', activos: 'Activos', posiciones: 'Posiciones', niveles: 'Niveles' };
+const LAYOUT_SECTION_LABELS = { contorno: 'Contorno de la nave', paredes: 'Paredes', obstaculos: 'Obstáculos', puertas: 'Puertas', luz: 'Energía Eléctrica', sensores: 'Sensores', seguridad: 'Seguridad', transito: 'Tránsito', objetos: 'Objetos', zonas: 'Zonas', pisos: 'Pisos', rampas: 'Rampas', espacios: 'Huella', activos: 'Activos', posiciones: 'Espacios', niveles: 'Niveles' };
 const LAYOUT_PLAN_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 
 function layoutPermissions(req) {

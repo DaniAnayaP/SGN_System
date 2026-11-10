@@ -2122,20 +2122,20 @@
                 }
                 // el largo y el ancho de un hueco (Posiciones) no pueden ser mayores que el largo y el fondo del activo (solo cuentan los que el hueco trae propios)
                 (s.bays || []).forEach((b) => {
-                    if (b.l !== undefined && s.l > 0 && b.l > s.l + eps) out.push({ ...base, kind: 'bayl', sig: JSON.stringify([b.n, b.c, 'l', b.l, s.l]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.l), max: m(s.l) }, message: `El hueco del nivel ${b.n}, columna ${b.c} del activo ${s.code} mide ${m(b.l)} m de largo y el activo solo ${m(s.l)} m: baja su largo.` });
+                    if (b.l !== undefined && s.l > 0 && b.l > s.l + eps) out.push({ ...base, kind: 'bayl', sig: JSON.stringify([b.n, b.c, 'l', b.l, s.l]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.l), max: m(s.l) }, message: `El espacio ${b.c} del nivel ${b.n} del activo ${s.code} mide ${m(b.l)} m de largo y el activo solo ${m(s.l)} m: baja su largo.` });
                     // el alto propio de una posición no pasa del alto del espacio de su nivel (paso Niveles)
                     if (b.h !== undefined) {
                         const lvH = levelMeasures(s, b.n).h;
-                        if (lvH > 0 && b.h > lvH + eps) out.push({ ...base, kind: 'bayh', sig: JSON.stringify([b.n, b.c, 'h', b.h, lvH]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.h), max: m(lvH) }, message: `La posición del nivel ${b.n}, columna ${b.c} del activo ${s.code} mide ${m(b.h)} m de alto y el espacio de su nivel solo ${m(lvH)} m: baja su alto.` });
+                        if (lvH > 0 && b.h > lvH + eps) out.push({ ...base, kind: 'bayh', sig: JSON.stringify([b.n, b.c, 'h', b.h, lvH]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.h), max: m(lvH) }, message: `El espacio ${b.c} del nivel ${b.n} del activo ${s.code} mide ${m(b.h)} m de alto y el nivel solo ${m(lvH)} m: baja su alto.` });
                     }
-                    if (b.w !== undefined && s.d > 0 && b.w > s.d + eps) out.push({ ...base, kind: 'bayw', sig: JSON.stringify([b.n, b.c, 'w', b.w, s.d]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.w), max: m(s.d) }, message: `El hueco del nivel ${b.n}, columna ${b.c} del activo ${s.code} mide ${m(b.w)} m de ancho y el activo solo ${m(s.d)} m de fondo: baja su ancho.` });
+                    if (b.w !== undefined && s.d > 0 && b.w > s.d + eps) out.push({ ...base, kind: 'bayw', sig: JSON.stringify([b.n, b.c, 'w', b.w, s.d]), vars: { code: s.code, n: b.n, c: b.c, value: m(b.w), max: m(s.d) }, message: `El espacio ${b.c} del nivel ${b.n} del activo ${s.code} mide ${m(b.w)} m de ancho y el activo solo ${m(s.d)} m de fondo: baja su ancho.` });
                 });
                 // las columnas de un nivel no pueden sumar más que el largo del activo (se suma lo que muestra Posiciones: el largo propio de cada hueco o, sin él, el largo del activo entre sus columnas)
                 for (let n = 1; n <= (s.levels || 1); n += 1) {
                     const ls = levelLengthSum(s, n);
                     if (!ls.over) continue;
                     const lens = Array.from({ length: levelSlots(s, n) }, (_, k) => { const st = bayOf(s, n, k + 1).stored; return st.l !== undefined ? st.l : null; });
-                    out.push({ ...base, kind: 'baysum', sig: JSON.stringify([n, lens, s.l]), vars: { code: s.code, n, sum: m(ls.sum), max: m(s.l) }, message: `Las columnas del nivel ${n} del activo ${s.code} suman ${m(ls.sum)} m de largo y el activo mide ${m(s.l)} m: baja el largo de alguna columna para poder guardar.` });
+                    out.push({ ...base, kind: 'baysum', sig: JSON.stringify([n, lens, s.l]), vars: { code: s.code, n, sum: m(ls.sum), max: m(s.l) }, message: `Los espacios del nivel ${n} del activo ${s.code} suman ${m(ls.sum)} m de largo y el activo mide ${m(s.l)} m: baja el largo de algún espacio para poder guardar.` });
                 }
                 // los niveles no pueden subir más que el activo (solo si el activo trae medidas de niveles o huecos propias: sin ellas los niveles se reparten justo en su alto)
                 const ownBays = (s.bays || []).filter((b) => b.floorH !== undefined || b.h !== undefined);

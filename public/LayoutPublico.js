@@ -35,7 +35,7 @@
             articlesOne: '1 artículo, ordenados por ubicación', articlesMany: '{n} artículos, ordenados por ubicación', viewGrid: 'Cuadrícula', viewList: 'Lista', viewLabel: 'Vista',
             clsMore: 'Ver más', clsShowing: 'Mostrando {n} de {t}', clsNoLoc: 'Sin ubicación', clsLevel: 'Nivel {n}', clsCode: 'Código {n}',
             clsError: 'No se pudo cargar la clasificación. Intenta de nuevo.', clsGone: 'Esta clasificación ya no está disponible.', clsLocked: 'Este QR no muestra las clasificaciones.', clsEmpty: 'Todavía no hay artículos en esta clasificación en esta zona.',
-            layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', niveles: 'Niveles', transito: 'Tránsito', seguridad: 'Seguridad', espacios: 'Huella-Espacio' },
+            layer: { contorno: 'Contorno', puertas: 'Puertas', luz: 'Conexiones de luz', zonas: 'Zonas', niveles: 'Niveles', transito: 'Tránsito', seguridad: 'Seguridad', espacios: 'Huella' },
             zone: { dry: 'Seco', cold: 'Refrigerado', chemical: 'Químicos', finished: 'Producto terminado', dock: 'Andén', office: 'Oficina', aisle: 'Pasillo principal', aisle2: 'Pasillo entre anaqueles' },
         },
         en: {
