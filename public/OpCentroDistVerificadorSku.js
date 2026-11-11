@@ -118,7 +118,7 @@
             detail.innerHTML = `<section class="vf-card" data-help-key="verificadorFicha">
                     <h2>${esc(a.sku)} · ${esc(a.uniqueDescription || a.knownDescription || a.customDescription || a.upc)}</h2>
                     <div class="vf-grid">
-                        ${fieldRow('main.colArticuloUpc', a.upc)}${fieldRow('main.colArticuloDescConocida', a.knownDescription)}${fieldRow('main.colArticuloDescPersonalizada', a.customDescription)}
+                        ${fieldRow('main.colArticuloUpc', a.upc)}${fieldRow('main.colArticuloCodigoCliente', a.clientCode)}${fieldRow('main.colArticuloDescConocida', a.knownDescription)}${fieldRow('main.colArticuloDescPersonalizada', a.customDescription)}
                         ${fieldRow('main.colArticuloUdm', a.mainUom)}${fieldRow('main.colArticuloTipo', TYPE_KEYS[a.articleType] ? t(TYPE_KEYS[a.articleType]) : a.articleType)}
                         ${fieldRow('main.colArticuloAlto', a.height, 'cm')}${fieldRow('main.colArticuloLargo', a.length, 'cm')}${fieldRow('main.colArticuloAncho', a.width, 'cm')}
                         ${fieldRow('main.colArticuloPesoArticulo', a.articleWeight, 'kg')}${fieldRow('main.colArticuloPesoEmpaque', a.packageWeight, 'kg')}

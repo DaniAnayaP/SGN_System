@@ -5266,6 +5266,8 @@ const SKU_DEPARTMENT_CODE = 'CS'; // Cadena de Suministro (preparado: cada depar
 const SKU_AREA_CODE = 'CD';       // Centro de Distribución
 ensureColumn('sku_items', 'sku_code', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('clients', 'sku_prefix', "TEXT NOT NULL DEFAULT ''");
+// «Código del cliente»: el número de código del propio cliente (el de su ERP, por ejemplo 195201). Opcional, no cuenta para los 24 datos que completan un código y no cambia el SKU.
+ensureColumn('sku_items', 'client_code', "TEXT NOT NULL DEFAULT ''");
 const SKU_NAME_PARTICLES = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e', 'en', 'al', 'para', 'por', 'con', 'sin', 'a']);
 function skuPrefixCandidates(companyName) {
     const words = String(companyName || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().split(/[^A-Z]+/).filter(Boolean);
@@ -5385,6 +5387,8 @@ const SKU_ITEM_PATCHABLE_FIELDS = {
     maxStack: { column: 'max_stack', fieldKey: 'main.colArticuloMaxEstiba', optional: true },
     // Clasificación: opcional, no cuenta para los 24 datos que completan un código (ver isSkuItemComplete en server.js); se guarda el id (ver classification_id arriba).
     classificationId: { column: 'classification_id', fieldKey: 'main.colArticuloClasificacion', optional: true },
+    // Código del cliente (su número de ERP): opcional, no cuenta para los 24 datos que completan un código (ver isSkuItemComplete en server.js); se guarda tal cual, sin cambiar ceros ni formato.
+    clientCode: { column: 'client_code', fieldKey: 'main.colArticuloCodigoCliente', optional: true },
 };
 
 // Cuántos códigos tienen una clasificación (o, con categoryName, los de esa Categoría Inventario que la tienen): impide borrarla o quitársela a su categoría con códigos puestos.
@@ -5740,7 +5744,7 @@ function listManualOrderItems(clientId, isTest = false, costCenterId = 0, placeI
         related = ' AND id IN (SELECT sku_item_id FROM code_relations WHERE client_id = ? AND is_test_data = ? AND cost_center_id = ?)';
         extra.push(clientId, isTest ? 1 : 0, costCenterId);
     }
-    return db.prepare(`SELECT id, record_number, sku_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ?${related} ORDER BY record_number ASC`)
+    return db.prepare(`SELECT id, record_number, sku_code, client_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ?${related} ORDER BY record_number ASC`)
         .all(clientId, isTest ? 1 : 0, ...extra);
 }
 // Cuántos códigos tiene habilitados cada lugar de envío (en el centro del QR, si lo hay): Map(placeId -> n).
@@ -5758,7 +5762,7 @@ function listManualItemShips(clientId, isTest = false) {
     return db.prepare('SELECT DISTINCT sku_item_id, cost_center_id, place_id FROM code_ship_relations WHERE client_id = ? AND is_test_data = ?').all(clientId, isTest ? 1 : 0);
 }
 function getManualOrderItem(clientId, id, isTest = false) {
-    return db.prepare(`SELECT id, record_number, sku_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id = ?`)
+    return db.prepare(`SELECT id, record_number, sku_code, client_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id = ?`)
         .get(clientId, isTest ? 1 : 0, id);
 }
 // Guarda un pedido con todos sus renglones en una sola operación. lines = [{ skuItemId, code, description, uom, categories, quantity, needBy }]. La hora la pone el servidor.
@@ -6423,7 +6427,7 @@ function countZoneCodesByCategory(clientId, forTestAccount, zoneId, categoryType
 }
 // Buscador de la página pública del QR del Layout: los códigos que ya tienen ficha pública (los completos; nunca los que les faltan datos) y los lugares donde está cada uno.
 function listPublicSkuItemsForSearch(clientId) {
-    return db.prepare("SELECT id, record_number, sku_code, upc, unique_description, known_description, custom_description, category_inventario, public_token FROM sku_items WHERE client_id = ? AND is_test_data = 0 AND public_token IS NOT NULL AND public_token != '' ORDER BY record_number ASC")
+    return db.prepare("SELECT id, record_number, sku_code, client_code, upc, unique_description, known_description, custom_description, category_inventario, public_token FROM sku_items WHERE client_id = ? AND is_test_data = 0 AND public_token IS NOT NULL AND public_token != '' ORDER BY record_number ASC")
         .all(clientId);
 }
 function listCodePlacesForSearch(clientId) {
@@ -6433,7 +6437,7 @@ function listCodePlacesForSearch(clientId) {
 // Página pública de una clasificación: los códigos de UNA categoría Inventario (por su nombre, que es lo que guarda el código) que Relación Código tiene en una zona, con su clasificación y
 // cada lugar donde están (anaquel, nivel y espacio). Una fila por lugar; quien llama agrupa por código.
 function listZoneCodesWithPlaces(clientId, zoneId, categoryName) {
-    return db.prepare(`SELECT s.id, s.record_number, s.sku_code, s.upc, s.unique_description, s.known_description, s.custom_description, s.classification_id, s.public_token, s.evidence_front,
+    return db.prepare(`SELECT s.id, s.record_number, s.sku_code, s.client_code, s.upc, s.unique_description, s.known_description, s.custom_description, s.classification_id, s.public_token, s.evidence_front,
             r.space_id, r.level, r.slot
         FROM code_relations r JOIN sku_items s ON s.id = r.sku_item_id
         WHERE r.client_id = ? AND r.is_test_data = 0 AND s.is_test_data = 0 AND r.zone_id = ? AND s.category_inventario = ? ORDER BY r.id ASC`)
@@ -6739,9 +6743,9 @@ function findCodeRelationDuplicate(clientId, forTestAccount, v, exceptId = 0) {
 // Búsqueda de artículos por SKU (con ceros), UPC o descripción para el selector de código.
 function searchSkuItems(clientId, term, forTestAccount = false, limit = 20) {
     const like = `%${String(term || '').trim().replace(/[%_]/g, '')}%`;
-    return db.prepare(`SELECT id, record_number, sku_code, upc, unique_description, known_description, custom_description, main_uom, length, width, height, packaging FROM sku_items
-        WHERE client_id = ? AND is_test_data = ? AND (printf('%06d', record_number) LIKE ? OR sku_code LIKE ? OR upc LIKE ? OR unique_description LIKE ? OR known_description LIKE ? OR custom_description LIKE ?)
-        ORDER BY record_number ASC LIMIT ?`).all(clientId, forTestAccount ? 1 : 0, like, like, like, like, like, like, limit);
+    return db.prepare(`SELECT id, record_number, sku_code, client_code, upc, unique_description, known_description, custom_description, main_uom, length, width, height, packaging FROM sku_items
+        WHERE client_id = ? AND is_test_data = ? AND (printf('%06d', record_number) LIKE ? OR sku_code LIKE ? OR client_code LIKE ? OR upc LIKE ? OR unique_description LIKE ? OR known_description LIKE ? OR custom_description LIKE ?)
+        ORDER BY record_number ASC LIMIT ?`).all(clientId, forTestAccount ? 1 : 0, like, like, like, like, like, like, like, limit);
 }
 
 

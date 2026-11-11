@@ -66,6 +66,7 @@
         if (c.key === 'sku') return [t('main.tplInstSku'), 'CMCSCD000123'];
         if (c.key === 'uniqueDescription') return [t('main.tplInstDesc'), 'Paracetamol 500 mg tabletas, caja con 20'];
         if (c.key === 'upc') return [t('main.tplInstUpc'), '7501003126410'];
+        if (c.key === 'clientCode') return [t('main.tplInstClientCode'), '195201'];
         if (c.kind === 'udm') return [t('main.tplInstUdm', { list: options(ctx && ctx.udm) }), ((ctx && ctx.udm) || [])[0] || ''];
         if (c.kind === 'type') return [t('main.tplInstType'), 'Artículo Terminado'];
         if (c.kind === 'storagetype') return [t('main.tplInstStorage'), 'Por UDM de pallets'];
@@ -78,7 +79,7 @@
     function downloadTemplate() {
         const required = (c) => (c.key === 'uniqueDescription' ? t('main.tplYes') : t('main.tplNo'));
         const bytes = X.writeXlsx([
-            { name: t('main.tplSheetTemplate'), rows: [COLS.map(header)], widths: COLS.map((c) => Math.max(14, header(c).length + 4)), headerRow: true, textColumns: [0, 1] },
+            { name: t('main.tplSheetTemplate'), rows: [COLS.map(header)], widths: COLS.map((c) => Math.max(14, header(c).length + 4)), headerRow: true, textColumns: [0, 1, 2] },
             {
                 name: t('main.tplSheetHelp'),
                 rows: [

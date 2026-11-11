@@ -53,7 +53,9 @@
     const TIPO_CODIGO_COLUMN = { key: 'categoryTipoCodigo', es: 'Tipo Código', en: 'Code Type', col: 'colArticuloCategoriaTipoCodigo', kind: 'category', type: 'tipocodigo', aliases: ['tipo de codigo', 'tipo codigo'] };
     // Tipo de almacenamiento y estiba (STORAGE_COLUMN, UNITS_PER_LAYER_COLUMN, LAYERS_PER_PALLET_COLUMN, MAX_STACK_COLUMN) ya no se capturan en Alta ni en su plantilla: pasan a Presentaciones de Distribución. Se dejan definidas
     // aquí para cuando se necesiten de nuevo; un archivo que las traiga solo las ignora (no son columnas conocidas).
-    const ALL_COLUMNS = [SKU_COLUMN, ...COLUMNS, TIPO_CODIGO_COLUMN, CLASSIFICATION_COLUMN];
+    // Código del cliente (su número de ERP, por ejemplo 195201): opcional, va junto al UPC; no cambia el SKU. La App sigue con COLUMNS.
+    const CLIENT_CODE_COLUMN = { key: 'clientCode', es: 'Código del Cliente', en: 'Client Code', col: 'colArticuloCodigoCliente', kind: 'text', aliases: ['codigo cliente', 'codigo de cliente', 'codigo erp', 'numero erp', 'erp', 'client code', 'customer code'] };
+    const ALL_COLUMNS = [SKU_COLUMN, COLUMNS[0], CLIENT_CODE_COLUMN, ...COLUMNS.slice(1), TIPO_CODIGO_COLUMN, CLASSIFICATION_COLUMN];
     const BY_KEY_ALL = Object.fromEntries(ALL_COLUMNS.map((c) => [c.key, c]));
     const indexFor = (cols) => {
         const map = new Map();

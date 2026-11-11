@@ -538,6 +538,7 @@ function buildRow(record) {
     const cells = {};
     [
         ['colArticuloUpc', 'upc'],
+        ['colArticuloCodigoCliente', 'clientCode'],
         ['colArticuloDescUnica', 'uniqueDescription'],
         ['colArticuloDescConocida', 'knownDescription'],
         ['colArticuloDescPersonalizada', 'customDescription'],
@@ -604,6 +605,7 @@ function buildRow(record) {
         textCellSystem('colArticuloRegistroUnico', record.registroUnico),
         textCell('colArticuloSku', record.sku),
         cells.colArticuloUpc,
+        cells.colArticuloCodigoCliente,
         cells.colArticuloDescUnica,
         cells.colArticuloDescConocida,
         cells.colArticuloDescPersonalizada,
@@ -672,7 +674,7 @@ let skuFetchToken = 0;
 
 const skuSearchText = () => (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
 function skuMatchesText(record, text) {
-    const haystack = [record.sku, record.upc, record.uniqueDescription, record.knownDescription].map((v) => String(v || '')).join(' ').toLowerCase();
+    const haystack = [record.sku, record.clientCode, record.upc, record.uniqueDescription, record.knownDescription].map((v) => String(v || '')).join(' ').toLowerCase();
     return SearchSyntax.matches('contains', text, haystack);
 }
 function computeSkuView() {
@@ -1054,6 +1056,7 @@ function renderNewRecordButton() {
 // user can't edit renders disabled here too, same as the table's own cells.
 const TEXT_FIELDS = [
     ['colArticuloUpc', 'upc', 'main.colArticuloUpc'],
+    ['colArticuloCodigoCliente', 'clientCode', 'main.colArticuloCodigoCliente'],
     ['colArticuloDescUnica', 'uniqueDescription', 'main.colArticuloDescUnica'],
     ['colArticuloDescConocida', 'knownDescription', 'main.colArticuloDescConocida'],
     ['colArticuloDescPersonalizada', 'customDescription', 'main.colArticuloDescPersonalizada'],

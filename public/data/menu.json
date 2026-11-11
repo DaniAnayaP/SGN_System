@@ -1699,6 +1699,7 @@
               ]
             },
             { "id": "colArticuloUpc", "labelKey": "main.colArticuloUpc", "permissionOnly": true },
+            { "id": "colArticuloCodigoCliente", "labelKey": "main.colArticuloCodigoCliente", "permissionOnly": true },
             { "id": "colArticuloDescUnica", "labelKey": "main.colArticuloDescUnica", "permissionOnly": true },
             { "id": "colArticuloDescConocida", "labelKey": "main.colArticuloDescConocida", "permissionOnly": true },
             { "id": "colArticuloDescPersonalizada", "labelKey": "main.colArticuloDescPersonalizada", "permissionOnly": true },

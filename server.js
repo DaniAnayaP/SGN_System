@@ -6280,6 +6280,7 @@ function mapSkuItemRecord(row, pendingByRecord, companyName) {
         id: row.id,
         registroUnico: row.db_id,
         sku: padSku(row.record_number, row.sku_code),
+        clientCode: row.client_code || '',
         upc: row.upc,
         uniqueDescription: row.unique_description,
         knownDescription: row.known_description,
@@ -7935,7 +7936,7 @@ function manualItemsFor(clientId, isTest, costCenterId = 0, placeId = 0) {
         const cats = [r.category_inventario, r.category_compra, r.category_almacenamiento, r.category_rotacion, r.category_manejo, r.category_riesgo, r.category_vidautil].map((c) => String(c || '').trim()).filter(Boolean);
         return {
             id: r.id, code: r.upc || sku, description: r.custom_description || r.known_description || r.unique_description || '', unique: r.unique_description || '', uom: r.main_uom || '', categories: [...new Set(cats)].join(' · '),
-            by: { code: [r.upc, sku, String(r.record_number), padSku(r.record_number)].map(foldText), desc: [r.unique_description, r.known_description, r.custom_description].map(foldText), uom: [r.main_uom].map(foldText), cat: cats.map(foldText) },
+            by: { code: [r.upc, r.client_code, sku, String(r.record_number), padSku(r.record_number)].map(foldText), desc: [r.unique_description, r.known_description, r.custom_description].map(foldText), uom: [r.main_uom].map(foldText), cat: cats.map(foldText) },
         };
     });
     manualItemsCache.set(key, { at: Date.now(), items });
@@ -8684,7 +8685,7 @@ app.get('/api/business/qr-apps/ficha', requireAuth, (req, res) => {
         if (!SearchSyntax.ready(mode, query)) list = [];
         else {
             const matches = publicSearchMatcher(mode, query);
-            list = list.filter((r) => matches([padSku(r.record_number, r.sku_code), padSku(r.record_number), r.upc, r.unique_description, r.known_description, r.custom_description]));
+            list = list.filter((r) => matches([padSku(r.record_number, r.sku_code), padSku(r.record_number), r.client_code, r.upc, r.unique_description, r.known_description, r.custom_description]));
         }
     }
     res.set('Cache-Control', 'no-store');
@@ -9391,7 +9392,7 @@ function publicSearchData(clientId) {
         name: r.custom_description || r.known_description || r.unique_description || '',
         // cada campo se revisa por separado, como la celda de una columna (el código con y sin ceros a la izquierda); by = los campos de cada opción del buscador (SKU, Descripción, Categoría)
         by: {
-            sku: [padSku(r.record_number, r.sku_code), padSku(r.record_number), String(r.record_number), r.upc].map(foldText),
+            sku: [padSku(r.record_number, r.sku_code), padSku(r.record_number), String(r.record_number), r.client_code, r.upc].map(foldText),
             desc: [r.unique_description, r.known_description, r.custom_description].map(foldText),
             cat: [r.category_inventario].map(foldText),
         },
@@ -9542,7 +9543,7 @@ app.get('/api/public/layout/:token/classification', publicSearchLimiter, async (
             const sku = padSku(code.record_number, code.sku_code);
             return {
                 code, places, sku, name: code.custom_description || code.known_description || code.unique_description || '',
-                fields: [sku, padSku(code.record_number), String(code.record_number), code.upc, code.unique_description, code.known_description, code.custom_description, ...(locks.where ? [...places.map((p) => p.space), ...places.filter((p) => p.level).map((p) => `nivel ${p.level}`)] : [])].map(foldText),
+                fields: [sku, padSku(code.record_number), String(code.record_number), code.client_code, code.upc, code.unique_description, code.known_description, code.custom_description, ...(locks.where ? [...places.map((p) => p.space), ...places.filter((p) => p.level).map((p) => `nivel ${p.level}`)] : [])].map(foldText),
             };
         });
         const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
@@ -10405,7 +10406,7 @@ app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
         else {
             const matches = publicSearchMatcher(mode, query);
             found = searchSkuItems(req.user.clientId, '', req.user.isTestAccount, 100000)
-                .filter((s) => matches([padSku(s.record_number, s.sku_code), padSku(s.record_number), s.upc, s.unique_description, s.known_description, s.custom_description]))
+                .filter((s) => matches([padSku(s.record_number, s.sku_code), padSku(s.record_number), s.client_code, s.upc, s.unique_description, s.known_description, s.custom_description]))
                 .slice(0, limit);
         }
     } else {
@@ -10770,7 +10771,7 @@ app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
         const query = publicSearchQuery(req.query.q);
         if (SearchSyntax.ready(mode, query)) {
             const matches = publicSearchMatcher(mode, query);
-            const found = searchSkuItems(clientId, '', isTestAccount, 100000).filter((s) => matches([padSku(s.record_number, s.sku_code), padSku(s.record_number), s.upc, s.unique_description, s.known_description, s.custom_description]));
+            const found = searchSkuItems(clientId, '', isTestAccount, 100000).filter((s) => matches([padSku(s.record_number, s.sku_code), padSku(s.record_number), s.client_code, s.upc, s.unique_description, s.known_description, s.custom_description]));
             truncated = found.length > UDM_DIST_SEARCH_LIMIT;
             const ids = found.slice(0, UDM_DIST_SEARCH_LIMIT).map((s) => s.id);
             source = listSkuDistributionBySkus(clientId, isTestAccount, ids);
