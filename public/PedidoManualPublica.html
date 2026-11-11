@@ -485,16 +485,14 @@ function view() {
     closePop();
     if (sentInfo) { viewSent(); return; }
     const locks = info.locks || {};
-    // Dentro de la pantalla de Operaciones > QR's (la computadora) la ruta y el encabezado de arriba ya dicen qué pantalla es y de qué centro: la tarjeta con el título y el centro sobra. En el celular se queda.
-    const embedded = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
-    const header = embedded ? '' : `<div class="card"><h1>${esc(TEXT.title)}</h1>${info.costCenter ? `<span class="chip">${esc((info.costCenter.code ? `${info.costCenter.code} · ` : '') + info.costCenter.name)}</span>` : ''}</div>`;
-    if (!locks.register) { $('view').innerHTML = `${header}<div class="card"><div class="msg">${esc(TEXT.viewOnly)}</div></div>`; return; }
-    if (locks.signin && !info.signedIn) { $('view').innerHTML = `${header}<div class="card"><div class="msg">${esc(TEXT.loginNeeded)}</div><a class="btn alt" style="text-align:center;text-decoration:none" href="/">${esc(TEXT.login)}</a><div class="muted" style="text-align:center">${esc(TEXT.loginHint)}</div></div>`; return; }
+    // Sin tarjeta de título ni chip del centro: el encabezado de arriba (logo, «Pedido Manual», sitio y empresa) ya dice qué pantalla es y de dónde.
+    if (!locks.register) { $('view').innerHTML = `<div class="card"><div class="msg">${esc(TEXT.viewOnly)}</div></div>`; return; }
+    if (locks.signin && !info.signedIn) { $('view').innerHTML = `<div class="card"><div class="msg">${esc(TEXT.loginNeeded)}</div><a class="btn alt" style="text-align:center;text-decoration:none" href="/">${esc(TEXT.login)}</a><div class="muted" style="text-align:center">${esc(TEXT.loginHint)}</div></div>`; return; }
     // Lista (celular): el buscador es una tarjeta aparte y el artículo elegido se afina abajo. Tabla: el buscador va DENTRO de la celda «Artículo» de la tabla y al elegir un artículo se agrega su renglón para escribir cuánto quieres cada día.
     // En la lista (celular) PRIMERO se pide quién pide y el lugar que solicita (tarjeta de arriba) y ya después se habilita la lista de códigos.
     const whoCard = wide ? '' : `<div class="card" id="whocard">${whoFieldHtml()}${placeFieldHtml()}</div>`;
     const searchCard = wide ? '' : `<div class="card" id="searchcard"><h2>${esc(TEXT.searchTitle)}</h2>${panelHtml()}<div id="results"></div></div><div id="selbox"></div>`;
-    $('view').innerHTML = `${header}${whoCard}${searchCard}<div class="card" id="orderbox"></div>`;
+    $('view').innerHTML = `${whoCard}${searchCard}<div class="card" id="orderbox"></div>`;
     listWasReady = listReady();
     syncLock();
     drawResults(); drawSel(); drawOrder();
