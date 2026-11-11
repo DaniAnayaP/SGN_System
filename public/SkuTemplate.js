@@ -37,6 +37,8 @@
 
     // sin mayúsculas, acentos, paréntesis (las unidades) ni signos: "Alto (cm)" y "alto" son la misma columna
     const norm = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+    // La Descripción Única nunca se repite: se compara sin mayúsculas, sin acentos y sin espacios de más (los signos y los números sí cuentan: «Tornillo (10 mm)» y «Tornillo (12 mm)» son distintas).
+    const descKey = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
     // Columnas nuevas de la carga con actualización (Web): SKU = el registro único de cada código (lo asigna el sistema) y Clasificación (se guarda su id, aquí va el nombre). La App sigue con
     // COLUMNS (las 18 de siempre) y las mismas funciones de siempre; lo nuevo es ALL_COLUMNS, planRow y rowsFromMatrix(matrix, { full: true }).
     const SKU_COLUMN = { key: 'sku', es: 'SKU', en: 'SKU', kind: 'sku', aliases: ['registro unico', 'sku del sistema', 'codigo sku'] };
@@ -201,6 +203,7 @@
     //   classifications: { all: [nombres], byCategory: { [categoría Inventario]: [nombres] } },
     //   itemBySku(n), itemByUpc(upc),             // artículo existente: { sku, upc, complete, v: { campo: valor actual } } o null
     //   priorRowWithKey(key, row),                // fila anterior del archivo que ya usa ese mismo código (0 = ninguna)
+    //   itemByDescription(clave),                 // código que ya tiene esa Descripción Única (clave = descKey) o null
     // }
     const sameValue = (a, b) => (typeof b === 'number' ? Number(a) === b : String(a == null ? '' : a) === String(b));
     const isEmptyValue = (v) => v === '' || v == null || v === 0;
@@ -260,6 +263,17 @@
             }
             if (c.kind === 'category' && !matchName(value, (ctx.categories || {})[c.type])) return fail(c.key, 'categoryUnknown', { label: c.es, labelEn: c.en, value });
         }
+        // La Descripción Única nunca se repite: ni con otro código que ya existe ni con otra fila del archivo. Vacía no cuenta.
+        let descKeyOfRow = '';
+        if (chosen('uniqueDescription') && val('uniqueDescription')) {
+            const k = descKey(val('uniqueDescription'));
+            const ownSku = item ? item.sku : (web ? String(skuNum).padStart(6, '0') : '');
+            const holder = ctx.itemByDescription ? ctx.itemByDescription(k) : null;
+            if (holder && holder.sku !== ownSku) return fail('uniqueDescription', 'descExists', { sku: holder.sku });
+            descKeyOfRow = `desc:${k}`;
+            const priorDesc = ctx.priorRowWithKey ? ctx.priorRowWithKey(descKeyOfRow, row) : 0;
+            if (priorDesc) return fail('uniqueDescription', 'descDuplicateFile', { row: priorDesc });
+        }
         // lo que se escribiría, normalizado (nombre exacto del catálogo, tipo en su clave, números como número)
         const incoming = {};
         for (const c of ALL_COLUMNS) {
@@ -283,7 +297,7 @@
             const allowed = allowedFor(categoryNow);
             if (!matchName(incoming.classificationId, allowed)) return fail('classificationId', 'classNotOfCategory', { value: incoming.classificationId, category: categoryNow, options: allowed.slice(0, 8).join(', ') || '—' });
         }
-        if (!item) return { action: 'create', patch: incoming, key, upcKey, sku: web ? skuNum : undefined };
+        if (!item) return { action: 'create', patch: incoming, key, upcKey, descKey: descKeyOfRow, sku: web ? skuNum : undefined };
         const changes = [];
         Object.entries(incoming).forEach(([field, to]) => {
             const from = item.v[field] == null ? '' : item.v[field];
@@ -294,8 +308,8 @@
         const clears = [];
         if (incoming.categoryInventario && incoming.categoryInventario !== item.v.categoryInventario && item.v.classificationId && incoming.classificationId === undefined
             && !matchName(item.v.classificationId, allowedFor(incoming.categoryInventario))) clears.push('classificationId');
-        if (!changes.length && !clears.length) return { action: 'same', item, key, upcKey };
-        return { action: 'update', item, key, upcKey, changes, clears, patch: Object.fromEntries(changes.map((c) => [c.key, c.to])) };
+        if (!changes.length && !clears.length) return { action: 'same', item, key, upcKey, descKey: descKeyOfRow };
+        return { action: 'update', item, key, upcKey, descKey: descKeyOfRow, changes, clears, patch: Object.fromEntries(changes.map((c) => [c.key, c.to])) };
     }
 
     const MESSAGES_ES = {
@@ -314,6 +328,8 @@
         skuRequired: () => 'SKU: es obligatorio (el número de tu código, por ejemplo 195201).',
         skuDuplicateFile: (p) => `Ese SKU ya está en la fila ${p.row} de tu archivo. Quita una de las dos filas.`,
         skuExists: (p) => `El SKU ${p.sku} ya existe. Vuelve a revisar el archivo.`,
+        descExists: (p) => `Esa Descripción Única ya la tiene el SKU ${p.sku}. La Descripción Única no se puede repetir: corrígela.`,
+        descDuplicateFile: (p) => `Esa Descripción Única ya está en la fila ${p.row} de tu archivo. La Descripción Única no se puede repetir: corrígela o quita la fila.`,
         skuUnknown: (p) => `El SKU ${p.sku} no existe. El SKU lo asigna el sistema: déjalo vacío si la fila es nueva, o corrígelo.`,
         keyRequired: () => 'Escribe el UPC (o el SKU, si el código ya existe).',
         classUnknown: (p) => `Clasificación: «${p.value}» no está en el catálogo.`,
@@ -322,5 +338,5 @@
     };
     const message = (err) => (err ? (MESSAGES_ES[err.code] || (() => err.code))(err.params || {}) : '');
 
-    return { MAX_ROWS, COLUMNS, BY_KEY, ALL_COLUMNS, BY_KEY_ALL, TYPE_LABELS, STORAGE_LABELS, norm, mapHeaders, rowsFromMatrix, parseDelimited, validateRow, normalizeRow, planRow, message };
+    return { MAX_ROWS, COLUMNS, BY_KEY, ALL_COLUMNS, BY_KEY_ALL, TYPE_LABELS, STORAGE_LABELS, norm, descKey, mapHeaders, rowsFromMatrix, parseDelimited, validateRow, normalizeRow, planRow, message };
 }));

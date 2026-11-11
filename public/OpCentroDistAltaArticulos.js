@@ -267,7 +267,7 @@ async function patchSkuItem(id, patch) {
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'error');
+            Dashboard.showToast(body.code === 'DESC_UNIQUE' ? Dashboard.t('main.skuDescRepetida').replace('{sku}', body.sku) : (body.message || Dashboard.t('admin.saveError')), body.code === 'DESC_UNIQUE' ? 'warning' : 'error');
             await refreshTable();
             return;
         }
@@ -1226,6 +1226,12 @@ createForm?.addEventListener('submit', async (event) => {
     const saveBtn = document.getElementById('new-sku-save');
     saveBtn.disabled = true;
     try {
+        // La Descripción Única nunca se repite: se revisa ANTES de crear el registro para no dejar uno vacío
+        const descInput = createForm.elements.namedItem('uniqueDescription');
+        if (descInput && !descInput.disabled && descInput.value.trim()) {
+            const check = await fetch(`/api/business/sku-items/description-taken?text=${encodeURIComponent(descInput.value.trim())}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+            if (check && check.sku) throw new Error(Dashboard.t('main.skuDescRepetida').replace('{sku}', check.sku));
+        }
         const res = await fetch('/api/business/sku-items', { method: 'POST', credentials: 'include' });
         if (!res.ok) {
             const body = await res.json().catch(() => null);

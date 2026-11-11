@@ -5261,6 +5261,11 @@ function listSkuItemUpcs(clientId, forTestAccount = false) {
     return db.prepare("SELECT upc, record_number FROM sku_items WHERE client_id = ? AND is_test_data = ? AND upc != ''").all(clientId, forTestAccount ? 1 : 0);
 }
 
+// Las Descripciones Únicas que ya existen (con su SKU): la regla «nunca se repite» las compara en el servidor.
+function listSkuUniqueDescriptions(clientId, forTestAccount = false) {
+    return db.prepare("SELECT id, record_number, unique_description FROM sku_items WHERE client_id = ? AND is_test_data = ? AND unique_description != ''").all(clientId, forTestAccount ? 1 : 0);
+}
+
 function listSkuItems(clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM sku_items WHERE client_id = ? AND is_test_data = ? ORDER BY record_number ASC').all(clientId, forTestAccount ? 1 : 0);
 }
@@ -12913,6 +12918,7 @@ module.exports = {
     findCodeRelationDuplicate,
     searchSkuItems,
     listSkuItemUpcs,
+    listSkuUniqueDescriptions,
     deleteArticleCategory,
     resolveEscalationHolder,
     getCatalogValueRequestById,

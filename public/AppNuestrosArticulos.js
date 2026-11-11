@@ -358,7 +358,7 @@ async function patchRecord(id, patch) {
         }
         const body = result.body;
         if (!result.ok) {
-            showToast(body.message || t('admin.saveError'));
+            showToast(body.code === 'DESC_UNIQUE' ? t('main.skuDescRepetida').replace('{sku}', body.sku) : (body.message || t('admin.saveError')));
             await loadRecords();
             render();
             return;

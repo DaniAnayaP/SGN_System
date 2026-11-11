@@ -225,6 +225,7 @@
                 udm: options.udm || [], categories: Object.fromEntries(CAT_COLS.map((c) => [c.type, options[c.type] || []])),
                 classifications: context.classifications || { all: [], byCategory: {} },
                 bySku: new Map(items.map((i) => [Number(i.sku), i])), byUpc: new Map(items.filter((i) => i.upc).map((i) => [i.upc, i])),
+                byDesc: new Map(items.filter((i) => i.v && i.v.uniqueDescription).map((i) => [T.descKey(i.v.uniqueDescription), i])),
             };
             fillDatalists();
         } catch (err) {
@@ -334,14 +335,14 @@
         const accepted = new Map();
         const local = {
             allowUpdate: true, selected, udm: ctx.udm, categories: ctx.categories, classifications: ctx.classifications,
-            itemBySku: (n) => ctx.bySku.get(n) || null, itemByUpc: (upc) => ctx.byUpc.get(upc) || null,
+            itemBySku: (n) => ctx.bySku.get(n) || null, itemByUpc: (upc) => ctx.byUpc.get(upc) || null, itemByDescription: (k) => ctx.byDesc.get(k) || null,
             priorRowWithKey: (key, row) => { const n = accepted.get(key); return n && n !== row.n ? n : 0; },
         };
         rows.forEach((r) => {
             if (r.out) { r.plan = null; r.err = null; return; }
             r.plan = T.planRow(r, local);
             r.err = r.plan.error || null;
-            if (!r.err) { accepted.set(r.plan.key, r.n); if (r.plan.upcKey) accepted.set(r.plan.upcKey, r.n); }
+            if (!r.err) { accepted.set(r.plan.key, r.n); if (r.plan.upcKey) accepted.set(r.plan.upcKey, r.n); if (r.plan.descKey) accepted.set(r.plan.descKey, r.n); }
         });
     }
     // el dato con error en una columna que no se ve (por ejemplo el UPC cuando el archivo solo trae SKU) se corrige en la llave que sí se ve
@@ -382,7 +383,7 @@
         const remove = t('main.tplRemoveRow');
         if (r.out) set('tpl-tag-grey', t('main.tplStateRemoved'), 'tpl-what-grey', t('main.tplRemovedHint'), t('main.tplRestoreRow'));
         else if (r.err) {
-            const dup = r.err.code === 'upcExists' || r.err.code === 'upcDuplicateFile' || r.err.code === 'skuDuplicateFile' || r.err.code === 'skuExists';
+            const dup = ['upcExists', 'upcDuplicateFile', 'skuDuplicateFile', 'skuExists', 'descExists', 'descDuplicateFile'].includes(r.err.code);
             set('tpl-tag-bad', t(dup ? 'main.tplStateRepeated' : 'main.tplStateInvalid'), 'tpl-what-bad', errText(r.err), remove);
         } else if (plan.action === 'create') {
             const n = Object.keys(plan.patch).length + 1; // + el SKU

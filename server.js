@@ -215,6 +215,7 @@ const {
     findCodeRelationDuplicate,
     searchSkuItems,
     listSkuItemUpcs,
+    listSkuUniqueDescriptions,
     deleteArticleCategory,
     resolveEscalationHolder,
     getCatalogValueRequestById,
@@ -6392,6 +6393,18 @@ app.get('/api/business/sku-items/upcs', requireAuth, (req, res) => {
 // Sin "columns" se cargan todas las columnas que traiga la fila; con ella, solo las elegidas (el SKU y el UPC siempre son llaves). Una celda vacía nunca borra lo que el código ya tiene.
 const SkuTemplate = require('./public/SkuTemplate.js');
 const SearchSyntax = require('./public/SearchSyntax.js');
+// La Descripción Única de un código nunca se repite entre los códigos de la empresa (sin importar mayúsculas, acentos ni espacios de más). Devuelve el SKU (con ceros) que ya la tiene, o null. Vacía no cuenta.
+function skuUniqueDescriptionOwner(clientId, isTest, text, exceptId = 0) {
+    const key = SkuTemplate.descKey(text);
+    if (!key) return null;
+    const hit = listSkuUniqueDescriptions(clientId, isTest).find((r) => r.id !== exceptId && SkuTemplate.descKey(r.unique_description) === key);
+    return hit ? String(hit.record_number).padStart(6, '0') : null;
+}
+app.get('/api/business/sku-items/description-taken', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ sku: skuUniqueDescriptionOwner(req.user.clientId, req.user.isTestAccount, String(req.query.text || ''), Number(req.query.except) || 0) });
+});
 // Un código para la carga por plantilla: { id, sku, upc, complete, v: { campo: valor actual } } (solo los datos que ya tiene; la clasificación va con su nombre).
 function skuTemplateItem(row, classificationNames) {
     const v = {};
@@ -6440,12 +6453,13 @@ app.post('/api/business/sku-items/import', requireAuth, requireCostCenter, (req,
     const items = listSkuItems(clientId, isTestAccount).map((r) => skuTemplateItem(r, cls.names));
     const bySku = new Map(items.map((i) => [Number(i.sku), i]));
     const byUpc = new Map(items.filter((i) => i.upc).map((i) => [i.upc, i]));
+    const byDesc = new Map(items.filter((i) => i.v.uniqueDescription).map((i) => [SkuTemplate.descKey(i.v.uniqueDescription), i]));
     const accepted = new Map();
     const categories = {};
     SkuTemplate.ALL_COLUMNS.filter((c) => c.kind === 'category').forEach((c) => { categories[c.type] = listActiveArticleCategoryNames(clientId, c.type, isTestAccount); });
     const ctx = {
         allowUpdate, selected, udm: listActiveArticleCategoryNames(clientId, 'udm', isTestAccount), categories, classifications: { all: cls.all, byCategory: cls.byCategory },
-        itemBySku: (n) => bySku.get(n) || null, itemByUpc: (upc) => byUpc.get(upc) || null,
+        itemBySku: (n) => bySku.get(n) || null, itemByUpc: (upc) => byUpc.get(upc) || null, itemByDescription: (k) => byDesc.get(k) || null,
         priorRowWithKey: (key, row) => { const n = accepted.get(key); return n && n !== row.n ? n : 0; },
     };
     // Cada dato que se escribe necesita su propia hoja, igual que en la tabla: llenar uno vacío pide Ver y Operar (o Modificar); cambiar uno que ya tenía pide Modificar y, como en la tabla, queda
@@ -6467,7 +6481,7 @@ app.post('/api/business/sku-items/import', requireAuth, requireCostCenter, (req,
     const unchanged = [];
     const completeSkipped = [];
     const failed = [];
-    const accept = (plan, n) => { accepted.set(plan.key, n); if (plan.upcKey) accepted.set(plan.upcKey, n); };
+    const accept = (plan, n) => { accepted.set(plan.key, n); if (plan.upcKey) accepted.set(plan.upcKey, n); if (plan.descKey) accepted.set(plan.descKey, n); };
     const changedBy = changedByLabel(req);
     const classIdOf = (name, category) => { const found = inventoryClassificationsFor(clientId, isTestAccount, category).find((r) => r.name === name); return found ? found.id : null; };
     const className = (id) => classificationNameOf(clientId, isTestAccount, id);
@@ -6496,6 +6510,7 @@ app.post('/api/business/sku-items/import', requireAuth, requireCostCenter, (req,
                 accept(plan, row.n);
                 bySku.set(item.record_number, { id: item.id, sku: String(item.record_number).padStart(6, '0'), upc: plan.patch.upc || '', complete: false, v: {} });
                 if (plan.patch.upc) byUpc.set(plan.patch.upc, { id: item.id, sku: String(item.record_number).padStart(6, '0'), upc: plan.patch.upc, complete: false, v: {} });
+                if (plan.descKey) byDesc.set(plan.descKey.slice(5), { id: item.id, sku: String(item.record_number).padStart(6, '0') });
                 created.push({ index, n: row.n, id: item.id, sku: String(item.record_number).padStart(6, '0') });
                 return;
             }
@@ -6516,6 +6531,10 @@ app.post('/api/business/sku-items/import', requireAuth, requireCostCenter, (req,
             }
             maybeIssueSkuPublicToken(item, clientId, isTestAccount);
             logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: existing.id, recordLabel: `#${existing.id}`, action: 'update', fieldKey: 'main.articuloOrigenAlta', oldValue: '', newValue: 'Actualización por plantilla', changedBy });
+            if (Object.prototype.hasOwnProperty.call(result.appliedPatch, 'uniqueDescription')) {
+                if (plan.item.v.uniqueDescription) byDesc.delete(SkuTemplate.descKey(plan.item.v.uniqueDescription));
+                if (result.appliedPatch.uniqueDescription) byDesc.set(SkuTemplate.descKey(result.appliedPatch.uniqueDescription), { id: existing.id, sku: plan.item.sku });
+            }
             accept(plan, row.n);
             updated.push({ index, n: row.n, id: existing.id, sku: plan.item.sku, applied: Object.keys(result.appliedPatch).length, pending: result.pendingFields.length, rejected: result.rejectedFields.length });
         } catch (error) {
@@ -6583,6 +6602,11 @@ app.patch('/api/business/sku-items/:id', requireAuth, requireCostCenter, (req, r
     const { baseline, overrideConflicts, ...rawPatch } = req.body || {};
     const stackingError = validateSkuStackingPatch(rawPatch);
     if (stackingError) return res.status(400).json({ message: stackingError });
+    // La Descripción Única nunca se repite: se rechaza antes de guardar nada (el código del mensaje lo traduce la pantalla).
+    if (Object.prototype.hasOwnProperty.call(rawPatch, 'uniqueDescription')) {
+        const owner = skuUniqueDescriptionOwner(req.user.clientId, req.user.isTestAccount, rawPatch.uniqueDescription, existing.id);
+        if (owner) return res.status(400).json({ message: `Esa Descripción Única ya la tiene el código ${owner}. No se puede repetir.`, code: 'DESC_UNIQUE', sku: owner });
+    }
     const prepared = prepareSkuClassificationPatch(req, existing, rawPatch);
     if (prepared.error) return res.status(prepared.error.status).json({ message: prepared.error.message });
     const { clientId: skuClientId, isTestAccount: skuIsTest } = req.user;
