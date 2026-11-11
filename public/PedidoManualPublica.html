@@ -267,6 +267,10 @@
         .pill{ display:flex; flex-direction:column; border:1px solid var(--line); border-radius:14px; padding:6px 12px; background:var(--bg); font-size:12px; min-width:110px; }
         .pill b{ font-size:13px; }
         .pill.empty{ opacity:.6; }
+        /* Lista de códigos del celular (como la columna «Artículo» de la tabla): sale de inicio y se desplaza por dentro */
+        .phonelist{ max-height:min(27rem, 55vh); overflow-y:auto; overscroll-behavior:contain; padding-right:2px; }
+        .res .rd{ display:block; font-size:15px; font-weight:600; line-height:1.25; }
+        main.compact .res .rd{ font-size:.85rem; }
         /* Celular (pantalla corta): al tocar un código se abre una pantalla sobre el celular, como una app, para elegir el día y la cantidad de ese día (un día a la vez). Sin tabla. */
         body.sheet-open{ overflow:hidden; }
         .shwrap{ position:fixed; inset:0; z-index:60; display:flex; align-items:flex-end; justify-content:center; background:rgba(42,27,48,.46); }
@@ -458,6 +462,7 @@ function view() {
     const searchCard = wide ? '' : `<div class="card"><h2>${esc(TEXT.searchTitle)}</h2>${panelHtml()}<div id="results"></div></div><div id="selbox"></div>`;
     $('view').innerHTML = `${header}${searchCard}<div class="card" id="orderbox"></div>`;
     drawResults(); drawSel(); drawOrder();
+    if (isNarrow() && !catalog.loaded && !catalog.loading) loadCatalog(false); // celular: la lista de códigos sale de inicio
 }
 // El final de cada resultado: «+» o, en el celular, lo que ya lleva ese código (cantidad total y cuántos días).
 function rowEnd(r) {
@@ -470,9 +475,31 @@ function drawResults() {
     if (!box) return;
     if (needPlace()) box.innerHTML = `<div class="msg">${esc(TEXT.pickPlace)}</div>`;
     else if ((info.places || []).length ? placeCount() === 0 : info.relatedCount === 0) box.innerHTML = `<div class="msg">${esc((info.places || []).length ? TEXT.noRelatedPlace : TEXT.noRelated)}</div>`;
+    else if (isNarrow()) drawPhoneList(box);
     else if (!ready()) box.innerHTML = `<div class="msg">${esc(mode === 'contains' ? TEXT.typeMore : TEXT.typeOne)}</div>`;
     else if (!results.length) box.innerHTML = `<div class="msg">${esc(TEXT.none)}</div>`;
     else box.innerHTML = `<div class="list">${results.map((r, i) => `<button type="button" class="res" data-pick="${i}"><div><b>${highlight(r.code)}</b><span>${highlight(r.description)}</span><small>${highlight([r.uom, r.categories].filter(Boolean).join(' · '))}</small></div>${rowEnd(r)}</button>`).join('')}</div>${total > results.length ? `<div class="muted">${esc(TEXT.more)}</div>` : ''}`;
+}
+// Lista del celular: DE INICIO sale toda la lista de códigos del lugar (con su descripción única), como la columna «Artículo» de la tabla de la computadora: así quien no sabe qué buscar los reconoce y toca el que va. Lo escrito en el buscador
+// la acota (mismo motor, con sus signos y «Buscar en»); por páginas de 100 con «Ver más». Tocar un código abre su hoja de día y cantidad.
+const phoneRowHtml = (r, i) => `<button type="button" class="res" data-pick="${i}"><div><span class="rd">${highlight(r.description)}</span><small>${highlight([r.code, r.uom].filter(Boolean).join(' · '))}</small></div>${rowEnd(r)}</button>`;
+function drawPhoneList(box) {
+    if (!catalog.loaded) { box.innerHTML = `<div class="msg">${esc(TEXT.loading)}</div>`; return; }
+    if (!catalog.items.length) { box.innerHTML = `<div class="msg">${esc(TEXT.none)}</div>`; return; }
+    const old = $('phonelist');
+    const keep = old ? old.scrollTop : 0; // al volver a dibujar (por ejemplo después de «Listo») la lista se queda donde estaba
+    box.innerHTML = `<div class="list phonelist" id="phonelist">${catalog.items.map(phoneRowHtml).join('')}</div><div class="catfoot" id="catfoot">${catFootHtml()}</div>`;
+    const now = $('phonelist');
+    if (now && keep) now.scrollTop = keep;
+}
+// Una página más: se agregan al final de la lista sin redibujar las que ya están.
+function appendPhoneRows(added) {
+    const list = $('phonelist');
+    if (!list) { drawResults(); return; }
+    const from = catalog.items.length - added.length;
+    list.insertAdjacentHTML('beforeend', added.map((r, k) => phoneRowHtml(r, from + k)).join(''));
+    const foot = $('catfoot');
+    if (foot) foot.innerHTML = catFootHtml();
 }
 function drawSel() {
     const box = $('selbox');
@@ -590,6 +617,7 @@ async function loadCatalog(append) {
     const fb = document.querySelector('[data-filter="art"]');
     if (fb) fb.classList.toggle('on', !!String(query).trim() || mode !== 'contains' || fields.length > 0);
     if (wide) { if (append && catalog.added && catalog.added.length) appendTableRows(catalog.added); else drawTableBody(); }
+    else if (isNarrow()) { if (append && catalog.added && catalog.added.length) appendPhoneRows(catalog.added); else drawResults(); }
 }
 // Una página más de códigos: se agregan al final de la tabla sin redibujar los que ya están (así no se pierde el lugar al ir bajando).
 function appendTableRows(items) {
@@ -859,7 +887,7 @@ function addPicked() {
     drawSel(); drawOrder();
 }
 async function search() {
-    if (wide) { loadCatalog(false); return; } // tabla: el filtro Artículo acota la lista de códigos
+    if (wide || isNarrow()) { loadCatalog(false); return; } // tabla (computadora) o lista del celular: lo escrito acota la lista de códigos
     const my = ++seq;
     if (!ready() || needPlace()) { results = []; total = 0; drawResults(); return; }
     try {
@@ -929,7 +957,7 @@ $('view').addEventListener('click', (event) => {
     if (toggle) { const list = $('fields'); list.hidden = !list.hidden; toggle.setAttribute('aria-expanded', String(!list.hidden)); return; }
     if (t.closest('#qclear')) { const q = $('q'); q.value = ''; query = ''; queueSearch(); q.focus(); return; }
     const pick = t.closest('[data-pick]');
-    if (pick && isNarrow()) { openSheet(results[Number(pick.getAttribute('data-pick'))]); return; } // celular: la hoja del código
+    if (pick && isNarrow()) { openSheet(catalog.items[Number(pick.getAttribute('data-pick'))]); return; } // celular: la hoja del código
     const edit = t.closest('[data-edit]');
     if (edit) { const c = cart[Number(edit.getAttribute('data-edit'))]; if (c) openSheet(c, edit.hasAttribute('data-editday') ? edit.getAttribute('data-editday') : undefined); return; }
     if (pick) { picked = { ...results[Number(pick.getAttribute('data-pick'))], qty: 1, when: defaultWhen }; drawSel(); const qi = $('qty'); if (qi) { qi.focus(); qi.select(); } return; }
@@ -981,7 +1009,7 @@ $('view').addEventListener('input', (event) => {
         results = []; total = 0;
         catalog = { items: [], total: 0, loading: false, loaded: false, added: [] };
         drawOrder();
-        if (!wide) { drawResults(); drawSel(); if (ready()) search(); }
+        if (!wide) { drawResults(); drawSel(); if (isNarrow()) loadCatalog(false); else if (ready()) search(); }
     }
     else if (t.dataset && t.dataset.item !== undefined) {
         // una casilla de la tabla por día: código y fecha; el código entra al pedido al ponerle una cantidad y sale si se queda sin ninguna
