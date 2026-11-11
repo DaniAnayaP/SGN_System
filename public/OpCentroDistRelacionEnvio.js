@@ -38,6 +38,7 @@ let loadToken = 0;
         if (!role) return;
         renderNewRecordButton();
         if (Dashboard.ensureColumnMinWidth) Dashboard.ensureColumnMinWidth(TABLE_KEY, 'colEnvSku', 150); // el SKU de 12 caracteres cabe completo
+        if (Dashboard.ensureColumnMinWidth) Dashboard.ensureColumnMinWidth(TABLE_KEY, 'colEnvLugar', 210); // el selector «Elige un lugar…» y los nombres de los lugares caben completos
         await refreshTable();
     } catch (err) {
         console.error('Relación Código Envío failed to initialize:', err);
@@ -98,16 +99,30 @@ function placePickCell(r) {
     const td = document.createElement('td');
     td.dataset.col = 'colEnvLugar';
     if (!Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '')) { td.textContent = '—'; return td; }
+    // Con el diseño de los selectores de las tablas de la página (borde suave, esquinas redondeadas y su flechita). Cada renglón sin lugares trae solo un botón con ese diseño («Elige un lugar…» en gris y cursiva); el selector de verdad
+    // se arma al tocarlo (con miles de códigos, miles de selectores harían pesada la pantalla).
     const active = places.filter((p) => p.active);
-    const select = document.createElement('select');
-    select.className = 'editable-cell-select';
-    select.setAttribute('data-help-key', 'envPlacePick');
-    select.setAttribute('aria-label', t('main.envPlacePick'));
-    select.innerHTML = `<option value="">${esc(active.length ? t('main.envPlacePick') : t('main.envPlacePickNone'))}</option>${active.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}`;
-    select.disabled = !active.length;
-    select.addEventListener('change', () => { if (select.value) relateCodePlace(r, Number(select.value), select); });
-    td.appendChild(select);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-select data-table-select-btn data-table-select-empty';
+    btn.setAttribute('data-help-key', 'envPlacePick');
+    btn.setAttribute('aria-label', t('main.envPlacePick'));
+    btn.textContent = active.length ? t('main.envPlacePick') : t('main.envPlacePickNone');
+    btn.disabled = !active.length;
+    btn.addEventListener('click', () => openPlaceSelect(td, btn, r, active));
+    td.appendChild(btn);
     return td;
+}
+function openPlaceSelect(td, btn, r, active) {
+    const select = document.createElement('select');
+    select.className = 'data-table-select';
+    select.setAttribute('aria-label', t('main.envPlacePick'));
+    select.innerHTML = `<option value="">${esc(t('main.envPlacePick'))}</option>${active.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}`;
+    select.addEventListener('change', () => { if (select.value) relateCodePlace(r, Number(select.value), select); });
+    select.addEventListener('blur', () => { if (!select.value && select.isConnected && !select.disabled) select.replaceWith(btn); }); // sin elegir nada, vuelve a ser el botón
+    btn.replaceWith(select);
+    select.focus();
+    try { if (select.showPicker) select.showPicker(); } catch (err) { /* el navegador no deja abrirla sola: se abre con otro toque */ }
 }
 async function relateCodePlace(r, placeId, select) {
     const centerId = singleCenterId();
