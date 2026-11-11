@@ -3835,6 +3835,7 @@
     "colEnvDeleteAuth": "Authorization to Delete Shipping Relations",
     "colEnvTemplateAuth": "Authorization to Load by Template (Shipping)",
     "envNew": "New shipping relation",
+    "envRelateRow": "Relate to shipping places",
     "envDialogTitle": "New shipping relation",
     "envCode": "Code (by its unique description)",
     "envSearchPlaceholder": "Search by code or unique description",
@@ -5551,6 +5552,10 @@
     "envNew": {
       "what": "Relates a code (by its description) to one or several shipping places from the Shipping Places catalog: it is what enables that code to be shipped to those places from the cost center. Check «All» for every active place.",
       "example": "Aspirina Protect 100mg Tablet: Central Hospital and North Hospital."
+    },
+    "envRelateRow": {
+      "what": "This New Sku Registration code is not related to any shipping place yet in the cost centers marked above (only its unique description shows). Open it to choose which places it is shipped to.",
+      "example": "Paracetamol 500mg Tablet: you choose Central Hospital and North Hospital and the row fills in with each place."
     },
     "envPlace": {
       "what": "The places the code will be able to ship to: they come from the Shipping Places catalog (hospitals and other sites outside the DC). Each place you check is a separate relation (a row in the table).",

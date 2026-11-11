@@ -3835,6 +3835,7 @@
     "colEnvDeleteAuth": "Autorización para Eliminar Relaciones de Envío",
     "colEnvTemplateAuth": "Autorización para Cargar por Plantilla (Envío)",
     "envNew": "Nueva relación de envío",
+    "envRelateRow": "Relacionar con lugares de envío",
     "envDialogTitle": "Nueva relación de envío",
     "envCode": "Código (por su descripción única)",
     "envSearchPlaceholder": "Busca por código o descripción única",
@@ -5550,6 +5551,10 @@
     "envNew": {
       "what": "Relaciona un código (por su descripción) con uno o varios lugares de envío del catálogo Lugares de Envío: es lo que habilita ese código para enviarse a esos lugares desde el centro de costos. Marca «Todos» para todos los lugares activos.",
       "example": "Aspirina Protect 100mg Tableta: Hospital Central y Hospital Norte."
+    },
+    "envRelateRow": {
+      "what": "Este código de Alta Artículos todavía no está relacionado con ningún lugar de envío en los centros de costos marcados arriba (solo se ve su descripción única). Ábrelo para elegir a qué lugares se envía.",
+      "example": "Paracetamol 500mg Tableta: eliges Hospital Central y Hospital Norte y el renglón se llena con cada lugar."
     },
     "envPlace": {
       "what": "Los lugares a los que se va a poder enviar el código: son los del catálogo Lugares de Envío (hospitales y otros sitios fuera del CEDIS). Cada lugar que marques es una relación aparte (un renglón en la tabla).",

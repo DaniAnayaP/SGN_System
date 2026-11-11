@@ -10989,6 +10989,8 @@ app.get('/api/business/code-ship-relations', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({
         relations: listCodeShipRelations(clientId, isTestAccount).map((r) => mapShipRelation(r, client?.company_name, ctx)),
+        // Todos los códigos que hay en Alta Artículos (por ahora todo el catálogo de códigos), solo con su descripción única: la pantalla muestra un renglón por cada código que todavía no tiene lugares.
+        codes: searchSkuItems(clientId, '', isTestAccount, 100000).map((s) => ({ id: s.id, sku: padSku(s.record_number, s.sku_code), upc: s.upc || '', description: s.unique_description || '' })),
         places: [...ctx.places.values()].filter((p) => p.name).map((p) => ({ id: p.id, name: p.name, active: p.status === 'active' })),
         costCenters: [...ctx.centers.values()].map((c) => ({ id: c.id, name: c.name, code: c.code || '' })),
         canCreate: shipCan(req, 'colEnvCreateAuth'), canDelete: shipCanDelete(req), canTemplate: shipCan(req, 'colEnvTemplateAuth'),

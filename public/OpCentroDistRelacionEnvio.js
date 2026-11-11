@@ -27,6 +27,7 @@ const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': 
 const $ = (id) => document.getElementById(id);
 
 let relations = [];
+let codes = [];    // [{ id, sku, upc, description }]: todos los códigos de Alta Artículos (descripción única)
 let places = [];   // [{ id, name, active }]: el catálogo Lugares de Envío
 let centers = [];  // [{ id, name, code }]
 let loadToken = 0;
@@ -67,6 +68,11 @@ function actionsCell(r, tr) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
     td.className = 'admin-table-actions';
+    // Un código que todavía no tiene lugares (renglón virtual): no tiene historial ni se elimina; solo se puede relacionar.
+    if (r.virtual) {
+        if (Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '')) td.appendChild(iconButton('admin-icon-btn', 'bx-plus', t('main.envRelateRow'), 'envRelateRow', () => relateCode(r)));
+        return td;
+    }
     td.appendChild(iconButton('admin-icon-btn', 'bx-history', t('main.changeHistoryTitleRecord'), 'changeHistory', () => Dashboard.openChangeHistory(TABLE_KEY, r.id)));
     if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) td.appendChild(iconButton('admin-icon-btn admin-icon-btn-danger', 'bx-trash', t('admin.delete'), 'delete', () => deleteRelation(r, tr)));
     return td;
@@ -74,12 +80,13 @@ function actionsCell(r, tr) {
 function buildRow(r) {
     const tr = document.createElement('tr');
     tr.dataset.recordId = String(r.id);
+    if (r.virtual) tr.dataset.virtual = '1';
     tr.dataset.search = [r.sku, r.upc, r.description, r.centroCostos, r.place].filter(Boolean).join(' ').toLowerCase();
     tr.append(
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, r[key], 'col-system')),
         cell('colCatRegistroUnico', r.registroUnico, 'col-system'),
         cell('colEnvSku', r.sku), cell('colEnvUpc', r.upc), cell('colEnvDescripcion', r.description), cell('colEnvCentroCostos', r.centroCostos),
-        cell('colEnvLugar', r.place, r.placeActive ? '' : 'udm-ro', r.placeActive ? '' : t('main.envLugarInactivo')),
+        cell('colEnvLugar', r.place, r.virtual || r.placeActive ? '' : 'udm-ro', r.virtual || r.placeActive ? '' : t('main.envLugarInactivo')),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
@@ -106,6 +113,13 @@ function visibleRelations() {
     const selected = Dashboard.getSelectedCostCenterIds();
     return relations.filter((r) => !selected || !r.costCenterId || selected.includes(r.costCenterId));
 }
+// Lo que se dibuja: las relaciones de los centros marcados y, de cada código de Alta Artículos que no tiene ninguna ahí, un renglón con su descripción única (los demás datos en blanco); todo por código.
+function visibleRows() {
+    const list = visibleRelations();
+    const related = new Set(list.map((r) => r.skuItemId));
+    const open = codes.filter((c) => !related.has(c.id)).map((c) => ({ id: -c.id, virtual: true, skuItemId: c.id, sku: c.sku, upc: c.upc, description: c.description }));
+    return [...list, ...open].sort((a, b) => String(a.sku).localeCompare(String(b.sku), undefined, { numeric: true }) || String(a.place || '').localeCompare(String(b.place || '')));
+}
 async function refreshTable() {
     const token = ++loadToken;
     const tbody = getTbody();
@@ -117,8 +131,9 @@ async function refreshTable() {
         relations = body.relations || [];
         places = body.places || [];
         centers = body.costCenters || [];
+        codes = body.codes || [];
         tbody.innerHTML = '';
-        const list = visibleRelations();
+        const list = visibleRows();
         if (!list.length) { ensureEmptyState(); return; }
         const finished = await Dashboard.renderTableRowsInChunks({ tableKey: TABLE_KEY, tbody, records: list, buildRow, isStale: () => token !== loadToken });
         if (finished) applyFilters();
@@ -148,8 +163,7 @@ async function deleteRelation(r, tr) {
             return;
         }
         relations = relations.filter((x) => x.id !== r.id);
-        tr.remove();
-        ensureEmptyState();
+        await refreshTable(); // si era el último lugar del código, el código vuelve a salir sin lugares
     } catch (err) {
         console.error('Relación Código Envío: failed to delete', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
@@ -238,6 +252,11 @@ function openDialog() {
     loadAllCodes();
 }
 function closeDialog() { if (modalEl) modalEl.hidden = true; f = null; }
+// El «+» de un código sin lugares: abre la misma ventana con ese código ya elegido.
+function relateCode(r) {
+    openDialog();
+    pickSku({ id: r.skuItemId, sku: r.sku, description: r.description });
+}
 
 // ---- la lista de códigos: TODO el catálogo de códigos, solo con su descripción única, desde que se abre la ventana (sin tener que escribir). Se baja una vez al abrir y se filtra aquí mismo con el motor de búsqueda de todo el
 // sistema (código, UPC y descripción única); se dibuja por tandas para que miles de códigos no congelen la ventana.
