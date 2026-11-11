@@ -5359,6 +5359,11 @@ function updateSkuItem(id, clientId, patch, forTestAccount = false) {
 function deleteSkuItem(id, clientId) {
     db.prepare('DELETE FROM sku_items WHERE id = ? AND client_id = ?').run(id, clientId);
 }
+// La numeración de los códigos: cada código nuevo toma «el más alto que existe + 1» (createSkuItem), así que con ninguno el siguiente es 000001. Cuántos códigos hay (de todas las pantallas: Alta, Códigos y Edición Código) y cuál sería el siguiente número.
+function getSkuNumberingInfo(clientId, isTest = false) {
+    const row = db.prepare('SELECT COUNT(*) AS count, COALESCE(MAX(record_number), 0) AS max FROM sku_items WHERE client_id = ? AND is_test_data = ?').get(clientId, isTest ? 1 : 0);
+    return { count: row.count, next: row.max + 1 };
+}
 
 // --- Código QR / Ficha pública ----------------------------------------------
 // See public_token's own migration comment for why this is a fresh random
@@ -12781,6 +12786,7 @@ module.exports = {
     updateSkuItem,
     setSkuItemEditing,
     deleteSkuItem,
+    getSkuNumberingInfo,
     SKU_ITEM_PATCHABLE_FIELDS,
     generatePublicToken,
     getSkuItemByPublicToken,

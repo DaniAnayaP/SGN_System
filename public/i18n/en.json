@@ -3679,6 +3679,8 @@
     "skuBorrando": "Deleting… {done} of {total}",
     "skuBorrarHecho": "{n} codes deleted.",
     "skuBorrarBloqueados": "{n} were not deleted because they already have locations in Code Relation.",
+    "skuNumVacio": "No codes are left: the first new one will be {next}.",
+    "skuNumQuedan": "{n} codes are left in the system (complete or with locations): the next new one will be {next}.",
     "layoutRelacionIr": "Open the Code Relation screen",
     "layoutRelacionSinEnfoque": "No related code falls in what you focused above (Zone, Pick or Locator).",
     "layoutLocalizadoresSinEnfoque": "No locator falls in what you focused above (Zone, Pick or Locator).",

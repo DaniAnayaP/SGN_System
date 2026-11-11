@@ -3678,6 +3678,8 @@
     "skuBorrando": "Eliminando… {done} de {total}",
     "skuBorrarHecho": "{n} códigos eliminados.",
     "skuBorrarBloqueados": "{n} no se eliminaron porque ya tienen ubicaciones en Relación Código.",
+    "skuNumVacio": "No queda ningún código: el primero nuevo será el {next}.",
+    "skuNumQuedan": "Quedan {n} códigos en el sistema (completos o con ubicaciones): el siguiente nuevo será el {next}.",
     "layoutRelacionIr": "Abrir la pantalla Relación Código",
     "layoutRelacionSinEnfoque": "Ningún código relacionado cae en lo que enfocaste arriba (Zona, Elegir o Localizador).",
     "layoutLocalizadoresSinEnfoque": "Ningún localizador cae en lo que enfocaste arriba (Zona, Elegir o Localizador).",

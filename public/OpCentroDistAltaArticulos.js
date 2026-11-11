@@ -893,6 +893,7 @@ async function bulkDeleteSelected() {
     const deleted = new Set();
     let blocked = 0;
     let failed = false;
+    let numbering = null; // lo último que dijo el servidor: cuántos códigos quedan en el sistema y cuál sería el siguiente número
     try {
         for (let from = 0; from < ids.length; from += SKU_BULK_CHUNK) {
             const chunk = ids.slice(from, from + SKU_BULK_CHUNK);
@@ -906,6 +907,7 @@ async function bulkDeleteSelected() {
             const body = await res.json();
             (body.deleted || []).forEach((id) => deleted.add(id));
             blocked += (body.blocked || []).length;
+            if (typeof body.remaining === 'number') numbering = { remaining: body.remaining, next: body.next };
             done += chunk.length;
             removeSkuRecords(new Set(body.deleted || []));
             (body.deleted || []).forEach((id) => skuSelected.delete(id));
@@ -919,7 +921,9 @@ async function bulkDeleteSelected() {
         failed = true;
     }
     skuDeleting = false;
-    if (deleted.size) Dashboard.showToast(fillText('main.skuBorrarHecho', { n: deleted.size }) + (blocked ? ` ${fillText('main.skuBorrarBloqueados', { n: blocked })}` : ''), blocked || failed ? 'warning' : 'success');
+    // la numeración: cada código nuevo toma «el más alto + 1»; sin ningún código en el sistema el primero nuevo es 000001
+    const numberText = numbering ? ` ${fillText(numbering.remaining ? 'main.skuNumQuedan' : 'main.skuNumVacio', { n: numbering.remaining, next: numbering.next })}` : '';
+    if (deleted.size) Dashboard.showToast(fillText('main.skuBorrarHecho', { n: deleted.size }) + (blocked ? ` ${fillText('main.skuBorrarBloqueados', { n: blocked })}` : '') + numberText, blocked || failed || (numbering && numbering.remaining) ? 'warning' : 'success');
     else if (blocked && !failed) Dashboard.showToast(fillText('main.skuBorrarBloqueados', { n: blocked }), 'warning');
     // los que se saltaron (con ubicaciones) dejan de estar marcados
     skuSelected.clear();

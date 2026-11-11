@@ -153,6 +153,7 @@ const {
     updateSkuItem,
     setSkuItemEditing,
     deleteSkuItem,
+    getSkuNumberingInfo,
     generatePublicToken,
     getSkuItemByPublicToken,
     setSkuItemPublicToken,
@@ -6651,7 +6652,9 @@ app.post('/api/business/sku-items/bulk-delete', requireAuth, requireCostCenter, 
     });
     if (deleted.length) notifyButtonAction(req, 'nuestros-articulos', 'delete', `${deleted.length} códigos`);
     res.set('Cache-Control', 'no-store');
-    res.json({ deleted, blocked });
+    // remaining / next: cuántos códigos quedan en TODO el sistema (Alta, Códigos, Edición Código) y cuál sería el siguiente número: el nuevo toma «el más alto + 1», así que sin ningún código empieza en 000001
+    const numbering = getSkuNumberingInfo(clientId, isTestAccount);
+    res.json({ deleted, blocked, remaining: numbering.count, next: padSku(numbering.next) });
 });
 
 // --- Ficha pública (no login) -----------------------------------------------
