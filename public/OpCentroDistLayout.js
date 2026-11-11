@@ -2485,11 +2485,25 @@ function fxCandidate() {
     const tail = h.kind === 'bay' ? ` · ${t('main.layoutPosNivel')} ${h.n} · ${t('main.layoutPosColumna')} ${h.c}${h.p ? ` · P${ubicPad(h.p)}` : ''}` : (h.n ? ` · ${t('main.layoutPosNivel')} ${h.n}` : '');
     return { id: sp.id, label: `${sp.code || ''}${tail}`, n: h.n || 0, c: h.kind === 'bay' ? h.c : 0, p: h.p || 0 };
 }
-// El enfoque que no viene del buscador: el activo (con su nivel, espacio y posición) del renglón elegido de la tabla.
+// El renglón elegido en cualquier OTRO paso (zona, huella, piso o rampa, pared u obstáculo, puerta, luz, sensor, seguridad, techo, tránsito, objeto): ese elemento enfoca igual que un activo. Usa el mismo enfoque que «Elegir» (items) y
+// los de zona y huella; las tablas no se filtran (el enfoque de un renglón es solo del dibujo).
+const FX_ITEM_KINDS = ['floor', 'obstacle', 'door', 'power', 'sensor', 'safety', 'ceiling', 'transit', 'object'];
+function fxRowTarget() {
+    const h = state.hl;
+    const d = state.draft;
+    if (!h || !d || h.step !== state.focus) return null;
+    if (h.kind === 'zone') { const z = (d.zones || []).find((x) => x.id === h.id); return z ? { kind: 'zone', id: z.id, ids: [z.id], from: 'row', label: z.code || z.name || '' } : null; }
+    if (h.kind === 'footprint') { const p = (d.footprints || []).find((x) => x.id === h.id); return p ? { kind: 'footprint', id: p.id, from: 'row', label: p.code || '' } : null; }
+    if (!FX_ITEM_KINDS.includes(h.kind) || !itemExists(d, h.kind, h.id)) return null;
+    const lists = { obstacle: d.obstacles, door: d.doors, power: d.power, sensor: d.sensors, safety: d.safety, ceiling: d.ceiling, transit: d.transit, object: d.objects, floor: LC.floorsAll(d) };
+    const item = (lists[h.kind] || []).find((x) => x.id === h.id) || {};
+    return { kind: 'items', items: [{ type: h.kind, id: h.id }], from: 'row', label: item.code || item.name || '' };
+}
+// El enfoque que no viene del buscador: el activo (con su nivel, espacio y posición) del renglón elegido de la tabla o, en los demás pasos, el elemento del renglón.
 function virtualFind() {
     if (state.find || !state.draft) return null;
     const c = fxCandidate();
-    return c ? { kind: 'spaces', ids: [c.id], n: c.n, c: c.c, p: c.p, from: 'row' } : null;
+    return c ? { kind: 'spaces', ids: [c.id], n: c.n, c: c.c, p: c.p, from: 'row' } : fxRowTarget();
 }
 const activeFind = () => state.find || virtualFind();
 // Lo que se eligió en «Elegir activos» (solo en el 3D): cuántos de cuántos; null si se ven todos.
@@ -2505,7 +2519,7 @@ function fxReframe() { resetZoom(); find3dReframe = true; }
 function fxAfterSelect() {
     const v = virtualFind();
     const rl = v ? null : rowLevelFocus();
-    const key = v ? v.ids.join(',') : (rl ? `${rl.id}|${rl.n}` : '');
+    const key = v ? (v.ids ? v.ids.join(',') : `${v.kind}:${v.id || (v.items || []).map((it) => `${it.type}${it.id}`).join(',')}`) : (rl ? `${rl.id}|${rl.n}` : '');
     if (!v && !rl && !fxLastKey) return; // sin enfoque antes ni ahora: nada que redibujar
     if (key !== fxLastKey) fxReframe();
     fxLastKey = key;
@@ -2752,7 +2766,7 @@ function findEntity() {
     if (f.kind === 'spaces') { const sp = d.spaces.find((x) => x.id === f.ids[0]); return sp ? { kind: 'spaces', id: sp.id, code: sp.code || '', name: sp.code || '' } : null; }
     if (f.kind === 'items') {
         const alive = (f.items || []).filter((it) => itemExists(d, it.type, it.id));
-        return alive.length ? { kind: 'items', id: alive[0].id, ids: [], code: '', name: t('main.layoutFiltroNElegidos', { n: alive.length }) } : null;
+        return alive.length ? { kind: 'items', id: alive[0].id, ids: [], code: '', name: f.from === 'row' ? (f.label || alive[0].id) : t('main.layoutFiltroNElegidos', { n: alive.length }) } : null;
     }
     if (f.kind === 'zone') {
         const zs = zoneFocusIds(f).map((id) => d.zones.find((x) => x.id === id)).filter(Boolean);
