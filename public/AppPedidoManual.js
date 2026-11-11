@@ -135,7 +135,7 @@ async function loadBrandingForTheme() {
 // --- Estado ----------------------------------------------------------------------------------------------------------------------------
 const ORDERS_URL = '/api/business/pedido-manual';
 const ORDER_RECORD_PREFIX = 'pedido-manual';
-const MAX_RESULTS = 30;
+const PAGE_SIZE = 50; // la lista de códigos del «Nuevo pedido» se ve de 50 en 50 (con «Ver más»)
 let currentUser = null;
 let isClientAdmin = false;
 let effectiveGrants = [];
@@ -148,6 +148,7 @@ let catalogPlaces = [];     // «Lugar que solicita»: los lugares de envío act
 let dayShift = 0;           // días de diferencia entre el día de la empresa y el del reloj del celular cuando se bajó el catálogo (para ofrecer «mañana» y los 14 días también sin señal)
 let maxDays = 14;           // hasta cuántos días adelante se puede pedir (desde mañana)
 let catalogById = new Map();
+const artName = (it) => (it && (it.unique || it.description)) || ''; // el nombre que se ve del código: su Descripción Única
 let catalogState = 'loading'; // 'loading' | 'online' | 'cached' | 'none'
 let view = 'list';          // 'list' | 'order' | 'new' | 'done' (el número de pedido recién enviado)
 let openKey = null;         // el pedido abierto: 'o:<orderId>' o 'q:<clientRef>'
@@ -326,7 +327,7 @@ async function refreshQueuedOrders() {
         try { body = JSON.parse(item.body || '{}'); } catch { return; }
         const lines = (body.items || []).map((it) => {
             const art = catalogById.get(it.id) || {};
-            return { code: art.code || '', description: art.description || `#${it.id}`, uom: art.uom || '', quantity: it.quantity, needBy: it.needBy || '', status: 'pending' };
+            return { code: art.code || '', description: artName(art) || `#${it.id}`, uom: art.uom || '', quantity: it.quantity, needBy: it.needBy || '', status: 'pending' };
         });
         const cc = costCenters.find((c) => c.id === body.costCenterId);
         const place = catalogPlaces.find((p) => p.id === body.placeId);
@@ -539,7 +540,7 @@ const searchTerms = (raw) => String(raw == null ? '' : raw).slice(0, 80).split('
 const searchReady = () => window.SearchSyntax.ready(draft.mode, searchTerms(draft.query));
 const signOff = (sign) => (sign === '$' && draft.mode !== 'contains') || (sign === '@' && draft.mode === 'equals');
 // los valores de un campo: las categorías se prueban una por una (Igual que compara cada una)
-const valuesOf = (item, key) => (key === 'categories' ? String(item.categories || '').split(' · ').filter(Boolean) : [item[key]]);
+const valuesOf = (item, key) => (key === 'categories' ? String(item.categories || '').split(' · ').filter(Boolean) : (key === 'description' ? [item.unique, item.description] : [item[key]]));
 // Solo se pueden pedir los códigos RELACIONADOS (Relación Código) con el centro de costos del pedido; un catálogo guardado de antes (sin esa lista) se ve completo hasta que se vuelva a bajar con señal.
 // Con «Lugar que solicita» (la empresa tiene lugares de envío) son los HABILITADOS para ese lugar desde ese centro (Relación Código Envío): sin centro o sin lugar no hay ninguno.
 const relatedTo = (it) => {
@@ -554,14 +555,14 @@ function pruneCart() {
 }
 // Un error del servidor en el idioma de la App: por su código, o el texto que trae.
 const sendErrorText = (body) => (body && body.code === 'PLACE' ? t('home.pmNeedPlace') : (body && body.code === 'RELATED' ? t('home.pmErrRelated') : (body && body.code === 'DATE' ? t('home.pmErrDate') : (body && body.message) || t('home.pmErrSend'))));
+// Sin escribir nada (o con algo todavía muy corto) salen TODOS los códigos habilitados, como la columna «Artículo» de la tabla: así quien no sabe qué buscar los reconoce. Lo escrito los acota.
 function searchCatalog() {
-    if (!searchReady()) return null;
-    const test = window.SearchSyntax.compile(draft.mode, searchTerms(draft.query));
+    const test = searchReady() ? window.SearchSyntax.compile(draft.mode, searchTerms(draft.query)) : null;
     const keys = draft.fields.length ? draft.fields : FIELD_KEYS.map(([k]) => k);
     const found = [];
     for (const it of catalog) {
         if (!relatedTo(it)) continue;
-        if (keys.some((k) => valuesOf(it, k).some((v) => !!v && test(v)))) { found.push(it); if (found.length > MAX_RESULTS) break; }
+        if (!test || keys.some((k) => valuesOf(it, k).some((v) => !!v && test(v)))) found.push(it);
     }
     return found;
 }
@@ -651,6 +652,7 @@ function renderNew() {
     // el buscador: el mismo de los demás QR
     const searchBox = document.createElement('div');
     searchBox.className = 'pm-app-card';
+    searchBox.setAttribute('data-help-key', 'pmBuscador');
     const modePop = SEARCH_MODES.map(([k, key]) => `<button type="button" class="pm-app-opt" role="menuitemradio" data-pm-mode="${k}" aria-pressed="${draft.mode === k}">${esc(t(key))}</button>`).join('');
     const signPop = SIGNS.map(([sg, key]) => `<button type="button" class="pm-app-opt pm-app-sg" role="menuitem" data-pm-sign="${sg}"><b aria-hidden="true">${sg}</b><span>${esc(t(`home.pmSign${key}`))}<small>${esc(t(`home.pmSign${key}Help`))}</small></span></button>`).join('');
     searchBox.innerHTML = `<div class="pm-app-mcur" id="pm-app-mcur">${esc(t(SEARCH_MODES.find(([k]) => k === draft.mode)[1]))}</div>
@@ -663,12 +665,13 @@ function renderNew() {
         </div>
         <button type="button" class="pm-app-sumrow" id="pm-app-fieldstoggle" aria-expanded="false" aria-controls="pm-app-fields"><span class="pm-app-lbl">${esc(t('home.pmSearchIn'))}</span><b id="pm-app-fields-sum">${esc(fieldsSummary())}</b><i aria-hidden="true"></i></button>
         <div class="pm-app-flist" id="pm-app-fields" role="group" aria-label="${esc(t('home.pmSearchIn'))}" hidden></div>
-        <p class="pm-app-note" id="pm-app-note"></p><div id="pm-app-results" class="pm-app-results"></div>`;
+        <p class="pm-app-note" id="pm-app-note"></p><div id="pm-app-results" class="pm-app-results"></div><div id="pm-app-foot" class="pm-app-foot"></div>`;
     bodyEl.appendChild(searchBox);
     const qInput = searchBox.querySelector('#pm-app-q');
     const qClear = searchBox.querySelector('#pm-app-qclear');
     const note = searchBox.querySelector('#pm-app-note');
     const results = searchBox.querySelector('#pm-app-results');
+    const foot = searchBox.querySelector('#pm-app-foot');
     const modeEl = searchBox.querySelector('#pm-app-modepop');
     const signEl = searchBox.querySelector('#pm-app-signpop');
     const fieldsEl = searchBox.querySelector('#pm-app-fields');
@@ -677,8 +680,13 @@ function renderNew() {
         return opt('all', t('home.pmAllFields'), !draft.fields.length, !!draft.fields.length) + FIELD_KEYS.map(([k, key]) => opt(k, t(key), draft.fields.includes(k), false)).join('');
     };
     fieldsEl.innerHTML = fieldsHtml();
-    const drawResults = () => {
+    let shown = PAGE_SIZE; // cuántos renglones de la lista se ven ahora
+    // keepPaging: al volver a dibujar después de la hoja de un código la lista se queda con lo que se veía y donde estaba; cualquier otro cambio (escribir, modo, campos, centro, lugar) empieza de nuevo
+    const drawResults = (keepPaging) => {
+        const keep = keepPaging ? results.scrollTop : 0;
+        if (!keepPaging) shown = PAGE_SIZE;
         results.innerHTML = '';
+        foot.innerHTML = '';
         note.textContent = '';
         if (catalogState === 'loading') { note.textContent = t('home.pmCatalogLoading'); return; }
         if (catalogState === 'none') { note.textContent = t('home.pmCatalogNone'); return; }
@@ -693,22 +701,17 @@ function renderNew() {
             if (catalog.length && !catalog.some(relatedTo)) { note.textContent = t('home.pmNoRelated'); return; }
         }
         const found = searchCatalog();
-        if (found === null) { if (catalogState !== 'cached') note.textContent = t(draft.mode === 'contains' ? 'home.pmTypeMore' : 'home.pmTypeOne'); return; }
         if (!found.length) { note.textContent = t('home.pmNone'); return; }
-        found.slice(0, MAX_RESULTS).forEach((it) => {
+        found.slice(0, shown).forEach((it) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'pm-app-result';
-            btn.innerHTML = `<span><p>${highlight(it.description)}</p><span>${highlight([it.code, it.uom, it.categories].filter(Boolean).join(' · '))}</span></span>${resultEnd(it)}`;
+            btn.innerHTML = `<span><p>${highlight(artName(it))}</p><span>${highlight([it.code, it.uom, it.categories].filter(Boolean).join(' · '))}</span></span>${resultEnd(it)}`;
             btn.addEventListener('click', () => openQuantity(it));
             results.appendChild(btn);
         });
-        if (found.length > MAX_RESULTS) {
-            const more = document.createElement('p');
-            more.className = 'pm-app-note';
-            more.textContent = t('home.pmMore');
-            results.appendChild(more);
-        }
+        results.scrollTop = keep;
+        foot.innerHTML = `<span>${esc(t('home.pmShowing', { n: Math.min(shown, found.length), total: found.length }))}</span>${found.length > shown ? `<button type="button" class="pm-app-more" id="pm-app-more">${esc(t('home.pmShowMore'))}</button>` : ''}`;
     };
     const drawMode = () => {
         searchBox.querySelector('#pm-app-mcur').textContent = t(SEARCH_MODES.find(([k]) => k === draft.mode)[1]);
@@ -719,6 +722,7 @@ function renderNew() {
     drawMode();
     const typed = () => { draft.query = qInput.value; qClear.hidden = !draft.query; drawResults(); };
     qInput.addEventListener('input', typed);
+    foot.addEventListener('click', (event) => { if (event.target.closest('#pm-app-more')) { shown += PAGE_SIZE; drawResults(true); } });
     qClear.addEventListener('click', () => { qInput.value = ''; typed(); qInput.focus(); });
     searchBox.querySelectorAll('[data-pm-popbtn]').forEach((btn) => btn.addEventListener('click', () => {
         const mine = btn.dataset.pmPopbtn === 'modepop' ? modeEl : signEl;
@@ -759,7 +763,7 @@ function renderNew() {
         drawResults();
     });
     drawResults();
-    draft.redrawResults = drawResults; // la hoja de un código lo vuelve a llamar para marcar lo que ya lleva
+    draft.redrawResults = () => drawResults(true); // la hoja de un código lo vuelve a llamar para marcar lo que ya lleva (la lista se queda donde estaba)
 
     // el pedido armado
     const cartBox = document.createElement('div');
@@ -789,7 +793,7 @@ function renderNew() {
             box.className = 'pm-app-oline';
             const head = document.createElement('div');
             head.className = 'pm-app-line';
-            head.innerHTML = `<div class="pm-app-line-main"><p>${esc(item.description)}</p><span>${esc([item.code, item.uom].filter(Boolean).join(' · '))}</span></div>`;
+            head.innerHTML = `<div class="pm-app-line-main"><p>${esc(artName(item))}</p><span>${esc([item.code, item.uom].filter(Boolean).join(' · '))}</span></div>`;
             const edit = document.createElement('button');
             edit.type = 'button';
             edit.className = 'pm-app-remove';
@@ -840,7 +844,7 @@ function openQuantity(item, startDay) {
     const todayText = t('home.pmTodayIs', { d: dayLong(appToday()) });
     sheet.innerHTML = `<div class="home-select-sheet-handle"></div>
         <div class="pm-app-daybody">
-            <div class="home-select-sheet-title">${esc(item.description)}</div>
+            <div class="home-select-sheet-title">${esc(artName(item))}</div>
             <p class="pm-app-note pm-app-sheet-meta">${esc([item.code, item.uom, item.categories].filter(Boolean).join(' · '))}</p>
             <span class="pm-app-qty-label">${esc(t('home.pmDayWhen'))}</span>
             <div class="pm-app-days" id="pm-app-days"></div>
@@ -942,7 +946,7 @@ async function sendDraft() {
         // lo que se ve al terminar: el número de pedido (si se mandó sin señal todavía no lo hay) y su lista de artículos
         doneInfo = {
             queued: !!result.queued, folio: result.queued ? '' : (result.body.folio || ''), name: requesterName, placeName: place ? place.name : '', at: result.queued ? body.clientAt : (result.body.createdAt || body.clientAt), centroCostos: cc ? cc.name : '',
-            lines: Array.from(draft.cart.values()).flatMap(({ item, parts }) => parts.map((p) => ({ code: item.code, description: item.description, uom: item.uom, quantity: p.quantity, needBy: p.when }))),
+            lines: Array.from(draft.cart.values()).flatMap(({ item, parts }) => parts.map((p) => ({ code: item.code, description: artName(item), uom: item.uom, quantity: p.quantity, needBy: p.when }))),
         };
         if (!result.queued) await loadOrders();
         draft = null;

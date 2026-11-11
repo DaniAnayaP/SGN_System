@@ -8193,7 +8193,7 @@ app.get('/api/business/pedido-manual/items', requireAuth, (req, res) => {
     const activePlaceIds = new Set(places.map((p) => p.id));
     const shipOf = new Map();
     if (places.length) listManualItemShips(req.user.clientId, !!req.user.isTestAccount).forEach((r) => { if (!activePlaceIds.has(r.place_id)) return; if (!shipOf.has(r.sku_item_id)) shipOf.set(r.sku_item_id, []); shipOf.get(r.sku_item_id).push([r.cost_center_id, r.place_id]); });
-    const items = manualItemsFor(req.user.clientId, !!req.user.isTestAccount).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories, centers: centersOf.get(id) || [], ...(places.length ? { ship: shipOf.get(id) || [] } : {}) }));
+    const items = manualItemsFor(req.user.clientId, !!req.user.isTestAccount).map(({ id, code, description, unique, uom, categories }) => ({ id, code, description, unique, uom, categories, centers: centersOf.get(id) || [], ...(places.length ? { ship: shipOf.get(id) || [] } : {}) }));
     res.set('Cache-Control', 'no-store');
     // today / maxDays: «para cuándo» (desde mañana, hasta 14 días) se cuenta con el día de la empresa; la App lo guarda para ofrecer las fechas también sin señal
     res.json({ items, places, today: clientLocalDay(req.user.clientId), maxDays: MANUAL_ORDER_MAX_DAYS, at: new Date().toISOString() });

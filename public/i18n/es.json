@@ -4442,6 +4442,8 @@
     "pmTypeMore": "Escribe al menos 2 letras o números.",
     "pmNone": "No se encontró nada con eso.",
     "pmMore": "Hay más resultados: escribe más para acotar.",
+    "pmShowing": "Mostrando {n} de {total} códigos",
+    "pmShowMore": "Ver más",
     "pmQuantity": "Cantidad",
     "pmChange": "Cambiar",
     "pmDayWhen": "¿Para cuándo?",
@@ -6193,6 +6195,10 @@
     "pmFechaEntrega": {
       "what": "Para cuándo quieres que llegue lo que pides: desde mañana y hasta 14 días, o «Lo antes posible». Al tocar un código (o el lápiz de un artículo ya agregado) se abre su hoja: eliges el día en la tira de arriba y escribes (o con − y +) la cantidad de ESE día; puedes repetirlo con otros días y «Listo» los deja todos en el pedido. Cada día queda como un renglón del pedido y se ve como un chip («Vie 13 nov · 10»); tocar el chip abre la hoja en ese día.",
       "example": "pides 20 cajas de leche: eliges el jueves y pones 12, eliges el lunes y pones 8 — dos días del mismo artículo."
+    },
+    "pmBuscador": {
+      "what": "La lista de los códigos que puedes pedir (los habilitados para el centro de costos y el lugar elegidos): sale completa desde que entras, para reconocer el que necesitas sin tener que escribirlo. Al tocar uno se abre su hoja para elegir el día y la cantidad. Lo que escribes arriba acota la lista (Contiene, Inicia con o Igual que, con $ antes, @ después y la coma para varias búsquedas) y «Buscar en» elige en qué campos. Se ven de 50 en 50: «Ver más» agrega los siguientes.",
+      "example": "escribes «leche»: la lista queda solo con los códigos que la mencionan; la borras y vuelve a salir completa."
     },
     "pmLugar": {
       "what": "El lugar que pide el pedido (por ejemplo un hospital fuera del centro de distribución). Cada lugar solo muestra los códigos habilitados para enviarle desde el centro de costos elegido (Relación Código Envío); al cambiar de lugar se quita del pedido lo que no esté habilitado para el nuevo.",
