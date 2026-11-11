@@ -5664,10 +5664,26 @@ const MANUAL_LINE_SELECT = `SELECT l.*, o.cost_center_id, o.requester_name, o.re
 const MANUAL_CATEGORY_COLUMNS = ['category_inventario', 'category_compra', 'category_almacenamiento', 'category_rotacion', 'category_manejo', 'category_riesgo', 'category_vidautil'];
 // Los artículos con los que se puede pedir: los de la empresa, con su código, descripciones, UdM y categorías (las siete listas de Alta Nuestros Artículos).
 // costCenterId > 0: solo los códigos RELACIONADOS con ese centro de costos en Relación Código (de cualquier almacén, zona o clasificación); sin centro, todos los de la empresa.
-function listManualOrderItems(clientId, isTest = false, costCenterId = 0) {
-    const related = costCenterId ? ' AND id IN (SELECT sku_item_id FROM code_relations WHERE client_id = ? AND is_test_data = ? AND cost_center_id = ?)' : '';
+// placeId > 0 (el «Lugar que solicita» de un pedido externo): solo los códigos habilitados para enviarse a ese lugar en Relación Código Envío (del centro de costos, si lo hay); sin lugar, los relacionados con el centro en la
+// Relación Código de siempre (los internos).
+function listManualOrderItems(clientId, isTest = false, costCenterId = 0, placeId = 0) {
+    let related = '';
+    const extra = [];
+    if (placeId) {
+        related = ` AND id IN (SELECT sku_item_id FROM code_ship_relations WHERE client_id = ? AND is_test_data = ? AND place_id = ?${costCenterId ? ' AND cost_center_id = ?' : ''})`;
+        extra.push(clientId, isTest ? 1 : 0, placeId, ...(costCenterId ? [costCenterId] : []));
+    } else if (costCenterId) {
+        related = ' AND id IN (SELECT sku_item_id FROM code_relations WHERE client_id = ? AND is_test_data = ? AND cost_center_id = ?)';
+        extra.push(clientId, isTest ? 1 : 0, costCenterId);
+    }
     return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ?${related} ORDER BY record_number ASC`)
-        .all(clientId, isTest ? 1 : 0, ...(costCenterId ? [clientId, isTest ? 1 : 0, costCenterId] : []));
+        .all(clientId, isTest ? 1 : 0, ...extra);
+}
+// Cuántos códigos tiene habilitados cada lugar de envío (en el centro del QR, si lo hay): Map(placeId -> n).
+function countShipItemsByPlace(clientId, isTest = false, costCenterId = 0) {
+    const rows = db.prepare(`SELECT place_id, COUNT(DISTINCT sku_item_id) AS n FROM code_ship_relations WHERE client_id = ? AND is_test_data = ?${costCenterId ? ' AND cost_center_id = ?' : ''} GROUP BY place_id`)
+        .all(clientId, isTest ? 1 : 0, ...(costCenterId ? [costCenterId] : []));
+    return new Map(rows.map((r) => [r.place_id, r.n]));
 }
 // Con qué centros de costos tiene relación cada código (para que la App filtre por el centro que se elige en el pedido): [{ sku_item_id, cost_center_id }].
 function listManualItemCenters(clientId, isTest = false) {
@@ -12849,6 +12865,7 @@ module.exports = {
     createCodeShipRelation,
     deleteCodeShipRelation,
     countCodeShipRelationsByPlace,
+    countShipItemsByPlace,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,

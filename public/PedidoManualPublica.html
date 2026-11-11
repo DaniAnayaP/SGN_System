@@ -288,7 +288,7 @@ const TEXT = {
         searchMode: 'Tipo de Filtro', searchModes: { startsWith: 'Inicia con', contains: 'Contiene', equals: 'Igual que' },
         searchSigns: 'Signos de búsqueda', searchSign: { before: 'Antes', after: 'Después', comma: 'Otra búsqueda' }, searchSignOff: 'No aplica con este tipo de filtro',
         searchSignHelp: { before: 'Otra palabra ANTES · rack$cajón', after: 'Otra palabra DESPUÉS · rack@cajón', comma: 'Sirve cualquiera de las dos · rack, estante' },
-        typeMore: 'Escribe al menos 2 letras o números.', typeOne: 'Escribe al menos 1 letra o número.', none: 'No se encontró nada con eso.', noRelated: 'Este centro de costos todavía no tiene códigos relacionados (Relación Código): no hay nada que pedir.', errRelated: 'Un artículo ya no está relacionado con este centro de costos: quítalo del pedido.', more: 'Hay más resultados: escribe más para acotar.',
+        typeMore: 'Escribe al menos 2 letras o números.', typeOne: 'Escribe al menos 1 letra o número.', none: 'No se encontró nada con eso.', noRelated: 'Este centro de costos todavía no tiene códigos relacionados (Relación Código): no hay nada que pedir.', pickPlace: 'Elige primero el lugar que solicita: así ves los códigos que se le pueden enviar.', noRelatedPlace: 'Este lugar todavía no tiene códigos habilitados para envío (Relación Código Envío): no hay nada que pedir.', changePlace: 'Cada lugar tiene sus propios códigos: al cambiar de lugar se borra lo que ya escribiste en el pedido. ¿Cambiar de lugar?', errRelated: 'Un artículo ya no está habilitado para ese lugar (o centro de costos): quítalo del pedido.', more: 'Hay más resultados: escribe más para acotar.',
         qtyTitle: 'Cantidad', add: 'Agregar al pedido', cancel: 'Cancelar', yourOrder: 'Tu pedido', items: '{n} artículos', item1: '1 artículo', empty: 'Todavía no agregas nada. Busca un artículo y elige la cantidad.', remove: 'Quitar',
         yourName: 'Quién pide', placeLabel: 'Lugar que solicita', placeChoose: 'Elige un lugar', needPlace: 'Elige el lugar que solicita para enviar.', placeAt: 'Lugar que solicita', namePlaceholder: 'Nombre de quien pide', signedAs: 'Pides como', send: 'Enviar pedido', sending: 'Enviando…', stamp: 'Se guarda en un número de pedido con el nombre de quien pide, la lista de artículos y la hora en que lo envías.',
         needName: 'Escribe el nombre de quien pide para enviar.', errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errQty: 'Una cantidad no es válida.', errItems: 'Agrega al menos un artículo.',
@@ -302,7 +302,7 @@ const TEXT = {
         searchMode: 'Filter type', searchModes: { startsWith: 'Starts with', contains: 'Contains', equals: 'Equal to' },
         searchSigns: 'Search signs', searchSign: { before: 'Before', after: 'After', comma: 'Another search' }, searchSignOff: 'Not available with this filter type',
         searchSignHelp: { before: 'Another word BEFORE · rack$drawer', after: 'Another word AFTER · rack@drawer', comma: 'Either one matches · rack, shelf' },
-        typeMore: 'Type at least 2 letters or numbers.', typeOne: 'Type at least 1 letter or number.', none: 'Nothing was found.', noRelated: 'This cost center has no related codes yet (Code Relation): there is nothing to order.', errRelated: 'An item is no longer related to this cost center: remove it from the order.', more: 'There are more results: type more to narrow them.',
+        typeMore: 'Type at least 2 letters or numbers.', typeOne: 'Type at least 1 letter or number.', none: 'Nothing was found.', noRelated: 'This cost center has no related codes yet (Code Relation): there is nothing to order.', pickPlace: 'Choose the requesting place first: that way you see the codes that can be shipped to it.', noRelatedPlace: 'This place has no codes enabled for shipping yet (Shipping Code Relation): there is nothing to order.', changePlace: 'Each place has its own codes: changing the place clears what you already typed in the order. Change the place?', errRelated: 'An item is no longer enabled for that place (or cost center): remove it from the order.', more: 'There are more results: type more to narrow them.',
         qtyTitle: 'Quantity', add: 'Add to the order', cancel: 'Cancel', yourOrder: 'Your order', items: '{n} items', item1: '1 item', empty: 'You have not added anything yet. Find an item and choose the quantity.', remove: 'Remove',
         yourName: 'Who is ordering', placeLabel: 'Requesting place', placeChoose: 'Choose a place', needPlace: 'Choose the requesting place to send.', placeAt: 'Requesting place', namePlaceholder: 'Name of who is ordering', signedAs: 'Ordering as', send: 'Send order', sending: 'Sending…', stamp: 'It is saved under one order number with the name of who is ordering, the list of items and the time you send it.',
         needName: 'Type the name of who is ordering to send.', errGeneric: 'It could not be sent. Check your connection and try again.', errQty: 'A quantity is not valid.', errItems: 'Add at least one item.',
@@ -339,6 +339,10 @@ let fields = [];                // en qué se busca; vacío = en todo (código, 
 let nameValue = store.get(KEY_NAME);
 const KEY_PLACE = 'sgn_pm_place';   // el último lugar que solicita elegido en este aparato (si todavía existe en el catálogo)
 let placeId = Number(store.get(KEY_PLACE)) || 0;
+// Con lugares de envío en el catálogo, la lista de códigos es la del lugar elegido (Relación Código Envío): sin lugar no hay lista.
+const needPlace = () => (info.places || []).length > 0 && !placeId;
+const placeCount = () => { const p = (info.places || []).find((x) => x.id === placeId); return p ? p.count : 0; };
+const placeQuery = () => ((info.places || []).length ? `&placeId=${placeId || 0}` : '');
 let results = [];
 let total = 0;
 let picked = null;
@@ -408,7 +412,8 @@ function view() {
 function drawResults() {
     const box = $('results');
     if (!box) return;
-    if (info.relatedCount === 0) box.innerHTML = `<div class="msg">${esc(TEXT.noRelated)}</div>`;
+    if (needPlace()) box.innerHTML = `<div class="msg">${esc(TEXT.pickPlace)}</div>`;
+    else if ((info.places || []).length ? placeCount() === 0 : info.relatedCount === 0) box.innerHTML = `<div class="msg">${esc((info.places || []).length ? TEXT.noRelatedPlace : TEXT.noRelated)}</div>`;
     else if (!ready()) box.innerHTML = `<div class="msg">${esc(mode === 'contains' ? TEXT.typeMore : TEXT.typeOne)}</div>`;
     else if (!results.length) box.innerHTML = `<div class="msg">${esc(TEXT.none)}</div>`;
     else box.innerHTML = `<div class="list">${results.map((r, i) => `<button type="button" class="res" data-pick="${i}"><div><b>${highlight(r.code)}</b><span>${highlight(r.description)}</span><small>${highlight([r.uom, r.categories].filter(Boolean).join(' · '))}</small></div><i class="plus" aria-hidden="true">+</i></button>`).join('')}</div>${total > results.length ? `<div class="muted">${esc(TEXT.more)}</div>` : ''}`;
@@ -502,11 +507,12 @@ const rowVisible = (c) => (!tblFilter.total || totalOf(c) > 0) && [...tblFilter.
 // Pide la lista (la primera página o, con append, la siguiente) con el filtro del encabezado Artículo.
 async function loadCatalog(append) {
     const my = ++catSeq;
+    if (needPlace()) { catalog = { items: [], total: 0, loading: false, loaded: true, added: [] }; if (wide) drawTableBody(); return; } // sin lugar no hay lista
     catalog.loading = true;
     catalog.added = [];
     const offset = append ? catalog.items.length : 0;
     try {
-        const res = await fetch(`${API}/list?offset=${offset}&limit=100&q=${encodeURIComponent(searchTerms(query))}&mode=${mode}&fields=${fields.join(',')}`, { cache: 'no-store' });
+        const res = await fetch(`${API}/list?offset=${offset}&limit=100&q=${encodeURIComponent(searchTerms(query))}&mode=${mode}&fields=${fields.join(',')}${placeQuery()}`, { cache: 'no-store' });
         if (my !== catSeq) return;
         if (res.ok) {
             const body = await res.json();
@@ -563,7 +569,8 @@ function rowHtml(it, cols) {
 function tableBodyHtml(cols) {
     const items = tableRowItems();
     let msg = '';
-    if (info.relatedCount === 0) msg = TEXT.noRelated;
+    if (needPlace()) msg = TEXT.pickPlace;
+    else if ((info.places || []).length ? placeCount() === 0 : info.relatedCount === 0) msg = (info.places || []).length ? TEXT.noRelatedPlace : TEXT.noRelated;
     else if (filterActive()) msg = items.length ? '' : (cart.length ? TEXT.noMatch : TEXT.emptyTable);
     else if (!catalog.loaded) msg = TEXT.loading;
     else if (!items.length) msg = TEXT.none;
@@ -690,9 +697,9 @@ function addPicked() {
 async function search() {
     if (wide) { loadCatalog(false); return; } // tabla: el filtro Artículo acota la lista de códigos
     const my = ++seq;
-    if (!ready()) { results = []; total = 0; drawResults(); return; }
+    if (!ready() || needPlace()) { results = []; total = 0; drawResults(); return; }
     try {
-        const res = await fetch(`${API}/search?q=${encodeURIComponent(searchTerms(query))}&mode=${mode}&fields=${fields.join(',')}`, { cache: 'no-store' });
+        const res = await fetch(`${API}/search?q=${encodeURIComponent(searchTerms(query))}&mode=${mode}&fields=${fields.join(',')}${placeQuery()}`, { cache: 'no-store' });
         if (my !== seq) return;
         if (!res.ok) { results = []; total = 0; drawResults(); return; }
         const body = await res.json();
@@ -795,7 +802,20 @@ $('view').addEventListener('input', (event) => {
     if (t.id === 'q') { query = t.value; queueSearch(); }
     else if (t.id === 'qty' && picked) picked.qty = t.value;
     else if (t.id === 'name') nameValue = t.value;
-    else if (t.id === 'place') { placeId = Number(t.value) || 0; store.set(KEY_PLACE, String(placeId || '')); }
+    else if (t.id === 'place') {
+        const next = Number(t.value) || 0;
+        if (next === placeId) return;
+        // cada lugar tiene sus propios códigos: lo que ya se escribió en el pedido es de la lista del lugar anterior
+        if (cart.length && !window.confirm(TEXT.changePlace)) { t.value = String(placeId || ''); return; }
+        placeId = next;
+        store.set(KEY_PLACE, String(placeId || ''));
+        cart = [];
+        picked = null;
+        results = []; total = 0;
+        catalog = { items: [], total: 0, loading: false, loaded: false, added: [] };
+        drawOrder();
+        if (!wide) { drawResults(); drawSel(); if (ready()) search(); }
+    }
     else if (t.dataset && t.dataset.item !== undefined) {
         // una casilla de la tabla por día: código y fecha; el código entra al pedido al ponerle una cantidad y sale si se queda sin ninguna
         const id = Number(t.dataset.item);

@@ -203,6 +203,7 @@ const {
     createCodeShipRelation,
     deleteCodeShipRelation,
     countCodeShipRelationsByPlace,
+    countShipItemsByPlace,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,
@@ -7865,11 +7866,11 @@ function optionalSessionUser(req) {
 }
 const manualItemsCache = new Map(); // clientId:prueba -> { at, items }: unos segundos, para no leer todos los artículos en cada letra
 // costCenterId > 0: solo los códigos relacionados con ese centro (Relación Código).
-function manualItemsFor(clientId, isTest, costCenterId = 0) {
-    const key = `${clientId}:${isTest ? 1 : 0}:${costCenterId || 0}`;
+function manualItemsFor(clientId, isTest, costCenterId = 0, placeId = 0) {
+    const key = `${clientId}:${isTest ? 1 : 0}:${costCenterId || 0}:${placeId || 0}`;
     const hit = manualItemsCache.get(key);
     if (hit && Date.now() - hit.at < 20000) return hit.items;
-    const items = listManualOrderItems(clientId, isTest, costCenterId || 0).map((r) => {
+    const items = listManualOrderItems(clientId, isTest, costCenterId || 0, placeId || 0).map((r) => {
         const sku = String(r.record_number).padStart(6, '0');
         const cats = [r.category_inventario, r.category_compra, r.category_almacenamiento, r.category_rotacion, r.category_manejo, r.category_riesgo, r.category_vidautil].map((c) => String(c || '').trim()).filter(Boolean);
         return {
@@ -7884,7 +7885,7 @@ function manualItemsFor(clientId, isTest, costCenterId = 0) {
 const manualAddDays = (day, n) => { const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 // Los renglones de un pedido a partir de lo que llega (artículos, cantidades y para cuándo): cada artículo debe existir en la empresa, las cantidades van de 0 a 999999 y los repetidos (mismo artículo y misma fecha) se suman.
 // needBy = AAAA-MM-DD, desde mañana y hasta 14 días en la zona horaria del cliente; vacío (o «asap») = lo antes posible. Un artículo para dos fechas son dos renglones. { lines } o { error }.
-function manualLinesFrom(rawItems, clientId, isTest, costCenterId = 0) {
+function manualLinesFrom(rawItems, clientId, isTest, costCenterId = 0, placeId = 0) {
     const raw = Array.isArray(rawItems) ? rawItems : [];
     if (!raw.length) return { error: { message: 'El pedido no trae artículos.', code: 'ITEMS' } };
     if (raw.length > MANUAL_ORDER_MAX_LINES) return { error: { message: `Un pedido lleva hasta ${MANUAL_ORDER_MAX_LINES} artículos.`, code: 'TOOMANY' } };
@@ -7907,13 +7908,13 @@ function manualLinesFrom(rawItems, clientId, isTest, costCenterId = 0) {
         const prev = wanted.get(key);
         wanted.set(key, { id, needBy, quantity: Math.round((((prev && prev.quantity) || 0) + quantity) * 1000) / 1000 });
     }
-    const view = new Map(manualItemsFor(clientId, isTest, costCenterId).map((it) => [it.id, it]));
+    const view = new Map(manualItemsFor(clientId, isTest, costCenterId, placeId).map((it) => [it.id, it]));
     const lines = [];
     for (const { id, needBy, quantity } of wanted.values()) {
         const it = view.get(id);
         if (!it) {
-            // existe en la empresa pero ya no está relacionado con este centro de costos
-            if (costCenterId && manualItemsFor(clientId, isTest).some((x) => x.id === id)) return { error: { message: 'Un artículo no está relacionado con este centro de costos.', code: 'RELATED' } };
+            // existe en la empresa pero ya no está relacionado con este centro de costos (o, en un pedido externo, ya no está habilitado para ese lugar)
+            if ((costCenterId || placeId) && manualItemsFor(clientId, isTest).some((x) => x.id === id)) return { error: { message: placeId ? 'Un artículo no está habilitado para enviarse a ese lugar.' : 'Un artículo no está relacionado con este centro de costos.', code: 'RELATED' } };
             return { error: { message: 'Un artículo ya no existe.', code: 'ITEM' } };
         }
         lines.push({ skuItemId: it.id, code: it.code, description: it.description, uom: it.uom, categories: it.categories, quantity, needBy });
@@ -7932,6 +7933,15 @@ app.get('/pm/:token', publicLayoutLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' });
     res.sendFile(path.join(PUBLIC_DIR, 'PedidoManualPublica.html'));
 });
+// «Lugar que solicita»: con lugares de envío activos en el catálogo, los códigos que se pueden pedir son los habilitados para ese lugar en Relación Código Envío (en el centro del QR) y hay que elegir el lugar para verlos; sin
+// lugares, la lista de siempre (Relación Código con el centro). required = hay lugares; placeId = el lugar pedido si es uno de ellos (0 si no).
+function manualPlaceScope(row, isTest, rawPlaceId) {
+    const places = listArticleCategories(row.clientId, 'lugares-envio', isTest).filter((r) => r.status === 'active' && r.name);
+    if (!places.length) return { required: false, placeId: 0, places };
+    const wanted = Number(rawPlaceId);
+    const place = places.find((p) => p.id === wanted) || null;
+    return { required: true, placeId: place ? place.id : 0, places };
+}
 app.get('/api/public/pedido-manual/:token', publicLayoutLimiter, (req, res) => {
     const target = manualOrderTarget(req, res);
     if (!target) return;
@@ -7947,7 +7957,8 @@ app.get('/api/public/pedido-manual/:token', publicLayoutLimiter, (req, res) => {
         // para cuándo: el día de hoy en la zona del cliente y hasta cuántos días adelante se puede pedir (desde mañana)
         today: clientLocalDay(row.clientId), maxDays: MANUAL_ORDER_MAX_DAYS,
         // «Lugar que solicita»: los lugares de envío activos del catálogo (si no hay ninguno, el QR no lo pide)
-        places: listArticleCategories(row.clientId, 'lugares-envio', isTest).filter((r) => r.status === 'active' && r.name).map((r) => ({ id: r.id, name: r.name })),
+        // y cuántos códigos tiene habilitados cada uno (si es 0, no hay nada que pedir para ese lugar)
+        places: (() => { const counts = countShipItemsByPlace(row.clientId, isTest, row.costCenterId || 0); return listArticleCategories(row.clientId, 'lugares-envio', isTest).filter((r) => r.status === 'active' && r.name).map((r) => ({ id: r.id, name: r.name, count: counts.get(r.id) || 0 })); })(),
         relatedCount: manualItemsFor(row.clientId, isTest, row.costCenterId || 0).length,
     });
 });
@@ -7962,9 +7973,11 @@ app.get('/api/public/pedido-manual/:token/search', publicManualSearchLimiter, (r
     const query = publicSearchQuery(req.query.q);
     const asked = String(req.query.fields || '').split(',').map((f) => f.trim()).filter((f) => MANUAL_ORDER_SEARCH_FIELDS.includes(f));
     const fields = asked.length ? asked : MANUAL_ORDER_SEARCH_FIELDS;
+    const scope = manualPlaceScope(row, isTest, req.query.placeId);
+    if (scope.required && !scope.placeId) return res.json({ total: 0, items: [], needPlace: true });
     if (!SearchSyntax.ready(mode, query)) return res.json({ total: 0, items: [] });
     const matches = publicSearchMatcher(mode, query);
-    const found = manualItemsFor(row.clientId, isTest, row.costCenterId || 0).filter((it) => matches(fields.flatMap((k) => it.by[k])));
+    const found = manualItemsFor(row.clientId, isTest, row.costCenterId || 0, scope.placeId).filter((it) => matches(fields.flatMap((k) => it.by[k])));
     res.json({ total: found.length, items: found.slice(0, 20).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories })) });
 });
 // La tabla por día del QR muestra DE INICIO toda la lista de códigos relacionados con el centro (con su descripción única) y los filtros de sus encabezados la acotan: por páginas (offset y límite de hasta 200), con el mismo motor de búsqueda
@@ -7979,7 +7992,9 @@ app.get('/api/public/pedido-manual/:token/list', publicManualSearchLimiter, (req
     const query = publicSearchQuery(req.query.q);
     const asked = String(req.query.fields || '').split(',').map((f) => f.trim()).filter((f) => MANUAL_ORDER_SEARCH_FIELDS.includes(f));
     const fields = asked.length ? asked : MANUAL_ORDER_SEARCH_FIELDS;
-    let found = manualItemsFor(row.clientId, isTest, row.costCenterId || 0);
+    const scope = manualPlaceScope(row, isTest, req.query.placeId);
+    if (scope.required && !scope.placeId) return res.json({ total: 0, offset: 0, items: [], needPlace: true });
+    let found = manualItemsFor(row.clientId, isTest, row.costCenterId || 0, scope.placeId);
     if (query && SearchSyntax.ready(mode, query)) {
         const matches = publicSearchMatcher(mode, query);
         found = found.filter((it) => matches(fields.flatMap((k) => it.by[k])));
@@ -8008,7 +8023,7 @@ app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req
         place = activePlaces.find((p) => p.id === Number(req.body && req.body.placeId)) || null;
         if (!place) return res.status(400).json({ message: 'Falta el lugar que solicita.', code: 'PLACE' });
     }
-    const built = manualLinesFrom(req.body && req.body.items, row.clientId, isTest, row.costCenterId || 0);
+    const built = manualLinesFrom(req.body && req.body.items, row.clientId, isTest, row.costCenterId || 0, place ? place.id : 0);
     if (built.error) return res.status(400).json(built.error);
     const lines = built.lines;
     const out = createManualOrder({ clientId: row.clientId, costCenterId: row.costCenterId || 0, requesterName: name, requesterUserId: signedIn ? user.sub : null, source: signedIn ? 'user' : 'qr', lines, placeId: place ? place.id : 0, placeName: place ? place.name : '' });
