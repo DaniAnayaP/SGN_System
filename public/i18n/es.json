@@ -4295,6 +4295,12 @@
     "pmNoRelatedPlace": "Este lugar todavía no tiene códigos habilitados para envío desde este centro de costos (Relación Código Envío): no hay nada que pedir.",
     "pmNeedPlace": "Elige el lugar que solicita para enviar.",
     "pmErrRelated": "Un artículo ya no está habilitado para ese lugar (o centro de costos): quítalo del pedido.",
+    "pmWhenAll": "Todo el pedido para",
+    "pmAsap": "Lo antes posible",
+    "pmTomorrow": "Mañana",
+    "pmNeedBy": "Para",
+    "pmAddDate": "+ Otra fecha para este artículo",
+    "pmErrDate": "Una fecha no es válida: elige desde mañana y hasta 14 días.",
     "pmNewButton": "Nuevo pedido",
     "pmListEmpty": "Todavía no hay pedidos.",
     "pmSearchPlaceholder": "Código, descripción, UdM o categoría",
@@ -5998,6 +6004,10 @@
     "pmEstatus": {
       "what": "En qué va cada renglón del pedido: Pendiente (recién llegó) o Surtido (ya se entregó). Quien tiene Ver y Operar en la columna Estatus lo cambia desde aquí; cada cambio queda en el historial.",
       "example": "entregas las 24 piezas de leche: cambias el renglón a Surtido."
+    },
+    "pmFechaEntrega": {
+      "what": "Para cuándo quieres que llegue lo que pides: desde mañana y hasta 14 días, o «Lo antes posible». «Todo el pedido para» pone la misma fecha a todo lo que no hayas puesto aparte; en cada artículo puedes cambiarle la fecha o repartirlo en varias con «+ Otra fecha para este artículo». Cada fecha queda como un renglón del pedido.",
+      "example": "pides 20 cajas de leche: 12 para el jueves y 8 para el lunes — dos fechas del mismo artículo."
     },
     "pmLugar": {
       "what": "El lugar que pide el pedido (por ejemplo un hospital fuera del centro de distribución). Cada lugar solo muestra los códigos habilitados para enviarle desde el centro de costos elegido (Relación Código Envío); al cambiar de lugar se quita del pedido lo que no esté habilitado para el nuevo.",

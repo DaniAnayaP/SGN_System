@@ -2017,6 +2017,19 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .pm-app-result i{ font-size: 1.3rem; color: var(--home-accent); flex-shrink: 0; }
 .pm-app-remove{ flex-shrink: 0; width: 2rem; height: 2rem; border-radius: 0.6rem; border: 1px solid var(--home-border); background: transparent; color: var(--home-text-muted); font-size: 1rem; cursor: pointer; }
 .pm-app-qty-label{ padding: 0 1rem; font-size: 0.72rem; font-weight: 600; color: var(--home-text-secondary); }
+/* Para cuándo: «Todo el pedido para», y por artículo una cantidad con su fecha (tocar la cantidad la cambia) y «+ Otra fecha» */
+.pm-app-whenrow{ display: flex; flex-direction: column; gap: 0.3rem; }
+.pm-app-whenrow label{ font-size: 0.72rem; font-weight: 600; color: var(--home-text-secondary); }
+.pm-app-whensel{ min-width: 0; }
+.home-select-sheet .pm-app-whensel{ width: calc(100% - 2rem); margin: 0 1rem; }
+.pm-app-oline{ display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.55rem; }
+.pm-app-oline > .pm-app-line{ margin-bottom: 0; }
+.pm-app-part{ display: flex; align-items: center; gap: 0.45rem; padding-left: 0.5rem; }
+.pm-app-partqty{ flex-shrink: 0; min-width: 4.2rem; display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem; padding: 0.55rem 0.65rem; border: 1px solid var(--home-border); border-radius: 0.6rem; background: var(--home-bg); color: var(--home-text-primary); font: inherit; font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer; }
+.pm-app-partqty small{ font-weight: 500; font-size: 0.66rem; color: var(--home-text-muted); }
+.pm-app-part .pm-app-whensel{ flex: 1; width: auto; padding: 0.55rem 0.5rem; font-size: 0.8rem; }
+.pm-app-split{ align-self: flex-start; margin-left: 0.5rem; padding: 0.2rem 0; border: 0; background: transparent; color: var(--home-accent); font: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer; }
+.pm-app-need{ display: block; }
 .pm-app-stepper{ display: flex; align-items: center; gap: 0.5rem; padding: 0 1rem; }
 .pm-app-stepper button{ width: 2.6rem; height: 2.6rem; flex-shrink: 0; border-radius: 0.7rem; border: 1px solid var(--home-border); background: var(--home-surface-2); color: var(--home-accent); font-size: 1.2rem; cursor: pointer; }
 .pm-app-stepper input{ flex: 1; min-width: 0; text-align: center; font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--home-bg); border: 1px solid var(--home-border); border-radius: 0.7rem; padding: 0.6rem; color: var(--home-text-primary); font-family: inherit; }

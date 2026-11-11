@@ -7885,11 +7885,12 @@ function manualItemsFor(clientId, isTest, costCenterId = 0, placeId = 0) {
 const manualAddDays = (day, n) => { const d = new Date(`${day}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 // Los renglones de un pedido a partir de lo que llega (artículos, cantidades y para cuándo): cada artículo debe existir en la empresa, las cantidades van de 0 a 999999 y los repetidos (mismo artículo y misma fecha) se suman.
 // needBy = AAAA-MM-DD, desde mañana y hasta 14 días en la zona horaria del cliente; vacío (o «asap») = lo antes posible. Un artículo para dos fechas son dos renglones. { lines } o { error }.
-function manualLinesFrom(rawItems, clientId, isTest, costCenterId = 0, placeId = 0) {
+// refDate (opcional): el momento en que la persona armó el pedido (la App que mandó sin señal lo trae); «mañana» y los 14 días se cuentan desde ESE día y no desde el día en que el pedido llega al servidor.
+function manualLinesFrom(rawItems, clientId, isTest, costCenterId = 0, placeId = 0, refDate = undefined) {
     const raw = Array.isArray(rawItems) ? rawItems : [];
     if (!raw.length) return { error: { message: 'El pedido no trae artículos.', code: 'ITEMS' } };
     if (raw.length > MANUAL_ORDER_MAX_LINES) return { error: { message: `Un pedido lleva hasta ${MANUAL_ORDER_MAX_LINES} artículos.`, code: 'TOOMANY' } };
-    const today = clientLocalDay(clientId);
+    const today = clientLocalDay(clientId, refDate);
     const minDay = manualAddDays(today, 1);
     const maxDay = manualAddDays(today, MANUAL_ORDER_MAX_DAYS);
     const wanted = new Map();
@@ -8131,7 +8132,8 @@ app.get('/api/business/pedido-manual/items', requireAuth, (req, res) => {
     if (places.length) listManualItemShips(req.user.clientId, !!req.user.isTestAccount).forEach((r) => { if (!activePlaceIds.has(r.place_id)) return; if (!shipOf.has(r.sku_item_id)) shipOf.set(r.sku_item_id, []); shipOf.get(r.sku_item_id).push([r.cost_center_id, r.place_id]); });
     const items = manualItemsFor(req.user.clientId, !!req.user.isTestAccount).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories, centers: centersOf.get(id) || [], ...(places.length ? { ship: shipOf.get(id) || [] } : {}) }));
     res.set('Cache-Control', 'no-store');
-    res.json({ items, places, at: new Date().toISOString() });
+    // today / maxDays: «para cuándo» (desde mañana, hasta 14 días) se cuenta con el día de la empresa; la App lo guarda para ofrecer las fechas también sin señal
+    res.json({ items, places, today: clientLocalDay(req.user.clientId), maxDays: MANUAL_ORDER_MAX_DAYS, at: new Date().toISOString() });
 });
 app.post('/api/business/pedido-manual/orders', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -8145,8 +8147,6 @@ app.post('/api/business/pedido-manual/orders', requireAuth, (req, res) => {
         place = activePlaces.find((p) => p.id === Number(req.body && req.body.placeId)) || null;
         if (!place) return res.status(400).json({ message: 'Falta el lugar que solicita.', code: 'PLACE' });
     }
-    const built = manualLinesFrom(req.body && req.body.items, req.user.clientId, !!req.user.isTestAccount, center.id, place ? place.id : 0);
-    if (built.error) return res.status(400).json(built.error);
     const clientRef = req.body && typeof req.body.clientRef === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(req.body.clientRef) ? req.body.clientRef : null;
     res.set('Cache-Control', 'no-store');
     // el mismo pedido reenviado (la respuesta se perdió y la App lo volvió a mandar): se contesta el que ya existe
@@ -8156,6 +8156,9 @@ app.post('/api/business/pedido-manual/orders', requireAuth, (req, res) => {
     let createdAt = null;
     const clientAt = req.body && typeof req.body.clientAt === 'string' ? Date.parse(req.body.clientAt) : NaN;
     if (Number.isFinite(clientAt) && clientAt >= Date.now() - 7 * 86400000 && clientAt < Date.now() - 120000) createdAt = new Date(clientAt).toISOString().slice(0, 19).replace('T', ' ');
+    // «Para cuándo» se cuenta desde el día en que se armó el pedido (el del celular si se mandó sin señal), no desde el día en que llega: un pedido hecho ayer sin señal para «mañana» sigue siendo válido al reconectar.
+    const built = manualLinesFrom(req.body && req.body.items, req.user.clientId, !!req.user.isTestAccount, center.id, place ? place.id : 0, createdAt ? new Date(clientAt) : undefined);
+    if (built.error) return res.status(400).json(built.error);
     // El nombre de quien pide lo escribe la persona (la App lo trae escrito con el de la cuenta y se puede cambiar); si no llega, el de la cuenta.
     const typed = String((req.body && req.body.requesterName) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
     const requesterName = typed || String(changedByLabel(req) || '').replace(/\s+/g, ' ').trim().slice(0, 60);

@@ -3,7 +3,8 @@
 //   · la lista de pedidos (un pedido = varios artículos) con su estatus: Pendiente, Parcial o Surtido;
 //   · Nuevo pedido: se busca en el catálogo de artículos (por código, descripción, UdM o categoría, con la misma sintaxis de búsqueda de todo el sistema),
 //     se elige la cantidad y se envía. Si la empresa tiene Lugares de Envío, el pedido también pide el «Lugar que solicita» y solo salen los códigos habilitados para ese lugar desde el centro (Relación Código Envío).
-//     El catálogo (con los lugares y qué código va a cuál) se guarda en el celular, así que se puede buscar y armar el pedido SIN señal: el pedido queda en la cola
+//     Cada cantidad lleva su fecha («Para»: desde mañana y hasta 14 días, o lo antes posible): «Todo el pedido para» arriba y, por artículo, «+ Otra fecha» reparte la cantidad en dos fechas (igual que el QR en el celular).
+//     El catálogo (con los lugares, qué código va a cuál y el día de la empresa) se guarda en el celular, así que se puede buscar y armar el pedido SIN señal: el pedido queda en la cola
 //     de AppOfflineSync.js ("En tu celular") y se envía solo al reconectar con la hora a la que se mandó (el servidor guarda aparte la hora en que lo recibió);
 //   · con permiso (Ver y Operar en la columna Estatus del árbol), cada renglón se marca Pendiente / Surtido; sin señal el cambio también queda en la cola.
 // El nombre de quien pide sale de la cuenta. Es una parte de lo que hace la pantalla Web: corregir cantidades, eliminar y el QR se siguen haciendo allá.
@@ -144,6 +145,8 @@ let queuedOrders = [];      // pedidos que se mandaron sin señal y siguen en la
 let canStatus = false;
 let catalog = [];           // los artículos que se pueden pedir
 let catalogPlaces = [];     // «Lugar que solicita»: los lugares de envío activos [{ id, name }]; vacío = la empresa no usa lugares y el pedido es el de siempre (por centro de costos)
+let dayShift = 0;           // días de diferencia entre el día de la empresa y el del reloj del celular cuando se bajó el catálogo (para ofrecer «mañana» y los 14 días también sin señal)
+let maxDays = 14;           // hasta cuántos días adelante se puede pedir (desde mañana)
 let catalogById = new Map();
 let catalogState = 'loading'; // 'loading' | 'online' | 'cached' | 'none'
 let view = 'list';          // 'list' | 'order' | 'new' | 'done' (el número de pedido recién enviado)
@@ -171,6 +174,34 @@ function formatTime(iso) {
     return d.toLocaleString(currentLang() === 'es' ? 'es-MX' : 'en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 const qtyText = (n) => Number(n).toLocaleString(currentLang() === 'es' ? 'es-MX' : 'en-US', { maximumFractionDigits: 3 });
+// ---- Para cuándo: cada cantidad lleva su fecha (desde mañana y hasta 14 días, o «lo antes posible» = ''); los días son los de la empresa, aunque el celular esté sin señal (dayShift) ----
+const pad2 = (n) => String(n).padStart(2, '0');
+const isoOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; // el día del reloj del celular
+const dayDate = (iso) => new Date(`${iso}T00:00:00Z`);
+const addDaysIso = (iso, n) => { const d = dayDate(iso); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const appToday = () => addDaysIso(isoOf(new Date()), dayShift);
+const allDays = () => Array.from({ length: maxDays }, (_, i) => addDaysIso(appToday(), i + 1));
+const capFirst = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+const dayShort = (iso) => {
+    const d = dayDate(iso);
+    const f = (o) => new Intl.DateTimeFormat(currentLang() === 'es' ? 'es-MX' : 'en-US', { timeZone: 'UTC', ...o }).format(d).replace('.', '');
+    return `${capFirst(f({ weekday: 'short' }))} ${d.getUTCDate()} ${f({ month: 'short' })}`;
+};
+const whenLabel = (w) => (w ? dayShort(w) : t('home.pmAsap'));
+const whenOptions = (selected) => {
+    const days = allDays();
+    const extra = selected && !days.includes(selected) ? `<option value="${esc(selected)}" selected>${esc(dayShort(selected))}</option>` : ''; // una fecha que ya pasó se sigue viendo (el envío avisa)
+    return `<option value=""${selected === '' ? ' selected' : ''}>${esc(t('home.pmAsap'))}</option>${extra}${days.map((d, i) => `<option value="${d}"${selected === d ? ' selected' : ''}>${esc(i === 0 ? `${t('home.pmTomorrow')} · ${dayShort(d)}` : dayShort(d))}</option>`).join('')}`;
+};
+const roundQ = (n) => Math.round(n * 1000) / 1000;
+const partOf = (c, when) => c.parts.find((p) => p.when === when);
+function setPart(c, when, quantity) { const p = partOf(c, when); if (p) p.quantity = quantity; else c.parts.push({ when, quantity }); }
+// las cantidades de una misma fecha se juntan
+function mergeParts(c) {
+    const merged = [];
+    c.parts.forEach((p) => { const same = merged.find((x) => x.when === p.when); if (same) same.quantity = roundQ(same.quantity + p.quantity); else merged.push(p); });
+    c.parts = merged;
+}
 const itemsText = (n) => (n === 1 ? t('home.pmItem1') : t('home.pmItemsN', { n }));
 const userLabel = () => (currentUser && (currentUser.name || currentUser.username)) || '';
 
@@ -200,10 +231,16 @@ async function catalogRead() {
         req.onerror = () => reject(req.error);
     });
 }
-function setCatalog(items, places) {
+// meta: { today, maxDays } (recién bajado: el día de la empresa) o { dayShift, maxDays } (el catálogo guardado en el celular).
+function setCatalog(items, places, meta) {
     catalog = items;
     catalogPlaces = Array.isArray(places) ? places : [];
     catalogById = new Map(items.map((it) => [it.id, it]));
+    const m = meta || {};
+    if (typeof m.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(m.today)) dayShift = Math.round((dayDate(m.today) - dayDate(isoOf(new Date()))) / 86400000);
+    else if (Number.isInteger(m.dayShift)) dayShift = m.dayShift;
+    else dayShift = 0;
+    maxDays = Number.isInteger(m.maxDays) && m.maxDays > 0 ? m.maxDays : 14;
 }
 const usesPlaces = () => catalogPlaces.length > 0;
 async function loadCatalog() {
@@ -213,18 +250,18 @@ async function loadCatalog() {
         const res = await fetch(apiUrl(`${ORDERS_URL}/items`), { credentials: 'include' });
         if (res.ok) {
             const body = await res.json();
-            setCatalog(body.items || [], body.places || []);
+            setCatalog(body.items || [], body.places || [], { today: body.today, maxDays: body.maxDays });
             catalogState = 'online';
-            catalogSave({ clientId, items: catalog, places: catalogPlaces, at: body.at }).catch(() => { /* sin almacenamiento: se baja otra vez la próxima */ });
+            catalogSave({ clientId, items: catalog, places: catalogPlaces, dayShift, maxDays, at: body.at }).catch(() => { /* sin almacenamiento: se baja otra vez la próxima */ });
             return;
         }
     } catch { /* sin señal: se usa el catálogo guardado */ }
     try {
         const saved = await catalogRead();
         // el catálogo guardado solo sirve si es de la misma empresa (otra cuenta en el mismo celular no ve artículos ajenos)
-        if (saved && Array.isArray(saved.items) && (saved.clientId ?? null) === clientId) { setCatalog(saved.items, saved.places); catalogState = 'cached'; return; }
+        if (saved && Array.isArray(saved.items) && (saved.clientId ?? null) === clientId) { setCatalog(saved.items, saved.places, { dayShift: saved.dayShift, maxDays: saved.maxDays }); catalogState = 'cached'; return; }
     } catch { /* sin catálogo guardado */ }
-    setCatalog([], []);
+    setCatalog([], [], null);
     catalogState = 'none';
 }
 
@@ -292,7 +329,7 @@ async function refreshQueuedOrders() {
         try { body = JSON.parse(item.body || '{}'); } catch { return; }
         const lines = (body.items || []).map((it) => {
             const art = catalogById.get(it.id) || {};
-            return { code: art.code || '', description: art.description || `#${it.id}`, uom: art.uom || '', quantity: it.quantity, status: 'pending' };
+            return { code: art.code || '', description: art.description || `#${it.id}`, uom: art.uom || '', quantity: it.quantity, needBy: it.needBy || '', status: 'pending' };
         });
         const cc = costCenters.find((c) => c.id === body.costCenterId);
         const place = catalogPlaces.find((p) => p.id === body.placeId);
@@ -430,7 +467,7 @@ function renderOrder() {
         const row = document.createElement('div');
         row.className = 'pm-app-line';
         const editable = canStatus && !o.queued;
-        row.innerHTML = `<div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, l.uom].filter(Boolean).join(' · '))}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b>`;
+        row.innerHTML = `<div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, l.uom].filter(Boolean).join(' · '))}</span><span class="pm-app-need">${esc(`${t('home.pmNeedBy')}: ${whenLabel(l.needBy)}`)}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b>`;
         const pill = document.createElement(editable ? 'button' : 'span');
         if (editable) { pill.type = 'button'; pill.setAttribute('data-help-key', 'pmEstatus'); pill.setAttribute('aria-label', t('main.colPmEstatus')); }
         pill.className = `pm-app-pill pm-app-pill-${o.queued ? 'queued' : l.status}${editable ? ' pm-app-pill-btn' : ''}`;
@@ -468,7 +505,7 @@ function openSheet(titleText, options, currentValue, onPick) {
 }
 
 // --- Nuevo pedido ----------------------------------------------------------------------------------------------------------------------
-// draft: { costCenterId, cart: Map(id → { item, quantity }), query, mode, fields, requesterName, clientRef }
+// draft: { costCenterId, placeId, when, cart: Map(id → { item, parts: [{ when, quantity }] }), query, mode, fields, requesterName, clientRef }
 let draft = null;
 const NAME_KEY = 'sgn_pm_name';
 const PLACE_KEY = 'sgn_pm_app_place'; // el último «Lugar que solicita» elegido en este celular (si todavía existe en el catálogo)
@@ -495,7 +532,8 @@ function startNewOrder() {
     // el lugar que solicita: el último que se usó en este celular, si todavía está en el catálogo (sin lugares en la empresa no se pide)
     let placeId = null;
     try { const saved = Number(localStorage.getItem(PLACE_KEY)); if (saved && catalogPlaces.some((p) => p.id === saved)) placeId = saved; } catch { /* sin almacenamiento */ }
-    draft = { costCenterId, placeId, cart: new Map(), query: '', mode: 'contains', fields: [], requesterName: name || userLabel(), clientRef: newRef() };
+    // when: «Todo el pedido para» ('' = lo antes posible); cart: Map(id → { item, parts: [{ when, quantity }] }), una cantidad por fecha
+    draft = { costCenterId, placeId, when: '', cart: new Map(), query: '', mode: 'contains', fields: [], requesterName: name || userLabel(), clientRef: newRef() };
     view = 'new';
     render();
 }
@@ -518,7 +556,7 @@ function pruneCart() {
     if (gone.length) showToast(t(usesPlaces() ? 'home.pmCartPrunedPlace' : 'home.pmCartPruned', { n: gone.length }));
 }
 // Un error del servidor en el idioma de la App: por su código, o el texto que trae.
-const sendErrorText = (body) => (body && body.code === 'PLACE' ? t('home.pmNeedPlace') : (body && body.code === 'RELATED' ? t('home.pmErrRelated') : (body && body.message) || t('home.pmErrSend')));
+const sendErrorText = (body) => (body && body.code === 'PLACE' ? t('home.pmNeedPlace') : (body && body.code === 'RELATED' ? t('home.pmErrRelated') : (body && body.code === 'DATE' ? t('home.pmErrDate') : (body && body.message) || t('home.pmErrSend'))));
 function searchCatalog() {
     if (!searchReady()) return null;
     const test = window.SearchSyntax.compile(draft.mode, searchTerms(draft.query));
@@ -735,24 +773,77 @@ function renderNew() {
     const sendDraw = () => { sendBtn.disabled = !draft.cart.size || draft.costCenterId === null || (usesPlaces() && draft.placeId === null); };
     const cartDraw = () => {
         cartBox.innerHTML = `<h4 class="pm-app-title">${esc(t('home.pmCart'))}${draft.cart.size ? ` · ${esc(itemsText(draft.cart.size))}` : ''}</h4>`;
+        // para cuándo se pide todo el pedido: lo que va a esa fecha cambia con ella (lo que se puso aparte en otra fecha se respeta)
+        const whenAll = document.createElement('div');
+        whenAll.className = 'pm-app-whenrow';
+        whenAll.setAttribute('data-help-key', 'pmFechaEntrega');
+        whenAll.innerHTML = `<label for="pm-app-defwhen">${esc(t('home.pmWhenAll'))}</label><select id="pm-app-defwhen" class="pm-app-input pm-app-whensel">${whenOptions(draft.when)}</select>`;
+        whenAll.querySelector('select').addEventListener('change', (event) => {
+            const prev = draft.when;
+            draft.when = event.target.value;
+            draft.cart.forEach((c) => { c.parts.forEach((p) => { if (p.when === prev) p.when = draft.when; }); mergeParts(c); });
+            cartDraw();
+        });
+        cartBox.appendChild(whenAll);
         if (!draft.cart.size) {
             const empty = document.createElement('p');
             empty.className = 'pm-app-note';
             empty.textContent = t('home.pmCartEmpty');
             cartBox.appendChild(empty);
         }
-        draft.cart.forEach(({ item, quantity }, id) => {
-            const row = document.createElement('div');
-            row.className = 'pm-app-line';
-            row.innerHTML = `<div class="pm-app-line-main"><p>${esc(item.description)}</p><span>${esc([item.code, item.uom].filter(Boolean).join(' · '))}</span></div><b class="pm-app-qty">${esc(qtyText(quantity))}</b>`;
+        draft.cart.forEach((c, id) => {
+            const { item } = c;
+            const box = document.createElement('div');
+            box.className = 'pm-app-oline';
+            const head = document.createElement('div');
+            head.className = 'pm-app-line';
+            head.innerHTML = `<div class="pm-app-line-main"><p>${esc(item.description)}</p><span>${esc([item.code, item.uom].filter(Boolean).join(' · '))}</span></div>`;
             const rm = document.createElement('button');
             rm.type = 'button';
             rm.className = 'pm-app-remove';
             rm.setAttribute('aria-label', t('home.pmRemove'));
             rm.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
             rm.addEventListener('click', () => { draft.cart.delete(id); cartDraw(); });
-            row.appendChild(rm);
-            cartBox.appendChild(row);
+            head.appendChild(rm);
+            box.appendChild(head);
+            // una cantidad con su fecha por renglón: tocar la cantidad la cambia; la fecha se elige ahí mismo
+            c.parts.forEach((p, j) => {
+                const row = document.createElement('div');
+                row.className = 'pm-app-part';
+                const qtyBtn = document.createElement('button');
+                qtyBtn.type = 'button';
+                qtyBtn.className = 'pm-app-partqty';
+                qtyBtn.setAttribute('aria-label', t('home.pmQuantity'));
+                qtyBtn.innerHTML = `${esc(qtyText(p.quantity))} <small>${esc(item.uom || '')}</small>`;
+                qtyBtn.addEventListener('click', () => openQuantity(item, p.when));
+                const sel = document.createElement('select');
+                sel.className = 'pm-app-input pm-app-whensel';
+                sel.setAttribute('aria-label', t('home.pmNeedBy'));
+                sel.innerHTML = whenOptions(p.when);
+                sel.addEventListener('change', () => { p.when = sel.value; mergeParts(c); cartDraw(); });
+                row.append(qtyBtn, sel);
+                if (c.parts.length > 1) {
+                    const del = document.createElement('button');
+                    del.type = 'button';
+                    del.className = 'pm-app-remove';
+                    del.setAttribute('aria-label', t('home.pmRemove'));
+                    del.textContent = '×';
+                    del.addEventListener('click', () => { c.parts.splice(j, 1); cartDraw(); });
+                    row.appendChild(del);
+                }
+                box.appendChild(row);
+            });
+            // «+ Otra fecha»: el artículo se reparte en dos fechas (la nueva lleva el primer día que todavía no tiene)
+            const free = ['', ...allDays()].find((w) => !partOf(c, w));
+            if (free !== undefined) {
+                const split = document.createElement('button');
+                split.type = 'button';
+                split.className = 'pm-app-split';
+                split.textContent = t('home.pmAddDate');
+                split.addEventListener('click', () => { c.parts.push({ when: free, quantity: 1 }); cartDraw(); });
+                box.appendChild(split);
+            }
+            cartBox.appendChild(box);
         });
         sendDraw();
     };
@@ -761,16 +852,21 @@ function renderNew() {
 }
 
 // La cantidad de un artículo (hoja desde abajo): − / número / + y «Agregar al pedido».
-function openQuantity(item) {
+// when: la fecha con la que se abre (la de la cantidad que se toca en el pedido; sin ella, la de «Todo el pedido para»). La misma fecha de un artículo que ya está en el pedido se cambia, otra fecha se agrega.
+function openQuantity(item, when) {
     const scrim = document.createElement('div');
     scrim.className = 'home-select-scrim';
     const sheet = document.createElement('div');
     sheet.className = 'home-select-sheet';
     const inCart = draft.cart.get(item.id);
+    const startWhen = when === undefined ? draft.when : when;
+    const existing = inCart ? partOf(inCart, startWhen) : null;
     sheet.innerHTML = `<div class="home-select-sheet-handle"></div><div class="home-select-sheet-title">${esc(item.description)}</div>
         <p class="pm-app-note pm-app-sheet-meta">${esc([item.code, item.uom, item.categories].filter(Boolean).join(' · '))}</p>
         <label class="pm-app-qty-label" for="pm-app-qty">${esc(t('home.pmQuantity'))}</label>
-        <div class="pm-app-stepper"><button type="button" id="pm-app-minus" aria-label="−"><i class="bx bx-minus" aria-hidden="true"></i></button><input id="pm-app-qty" type="number" inputmode="decimal" min="0" step="any" value="${inCart ? esc(inCart.quantity) : '1'}"><button type="button" id="pm-app-plus" aria-label="+"><i class="bx bx-plus" aria-hidden="true"></i></button></div>
+        <div class="pm-app-stepper"><button type="button" id="pm-app-minus" aria-label="−"><i class="bx bx-minus" aria-hidden="true"></i></button><input id="pm-app-qty" type="number" inputmode="decimal" min="0" step="any" value="${existing ? esc(existing.quantity) : '1'}"><button type="button" id="pm-app-plus" aria-label="+"><i class="bx bx-plus" aria-hidden="true"></i></button></div>
+        <label class="pm-app-qty-label" for="pm-app-when">${esc(t('home.pmNeedBy'))}</label>
+        <select id="pm-app-when" class="pm-app-input pm-app-whensel">${whenOptions(startWhen)}</select>
         <p class="home-carga-field-error" id="pm-app-qty-err">${esc(t('main.recEditError_QTY'))}</p>
         <button type="button" class="home-carga-new-btn" id="pm-app-add"><i class="bx bx-cart-add" aria-hidden="true"></i><span>${esc(t('home.pmAdd'))}</span></button>
         <button type="button" class="home-carga-secondary-btn" id="pm-app-cancel">${esc(t('home.pmCancel'))}</button>`;
@@ -784,10 +880,17 @@ function openQuantity(item) {
     const close = () => scrim.remove();
     scrim.addEventListener('click', (event) => { if (event.target === scrim) close(); });
     sheet.querySelector('#pm-app-cancel').addEventListener('click', close);
+    const whenSel = sheet.querySelector('#pm-app-when');
+    // al cambiar la fecha, si ese artículo ya tiene cantidad para ella se ve (agregar la cambia); si no, queda la que se estaba escribiendo
+    whenSel.addEventListener('change', () => { const there = inCart ? partOf(inCart, whenSel.value) : null; if (there) input.value = String(there.quantity); err.classList.remove('show'); });
     sheet.querySelector('#pm-app-add').addEventListener('click', () => {
         const qty = Math.round(parseFloat(input.value) * 1000) / 1000;
         if (!Number.isFinite(qty) || qty <= 0 || qty > 999999) { err.classList.add('show'); return; }
-        draft.cart.set(item.id, { item, quantity: qty });
+        let c = draft.cart.get(item.id);
+        if (!c) { c = { item, parts: [] }; draft.cart.set(item.id, c); }
+        // si se abrió con la cantidad de una fecha y se cambió la fecha, esa cantidad se mueve a la nueva (si ya había una ahí, se juntan)
+        if (existing && whenSel.value !== startWhen) { c.parts.splice(c.parts.indexOf(existing), 1); const there = partOf(c, whenSel.value); if (there) there.quantity = roundQ(there.quantity + qty); else c.parts.push({ when: whenSel.value, quantity: qty }); }
+        else setPart(c, whenSel.value, qty);
         close();
         draft.redrawCart();
     });
@@ -799,12 +902,16 @@ async function sendDraft() {
     if (!draft || !draft.cart.size || draft.costCenterId === null) return;
     if (usesPlaces() && draft.placeId === null) { showToast(t('home.pmNeedPlace')); return; }
     const requesterName = draft.requesterName.replace(/\s+/g, ' ').trim().slice(0, 60);
-    const items = Array.from(draft.cart, ([id, { quantity }]) => ({ id, quantity }));
+    // una fecha que ya pasó (el pedido se dejó abierto de un día a otro) ya no vale: se avisa y no se manda
+    const valid = new Set(allDays());
+    if (Array.from(draft.cart.values()).some((c) => c.parts.some((p) => p.when && !valid.has(p.when)))) { showToast(t('home.pmErrDate')); draft.redrawCart(); return; }
+    // un renglón por artículo y fecha ('' = lo antes posible: no lleva needBy, igual que antes de que hubiera fechas)
+    const items = Array.from(draft.cart.values()).flatMap((c) => c.parts.map((p) => ({ id: c.item.id, quantity: p.quantity, ...(p.when ? { needBy: p.when } : {}) })));
     const body = { costCenterId: draft.costCenterId, requesterName, items, clientAt: new Date().toISOString(), clientRef: draft.clientRef };
     const place = usesPlaces() ? catalogPlaces.find((p) => p.id === draft.placeId) : null;
     if (place) body.placeId = place.id;
     const cc = costCenters.find((c) => c.id === draft.costCenterId);
-    const description = `${t('menu.opCentroDistPedidoManual')} · ${[place ? place.name : '', cc ? cc.name : ''].filter(Boolean).join(' · ')} · ${itemsText(items.length)}`;
+    const description = `${t('menu.opCentroDistPedidoManual')} · ${[place ? place.name : '', cc ? cc.name : ''].filter(Boolean).join(' · ')} · ${itemsText(draft.cart.size)}`;
     const sendBtn = bodyEl.querySelector('.pm-app-send');
     if (sendBtn) sendBtn.disabled = true;
     try {
@@ -823,7 +930,7 @@ async function sendDraft() {
         // lo que se ve al terminar: el número de pedido (si se mandó sin señal todavía no lo hay) y su lista de artículos
         doneInfo = {
             queued: !!result.queued, folio: result.queued ? '' : (result.body.folio || ''), name: requesterName, placeName: place ? place.name : '', at: result.queued ? body.clientAt : (result.body.createdAt || body.clientAt), centroCostos: cc ? cc.name : '',
-            lines: Array.from(draft.cart.values(), ({ item, quantity }) => ({ code: item.code, description: item.description, uom: item.uom, quantity })),
+            lines: Array.from(draft.cart.values()).flatMap(({ item, parts }) => parts.map((p) => ({ code: item.code, description: item.description, uom: item.uom, quantity: p.quantity, needBy: p.when }))),
         };
         if (!result.queued) await loadOrders();
         draft = null;
@@ -848,8 +955,8 @@ function renderDone() {
         <div class="pm-app-folio">${esc(d.folio || t('home.pmNoNumberYet'))}</div>
         ${d.queued ? `<p class="pm-app-note">${esc(t('home.pmNumberOnSync'))}</p>` : ''}
         <div class="pm-app-meta pm-app-meta-flat">${[[t('home.pmRequestedBy'), d.name], [t('main.colPmLugar'), d.placeName], [t('home.pmWhen'), formatTime(d.at)], [t('main.pmQrCentro'), d.centroCostos]].filter(([, v]) => v).map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
-        <h4 class="pm-app-title">${esc(t('home.pmListTitle'))} · ${esc(itemsText(d.lines.length))}</h4>
-        ${d.lines.map((l) => `<div class="pm-app-line"><div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, l.uom].filter(Boolean).join(' · '))}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b></div>`).join('')}`;
+        <h4 class="pm-app-title">${esc(t('home.pmListTitle'))} · ${esc(itemsText(new Set(d.lines.map((l) => l.code)).size))}</h4>
+        ${d.lines.map((l) => `<div class="pm-app-line"><div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, l.uom].filter(Boolean).join(' · '))}</span><span class="pm-app-need">${esc(`${t('home.pmNeedBy')}: ${whenLabel(l.needBy)}`)}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b></div>`).join('')}`;
     bodyEl.appendChild(box);
     const again = document.createElement('button');
     again.type = 'button';

@@ -4296,6 +4296,12 @@
     "pmNoRelatedPlace": "This place has no codes enabled for shipping from this cost center yet (Shipping Code Relation): there is nothing to order.",
     "pmNeedPlace": "Choose the requesting place to send.",
     "pmErrRelated": "An item is no longer enabled for that place (or cost center): remove it from the order.",
+    "pmWhenAll": "Whole order for",
+    "pmAsap": "As soon as possible",
+    "pmTomorrow": "Tomorrow",
+    "pmNeedBy": "For",
+    "pmAddDate": "+ Another date for this item",
+    "pmErrDate": "A date is not valid: choose from tomorrow up to 14 days.",
     "pmNewButton": "New order",
     "pmListEmpty": "There are no orders yet.",
     "pmSearchPlaceholder": "Code, description, UoM or category",
@@ -5999,6 +6005,10 @@
     "pmEstatus": {
       "what": "Where each order line is: Pending (just arrived) or Supplied (already delivered). Whoever has View and Operate on the Status column changes it here; every change is kept in the history.",
       "example": "you deliver the 24 milk units: you change the line to Supplied."
+    },
+    "pmFechaEntrega": {
+      "what": "When you want what you order to arrive: from tomorrow up to 14 days, or «As soon as possible». «Whole order for» sets the same date for everything you did not set apart; on each item you can change its date or split it across several with «+ Another date for this item». Each date becomes a line of the order.",
+      "example": "you order 20 boxes of milk: 12 for Thursday and 8 for Monday — two dates of the same item."
     },
     "pmLugar": {
       "what": "The place that is asking for the order (for example a hospital outside the distribution center). Each place only shows the codes enabled for shipping to it from the selected cost center (Shipping Code Relation); changing the place removes from the order what is not enabled for the new one.",
