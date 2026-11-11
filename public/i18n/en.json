@@ -3723,12 +3723,17 @@
     "colEnvTemplateAuth": "Authorization to Load by Template (Shipping)",
     "envNew": "New shipping relation",
     "envDialogTitle": "New shipping relation",
-    "envCode": "Code (by its description)",
+    "envCode": "Code (by its unique description)",
+    "envSearchPlaceholder": "Search by code or unique description",
+    "envListCount": "Showing {n} of {m} codes",
+    "envShowMore": "Show more",
+    "envListLoading": "Loading the codes…",
+    "envNoUnique": "No unique description",
     "envPlaces": "Places it ships to",
     "envPlacesAll": "All",
     "envPlacesEmpty": "There are no shipping places yet. Add them in Catalogs > Shipping Places.",
     "envSave": "Save",
-    "envNoCode": "Search and choose the code.",
+    "envNoCode": "Choose the code from the list.",
     "envSaved": "Relation saved.",
     "envSavedN": "{n} relations saved.",
     "envExisting": " ({n} already existed)",
@@ -5321,6 +5326,10 @@
     "tplLoad": {
       "what": "Loads the ready rows: creates the new ones and updates those that already exist. The ones you removed, with errors, with no changes or already complete are not touched and you can download them in an Excel with their reason. The new articles have no QR code until they have their 6 photos and all their data, just like the ones entered by hand.",
       "example": "you load 12 of 15 rows and download the 3 that were not loaded."
+    },
+    "envCodeSearch": {
+      "what": "The full list of the catalog codes (Alta Artículos), each with only its unique description and its code. Type to narrow it (code, UPC or unique description, with the system search signs) and tap the one you are going to ship to the places.",
+      "example": "you type paracet: only Paracetamol is left; you tap it and choose which places it ships to."
     },
     "relCodeSearch": {
       "what": "Finds the code you will locate by its SKU (with or without zeros), UPC or description. It lists the codes from Article Setup.",

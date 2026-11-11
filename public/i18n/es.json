@@ -3723,12 +3723,17 @@
     "colEnvTemplateAuth": "Autorización para Cargar por Plantilla (Envío)",
     "envNew": "Nueva relación de envío",
     "envDialogTitle": "Nueva relación de envío",
-    "envCode": "Código (por su descripción)",
+    "envCode": "Código (por su descripción única)",
+    "envSearchPlaceholder": "Busca por código o descripción única",
+    "envListCount": "Mostrando {n} de {m} códigos",
+    "envShowMore": "Mostrar más",
+    "envListLoading": "Cargando los códigos…",
+    "envNoUnique": "Sin descripción única",
     "envPlaces": "Lugares a los que se envía",
     "envPlacesAll": "Todos",
     "envPlacesEmpty": "Todavía no hay lugares de envío. Dalos de alta en Catálogos > Lugares de Envío.",
     "envSave": "Guardar",
-    "envNoCode": "Busca y elige el código.",
+    "envNoCode": "Elige el código de la lista.",
     "envSaved": "Relación guardada.",
     "envSavedN": "{n} relaciones guardadas.",
     "envExisting": " ({n} ya existían)",
@@ -5320,6 +5325,10 @@
     "tplLoad": {
       "what": "Carga las filas listas: da de alta las nuevas y actualiza las que ya existen. Las que quitaste, con error, sin cambios o ya completas no se tocan y puedes bajarlas en un Excel con su motivo. Los artículos nuevos quedan sin código QR hasta tener sus 6 fotos y sus datos completos, igual que los capturados a mano.",
       "example": "cargas 12 de 15 filas y bajas las 3 que no se cargaron."
+    },
+    "envCodeSearch": {
+      "what": "La lista completa de los códigos del catálogo (Alta Artículos), cada uno solo con su descripción única y su código. Escribe para acotarla (código, UPC o descripción única, con los signos de búsqueda del sistema) y toca el que vas a enviar a los lugares.",
+      "example": "escribes paracet: queda solo el Paracetamol; lo tocas y eliges a qué lugares se envía."
     },
     "relCodeSearch": {
       "what": "Busca el código que vas a ubicar por su SKU (con o sin ceros), su UPC o su descripción. Salen los códigos de Alta Artículos.",

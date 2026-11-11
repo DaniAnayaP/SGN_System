@@ -10352,7 +10352,7 @@ app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
     }
     res.json({
         skus: found.map((s) => ({
-            id: s.id, sku: padSku(s.record_number), upc: s.upc || '', description: s.unique_description || s.known_description || s.custom_description || '', uom: s.main_uom || '',
+            id: s.id, sku: padSku(s.record_number), upc: s.upc || '', description: s.unique_description || s.known_description || s.custom_description || '', unique: s.unique_description || '', uom: s.main_uom || '',
             length: s.length || 0, width: s.width || 0, height: s.height || 0, packaging: packMap.get(s.id) || null,
         })),
     });
@@ -10874,7 +10874,7 @@ function mapShipRelation(r, companyName, ctx) {
     const cc = ctx.centers.get(r.cost_center_id);
     return {
         id: r.id, registroUnico: r.db_id, skuItemId: r.sku_item_id, sku: padSku(r.sku_number), upc: r.sku_upc || '',
-        description: r.sku_unique || r.sku_known || r.sku_custom || '', costCenterId: r.cost_center_id, centroCostos: cc ? cc.name : '',
+        description: r.sku_unique || '', costCenterId: r.cost_center_id, centroCostos: cc ? cc.name : '', // «Descripción única»: solo esa (sin las otras descripciones del código)
         placeId: r.place_id, place: r.place_name || '', placeActive: r.place_status === 'active',
         ...getSystemColumnsForRecord({ companyName, area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: SHIP_REL_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.created_at }),
     };

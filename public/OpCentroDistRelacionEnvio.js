@@ -195,8 +195,8 @@ function ensureModal() {
         <h3 id="env-title">${esc(t('main.envDialogTitle'))}</h3>
         <div class="rel-fld">
             <label for="env-code">${esc(t('main.envCode'))}</label>
-            <input type="search" id="env-code" autocomplete="off" placeholder="${esc(t('main.relSearchPlaceholder'))}" data-help-key="relCodeSearch">
-            <div class="rel-results" id="env-results" hidden></div>
+            <input type="search" id="env-code" autocomplete="off" placeholder="${esc(t('main.envSearchPlaceholder'))}" data-help-key="envCodeSearch">
+            <div class="rel-results rel-results-tall" id="env-results" hidden></div>
         </div>
         <div class="rel-art" id="env-info"></div>
         <div id="env-fields"></div>
@@ -211,11 +211,12 @@ function ensureModal() {
     modalEl.addEventListener('click', (event) => {
         if (event.target === modalEl || event.target.closest('#env-close')) { closeDialog(); return; }
         if (event.target.closest('#env-save')) { save(); return; }
+        if (event.target.closest('[data-more]')) { shown += CODES_PAGE; drawCodeList(); return; }
         const pick = event.target.closest('[data-sku]');
         if (pick) { pickSku({ id: Number(pick.dataset.sku), sku: pick.dataset.skuCode, description: pick.dataset.desc }); }
     });
     modalEl.addEventListener('input', (event) => {
-        if (event.target.id === 'env-code') { f.sku = null; clearTimeout(searchTimer); searchTimer = setTimeout(searchCodes, 220); renderForm(); }
+        if (event.target.id === 'env-code') { f.sku = null; filterCodes(); renderForm(); }
     });
     modalEl.addEventListener('change', (event) => {
         const el = event.target;
@@ -230,32 +231,84 @@ function openDialog() {
     ensureModal();
     f = { sku: null, placeIds: new Set(), centerId: singleCenterId() };
     $('env-code').value = '';
-    $('env-results').hidden = true;
     renderForm();
     modalEl.hidden = false;
     $('env-code').focus();
+    loadAllCodes();
 }
 function closeDialog() { if (modalEl) modalEl.hidden = true; f = null; }
 
-async function searchCodes() {
-    const q = $('env-code').value.trim();
+// ---- la lista de códigos: TODO el catálogo de códigos, solo con su descripción única, desde que se abre la ventana (sin tener que escribir). Se baja una vez al abrir y se filtra aquí mismo con el motor de búsqueda de todo el
+// sistema (código, UPC y descripción única); se dibuja por tandas para que miles de códigos no congelen la ventana.
+const CODES_PAGE = 60;
+const CODES_CAP = 5000; // lo que entrega el servidor de una vez; si el catálogo es más grande, al escribir se busca en el servidor
+let allCodes = [];      // [{ id, sku, upc, unique }]
+let filtered = [];
+let shown = CODES_PAGE;
+let codesCapped = false;
+let codesToken = 0;
+async function loadAllCodes() {
+    const token = ++codesToken;
     const box = $('env-results');
-    if (!q) { box.hidden = true; return; }
+    allCodes = []; filtered = [];
+    box.innerHTML = `<span class="rel-muted">${esc(t('main.envListLoading'))}</span>`;
+    box.hidden = false;
     try {
-        const res = await fetch(`${SKU_API}?q=${encodeURIComponent(q)}&mode=${Dashboard.searchModeOf($('env-code'))}`, { credentials: 'include' });
+        const res = await fetch(`${SKU_API}?all=1`, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const { skus } = await res.json();
+        if (token !== codesToken || !f) return; // se cerró la ventana o se abrió otra vez
+        allCodes = (skus || []).map((s) => ({ id: s.id, sku: s.sku, upc: s.upc || '', unique: s.unique || '' }));
+        codesCapped = allCodes.length >= CODES_CAP;
+        filterCodes();
+    } catch (err) {
+        console.error('Relación Código Envío: failed to load the code list', err);
+        if (token === codesToken) box.innerHTML = `<span class="rel-muted">${esc(t('admin.loadError'))}</span>`;
+    }
+}
+// Lo escrito en la caja acota la lista (código, UPC y descripción única); sin escribir, o con algo todavía muy corto, salen todos.
+async function filterCodes() {
+    const input = $('env-code');
+    const q = input.value.trim();
+    const mode = Dashboard.searchModeOf(input);
+    shown = CODES_PAGE;
+    if (q && codesCapped) { await searchCodesOnServer(q, mode); return; }
+    if (!q || !SearchSyntax.ready(mode, q)) filtered = allCodes;
+    else {
+        const test = SearchSyntax.compile(mode, q);
+        filtered = allCodes.filter((c) => [c.sku, c.upc, c.unique].some((v) => !!v && test(v)));
+    }
+    drawCodeList();
+}
+// Un catálogo de más de 5,000 códigos: al escribir se busca en el servidor (hasta 20 resultados).
+async function searchCodesOnServer(q, mode) {
+    try {
+        const res = await fetch(`${SKU_API}?q=${encodeURIComponent(q)}&mode=${mode}`, { credentials: 'include' });
         if (!res.ok) return;
         const { skus } = await res.json();
-        box.innerHTML = skus.length
-            ? skus.map((s) => `<button type="button" class="rel-result" data-sku="${s.id}" data-sku-code="${esc(s.sku)}" data-desc="${esc(s.description)}"><b>${esc(s.description)}</b></button>`).join('')
-            : `<span class="rel-muted">${esc(t('main.relNoMatches'))}</span>`;
-        box.hidden = false;
+        if ($('env-code').value.trim() !== q) return; // ya se escribió otra cosa
+        filtered = (skus || []).map((s) => ({ id: s.id, sku: s.sku, upc: s.upc || '', unique: s.unique || '' }));
+        drawCodeList();
     } catch (err) {
         console.error('Relación Código Envío: code search failed', err);
     }
 }
+function drawCodeList() {
+    const box = $('env-results');
+    if (!box || !f) return;
+    if (f.sku) { box.hidden = true; return; } // ya hay un código elegido
+    const rows = filtered.slice(0, shown);
+    const count = `<div class="rel-count rel-muted">${esc(t('main.envListCount', { n: rows.length, m: filtered.length }))}</div>`;
+    const list = rows.length
+        ? rows.map((c) => `<button type="button" class="rel-result" data-sku="${c.id}" data-sku-code="${esc(c.sku)}" data-desc="${esc(c.unique)}"><b>${c.unique ? esc(c.unique) : `<i class="rel-muted">${esc(t('main.envNoUnique'))}</i>`}</b> <small>${esc(c.sku)}</small></button>`).join('')
+        : `<span class="rel-muted">${esc(t('main.relNoMatches'))}</span>`;
+    const more = filtered.length > shown ? `<button type="button" class="rel-more" data-more="1">${esc(t('main.envShowMore'))}</button>` : '';
+    box.innerHTML = count + list + more;
+    box.hidden = false;
+}
 function pickSku(s) {
     f.sku = s;
-    $('env-code').value = s.description;
+    $('env-code').value = s.description || s.sku;
     $('env-results').hidden = true;
     renderForm();
 }
@@ -266,7 +319,7 @@ function renderForm() {
     const save = $('env-save');
     $('env-msg').textContent = '';
     if (!f.sku) { info.textContent = t('main.envNoCode'); box.innerHTML = ''; save.disabled = true; return; }
-    info.innerHTML = `<b>${esc(f.sku.description)}</b><span>${esc(f.sku.sku)}</span>`;
+    info.innerHTML = `<b>${esc(f.sku.description || t('main.envNoUnique'))}</b><span>${esc(f.sku.sku)}</span>`;
     const active = places.filter((p) => p.active);
     const placesField = active.length
         ? `<div class="udm-types"><label class="udm-check udm-check-all"><input type="checkbox" data-place-all="1"${active.every((p) => f.placeIds.has(p.id)) ? ' checked' : ''}> <b>${esc(t('main.envPlacesAll'))}</b></label>${active.map((p) => `<label class="udm-check"><input type="checkbox" data-place="${p.id}"${f.placeIds.has(p.id) ? ' checked' : ''}> ${esc(p.name)}</label>`).join('')}</div>`

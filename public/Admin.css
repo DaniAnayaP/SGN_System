@@ -8049,6 +8049,11 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .rel-art{ border: 1px solid var(--color-border); border-radius: 0.6rem; padding: 0.5rem 0.75rem; font-size: 0.76rem; color: var(--color-text-secondary); display: flex; flex-direction: column; gap: 0.1rem; }
 .rel-art b{ color: var(--color-text-primary); font-size: 0.8rem; }
 .rel-muted{ color: var(--color-text-secondary); font-size: 0.78rem; }
+/* Relación Código Envío: la lista completa del catálogo de códigos (solo la descripción única) al abrir la ventana */
+.rel-results-tall{ max-height: 17rem; }
+.rel-result small{ margin-left: 0.4rem; color: var(--color-text-secondary); font-size: 0.7rem; }
+.rel-count{ position: sticky; top: 0; padding: 0.3rem 0.6rem; background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+.rel-more{ font: inherit; font-size: 0.76rem; font-weight: 600; padding: 0.45rem 0.6rem; border: 0; background: transparent; color: var(--color-accent, var(--color-text-primary)); cursor: pointer; }
 .rel-rack{ display: flex; flex-direction: column; gap: 0.4rem; }
 .rel-rack-head{ display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
 .rel-frame{ border: 2px solid var(--color-text-primary); border-radius: 0.5rem; padding: 0.4rem; display: flex; flex-direction: column; gap: 0.3rem; }
