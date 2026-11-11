@@ -6624,6 +6624,36 @@ app.delete('/api/business/sku-items/:id', requireAuth, requireCostCenter, (req, 
     res.status(204).end();
 });
 
+// Eliminar VARIOS códigos de una vez (Alta Nuestros Artículos: «Seleccionar» lo filtrado y «Eliminar»): las mismas reglas que eliminar uno (hoja «Autorización para Eliminar» de la pantalla; un código con ubicaciones en
+// Relación Código no se elimina: se salta y se cuenta), cada eliminado queda en su historial y se avisa UNA sola vez. Sus presentaciones de distribución y sus relaciones de envío se van con él (ON DELETE CASCADE).
+// Hasta 500 por petición: la pantalla los manda por tandas.
+const SKU_BULK_DELETE_MAX = 500;
+app.post('/api/business/sku-items/bulk-delete', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin && !canDeleteColumn(getUserEffectiveGrants(req.user.sub), 'nuestros-articulos', 'colArticuloDeleteAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para eliminar artículos.' });
+    }
+    const raw = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
+    const ids = [...new Set(raw.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    if (!ids.length) return res.status(400).json({ message: 'No hay códigos que eliminar.', code: 'EMPTY' });
+    if (ids.length > SKU_BULK_DELETE_MAX) return res.status(400).json({ message: `Hasta ${SKU_BULK_DELETE_MAX} códigos por vez.`, code: 'TOOMANY' });
+    const { clientId, isTestAccount } = req.user;
+    const located = new Set(listCodeRelations(clientId, isTestAccount).map((r) => r.sku_item_id));
+    const deleted = [];
+    const blocked = [];
+    ids.forEach((id) => {
+        const existing = getSkuItemById(id, clientId, isTestAccount);
+        if (!existing) return; // ya no existe (otra persona lo eliminó): no cuenta
+        if (located.has(existing.id)) { blocked.push(existing.id); return; }
+        logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: existing.id, recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req) });
+        deleteSkuItem(existing.id, clientId);
+        deleted.push(existing.id);
+    });
+    if (deleted.length) notifyButtonAction(req, 'nuestros-articulos', 'delete', `${deleted.length} códigos`);
+    res.set('Cache-Control', 'no-store');
+    res.json({ deleted, blocked });
+});
+
 // --- Ficha pública (no login) -----------------------------------------------
 // What a "Código QR" scan opens (see Ficha.html/.js) -- deliberately NOT
 // behind requireAuth, and deliberately the ONLY route that looks a sku_item

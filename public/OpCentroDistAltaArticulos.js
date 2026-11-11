@@ -634,6 +634,7 @@ function buildRow(record) {
     );
     if (CODES_MODE) makeRowReadOnly(tr);
     tr.classList.toggle('data-table-row-editable', !!tr.querySelector('td.editable-cell'));
+    if (skuSelectMode) decorateRowSelection(tr);
     return tr;
 }
 
@@ -776,6 +777,170 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applySkuItemFilters);
 if (window.Dashboard && Dashboard.registerPartialTable) Dashboard.registerPartialTable(TABLE_KEY, { isComplete: () => skuDrawn >= skuView.length, loadAll: drawAllSkuRows });
 
+// ---- Seleccionar y eliminar varios (Alta y Edición Código; Códigos es de solo lectura) -------------------------------------------------------------------------
+// «Seleccionar» marca TODO lo que quede filtrado (la búsqueda de texto y los filtros de columna), también lo que todavía no está dibujado; cada vez que cambian los filtros se puede volver a marcar lo filtrado. Solo cuenta lo marcado
+// que sigue a la vista: lo que un filtro esconde nunca se elimina por accidente. «Eliminar» pide confirmar (dos veces si son muchos), manda los códigos por tandas y los que ya tienen ubicaciones en Relación Código se saltan.
+// Pide la misma hoja del árbol que el botón de eliminar de cada renglón (Autorización para Eliminar).
+let skuSelectMode = false;
+const skuSelected = new Set(); // ids marcados
+let skuSelectObserver = null;
+let skuDeleting = false;
+const SKU_BULK_CHUNK = 200;
+const SKU_BULK_FINAL_CONFIRM_FROM = 20; // desde cuántos códigos se pide una segunda confirmación
+const canBulkDelete = () => !CODES_MODE && Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth');
+const fillText = (key, params) => Object.entries(params || {}).reduce((text, [name, value]) => text.split(`{${name}}`).join(String(value)), Dashboard.t(key));
+// Lo filtrado: lo que cumple la búsqueda de texto (skuView) y no lo esconde un filtro de columna (esos filtros obligan a tener todas las filas dibujadas, así que se leen del DOM).
+function filteredSkuIds() {
+    const hidden = new Set(Array.from(getTbody().querySelectorAll('tr.data-table-row-col-filtered')).map((tr) => Number(tr.dataset.recordId)));
+    return skuView.filter((r) => !hidden.has(r.id)).map((r) => r.id);
+}
+const selectedFilteredIds = () => filteredSkuIds().filter((id) => skuSelected.has(id));
+function decorateRowSelection(tr) {
+    const td = tr.querySelector('td.admin-table-actions');
+    if (!td) return;
+    const id = Number(tr.dataset.recordId);
+    let box = td.querySelector('input.sku-row-check');
+    if (!skuSelectMode) { if (box) box.remove(); tr.classList.remove('sku-row-selected'); return; }
+    if (!box) {
+        box = document.createElement('input');
+        box.type = 'checkbox';
+        box.className = 'sku-row-check';
+        box.setAttribute('aria-label', Dashboard.t('main.skuSelRow'));
+        box.addEventListener('change', () => {
+            if (box.checked) skuSelected.add(id); else skuSelected.delete(id);
+            tr.classList.toggle('sku-row-selected', box.checked);
+            updateSelectBar();
+        });
+        td.prepend(box);
+    }
+    box.checked = skuSelected.has(id);
+    tr.classList.toggle('sku-row-selected', box.checked);
+}
+function decorateAllRowSelection() {
+    getTbody().querySelectorAll('tr[data-record-id]').forEach(decorateRowSelection);
+}
+function selectBar() { return skuToolbar()?.querySelector('.sku-select-bar') || null; }
+function updateSelectBar() {
+    const bar = selectBar();
+    if (!bar) return;
+    const filtered = filteredSkuIds();
+    const selected = filtered.filter((id) => skuSelected.has(id)).length;
+    bar.querySelector('.sku-select-text').textContent = fillText('main.skuSelTexto', { n: selected, m: filtered.length });
+    bar.querySelector('[data-sku-select-filtered]').textContent = fillText('main.skuSelFiltrado', { m: filtered.length });
+    const del = bar.querySelector('[data-sku-delete]');
+    del.textContent = fillText('main.skuEliminarSel', { n: selected });
+    del.disabled = !selected || skuDeleting;
+    bar.querySelector('[data-sku-select-none]').disabled = !selected || skuDeleting;
+}
+function selectFiltered() {
+    filteredSkuIds().forEach((id) => skuSelected.add(id));
+    decorateAllRowSelection();
+    updateSelectBar();
+}
+function enterSelectMode() {
+    if (skuSelectMode) return;
+    skuSelectMode = true;
+    const toolbar = skuToolbar();
+    const bar = document.createElement('span');
+    bar.className = 'sku-select-bar tpl-muted';
+    bar.innerHTML = `<span class="sku-select-text" aria-live="polite"></span>
+        <button type="button" class="btn btn-secondary sku-more-btn" data-sku-select-filtered data-help-key="skuSeleccionar"></button>
+        <button type="button" class="btn btn-secondary sku-more-btn" data-sku-select-none>${Dashboard.t('main.skuSelQuitar')}</button>
+        <button type="button" class="btn btn-danger sku-more-btn sku-delete-btn" data-sku-delete data-help-key="skuEliminarVarios"></button>
+        <button type="button" class="btn btn-secondary sku-more-btn" data-sku-select-exit>${Dashboard.t('main.skuSelCerrar')}</button>`;
+    bar.querySelector('[data-sku-select-filtered]').addEventListener('click', selectFiltered);
+    bar.querySelector('[data-sku-select-none]').addEventListener('click', () => { skuSelected.clear(); decorateAllRowSelection(); updateSelectBar(); });
+    bar.querySelector('[data-sku-delete]').addEventListener('click', bulkDeleteSelected);
+    bar.querySelector('[data-sku-select-exit]').addEventListener('click', exitSelectMode);
+    toolbar.querySelector('.sku-select-btn')?.after(bar);
+    // los filtros de columna esconden o muestran filas sin avisar: la barra se actualiza sola
+    let timer = null;
+    skuSelectObserver = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(updateSelectBar, 150); });
+    skuSelectObserver.observe(getTbody(), { attributes: true, subtree: true, attributeFilter: ['class'], childList: true });
+    selectFiltered();
+}
+function exitSelectMode() {
+    if (!skuSelectMode || skuDeleting) return;
+    skuSelectMode = false;
+    skuSelected.clear();
+    if (skuSelectObserver) { skuSelectObserver.disconnect(); skuSelectObserver = null; }
+    selectBar()?.remove();
+    decorateAllRowSelection();
+}
+// El botón «Seleccionar» de la barra de la tabla (solo con la hoja de eliminar).
+function mountSelectButton(toolbar) {
+    if (!canBulkDelete() || toolbar.querySelector('.sku-select-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-template-btn sku-select-btn';
+    btn.setAttribute('data-help-key', 'skuSeleccionar');
+    btn.innerHTML = `<i class="bx bx-select-multiple" aria-hidden="true"></i><span>${Dashboard.t('main.skuSeleccionar')}</span>`;
+    btn.addEventListener('click', () => { if (skuSelectMode) selectFiltered(); else enterSelectMode(); });
+    const anchor = toolbar.querySelector('.data-table-template-btn:not(.sku-select-btn)') || toolbar.querySelector('.data-table-new-record-btn');
+    if (anchor) anchor.after(btn); else toolbar.prepend(btn);
+}
+async function bulkDeleteSelected() {
+    if (skuDeleting) return;
+    const ids = selectedFilteredIds();
+    if (!ids.length) return;
+    const n = ids.length;
+    const ok = await Dashboard.confirm(fillText('main.skuBorrarConfirm', { n }), { items: [Dashboard.t('main.skuBorrarItem1'), Dashboard.t('main.skuBorrarItem2')], accept: fillText('main.skuBorrarAceptar', { n }) });
+    if (!ok) return;
+    if (n >= SKU_BULK_FINAL_CONFIRM_FROM && !(await Dashboard.confirm(fillText('main.skuBorrarFinal', { n }), { accept: fillText('main.skuBorrarAceptar', { n }) }))) return;
+    skuDeleting = true;
+    updateSelectBar();
+    let done = 0;
+    const deleted = new Set();
+    let blocked = 0;
+    let failed = false;
+    try {
+        for (let from = 0; from < ids.length; from += SKU_BULK_CHUNK) {
+            const chunk = ids.slice(from, from + SKU_BULK_CHUNK);
+            const res = await fetch('/api/business/sku-items/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ids: chunk }) });
+            if (!res.ok) {
+                if (res.status === 403) Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning');
+                else Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+                failed = true;
+                break;
+            }
+            const body = await res.json();
+            (body.deleted || []).forEach((id) => deleted.add(id));
+            blocked += (body.blocked || []).length;
+            done += chunk.length;
+            removeSkuRecords(new Set(body.deleted || []));
+            (body.deleted || []).forEach((id) => skuSelected.delete(id));
+            const text = selectBar()?.querySelector('.sku-select-text');
+            if (text) text.textContent = fillText('main.skuBorrando', { done, total: n });
+            await new Promise((resolve) => setTimeout(resolve, 0)); // deja respirar a la pantalla entre tandas
+        }
+    } catch (err) {
+        console.error('Alta Nuestros Artículos: bulk delete failed', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        failed = true;
+    }
+    skuDeleting = false;
+    if (deleted.size) Dashboard.showToast(fillText('main.skuBorrarHecho', { n: deleted.size }) + (blocked ? ` ${fillText('main.skuBorrarBloqueados', { n: blocked })}` : ''), blocked || failed ? 'warning' : 'success');
+    else if (blocked && !failed) Dashboard.showToast(fillText('main.skuBorrarBloqueados', { n: blocked }), 'warning');
+    // los que se saltaron (con ubicaciones) dejan de estar marcados
+    skuSelected.clear();
+    decorateAllRowSelection();
+    updateSelectBar();
+}
+
+// Varios códigos dejaron de ser de esta pantalla (se eliminaron): salen de la lista y de la tabla de una vez.
+function removeSkuRecords(idSet) {
+    if (!idSet.size) return;
+    skuRecords = skuRecords.filter((r) => !idSet.has(r.id));
+    skuView = skuView.filter((r) => !idSet.has(r.id));
+    let removedDrawn = 0;
+    getTbody().querySelectorAll('tr[data-record-id]').forEach((tr) => { if (idSet.has(Number(tr.dataset.recordId))) { tr.remove(); removedDrawn += 1; } });
+    skuDrawn = Math.max(0, Math.min(skuView.length, skuDrawn - removedDrawn));
+    if (!getTbody().querySelector('tr[data-record-id]')) {
+        if (skuDrawn < skuView.length) drawSkuRows(SKU_FIRST_ROWS); else ensureEmptyState();
+    }
+    updateSkuMoreBar();
+}
+
 // Un código dejó de ser de esta pantalla (quedó completo, se mandó a Edición, o se borró): sale de la lista y de la tabla sin volver a leerla.
 function removeSkuRecord(id) {
     skuRecords = skuRecords.filter((r) => r.id !== id);
@@ -814,6 +979,7 @@ function renderNewRecordButton() {
     toolbar.prepend(btn);
     // "Cargar por plantilla" va junto a este botón (si tiene su hoja en el árbol); al terminar la tabla se vuelve a leer.
     if (window.SkuTemplateUi) window.SkuTemplateUi.mount(toolbar, btn, refreshTable);
+    mountSelectButton(toolbar); // «Seleccionar»: marcar todo lo filtrado y eliminarlo
 }
 
 // --- "+ Nuevo Artículo" modal ------------------------------------------------

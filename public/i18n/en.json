@@ -3664,6 +3664,21 @@
     "skuMostrando": "Showing {shown} of {total} codes",
     "skuMostrarMas": "Show more",
     "skuMostrarTodos": "Show all",
+    "skuSeleccionar": "Select",
+    "skuSelRow": "Select this code",
+    "skuSelTexto": "{n} selected of {m} filtered",
+    "skuSelFiltrado": "Select everything filtered ({m})",
+    "skuSelQuitar": "Clear selection",
+    "skuSelCerrar": "Close",
+    "skuEliminarSel": "Delete selected ({n})",
+    "skuBorrarConfirm": "Delete {n} codes? This cannot be undone.",
+    "skuBorrarItem1": "Their distribution presentations and shipping relations are deleted too.",
+    "skuBorrarItem2": "Codes that already have locations in Code Relation are not deleted: remove those locations first.",
+    "skuBorrarAceptar": "Delete {n} codes",
+    "skuBorrarFinal": "Final confirmation: {n} codes will be permanently deleted.",
+    "skuBorrando": "Deleting… {done} of {total}",
+    "skuBorrarHecho": "{n} codes deleted.",
+    "skuBorrarBloqueados": "{n} were not deleted because they already have locations in Code Relation.",
     "layoutRelacionIr": "Open the Code Relation screen",
     "layoutRelacionSinEnfoque": "No related code falls in what you focused above (Zone, Pick or Locator).",
     "layoutLocalizadoresSinEnfoque": "No locator falls in what you focused above (Zone, Pick or Locator).",
@@ -5842,6 +5857,14 @@
     "layoutSite": {
       "what": "The name of the place (the site). It appears above the company name in the header of the Layout sheet and of the printed cards. If you leave it empty the usual text is used. Later it will come from settings.",
       "example": "you type Chihuahua Distribution Center and the header shows it on top with the company name below."
+    },
+    "skuSeleccionar": {
+      "what": "Marks EVERYTHING that is filtered in the table (the text search and the column filters), including what has not been drawn yet; each row has its own checkbox to remove or add one. Every time you change the filters you can tap «Select everything filtered» again. What a filter hides never counts.",
+      "example": "you filter the category «No category»: «Select everything filtered (320)» marks those 320 and then you delete them."
+    },
+    "skuEliminarVarios": {
+      "what": "Deletes at once the marked codes that are still in view. It asks to confirm (twice when there are many) and cannot be undone. Their distribution presentations and shipping relations go with them; codes that already have locations in Code Relation are not deleted. Each deleted code stays in the change history.",
+      "example": "you mark all 1,164 codes in the list, confirm, and the screen is left empty to load them again with «Upload template»."
     },
     "skuEditar": {
       "what": "Sends this code to Operations > Code Editing so you can fix it. Here, in Codes, they are only viewed. It is noted in the code history.",

@@ -3663,6 +3663,21 @@
     "skuMostrando": "Mostrando {shown} de {total} códigos",
     "skuMostrarMas": "Mostrar más",
     "skuMostrarTodos": "Mostrar todos",
+    "skuSeleccionar": "Seleccionar",
+    "skuSelRow": "Seleccionar este código",
+    "skuSelTexto": "{n} seleccionados de {m} filtrados",
+    "skuSelFiltrado": "Seleccionar todo lo filtrado ({m})",
+    "skuSelQuitar": "Quitar selección",
+    "skuSelCerrar": "Cerrar",
+    "skuEliminarSel": "Eliminar seleccionados ({n})",
+    "skuBorrarConfirm": "¿Eliminar {n} códigos? No se puede deshacer.",
+    "skuBorrarItem1": "También se eliminan sus presentaciones de distribución y sus relaciones de envío.",
+    "skuBorrarItem2": "Los códigos que ya tienen ubicaciones en Relación Código no se eliminan: quita primero esas ubicaciones.",
+    "skuBorrarAceptar": "Eliminar {n} códigos",
+    "skuBorrarFinal": "Última confirmación: se van a eliminar {n} códigos de forma permanente.",
+    "skuBorrando": "Eliminando… {done} de {total}",
+    "skuBorrarHecho": "{n} códigos eliminados.",
+    "skuBorrarBloqueados": "{n} no se eliminaron porque ya tienen ubicaciones en Relación Código.",
     "layoutRelacionIr": "Abrir la pantalla Relación Código",
     "layoutRelacionSinEnfoque": "Ningún código relacionado cae en lo que enfocaste arriba (Zona, Elegir o Localizador).",
     "layoutLocalizadoresSinEnfoque": "Ningún localizador cae en lo que enfocaste arriba (Zona, Elegir o Localizador).",
@@ -5841,6 +5856,14 @@
     "layoutSite": {
       "what": "El nombre del lugar (el sitio). Sale arriba del nombre de la empresa en el encabezado de la hoja del Layout y de las tarjetas que se imprimen. Si lo dejas vacío sale el texto de siempre. Más adelante saldrá de la configuración.",
       "example": "escribes Centro de Distribución Chihuahua y el encabezado queda con ese nombre arriba y el de la empresa abajo."
+    },
+    "skuSeleccionar": {
+      "what": "Marca TODO lo que quede filtrado en la tabla (la búsqueda de texto y los filtros de columna), también lo que todavía no se ha dibujado; cada renglón trae su casilla para quitar o agregar uno. Cada vez que cambies los filtros puedes volver a tocar «Seleccionar todo lo filtrado». Lo que un filtro esconde nunca cuenta.",
+      "example": "filtras la categoría «Sin categoría»: «Seleccionar todo lo filtrado (320)» marca esos 320 y después los eliminas."
+    },
+    "skuEliminarVarios": {
+      "what": "Elimina de una vez los códigos marcados que siguen a la vista. Pide confirmar (dos veces si son muchos) y no se puede deshacer. Se van con ellos sus presentaciones de distribución y sus relaciones de envío; los códigos que ya tienen ubicaciones en Relación Código no se eliminan. Cada código eliminado queda en el historial de cambios.",
+      "example": "marcas los 1,164 códigos de la lista, confirmas y la pantalla queda vacía para volver a cargarlos con «Cargar por plantilla»."
     },
     "skuEditar": {
       "what": "Manda este código a Operaciones > Edición Código para corregirlo. Aquí, en Códigos, solo se ven. Queda anotado en el historial del código.",
