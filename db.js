@@ -5689,6 +5689,10 @@ function countShipItemsByPlace(clientId, isTest = false, costCenterId = 0) {
 function listManualItemCenters(clientId, isTest = false) {
     return db.prepare('SELECT DISTINCT sku_item_id, cost_center_id FROM code_relations WHERE client_id = ? AND is_test_data = ? AND sku_item_id IS NOT NULL AND cost_center_id IS NOT NULL').all(clientId, isTest ? 1 : 0);
 }
+// Qué código se puede enviar a qué lugar desde qué centro de costos (Relación Código Envío), para que la App filtre por el centro y el lugar que se eligen: [{ sku_item_id, cost_center_id, place_id }].
+function listManualItemShips(clientId, isTest = false) {
+    return db.prepare('SELECT DISTINCT sku_item_id, cost_center_id, place_id FROM code_ship_relations WHERE client_id = ? AND is_test_data = ?').all(clientId, isTest ? 1 : 0);
+}
 function getManualOrderItem(clientId, id, isTest = false) {
     return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id = ?`)
         .get(clientId, isTest ? 1 : 0, id);
@@ -12779,6 +12783,7 @@ module.exports = {
     listSkuCapacityData,
     listManualOrderItems,
     listManualItemCenters,
+    listManualItemShips,
     getManualOrderItem,
     createManualOrder,
     findManualOrderByRef,

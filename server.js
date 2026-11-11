@@ -163,7 +163,7 @@ const {
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, findCleaningByRef, finishCleaningFromApp, listOpenCleaningsOf, getCleaningLast, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
-    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
+    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, listManualItemShips,getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
     addTemperatureRecord, findTemperatureByRef, getTemperatureLast, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, findSafetyCheckByRef, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
@@ -8124,16 +8124,28 @@ app.get('/api/business/pedido-manual/items', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const centersOf = new Map();
     listManualItemCenters(req.user.clientId, !!req.user.isTestAccount).forEach((r) => { if (!centersOf.has(r.sku_item_id)) centersOf.set(r.sku_item_id, []); centersOf.get(r.sku_item_id).push(r.cost_center_id); });
-    const items = manualItemsFor(req.user.clientId, !!req.user.isTestAccount).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories, centers: centersOf.get(id) || [] }));
+    // «Lugar que solicita»: si el catálogo Lugares de Envío tiene lugares activos, la App pide el lugar y cada código trae a qué lugares se puede enviar desde cada centro: ship = [[centro, lugar], …] (Relación Código Envío)
+    const places = listArticleCategories(req.user.clientId, 'lugares-envio', !!req.user.isTestAccount).filter((r) => r.status === 'active' && r.name).map((r) => ({ id: r.id, name: r.name }));
+    const activePlaceIds = new Set(places.map((p) => p.id));
+    const shipOf = new Map();
+    if (places.length) listManualItemShips(req.user.clientId, !!req.user.isTestAccount).forEach((r) => { if (!activePlaceIds.has(r.place_id)) return; if (!shipOf.has(r.sku_item_id)) shipOf.set(r.sku_item_id, []); shipOf.get(r.sku_item_id).push([r.cost_center_id, r.place_id]); });
+    const items = manualItemsFor(req.user.clientId, !!req.user.isTestAccount).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories, centers: centersOf.get(id) || [], ...(places.length ? { ship: shipOf.get(id) || [] } : {}) }));
     res.set('Cache-Control', 'no-store');
-    res.json({ items, at: new Date().toISOString() });
+    res.json({ items, places, at: new Date().toISOString() });
 });
 app.post('/api/business/pedido-manual/orders', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const center = layoutCenter(req);
     if (center.error) return res.status(center.error.status).json(center.error.body);
     if (!center.id) return res.status(400).json({ message: 'Elige un centro de costos.', code: 'CENTER' });
-    const built = manualLinesFrom(req.body && req.body.items, req.user.clientId, !!req.user.isTestAccount, center.id);
+    // Lugar que solicita: igual que en el QR, con lugares de envío activos en el catálogo el pedido tiene que traer uno y sus códigos son los habilitados para ese lugar desde este centro (Relación Código Envío)
+    const activePlaces = listArticleCategories(req.user.clientId, 'lugares-envio', !!req.user.isTestAccount).filter((r) => r.status === 'active' && r.name);
+    let place = null;
+    if (activePlaces.length) {
+        place = activePlaces.find((p) => p.id === Number(req.body && req.body.placeId)) || null;
+        if (!place) return res.status(400).json({ message: 'Falta el lugar que solicita.', code: 'PLACE' });
+    }
+    const built = manualLinesFrom(req.body && req.body.items, req.user.clientId, !!req.user.isTestAccount, center.id, place ? place.id : 0);
     if (built.error) return res.status(400).json(built.error);
     const clientRef = req.body && typeof req.body.clientRef === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(req.body.clientRef) ? req.body.clientRef : null;
     res.set('Cache-Control', 'no-store');
@@ -8147,8 +8159,8 @@ app.post('/api/business/pedido-manual/orders', requireAuth, (req, res) => {
     // El nombre de quien pide lo escribe la persona (la App lo trae escrito con el de la cuenta y se puede cambiar); si no llega, el de la cuenta.
     const typed = String((req.body && req.body.requesterName) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
     const requesterName = typed || String(changedByLabel(req) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
-    const out = createManualOrder({ clientId: req.user.clientId, costCenterId: center.id, requesterName, requesterUserId: req.user.sub, source: 'app', lines: built.lines, createdAt, clientRef });
-    res.status(201).json({ folio: manualFolio(out.id), orderId: out.id, createdAt: sqlUtcIso(out.createdAt), lines: out.lines, offline: !!createdAt });
+    const out = createManualOrder({ clientId: req.user.clientId, costCenterId: center.id, requesterName, requesterUserId: req.user.sub, source: 'app', lines: built.lines, createdAt, clientRef, placeId: place ? place.id : 0, placeName: place ? place.name : '' });
+    res.status(201).json({ folio: manualFolio(out.id), orderId: out.id, createdAt: sqlUtcIso(out.createdAt), lines: out.lines, offline: !!createdAt, place: place ? place.name : '' });
 });
 // El QR del centro de costos que se eligió: la dirección fija (/pm/…) y la cuadrícula del QR para dibujarlo; sale del Layout de ese centro (si todavía no hay uno guardado, no hay QR).
 app.get('/api/business/pedido-manual/qr', requireAuth, (req, res) => {

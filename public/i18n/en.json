@@ -4289,6 +4289,13 @@
     "pmNoRelated": "This cost center has no related codes yet (Code Relation): there is nothing to order.",
     "pmPickCenterFirst": "Choose the cost center first: only the codes related to it can be ordered.",
     "pmCartPruned": "{n} items were removed from the order: they are not related to that cost center.",
+    "pmCartPrunedPlace": "{n} items were removed from the order: they are not enabled for shipping to that place from this cost center.",
+    "pmPlace": "Requesting place",
+    "pmPlacePick": "Choose the requesting place",
+    "pmPickPlaceFirst": "Choose the requesting place first: that way you see the codes that can be shipped to it.",
+    "pmNoRelatedPlace": "This place has no codes enabled for shipping from this cost center yet (Shipping Code Relation): there is nothing to order.",
+    "pmNeedPlace": "Choose the requesting place to send.",
+    "pmErrRelated": "An item is no longer enabled for that place (or cost center): remove it from the order.",
     "pmNewButton": "New order",
     "pmListEmpty": "There are no orders yet.",
     "pmSearchPlaceholder": "Code, description, UoM or category",
@@ -5992,6 +5999,10 @@
     "pmEstatus": {
       "what": "Where each order line is: Pending (just arrived) or Supplied (already delivered). Whoever has View and Operate on the Status column changes it here; every change is kept in the history.",
       "example": "you deliver the 24 milk units: you change the line to Supplied."
+    },
+    "pmLugar": {
+      "what": "The place that is asking for the order (for example a hospital outside the distribution center). Each place only shows the codes enabled for shipping to it from the selected cost center (Shipping Code Relation); changing the place removes from the order what is not enabled for the new one.",
+      "example": "you choose Hospital Norte: you only see the codes enabled for Hospital Norte, and the order is saved with that place."
     },
     "layoutModoEditar": {
       "what": "Switches from View to Edit mode: the steps with their tables, the buttons to add and remove things of the Layout, Save and Discard changes appear. Without this icon in the access tree the Layout always stays in View.",

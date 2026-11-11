@@ -2,7 +2,8 @@
 // Pedido Manual (App) — la misma pantalla de la Web (Operaciones > Pedido Manual) hecha para el celular:
 //   · la lista de pedidos (un pedido = varios artículos) con su estatus: Pendiente, Parcial o Surtido;
 //   · Nuevo pedido: se busca en el catálogo de artículos (por código, descripción, UdM o categoría, con la misma sintaxis de búsqueda de todo el sistema),
-//     se elige la cantidad y se envía. El catálogo se guarda en el celular, así que se puede buscar y armar el pedido SIN señal: el pedido queda en la cola
+//     se elige la cantidad y se envía. Si la empresa tiene Lugares de Envío, el pedido también pide el «Lugar que solicita» y solo salen los códigos habilitados para ese lugar desde el centro (Relación Código Envío).
+//     El catálogo (con los lugares y qué código va a cuál) se guarda en el celular, así que se puede buscar y armar el pedido SIN señal: el pedido queda en la cola
 //     de AppOfflineSync.js ("En tu celular") y se envía solo al reconectar con la hora a la que se mandó (el servidor guarda aparte la hora en que lo recibió);
 //   · con permiso (Ver y Operar en la columna Estatus del árbol), cada renglón se marca Pendiente / Surtido; sin señal el cambio también queda en la cola.
 // El nombre de quien pide sale de la cuenta. Es una parte de lo que hace la pantalla Web: corregir cantidades, eliminar y el QR se siguen haciendo allá.
@@ -142,6 +143,7 @@ let orders = [];            // pedidos del servidor (ya agrupados, el más nuevo
 let queuedOrders = [];      // pedidos que se mandaron sin señal y siguen en la cola de este celular
 let canStatus = false;
 let catalog = [];           // los artículos que se pueden pedir
+let catalogPlaces = [];     // «Lugar que solicita»: los lugares de envío activos [{ id, name }]; vacío = la empresa no usa lugares y el pedido es el de siempre (por centro de costos)
 let catalogById = new Map();
 let catalogState = 'loading'; // 'loading' | 'online' | 'cached' | 'none'
 let view = 'list';          // 'list' | 'order' | 'new' | 'done' (el número de pedido recién enviado)
@@ -198,10 +200,12 @@ async function catalogRead() {
         req.onerror = () => reject(req.error);
     });
 }
-function setCatalog(items) {
+function setCatalog(items, places) {
     catalog = items;
+    catalogPlaces = Array.isArray(places) ? places : [];
     catalogById = new Map(items.map((it) => [it.id, it]));
 }
+const usesPlaces = () => catalogPlaces.length > 0;
 async function loadCatalog() {
     catalogState = 'loading';
     const clientId = currentUser ? (currentUser.clientId ?? null) : null;
@@ -209,18 +213,18 @@ async function loadCatalog() {
         const res = await fetch(apiUrl(`${ORDERS_URL}/items`), { credentials: 'include' });
         if (res.ok) {
             const body = await res.json();
-            setCatalog(body.items || []);
+            setCatalog(body.items || [], body.places || []);
             catalogState = 'online';
-            catalogSave({ clientId, items: catalog, at: body.at }).catch(() => { /* sin almacenamiento: se baja otra vez la próxima */ });
+            catalogSave({ clientId, items: catalog, places: catalogPlaces, at: body.at }).catch(() => { /* sin almacenamiento: se baja otra vez la próxima */ });
             return;
         }
     } catch { /* sin señal: se usa el catálogo guardado */ }
     try {
         const saved = await catalogRead();
         // el catálogo guardado solo sirve si es de la misma empresa (otra cuenta en el mismo celular no ve artículos ajenos)
-        if (saved && Array.isArray(saved.items) && (saved.clientId ?? null) === clientId) { setCatalog(saved.items); catalogState = 'cached'; return; }
+        if (saved && Array.isArray(saved.items) && (saved.clientId ?? null) === clientId) { setCatalog(saved.items, saved.places); catalogState = 'cached'; return; }
     } catch { /* sin catálogo guardado */ }
-    setCatalog([]);
+    setCatalog([], []);
     catalogState = 'none';
 }
 
@@ -230,7 +234,7 @@ function groupOrders(lines) {
     lines.forEach((l) => {
         let o = byOrder.get(l.orderId);
         if (!o) {
-            o = { key: `o:${l.orderId}`, orderId: l.orderId, folio: l.folio, name: l.name, requestedAt: l.requestedAt, receivedAt: l.receivedAt, cc: l.cc, centroCostos: l.centroCostos, source: l.source, lines: [] };
+            o = { key: `o:${l.orderId}`, orderId: l.orderId, folio: l.folio, name: l.name, placeName: l.placeName || '', requestedAt: l.requestedAt, receivedAt: l.receivedAt, cc: l.cc, centroCostos: l.centroCostos, source: l.source, lines: [] };
             byOrder.set(l.orderId, o);
         }
         o.lines.push(l);
@@ -291,7 +295,8 @@ async function refreshQueuedOrders() {
             return { code: art.code || '', description: art.description || `#${it.id}`, uom: art.uom || '', quantity: it.quantity, status: 'pending' };
         });
         const cc = costCenters.find((c) => c.id === body.costCenterId);
-        queuedOrders.push({ key: `q:${body.clientRef || item.id}`, queued: true, folio: '', name: body.requesterName || userLabel(), requestedAt: body.clientAt || item.queuedAt, cc: body.costCenterId, centroCostos: cc ? cc.name : '', source: 'app', lines });
+        const place = catalogPlaces.find((p) => p.id === body.placeId);
+        queuedOrders.push({ key: `q:${body.clientRef || item.id}`, queued: true, folio: '', name: body.requesterName || userLabel(), placeName: place ? place.name : '', requestedAt: body.clientAt || item.queuedAt, cc: body.costCenterId, centroCostos: cc ? cc.name : '', source: 'app', lines });
     });
     queuedOrders.reverse();
 }
@@ -395,7 +400,7 @@ function renderList() {
         row.type = 'button';
         row.className = 'home-carga-active-row';
         const label = o.queued ? t('home.pmOnPhone') : o.folio;
-        const sub = [itemsText(o.lines.length), o.centroCostos, formatTime(o.requestedAt)].filter(Boolean).join(' · ');
+        const sub = [itemsText(o.lines.length), o.placeName, o.centroCostos, formatTime(o.requestedAt)].filter(Boolean).join(' · ');
         row.innerHTML = `
             <span class="home-carga-active-row-icon"><i class="bx ${o.queued ? 'bx-cloud-upload' : 'bx-cart'}" aria-hidden="true"></i></span>
             <span class="home-carga-active-row-label"><p>${esc(label)}${o.name ? ` · ${esc(o.name)}` : ''}</p><span>${esc(sub)}</span></span>
@@ -413,6 +418,7 @@ function renderOrder() {
     meta.className = 'pm-app-meta';
     const rows = [
         [t('home.pmRequestedBy'), o.name || '—'],
+        o.placeName ? [t('main.colPmLugar'), o.placeName] : null,
         [t('home.pmWhen'), formatTime(o.requestedAt)],
         o.receivedAt ? [t('main.pmRecibido'), formatTime(o.receivedAt)] : null,
         [t('main.pmQrCentro'), o.centroCostos || '—'],
@@ -465,6 +471,7 @@ function openSheet(titleText, options, currentValue, onPick) {
 // draft: { costCenterId, cart: Map(id → { item, quantity }), query, mode, fields, requesterName, clientRef }
 let draft = null;
 const NAME_KEY = 'sgn_pm_name';
+const PLACE_KEY = 'sgn_pm_app_place'; // el último «Lugar que solicita» elegido en este celular (si todavía existe en el catálogo)
 const FIELD_KEYS = [['code', 'home.pmFCode'], ['description', 'home.pmFDesc'], ['uom', 'home.pmFUom'], ['categories', 'home.pmFCat']];
 const SEARCH_MODES = [['startsWith', 'home.pmModeStarts'], ['contains', 'home.pmModeContains'], ['equals', 'home.pmModeEquals']];
 const SIGNS = [['$', 'Before'], ['@', 'After'], [',', 'Comma']];
@@ -485,7 +492,10 @@ function startNewOrder() {
     // «Quién pide» siempre se pide: viene escrito con el último nombre usado (o el de la cuenta) y se puede cambiar
     let name = '';
     try { name = localStorage.getItem(NAME_KEY) || ''; } catch { /* sin almacenamiento */ }
-    draft = { costCenterId, cart: new Map(), query: '', mode: 'contains', fields: [], requesterName: name || userLabel(), clientRef: newRef() };
+    // el lugar que solicita: el último que se usó en este celular, si todavía está en el catálogo (sin lugares en la empresa no se pide)
+    let placeId = null;
+    try { const saved = Number(localStorage.getItem(PLACE_KEY)); if (saved && catalogPlaces.some((p) => p.id === saved)) placeId = saved; } catch { /* sin almacenamiento */ }
+    draft = { costCenterId, placeId, cart: new Map(), query: '', mode: 'contains', fields: [], requesterName: name || userLabel(), clientRef: newRef() };
     view = 'new';
     render();
 }
@@ -496,7 +506,19 @@ const signOff = (sign) => (sign === '$' && draft.mode !== 'contains') || (sign =
 // los valores de un campo: las categorías se prueban una por una (Igual que compara cada una)
 const valuesOf = (item, key) => (key === 'categories' ? String(item.categories || '').split(' · ').filter(Boolean) : [item[key]]);
 // Solo se pueden pedir los códigos RELACIONADOS (Relación Código) con el centro de costos del pedido; un catálogo guardado de antes (sin esa lista) se ve completo hasta que se vuelva a bajar con señal.
-const relatedTo = (it) => !Array.isArray(it.centers) || (draft.costCenterId !== null && it.centers.includes(draft.costCenterId));
+// Con «Lugar que solicita» (la empresa tiene lugares de envío) son los HABILITADOS para ese lugar desde ese centro (Relación Código Envío): sin centro o sin lugar no hay ninguno.
+const relatedTo = (it) => {
+    if (usesPlaces()) return draft.costCenterId !== null && draft.placeId !== null && Array.isArray(it.ship) && it.ship.some(([cc, place]) => cc === draft.costCenterId && place === draft.placeId);
+    return !Array.isArray(it.centers) || (draft.costCenterId !== null && it.centers.includes(draft.costCenterId));
+};
+// Lo ya agregado que deja de estar habilitado al cambiar el centro o el lugar se quita del pedido (con aviso).
+function pruneCart() {
+    const gone = Array.from(draft.cart.values()).filter(({ item }) => !relatedTo(item));
+    gone.forEach(({ item }) => draft.cart.delete(item.id));
+    if (gone.length) showToast(t(usesPlaces() ? 'home.pmCartPrunedPlace' : 'home.pmCartPruned', { n: gone.length }));
+}
+// Un error del servidor en el idioma de la App: por su código, o el texto que trae.
+const sendErrorText = (body) => (body && body.code === 'PLACE' ? t('home.pmNeedPlace') : (body && body.code === 'RELATED' ? t('home.pmErrRelated') : (body && body.message) || t('home.pmErrSend')));
 function searchCatalog() {
     if (!searchReady()) return null;
     const test = window.SearchSyntax.compile(draft.mode, searchTerms(draft.query));
@@ -540,9 +562,7 @@ function renderNew() {
     ccRow.addEventListener('click', () => openSheet(t('home.pmCenter'), costCenters.map((c) => ({ value: c.id, label: `${c.code ? `${c.code} · ` : ''}${c.name}` })), draft.costCenterId, (value) => {
         draft.costCenterId = value;
         // lo ya agregado que no está relacionado con el centro nuevo se quita del pedido
-        const gone = Array.from(draft.cart.values()).filter(({ item }) => !relatedTo(item));
-        gone.forEach(({ item }) => draft.cart.delete(item.id));
-        if (gone.length) showToast(t('home.pmCartPruned', { n: gone.length }));
+        pruneCart();
         ccDraw();
         drawResults();
         draft.redrawCart();
@@ -551,6 +571,33 @@ function renderNew() {
     ccWrap.className = 'home-carga-field';
     ccWrap.appendChild(ccRow);
     bodyEl.appendChild(ccWrap);
+
+    // el lugar que solicita (solo si la empresa tiene lugares de envío): cada lugar tiene sus propios códigos habilitados
+    if (usesPlaces()) {
+        const placeRow = document.createElement('button');
+        placeRow.type = 'button';
+        placeRow.className = 'home-carga-field-row pm-app-cc';
+        placeRow.setAttribute('data-help-key', 'pmLugar');
+        const placeDraw = () => {
+            const place = catalogPlaces.find((p) => p.id === draft.placeId);
+            placeRow.innerHTML = `<span class="home-carga-field-icon"><i class="bx bx-map-pin" aria-hidden="true"></i></span><span class="home-carga-field-label"><p>${esc(t('home.pmPlace'))} <span class="pm-app-req" aria-hidden="true">*</span></p><span>${esc(place ? place.name : t('home.pmPlacePick'))}</span></span><i class="bx ${place ? 'bx-edit' : 'bx-chevron-down'} home-carga-field-trailing"></i>`;
+        };
+        placeDraw();
+        placeRow.addEventListener('click', () => openSheet(t('home.pmPlace'), catalogPlaces.map((p) => ({ value: p.id, label: p.name })), draft.placeId, (value) => {
+            if (value === draft.placeId) return;
+            draft.placeId = value;
+            try { localStorage.setItem(PLACE_KEY, String(value)); } catch { /* sin almacenamiento */ }
+            // cada lugar tiene sus códigos: lo ya agregado que no está habilitado para el lugar nuevo se quita del pedido
+            pruneCart();
+            placeDraw();
+            drawResults();
+            draft.redrawCart();
+        }));
+        const placeWrap = document.createElement('div');
+        placeWrap.className = 'home-carga-field';
+        placeWrap.appendChild(placeRow);
+        bodyEl.appendChild(placeWrap);
+    }
 
     // quién pide (siempre se pide el nombre)
     const whoBox = document.createElement('div');
@@ -595,8 +642,15 @@ function renderNew() {
         if (catalogState === 'loading') { note.textContent = t('home.pmCatalogLoading'); return; }
         if (catalogState === 'none') { note.textContent = t('home.pmCatalogNone'); return; }
         if (catalogState === 'cached') note.textContent = t('home.pmCatalogCached', { n: catalog.length });
-        if (draft.costCenterId === null && catalog.some((it) => Array.isArray(it.centers))) { note.textContent = t('home.pmPickCenterFirst'); return; }
-        if (catalog.length && !catalog.some(relatedTo)) { note.textContent = t('home.pmNoRelated'); return; }
+        if (usesPlaces()) {
+            // con lugares: primero el centro y el lugar; solo salen los códigos habilitados para ese lugar desde ese centro
+            if (draft.costCenterId === null) { note.textContent = t('home.pmPickCenterFirst'); return; }
+            if (draft.placeId === null) { note.textContent = t('home.pmPickPlaceFirst'); return; }
+            if (!catalog.some(relatedTo)) { note.textContent = t('home.pmNoRelatedPlace'); return; }
+        } else {
+            if (draft.costCenterId === null && catalog.some((it) => Array.isArray(it.centers))) { note.textContent = t('home.pmPickCenterFirst'); return; }
+            if (catalog.length && !catalog.some(relatedTo)) { note.textContent = t('home.pmNoRelated'); return; }
+        }
         const found = searchCatalog();
         if (found === null) { if (catalogState !== 'cached') note.textContent = t(draft.mode === 'contains' ? 'home.pmTypeMore' : 'home.pmTypeOne'); return; }
         if (!found.length) { note.textContent = t('home.pmNone'); return; }
@@ -678,7 +732,7 @@ function renderNew() {
         sendDraft();
     });
     bodyEl.appendChild(sendBtn);
-    const sendDraw = () => { sendBtn.disabled = !draft.cart.size || draft.costCenterId === null; };
+    const sendDraw = () => { sendBtn.disabled = !draft.cart.size || draft.costCenterId === null || (usesPlaces() && draft.placeId === null); };
     const cartDraw = () => {
         cartBox.innerHTML = `<h4 class="pm-app-title">${esc(t('home.pmCart'))}${draft.cart.size ? ` · ${esc(itemsText(draft.cart.size))}` : ''}</h4>`;
         if (!draft.cart.size) {
@@ -743,11 +797,14 @@ function openQuantity(item) {
 
 async function sendDraft() {
     if (!draft || !draft.cart.size || draft.costCenterId === null) return;
+    if (usesPlaces() && draft.placeId === null) { showToast(t('home.pmNeedPlace')); return; }
     const requesterName = draft.requesterName.replace(/\s+/g, ' ').trim().slice(0, 60);
     const items = Array.from(draft.cart, ([id, { quantity }]) => ({ id, quantity }));
     const body = { costCenterId: draft.costCenterId, requesterName, items, clientAt: new Date().toISOString(), clientRef: draft.clientRef };
+    const place = usesPlaces() ? catalogPlaces.find((p) => p.id === draft.placeId) : null;
+    if (place) body.placeId = place.id;
     const cc = costCenters.find((c) => c.id === draft.costCenterId);
-    const description = `${t('menu.opCentroDistPedidoManual')} · ${cc ? cc.name : ''} · ${itemsText(items.length)}`;
+    const description = `${t('menu.opCentroDistPedidoManual')} · ${[place ? place.name : '', cc ? cc.name : ''].filter(Boolean).join(' · ')} · ${itemsText(items.length)}`;
     const sendBtn = bodyEl.querySelector('.pm-app-send');
     if (sendBtn) sendBtn.disabled = true;
     try {
@@ -758,14 +815,14 @@ async function sendDraft() {
             description, `${ORDER_RECORD_PREFIX}-new:${draft.clientRef}`, null, { rejectable: true },
         );
         if (!result.queued && !result.ok) {
-            showToast(result.body.message || t('home.pmErrSend'));
+            showToast(sendErrorText(result.body));
             if (sendBtn) sendBtn.disabled = false;
             return;
         }
         try { localStorage.setItem(NAME_KEY, requesterName); } catch { /* sin almacenamiento */ }
         // lo que se ve al terminar: el número de pedido (si se mandó sin señal todavía no lo hay) y su lista de artículos
         doneInfo = {
-            queued: !!result.queued, folio: result.queued ? '' : (result.body.folio || ''), name: requesterName, at: result.queued ? body.clientAt : (result.body.createdAt || body.clientAt), centroCostos: cc ? cc.name : '',
+            queued: !!result.queued, folio: result.queued ? '' : (result.body.folio || ''), name: requesterName, placeName: place ? place.name : '', at: result.queued ? body.clientAt : (result.body.createdAt || body.clientAt), centroCostos: cc ? cc.name : '',
             lines: Array.from(draft.cart.values(), ({ item, quantity }) => ({ code: item.code, description: item.description, uom: item.uom, quantity })),
         };
         if (!result.queued) await loadOrders();
@@ -790,7 +847,7 @@ function renderDone() {
         <span class="pm-app-lbl">${esc(t('home.pmOrderNumber'))}</span>
         <div class="pm-app-folio">${esc(d.folio || t('home.pmNoNumberYet'))}</div>
         ${d.queued ? `<p class="pm-app-note">${esc(t('home.pmNumberOnSync'))}</p>` : ''}
-        <div class="pm-app-meta pm-app-meta-flat">${[[t('home.pmRequestedBy'), d.name], [t('home.pmWhen'), formatTime(d.at)], [t('main.pmQrCentro'), d.centroCostos]].filter(([, v]) => v).map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+        <div class="pm-app-meta pm-app-meta-flat">${[[t('home.pmRequestedBy'), d.name], [t('main.colPmLugar'), d.placeName], [t('home.pmWhen'), formatTime(d.at)], [t('main.pmQrCentro'), d.centroCostos]].filter(([, v]) => v).map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
         <h4 class="pm-app-title">${esc(t('home.pmListTitle'))} · ${esc(itemsText(d.lines.length))}</h4>
         ${d.lines.map((l) => `<div class="pm-app-line"><div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, l.uom].filter(Boolean).join(' · '))}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b></div>`).join('')}`;
     bodyEl.appendChild(box);

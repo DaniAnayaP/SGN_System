@@ -4288,6 +4288,13 @@
     "pmNoRelated": "Este centro de costos todavía no tiene códigos relacionados (Relación Código): no hay nada que pedir.",
     "pmPickCenterFirst": "Elige primero el centro de costos: solo se pueden pedir los códigos relacionados con él.",
     "pmCartPruned": "Se quitaron {n} artículos del pedido: no están relacionados con ese centro de costos.",
+    "pmCartPrunedPlace": "Se quitaron {n} artículos del pedido: no están habilitados para enviarse a ese lugar desde este centro de costos.",
+    "pmPlace": "Lugar que solicita",
+    "pmPlacePick": "Elige el lugar que solicita",
+    "pmPickPlaceFirst": "Elige primero el lugar que solicita: así ves los códigos que se le pueden enviar.",
+    "pmNoRelatedPlace": "Este lugar todavía no tiene códigos habilitados para envío desde este centro de costos (Relación Código Envío): no hay nada que pedir.",
+    "pmNeedPlace": "Elige el lugar que solicita para enviar.",
+    "pmErrRelated": "Un artículo ya no está habilitado para ese lugar (o centro de costos): quítalo del pedido.",
     "pmNewButton": "Nuevo pedido",
     "pmListEmpty": "Todavía no hay pedidos.",
     "pmSearchPlaceholder": "Código, descripción, UdM o categoría",
@@ -5991,6 +5998,10 @@
     "pmEstatus": {
       "what": "En qué va cada renglón del pedido: Pendiente (recién llegó) o Surtido (ya se entregó). Quien tiene Ver y Operar en la columna Estatus lo cambia desde aquí; cada cambio queda en el historial.",
       "example": "entregas las 24 piezas de leche: cambias el renglón a Surtido."
+    },
+    "pmLugar": {
+      "what": "El lugar que pide el pedido (por ejemplo un hospital fuera del centro de distribución). Cada lugar solo muestra los códigos habilitados para enviarle desde el centro de costos elegido (Relación Código Envío); al cambiar de lugar se quita del pedido lo que no esté habilitado para el nuevo.",
+      "example": "eliges Hospital Norte: solo ves los códigos habilitados para Hospital Norte y el pedido se guarda con ese lugar."
     },
     "layoutModoEditar": {
       "what": "Pasa del modo Ver al modo Editar: aparecen los pasos con sus tablas, los botones para agregar y quitar cosas del Layout, Guardar y Descartar cambios. Sin este icono en el árbol de accesos el Layout se queda siempre en Ver.",
