@@ -3727,6 +3727,8 @@
     "pmPedidoTitulo": "Order",
     "pmListaNum": "No.",
     "pmTodoPedido": "Whole order",
+    "pmFiltroTodo": "All",
+    "pmFiltroVacio": "No line of the order has that status.",
     "pmEliminarPedido": "Delete order {folio} with {n} item(s)? This cannot be undone.",
     "pmArticulosN": "{n} item(s)",
     "qrsVolver": "Back to the list",
@@ -6039,6 +6041,10 @@
     "pmQr": {
       "what": "Shows the Manual Order QR of the cost center selected above. Stick it in the warehouse: whoever scans it searches for the item (by code, description, unit of measure or category), enters the quantity and sends the order; it arrives here with their name and the time. The same window downloads the image and opens or closes the QR locks.",
       "example": "you print the Main Warehouse QR and stick it by the door: staff request what they need from their phones."
+    },
+    "pmEstatusFiltro": {
+      "what": "Shows only the order lines that have the status you choose: All, Pending or Supplied (in brackets, how many there are of each). It is only the view: it does not change any status. Each line status is changed in its own select and the whole order status in the orders table. The list you download from this window follows what you see.",
+      "example": "you choose Pending: only the lines still to be supplied are left."
     },
     "pmEstatus": {
       "what": "Where each order line is: Pending (just arrived) or Supplied (already delivered). Whoever has View and Operate on the Status column changes it here; every change is kept in the history.",

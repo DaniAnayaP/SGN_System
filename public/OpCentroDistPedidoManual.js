@@ -446,10 +446,14 @@ function ensureListModal() {
         listOverlay.hidden = true;
     }, true);
 }
+// «Estatus» de la ventana «Ver SKU solicitado»: un FILTRO de los renglones del pedido (Todo / Pendiente / Surtido). Es solo de vista: no cambia ningún estatus (el del pedido completo se cambia en la tabla de pedidos y el de cada renglón en su select).
+let listStatusFilter = 'all';
+const visibleLines = (o) => (listStatusFilter === 'all' ? o.lines : o.lines.filter((l) => l.status === listStatusFilter));
 function openListModal(orderId) {
     if (!orderMap.has(orderId)) return;
     ensureListModal();
     listOrderId = orderId;
+    listStatusFilter = 'all';
     listOverlay.hidden = false;
     renderListModal();
     listOverlay.querySelector('#pm-list-close').focus();
@@ -473,12 +477,37 @@ function renderListModal() {
     metaItem(t('main.colPmLugar'), o.placeName);
     metaItem(t('main.colPmFechaHora'), whenText(o.requestedAt));
     metaItem(t('main.colPmOrigen'), originText(o.source));
-    metaItem(`${t('main.colPmEstatus')} · ${t('main.pmTodoPedido')}`, orderStatusControl(o));
+    const counts = { all: o.lines.length, pending: o.lines.filter((l) => l.status === 'pending').length, supplied: o.lines.filter((l) => l.status === 'supplied').length };
+    const filter = document.createElement('select');
+    filter.className = 'pm-status';
+    filter.dataset.s = listStatusFilter;
+    filter.setAttribute('data-help-key', 'pmEstatusFiltro');
+    filter.setAttribute('aria-label', t('main.colPmEstatus'));
+    [['all', t('main.pmFiltroTodo')], ['pending', statusText('pending')], ['supplied', statusText('supplied')]].forEach(([value, label]) => {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = `${label} (${counts[value]})`;
+        if (value === listStatusFilter) opt.selected = true;
+        filter.appendChild(opt);
+    });
+    filter.addEventListener('change', () => { listStatusFilter = filter.value; renderListModal(); });
+    metaItem(t('main.colPmEstatus'), filter);
     const head = listOverlay.querySelector('#pm-list-head');
     head.innerHTML = [t('main.pmListaNum'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmCategoria'), t('main.colPmCantidad'), t('main.colPmFechaRequerida'), t('main.colPmEstatus'), t('main.colActions')].map((h) => `<th>${esc(h)}</th>`).join('');
     const body = listOverlay.querySelector('#pm-list-body');
     body.innerHTML = '';
+    const shownLines = visibleLines(o);
+    if (!shownLines.length) {
+        const tr = document.createElement('tr');
+        const emptyTd = document.createElement('td');
+        emptyTd.colSpan = 9;
+        emptyTd.className = 'rel-muted';
+        emptyTd.textContent = t('main.pmFiltroVacio');
+        tr.appendChild(emptyTd);
+        body.appendChild(tr);
+    }
     o.lines.forEach((l, i) => {
+        if (!shownLines.includes(l)) return;
         const tr = document.createElement('tr');
         const td = (text, cls) => { const c = document.createElement('td'); c.textContent = text === null || text === undefined || text === '' ? '—' : String(text); if (cls) c.className = cls; return c; };
         tr.append(td(i + 1), td(l.code), td(l.description), td(l.uom), td(l.categories), td(quantityText(l.quantity), 'num'), td(needByText(l.needBy)));
@@ -506,7 +535,7 @@ function renderListModal() {
             btn.className = 'btn btn-secondary';
             btn.setAttribute('data-help-key', 'pmDescargar');
             btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(key))}`;
-            btn.addEventListener('click', () => downloadDataset(id, orderDataset(o)));
+            btn.addEventListener('click', () => downloadDataset(id, orderDataset(o, visibleLines(o))));
             formats.appendChild(btn);
         });
     }
@@ -516,27 +545,28 @@ function renderListModal() {
 const FORMATS = [['xlsx', 'bx-spreadsheet', 'main.pmFormatoXlsx'], ['pdf', 'bxs-file-pdf', 'main.pmFormatoPdf'], ['csv', 'bx-table', 'main.pmFormatoCsv'], ['txt', 'bx-file-blank', 'main.pmFormatoTxt'], ['json', 'bx-code-curly', 'main.pmFormatoJson']];
 const today = () => new Date().toISOString().slice(0, 10);
 const csvCell = (v) => { const s = String(v === null || v === undefined ? '' : v); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-const orderHeader = (o) => [[t('main.colPmFolio'), o.folio], [t('main.colPmSolicitante'), o.name], [t('main.colPmLugar'), o.placeName || '—'], [t('main.colPmFechaHora'), whenText(o.requestedAt)], [t('main.colPmOrigen'), originText(o.source)], [t('main.colPmEstatus'), statusText(orderStatus(o))], [t('main.colPmArticulos'), o.lines.length]];
+const orderHeader = (o, lines = o.lines) => [[t('main.colPmFolio'), o.folio], [t('main.colPmSolicitante'), o.name], [t('main.colPmLugar'), o.placeName || '—'], [t('main.colPmFechaHora'), whenText(o.requestedAt)], [t('main.colPmOrigen'), originText(o.source)], [t('main.colPmEstatus'), statusText(orderStatus(o))], [t('main.colPmArticulos'), lines.length === o.lines.length ? lines.length : `${lines.length} / ${o.lines.length}`]];
 const lineColumns = () => [t('main.pmListaNum'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmCategoria'), t('main.colPmCantidad'), t('main.colPmFechaRequerida'), t('main.colPmEstatus')];
 const lineValues = (l, i) => [i + 1, l.code, l.description, l.uom, l.categories, quantityText(l.quantity), needByText(l.needBy), statusText(l.status)];
 // El mismo renglón con los datos del pedido repetidos (para CSV y para juntar varios pedidos en una sola tabla).
 const flatColumns = () => [t('main.colPmFolio'), t('main.colPmSolicitante'), t('main.colPmLugar'), t('main.colPmFechaHora'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmCategoria'), t('main.colPmCantidad'), t('main.colPmFechaRequerida'), t('main.colPmEstatus')];
 const flatValues = (o, l) => [o.folio, o.name, o.placeName, whenText(o.requestedAt), l.code, l.description, l.uom, l.categories, quantityText(l.quantity), needByText(l.needBy), statusText(l.status)];
-const orderJson = (o) => ({
+const orderJson = (o, lines = o.lines) => ({
     folio: o.folio, requestedBy: o.name, place: o.placeName || null, requestedAtUtc: o.requestedAt, receivedAtUtc: o.receivedAt || null, origin: o.source, status: orderStatus(o),
-    items: o.lines.map((l, i) => ({ no: i + 1, code: l.code, description: l.description, uom: l.uom, categories: l.categories, quantity: l.quantity, requiredDate: /^\d{4}-\d{2}-\d{2}$/.test(l.needBy || '') ? l.needBy : null, asap: !/^\d{4}-\d{2}-\d{2}$/.test(l.needBy || ''), status: l.status })),
+    items: lines.map((l) => ({ no: o.lines.indexOf(l) + 1, code: l.code, description: l.description, uom: l.uom, categories: l.categories, quantity: l.quantity, requiredDate: /^\d{4}-\d{2}-\d{2}$/.test(l.needBy || '') ? l.needBy : null, asap: !/^\d{4}-\d{2}-\d{2}$/.test(l.needBy || ''), status: l.status })),
 });
-function orderTxt(o) {
-    const head = orderHeader(o).map(([k, v]) => `${k}: ${v}`);
-    const items = o.lines.map((l, i) => `${String(i + 1).padStart(3, ' ')}. ${l.code} | ${l.description} | ${quantityText(l.quantity)} ${l.uom || ''} | ${t('main.colPmFechaRequerida')}: ${needByText(l.needBy)} | ${statusText(l.status)}`.replace(/\s+\|/g, ' |'));
+function orderTxt(o, lines = o.lines) {
+    const head = orderHeader(o, lines).map(([k, v]) => `${k}: ${v}`);
+    const items = lines.map((l) => `${String(o.lines.indexOf(l) + 1).padStart(3, ' ')}. ${l.code} | ${l.description} | ${quantityText(l.quantity)} ${l.uom || ''} | ${t('main.colPmFechaRequerida')}: ${needByText(l.needBy)} | ${statusText(l.status)}`.replace(/\s+\|/g, ' |'));
     return [`${t('main.pmPedidoTitulo').toUpperCase()} ${o.folio}`, ...head, '', ...items].join('\r\n');
 }
 // La lista de UN pedido: los datos del pedido arriba y sus artículos abajo (Excel y PDF); CSV, texto y JSON con la misma información.
-function orderDataset(o) {
+// lines: los renglones que van en la lista (los que se ven en la ventana con el filtro de estatus; todos si no se pasa)
+function orderDataset(o, lines = o.lines) {
     return {
-        title: `${t('main.pmPedidoTitulo')} ${o.folio}`, filename: `Pedido-${o.folio}_${today()}`, header: orderHeader(o),
-        columns: lineColumns(), rows: o.lines.map(lineValues), widths: [0.35, 1.0, 3.4, 0.8, 1.7, 0.8, 1.2, 1.0],
-        flat: { columns: flatColumns(), rows: o.lines.map((l) => flatValues(o, l)) }, json: orderJson(o), txt: orderTxt(o),
+        title: `${t('main.pmPedidoTitulo')} ${o.folio}`, filename: `Pedido-${o.folio}_${today()}`, header: orderHeader(o, lines),
+        columns: lineColumns(), rows: lines.map((l) => lineValues(l, o.lines.indexOf(l))), widths: [0.35, 1.0, 3.4, 0.8, 1.7, 0.8, 1.2, 1.0],
+        flat: { columns: flatColumns(), rows: lines.map((l) => flatValues(o, l)) }, json: orderJson(o, lines), txt: orderTxt(o, lines),
     };
 }
 // Los pedidos que se ven ahora en la tabla (con la búsqueda y los filtros puestos), en el orden de la tabla.

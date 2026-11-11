@@ -3727,6 +3727,8 @@
     "pmPedidoTitulo": "Pedido",
     "pmListaNum": "No.",
     "pmTodoPedido": "Todo el pedido",
+    "pmFiltroTodo": "Todo",
+    "pmFiltroVacio": "Ningún renglón del pedido tiene ese estatus.",
     "pmEliminarPedido": "¿Eliminar el pedido {folio} con {n} artículo(s)? No se puede deshacer.",
     "pmArticulosN": "{n} artículo(s)",
     "qrsVolver": "Volver a la lista",
@@ -6038,6 +6040,10 @@
     "pmQr": {
       "what": "Muestra el QR de Pedido Manual del centro de costos que tienes marcado arriba. Pégalo en el almacén: quien lo escanea busca el artículo (por código, descripción, unidad de medida o categoría), pone la cantidad y envía el pedido; llega aquí con su nombre y la hora. Desde la misma ventana se descarga la imagen y se cierran o abren los candados del QR.",
       "example": "imprimes el QR del Almacén Central y lo pegas junto a la puerta: el personal pide lo que necesita desde su celular."
+    },
+    "pmEstatusFiltro": {
+      "what": "Muestra solo los renglones del pedido que tengan el estatus que elijas: Todo, Pendiente o Surtido (entre paréntesis, cuántos hay de cada uno). Es solo la vista: no cambia ningún estatus. El estatus de cada renglón se cambia en su propio select y el de todo el pedido en la tabla de pedidos. La lista que se descarga de esta ventana sigue lo que ves.",
+      "example": "eliges Pendiente: quedan solo los renglones que todavía faltan por surtir."
     },
     "pmEstatus": {
       "what": "En qué va cada renglón del pedido: Pendiente (recién llegó) o Surtido (ya se entregó). Quien tiene Ver y Operar en la columna Estatus lo cambia desde aquí; cada cambio queda en el historial.",
