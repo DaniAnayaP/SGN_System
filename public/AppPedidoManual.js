@@ -547,6 +547,15 @@ const relatedTo = (it) => {
     if (usesPlaces()) return draft.costCenterId !== null && draft.placeId !== null && Array.isArray(it.ship) && it.ship.some(([cc, place]) => cc === draft.costCenterId && place === draft.placeId);
     return !Array.isArray(it.centers) || (draft.costCenterId !== null && it.centers.includes(draft.costCenterId));
 };
+// Qué falta para habilitar la lista de códigos, en el orden de la pantalla (centro, lugar, quién pide): la clave de su aviso, o null si ya se puede.
+const nameOk = () => !!String(draft.requesterName || '').replace(/\s+/g, ' ').trim();
+function listBlock() {
+    if (usesPlaces()) {
+        if (draft.costCenterId === null) return 'home.pmPickCenterFirst';
+        if (draft.placeId === null) return 'home.pmPickPlaceFirst';
+    } else if (draft.costCenterId === null && catalog.some((it) => Array.isArray(it.centers))) return 'home.pmPickCenterFirst';
+    return nameOk() ? null : 'home.pmNameFirst';
+}
 // Lo ya agregado que deja de estar habilitado al cambiar el centro o el lugar se quita del pedido (con aviso).
 function pruneCart() {
     const gone = Array.from(draft.cart.values()).filter(({ item }) => !relatedTo(item));
@@ -647,7 +656,8 @@ function renderNew() {
     whoBox.innerHTML = `<label class="pm-app-qty-label pm-app-who-label" for="pm-app-who">${esc(t('home.pmWho'))} <span class="pm-app-req" aria-hidden="true">*</span></label><input id="pm-app-who" class="pm-app-input" type="text" maxlength="60" autocomplete="name" required placeholder="${esc(t('home.pmWhoPlaceholder'))}" value="${esc(draft.requesterName)}">`;
     bodyEl.appendChild(whoBox);
     const whoInput = whoBox.querySelector('#pm-app-who');
-    whoInput.addEventListener('input', () => { draft.requesterName = whoInput.value; });
+    let lockedNow = null; // ¿la lista está apagada? (solo se redibuja cuando cambia, para no perder el cursor al escribir el nombre)
+    whoInput.addEventListener('input', () => { draft.requesterName = whoInput.value; if (draft.redrawResults && !!listBlock() !== lockedNow) draft.redrawResults(); });
 
     // el buscador: el mismo de los demás QR
     const searchBox = document.createElement('div');
@@ -691,15 +701,16 @@ function renderNew() {
         if (catalogState === 'loading') { note.textContent = t('home.pmCatalogLoading'); return; }
         if (catalogState === 'none') { note.textContent = t('home.pmCatalogNone'); return; }
         if (catalogState === 'cached') note.textContent = t('home.pmCatalogCached', { n: catalog.length });
+        // PRIMERO el centro, el lugar (si la empresa los usa) y quién pide; hasta entonces la tarjeta de la lista se ve apagada, no responde y avisa qué falta
+        const block = listBlock();
+        lockedNow = !!block;
+        searchBox.classList.toggle('pm-app-locked', lockedNow);
+        if (lockedNow) searchBox.setAttribute('inert', ''); else searchBox.removeAttribute('inert');
+        if (block) { note.textContent = t(block); return; }
+        // con lugares solo salen los códigos habilitados para ese lugar desde ese centro
         if (usesPlaces()) {
-            // con lugares: primero el centro y el lugar; solo salen los códigos habilitados para ese lugar desde ese centro
-            if (draft.costCenterId === null) { note.textContent = t('home.pmPickCenterFirst'); return; }
-            if (draft.placeId === null) { note.textContent = t('home.pmPickPlaceFirst'); return; }
             if (!catalog.some(relatedTo)) { note.textContent = t('home.pmNoRelatedPlace'); return; }
-        } else {
-            if (draft.costCenterId === null && catalog.some((it) => Array.isArray(it.centers))) { note.textContent = t('home.pmPickCenterFirst'); return; }
-            if (catalog.length && !catalog.some(relatedTo)) { note.textContent = t('home.pmNoRelated'); return; }
-        }
+        } else if (catalog.length && !catalog.some(relatedTo)) { note.textContent = t('home.pmNoRelated'); return; }
         const found = searchCatalog();
         if (!found.length) { note.textContent = t('home.pmNone'); return; }
         found.slice(0, shown).forEach((it) => {

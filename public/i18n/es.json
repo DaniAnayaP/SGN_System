@@ -4444,6 +4444,7 @@
     "pmMore": "Hay más resultados: escribe más para acotar.",
     "pmShowing": "Mostrando {n} de {total} códigos",
     "pmShowMore": "Ver más",
+    "pmNameFirst": "Primero escribe quién pide: así se habilita la lista de códigos.",
     "pmQuantity": "Cantidad",
     "pmChange": "Cambiar",
     "pmDayWhen": "¿Para cuándo?",
@@ -6197,7 +6198,7 @@
       "example": "pides 20 cajas de leche: eliges el jueves y pones 12, eliges el lunes y pones 8 — dos días del mismo artículo."
     },
     "pmBuscador": {
-      "what": "La lista de los códigos que puedes pedir (los habilitados para el centro de costos y el lugar elegidos): sale completa desde que entras, para reconocer el que necesitas sin tener que escribirlo. Al tocar uno se abre su hoja para elegir el día y la cantidad. Lo que escribes arriba acota la lista (Contiene, Inicia con o Igual que, con $ antes, @ después y la coma para varias búsquedas) y «Buscar en» elige en qué campos. Se ven de 50 en 50: «Ver más» agrega los siguientes.",
+      "what": "La lista de los códigos que puedes pedir (los habilitados para el centro de costos y el lugar elegidos): sale completa desde que entras, para reconocer el que necesitas sin tener que escribirlo. Al tocar uno se abre su hoja para elegir el día y la cantidad. Lo que escribes arriba acota la lista (Contiene, Inicia con o Igual que, con $ antes, @ después y la coma para varias búsquedas) y «Buscar en» elige en qué campos. Se ven de 50 en 50: «Ver más» agrega los siguientes. La lista se habilita cuando ya están el centro de costos, el lugar y quién pide.",
       "example": "escribes «leche»: la lista queda solo con los códigos que la mencionan; la borras y vuelve a salir completa."
     },
     "pmLugar": {

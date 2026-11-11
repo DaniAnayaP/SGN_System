@@ -160,6 +160,7 @@
         .whospacer{ display:none; }
         /* lista (celular): mientras no se escriba quién pide y se elija el lugar, la tarjeta de la lista de códigos se ve apagada y no responde */
         .card.locked{ pointer-events:none; }
+        .scroll.locked{ opacity:.6; pointer-events:none; }
         .card.locked .fmenu, .card.locked h2{ opacity:.45; }
         .whorow{ display:grid; grid-template-columns:1fr; gap:12px; }
         /* en pantalla ancha: «Quién pide», «Lugar que solicita» y «Enviar pedido» en un solo renglón; en la angosta (aunque se elija la tabla), uno debajo del otro */
@@ -461,21 +462,27 @@ const placeFieldHtml = () => {
 const whoOk = () => !!String(nameValue || '').replace(/\s+/g, ' ').trim();
 const listReady = () => whoOk() && !needPlace();
 let listWasReady = null;
-// La tarjeta de la lista se apaga (y no responde) mientras falte quién pide o el lugar.
+// La tarjeta de la lista (celular) y la tabla (computadora) se apagan (y no responden) mientras falte quién pide o el lugar.
 function syncLock() {
-    const card = $('searchcard');
-    if (!card) return;
     const ok = listReady();
-    card.classList.toggle('locked', !ok);
-    if (ok) card.removeAttribute('inert'); else card.setAttribute('inert', '');
+    [$('searchcard'), document.querySelector('.scroll')].forEach((el) => {
+        if (!el) return;
+        el.classList.toggle('locked', !ok);
+        if (ok) el.removeAttribute('inert'); else el.setAttribute('inert', '');
+    });
 }
 // Al escribir el nombre: solo cuando la lista pasa de bloqueada a habilitada (o al revés) se redibuja, para no mover nada mientras se sigue escribiendo.
 function onWhoChange() {
-    if (wide) return;
     const ok = listReady();
     if (ok === listWasReady) return;
     listWasReady = ok;
     syncLock();
+    if (wide) {
+        // tabla: habilitada pide la primera página; bloqueada se vacía con su aviso (lo que se había escrito en el pedido se conserva)
+        if (ok) loadCatalog(false);
+        else { catSeq++; catalog = { items: [], total: 0, loading: false, loaded: true, added: [] }; drawTableBody(); }
+        return;
+    }
     drawResults();
     if (ok && isNarrow() && !catalog.loaded && !catalog.loading) loadCatalog(false);
 }
@@ -507,7 +514,7 @@ function rowEnd(r) {
 function drawResults() {
     const box = $('results');
     if (!box) return;
-    if (!wide && !listReady()) box.innerHTML = `<div class="msg">${esc(!whoOk() ? ((info.places || []).length ? TEXT.fillFirst : TEXT.fillFirstNoPlace) : TEXT.pickPlace)}</div>`;
+    if (!wide && !listReady()) box.innerHTML = `<div class="msg">${esc(!whoOk() ? (needPlace() ? TEXT.fillFirst : TEXT.fillFirstNoPlace) : TEXT.pickPlace)}</div>`;
     else if (needPlace()) box.innerHTML = `<div class="msg">${esc(TEXT.pickPlace)}</div>`;
     else if ((info.places || []).length ? placeCount() === 0 : info.relatedCount === 0) box.innerHTML = `<div class="msg">${esc((info.places || []).length ? TEXT.noRelatedPlace : TEXT.noRelated)}</div>`;
     else if (isNarrow()) drawPhoneList(box);
@@ -632,7 +639,7 @@ const rowVisible = (c) => (!tblFilter.total || totalOf(c) > 0) && [...tblFilter.
 // Pide la lista (la primera página o, con append, la siguiente) con el filtro del encabezado Artículo.
 async function loadCatalog(append) {
     const my = ++catSeq;
-    if (needPlace()) { catalog = { items: [], total: 0, loading: false, loaded: true, added: [] }; if (wide) drawTableBody(); return; } // sin lugar no hay lista
+    if (needPlace() || !whoOk()) { catalog = { items: [], total: 0, loading: false, loaded: wide, added: [] }; if (wide) drawTableBody(); return; } // sin lugar o sin quién pide no hay lista
     catalog.loading = true;
     catalog.added = [];
     const offset = append ? catalog.items.length : 0;
@@ -695,7 +702,8 @@ function rowHtml(it, cols) {
 function tableBodyHtml(cols) {
     const items = tableRowItems();
     let msg = '';
-    if (needPlace()) msg = TEXT.pickPlace;
+    if (!whoOk()) msg = needPlace() ? TEXT.fillFirst : TEXT.fillFirstNoPlace; // faltan los dos, o solo el nombre
+    else if (needPlace()) msg = TEXT.pickPlace;
     else if ((info.places || []).length ? placeCount() === 0 : info.relatedCount === 0) msg = (info.places || []).length ? TEXT.noRelatedPlace : TEXT.noRelated;
     else if (filterActive()) msg = items.length ? '' : (cart.length ? TEXT.noMatch : TEXT.emptyTable);
     else if (!catalog.loaded) msg = TEXT.loading;
@@ -804,7 +812,7 @@ function drawOrder() {
     const whoRow = wide ? `<div class="whorow">${whoFieldHtml()}${placeFieldHtml() || '<div class="whospacer"></div>'}${sendbox}</div>` : sendbox;
     const today = wide ? `<span class="muted">${esc(fill(TEXT.todayIs, { d: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(dayDate(todayIso())) }))}</span>` : '';
     box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${layoutToggle()}</div>${whoRow}<div class="err" id="err" role="alert" hidden></div>${body}`;
-    if (wide) { refreshTable(); fitScroll(); if (!catalog.loaded && !catalog.loading) loadCatalog(false); }
+    if (wide) { syncLock(); refreshTable(); fitScroll(); if (!catalog.loaded && !catalog.loading) loadCatalog(false); }
     if (pop) { const a = document.querySelector(`[data-filter="${pop.kind}"]`); if (a) { pop.anchor = a; placePop(); } else closePop(); }
 }
 // ---- La hoja del celular ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1041,6 +1049,7 @@ $('view').addEventListener('input', (event) => {
         picked = null;
         results = []; total = 0;
         catalog = { items: [], total: 0, loading: false, loaded: false, added: [] };
+        listWasReady = listReady();
         drawOrder();
         if (!wide) { listWasReady = listReady(); syncLock(); drawResults(); drawSel(); if (listReady()) { if (isNarrow()) loadCatalog(false); else if (ready()) search(); } }
     }
