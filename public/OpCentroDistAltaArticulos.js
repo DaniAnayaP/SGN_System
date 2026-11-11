@@ -821,6 +821,7 @@ function decorateAllRowSelection() {
 }
 function selectBar() { return skuToolbar()?.querySelector('.sku-select-bar') || null; }
 function updateSelectBar() {
+    updateHeaderTools();
     const bar = selectBar();
     if (!bar) return;
     const filtered = filteredSkuIds();
@@ -852,7 +853,8 @@ function enterSelectMode() {
     bar.querySelector('[data-sku-select-none]').addEventListener('click', () => { skuSelected.clear(); decorateAllRowSelection(); updateSelectBar(); });
     bar.querySelector('[data-sku-delete]').addEventListener('click', bulkDeleteSelected);
     bar.querySelector('[data-sku-select-exit]').addEventListener('click', exitSelectMode);
-    toolbar.querySelector('.sku-select-btn')?.after(bar);
+    const anchor = toolbar.querySelector('.data-table-template-btn') || toolbar.querySelector('.data-table-new-record-btn');
+    if (anchor) anchor.after(bar); else toolbar.prepend(bar);
     // los filtros de columna esconden o muestran filas sin avisar: la barra se actualiza sola
     let timer = null;
     skuSelectObserver = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(updateSelectBar, 150); });
@@ -866,18 +868,73 @@ function exitSelectMode() {
     if (skuSelectObserver) { skuSelectObserver.disconnect(); skuSelectObserver = null; }
     selectBar()?.remove();
     decorateAllRowSelection();
+    updateHeaderTools();
 }
-// El botón «Seleccionar» de la barra de la tabla (solo con la hoja de eliminar).
-function mountSelectButton(toolbar) {
-    if (!canBulkDelete() || toolbar.querySelector('.sku-select-btn')) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'data-table-template-btn sku-select-btn';
-    btn.setAttribute('data-help-key', 'skuSeleccionar');
-    btn.innerHTML = `<i class="bx bx-select-multiple" aria-hidden="true"></i><span>${Dashboard.t('main.skuSeleccionar')}</span>`;
-    btn.addEventListener('click', () => { if (skuSelectMode) selectFiltered(); else enterSelectMode(); });
-    const anchor = toolbar.querySelector('.data-table-template-btn:not(.sku-select-btn)') || toolbar.querySelector('.data-table-new-record-btn');
-    if (anchor) anchor.after(btn); else toolbar.prepend(btn);
+// Los íconos «Seleccionar» y «Eliminar seleccionados» van en el encabezado «Acciones», después de la palabra y dentro del mismo encabezado (solo con la hoja de eliminar). La palabra se queda en su propio span para que el
+// cambio de idioma (data-i18n) no borre los íconos.
+const SKU_ACTIONS_MIN_WIDTH = 170; // px: «ACCIONES» + los dos íconos del encabezado
+function mountHeaderTools() {
+    if (!canBulkDelete()) return;
+    const th = document.querySelector('[data-table-id="nuestros-articulos"] th[data-col="actions"]');
+    if (!th || th.querySelector('.sku-th-tools')) return;
+    const label = document.createElement('span');
+    label.className = 'sku-th-label';
+    const key = th.getAttribute('data-i18n');
+    if (key) { label.setAttribute('data-i18n', key); th.removeAttribute('data-i18n'); }
+    label.textContent = th.textContent;
+    th.textContent = '';
+    const tools = document.createElement('span');
+    tools.className = 'sku-th-tools';
+    const mk = (cls, icon, helpKey, label2, onClick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `admin-icon-btn sku-th-btn ${cls}`;
+        b.setAttribute('data-help-key', helpKey);
+        b.title = label2;
+        b.setAttribute('aria-label', label2);
+        b.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+        // el encabezado puede ordenar o abrir filtros: el toque es de este ícono y nada más
+        b.addEventListener('click', (event) => { event.stopPropagation(); onClick(); });
+        return b;
+    };
+    tools.append(
+        mk('sku-th-select', 'bx-checkbox', 'skuSeleccionar', Dashboard.t('main.skuSeleccionar'), toggleSelectAll),
+        mk('admin-icon-btn-danger sku-th-delete', 'bx-trash', 'skuEliminarVarios', Dashboard.t('main.skuEliminarIcono'), bulkDeleteSelected),
+    );
+    th.classList.add('sku-th-actions');
+    th.append(label, tools);
+    // la columna necesita ancho para la palabra y los dos íconos (el de antes solo alcanzaba para la palabra y los botones de cada renglón)
+    if (Dashboard.ensureColumnMinWidth) Dashboard.ensureColumnMinWidth(TABLE_KEY, 'actions', SKU_ACTIONS_MIN_WIDTH);
+    updateHeaderTools();
+}
+// El ícono de seleccionar es como la casilla de un encabezado, se prende y se apaga: vacío si no hay nada marcado, con una raya en medio si se marcó una parte de lo filtrado y relleno de color si se marcó todo lo filtrado.
+// Tocarlo marca todo lo filtrado (si estaba vacío o a medias) o, si ya estaba todo marcado, lo apaga y quita la selección.
+function toggleSelectAll() {
+    if (!skuSelectMode) { enterSelectMode(); return; } // entra y marca todo lo filtrado
+    const filtered = filteredSkuIds();
+    const selected = filtered.filter((id) => skuSelected.has(id)).length;
+    if (filtered.length && selected === filtered.length) exitSelectMode(); else selectFiltered();
+}
+// El ícono de eliminar se apaga mientras no haya nada marcado (o se esté eliminando); el de seleccionar muestra si hay todo, una parte o nada de lo filtrado marcado.
+function updateHeaderTools() {
+    const th = document.querySelector('[data-table-id="nuestros-articulos"] th[data-col="actions"] .sku-th-tools');
+    if (!th) return;
+    const filteredCount = skuSelectMode ? filteredSkuIds().length : 0;
+    const selected = skuSelectMode ? selectedFilteredIds().length : 0;
+    const state = selected && selected === filteredCount ? 'all' : (selected ? 'some' : 'none');
+    const del = th.querySelector('.sku-th-delete');
+    del.disabled = !selected || skuDeleting;
+    const text = selected ? fillText('main.skuEliminarSel', { n: selected }) : Dashboard.t('main.skuEliminarIcono');
+    del.title = text;
+    del.setAttribute('aria-label', text);
+    const sel = th.querySelector('.sku-th-select');
+    sel.classList.toggle('sku-th-all', state === 'all');
+    sel.classList.toggle('sku-th-some', state === 'some');
+    sel.querySelector('i').className = `bx ${state === 'all' ? 'bxs-checkbox-checked' : (state === 'some' ? 'bx-checkbox-minus' : 'bx-checkbox')}`;
+    sel.setAttribute('role', 'checkbox');
+    sel.setAttribute('aria-checked', state === 'all' ? 'true' : (state === 'some' ? 'mixed' : 'false'));
+    const selText = Dashboard.t(state === 'all' ? 'main.skuSelQuitarTodo' : 'main.skuSeleccionar');
+    sel.title = selText;
 }
 async function bulkDeleteSelected() {
     if (skuDeleting) return;
@@ -983,7 +1040,7 @@ function renderNewRecordButton() {
     toolbar.prepend(btn);
     // "Cargar por plantilla" va junto a este botón (si tiene su hoja en el árbol); al terminar la tabla se vuelve a leer.
     if (window.SkuTemplateUi) window.SkuTemplateUi.mount(toolbar, btn, refreshTable);
-    mountSelectButton(toolbar); // «Seleccionar»: marcar todo lo filtrado y eliminarlo
+    mountHeaderTools(); // los íconos «Seleccionar» y «Eliminar» del encabezado «Acciones»
 }
 
 // --- "+ Nuevo Artículo" modal ------------------------------------------------

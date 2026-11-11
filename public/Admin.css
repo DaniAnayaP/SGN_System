@@ -8487,7 +8487,14 @@ td.cap-pick{ white-space: nowrap; }
 /* Alta Nuestros Artículos (y Códigos / Edición Código): «Mostrando X de Y» con los botones para dibujar más filas. */
 .sku-more-bar{ display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .sku-more-btn{ padding: 0.25rem 0.8rem; font-size: 0.78rem; }
-/* Seleccionar y eliminar varios (Alta Nuestros Artículos) */
+/* Seleccionar y eliminar varios (Alta Nuestros Artículos): los íconos van en el encabezado «Acciones», después de la palabra */
+th.sku-th-actions{ min-width: 9.5rem; white-space: nowrap; overflow: visible; text-overflow: clip; }
+.sku-th-label{ vertical-align: middle; }
+.sku-th-tools{ display: inline-flex; align-items: center; gap: 0.3rem; margin-left: 0.5rem; vertical-align: middle; }
+.sku-th-btn{ width: 1.7rem; height: 1.7rem; }
+.sku-th-btn:disabled{ opacity: 0.4; cursor: not-allowed; }
+.sku-th-btn i{ font-size: 1.15rem; }
+.sku-th-select.sku-th-all, .sku-th-select.sku-th-some{ color: var(--color-accent, #7d3f8f); }
 .sku-select-bar{ display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .sku-select-text{ font-size: 0.78rem; font-weight: 600; }
 .sku-delete-btn:disabled, .sku-select-bar .sku-more-btn:disabled{ opacity: 0.5; cursor: not-allowed; }

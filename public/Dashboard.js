@@ -13396,8 +13396,20 @@ function needAllTableRows(tableId) {
 }
 // Vuelve a aplicar los filtros por columna a las filas dibujadas (una pantalla que dibuja las filas otra vez los pide para que las nuevas queden filtradas).
 function reapplyColumnFilters(tableId) { applyColumnValueFilters(tableId); }
+// Una pantalla que le agrega algo a un encabezado (por ejemplo íconos junto a la palabra «Acciones») pide un ancho mínimo para esa columna: si ya es más angosta se ensancha y queda guardado como su ancho. true si la ensanchó.
+function ensureColumnMinWidth(tableId, key, widthPx) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || !state.config) return false;
+    const current = state.config.widths[key] || DATA_TABLE_COL_MIN_WIDTH;
+    if (current >= widthPx) return false;
+    state.config.widths[key] = widthPx;
+    applyDataTableColumnLayout(tableId);
+    saveDataTableConfig(tableId, state.config);
+    return true;
+}
 
 window.Dashboard = {
+    ensureColumnMinWidth,
     initDashboard,
     renderTableRowsInChunks,
     registerPartialTable,
