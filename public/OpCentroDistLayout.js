@@ -6298,21 +6298,24 @@ function dim3dLayers() {
     const layers = effective3dLayers();
     return Object.keys(layers).filter((n) => !layers[n]);
 }
-// El nivel enfocado de un activo (renglón de Niveles o Posiciones): los demás niveles de ese activo se apagan (Tenue) o se quitan (Oculto).
+// Qué se dibuja del activo cuyo nivel (o espacio o posición) se enfocó, según «Lo demás»: Tenue apaga los demás niveles; Oculto (en Ver) deja el ACTIVO ENTERO a la vista (se quitan los demás activos) y solo marca el nivel;
+// Enfoque dibuja SOLO el nivel (en un gabinete, solo su cajón: lone). En Editar, ocultar siempre es Enfoque (ver setFindMode).
+const fxLevelMode = () => (state.findDim ? { mode: 'dim' } : (state.findMode === 'oculto' && state.mode !== 'edit' ? { mode: 'keep' } : { mode: 'hide', lone: true }));
+// El nivel enfocado de un activo (renglón de Niveles o Posiciones): los demás niveles de ese activo se apagan (Tenue) o se quitan (Enfoque); con Oculto el activo se ve entero.
 function fxFocusLevel() {
     // «Localizador»: con Enfoque u Oculto solo se ve el nivel, la posición o el localizador elegido; con Tenue, los demás niveles se apagan
     const h = state.hl;
     if (h && h.loc && hlOnStep(h)) {
         const picked = new Set(state.pick.filter((x) => x.type === 'space').map((x) => x.id));
         // un espacio marcado (sin posición) se dibuja solo, sin los demás espacios de su nivel (only)
-        const out = highlightedList().filter((e) => e.n && picked.has(e.id)).map((e) => ({ id: e.id, n: e.n, c: e.c, f: e.f, p: e.p, only: !!(e.c && !e.p), solo: !!e.p, mode: state.findDim ? 'dim' : 'hide' }));
+        const out = highlightedList().filter((e) => e.n && picked.has(e.id)).map((e) => ({ id: e.id, n: e.n, c: e.c, f: e.f, p: e.p, only: !!(e.c && !e.p), solo: !!e.p, ...fxLevelMode() }));
         if (out.length) return out;
     }
     const v = virtualFind();
-    if (v && v.n) return [{ id: v.ids[0], n: v.n, c: v.c, p: v.p, solo: !!v.p, mode: state.findDim ? 'dim' : 'hide' }];
+    if (v && v.n) return [{ id: v.ids[0], n: v.n, c: v.c, p: v.p, solo: !!v.p, ...fxLevelMode() }];
     // con un filtro de la franja (Elegir, Localizador, Zona o la búsqueda) el renglón elegido de Niveles, Espacios o Posiciones también enfoca su nivel
     const rl = rowLevelFocus();
-    return rl ? [{ id: rl.id, n: rl.n, c: rl.c, p: rl.p, solo: !!rl.p, mode: state.findDim ? 'dim' : 'hide' }] : null;
+    return rl ? [{ id: rl.id, n: rl.n, c: rl.c, p: rl.p, solo: !!rl.p, ...fxLevelMode() }] : null;
 }
 // Con un filtro de la franja puesto (Elegir, Localizador, Zona o la búsqueda) virtualFind no aplica, pero el renglón que se elige en Niveles, Espacios o Posiciones sigue enfocando SU nivel en el 3D: solo se ve ese nivel con sus
 // espacios (o el espacio con sus posiciones), no todos los niveles del activo. Sin filtro lo hace virtualFind.

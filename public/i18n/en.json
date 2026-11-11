@@ -6029,7 +6029,7 @@
       "example": "you type «dry, cold» and the zones with either word show up; with rack@drawer you get «rack» having «drawer» after it."
     },
     "layoutFiltroLoDemas": {
-      "what": "What happens to what is not part of what you filtered. Faded: the whole Layout is shown dimmed with what you picked highlighted. Hidden: only what you picked is shown, centered and at the same size as in the full Layout (no zoom). Focus: only what you picked is shown and the plan and the 3D zoom in on it. It is remembered in this browser.",
+      "what": "What happens to what is not part of what you filtered. Faded: the whole Layout is shown dimmed with what you picked highlighted. Hidden: only what you picked is shown, centered and at the same size as in the full Layout (no zoom); if you pick a level, a space or a position, the 3D shows the whole asset with that marked. Focus: only what you picked is shown and the plan and the 3D zoom in on it; if you pick a level, a space or a position, the 3D shows only that, without the rest of the asset. It is remembered in this browser.",
       "example": "with Faded you see Zone 6 highlighted and the rest of the building in the background; with Hidden only Zone 6."
     },
     "layoutFind": {

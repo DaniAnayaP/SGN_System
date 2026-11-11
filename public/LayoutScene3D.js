@@ -233,7 +233,7 @@
         let bayFmtOn = null; // con el paso Espacios encendido: { 'número de espacio': formato propio } (los demás llevan el de fábrica de su número); null = los espacios no llevan color propio
         let pieceMap = new Map(); // las piezas que caben en cada posición (Relación Código): 'activo|nivel|espacio|posición' -> { level, cells (una capa, cm), layers, layerHeight, box }
         let posOn = false; // con el paso Posiciones encendido: cada posición de los anaqueles se dibuja en su lugar (caja con borde y su P001…)
-        let focusLevels = []; // los niveles (o espacios o posiciones) que el Enfoque deja dibujados: [{ id, n, c, p, mode, all }]
+        let focusLevels = []; // los niveles (o espacios o posiciones) enfocados: [{ id, n, c, p, mode, all, lone }]. mode: 'hide' = Enfoque (solo el nivel; en un gabinete, con lone, solo su cajón), 'keep' = Oculto (el activo entero, el nivel se marca), 'dim' = Tenue
         let focusContainer = null; // el cuadro (nivel o posición) que el Enfoque dejó dibujado: a él se acerca la cámara (con varios, el cuadro que los junta)
         // El cuadro que cubre a dos cuadros {x, y, z, sx, sy, sz} (centro y medidas); sin el primero, el segundo.
         function mergeBox(a, b2) {
@@ -1504,7 +1504,8 @@
             // se distinguen los cajones y un gabinete del que está pegado a él. Se arma en un marco propio (u = a lo ancho de la cara, v = hacia afuera del frente) para cualquier lado del frente.
             const cabParts = []; const cabEdges = []; const cabEdgesDim = []; // el contorno de los gabinetes tenues va aparte, en un gris claro
             const CAB = { core: 0xd3d8e2, frame: 0xb6bdcc, plinth: 0x98a1b3, drawer: 0xffffff, handle: 0x465065, hi: 0xffb865 }; // hi = el cajón (nivel) que se enfocó
-            const addCabinet3d = (s, cx, cz, fl, lv, own, mute, dimIt, hiLevels) => {
+            // onlyLevels (Enfoque con un nivel elegido): se dibuja SOLO la franja de ese nivel (su cuerpo y su cajón, sin tapa ni zócalo) y no el gabinete entero.
+            const addCabinet3d = (s, cx, cz, fl, lv, own, mute, dimIt, hiLevels, onlyLevels) => {
                 const LCc = root.LayoutCalc;
                 const side = frontSides[s.id] || (LCc && LCc.activoFront ? (LCc.activoFront(layout, s) || {}).side : '') || 'S';
                 const dirs = LCc && LCc.faceVectors ? LCc.faceVectors(side) : { front: [0, 1], back: [0, -1], left: [-1, 0], right: [1, 0] };
@@ -1520,16 +1521,29 @@
                 const { W, D, put } = frameOf(dirs.front);
                 const H = s.h;
                 const ts = Math.min(0.03, W * 0.08); const tp = Math.min(0.03, H * 0.03); const base = Math.min(0.06, H * 0.05);
-                put(0, H / 2, 0, Math.max(W - 0.004, 0.02), Math.max(H - 0.004, 0.02), Math.max(D - 0.004, 0.02), CAB.core); // el cuerpo
-                [-1, 1].forEach((k) => put(k * (W / 2 - ts / 2), H / 2, 0, ts, H, D, CAB.frame)); // los costados
-                put(0, H - tp / 2, 0, W, tp, D, CAB.frame); // la tapa
-                put(0, base / 2, -0.01, Math.max(W - 0.02, 0.02), base, Math.max(D - 0.03, 0.02), CAB.plinth); // el zócalo
                 const inner0 = base; const inner1 = H - tp;
-                for (let k = 1; k <= lv; k++) {
+                // de dónde a dónde (alto desde el piso) va el cajón de un nivel; null si queda muy delgado
+                const rangeOf = (k) => {
                     let y0; let y1;
                     if (LCc && LCc.levelMeasures) { const m = LCc.levelMeasures(s, k); y0 = Math.max(m.floorH, inner0); y1 = Math.min(m.floorH + (m.beam > 0 ? m.beam : 0.06) + m.h, inner1); }
                     else { const step = (inner1 - inner0) / lv; y0 = inner0 + (k - 1) * step; y1 = y0 + step; }
-                    if (!(y1 - y0 > 0.04)) continue;
+                    return y1 - y0 > 0.04 ? { y0, y1 } : null;
+                };
+                // el gabinete entero (de 0 a su alto) o, con onlyLevels, solo la franja de esos niveles
+                let yLo = 0; let yHi = H;
+                if (onlyLevels) { const rs = Array.from(onlyLevels).map(rangeOf).filter(Boolean); if (rs.length) { yLo = Math.min(...rs.map((r) => r.y0)); yHi = Math.max(...rs.map((r) => r.y1)); } }
+                const hBody = yHi - yLo; const yMid = yLo + hBody / 2;
+                put(0, yMid, 0, Math.max(W - 0.004, 0.02), Math.max(hBody - 0.004, 0.02), Math.max(D - 0.004, 0.02), CAB.core); // el cuerpo
+                [-1, 1].forEach((k) => put(k * (W / 2 - ts / 2), yMid, 0, ts, hBody, D, CAB.frame)); // los costados
+                if (!onlyLevels) {
+                    put(0, H - tp / 2, 0, W, tp, D, CAB.frame); // la tapa
+                    put(0, base / 2, -0.01, Math.max(W - 0.02, 0.02), base, Math.max(D - 0.03, 0.02), CAB.plinth); // el zócalo
+                }
+                for (let k = 1; k <= lv; k++) {
+                    if (onlyLevels && !onlyLevels.has(k)) continue;
+                    const rg = rangeOf(k);
+                    if (!rg) continue;
+                    const y0 = rg.y0; const y1 = rg.y1;
                     const yc = (y0 + y1) / 2; const hD = y1 - y0 - 0.016;
                     // cada cara por donde se consume lleva su cajón por nivel (con varios espacios en el nivel, uno por espacio; de lado, uno solo del ancho de la cara)
                     faces.forEach((fc) => {
@@ -1544,7 +1558,7 @@
                         });
                     });
                 }
-                edgeBox(cx, fl + H / 2, cz, s.l, H, s.d, dimIt ? cabEdgesDim : cabEdges); // el contorno del gabinete (gris claro si está tenue)
+                edgeBox(cx, fl + yMid, cz, s.l, hBody, s.d, dimIt ? cabEdgesDim : cabEdges); // el contorno del gabinete (o de la franja del nivel enfocado); gris claro si está tenue
             };
             // Rack móvil: un carrito de repisas de alambre cromado con ruedas (más ligero que el rack): cuatro postes delgados, una repisa de alambre por nivel (marco, hilos a lo largo y a lo ancho), la de arriba con borde de canasta,
             // un asa en un extremo del lado largo y cuatro ruedas con su base. Se arma dentro de su caja (largo × fondo × alto); el eje largo es el del carrito.
@@ -1660,7 +1674,8 @@
                         const xc = PX(pp ? bx0 + (pp.x + pp.l / 2) * sxP : (rb ? s.x + rb.x + rb.l / 2 : bx0 + (ci + 0.5) * wC));
                         const zc = PZ(pp ? by0 + (pp.y + pp.w / 2) * szP : s.y + s.d / 2);
                         if (pp && cont && !solid) { const pcF = pieceMap.get(`${s.id}|${nz}|${cont}|${pp.num}`); if (pcF) addPieceVolumes(pcF, xc - sxC / 2, zc - szC / 2, sxC, szC, yB + beamC); }
-                        if (s.type === 'cabinet') { /* idem */ } else if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, esp || ci + 1, false);
+                        // un gabinete se dibuja entero al terminar este bloque; salvo con Enfoque (lone) en un espacio o una posición: entonces solo se dibuja esa caja, como en un pallet
+                        if (s.type === 'cabinet' && !(fzm.lone && one)) { /* idem */ } else if (solid) pushPiece(blk, xc, yB + (beamC + hC) / 2, zc, Math.max(sxC - gx, 0.02), beamC + hC, Math.max(szC - gz, 0.02), blockC, esp || ci + 1, false);
                         else pushPiece(dck, xc, yB + beamC / 2, zc, Math.max(sxC - gx, 0.02), beamC, Math.max(szC - gz, 0.02), deckZ, esp || ci + 1, false);
                         if (!solid && !contPos.length) { const dV = rb ? rb.w : s.d; bayVolume(xc, yB + beamC + hC / 2, PZ(s.y + (rb ? rb.y : 0) + dV / 2), Math.max(sxC - gx, 0.02), hC, Math.max(dV - gz, 0.02), esp || ci + 1); }
                     }
@@ -1677,8 +1692,17 @@
                     drawnBox = mergeBox(drawnBox, cage);
                     addFocusContainer(cage);
                   });
-                    // Un gabinete con un nivel (cajón), espacio o posición enfocado se ve entero, con sus cajones como los demás gabinetes; el cajón enfocado va en naranja claro (el cuadro naranja sigue marcando lo elegido).
-                    if (s.type === 'cabinet') addCabinet3d(s, cx, cz, fl, lv, own, dimS ? (c) => mixHex(c, 0xe4e7f0, 0.8) : mute, dimS, new Set(fzs.map((f2) => Math.min(Math.max(1, Number(f2.n) || 1), lv))));
+                    // Un gabinete con un nivel (cajón), espacio o posición enfocado: con Enfoque del editor (lone) un NIVEL se dibuja como su franja con su cajón, y un espacio o una posición como solo su caja (ya dibujada arriba);
+                    // en la página pública se ve entero, con sus cajones como los demás gabinetes. El cajón enfocado va en naranja claro (el cuadro naranja sigue marcando lo elegido).
+                    // Con Oculto el gabinete ni entra aquí: se dibuja entero (mode 'keep').
+                    if (s.type === 'cabinet') {
+                        const isOne = (f2) => !!(Number(f2.c) && (Number(f2.p) > 0 || f2.only)); // el enfoque es un espacio o una posición
+                        const strip = fzs.filter((f2) => !(f2.lone && isOne(f2))); // los que se dibujan como nivel del gabinete
+                        if (strip.length) {
+                            const hiLevels = new Set(strip.map((f2) => Math.min(Math.max(1, Number(f2.n) || 1), lv)));
+                            addCabinet3d(s, cx, cz, fl, lv, own, dimS ? (c) => mixHex(c, 0xe4e7f0, 0.8) : mute, dimS, hiLevels, strip.every((f2) => f2.lone) ? hiLevels : null);
+                        }
+                    }
                     spaceList.push({ s, x: cx, z: cz, fl, box: drawnBox });
                     return;
                 }
@@ -1688,7 +1712,9 @@
                     if (!dimS) for (let k = 0; k < lv; k++) edgeBox(cx, fl + 0.14 + k * loadH + loadH / 2, cz, s.l - 0.04, loadH - 0.04, s.d - 0.04);
                 } else if (s.type === 'cabinet') {
                     // tenue: se desvanece menos que lo demás para que se sigan distinguiendo sus cajones, y su contorno es gris claro (no el oscuro de los elegidos)
-                    addCabinet3d(s, cx, cz, fl, lv, own, dimS ? (c) => mixHex(c, 0xe4e7f0, 0.8) : mute, dimS);
+                    // con Oculto (keep) el gabinete se ve entero y el cajón del nivel enfocado va en naranja claro
+                    const keepFx = focusLevels.filter((f2) => f2.mode === 'keep' && f2.id === s.id);
+                    addCabinet3d(s, cx, cz, fl, lv, own, dimS ? (c) => mixHex(c, 0xe4e7f0, 0.8) : mute, dimS, keepFx.length ? new Set(keepFx.map((f2) => Math.min(Math.max(1, Number(f2.n) || 1), lv))) : null);
                 } else if (s.type === 'cart') {
                     addCart3d(s, cx, cz, fl, lv, own, mute);
                 } else if (s.type === 'cold') {
@@ -1702,9 +1728,9 @@
                     const LCx = root.LayoutCalc;
                     const deckAt = (xc, sx, m, color, bayNo, dimIt) => { const th = m.beam > 0 ? m.beam : 0.06; pushPiece(dck, xc, fl + Math.max(m.floorH, 0.03) + th / 2, cz, sx, th, s.d, color === undefined ? deckC : color, bayNo || 0, dimIt); };
                     for (let k = 1; k <= lv; k++) {
-                        // con un nivel enfocado en este activo, los demás niveles se apagan (tenue) o se quitan (oculto)
+                        // con un nivel enfocado en este activo, los demás niveles se apagan (tenue) o se quitan (Enfoque); con Oculto (keep) el activo se ve entero y solo se marca el nivel
                         const mineFx = focusLevels.filter((f) => f.id === s.id);
-                        const otherLevel = mineFx.length > 0 && !mineFx.some((f) => (Number(f.n) || 1) === k);
+                        const otherLevel = mineFx.length > 0 && mineFx[0].mode !== 'keep' && !mineFx.some((f) => (Number(f.n) || 1) === k);
                         if (otherLevel && mineFx[0].mode === 'hide') continue;
                         const lvColor = otherLevel ? mixHex(deckC, 0xe4e7f0, 0.93) : deckC;
                         if (!(LCx && LCx.levelMeasures && LCx.bayMeasures)) { dck.push({ x: cx, y: 0.15 + (k - 1) * ((s.h - 0.3) / lv) + fl, z: cz, sx: s.l, sy: 0.06, sz: s.d, c: deckC }); continue; }
