@@ -197,6 +197,12 @@ const {
     countSkuDistributionByShipTo,
     listSkuItemsWithoutDistribution,
     listSkuDistributionBySkus,
+    listCodeShipRelations,
+    getCodeShipRelationById,
+    findCodeShipRelation,
+    createCodeShipRelation,
+    deleteCodeShipRelation,
+    countCodeShipRelationsByPlace,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,
@@ -530,7 +536,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion' };
+const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -9893,6 +9899,8 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, re
     if (req.params.categoryType === 'lugares-envio') {
         const used = countSkuDistributionByShipTo(req.user.clientId, existing.id);
         if (used) return res.status(409).json({ message: `Hay ${used === 1 ? 'una presentación' : `${used} presentaciones`} que se envían a este lugar en Presentaciones de Distribución. Quítalo de ahí primero o márcalo como Inactivo.` });
+        const related = countCodeShipRelationsByPlace(req.user.clientId, existing.id);
+        if (related) return res.status(409).json({ message: `Hay ${related === 1 ? 'una relación' : `${related} relaciones`} de códigos con este lugar en Relación Código Envío. Quítalas de ahí primero o márcalo como Inactivo.` });
     }
     // Un almacén con sub almacenes no se borra (se deja Inactivo): los sub almacenes quedarían sin almacén.
     if (req.params.categoryType === 'almacenes'
@@ -10813,6 +10821,110 @@ app.delete('/api/business/sku-distribution/:id', requireAuth, requireCostCenter,
     logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: existing.id, recordLabel: skuDistLabel(existing), action: 'delete', changedBy: changedByLabel(req) });
     notifyButtonAction(req, UDM_DIST_TABLE_KEY, 'delete', `${padSku(existing.sku_number)} · ${PACK_ORDINALS[existing.level] || ''}`);
     deleteSkuDistribution(existing.id, clientId);
+    res.status(204).end();
+});
+
+// --- Relación Código Envío (Operaciones, C. Distribución) ------------------------------------------------------------------------------------------------
+// Qué código se habilita para enviar a qué LUGAR DE ENVÍO (catálogo Lugares de Envío), por centro de costos: un renglón = un código enviado a un lugar. Se captura una por una (un código a varios lugares a la vez) o por
+// plantilla (Excel o filas pegadas: la pantalla revisa cada fila y aquí se vuelve a revisar). Es la relación de los pedidos manuales EXTERNOS; la Relación Código de siempre es la de los códigos internos.
+const SHIP_REL_TABLE_KEY = 'relacion-envio';
+const SHIP_REL_SCREEN_LABEL = 'Relación Código Envío';
+const SHIP_REL_IMPORT_MAX = 500;
+const SHIP_REL_MAX_PLACES = 200;
+const shipCanDelete = (req) => !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), SHIP_REL_TABLE_KEY, 'colEnvDeleteAuth');
+const shipCan = (req, colKey) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), SHIP_REL_TABLE_KEY, colKey);
+function shipContext(req) {
+    const { clientId, isTestAccount } = req.user;
+    return {
+        centers: new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c])),
+        places: new Map(listArticleCategories(clientId, 'lugares-envio', isTestAccount).map((r) => [r.id, r])),
+    };
+}
+function mapShipRelation(r, companyName, ctx) {
+    const cc = ctx.centers.get(r.cost_center_id);
+    return {
+        id: r.id, registroUnico: r.db_id, skuItemId: r.sku_item_id, sku: padSku(r.sku_number), upc: r.sku_upc || '',
+        description: r.sku_unique || r.sku_known || r.sku_custom || '', costCenterId: r.cost_center_id, centroCostos: cc ? cc.name : '',
+        placeId: r.place_id, place: r.place_name || '', placeActive: r.place_status === 'active',
+        ...getSystemColumnsForRecord({ companyName, area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: SHIP_REL_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.created_at }),
+    };
+}
+// Revisa y guarda UNA relación (lo usan la captura a mano y la plantilla). Devuelve { row } o { error, code }.
+function tryCreateShipRelation(req, ctx, { skuItemId, placeId, costCenterId }) {
+    const { clientId, isTestAccount } = req.user;
+    const sku = Number.isInteger(skuItemId) && skuItemId > 0 ? getSkuItemById(skuItemId, clientId, isTestAccount) : null;
+    if (!sku) return { error: 'Elige un código de Alta Artículos.', code: 'SKU' };
+    const place = ctx.places.get(placeId);
+    if (!place || place.status !== 'active' || !place.name) return { error: 'Elige un lugar de envío activo del catálogo Lugares de Envío.', code: 'PLACE' };
+    const center = ctx.centers.get(costCenterId);
+    if (!center) return { error: 'Elige el centro de costos.', code: 'CENTER' };
+    if (findCodeShipRelation(clientId, isTestAccount, center.id, sku.id, place.id)) return { error: 'Ese código ya está relacionado con ese lugar en este centro de costos.', code: 'EXISTS' };
+    const row = createCodeShipRelation({ clientId, isTestData: isTestAccount, costCenterId: center.id, skuItemId: sku.id, placeId: place.id, createdBy: changedByLabel(req) });
+    logTableChange({ clientId, tableKey: SHIP_REL_TABLE_KEY, recordId: row.id, recordLabel: `${padSku(sku.record_number)} → ${place.name}`, action: 'create', changedBy: changedByLabel(req) });
+    return { row };
+}
+const intOf = (v) => { const n = Number(v); return Number.isInteger(n) ? n : 0; };
+app.get('/api/business/code-ship-relations', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const ctx = shipContext(req);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        relations: listCodeShipRelations(clientId, isTestAccount).map((r) => mapShipRelation(r, client?.company_name, ctx)),
+        places: [...ctx.places.values()].filter((p) => p.name).map((p) => ({ id: p.id, name: p.name, active: p.status === 'active' })),
+        costCenters: [...ctx.centers.values()].map((c) => ({ id: c.id, name: c.name, code: c.code || '' })),
+        canCreate: shipCan(req, 'colEnvCreateAuth'), canDelete: shipCanDelete(req), canTemplate: shipCan(req, 'colEnvTemplateAuth'),
+    });
+});
+app.post('/api/business/code-ship-relations', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!shipCan(req, 'colEnvCreateAuth')) return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    const body = req.body || {};
+    const placeIds = [...new Set((Array.isArray(body.placeIds) ? body.placeIds : []).map(intOf).filter((n) => n > 0))];
+    if (!placeIds.length) return res.status(400).json({ message: 'Elige al menos un lugar de envío.', code: 'PLACE' });
+    if (placeIds.length > SHIP_REL_MAX_PLACES) return res.status(400).json({ message: `Elige hasta ${SHIP_REL_MAX_PLACES} lugares a la vez.`, code: 'PLACE' });
+    const ctx = shipContext(req);
+    const created = [];
+    let existing = 0;
+    let firstError = null;
+    placeIds.forEach((placeId) => {
+        const out = tryCreateShipRelation(req, ctx, { skuItemId: intOf(body.skuItemId), placeId, costCenterId: intOf(body.costCenterId) });
+        if (out.row) created.push(out.row);
+        else if (out.code === 'EXISTS') existing += 1;
+        else if (!firstError) firstError = out;
+    });
+    if (!created.length && firstError) return res.status(400).json({ message: firstError.error, code: firstError.code });
+    if (created.length) notifyButtonAction(req, SHIP_REL_TABLE_KEY, 'create', `${created[0].sku_number ? padSku(created[0].sku_number) : ''} → ${created.map((r) => r.place_name).join(', ')}`);
+    const client = getClientById(req.user.clientId);
+    res.status(created.length ? 201 : 200).json({ created: created.map((r) => mapShipRelation(r, client?.company_name, ctx)), existing });
+});
+// La plantilla: la pantalla ya convirtió los nombres en ids y revisó cada fila; aquí se revisa otra vez (nada se da por bueno) y se guardan las que pasan.
+app.post('/api/business/code-ship-relations/import', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!shipCan(req, 'colEnvTemplateAuth')) return res.status(403).json({ message: 'No tienes permiso para cargar por plantilla.' });
+    const rows = Array.isArray(req.body && req.body.rows) ? req.body.rows : [];
+    if (!rows.length || rows.length > SHIP_REL_IMPORT_MAX) return res.status(400).json({ message: `Manda de 1 a ${SHIP_REL_IMPORT_MAX} filas por vez.` });
+    const ctx = shipContext(req);
+    const created = [];
+    const failed = [];
+    rows.forEach((row, index) => {
+        const out = tryCreateShipRelation(req, ctx, { skuItemId: intOf(row && row.skuItemId), placeId: intOf(row && row.placeId), costCenterId: intOf(row && row.costCenterId) });
+        if (out.row) created.push(out.row.id);
+        else failed.push({ index, message: out.error, code: out.code });
+    });
+    if (created.length) notifyButtonAction(req, SHIP_REL_TABLE_KEY, 'create', `Plantilla: ${created.length}`);
+    res.json({ created, failed });
+});
+app.delete('/api/business/code-ship-relations/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getCodeShipRelationById(intOf(req.params.id), clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Relation not found.' });
+    if (!shipCanDelete(req)) return res.status(403).json({ message: 'No tienes permiso para eliminar registros aquí.' });
+    logTableChange({ clientId, tableKey: SHIP_REL_TABLE_KEY, recordId: existing.id, recordLabel: `${padSku(existing.sku_number)} → ${existing.place_name || ''}`, action: 'delete', changedBy: changedByLabel(req) });
+    notifyButtonAction(req, SHIP_REL_TABLE_KEY, 'delete', `${padSku(existing.sku_number)} → ${existing.place_name || ''}`);
+    deleteCodeShipRelation(existing.id, clientId);
     res.status(204).end();
 });
 

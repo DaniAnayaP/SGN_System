@@ -1,0 +1,304 @@
+// ---------------------------------------------------------------------------
+// Relación Código Envío (Operaciones, C. Distribución): qué código (su descripción) se habilita para enviar a qué LUGAR DE ENVÍO (el catálogo Lugares de Envío: hospitales y otros sitios fuera del CEDIS), por centro de
+// costos. Es la relación de los pedidos manuales EXTERNOS; la Relación Código de siempre es la de los códigos internos (dónde está cada uno dentro del CEDIS). Un renglón = un código enviado a un lugar; «+ Nueva
+// relación de envío» relaciona un código con uno o varios lugares a la vez y «Cargar por plantilla» (Excel o filas pegadas) relaciona muchos de una sola vez. Los renglones salen del servidor
+// (GET /api/business/code-ship-relations) y se dibujan por tandas (con miles no se congela la pantalla).
+// ---------------------------------------------------------------------------
+
+// Envuelto en una función: Dashboard.js ya declara globales como t, y chocarían con los de esta pantalla.
+(function () {
+const TABLE_KEY = 'relacion-envio';
+const API = '/api/business/code-ship-relations';
+const SKU_API = '/api/business/code-relations/skus';
+const CREATE_AUTH_COL = 'colEnvCreateAuth';
+const DELETE_AUTH_COL = 'colEnvDeleteAuth';
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+
+const t = (key, params) => {
+    let text = Dashboard.t(key);
+    Object.entries(params || {}).forEach(([name, value]) => { text = text.split(`{${name}}`).join(String(value)); });
+    return text;
+};
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const $ = (id) => document.getElementById(id);
+
+let relations = [];
+let places = [];   // [{ id, name, active }]: el catálogo Lugares de Envío
+let centers = [];  // [{ id, name, code }]
+let loadToken = 0;
+
+(async function init() {
+    try {
+        const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
+        if (!role) return;
+        renderNewRecordButton();
+        await refreshTable();
+    } catch (err) {
+        console.error('Relación Código Envío failed to initialize:', err);
+    }
+})();
+
+// ---- tabla --------------------------------------------------------------------------------------------------------------------------
+function cell(col, value, extraClass, title) {
+    const td = document.createElement('td');
+    td.dataset.col = col;
+    td.textContent = value === null || value === undefined || value === '' ? '—' : String(value);
+    if (extraClass) td.className = extraClass;
+    if (title) td.title = title;
+    return td;
+}
+function iconButton(className, icon, label, helpKey, onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = className;
+    btn.setAttribute('data-help-key', helpKey);
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+    btn.addEventListener('click', onClick);
+    return btn;
+}
+function actionsCell(r, tr) {
+    const td = document.createElement('td');
+    td.dataset.col = 'actions';
+    td.className = 'admin-table-actions';
+    td.appendChild(iconButton('admin-icon-btn', 'bx-history', t('main.changeHistoryTitleRecord'), 'changeHistory', () => Dashboard.openChangeHistory(TABLE_KEY, r.id)));
+    if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) td.appendChild(iconButton('admin-icon-btn admin-icon-btn-danger', 'bx-trash', t('admin.delete'), 'delete', () => deleteRelation(r, tr)));
+    return td;
+}
+function buildRow(r) {
+    const tr = document.createElement('tr');
+    tr.dataset.recordId = String(r.id);
+    tr.dataset.search = [r.sku, r.upc, r.description, r.centroCostos, r.place].filter(Boolean).join(' ').toLowerCase();
+    tr.append(
+        ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, r[key], 'col-system')),
+        cell('colCatRegistroUnico', r.registroUnico, 'col-system'),
+        cell('colEnvSku', r.sku), cell('colEnvUpc', r.upc), cell('colEnvDescripcion', r.description), cell('colEnvCentroCostos', r.centroCostos),
+        cell('colEnvLugar', r.place, r.placeActive ? '' : 'udm-ro', r.placeActive ? '' : t('main.envLugarInactivo')),
+    );
+    tr.appendChild(actionsCell(r, tr));
+    return tr;
+}
+function getTbody() {
+    return document.querySelector(`[data-table-id="${TABLE_KEY}"] table.data-table`).tBodies[0];
+}
+function ensureEmptyState() {
+    const tbody = getTbody();
+    if (tbody.querySelectorAll('tr').length) return;
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.className = 'data-table-empty-cell';
+    td.colSpan = document.querySelectorAll('table.data-table thead th').length;
+    const inner = document.createElement('div');
+    inner.className = 'data-table-empty-inner';
+    inner.textContent = Dashboard.t('main.emptyStateText');
+    td.appendChild(inner);
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+}
+// Solo lo de los centros de costos marcados arriba.
+function visibleRelations() {
+    const selected = Dashboard.getSelectedCostCenterIds();
+    return relations.filter((r) => !selected || !r.costCenterId || selected.includes(r.costCenterId));
+}
+async function refreshTable() {
+    const token = ++loadToken;
+    const tbody = getTbody();
+    try {
+        const res = await fetch(API, { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        const body = await res.json();
+        if (token !== loadToken) return;
+        relations = body.relations || [];
+        places = body.places || [];
+        centers = body.costCenters || [];
+        tbody.innerHTML = '';
+        const list = visibleRelations();
+        if (!list.length) { ensureEmptyState(); return; }
+        const finished = await Dashboard.renderTableRowsInChunks({ tableKey: TABLE_KEY, tbody, records: list, buildRow, isStale: () => token !== loadToken });
+        if (finished) applyFilters();
+    } catch (err) {
+        console.error('Relación Código Envío: failed to load records', err);
+    }
+}
+document.addEventListener('sgn:cost-centers-changed', () => refreshTable());
+function applyFilters() {
+    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+    getTbody().querySelectorAll('tr').forEach((tr) => {
+        if (tr.querySelector('td.data-table-empty-cell')) return;
+        if (!text) { tr.hidden = false; return; }
+        tr.hidden = !SearchSyntax.matches('contains', text, tr.dataset.search || '');
+    });
+}
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFilters);
+document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFilters);
+
+async function deleteRelation(r, tr) {
+    if (!(await Dashboard.confirm(Dashboard.t('main.recordDeleteConfirm')))) return;
+    try {
+        const res = await fetch(`${API}/${r.id}`, { method: 'DELETE', credentials: 'include' });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            Dashboard.showToast(body.message || Dashboard.t('main.fieldLocked'), 'warning');
+            return;
+        }
+        relations = relations.filter((x) => x.id !== r.id);
+        tr.remove();
+        ensureEmptyState();
+    } catch (err) {
+        console.error('Relación Código Envío: failed to delete', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+
+// ---- botones «+ Nueva relación de envío» y «Cargar por plantilla» ---------------------------------------------------------------------------
+function renderNewRecordButton() {
+    const wrapper = document.querySelector(`[data-table-id="${TABLE_KEY}"]`);
+    const toolbar = wrapper?.previousElementSibling;
+    if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
+    if (toolbar.querySelector('.data-table-new-record-btn')) return;
+    let btn = null;
+    // Sin la hoja «Nueva relación» del árbol el botón no sale (el servidor también lo rechaza).
+    if (Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '')) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'data-table-new-record-btn';
+        btn.setAttribute('data-help-key', 'envNew');
+        btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${esc(t('main.envNew'))}</span>`;
+        btn.addEventListener('click', openDialog);
+        toolbar.prepend(btn);
+    }
+    if (window.EnvTemplateUi) window.EnvTemplateUi.mount(toolbar, btn, refreshTable);
+}
+
+// ---- ventana «Nueva relación de envío» --------------------------------------------------------------------------------------------------
+let modalEl = null;
+let f = null; // { sku: { id, sku, description } | null, placeIds: Set, centerId }
+let searchTimer = null;
+const singleCenterId = () => {
+    const selected = Dashboard.getSelectedCostCenterIds();
+    if (selected && selected.length === 1 && centers.some((c) => c.id === selected[0])) return selected[0];
+    return !selected || !selected.length ? (centers.length === 1 ? centers[0].id : null) : null;
+};
+
+function ensureModal() {
+    if (modalEl) return;
+    modalEl = document.createElement('div');
+    modalEl.className = 'modal-overlay';
+    modalEl.id = 'env-modal';
+    modalEl.hidden = true;
+    modalEl.innerHTML = `<div class="modal-panel rel-dialog udm-dialog" role="dialog" aria-modal="true" aria-labelledby="env-title">
+        <h3 id="env-title">${esc(t('main.envDialogTitle'))}</h3>
+        <div class="rel-fld">
+            <label for="env-code">${esc(t('main.envCode'))}</label>
+            <input type="search" id="env-code" autocomplete="off" placeholder="${esc(t('main.relSearchPlaceholder'))}" data-help-key="relCodeSearch">
+            <div class="rel-results" id="env-results" hidden></div>
+        </div>
+        <div class="rel-art" id="env-info"></div>
+        <div id="env-fields"></div>
+        <div class="rel-foot">
+            <span class="rel-muted" id="env-msg"></span>
+            <button type="button" class="btn" id="env-save">${esc(t('main.envSave'))}</button>
+            <button type="button" class="btn btn-secondary" id="env-close">${esc(t('main.whClose'))}</button>
+        </div>
+    </div>`;
+    document.body.appendChild(modalEl);
+    Dashboard.attachSearchOptions($('env-code')); // Inicia con / Contiene / Igual que y los signos $ @ coma, como en las tablas
+    modalEl.addEventListener('click', (event) => {
+        if (event.target === modalEl || event.target.closest('#env-close')) { closeDialog(); return; }
+        if (event.target.closest('#env-save')) { save(); return; }
+        const pick = event.target.closest('[data-sku]');
+        if (pick) { pickSku({ id: Number(pick.dataset.sku), sku: pick.dataset.skuCode, description: pick.dataset.desc }); }
+    });
+    modalEl.addEventListener('input', (event) => {
+        if (event.target.id === 'env-code') { f.sku = null; clearTimeout(searchTimer); searchTimer = setTimeout(searchCodes, 220); renderForm(); }
+    });
+    modalEl.addEventListener('change', (event) => {
+        const el = event.target;
+        if (!f || !el.dataset) return;
+        if (el.dataset.placeAll) { f.placeIds = el.checked ? new Set(places.filter((p) => p.active).map((p) => p.id)) : new Set(); renderForm(); return; }
+        if (el.dataset.place) { const id = Number(el.dataset.place); if (el.checked) f.placeIds.add(id); else f.placeIds.delete(id); renderForm(); return; }
+        if (el.id === 'env-center') { f.centerId = el.value ? Number(el.value) : null; renderForm(); }
+    });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && modalEl && !modalEl.hidden) closeDialog(); });
+}
+function openDialog() {
+    ensureModal();
+    f = { sku: null, placeIds: new Set(), centerId: singleCenterId() };
+    $('env-code').value = '';
+    $('env-results').hidden = true;
+    renderForm();
+    modalEl.hidden = false;
+    $('env-code').focus();
+}
+function closeDialog() { if (modalEl) modalEl.hidden = true; f = null; }
+
+async function searchCodes() {
+    const q = $('env-code').value.trim();
+    const box = $('env-results');
+    if (!q) { box.hidden = true; return; }
+    try {
+        const res = await fetch(`${SKU_API}?q=${encodeURIComponent(q)}&mode=${Dashboard.searchModeOf($('env-code'))}`, { credentials: 'include' });
+        if (!res.ok) return;
+        const { skus } = await res.json();
+        box.innerHTML = skus.length
+            ? skus.map((s) => `<button type="button" class="rel-result" data-sku="${s.id}" data-sku-code="${esc(s.sku)}" data-desc="${esc(s.description)}"><b>${esc(s.description)}</b></button>`).join('')
+            : `<span class="rel-muted">${esc(t('main.relNoMatches'))}</span>`;
+        box.hidden = false;
+    } catch (err) {
+        console.error('Relación Código Envío: code search failed', err);
+    }
+}
+function pickSku(s) {
+    f.sku = s;
+    $('env-code').value = s.description;
+    $('env-results').hidden = true;
+    renderForm();
+}
+function renderForm() {
+    if (!f) return;
+    const info = $('env-info');
+    const box = $('env-fields');
+    const save = $('env-save');
+    $('env-msg').textContent = '';
+    if (!f.sku) { info.textContent = t('main.envNoCode'); box.innerHTML = ''; save.disabled = true; return; }
+    info.innerHTML = `<b>${esc(f.sku.description)}</b><span>${esc(f.sku.sku)}</span>`;
+    const active = places.filter((p) => p.active);
+    const placesField = active.length
+        ? `<div class="udm-types"><label class="udm-check udm-check-all"><input type="checkbox" data-place-all="1"${active.every((p) => f.placeIds.has(p.id)) ? ' checked' : ''}> <b>${esc(t('main.envPlacesAll'))}</b></label>${active.map((p) => `<label class="udm-check"><input type="checkbox" data-place="${p.id}"${f.placeIds.has(p.id) ? ' checked' : ''}> ${esc(p.name)}</label>`).join('')}</div>`
+        : `<span class="rel-muted">${esc(t('main.envPlacesEmpty'))}</span>`;
+    const fixedCenter = singleCenterId();
+    const centerField = fixedCenter
+        ? `<div class="rel-fld"><label>${esc(t('main.colEnvCentroCostos'))}</label><div class="udm-from">${esc((centers.find((c) => c.id === fixedCenter) || {}).name || '')}</div></div>`
+        : `<div class="rel-fld"><label for="env-center">${esc(t('main.colEnvCentroCostos'))}</label><select id="env-center"><option value="">${esc(t('main.articleTypeSelect'))}</option>${centers.map((c) => `<option value="${c.id}"${c.id === f.centerId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>`;
+    box.innerHTML = `<div class="rel-fld" data-help-key="envPlace"><label>${esc(t('main.envPlaces'))}</label>${placesField}</div>${centerField}`;
+    if (fixedCenter) f.centerId = fixedCenter;
+    save.disabled = !(f.placeIds.size && f.centerId);
+}
+async function save() {
+    if (!f || !f.sku || !f.placeIds.size || !f.centerId) return;
+    $('env-save').disabled = true;
+    try {
+        const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ skuItemId: f.sku.id, placeIds: [...f.placeIds], costCenterId: f.centerId }) });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            Dashboard.showToast(json.message || Dashboard.t('admin.saveError'), res.status === 403 ? 'warning' : 'error');
+            $('env-save').disabled = false;
+            return;
+        }
+        const n = (json.created || []).length;
+        const extra = json.existing ? t('main.envExisting', { n: json.existing }) : '';
+        Dashboard.showToast(n ? `${t(n === 1 ? 'main.envSaved' : 'main.envSavedN', { n })}${extra}` : t('main.envNothingNew'), n ? 'success' : 'info');
+        closeDialog();
+        await refreshTable();
+    } catch (err) {
+        console.error('Relación Código Envío: failed to save', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        $('env-save').disabled = false;
+    }
+}
+})();

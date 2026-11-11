@@ -3337,6 +3337,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'layout': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Layout' },
     'relacion-codigo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código' },
     'udm-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones de Distribución' },
+    'relacion-envio': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código Envío' },
     'presentaciones-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones Distribución' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
     'capacidad-almacenamiento': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Capacidad Almacenamiento' },
@@ -3677,6 +3678,7 @@ const TABLE_GRANT_PATHS = {
     'mapa-calor': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-mapa-calor' },
     'relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
     'udm-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion' },
+    'relacion-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-envio' },
     // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
@@ -3908,6 +3910,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
     'udm-distribucion': { create: 'colUdmDCreateAuth', delete: 'colUdmDDeleteAuth' },
+    'relacion-envio': { create: 'colEnvCreateAuth', delete: 'colEnvDeleteAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -5560,6 +5563,51 @@ function updateEditableRecord(table, fields, existing, patch, editedBy) {
 function updateCleaningRecord(id, clientId, patch, { editedBy = '' } = {}) {
     updateEditableRecord('cleaning_records', CLEANING_PATCHABLE_FIELDS, getCleaningRecord(id, clientId), patch || {}, editedBy);
     return getCleaningRecord(id, clientId);
+}
+
+// --- Relación Código Envío (Operaciones, C. Distribución) -------------------------------------------------------------------------------------------------
+// Qué código se habilita para enviar a qué LUGAR DE ENVÍO (catálogo Lugares de Envío: hospitales y otros sitios fuera del CEDIS), por centro de costos: un renglón = un código (su descripción) enviado a un lugar. Es la
+// relación de los pedidos manuales EXTERNOS; la Relación Código de siempre (code_relations) es la de los códigos internos (dónde está cada uno dentro del CEDIS).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS code_ship_relations (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id      INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id          TEXT NOT NULL,
+        record_number  INTEGER NOT NULL,
+        cost_center_id INTEGER NOT NULL DEFAULT 0,
+        sku_item_id    INTEGER NOT NULL REFERENCES sku_items(id) ON DELETE CASCADE,
+        place_id       INTEGER NOT NULL,
+        is_test_data   INTEGER NOT NULL DEFAULT 0,
+        created_by     TEXT NOT NULL DEFAULT '',
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (client_id, is_test_data, cost_center_id, sku_item_id, place_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_code_ship_relations_client ON code_ship_relations (client_id, is_test_data);
+    CREATE INDEX IF NOT EXISTS idx_code_ship_relations_sku ON code_ship_relations (sku_item_id);
+`);
+const SHIP_REL_SELECT = `SELECT r.*, s.record_number AS sku_number, s.upc AS sku_upc, s.unique_description AS sku_unique, s.known_description AS sku_known, s.custom_description AS sku_custom, p.name AS place_name, p.status AS place_status
+    FROM code_ship_relations r JOIN sku_items s ON s.id = r.sku_item_id LEFT JOIN article_categories p ON p.id = r.place_id`;
+function listCodeShipRelations(clientId, forTestAccount = false) {
+    return db.prepare(`${SHIP_REL_SELECT} WHERE r.client_id = ? AND r.is_test_data = ? ORDER BY r.id DESC`).all(clientId, forTestAccount ? 1 : 0);
+}
+function getCodeShipRelationById(id, clientId, forTestAccount = false) {
+    return db.prepare(`${SHIP_REL_SELECT} WHERE r.id = ? AND r.client_id = ? AND r.is_test_data = ?`).get(id, clientId, forTestAccount ? 1 : 0);
+}
+function findCodeShipRelation(clientId, forTestAccount, costCenterId, skuItemId, placeId) {
+    return db.prepare('SELECT id FROM code_ship_relations WHERE client_id = ? AND is_test_data = ? AND cost_center_id = ? AND sku_item_id = ? AND place_id = ?').get(clientId, forTestAccount ? 1 : 0, costCenterId, skuItemId, placeId);
+}
+function createCodeShipRelation({ clientId, isTestData = false, costCenterId, skuItemId, placeId, createdBy = '' }) {
+    const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM code_ship_relations WHERE client_id = ? AND is_test_data = ?').get(clientId, isTestData ? 1 : 0).n;
+    const result = db.prepare('INSERT INTO code_ship_relations (client_id, db_id, record_number, cost_center_id, sku_item_id, place_id, is_test_data, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(clientId, generateBigDateId(), recordNumber, costCenterId, skuItemId, placeId, isTestData ? 1 : 0, String(createdBy || '').slice(0, 120));
+    return getCodeShipRelationById(result.lastInsertRowid, clientId, isTestData);
+}
+function deleteCodeShipRelation(id, clientId) {
+    db.prepare('DELETE FROM code_ship_relations WHERE id = ? AND client_id = ?').run(id, clientId);
+}
+// Cuántas relaciones usan un lugar de envío (para no borrarlo del catálogo mientras se use).
+function countCodeShipRelationsByPlace(clientId, placeId) {
+    return db.prepare('SELECT COUNT(*) AS n FROM code_ship_relations WHERE client_id = ? AND place_id = ?').get(clientId, placeId).n;
 }
 
 // --- Pedido Manual (Operaciones > C. Distribución) --------------------------------------------------------------------------------------------------
@@ -7918,6 +7966,13 @@ function seedPresentacionesCatalogGrants() {
     const path = TABLE_GRANT_PATHS['udm-distribucion'];
     if (!path) return;
     seedLeavesForScreenHolders(PRESENTACIONES_CATALOG_SEED_KEY, path, ['cat-catalogos/cat-catalogos-centro-dist-presentaciones-distribucion'], 'the Presentaciones Distribución catalog screen');
+}
+// Operaciones > Relación Código Envío (2026-11-10): la pantalla nueva la reciben, una sola vez, quienes ya tienen Relación Código (la de códigos internos). Los botones (nueva, eliminar, plantilla) los asigna el administrador desde el árbol.
+const RELACION_ENVIO_SEED_KEY = 'seed-relacion-envio-screen-v1';
+function seedRelacionEnvioGrants() {
+    const path = TABLE_GRANT_PATHS['relacion-codigo'];
+    if (!path) return;
+    seedLeavesForScreenHolders(RELACION_ENVIO_SEED_KEY, path, ['cat-operaciones/cat-operaciones-centro-dist-relacion-envio'], 'the Relación Código Envío screen');
 }
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
@@ -12578,6 +12633,7 @@ seedMarcasScreenGrants();
 seedLugaresEnvioScreenGrants();
 seedPmDescargarGrants();
 seedPresentacionesCatalogGrants();
+seedRelacionEnvioGrants();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
@@ -12787,6 +12843,12 @@ module.exports = {
     countSkuDistributionByShipTo,
     listSkuItemsWithoutDistribution,
     listSkuDistributionBySkus,
+    listCodeShipRelations,
+    getCodeShipRelationById,
+    findCodeShipRelation,
+    createCodeShipRelation,
+    deleteCodeShipRelation,
+    countCodeShipRelationsByPlace,
     listCodeRelations,
     getCodeRelationById,
     createCodeRelation,

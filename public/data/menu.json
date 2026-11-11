@@ -1879,6 +1879,56 @@
             { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
           ]
         },
+        {
+          "id": "cat-operaciones-centro-dist-relacion-envio", "labelKey": "menu.opCentroDistRelacionEnvio", "abbrKeys": ["menu.opCentroDistRelacionEnvioAbbr1", "menu.opCentroDistRelacionEnvioAbbr2"], "icon": "bx-send", "href": "OpCentroDistRelacionEnvio.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colEnvSku", "labelKey": "main.colEnvSku", "permissionOnly": true },
+            { "id": "colEnvUpc", "labelKey": "main.colEnvUpc", "permissionOnly": true },
+            { "id": "colEnvDescripcion", "labelKey": "main.colEnvDescripcion", "permissionOnly": true },
+            { "id": "colEnvCentroCostos", "labelKey": "main.colEnvCentroCostos", "permissionOnly": true },
+            { "id": "colEnvLugar", "labelKey": "main.colEnvLugar", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colEnvDeleteAuth", "labelKey": "main.colEnvDeleteAuth", "permissionOnly": true },
+                { "id": "colEnvCreateAuth", "labelKey": "main.colEnvCreateAuth", "permissionOnly": true },
+                { "id": "colEnvTemplateAuth", "labelKey": "main.colEnvTemplateAuth", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
+        },
         { "id": "cat-operaciones-centro-dist-edicion-codigo", "labelKey": "menu.opCentroDistEdicionCodigo", "icon": "bx-edit", "href": "OpCentroDistEdicionCodigo.html" },
         {
           "id": "cat-operaciones-centro-dist-temperaturas", "labelKey": "menu.opCentroDistTemperaturas", "icon": "bx-fridge", "href": "OpCentroDistTemperaturas.html",
