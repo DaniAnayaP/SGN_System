@@ -8143,7 +8143,8 @@ th[data-col="colUdmDRamificacion"]{ min-width: 17rem; }
 /* En Operaciones (un renglón por presentación) la fila del material principal (la UDM principal del producto) lleva el mismo tinte suave en toda la fila. Va como capa sobre el fondo, así también se ve en las columnas fijas. */
 tr.udm-main-row > td{ background-image: linear-gradient(color-mix(in srgb, var(--color-accent) 11%, transparent), color-mix(in srgb, var(--color-accent) 11%, transparent)); }
 .udm-ops-search{ margin: 0 0 0.7rem; }
-.udm-ops-search input[type=search]{ width: 100%; max-width: 42rem; }
+.udm-ops-search input[type=search]{ width: 100%; max-width: 42rem; padding: 0.55rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.4rem; background-color: var(--color-bg); color: var(--color-text-primary); font: inherit; font-size: 0.85rem; }
+.udm-ops-search input[type=search]:focus{ outline: none; border-color: var(--color-text-primary); }
 .udm-tcount{ align-self: center; margin-left: 0.5rem; font-size: 0.74rem; color: var(--color-text-secondary); white-space: nowrap; }
 .udm-tcount.none{ font-style: italic; }
 .udm-nx{ line-height: 1.25; }
