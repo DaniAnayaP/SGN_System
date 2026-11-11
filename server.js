@@ -5411,8 +5411,148 @@ function validateExportPayload(req, res) {
     return { columns, rows };
 }
 
-// Escribe un Excel (título, datos de arriba opcionales, columnas y renglones) como respuesta; lo usan la ruta de exportar de siempre y el QR del Pedido Manual.
-async function sendXlsxExport(res, { title, fileBase, header, columns, rows }) {
+// ---- El formato de la compañía en lo que se descarga (igual que las tarjetas de los QR): su logo (o sus iniciales), el tipo de documento en letras chicas, el Sitio (lo fuerte, con el color del cliente) y el nombre de la empresa (lo débil).
+// Los tonos salen de la misma escala del color del cliente que usa QrBrandHeader.js (el 7.º para el sitio y la marca, el 9.º para el tipo); sin color propio se usa el morado del Pedido Manual. Del logo solo entran PNG y JPEG
+// (lo que saben dibujar PDF y Excel); con otro formato (SVG, WebP, GIF) o sin logo sale la marca con las iniciales de la empresa, como en la página del QR. ----
+const BRAND_LIGHTNESS = [97, 92, 84, 74, 63, 52, 42, 33, 24, 15];
+function brandHexToHsl(hex) {
+    const r = parseInt(hex.slice(1, 3), 16) / 255; const g = parseInt(hex.slice(3, 5), 16) / 255; const b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b); const min = Math.min(r, g, b); const l = (max + min) / 2; const d = max - min;
+    if (!d) return [0, 0, l * 100];
+    const s = d / (1 - Math.abs(2 * l - 1));
+    let h;
+    if (max === r) h = ((g - b) / d) % 6; else if (max === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+    return [(h * 60 + 360) % 360, s * 100, l * 100];
+}
+function brandHslToHex(h, s, l) {
+    const sat = s / 100; const lig = l / 100;
+    const c = (1 - Math.abs(2 * lig - 1)) * sat; const x = c * (1 - Math.abs(((h / 60) % 2) - 1)); const m = lig - c / 2;
+    const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+    const to = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+    return `#${to(r)}${to(g)}${to(b)}`;
+}
+function brandScale(seed) {
+    const [h, s0] = brandHexToHsl(seed);
+    const sat = s0 < 8 ? 0 : Math.max(30, Math.min(65, s0));
+    return BRAND_LIGHTNESS.map((l) => brandHslToHex(h, sat, l));
+}
+// Ancho y alto de un PNG o un JPEG (null si no se pueden leer): hacen falta para dibujar el logo sin deformarlo.
+function brandImageSize(buf, ext) {
+    try {
+        if (ext === 'png') return buf.length > 24 && buf.toString('latin1', 1, 4) === 'PNG' ? { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) } : null;
+        let i = 2;
+        while (i + 9 < buf.length) {
+            if (buf[i] !== 0xFF) return null;
+            const marker = buf[i + 1];
+            if (marker >= 0xC0 && marker <= 0xCF && ![0xC4, 0xC8, 0xCC].includes(marker)) return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+            i += 2 + buf.readUInt16BE(i + 2);
+        }
+    } catch { /* imagen dañada */ }
+    return null;
+}
+// El encabezado de la compañía de un archivo: { kind, siteName, companyName, initials, docTitle, scale, logo } (o null si la empresa no existe).
+function exportBrandFor(clientId, { kind, siteName, docTitle }) {
+    const client = getClientById(clientId);
+    if (!client) return null;
+    const seed = typeof client.seed_color === 'string' ? client.seed_color.trim() : '';
+    let logo = null;
+    const m = clientLogoDataUrl(clientId).match(/^data:image\/(png|jpe?g);base64,([A-Za-z0-9+/=]+)$/);
+    if (m) {
+        const ext = m[1] === 'png' ? 'png' : 'jpeg';
+        const buffer = Buffer.from(m[2], 'base64');
+        const size = brandImageSize(buffer, ext);
+        if (size && size.w > 0 && size.h > 0) logo = { buffer, ext, w: size.w, h: size.h };
+    }
+    const company = String(client.company_name || '').replace(/\s+/g, ' ').trim();
+    return { kind: String(kind || '').replace(/\s+/g, ' ').trim().slice(0, 40), siteName: String(siteName || '').replace(/\s+/g, ' ').trim().slice(0, 80), companyName: company, initials: company.slice(0, 2).toUpperCase() || '··', docTitle: String(docTitle || '').replace(/\s+/g, ' ').trim().slice(0, 80), scale: brandScale(/^#[0-9a-fA-F]{6}$/.test(seed) ? seed : '#7d3f8f'), logo };
+}
+// Lo mismo a partir de lo que manda la App (con sesión): { kind, docTitle, costCenterId }; el sitio sale del Layout de ese centro de costos de SU empresa.
+function exportBrandFromRequest(req) {
+    const b = req.body && req.body.brand;
+    if (!b || typeof b !== 'object' || !req.user || !req.user.clientId) return null;
+    const costCenterId = Number(b.costCenterId);
+    let siteName = '';
+    if (Number.isInteger(costCenterId) && costCenterId > 0) {
+        const layoutRow = getClientLayout(req.user.clientId, { costCenterId });
+        siteName = layoutRow && layoutRow.layout ? layoutRow.layout.siteName || '' : '';
+    }
+    return exportBrandFor(req.user.clientId, { kind: b.kind, siteName, docTitle: b.docTitle });
+}
+// Excel: arriba, la marca (logo o iniciales a la izquierda; tipo, sitio y empresa a su lado), una línea del color y el título del documento.
+function addXlsxBrand(workbook, sheet, brand, colCount) {
+    const hex = (i) => `FF${brand.scale[i].slice(1).toUpperCase()}`;
+    [16, 24, 16].forEach((height) => { const r = sheet.addRow([]); r.height = height; });
+    sheet.getCell(1, 2).value = brand.kind.toUpperCase();
+    sheet.getCell(1, 2).font = { size: 9, bold: true, color: { argb: hex(9) } };
+    if (brand.siteName) {
+        sheet.getCell(2, 2).value = brand.siteName;
+        sheet.getCell(2, 2).font = { size: 16, bold: true, color: { argb: hex(7) } };
+        sheet.getCell(3, 2).value = brand.companyName.toUpperCase();
+        sheet.getCell(3, 2).font = { size: 9, bold: true, color: { argb: 'FF6B6B7B' } };
+    } else {
+        sheet.getCell(2, 2).value = brand.companyName;
+        sheet.getCell(2, 2).font = { size: 13, bold: true };
+    }
+    if (brand.logo) {
+        const id = workbook.addImage({ buffer: brand.logo.buffer, extension: brand.logo.ext });
+        const k = Math.min(96 / brand.logo.w, 50 / brand.logo.h);
+        sheet.addImage(id, { tl: { col: 0.04, row: 0.1 }, ext: { width: Math.round(brand.logo.w * k), height: Math.round(brand.logo.h * k) } });
+    } else {
+        sheet.mergeCells(1, 1, 3, 1);
+        const mark = sheet.getCell(1, 1);
+        mark.value = brand.initials;
+        mark.font = { size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+        mark.alignment = { horizontal: 'center', vertical: 'middle' };
+        mark.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: hex(7) } };
+    }
+    for (let c = 1; c <= colCount; c += 1) sheet.getCell(3, c).border = { bottom: { style: 'medium', color: { argb: hex(3) } } };
+    sheet.addRow([]);
+    if (brand.docTitle) { const t = sheet.addRow([brand.docTitle]); t.getCell(1).font = { size: 13, bold: true }; t.height = 20; sheet.addRow([]); }
+}
+// PDF: arriba, la marca (logo o iniciales a la izquierda; tipo, sitio y empresa a su lado), una línea del color y el título del documento.
+function drawPdfBrand(doc, brand) {
+    const left = doc.page.margins.left;
+    const top = doc.page.margins.top;
+    const pageW = doc.page.width - left - doc.page.margins.right;
+    const S = brand.scale;
+    let blockW = 36;
+    let blockH = 36;
+    if (brand.logo) {
+        const k = Math.min(110 / brand.logo.w, 32 / brand.logo.h);
+        const dw = brand.logo.w * k;
+        const dh = brand.logo.h * k;
+        blockW = dw + 8;
+        blockH = dh + 8;
+        doc.roundedRect(left, top, blockW, blockH, 5).lineWidth(0.7).stroke('#E4D2E9');
+        try { doc.image(brand.logo.buffer, left + 4, top + 4, { width: dw, height: dh }); } catch (err) { /* un logo que no se pueda dibujar deja solo el marco */ }
+    } else {
+        doc.roundedRect(left, top, 36, 36, 8).fill(S[7]);
+        doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(13).text(brand.initials, left, top + 12, { width: 36, align: 'center', lineBreak: false });
+    }
+    const tx = left + blockW + 10;
+    const tw = pageW - blockW - 10;
+    doc.fillColor(S[9]).font('Helvetica-Bold').fontSize(7.5).text(brand.kind.toUpperCase(), tx, top + 1, { width: tw, characterSpacing: 1.4, lineBreak: false });
+    if (brand.siteName) {
+        doc.fillColor(S[7]).font('Helvetica-Bold').fontSize(15).text(brand.siteName, tx, top + 11, { width: tw, lineBreak: false, ellipsis: true });
+        doc.fillColor('#6B6B7B').font('Helvetica-Bold').fontSize(7.5).text(brand.companyName.toUpperCase(), tx, top + 29, { width: tw, characterSpacing: 0.3, lineBreak: false, ellipsis: true });
+    } else {
+        doc.fillColor('#2A1B30').font('Helvetica-Bold').fontSize(12).text(brand.companyName, tx, top + 13, { width: tw, lineBreak: false, ellipsis: true });
+    }
+    const bottom = top + Math.max(blockH, 40) + 8;
+    doc.moveTo(left, bottom).lineWidth(1).lineTo(left + pageW, bottom).stroke(S[3]);
+    doc.fillColor('#000000');
+    doc.x = left;
+    doc.y = bottom + 12;
+    if (brand.docTitle) {
+        doc.font('Helvetica-Bold').fontSize(13).fillColor('#2A1B30').text(brand.docTitle, left, doc.y, { width: pageW });
+        doc.moveDown(0.5);
+        doc.fillColor('#000000');
+        doc.x = left;
+    }
+}
+
+// Escribe un Excel (título, datos de arriba opcionales, columnas y renglones) como respuesta; lo usan la ruta de exportar de siempre y el QR del Pedido Manual. brand (opcional): el formato de la compañía arriba.
+async function sendXlsxExport(res, { title, fileBase, header, columns, rows, brand }) {
     const workbook = new ExcelJS.Workbook();
     // Excel sheet names: max 31 chars, can't contain \ / * ? : [ ]
     const sheet = workbook.addWorksheet(title.replace(/[\\/*?:[\]]/g, ' ').slice(0, 31) || 'Reporte');
@@ -5427,11 +5567,12 @@ async function sendXlsxExport(res, { title, fileBase, header, columns, rows }) {
         });
         sheet.getRow(1).font = { bold: true };
     } else {
+        if (brand) addXlsxBrand(workbook, sheet, brand, columns.length);
         header.forEach(([label, value]) => { const r = sheet.addRow([label, value]); r.getCell(1).font = { bold: true }; });
         sheet.addRow([]);
         const head = sheet.addRow(columns.map((col) => String(col?.label ?? '')));
         head.font = { bold: true };
-        head.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE7F2' } }; });
+        head.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: brand ? `FF${brand.scale[1].slice(1).toUpperCase()}` : 'FFEDE7F2' } }; });
         rows.forEach((row) => { sheet.addRow(Array.isArray(row) ? row.map(cellText) : []); });
         columns.forEach((col, i) => {
             const widest = rows.reduce((m, row) => Math.max(m, cellText(Array.isArray(row) ? row[i] : '').length), String(col?.label ?? '').length);
@@ -5451,7 +5592,7 @@ app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
     const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
     const fileBase = String(req.body.filename || title).trim() || title;
     const header = exportHeaderPairs(req.body.header); // datos que van ARRIBA de la tabla (por ejemplo, los del pedido): [[etiqueta, valor], ...]
-    await sendXlsxExport(res, { title, fileBase, header, columns, rows });
+    await sendXlsxExport(res, { title, fileBase, header, columns, rows, brand: exportBrandFromRequest(req) });
 });
 
 // pdfkit has no built-in table widget -- draws a simple even-width grid by
@@ -5488,7 +5629,7 @@ function drawPdfTable(doc, columns, rows) {
 }
 
 // Tabla para listas de texto largo (por ejemplo, los artículos de un pedido): las columnas se reparten por pesos (widths) y el texto se parte en renglones; el encabezado se repite en cada hoja.
-function drawPdfTableWrapped(doc, columns, rows, weights) {
+function drawPdfTableWrapped(doc, columns, rows, weights, headFill) {
     const startX = doc.page.margins.left;
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const w = columns.map((_, i) => Math.max(0.2, Number(weights && weights[i]) || 1));
@@ -5509,7 +5650,7 @@ function drawPdfTableWrapped(doc, columns, rows, weights) {
         }
         let x = startX;
         cells.forEach((txt, i) => {
-            if (isHeader) doc.rect(x, y, widths[i], h).fillAndStroke('#EDE7F2', '#CCCCCC'); else doc.rect(x, y, widths[i], h).stroke('#CCCCCC');
+            if (isHeader) doc.rect(x, y, widths[i], h).fillAndStroke(headFill || '#EDE7F2', '#CCCCCC'); else doc.rect(x, y, widths[i], h).stroke('#CCCCCC');
             doc.fillColor('#000000').text(txt, x + pad, y + pad, { width: widths[i] - pad * 2 });
             x += widths[i];
         });
@@ -5521,20 +5662,23 @@ function drawPdfTableWrapped(doc, columns, rows, weights) {
 }
 
 // Escribe un PDF (título, datos de arriba opcionales y una tabla) como respuesta; lo usan la ruta de exportar de siempre y el QR del Pedido Manual.
-function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widths }) {
+function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widths, brand }) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', buildContentDisposition(`${fileBase}.pdf`));
     const doc = new PDFDocument({ margin: 30, size: 'A4', layout: columns.length > 5 ? 'landscape' : 'portrait' });
     doc.pipe(res);
-    doc.font('Helvetica-Bold').fontSize(14).text(title, { align: 'center' });
-    doc.moveDown(0.6);
+    if (brand) drawPdfBrand(doc, brand);
+    else {
+        doc.font('Helvetica-Bold').fontSize(14).text(title, { align: 'center' });
+        doc.moveDown(0.6);
+    }
     if (header.length) {
         header.forEach(([label, value]) => {
             doc.font('Helvetica-Bold').fontSize(9).text(`${label}: `, { continued: true }).font('Helvetica').text(value);
         });
         doc.moveDown(0.8);
     }
-    if (wrap) drawPdfTableWrapped(doc, columns, rows, Array.isArray(widths) ? widths : null);
+    if (wrap) drawPdfTableWrapped(doc, columns, rows, Array.isArray(widths) ? widths : null, brand ? brand.scale[1] : undefined);
     else drawPdfTable(doc, columns, rows);
     doc.end();
 }
@@ -5545,7 +5689,7 @@ app.post('/api/business/export/pdf', requireAuth, (req, res) => {
     const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
     const fileBase = String(req.body.filename || title).trim() || title;
     const header = exportHeaderPairs(req.body.header);
-    sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: !!req.body.wrap, widths: Array.isArray(req.body.widths) ? req.body.widths : null });
+    sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: !!req.body.wrap, widths: Array.isArray(req.body.widths) ? req.body.widths : null, brand: exportBrandFromRequest(req) });
 });
 
 app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {
@@ -8134,8 +8278,10 @@ app.post('/api/public/pedido-manual/:token/export', publicManualOrderLimiter, as
     const folio = /^PM-\d{4,}$/.test(String(body.folio || '')) ? String(body.folio) : '';
     const dayText = (iso) => (iso ? new Intl.DateTimeFormat(L.locale, { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${iso}T00:00:00Z`)) : L.asap);
     const itemsCount = new Set(lines.map((l) => l.it.id)).size;
+    // El formato de la compañía (logo o iniciales, «Pedido Manual», sitio y empresa) va arriba, como en el QR: ya no se repiten el número, la empresa ni el sitio entre los datos.
+    const brand = exportBrandFor(row.clientId, { kind: L.title, siteName: row.layout.siteName || '', docTitle: `${L.order} ${folio || L.draft}` });
     const header = [
-        [L.order, folio || L.draft], [L.company, (client && client.company_name) || ''], [L.site, row.layout.siteName || ''], [L.center, center ? `${center.code ? `${center.code} · ` : ''}${center.name}` : ''],
+        ...(brand ? [] : [[L.order, folio || L.draft], [L.company, (client && client.company_name) || ''], [L.site, row.layout.siteName || '']]), [L.center, center ? `${center.code ? `${center.code} · ` : ''}${center.name}` : ''],
         [L.by, oneLine(body.name, 60)], [L.place, place ? place.name : ''], [L.at, oneLine(body.when, 40)],
         [L.summary, `${itemsCount === 1 ? L.item1 : L.items.replace('{n}', itemsCount)} · ${lines.length === 1 ? L.line1 : L.lines.replace('{n}', lines.length)}`],
     ].filter(([, v]) => v);
@@ -8145,8 +8291,8 @@ app.post('/api/public/pedido-manual/:token/export', publicManualOrderLimiter, as
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     try {
         const title = `${L.title} · ${folio || L.draft}`;
-        if (format === 'xlsx') await sendXlsxExport(res, { title: `${L.filePrefix} ${folio || L.fileDraft}`, fileBase, header, columns, rows });
-        else sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: true, widths: [1.3, 3.6, 0.7, 1.7, 0.9] });
+        if (format === 'xlsx') await sendXlsxExport(res, { title: `${L.filePrefix} ${folio || L.fileDraft}`, fileBase, header, columns, rows, brand });
+        else sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: true, widths: [1.3, 3.6, 0.7, 1.7, 0.9], brand });
     } catch (err) {
         console.error('Pedido Manual: no se pudo armar el archivo del pedido', err);
         if (!res.headersSent) res.status(500).json({ message: 'No se pudo preparar el archivo.' });

@@ -928,11 +928,13 @@ function openQuantity(item, startDay) {
 // ---- «Cerrar pedido…»: una hoja con DOS cosas: descargar el listado (PDF o Excel: solo baja el archivo y la hoja se queda, para poder enviar después) o enviar el pedido como siempre. ----
 const draftLines = () => Array.from(draft.cart.values()).flatMap(({ item, parts }) => parts.map((p) => ({ code: item.code, description: artName(item), uom: item.uom, quantity: p.quantity, needBy: p.when })));
 // El listado como lo arma el servidor de exportar (el mismo de la pantalla Pedido Manual de la computadora): datos del pedido arriba y una tabla de código, descripción, UdM, para cuándo y cantidad.
-function exportDataset({ folio, lines, name, placeName, centroCostos, at }) {
+function exportDataset({ folio, lines, name, placeName, centroCostos, at, costCenterId }) {
     return {
+        // el formato de la compañía (logo o iniciales, «Pedido Manual», sitio y empresa) lo pone el servidor arriba del archivo, como en los QR
+        brand: { kind: t('menu.opCentroDistPedidoManual'), docTitle: `${t('home.pmFilePrefix')} ${folio || t('home.pmDraft')}`, costCenterId },
         title: t('menu.opCentroDistPedidoManual'),
         filename: `${t('home.pmFilePrefix')}-${folio || t('home.pmDraftFile')}_${isoOf(new Date())}`,
-        header: [[t('home.pmOrderNumber'), folio || t('home.pmDraft')], [t('main.pmQrCentro'), centroCostos], [t('main.colPmLugar'), placeName], [t('home.pmRequestedBy'), name], [t('home.pmWhen'), formatTime(at)], [t('home.pmListTitle'), itemsText(new Set(lines.map((l) => l.code)).size)]].filter(([, v]) => v),
+        header: [[t('main.pmQrCentro'), centroCostos], [t('main.colPmLugar'), placeName], [t('home.pmRequestedBy'), name], [t('home.pmWhen'), formatTime(at)], [t('home.pmListTitle'), itemsText(new Set(lines.map((l) => l.code)).size)]].filter(([, v]) => v),
         columns: [t('home.pmFCode'), t('home.pmFDesc'), t('home.pmFUom'), t('home.pmNeedBy'), t('home.pmQuantity')].map((label) => ({ label })),
         rows: lines.map((l) => [l.code, l.description, l.uom, whenLabel(l.needBy), qtyText(l.quantity)]),
         widths: [1.3, 3.6, 0.7, 1.7, 0.9],
@@ -941,7 +943,7 @@ function exportDataset({ folio, lines, name, placeName, centroCostos, at }) {
 const fmtButtonsHtml = () => `<div class="pm-app-two"><button type="button" class="pm-app-fmt pm-app-fmt-pdf" data-pm-dl="pdf"><i class="bx bxs-file-pdf" aria-hidden="true"></i><span>${esc(t('home.pmFmtPdf'))}</span></button><button type="button" class="pm-app-fmt pm-app-fmt-xlsx" data-pm-dl="xlsx"><i class="bx bx-spreadsheet" aria-hidden="true"></i><span>${esc(t('home.pmFmtXlsx'))}</span></button></div>`;
 // En el celular se comparte (WhatsApp, correo, Drive...); si el sistema no puede compartir archivos se baja directo. Devuelve el nombre del archivo, o null si se canceló el compartir.
 async function exportToFile(format, ds) {
-    const res = await fetch(apiUrl(`/api/business/export/${format}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ title: ds.title, filename: ds.filename, header: ds.header, columns: ds.columns, rows: ds.rows, ...(format === 'pdf' ? { wrap: true, widths: ds.widths } : {}) }) });
+    const res = await fetch(apiUrl(`/api/business/export/${format}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ title: ds.title, filename: ds.filename, header: ds.header, brand: ds.brand, columns: ds.columns, rows: ds.rows, ...(format === 'pdf' ? { wrap: true, widths: ds.widths } : {}) }) });
     if (!res.ok) throw new Error('export');
     const blob = await res.blob();
     const name = `${ds.filename}.${format}`;
@@ -1002,7 +1004,7 @@ function openClose() {
     sheet.querySelector('#pm-app-clsend').addEventListener('click', () => { close(); sendDraft(); });
     const place = usesPlaces() ? catalogPlaces.find((p) => p.id === draft.placeId) : null;
     const cc = costCenters.find((c) => c.id === draft.costCenterId);
-    wireDownloads(sheet, sheet.querySelector('#pm-app-clnote'), () => exportDataset({ folio: '', lines: draftLines(), name: draft.requesterName.replace(/\s+/g, ' ').trim(), placeName: place ? place.name : '', centroCostos: cc ? cc.name : '', at: new Date().toISOString() }));
+    wireDownloads(sheet, sheet.querySelector('#pm-app-clnote'), () => exportDataset({ folio: '', lines: draftLines(), name: draft.requesterName.replace(/\s+/g, ' ').trim(), placeName: place ? place.name : '', centroCostos: cc ? cc.name : '', at: new Date().toISOString(), costCenterId: draft.costCenterId }));
 }
 
 async function sendDraft() {
@@ -1036,7 +1038,7 @@ async function sendDraft() {
         try { localStorage.setItem(NAME_KEY, requesterName); } catch { /* sin almacenamiento */ }
         // lo que se ve al terminar: el número de pedido (si se mandó sin señal todavía no lo hay) y su lista de artículos
         doneInfo = {
-            queued: !!result.queued, folio: result.queued ? '' : (result.body.folio || ''), name: requesterName, placeName: place ? place.name : '', at: result.queued ? body.clientAt : (result.body.createdAt || body.clientAt), centroCostos: cc ? cc.name : '',
+            queued: !!result.queued, folio: result.queued ? '' : (result.body.folio || ''), name: requesterName, placeName: place ? place.name : '', at: result.queued ? body.clientAt : (result.body.createdAt || body.clientAt), centroCostos: cc ? cc.name : '', costCenterId: draft.costCenterId,
             lines: Array.from(draft.cart.values()).flatMap(({ item, parts }) => parts.map((p) => ({ code: item.code, description: artName(item), uom: item.uom, quantity: p.quantity, needBy: p.when }))),
         };
         if (!result.queued) await loadOrders();
@@ -1070,7 +1072,7 @@ function renderDone() {
         dl.className = 'pm-app-optbox';
         dl.innerHTML = `<span class="pm-app-qty-label">${esc(t('home.pmDlThis'))}</span>${fmtButtonsHtml()}<p class="pm-app-note" id="pm-app-dlnote" role="status"></p>`;
         box.appendChild(dl);
-        wireDownloads(dl, dl.querySelector('#pm-app-dlnote'), () => exportDataset({ folio: d.folio, lines: d.lines, name: d.name, placeName: d.placeName, centroCostos: d.centroCostos, at: d.at }));
+        wireDownloads(dl, dl.querySelector('#pm-app-dlnote'), () => exportDataset({ folio: d.folio, lines: d.lines, name: d.name, placeName: d.placeName, centroCostos: d.centroCostos, at: d.at, costCenterId: d.costCenterId }));
     }
     bodyEl.appendChild(box);
     const again = document.createElement('button');
