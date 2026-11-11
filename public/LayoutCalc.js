@@ -3525,7 +3525,8 @@
     // El FRENTE de un activo es la cara que mira al pasillo principal (los pasillos de Tránsito de tipo «Principal»). Con dos pasillos principales en esquina, el frente es la cara de la IZQUIERDA al mirar la esquina del activo desde el cruce de
     // los pasillos (esquina abajo-derecha: la de abajo; abajo-izquierda: la izquierda; arriba-izquierda: la de arriba; arriba-derecha: la derecha). Si ningún pasillo principal lo toca mira al más cercano y, sin pasillos principales, hacia abajo
     // del croquis. Se puede cambiar a mano (space.front). Lados del croquis sin girar: N arriba, S abajo, W izquierda, E derecha. Devuelve { side, source: manual | aisle | corner | nearest | default }.
-    function activoFront(layout, space) {
+    // (el frente de UN activo mirado solo; activoFront de más abajo lo ajusta cuando es un gabinete pegado a otros)
+    function activoFrontOwn(layout, space) {
         if (space && ['N', 'S', 'E', 'W'].includes(space.front)) return { side: space.front, source: 'manual' };
         const mains = ((layout && layout.transit) || []).filter((p) => p && p.active !== false && p.type !== 'between' && Number(p.l) > 0 && Number(p.w) > 0);
         if (!space || !(Number(space.l) > 0) || !(Number(space.d) > 0) || !mains.length) return { side: 'S', source: 'default' };
@@ -3571,6 +3572,56 @@
         const cx = space.x + space.l / 2; const cy = space.y + space.d / 2;
         const side = best.gy >= best.gx ? (best.a.y + best.a.w / 2 >= cy ? 'S' : 'N') : (best.a.x + best.a.l / 2 >= cx ? 'E' : 'W');
         return { side, source: 'nearest' };
+    }
+    // Gabinetes pegados en una misma fila comparten el frente. Cada gabinete calculaba el suyo solo (hacia el pasillo principal más cercano) y en una fila podían salir distintos: uno mirando hacia su vecino (sin cajones a la vista)
+    // y otro por el costado. Ahora los gabinetes que se tocan (a menos de 5 cm, uno junto al otro por el mismo lado) forman una fila y todos miran al MISMO lado largo de la fila: el que salió en más gabinetes (pesa más el que viene de un pasillo
+    // que el «más cercano»; empatan: abajo y luego izquierda). Solo cuentan los lados largos de la fila (en una fila a lo ancho, arriba o abajo; en una fila a lo alto, izquierda o derecha): un costado de la fila nunca es su frente. Sin ningún
+    // gabinete con un lado largo claro, o si ya miran todos al mismo lado, nada cambia. Un frente puesto a mano se respeta siempre y no vota. Solo gabinetes (type cabinet).
+    const ROW_GAP = 0.05;
+    const ROW_MIN_OVERLAP = 0.05;
+    const ROW_WEIGHT = { aisle: 2, corner: 2, nearest: 1, default: 0.5 };
+    // Cómo se tocan dos gabinetes: 'x' (uno junto al otro, a lo ancho), 'y' (uno detrás del otro) o null.
+    function cabinetLink(a, b) {
+        const ox = Math.min(a.x + a.l, b.x + b.l) - Math.max(a.x, b.x);
+        const oy = Math.min(a.y + a.d, b.y + b.d) - Math.max(a.y, b.y);
+        if (oy > ROW_MIN_OVERLAP && ox <= 0.005 && ox >= -ROW_GAP) return 'x';
+        if (ox > ROW_MIN_OVERLAP && oy <= 0.005 && oy >= -ROW_GAP) return 'y';
+        return null;
+    }
+    // El lado que toca a la fila de gabinetes de `space`, o null si no hay nada que unificar.
+    function cabinetRowSide(layout, space) {
+        const cabs = ((layout && layout.spaces) || []).filter((s) => s && s.active !== false && s.type === 'cabinet' && Number(s.l) > 0 && Number(s.d) > 0);
+        if (cabs.length < 2) return null;
+        const rowOf = (axis) => {
+            const seen = new Map([[space.id, space]]);
+            const queue = [space];
+            while (queue.length) {
+                const a = queue.pop();
+                cabs.forEach((b) => { if (!seen.has(b.id) && cabinetLink(a, b) === axis) { seen.set(b.id, b); queue.push(b); } });
+            }
+            return Array.from(seen.values());
+        };
+        const rowX = rowOf('x');
+        const rowY = rowOf('y');
+        const axis = rowX.length >= rowY.length ? 'x' : 'y';
+        const row = axis === 'x' ? rowX : rowY;
+        if (row.length < 2) return null;
+        const candidates = axis === 'x' ? ['S', 'N'] : ['W', 'E']; // los lados largos de la fila, en el orden de desempate
+        const score = {};
+        candidates.forEach((c) => { score[c] = 0; });
+        row.forEach((m) => {
+            if (['N', 'S', 'E', 'W'].includes(m.front)) return; // a mano: no vota
+            const r = activoFrontOwn(layout, { ...m, front: undefined });
+            if (candidates.includes(r.side)) score[r.side] += ROW_WEIGHT[r.source] || 1;
+        });
+        const best = candidates.reduce((acc, c) => (score[c] > score[acc] ? c : acc), candidates[0]);
+        return score[best] > 0 ? best : null;
+    }
+    function activoFront(layout, space) {
+        const own = activoFrontOwn(layout, space);
+        if (!space || own.source === 'manual' || space.type !== 'cabinet' || !(Number(space.l) > 0) || !(Number(space.d) > 0)) return own;
+        const side = cabinetRowSide(layout, space);
+        return side && side !== own.side ? { side, source: 'row' } : own;
     }
     // A qué lado del croquis cae una cara (frente, atrás, izquierda o derecha) de un activo cuyo frente mira al lado `front`. La izquierda y la derecha son las de quien mira el activo de frente.
     function faceSide(front, face) {
