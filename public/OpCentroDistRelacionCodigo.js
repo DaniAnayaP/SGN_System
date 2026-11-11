@@ -30,6 +30,7 @@ const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': 
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
         renderNewRecordButton();
+        mountHeaderTools();
         await refreshTable();
         // Desde el Layout se abre ya filtrada al localizador (o a lo que se veía): ?q=
         const q = new URLSearchParams(window.location.search).get('q');
@@ -130,6 +131,7 @@ function buildRow(r) {
         statusCell(r),
     );
     tr.appendChild(actionsCell(r, tr));
+    if (relSelectMode) decorateRowSelection(tr);
     return tr;
 }
 
@@ -174,6 +176,7 @@ function setLoadingRows(done, total) {
 async function refreshTable() {
     const tbody = getTbody();
     const token = ++renderToken;
+    rowsDone = false;
     try {
         const res = await fetch(API, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
@@ -183,7 +186,7 @@ async function refreshTable() {
         const selected = Dashboard.getSelectedCostCenterIds();
         const relations = body.relations.filter((r) => !selected || !r.costCenterId || selected.includes(r.costCenterId));
         tbody.innerHTML = '';
-        if (!relations.length) { setLoadingRows(null); ensureEmptyState(); return; }
+        if (!relations.length) { setLoadingRows(null); ensureEmptyState(); rowsDone = true; return; }
         for (let from = 0; from < relations.length; from += ROW_CHUNK) {
             if (token !== renderToken) return;
             const fragment = document.createDocumentFragment();
@@ -196,9 +199,11 @@ async function refreshTable() {
         }
         if (token !== renderToken) return;
         setLoadingRows(null);
+        rowsDone = true;
         applyFilters();
+        if (relSelectMode) { decorateAllRowSelection(); updateSelectBar(); }
     } catch (err) {
-        if (token === renderToken) setLoadingRows(null);
+        if (token === renderToken) { setLoadingRows(null); rowsDone = true; }
         console.error('Relación Código: failed to load records', err);
     }
 }
@@ -234,6 +239,206 @@ async function deleteRelation(r, tr) {
         console.error('Relación Código: failed to delete record', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
+}
+
+// ---- Seleccionar y eliminar varias relaciones ---------------------------------------------------------------------------------------------------------
+// Los íconos «Seleccionar» y «Eliminar seleccionadas» van en el encabezado «Acciones», después de la palabra. «Seleccionar» es como la casilla de un encabezado y se prende y se apaga: vacío si no hay nada marcado, con una raya en
+// medio si se marcó una parte de lo filtrado y relleno de color si se marcó todo lo filtrado (la búsqueda de texto y los filtros de columna; solo las relaciones de los centros de costos marcados arriba). Solo cuenta lo marcado que
+// sigue a la vista: lo que un filtro esconde nunca se elimina por accidente. Se elimina la RELACIÓN (la ubicación); el código se queda y se elimina aparte en Alta Nuestros Artículos. Pide la misma hoja que el botón de eliminar de cada renglón.
+let relSelectMode = false;
+const relSelected = new Set(); // ids marcados
+let relSelectObserver = null;
+let relDeleting = false;
+let rowsDone = true; // ¿ya se dibujaron todas las filas? Mientras se dibujan, «lo filtrado» todavía no está completo.
+const REL_BULK_CHUNK = 200;
+const REL_FINAL_CONFIRM_FROM = 20; // desde cuántas se pide una segunda confirmación
+const REL_ACTIONS_MIN_WIDTH = 170; // px: «ACCIONES» + los dos íconos del encabezado
+const canBulkDelete = () => Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL);
+function filteredRelIds() {
+    return Array.from(getTbody().querySelectorAll('tr[data-record-id]')).filter((tr) => !tr.hidden && !tr.classList.contains('data-table-row-col-filtered')).map((tr) => Number(tr.dataset.recordId));
+}
+const selectedFilteredIds = () => filteredRelIds().filter((id) => relSelected.has(id));
+function decorateRowSelection(tr) {
+    const td = tr.querySelector('td.admin-table-actions');
+    if (!td) return;
+    const id = Number(tr.dataset.recordId);
+    let box = td.querySelector('input.sku-row-check');
+    if (!relSelectMode) { if (box) box.remove(); tr.classList.remove('sku-row-selected'); return; }
+    if (!box) {
+        box = document.createElement('input');
+        box.type = 'checkbox';
+        box.className = 'sku-row-check';
+        box.setAttribute('aria-label', t('main.relSelRow'));
+        box.addEventListener('change', () => {
+            if (box.checked) relSelected.add(id); else relSelected.delete(id);
+            tr.classList.toggle('sku-row-selected', box.checked);
+            updateSelectBar();
+        });
+        td.prepend(box);
+    }
+    box.checked = relSelected.has(id);
+    tr.classList.toggle('sku-row-selected', box.checked);
+}
+function decorateAllRowSelection() {
+    getTbody().querySelectorAll('tr[data-record-id]').forEach(decorateRowSelection);
+}
+function relToolbar() { return document.querySelector(`[data-table-id="${TABLE_KEY}"]`)?.previousElementSibling || null; }
+function selectBar() { return relToolbar()?.querySelector('.sku-select-bar') || null; }
+function updateSelectBar() {
+    updateHeaderTools();
+    const bar = selectBar();
+    if (!bar) return;
+    const filtered = filteredRelIds();
+    const selected = filtered.filter((id) => relSelected.has(id)).length;
+    bar.querySelector('.sku-select-text').textContent = t('main.relSelTexto', { n: selected, m: filtered.length });
+    bar.querySelector('[data-rel-select-filtered]').textContent = t('main.relSelFiltrado', { m: filtered.length });
+    const del = bar.querySelector('[data-rel-delete]');
+    del.textContent = t('main.relEliminarSel', { n: selected });
+    del.disabled = !selected || relDeleting;
+    bar.querySelector('[data-rel-select-none]').disabled = !selected || relDeleting;
+}
+function selectFiltered() {
+    if (!rowsDone) { Dashboard.showToast(t('main.relEsperaCarga'), 'info'); return; }
+    filteredRelIds().forEach((id) => relSelected.add(id));
+    decorateAllRowSelection();
+    updateSelectBar();
+}
+function enterSelectMode() {
+    if (relSelectMode) return;
+    if (!rowsDone) { Dashboard.showToast(t('main.relEsperaCarga'), 'info'); return; }
+    relSelectMode = true;
+    const toolbar = relToolbar();
+    const bar = document.createElement('span');
+    bar.className = 'sku-select-bar tpl-muted';
+    bar.innerHTML = `<span class="sku-select-text" aria-live="polite"></span>
+        <button type="button" class="btn btn-secondary sku-more-btn" data-rel-select-filtered data-help-key="relSeleccionar"></button>
+        <button type="button" class="btn btn-secondary sku-more-btn" data-rel-select-none>${esc(t('main.relSelQuitar'))}</button>
+        <button type="button" class="btn btn-danger sku-more-btn sku-delete-btn" data-rel-delete data-help-key="relEliminarVarios"></button>
+        <button type="button" class="btn btn-secondary sku-more-btn" data-rel-select-exit>${esc(t('main.relSelCerrar'))}</button>`;
+    bar.querySelector('[data-rel-select-filtered]').addEventListener('click', selectFiltered);
+    bar.querySelector('[data-rel-select-none]').addEventListener('click', () => { relSelected.clear(); decorateAllRowSelection(); updateSelectBar(); });
+    bar.querySelector('[data-rel-delete]').addEventListener('click', bulkDeleteSelected);
+    bar.querySelector('[data-rel-select-exit]').addEventListener('click', exitSelectMode);
+    const anchor = toolbar.querySelector('.data-table-template-btn') || toolbar.querySelector('.data-table-new-record-btn');
+    if (anchor) anchor.after(bar); else toolbar.prepend(bar);
+    // los filtros de columna y la búsqueda esconden o muestran filas sin avisar: la barra se actualiza sola
+    let timer = null;
+    relSelectObserver = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(updateSelectBar, 150); });
+    relSelectObserver.observe(getTbody(), { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'], childList: true });
+    selectFiltered();
+}
+function exitSelectMode() {
+    if (!relSelectMode || relDeleting) return;
+    relSelectMode = false;
+    relSelected.clear();
+    if (relSelectObserver) { relSelectObserver.disconnect(); relSelectObserver = null; }
+    selectBar()?.remove();
+    decorateAllRowSelection();
+    updateHeaderTools();
+}
+function toggleSelectAll() {
+    if (!relSelectMode) { enterSelectMode(); return; } // entra y marca todo lo filtrado
+    const filtered = filteredRelIds();
+    const selected = filtered.filter((id) => relSelected.has(id)).length;
+    if (filtered.length && selected === filtered.length) exitSelectMode(); else selectFiltered();
+}
+function mountHeaderTools() {
+    if (!canBulkDelete()) return;
+    const th = document.querySelector(`[data-table-id="${TABLE_KEY}"] th[data-col="actions"]`);
+    if (!th || th.querySelector('.sku-th-tools')) return;
+    const label = document.createElement('span');
+    label.className = 'sku-th-label';
+    const key = th.getAttribute('data-i18n');
+    if (key) { label.setAttribute('data-i18n', key); th.removeAttribute('data-i18n'); }
+    label.textContent = th.textContent;
+    th.textContent = '';
+    const tools = document.createElement('span');
+    tools.className = 'sku-th-tools';
+    const mk = (cls, icon, helpKey, label2, onClick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `admin-icon-btn sku-th-btn ${cls}`;
+        b.setAttribute('data-help-key', helpKey);
+        b.title = label2;
+        b.setAttribute('aria-label', label2);
+        b.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+        // el encabezado puede ordenar o abrir filtros: el toque es de este ícono y nada más
+        b.addEventListener('click', (event) => { event.stopPropagation(); onClick(); });
+        return b;
+    };
+    tools.append(
+        mk('sku-th-select', 'bx-checkbox', 'relSeleccionar', t('main.relSeleccionar'), toggleSelectAll),
+        mk('admin-icon-btn-danger sku-th-delete', 'bx-trash', 'relEliminarVarios', t('main.relEliminarIcono'), bulkDeleteSelected),
+    );
+    th.classList.add('sku-th-actions');
+    th.append(label, tools);
+    // la columna necesita ancho para la palabra y los dos íconos
+    if (Dashboard.ensureColumnMinWidth) Dashboard.ensureColumnMinWidth(TABLE_KEY, 'actions', REL_ACTIONS_MIN_WIDTH);
+    updateHeaderTools();
+}
+function updateHeaderTools() {
+    const th = document.querySelector(`[data-table-id="${TABLE_KEY}"] th[data-col="actions"] .sku-th-tools`);
+    if (!th) return;
+    const filteredCount = relSelectMode ? filteredRelIds().length : 0;
+    const selected = relSelectMode ? selectedFilteredIds().length : 0;
+    const state = selected && selected === filteredCount ? 'all' : (selected ? 'some' : 'none');
+    const del = th.querySelector('.sku-th-delete');
+    del.disabled = !selected || relDeleting;
+    const delText = selected ? t('main.relEliminarSel', { n: selected }) : t('main.relEliminarIcono');
+    del.title = delText;
+    del.setAttribute('aria-label', delText);
+    const sel = th.querySelector('.sku-th-select');
+    sel.classList.toggle('sku-th-all', state === 'all');
+    sel.classList.toggle('sku-th-some', state === 'some');
+    sel.querySelector('i').className = `bx ${state === 'all' ? 'bxs-checkbox-checked' : (state === 'some' ? 'bx-checkbox-minus' : 'bx-checkbox')}`;
+    sel.setAttribute('role', 'checkbox');
+    sel.setAttribute('aria-checked', state === 'all' ? 'true' : (state === 'some' ? 'mixed' : 'false'));
+    sel.title = t(state === 'all' ? 'main.relSelQuitarTodo' : 'main.relSeleccionar');
+}
+async function bulkDeleteSelected() {
+    if (relDeleting) return;
+    const ids = selectedFilteredIds();
+    if (!ids.length) return;
+    const n = ids.length;
+    const ok = await Dashboard.confirm(t('main.relBorrarConfirm', { n }), { items: [t('main.relBorrarItem1'), t('main.relBorrarItem2')], accept: t('main.relBorrarAceptar', { n }) });
+    if (!ok) return;
+    if (n >= REL_FINAL_CONFIRM_FROM && !(await Dashboard.confirm(t('main.relBorrarFinal', { n }), { accept: t('main.relBorrarAceptar', { n }) }))) return;
+    relDeleting = true;
+    updateSelectBar();
+    let done = 0;
+    let deleted = 0;
+    let failed = false;
+    try {
+        for (let from = 0; from < ids.length; from += REL_BULK_CHUNK) {
+            const chunk = ids.slice(from, from + REL_BULK_CHUNK);
+            const res = await fetch(`${API}/bulk-delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ids: chunk }) });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                Dashboard.showToast(res.status === 403 ? Dashboard.t('main.fieldLocked') : (body.message || Dashboard.t('admin.saveError')), res.status === 403 ? 'warning' : 'error');
+                failed = true;
+                break;
+            }
+            const body = await res.json();
+            const gone = new Set(body.deleted || []);
+            deleted += gone.size;
+            getTbody().querySelectorAll('tr[data-record-id]').forEach((tr) => { if (gone.has(Number(tr.dataset.recordId))) tr.remove(); });
+            gone.forEach((id) => relSelected.delete(id));
+            done += chunk.length;
+            const text = selectBar()?.querySelector('.sku-select-text');
+            if (text) text.textContent = t('main.relBorrando', { done, total: n });
+            await nextTurn(); // deja respirar a la pantalla entre tandas
+        }
+    } catch (err) {
+        console.error('Relación Código: bulk delete failed', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        failed = true;
+    }
+    relDeleting = false;
+    ensureEmptyState();
+    if (deleted) Dashboard.showToast(t('main.relBorrarHecho', { n: deleted }), failed ? 'warning' : 'success');
+    relSelected.clear();
+    decorateAllRowSelection();
+    updateSelectBar();
 }
 
 function renderNewRecordButton() {

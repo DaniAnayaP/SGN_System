@@ -3677,6 +3677,23 @@
     "relCode": "Código",
     "relSearchPlaceholder": "Escribe SKU, UPC o descripción",
     "relNoMatches": "Sin resultados",
+    "relSeleccionar": "Seleccionar todo lo filtrado",
+    "relSelQuitarTodo": "Quitar la selección",
+    "relEliminarIcono": "Eliminar seleccionadas",
+    "relSelRow": "Seleccionar esta relación",
+    "relSelTexto": "{n} seleccionadas de {m} filtradas",
+    "relSelFiltrado": "Seleccionar todo lo filtrado ({m})",
+    "relSelQuitar": "Quitar selección",
+    "relSelCerrar": "Cerrar",
+    "relEliminarSel": "Eliminar seleccionadas ({n})",
+    "relBorrarConfirm": "¿Eliminar {n} relaciones de códigos? No se puede deshacer.",
+    "relBorrarItem1": "Se elimina la relación (la ubicación del código); los códigos se quedan y se eliminan aparte en Alta Nuestros Artículos.",
+    "relBorrarItem2": "Solo se eliminan las relaciones de los centros de costos que tienes marcados arriba y que siguen a la vista con los filtros.",
+    "relBorrarAceptar": "Eliminar {n} relaciones",
+    "relBorrarFinal": "Última confirmación: se van a eliminar {n} relaciones de forma permanente.",
+    "relBorrando": "Eliminando… {done} de {total}",
+    "relBorrarHecho": "{n} relaciones eliminadas. Ya puedes eliminar esos códigos en Alta Nuestros Artículos.",
+    "relEsperaCarga": "Espera a que termine de cargar la tabla para seleccionar todo lo filtrado.",
     "relPickCode": "Elige un código para ver su ficha.",
     "relChooseCost": "Elige un centro de costos",
     "relChooseWarehouse": "Elige un almacén",
@@ -3747,7 +3764,7 @@
     "skuBorrarFinal": "Última confirmación: se van a eliminar {n} códigos de forma permanente.",
     "skuBorrando": "Eliminando… {done} de {total}",
     "skuBorrarHecho": "{n} códigos eliminados.",
-    "skuBorrarBloqueados": "{n} no se eliminaron porque ya tienen ubicaciones en Relación Código.",
+    "skuBorrarBloqueados": "{n} no se eliminaron porque ya tienen ubicaciones en Relación Código: elimina primero esas relaciones allá (Seleccionar › Eliminar).",
     "skuNumVacio": "No queda ningún código: el primero nuevo será el {next}.",
     "skuNumQuedan": "Quedan {n} códigos en el sistema (completos o con ubicaciones): el siguiente nuevo será el {next}.",
     "layoutRelacionIr": "Abrir la pantalla Relación Código",
@@ -5418,6 +5435,14 @@
     "envCodeSearch": {
       "what": "La lista completa de los códigos del catálogo (Alta Artículos), cada uno solo con su descripción única y su código. Escribe para acotarla (código, UPC o descripción única, con los signos de búsqueda del sistema) y toca el que vas a enviar a los lugares.",
       "example": "escribes paracet: queda solo el Paracetamol; lo tocas y eliges a qué lugares se envía."
+    },
+    "relSeleccionar": {
+      "what": "Marca TODO lo que quede filtrado en la tabla (la búsqueda de texto y los filtros de columna, solo de los centros de costos marcados arriba); cada renglón trae su casilla para quitar o agregar uno. Es como la casilla de un encabezado: vacío si no hay nada marcado, con una raya en medio si hay una parte y relleno si está todo lo filtrado; tocarlo con todo marcado lo apaga. Lo que un filtro esconde nunca cuenta.",
+      "example": "filtras el almacén «TRANSITORIO»: «Seleccionar todo lo filtrado (1,164)» marca esas 1,164 relaciones y después las eliminas."
+    },
+    "relEliminarVarios": {
+      "what": "Elimina de una vez las relaciones marcadas que siguen a la vista. Pide confirmar (dos veces si son muchas) y no se puede deshacer. Se elimina la relación, o sea la ubicación del código; los códigos se quedan y se eliminan aparte en Alta Nuestros Artículos. Cada relación eliminada queda en el historial de cambios.",
+      "example": "marcas las 1,164 relaciones, confirmas, y después los códigos ya se pueden eliminar en Alta Nuestros Artículos."
     },
     "relCodeSearch": {
       "what": "Busca el código que vas a ubicar por su SKU (con o sin ceros), su UPC o su descripción. Salen los códigos de Alta Artículos.",

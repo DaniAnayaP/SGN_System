@@ -10561,6 +10561,31 @@ app.delete('/api/business/code-relations/:id', requireAuth, requireCostCenter, (
     deleteCodeRelation(existing.id, req.user.clientId);
     res.status(204).end();
 });
+// Eliminar VARIAS relaciones (ubicaciones) de una vez (Relación Código: «Seleccionar» lo filtrado y «Eliminar»): las mismas reglas que eliminar una (hoja «Autorización para Eliminar» de la pantalla), cada una con su historial y UN solo aviso.
+// Solo se elimina la relación (la ubicación del código): el código se queda y se elimina aparte en Alta Nuestros Artículos. Hasta 500 por petición: la pantalla las manda por tandas.
+const CODE_REL_BULK_DELETE_MAX = 500;
+app.post('/api/business/code-relations/bulk-delete', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!req.user.isClientAdmin && !canDeleteColumn(getUserEffectiveGrants(req.user.sub), CODE_RELATION_TABLE_KEY, 'colRelDeleteAuth')) {
+        return res.status(403).json({ message: 'No tienes permiso para eliminar registros aquí.' });
+    }
+    const raw = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
+    const ids = [...new Set(raw.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    if (!ids.length) return res.status(400).json({ message: 'No hay relaciones que eliminar.', code: 'EMPTY' });
+    if (ids.length > CODE_REL_BULK_DELETE_MAX) return res.status(400).json({ message: `Hasta ${CODE_REL_BULK_DELETE_MAX} relaciones por vez.`, code: 'TOOMANY' });
+    const { clientId, isTestAccount } = req.user;
+    const deleted = [];
+    ids.forEach((id) => {
+        const existing = getCodeRelationById(id, clientId, isTestAccount);
+        if (!existing) return; // ya no existe (otra persona la eliminó): no cuenta
+        logTableChange({ clientId, tableKey: CODE_RELATION_TABLE_KEY, recordId: existing.id, recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req) });
+        deleteCodeRelation(existing.id, clientId);
+        deleted.push(existing.id);
+    });
+    if (deleted.length) notifyButtonAction(req, CODE_RELATION_TABLE_KEY, 'delete', `${deleted.length} relaciones`);
+    res.set('Cache-Control', 'no-store');
+    res.json({ deleted });
+});
 
 // --- Presentaciones de Distribución (Operaciones, C. Distribución) ---------------------------------------------------------------------------------
 // Las presentaciones en que se distribuye cada código, en ÁRBOL: la raíz (nivel 0) es el material principal (sus medidas y su peso son los de Alta Artículos; aquí solo su forma y si se puede acostar) y cada presentación

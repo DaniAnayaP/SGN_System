@@ -3678,6 +3678,23 @@
     "relCode": "Code",
     "relSearchPlaceholder": "Type SKU, UPC or description",
     "relNoMatches": "No matches",
+    "relSeleccionar": "Select everything filtered",
+    "relSelQuitarTodo": "Clear the selection",
+    "relEliminarIcono": "Delete selected",
+    "relSelRow": "Select this relation",
+    "relSelTexto": "{n} selected of {m} filtered",
+    "relSelFiltrado": "Select everything filtered ({m})",
+    "relSelQuitar": "Clear selection",
+    "relSelCerrar": "Close",
+    "relEliminarSel": "Delete selected ({n})",
+    "relBorrarConfirm": "Delete {n} code relations? This cannot be undone.",
+    "relBorrarItem1": "The relation (the code location) is deleted; the codes stay and are deleted separately in New Sku Registration.",
+    "relBorrarItem2": "Only the relations of the cost centers you have marked above and that are still in view with the filters are deleted.",
+    "relBorrarAceptar": "Delete {n} relations",
+    "relBorrarFinal": "Final confirmation: {n} relations will be permanently deleted.",
+    "relBorrando": "Deleting… {done} of {total}",
+    "relBorrarHecho": "{n} relations deleted. You can now delete those codes in New Sku Registration.",
+    "relEsperaCarga": "Wait for the table to finish loading to select everything filtered.",
     "relPickCode": "Choose a code to see its card.",
     "relChooseCost": "Choose a cost center",
     "relChooseWarehouse": "Choose a warehouse",
@@ -3748,7 +3765,7 @@
     "skuBorrarFinal": "Final confirmation: {n} codes will be permanently deleted.",
     "skuBorrando": "Deleting… {done} of {total}",
     "skuBorrarHecho": "{n} codes deleted.",
-    "skuBorrarBloqueados": "{n} were not deleted because they already have locations in Code Relation.",
+    "skuBorrarBloqueados": "{n} were not deleted because they already have locations in Code Relation: delete those relations there first (Select › Delete).",
     "skuNumVacio": "No codes are left: the first new one will be {next}.",
     "skuNumQuedan": "{n} codes are left in the system (complete or with locations): the next new one will be {next}.",
     "layoutRelacionIr": "Open the Code Relation screen",
@@ -5419,6 +5436,14 @@
     "envCodeSearch": {
       "what": "The full list of the catalog codes (Alta Artículos), each with only its unique description and its code. Type to narrow it (code, UPC or unique description, with the system search signs) and tap the one you are going to ship to the places.",
       "example": "you type paracet: only Paracetamol is left; you tap it and choose which places it ships to."
+    },
+    "relSeleccionar": {
+      "what": "Marks EVERYTHING that is filtered in the table (the text search and the column filters, only for the cost centers marked above); each row has its own checkbox to remove or add one. It works like a header checkbox: empty when nothing is marked, a line in the middle when part is marked and filled when everything filtered is marked; tapping it with everything marked turns it off. What a filter hides never counts.",
+      "example": "you filter the warehouse «TRANSITORIO»: «Select everything filtered (1,164)» marks those 1,164 relations and then you delete them."
+    },
+    "relEliminarVarios": {
+      "what": "Deletes at once the marked relations that are still in view. It asks to confirm (twice when there are many) and cannot be undone. The relation is deleted, that is the code location; the codes stay and are deleted separately in New Sku Registration. Each deleted relation stays in the change history.",
+      "example": "you mark the 1,164 relations, confirm, and then the codes can be deleted in New Sku Registration."
     },
     "relCodeSearch": {
       "what": "Finds the code you will locate by its SKU (with or without zeros), UPC or description. It lists the codes from Article Setup.",
