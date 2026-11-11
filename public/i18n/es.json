@@ -257,6 +257,8 @@
     "opCentroDistAltaArticulos": "Alta Nuestros Artículos (Sku)",
     "opCentroDistEdicionCodigo": "Edición Código",
     "opCentroDistCapacidadAlmacenamiento": "Capacidad Almacenamiento",
+    "opCentroDistCapacidadAlmacenamientoAbbr1": "Capacidad Almac.",
+    "opCentroDistCapacidadAlmacenamientoAbbr2": "Cap. Almac.",
     "classCapUbicacion": "Ubicación (del Layout)",
     "classCapCodigo": "Código asignado",
     "classCapEstiba": "Cómo se estiba (del código)",

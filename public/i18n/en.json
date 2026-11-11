@@ -257,6 +257,8 @@
     "opCentroDistAltaArticulos": "New Sku Registration",
     "opCentroDistEdicionCodigo": "Code Editing",
     "opCentroDistCapacidadAlmacenamiento": "Storage Capacity",
+    "opCentroDistCapacidadAlmacenamientoAbbr1": "Storage Cap.",
+    "opCentroDistCapacidadAlmacenamientoAbbr2": "Stor. Cap.",
     "classCapUbicacion": "Location (from the Layout)",
     "classCapCodigo": "Assigned code",
     "classCapEstiba": "How it is stacked (from the code)",

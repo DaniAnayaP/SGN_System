@@ -2163,7 +2163,7 @@
           ]
         },
         {
-          "id": "cat-operaciones-centro-dist-capacidad-almacenamiento", "labelKey": "menu.opCentroDistCapacidadAlmacenamiento", "icon": "bx-package", "href": "OpCentroDistCapacidadAlmacenamiento.html",
+          "id": "cat-operaciones-centro-dist-capacidad-almacenamiento", "labelKey": "menu.opCentroDistCapacidadAlmacenamiento", "abbrKeys": ["menu.opCentroDistCapacidadAlmacenamientoAbbr1", "menu.opCentroDistCapacidadAlmacenamientoAbbr2"], "icon": "bx-package", "href": "OpCentroDistCapacidadAlmacenamiento.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
