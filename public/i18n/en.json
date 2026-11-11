@@ -2932,6 +2932,7 @@
     "fleetEcoDuplicate": "A unit with that Eco Unit already exists.",
     "newFleetUnit": "New Unit",
     "colArticuloSku": "SKU",
+    "colArticuloEstatus": "Status",
     "colArticuloUpc": "UPC",
     "colArticuloCodigoCliente": "Client Code",
     "colArticuloDescUnica": "Unique Description",
@@ -3016,7 +3017,7 @@
     "qrGenerated": "Generated",
     "qrPending": "Pending",
     "qrViewFicha": "View Sheet",
-    "colArticuloDeleteAuth": "Delete Authorization",
+    "colArticuloDeleteAuth": "Deactivate Authorization",
     "colArticuloCreateAuth": "Create Authorization",
     "colArticuloRegistroUnico": "Unique Registration",
     "colCatRegistroUnico": "Unique Registration",
@@ -3758,23 +3759,29 @@
     "skuMostrarTodos": "Show all",
     "skuSeleccionar": "Select everything filtered",
     "skuSelQuitarTodo": "Clear the selection",
-    "skuEliminarIcono": "Delete selected",
+    "skuDesactivarIcono": "Deactivate selected",
+    "skuDesactivarSel": "Deactivate selected ({n})",
+    "skuDesactivarSelConfirm": "Deactivate {n} codes?",
+    "skuDesactivarSelItem1": "They keep existing with everything they have (relations, locations, presentations and orders); they just stop being offered for new relations and orders.",
+    "skuDesactivarSelItem2": "Their Unique Description stays reserved and they can be activated again one by one.",
+    "skuDesactivarSelAceptar": "Deactivate {n} codes",
+    "skuDesactivando": "Deactivating… {done} of {total}",
+    "skuDesactivadosHecho": "{n} codes deactivated.",
+    "skuDesactivarBtn": "Deactivate code",
+    "skuActivarBtn": "Activate code",
+    "skuDesactivarConfirm": "Deactivate code {sku}?",
+    "skuDesactivarItem1": "It keeps existing with everything it has (relations, locations, presentations and orders); it just stops being offered for new relations and orders.",
+    "skuDesactivarItem2": "Its Unique Description stays reserved and it can be activated again.",
+    "skuDesactivarAceptar": "Deactivate",
+    "skuDesactivado": "Code {sku} deactivated.",
+    "skuActivado": "Code {sku} activated.",
+    "skuStatusActive": "Active",
+    "skuStatusInactive": "Inactive",
     "skuSelRow": "Select this code",
     "skuSelTexto": "{n} selected of {m} filtered",
     "skuSelFiltrado": "Select everything filtered ({m})",
     "skuSelQuitar": "Clear selection",
     "skuSelCerrar": "Close",
-    "skuEliminarSel": "Delete selected ({n})",
-    "skuBorrarConfirm": "Delete {n} codes? This cannot be undone.",
-    "skuBorrarItem1": "Their distribution presentations and shipping relations are deleted too.",
-    "skuBorrarItem2": "Codes that already have locations in Code Relation are not deleted: remove those locations first.",
-    "skuBorrarAceptar": "Delete {n} codes",
-    "skuBorrarFinal": "Final confirmation: {n} codes will be permanently deleted.",
-    "skuBorrando": "Deleting… {done} of {total}",
-    "skuBorrarHecho": "{n} codes deleted.",
-    "skuBorrarBloqueados": "{n} were not deleted because they already have locations in Code Relation: delete those relations there first (Select › Delete).",
-    "skuNumVacio": "No codes are left: the first new one will be {next}.",
-    "skuNumQuedan": "{n} codes are left in the system (complete or with locations): the next new one will be {next}.",
     "layoutRelacionIr": "Open the Code Relation screen",
     "layoutRelacionSinEnfoque": "No related code falls in what you focused above (Zone, Pick or Locator).",
     "layoutLocalizadoresSinEnfoque": "No locator falls in what you focused above (Zone, Pick or Locator).",
@@ -5986,11 +5993,19 @@
     },
     "skuSeleccionar": {
       "what": "Marks EVERYTHING that is filtered in the table (the text search and the column filters), including what has not been drawn yet; each row has its own checkbox to remove or add one. Every time you change the filters you can tap «Select everything filtered» again. What a filter hides never counts.",
-      "example": "you filter the category «No category»: «Select everything filtered (320)» marks those 320 and then you delete them."
+      "example": "you filter the category «No category»: «Select everything filtered (320)» marks those 320 and then you deactivate them."
     },
-    "skuEliminarVarios": {
-      "what": "Deletes at once the marked codes that are still in view. It asks to confirm (twice when there are many) and cannot be undone. Their distribution presentations and shipping relations go with them; codes that already have locations in Code Relation are not deleted. Each deleted code stays in the change history.",
-      "example": "you mark all 1,164 codes in the list, confirm, and the screen is left empty to load them again with «Upload template»."
+    "skuDesactivarVarios": {
+      "what": "Deactivates at once the marked codes that are still in view. It asks to confirm. Codes are never deleted: they keep existing with everything they have (relations, locations, presentations and orders), their Unique Description stays reserved and they just stop being offered for new relations and orders. They can be activated again one by one. Each change stays in the change history.",
+      "example": "you filter the codes you will no longer handle, mark them, confirm and they become «Inactive»."
+    },
+    "skuDesactivar": {
+      "what": "Deactivates this code. It is not deleted: it keeps existing with everything it has (relations, locations, presentations and orders) and its Unique Description stays reserved, but it stops being offered for new relations, orders and selectors. It can be activated again. It stays in the change history.",
+      "example": "a medicine that is no longer handled: you deactivate it and its existing relations are kept."
+    },
+    "skuActivar": {
+      "what": "Activates this code again: it is offered once more for new relations, orders and selectors. It stays in the change history.",
+      "example": "the medicine is back in the catalog: you activate it and it shows up when making a new relation."
     },
     "skuEditar": {
       "what": "Sends this code to Operations > Code Editing so you can fix it. Here, in Codes, they are only viewed. It is noted in the code history.",

@@ -155,6 +155,7 @@ const {
     deleteSkuItem,
     getSkuNumberingInfo,
     buildSkuCode,
+    setSkuItemStatus,
     generatePublicToken,
     getSkuItemByPublicToken,
     setSkuItemPublicToken,
@@ -6281,6 +6282,7 @@ function mapSkuItemRecord(row, pendingByRecord, companyName) {
         registroUnico: row.db_id,
         sku: padSku(row.record_number, row.sku_code),
         clientCode: row.client_code || '',
+        status: row.status === 'inactive' ? 'inactive' : 'active',
         upc: row.upc,
         uniqueDescription: row.unique_description,
         knownDescription: row.known_description,
@@ -6631,58 +6633,58 @@ app.patch('/api/business/sku-items/:id', requireAuth, requireCostCenter, (req, r
     res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
 });
 
-app.delete('/api/business/sku-items/:id', requireAuth, requireCostCenter, (req, res) => {
+// Los códigos NUNCA se eliminan: se DESACTIVAN (y se vuelven a activar). Un código es la rama de conexión de todo (relaciones, ubicaciones, presentaciones, QR, pedidos): si se borrara, se borrarían los registros que cuelgan de él.
+// Uno inactivo se queda con todo lo suyo y su Descripción Única sigue reservada, pero deja de ofrecerse para relaciones, pedidos y selectores nuevos. Pide la hoja «Autorización para Desactivar» (colArticuloDeleteAuth) de la pantalla;
+// el administrador del cliente no depende de hojas. Cada cambio queda en el historial del código.
+const SKU_STATUS_MAX = 500;
+const SKU_STATUS_LABELS = { active: 'Activo', inactive: 'Inactivo' };
+const canChangeSkuStatus = (req) => !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), 'nuestros-articulos', 'colArticuloDeleteAuth');
+const skuStatusOf = (v) => (v === 'inactive' ? 'inactive' : (v === 'active' ? 'active' : ''));
+// Cambia el estatus de UN código y lo deja en el historial; false si ya estaba así. El aviso lo manda quien llama (uno por cambio o uno solo por todo un lote).
+function applySkuStatus(req, existing, status) {
+    const before = existing.status === 'inactive' ? 'inactive' : 'active';
+    if (before === status) return false;
+    const { clientId, isTestAccount } = req.user;
+    setSkuItemStatus(existing.id, clientId, status, isTestAccount);
+    logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: existing.id, recordLabel: `#${existing.id}`, action: 'update', fieldKey: 'main.colArticuloEstatus', oldValue: SKU_STATUS_LABELS[before], newValue: SKU_STATUS_LABELS[status], changedBy: changedByLabel(req) });
+    return true;
+}
+app.post('/api/business/sku-items/:id/status', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!canChangeSkuStatus(req)) return res.status(403).json({ message: 'No tienes permiso para desactivar códigos.' });
+    const status = skuStatusOf(req.body && req.body.status);
+    if (!status) return res.status(400).json({ message: 'El estatus es Activo o Inactivo.', code: 'STATUS' });
     const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
-    if (!req.user.isClientAdmin) {
-        const grants = getUserEffectiveGrants(req.user.sub);
-        if (!canDeleteColumn(grants, 'nuestros-articulos', 'colArticuloDeleteAuth')) {
-            return res.status(403).json({ message: 'No tienes permiso para eliminar artículos.' });
-        }
+    const changed = applySkuStatus(req, existing, status);
+    if (changed) {
+        notifyDataChange({ clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordLabel: `#${existing.id}`, fieldKey: 'main.colArticuloEstatus', oldValue: SKU_STATUS_LABELS[status === 'inactive' ? 'active' : 'inactive'], newValue: SKU_STATUS_LABELS[status], actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
     }
-    if (listCodeRelationsBy(req.user.clientId, req.user.isTestAccount, 'sku_item_id', existing.id).length) {
-        return res.status(409).json({ message: 'Este código ya tiene ubicaciones en Relación Código. Quítalas primero.' });
-    }
-    logTableChange({
-        clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordId: existing.id,
-        recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req),
-    });
-    notifyButtonAction(req, 'nuestros-articulos', 'delete', `#${existing.id}`);
-    deleteSkuItem(req.params.id, req.user.clientId);
-    res.status(204).end();
+    const client = getClientById(req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({ skuItem: mapSkuItemRecord(getSkuItemById(existing.id, req.user.clientId, req.user.isTestAccount), null, client?.company_name), changed });
 });
-
-// Eliminar VARIOS códigos de una vez (Alta Nuestros Artículos: «Seleccionar» lo filtrado y «Eliminar»): las mismas reglas que eliminar uno (hoja «Autorización para Eliminar» de la pantalla; un código con ubicaciones en
-// Relación Código no se elimina: se salta y se cuenta), cada eliminado queda en su historial y se avisa UNA sola vez. Sus presentaciones de distribución y sus relaciones de envío se van con él (ON DELETE CASCADE).
-// Hasta 500 por petición: la pantalla los manda por tandas.
-const SKU_BULK_DELETE_MAX = 500;
-app.post('/api/business/sku-items/bulk-delete', requireAuth, requireCostCenter, (req, res) => {
+// Varios a la vez (Alta: «Seleccionar» lo filtrado y «Desactivar seleccionados»): las mismas reglas; devuelve los ids que sí cambiaron (los que ya estaban así no cuentan) y manda UN solo aviso. Hasta 500 por petición.
+app.post('/api/business/sku-items/bulk-status', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    if (!req.user.isClientAdmin && !canDeleteColumn(getUserEffectiveGrants(req.user.sub), 'nuestros-articulos', 'colArticuloDeleteAuth')) {
-        return res.status(403).json({ message: 'No tienes permiso para eliminar artículos.' });
-    }
+    if (!canChangeSkuStatus(req)) return res.status(403).json({ message: 'No tienes permiso para desactivar códigos.' });
+    const status = skuStatusOf(req.body && req.body.status);
+    if (!status) return res.status(400).json({ message: 'El estatus es Activo o Inactivo.', code: 'STATUS' });
     const raw = Array.isArray(req.body && req.body.ids) ? req.body.ids : [];
     const ids = [...new Set(raw.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
-    if (!ids.length) return res.status(400).json({ message: 'No hay códigos que eliminar.', code: 'EMPTY' });
-    if (ids.length > SKU_BULK_DELETE_MAX) return res.status(400).json({ message: `Hasta ${SKU_BULK_DELETE_MAX} códigos por vez.`, code: 'TOOMANY' });
+    if (!ids.length) return res.status(400).json({ message: 'No hay códigos que cambiar.', code: 'EMPTY' });
+    if (ids.length > SKU_STATUS_MAX) return res.status(400).json({ message: `Hasta ${SKU_STATUS_MAX} códigos por vez.`, code: 'TOOMANY' });
     const { clientId, isTestAccount } = req.user;
-    const located = new Set(listCodeRelations(clientId, isTestAccount).map((r) => r.sku_item_id));
-    const deleted = [];
-    const blocked = [];
+    const changed = [];
     ids.forEach((id) => {
         const existing = getSkuItemById(id, clientId, isTestAccount);
-        if (!existing) return; // ya no existe (otra persona lo eliminó): no cuenta
-        if (located.has(existing.id)) { blocked.push(existing.id); return; }
-        logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: existing.id, recordLabel: `#${existing.id}`, action: 'delete', changedBy: changedByLabel(req) });
-        deleteSkuItem(existing.id, clientId);
-        deleted.push(existing.id);
+        if (existing && applySkuStatus(req, existing, status)) changed.push(existing.id);
     });
-    if (deleted.length) notifyButtonAction(req, 'nuestros-articulos', 'delete', `${deleted.length} códigos`);
+    if (changed.length) {
+        notifyDataChange({ clientId, tableKey: 'nuestros-articulos', recordLabel: `${changed.length} códigos`, fieldKey: 'main.colArticuloEstatus', oldValue: SKU_STATUS_LABELS[status === 'inactive' ? 'active' : 'inactive'], newValue: SKU_STATUS_LABELS[status], actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+    }
     res.set('Cache-Control', 'no-store');
-    // remaining / next: cuántos códigos quedan en TODO el sistema (Alta, Códigos, Edición Código) y cuál sería el siguiente número: el nuevo toma «el más alto + 1», así que sin ningún código empieza en 000001
-    const numbering = getSkuNumberingInfo(clientId, isTestAccount);
-    res.json({ deleted, blocked, remaining: numbering.count, next: buildSkuCode(clientId, numbering.next) });
+    res.json({ changed });
 });
 
 // --- Ficha pública (no login) -----------------------------------------------

@@ -1698,6 +1698,7 @@
                 { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
               ]
             },
+            { "id": "colArticuloEstatus", "labelKey": "main.colArticuloEstatus", "permissionOnly": true },
             { "id": "colArticuloUpc", "labelKey": "main.colArticuloUpc", "permissionOnly": true },
             { "id": "colArticuloCodigoCliente", "labelKey": "main.colArticuloCodigoCliente", "permissionOnly": true },
             { "id": "colArticuloDescUnica", "labelKey": "main.colArticuloDescUnica", "permissionOnly": true },

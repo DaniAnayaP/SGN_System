@@ -206,6 +206,13 @@ function textCell(key, value) {
     return td;
 }
 
+// Estatus del código: Activo o Inactivo. Solo se lee aquí; se cambia con el ícono «Desactivar» / «Activar» del renglón (los códigos nunca se eliminan).
+function statusCell(record) {
+    const td = textCell('colArticuloEstatus', Dashboard.t(record.status === 'inactive' ? 'main.skuStatusInactive' : 'main.skuStatusActive'));
+    td.classList.toggle('sku-status-inactive', record.status === 'inactive');
+    return td;
+}
+
 function textCellSystem(key, value) {
     const td = textCell(key, value);
     td.classList.add('col-system');
@@ -492,31 +499,37 @@ function buildActionsCell(record, tr) {
         moveBtn.addEventListener('click', () => moveSkuItem(record, CODES_MODE ? 'edit' : 'finish-edit'));
         td.appendChild(moveBtn);
     }
+    // Los códigos NUNCA se eliminan: se desactivan (y se vuelven a activar). Pide la hoja «Autorización para Desactivar».
     if (!CODES_MODE && Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth')) {
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
-        deleteBtn.setAttribute('data-help-key', 'delete');
-        deleteBtn.setAttribute('aria-label', Dashboard.t('admin.delete'));
-        deleteBtn.title = Dashboard.t('admin.delete');
-        deleteBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-        deleteBtn.addEventListener('click', () => deleteSkuItem(record.id, tr));
-        td.appendChild(deleteBtn);
+        const inactive = record.status === 'inactive';
+        const statusBtn = document.createElement('button');
+        statusBtn.type = 'button';
+        statusBtn.className = inactive ? 'admin-icon-btn' : 'admin-icon-btn admin-icon-btn-danger';
+        statusBtn.setAttribute('data-help-key', inactive ? 'skuActivar' : 'skuDesactivar');
+        const label = Dashboard.t(inactive ? 'main.skuActivarBtn' : 'main.skuDesactivarBtn');
+        statusBtn.setAttribute('aria-label', label);
+        statusBtn.title = label;
+        statusBtn.innerHTML = `<i class="bx ${inactive ? 'bx-play-circle' : 'bx-power-off'}" aria-hidden="true"></i>`;
+        statusBtn.addEventListener('click', () => changeSkuStatus(record, inactive ? 'active' : 'inactive'));
+        td.appendChild(statusBtn);
     }
     return td;
 }
 
-async function deleteSkuItem(id, tr) {
-    if (!(await Dashboard.confirm(Dashboard.t('main.recordDeleteConfirm')))) return;
+// Desactivar (pide confirmar: deja de ofrecerse para relaciones y pedidos nuevos) o volver a activar un código.
+async function changeSkuStatus(record, status) {
+    if (status === 'inactive' && !(await Dashboard.confirm(fillText('main.skuDesactivarConfirm', { sku: record.sku }), { items: [Dashboard.t('main.skuDesactivarItem1'), Dashboard.t('main.skuDesactivarItem2')], accept: Dashboard.t('main.skuDesactivarAceptar') }))) return;
     try {
-        const res = await fetch(`/api/business/sku-items/${id}`, { method: 'DELETE', credentials: 'include' });
+        const res = await fetch(`/api/business/sku-items/${record.id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status }) });
         if (!res.ok) {
             if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
-            throw new Error('delete failed');
+            throw new Error('status failed');
         }
-        removeSkuRecord(id);
+        const body = await res.json();
+        applySavedSkuRecord(body.skuItem, record);
+        Dashboard.showToast(fillText(status === 'inactive' ? 'main.skuDesactivado' : 'main.skuActivado', { sku: record.sku }), 'success');
     } catch (err) {
-        console.error('Alta Nuestros Artículos: failed to delete record', err);
+        console.error('Alta Nuestros Artículos: failed to change the status', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
     }
 }
@@ -600,10 +613,12 @@ function buildRow(record) {
 
     const tr = document.createElement('tr');
     tr.dataset.recordId = record.id != null ? String(record.id) : '';
+    if (record.status === 'inactive') tr.classList.add('sku-row-inactive');
     tr.append(
         ...buildSystemCells(record),
         textCellSystem('colArticuloRegistroUnico', record.registroUnico),
         textCell('colArticuloSku', record.sku),
+        statusCell(record),
         cells.colArticuloUpc,
         cells.colArticuloCodigoCliente,
         cells.colArticuloDescUnica,
@@ -779,17 +794,16 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applySkuItemFilters);
 if (window.Dashboard && Dashboard.registerPartialTable) Dashboard.registerPartialTable(TABLE_KEY, { isComplete: () => skuDrawn >= skuView.length, loadAll: drawAllSkuRows });
 
-// ---- Seleccionar y eliminar varios (Alta y Edición Código; Códigos es de solo lectura) -------------------------------------------------------------------------
+// ---- Seleccionar y desactivar varios (Alta y Edición Código; Códigos es de solo lectura) ------------------------------------------------------------------------
 // «Seleccionar» marca TODO lo que quede filtrado (la búsqueda de texto y los filtros de columna), también lo que todavía no está dibujado; cada vez que cambian los filtros se puede volver a marcar lo filtrado. Solo cuenta lo marcado
-// que sigue a la vista: lo que un filtro esconde nunca se elimina por accidente. «Eliminar» pide confirmar (dos veces si son muchos), manda los códigos por tandas y los que ya tienen ubicaciones en Relación Código se saltan.
-// Pide la misma hoja del árbol que el botón de eliminar de cada renglón (Autorización para Eliminar).
+// que sigue a la vista: lo que un filtro esconde nunca se cambia por accidente. «Desactivar» pide confirmar y manda los códigos por tandas; los códigos NUNCA se eliminan (son la rama de conexión de todo): se desactivan y se
+// pueden volver a activar uno por uno. Pide la misma hoja del árbol que el botón de cada renglón (Autorización para Desactivar).
 let skuSelectMode = false;
 const skuSelected = new Set(); // ids marcados
 let skuSelectObserver = null;
 let skuDeleting = false;
 const SKU_BULK_CHUNK = 200;
-const SKU_BULK_FINAL_CONFIRM_FROM = 20; // desde cuántos códigos se pide una segunda confirmación
-const canBulkDelete = () => !CODES_MODE && Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth');
+const canBulkStatus = () => !CODES_MODE && Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth');
 const fillText = (key, params) => Object.entries(params || {}).reduce((text, [name, value]) => text.split(`{${name}}`).join(String(value)), Dashboard.t(key));
 // Lo filtrado: lo que cumple la búsqueda de texto (skuView) y no lo esconde un filtro de columna (esos filtros obligan a tener todas las filas dibujadas, así que se leen del DOM).
 function filteredSkuIds() {
@@ -830,8 +844,8 @@ function updateSelectBar() {
     const selected = filtered.filter((id) => skuSelected.has(id)).length;
     bar.querySelector('.sku-select-text').textContent = fillText('main.skuSelTexto', { n: selected, m: filtered.length });
     bar.querySelector('[data-sku-select-filtered]').textContent = fillText('main.skuSelFiltrado', { m: filtered.length });
-    const del = bar.querySelector('[data-sku-delete]');
-    del.textContent = fillText('main.skuEliminarSel', { n: selected });
+    const del = bar.querySelector('[data-sku-deactivate]');
+    del.textContent = fillText('main.skuDesactivarSel', { n: selected });
     del.disabled = !selected || skuDeleting;
     bar.querySelector('[data-sku-select-none]').disabled = !selected || skuDeleting;
 }
@@ -849,11 +863,11 @@ function enterSelectMode() {
     bar.innerHTML = `<span class="sku-select-text" aria-live="polite"></span>
         <button type="button" class="btn btn-secondary sku-more-btn" data-sku-select-filtered data-help-key="skuSeleccionar"></button>
         <button type="button" class="btn btn-secondary sku-more-btn" data-sku-select-none>${Dashboard.t('main.skuSelQuitar')}</button>
-        <button type="button" class="btn btn-danger sku-more-btn sku-delete-btn" data-sku-delete data-help-key="skuEliminarVarios"></button>
+        <button type="button" class="btn btn-danger sku-more-btn sku-delete-btn" data-sku-deactivate data-help-key="skuDesactivarVarios"></button>
         <button type="button" class="btn btn-secondary sku-more-btn" data-sku-select-exit>${Dashboard.t('main.skuSelCerrar')}</button>`;
     bar.querySelector('[data-sku-select-filtered]').addEventListener('click', selectFiltered);
     bar.querySelector('[data-sku-select-none]').addEventListener('click', () => { skuSelected.clear(); decorateAllRowSelection(); updateSelectBar(); });
-    bar.querySelector('[data-sku-delete]').addEventListener('click', bulkDeleteSelected);
+    bar.querySelector('[data-sku-deactivate]').addEventListener('click', bulkDeactivateSelected);
     bar.querySelector('[data-sku-select-exit]').addEventListener('click', exitSelectMode);
     const anchor = toolbar.querySelector('.data-table-template-btn') || toolbar.querySelector('.data-table-new-record-btn');
     if (anchor) anchor.after(bar); else toolbar.prepend(bar);
@@ -876,7 +890,7 @@ function exitSelectMode() {
 // cambio de idioma (data-i18n) no borre los íconos.
 const SKU_ACTIONS_MIN_WIDTH = 170; // px: «ACCIONES» + los dos íconos del encabezado
 function mountHeaderTools() {
-    if (!canBulkDelete()) return;
+    if (!canBulkStatus()) return;
     const th = document.querySelector('[data-table-id="nuestros-articulos"] th[data-col="actions"]');
     if (!th || th.querySelector('.sku-th-tools')) return;
     const label = document.createElement('span');
@@ -901,7 +915,7 @@ function mountHeaderTools() {
     };
     tools.append(
         mk('sku-th-select', 'bx-checkbox', 'skuSeleccionar', Dashboard.t('main.skuSeleccionar'), toggleSelectAll),
-        mk('admin-icon-btn-danger sku-th-delete', 'bx-trash', 'skuEliminarVarios', Dashboard.t('main.skuEliminarIcono'), bulkDeleteSelected),
+        mk('admin-icon-btn-danger sku-th-delete', 'bx-power-off', 'skuDesactivarVarios', Dashboard.t('main.skuDesactivarIcono'), bulkDeactivateSelected),
     );
     th.classList.add('sku-th-actions');
     th.append(label, tools);
@@ -917,7 +931,7 @@ function toggleSelectAll() {
     const selected = filtered.filter((id) => skuSelected.has(id)).length;
     if (filtered.length && selected === filtered.length) exitSelectMode(); else selectFiltered();
 }
-// El ícono de eliminar se apaga mientras no haya nada marcado (o se esté eliminando); el de seleccionar muestra si hay todo, una parte o nada de lo filtrado marcado.
+// El ícono de desactivar se apaga mientras no haya nada marcado (o se esté desactivando); el de seleccionar muestra si hay todo, una parte o nada de lo filtrado marcado.
 function updateHeaderTools() {
     const th = document.querySelector('[data-table-id="nuestros-articulos"] th[data-col="actions"] .sku-th-tools');
     if (!th) return;
@@ -926,7 +940,7 @@ function updateHeaderTools() {
     const state = selected && selected === filteredCount ? 'all' : (selected ? 'some' : 'none');
     const del = th.querySelector('.sku-th-delete');
     del.disabled = !selected || skuDeleting;
-    const text = selected ? fillText('main.skuEliminarSel', { n: selected }) : Dashboard.t('main.skuEliminarIcono');
+    const text = selected ? fillText('main.skuDesactivarSel', { n: selected }) : Dashboard.t('main.skuDesactivarIcono');
     del.title = text;
     del.setAttribute('aria-label', text);
     const sel = th.querySelector('.sku-th-select');
@@ -938,25 +952,23 @@ function updateHeaderTools() {
     const selText = Dashboard.t(state === 'all' ? 'main.skuSelQuitarTodo' : 'main.skuSeleccionar');
     sel.title = selText;
 }
-async function bulkDeleteSelected() {
+async function bulkDeactivateSelected() {
     if (skuDeleting) return;
-    const ids = selectedFilteredIds();
+    const byId = new Map(skuRecords.map((r) => [r.id, r]));
+    const ids = selectedFilteredIds().filter((id) => byId.get(id) && byId.get(id).status !== 'inactive'); // los que ya están inactivos no cuentan
     if (!ids.length) return;
     const n = ids.length;
-    const ok = await Dashboard.confirm(fillText('main.skuBorrarConfirm', { n }), { items: [Dashboard.t('main.skuBorrarItem1'), Dashboard.t('main.skuBorrarItem2')], accept: fillText('main.skuBorrarAceptar', { n }) });
+    const ok = await Dashboard.confirm(fillText('main.skuDesactivarSelConfirm', { n }), { items: [Dashboard.t('main.skuDesactivarSelItem1'), Dashboard.t('main.skuDesactivarSelItem2')], accept: fillText('main.skuDesactivarSelAceptar', { n }) });
     if (!ok) return;
-    if (n >= SKU_BULK_FINAL_CONFIRM_FROM && !(await Dashboard.confirm(fillText('main.skuBorrarFinal', { n }), { accept: fillText('main.skuBorrarAceptar', { n }) }))) return;
-    skuDeleting = true;
+    skuDeleting = true; // «ocupado»: se está mandando el lote
     updateSelectBar();
     let done = 0;
-    const deleted = new Set();
-    let blocked = 0;
+    const changed = new Set();
     let failed = false;
-    let numbering = null; // lo último que dijo el servidor: cuántos códigos quedan en el sistema y cuál sería el siguiente número
     try {
         for (let from = 0; from < ids.length; from += SKU_BULK_CHUNK) {
             const chunk = ids.slice(from, from + SKU_BULK_CHUNK);
-            const res = await fetch('/api/business/sku-items/bulk-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ids: chunk }) });
+            const res = await fetch('/api/business/sku-items/bulk-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ids: chunk, status: 'inactive' }) });
             if (!res.ok) {
                 if (res.status === 403) Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning');
                 else Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
@@ -964,47 +976,38 @@ async function bulkDeleteSelected() {
                 break;
             }
             const body = await res.json();
-            (body.deleted || []).forEach((id) => deleted.add(id));
-            blocked += (body.blocked || []).length;
-            if (typeof body.remaining === 'number') numbering = { remaining: body.remaining, next: body.next };
+            (body.changed || []).forEach((id) => changed.add(id));
+            markSkuInactive(new Set(body.changed || []));
             done += chunk.length;
-            removeSkuRecords(new Set(body.deleted || []));
-            (body.deleted || []).forEach((id) => skuSelected.delete(id));
             const text = selectBar()?.querySelector('.sku-select-text');
-            if (text) text.textContent = fillText('main.skuBorrando', { done, total: n });
+            if (text) text.textContent = fillText('main.skuDesactivando', { done, total: n });
             await new Promise((resolve) => setTimeout(resolve, 0)); // deja respirar a la pantalla entre tandas
         }
     } catch (err) {
-        console.error('Alta Nuestros Artículos: bulk delete failed', err);
+        console.error('Alta Nuestros Artículos: bulk status failed', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
         failed = true;
     }
     skuDeleting = false;
-    // la numeración: cada código nuevo toma «el más alto + 1»; sin ningún código en el sistema el primero nuevo es 000001
-    const numberText = numbering ? ` ${fillText(numbering.remaining ? 'main.skuNumQuedan' : 'main.skuNumVacio', { n: numbering.remaining, next: numbering.next })}` : '';
-    if (deleted.size) Dashboard.showToast(fillText('main.skuBorrarHecho', { n: deleted.size }) + (blocked ? ` ${fillText('main.skuBorrarBloqueados', { n: blocked })}` : '') + numberText, blocked || failed || (numbering && numbering.remaining) ? 'warning' : 'success');
-    else if (blocked && !failed) Dashboard.showToast(fillText('main.skuBorrarBloqueados', { n: blocked }), 'warning');
-    // los que se saltaron (con ubicaciones) dejan de estar marcados
+    if (changed.size) Dashboard.showToast(fillText('main.skuDesactivadosHecho', { n: changed.size }), failed ? 'warning' : 'success');
     skuSelected.clear();
     decorateAllRowSelection();
     updateSelectBar();
 }
 
-// Varios códigos dejaron de ser de esta pantalla (se eliminaron): salen de la lista y de la tabla de una vez.
-function removeSkuRecords(idSet) {
+// Varios códigos quedaron inactivos: se actualizan en la lista y se vuelven a dibujar solo sus renglones ya dibujados.
+function markSkuInactive(idSet) {
     if (!idSet.size) return;
-    skuRecords = skuRecords.filter((r) => !idSet.has(r.id));
-    skuView = skuView.filter((r) => !idSet.has(r.id));
-    let removedDrawn = 0;
-    getTbody().querySelectorAll('tr[data-record-id]').forEach((tr) => { if (idSet.has(Number(tr.dataset.recordId))) { tr.remove(); removedDrawn += 1; } });
-    skuDrawn = Math.max(0, Math.min(skuView.length, skuDrawn - removedDrawn));
-    if (!getTbody().querySelector('tr[data-record-id]')) {
-        if (skuDrawn < skuView.length) drawSkuRows(SKU_FIRST_ROWS); else ensureEmptyState();
-    }
-    updateSkuMoreBar();
+    [skuRecords, skuView].forEach((list) => list.forEach((r) => { if (idSet.has(r.id)) r.status = 'inactive'; }));
+    const byId = new Map(skuRecords.map((r) => [r.id, r]));
+    getTbody().querySelectorAll('tr[data-record-id]').forEach((tr) => {
+        const id = Number(tr.dataset.recordId);
+        const rec = idSet.has(id) ? byId.get(id) : null;
+        if (rec) tr.replaceWith(buildRow(rec));
+    });
 }
 
-// Un código dejó de ser de esta pantalla (quedó completo, se mandó a Edición, o se borró): sale de la lista y de la tabla sin volver a leerla.
+// Un código dejó de ser de esta pantalla (quedó completo o se mandó a Edición): sale de la lista y de la tabla sin volver a leerla.
 function removeSkuRecord(id) {
     skuRecords = skuRecords.filter((r) => r.id !== id);
     const before = skuView.length;

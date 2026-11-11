@@ -5268,6 +5268,9 @@ ensureColumn('sku_items', 'sku_code', "TEXT NOT NULL DEFAULT ''");
 ensureColumn('clients', 'sku_prefix', "TEXT NOT NULL DEFAULT ''");
 // «Código del cliente»: el número de código del propio cliente (el de su ERP, por ejemplo 195201). Opcional, no cuenta para los 24 datos que completan un código y no cambia el SKU.
 ensureColumn('sku_items', 'client_code', "TEXT NOT NULL DEFAULT ''");
+// Estatus del código: 'active' o 'inactive'. Los códigos NUNCA se eliminan (son la rama de conexión de todo): se desactivan y se vuelven a activar. Uno inactivo se queda con todo lo suyo y su Descripción Única sigue
+// reservada, pero deja de ofrecerse para relaciones, pedidos y selectores nuevos.
+ensureColumn('sku_items', 'status', "TEXT NOT NULL DEFAULT 'active'");
 const SKU_NAME_PARTICLES = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e', 'en', 'al', 'para', 'por', 'con', 'sin', 'a']);
 function skuPrefixCandidates(companyName) {
     const words = String(companyName || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().split(/[^A-Z]+/).filter(Boolean);
@@ -5396,6 +5399,12 @@ function countSkuItemsByClassification(clientId, forTestAccount, classificationI
     const byCategory = categoryName !== null;
     return db.prepare(`SELECT COUNT(*) AS n FROM sku_items WHERE client_id = ? AND is_test_data = ? AND classification_id = ?${byCategory ? ' AND category_inventario = ?' : ''}`)
         .get(...[clientId, forTestAccount ? 1 : 0, classificationId, ...(byCategory ? [categoryName] : [])]).n;
+}
+
+// Activa o desactiva un código (nunca se elimina).
+function setSkuItemStatus(id, clientId, status, forTestAccount = false) {
+    db.prepare('UPDATE sku_items SET status = ? WHERE id = ? AND client_id = ? AND is_test_data = ?').run(status === 'inactive' ? 'inactive' : 'active', id, clientId, forTestAccount ? 1 : 0);
+    return getSkuItemById(id, clientId, forTestAccount);
 }
 
 // Pasa un código a Edición Código (flag = true) o lo regresa a Códigos (flag = false).
@@ -5744,7 +5753,7 @@ function listManualOrderItems(clientId, isTest = false, costCenterId = 0, placeI
         related = ' AND id IN (SELECT sku_item_id FROM code_relations WHERE client_id = ? AND is_test_data = ? AND cost_center_id = ?)';
         extra.push(clientId, isTest ? 1 : 0, costCenterId);
     }
-    return db.prepare(`SELECT id, record_number, sku_code, client_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ?${related} ORDER BY record_number ASC`)
+    return db.prepare(`SELECT id, record_number, sku_code, client_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND status = 'active'${related} ORDER BY record_number ASC`)
         .all(clientId, isTest ? 1 : 0, ...extra);
 }
 // Cuántos códigos tiene habilitados cada lugar de envío (en el centro del QR, si lo hay): Map(placeId -> n).
@@ -5762,7 +5771,7 @@ function listManualItemShips(clientId, isTest = false) {
     return db.prepare('SELECT DISTINCT sku_item_id, cost_center_id, place_id FROM code_ship_relations WHERE client_id = ? AND is_test_data = ?').all(clientId, isTest ? 1 : 0);
 }
 function getManualOrderItem(clientId, id, isTest = false) {
-    return db.prepare(`SELECT id, record_number, sku_code, client_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id = ?`)
+    return db.prepare(`SELECT id, record_number, sku_code, client_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND id = ?`)
         .get(clientId, isTest ? 1 : 0, id);
 }
 // Guarda un pedido con todos sus renglones en una sola operación. lines = [{ skuItemId, code, description, uom, categories, quantity, needBy }]. La hora la pone el servidor.
@@ -6744,7 +6753,7 @@ function findCodeRelationDuplicate(clientId, forTestAccount, v, exceptId = 0) {
 function searchSkuItems(clientId, term, forTestAccount = false, limit = 20) {
     const like = `%${String(term || '').trim().replace(/[%_]/g, '')}%`;
     return db.prepare(`SELECT id, record_number, sku_code, client_code, upc, unique_description, known_description, custom_description, main_uom, length, width, height, packaging FROM sku_items
-        WHERE client_id = ? AND is_test_data = ? AND (printf('%06d', record_number) LIKE ? OR sku_code LIKE ? OR client_code LIKE ? OR upc LIKE ? OR unique_description LIKE ? OR known_description LIKE ? OR custom_description LIKE ?)
+        WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND (printf('%06d', record_number) LIKE ? OR sku_code LIKE ? OR client_code LIKE ? OR upc LIKE ? OR unique_description LIKE ? OR known_description LIKE ? OR custom_description LIKE ?)
         ORDER BY record_number ASC LIMIT ?`).all(clientId, forTestAccount ? 1 : 0, like, like, like, like, like, like, like, limit);
 }
 
@@ -12853,6 +12862,7 @@ module.exports = {
     buildSkuCode,
     getClientSkuPrefix,
     skuPrefixCandidates,
+    setSkuItemStatus,
     SKU_ITEM_PATCHABLE_FIELDS,
     generatePublicToken,
     getSkuItemByPublicToken,
