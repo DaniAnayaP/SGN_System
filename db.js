@@ -7978,7 +7978,32 @@ const PM_DESCARGAR_SEED_KEY = 'seed-pm-descargar-button-v1';
 function seedPmDescargarGrants() {
     const path = TABLE_GRANT_PATHS['pedido-manual'];
     if (!path) return;
-    seedLeavesForScreenHolders(PM_DESCARGAR_SEED_KEY, path, [`${path.submenuPrefix}/class-botones/colPmDescargar/ver-y-operar`], 'the Pedido Manual download button');
+    // «Solo ver» y «Ver y operar»: en el árbol «Operar» no puede quedarse sin «Ver» (la primera versión de esta siembra solo dio «Ver y operar»: ver seedPmDescargarSoloVer)
+    seedLeavesForScreenHolders(PM_DESCARGAR_SEED_KEY, path, ['solo-ver', 'ver-y-operar'].map((level) => `${path.submenuPrefix}/class-botones/colPmDescargar/${level}`), 'the Pedido Manual download button');
+}
+// Arreglo de la siembra de arriba (2026-11-11): a quien ya recibió «Ver y operar» del botón «Descargar lista del pedido» le faltó «Solo ver», el nivel de abajo. En el árbol del cliente (Permisos Adicionales) el botón se veía cubierto
+// pero su grupo «Botones» salía en gris («−», incompleto), porque el grupo se mide con «Solo ver» de cada botón. Una sola vez se le agrega «Solo ver» a todo dueño que tiene «Ver y operar» de ese botón y no tiene «Solo ver»
+// (puestos, usuarios, planes, clientes y sectores). Lo que el botón permite hacer no cambia: ya lo tenían por «Ver y operar».
+const PM_DESCARGAR_SOLO_VER_SEED_KEY = 'seed-pm-descargar-solo-ver-v1';
+function seedPmDescargarSoloVer() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(PM_DESCARGAR_SOLO_VER_SEED_KEY)) return;
+    const path = TABLE_GRANT_PATHS['pedido-manual'];
+    if (!path) return;
+    const base = `${path.submenuPrefix}/class-botones/colPmDescargar`;
+    const counts = {};
+    db.transaction(() => {
+        for (const [table, ownerColumn] of [['job_position_grants', 'job_position_id'], ['user_grants', 'user_id'], ['plan_grants', 'plan_id'], ['client_permission_grants', 'client_id'], ['sector_grants', 'business_sector_id']]) {
+            const result = db.prepare(`
+                INSERT INTO ${table} (${ownerColumn}, section_id, item_id, submenu_id)
+                SELECT g.${ownerColumn}, g.section_id, g.item_id, ? FROM ${table} g
+                WHERE g.section_id = ? AND g.item_id = ? AND g.submenu_id = ?
+                  AND NOT EXISTS (SELECT 1 FROM ${table} x WHERE x.${ownerColumn} = g.${ownerColumn} AND x.section_id = g.section_id AND x.item_id = g.item_id AND x.submenu_id = ?)
+            `).run(`${base}/solo-ver`, path.sectionId, path.itemId, `${base}/ver-y-operar`, `${base}/solo-ver`);
+            counts[table] = result.changes;
+        }
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(PM_DESCARGAR_SOLO_VER_SEED_KEY);
+    })();
+    console.log(`[db] Added "Solo ver" to the Pedido Manual download button where only "Ver y operar" was granted (one-time migration): ${JSON.stringify(counts)}.`);
 }
 // Catálogos > Presentaciones Distribución (2026-11-10): el catálogo (solo ver) con todos los códigos y su ramificación lo reciben, una sola vez, quienes ya tienen Presentaciones de Distribución en Operaciones.
 const PRESENTACIONES_CATALOG_SEED_KEY = 'seed-presentaciones-catalog-screen-v1';
@@ -12652,6 +12677,7 @@ seedQrPedidoManualScreenGrants();
 seedMarcasScreenGrants();
 seedLugaresEnvioScreenGrants();
 seedPmDescargarGrants();
+seedPmDescargarSoloVer();
 seedPresentacionesCatalogGrants();
 seedRelacionEnvioGrants();
 seedQrSeguridadScreenGrants();
