@@ -149,13 +149,14 @@
         {
           "id": "admin-business",
           "labelKey": "menu.adminBusiness",
+          "abbrKeys": ["menu.adminBusinessAbbr1", "menu.adminBusinessAbbr2", "menu.adminBusinessAbbr3"],
           "icon": "bx-shopping-bag",
           "submenu": [
             {
-              "id": "ab-contracted-service", "labelKey": "menu.contractedService", "href": "#", "icon": "bx-purchase-tag-alt",
+              "id": "ab-contracted-service", "labelKey": "menu.contractedService", "abbrKeys": ["menu.contractedServiceAbbr1", "menu.contractedServiceAbbr2"], "href": "#", "icon": "bx-purchase-tag-alt",
               "submenu": [
                 {
-                  "id": "ab-our-cost-centers", "labelKey": "menu.ourCostCenters", "href": "Business-CentrosCosto.html", "icon": "bx-purchase-tag-alt",
+                  "id": "ab-our-cost-centers", "labelKey": "menu.ourCostCenters", "abbrKeys": ["menu.ourCostCentersAbbr1", "menu.ourCostCentersAbbr2", "menu.ourCostCentersAbbr3"], "href": "Business-CentrosCosto.html", "icon": "bx-purchase-tag-alt",
                   "submenu": [
                     { "id": "ccCode", "labelKey": "business.ccCode", "permissionOnly": true },
                     { "id": "ccName", "labelKey": "business.ccName", "permissionOnly": true },
@@ -163,12 +164,12 @@
                     { "id": "ccDescription", "labelKey": "business.ccDescription", "permissionOnly": true }
                   ]
                 },
-                { "id": "ab-my-access", "labelKey": "menu.myContractedAccess", "href": "Business-MisAccesos.html", "icon": "bx-key" }
+                { "id": "ab-my-access", "labelKey": "menu.myContractedAccess", "abbrKeys": ["menu.myContractedAccessAbbr1", "menu.myContractedAccessAbbr2", "menu.myContractedAccessAbbr3"], "href": "Business-MisAccesos.html", "icon": "bx-key" }
               ]
             },
             { "id": "ab-expansions", "labelKey": "menu.expansions", "href": "#", "icon": "bx-trending-up" },
-            { "id": "ab-business-config", "labelKey": "menu.businessConfig", "href": "Business-Config.html", "icon": "bx-palette" },
-            { "id": "ab-client-data", "labelKey": "menu.clientData", "href": "Business-DatosCliente.html", "icon": "bx-id-card" },
+            { "id": "ab-business-config", "labelKey": "menu.businessConfig", "abbrKeys": ["menu.businessConfigAbbr1", "menu.businessConfigAbbr2"], "href": "Business-Config.html", "icon": "bx-palette" },
+            { "id": "ab-client-data", "labelKey": "menu.clientData", "abbrKeys": ["menu.clientDataAbbr1", "menu.clientDataAbbr2"], "href": "Business-DatosCliente.html", "icon": "bx-id-card" },
             {
               "id": "ab-roles", "labelKey": "menu.roles", "href": "Business-Roles.html", "icon": "bx-shield",
               "submenu": [
@@ -184,8 +185,8 @@
                 { "id": "userLayout", "labelKey": "business.userLayoutColumn", "permissionOnly": true }
               ]
             },
-            { "id": "ab-upcoming-updates", "labelKey": "menu.upcomingUpdates", "href": "#", "icon": "bx-calendar" },
-            { "id": "ab-training-sessions", "labelKey": "menu.trainingSessions", "href": "#", "icon": "bx-chalkboard" }
+            { "id": "ab-upcoming-updates", "labelKey": "menu.upcomingUpdates", "abbrKeys": ["menu.upcomingUpdatesAbbr1", "menu.upcomingUpdatesAbbr2", "menu.upcomingUpdatesAbbr3"], "href": "#", "icon": "bx-calendar" },
+            { "id": "ab-training-sessions", "labelKey": "menu.trainingSessions", "abbrKeys": ["menu.trainingSessionsAbbr1", "menu.trainingSessionsAbbr2", "menu.trainingSessionsAbbr3"], "href": "#", "icon": "bx-chalkboard" }
           ]
         }
       ]
@@ -259,6 +260,7 @@
       "id": "cat-material-apoyo",
       "labelKey": "menu.catMaterialApoyo",
       "abbrKey": "menu.catMaterialApoyoAbbr",
+      "abbrKeys": ["menu.catMaterialApoyoAbbr1", "menu.catMaterialApoyoAbbr2"],
       "icon": "bx-support",
       "submenu": [
         { "id": "cat-material-apoyo-funcionalidad", "labelKey": "menu.catMaterialApoyoFuncionalidad", "abbrKeys": ["menu.catMaterialApoyoFuncionalidadAbbr1", "menu.catMaterialApoyoFuncionalidadAbbr2"], "icon": "bx-window-alt", "href": "MaterialApoyo-Funcionalidad.html",
@@ -267,7 +269,7 @@
         { "id": "cat-material-apoyo-flujo", "labelKey": "menu.catMaterialApoyoFlujo", "icon": "bx-git-branch", "href": "MaterialApoyo-Flujo.html",
           "submenu": [ { "id": "colMaterialApoyoFlujo", "labelKey": "main.colMaterialApoyoFlujo", "permissionOnly": true } ]
         },
-        { "id": "cat-material-apoyo-procesos", "labelKey": "menu.catMaterialApoyoProcesos", "icon": "bx-sitemap", "href": "MaterialApoyo-Procesos.html",
+        { "id": "cat-material-apoyo-procesos", "labelKey": "menu.catMaterialApoyoProcesos", "abbrKeys": ["menu.catMaterialApoyoProcesosAbbr1", "menu.catMaterialApoyoProcesosAbbr2"], "icon": "bx-sitemap", "href": "MaterialApoyo-Procesos.html",
           "submenu": [ { "id": "colMaterialApoyoProcesos", "labelKey": "main.colMaterialApoyoProcesos", "permissionOnly": true } ]
         }
       ]
@@ -278,14 +280,14 @@
       "cat-catalogos": [
         { "id": "cat-catalogos-transporte-vol-clientes", "labelKey": "menu.catTransVolClientes", "icon": "bx-window", "href": "#" },
         { "id": "cat-catalogos-transporte-vol-sitios-origen", "labelKey": "menu.catTransVolSitiosOrigen", "icon": "bx-window", "href": "#" },
-        { "id": "cat-catalogos-transporte-vol-sitios-destino", "labelKey": "menu.catTransVolSitiosDestino", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-sitios-destino", "labelKey": "menu.catTransVolSitiosDestino", "abbrKeys": ["menu.catTransVolSitiosDestinoAbbr1", "menu.catTransVolSitiosDestinoAbbr2"], "icon": "bx-window", "href": "#" },
         { "id": "cat-catalogos-transporte-vol-rutas", "labelKey": "menu.catTransVolRutas", "icon": "bx-window", "href": "#" },
-        { "id": "cat-catalogos-transporte-vol-tipos-servicio", "labelKey": "menu.catTransVolTiposServicio", "icon": "bx-window", "href": "#" },
-        { "id": "cat-catalogos-transporte-vol-tipos-traslado", "labelKey": "menu.catTransVolTiposTraslado", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-tipos-servicio", "labelKey": "menu.catTransVolTiposServicio", "abbrKeys": ["menu.catTransVolTiposServicioAbbr1", "menu.catTransVolTiposServicioAbbr2"], "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-tipos-traslado", "labelKey": "menu.catTransVolTiposTraslado", "abbrKeys": ["menu.catTransVolTiposTrasladoAbbr1", "menu.catTransVolTiposTrasladoAbbr2"], "icon": "bx-window", "href": "#" },
         { "id": "cat-catalogos-transporte-vol-contactos", "labelKey": "menu.catTransVolContactos", "icon": "bx-window", "href": "#" },
-        { "id": "cat-catalogos-transporte-vol-empresas-asociadas", "labelKey": "menu.catTransVolEmpresasAsociadas", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-empresas-asociadas", "labelKey": "menu.catTransVolEmpresasAsociadas", "abbrKeys": ["menu.catTransVolEmpresasAsociadasAbbr1", "menu.catTransVolEmpresasAsociadasAbbr2"], "icon": "bx-window", "href": "#" },
         {
-          "id": "cat-catalogos-transporte-vol-tipos-unidades", "labelKey": "menu.catTransVolTiposUnidades", "icon": "bx-car", "href": "CatTransVolTiposUnidades.html",
+          "id": "cat-catalogos-transporte-vol-tipos-unidades", "labelKey": "menu.catTransVolTiposUnidades", "abbrKeys": ["menu.catTransVolTiposUnidadesAbbr1", "menu.catTransVolTiposUnidadesAbbr2"], "icon": "bx-car", "href": "CatTransVolTiposUnidades.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -337,9 +339,9 @@
             { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
           ]
         },
-        { "id": "cat-catalogos-transporte-vol-tipos-aditamentos", "labelKey": "menu.catTransVolTiposAditamentos", "icon": "bx-window", "href": "#" },
+        { "id": "cat-catalogos-transporte-vol-tipos-aditamentos", "labelKey": "menu.catTransVolTiposAditamentos", "abbrKeys": ["menu.catTransVolTiposAditamentosAbbr1", "menu.catTransVolTiposAditamentosAbbr2"], "icon": "bx-window", "href": "#" },
         {
-          "id": "cat-catalogos-transporte-vol-tipos-cliente", "labelKey": "menu.catTransVolTiposCliente", "icon": "bx-id-card", "href": "CatTransVolTiposCliente.html",
+          "id": "cat-catalogos-transporte-vol-tipos-cliente", "labelKey": "menu.catTransVolTiposCliente", "abbrKeys": ["menu.catTransVolTiposClienteAbbr1", "menu.catTransVolTiposClienteAbbr2"], "icon": "bx-id-card", "href": "CatTransVolTiposCliente.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -387,7 +389,7 @@
       ],
       "cat-operaciones": [
         {
-          "id": "cat-operaciones-transporte-vol-combustible", "labelKey": "menu.opTransVolCombustible", "icon": "bx-window", "href": "OpTransVolCombustible.html",
+          "id": "cat-operaciones-transporte-vol-combustible", "labelKey": "menu.opTransVolCombustible", "abbrKeys": ["menu.opTransVolCombustibleAbbr1", "menu.opTransVolCombustibleAbbr2", "menu.opTransVolCombustibleAbbr3"], "icon": "bx-window", "href": "OpTransVolCombustible.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -444,7 +446,7 @@
           ]
         },
         {
-          "id": "cat-operaciones-transporte-vol-carga-combustible", "labelKey": "menu.opTransVolCargaCombustible", "icon": "bx-gas-pump", "href": "OpTransVolCargaCombustible.html",
+          "id": "cat-operaciones-transporte-vol-carga-combustible", "labelKey": "menu.opTransVolCargaCombustible", "abbrKeys": ["menu.opTransVolCargaCombustibleAbbr1", "menu.opTransVolCargaCombustibleAbbr2"], "icon": "bx-gas-pump", "href": "OpTransVolCargaCombustible.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -505,7 +507,7 @@
           ]
         },
         {
-          "id": "cat-operaciones-transporte-vol-nuestras-unidades", "labelKey": "menu.opTransVolNuestrasUnidades", "icon": "bx-car", "href": "OpTransVolNuestrasUnidades.html",
+          "id": "cat-operaciones-transporte-vol-nuestras-unidades", "labelKey": "menu.opTransVolNuestrasUnidades", "abbrKeys": ["menu.opTransVolNuestrasUnidadesAbbr1", "menu.opTransVolNuestrasUnidadesAbbr2"], "icon": "bx-car", "href": "OpTransVolNuestrasUnidades.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -560,7 +562,7 @@
           ]
         },
         {
-          "id": "cat-operaciones-transporte-vol-nuestros-traslados", "labelKey": "menu.opTransVolNuestrosTraslados", "icon": "bx-transfer-alt", "href": "OpTransVolNuestrosTraslados.html",
+          "id": "cat-operaciones-transporte-vol-nuestros-traslados", "labelKey": "menu.opTransVolNuestrosTraslados", "abbrKeys": ["menu.opTransVolNuestrosTrasladosAbbr1", "menu.opTransVolNuestrosTrasladosAbbr2"], "icon": "bx-transfer-alt", "href": "OpTransVolNuestrosTraslados.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -647,7 +649,7 @@
           ]
         },
         {
-          "id": "cat-operaciones-transporte-vol-cotizaciones", "labelKey": "menu.opTransVolCotizaciones", "icon": "bx-receipt", "href": "OpTransVolCotizaciones.html",
+          "id": "cat-operaciones-transporte-vol-cotizaciones", "labelKey": "menu.opTransVolCotizaciones", "abbrKeys": ["menu.opTransVolCotizacionesAbbr1", "menu.opTransVolCotizacionesAbbr2"], "icon": "bx-receipt", "href": "OpTransVolCotizaciones.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -707,8 +709,8 @@
         { "id": "cat-operaciones-transporte-vol-inventario", "labelKey": "menu.opTransVolInventario", "icon": "bx-window", "href": "#" }
       ],
       "cat-admin": [
-        { "id": "cat-operaciones-transporte-vol-traslados", "labelKey": "menu.opTransVolTraslados", "icon": "bx-window", "href": "OpTransVolTraslados.html" },
-        { "id": "cat-admin-fuel-traceability", "labelKey": "menu.opTransVolCombustible", "icon": "bx-data", "href": "TrazTransVolCombustible.html" }
+        { "id": "cat-operaciones-transporte-vol-traslados", "labelKey": "menu.opTransVolTraslados", "abbrKeys": ["menu.opTransVolTrasladosAbbr1", "menu.opTransVolTrasladosAbbr2", "menu.opTransVolTrasladosAbbr3"], "icon": "bx-window", "href": "OpTransVolTraslados.html" },
+        { "id": "cat-admin-fuel-traceability", "labelKey": "menu.opTransVolCombustible", "abbrKeys": ["menu.opTransVolCombustibleAbbr1", "menu.opTransVolCombustibleAbbr2", "menu.opTransVolCombustibleAbbr3"], "icon": "bx-data", "href": "TrazTransVolCombustible.html" }
       ]
     },
     "supply-chain/sc-area-distribution-center": {
@@ -1045,7 +1047,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-categorias-tipocodigo", "sidebarGroup": "categorias", "labelKey": "menu.catCentroDistCategoriasTipocodigo", "abbrKeys": ["menu.catCentroDistCategoriasTipocodigoAbbr1", "menu.catCentroDistCategoriasTipocodigoAbbr2"], "icon": "bx-barcode", "href": "CatCentroDistCategoriasTipoCodigo.html",
+          "id": "cat-catalogos-centro-dist-categorias-tipocodigo", "sidebarGroup": "categorias", "labelKey": "menu.catCentroDistCategoriasTipocodigo", "abbrKeys": ["menu.catCentroDistCategoriasTipocodigoAbbr1", "menu.catCentroDistCategoriasTipocodigoAbbr2", "menu.catCentroDistCategoriasTipocodigoAbbr3"], "icon": "bx-barcode", "href": "CatCentroDistCategoriasTipoCodigo.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -1233,7 +1235,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-lugares-envio", "labelKey": "menu.catCentroDistLugaresEnvio", "abbrKeys": ["menu.catCentroDistLugaresEnvioAbbr1", "menu.catCentroDistLugaresEnvioAbbr2"], "icon": "bx-map-pin", "href": "CatCentroDistLugaresEnvio.html",
+          "id": "cat-catalogos-centro-dist-lugares-envio", "labelKey": "menu.catCentroDistLugaresEnvio", "abbrKeys": ["menu.catCentroDistLugaresEnvioAbbr2", "menu.catCentroDistLugaresEnvioAbbr1"], "icon": "bx-map-pin", "href": "CatCentroDistLugaresEnvio.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -1280,7 +1282,7 @@
           ]
         },
         {
-          "id": "cat-catalogos-centro-dist-presentaciones-distribucion", "labelKey": "menu.catCentroDistPresentaciones", "abbrKeys": ["menu.catCentroDistPresentacionesAbbr1", "menu.catCentroDistPresentacionesAbbr2"], "icon": "bx-sitemap", "href": "CatCentroDistPresentaciones.html",
+          "id": "cat-catalogos-centro-dist-presentaciones-distribucion", "labelKey": "menu.catCentroDistPresentaciones", "abbrKeys": ["menu.catCentroDistPresentacionesAbbr2", "menu.catCentroDistPresentacionesAbbr1"], "icon": "bx-sitemap", "href": "CatCentroDistPresentaciones.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -1752,7 +1754,7 @@
           ]
         },
         {
-          "id": "cat-operaciones-centro-dist-udm-distribucion", "labelKey": "menu.opCentroDistUdmDistribucion", "abbrKeys": ["menu.opCentroDistUdmDistribucionAbbr1", "menu.opCentroDistUdmDistribucionAbbr2"], "icon": "bx-ruler", "href": "OpCentroDistUdmDistribucion.html",
+          "id": "cat-operaciones-centro-dist-udm-distribucion", "labelKey": "menu.opCentroDistUdmDistribucion", "abbrKeys": ["menu.opCentroDistUdmDistribucionAbbr2", "menu.opCentroDistUdmDistribucionAbbr1"], "icon": "bx-ruler", "href": "OpCentroDistUdmDistribucion.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
@@ -1929,7 +1931,7 @@
             { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
           ]
         },
-        { "id": "cat-operaciones-centro-dist-edicion-codigo", "labelKey": "menu.opCentroDistEdicionCodigo", "icon": "bx-edit", "href": "OpCentroDistEdicionCodigo.html" },
+        { "id": "cat-operaciones-centro-dist-edicion-codigo", "labelKey": "menu.opCentroDistEdicionCodigo", "abbrKeys": ["menu.opCentroDistEdicionCodigoAbbr1", "menu.opCentroDistEdicionCodigoAbbr2"], "icon": "bx-edit", "href": "OpCentroDistEdicionCodigo.html" },
         {
           "id": "cat-operaciones-centro-dist-temperaturas", "labelKey": "menu.opCentroDistTemperaturas", "icon": "bx-fridge", "href": "OpCentroDistTemperaturas.html",
           "submenu": [
@@ -2377,7 +2379,7 @@
           "id": "cat-operaciones-centro-dist-qr-donde-esta", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrDondeEsta", "icon": "bx-map-pin", "href": "OpCentroDistQrDondeEsta.html"
         },
         {
-          "id": "cat-operaciones-centro-dist-qr-ficha", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrFicha", "icon": "bx-id-card", "href": "OpCentroDistQrFicha.html"
+          "id": "cat-operaciones-centro-dist-qr-ficha", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrFicha", "abbrKeys": ["menu.opCentroDistQrFichaAbbr1", "menu.opCentroDistQrFichaAbbr2"], "icon": "bx-id-card", "href": "OpCentroDistQrFicha.html"
         }
       ],
       "cat-admin": [
@@ -2397,18 +2399,18 @@
     "human-resources/hr-area-personnel-admin": {
       "cat-catalogos": [
         {
-          "id": "cat-catalogos-puestos-trabajo", "labelKey": "menu.catPuestosTrabajo", "icon": "bx-window", "href": "Business-PuestosTrabajo.html"
+          "id": "cat-catalogos-puestos-trabajo", "labelKey": "menu.catPuestosTrabajo", "abbrKeys": ["menu.catPuestosTrabajoAbbr1", "menu.catPuestosTrabajoAbbr2"], "icon": "bx-window", "href": "Business-PuestosTrabajo.html"
         },
         {
           "id": "cat-catalogos-estatus-rh", "labelKey": "menu.catEstatusRH", "icon": "bx-id-card", "href": "Business-EstatusRH.html"
         },
         {
-          "id": "cat-catalogos-estructura-organizacional", "labelKey": "menu.catEstructuraOrganizacional", "icon": "bx-sitemap", "href": "Business-EstructuraOrganizacional.html"
+          "id": "cat-catalogos-estructura-organizacional", "labelKey": "menu.catEstructuraOrganizacional", "abbrKeys": ["menu.catEstructuraOrganizacionalAbbr1", "menu.catEstructuraOrganizacionalAbbr2", "menu.catEstructuraOrganizacionalAbbr3"], "icon": "bx-sitemap", "href": "Business-EstructuraOrganizacional.html"
         }
       ],
       "cat-operaciones": [
         {
-          "id": "cat-operaciones-rrhh-mi-recurso-humano", "labelKey": "menu.opRrhhMiRecursoHumano", "icon": "bx-window", "href": "OpRRHHMiRecursoHumano.html",
+          "id": "cat-operaciones-rrhh-mi-recurso-humano", "labelKey": "menu.opRrhhMiRecursoHumano", "abbrKeys": ["menu.opRrhhMiRecursoHumanoAbbr1", "menu.opRrhhMiRecursoHumanoAbbr2", "menu.opRrhhMiRecursoHumanoAbbr3"], "icon": "bx-window", "href": "OpRRHHMiRecursoHumano.html",
           "submenu": [
             {
               "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
