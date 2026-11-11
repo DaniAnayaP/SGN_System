@@ -9,10 +9,10 @@
     <link rel="icon" href="/icons/icon-512.png">
     <style>
         :root{
-            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --soft:#f1e4f5; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14);
+            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --soft:#f1e4f5; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14); --xl:#1f7a4d; --xlsoft:#e3f3ea; --pdf:#b3402f; --pdfsoft:#fbe6e1;
         }
         @media (prefers-color-scheme: dark){
-            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --soft:#3a2745; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); }
+            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --soft:#3a2745; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); --xl:#6fd0a0; --xlsoft:#1f3a2e; --pdf:#ff9f8f; --pdfsoft:#432723; }
         }
         *{ box-sizing:border-box; }
         html,body{ margin:0; min-height:100%; }
@@ -276,6 +276,18 @@
         main.compact .res .rd{ font-size:.85rem; }
         /* Celular (pantalla corta): al tocar un código se abre una pantalla sobre el celular, como una app, para elegir el día y la cantidad de ese día (un día a la vez). Sin tabla. */
         body.sheet-open{ overflow:hidden; }
+        /* «Cerrar pedido…»: descargar el listado (PDF o Excel) o enviar el pedido */
+        .opt{ border:1px solid var(--line); border-radius:1.1rem; padding:.7rem; display:flex; flex-direction:column; gap:.55rem; }
+        .opt .tt{ font-weight:700; font-size:.95rem; }
+        .two{ display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+        .fmt{ display:flex; align-items:center; justify-content:center; gap:.45rem; font:700 .95rem system-ui,sans-serif; padding:.7rem .5rem; border-radius:.9rem; border:1.5px solid currentColor; background:transparent; cursor:pointer; }
+        .fmt svg{ width:1.05rem; height:1.05rem; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+        .fmt.pdf{ color:var(--pdf); background:var(--pdfsoft); }
+        .fmt.xl{ color:var(--xl); background:var(--xlsoft); }
+        .fmt[disabled]{ opacity:.55; cursor:default; }
+        .clnote{ font-size:.82rem; color:var(--muted); text-align:center; overflow-wrap:anywhere; }
+        .dl{ width:100%; display:flex; flex-direction:column; gap:.45rem; text-align:left; border-top:1px solid var(--line); padding-top:.6rem; }
+        .dl .tt{ font-size:.7rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
         .shwrap{ position:fixed; inset:0; z-index:60; display:flex; align-items:flex-end; justify-content:center; background:rgba(42,27,48,.46); }
         .sheet{ width:100%; max-width:34rem; max-height:92vh; max-height:92dvh; display:flex; flex-direction:column; gap:.7rem; background:var(--surface); color:var(--ink); border:1px solid var(--line); border-bottom:0; border-radius:1.6rem 1.6rem 0 0; box-shadow:0 -10px 30px rgba(20,8,26,.28); padding:.5rem 1rem calc(.9rem + env(safe-area-inset-bottom, 0px)); outline:0; }
         .sheet .grab{ width:2.6rem; height:.3rem; border-radius:99px; background:var(--line); align-self:center; flex:none; }
@@ -348,7 +360,7 @@ const TEXT = {
         sentTitle: 'Pedido enviado', folio: 'Número de pedido', by: 'Pidió', at: 'Hora', list: 'Artículos del pedido', newOrder: 'Nuevo pedido', viewOnly: 'Este QR solo sirve para consultar.', loginNeeded: 'Este QR pide iniciar sesión para enviar pedidos.',
         login: 'Iniciar sesión', loginHint: 'Inicia sesión en el sistema y vuelve a abrir este QR.', locked: 'Este QR ya no permite enviar pedidos.', tooMany: 'Un pedido lleva hasta 40 artículos.',
         whenTitle: 'Todo el pedido para', asap: 'Lo antes posible', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.', layoutTitle: 'Ver el pedido como', layoutList: 'Lista', layoutTable: 'Tabla', todayIs: 'Hoy es {d}', emptyTable: 'Todavía no escribes ninguna cantidad. Escríbela en el día que la quieras.', noMatch: 'Ningún artículo cumple el filtro.', showing: 'Mostrando {n} de {m} códigos', showMore: 'Ver más', filterHint: 'La lista de la tabla se filtra mientras escribes.', inTotal: 'en total', onlyWithQty: 'Solo lo que lleva cantidad', onlyWithQtyDay: 'Solo artículos con cantidad este día',
-        change: 'Cambiar', close: 'Cerrar', sheetWhen: '¿Para cuándo?', sheetMine: 'Lo que llevas de este código', sheetUnitDay: '{u} en ese día', sheetDone: 'Listo · {n}', sheetDoneEmpty: 'Listo', sheetRemoveAll: 'Quitar del pedido', sheetNote: '{today}. Se pide desde mañana y hasta 14 días.', gotDay: '1 día', gotDays: '{d} días', qtyOfDay: 'Cantidad de ese día',
+        change: 'Cambiar', close: 'Cerrar', closeOrder: 'Cerrar pedido…', closeTitle: 'Cerrar pedido', dlList: 'Descargar listado', dlThis: 'Descargar este pedido', fmtPdf: 'PDF', fmtXlsx: 'Excel', preparing: 'Preparando el archivo…', downloaded: 'Descargado: {f}', errDownload: 'No se pudo preparar el archivo. Revisa tu conexión e inténtalo de nuevo.', sheetWhen: '¿Para cuándo?', sheetMine: 'Lo que llevas de este código', sheetUnitDay: '{u} en ese día', sheetDone: 'Listo · {n}', sheetDoneEmpty: 'Listo', sheetRemoveAll: 'Quitar del pedido', sheetNote: '{today}. Se pide desde mañana y hasta 14 días.', gotDay: '1 día', gotDays: '{d} días', qtyOfDay: 'Cantidad de ese día',
     },
     en: {
         title: 'Manual Order', loading: 'Loading…', notFound: 'This QR no longer matches any cost center.', searchTitle: 'Find an item', searchPlaceholder: 'Code, description, UoM or category',
@@ -363,7 +375,7 @@ const TEXT = {
         sentTitle: 'Order sent', folio: 'Order number', by: 'Ordered by', at: 'Time', list: 'Items in the order', newOrder: 'New order', viewOnly: 'This QR is for viewing only.', loginNeeded: 'This QR requires signing in to send orders.',
         login: 'Sign in', loginHint: 'Sign in to the system and open this QR again.', locked: 'This QR no longer allows sending orders.', tooMany: 'An order takes up to 40 items.',
         whenTitle: 'The whole order for', asap: 'As soon as possible', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.', layoutTitle: 'View the order as', layoutList: 'List', layoutTable: 'Table', todayIs: 'Today is {d}', emptyTable: 'You have not typed any quantity yet. Type it on the day you want it.', noMatch: 'No item meets the filter.', showing: 'Showing {n} of {m} codes', showMore: 'Show more', filterHint: 'The table list is filtered as you type.', inTotal: 'in total', onlyWithQty: 'Only what has a quantity', onlyWithQtyDay: 'Only items with a quantity on this day',
-        change: 'Edit', close: 'Close', sheetWhen: 'For when?', sheetMine: 'What you have for this code', sheetUnitDay: '{u} on that day', sheetDone: 'Done · {n}', sheetDoneEmpty: 'Done', sheetRemoveAll: 'Remove from the order', sheetNote: '{today}. You can order from tomorrow and up to 14 days.', gotDay: '1 day', gotDays: '{d} days', qtyOfDay: 'Quantity for that day',
+        change: 'Edit', close: 'Close', closeOrder: 'Close order…', closeTitle: 'Close order', dlList: 'Download list', dlThis: 'Download this order', fmtPdf: 'PDF', fmtXlsx: 'Excel', preparing: 'Preparing the file…', downloaded: 'Downloaded: {f}', errDownload: 'The file could not be prepared. Check your connection and try again.', sheetWhen: 'For when?', sheetMine: 'What you have for this code', sheetUnitDay: '{u} on that day', sheetDone: 'Done · {n}', sheetDoneEmpty: 'Done', sheetRemoveAll: 'Remove from the order', sheetNote: '{today}. You can order from tomorrow and up to 14 days.', gotDay: '1 day', gotDays: '{d} days', qtyOfDay: 'Quantity for that day',
     },
 }[LANG];
 document.documentElement.lang = LANG;
@@ -808,7 +820,7 @@ function drawOrder() {
     const box = $('orderbox');
     if (!box) return;
     const body = wide ? drawOrderTable() : drawOrderList(); // con el pedido vacío también se ve la tabla (o las fechas de la lista), con su aviso
-    const sendbox = `<div class="sendbox" id="sendbox"${cart.length ? '' : ' hidden'}><button type="button" class="btn ok" id="send" title="${esc(TEXT.stamp)}">${esc(TEXT.send)}</button></div>`;
+    const sendbox = `<div class="sendbox" id="sendbox"${cart.length ? '' : ' hidden'}><button type="button" class="btn ok" id="send">${esc(TEXT.closeOrder)}</button></div>`;
     const whoRow = wide ? `<div class="whorow">${whoFieldHtml()}${placeFieldHtml() || '<div class="whospacer"></div>'}${sendbox}</div>` : sendbox;
     const today = wide ? `<span class="muted">${esc(fill(TEXT.todayIs, { d: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(dayDate(todayIso())) }))}</span>` : '';
     box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${layoutToggle()}</div>${whoRow}<div class="err" id="err" role="alert" hidden></div>${body}`;
@@ -915,7 +927,7 @@ function applySheet() {
     drawOrder();
     drawResults();
 }
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && sheet) closeSheet(); });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { if (sheet) closeSheet(); closeClose(); } });
 function addPicked() {
     const n = Number(String(picked.qty).replace(',', '.'));
     if (!Number.isFinite(n) || n <= 0) { $('qty').focus(); return; }
@@ -1031,7 +1043,7 @@ $('view').addEventListener('click', (event) => {
     if (defwhen) { setDefault(defwhen.getAttribute('data-defwhen')); return; }
     const rm = t.closest('[data-rm]');
     if (rm) { cart.splice(Number(rm.getAttribute('data-rm')), 1); drawOrder(); drawResults(); return; }
-    if (t.closest('#send')) sendOrder();
+    if (t.closest('#send')) openClose();
 });
 $('view').addEventListener('input', (event) => {
     const t = event.target;
@@ -1090,15 +1102,86 @@ $('view').addEventListener('change', (event) => {
     }
 });
 
+// ---- «Cerrar pedido…»: al tocar el botón sube una hoja con DOS cosas: descargar el listado (PDF o Excel: solo baja el archivo y la hoja se queda, para poder enviar después) o enviar el pedido como siempre. ----
+const ICON_PDF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></svg>';
+const ICON_XLS = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/></svg>';
+const fmtButtons = () => `<div class="two"><button type="button" class="fmt pdf" data-dl="pdf">${ICON_PDF}${esc(TEXT.fmtPdf)}</button><button type="button" class="fmt xl" data-dl="xlsx">${ICON_XLS}${esc(TEXT.fmtXlsx)}</button></div>`;
+const localStamp = (d) => d.toLocaleString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+function saveBlob(blob, filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+}
+function closeClose() {
+    const wrap = $('closewrap');
+    if (wrap) wrap.remove();
+    if (!sheet) document.body.classList.remove('sheet-open');
+}
+function openClose() {
+    closeClose();
+    const lines = flatLines();
+    if (!lines.length) return;
+    const n = new Set(lines.map((l) => l.id)).size;
+    const wrap = document.createElement('div');
+    wrap.className = 'shwrap';
+    wrap.id = 'closewrap';
+    wrap.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(TEXT.closeTitle)}" tabindex="-1"><div class="grab" aria-hidden="true"></div>
+        <div class="shead"><div><b>${esc(TEXT.closeTitle)}</b><small>${esc(n === 1 ? TEXT.item1 : TEXT.items.replace('{n}', n))}</small></div><button type="button" class="shx" data-clclose aria-label="${esc(TEXT.close)}">✕</button></div>
+        <div class="opt"><span class="tt">${esc(TEXT.dlList)}</span>${fmtButtons()}</div>
+        <div class="opt"><span class="tt">${esc(TEXT.send)}</span><button type="button" class="btn ok" id="clsend" title="${esc(TEXT.stamp)}">${esc(TEXT.send)}</button></div>
+        <div class="err" id="clerr" role="alert" hidden></div><div class="clnote" id="clnote" role="status" hidden></div>
+        <button type="button" class="btn alt" data-clclose>${esc(TEXT.cancel)}</button></div>`;
+    document.body.appendChild(wrap);
+    document.body.classList.add('sheet-open');
+    wrap.addEventListener('click', (event) => {
+        const t = event.target;
+        if (t.id === 'closewrap' || t.closest('[data-clclose]')) { closeClose(); return; }
+        const dl = t.closest('[data-dl]');
+        if (dl) { downloadList(dl.getAttribute('data-dl')); return; }
+        if (t.closest('#clsend')) sendOrder();
+    });
+    const card = wrap.querySelector('.sheet');
+    if (card) card.focus({ preventScroll: true });
+}
+// El listado del pedido (armado o ya enviado) en PDF o Excel: lo arma el servidor con los datos de cada código; aquí solo se manda qué artículos, cuánto y para cuándo, y se baja el archivo.
+async function downloadList(format, ctx) {
+    const c = ctx || { lines: flatLines(), folio: '', name: nameValue, placeId, when: localStamp(new Date()) };
+    const note = $('clnote') || $('dlnote');
+    const btns = [...document.querySelectorAll('[data-dl]')];
+    const err = $('clerr');
+    if (err) err.hidden = true;
+    btns.forEach((b) => { b.disabled = true; });
+    if (note) { note.textContent = TEXT.preparing; note.hidden = false; }
+    try {
+        const res = await fetch(`${API}/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ format, lang: LANG, name: String(c.name || '').replace(/\s+/g, ' ').trim(), ...((info.places || []).length ? { placeId: c.placeId } : {}), folio: c.folio || '', when: c.when || '', items: c.lines.map((l) => ({ id: l.id, quantity: l.quantity, needBy: l.needBy })) }) });
+        if (!res.ok) throw new Error('export');
+        const file = `${LANG === 'en' ? 'Order' : 'Pedido'}-${c.folio || (LANG === 'en' ? 'draft' : 'borrador')}_${todayIso()}.${format}`;
+        saveBlob(await res.blob(), file);
+        if (note) { note.textContent = fill(TEXT.downloaded, { f: file }); note.hidden = false; }
+    } catch (e) {
+        if (note) { note.textContent = TEXT.errDownload; note.hidden = false; }
+    } finally {
+        btns.forEach((b) => { b.disabled = false; });
+    }
+}
+// Se manda desde la hoja «Cerrar pedido»: su botón dice «Enviando…» y sus avisos salen en la hoja (si falta nombre o lugar, la hoja se cierra y el aviso sale arriba, junto al campo).
 async function sendOrder() {
-    const err = $('err');
+    const mainErr = $('err');
+    const failMain = (text) => { mainErr.textContent = text; mainErr.hidden = false; };
+    mainErr.hidden = true;
+    const err = $('clerr') || mainErr;
     const fail = (text) => { err.textContent = text; err.hidden = false; };
     err.hidden = true;
     const name = nameValue.replace(/\s+/g, ' ').trim();
-    if (!name) { fail(TEXT.needName); $('name').focus(); return; }
-    if ((info.places || []).length && !placeId) { fail(TEXT.needPlace); $('place').focus(); return; }
-    if (!flatLines().length) { fail(TEXT.errItems); return; }
-    const btn = $('send');
+    if (!name) { closeClose(); failMain(TEXT.needName); $('name').focus(); return; }
+    if ((info.places || []).length && !placeId) { closeClose(); failMain(TEXT.needPlace); $('place').focus(); return; }
+    if (!flatLines().length) { closeClose(); failMain(TEXT.errItems); return; }
+    const btn = $('clsend') || $('send');
+    const idleLabel = btn.id === 'clsend' ? TEXT.send : TEXT.closeOrder;
     btn.disabled = true;
     btn.textContent = TEXT.sending;
     const items = flatLines();
@@ -1106,18 +1189,19 @@ async function sendOrder() {
         const res = await fetch(`${API}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, ...((info.places || []).length ? { placeId } : {}), items: items.map((c) => ({ id: c.id, quantity: c.quantity, needBy: c.needBy })) }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
-            btn.disabled = false; btn.textContent = TEXT.send;
-            if (body.code === 'LOCKED') { info.locks.register = false; view(); return; }
-            if (body.code === 'LOGIN') { info.locks.signin = true; info.signedIn = false; view(); return; }
+            btn.disabled = false; btn.textContent = idleLabel;
+            if (body.code === 'LOCKED') { closeClose(); info.locks.register = false; view(); return; }
+            if (body.code === 'LOGIN') { closeClose(); info.locks.signin = true; info.signedIn = false; view(); return; }
             fail(body.code === 'NAME' ? TEXT.needName : (body.code === 'PLACE' ? TEXT.needPlace : (body.code === 'QTY' ? TEXT.errQty : (body.code === 'ITEMS' ? TEXT.errItems : (body.code === 'TOOMANY' ? TEXT.tooMany : (body.code === 'RELATED' ? TEXT.errRelated : (body.code === 'DATE' ? TEXT.errDate : TEXT.errGeneric)))))));
             return;
         }
         store.set(KEY_NAME, name);
-        sentInfo = { folio: body.folio, name: body.name, place: body.place || '', createdAt: body.createdAt, items };
+        sentInfo = { folio: body.folio, name: body.name, place: body.place || '', placeId, createdAt: body.createdAt, items };
         cart = [];
+        closeClose();
         view();
     } catch (e) {
-        btn.disabled = false; btn.textContent = TEXT.send;
+        btn.disabled = false; btn.textContent = idleLabel;
         fail(TEXT.errGeneric);
     }
 }
@@ -1128,7 +1212,9 @@ function viewSent() {
     $('view').innerHTML = `<div class="card done"><div class="tick" aria-hidden="true">✓</div><h1>${esc(TEXT.sentTitle)}</h1><div class="muted">${esc(TEXT.folio)}</div><div class="folio">${esc(sentInfo.folio)}</div>
         <div>${esc(TEXT.by)}: <b>${esc(sentInfo.name)}</b></div>${sentInfo.place ? `<div>${esc(TEXT.placeAt)}: <b>${esc(sentInfo.place)}</b></div>` : ''}<div>${esc(TEXT.at)}: <b>${esc(when)}</b></div>
         <div class="items"><h2>${esc(TEXT.list)} · ${esc(sentInfo.items.length === 1 ? TEXT.item1 : TEXT.items.replace('{n}', sentInfo.items.length))}</h2>${lines}</div>
+        <div class="dl"><span class="tt">${esc(TEXT.dlThis)}</span>${fmtButtons()}<div class="clnote" id="dlnote" role="status" hidden></div></div>
         <button type="button" class="btn" id="again">${esc(TEXT.newOrder)}</button></div>`;
+    $('view').querySelectorAll('[data-dl]').forEach((b) => b.addEventListener('click', () => downloadList(b.getAttribute('data-dl'), { lines: sentInfo.items, folio: sentInfo.folio, name: sentInfo.name, placeId: sentInfo.placeId, when: localStamp(new Date(sentInfo.createdAt)) })));
     $('again').addEventListener('click', () => { sentInfo = null; query = ''; results = []; total = 0; picked = null; view(); });
 }
 
@@ -1146,7 +1232,7 @@ function viewSent() {
     // pantalla ancha (la computadora, la ventana de QR's): la tabla por día; angosta (el celular): la lista. Al cambiar el ancho se vuelve a dibujar el mismo pedido.
     mq = window.matchMedia('(min-width: 780px)');
     applyWide();
-    mq.addEventListener('change', () => { closeSheet(); applyWide(); view(); });
+    mq.addEventListener('change', () => { closeSheet(); closeClose(); applyWide(); view(); });
     view();
 })();
 })();

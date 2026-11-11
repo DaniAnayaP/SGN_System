@@ -5411,13 +5411,8 @@ function validateExportPayload(req, res) {
     return { columns, rows };
 }
 
-app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
-    const payload = validateExportPayload(req, res);
-    if (!payload) return;
-    const { columns, rows } = payload;
-    const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
-    const fileBase = String(req.body.filename || title).trim() || title;
-    const header = exportHeaderPairs(req.body.header); // datos que van ARRIBA de la tabla (por ejemplo, los del pedido): [[etiqueta, valor], ...]
+// Escribe un Excel (título, datos de arriba opcionales, columnas y renglones) como respuesta; lo usan la ruta de exportar de siempre y el QR del Pedido Manual.
+async function sendXlsxExport(res, { title, fileBase, header, columns, rows }) {
     const workbook = new ExcelJS.Workbook();
     // Excel sheet names: max 31 chars, can't contain \ / * ? : [ ]
     const sheet = workbook.addWorksheet(title.replace(/[\\/*?:[\]]/g, ' ').slice(0, 31) || 'Reporte');
@@ -5448,6 +5443,15 @@ app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
     res.setHeader('Content-Disposition', buildContentDisposition(`${fileBase}.xlsx`));
     await workbook.xlsx.write(res);
     res.end();
+}
+app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
+    const payload = validateExportPayload(req, res);
+    if (!payload) return;
+    const { columns, rows } = payload;
+    const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
+    const fileBase = String(req.body.filename || title).trim() || title;
+    const header = exportHeaderPairs(req.body.header); // datos que van ARRIBA de la tabla (por ejemplo, los del pedido): [[etiqueta, valor], ...]
+    await sendXlsxExport(res, { title, fileBase, header, columns, rows });
 });
 
 // pdfkit has no built-in table widget -- draws a simple even-width grid by
@@ -5516,14 +5520,8 @@ function drawPdfTableWrapped(doc, columns, rows, weights) {
     doc.y = y;
 }
 
-app.post('/api/business/export/pdf', requireAuth, (req, res) => {
-    const payload = validateExportPayload(req, res);
-    if (!payload) return;
-    const { columns, rows } = payload;
-    const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
-    const fileBase = String(req.body.filename || title).trim() || title;
-    const header = exportHeaderPairs(req.body.header);
-
+// Escribe un PDF (título, datos de arriba opcionales y una tabla) como respuesta; lo usan la ruta de exportar de siempre y el QR del Pedido Manual.
+function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widths }) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', buildContentDisposition(`${fileBase}.pdf`));
     const doc = new PDFDocument({ margin: 30, size: 'A4', layout: columns.length > 5 ? 'landscape' : 'portrait' });
@@ -5536,9 +5534,18 @@ app.post('/api/business/export/pdf', requireAuth, (req, res) => {
         });
         doc.moveDown(0.8);
     }
-    if (req.body.wrap) drawPdfTableWrapped(doc, columns, rows, Array.isArray(req.body.widths) ? req.body.widths : null);
+    if (wrap) drawPdfTableWrapped(doc, columns, rows, Array.isArray(widths) ? widths : null);
     else drawPdfTable(doc, columns, rows);
     doc.end();
+}
+app.post('/api/business/export/pdf', requireAuth, (req, res) => {
+    const payload = validateExportPayload(req, res);
+    if (!payload) return;
+    const { columns, rows } = payload;
+    const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
+    const fileBase = String(req.body.filename || title).trim() || title;
+    const header = exportHeaderPairs(req.body.header);
+    sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: !!req.body.wrap, widths: Array.isArray(req.body.widths) ? req.body.widths : null });
 });
 
 app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {
@@ -8093,6 +8100,57 @@ app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req
     const out = createManualOrder({ clientId: row.clientId, costCenterId: row.costCenterId || 0, requesterName: name, requesterUserId: signedIn ? user.sub : null, source: signedIn ? 'user' : 'qr', lines, placeId: place ? place.id : 0, placeName: place ? place.name : '' });
     res.set('Cache-Control', 'no-store');
     res.status(201).json({ folio: manualFolio(out.id), createdAt: sqlUtcIso(out.createdAt), lines: out.lines, name, place: place ? place.name : '', now: new Date().toISOString() });
+});
+
+// «Cerrar pedido…» del QR: la LISTA del pedido armado (o ya enviado, con su número) en PDF o Excel. Lo que sale en el archivo (código, descripción única, unidad, empresa, sitio, centro) se toma SIEMPRE del servidor a partir
+// de los artículos pedidos (id): del celular solo llegan el formato, el idioma, el nombre de quien pide, el lugar, el número de pedido (PM-0005), una hora ya escrita, y los artículos con su cantidad y su fecha. No guarda nada.
+const MANUAL_EXPORT_TEXT = {
+    es: { locale: 'es-MX', title: 'Pedido Manual', draft: 'Borrador', order: 'Pedido', company: 'Empresa', site: 'Sitio', center: 'Centro de costos', by: 'Pidió', place: 'Lugar que solicita', at: 'Fecha y hora', summary: 'Resumen', item1: '1 artículo', items: '{n} artículos', line1: '1 renglón', lines: '{n} renglones', code: 'Código', description: 'Descripción', uom: 'UdM', needBy: 'Para cuándo', quantity: 'Cantidad', asap: 'Lo antes posible', filePrefix: 'Pedido', fileDraft: 'borrador' },
+    en: { locale: 'en-US', title: 'Manual Order', draft: 'Draft', order: 'Order', company: 'Company', site: 'Site', center: 'Cost center', by: 'Ordered by', place: 'Requesting place', at: 'Date and time', summary: 'Summary', item1: '1 item', items: '{n} items', line1: '1 line', lines: '{n} lines', code: 'Code', description: 'Description', uom: 'UoM', needBy: 'Needed by', quantity: 'Quantity', asap: 'As soon as possible', filePrefix: 'Order', fileDraft: 'draft' },
+};
+app.post('/api/public/pedido-manual/:token/export', publicManualOrderLimiter, async (req, res) => {
+    const target = manualOrderTarget(req, res);
+    if (!target) return;
+    const { row, client, center, isTest } = target;
+    if (!qrLocksOf('manual_order', row.clientId, row.costCenterId || 0).register) return res.status(403).json({ message: 'Este QR solo sirve para consultar.', code: 'LOCKED' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const format = body.format === 'pdf' ? 'pdf' : (body.format === 'xlsx' ? 'xlsx' : '');
+    if (!format) return res.status(400).json({ message: 'El formato debe ser pdf o xlsx.', code: 'FORMAT' });
+    const L = MANUAL_EXPORT_TEXT[body.lang === 'en' ? 'en' : 'es'];
+    const oneLine = (v, max) => String(v === undefined || v === null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
+    const scope = manualPlaceScope(row, isTest, body.placeId);
+    const place = scope.placeId ? scope.places.find((p) => p.id === scope.placeId) : null;
+    const view = new Map(manualItemsFor(row.clientId, isTest, row.costCenterId || 0, scope.placeId).map((it) => [it.id, it]));
+    const lines = [];
+    for (const raw of (Array.isArray(body.items) ? body.items : []).slice(0, 400)) {
+        const it = view.get(Number(raw && raw.id));
+        const quantity = Number(raw && raw.quantity);
+        if (!it || !Number.isFinite(quantity) || quantity <= 0 || quantity > 999999) continue;
+        const rawBy = raw && raw.needBy ? String(raw.needBy) : '';
+        const needBy = /^\d{4}-\d{2}-\d{2}$/.test(rawBy) && !Number.isNaN(Date.parse(`${rawBy}T00:00:00Z`)) ? rawBy : '';
+        lines.push({ it, needBy, quantity: Math.round(quantity * 1000) / 1000 });
+    }
+    if (!lines.length) return res.status(400).json({ message: 'El pedido no trae artículos.', code: 'ITEMS' });
+    const folio = /^PM-\d{4,}$/.test(String(body.folio || '')) ? String(body.folio) : '';
+    const dayText = (iso) => (iso ? new Intl.DateTimeFormat(L.locale, { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${iso}T00:00:00Z`)) : L.asap);
+    const itemsCount = new Set(lines.map((l) => l.it.id)).size;
+    const header = [
+        [L.order, folio || L.draft], [L.company, (client && client.company_name) || ''], [L.site, row.layout.siteName || ''], [L.center, center ? `${center.code ? `${center.code} · ` : ''}${center.name}` : ''],
+        [L.by, oneLine(body.name, 60)], [L.place, place ? place.name : ''], [L.at, oneLine(body.when, 40)],
+        [L.summary, `${itemsCount === 1 ? L.item1 : L.items.replace('{n}', itemsCount)} · ${lines.length === 1 ? L.line1 : L.lines.replace('{n}', lines.length)}`],
+    ].filter(([, v]) => v);
+    const columns = [L.code, L.description, L.uom, L.needBy, L.quantity].map((label) => ({ label }));
+    const rows = lines.map(({ it, needBy, quantity }) => [it.code, it.unique || it.description, it.uom, dayText(needBy), String(quantity)]);
+    const fileBase = `${L.filePrefix}-${folio || L.fileDraft}_${clientLocalDay(row.clientId)}`;
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    try {
+        const title = `${L.title} · ${folio || L.draft}`;
+        if (format === 'xlsx') await sendXlsxExport(res, { title: `${L.filePrefix} ${folio || L.fileDraft}`, fileBase, header, columns, rows });
+        else sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: true, widths: [1.3, 3.6, 0.7, 1.7, 0.9] });
+    } catch (err) {
+        console.error('Pedido Manual: no se pudo armar el archivo del pedido', err);
+        if (!res.headersSent) res.status(500).json({ message: 'No se pudo preparar el archivo.' });
+    }
 });
 
 // La pantalla (con usuario): TODOS los pedidos de la empresa, un renglón por artículo, con las columnas de Control Interno por fila.

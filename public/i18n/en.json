@@ -4464,6 +4464,18 @@
     "pmCartEmpty": "You have not added anything yet. Find an item and choose the quantity.",
     "pmRemove": "Remove",
     "pmSend": "Send order",
+    "pmClose": "Close order…",
+    "pmCloseTitle": "Close order",
+    "pmDlList": "Download list",
+    "pmDlThis": "Download this order",
+    "pmFmtPdf": "PDF",
+    "pmFmtXlsx": "Excel",
+    "pmPreparing": "Preparing the file…",
+    "pmDownloaded": "Ready: {f}",
+    "pmErrDownload": "The file could not be prepared. Check your connection and try again.",
+    "pmDraft": "Draft",
+    "pmFilePrefix": "Order",
+    "pmDraftFile": "draft",
     "pmCenter": "Cost center",
     "pmCenterPick": "Choose the cost center",
     "pmItemsN": "{n} items",
@@ -6197,6 +6209,10 @@
     "pmFechaEntrega": {
       "what": "When you want what you order to arrive: from tomorrow up to 14 days, or «As soon as possible». Tapping a code (or the pencil of an item already added) opens its sheet: you choose the day in the strip at the top and type (or use − and +) the quantity for THAT day; you can repeat it with other days and «Done» leaves all of them in the order. Each day becomes a line of the order and shows as a chip («Fri 13 Nov · 10»); tapping the chip opens the sheet on that day.",
       "example": "you order 20 boxes of milk: you choose Thursday and type 12, you choose Monday and type 8 — two days of the same item."
+    },
+    "pmCerrar": {
+      "what": "Closes the order and lets you choose: download the list as PDF or Excel (it only downloads the file, the order stays open) or send the order. The file carries the order data and, per line, code, description, unit, needed-by date and quantity. Once sent, the order number also lets you download the list.",
+      "example": "you build the order, tap Close order…, download the PDF to review it and then tap Send order."
     },
     "pmBuscador": {
       "what": "The list of the codes you can order (the ones enabled for the selected cost center and place): it comes out complete as soon as you enter, so you can recognize the one you need without typing it. Tapping one opens its sheet to choose the day and the quantity. What you type above narrows the list (Contains, Starts with or Equals, with $ before, @ after and the comma for several searches) and «Search in» chooses which fields. They show 50 at a time: «Show more» adds the next ones. The list is enabled once the cost center, the place and who is ordering are filled in.",

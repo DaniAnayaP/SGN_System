@@ -2016,6 +2016,14 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .pm-app-foot{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; font-size: 0.72rem; color: var(--home-text-muted); }
 .pm-app-foot:empty{ display: none; }
 .pm-app-card[hidden]{ display: none; }
+/* «Cerrar pedido…»: descargar el listado (PDF o Excel) o enviar el pedido */
+.pm-app-optbox{ border: 1px solid var(--home-border); border-radius: 0.9rem; padding: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.pm-app-two{ display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.pm-app-fmt{ display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-family: inherit; font-weight: 700; font-size: 0.85rem; padding: 0.6rem 0.4rem; border-radius: 0.8rem; border: 1.5px solid currentColor; background: color-mix(in srgb, currentColor 12%, transparent); cursor: pointer; }
+.pm-app-fmt i{ font-size: 1.15rem; }
+.pm-app-fmt-pdf{ color: #d9604c; }
+.pm-app-fmt-xlsx{ color: #2f9e6a; }
+.pm-app-fmt:disabled{ opacity: 0.55; cursor: default; }
 .pm-app-more{ font-family: inherit; font-size: 0.78rem; font-weight: 600; color: var(--home-accent); background: transparent; border: 1px solid var(--home-border); border-radius: 0.6rem; padding: 0.4rem 0.85rem; cursor: pointer; }
 .pm-app-result{ display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left; font-family: inherit; padding: 0.6rem 0.75rem; border: 1px solid var(--home-border); border-radius: 0.7rem; background: var(--home-bg); cursor: pointer; }
 .pm-app-result > span{ flex: 1; min-width: 0; }

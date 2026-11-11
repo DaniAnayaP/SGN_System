@@ -782,10 +782,11 @@ function renderNew() {
     const sendBtn = document.createElement('button');
     sendBtn.type = 'button';
     sendBtn.className = 'home-carga-new-btn pm-app-send';
-    sendBtn.innerHTML = `<i class="bx bx-send" aria-hidden="true"></i><span>${esc(t('home.pmSend'))}</span>`;
+    sendBtn.setAttribute('data-help-key', 'pmCerrar');
+    sendBtn.innerHTML = `<i class="bx bx-lock-alt" aria-hidden="true"></i><span>${esc(t('home.pmClose'))}</span>`;
     sendBtn.addEventListener('click', () => {
         if (!draft.requesterName.replace(/\s+/g, ' ').trim()) { showToast(t('home.pmNeedName')); whoInput.focus(); return; }
-        sendDraft();
+        openClose(); // la hoja con las dos opciones: descargar el listado o enviar el pedido
     });
     bodyEl.appendChild(sendBtn);
     const sendDraw = () => { sendBtn.disabled = !draft.cart.size || draft.costCenterId === null || (usesPlaces() && draft.placeId === null); };
@@ -924,6 +925,86 @@ function openQuantity(item, startDay) {
     if (on && on.scrollIntoView) { try { on.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch { /* sin desplazamiento */ } }
 }
 
+// ---- «Cerrar pedido…»: una hoja con DOS cosas: descargar el listado (PDF o Excel: solo baja el archivo y la hoja se queda, para poder enviar después) o enviar el pedido como siempre. ----
+const draftLines = () => Array.from(draft.cart.values()).flatMap(({ item, parts }) => parts.map((p) => ({ code: item.code, description: artName(item), uom: item.uom, quantity: p.quantity, needBy: p.when })));
+// El listado como lo arma el servidor de exportar (el mismo de la pantalla Pedido Manual de la computadora): datos del pedido arriba y una tabla de código, descripción, UdM, para cuándo y cantidad.
+function exportDataset({ folio, lines, name, placeName, centroCostos, at }) {
+    return {
+        title: t('menu.opCentroDistPedidoManual'),
+        filename: `${t('home.pmFilePrefix')}-${folio || t('home.pmDraftFile')}_${isoOf(new Date())}`,
+        header: [[t('home.pmOrderNumber'), folio || t('home.pmDraft')], [t('main.pmQrCentro'), centroCostos], [t('main.colPmLugar'), placeName], [t('home.pmRequestedBy'), name], [t('home.pmWhen'), formatTime(at)], [t('home.pmListTitle'), itemsText(new Set(lines.map((l) => l.code)).size)]].filter(([, v]) => v),
+        columns: [t('home.pmFCode'), t('home.pmFDesc'), t('home.pmFUom'), t('home.pmNeedBy'), t('home.pmQuantity')].map((label) => ({ label })),
+        rows: lines.map((l) => [l.code, l.description, l.uom, whenLabel(l.needBy), qtyText(l.quantity)]),
+        widths: [1.3, 3.6, 0.7, 1.7, 0.9],
+    };
+}
+const fmtButtonsHtml = () => `<div class="pm-app-two"><button type="button" class="pm-app-fmt pm-app-fmt-pdf" data-pm-dl="pdf"><i class="bx bxs-file-pdf" aria-hidden="true"></i><span>${esc(t('home.pmFmtPdf'))}</span></button><button type="button" class="pm-app-fmt pm-app-fmt-xlsx" data-pm-dl="xlsx"><i class="bx bx-spreadsheet" aria-hidden="true"></i><span>${esc(t('home.pmFmtXlsx'))}</span></button></div>`;
+// En el celular se comparte (WhatsApp, correo, Drive...); si el sistema no puede compartir archivos se baja directo. Devuelve el nombre del archivo, o null si se canceló el compartir.
+async function exportToFile(format, ds) {
+    const res = await fetch(apiUrl(`/api/business/export/${format}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ title: ds.title, filename: ds.filename, header: ds.header, columns: ds.columns, rows: ds.rows, ...(format === 'pdf' ? { wrap: true, widths: ds.widths } : {}) }) });
+    if (!res.ok) throw new Error('export');
+    const blob = await res.blob();
+    const name = `${ds.filename}.${format}`;
+    const file = new File([blob], name, { type: blob.type });
+    try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: ds.title }); return name; }
+    } catch (err) {
+        if (err && err.name === 'AbortError') return null;
+    }
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    return name;
+}
+// Los dos botones (PDF / Excel) de un bloque: se apagan mientras se prepara el archivo y el aviso de abajo dice cómo quedó.
+function wireDownloads(root, noteEl, getDataset) {
+    root.addEventListener('click', async (event) => {
+        const b = event.target.closest('[data-pm-dl]');
+        if (!b) return;
+        const btns = [...root.querySelectorAll('[data-pm-dl]')];
+        btns.forEach((x) => { x.disabled = true; });
+        noteEl.textContent = t('home.pmPreparing');
+        try {
+            const name = await exportToFile(b.getAttribute('data-pm-dl'), getDataset());
+            noteEl.textContent = name ? t('home.pmDownloaded', { f: name }) : '';
+        } catch {
+            noteEl.textContent = t('home.pmErrDownload');
+        } finally {
+            btns.forEach((x) => { x.disabled = false; });
+        }
+    });
+}
+function openClose() {
+    if (!draft || !draft.cart.size) return;
+    const scrim = document.createElement('div');
+    scrim.className = 'home-select-scrim';
+    const sheet = document.createElement('div');
+    sheet.className = 'home-select-sheet pm-app-daysheet';
+    sheet.innerHTML = `<div class="home-select-sheet-handle"></div>
+        <div class="pm-app-daybody">
+            <div class="home-select-sheet-title">${esc(t('home.pmCloseTitle'))}</div>
+            <p class="pm-app-note pm-app-sheet-meta">${esc(itemsText(draft.cart.size))}</p>
+            <div class="pm-app-optbox"><span class="pm-app-qty-label">${esc(t('home.pmDlList'))}</span>${fmtButtonsHtml()}</div>
+            <div class="pm-app-optbox"><span class="pm-app-qty-label">${esc(t('home.pmSend'))}</span><button type="button" class="home-carga-new-btn" id="pm-app-clsend"><i class="bx bx-send" aria-hidden="true"></i><span>${esc(t('home.pmSend'))}</span></button></div>
+            <p class="pm-app-note" id="pm-app-clnote" role="status"></p>
+        </div>
+        <div class="pm-app-dayfoot"><button type="button" class="home-carga-secondary-btn" id="pm-app-clcancel">${esc(t('home.pmCancel'))}</button></div>`;
+    scrim.appendChild(sheet);
+    document.body.appendChild(scrim);
+    const close = () => scrim.remove();
+    scrim.addEventListener('click', (event) => { if (event.target === scrim) close(); });
+    sheet.querySelector('#pm-app-clcancel').addEventListener('click', close);
+    sheet.querySelector('#pm-app-clsend').addEventListener('click', () => { close(); sendDraft(); });
+    const place = usesPlaces() ? catalogPlaces.find((p) => p.id === draft.placeId) : null;
+    const cc = costCenters.find((c) => c.id === draft.costCenterId);
+    wireDownloads(sheet, sheet.querySelector('#pm-app-clnote'), () => exportDataset({ folio: '', lines: draftLines(), name: draft.requesterName.replace(/\s+/g, ' ').trim(), placeName: place ? place.name : '', centroCostos: cc ? cc.name : '', at: new Date().toISOString() }));
+}
+
 async function sendDraft() {
     if (!draft || !draft.cart.size || draft.costCenterId === null) return;
     if (usesPlaces() && draft.placeId === null) { showToast(t('home.pmNeedPlace')); return; }
@@ -983,6 +1064,14 @@ function renderDone() {
         <div class="pm-app-meta pm-app-meta-flat">${[[t('home.pmRequestedBy'), d.name], [t('main.colPmLugar'), d.placeName], [t('home.pmWhen'), formatTime(d.at)], [t('main.pmQrCentro'), d.centroCostos]].filter(([, v]) => v).map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
         <h4 class="pm-app-title">${esc(t('home.pmListTitle'))} · ${esc(itemsText(new Set(d.lines.map((l) => l.code)).size))}</h4>
         ${d.lines.map((l) => `<div class="pm-app-line"><div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, l.uom].filter(Boolean).join(' · '))}</span><span class="pm-app-need">${esc(`${t('home.pmNeedBy')}: ${whenLabel(l.needBy)}`)}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b></div>`).join('')}`;
+    // el pedido ya enviado (con su número) también se puede bajar en PDF o Excel; el que se guardó sin señal todavía no tiene número ni se puede preparar
+    if (!d.queued) {
+        const dl = document.createElement('div');
+        dl.className = 'pm-app-optbox';
+        dl.innerHTML = `<span class="pm-app-qty-label">${esc(t('home.pmDlThis'))}</span>${fmtButtonsHtml()}<p class="pm-app-note" id="pm-app-dlnote" role="status"></p>`;
+        box.appendChild(dl);
+        wireDownloads(dl, dl.querySelector('#pm-app-dlnote'), () => exportDataset({ folio: d.folio, lines: d.lines, name: d.name, placeName: d.placeName, centroCostos: d.centroCostos, at: d.at }));
+    }
     bodyEl.appendChild(box);
     const again = document.createElement('button');
     again.type = 'button';

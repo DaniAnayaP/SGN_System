@@ -4463,6 +4463,18 @@
     "pmCartEmpty": "Todavía no agregas nada. Busca un artículo y elige la cantidad.",
     "pmRemove": "Quitar",
     "pmSend": "Enviar pedido",
+    "pmClose": "Cerrar pedido…",
+    "pmCloseTitle": "Cerrar pedido",
+    "pmDlList": "Descargar listado",
+    "pmDlThis": "Descargar este pedido",
+    "pmFmtPdf": "PDF",
+    "pmFmtXlsx": "Excel",
+    "pmPreparing": "Preparando el archivo…",
+    "pmDownloaded": "Listo: {f}",
+    "pmErrDownload": "No se pudo preparar el archivo. Revisa tu conexión e inténtalo de nuevo.",
+    "pmDraft": "Borrador",
+    "pmFilePrefix": "Pedido",
+    "pmDraftFile": "borrador",
     "pmCenter": "Centro de costos",
     "pmCenterPick": "Elige el centro de costos",
     "pmItemsN": "{n} artículos",
@@ -6196,6 +6208,10 @@
     "pmFechaEntrega": {
       "what": "Para cuándo quieres que llegue lo que pides: desde mañana y hasta 14 días, o «Lo antes posible». Al tocar un código (o el lápiz de un artículo ya agregado) se abre su hoja: eliges el día en la tira de arriba y escribes (o con − y +) la cantidad de ESE día; puedes repetirlo con otros días y «Listo» los deja todos en el pedido. Cada día queda como un renglón del pedido y se ve como un chip («Vie 13 nov · 10»); tocar el chip abre la hoja en ese día.",
       "example": "pides 20 cajas de leche: eliges el jueves y pones 12, eliges el lunes y pones 8 — dos días del mismo artículo."
+    },
+    "pmCerrar": {
+      "what": "Cierra el pedido y te deja elegir: descargar el listado en PDF o en Excel (solo baja el archivo, el pedido sigue abierto) o enviar el pedido. El archivo lleva los datos del pedido y, por renglón, código, descripción, unidad, para cuándo y cantidad. Una vez enviado, el número de pedido también permite bajar el listado.",
+      "example": "armas el pedido, tocas Cerrar pedido…, bajas el PDF para revisarlo y después tocas Enviar pedido."
     },
     "pmBuscador": {
       "what": "La lista de los códigos que puedes pedir (los habilitados para el centro de costos y el lugar elegidos): sale completa desde que entras, para reconocer el que necesitas sin tener que escribirlo. Al tocar uno se abre su hoja para elegir el día y la cantidad. Lo que escribes arriba acota la lista (Contiene, Inicia con o Igual que, con $ antes, @ después y la coma para varias búsquedas) y «Buscar en» elige en qué campos. Se ven de 50 en 50: «Ver más» agrega los siguientes. La lista se habilita cuando ya están el centro de costos, el lugar y quién pide.",
