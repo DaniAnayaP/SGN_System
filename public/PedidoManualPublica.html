@@ -158,10 +158,9 @@
         .sendbox{ display:flex; flex-direction:column; justify-content:flex-end; }
         .sendbox[hidden]{ display:none; }
         .whospacer{ display:none; }
-        /* lista (celular): mientras no se escriba quién pide y se elija el lugar, la tarjeta de la lista de códigos se ve apagada y no responde */
-        .card.locked{ pointer-events:none; }
+        /* lista (celular): la tarjeta «Buscar artículo» NO aparece hasta que estén quién pide y el lugar; tabla (computadora): se ve apagada y no responde */
+        .card[hidden]{ display:none; }
         .scroll.locked{ opacity:.6; pointer-events:none; }
-        .card.locked .fmenu, .card.locked h2{ opacity:.45; }
         .whorow{ display:grid; grid-template-columns:1fr; gap:12px; }
         /* en pantalla ancha: «Quién pide», «Lugar que solicita» y «Enviar pedido» en un solo renglón; en la angosta (aunque se elija la tabla), uno debajo del otro */
         @media (min-width: 780px){
@@ -462,14 +461,15 @@ const placeFieldHtml = () => {
 const whoOk = () => !!String(nameValue || '').replace(/\s+/g, ' ').trim();
 const listReady = () => whoOk() && !needPlace();
 let listWasReady = null;
-// La tarjeta de la lista (celular) y la tabla (computadora) se apagan (y no responden) mientras falte quién pide o el lugar.
+// Mientras falte quién pide o el lugar: la tarjeta «Buscar artículo» (y el código elegido) del celular NO aparece; la tabla de la computadora se apaga y no responde.
 function syncLock() {
     const ok = listReady();
-    [$('searchcard'), document.querySelector('.scroll')].forEach((el) => {
-        if (!el) return;
-        el.classList.toggle('locked', !ok);
-        if (ok) el.removeAttribute('inert'); else el.setAttribute('inert', '');
-    });
+    ['searchcard', 'selbox'].forEach((id) => { const el = $(id); if (el) el.hidden = !ok; });
+    const sc = document.querySelector('.scroll');
+    if (sc) {
+        sc.classList.toggle('locked', !ok);
+        if (ok) sc.removeAttribute('inert'); else sc.setAttribute('inert', '');
+    }
 }
 // Al escribir el nombre: solo cuando la lista pasa de bloqueada a habilitada (o al revés) se redibuja, para no mover nada mientras se sigue escribiendo.
 function onWhoChange() {

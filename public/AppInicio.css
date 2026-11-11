@@ -2015,8 +2015,7 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 #pm-app-results > *{ flex-shrink: 0; }
 .pm-app-foot{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; font-size: 0.72rem; color: var(--home-text-muted); }
 .pm-app-foot:empty{ display: none; }
-.pm-app-card.pm-app-locked{ pointer-events: none; }
-.pm-app-locked .pm-app-mcur, .pm-app-locked .pm-app-srow, .pm-app-locked .pm-app-sumrow{ opacity: 0.45; }
+.pm-app-card[hidden]{ display: none; }
 .pm-app-more{ font-family: inherit; font-size: 0.78rem; font-weight: 600; color: var(--home-accent); background: transparent; border: 1px solid var(--home-border); border-radius: 0.6rem; padding: 0.4rem 0.85rem; cursor: pointer; }
 .pm-app-result{ display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left; font-family: inherit; padding: 0.6rem 0.75rem; border: 1px solid var(--home-border); border-radius: 0.7rem; background: var(--home-bg); cursor: pointer; }
 .pm-app-result > span{ flex: 1; min-width: 0; }

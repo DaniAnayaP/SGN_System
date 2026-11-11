@@ -701,11 +701,10 @@ function renderNew() {
         if (catalogState === 'loading') { note.textContent = t('home.pmCatalogLoading'); return; }
         if (catalogState === 'none') { note.textContent = t('home.pmCatalogNone'); return; }
         if (catalogState === 'cached') note.textContent = t('home.pmCatalogCached', { n: catalog.length });
-        // PRIMERO el centro, el lugar (si la empresa los usa) y quién pide; hasta entonces la tarjeta de la lista se ve apagada, no responde y avisa qué falta
+        // PRIMERO el centro, el lugar (si la empresa los usa) y quién pide; hasta entonces la tarjeta «Buscar artículo» NO aparece
         const block = listBlock();
         lockedNow = !!block;
-        searchBox.classList.toggle('pm-app-locked', lockedNow);
-        if (lockedNow) searchBox.setAttribute('inert', ''); else searchBox.removeAttribute('inert');
+        searchBox.hidden = lockedNow;
         if (block) { note.textContent = t(block); return; }
         // con lugares solo salen los códigos habilitados para ese lugar desde ese centro
         if (usesPlaces()) {
