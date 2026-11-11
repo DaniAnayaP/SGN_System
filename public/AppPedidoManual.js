@@ -188,20 +188,17 @@ const dayShort = (iso) => {
     return `${capFirst(f({ weekday: 'short' }))} ${d.getUTCDate()} ${f({ month: 'short' })}`;
 };
 const whenLabel = (w) => (w ? dayShort(w) : t('home.pmAsap'));
-const whenOptions = (selected) => {
-    const days = allDays();
-    const extra = selected && !days.includes(selected) ? `<option value="${esc(selected)}" selected>${esc(dayShort(selected))}</option>` : ''; // una fecha que ya pasó se sigue viendo (el envío avisa)
-    return `<option value=""${selected === '' ? ' selected' : ''}>${esc(t('home.pmAsap'))}</option>${extra}${days.map((d, i) => `<option value="${d}"${selected === d ? ' selected' : ''}>${esc(i === 0 ? `${t('home.pmTomorrow')} · ${dayShort(d)}` : dayShort(d))}</option>`).join('')}`;
+// Las partes de un día: el celular enseña un día a la vez (tira de días en la hoja de cada código). dayParts = cómo se dibuja cada día de la tira.
+const dayParts = (iso) => {
+    const d = dayDate(iso);
+    const f = (o) => new Intl.DateTimeFormat(currentLang() === 'es' ? 'es-MX' : 'en-US', { timeZone: 'UTC', ...o }).format(d).replace('.', '');
+    return { dow: f({ weekday: 'short' }), day: d.getUTCDate(), mon: f({ month: 'short' }), weekend: [0, 6].includes(d.getUTCDay()) };
 };
+const dayLong = (iso) => capFirst(new Intl.DateTimeFormat(currentLang() === 'es' ? 'es-MX' : 'en-US', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(dayDate(iso)));
+const whenSort = (a, z) => (a === z ? 0 : (a === '' ? -1 : (z === '' ? 1 : a.localeCompare(z))));
+const sortedParts = (c) => c.parts.slice().sort((a, z) => whenSort(a.when, z.when));
 const roundQ = (n) => Math.round(n * 1000) / 1000;
 const partOf = (c, when) => c.parts.find((p) => p.when === when);
-function setPart(c, when, quantity) { const p = partOf(c, when); if (p) p.quantity = quantity; else c.parts.push({ when, quantity }); }
-// las cantidades de una misma fecha se juntan
-function mergeParts(c) {
-    const merged = [];
-    c.parts.forEach((p) => { const same = merged.find((x) => x.when === p.when); if (same) same.quantity = roundQ(same.quantity + p.quantity); else merged.push(p); });
-    c.parts = merged;
-}
 const itemsText = (n) => (n === 1 ? t('home.pmItem1') : t('home.pmItemsN', { n }));
 const userLabel = () => (currentUser && (currentUser.name || currentUser.username)) || '';
 
@@ -586,6 +583,12 @@ document.addEventListener('click', (event) => {
     document.querySelectorAll('.pm-app-pop:not([hidden])').forEach((pop) => { if (!pop.contains(event.target) && !event.target.closest('[data-pm-popbtn]')) pop.hidden = true; });
 });
 
+// El final de cada resultado: «+» o, si ese código ya lleva cantidad, el total y en cuántos días.
+function resultEnd(it) {
+    const c = draft.cart.get(it.id);
+    if (c && c.parts.length) { const n = c.parts.length; return `<em class="pm-app-got">${esc(qtyText(c.parts.reduce((s, p) => s + p.quantity, 0)))}<br>${esc(n === 1 ? t('home.pmGotDay') : t('home.pmGotDays', { d: n }))}</em>`; }
+    return '<i class="bx bx-plus-circle" aria-hidden="true"></i>';
+}
 function renderNew() {
     titleEl.textContent = t('home.pmNewButton');
     // el centro de costos
@@ -696,7 +699,7 @@ function renderNew() {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'pm-app-result';
-            btn.innerHTML = `<span><p>${highlight(it.description)}</p><span>${highlight([it.code, it.uom, it.categories].filter(Boolean).join(' · '))}</span></span><i class="bx bx-plus-circle" aria-hidden="true"></i>`;
+            btn.innerHTML = `<span><p>${highlight(it.description)}</p><span>${highlight([it.code, it.uom, it.categories].filter(Boolean).join(' · '))}</span></span>${resultEnd(it)}`;
             btn.addEventListener('click', () => openQuantity(it));
             results.appendChild(btn);
         });
@@ -756,6 +759,7 @@ function renderNew() {
         drawResults();
     });
     drawResults();
+    draft.redrawResults = drawResults; // la hoja de un código lo vuelve a llamar para marcar lo que ya lleva
 
     // el pedido armado
     const cartBox = document.createElement('div');
@@ -773,18 +777,6 @@ function renderNew() {
     const sendDraw = () => { sendBtn.disabled = !draft.cart.size || draft.costCenterId === null || (usesPlaces() && draft.placeId === null); };
     const cartDraw = () => {
         cartBox.innerHTML = `<h4 class="pm-app-title">${esc(t('home.pmCart'))}${draft.cart.size ? ` · ${esc(itemsText(draft.cart.size))}` : ''}</h4>`;
-        // para cuándo se pide todo el pedido: lo que va a esa fecha cambia con ella (lo que se puso aparte en otra fecha se respeta)
-        const whenAll = document.createElement('div');
-        whenAll.className = 'pm-app-whenrow';
-        whenAll.setAttribute('data-help-key', 'pmFechaEntrega');
-        whenAll.innerHTML = `<label for="pm-app-defwhen">${esc(t('home.pmWhenAll'))}</label><select id="pm-app-defwhen" class="pm-app-input pm-app-whensel">${whenOptions(draft.when)}</select>`;
-        whenAll.querySelector('select').addEventListener('change', (event) => {
-            const prev = draft.when;
-            draft.when = event.target.value;
-            draft.cart.forEach((c) => { c.parts.forEach((p) => { if (p.when === prev) p.when = draft.when; }); mergeParts(c); });
-            cartDraw();
-        });
-        cartBox.appendChild(whenAll);
         if (!draft.cart.size) {
             const empty = document.createElement('p');
             empty.className = 'pm-app-note';
@@ -798,51 +790,33 @@ function renderNew() {
             const head = document.createElement('div');
             head.className = 'pm-app-line';
             head.innerHTML = `<div class="pm-app-line-main"><p>${esc(item.description)}</p><span>${esc([item.code, item.uom].filter(Boolean).join(' · '))}</span></div>`;
+            const edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'pm-app-remove';
+            edit.setAttribute('data-help-key', 'pmFechaEntrega');
+            edit.setAttribute('aria-label', t('home.pmChange'));
+            edit.innerHTML = '<i class="bx bx-edit" aria-hidden="true"></i>';
+            edit.addEventListener('click', () => openQuantity(item));
             const rm = document.createElement('button');
             rm.type = 'button';
             rm.className = 'pm-app-remove';
             rm.setAttribute('aria-label', t('home.pmRemove'));
             rm.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-            rm.addEventListener('click', () => { draft.cart.delete(id); cartDraw(); });
-            head.appendChild(rm);
+            rm.addEventListener('click', () => { draft.cart.delete(id); cartDraw(); if (draft.redrawResults) draft.redrawResults(); });
+            head.append(edit, rm);
             box.appendChild(head);
-            // una cantidad con su fecha por renglón: tocar la cantidad la cambia; la fecha se elige ahí mismo
-            c.parts.forEach((p, j) => {
-                const row = document.createElement('div');
-                row.className = 'pm-app-part';
-                const qtyBtn = document.createElement('button');
-                qtyBtn.type = 'button';
-                qtyBtn.className = 'pm-app-partqty';
-                qtyBtn.setAttribute('aria-label', t('home.pmQuantity'));
-                qtyBtn.innerHTML = `${esc(qtyText(p.quantity))} <small>${esc(item.uom || '')}</small>`;
-                qtyBtn.addEventListener('click', () => openQuantity(item, p.when));
-                const sel = document.createElement('select');
-                sel.className = 'pm-app-input pm-app-whensel';
-                sel.setAttribute('aria-label', t('home.pmNeedBy'));
-                sel.innerHTML = whenOptions(p.when);
-                sel.addEventListener('change', () => { p.when = sel.value; mergeParts(c); cartDraw(); });
-                row.append(qtyBtn, sel);
-                if (c.parts.length > 1) {
-                    const del = document.createElement('button');
-                    del.type = 'button';
-                    del.className = 'pm-app-remove';
-                    del.setAttribute('aria-label', t('home.pmRemove'));
-                    del.textContent = '×';
-                    del.addEventListener('click', () => { c.parts.splice(j, 1); cartDraw(); });
-                    row.appendChild(del);
-                }
-                box.appendChild(row);
+            // un chip por día con su cantidad («Vie 13 nov · 10»): tocarlo abre la hoja del código en ese día
+            const chips = document.createElement('div');
+            chips.className = 'pm-app-chips pm-app-daychips';
+            sortedParts(c).forEach((p) => {
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'pm-app-chip';
+                chip.textContent = `${whenLabel(p.when)} · ${qtyText(p.quantity)}`;
+                chip.addEventListener('click', () => openQuantity(item, p.when));
+                chips.appendChild(chip);
             });
-            // «+ Otra fecha»: el artículo se reparte en dos fechas (la nueva lleva el primer día que todavía no tiene)
-            const free = ['', ...allDays()].find((w) => !partOf(c, w));
-            if (free !== undefined) {
-                const split = document.createElement('button');
-                split.type = 'button';
-                split.className = 'pm-app-split';
-                split.textContent = t('home.pmAddDate');
-                split.addEventListener('click', () => { c.parts.push({ when: free, quantity: 1 }); cartDraw(); });
-                box.appendChild(split);
-            }
+            box.appendChild(chips);
             cartBox.appendChild(box);
         });
         sendDraw();
@@ -851,51 +825,89 @@ function renderNew() {
     cartDraw();
 }
 
-// La cantidad de un artículo (hoja desde abajo): − / número / + y «Agregar al pedido».
-// when: la fecha con la que se abre (la de la cantidad que se toca en el pedido; sin ella, la de «Todo el pedido para»). La misma fecha de un artículo que ya está en el pedido se cambia, otra fecha se agrega.
-function openQuantity(item, when) {
+// La hoja de un código (desde abajo, como una app): se elige el DÍA y la CANTIDAD de ese día, un día a la vez y tantos días como haga falta. Lo que queda al tocar «Listo» reemplaza lo que ese código llevaba en el pedido
+// (draft.cart: Map(id → { item, parts: [{ when, quantity }] })): el envío y la cola sin señal no cambian. «Cancelar» o tocar fuera no cambian nada. startDay = el día con el que se abre (el del chip que se tocó; sin él, el primero del
+// código, o el último día usado en este pedido).
+function openQuantity(item, startDay) {
     const scrim = document.createElement('div');
     scrim.className = 'home-select-scrim';
     const sheet = document.createElement('div');
-    sheet.className = 'home-select-sheet';
+    sheet.className = 'home-select-sheet pm-app-daysheet';
     const inCart = draft.cart.get(item.id);
-    const startWhen = when === undefined ? draft.when : when;
-    const existing = inCart ? partOf(inCart, startWhen) : null;
-    sheet.innerHTML = `<div class="home-select-sheet-handle"></div><div class="home-select-sheet-title">${esc(item.description)}</div>
-        <p class="pm-app-note pm-app-sheet-meta">${esc([item.code, item.uom, item.categories].filter(Boolean).join(' · '))}</p>
-        <label class="pm-app-qty-label" for="pm-app-qty">${esc(t('home.pmQuantity'))}</label>
-        <div class="pm-app-stepper"><button type="button" id="pm-app-minus" aria-label="−"><i class="bx bx-minus" aria-hidden="true"></i></button><input id="pm-app-qty" type="number" inputmode="decimal" min="0" step="any" value="${existing ? esc(existing.quantity) : '1'}"><button type="button" id="pm-app-plus" aria-label="+"><i class="bx bx-plus" aria-hidden="true"></i></button></div>
-        <label class="pm-app-qty-label" for="pm-app-when">${esc(t('home.pmNeedBy'))}</label>
-        <select id="pm-app-when" class="pm-app-input pm-app-whensel">${whenOptions(startWhen)}</select>
-        <p class="home-carga-field-error" id="pm-app-qty-err">${esc(t('main.recEditError_QTY'))}</p>
-        <button type="button" class="home-carga-new-btn" id="pm-app-add"><i class="bx bx-cart-add" aria-hidden="true"></i><span>${esc(t('home.pmAdd'))}</span></button>
-        <button type="button" class="home-carga-secondary-btn" id="pm-app-cancel">${esc(t('home.pmCancel'))}</button>`;
+    const work = new Map(inCart ? inCart.parts.map((p) => [p.when, p.quantity]) : []);
+    let day = startDay !== undefined ? startDay : (inCart && inCart.parts.length ? sortedParts(inCart)[0].when : (draft.lastWhen !== undefined ? draft.lastWhen : draft.when));
+    if (day !== '' && !allDays().includes(day) && !work.has(day)) day = '';
+    const todayText = t('home.pmTodayIs', { d: dayLong(appToday()) });
+    sheet.innerHTML = `<div class="home-select-sheet-handle"></div>
+        <div class="pm-app-daybody">
+            <div class="home-select-sheet-title">${esc(item.description)}</div>
+            <p class="pm-app-note pm-app-sheet-meta">${esc([item.code, item.uom, item.categories].filter(Boolean).join(' · '))}</p>
+            <span class="pm-app-qty-label">${esc(t('home.pmDayWhen'))}</span>
+            <div class="pm-app-days" id="pm-app-days"></div>
+            <p class="pm-app-note pm-app-sheet-meta">${esc(t('home.pmDayNote', { today: todayText }))}</p>
+            <div class="pm-app-daybox"><b id="pm-app-daywhen"></b>
+                <div class="pm-app-stepper"><button type="button" id="pm-app-minus" aria-label="−"><i class="bx bx-minus" aria-hidden="true"></i></button><input id="pm-app-qty" type="number" inputmode="decimal" min="0" step="any" placeholder="0" aria-label="${esc(t('home.pmQtyOfDay'))}"><button type="button" id="pm-app-plus" aria-label="+"><i class="bx bx-plus" aria-hidden="true"></i></button></div>
+                <span class="pm-app-dayunit" id="pm-app-dayunit"></span></div>
+            <div class="pm-app-mine" id="pm-app-mine"></div>
+        </div>
+        <div class="pm-app-dayfoot"><button type="button" class="home-carga-new-btn" id="pm-app-done"></button><button type="button" class="home-carga-secondary-btn" id="pm-app-cancel">${esc(t('home.pmCancel'))}</button></div>`;
     scrim.appendChild(sheet);
     document.body.appendChild(scrim);
-    const input = sheet.querySelector('#pm-app-qty');
-    const err = sheet.querySelector('#pm-app-qty-err');
-    const step = (delta) => { const v = parseFloat(input.value) || 0; input.value = String(Math.max(0, Math.round((v + delta) * 1000) / 1000)); err.classList.remove('show'); };
-    sheet.querySelector('#pm-app-minus').addEventListener('click', () => step(-1));
-    sheet.querySelector('#pm-app-plus').addEventListener('click', () => step(1));
+    const $s = (sel) => sheet.querySelector(sel);
+    const input = $s('#pm-app-qty');
+    const cur = () => work.get(day) || 0;
+    const setQ = (q) => { if (q > 0) work.set(day, Math.min(q, 999999)); else work.delete(day); };
+    const whens = () => [...work.keys()].sort(whenSort);
+    const total = () => roundQ([...work.values()].reduce((s, q) => s + q, 0));
+    // lo que cambia: los días (con su cantidad), el día elegido, lo que se lleva y el botón; full = también escribe la cantidad en la casilla
+    const paint = (full) => {
+        const strip = $s('#pm-app-days');
+        const keep = strip.scrollLeft;
+        const list = ['', ...allDays()];
+        [...work.keys()].forEach((w) => { if (!list.includes(w)) list.push(w); }); // una fecha que ya pasó se sigue viendo (el envío avisa)
+        strip.innerHTML = list.map((w) => {
+            const p = w ? dayParts(w) : null;
+            const q = work.get(w);
+            return `<button type="button" class="pm-app-day${p && p.weekend ? ' pm-app-we' : ''}${w === '' ? ' pm-app-asap' : ''}" data-pm-day="${esc(w)}" aria-pressed="${day === w}">${q ? `<em>${esc(qtyText(q))}</em>` : ''}${w === '' ? `<b>${esc(t('home.pmAsap'))}</b>` : `<span>${esc(p.dow.toUpperCase())}</span><b>${p.day}</b><small>${esc(p.mon)}</small>`}</button>`;
+        }).join('');
+        strip.scrollLeft = keep;
+        $s('#pm-app-daywhen').textContent = day === '' ? t('home.pmAsap') : dayLong(day);
+        $s('#pm-app-dayunit').textContent = t('home.pmDayUnit', { u: item.uom || t('home.pmQuantity') });
+        if (full) input.value = cur() ? String(cur()) : '';
+        const ws = whens();
+        $s('#pm-app-mine').innerHTML = ws.length ? `<span class="pm-app-qty-label">${esc(t('home.pmDayMine'))}</span>${ws.map((w) => `<div class="pm-app-mrow${w === day ? ' pm-app-now' : ''}"><button type="button" class="pm-app-mpick" data-pm-pick="${esc(w)}">${esc(whenLabel(w))}</button><b>${esc(qtyText(work.get(w)))} ${esc(item.uom || '')}</b><button type="button" class="pm-app-mrm" data-pm-rm="${esc(w)}">${esc(t('home.pmRemove'))}</button></div>`).join('')}` : '';
+        const done = $s('#pm-app-done');
+        const sum = total();
+        done.querySelector('span').textContent = sum > 0 ? t('home.pmDayDone', { n: `${qtyText(sum)} ${item.uom || ''}`.trim() }) : (inCart ? t('home.pmDayRemoveAll') : t('home.pmDayDoneEmpty'));
+        done.disabled = sum <= 0 && !inCart;
+    };
+    $s('#pm-app-done').innerHTML = '<i class="bx bx-check" aria-hidden="true"></i><span></span>';
     const close = () => scrim.remove();
     scrim.addEventListener('click', (event) => { if (event.target === scrim) close(); });
-    sheet.querySelector('#pm-app-cancel').addEventListener('click', close);
-    const whenSel = sheet.querySelector('#pm-app-when');
-    // al cambiar la fecha, si ese artículo ya tiene cantidad para ella se ve (agregar la cambia); si no, queda la que se estaba escribiendo
-    whenSel.addEventListener('change', () => { const there = inCart ? partOf(inCart, whenSel.value) : null; if (there) input.value = String(there.quantity); err.classList.remove('show'); });
-    sheet.querySelector('#pm-app-add').addEventListener('click', () => {
-        const qty = Math.round(parseFloat(input.value) * 1000) / 1000;
-        if (!Number.isFinite(qty) || qty <= 0 || qty > 999999) { err.classList.add('show'); return; }
-        let c = draft.cart.get(item.id);
-        if (!c) { c = { item, parts: [] }; draft.cart.set(item.id, c); }
-        // si se abrió con la cantidad de una fecha y se cambió la fecha, esa cantidad se mueve a la nueva (si ya había una ahí, se juntan)
-        if (existing && whenSel.value !== startWhen) { c.parts.splice(c.parts.indexOf(existing), 1); const there = partOf(c, whenSel.value); if (there) there.quantity = roundQ(there.quantity + qty); else c.parts.push({ when: whenSel.value, quantity: qty }); }
-        else setPart(c, whenSel.value, qty);
-        close();
-        draft.redrawCart();
+    $s('#pm-app-cancel').addEventListener('click', close);
+    sheet.addEventListener('click', (event) => {
+        const t2 = event.target;
+        const d = t2.closest('[data-pm-day]');
+        if (d) { day = d.getAttribute('data-pm-day'); paint(true); return; }
+        const pk = t2.closest('[data-pm-pick]');
+        if (pk) { day = pk.getAttribute('data-pm-pick'); paint(true); return; }
+        const rm = t2.closest('[data-pm-rm]');
+        if (rm) { work.delete(rm.getAttribute('data-pm-rm')); paint(true); return; }
+        if (t2.closest('#pm-app-minus')) { const c = cur(); setQ(c > 1 ? Math.max(0, Math.round(c - 1)) : 0); paint(true); return; }
+        if (t2.closest('#pm-app-plus')) { setQ(Math.round(cur() + 1)); paint(true); return; }
+        if (t2.closest('#pm-app-done')) {
+            const parts = whens().map((w) => ({ when: w, quantity: work.get(w) }));
+            if (!parts.length) draft.cart.delete(item.id); else draft.cart.set(item.id, { item, parts });
+            if (parts.length) draft.lastWhen = parts.some((p) => p.when === day) ? day : parts[parts.length - 1].when;
+            close();
+            draft.redrawCart();
+            if (draft.redrawResults) draft.redrawResults();
+        }
     });
-    input.focus();
-    input.select();
+    input.addEventListener('input', () => { const n = parseFloat(String(input.value).replace(',', '.')); setQ(Number.isFinite(n) && n > 0 ? roundQ(n) : 0); paint(false); }); // sin tocar la casilla que se está escribiendo
+    paint(true);
+    const on = $s('.pm-app-day[aria-pressed="true"]');
+    if (on && on.scrollIntoView) { try { on.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch { /* sin desplazamiento */ } }
 }
 
 async function sendDraft() {

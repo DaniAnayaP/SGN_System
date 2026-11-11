@@ -4428,11 +4428,8 @@
     "pmNoRelatedPlace": "Este lugar todavía no tiene códigos habilitados para envío desde este centro de costos (Relación Código Envío): no hay nada que pedir.",
     "pmNeedPlace": "Elige el lugar que solicita para enviar.",
     "pmErrRelated": "Un artículo ya no está habilitado para ese lugar (o centro de costos): quítalo del pedido.",
-    "pmWhenAll": "Todo el pedido para",
     "pmAsap": "Lo antes posible",
-    "pmTomorrow": "Mañana",
     "pmNeedBy": "Para",
-    "pmAddDate": "+ Otra fecha para este artículo",
     "pmErrDate": "Una fecha no es válida: elige desde mañana y hasta 14 días.",
     "pmNewButton": "Nuevo pedido",
     "pmListEmpty": "Todavía no hay pedidos.",
@@ -4446,7 +4443,18 @@
     "pmNone": "No se encontró nada con eso.",
     "pmMore": "Hay más resultados: escribe más para acotar.",
     "pmQuantity": "Cantidad",
-    "pmAdd": "Agregar al pedido",
+    "pmChange": "Cambiar",
+    "pmDayWhen": "¿Para cuándo?",
+    "pmDayMine": "Lo que llevas de este código",
+    "pmDayUnit": "{u} en ese día",
+    "pmDayDone": "Listo · {n}",
+    "pmDayDoneEmpty": "Listo",
+    "pmDayRemoveAll": "Quitar del pedido",
+    "pmDayNote": "{today}. Se pide desde mañana y hasta 14 días.",
+    "pmTodayIs": "Hoy es {d}",
+    "pmGotDay": "1 día",
+    "pmGotDays": "{d} días",
+    "pmQtyOfDay": "Cantidad de ese día",
     "pmCancel": "Cancelar",
     "pmCart": "Tu pedido",
     "pmCartEmpty": "Todavía no agregas nada. Busca un artículo y elige la cantidad.",
@@ -6183,8 +6191,8 @@
       "example": "entregas las 24 piezas de leche: cambias el renglón a Surtido."
     },
     "pmFechaEntrega": {
-      "what": "Para cuándo quieres que llegue lo que pides: desde mañana y hasta 14 días, o «Lo antes posible». «Todo el pedido para» pone la misma fecha a todo lo que no hayas puesto aparte; en cada artículo puedes cambiarle la fecha o repartirlo en varias con «+ Otra fecha para este artículo». Cada fecha queda como un renglón del pedido.",
-      "example": "pides 20 cajas de leche: 12 para el jueves y 8 para el lunes — dos fechas del mismo artículo."
+      "what": "Para cuándo quieres que llegue lo que pides: desde mañana y hasta 14 días, o «Lo antes posible». Al tocar un código (o el lápiz de un artículo ya agregado) se abre su hoja: eliges el día en la tira de arriba y escribes (o con − y +) la cantidad de ESE día; puedes repetirlo con otros días y «Listo» los deja todos en el pedido. Cada día queda como un renglón del pedido y se ve como un chip («Vie 13 nov · 10»); tocar el chip abre la hoja en ese día.",
+      "example": "pides 20 cajas de leche: eliges el jueves y pones 12, eliges el lunes y pones 8 — dos días del mismo artículo."
     },
     "pmLugar": {
       "what": "El lugar que pide el pedido (por ejemplo un hospital fuera del centro de distribución). Cada lugar solo muestra los códigos habilitados para enviarle desde el centro de costos elegido (Relación Código Envío); al cambiar de lugar se quita del pedido lo que no esté habilitado para el nuevo.",

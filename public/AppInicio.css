@@ -2037,6 +2037,36 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .home-select-sheet .home-carga-new-btn, .home-select-sheet .home-carga-secondary-btn{ width: calc(100% - 2rem); margin: 0.5rem 1rem 0; }
 .pm-app-send:disabled{ opacity: 0.45; cursor: default; }
 .pm-app-cc .home-carga-field-trailing{ margin-left: auto; color: var(--home-text-muted); }
+/* Pedido Manual (App) — hoja de un código: tira de días, cantidad del día elegido y lo que lleva el código (un día a la vez) */
+.pm-app-daysheet{ max-height: 92vh; max-height: 92dvh; display: flex; flex-direction: column; }
+.pm-app-daybody{ overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 0.5rem; min-height: 0; flex: 1; }
+.pm-app-dayfoot{ flex: none; padding-bottom: 0.2rem; }
+.pm-app-days{ display: flex; gap: 0.4rem; overflow-x: auto; padding: 0.55rem 1rem 0.3rem; scrollbar-width: none; }
+.pm-app-days::-webkit-scrollbar{ display: none; }
+.pm-app-day{ flex: none; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 3.3rem; padding: 0.4rem 0.35rem 0.35rem; border: 1px solid var(--home-border); border-radius: 0.9rem; background: var(--home-bg); color: var(--home-text-secondary); font-family: inherit; line-height: 1.1; cursor: pointer; }
+.pm-app-day span{ font-size: 0.56rem; font-weight: 800; letter-spacing: 0.08em; color: var(--home-text-muted); }
+.pm-app-day b{ font-size: 1.1rem; margin: 0.05rem 0; color: var(--home-text-primary); }
+.pm-app-day small{ font-size: 0.6rem; color: var(--home-text-muted); }
+.pm-app-day.pm-app-we{ background: var(--home-surface-2); }
+.pm-app-day.pm-app-asap{ min-width: 4.8rem; }
+.pm-app-day.pm-app-asap b{ font-size: 0.74rem; line-height: 1.15; margin: 0.15rem 0; text-align: center; }
+.pm-app-day[aria-pressed="true"]{ background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2)); border-color: transparent; }
+.pm-app-day[aria-pressed="true"] span, .pm-app-day[aria-pressed="true"] small, .pm-app-day[aria-pressed="true"] b{ color: var(--home-on-accent); }
+.pm-app-day em{ position: absolute; top: -0.4rem; right: -0.2rem; min-width: 1.25rem; height: 1.25rem; padding: 0 0.28rem; border-radius: 999px; background: #1d7a46; color: #fff; font-style: normal; font-size: 0.62rem; font-weight: 800; display: grid; place-items: center; border: 2px solid var(--home-surface); }
+.pm-app-daybox{ margin: 0 1rem; border: 1.5px solid var(--home-accent-strong-1); border-radius: 1rem; padding: 0.65rem 0.5rem 0.7rem; display: flex; flex-direction: column; align-items: center; gap: 0.45rem; background: var(--home-surface-2); }
+.pm-app-daybox > b{ font-size: 0.88rem; color: var(--home-text-primary); text-align: center; }
+.pm-app-daybox .pm-app-stepper{ padding: 0; width: 100%; justify-content: center; }
+.pm-app-daybox .pm-app-stepper input{ flex: none; width: 6.2rem; font-size: 1.5rem; }
+.pm-app-dayunit{ font-size: 0.72rem; color: var(--home-text-muted); }
+.pm-app-mine{ padding: 0 1rem; display: flex; flex-direction: column; }
+.pm-app-mine .pm-app-qty-label{ padding: 0 0 0.15rem; }
+.pm-app-mrow{ display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.7rem; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid var(--home-divider); font-size: 0.82rem; color: var(--home-text-secondary); }
+.pm-app-mrow b{ font-variant-numeric: tabular-nums; color: var(--home-text-primary); }
+.pm-app-mpick{ text-align: left; border: 0; background: none; font: inherit; color: inherit; padding: 0.2rem 0; cursor: pointer; }
+.pm-app-mrm{ border: 0; background: none; font: inherit; font-size: 0.72rem; color: #d9443a; cursor: pointer; }
+.pm-app-mrow.pm-app-now .pm-app-mpick, .pm-app-mrow.pm-app-now b{ color: var(--home-accent); font-weight: 700; }
+.pm-app-daychips{ padding-left: 0.5rem; }
+.pm-app-got{ flex: none; font-style: normal; font-size: 0.66rem; font-weight: 700; line-height: 1.2; text-align: center; color: var(--home-accent); background: var(--home-surface-2); border: 1px solid var(--home-accent); border-radius: 999px; padding: 0.2rem 0.55rem; white-space: nowrap; }
 
 /* Pedido Manual (App) — buscador igual al de los QR del Layout: tipo de filtro, signos $ @ ,, caja con borrar y «Buscar en» con «Todos»; «Quién pide»; número de pedido. */
 .pm-app-req{ color: var(--home-danger, #d9443a); }
