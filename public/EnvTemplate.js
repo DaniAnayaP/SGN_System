@@ -76,6 +76,7 @@
         if (!rawSku) return bad('sku', 'skuRequired');
         let item = null;
         if (/^\d+$/.test(rawSku)) item = ctx.itemBySku(Number(rawSku)) || ctx.itemByUpc(rawSku);
+        else if (/^[A-Za-z]{6}\d{6,9}$/.test(rawSku)) item = ctx.itemBySku(rawSku.toUpperCase()) || ctx.itemByUpc(rawSku); // el SKU completo (CMCSCD000123)
         else item = ctx.itemByUpc(rawSku);
         if (!item) return bad('sku', 'skuUnknown', { value: rawSku });
         const rawPlace = String(v.place || '').trim();

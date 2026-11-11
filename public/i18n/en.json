@@ -3109,7 +3109,9 @@
     "tplErr_skuExists": "SKU {sku} already exists. Check the file again.",
     "tplErr_skuDuplicateFile": "That SKU is already in row {row} of your file. Remove one of the two rows.",
     "tplErr_skuRequired": "SKU: it is required (your code number, for example 195201).",
-    "tplNeedSku": "Your file needs the SKU column: it is the only required one.",
+    "tplNeedDesc": "Your file needs the Unique Description column: it is the only required one.",
+    "tplErr_descRequired": "Unique Description: it is required (and it cannot be repeated).",
+    "tplInstDesc": "The name that identifies the code. It is required and it is the only required column: it cannot be repeated, neither with another code that already exists nor in another row of the file (upper or lower case, accents and extra spaces do not matter).",
     "tplInstUpc": "Barcode, numbers only (8 to 14). Optional. It cannot be repeated in another code.",
     "tplInstText": "Free text (up to 200 letters). It can be left empty and filled in later.",
     "tplInstUdm": "A unit from the Our Unit of Measure catalog: {list}.",
@@ -3139,15 +3141,15 @@
     "tplColsFile": "Columns in your file",
     "tplColsMissing": "Template columns not in your file (left untouched)",
     "tplKeyLabel": "How each row is recognized",
-    "tplKeyFirst": "SKU: required",
-    "tplKeySecond": "UPC: optional",
-    "tplKeyNote": "The SKU is the key of each row: if it already exists that line is updated; if not, it is created with that SKU. The UPC is optional and cannot be repeated. A column left unchecked is not loaded and changes nothing.",
+    "tplKeyFirst": "Unique Description: required",
+    "tplKeySecond": "SKU and UPC: optional",
+    "tplKeyNote": "The Unique Description is the key of each row and cannot be repeated. The SKU is assigned by the system: if the row carries the SKU of a code that already exists that line is updated; if it carries no SKU it is created as a new code with the next SKU. The UPC is optional and cannot be repeated. A column left unchecked is not loaded and changes nothing.",
     "tplKeyTag": "key",
     "tplStateNew": "New",
     "tplStateUpdate": "Updates",
     "tplStateSame": "No changes",
     "tplStateComplete": "Already complete",
-    "tplWillCreateOnly": "Created with the SKU only; the rest stays pending in Alta Artículos.",
+    "tplWillCreateOnly": "Created with the Unique Description only; the rest stays pending in Alta Artículos.",
     "tplWillCreate": "Created with {n} values; the rest stays pending in Alta Artículos.",
     "tplWillUpdate": "SKU {sku}: {parts}.",
     "tplUpdChange": "changes {list}",
@@ -3164,14 +3166,14 @@
     "tplResultUpdN": "{n} articles were updated",
     "tplResultUpdated": "Updated: {list}",
     "tplResultPending": " · {n} changes are waiting for authorization",
-    "tplInstSku": "Your code number (up to 9 digits, for example 195201). It is required and it is the only required column: if it already exists in the system that line is updated; if not, it is created with that number.",
+    "tplInstSku": "The SKU is assigned by the system (for example CMCSCD000123). Leave it empty in new rows; type it only to update a code that already exists (its 6-digit number also works, for example 000123).",
     "tplInstClass": "A classification from the catalog that belongs to the code's Inventory Category: {list}. Put the category in the same row (or the code must already have it).",
     "tplYesNew": "Yes, in new rows",
     "tplInstRulesTitle": "Rules",
-    "tplInstRule1": "Each row is recognized by its SKU (required). If the SKU already exists the same line is updated; if not, it is created with that SKU.",
+    "tplInstRule1": "The Unique Description is required and cannot be repeated (neither with another code nor in another row). The SKU is assigned by the system: if the row carries the SKU of a code that already exists that line is updated; if it carries no SKU it is created as a new code.",
     "tplInstRule2": "An empty cell never erases what the code already has. Only the columns you check when you upload the file are loaded.",
     "tplInstRule3": "A code that is already complete is not changed here: it is corrected in Edición Código. The 6 photos are not part of the template.",
-    "tplErr_skuFormat": "SKU: type only the number, up to 9 digits (for example 195201).",
+    "tplErr_skuFormat": "SKU: type the full SKU (for example CMCSCD000123) or its 6-digit number (000123).",
     "tplErr_skuUnknown": "SKU {sku} does not exist. The system assigns the SKU: leave it empty if the row is new, or correct it.",
     "tplErr_keyRequired": "Type the UPC (or the SKU, if the code already exists).",
     "tplErr_classUnknown": "Classification: \"{value}\" is not in the catalog.",
@@ -5409,7 +5411,7 @@
       "example": "you load 40 new codes at once instead of one by one."
     },
     "tplDownload": {
-      "what": "Downloads the Excel template with all the fill-in columns (including the SKU and the classification) and an Instructions sheet with what goes in each one and the catalog options. Only the SKU (your code number) is required; the 6 photos are not part of the template.",
+      "what": "Downloads the Excel template with all the fill-in columns (including the SKU and the classification) and an Instructions sheet with what goes in each one and the catalog options. Only the Unique Description is required (and it cannot be repeated); the SKU is assigned by the system; the 6 photos are not part of the template.",
       "example": "you fill it in on your computer with the supplier data."
     },
     "tplUpload": {
@@ -5425,7 +5427,7 @@
       "example": "you replace the repeated UPC with the right one and the row becomes New."
     },
     "tplColumns": {
-      "what": "Here you choose which columns of your file are loaded. A column left unchecked is not loaded and changes nothing, so you can load only the UPC and fill in the rest later. The SKU and the UPC are the keys that recognize each code: if there is a SKU the SKU rules (it also lets you fix a UPC), otherwise the UPC.",
+      "what": "Here you choose which columns of your file are loaded. A column left unchecked is not loaded and changes nothing, so you can load only the Unique Description and fill in the rest later. The Unique Description is the key of each row (required and never repeated) and the SKU is assigned by the system: if the row carries the SKU of a code that already exists that line is updated (it also lets you fix a description); otherwise it is created with the next SKU.",
       "example": "you load only the UPC column and fill in the descriptions in another load using the SKUs."
     },
     "tplNext": {

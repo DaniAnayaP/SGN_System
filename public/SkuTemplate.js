@@ -79,6 +79,7 @@
             hasUpc: used.has('upc'),
             hasKey: used.has('upc') || used.has('sku'),
             hasSku: used.has('sku'),
+            hasDesc: used.has('uniqueDescription'),
             ignored: (firstRow || []).map((cell, i) => (keys[i] ? '' : String(cell == null ? '' : cell).trim())).filter(Boolean),
         };
     }
@@ -93,9 +94,9 @@
         const head = mapHeaders(matrix[first], full);
         let keys;
         let start;
-        if (full && head.matched >= 1 && !head.hasSku) return { error: 'sku', rows: [] }; // trae encabezados pero no el SKU (la única columna obligatoria)
+        if (full && head.matched >= 1 && !head.hasDesc && !head.hasSku) return { error: 'desc', rows: [] }; // trae encabezados pero ni la Descripción Única (la única obligatoria) ni el SKU (solo para actualizar)
         if (full ? head.matched >= 1 : (head.hasUpc && head.matched >= 2)) { keys = head.keys; start = first + 1; }
-        else if (/^\d/.test(String(matrix[first][0] == null ? '' : matrix[first][0]).trim())) { keys = (full ? ALL_COLUMNS : COLUMNS).map((c) => c.key); start = first; } // sin encabezados: el orden de la plantilla
+        else if (/^\d+$/.test(String(matrix[first][0] == null ? '' : matrix[first][0]).trim())) { keys = (full ? ALL_COLUMNS : COLUMNS).map((c) => c.key); start = first; } // sin encabezados: el orden de la plantilla
         else return { error: 'columns', rows: [] };
         const rows = [];
         for (let i = start; i < matrix.length; i += 1) {
@@ -211,18 +212,24 @@
         const v = row.v || {};
         const chosen = (key) => !ctx.selected || ctx.selected.has(key);
         const val = (key) => String(v[key] == null ? '' : v[key]).trim();
-        // Web (allowUpdate): el SKU es obligatorio y es la llave (el número de código del cliente); el UPC es opcional. App (sin allowUpdate): como siempre, por UPC.
+        // Web (allowUpdate): la Descripción Única es la única columna obligatoria (y nunca se repite); el SKU lo asigna el sistema, así que solo sirve para actualizar un código que ya existe; el UPC es opcional. App (sin allowUpdate): como siempre, por UPC.
         const web = !!ctx.allowUpdate;
         const skuRaw = val('sku');
+        // sin SKU la fila es un código nuevo y la Descripción Única es su llave: se carga aunque su columna no se haya marcado
+        const wants = (key) => chosen(key) || (web && !skuRaw && key === 'uniqueDescription');
         const upc = web && !chosen('upc') ? '' : val('upc');
         const fail = (field, code, params) => ({ error: { field, code, params: params || {} } });
         let item = null;
-        let skuNum = 0;
         if (web) {
-            if (!skuRaw) return fail('sku', 'skuRequired');
-            if (!/^\d{1,9}$/.test(skuRaw) || Number(skuRaw) < 1) return fail('sku', 'skuFormat');
-            skuNum = Number(skuRaw);
-            item = ctx.itemBySku ? ctx.itemBySku(skuNum) : null;
+            if (skuRaw) {
+                // el SKU completo (CMCSCD000123) o su número de 6 dígitos
+                const lookup = /^[A-Za-z]{6}\d{6,9}$/.test(skuRaw) ? skuRaw.toUpperCase() : (/^\d{1,9}$/.test(skuRaw) && Number(skuRaw) >= 1 ? Number(skuRaw) : null);
+                if (lookup === null) return fail('sku', 'skuFormat');
+                item = ctx.itemBySku ? ctx.itemBySku(lookup) : null;
+                if (!item) return fail('sku', 'skuUnknown', { sku: skuRaw });
+            } else if (!val('uniqueDescription')) {
+                return fail('uniqueDescription', 'descRequired');
+            }
         } else if (skuRaw) {
             if (!/^\d{1,9}$/.test(skuRaw)) return fail('sku', 'skuFormat');
             item = ctx.itemBySku ? ctx.itemBySku(Number(skuRaw)) : null;
@@ -235,14 +242,15 @@
         }
         if (upc && !/^\d{8,14}$/.test(upc)) return fail('upc', 'upcFormat');
         if (item && !web) return fail('upc', 'upcExists', { sku: item.sku });
-        const key = web ? `sku:${skuNum}` : (item ? `sku:${item.sku}` : `upc:${upc}`);
-        const prior = ctx.priorRowWithKey ? ctx.priorRowWithKey(key, row) : 0;
+        const key = item ? `sku:${item.sku}` : (web ? `desc:${descKey(val('uniqueDescription'))}` : `upc:${upc}`);
+        // un código nuevo sin SKU no tiene otra llave que su descripción: su repetición la revisa más abajo la regla de la Descripción Única
+        const prior = ctx.priorRowWithKey && !(web && !item) ? ctx.priorRowWithKey(key, row) : 0;
         if (prior) return fail(skuRaw ? 'sku' : 'upc', web ? 'skuDuplicateFile' : 'upcDuplicateFile', { row: prior });
         if (item && item.complete) return { action: 'complete', item, key, upcKey: '' };
         // el UPC (si viene) no puede ser el de otro código, ni repetirse en otra fila del archivo
         const upcKey = web && upc ? `upc:${upc}` : '';
         if (upcKey) {
-            const own = String(skuNum).padStart(6, '0');
+            const own = item ? item.sku : '';
             const other = ctx.itemByUpc ? ctx.itemByUpc(upc) : null;
             if (other && other.sku !== own) return fail('upc', 'upcExists', { sku: other.sku });
             const priorUpc = ctx.priorRowWithKey ? ctx.priorRowWithKey(upcKey, row) : 0;
@@ -250,7 +258,7 @@
         }
         // cada dato que viene (de las columnas elegidas), con las mismas reglas de siempre
         for (const c of ALL_COLUMNS) {
-            if (c.kind === 'sku' || c.key === 'upc' || !chosen(c.key)) continue;
+            if (c.kind === 'sku' || c.key === 'upc' || !wants(c.key)) continue;
             const value = val(c.key);
             if (!value) continue;
             if (c.kind === 'text' && value.length > MAX_TEXT) return fail(c.key, 'tooLong', { label: c.es, labelEn: c.en, max: MAX_TEXT });
@@ -265,9 +273,9 @@
         }
         // La Descripción Única nunca se repite: ni con otro código que ya existe ni con otra fila del archivo. Vacía no cuenta.
         let descKeyOfRow = '';
-        if (chosen('uniqueDescription') && val('uniqueDescription')) {
+        if (wants('uniqueDescription') && val('uniqueDescription')) {
             const k = descKey(val('uniqueDescription'));
-            const ownSku = item ? item.sku : (web ? String(skuNum).padStart(6, '0') : '');
+            const ownSku = item ? item.sku : '';
             const holder = ctx.itemByDescription ? ctx.itemByDescription(k) : null;
             if (holder && holder.sku !== ownSku) return fail('uniqueDescription', 'descExists', { sku: holder.sku });
             descKeyOfRow = `desc:${k}`;
@@ -277,7 +285,7 @@
         // lo que se escribiría, normalizado (nombre exacto del catálogo, tipo en su clave, números como número)
         const incoming = {};
         for (const c of ALL_COLUMNS) {
-            if (c.kind === 'sku' || (!chosen(c.key) && !(c.key === 'upc' && !web))) continue;
+            if (c.kind === 'sku' || (!wants(c.key) && !(c.key === 'upc' && !web))) continue;
             const value = val(c.key);
             if (!value) continue;
             if (c.kind === 'udm') incoming[c.key] = matchName(value, ctx.udm);
@@ -297,7 +305,7 @@
             const allowed = allowedFor(categoryNow);
             if (!matchName(incoming.classificationId, allowed)) return fail('classificationId', 'classNotOfCategory', { value: incoming.classificationId, category: categoryNow, options: allowed.slice(0, 8).join(', ') || '—' });
         }
-        if (!item) return { action: 'create', patch: incoming, key, upcKey, descKey: descKeyOfRow, sku: web ? skuNum : undefined };
+        if (!item) return { action: 'create', patch: incoming, key, upcKey, descKey: descKeyOfRow };
         const changes = [];
         Object.entries(incoming).forEach(([field, to]) => {
             const from = item.v[field] == null ? '' : item.v[field];
@@ -324,8 +332,8 @@
         integer: (p) => `${p.label}: escribe solo un número entero, sin decimales (por ejemplo 30).`,
         number: (p) => `${p.label}: escribe solo el número, en ${p.unit === 'kg' ? 'kilos (por ejemplo 0.5)' : 'centímetros (por ejemplo 12)'}.`,
         categoryUnknown: (p) => `${p.label}: «${p.value}» no está en el catálogo.`,
-        skuFormat: () => 'SKU: escribe solo el número, hasta 9 dígitos (por ejemplo 195201).',
-        skuRequired: () => 'SKU: es obligatorio (el número de tu código, por ejemplo 195201).',
+        skuFormat: () => 'SKU: escribe el SKU completo (por ejemplo CMCSCD000123) o su número de 6 dígitos (000123).',
+        descRequired: () => 'Descripción Única: es obligatoria (y no se puede repetir).',
         skuDuplicateFile: (p) => `Ese SKU ya está en la fila ${p.row} de tu archivo. Quita una de las dos filas.`,
         skuExists: (p) => `El SKU ${p.sku} ya existe. Vuelve a revisar el archivo.`,
         descExists: (p) => `Esa Descripción Única ya la tiene el SKU ${p.sku}. La Descripción Única no se puede repetir: corrígela.`,

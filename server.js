@@ -154,6 +154,7 @@ const {
     setSkuItemEditing,
     deleteSkuItem,
     getSkuNumberingInfo,
+    buildSkuCode,
     generatePublicToken,
     getSkuItemByPublicToken,
     setSkuItemPublicToken,
@@ -6278,7 +6279,7 @@ function mapSkuItemRecord(row, pendingByRecord, companyName) {
     return {
         id: row.id,
         registroUnico: row.db_id,
-        sku: String(row.record_number).padStart(6, '0'),
+        sku: padSku(row.record_number, row.sku_code),
         upc: row.upc,
         uniqueDescription: row.unique_description,
         knownDescription: row.known_description,
@@ -6384,7 +6385,7 @@ function maybeIssueSkuPublicToken(skuItem, clientId, forTestAccount) {
 app.get('/api/business/sku-items/upcs', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     res.set('Cache-Control', 'no-store');
-    res.json({ upcs: listSkuItemUpcs(req.user.clientId, req.user.isTestAccount).map((r) => [r.upc, String(r.record_number).padStart(6, '0')]) });
+    res.json({ upcs: listSkuItemUpcs(req.user.clientId, req.user.isTestAccount).map((r) => [r.upc, padSku(r.record_number, r.sku_code)]) });
 });
 
 // Carga por plantilla: da de alta muchos artículos a la vez, y con "update" también actualiza los que ya existen (Excel o filas pegadas, ya revisadas en pantalla). El servidor vuelve a revisar CADA fila con
@@ -6398,7 +6399,7 @@ function skuUniqueDescriptionOwner(clientId, isTest, text, exceptId = 0) {
     const key = SkuTemplate.descKey(text);
     if (!key) return null;
     const hit = listSkuUniqueDescriptions(clientId, isTest).find((r) => r.id !== exceptId && SkuTemplate.descKey(r.unique_description) === key);
-    return hit ? String(hit.record_number).padStart(6, '0') : null;
+    return hit ? padSku(hit.record_number, hit.sku_code) : null;
 }
 app.get('/api/business/sku-items/description-taken', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -6413,7 +6414,7 @@ function skuTemplateItem(row, classificationNames) {
         if (isSkuFieldFilled(value)) v[c.key] = value;
     });
     if (row.classification_id != null && classificationNames.has(row.classification_id)) v.classificationId = classificationNames.get(row.classification_id);
-    return { id: row.id, sku: String(row.record_number).padStart(6, '0'), upc: row.upc, complete: isSkuItemComplete(row), v };
+    return { id: row.id, sku: padSku(row.record_number, row.sku_code), num: row.record_number, upc: row.upc, complete: isSkuItemComplete(row), v };
 }
 // Las clasificaciones que se pueden poner: todas las activas del catálogo y, de cada categoría Inventario, las suyas.
 function skuTemplateClassifications(clientId, isTest) {
@@ -6451,7 +6452,7 @@ app.post('/api/business/sku-items/import', requireAuth, requireCostCenter, (req,
     const selected = Array.isArray(req.body && req.body.columns) ? new Set(req.body.columns.filter((k) => SkuTemplate.BY_KEY_ALL[k])) : null;
     const cls = skuTemplateClassifications(clientId, isTestAccount);
     const items = listSkuItems(clientId, isTestAccount).map((r) => skuTemplateItem(r, cls.names));
-    const bySku = new Map(items.map((i) => [Number(i.sku), i]));
+    const bySku = new Map(items.flatMap((i) => [[i.num, i], [i.sku, i]])); // por el número (6 dígitos) o por el SKU completo
     const byUpc = new Map(items.filter((i) => i.upc).map((i) => [i.upc, i]));
     const byDesc = new Map(items.filter((i) => i.v.uniqueDescription).map((i) => [SkuTemplate.descKey(i.v.uniqueDescription), i]));
     const accepted = new Map();
@@ -6499,7 +6500,7 @@ app.post('/api/business/sku-items/import', requireAuth, requireCostCenter, (req,
                 const prepared = prepareSkuClassificationPatch(req, { category_inventario: '', classification_id: null }, patch);
                 if (prepared.error) { failed.push({ index, n: row.n, field: 'classificationId', code: 'serverError', params: {}, message: prepared.error.message }); return; }
                 // con la carga por plantilla el SKU es el que trae la fila (el número de código del cliente); sin «update» (la App) el sistema asigna el siguiente
-                let item = createSkuItem({ clientId, isTestData: isTestAccount, recordNumber: allowUpdate ? plan.sku : 0 });
+                let item = createSkuItem({ clientId, isTestData: isTestAccount, recordNumber: 0 }); // el SKU lo asigna el sistema (siguiente consecutivo)
                 item = updateSkuItem(item.id, clientId, prepared.patch, isTestAccount);
                 logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'create', changedBy });
                 Object.entries(prepared.patch).forEach(([key, value]) => logTableChange({
@@ -6508,10 +6509,12 @@ app.post('/api/business/sku-items/import', requireAuth, requireCostCenter, (req,
                 }));
                 logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: item.id, recordLabel: `#${item.id}`, action: 'update', fieldKey: 'main.articuloOrigenAlta', oldValue: '', newValue: 'Carga por plantilla', changedBy });
                 accept(plan, row.n);
-                bySku.set(item.record_number, { id: item.id, sku: String(item.record_number).padStart(6, '0'), upc: plan.patch.upc || '', complete: false, v: {} });
-                if (plan.patch.upc) byUpc.set(plan.patch.upc, { id: item.id, sku: String(item.record_number).padStart(6, '0'), upc: plan.patch.upc, complete: false, v: {} });
-                if (plan.descKey) byDesc.set(plan.descKey.slice(5), { id: item.id, sku: String(item.record_number).padStart(6, '0') });
-                created.push({ index, n: row.n, id: item.id, sku: String(item.record_number).padStart(6, '0') });
+                const made = { id: item.id, sku: padSku(item.record_number, item.sku_code), num: item.record_number, upc: plan.patch.upc || '', complete: false, v: {} };
+                bySku.set(item.record_number, made);
+                bySku.set(made.sku, made);
+                if (plan.patch.upc) byUpc.set(plan.patch.upc, made);
+                if (plan.descKey) byDesc.set(plan.descKey.slice(5), made);
+                created.push({ index, n: row.n, id: item.id, sku: made.sku });
                 return;
             }
             // update: lo mismo que cambiar las celdas a mano en la tabla (permisos por columna, historial, avisos, clasificación que ya no le toca, QR de la ficha)
@@ -6678,7 +6681,7 @@ app.post('/api/business/sku-items/bulk-delete', requireAuth, requireCostCenter, 
     res.set('Cache-Control', 'no-store');
     // remaining / next: cuántos códigos quedan en TODO el sistema (Alta, Códigos, Edición Código) y cuál sería el siguiente número: el nuevo toma «el más alto + 1», así que sin ningún código empieza en 000001
     const numbering = getSkuNumberingInfo(clientId, isTestAccount);
-    res.json({ deleted, blocked, remaining: numbering.count, next: padSku(numbering.next) });
+    res.json({ deleted, blocked, remaining: numbering.count, next: buildSkuCode(clientId, numbering.next) });
 });
 
 // --- Ficha pública (no login) -----------------------------------------------
@@ -6946,7 +6949,7 @@ app.get('/api/business/layout/pieces', requireAuth, (req, res) => {
         const pack = codeRelationPack(r, layout, true, ctx);
         if (!pack.packCount || !pack.packBox) return;
         pieces.push({
-            id: r.id, sku: padSku(r.sku_number), spaceId: r.space_id, n: r.level, c: r.slot, p: posNum,
+            id: r.id, sku: padSku(r.sku_number, r.sku_code), spaceId: r.space_id, n: r.level, c: r.slot, p: posNum,
             level: pack.packLevel, label: pack.packLabel, shape: pack.packShape, count: pack.packCount, layers: pack.packLayers, perLayer: pack.packPerLayer, pieces: pack.packPieces, capacity: pack.packCapacity,
             leftH: pack.packLeftH, leftD: pack.packLeftD, box: pack.packBox, circle: pack.packCircle, layerHeight: pack.packLayerHeight, cells: pack.packCells,
         });
@@ -7025,7 +7028,7 @@ app.post('/api/business/layout/locator-code', requireAuth, requireCostCenter, (r
     const relationId = int(body.relationId);
     const existing = relationId ? getCodeRelationById(relationId, clientId, isTestAccount) : null;
     if (relationId && (!existing || !existingAtPlace || existing.id !== existingAtPlace.id)) return res.status(404).json({ message: 'La relación de este localizador ya no existe. Vuelve a abrir el Layout.' });
-    if (!relationId && existingAtPlace) return res.status(409).json({ message: `Este localizador ya tiene el código ${padSku(existingAtPlace.sku_number)}. Usa «Cambiar».` });
+    if (!relationId && existingAtPlace) return res.status(409).json({ message: `Este localizador ya tiene el código ${padSku(existingAtPlace.sku_number, existingAtPlace.sku_code)}. Usa «Cambiar».` });
     const state = {
         skuItemId, costCenterId: center.id, warehouseId: sub.parent_id, subWarehouseId: sub.id, zoneId: space.zoneId, spaceId, level, slot, position,
         classification: existing ? (existing.classification || 'activo') : 'activo', packUnitId,
@@ -7089,7 +7092,7 @@ function locatorsWithCodeRemoved(clientId, isTestAccount, centerId, prevLayout, 
         const zone = prev.zoneById.get(space.zoneId);
         const footprint = prev.footprintById.get(space.footprintId);
         const locator = zone && footprint ? RelTemplate.formatLocator({ zoneCode: zone.code, zoneName: zone.name, footprintCode: footprint.code, spaceType: space.type, spaceCode: space.code, level: r.level, slot: r.slot, position: posNum }) : '';
-        out.push({ locator: locator || `${space.code} N${r.level} E${r.slot} P${posNum}`, sku: padSku(r.sku_number) });
+        out.push({ locator: locator || `${space.code} N${r.level} E${r.slot} P${posNum}`, sku: padSku(r.sku_number, r.sku_code) });
     }
     return out;
 }
@@ -7928,11 +7931,11 @@ function manualItemsFor(clientId, isTest, costCenterId = 0, placeId = 0) {
     const hit = manualItemsCache.get(key);
     if (hit && Date.now() - hit.at < 20000) return hit.items;
     const items = listManualOrderItems(clientId, isTest, costCenterId || 0, placeId || 0).map((r) => {
-        const sku = String(r.record_number).padStart(6, '0');
+        const sku = padSku(r.record_number, r.sku_code);
         const cats = [r.category_inventario, r.category_compra, r.category_almacenamiento, r.category_rotacion, r.category_manejo, r.category_riesgo, r.category_vidautil].map((c) => String(c || '').trim()).filter(Boolean);
         return {
             id: r.id, code: r.upc || sku, description: r.custom_description || r.known_description || r.unique_description || '', unique: r.unique_description || '', uom: r.main_uom || '', categories: [...new Set(cats)].join(' · '),
-            by: { code: [r.upc, sku, String(r.record_number)].map(foldText), desc: [r.unique_description, r.known_description, r.custom_description].map(foldText), uom: [r.main_uom].map(foldText), cat: cats.map(foldText) },
+            by: { code: [r.upc, sku, String(r.record_number), padSku(r.record_number)].map(foldText), desc: [r.unique_description, r.known_description, r.custom_description].map(foldText), uom: [r.main_uom].map(foldText), cat: cats.map(foldText) },
         };
     });
     manualItemsCache.set(key, { at: Date.now(), items });
@@ -8681,13 +8684,13 @@ app.get('/api/business/qr-apps/ficha', requireAuth, (req, res) => {
         if (!SearchSyntax.ready(mode, query)) list = [];
         else {
             const matches = publicSearchMatcher(mode, query);
-            list = list.filter((r) => matches([padSku(r.record_number), r.upc, r.unique_description, r.known_description, r.custom_description]));
+            list = list.filter((r) => matches([padSku(r.record_number, r.sku_code), padSku(r.record_number), r.upc, r.unique_description, r.known_description, r.custom_description]));
         }
     }
     res.set('Cache-Control', 'no-store');
     res.json({
         siteName: '', zones: [], total: list.length,
-        spaces: list.slice(0, QR_FICHA_LIMIT).map((r) => ({ key: String(r.id), id: String(r.id), code: padSku(r.record_number), name: r.custom_description || r.known_description || r.unique_description || '', upc: r.upc || '', zoneId: '', zoneName: '', locator: '', path: `/Ficha.html?token=${encodeURIComponent(r.public_token)}` })),
+        spaces: list.slice(0, QR_FICHA_LIMIT).map((r) => ({ key: String(r.id), id: String(r.id), code: padSku(r.record_number, r.sku_code), name: r.custom_description || r.known_description || r.unique_description || '', upc: r.upc || '', zoneId: '', zoneName: '', locator: '', path: `/Ficha.html?token=${encodeURIComponent(r.public_token)}` })),
     });
 });
 
@@ -9384,11 +9387,11 @@ function publicSearchData(clientId) {
     if (hit && Date.now() - hit.at < 20000) return hit;
     const codes = listPublicSkuItemsForSearch(clientId).map((r) => ({
         r,
-        sku: String(r.record_number).padStart(6, '0'),
+        sku: padSku(r.record_number, r.sku_code),
         name: r.custom_description || r.known_description || r.unique_description || '',
         // cada campo se revisa por separado, como la celda de una columna (el código con y sin ceros a la izquierda); by = los campos de cada opción del buscador (SKU, Descripción, Categoría)
         by: {
-            sku: [String(r.record_number).padStart(6, '0'), String(r.record_number), r.upc].map(foldText),
+            sku: [padSku(r.record_number, r.sku_code), padSku(r.record_number), String(r.record_number), r.upc].map(foldText),
             desc: [r.unique_description, r.known_description, r.custom_description].map(foldText),
             cat: [r.category_inventario].map(foldText),
         },
@@ -9536,10 +9539,10 @@ app.get('/api/public/layout/:token/classification', publicSearchLimiter, async (
         const codes = (ctx.groups.get(key) || []).map((code) => {
             const places = code.places.map((p) => { const sp = spaceById.get(p.spaceId); return { space: sp ? sp.code : '', spaceId: sp ? sp.id : '', level: Number(p.level) || 0, slot: Number(p.slot) || 0 }; })
                 .sort((a, b) => (a.space ? 0 : 1) - (b.space ? 0 : 1) || naturalCompare(a.space, b.space) || a.level - b.level || a.slot - b.slot);
-            const sku = String(code.record_number).padStart(6, '0');
+            const sku = padSku(code.record_number, code.sku_code);
             return {
                 code, places, sku, name: code.custom_description || code.known_description || code.unique_description || '',
-                fields: [sku, String(code.record_number), code.upc, code.unique_description, code.known_description, code.custom_description, ...(locks.where ? [...places.map((p) => p.space), ...places.filter((p) => p.level).map((p) => `nivel ${p.level}`)] : [])].map(foldText),
+                fields: [sku, padSku(code.record_number), String(code.record_number), code.upc, code.unique_description, code.known_description, code.custom_description, ...(locks.where ? [...places.map((p) => p.space), ...places.filter((p) => p.level).map((p) => `nivel ${p.level}`)] : [])].map(foldText),
             };
         });
         const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
@@ -10077,7 +10080,8 @@ function convertLegacyCell(state, ctx, values) {
     if (values) { delete values.row; delete values.depth; if (state.position != null) values.position = state.position; }
 }
 const CODE_RELATION_TEXT_KEYS = ['zoneId', 'spaceId', 'classification'];
-const padSku = (n) => String(n || 0).padStart(6, '0');
+// El SKU que se muestra: el código automático de 12 caracteres (CMCSCD000001) de sku_items.sku_code; sin él (filas sin código) cae al número de 6 dígitos de siempre.
+const padSku = (n, code) => code || String(n || 0).padStart(6, '0');
 
 function codeRelationContext(req) {
     return codeRelationContextFor(req.user.clientId, req.user.isTestAccount);
@@ -10158,7 +10162,7 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
         id: row.id,
         registroUnico: row.db_id,
         skuItemId: row.sku_item_id,
-        sku: padSku(row.sku_number),
+        sku: padSku(row.sku_number, row.sku_code),
         upc: row.sku_upc || '',
         description: row.sku_description || row.sku_known || '',
         costCenterId: row.cost_center_id, centroCostos: cc ? cc.name : '',
@@ -10186,7 +10190,7 @@ function mapCodeRelation(row, pendingByRecord, companyName, ctx) {
 function codeRelationSanitizers(ctx, req) {
     const { clientId, isTestAccount } = req.user;
     return {
-        skuItemId: (v) => { const s = v ? getSkuItemById(v, clientId, isTestAccount) : null; return s ? padSku(s.record_number) : (v == null ? '' : String(v)); },
+        skuItemId: (v) => { const s = v ? getSkuItemById(v, clientId, isTestAccount) : null; return s ? padSku(s.record_number, s.sku_code) : (v == null ? '' : String(v)); },
         costCenterId: (v) => { const c = ctx.costCenters.get(Number(v)); return c ? c.name : (v == null ? '' : String(v)); },
         warehouseId: (v) => { const w = ctx.warehouses.get(Number(v)); return w ? w.name : (v == null ? '' : String(v)); },
         subWarehouseId: (v) => { const w = ctx.warehouses.get(Number(v)); return w ? w.name : (v == null ? '' : String(v)); },
@@ -10287,7 +10291,7 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     }
     if (hasSpace && hasLevel && hasSlot) {
         const occupant = findCodeRelationInSlot(clientId, isTestAccount, state.spaceId, state.level, state.slot, selfId || 0, state.position);
-        if (occupant) return bad(`Esa posición ya la ocupa el código ${padSku(occupant.sku_number)}. Elige otra posición.`, 409);
+        if (occupant) return bad(`Esa posición ya la ocupa el código ${padSku(occupant.sku_number, occupant.sku_code)}. Elige otra posición.`, 409);
     }
     if (findCodeRelationDuplicate(clientId, isTestAccount, state, selfId || 0)) return bad('Este código ya tiene esa misma ubicación.', 409);
     return { ok: true };
@@ -10379,7 +10383,7 @@ app.get('/api/business/code-relations/options', requireAuth, (req, res) => {
         subWarehouses: sub.map((r) => ({ id: r.id, name: r.name, parentId: r.parent_id, status: r.status, kind: r.kind, locations: r.kind === 'physical' ? parseWarehouseLocations(r.locations) : [] })),
         zonesByCenter,
         zones: layouts.length ? zonesOf(layouts[0]) : [],
-        occupied: listCodeRelations(clientId, isTestAccount).filter((r) => r.space_id && r.level && r.slot).map((r) => ({ id: r.id, spaceId: r.space_id, level: r.level, slot: r.slot, position: r.position || 1, sku: padSku(r.sku_number) })),
+        occupied: listCodeRelations(clientId, isTestAccount).filter((r) => r.space_id && r.level && r.slot).map((r) => ({ id: r.id, spaceId: r.space_id, level: r.level, slot: r.slot, position: r.position || 1, sku: padSku(r.sku_number, r.sku_code) })),
     });
 });
 
@@ -10401,7 +10405,7 @@ app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
         else {
             const matches = publicSearchMatcher(mode, query);
             found = searchSkuItems(req.user.clientId, '', req.user.isTestAccount, 100000)
-                .filter((s) => matches([padSku(s.record_number), s.upc, s.unique_description, s.known_description, s.custom_description]))
+                .filter((s) => matches([padSku(s.record_number, s.sku_code), padSku(s.record_number), s.upc, s.unique_description, s.known_description, s.custom_description]))
                 .slice(0, limit);
         }
     } else {
@@ -10409,7 +10413,7 @@ app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
     }
     res.json({
         skus: found.map((s) => ({
-            id: s.id, sku: padSku(s.record_number), upc: s.upc || '', description: s.unique_description || s.known_description || s.custom_description || '', unique: s.unique_description || '', uom: s.main_uom || '',
+            id: s.id, sku: padSku(s.record_number, s.sku_code), num: s.record_number, upc: s.upc || '', description: s.unique_description || s.known_description || s.custom_description || '', unique: s.unique_description || '', uom: s.main_uom || '',
             length: s.length || 0, width: s.width || 0, height: s.height || 0, packaging: packMap.get(s.id) || null,
         })),
     });
@@ -10634,7 +10638,7 @@ function mapSkuDistribution(row, pendingByRecord, companyName, node, pantalla) {
         id: row.id,
         registroUnico: row.db_id,
         skuItemId: row.sku_item_id,
-        sku: padSku(row.sku_number),
+        sku: padSku(row.sku_number, row.sku_code),
         upc: row.sku_upc || '',
         description: row.sku_description || row.sku_known || row.sku_custom || '', // la columna se llama «Descripción única»: sale la descripción única del código (no la personalizada)
         level: row.level,
@@ -10667,7 +10671,7 @@ function mapSkuDistribution(row, pendingByRecord, companyName, node, pantalla) {
 function skuDistPlaceholderRow(s) {
     return {
         id: -s.id, db_id: '', record_number: 0, sku_item_id: s.id, parent_id: null, level: 0, kind: 'presentacion', classification: '', brand_id: null, uom: '', contains: null, shape: 'rectangular', length: 0, width: 0, height: 0, weight_g: 0, can_lay: 0,
-        storage_types: null, ship_to: null, units_per_layer: 0, layers_per_pallet: 0, max_stack: 0, created_at: s.created_at, sku_number: s.record_number, sku_upc: s.upc, sku_description: s.unique_description, sku_known: s.known_description,
+        storage_types: null, ship_to: null, units_per_layer: 0, layers_per_pallet: 0, max_stack: 0, created_at: s.created_at, sku_number: s.record_number, sku_code: s.sku_code, sku_upc: s.upc, sku_description: s.unique_description, sku_known: s.known_description,
         sku_custom: s.custom_description, sku_uom: s.main_uom, sku_length: s.length, sku_width: s.width, sku_height: s.height, sku_weight: s.article_weight, brand_name: null,
     };
 }
@@ -10766,7 +10770,7 @@ app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
         const query = publicSearchQuery(req.query.q);
         if (SearchSyntax.ready(mode, query)) {
             const matches = publicSearchMatcher(mode, query);
-            const found = searchSkuItems(clientId, '', isTestAccount, 100000).filter((s) => matches([padSku(s.record_number), s.upc, s.unique_description, s.known_description, s.custom_description]));
+            const found = searchSkuItems(clientId, '', isTestAccount, 100000).filter((s) => matches([padSku(s.record_number, s.sku_code), padSku(s.record_number), s.upc, s.unique_description, s.known_description, s.custom_description]));
             truncated = found.length > UDM_DIST_SEARCH_LIMIT;
             const ids = found.slice(0, UDM_DIST_SEARCH_LIMIT).map((s) => s.id);
             source = listSkuDistributionBySkus(clientId, isTestAccount, ids);
@@ -10884,7 +10888,7 @@ app.post('/api/business/sku-distribution', requireAuth, requireCostCenter, (req,
         if (v === null || v === '' || v === undefined || v === false || (key === 'shape' && v === 'rectangular') || (key === 'weightG' && !v) || (UDM_DIST_INT_KEYS.includes(key) && !v) || (level === 0 && !UDM_DIST_MAIN_KEYS.includes(key))) return;
         logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: row.id, recordLabel: skuDistLabel(row), action: 'update', fieldKey, oldValue: '', newValue: san[key] ? san[key](v) : String(v), changedBy: changedByLabel(req) });
     });
-    notifyButtonAction(req, UDM_DIST_TABLE_KEY, 'create', `${padSku(row.sku_number)} · ${PACK_ORDINALS[row.level] || ''}`);
+    notifyButtonAction(req, UDM_DIST_TABLE_KEY, 'create', `${padSku(row.sku_number, row.sku_code)} · ${PACK_ORDINALS[row.level] || ''}`);
     const client = getClientById(clientId);
     const mapped = mapSkuDistributionRows(listSkuDistributionBySku(clientId, isTestAccount, sku.id), null, client?.company_name).find((r) => r.id === row.id);
     res.status(201).json({ row: mapped });
@@ -10931,7 +10935,7 @@ app.delete('/api/business/sku-distribution/:id', requireAuth, requireCostCenter,
     const used = listCodeRelationsBy(clientId, isTestAccount, 'sku_item_id', existing.sku_item_id).filter((r) => r.pack_unit_id === usedId).length;
     if (used) return res.status(409).json({ message: `${used} lugar(es) de Relación Código almacenan esta unidad. Cámbialos primero.`, code: 'IN_USE' });
     logTableChange({ clientId, tableKey: UDM_DIST_TABLE_KEY, recordId: existing.id, recordLabel: skuDistLabel(existing), action: 'delete', changedBy: changedByLabel(req) });
-    notifyButtonAction(req, UDM_DIST_TABLE_KEY, 'delete', `${padSku(existing.sku_number)} · ${PACK_ORDINALS[existing.level] || ''}`);
+    notifyButtonAction(req, UDM_DIST_TABLE_KEY, 'delete', `${padSku(existing.sku_number, existing.sku_code)} · ${PACK_ORDINALS[existing.level] || ''}`);
     deleteSkuDistribution(existing.id, clientId);
     res.status(204).end();
 });
@@ -10955,7 +10959,7 @@ function shipContext(req) {
 function mapShipRelation(r, companyName, ctx) {
     const cc = ctx.centers.get(r.cost_center_id);
     return {
-        id: r.id, registroUnico: r.db_id, skuItemId: r.sku_item_id, sku: padSku(r.sku_number), upc: r.sku_upc || '',
+        id: r.id, registroUnico: r.db_id, skuItemId: r.sku_item_id, sku: padSku(r.sku_number, r.sku_code), upc: r.sku_upc || '',
         description: r.sku_unique || '', costCenterId: r.cost_center_id, centroCostos: cc ? cc.name : '', // «Descripción única»: solo esa (sin las otras descripciones del código)
         placeId: r.place_id, place: r.place_name || '', placeActive: r.place_status === 'active',
         ...getSystemColumnsForRecord({ companyName, area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: SHIP_REL_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.created_at }),
@@ -10972,7 +10976,7 @@ function tryCreateShipRelation(req, ctx, { skuItemId, placeId, costCenterId }) {
     if (!center) return { error: 'Elige el centro de costos.', code: 'CENTER' };
     if (findCodeShipRelation(clientId, isTestAccount, center.id, sku.id, place.id)) return { error: 'Ese código ya está relacionado con ese lugar en este centro de costos.', code: 'EXISTS' };
     const row = createCodeShipRelation({ clientId, isTestData: isTestAccount, costCenterId: center.id, skuItemId: sku.id, placeId: place.id, createdBy: changedByLabel(req) });
-    logTableChange({ clientId, tableKey: SHIP_REL_TABLE_KEY, recordId: row.id, recordLabel: `${padSku(sku.record_number)} → ${place.name}`, action: 'create', changedBy: changedByLabel(req) });
+    logTableChange({ clientId, tableKey: SHIP_REL_TABLE_KEY, recordId: row.id, recordLabel: `${padSku(sku.record_number, sku.sku_code)} → ${place.name}`, action: 'create', changedBy: changedByLabel(req) });
     return { row };
 }
 const intOf = (v) => { const n = Number(v); return Number.isInteger(n) ? n : 0; };
@@ -11007,7 +11011,7 @@ app.post('/api/business/code-ship-relations', requireAuth, requireCostCenter, (r
         else if (!firstError) firstError = out;
     });
     if (!created.length && firstError) return res.status(400).json({ message: firstError.error, code: firstError.code });
-    if (created.length) notifyButtonAction(req, SHIP_REL_TABLE_KEY, 'create', `${created[0].sku_number ? padSku(created[0].sku_number) : ''} → ${created.map((r) => r.place_name).join(', ')}`);
+    if (created.length) notifyButtonAction(req, SHIP_REL_TABLE_KEY, 'create', `${created[0].sku_number ? padSku(created[0].sku_number, created[0].sku_code) : ''} → ${created.map((r) => r.place_name).join(', ')}`);
     const client = getClientById(req.user.clientId);
     res.status(created.length ? 201 : 200).json({ created: created.map((r) => mapShipRelation(r, client?.company_name, ctx)), existing });
 });
@@ -11034,8 +11038,8 @@ app.delete('/api/business/code-ship-relations/:id', requireAuth, (req, res) => {
     const existing = getCodeShipRelationById(intOf(req.params.id), clientId, isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Relation not found.' });
     if (!shipCanDelete(req)) return res.status(403).json({ message: 'No tienes permiso para eliminar registros aquí.' });
-    logTableChange({ clientId, tableKey: SHIP_REL_TABLE_KEY, recordId: existing.id, recordLabel: `${padSku(existing.sku_number)} → ${existing.place_name || ''}`, action: 'delete', changedBy: changedByLabel(req) });
-    notifyButtonAction(req, SHIP_REL_TABLE_KEY, 'delete', `${padSku(existing.sku_number)} → ${existing.place_name || ''}`);
+    logTableChange({ clientId, tableKey: SHIP_REL_TABLE_KEY, recordId: existing.id, recordLabel: `${padSku(existing.sku_number, existing.sku_code)} → ${existing.place_name || ''}`, action: 'delete', changedBy: changedByLabel(req) });
+    notifyButtonAction(req, SHIP_REL_TABLE_KEY, 'delete', `${padSku(existing.sku_number, existing.sku_code)} → ${existing.place_name || ''}`);
     deleteCodeShipRelation(existing.id, clientId);
     res.status(204).end();
 });
@@ -11045,7 +11049,7 @@ app.delete('/api/business/code-ship-relations/:id', requireAuth, (req, res) => {
 // lugar y de los datos del código (LayoutCalc.capacityOf). Todavía no hay cantidades en existencia: eso vendrá con «existencias y transacciones». Las columnas de Control Interno son las del centro (se mandan una vez por centro).
 const STORAGE_CAP_TABLE_KEY = 'capacidad-almacenamiento';
 const STORAGE_CAP_MAX_ROWS = 20000;
-const skuLabelOf = (r) => `${padSku(r.record_number)} · ${r.custom_description || r.known_description || r.unique_description || ''}`.replace(/ · $/, '');
+const skuLabelOf = (r) => `${padSku(r.record_number, r.sku_code)} · ${r.custom_description || r.known_description || r.unique_description || ''}`.replace(/ · $/, '');
 function storageCapContext(req) {
     const { clientId, isTestAccount } = req.user;
     const classes = listArticleCategories(clientId, 'activos-clasificacion', isTestAccount);
@@ -11100,7 +11104,7 @@ function storageCapRows(ctx, { costCenterId, key, max = STORAGE_CAP_MAX_ROWS } =
             if (key && loc.key !== key) continue;
             const rec = assigned.get(`${cc.id}|${loc.key}`);
             const sku = rec && rec.sku_item_id ? skus.get(rec.sku_item_id) : null;
-            const code = sku ? { id: sku.id, sku: padSku(sku.record_number), upc: sku.upc || '', description: sku.custom_description || sku.known_description || sku.unique_description || '', uom: sku.main_uom || '', storageType: sku.storage_type || '', storageTypes: sku.storageTypes || [], length: sku.length || 0, width: sku.width || 0, height: sku.height || 0, ti: sku.units_per_layer || 0, hi: sku.layers_per_pallet || 0, stack: sku.max_stack || 0 } : null;
+            const code = sku ? { id: sku.id, sku: padSku(sku.record_number, sku.sku_code), upc: sku.upc || '', description: sku.custom_description || sku.known_description || sku.unique_description || '', uom: sku.main_uom || '', storageType: sku.storage_type || '', storageTypes: sku.storageTypes || [], length: sku.length || 0, width: sku.width || 0, height: sku.height || 0, ti: sku.units_per_layer || 0, hi: sku.layers_per_pallet || 0, stack: sku.max_stack || 0 } : null;
             rows.push({
                 cc: cc.id, id: rec ? rec.id : null, key: loc.key, locator: loc.locator, zoneName: loc.zoneName, spaceCode: loc.spaceCode, level: loc.multi ? loc.level : 0, slot: loc.multi ? loc.slot : 0,
                 className: ctx.className.get(loc.assetClassId) || '', typeName: ctx.typeName.get(loc.assetId) || '', l: loc.l, w: loc.w, h: loc.h, m2: loc.m2,
@@ -11125,7 +11129,7 @@ app.get('/api/business/storage-capacity/codes', requireAuth, (req, res) => {
     const ids = searchSkuItems(clientId, '', isTestAccount, 5000).map((r) => r.id);
     const presBySku = capacityPresentationsMap(clientId, isTestAccount);
     const codes = listSkuCapacityData(clientId, isTestAccount, ids).map((raw) => skuCapacityEffective(raw, presBySku.get(raw.id))).map((r) => ({
-        id: r.id, storageTypes: r.storageTypes || [], sku: padSku(r.record_number), upc: r.upc || '', description: r.custom_description || r.known_description || r.unique_description || '', uom: r.main_uom || '',
+        id: r.id, storageTypes: r.storageTypes || [], sku: padSku(r.record_number, r.sku_code), upc: r.upc || '', description: r.custom_description || r.known_description || r.unique_description || '', uom: r.main_uom || '',
         storageType: r.storage_type || '', length: r.length || 0, width: r.width || 0, height: r.height || 0, ti: r.units_per_layer || 0, hi: r.layers_per_pallet || 0, stack: r.max_stack || 0,
     }));
     res.set('Cache-Control', 'no-store');

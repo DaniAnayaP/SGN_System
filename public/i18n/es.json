@@ -3108,7 +3108,9 @@
     "tplErr_skuExists": "El SKU {sku} ya existe. Vuelve a revisar el archivo.",
     "tplErr_skuDuplicateFile": "Ese SKU ya está en la fila {row} de tu archivo. Quita una de las dos filas.",
     "tplErr_skuRequired": "SKU: es obligatorio (el número de tu código, por ejemplo 195201).",
-    "tplNeedSku": "Tu archivo necesita la columna SKU: es la única obligatoria.",
+    "tplNeedDesc": "Tu archivo necesita la columna Descripción Única: es la única obligatoria.",
+    "tplErr_descRequired": "Descripción Única: es obligatoria (y no se puede repetir).",
+    "tplInstDesc": "El nombre con el que se identifica el código. Es obligatoria y es la única columna obligatoria: no se puede repetir, ni con otro código que ya existe ni en otra fila del archivo (no importan mayúsculas, acentos ni espacios de más).",
     "tplInstUpc": "Código de barras, solo números (de 8 a 14). Es opcional. No se puede repetir en otro código.",
     "tplInstText": "Texto libre (hasta 200 letras). Se puede dejar vacío y llenarse después.",
     "tplInstUdm": "Una unidad del catálogo Nuestras Unidad Medida: {list}.",
@@ -3138,15 +3140,15 @@
     "tplColsFile": "Columnas que trae tu archivo",
     "tplColsMissing": "Columnas de la plantilla que no trae (no se tocan)",
     "tplKeyLabel": "Cómo reconoce cada fila",
-    "tplKeyFirst": "SKU: obligatorio",
-    "tplKeySecond": "UPC: opcional",
-    "tplKeyNote": "El SKU es la llave de cada fila: si ya existe se actualiza esa línea; si no, se da de alta con ese SKU. El UPC es opcional y no se puede repetir. Una columna sin marcar no se carga ni cambia nada.",
+    "tplKeyFirst": "Descripción Única: obligatoria",
+    "tplKeySecond": "SKU y UPC: opcionales",
+    "tplKeyNote": "La Descripción Única es la llave de cada fila y no se puede repetir. El SKU lo asigna el sistema: si la fila trae el SKU de un código que ya existe se actualiza esa línea; si no trae SKU se da de alta como código nuevo con el siguiente SKU. El UPC es opcional y no se puede repetir. Una columna sin marcar no se carga ni cambia nada.",
     "tplKeyTag": "llave",
     "tplStateNew": "Alta nueva",
     "tplStateUpdate": "Actualiza",
     "tplStateSame": "Sin cambios",
     "tplStateComplete": "Ya completo",
-    "tplWillCreateOnly": "Se da de alta solo con el SKU; lo demás queda pendiente en Alta Artículos.",
+    "tplWillCreateOnly": "Se da de alta solo con la Descripción Única; lo demás queda pendiente en Alta Artículos.",
     "tplWillCreate": "Se da de alta con {n} datos; lo demás queda pendiente en Alta Artículos.",
     "tplWillUpdate": "SKU {sku}: {parts}.",
     "tplUpdChange": "cambia {list}",
@@ -3163,14 +3165,14 @@
     "tplResultUpdN": "Se actualizaron {n} artículos",
     "tplResultUpdated": "Actualizados: {list}",
     "tplResultPending": " · {n} cambios quedan pendientes de autorización",
-    "tplInstSku": "Tu número de código (hasta 9 dígitos, por ejemplo 195201). Es obligatorio y es la única columna obligatoria: si ya existe en el sistema se actualiza esa línea; si no existe se da de alta con ese número.",
+    "tplInstSku": "El SKU lo asigna el sistema (por ejemplo CMCSCD000123). Déjalo vacío en las filas nuevas; escríbelo solo para actualizar un código que ya existe (también sirve su número de 6 dígitos, por ejemplo 000123).",
     "tplInstClass": "Una clasificación del catálogo que tenga la Categoría Inventario del código: {list}. Pon la categoría en la misma fila (o que el código ya la tenga).",
     "tplYesNew": "Sí, en filas nuevas",
     "tplInstRulesTitle": "Reglas",
-    "tplInstRule1": "Cada fila se reconoce por su SKU (obligatorio). Si el SKU ya existe se actualiza la misma línea; si no existe se da de alta con ese SKU.",
+    "tplInstRule1": "La Descripción Única es obligatoria y no se puede repetir (ni con otro código ni en otra fila). El SKU lo asigna el sistema: si la fila trae el SKU de un código que ya existe se actualiza esa línea; si no trae SKU se da de alta como código nuevo.",
     "tplInstRule2": "Una celda vacía nunca borra lo que el código ya tiene. Solo se cargan las columnas que marques al subir el archivo.",
     "tplInstRule3": "Un código que ya está completo no se cambia aquí: se corrige en Edición Código. Las 6 fotos no van en la plantilla.",
-    "tplErr_skuFormat": "SKU: escribe solo el número, hasta 9 dígitos (por ejemplo 195201).",
+    "tplErr_skuFormat": "SKU: escribe el SKU completo (por ejemplo CMCSCD000123) o su número de 6 dígitos (000123).",
     "tplErr_skuUnknown": "El SKU {sku} no existe. El SKU lo asigna el sistema: déjalo vacío si la fila es nueva, o corrígelo.",
     "tplErr_keyRequired": "Escribe el UPC (o el SKU, si el código ya existe).",
     "tplErr_classUnknown": "Clasificación: «{value}» no está en el catálogo.",
@@ -5408,7 +5410,7 @@
       "example": "cargas 40 códigos nuevos de una sola vez en lugar de uno por uno."
     },
     "tplDownload": {
-      "what": "Baja la plantilla de Excel con todas las columnas de llenado (incluidos el SKU y la clasificación) y una hoja de Instrucciones con lo que va en cada una y las opciones de los catálogos. Solo el SKU (el número de tu código) es obligatorio; las 6 fotos no van en la plantilla.",
+      "what": "Baja la plantilla de Excel con todas las columnas de llenado (incluidos el SKU y la clasificación) y una hoja de Instrucciones con lo que va en cada una y las opciones de los catálogos. Solo la Descripción Única es obligatoria (y no se puede repetir); el SKU lo asigna el sistema; las 6 fotos no van en la plantilla.",
       "example": "la llenas en tu computadora con los datos del proveedor."
     },
     "tplUpload": {
@@ -5424,7 +5426,7 @@
       "example": "cambias el UPC repetido por el correcto y la fila se vuelve Alta nueva."
     },
     "tplColumns": {
-      "what": "Aquí eliges qué columnas de tu archivo se cargan. Una columna sin marcar no se carga ni cambia nada, así puedes cargar solo el UPC y llenar el resto después. El SKU y el UPC son las llaves con las que se reconoce cada código: si trae SKU manda el SKU (también sirve para corregir un UPC), y si no, el UPC.",
+      "what": "Aquí eliges qué columnas de tu archivo se cargan. Una columna sin marcar no se carga ni cambia nada, así puedes cargar solo la Descripción Única y llenar el resto después. La Descripción Única es la llave de cada fila (obligatoria y sin repetir) y el SKU lo asigna el sistema: si la fila trae el SKU de un código que ya existe se actualiza esa línea (también sirve para corregir una descripción); si no, se da de alta con el siguiente SKU.",
       "example": "cargas solo la columna UPC y llenas las descripciones en otra carga con los SKU."
     },
     "tplNext": {

@@ -214,7 +214,7 @@
             const get = (url) => fetch(url, { credentials: 'include' }).then((r) => { if (!r.ok) throw new Error(url); return r.json(); });
             const [options, skus, list] = await Promise.all([get(`${API}/options`), get(`${API}/skus?all=1`), get(API)]);
             const items = skus.skus || [];
-            const bySku = new Map(items.map((i) => [Number(i.sku), i]));
+            const bySku = new Map(items.flatMap((i) => [[Number(i.num), i], [String(i.sku).toUpperCase(), i]])); // por su número de 6 dígitos o por su SKU completo
             const byUpc = new Map(items.filter((i) => i.upc).map((i) => [i.upc, i]));
             const placeKey = (r) => [r.skuItemId, r.costCenterId, r.warehouseId, r.subWarehouseId || 0, r.zoneId || '', r.spaceId || '', r.level || 0, r.slot || 0, r.positionCount > 1 ? (r.position || 0) : 0].join('|'); // un espacio con una sola posición no la distingue
             const existing = new Map((list.relations || []).map((r) => [placeKey(r), { id: r.id, classification: r.classification || 'activo' }]));

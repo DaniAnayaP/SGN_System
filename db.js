@@ -5256,14 +5256,65 @@ function deleteFleetUnit(id, clientId) {
 // --- > Operaciones. Same "create blank, fill in one field at a time" shape
 // as fleet_units above; db_id/record_number follow fuel_records' own
 // convention (see the table's own DDL comment for why SKU has no column).
+// ---- SKU automático -------------------------------------------------------------------------------------------------------------------------
+// El SKU de un código lo asigna el sistema: <cliente 2 letras><departamento 2><área 2><número de 6 dígitos>, por ejemplo CMCSCD000001 (Christus Muguerza · Cadena de Suministro · Centro de Distribución · el primer código).
+// Se guarda en sku_items.sku_code al CREAR el código y nunca cambia (ni cuando cambia el nombre del cliente): es la rama de conexión de todo (relaciones, ubicaciones, QR) y la llave el día que todo baje a la base de datos
+// global del grupo. Los 6 números son el record_number de siempre (consecutivo por empresa; con ningún código el siguiente es 000001). Los códigos NO se eliminan: se desactivan (pendiente).
+// Cliente = iniciales de las dos primeras palabras de su nombre sin contar «de, del, la…» (Christus Muguerza → CM; una sola palabra → sus 2 primeras letras). Se calcula una vez, se guarda en clients.sku_prefix y
+// no se repite entre clientes (si ya lo tiene otro, toma la siguiente opción: CA, CH, CU…).
+const SKU_DEPARTMENT_CODE = 'CS'; // Cadena de Suministro (preparado: cada departamento traerá el suyo cuando den de alta códigos)
+const SKU_AREA_CODE = 'CD';       // Centro de Distribución
+ensureColumn('sku_items', 'sku_code', "TEXT NOT NULL DEFAULT ''");
+ensureColumn('clients', 'sku_prefix', "TEXT NOT NULL DEFAULT ''");
+const SKU_NAME_PARTICLES = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e', 'en', 'al', 'para', 'por', 'con', 'sin', 'a']);
+function skuPrefixCandidates(companyName) {
+    const words = String(companyName || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().split(/[^A-Z]+/).filter(Boolean);
+    const significant = words.filter((w) => !SKU_NAME_PARTICLES.has(w.toLowerCase()));
+    const use = significant.length ? significant : words;
+    const out = [];
+    const add = (s) => { if (s.length === 2 && !out.includes(s)) out.push(s); };
+    const w1 = use[0] || 'X';
+    const w2 = use[1] || '';
+    if (w2) add(w1[0] + w2[0]);
+    add((w1 + 'X').slice(0, 2));
+    for (let i = 1; i < w2.length; i += 1) add(w1[0] + w2[i]);
+    for (let i = 1; i < w1.length; i += 1) add(w1[0] + w1[i]);
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    for (const c of alphabet) add(w1[0] + c);
+    for (const a of alphabet) for (const b of alphabet) add(a + b);
+    return out;
+}
+function getClientSkuPrefix(clientId) {
+    const row = db.prepare('SELECT id, company_name, sku_prefix FROM clients WHERE id = ?').get(clientId);
+    if (!row) return 'XX';
+    if (row.sku_prefix) return row.sku_prefix;
+    const taken = new Set(db.prepare("SELECT sku_prefix FROM clients WHERE id <> ? AND sku_prefix <> ''").all(clientId).map((r) => r.sku_prefix));
+    const prefix = skuPrefixCandidates(row.company_name).find((c) => !taken.has(c)) || 'XX';
+    db.prepare('UPDATE clients SET sku_prefix = ? WHERE id = ?').run(prefix, clientId);
+    return prefix;
+}
+function buildSkuCode(clientId, recordNumber) {
+    return `${getClientSkuPrefix(clientId)}${SKU_DEPARTMENT_CODE}${SKU_AREA_CODE}${String(recordNumber).padStart(6, '0')}`;
+}
+// Los códigos que ya existían (de otros clientes) reciben su SKU de 12 caracteres con su mismo número de siempre; una sola vez.
+function backfillSkuCodes() {
+    const rows = db.prepare("SELECT id, client_id, record_number FROM sku_items WHERE sku_code = ''").all();
+    if (!rows.length) return;
+    const update = db.prepare('UPDATE sku_items SET sku_code = ? WHERE id = ?');
+    db.transaction(() => rows.forEach((r) => update.run(buildSkuCode(r.client_id, r.record_number), r.id)))();
+    console.log(`[db] SKU automático: ${rows.length} códigos existentes recibieron su SKU de 12 caracteres.`);
+}
+backfillSkuCodes();
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sku_items_code_live ON sku_items(sku_code) WHERE sku_code <> '' AND is_test_data = 0"); } catch (error) { console.error('[db] No se pudo crear el índice único del SKU:', error.message); }
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_sku_items_code_test ON sku_items(client_id, sku_code) WHERE sku_code <> '' AND is_test_data = 1"); } catch (error) { console.error('[db] No se pudo crear el índice único del SKU (pruebas):', error.message); }
 // Los UPC que ya existen (con su SKU) para que la carga por plantilla no repita ninguno.
 function listSkuItemUpcs(clientId, forTestAccount = false) {
-    return db.prepare("SELECT upc, record_number FROM sku_items WHERE client_id = ? AND is_test_data = ? AND upc != ''").all(clientId, forTestAccount ? 1 : 0);
+    return db.prepare("SELECT upc, record_number, sku_code FROM sku_items WHERE client_id = ? AND is_test_data = ? AND upc != ''").all(clientId, forTestAccount ? 1 : 0);
 }
 
 // Las Descripciones Únicas que ya existen (con su SKU): la regla «nunca se repite» las compara en el servidor.
 function listSkuUniqueDescriptions(clientId, forTestAccount = false) {
-    return db.prepare("SELECT id, record_number, unique_description FROM sku_items WHERE client_id = ? AND is_test_data = ? AND unique_description != ''").all(clientId, forTestAccount ? 1 : 0);
+    return db.prepare("SELECT id, record_number, sku_code, unique_description FROM sku_items WHERE client_id = ? AND is_test_data = ? AND unique_description != ''").all(clientId, forTestAccount ? 1 : 0);
 }
 
 function listSkuItems(clientId, forTestAccount = false) {
@@ -5282,10 +5333,13 @@ function createSkuItem({ clientId, isTestData = false, recordNumber: wanted = 0 
     const recordNumber = wanted || db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM sku_items WHERE client_id = ? AND is_test_data = ?')
         .get(clientId, isTestData ? 1 : 0).n;
-    const result = db
-        .prepare('INSERT INTO sku_items (client_id, db_id, record_number, is_test_data) VALUES (@clientId, @dbId, @recordNumber, @isTestData)')
-        .run({ clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0 });
-    return getSkuItemById(result.lastInsertRowid, clientId, isTestData);
+    const create = db.transaction(() => {
+        const result = db
+            .prepare('INSERT INTO sku_items (client_id, db_id, record_number, is_test_data, sku_code) VALUES (@clientId, @dbId, @recordNumber, @isTestData, @skuCode)')
+            .run({ clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuCode: buildSkuCode(clientId, recordNumber) });
+        return result.lastInsertRowid;
+    });
+    return getSkuItemById(create(), clientId, isTestData);
 }
 
 const SKU_ITEM_PATCHABLE_FIELDS = {
@@ -5595,7 +5649,7 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_code_ship_relations_client ON code_ship_relations (client_id, is_test_data);
     CREATE INDEX IF NOT EXISTS idx_code_ship_relations_sku ON code_ship_relations (sku_item_id);
 `);
-const SHIP_REL_SELECT = `SELECT r.*, s.record_number AS sku_number, s.upc AS sku_upc, s.unique_description AS sku_unique, s.known_description AS sku_known, s.custom_description AS sku_custom, p.name AS place_name, p.status AS place_status
+const SHIP_REL_SELECT = `SELECT r.*, s.record_number AS sku_number, s.sku_code AS sku_code, s.upc AS sku_upc, s.unique_description AS sku_unique, s.known_description AS sku_known, s.custom_description AS sku_custom, p.name AS place_name, p.status AS place_status
     FROM code_ship_relations r JOIN sku_items s ON s.id = r.sku_item_id LEFT JOIN article_categories p ON p.id = r.place_id`;
 function listCodeShipRelations(clientId, forTestAccount = false) {
     return db.prepare(`${SHIP_REL_SELECT} WHERE r.client_id = ? AND r.is_test_data = ? ORDER BY r.id DESC`).all(clientId, forTestAccount ? 1 : 0);
@@ -5686,7 +5740,7 @@ function listManualOrderItems(clientId, isTest = false, costCenterId = 0, placeI
         related = ' AND id IN (SELECT sku_item_id FROM code_relations WHERE client_id = ? AND is_test_data = ? AND cost_center_id = ?)';
         extra.push(clientId, isTest ? 1 : 0, costCenterId);
     }
-    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ?${related} ORDER BY record_number ASC`)
+    return db.prepare(`SELECT id, record_number, sku_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ?${related} ORDER BY record_number ASC`)
         .all(clientId, isTest ? 1 : 0, ...extra);
 }
 // Cuántos códigos tiene habilitados cada lugar de envío (en el centro del QR, si lo hay): Map(placeId -> n).
@@ -5704,7 +5758,7 @@ function listManualItemShips(clientId, isTest = false) {
     return db.prepare('SELECT DISTINCT sku_item_id, cost_center_id, place_id FROM code_ship_relations WHERE client_id = ? AND is_test_data = ?').all(clientId, isTest ? 1 : 0);
 }
 function getManualOrderItem(clientId, id, isTest = false) {
-    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id = ?`)
+    return db.prepare(`SELECT id, record_number, sku_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id = ?`)
         .get(clientId, isTest ? 1 : 0, id);
 }
 // Guarda un pedido con todos sus renglones en una sola operación. lines = [{ skuItemId, code, description, uom, categories, quantity, needBy }]. La hora la pone el servidor.
@@ -5943,7 +5997,7 @@ function listSkuCapacityData(clientId, isTest, ids) {
     const out = [];
     for (let i = 0; i < list.length; i += 500) {
         const chunk = list.slice(i, i + 500);
-        out.push(...db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, length, width, height, storage_type, units_per_layer, layers_per_pallet, max_stack FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id IN (${chunk.map(() => '?').join(',')})`).all(clientId, isTest ? 1 : 0, ...chunk));
+        out.push(...db.prepare(`SELECT id, record_number, sku_code, upc, unique_description, known_description, custom_description, main_uom, length, width, height, storage_type, units_per_layer, layers_per_pallet, max_stack FROM sku_items WHERE client_id = ? AND is_test_data = ? AND id IN (${chunk.map(() => '?').join(',')})`).all(clientId, isTest ? 1 : 0, ...chunk));
     }
     return out;
 }
@@ -6369,7 +6423,7 @@ function countZoneCodesByCategory(clientId, forTestAccount, zoneId, categoryType
 }
 // Buscador de la página pública del QR del Layout: los códigos que ya tienen ficha pública (los completos; nunca los que les faltan datos) y los lugares donde está cada uno.
 function listPublicSkuItemsForSearch(clientId) {
-    return db.prepare("SELECT id, record_number, upc, unique_description, known_description, custom_description, category_inventario, public_token FROM sku_items WHERE client_id = ? AND is_test_data = 0 AND public_token IS NOT NULL AND public_token != '' ORDER BY record_number ASC")
+    return db.prepare("SELECT id, record_number, sku_code, upc, unique_description, known_description, custom_description, category_inventario, public_token FROM sku_items WHERE client_id = ? AND is_test_data = 0 AND public_token IS NOT NULL AND public_token != '' ORDER BY record_number ASC")
         .all(clientId);
 }
 function listCodePlacesForSearch(clientId) {
@@ -6379,7 +6433,7 @@ function listCodePlacesForSearch(clientId) {
 // Página pública de una clasificación: los códigos de UNA categoría Inventario (por su nombre, que es lo que guarda el código) que Relación Código tiene en una zona, con su clasificación y
 // cada lugar donde están (anaquel, nivel y espacio). Una fila por lugar; quien llama agrupa por código.
 function listZoneCodesWithPlaces(clientId, zoneId, categoryName) {
-    return db.prepare(`SELECT s.id, s.record_number, s.upc, s.unique_description, s.known_description, s.custom_description, s.classification_id, s.public_token, s.evidence_front,
+    return db.prepare(`SELECT s.id, s.record_number, s.sku_code, s.upc, s.unique_description, s.known_description, s.custom_description, s.classification_id, s.public_token, s.evidence_front,
             r.space_id, r.level, r.slot
         FROM code_relations r JOIN sku_items s ON s.id = r.sku_item_id
         WHERE r.client_id = ? AND r.is_test_data = 0 AND s.is_test_data = 0 AND r.zone_id = ? AND s.category_inventario = ? ORDER BY r.id ASC`)
@@ -6494,7 +6548,7 @@ const CODE_RELATION_PATCHABLE_FIELDS = {
     classification: { column: 'classification', fieldKey: 'main.colRelClasificacion' },
     packUnitId: { column: 'pack_unit_id', fieldKey: 'main.colRelSeAcomoda' },
 };
-const CODE_RELATION_SELECT = `SELECT r.*, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.record_number AS sku_number,
+const CODE_RELATION_SELECT = `SELECT r.*, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.record_number AS sku_number, s.sku_code AS sku_code,
         s.length AS sku_length, s.width AS sku_width, s.height AS sku_height, s.packaging AS sku_packaging
     FROM code_relations r LEFT JOIN sku_items s ON s.id = r.sku_item_id`;
 
@@ -6557,7 +6611,7 @@ const SKU_DIST_PATCHABLE_FIELDS = {
     brandId: { column: 'brand_id', fieldKey: 'main.colUdmDMarca' },
 };
 const SKU_DIST_STORAGE_TYPES = ['principal', 'original', 'almacenamiento', 'compra', 'empaque', 'pallet'];
-const SKU_DIST_SELECT = `SELECT d.*, s.record_number AS sku_number, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.custom_description AS sku_custom,
+const SKU_DIST_SELECT = `SELECT d.*, s.record_number AS sku_number, s.sku_code AS sku_code, s.upc AS sku_upc, s.unique_description AS sku_description, s.known_description AS sku_known, s.custom_description AS sku_custom,
         s.main_uom AS sku_uom, s.length AS sku_length, s.width AS sku_width, s.height AS sku_height, s.article_weight AS sku_weight, b.name AS brand_name
     FROM sku_distribution_units d JOIN sku_items s ON s.id = d.sku_item_id LEFT JOIN article_categories b ON b.id = d.brand_id`;
 function listSkuDistribution(clientId, forTestAccount = false) {
@@ -6568,7 +6622,7 @@ function listSkuDistributionBySku(clientId, forTestAccount, skuItemId) {
 }
 // Los códigos de Alta Artículos que todavía no tienen ningún renglón en Presentaciones de Distribución (la pantalla los lista desde el inicio con su unidad de medida principal; el renglón se guarda al capturarlo).
 function listSkuItemsWithoutDistribution(clientId, forTestAccount = false) {
-    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, length, width, height, article_weight, created_at FROM sku_items
+    return db.prepare(`SELECT id, record_number, sku_code, upc, unique_description, known_description, custom_description, main_uom, length, width, height, article_weight, created_at FROM sku_items
         WHERE client_id = ? AND is_test_data = ? AND id NOT IN (SELECT sku_item_id FROM sku_distribution_units WHERE client_id = ? AND is_test_data = ?) ORDER BY record_number ASC`).all(clientId, forTestAccount ? 1 : 0, clientId, forTestAccount ? 1 : 0);
 }
 // Los renglones de varios códigos a la vez (la búsqueda de Operaciones trae las presentaciones de los códigos que coinciden).
@@ -6685,9 +6739,9 @@ function findCodeRelationDuplicate(clientId, forTestAccount, v, exceptId = 0) {
 // Búsqueda de artículos por SKU (con ceros), UPC o descripción para el selector de código.
 function searchSkuItems(clientId, term, forTestAccount = false, limit = 20) {
     const like = `%${String(term || '').trim().replace(/[%_]/g, '')}%`;
-    return db.prepare(`SELECT id, record_number, upc, unique_description, known_description, custom_description, main_uom, length, width, height, packaging FROM sku_items
-        WHERE client_id = ? AND is_test_data = ? AND (printf('%06d', record_number) LIKE ? OR upc LIKE ? OR unique_description LIKE ? OR known_description LIKE ? OR custom_description LIKE ?)
-        ORDER BY record_number ASC LIMIT ?`).all(clientId, forTestAccount ? 1 : 0, like, like, like, like, like, limit);
+    return db.prepare(`SELECT id, record_number, sku_code, upc, unique_description, known_description, custom_description, main_uom, length, width, height, packaging FROM sku_items
+        WHERE client_id = ? AND is_test_data = ? AND (printf('%06d', record_number) LIKE ? OR sku_code LIKE ? OR upc LIKE ? OR unique_description LIKE ? OR known_description LIKE ? OR custom_description LIKE ?)
+        ORDER BY record_number ASC LIMIT ?`).all(clientId, forTestAccount ? 1 : 0, like, like, like, like, like, like, limit);
 }
 
 
@@ -12792,6 +12846,9 @@ module.exports = {
     setSkuItemEditing,
     deleteSkuItem,
     getSkuNumberingInfo,
+    buildSkuCode,
+    getClientSkuPrefix,
+    skuPrefixCandidates,
     SKU_ITEM_PATCHABLE_FIELDS,
     generatePublicToken,
     getSkuItemByPublicToken,

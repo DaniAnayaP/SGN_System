@@ -187,7 +187,7 @@
             const get = (url) => fetch(url, { credentials: 'include' }).then((r) => { if (!r.ok) throw new Error(url); return r.json(); });
             const [list, skus] = await Promise.all([get(API), get('/api/business/code-relations/skus?all=1')]);
             const items = skus.skus || [];
-            const bySku = new Map(items.map((i) => [Number(i.sku), i]));
+            const bySku = new Map(items.flatMap((i) => [[Number(i.num), i], [String(i.sku).toUpperCase(), i]])); // por su número de 6 dígitos o por su SKU completo
             const byUpc = new Map(items.filter((i) => i.upc).map((i) => [i.upc, i]));
             const places = list.places || [];
             const byPlace = new Map(places.map((p) => [E.norm(p.name), p]));

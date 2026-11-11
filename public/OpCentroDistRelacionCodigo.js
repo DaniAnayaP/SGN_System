@@ -30,6 +30,7 @@ const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': 
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
         renderNewRecordButton();
+        if (Dashboard.ensureColumnMinWidth) Dashboard.ensureColumnMinWidth(TABLE_KEY, 'colRelSku', 150); // el SKU de 12 caracteres cabe completo
         mountHeaderTools();
         await refreshTable();
         // Desde el Layout se abre ya filtrada al localizador (o a lo que se veía): ?q=

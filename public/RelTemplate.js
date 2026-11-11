@@ -167,6 +167,7 @@
         const skuRaw = text('sku');
         if (!skuRaw) return err('sku', 'skuMissing');
         let item = /^\d{1,9}$/.test(skuRaw) ? ctx.itemBySku(Number(skuRaw)) : null;
+        if (!item && /^[A-Za-z]{6}\d{6,9}$/.test(skuRaw)) item = ctx.itemBySku(skuRaw.toUpperCase()); // el SKU completo (CMCSCD000123)
         if (!item && /^\d{8,14}$/.test(skuRaw)) item = ctx.itemByUpc(skuRaw);
         if (!item) return err('sku', 'skuNotFound', { sku: skuRaw });
         const clsRaw = text('classification');

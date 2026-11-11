@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
 // Alta Nuestros Artículos: "Cargar por plantilla". Muchos artículos a la vez: se baja una plantilla de Excel (todas las columnas de llenado), se llena y se sube (o se pegan las filas
 // copiadas de Excel). Al subirla se ELIGEN las columnas que se cargan (una columna sin marcar no se carga ni cambia nada) y cada fila se reconoce por su SKU (el registro único de cada
-// código) o, si no lo trae, por su UPC: si el código ya existe se ACTUALIZA la misma línea (lo vacío nunca borra; un código ya completo no se toca, se corrige en Edición Código) y si no
-// existe se da de alta, aunque traiga solo el UPC (lo demás se llena después). Antes de cargar la ventana revisa CADA fila con la regla de public/SkuTemplate.js (planRow, la misma que vuelve
+// código; lo asigna el sistema, así que solo sirve para actualizar) o, si no lo trae, es un código NUEVO y su llave es la Descripción Única (la única columna obligatoria, que nunca se repite): si el código ya existe
+// se ACTUALIZA la misma línea (lo vacío nunca borra; un código ya completo no se toca, se corrige en Edición Código) y si no existe se da de alta con el siguiente SKU automático (lo demás se llena después). Antes de cargar la ventana revisa CADA fila con la regla de public/SkuTemplate.js (planRow, la misma que vuelve
 // a aplicar el servidor): cada dato con error sale en rojo con su motivo y se corrige ahí mismo; una fila se puede quitar; las que no se cargan bajan en un Excel con su motivo. Los artículos
 // nuevos no llevan fotos, así que quedan sin código QR hasta tenerlas (el QR se genera solo cuando el artículo tiene sus 24 datos). Solo Web.
 // OpCentroDistAltaArticulos.js llama a window.SkuTemplateUi.mount(...) al armar su botón "+ Nuevo Artículo".
@@ -15,7 +15,8 @@
     const X = window.SimpleXlsx;
     const COLS = T.ALL_COLUMNS;
     const CAT_COLS = COLS.filter((c) => c.kind === 'category');
-    const KEY_KEYS = ['sku']; // el SKU es la llave y la única columna obligatoria; el UPC es una columna más (opcional)
+    const KEY_KEYS = ['sku']; // el SKU lo asigna el sistema: aquí solo reconoce un código que ya existe (opcional)
+    const LOCKED = [...KEY_KEYS, 'uniqueDescription']; // la Descripción Única es la única columna obligatoria: no se puede desmarcar
 
     const t = (key, params) => {
         let text = Dashboard.t(key);
@@ -62,7 +63,8 @@
     // ---- plantilla para bajar ---------------------------------------------------------------------------------------------------------
     function instruction(c) {
         const options = (list) => (list || []).slice(0, 12).join(', ') || '—';
-        if (c.key === 'sku') return [t('main.tplInstSku'), '000123'];
+        if (c.key === 'sku') return [t('main.tplInstSku'), 'CMCSCD000123'];
+        if (c.key === 'uniqueDescription') return [t('main.tplInstDesc'), 'Paracetamol 500 mg tabletas, caja con 20'];
         if (c.key === 'upc') return [t('main.tplInstUpc'), '7501003126410'];
         if (c.kind === 'udm') return [t('main.tplInstUdm', { list: options(ctx && ctx.udm) }), ((ctx && ctx.udm) || [])[0] || ''];
         if (c.kind === 'type') return [t('main.tplInstType'), 'Artículo Terminado'];
@@ -74,7 +76,7 @@
         return [t('main.tplInstText'), { uniqueDescription: 'Paracetamol 500 mg tabletas, caja con 20', knownDescription: 'Tempra', customDescription: 'Paracetamol 500 caja' }[c.key] || ''];
     }
     function downloadTemplate() {
-        const required = (c) => (c.key === 'sku' ? t('main.tplYes') : t('main.tplNo'));
+        const required = (c) => (c.key === 'uniqueDescription' ? t('main.tplYes') : t('main.tplNo'));
         const bytes = X.writeXlsx([
             { name: t('main.tplSheetTemplate'), rows: [COLS.map(header)], widths: COLS.map((c) => Math.max(14, header(c).length + 4)), headerRow: true, textColumns: [0, 1] },
             {
@@ -224,7 +226,7 @@
             ctx = {
                 udm: options.udm || [], categories: Object.fromEntries(CAT_COLS.map((c) => [c.type, options[c.type] || []])),
                 classifications: context.classifications || { all: [], byCategory: {} },
-                bySku: new Map(items.map((i) => [Number(i.sku), i])), byUpc: new Map(items.filter((i) => i.upc).map((i) => [i.upc, i])),
+                bySku: new Map(items.flatMap((i) => [[i.num, i], [i.sku, i]])), byUpc: new Map(items.filter((i) => i.upc).map((i) => [i.upc, i])),
                 byDesc: new Map(items.filter((i) => i.v && i.v.uniqueDescription).map((i) => [T.descKey(i.v.uniqueDescription), i])),
             };
             fillDatalists();
@@ -277,7 +279,7 @@
         const res = T.rowsFromMatrix(matrix, { full: true });
         if (res.error === 'empty') { setInfo(t('main.tplNoRows'), true); return; }
         if (res.error === 'columns') { setInfo(t('main.tplNoColumns'), true); return; }
-        if (res.error === 'sku') { setInfo(t('main.tplNeedSku'), true); return; }
+        if (res.error === 'desc') { setInfo(t('main.tplNeedDesc'), true); return; }
         if (!res.rows.length) { setInfo(t('main.tplNoRows'), true); return; }
         rows = res.rows.map((r) => ({ n: r.n, v: r.v, out: false, err: null, plan: null, fixed: false, show: true }));
         usedKeys = new Set(res.usedKeys);
@@ -297,7 +299,7 @@
 
     // ---- columnas que se cargan ----------------------------------------------------------------------------------------------------------
     function buildPicker() {
-        $('tpl-cols-file').innerHTML = COLS.filter((c) => usedKeys.has(c.key)).map((c) => (KEY_KEYS.includes(c.key)
+        $('tpl-cols-file').innerHTML = COLS.filter((c) => usedKeys.has(c.key)).map((c) => (LOCKED.includes(c.key)
             ? `<span class="tpl-pc tpl-pc-key"><input type="checkbox" checked disabled aria-label="${esc(header(c))}"><span>${esc(header(c))}</span><small>${esc(t('main.tplKeyTag'))}</small></span>`
             : `<label class="tpl-pc"><input type="checkbox" data-pick="${c.key}"${selected.has(c.key) ? ' checked' : ''}><span>${esc(header(c))}</span></label>`)).join('');
         $('tpl-cols-missing').innerHTML = COLS.filter((c) => !usedKeys.has(c.key)).map((c) => `<span class="tpl-pc tpl-pc-na"><span>${esc(header(c))}</span></span>`).join('');
@@ -346,7 +348,7 @@
         });
     }
     // el dato con error en una columna que no se ve (por ejemplo el UPC cuando el archivo solo trae SKU) se corrige en la llave que sí se ve
-    const errField = (r) => (r.err && r.err.field === 'upc' && !usedKeys.has('upc') ? 'sku' : (r.err ? r.err.field : ''));
+    const errField = (r) => (r.err && ((r.err.field === 'upc' && !usedKeys.has('upc')) || (r.err.field === 'uniqueDescription' && !usedKeys.has('uniqueDescription'))) ? 'sku' : (r.err ? r.err.field : ''));
     const show = (key, value) => (key === 'articleType' ? (T.TYPE_LABELS[value] || value) : (value === '' || value == null ? '—' : value));
     function updateText(plan) {
         const label = (key) => header(T.BY_KEY_ALL[key]);
@@ -386,7 +388,7 @@
             const dup = ['upcExists', 'upcDuplicateFile', 'skuDuplicateFile', 'skuExists', 'descExists', 'descDuplicateFile'].includes(r.err.code);
             set('tpl-tag-bad', t(dup ? 'main.tplStateRepeated' : 'main.tplStateInvalid'), 'tpl-what-bad', errText(r.err), remove);
         } else if (plan.action === 'create') {
-            const n = Object.keys(plan.patch).length + 1; // + el SKU
+            const n = Object.keys(plan.patch).length;
             set('tpl-tag-ok', t('main.tplStateNew'), 'tpl-what-ok', n === 1 ? t('main.tplWillCreateOnly') : t('main.tplWillCreate', { n }), remove);
         } else if (plan.action === 'update') set('tpl-tag-info', t('main.tplStateUpdate'), 'tpl-what-info', updateText(plan), remove);
         else if (plan.action === 'same') set('tpl-tag-grey', t('main.tplStateSame'), 'tpl-what-grey', t('main.tplSameMsg'), remove);

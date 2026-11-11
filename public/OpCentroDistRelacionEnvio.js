@@ -36,6 +36,7 @@ let loadToken = 0;
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
         renderNewRecordButton();
+        if (Dashboard.ensureColumnMinWidth) Dashboard.ensureColumnMinWidth(TABLE_KEY, 'colEnvSku', 150); // el SKU de 12 caracteres cabe completo
         await refreshTable();
     } catch (err) {
         console.error('Relación Código Envío failed to initialize:', err);

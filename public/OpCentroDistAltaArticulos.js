@@ -1040,6 +1040,7 @@ function renderNewRecordButton() {
     toolbar.prepend(btn);
     // "Cargar por plantilla" va junto a este botón (si tiene su hoja en el árbol); al terminar la tabla se vuelve a leer.
     if (window.SkuTemplateUi) window.SkuTemplateUi.mount(toolbar, btn, refreshTable);
+    if (Dashboard.ensureColumnMinWidth) Dashboard.ensureColumnMinWidth(TABLE_KEY, 'colArticuloSku', 150); // el SKU de 12 caracteres cabe completo
     mountHeaderTools(); // los íconos «Seleccionar» y «Eliminar» del encabezado «Acciones»
 }
 
