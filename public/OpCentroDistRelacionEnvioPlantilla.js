@@ -54,7 +54,7 @@
     }
 
     // ---- plantilla para bajar ---------------------------------------------------------------------------------------------------------
-    const EXAMPLE = { sku: '195201', place: 'Hospital Central', center: 'CMCCCDC' };
+    const EXAMPLE = { sku: 'CMCSCD000001', description: 'Paracetamol 500mg Tableta', place: 'Hospital Central', center: 'CMCCCDC' };
     function optionsSheet() {
         const out = [[t('main.colEnvLugar'), t('main.tplColState'), '', t('main.colEnvCentroCostos'), t('main.envCode')]];
         const places = ctx.places.filter((p) => p.active);
@@ -70,7 +70,7 @@
                 name: t('main.tplSheetHelp'),
                 rows: [
                     [t('main.tplInstColumn'), t('main.tplInstRequired'), t('main.tplInstWhat'), t('main.tplInstExample')],
-                    ...COLS.map((c) => [header(c), c.required ? t('main.tplYes') : t('main.tplNo'), t(`main.envTplInst_${c.key}`), EXAMPLE[c.key]]),
+                    ...COLS.map((c) => [header(c), c.required ? t('main.tplYes') : (c.anyOf ? t('main.envTplEither') : t('main.tplNo')), t(`main.envTplInst_${c.key}`), EXAMPLE[c.key]]),
                     ['', '', '', ''],
                     [t('main.relTplRulesTitle'), '', t('main.envTplRule1'), ''],
                     ['', '', t('main.envTplRule2'), ''],
@@ -189,10 +189,11 @@
             const items = skus.skus || [];
             const bySku = new Map(items.flatMap((i) => [[Number(i.num), i], [String(i.sku).toUpperCase(), i]])); // por su número de 6 dígitos o por su SKU completo
             const byUpc = new Map(items.filter((i) => i.upc).map((i) => [i.upc, i]));
+            const byDesc = new Map(items.filter((i) => i.unique).map((i) => [E.descKey(i.unique), i])); // por su Descripción Única
             const places = list.places || [];
             const byPlace = new Map(places.map((p) => [E.norm(p.name), p]));
             const existing = new Set((list.relations || []).map((r) => `${r.costCenterId}|${r.skuItemId}|${r.placeId}`));
-            ctx = { places, byPlace, centers: list.costCenters || [], bySku, byUpc, existing };
+            ctx = { places, byPlace, centers: list.costCenters || [], bySku, byUpc, byDesc, existing };
             if (!places.some((p) => p.active)) setInfo(t('main.envTplNoPlaces'), true);
             const selected = Dashboard.getSelectedCostCenterIds();
             const one = selected && selected.length === 1 ? ctx.centers.find((c) => c.id === selected[0]) : (ctx.centers.length === 1 ? ctx.centers[0] : null);
@@ -241,7 +242,7 @@
         const ignored = (res.ignored || []).length ? ` · ${t('main.tplIgnored', { list: res.ignored.slice(0, 6).join(', ') })}` : '';
         if (res.error === 'empty') { setInfo(t('main.tplNoRows'), true); return; }
         if (res.error === 'columns') { setInfo(t('main.tplNoColumns'), true); return; }
-        if (res.error === 'sku' || res.error === 'place') { setInfo(t('main.envTplNeedColumns') + ignored, true); $('tpl-review').hidden = true; return; }
+        if (res.error === 'code' || res.error === 'place') { setInfo(t('main.envTplNeedColumns') + ignored, true); $('tpl-review').hidden = true; return; }
         if (!res.rows.length) { setInfo(t('main.tplNoRows'), true); return; }
         rows = res.rows.map((r) => ({ n: r.n, v: r.v, out: false, err: null, plan: null, fixed: false, tr: null }));
         setInfo(`${t('main.tplFileInfo', { rows: rows.length, cols: res.usedKeys.length })}${ignored}`, false);
@@ -274,7 +275,7 @@
         const accepted = new Map();
         const local = {
             centers: ctx.centers, selectedIds: Dashboard.getSelectedCostCenterIds(),
-            itemBySku: (n) => ctx.bySku.get(n) || null, itemByUpc: (upc) => ctx.byUpc.get(upc) || null,
+            itemBySku: (n) => ctx.bySku.get(n) || null, itemByUpc: (upc) => ctx.byUpc.get(upc) || null, itemByDescription: (k) => ctx.byDesc.get(k) || null,
             placeByName: (name) => ctx.byPlace.get(name) || null,
             existingRelation: (key) => (ctx.existing.has(key) ? key : null),
             priorRowWithKey: (key, row) => { const n = accepted.get(key); return n && n !== row.n ? n : 0; },

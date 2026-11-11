@@ -74,6 +74,7 @@ function actionsCell(r, tr) {
         return td;
     }
     td.appendChild(iconButton('admin-icon-btn', 'bx-history', t('main.changeHistoryTitleRecord'), 'changeHistory', () => Dashboard.openChangeHistory(TABLE_KEY, r.id)));
+    if (Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '')) td.appendChild(iconButton('admin-icon-btn', 'bx-plus', t('main.envRelateMore'), 'envRelateMore', () => relateCode(r)));
     if (Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL)) td.appendChild(iconButton('admin-icon-btn admin-icon-btn-danger', 'bx-trash', t('admin.delete'), 'delete', () => deleteRelation(r, tr)));
     return td;
 }
@@ -86,10 +87,54 @@ function buildRow(r) {
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, r[key], 'col-system')),
         cell('colCatRegistroUnico', r.registroUnico, 'col-system'),
         cell('colEnvSku', r.sku), cell('colEnvUpc', r.upc), cell('colEnvDescripcion', r.description), cell('colEnvCentroCostos', r.centroCostos),
-        cell('colEnvLugar', r.place, r.virtual || r.placeActive ? '' : 'udm-ro', r.virtual || r.placeActive ? '' : t('main.envLugarInactivo')),
+        r.virtual ? placePickCell(r) : cell('colEnvLugar', r.place, r.placeActive ? '' : 'udm-ro', r.placeActive ? '' : t('main.envLugarInactivo')),
     );
     tr.appendChild(actionsCell(r, tr));
     return tr;
+}
+// Un código que todavía no tiene lugares: en su celda «Lugar de envío» se eligen, de los lugares ACTIVOS del catálogo Lugares de Envío, a cuál se envía; al elegirlo se crea la relación (en el centro de costos marcado arriba, o el único que
+// hay) y el renglón pasa a ser esa relación. Sin la hoja de crear solo se ve en blanco. Si no hay un solo centro marcado, se abre «Nueva relación de envío» con el código y el lugar ya elegidos para escoger el centro.
+function placePickCell(r) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colEnvLugar';
+    if (!Dashboard.canEditField(TABLE_KEY, CREATE_AUTH_COL, '')) { td.textContent = '—'; return td; }
+    const active = places.filter((p) => p.active);
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    select.setAttribute('data-help-key', 'envPlacePick');
+    select.setAttribute('aria-label', t('main.envPlacePick'));
+    select.innerHTML = `<option value="">${esc(active.length ? t('main.envPlacePick') : t('main.envPlacePickNone'))}</option>${active.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}`;
+    select.disabled = !active.length;
+    select.addEventListener('change', () => { if (select.value) relateCodePlace(r, Number(select.value), select); });
+    td.appendChild(select);
+    return td;
+}
+async function relateCodePlace(r, placeId, select) {
+    const centerId = singleCenterId();
+    if (!centerId) {
+        openDialog();
+        pickSku({ id: r.skuItemId, sku: r.sku, description: r.description });
+        f.placeIds.add(placeId);
+        renderForm();
+        return;
+    }
+    select.disabled = true;
+    try {
+        const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ skuItemId: r.skuItemId, placeIds: [placeId], costCenterId: centerId }) });
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            Dashboard.showToast(res.status === 403 ? Dashboard.t('main.fieldLocked') : (body.message || Dashboard.t('admin.saveError')), res.status === 403 ? 'warning' : 'error');
+            select.value = '';
+            select.disabled = false;
+            return;
+        }
+        await refreshTable();
+    } catch (err) {
+        console.error('Relación Código Envío: failed to relate the code from its row', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        select.value = '';
+        select.disabled = false;
+    }
 }
 function getTbody() {
     return document.querySelector(`[data-table-id="${TABLE_KEY}"] table.data-table`).tBodies[0];
