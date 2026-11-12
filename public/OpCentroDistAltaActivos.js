@@ -179,7 +179,9 @@ function attachEvidenceControl(td, { value, pending, labelKey, recordId, fieldKe
             onCommit(key);
         } catch (err) {
             console.error('evidence upload failed', err);
-            Dashboard.showToast(Dashboard.t(err.status === 403 ? 'main.fieldLocked' : 'admin.saveError'), err.status === 403 ? 'warning' : 'error');
+            // el aviso dice en qué paso falló: sin permiso, el almacenamiento no recibió el archivo, el almacenamiento no está disponible, o (otro caso) un error al guardar
+            const textKey = err.status === 403 ? 'main.fieldLocked' : (err.step === 'put' ? 'main.assetPhotoPutError' : (err.status === 503 ? 'main.assetPhotoStorageError' : 'admin.saveError'));
+            Dashboard.showToast(Dashboard.t(textKey), err.status === 403 ? 'warning' : 'error');
         } finally {
             busy = false;
             render();
@@ -529,18 +531,22 @@ createForm?.addEventListener('submit', async (event) => {
             throw new Error(err?.message || Dashboard.t('admin.saveError'));
         }
         const { asset } = await res.json();
-        for (const [, key] of EVIDENCE_FIELDS) {
+        const failedPhotos = []; // las fotos que no se pudieron subir (el activo ya quedó guardado): se avisan al final, no se quedan calladas
+        for (const [labelKey, key] of EVIDENCE_FIELDS) {
             const file = createEvidenceFiles.get(key);
             if (!file) continue;
             try {
                 const evidenceKey = await Dashboard.uploadEvidenceFile(file, { tableKey: TABLE_KEY, recordId: asset.id, fieldKey: key });
-                await fetch(`/api/business/fixed-assets/${asset.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ [key]: evidenceKey }) });
+                const patched = await fetch(`/api/business/fixed-assets/${asset.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ [key]: evidenceKey }) });
+                if (!patched.ok) throw new Error(`PATCH ${patched.status}`);
             } catch (err) {
                 console.error(`Alta Activos: evidence upload failed for ${key}`, err);
+                failedPhotos.push(Dashboard.t(`main.${labelKey}`));
             }
         }
         closeCreateModal();
         await refreshTable();
+        if (failedPhotos.length) Dashboard.showToast(Dashboard.t('main.assetPhotosFailed').replace('{list}', failedPhotos.join(', ')), 'error');
     } catch (err) {
         console.error('Alta Activos: failed to save new record', err);
         createFormError.textContent = err.message;

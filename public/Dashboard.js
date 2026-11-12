@@ -13081,16 +13081,27 @@ async function compressImageToBlob(file, maxDim = 1280, quality = 0.7) {
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    // Una imagen con partes transparentes (por ejemplo la foto de un producto sin fondo) se queda en PNG: al pasarla a JPEG lo transparente sale NEGRO.
+    // Solo las que pueden traer transparencia (PNG, WebP, GIF) se revisan; una foto normal sigue yendo a JPEG como siempre.
+    let hasAlpha = false;
+    if (/^image\/(png|webp|gif)$/i.test(file.type)) {
+        const px = ctx.getImageData(0, 0, w, h).data;
+        for (let i = 3; i < px.length; i += 4) { if (px[i] < 250) { hasAlpha = true; break; } }
+    }
+    const blob = await new Promise((resolve) => (hasAlpha ? canvas.toBlob(resolve, 'image/png') : canvas.toBlob(resolve, 'image/jpeg', quality)));
     return blob || file;
 }
 
 // Compresses, asks the server for a presigned PUT URL (server checks the
 // caller can actually edit this field), then PUTs directly to R2. Returns
 // the short storage key to PATCH onto the record — never the file itself.
+// Cada paso que falla lo dice en err.step ('url' = el servidor no dio el permiso de subida, 'put' = el almacenamiento no recibió el archivo) para que la pantalla avise qué pasó y no un genérico «Error al guardar».
 async function uploadEvidenceFile(file, { tableKey, recordId, fieldKey }) {
-    const blob = await compressImageToBlob(file);
+    // si el navegador no puede leer la imagen para reducirla (un formato raro), se sube tal cual en vez de fallar
+    let blob;
+    try { blob = await compressImageToBlob(file); } catch (e) { console.warn('evidence compress failed, uploading the original', e); blob = file; }
     const contentType = blob.type || file.type || 'application/octet-stream';
     const res = await fetch('/api/business/evidence-upload-url', {
         method: 'POST',
@@ -13102,11 +13113,13 @@ async function uploadEvidenceFile(file, { tableKey, recordId, fieldKey }) {
         const body = await res.json().catch(() => ({}));
         const err = new Error(body.message || 'evidence-upload-url failed');
         err.status = res.status;
+        err.step = 'url';
         throw err;
     }
     const { uploadUrl, key } = await res.json();
-    const putRes = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
-    if (!putRes.ok) throw new Error('R2 upload failed');
+    let putRes;
+    try { putRes = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob }); } catch (e) { const err = new Error(`R2 upload failed: ${e && e.message}`); err.step = 'put'; throw err; }
+    if (!putRes.ok) { const err = new Error(`R2 upload failed (${putRes.status})`); err.step = 'put'; err.putStatus = putRes.status; throw err; }
     return key;
 }
 
