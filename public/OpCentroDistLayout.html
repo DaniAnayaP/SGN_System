@@ -508,7 +508,33 @@
                                 <svg id="layout-svg" viewBox="0 0 700 460" role="img" aria-label="Layout"></svg>
                                 <div class="layout-map3d" id="layout-map3d" hidden>
                                     <div class="layout-3d-picker" id="layout-3d-picker" hidden></div>
-                                    <div class="layout-3d-stage" id="layout-3d-stage" data-help-key="layout3dStage"><div class="layout-3d-msg" id="layout-3d-msg" hidden></div></div>
+                                    <div class="layout-3d-stage" id="layout-3d-stage" data-help-key="layout3dStage"><div class="layout-3d-msg" id="layout-3d-msg" hidden></div>
+                                        <div class="layout-walk" id="layout-walk" hidden>
+                                            <div class="layout-walk-tl" id="layout-walk-tl" hidden>
+                                                <span class="layout-walk-chip" data-i18n="main.layoutWalkDentro">Inside the building</span>
+                                                <span class="layout-walk-chip" id="layout-walk-pos"></span>
+                                                <label class="layout-walk-chip layout-walk-eye" data-help-key="layoutWalkOjos"><span data-i18n="main.layoutWalkOjos">Eyes at</span> <select id="layout-walk-eye"><option value="1.7" data-i18n="main.layoutWalkOjosPersona">Person on foot · 1.70 m</option><option value="2.4" data-i18n="main.layoutWalkOjosMontacargas">Forklift operator · 2.40 m</option></select></label>
+                                            </div>
+                                            <div class="layout-walk-tr"><button type="button" class="btn btn-secondary" id="layout-walk-exit" data-i18n="main.layoutWalkSalir">Exit</button></div>
+                                            <div class="layout-walk-tray" id="layout-walk-tray" data-help-key="layoutRecorrer">
+                                                <button type="button" class="layout-walk-peg" id="layout-walk-peg" data-i18n-aria-label="main.layoutWalkMonito"><svg viewBox="0 0 46 58" aria-hidden="true"><circle cx="23" cy="10" r="8" fill="var(--color-accent)"/><path d="M12 24c0-4 5-6 11-6s11 2 11 6v13h-5v17h-6V42v12h-6V37h-5z" fill="var(--color-accent)" stroke="var(--color-text-primary)" stroke-width="1.6" stroke-linejoin="round"/><circle cx="23" cy="10" r="8" fill="none" stroke="var(--color-text-primary)" stroke-width="1.6"/></svg></button>
+                                                <span class="layout-walk-tray-txt" data-i18n="main.layoutWalkPonerTxt">Drag the figure to any spot in the building and you step in there.</span>
+                                                <button type="button" class="btn" id="layout-walk-enter" data-i18n="main.layoutWalkEntrar">Enter</button>
+                                            </div>
+                                            <div class="layout-walk-cross" id="layout-walk-cross" hidden></div>
+                                            <div class="layout-walk-mini" id="layout-walk-mini-box" hidden><canvas id="layout-walk-mini" width="340" height="232" data-i18n-aria-label="main.layoutWalkMini"></canvas></div>
+                                            <div class="layout-walk-pad" id="layout-walk-pad" hidden role="group" data-i18n-aria-label="main.layoutWalkBotones">
+                                                <button type="button" data-wk="turnL" data-i18n-aria-label="main.layoutWalkGiraIzq">↶</button>
+                                                <button type="button" data-wk="fwd" data-i18n-aria-label="main.layoutWalkAvanza">▲</button>
+                                                <button type="button" data-wk="turnR" data-i18n-aria-label="main.layoutWalkGiraDer">↷</button>
+                                                <button type="button" data-wk="strL" data-i18n-aria-label="main.layoutWalkPasoIzq">◀</button>
+                                                <button type="button" data-wk="back" data-i18n-aria-label="main.layoutWalkRetrocede">▼</button>
+                                                <button type="button" data-wk="strR" data-i18n-aria-label="main.layoutWalkPasoDer">▶</button>
+                                            </div>
+                                            <div class="layout-walk-hint" id="layout-walk-hint"></div>
+                                            <div class="layout-walk-card" id="layout-walk-card" hidden></div>
+                                        </div>
+                                    </div>
                                     <div class="layout-3d-info" id="layout-3d-info" aria-live="polite" hidden></div>
                                 </div>
                             </div>
@@ -534,6 +560,7 @@
                                             <button type="button" class="layout-3d-view on" data-view="general" data-help-key="layout3dViews" data-i18n="main.layout3dGeneral">Overview</button>
                                             <button type="button" class="layout-3d-view" data-view="planta" data-help-key="layout3dViews" data-i18n="main.layout3dPlanta">Top view</button>
                                             <button type="button" class="layout-3d-view" data-view="frente" data-help-key="layout3dViews" data-i18n="main.layout3dFrente">Front view</button>
+                                            <button type="button" class="layout-3d-view-walk" id="layout-walk-btn" data-help-key="layoutRecorrer" aria-pressed="false" data-i18n="main.layoutRecorrer">Walk through</button>
                                         </div>
                                     </div>
                                     <div class="layout-views-icons">

@@ -2168,6 +2168,27 @@
     "layoutHojaConSimbologia": "Legend",
     "layoutSimbologiaOcultar": "Remove the legend from the sheet",
     "layoutSimbologiaVer": "Put the legend on the sheet",
+    "layoutRecorrer": "Walk through",
+    "layoutWalkEntrar": "Enter",
+    "layoutWalkSalir": "Exit",
+    "layoutWalkMonito": "Figure: drag it to a spot in the building",
+    "layoutWalkPonerTxt": "Drag the figure to any spot in the building and you step in there.",
+    "layoutWalkDentro": "Inside the building",
+    "layoutWalkPos": "X {x} · Y {y} m · eyes at {eye} m",
+    "layoutWalkHint": "Arrows or W A S D to walk · drag to look around · tap something to see its details",
+    "layoutWalkOjos": "Eyes at",
+    "layoutWalkOjosPersona": "Person on foot · 1.70 m",
+    "layoutWalkOjosMontacargas": "Forklift operator · 2.40 m",
+    "layoutWalkMini": "Minimap: tap to move",
+    "layoutWalkPiso": "floor {n} m",
+    "layoutWalkBotones": "Walking buttons",
+    "layoutWalkGiraIzq": "Turn left",
+    "layoutWalkAvanza": "Move forward",
+    "layoutWalkGiraDer": "Turn right",
+    "layoutWalkPasoIzq": "Step left",
+    "layoutWalkRetrocede": "Move back",
+    "layoutWalkPasoDer": "Step right",
+    "layoutWalkCerrarFicha": "Close the card",
     "layoutHojaConPuertas": "Door space",
     "layoutPuertasOcultar": "Remove the door space from the sheet (open doors and their travel)",
     "layoutPuertasVer": "Put the door space on the sheet (open doors and their travel)",
@@ -6645,6 +6666,14 @@
     "layoutSgAlcance": {
       "what": "How many meters the camera sees or the speaker can be heard (1 to 200). 12 m for a camera and 15 m for a speaker by default. It is drawn as the length of the cone (camera) or as a circle (speaker).",
       "example": "a camera covering 12 m to the end of the aisle; a speaker heard 15 m all around."
+    },
+    "layoutRecorrer": {
+      "what": "Walk through the building like the figure in Maps. Press «Walk through», drag the figure to a spot in the building (or press «Enter») and you are there at a person's eye level (1.70 m; you can choose to look as a forklift operator). You walk with the arrows or W A S D (Shift runs, Q and E turn) or with the on-screen buttons, and you look around by dragging. You cannot go through what you see (walls, columns, assets, objects); doors are crossed through their opening and raised floors and ramps are climbed on foot. Tap something to open its card. The minimap shows where you are and, tapping it, you move there. You only see and bump into what is turned on in «What to see». «Exit» (or Esc) takes you back to the overview.",
+      "example": "you come in through the dock door, walk between the Zone 1 racks, tap one to see its code, size and levels, and climb onto the platform to see how the +0.60 m floor looks."
+    },
+    "layoutWalkOjos": {
+      "what": "How high above the floor the eyes are when walking through the building: a person on foot (1.70 m) or a forklift operator (2.40 m). It can be changed while walking.",
+      "example": "with the eyes at 2.40 m you see over the boxes on a low rack, as the forklift driver would."
     },
     "layoutHidranteModelo": {
       "what": "Which kind of hydrant it is: pillar (the usual red post standing on the floor), double-outlet post (a pipe with two valves on top), siamese connection (the Y-shaped connection that goes on the wall) or fire hose cabinet (the red box with a hose, which goes on the wall). Each model comes with its own height from the floor and size, which you can change in its row.",

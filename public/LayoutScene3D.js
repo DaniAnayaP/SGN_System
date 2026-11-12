@@ -190,6 +190,7 @@
 
         const cam = new THREE.PerspectiveCamera(42, 1, 0.1, 2000);
         const st = { theta: 0.8, phi: 0.95, r: 40, tx: 0, ty: 1, tz: 0 };
+        const walk = { on: false, x: 0, y: 0, rot: 0, pitch: 0, eye: 1.7, gy: 0, keys: {}, col: null, for: null, saved: null, savedFov: 42 };
         let bounds = { diag: 40, maxH: 9, sx: 30, sy: 30 };
         let viewTy = 1; // a qué altura mira la vista general: con lo del techo enfocado, a media altura de lo que cuelga (si no, no se vería)
         let dirty = true;
@@ -538,6 +539,7 @@
         }
 
         function applyCam() {
+            if (walk.on) { dirty = true; return; } // caminando, la cámara es la de los ojos de la persona
             const sp = Math.sin(st.phi);
             cam.position.set(st.tx + st.r * sp * Math.sin(st.theta), st.ty + st.r * Math.cos(st.phi), st.tz + st.r * sp * Math.cos(st.theta));
             cam.lookAt(st.tx, st.ty, st.tz);
@@ -553,6 +555,7 @@
             return { theta: 0.8, phi: 0.95, r: d * 1.0, tx: 0, ty: viewTy, tz: 0 };
         }
         function go(target, animate) {
+            if (walk.on) return;
             cancelAnimationFrame(anim);
             if (!animate) { Object.assign(st, target); applyCam(); return; }
             const from = Object.assign({}, st);
@@ -2088,6 +2091,7 @@
             const dx = e.clientX - p.x; const dy = e.clientY - p.y;
             p.x = e.clientX; p.y = e.clientY;
             moved += Math.abs(dx) + Math.abs(dy);
+            if (walk.on) { walk.rot += dx * 0.005; walk.pitch = clamp(walk.pitch + dy * 0.004, -0.9, 0.9); walkCam(); dirty = true; return; }
             if (ptrs.size === 2) { const d = pinch() || 1; st.r = clamp(st.r * lastPinch / d, 3, bounds.diag * 6); lastPinch = d; applyCam(); return; }
             if (e.buttons & 2 || e.shiftKey) {
                 const k = st.r * 0.0016;
@@ -2104,7 +2108,7 @@
             const r = canvas.getBoundingClientRect();
             raycaster.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), cam);
             // En un paso que edita cosas sueltas (paredes, puertas, pisos, seguridad…) solo se pueden tocar las cosas de ese paso: el editor dice sus tipos (itemPickTypes) y se toma la más cercana de ellas que esté a la vista.
-            const itemTypes = options.itemPickTypes ? options.itemPickTypes() : null;
+            const itemTypes = walk.on ? WALK_PICK : (options.itemPickTypes ? options.itemPickTypes() : null);
             if (itemTypes && itemTypes.length) {
                 let best = null;
                 const consider = (hit, type, id, obj) => { if (!best || hit.distance < best.hit.distance) best = { hit, type, id, obj }; };
@@ -2127,6 +2131,16 @@
                     const rh = raycaster.intersectObjects(roofMeshes)[0];
                     if (rh) consider(rh, 'roof', rh.object.userData.roofId, rh.object);
                 }
+                if (walk.on && hitSpaces && layerOn.assets) { // en el recorrido también se tocan los activos: gana lo más cercano
+                    const sh = raycaster.intersectObject(hitSpaces)[0];
+                    if (sh && sh.instanceId !== undefined && (!best || sh.distance < best.hit.distance)) {
+                        const e2 = spaceList[sh.instanceId];
+                        const bx = e2.box ? { ...e2.box } : { x: e2.x, y: e2.s.h / 2 + e2.fl, z: e2.z, sx: e2.s.l, sy: e2.s.h, sz: e2.s.d };
+                        outline.visible = true; outline.position.set(bx.x, bx.y, bx.z); outline.scale.set(bx.sx + 0.06, bx.sy + 0.06, bx.sz + 0.06); dirty = true;
+                        if (options.onWalkPick) options.onWalkPick({ kind: 'space', space: e2.s });
+                        return;
+                    }
+                }
                 let itemPayload = null;
                 if (best) {
                     const b3 = new THREE.Box3();
@@ -2139,7 +2153,7 @@
                     outline.scale.set(Math.max(s3.x, 0.2) + 0.06, Math.max(s3.y, 0.1) + 0.06, Math.max(s3.z, 0.2) + 0.06);
                 } else outline.visible = false;
                 dirty = true;
-                if (options.onSelect) options.onSelect(itemPayload);
+                if (walk.on) { if (options.onWalkPick) options.onWalkPick(itemPayload); } else if (options.onSelect) options.onSelect(itemPayload);
                 return;
             }
             // una capa oculta no se puede tocar
@@ -2175,6 +2189,7 @@
         const onCancel = (e) => ptrs.delete(e.pointerId);
         // Igual que el croquis en 2D: sin Ctrl la rueda sigue moviendo la página.
         const onWheel = (e) => {
+            if (walk.on) return;
             if (!e.ctrlKey && !e.metaKey) return;
             e.preventDefault();
             st.r = clamp(st.r * (1 + e.deltaY * 0.0012), 3, bounds.diag * 6);
@@ -2196,12 +2211,108 @@
             cam.updateProjectionMatrix();
             dirty = true;
         }
+        // ---- Recorrer: caminar por dentro de la nave (primera persona) ----------------------------------------------------------------------
+        // La cámara pasa a los ojos de una persona (walk.eye metros sobre el piso de donde está). Camina con el teclado (flechas o W A S D, Shift corre, Q y E giran) o con los botones del editor (walkKeys), voltea arrastrando
+        // y no atraviesa lo que se ve (paredes, columnas, activos, objetos): las puertas se cruzan por su hueco. Los pisos a desnivel y las rampas se suben (los ojos siguen al piso). Tocar algo lo marca y avisa al editor (onWalkPick).
+                const WALK_PICK = ['door', 'obstacle', 'power', 'sensor', 'safety', 'ceiling', 'transit', 'object', 'floor', 'roof'];
+        const WALK_KEYS = { ArrowUp: 'fwd', w: 'fwd', W: 'fwd', ArrowDown: 'back', s: 'back', S: 'back', ArrowLeft: 'turnL', q: 'turnL', Q: 'turnL', ArrowRight: 'turnR', e: 'turnR', E: 'turnR', a: 'strL', A: 'strL', d: 'strR', D: 'strR' };
+        // los choques (paredes, columnas, activos, objetos, puertas y contorno) los saca LayoutCalc (walkColliders / walkBlockedAt) según las capas encendidas
+        function walkBuild() { walk.for = lastLayout; walk.col = root.LayoutCalc.walkColliders(lastLayout, layerOn); }
+        const walkBlocked = (x, y) => root.LayoutCalc.walkBlockedAt(walk.col, x, y);
+        const walkFree = (x, y) => root.LayoutCalc.walkFreeSpot(walk.col, x, y);
+        const walkFloorAt = (x, y) => (root.LayoutCalc && root.LayoutCalc.floorLevelAt && lastLayout ? root.LayoutCalc.floorLevelAt(lastLayout, x, y) : 0) + 0.08;
+        function walkCam() {
+            if (!center) return;
+            cam.position.set(walk.x - center.x, walk.gy + walk.eye, walk.y - center.y);
+            cam.rotation.set(-walk.pitch, walk.rot, 0, 'YXZ');
+        }
+        const walkTyping = (e) => { const tg = e.target; return !!tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.tagName === 'SELECT' || tg.isContentEditable); };
+        function walkKeyDown(e) {
+            if (walkTyping(e)) return;
+            if (e.key === 'Escape') { walkStop(); if (options.onWalkExit) options.onWalkExit(); return; }
+            const k = WALK_KEYS[e.key];
+            if (k) { walk.keys[k] = true; e.preventDefault(); }
+            if (e.key === 'Shift') walk.keys.run = true;
+        }
+        function walkKeyUp(e) {
+            const k = WALK_KEYS[e.key];
+            if (k) walk.keys[k] = false;
+            if (e.key === 'Shift') walk.keys.run = false;
+        }
+        function walkStart(o) {
+            if (!center || !lastLayout || walk.on) return false;
+            walk.saved = Object.assign({}, st); walk.savedFov = cam.fov;
+            walk.on = true; walk.keys = {}; walk.pitch = 0;
+            walk.eye = Number(o && o.eye) > 0 ? Number(o.eye) : 1.7;
+            walk.rot = Number(o && o.rot) || 0;
+            walkBuild();
+            const f = walkFree(Number(o && o.x) || 0, Number(o && o.y) || 0);
+            walk.x = f[0]; walk.y = f[1]; walk.gy = walkFloorAt(walk.x, walk.y);
+            cam.fov = 72; cam.updateProjectionMatrix();
+            window.addEventListener('keydown', walkKeyDown);
+            window.addEventListener('keyup', walkKeyUp);
+            outline.visible = false;
+            walkCam(); dirty = true;
+            return true;
+        }
+        function walkStop() {
+            if (!walk.on) return;
+            walk.on = false; walk.keys = {};
+            window.removeEventListener('keydown', walkKeyDown);
+            window.removeEventListener('keyup', walkKeyUp);
+            cam.fov = walk.savedFov || 42; cam.updateProjectionMatrix();
+            Object.assign(st, walk.saved || {});
+            outline.visible = false;
+            applyCam();
+        }
+        // un paso de hasta 0.05 s: caminar a la misma velocidad aunque el cuadro tarde (se parte en pasos chicos para no brincarse una pared)
+        function walkMove(dt) {
+            const k = walk.keys; const sp = (k.run ? 4.2 : 2.0) * dt;
+            if (k.turnL) walk.rot += 1.6 * dt;
+            if (k.turnR) walk.rot -= 1.6 * dt;
+            const fx = -Math.sin(walk.rot); const fy = -Math.cos(walk.rot); const rx = -fy; const ry = fx;
+            let mx = 0; let my = 0;
+            if (k.fwd) { mx += fx; my += fy; }
+            if (k.back) { mx -= fx; my -= fy; }
+            if (k.strR) { mx += rx; my += ry; }
+            if (k.strL) { mx -= rx; my -= ry; }
+            const len = Math.hypot(mx, my);
+            if (len) {
+                mx = (mx / len) * sp; my = (my / len) * sp;
+                if (!walkBlocked(walk.x + mx, walk.y)) walk.x += mx;
+                if (!walkBlocked(walk.x, walk.y + my)) walk.y += my;
+            }
+            walk.gy += (walkFloorAt(walk.x, walk.y) - walk.gy) * Math.min(1, dt * 9);
+        }
+        function walkStep(dt) {
+            if (walk.for !== lastLayout) walkBuild(); // el Layout cambió (otra capa, otro enfoque): los choques se vuelven a sacar
+            let rest = dt;
+            while (rest > 1e-6) { const h = Math.min(rest, 0.05); walkMove(h); rest -= h; }
+            walkCam(); dirty = true;
+            if (options.onWalkFrame) options.onWalkFrame({ x: walk.x, y: walk.y, rot: walk.rot, eye: walk.eye, level: walk.gy - 0.08 });
+        }
+        function walkTo(x, y) { if (!walk.on) return; const f = walkFree(x, y); walk.x = f[0]; walk.y = f[1]; }
+        function walkSetEye(h) { if (Number(h) > 0) { walk.eye = Number(h); if (walk.on) { walkCam(); dirty = true; } } }
+        function walkKeys(k, down) { if (walk.on) walk.keys[k] = !!down; }
+        // el punto del plano (en metros del Layout) que está debajo de un punto de la pantalla, para soltar al monito; null si cae fuera del contorno de la nave
+        function walkPoint(clientX, clientY) {
+            if (!center || !lastLayout || !Array.isArray(lastLayout.vertices)) return null;
+            const r = canvas.getBoundingClientRect();
+            raycaster.setFromCamera(new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1), cam);
+            const p = new THREE.Vector3();
+            if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p)) return null;
+            const x = p.x + center.x; const y = p.z + center.y;
+            const poly = lastLayout.vertices.map((v) => [v[0], v[1]]); const LCh = root.LayoutCalc;
+            return poly.length >= 3 && (LCh.pointInPolygon(x, y, poly) || LCh.onPolygonEdge(x, y, poly)) ? { x, y } : null;
+        }
+        let walkLast = performance.now();
         const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(resize) : null;
         if (ro) ro.observe(container);
         resize();
         applyCam();
         const loop = () => {
             if (destroyed) return;
+            { const nowT = performance.now(); const dtW = Math.min(0.25, (nowT - walkLast) / 1000); walkLast = nowT; if (walk.on) walkStep(dtW); }
             if (marchMats.length) { marchMats.forEach((m) => { m.dashOffset -= 0.012; }); dirty = true; } // el punteado de lo elegido gira
             if (markSpin.length || hlSpin.length) { markSpin.forEach((g) => { g.rotation.y -= 0.022; }); hlSpin.forEach((g) => { g.rotation.y -= 0.022; }); dirty = true; } // y el anillo del giro de los objetos
             if (dirty) { dirty = false; renderer.render(scene, cam); }
@@ -2211,6 +2322,7 @@
 
         function destroy() {
             destroyed = true;
+            walkStop();
             cancelAnimationFrame(anim);
             if (ro) ro.disconnect();
             canvas.removeEventListener('contextmenu', onContext);
@@ -2225,7 +2337,7 @@
             renderer.dispose();
             canvas.remove();
         }
-        return { update, setLabels, setLayer, setHiddenAssets, highlight, focusOn, setView, zoom, resize, destroy, canvas, layers: LAYER_NAMES.slice(), measuredCount: () => measuredGroup.children.length / 2 };
+        return { update, setLabels, setLayer, setHiddenAssets, highlight, focusOn, setView, zoom, resize, destroy, canvas, walkStart, walkStop, walkTo, walkSetEye, walkKeys, walkPoint, isWalking: () => walk.on, layers: LAYER_NAMES.slice(), measuredCount: () => measuredGroup.children.length / 2 };
     }
 
     root.LayoutScene3D = { create, LAYERS: LAYER_NAMES.slice() };

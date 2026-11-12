@@ -2168,6 +2168,27 @@
     "layoutHojaConSimbologia": "Simbología",
     "layoutSimbologiaOcultar": "Quitar la simbología de la hoja",
     "layoutSimbologiaVer": "Poner la simbología en la hoja",
+    "layoutRecorrer": "Recorrer",
+    "layoutWalkEntrar": "Entrar",
+    "layoutWalkSalir": "Salir",
+    "layoutWalkMonito": "Monito: arrástralo a un lugar de la nave",
+    "layoutWalkPonerTxt": "Arrastra al monito a cualquier lugar de la nave y entras ahí.",
+    "layoutWalkDentro": "Dentro de la nave",
+    "layoutWalkPos": "X {x} · Y {y} m · ojos a {eye} m",
+    "layoutWalkHint": "Flechas o W A S D para caminar · arrastra para voltear · toca algo para ver su ficha",
+    "layoutWalkOjos": "Los ojos van a",
+    "layoutWalkOjosPersona": "Persona a pie · 1.70 m",
+    "layoutWalkOjosMontacargas": "Operador de montacargas · 2.40 m",
+    "layoutWalkMini": "Minimapa: toca para moverte",
+    "layoutWalkPiso": "piso {n} m",
+    "layoutWalkBotones": "Botones para caminar",
+    "layoutWalkGiraIzq": "Girar a la izquierda",
+    "layoutWalkAvanza": "Avanzar",
+    "layoutWalkGiraDer": "Girar a la derecha",
+    "layoutWalkPasoIzq": "Paso a la izquierda",
+    "layoutWalkRetrocede": "Retroceder",
+    "layoutWalkPasoDer": "Paso a la derecha",
+    "layoutWalkCerrarFicha": "Cerrar la ficha",
     "layoutHojaConPuertas": "Espacio de puertas",
     "layoutPuertasOcultar": "Quitar de la hoja el espacio de las puertas (abiertas y su recorrido)",
     "layoutPuertasVer": "Poner en la hoja el espacio de las puertas (abiertas y su recorrido)",
@@ -6644,6 +6665,14 @@
     "layoutSgAlcance": {
       "what": "Hasta cuántos metros llega lo que ve la cámara o lo que se oye en la bocina (de 1 a 200). De fábrica 12 m la cámara y 15 m la bocina. Se dibuja como el largo del cono (cámara) o como un círculo (bocina).",
       "example": "una cámara que cubre 12 m hasta el fondo del pasillo; una bocina que se oye 15 m a la redonda."
+    },
+    "layoutRecorrer": {
+      "what": "Camina por dentro de la nave, como el monito de Maps. Pulsa «Recorrer», arrastra al monito a un lugar de la nave (o pulsa «Entrar») y estás ahí a la altura de los ojos de una persona (1.70 m; puedes elegir ver como operador de montacargas). Caminas con las flechas o W A S D (Shift corre, Q y E giran) o con los botones de la pantalla, y volteas arrastrando. No atraviesas lo que se ve (paredes, columnas, activos, objetos); las puertas se cruzan por su hueco y los pisos a desnivel y las rampas se suben a pie. Toca algo para abrir su ficha. El minimapa te dice dónde estás y, tocándolo, te mueves ahí. Solo se ve y choca con lo que tengas encendido en «Qué ver». «Salir» (o Esc) te regresa a la vista general.",
+      "example": "entras por la puerta del muelle, caminas entre los anaqueles de la Zona 1, tocas uno para ver su código, medidas y niveles, y subes a la plataforma para ver cómo queda el piso a +0.60 m."
+    },
+    "layoutWalkOjos": {
+      "what": "A qué altura del piso van los ojos al recorrer la nave: de una persona a pie (1.70 m) o de un operador de montacargas (2.40 m). Se puede cambiar caminando.",
+      "example": "con los ojos a 2.40 m ves por encima de las cajas de un anaquel bajo, como lo vería quien maneja el montacargas."
     },
     "layoutHidranteModelo": {
       "what": "Qué clase de hidrante es: de columna (el poste rojo de siempre, parado en el piso), de poste doble (un tubo con dos válvulas arriba), toma siamesa (la conexión en «Y» que va a la pared) o gabinete contra incendio (la caja roja con manguera, que va a la pared). Cada modelo trae su propia altura al piso y tamaño, que puedes cambiar en su renglón.",

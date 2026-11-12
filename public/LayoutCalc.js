@@ -465,6 +465,59 @@
         const n = verts.length;
         return { a, b: { x: a.x + seg.ux * width, y: a.y + seg.uy * width }, ux: seg.ux, uy: seg.uy, nx: 0, ny: 0, thick: 0, wallLength: seg.length, wallHeight: (cornerHeightAt(layout, (side - 1) % n) + cornerHeightAt(layout, side % n)) / 2, base: 0, wall: null, legacy: true };
     }
+    // ---- Recorrer: lo que bloquea el paso de una persona a pie ---------------------------------------------------------------------------
+    // Según las capas encendidas (layers.walls, columns, assets y objects; sin layers, todas): paredes, columnas y otros obstáculos (no los desniveles ni lo colgado a más de 1.8 m), activos y objetos. Una pared
+    // no bloquea cerca de una puerta (el hueco se cruza) y no se sale del contorno de la nave. walkColliders arma la lista una vez; walkBlockedAt dice si una persona (radio WALK_RADIUS) no cabe en un punto.
+    const WALK_RADIUS = 0.36;
+    function distToPolygon(px, py, pts) {
+        if (pointInPolygon(px, py, pts)) return 0;
+        let best = Infinity;
+        for (let i = 0; i < pts.length; i++) {
+            const a = pts[i]; const b = pts[(i + 1) % pts.length];
+            const dx = b[0] - a[0]; const dy = b[1] - a[1]; const l2 = dx * dx + dy * dy;
+            const t = l2 ? Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / l2)) : 0;
+            best = Math.min(best, Math.hypot(px - (a[0] + dx * t), py - (a[1] + dy * t)));
+        }
+        return best;
+    }
+    function walkColliders(layout, layers) {
+        const out = { poly: [], solids: [], doors: [] };
+        if (!layout || !Array.isArray(layout.vertices) || layout.vertices.length < 3) return out;
+        const on = (k) => !layers || layers[k] !== false;
+        out.poly = layout.vertices.map((p) => [p[0], p[1]]);
+        obstacleShapes(layout).forEach(({ o, g }) => {
+            if (o._geom) return;
+            if (o.kind === 'wall') { if (on('walls')) out.solids.push({ pts: g.pts, wall: true }); return; }
+            if (!on('columns') || o.kind === 'step' || Number(o.elev) > 1.8) return;
+            out.solids.push({ pts: g.pts });
+        });
+        if (on('assets')) (layout.spaces || []).filter((s) => s.active !== false && s.l > 0 && s.d > 0).forEach((s) => out.solids.push({ pts: [[s.x, s.y], [s.x + s.l, s.y], [s.x + s.l, s.y + s.d], [s.x, s.y + s.d]] }));
+        if (on('objects')) (layout.objects || []).forEach((o) => { const pg = objectPolygon(o); if (pg && pg.length >= 3) out.solids.push({ pts: pg }); });
+        (layout.doors || []).forEach((d) => { const g = doorGeometry(layout, d); if (g) out.doors.push([g.a.x, g.a.y, g.b.x, g.b.y]); });
+        return out;
+    }
+    function walkBlockedAt(col, x, y) {
+        if (!col) return false;
+        if (col.poly.length >= 3 && !(pointInPolygon(x, y, col.poly) || onPolygonEdge(x, y, col.poly))) return true; // no sale de la nave
+        let atDoor = null;
+        const nearDoor = () => {
+            if (atDoor === null) {
+                atDoor = col.doors.some(([ax, ay, bx, by]) => {
+                    const dx = bx - ax; const dy = by - ay; const l2 = dx * dx + dy * dy;
+                    const t = l2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2)) : 0;
+                    return Math.hypot(x - (ax + dx * t), y - (ay + dy * t)) <= WALK_RADIUS + 0.4;
+                });
+            }
+            return atDoor;
+        };
+        return col.solids.some((s) => distToPolygon(x, y, s.pts) < WALK_RADIUS && !(s.wall && nearDoor()));
+    }
+    // el punto libre más cercano a (x, y) (para soltar al monito sobre un anaquel o una pared)
+    function walkFreeSpot(col, x, y) {
+        if (!walkBlockedAt(col, x, y)) return [x, y];
+        for (let r = 0.3; r < 5; r += 0.3) for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; const px = x + Math.cos(a) * r; const py = y + Math.sin(a) * r; if (!walkBlockedAt(col, px, py)) return [px, py]; }
+        return [x, y];
+    }
     // ---- Pared compartida: una altura por lado -----------------------------------------------------------------------------------------------------------------
     // Una pared tiene dos lados: el A (hacia adentro de la nave en una pared del contorno; hacia abajo del croquis, o a la izquierda si es vertical, en una pared de adentro) y el B (el opuesto). Cada lado puede traer su altura:
     // A con h al inicio y h2 al final, B con hb y hb2, y cada una se mide DESDE EL PISO DE SU LADO (si el piso de ese lado está más alto, el remate sube con él: la altura se pide de piso a techo y un desnivel nunca la recorta).
@@ -4286,7 +4339,7 @@
         storageLocations, huellasThatFit, capacityOf,
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, zoneClearHeights, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
-        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HUNG_SAFETY, SAFETY_AIMS, CAMERA_DEFAULTS, isHungSafety, safetyHangOf, safetyAimOf, safetyFovOf, safetyRangeOf, safetyAimVector, migrateCeilingToSafety, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, CEILING_TYPES, CEILING_LETTER, CEILING_COLORS, CEILING_SIZE_DEFAULTS, ceilingSizeOf, ceilingLimitAt, ceilingHangOf, deriveCeilingZones, assignCeilingCodes, lockCeilingCodes, ceilingViolations, newCeilingViolations, ROOF_SHAPES, ROOF_COVERS, ROOF_MATERIALS, ROOF_COLORS, ROOF_COLOR_BY_SHAPE, ROOF_SHED_DIRS, ROOF_GABLE_DIRS, roofColorOf, roofRings, roofBox, roofHeightIn, roofSlopePct, roofRidge, roofAt, roofLimitAt, assignRoofCodes, lockRoofCodes, roofViolations, newRoofViolations, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
+        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, WALK_RADIUS, walkColliders, walkBlockedAt, walkFreeSpot, HUNG_SAFETY, SAFETY_AIMS, CAMERA_DEFAULTS, isHungSafety, safetyHangOf, safetyAimOf, safetyFovOf, safetyRangeOf, safetyAimVector, migrateCeilingToSafety, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, CEILING_TYPES, CEILING_LETTER, CEILING_COLORS, CEILING_SIZE_DEFAULTS, ceilingSizeOf, ceilingLimitAt, ceilingHangOf, deriveCeilingZones, assignCeilingCodes, lockCeilingCodes, ceilingViolations, newCeilingViolations, ROOF_SHAPES, ROOF_COVERS, ROOF_MATERIALS, ROOF_COLORS, ROOF_COLOR_BY_SHAPE, ROOF_SHED_DIRS, ROOF_GABLE_DIRS, roofColorOf, roofRings, roofBox, roofHeightIn, roofSlopePct, roofRidge, roofAt, roofLimitAt, assignRoofCodes, lockRoofCodes, roofViolations, newRoofViolations, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, BAY_COLORS, bayFmtOf, levelBayRects, levelHasPlaced, levelBayClashes, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

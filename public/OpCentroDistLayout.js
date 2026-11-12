@@ -4992,6 +4992,7 @@ function showChooseCenter() {
     renderKpis();
 }
 async function loadLayout(opts = {}) {
+    walkExit(); // otro Layout (o descartar): se sale del recorrido
     await loadAssetLists();
     state.centerId = Dashboard.getSingleSelectedCostCenterId();
     if (!state.centerId) { showChooseCenter(); return; }
@@ -6632,7 +6633,7 @@ function ensureScene3d() {
             await loadScriptOnce('vendor/three/three.min.js');
             await loadScriptOnce('LayoutScene3D.js');
             await loadScriptOnce('LayoutAssetPicker.js');
-            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, itemPickTypes: () => (state.mode === 'edit' ? STEP_PICK_3D[state.focus] || [] : []), onSelect: (sel) => { show3dInfo(sel); selectFrom3d(sel); } });
+            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, itemPickTypes: () => (state.mode === 'edit' ? STEP_PICK_3D[state.focus] || [] : []), onSelect: (sel) => { show3dInfo(sel); selectFrom3d(sel); }, onWalkFrame: (p) => onWalkFrame(p), onWalkPick: (sel) => onWalkPick(sel), onWalkExit: () => walkExit() });
             picker3d = window.LayoutAssetPicker.create($('layout-3d-picker'), {
                 texts: { title: t('main.layout3dActivosTitulo'), count: t('main.layout3dActivosConteo'), all: t('main.layout3dTodos'), none: t('main.layout3dNinguno'), close: t('main.layout3dCerrar'), search: t('main.layout3dActivosBuscar'), noResults: t('main.layout3dSinResultados'), noZone: t('main.layoutSinZona') },
                 typeLabel: (type) => typeLabel('space', type),
@@ -6681,6 +6682,174 @@ function find3dMarks() {
     if (f.kind === 'items') return (f.items || []).filter((it) => it.type === 'footprint' || it.type === 'space' || it.type === 'zone' || it.type === 'object').map((it) => ({ kind: it.type, id: it.id }));
     return [];
 }
+// ---- Recorrer: caminar por dentro de la nave (como el monito de Maps) ----------------------------------------------------------------------------------
+// «Recorrer» pone la vista de planta con el monito: se arrastra a un lugar de la nave (o se pulsa «Entrar») y se camina a la altura de los ojos de una persona (1.70 m, o de un operador de montacargas, 2.40 m).
+// Se ve y choca solo con lo que está encendido en «Qué ver» (el 3D ya sigue esas capas). El minimapa dice dónde se está y, tocándolo, se pasa a otro lugar; tocar algo abre su ficha. Salir (o Esc) regresa a la vista general.
+const walkUi = { phase: 'off', eye: 1.7, x: null, y: null, mini: null, posText: '' };
+function walkRefreshUi() {
+    const place = walkUi.phase === 'place';
+    const on = walkUi.phase === 'walk';
+    $('layout-walk').hidden = walkUi.phase === 'off';
+    $('layout-walk-tray').hidden = !place;
+    $('layout-walk-tl').hidden = !on;
+    $('layout-walk-cross').hidden = !on;
+    $('layout-walk-mini-box').hidden = !on;
+    $('layout-walk-pad').hidden = !on;
+    $('layout-walk-hint').hidden = !on;
+    $('layout-walk-hint').textContent = on ? t('main.layoutWalkHint') : '';
+    $('layout-walk-card').hidden = true;
+    const btn = $('layout-walk-btn');
+    btn.setAttribute('aria-pressed', String(walkUi.phase !== 'off'));
+    btn.title = btn.textContent;
+}
+function walkSetView(name) {
+    if (!scene3d) return;
+    scene3d.setView(name);
+    document.querySelectorAll('.layout-3d-view').forEach((b) => b.classList.toggle('on', b.getAttribute('data-view') === name));
+}
+// el centro del contorno (donde se entra con «Entrar» la primera vez) y hacia dónde mirar para quedar de frente a él
+function walkCenter() {
+    const v = (state.draft && state.draft.vertices) || [];
+    if (!v.length) return { x: 0, y: 0 };
+    return { x: v.reduce((a, p) => a + p[0], 0) / v.length, y: v.reduce((a, p) => a + p[1], 0) / v.length };
+}
+function walkHeadingFrom(x, y) {
+    const c = walkCenter();
+    const dx = c.x - x; const dy = c.y - y;
+    return Math.hypot(dx, dy) < 1 ? 0 : Math.atan2(-dx, -dy);
+}
+function walkBegin() {
+    if (!state.view3d || !scene3d || !state.draft || !can3d()) return;
+    if (walkUi.phase !== 'off') { walkExit(); return; } // pulsarlo otra vez sale
+    walkUi.phase = 'place';
+    walkSetView('planta');
+    walkRefreshUi();
+}
+function walkEnter(x, y, rot) {
+    if (!scene3d || !state.draft) return;
+    if (!scene3d.walkStart({ x, y, rot, eye: walkUi.eye })) return;
+    walkUi.phase = 'walk';
+    walkRefreshUi();
+}
+function walkExit() {
+    if (walkUi.phase === 'off') return;
+    if (scene3d) scene3d.walkStop();
+    walkUi.phase = 'off';
+    walkRefreshUi();
+    walkSetView('general');
+}
+// el minimapa: el contorno, las paredes, las columnas, los activos y las puertas (según lo encendido) con el monito y su abanico; sale de lo mismo que el 3D
+function drawWalkMini(p) {
+    const cv = $('layout-walk-mini');
+    const d = state.draft;
+    if (!cv || !d || !Array.isArray(d.vertices) || d.vertices.length < 3) return;
+    const g = cv.getContext('2d');
+    const W = cv.width; const H = cv.height; const M = 10;
+    const xs = d.vertices.map((v) => v[0]); const ys = d.vertices.map((v) => v[1]);
+    const x0 = Math.min(...xs); const y0 = Math.min(...ys);
+    const sc = Math.min((W - 2 * M) / Math.max(Math.max(...xs) - x0, 1), (H - 2 * M) / Math.max(Math.max(...ys) - y0, 1));
+    const ox = (W - sc * (Math.max(...xs) - x0)) / 2; const oy = (H - sc * (Math.max(...ys) - y0)) / 2;
+    walkUi.mini = { x0, y0, sc, ox, oy, W, H };
+    const X = (x) => ox + (x - x0) * sc; const Y = (y) => oy + (y - y0) * sc;
+    const css = getComputedStyle(document.documentElement);
+    const ink = (css.getPropertyValue('--color-text-primary') || '#2b1d30').trim() || '#2b1d30';
+    const accent = (css.getPropertyValue('--color-accent') || '#c04fc9').trim() || '#c04fc9';
+    const lay = effective3dLayers();
+    g.clearRect(0, 0, W, H);
+    const poly = (pts, fill, stroke, lw) => { g.beginPath(); pts.forEach((q, i) => { if (i) g.lineTo(X(q[0]), Y(q[1])); else g.moveTo(X(q[0]), Y(q[1])); }); g.closePath(); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw || 2; g.stroke(); } };
+    poly(d.vertices, 'rgba(160,110,175,.16)', ink, 3);
+    LC.obstacleShapes(d).forEach(({ o, g: sh }) => { if (o.kind === 'wall' ? lay.walls : (lay.columns && o.kind !== 'step')) poly(sh.pts, o.kind === 'wall' ? ink : '#7b8196'); });
+    if (lay.assets) (d.spaces || []).filter((s) => s.active !== false).forEach((s) => poly([[s.x, s.y], [s.x + s.l, s.y], [s.x + s.l, s.y + s.d], [s.x, s.y + s.d]], '#d99a43'));
+    if (lay.doors) (d.doors || []).forEach((dr) => { const dg = LC.doorGeometry(d, dr); if (!dg) return; g.beginPath(); g.moveTo(X(dg.a.x), Y(dg.a.y)); g.lineTo(X(dg.b.x), Y(dg.b.y)); g.strokeStyle = '#1e7e34'; g.lineWidth = 5; g.stroke(); });
+    const ax = -Math.sin(p.rot); const ay = -Math.cos(p.rot); const ang = Math.atan2(ay, ax); const px = X(p.x); const py = Y(p.y);
+    g.fillStyle = 'rgba(207,95,211,.45)'; g.beginPath(); g.moveTo(px, py); g.arc(px, py, 46, ang - 0.65, ang + 0.65); g.closePath(); g.fill();
+    g.fillStyle = accent; g.strokeStyle = ink; g.lineWidth = 2.5; g.beginPath(); g.arc(px, py, 7, 0, Math.PI * 2); g.fill(); g.stroke();
+}
+function onWalkFrame(p) {
+    walkUi.x = p.x; walkUi.y = p.y;
+    // sobre un piso a desnivel o una rampa la ficha de la posición dice a qué nivel se está
+    const lvl = Math.round((Number(p.level) || 0) * 100) / 100;
+    const text = t('main.layoutWalkPos', { x: fmt(p.x, 1), y: fmt(p.y, 1), eye: fmt(p.eye, 2) }) + (Math.abs(lvl) >= 0.01 ? ` · ${t('main.layoutWalkPiso', { n: `${lvl > 0 ? '+' : ''}${fmt(lvl)}` })}` : '');
+    if (text !== walkUi.posText) { walkUi.posText = text; $('layout-walk-pos').textContent = text; }
+    drawWalkMini(p);
+}
+// la ficha de lo que se toca: su nombre o tipo, su código y lo que se sabe de él (zona, medidas, estado)
+function walkCardInfo(sel) {
+    const d = state.draft;
+    if (!d || !sel) return null;
+    const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '';
+    const dims = (...v) => { const l = v.filter((n) => Number(n) > 0); return l.length ? `${l.map((n) => fmt(n)).join(' × ')} m` : ''; };
+    const find = (list) => (list || []).find((x) => x.id === sel.id);
+    if (sel.kind === 'space') {
+        const s = sel.space;
+        return { title: typeLabel('space', s.type), code: s.code, lines: [zoneName(s.zoneId), dims(s.l, s.d, s.h), (s.levels || 1) === 1 ? t('main.layout3dNivel1') : t('main.layout3dNivelesN', { n: s.levels })] };
+    }
+    if (sel.kind !== 'item') return null;
+    if (sel.type === 'door') { const x = find(d.doors); return x && { title: x.name || typeLabel('door', x.type), code: x.code, lines: [typeLabel('door', x.type), dims(x.width, x.height), typeLabel('doorOpen', LC.doorOpenOf(x))] }; }
+    if (sel.type === 'obstacle') { const x = find(d.obstacles); return x && { title: x.name || typeLabel('obstacle', x.kind), code: x.code, lines: [typeLabel('obstacle', x.kind), dims(x.l, x.w, x.h)] }; }
+    if (sel.type === 'safety') {
+        const x = find(d.safety); if (!x) return null;
+        const st = LC.safetyStatus(x, todayIso(), d.safetyWarnDays, sfLast(x));
+        return { title: x.name || typeLabel('safety', x.type), code: x.code, lines: [typeLabel('safety', x.type), zoneName(x.zoneId), LC.isHungSafety(x) ? `${t('main.layoutCuelgaA')} ${fmt(LC.safetyHangOf(d, x))} m` : '', st.state !== 'none' ? safetyStatusText(st) : ''] };
+    }
+    if (sel.type === 'ceiling') { const x = find(d.ceiling); return x && { title: x.name || typeLabel('ceiling', x.type), code: x.code, lines: [typeLabel('ceiling', x.type), zoneName(x.zoneId), `${t('main.layoutCuelgaA')} ${fmt(LC.ceilingHangOf(d, x))} m`] }; }
+    if (sel.type === 'transit') { const x = find(d.transit); return x && { title: x.name || typeLabel('transit', x.type), code: x.code, lines: [typeLabel('transit', x.type), zoneName(x.zoneId), dims(x.l, x.w)] }; }
+    if (sel.type === 'object') { const x = find(d.objects); return x && { title: x.name || typeLabel('object', x.type), code: x.code, lines: [dims(x.l, x.w, x.h)] }; }
+    if (sel.type === 'sensor') { const x = find(d.sensors); return x && { title: typeLabel('sensor', x.type), code: x.code, lines: [zoneName(x.zoneId)] }; }
+    if (sel.type === 'power') { const x = find(d.power); return x && { title: typeLabel('power', x.type), code: x.code, lines: [] }; }
+    if (sel.type === 'floor') { const x = LC.floorsAll(d).find((f) => f.id === sel.id); return x && { title: x.name || x.code, code: x.code, lines: [`${Number(x.lvl) > 0 ? '+' : ''}${fmt(Number(x.lvl) || 0)} m`, dims(x.l, x.w)] }; }
+    if (sel.type === 'roof') { const x = find(d.roofs); return x && { title: x.name || typeLabel('roofShape', x.shape), code: x.code, lines: [typeLabel('roofShape', x.shape)] }; }
+    return null;
+}
+function onWalkPick(sel) {
+    const box = $('layout-walk-card');
+    const info = walkCardInfo(sel);
+    if (!info) { box.hidden = true; return; }
+    const lines = info.lines.filter(Boolean);
+    box.innerHTML = `<button type="button" class="wk-x" aria-label="${esc(t('main.layoutWalkCerrarFicha'))}">×</button><b>${esc(info.title || '')}</b>${info.code ? `<span class="wk-code">${esc(info.code)}</span>` : ''}${lines.length ? `<p>${esc(lines.join(' · '))}</p>` : ''}`;
+    box.hidden = false;
+    box.querySelector('.wk-x').addEventListener('click', () => { box.hidden = true; });
+}
+$('layout-walk-btn').addEventListener('click', walkBegin);
+$('layout-walk-exit').addEventListener('click', walkExit);
+$('layout-walk-enter').addEventListener('click', () => {
+    const spot = walkUi.x !== null ? { x: walkUi.x, y: walkUi.y } : walkCenter();
+    walkEnter(spot.x, spot.y, walkHeadingFrom(spot.x, spot.y));
+});
+$('layout-walk-eye').addEventListener('change', (event) => { walkUi.eye = parseFloat(event.target.value) || 1.7; if (scene3d) scene3d.walkSetEye(walkUi.eye); });
+document.querySelectorAll('#layout-walk-pad [data-wk]').forEach((b) => {
+    const k = b.getAttribute('data-wk');
+    b.addEventListener('pointerdown', (event) => { event.preventDefault(); if (scene3d) scene3d.walkKeys(k, true); try { b.setPointerCapture(event.pointerId); } catch (err) { /* sin captura: el botón se suelta igual al levantar */ } });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => b.addEventListener(ev, () => { if (scene3d) scene3d.walkKeys(k, false); }));
+});
+$('layout-walk-mini').addEventListener('pointerdown', (event) => {
+    const m = walkUi.mini;
+    if (!m || !scene3d) return;
+    const r = $('layout-walk-mini').getBoundingClientRect();
+    scene3d.walkTo(m.x0 + (((event.clientX - r.left) / r.width) * m.W - m.ox) / m.sc, m.y0 + (((event.clientY - r.top) / r.height) * m.H - m.oy) / m.sc);
+});
+// arrastrar al monito: se suelta sobre la nave (en la vista de planta) y se entra ahí, de frente al centro
+$('layout-walk-peg').addEventListener('pointerdown', (event) => {
+    if (walkUi.phase !== 'place' || !scene3d) return;
+    event.preventDefault();
+    const ghost = document.createElement('div');
+    ghost.className = 'layout-walk-ghost';
+    ghost.innerHTML = $('layout-walk-peg').innerHTML;
+    document.body.appendChild(ghost);
+    const move = (e) => { ghost.style.left = `${e.clientX}px`; ghost.style.top = `${e.clientY}px`; };
+    const up = (e) => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        ghost.remove();
+        const r = scene3d.canvas.getBoundingClientRect();
+        if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+        const p = scene3d.walkPoint(e.clientX, e.clientY);
+        if (p) walkEnter(p.x, p.y, walkHeadingFrom(p.x, p.y));
+    };
+    move(event);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+});
 function refreshScene3d() {
     if (!(scene3d && state.view3d && state.draft)) return;
     // el selector se actualiza con el borrador (lo que se ocultó y ya no existe se olvida) y la escena se arma una sola vez
@@ -6739,6 +6908,7 @@ function updateViewBtns() {
 }
 async function setView3d(on) {
     if (on && !can3d()) return;
+    if (!on) walkExit(); // al volver al croquis se sale del recorrido
     state.view3d = on;
     updateViewBtns();
     if (!on) {
