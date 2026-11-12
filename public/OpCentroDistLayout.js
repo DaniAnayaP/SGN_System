@@ -442,7 +442,12 @@ function onSidesEdit(el) {
         // Una flecha en diagonal conserva la inclinación que ya traía el lado (o 45° si venía derecho); una derecha deja el lado derecho.
         sides[at][0] = el.value.length === 2 ? angleFromTilt(el.value, typeof sides[at][0] === 'number' ? sideTilt(sides[at]) : 45) : el.value;
     } else if (kind === 'tilt') sides[at][0] = angleFromTilt(sideDirKey(sides[at]), n);
-    else if (kind === 'len') sides[at][1] = Math.max(0, n);
+    else if (kind === 'len') {
+        // Un lado sin medida (el campo vacío o en 0 mientras se escribe el número nuevo) NO se aplica: un lado de 0 m pierde su dirección (al volver a leer las esquinas queda «derecha») y la figura ya no cierra.
+        // Se conserva la medida de antes hasta que haya un número mayor que 0.
+        if (!(num > 0)) return;
+        sides[at][1] = n;
+    }
     else if (kind === 'h') heights[at] = n;
     sh.apply(origin, sides, heights);
     refreshLive();
@@ -5151,6 +5156,8 @@ function onEdit(event) {
     const el = event.target;
     if (state.draft && (el.getAttribute('data-cs') !== null || el.getAttribute('data-zs') !== null)) {
         onSidesEdit(el);
+        // al salir de una medida vacía o en 0 el campo vuelve a mostrar la medida que sigue valiendo
+        if (event.type === 'change' && /^len:/.test(el.getAttribute('data-cs') || el.getAttribute('data-zs')) && !(parseFloat(el.value) > 0)) renderPanel();
         // elegir o quitar una flecha en diagonal agrega o quita el campo de inclinación de ese renglón
         if (event.type === 'change' && /^dir:/.test(el.getAttribute('data-cs') || el.getAttribute('data-zs'))) renderPanel();
         return;
