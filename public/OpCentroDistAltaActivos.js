@@ -180,8 +180,9 @@ function attachEvidenceControl(td, { value, pending, labelKey, recordId, fieldKe
         } catch (err) {
             console.error('evidence upload failed', err);
             // el aviso dice en qué paso falló: sin permiso, el almacenamiento no recibió el archivo, el almacenamiento no está disponible, o (otro caso) un error al guardar
-            const textKey = err.status === 403 ? 'main.fieldLocked' : (err.step === 'put' ? 'main.assetPhotoPutError' : (err.status === 503 ? 'main.assetPhotoStorageError' : 'admin.saveError'));
-            Dashboard.showToast(Dashboard.t(textKey), err.status === 403 ? 'warning' : 'error');
+            const textKey = err.status === 403 ? 'main.fieldLocked' : (err.step === 'put' || err.step === 'server' ? 'main.assetPhotoPutError' : (err.status === 503 ? 'main.assetPhotoStorageError' : 'admin.saveError'));
+            // si el almacenamiento (R2) rechazó al servidor, se agrega el código que dio R2 (AccessDenied, NoSuchBucket…): dice qué corregir
+            Dashboard.showToast(`${Dashboard.t(textKey)}${err.r2Error ? ` (${err.r2Error})` : ''}`, err.status === 403 ? 'warning' : 'error');
         } finally {
             busy = false;
             render();

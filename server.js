@@ -534,7 +534,7 @@ const {
     deleteSupportMaterial,
     SUPPORT_MATERIAL_CATEGORIES,
 } = require('./db');
-const { getUploadUrl, getDownloadUrl, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
+const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
 const { buildEvidenceStorageKey, buildEvidenceDisplayName, extFromContentType } = require('./evidenceNaming');
 const { buildSupportMaterialStorageKey } = require('./supportMaterialNaming');
@@ -12331,6 +12331,38 @@ app.post('/api/business/evidence-upload-url', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('evidence-upload-url failed:', err.message);
         res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' });
+    }
+});
+
+// La misma subida de una foto, pero POR EL SERVIDOR: el navegador manda el archivo aquí y el servidor lo guarda en el MISMO almacenamiento (R2) con la MISMA llave que habría usado la subida directa. Sirve cuando el navegador no
+// logra mandarlo directo a R2 (la política CORS del bucket, la red de la empresa…): el servidor escribe en R2 por su cuenta y no depende de nada de eso. Mismos permisos que la subida directa. Si R2 también rechaza al
+// servidor, la respuesta trae el código exacto que dio R2 (AccessDenied, NoSuchBucket…) para saber qué corregir; la foto NO se guarda en otro lugar.
+const EVIDENCE_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/gif']);
+app.post('/api/business/evidence-upload', requireAuth, express.raw({ type: (req) => /^image\//i.test(String(req.headers['content-type'] || '')), limit: '8mb' }), async (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const tableKey = String(req.query.tableKey || '');
+    const fieldKey = String(req.query.fieldKey || '');
+    const recordId = Number(req.query.recordId);
+    const permColKey = getEvidencePermColKey(tableKey, fieldKey);
+    if (!permColKey) return res.status(400).json({ message: 'Unknown evidence field.' });
+    if (!Number.isInteger(recordId) || recordId < 1) return res.status(400).json({ message: 'Ese registro no es válido.', code: 'RECORD' });
+    if (!req.user.isClientAdmin) {
+        const grants = getUserEffectiveGrants(req.user.sub);
+        const level = getColumnGrantLevel(grants, tableKey, permColKey);
+        if (level !== 'ver-y-operar' && level !== 'editar') {
+            return res.status(403).json({ message: 'No tienes permiso para subir esta evidencia.' });
+        }
+    }
+    const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+    if (!EVIDENCE_IMAGE_TYPES.has(contentType) || !Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ message: 'La foto no es válida.', code: 'FILE' });
+    try {
+        const key = buildEvidenceStorageKey({ clientId: req.user.clientId, tableKey, recordId, fieldKey, ext: extFromContentType(contentType) });
+        await putObject(key, req.body, contentType);
+        res.json({ key });
+    } catch (err) {
+        const r2Error = String((err && (err.name || err.Code)) || 'Error').slice(0, 60);
+        console.error('evidence-upload failed:', r2Error, err && err.message, err && err.$metadata ? err.$metadata.httpStatusCode : '');
+        res.status(502).json({ message: `El almacenamiento de archivos (R2) no recibió la foto: ${r2Error}.`, code: 'R2', r2Error });
     }
 });
 

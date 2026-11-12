@@ -370,7 +370,9 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
             onCommit(key);
         } catch (err) {
             console.error('evidence upload failed', err);
-            Dashboard.showToast(Dashboard.t(err.status === 403 ? 'main.fieldLocked' : 'admin.saveError'), err.status === 403 ? 'warning' : 'error');
+            // el aviso dice en qué paso falló (igual que en Alta Activos); si R2 rechazó al servidor se agrega el código que dio
+            const textKey = err.status === 403 ? 'main.fieldLocked' : (err.step === 'put' || err.step === 'server' ? 'main.assetPhotoPutError' : (err.status === 503 ? 'main.assetPhotoStorageError' : 'admin.saveError'));
+            Dashboard.showToast(`${Dashboard.t(textKey)}${err.r2Error ? ` (${err.r2Error})` : ''}`, err.status === 403 ? 'warning' : 'error');
         } finally {
             busy = false;
             render();

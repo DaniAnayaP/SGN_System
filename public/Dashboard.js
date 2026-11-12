@@ -13097,12 +13097,38 @@ async function compressImageToBlob(file, maxDim = 1280, quality = 0.7) {
 // Compresses, asks the server for a presigned PUT URL (server checks the
 // caller can actually edit this field), then PUTs directly to R2. Returns
 // the short storage key to PATCH onto the record — never the file itself.
-// Cada paso que falla lo dice en err.step ('url' = el servidor no dio el permiso de subida, 'put' = el almacenamiento no recibió el archivo) para que la pantalla avise qué pasó y no un genérico «Error al guardar».
+// Cada paso que falla lo dice en err.step ('url' = el servidor no dio el permiso de subida, 'put' = el almacenamiento no recibió el archivo, 'server' = tampoco lo recibió por el servidor) para que la pantalla avise qué pasó
+// y no un genérico «Error al guardar». Primero se intenta la subida DIRECTA a R2; si el navegador no logra mandarla (la política CORS del bucket, la red de la empresa…) se sube POR EL SERVIDOR, que la guarda en el mismo R2 con la
+// misma llave: la foto queda en el mismo lugar y el resto del sistema no nota la diferencia.
 async function uploadEvidenceFile(file, { tableKey, recordId, fieldKey }) {
     // si el navegador no puede leer la imagen para reducirla (un formato raro), se sube tal cual en vez de fallar
     let blob;
     try { blob = await compressImageToBlob(file); } catch (e) { console.warn('evidence compress failed, uploading the original', e); blob = file; }
     const contentType = blob.type || file.type || 'application/octet-stream';
+    try {
+        return await uploadEvidenceDirect(blob, contentType, { tableKey, recordId, fieldKey });
+    } catch (err) {
+        // sin permiso (403) o un archivo que no vale no se reintentan; lo demás (la subida directa que no llegó, o el servidor sin permiso de subida por falta de configuración) se intenta por el servidor
+        if (!(err.step === 'put' || (err.step === 'url' && err.status === 503))) throw err;
+        console.warn('evidence direct upload failed, uploading through the server', err);
+        return uploadEvidenceViaServer(blob, contentType, { tableKey, recordId, fieldKey });
+    }
+}
+async function uploadEvidenceViaServer(blob, contentType, { tableKey, recordId, fieldKey }) {
+    const qs = new URLSearchParams({ tableKey, recordId: String(recordId), fieldKey });
+    const res = await fetch(`/api/business/evidence-upload?${qs}`, { method: 'POST', headers: { 'Content-Type': contentType }, credentials: 'include', body: blob });
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const err = new Error(body.message || 'evidence-upload failed');
+        err.status = res.status;
+        err.step = 'server';
+        err.r2Error = body.r2Error || '';
+        throw err;
+    }
+    const { key } = await res.json();
+    return key;
+}
+async function uploadEvidenceDirect(blob, contentType, { tableKey, recordId, fieldKey }) {
     const res = await fetch('/api/business/evidence-upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
