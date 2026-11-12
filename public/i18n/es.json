@@ -2180,6 +2180,7 @@
     "layoutWalkOjosPersona": "Persona a pie · 1.70 m",
     "layoutWalkOjosMontacargas": "Operador de montacargas · 2.40 m",
     "layoutWalkMini": "Minimapa: toca para moverte",
+    "layoutCargandoLayout": "Cargando el Layout…",
     "layoutWalkPiso": "piso {n} m",
     "layoutWalkBotones": "Botones para caminar",
     "layoutWalkGiraIzq": "Girar a la izquierda",

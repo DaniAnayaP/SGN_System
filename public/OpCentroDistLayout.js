@@ -4991,11 +4991,25 @@ function showChooseCenter() {
     $('layout-choose-center').hidden = false;
     renderKpis();
 }
+// Mientras el Layout (de otro centro de costos, o el de antes de guardar) se carga, el croquis de antes se queda y arriba sale «Cargando el Layout…» (solo si tarda más de 0.25 s, para que lo rápido no parpadee).
+let layoutLoadingTimer = 0;
+function layoutLoading(on) {
+    clearTimeout(layoutLoadingTimer);
+    const el = $('layout-loading');
+    if (!el) return;
+    if (!on) { el.hidden = true; return; }
+    layoutLoadingTimer = setTimeout(() => { el.hidden = false; }, 250);
+}
 async function loadLayout(opts = {}) {
+    layoutLoading(true);
+    try { await loadLayoutNow(opts); } finally { layoutLoading(false); }
+}
+async function loadLayoutNow(opts = {}) {
     walkExit(); // otro Layout (o descartar): se sale del recorrido
-    await loadAssetLists();
     state.centerId = Dashboard.getSingleSelectedCostCenterId();
-    if (!state.centerId) { showChooseCenter(); return; }
+    // lo que no depende de lo demás se pide a la vez: las listas de activos (de toda la empresa) van junto con el Layout
+    const assetsLoading = loadAssetLists();
+    if (!state.centerId) { await assetsLoading; showChooseCenter(); return; }
     const res = await fetch(layoutUrl('/api/business/layout'), { credentials: 'include' });
     if (!res.ok) throw new Error('layout load failed');
     const body = await res.json();
@@ -5012,7 +5026,8 @@ async function loadLayout(opts = {}) {
     state.planImage = '';
     state.draft = body.layout ? clone(body.layout) : null;
     initEditState(!!opts.keepView && !!state.draft);
-    if (body.layout && body.hasPlanImage) {
+    const loadPlanImage = async () => {
+        if (!(body.layout && body.hasPlanImage)) return;
         try {
             const imgRes = await fetch(layoutUrl('/api/business/layout/plan-image'), { credentials: 'include' });
             if (imgRes.ok) {
@@ -5021,9 +5036,8 @@ async function loadLayout(opts = {}) {
                 state.planAspect = await imageAspect(image);
             }
         } catch (err) { console.error('Layout: no se pudo cargar el plano', err); }
-    }
-    await loadPieces();
-    await loadLocatorCodes();
+    };
+    await Promise.all([assetsLoading, loadPlanImage(), loadPieces(), loadLocatorCodes()]);
     updatePiecesBtn();
     state.loaded = true;
     if (state.mode !== 'edit') showAllLayers(); // en «Ver» se ve todo el Layout al entrar

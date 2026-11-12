@@ -2180,6 +2180,7 @@
     "layoutWalkOjosPersona": "Person on foot · 1.70 m",
     "layoutWalkOjosMontacargas": "Forklift operator · 2.40 m",
     "layoutWalkMini": "Minimap: tap to move",
+    "layoutCargandoLayout": "Loading the Layout…",
     "layoutWalkPiso": "floor {n} m",
     "layoutWalkBotones": "Walking buttons",
     "layoutWalkGiraIzq": "Turn left",
