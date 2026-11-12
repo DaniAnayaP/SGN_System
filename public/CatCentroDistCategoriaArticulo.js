@@ -292,7 +292,7 @@ function applyCategoryFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colActivoFijoLetra', 'colTrEquipTipo', 'colIncCritCategoria']
+        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colActivoFijoLetraCodigo', 'colActivoFijoLetra', 'colTrEquipTipo', 'colIncCritCategoria']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
@@ -571,10 +571,18 @@ function buildExtraCells(record) {
             (v) => ({ kind: v }))];
     }
     if (CATEGORY_TYPE === 'activos-fijos') {
-        // La letra del Localizador del tipo (la que lleva el código de sus activos: R001, A001…): es el tipo de espacio del Layout que le toca. Sin letra, su activo conserva la que ya tenía.
-        const letters = { rackpal: 'R', rack: 'A', cabinet: 'G', pallet: 'T', cold: 'F', cart: 'M' };
-        return [buildOptionCell(record, 'colActivoFijoLetra', 'kind', 'assetTypeLetter',
-            Object.keys(letters).map((k) => ({ value: k, label: `${letters[k]} · ${Dashboard.t(`main.layoutType_space_${k}`)}` })), record.kind || '', '',
+        // «Letra del código»: con ella empieza el código de los activos de este tipo en Alta Activos (R001, A001, L001…). Una sola letra de la A a la Z y distinta en cada tipo.
+        const letterTd = document.createElement('td');
+        letterTd.dataset.col = 'colActivoFijoLetraCodigo';
+        letterTd.setAttribute('data-help-key', 'assetTypeCodeLetter');
+        Dashboard.attachInlineEdit(letterTd, {
+            value: record.letter || '', inputType: 'text', tableKey: TABLE_KEY, colKey: 'colActivoFijoLetraCodigo', pending: isPending(record, 'letter'),
+            onCommit: (val) => ensureCreatedThenPatch(record, { letter: String(val || '').trim().toUpperCase() }),
+        });
+        // «Se dibuja como»: el tipo de espacio del Layout que le toca (cómo se ve y qué letra traían sus activos del Layout). Sin dibujo propio, su activo conserva el que ya tenía.
+        const kinds = ['rack', 'rackpal', 'cabinet', 'pallet', 'cold', 'cart'];
+        return [letterTd, buildOptionCell(record, 'colActivoFijoLetra', 'kind', 'assetTypeLetter',
+            kinds.map((k) => ({ value: k, label: Dashboard.t(`main.layoutType_space_${k}`) })), record.kind || '', '',
             (v) => ({ kind: v }))];
     }
     if (CATEGORY_TYPE === 'activos-clasificacion') {

@@ -290,6 +290,11 @@
     "catCentroDistCategorias": "Categories",
     "catCentroDistUdm": "UOM",
     "opCentroDistAltaArticulos": "New Sku Registration",
+    "opCentroDistAltaActivos": "Asset Registration",
+    "classActDatosGenerales": "General Data",
+    "classActFormaMedidas": "Shape and Dimensions",
+    "classActEvidencias": "Evidence · 6 faces",
+    "classActLayout": "Layout",
     "opCentroDistEdicionCodigo": "Code Editing",
     "opCentroDistEdicionCodigoAbbr1": "Code Edit.",
     "opCentroDistEdicionCodigoAbbr2": "Edit",
@@ -4131,7 +4136,53 @@
     "incFotoCerrar": "Close",
     "recEditError_DESC": "Describe the situation: it cannot be empty.",
     "colActClasMetrica": "Measured in",
-    "colActivoFijoLetra": "Locator letter",
+    "colActivoFijoLetra": "Drawn as",
+    "colActivoFijoLetraCodigo": "Code letter",
+    "colActRegistroUnico": "Unique Registration",
+    "colActCodigo": "Code",
+    "colActEstatus": "Status",
+    "colActTipo": "Asset Type",
+    "colActClasificacion": "Classification",
+    "colActNombreCompra": "Purchase Name",
+    "colActNombrePersonalizado": "Custom Name",
+    "colActModelo": "Model",
+    "colActSerie": "S/N (serial number)",
+    "colActForma": "Shape",
+    "colActAlto": "Height",
+    "colActLargo": "Length",
+    "colActProfundidad": "Depth",
+    "colActPeso": "Weight",
+    "colActVolumen": "Volume",
+    "colActFotoFrente": "Photo Front",
+    "colActFotoAtras": "Photo Back",
+    "colActFotoIzq": "Photo Left",
+    "colActFotoDer": "Photo Right",
+    "colActFotoArriba": "Photo Top",
+    "colActFotoAbajo": "Photo Bottom",
+    "colActEnLayout": "Shows in the Layout",
+    "colActDeleteAuth": "Authorization to Deactivate",
+    "colActCreateAuth": "Authorization to Create",
+    "newAsset": "New Asset",
+    "filterAssetSearchHint": "Code, name, model, S/N...",
+    "assetShape_rectangular": "Rectangular",
+    "assetShape_cilindrica": "Cylindrical",
+    "assetShape_irregular": "Irregular",
+    "assetYes": "Yes",
+    "assetNo": "No",
+    "assetCostCenter": "Cost center",
+    "assetNoLetter": "(no letter)",
+    "assetPickType": "Choose the asset type",
+    "assetVolumeCalc": "Calculated from the measurements",
+    "assetDepthCyl": "Same as the length (the diameter)",
+    "assetDesactivarBtn": "Deactivate asset",
+    "assetActivarBtn": "Activate asset",
+    "assetDesactivarConfirm": "Deactivate asset {code}?",
+    "assetDesactivarItem1": "It keeps existing with everything it has (history and photos); it just stops being offered for new uses.",
+    "assetDesactivarItem2": "Its code stays reserved and it can be activated again.",
+    "assetDesactivarAceptar": "Deactivate",
+    "assetDesactivado": "Asset {code} was deactivated.",
+    "assetActivado": "Asset {code} was activated.",
+    "assetElegirCentro": "Choose the cost center of the asset.",
     "newTransitEquip": "New equipment or person",
     "colTrEquipTipo": "Type",
     "colTrEquipAncho": "Width (m)",
@@ -5516,7 +5567,7 @@
       "example": "you pick Zone 6 and the footprints shown are only those of Zone 6 (H001, H003…)."
     },
     "layoutActivoNivelFijo": {
-      "what": "An asset for operating (classification Asset for operating, measured in m²) always has 1 level and it cannot be edited. Levels, spaces and positions belong to assets for storing.",
+      "what": "An asset for operating or for administering (measured in m²) always has 1 level and it cannot be edited. Levels, spaces and positions belong to assets for storing.",
       "example": "a desk has 1 level; a rack for storing can have 4."
     },
     "layoutAssetType": {
@@ -5816,12 +5867,80 @@
       "example": "a forklift 1.4 m wide does not fit in an aisle 1.2 m wide."
     },
     "assetClassMetric": {
-      "what": "Which metric this classification counts in the Layout. There are only two and they are fixed. Asset for operating: measured in m², with a single level that cannot be edited. Asset for storing: its storage m³ are measured, with its levels, positions and locators.",
-      "example": "A desk is an asset for operating (m²); a rack is an asset for storing (m³). The same asset type can be either."
+      "what": "Which metric this classification counts in the Layout. There are only three and they are fixed. Asset for operating and Asset for administering: measured in m², with a single level that cannot be edited. Asset for storing: its storage m³ are measured, with its levels, positions and locators.",
+      "example": "A forklift is an asset for operating (m²), a telephone for administering (m²) and a rack for storing (m³). The same asset type can be any of them."
     },
     "assetTypeLetter": {
-      "what": "The letter the codes of this type's assets and their Locator start with (R001, A001…). It comes from the asset type: it is no longer chosen on each asset. With no letter, the asset keeps the one it already had.",
-      "example": "Rack uses R, Mobile rack uses M, Shelf uses A, Cabinet uses G, Refrigerator uses F and Floor pallet uses T."
+      "what": "How this asset type is drawn in the Layout: Rack, Pallet rack, Cabinet, Floor pallet, Cold or Mobile rack. With no drawing of its own, its asset keeps the one it already had.",
+      "example": "Shelf is drawn as Rack and Refrigerator as Cold."
+    },
+    "assetTypeCodeLetter": {
+      "what": "The letter the code of this type's assets starts with in Alta Activos (Asset Registration). One single letter, different for each type, and once assets of this type exist it can no longer be changed (their codes carry it). With no letter, assets of this type cannot be registered.",
+      "example": "Rack uses R (R001, R002…) and Telephone uses L (L001, L002…)."
+    },
+    "assetNew": {
+      "what": "Registers an asset: everything inside the site that is kept for use (racks, furniture, sensors, telephones, printers…). Articles (SKU) are what is distributed; assets are what is used.",
+      "example": "A rack, a printer, a desk or a telephone are assets."
+    },
+    "assetCode": {
+      "what": "The asset code is assigned automatically: the letter of its type plus a consecutive number per cost center. It is not typed and never repeats.",
+      "example": "R001 is the first rack of the cost center; L001, the first telephone."
+    },
+    "assetType": {
+      "what": "The asset type comes from the Fixed Assets catalog. It is chosen when registering and is not changed afterwards, because the code carries the letter of the type.",
+      "example": "Rack, Shelf, Refrigerator, Telephone, Desk…"
+    },
+    "assetClass": {
+      "what": "What the asset is kept for: to operate (m²), to store (m³) or to administer (m²). It comes from the Asset Classifications catalog.",
+      "example": "A rack is for storing; a forklift, for operating; a telephone, for administering."
+    },
+    "assetPurchaseName": {
+      "what": "How the asset was bought: the name on the invoice or purchase order. Required.",
+      "example": "Selective rack 2.7 m SR-2700."
+    },
+    "assetCustomName": {
+      "what": "What you call the asset. Optional; the plan and the sheets show this name and, if empty, the purchase name.",
+      "example": "Aisle 1 rack."
+    },
+    "assetModel": {
+      "what": "The model of the asset, the one on its plate or box.",
+      "example": "SR-2700."
+    },
+    "assetSerial": {
+      "what": "The serial number (S/N) of the asset, the one on its plate.",
+      "example": "RK-88213."
+    },
+    "assetShape": {
+      "what": "The shape of the asset: rectangular (a box), cylindrical (a drum or tank) or irregular (any other). The shape is used to calculate the volume.",
+      "example": "A rack is rectangular; a water drum, cylindrical; a chair, irregular."
+    },
+    "assetSize": {
+      "what": "Height, length and depth, in centimeters. In a cylindrical shape the length is the diameter and the depth equals the length. In an irregular one they are the measures of the box that contains it.",
+      "example": "270 high × 120 long × 100 deep."
+    },
+    "assetWeight": {
+      "what": "How much the asset weighs, in kilograms.",
+      "example": "95 kg."
+    },
+    "assetVolume": {
+      "what": "The volume in m³. It is calculated automatically: height × length × depth (rectangular) or π × (length ÷ 2)² × height (cylindrical). In the irregular shape you type it.",
+      "example": "270 × 120 × 100 cm = 3.240 m³."
+    },
+    "assetPhotos": {
+      "what": "The photos of the 6 faces of the asset: front, back, left, right, top and bottom. They are not required to save it.",
+      "example": "Tap the camera to upload the photo; the check mark shows the one already there."
+    },
+    "assetInLayout": {
+      "what": "Whether the asset is drawn in the Layout. In the Layout Assets step only the ones that say Yes can be placed. It is suggested by type (rack = Yes, telephone = No) and can be changed.",
+      "example": "A rack says Yes; a printer, No."
+    },
+    "assetDeactivate": {
+      "what": "Deactivates the asset: it keeps existing with everything it has, but it stops being offered for new uses. Assets are never deleted.",
+      "example": "A rack that was retired is deactivated."
+    },
+    "assetActivate": {
+      "what": "Activates an asset that was deactivated again.",
+      "example": "The rack that went back to work."
     },
     "incQr": {
       "what": "Shows the Incidents QR of the cost center you have selected above. Stick it up in the facility: whoever scans it types their name, picks the zone where it happened, the category and the criterion, describes the situation in their own words and uploads their evidence (photos, at least one and no maximum); the report arrives here with its number and the time. From the same window you download the image and open or close the QR locks.",

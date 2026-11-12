@@ -290,6 +290,11 @@
     "catCentroDistCategorias": "Categorías",
     "catCentroDistUdm": "UDM",
     "opCentroDistAltaArticulos": "Alta Nuestros Artículos (Sku)",
+    "opCentroDistAltaActivos": "Alta Activos",
+    "classActDatosGenerales": "Datos Generales",
+    "classActFormaMedidas": "Forma y Medidas",
+    "classActEvidencias": "Evidencia · 6 caras",
+    "classActLayout": "Layout",
     "opCentroDistEdicionCodigo": "Edición Código",
     "opCentroDistEdicionCodigoAbbr1": "Edic. Código",
     "opCentroDistEdicionCodigoAbbr2": "Edic. Cód.",
@@ -4130,7 +4135,53 @@
     "incFotoCerrar": "Cerrar",
     "recEditError_DESC": "Cuenta la situación: no puede quedar vacía.",
     "colActClasMetrica": "Se mide en",
-    "colActivoFijoLetra": "Letra del localizador",
+    "colActivoFijoLetra": "Se dibuja como",
+    "colActivoFijoLetraCodigo": "Letra del código",
+    "colActRegistroUnico": "Registro Único",
+    "colActCodigo": "Código",
+    "colActEstatus": "Estatus",
+    "colActTipo": "Tipo de activo",
+    "colActClasificacion": "Clasificación",
+    "colActNombreCompra": "Nombre de compra",
+    "colActNombrePersonalizado": "Nombre personalizado",
+    "colActModelo": "Modelo",
+    "colActSerie": "S/N (número de serie)",
+    "colActForma": "Forma",
+    "colActAlto": "Alto",
+    "colActLargo": "Largo",
+    "colActProfundidad": "Profundidad",
+    "colActPeso": "Peso",
+    "colActVolumen": "Volumen",
+    "colActFotoFrente": "Foto Frente",
+    "colActFotoAtras": "Foto Atrás",
+    "colActFotoIzq": "Foto Izquierda",
+    "colActFotoDer": "Foto Derecha",
+    "colActFotoArriba": "Foto Arriba",
+    "colActFotoAbajo": "Foto Abajo",
+    "colActEnLayout": "Aparece en el Layout",
+    "colActDeleteAuth": "Autorización para Desactivar",
+    "colActCreateAuth": "Autorización para Crear",
+    "newAsset": "Nuevo Activo",
+    "filterAssetSearchHint": "Código, nombre, modelo, S/N...",
+    "assetShape_rectangular": "Rectangular",
+    "assetShape_cilindrica": "Cilíndrica",
+    "assetShape_irregular": "Irregular",
+    "assetYes": "Sí",
+    "assetNo": "No",
+    "assetCostCenter": "Centro de costos",
+    "assetNoLetter": "(sin letra)",
+    "assetPickType": "Elige el tipo de activo",
+    "assetVolumeCalc": "Se calcula con las medidas",
+    "assetDepthCyl": "Igual al largo (el diámetro)",
+    "assetDesactivarBtn": "Desactivar activo",
+    "assetActivarBtn": "Activar activo",
+    "assetDesactivarConfirm": "¿Desactivar el activo {code}?",
+    "assetDesactivarItem1": "Sigue existiendo con todo lo suyo (historial y fotos); solo deja de ofrecerse para usos nuevos.",
+    "assetDesactivarItem2": "Su código sigue reservado y se puede volver a activar.",
+    "assetDesactivarAceptar": "Desactivar",
+    "assetDesactivado": "El activo {code} se desactivó.",
+    "assetActivado": "El activo {code} se activó.",
+    "assetElegirCentro": "Elige el centro de costos del activo.",
     "newTransitEquip": "Nuevo equipo o persona",
     "colTrEquipTipo": "Tipo",
     "colTrEquipAncho": "Ancho (m)",
@@ -5515,7 +5566,7 @@
       "example": "eliges Zona 6 y las huellas que salen son solo las de la Zona 6 (H001, H003…)."
     },
     "layoutActivoNivelFijo": {
-      "what": "Un activo para operar (clasificación Activo para operar, que se mide en m²) siempre tiene 1 nivel y no se edita. Los niveles, espacios y posiciones son de los activos para almacenar.",
+      "what": "Un activo para operar o para administrar (que se miden en m²) siempre tiene 1 nivel y no se edita. Los niveles, espacios y posiciones son de los activos para almacenar.",
       "example": "un escritorio tiene 1 nivel; un rack para almacenar puede tener 4."
     },
     "layoutAssetType": {
@@ -5815,12 +5866,80 @@
       "example": "un montacargas de 1.4 m de ancho no cabe en un pasillo de 1.2 m."
     },
     "assetClassMetric": {
-      "what": "Con qué métrica cuenta esta clasificación en el Layout. Hay solo dos y son fijas. Activo para operar: se mide en m² y tiene un solo nivel que no se edita. Activo para almacenar: se miden sus m³ de almacenamiento, con sus niveles, posiciones y localizadores.",
-      "example": "Un escritorio es un activo para operar (m²); un rack es un activo para almacenar (m³). Un mismo tipo de activo puede ser de una o de la otra."
+      "what": "Con qué métrica cuenta esta clasificación en el Layout. Hay solo tres y son fijas. Activo para operar y Activo para administrar: se miden en m² y tienen un solo nivel que no se edita. Activo para almacenar: se miden sus m³ de almacenamiento, con sus niveles, posiciones y localizadores.",
+      "example": "Un montacargas es un activo para operar (m²), un teléfono para administrar (m²) y un rack para almacenar (m³). Un mismo tipo de activo puede ser de cualquiera."
     },
     "assetTypeLetter": {
-      "what": "La letra con la que empiezan los códigos de los activos de este tipo y su Localizador (R001, A001…). Sale del tipo de activo: ya no se elige en cada activo. Sin letra, el activo conserva la que ya tenía.",
-      "example": "Rack lleva la R, Rack móvil la M, Estante la A, Gabinete la G, Refrigerador la F y Tarima en piso la T."
+      "what": "Cómo se dibuja este tipo de activo en el Layout: Anaquel, Rack, Gabeta, Tarima en piso, Frío o Rack móvil. Sin dibujo propio, su activo conserva el que ya tenía.",
+      "example": "Estante se dibuja como Anaquel y Refrigerador como Frío."
+    },
+    "assetTypeCodeLetter": {
+      "what": "La letra con la que empieza el código de los activos de este tipo en Alta Activos. Es una sola letra, distinta en cada tipo, y ya con activos de este tipo no se cambia (sus códigos la llevan). Sin letra no se pueden dar de alta activos de este tipo.",
+      "example": "Rack lleva la R (R001, R002…) y Teléfono la L (L001, L002…)."
+    },
+    "assetNew": {
+      "what": "Da de alta un activo: todo lo que está dentro del sitio y se tiene para usar (racks, mobiliario, sensores, teléfonos, impresoras…). Los artículos (SKU) son lo que se distribuye; los activos son lo que se usa.",
+      "example": "Un rack, una impresora, un escritorio o un teléfono son activos."
+    },
+    "assetCode": {
+      "what": "El código del activo se asigna solo: la letra de su tipo más un consecutivo por centro de costos. No se escribe a mano ni se repite.",
+      "example": "R001 es el primer rack del centro de costos; L001, el primer teléfono."
+    },
+    "assetType": {
+      "what": "El tipo de activo sale del catálogo Activos Fijos. Se elige al dar de alta y ya no se cambia, porque el código lleva la letra del tipo.",
+      "example": "Rack, Anaquel, Refrigerador, Teléfono, Escritorio…"
+    },
+    "assetClass": {
+      "what": "Para qué se tiene el activo: para operar (m²), para almacenar (m³) o para administrar (m²). Sale del catálogo Clasificaciones de Activos.",
+      "example": "Un rack es para almacenar; un montacargas, para operar; un teléfono, para administrar."
+    },
+    "assetPurchaseName": {
+      "what": "Cómo se compró el activo: el nombre de la factura o de la orden de compra. Es obligatorio.",
+      "example": "Rack selectivo 2.7 m SR-2700."
+    },
+    "assetCustomName": {
+      "what": "Cómo le dicen ustedes al activo. Es opcional; el croquis y las fichas muestran este nombre y, si está vacío, el de compra.",
+      "example": "Rack pasillo 1."
+    },
+    "assetModel": {
+      "what": "El modelo del activo, el que trae en su placa o en su caja.",
+      "example": "SR-2700."
+    },
+    "assetSerial": {
+      "what": "El número de serie (S/N) del activo, el que trae en su placa.",
+      "example": "RK-88213."
+    },
+    "assetShape": {
+      "what": "La forma del activo: rectangular (una caja), cilíndrica (un tambo o un tanque) o irregular (cualquier otra). Con la forma se calcula el volumen.",
+      "example": "Un rack es rectangular; un tambo de agua, cilíndrico; una silla, irregular."
+    },
+    "assetSize": {
+      "what": "Alto, largo y profundidad, en centímetros. En una forma cilíndrica el largo es el diámetro y la profundidad es igual al largo. En una irregular son las medidas de la caja que lo contiene.",
+      "example": "270 de alto × 120 de largo × 100 de profundidad."
+    },
+    "assetWeight": {
+      "what": "Cuánto pesa el activo, en kilogramos.",
+      "example": "95 kg."
+    },
+    "assetVolume": {
+      "what": "El volumen en m³. Se calcula solo: alto × largo × profundidad (rectangular) o π × (largo ÷ 2)² × alto (cilíndrica). En la forma irregular lo escribes tú.",
+      "example": "270 × 120 × 100 cm = 3.240 m³."
+    },
+    "assetPhotos": {
+      "what": "Las fotos de las 6 caras del activo: frente, atrás, izquierda, derecha, arriba y abajo. No son obligatorias para guardarlo.",
+      "example": "Toca la cámara para subir la foto; con la palomita se ve la que ya está."
+    },
+    "assetInLayout": {
+      "what": "Si el activo se dibuja en el Layout. En el paso Activos del Layout solo se pueden colocar los que dicen Sí. Sale propuesto según el tipo (rack = Sí, teléfono = No) y se puede cambiar.",
+      "example": "Un rack dice Sí; una impresora, No."
+    },
+    "assetDeactivate": {
+      "what": "Desactiva el activo: sigue existiendo con todo lo suyo, pero deja de ofrecerse para usos nuevos. Los activos nunca se eliminan.",
+      "example": "Un rack que se dio de baja se desactiva."
+    },
+    "assetActivate": {
+      "what": "Vuelve a activar un activo que estaba desactivado.",
+      "example": "El rack que regresó a operar."
     },
     "incQr": {
       "what": "Muestra el QR de Incidentes del centro de costos que tienes marcado arriba. Pégalo en la nave: quien lo escanea escribe su nombre, elige la zona donde pasó, la categoría y el criterio, cuenta la situación con sus palabras y sube sus evidencias (fotos, mínimo una y sin máximo); el reporte llega aquí con su número y la hora. Desde la misma ventana se descarga la imagen y se cierran o abren los candados del QR.",

@@ -49,6 +49,7 @@ const TABLES = {
     freight_quotes: { action: WIPE, group: 'captures' },
     transfers: { action: WIPE, group: 'captures' },
     sku_items: { action: WIPE, group: 'captures' },
+    fixed_assets: { action: WIPE, group: 'captures' }, // Alta Activos (2026-11-12)
     article_categories: { action: WIPE, group: 'captures' },
     unit_types: { action: WIPE, group: 'captures' },
     catalog_value_requests: { action: WIPE, group: 'captures' },

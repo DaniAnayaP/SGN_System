@@ -2408,6 +2408,9 @@ if (!articleCategoryColumns.some((c) => c.name === 'classification_ids')) db.exe
 if (!articleCategoryColumns.some((c) => c.name === 'width_m')) db.exec('ALTER TABLE article_categories ADD COLUMN width_m REAL NOT NULL DEFAULT 0');
 if (!articleCategoryColumns.some((c) => c.name === 'length_m')) db.exec('ALTER TABLE article_categories ADD COLUMN length_m REAL NOT NULL DEFAULT 0');
 if (!articleCategoryColumns.some((c) => c.name === 'height_m')) db.exec('ALTER TABLE article_categories ADD COLUMN height_m REAL NOT NULL DEFAULT 0');
+// Tipo de activo (Catálogos > Activos Fijos): letter = la letra con la que empieza el código de sus activos en Alta Activos (R001, A001, L001…). Una por tipo y no se repite entre los tipos de la empresa; '' = todavía sin letra.
+// (kind sigue siendo cómo se DIBUJA el tipo en el Layout: Anaquel, Rack, Gabeta…)
+if (!articleCategoryColumns.some((c) => c.name === 'letter')) db.exec("ALTER TABLE article_categories ADD COLUMN letter TEXT NOT NULL DEFAULT ''");
 
 // Relación Código (Operaciones, C. Distribución): dónde vive un código. Una fila por LUGAR (un mismo artículo puede tener varios): centro de costos > almacén > sub almacén >
 // zona > anaquel > nivel > espacio. Lo que está debajo del almacén es opcional (la fila queda "A medias" hasta completarlo). Zonas y anaqueles son ids del Layout guardado.
@@ -3338,6 +3341,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'relacion-codigo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código' },
     'udm-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones de Distribución' },
     'relacion-envio': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código Envío' },
+    'alta-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Activos' },
     'presentaciones-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones Distribución' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
     'capacidad-almacenamiento': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Capacidad Almacenamiento' },
@@ -3679,6 +3683,7 @@ const TABLE_GRANT_PATHS = {
     'relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
     'udm-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion' },
     'relacion-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-envio' },
+    'alta-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-activos' },
     // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
@@ -3911,6 +3916,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
     'udm-distribucion': { create: 'colUdmDCreateAuth', delete: 'colUdmDDeleteAuth' },
     'relacion-envio': { create: 'colEnvCreateAuth', delete: 'colEnvDeleteAuth' },
+    'alta-activos': { create: 'colActCreateAuth', delete: 'colActDeleteAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -4944,6 +4950,18 @@ const EVIDENCE_FIELD_SOURCES = [
             { fieldKey: 'evidenceBottom', column: 'evidence_bottom', permColKey: 'colArticuloEvidenceBottom' },
         ],
     },
+    {
+        // Alta Activos: las 6 caras de cada activo (sin fecha propia: usa created_at, como Alta Artículos).
+        tableKey: 'alta-activos', table: 'fixed_assets', screenLabelKey: 'menu.opCentroDistAltaActivos',
+        fields: [
+            { fieldKey: 'evidenceFront', column: 'evidence_front', permColKey: 'colActFotoFrente' },
+            { fieldKey: 'evidenceBack', column: 'evidence_back', permColKey: 'colActFotoAtras' },
+            { fieldKey: 'evidenceLeft', column: 'evidence_left', permColKey: 'colActFotoIzq' },
+            { fieldKey: 'evidenceRight', column: 'evidence_right', permColKey: 'colActFotoDer' },
+            { fieldKey: 'evidenceTop', column: 'evidence_top', permColKey: 'colActFotoArriba' },
+            { fieldKey: 'evidenceBottom', column: 'evidence_bottom', permColKey: 'colActFotoAbajo' },
+        ],
+    },
 ];
 
 // One row per FILE (not per record) — a fuel_records row alone can carry up
@@ -4961,6 +4979,7 @@ const EVIDENCE_SCREEN_SYSTEM_META = {
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
     'nuestros-articulos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Nuestros Artículos' },
+    'alta-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Activos' },
 };
 
 function listClientEvidenceFiles(clientId) {
@@ -5018,7 +5037,7 @@ function getEvidenceRawValue(clientId, tableKey, recordId, fieldKey) {
     const source = EVIDENCE_FIELD_SOURCES.find((s) => s.tableKey === tableKey);
     const field = source && source.fields.find((f) => f.fieldKey === fieldKey);
     if (!field) return null;
-    const row = db.prepare(`SELECT ${field.column} AS value, record_number, record_date FROM ${source.table} WHERE id = ? AND client_id = ?`).get(recordId, clientId);
+    const row = db.prepare(`SELECT ${field.column} AS value, record_number, ${source.dateColumn || 'created_at'} AS record_date FROM ${source.table} WHERE id = ? AND client_id = ?`).get(recordId, clientId);
     if (!row || !row.value) return null;
     return { value: row.value, migrated: !row.value.startsWith('data:'), recordNumber: row.record_number, recordDate: row.record_date };
 }
@@ -5685,6 +5704,117 @@ function deleteCodeShipRelation(id, clientId) {
 // Cuántas relaciones usan un lugar de envío (para no borrarlo del catálogo mientras se use).
 function countCodeShipRelationsByPlace(clientId, placeId) {
     return db.prepare('SELECT COUNT(*) AS n FROM code_ship_relations WHERE client_id = ? AND place_id = ?').get(clientId, placeId).n;
+}
+
+// --- Alta Activos (Operaciones, C. Distribución) ------------------------------------------------------------------------------------------------------
+// El registro de TODO lo que está dentro de un sitio (centro de costos) y se tiene para usar: racks, mobiliario, sensores, teléfonos, impresoras, escritorios, sillas… (los artículos de Alta Artículos son lo que se distribuye).
+// Un renglón = un activo. El código es automático: la letra de su Tipo de activo (catálogo Activos Fijos, article_categories.letter) + un consecutivo por centro de costos y letra (R001, A001, L001…). El Layout toma de aquí los
+// activos que se dibujan (show_in_layout). Los activos NUNCA se eliminan: se desactivan. Medidas en cm, peso en kg y volumen en m³ (rectangular = alto × largo × profundidad; cilíndrica = π × (largo ÷ 2)² × alto con la
+// profundidad igual al largo; irregular = el volumen lo escribe quien da de alta).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS fixed_assets (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id           TEXT NOT NULL,
+        record_number   INTEGER NOT NULL,
+        cost_center_id  INTEGER NOT NULL DEFAULT 0,
+        code_letter     TEXT NOT NULL DEFAULT '',
+        code_number     INTEGER NOT NULL DEFAULT 0,
+        status          TEXT NOT NULL DEFAULT 'active',
+        type_id         INTEGER,
+        class_id        INTEGER,
+        purchase_name   TEXT NOT NULL DEFAULT '',
+        custom_name     TEXT NOT NULL DEFAULT '',
+        model           TEXT NOT NULL DEFAULT '',
+        serial_number   TEXT NOT NULL DEFAULT '',
+        shape           TEXT NOT NULL DEFAULT 'rectangular',
+        height_cm       REAL NOT NULL DEFAULT 0,
+        length_cm       REAL NOT NULL DEFAULT 0,
+        depth_cm        REAL NOT NULL DEFAULT 0,
+        weight_kg       REAL NOT NULL DEFAULT 0,
+        volume_m3       REAL NOT NULL DEFAULT 0,
+        evidence_front  TEXT NOT NULL DEFAULT '',
+        evidence_back   TEXT NOT NULL DEFAULT '',
+        evidence_left   TEXT NOT NULL DEFAULT '',
+        evidence_right  TEXT NOT NULL DEFAULT '',
+        evidence_top    TEXT NOT NULL DEFAULT '',
+        evidence_bottom TEXT NOT NULL DEFAULT '',
+        show_in_layout  INTEGER NOT NULL DEFAULT 0,
+        is_test_data    INTEGER NOT NULL DEFAULT 0,
+        created_by      TEXT NOT NULL DEFAULT '',
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_fixed_assets_client ON fixed_assets (client_id, is_test_data, cost_center_id);
+    CREATE INDEX IF NOT EXISTS idx_fixed_assets_type ON fixed_assets (client_id, type_id);
+`);
+const FIXED_ASSET_PATCHABLE_FIELDS = {
+    typeId: { column: 'type_id', fieldKey: 'main.colActTipo' },
+    classId: { column: 'class_id', fieldKey: 'main.colActClasificacion' },
+    purchaseName: { column: 'purchase_name', fieldKey: 'main.colActNombreCompra' },
+    customName: { column: 'custom_name', fieldKey: 'main.colActNombrePersonalizado' },
+    model: { column: 'model', fieldKey: 'main.colActModelo' },
+    serialNumber: { column: 'serial_number', fieldKey: 'main.colActSerie' },
+    shape: { column: 'shape', fieldKey: 'main.colActForma' },
+    height: { column: 'height_cm', fieldKey: 'main.colActAlto' },
+    length: { column: 'length_cm', fieldKey: 'main.colActLargo' },
+    depth: { column: 'depth_cm', fieldKey: 'main.colActProfundidad' },
+    weight: { column: 'weight_kg', fieldKey: 'main.colActPeso' },
+    volume: { column: 'volume_m3', fieldKey: 'main.colActVolumen' },
+    evidenceFront: { column: 'evidence_front', fieldKey: 'main.colActFotoFrente' },
+    evidenceBack: { column: 'evidence_back', fieldKey: 'main.colActFotoAtras' },
+    evidenceLeft: { column: 'evidence_left', fieldKey: 'main.colActFotoIzq' },
+    evidenceRight: { column: 'evidence_right', fieldKey: 'main.colActFotoDer' },
+    evidenceTop: { column: 'evidence_top', fieldKey: 'main.colActFotoArriba' },
+    evidenceBottom: { column: 'evidence_bottom', fieldKey: 'main.colActFotoAbajo' },
+    showInLayout: { column: 'show_in_layout', fieldKey: 'main.colActEnLayout' },
+};
+function listFixedAssets(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM fixed_assets WHERE client_id = ? AND is_test_data = ? ORDER BY cost_center_id ASC, code_letter ASC, code_number ASC, id ASC').all(clientId, forTestAccount ? 1 : 0);
+}
+function getFixedAssetById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM fixed_assets WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+// El siguiente consecutivo de una letra en un centro de costos (R001, R002…): nunca se reutiliza (los activos no se eliminan).
+function nextFixedAssetCodeNumber(clientId, forTestAccount, costCenterId, letter) {
+    return db.prepare('SELECT COALESCE(MAX(code_number), 0) + 1 AS n FROM fixed_assets WHERE client_id = ? AND is_test_data = ? AND cost_center_id = ? AND code_letter = ?')
+        .get(clientId, forTestAccount ? 1 : 0, costCenterId, letter).n;
+}
+function createFixedAsset({ clientId, isTestData = false, costCenterId, typeId, letter, codeNumber, values = {}, createdBy = '' }) {
+    const test = isTestData ? 1 : 0;
+    return db.transaction(() => {
+        const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM fixed_assets WHERE client_id = ? AND is_test_data = ?').get(clientId, test).n;
+        const number = codeNumber || nextFixedAssetCodeNumber(clientId, isTestData, costCenterId, letter);
+        const cols = ['client_id', 'db_id', 'record_number', 'cost_center_id', 'code_letter', 'code_number', 'type_id', 'is_test_data', 'created_by'];
+        const args = [clientId, generateBigDateId(), recordNumber, costCenterId, letter, number, typeId, test, String(createdBy || '').slice(0, 120)];
+        Object.entries(values).forEach(([key, value]) => {
+            const def = FIXED_ASSET_PATCHABLE_FIELDS[key];
+            if (!def || def.column === 'type_id') return;
+            cols.push(def.column);
+            args.push(value);
+        });
+        const result = db.prepare(`INSERT INTO fixed_assets (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`).run(...args);
+        return getFixedAssetById(result.lastInsertRowid, clientId, isTestData);
+    })();
+}
+function updateFixedAsset(id, clientId, patch, forTestAccount = false) {
+    const sets = [];
+    const args = [];
+    Object.entries(patch || {}).forEach(([key, value]) => {
+        if (key === 'status') { sets.push('status = ?'); args.push(value === 'inactive' ? 'inactive' : 'active'); return; }
+        const def = FIXED_ASSET_PATCHABLE_FIELDS[key];
+        if (!def) return;
+        sets.push(`${def.column} = ?`);
+        args.push(value);
+    });
+    if (sets.length) db.prepare(`UPDATE fixed_assets SET ${sets.join(', ')} WHERE id = ? AND client_id = ?`).run(...args, id, clientId);
+    return getFixedAssetById(id, clientId, forTestAccount);
+}
+// Cuántos activos tienen un tipo / una clasificación (para no cambiar la letra de un tipo ni borrarlo del catálogo mientras se use).
+function countFixedAssetsByType(clientId, typeId) {
+    return db.prepare('SELECT COUNT(*) AS n FROM fixed_assets WHERE client_id = ? AND type_id = ?').get(clientId, typeId).n;
+}
+function countFixedAssetsByClass(clientId, classId) {
+    return db.prepare('SELECT COUNT(*) AS n FROM fixed_assets WHERE client_id = ? AND class_id = ?').get(clientId, classId).n;
 }
 
 // --- Pedido Manual (Operaciones > C. Distribución) --------------------------------------------------------------------------------------------------
@@ -6507,6 +6637,7 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
     },
     'activos-fijos': {
         kind: { column: 'kind', fieldKey: 'main.colActivoFijoLetra' },
+        letter: { column: 'letter', fieldKey: 'main.colActivoFijoLetraCodigo' },
     },
     'activos-clasificacion': {
         kind: { column: 'kind', fieldKey: 'main.colActClasMetrica' },
@@ -6524,7 +6655,7 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
 function articleCategoryPatchableFields(categoryType) {
     return { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, ...(ARTICLE_CATEGORY_EXTRA_FIELDS[categoryType] || {}) };
 }
-const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' }, widthM: { column: 'width_m' }, lengthM: { column: 'length_m' }, heightM: { column: 'height_m' } };
+const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' }, widthM: { column: 'width_m' }, lengthM: { column: 'length_m' }, heightM: { column: 'height_m' }, letter: { column: 'letter' } };
 
 function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
     const sets = [];
@@ -8095,6 +8226,13 @@ function seedRelacionEnvioGrants() {
     const path = TABLE_GRANT_PATHS['relacion-codigo'];
     if (!path) return;
     seedLeavesForScreenHolders(RELACION_ENVIO_SEED_KEY, path, ['cat-operaciones/cat-operaciones-centro-dist-relacion-envio'], 'the Relación Código Envío screen');
+}
+// Operaciones > Alta Activos (2026-11-12): la pantalla nueva la reciben, una sola vez, quienes ya tienen el Layout (de ahí sale lo que ahora se da de alta aquí). Los botones (nuevo activo y desactivar) los asigna el administrador desde el árbol.
+const ALTA_ACTIVOS_SCREEN_SEED_KEY = 'seed-alta-activos-screen-v1';
+function seedAltaActivosGrants() {
+    const path = TABLE_GRANT_PATHS.layout;
+    if (!path) return;
+    seedLeavesForScreenHolders(ALTA_ACTIVOS_SCREEN_SEED_KEY, path, ['cat-operaciones/cat-operaciones-centro-dist-alta-activos'], 'the Alta Activos screen');
 }
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
@@ -12536,18 +12674,28 @@ function seedTipoCodigoValuesOnce() {
 
 // Activos Fijos (el TIPO de activo): el catálogo arranca con la lista de Daniel (rack, gabinete, refrigerador, estante, escritorio, mesa); el cliente agrega los suyos desde su pantalla. Se siembra
 // una vez para cada cliente que ya existe y al crear uno nuevo. (La primera siembra, v1, solo puso Rack y Escritorio y con un «Uso» que ya no existe; la v2 completa la lista y lo limpia.)
-const ACTIVOS_FIJOS_DEFAULTS = ['Rack', 'Rack móvil', 'Gabinete', 'Refrigerador', 'Estante', 'Tarima en piso', 'Escritorio', 'Mesa'];
+const ACTIVOS_FIJOS_DEFAULTS = ['Rack', 'Rack móvil', 'Gabinete', 'Refrigerador', 'Estante', 'Tarima en piso', 'Escritorio', 'Mesa', 'Teléfono'];
 // La LETRA del Localizador sale del tipo de activo: el tipo de espacio del Layout que le toca (rackpal = R · Rack, rack = A · Anaquel, cabinet = G · Gabeta, pallet = T · Tarima en piso, cold = F · Frío). Se guarda en el campo «kind» del
 // catálogo. Escritorio y Mesa todavía no traen letra (su activo conserva la que ya tenía).
 const ACTIVOS_FIJOS_LETRAS = { rack: 'rackpal', 'rack móvil': 'cart', 'rack movil': 'cart', estante: 'rack', gabinete: 'cabinet', refrigerador: 'cold', tarima: 'pallet', 'tarima en piso': 'pallet' };
 const activoFijoKindOf = (name) => ACTIVOS_FIJOS_LETRAS[String(name || '').trim().toLowerCase()] || '';
+// La LETRA DEL CÓDIGO de cada tipo (Alta Activos: R001, A001, L001…), una por tipo y sin repetirse: la de su dibujo del Layout (rackpal R, rack A, cabinet G, pallet T, cold F, cart M) o, si no tiene dibujo, la que dijo Daniel (Teléfono = L; Escritorio = E).
+// Mesa queda SIN letra (la M ya la usa Rack móvil): el cliente la elige en su catálogo.
+const ACTIVOS_FIJOS_KIND_LETTER = { rackpal: 'R', rack: 'A', cabinet: 'G', pallet: 'T', cold: 'F', cart: 'M' };
+const ACTIVOS_FIJOS_NAME_LETTER = { escritorio: 'E', teléfono: 'L', telefono: 'L' };
+const activoFijoLetterOf = (name, kind) => ACTIVOS_FIJOS_KIND_LETTER[kind] || ACTIVOS_FIJOS_NAME_LETTER[String(name || '').trim().toLowerCase()] || '';
 const ACTIVOS_FIJOS_SEED_KEY = 'seed-activos-fijos-values-v1';
 const ACTIVOS_FIJOS_TIPOS_SEED_KEY = 'seed-activos-fijos-tipos-v2';
 function seedActivosFijosValues(clientId) {
     if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = 'activos-fijos' LIMIT 1").get(clientId)) return 0;
+    const usedLetters = new Set();
     ACTIVOS_FIJOS_DEFAULTS.forEach((name) => {
         const row = createArticleCategory({ clientId, categoryType: 'activos-fijos', isTestData: false });
-        db.prepare("UPDATE article_categories SET name = ?, kind = ?, status = 'active' WHERE id = ?").run(name, activoFijoKindOf(name), row.id);
+        const kind = activoFijoKindOf(name);
+        let letter = activoFijoLetterOf(name, kind);
+        if (letter && usedLetters.has(letter)) letter = '';
+        if (letter) usedLetters.add(letter);
+        db.prepare("UPDATE article_categories SET name = ?, kind = ?, letter = ?, status = 'active' WHERE id = ?").run(name, kind, letter, row.id);
     });
     return ACTIVOS_FIJOS_DEFAULTS.length;
 }
@@ -12609,6 +12757,36 @@ function seedActivosFijosRackMovilOnce() {
     })();
     console.log(`[db] Activos Fijos: ${added} «Rack móvil» types were added (one-time).`);
 }
+// v5: LETRA DEL CÓDIGO (Alta Activos). A cada tipo de activo que ya existe y todavía no trae letra se le pone la de su dibujo del Layout (R, A, G, T, F, M) o la de su nombre (Escritorio = E, Teléfono = L), solo si nadie en la empresa la usa ya
+// (con dos tipos del mismo dibujo la letra es del primero y el otro queda sin letra: el cliente le elige una). Y a cada cliente que ya tiene el catálogo se le agrega «Teléfono» (letra L) si todavía no trae uno. No toca nombres ni estatus.
+const ACTIVOS_FIJOS_LETRA_CODIGO_SEED_KEY = 'seed-activos-fijos-letra-codigo-v5';
+function seedActivosFijosLetraCodigoOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_LETRA_CODIGO_SEED_KEY)) return;
+    let set = 0;
+    let added = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => {
+            const rows = db.prepare("SELECT id, name, kind, letter FROM article_categories WHERE client_id = ? AND category_type = 'activos-fijos' ORDER BY is_test_data ASC, record_number ASC").all(c.id);
+            if (!rows.length) return;
+            const used = new Set(rows.map((r) => String(r.letter || '').toUpperCase()).filter(Boolean));
+            rows.forEach((r) => {
+                if (r.letter) return;
+                const letter = activoFijoLetterOf(r.name, r.kind);
+                if (!letter || used.has(letter)) return;
+                db.prepare('UPDATE article_categories SET letter = ? WHERE id = ?').run(letter, r.id);
+                used.add(letter);
+                set += 1;
+            });
+            if (!rows.some((r) => /^tel[eé]fono$/i.test(String(r.name || '').trim()))) {
+                const row = createArticleCategory({ clientId: c.id, categoryType: 'activos-fijos', isTestData: false });
+                db.prepare("UPDATE article_categories SET name = 'Teléfono', kind = '', letter = ?, status = 'active' WHERE id = ?").run(used.has('L') ? '' : 'L', row.id);
+                added += 1;
+            }
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_FIJOS_LETRA_CODIGO_SEED_KEY);
+    })();
+    console.log(`[db] Activos Fijos: ${set} types got their code letter and ${added} «Teléfono» types were added (one-time).`);
+}
 // La fila y la profundidad de cada relación pasan a ser la POSICIÓN que les tocó (el número que el Layout les da a las celdas de antes: (fila − 1) × profundidades + profundidad). Solo las relaciones cuya celda estaba completa (con fila y profundidad,
 // o en un hueco de una sola fila y profundidad con alguna de las dos dicha); las que no, siguen «A medias» como estaban. row_no y depth se conservan sin tocar (ya no se usan).
 const CODE_RELATION_POSITIONS_KEY = 'code-relation-positions-v1';
@@ -12636,8 +12814,8 @@ function migrateCodeRelationPositionsOnce() {
     })();
     console.log(`[db] Relación Código: ${moved} relations moved from (row, depth) to position (one-time).`);
 }
-// Clasificación de Activos: solo hay DOS, fijas: «Activo para operar» (m²) y «Activo para almacenar» (m³). Antes se llamaban Mobiliario operativo y Mobiliario almacenamiento.
-const ACTIVOS_CLASIFICACION_DEFAULTS = [{ name: 'Activo para operar', kind: 'm2' }, { name: 'Activo para almacenar', kind: 'm3' }];
+// Clasificación de Activos: solo hay TRES, fijas: «Activo para operar» (m²), «Activo para almacenar» (m³) y «Activo para administrar» (m², como operar: oficina, telefonía, impresoras…). Antes se llamaban Mobiliario operativo y Mobiliario almacenamiento.
+const ACTIVOS_CLASIFICACION_DEFAULTS = [{ name: 'Activo para operar', kind: 'm2' }, { name: 'Activo para almacenar', kind: 'm3' }, { name: 'Activo para administrar', kind: 'm2' }];
 const ACTIVOS_CLASIFICACION_NAMES_KEY = 'seed-activos-clasificacion-nombres-v2';
 // Renombra las de siempre (solo si todavía se llaman como las de fábrica) y deja a cada cliente con sus dos: la que falte (métrica m² o m³) se vuelve a crear.
 function seedActivosClasificacionNombresOnce() {
@@ -12653,7 +12831,7 @@ function seedActivosClasificacionNombresOnce() {
                 if (to && !rows().some((x) => String(x.name || '').trim().toLowerCase() === to.toLowerCase())) { db.prepare('UPDATE article_categories SET name = ? WHERE id = ?').run(to, r.id); renamed += 1; }
             });
             if (!rows().length) return; // el cliente sin catálogo lo recibe completo de la siembra normal
-            ACTIVOS_CLASIFICACION_DEFAULTS.forEach(({ name, kind }) => {
+            ACTIVOS_CLASIFICACION_DEFAULTS.slice(0, 2).forEach(({ name, kind }) => {
                 if (rows().some((r) => r.kind === kind)) return;
                 const row = createArticleCategory({ clientId: c.id, categoryType: 'activos-clasificacion', isTestData: false });
                 db.prepare("UPDATE article_categories SET name = ?, kind = ?, status = 'active' WHERE id = ?").run(name, kind, row.id);
@@ -12663,6 +12841,23 @@ function seedActivosClasificacionNombresOnce() {
         db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_CLASIFICACION_NAMES_KEY);
     })();
     console.log(`[db] Activos clasificación: ${renamed} renamed to «Activo para operar/almacenar» and ${added} missing ones created (one-time).`);
+}
+// v3 (2026-11-12, Daniel: «agrega la de Administrar»): a cada cliente que ya tiene el catálogo se le agrega «Activo para administrar» (m²) si todavía no la trae. No toca nombres ni estatus de las otras.
+const ACTIVOS_CLASIFICACION_ADMINISTRAR_KEY = 'seed-activos-clasificacion-administrar-v3';
+function seedActivosClasificacionAdministrarOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_CLASIFICACION_ADMINISTRAR_KEY)) return;
+    let added = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => {
+            const rows = db.prepare("SELECT name FROM article_categories WHERE client_id = ? AND category_type = 'activos-clasificacion'").all(c.id);
+            if (!rows.length || rows.some((r) => /administrar/i.test(String(r.name || '')))) return;
+            const row = createArticleCategory({ clientId: c.id, categoryType: 'activos-clasificacion', isTestData: false });
+            db.prepare("UPDATE article_categories SET name = 'Activo para administrar', kind = 'm2', status = 'active' WHERE id = ?").run(row.id);
+            added += 1;
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_CLASIFICACION_ADMINISTRAR_KEY);
+    })();
+    console.log(`[db] Activos clasificación: ${added} «Activo para administrar» created (one-time).`);
 }
 const ACTIVOS_CLASIFICACION_SEED_KEY = 'seed-activos-clasificacion-v1';
 function seedActivosClasificacionValues(clientId) {
@@ -12757,6 +12952,7 @@ seedPmDescargarGrants();
 seedPmDescargarSoloVer();
 seedPresentacionesCatalogGrants();
 seedRelacionEnvioGrants();
+seedAltaActivosGrants();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
@@ -12775,8 +12971,10 @@ seedActivosFijosValuesOnce();
 seedActivosFijosTiposOnce();
 seedActivosFijosLetrasOnce();
 seedActivosFijosRackMovilOnce();
+seedActivosFijosLetraCodigoOnce();
 seedActivosClasificacionValuesOnce();
 seedActivosClasificacionNombresOnce();
+seedActivosClasificacionAdministrarOnce();
 migrateCodeRelationPositionsOnce();
 seedTransitoEquiposValuesOnce();
 seedIncidentesCriteriosValuesOnce();
@@ -12973,6 +13171,14 @@ module.exports = {
     listSkuItemsWithoutDistribution,
     listSkuDistributionBySkus,
     listCodeShipRelations,
+    FIXED_ASSET_PATCHABLE_FIELDS,
+    listFixedAssets,
+    getFixedAssetById,
+    nextFixedAssetCodeNumber,
+    createFixedAsset,
+    updateFixedAsset,
+    countFixedAssetsByType,
+    countFixedAssetsByClass,
     getCodeShipRelationById,
     findCodeShipRelation,
     createCodeShipRelation,

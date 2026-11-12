@@ -1503,6 +1503,7 @@
             },
             { "id": "colCatName", "labelKey": "main.colCatName", "permissionOnly": true },
             { "id": "colCatDescription", "labelKey": "main.colCatDescription", "permissionOnly": true },
+            { "id": "colActivoFijoLetraCodigo", "labelKey": "main.colActivoFijoLetraCodigo", "permissionOnly": true },
             { "id": "colActivoFijoLetra", "labelKey": "main.colActivoFijoLetra", "permissionOnly": true },
             { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
             {
@@ -1737,6 +1738,70 @@
                 { "id": "colArticuloDeleteAuth", "labelKey": "main.colArticuloDeleteAuth", "permissionOnly": true },
                 { "id": "colArticuloCreateAuth", "labelKey": "main.colArticuloCreateAuth", "permissionOnly": true },
                 { "id": "colArticuloTemplateAuth", "labelKey": "main.colArticuloTemplateAuth", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-operaciones-centro-dist-alta-activos", "labelKey": "menu.opCentroDistAltaActivos", "icon": "bx-buildings", "href": "OpCentroDistAltaActivos.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colActEstatus", "labelKey": "main.colActEstatus", "permissionOnly": true },
+            { "id": "colActTipo", "labelKey": "main.colActTipo", "permissionOnly": true },
+            { "id": "colActClasificacion", "labelKey": "main.colActClasificacion", "permissionOnly": true },
+            { "id": "colActNombreCompra", "labelKey": "main.colActNombreCompra", "permissionOnly": true },
+            { "id": "colActNombrePersonalizado", "labelKey": "main.colActNombrePersonalizado", "permissionOnly": true },
+            { "id": "colActModelo", "labelKey": "main.colActModelo", "permissionOnly": true },
+            { "id": "colActSerie", "labelKey": "main.colActSerie", "permissionOnly": true },
+            { "id": "colActForma", "labelKey": "main.colActForma", "permissionOnly": true },
+            { "id": "colActAlto", "labelKey": "main.colActAlto", "permissionOnly": true },
+            { "id": "colActLargo", "labelKey": "main.colActLargo", "permissionOnly": true },
+            { "id": "colActProfundidad", "labelKey": "main.colActProfundidad", "permissionOnly": true },
+            { "id": "colActPeso", "labelKey": "main.colActPeso", "permissionOnly": true },
+            { "id": "colActVolumen", "labelKey": "main.colActVolumen", "permissionOnly": true },
+            { "id": "colActFotoFrente", "labelKey": "main.colActFotoFrente", "permissionOnly": true },
+            { "id": "colActFotoAtras", "labelKey": "main.colActFotoAtras", "permissionOnly": true },
+            { "id": "colActFotoIzq", "labelKey": "main.colActFotoIzq", "permissionOnly": true },
+            { "id": "colActFotoDer", "labelKey": "main.colActFotoDer", "permissionOnly": true },
+            { "id": "colActFotoArriba", "labelKey": "main.colActFotoArriba", "permissionOnly": true },
+            { "id": "colActFotoAbajo", "labelKey": "main.colActFotoAbajo", "permissionOnly": true },
+            { "id": "colActEnLayout", "labelKey": "main.colActEnLayout", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colActDeleteAuth", "labelKey": "main.colActDeleteAuth", "permissionOnly": true },
+                { "id": "colActCreateAuth", "labelKey": "main.colActCreateAuth", "permissionOnly": true }
               ]
             }
           ],

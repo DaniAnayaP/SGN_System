@@ -35,6 +35,7 @@ const SCREEN_LABELS = {
     'registro-combustible': 'RegistroCombustible',
     'carga-combustible': 'CargaCombustible',
     'nuestros-articulos': 'AltaNuestrosArticulos',
+    'alta-activos': 'AltaActivos',
 };
 const FIELD_LABELS = {
     ticketEvidence: 'TicketEvidencia',
