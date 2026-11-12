@@ -29,6 +29,8 @@ let loadToken = 0;
         if (!role) return;
         await refreshTable();
         renderNewRecordButton();
+        // las columnas con desplegable llevan un ancho mínimo para que se lea la opción completa («Rectangular», «Activo para almacenar») y se vea la flecha
+        if (Dashboard.ensureColumnMinWidth) [['colActForma', 190], ['colActClasificacion', 230], ['colActEnLayout', 130], ['colActCodigo', 100]].forEach(([col, px]) => Dashboard.ensureColumnMinWidth(TABLE_KEY, col, px));
     } catch (err) {
         console.error('Alta Activos failed to initialize:', err);
     }
@@ -90,7 +92,7 @@ function selectCell(record, colId, key, { items, current, currentLabel, helpKey,
     const td = document.createElement('td');
     td.dataset.col = colId;
     const select = document.createElement('select');
-    select.className = 'editable-cell-select';
+    select.className = 'editable-cell-select asset-select'; // desplegable con el mismo aspecto que el resto de la pantalla (ver .asset-select en Admin.css)
     if (helpKey) select.setAttribute('data-help-key', helpKey);
     const list = items.slice();
     if (current !== null && current !== undefined && current !== '' && !list.some((i) => String(i.value) === String(current))) list.unshift({ value: current, label: currentLabel || String(current) });
