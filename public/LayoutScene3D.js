@@ -552,7 +552,8 @@
             const aspect = cam.aspect || 1.5;
             if (name === 'planta') return { theta: 0, phi: 0.03, r: 1.12 * Math.max(bounds.sy / 0.768, bounds.sx / (0.768 * aspect)), tx: 0, ty: 0, tz: 0 };
             if (name === 'frente') return { theta: 0, phi: 1.2, r: 1.15 * Math.max(bounds.sx / (0.768 * aspect), (bounds.maxH + bounds.sy * 0.35) / 0.768), tx: 0, ty: bounds.maxH / 3, tz: 0 };
-            return { theta: 0.8, phi: 0.95, r: d * 1.0, tx: 0, ty: viewTy, tz: 0 };
+            // en una pantalla vertical (celular) la nave se sale por los lados: se aleja según qué tan angosto es el cuadro
+            return { theta: 0.8, phi: 0.95, r: d * (aspect < 1 ? 1.15 / aspect : 1.0), tx: 0, ty: viewTy, tz: 0 };
         }
         function go(target, animate) {
             if (walk.on) return;
@@ -2285,7 +2286,8 @@
             walk.gy += (walkFloorAt(walk.x, walk.y) - walk.gy) * Math.min(1, dt * 9);
         }
         function walkStep(dt) {
-            if (walk.for !== lastLayout) walkBuild(); // el Layout cambió (otra capa, otro enfoque): los choques se vuelven a sacar
+            const lk = ['walls', 'columns', 'assets', 'objects'].map((n) => (layerOn[n] ? 1 : 0)).join('');
+            if (walk.for !== lastLayout || walk.lk !== lk) { walkBuild(); walk.lk = lk; } // el Layout o las capas encendidas cambiaron: los choques se vuelven a sacar
             let rest = dt;
             while (rest > 1e-6) { const h = Math.min(rest, 0.05); walkMove(h); rest -= h; }
             walkCam(); dirty = true;

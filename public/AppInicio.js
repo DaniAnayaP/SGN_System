@@ -169,6 +169,7 @@ const WEB_SCREEN_PAGES = {
     'limpieza': { href: 'AppLimpieza.html', icon: 'bx-brush-alt' },
     'temperaturas': { href: 'AppTemperaturas.html', icon: 'bx-fridge' },
     'capacidad-almacenamiento': { href: 'AppCapacidadAlmacenamiento.html', icon: 'bx-package' },
+    'layout': { href: 'AppLayout.html', icon: 'bx-building-house' },
 };
 
 // menu.json pantalla id -> its WEB_SCREEN_PAGES key, for the category
@@ -198,6 +199,7 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-operaciones-centro-dist-limpieza': 'limpieza',
     'cat-operaciones-centro-dist-temperaturas': 'temperaturas',
     'cat-operaciones-centro-dist-capacidad-almacenamiento': 'capacidad-almacenamiento',
+    'cat-operaciones-centro-dist-layout': 'layout',
 };
 
 // grantedAppScreens (from GET /api/business/app-screens) is the CLIENT's

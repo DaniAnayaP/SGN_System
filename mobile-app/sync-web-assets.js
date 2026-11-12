@@ -43,6 +43,8 @@ const FILES = [
     'AppLimpieza.html', 'AppLimpieza.js',
     'AppTemperaturas.html', 'AppTemperaturas.js',
     'AppCapacidadAlmacenamiento.html', 'AppCapacidadAlmacenamiento.js',
+    'AppLayout.html', 'AppLayout.js', 'LayoutCalc.js', 'LayoutScene3D.js', 'HelpMode.js',
+    path.join('vendor', 'three', 'three.min.js'),
     'manifest.json', 'sw.js',
     path.join('icons', 'icon-512.png'),
     path.join('data', 'menu.json'),

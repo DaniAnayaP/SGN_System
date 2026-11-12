@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title data-i18n="menu.opCentroDistLayout">Layout</title>
+    <link rel="icon" href="icons/icon-512.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-512.png">
+    <meta name="theme-color" content="#0b0d14">
+    <link rel="stylesheet" href="AppInicio.css">
+    <link rel="stylesheet" href="vendor/boxicons/css/boxicons.min.css">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+            // Same reload-on-new-service-worker guard as every other App page (see AppCotizaciones.html).
+            let sgnSwRefreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (sgnSwRefreshing) return;
+                sgnSwRefreshing = true;
+                window.location.reload();
+            });
+        }
+    </script>
+</head>
+<body>
+    <!-- Layout (App): the same screen as the Web one (Operaciones > Layout), made for the phone and only to LOOK at the building: the 3D of the Layout of a cost center (overview, top view, front view) and
+         «Recorrer» (walk through the building at eye level, like the figure in Maps: drag the figure onto the building, walk with the on-screen buttons, turn by dragging, tap something to see its card).
+         Nothing is edited here (editing stays in the Web). See AppLayout.js. -->
+    <div class="home-screen">
+        <div class="home-subscreen">
+            <div class="home-subscreen-header home-carga-header">
+                <div class="home-carga-header-top">
+                    <button type="button" class="home-subscreen-back" id="carga-back" data-i18n-aria="admin.back" aria-label="Back">
+                        <i class="bx bx-arrow-back" aria-hidden="true"></i>
+                    </button>
+                    <h2 data-i18n="menu.opCentroDistLayout" id="carga-title">Layout</h2>
+                </div>
+            </div>
+            <div class="home-subscreen-body" id="carga-body"></div>
+        </div>
+    </div>
+
+    <div class="home-toast-container" id="home-toast-container"></div>
+
+    <script src="AppConfig.js"></script>
+    <script src="HelpMode.js"></script>
+    <script src="ColorPalette.js"></script>
+    <script src="AppOfflineSync.js"></script>
+    <script src="vendor/three/three.min.js"></script>
+    <script src="LayoutCalc.js"></script>
+    <script src="LayoutScene3D.js"></script>
+    <script src="AppLayout.js" defer></script>
+</body>
+</html>
