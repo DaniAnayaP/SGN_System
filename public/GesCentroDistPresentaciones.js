@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Catálogos > Presentaciones Distribución (C. Distribución): el CATÁLOGO, solo para ver, de lo que ya se registró en Operaciones > Presentaciones de Distribución: un renglón por código de Alta Artículos con su unidad de medida
+// Gestión > Presentaciones Distribución (C. Distribución): los registros, solo para ver, de lo que ya se registró en Operaciones > Presentaciones de Distribución: un renglón por código de Alta Artículos con su unidad de medida
 // principal y la columna «Ramificación», que resume cuántas presentaciones tiene y, al tocarla, abre en una pantalla flotante el árbol completo (de cuál sale cada una, cuántas lleva, medidas, peso, para qué se usa, a dónde se
 // envía y su estiba). Los códigos que todavía no tienen presentaciones salen como «Sin presentaciones». Aquí no se agrega ni se edita nada: eso se hace en Operaciones. Los renglones salen del servidor (GET
 // /api/business/sku-distribution?catalog=1) y se dibujan por tandas (con miles de códigos no se congela la pantalla).

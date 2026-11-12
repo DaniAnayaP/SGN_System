@@ -22,12 +22,12 @@
 
 // Esta misma pantalla sirve a tres páginas, las tres sobre la misma tabla de artículos:
 //   - Alta Nuestros Artículos: los códigos a los que todavía les falta algún dato. Aquí se dan de alta (formulario o plantilla) y se terminan de llenar; en cuanto queda lleno el último
-//     dato el código sale de Alta y pasa a Catálogos > Códigos.
-//   - Catálogos > Códigos (CatCentroDistCodigos.html): los códigos ya completos, SOLO LECTURA. Para corregir uno se elige Editar.
+//     dato el código sale de Alta y pasa a Gestión > Códigos.
+//   - Gestión > Códigos (GesCentroDistCodigos.html): los códigos ya completos, SOLO LECTURA. Para corregir uno se elige Editar.
 //   - Operaciones > Edición Código (OpCentroDistEdicionCodigo.html): los códigos que se mandaron a corregir con Editar. Se editan como en Alta y, con los 24 datos llenos, se elige
 //     Terminar edición y regresan a Códigos.
 const PAGE = document.body.dataset.activePage;
-const CODES_MODE = PAGE === 'cat-catalogos-centro-dist-codigos';
+const CODES_MODE = PAGE === 'cat-gestion-centro-dist-codigos';
 const EDIT_MODE = PAGE === 'cat-operaciones-centro-dist-edicion-codigo';
 const ACTIVE_PAGE = CODES_MODE || EDIT_MODE ? PAGE : 'cat-operaciones-centro-dist-alta-articulos';
 const SKU_SCOPE = CODES_MODE ? 'complete' : (EDIT_MODE ? 'editing' : 'pending');

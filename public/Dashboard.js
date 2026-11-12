@@ -12850,7 +12850,7 @@ const TABLE_GRANT_PATHS = {
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
     'marcas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-marcas' },
     'lugares-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-lugares-envio' },
-    'presentaciones-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-presentaciones-distribucion' },
+    'presentaciones-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-presentaciones-distribucion' },
     'clasificaciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
@@ -12892,9 +12892,9 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-centro-dist-verificador-sku': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-verificador-sku' },
     'cat-operaciones-centro-dist-relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
     'cat-operaciones-centro-dist-udm-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion' },
-    // Catálogos > Códigos (los códigos ya completos, solo lectura) y Operaciones > Edición Código (los que se mandaron a corregir): su acceso es el de cada pantalla; sus columnas e
+    // Gestión > Códigos (los códigos ya completos, solo lectura) y Operaciones > Edición Código (los que se mandaron a corregir): su acceso es el de cada pantalla; sus columnas e
     // iconos siguen los de Alta Nuestros Artículos (es la misma tabla).
-    'cat-catalogos-centro-dist-codigos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-codigos' },
+    'cat-gestion-centro-dist-codigos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-codigos' },
     // Catálogos > Localizadores: la lista de solo lectura de los localizadores que crea el Layout.
     'cat-catalogos-centro-dist-localizadores': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-localizadores' },
     // Operaciones > Limpieza: la base de registros de las limpiezas con QR (con usuario).

@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.catCentroDistPresentaciones">Distribution Presentations Catalog</title>
+    <title data-i18n="menu.catCentroDistCodigos">Codes</title>
     <link rel="icon" href="icons/icon-512.png">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
     <link rel="stylesheet" href="vendor/boxicons/css/boxicons.min.css">
+    <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
-<body data-requires-site data-active-page="cat-catalogos-centro-dist-presentaciones-distribucion">
+<body data-active-page="cat-gestion-centro-dist-codigos">
     <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
         <div class="header">
             <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
@@ -370,8 +371,8 @@
                     <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
                     <div class="filter-bar-fields">
                         <div class="filter-field">
-                            <label for="filter-search-text" data-i18n="main.filterCatSearchHint">Code, name, description...</label>
-                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterCatSearchHint" placeholder="Code, name, description...">
+                            <label for="filter-search-text" data-i18n="main.filterSkuItemSearchHint">Eco unit, plates, brand/model...</label>
+                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterSkuItemSearchHint" placeholder="Eco unit, plates, brand/model...">
                         </div>
                     </div>
                     <div class="filter-bar-actions">
@@ -380,7 +381,7 @@
                 </div>
             </div>
 
-            <div class="data-table-wrapper" data-table-id="presentaciones-distribucion">
+            <div class="data-table-wrapper" data-table-id="nuestros-articulos">
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -397,26 +398,47 @@
                             <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group="menu.classControlInterno" class="col-system">Year (yyyy)</th>
                             <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
                             <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
-                            <th data-i18n="main.colCatRegistroUnico" data-col="colCatRegistroUnico" data-group="menu.classControlInterno" class="col-system">Unique Registration</th>
-                            <th data-i18n="main.colUdmDDescripcion" data-col="colUdmDDescripcion" data-group="menu.catCentroDistPresentaciones">Unique Description</th>
-                            <th data-i18n="main.colUdmDRamificacion" data-col="colUdmDRamificacion" data-group="menu.catCentroDistPresentaciones" data-help-key="udmRamificacion">Branching</th>
-                            <th data-i18n="main.colUdmDUnidad" data-col="colUdmDUnidad" data-group="menu.catCentroDistPresentaciones">Unit of Measure</th>
-                            <th data-i18n="main.colUdmDForma" data-col="colUdmDForma" data-group="menu.catCentroDistPresentaciones">Shape</th>
-                            <th data-i18n="main.colUdmDLargo" data-col="colUdmDLargo" data-group="menu.catCentroDistPresentaciones">Length / Ø (cm)</th>
-                            <th data-i18n="main.colUdmDAncho" data-col="colUdmDAncho" data-group="menu.catCentroDistPresentaciones">Width (cm)</th>
-                            <th data-i18n="main.colUdmDAlto" data-col="colUdmDAlto" data-group="menu.catCentroDistPresentaciones">Height (cm)</th>
-                            <th data-i18n="main.colUdmDPeso" data-col="colUdmDPeso" data-group="menu.catCentroDistPresentaciones">Weight (g)</th>
-                            <th data-i18n="main.colUdmDAcostar" data-col="colUdmDAcostar" data-group="menu.catCentroDistPresentaciones">Can lie down</th>
-                            <th data-i18n="main.colUdmDTipo" data-col="colUdmDTipo" data-group="menu.catCentroDistPresentaciones">Storage Type</th>
-                            <th data-i18n="main.colUdmDEnvios" data-col="colUdmDEnvios" data-group="menu.catCentroDistPresentaciones" data-help-key="udmEnvios">Ships to</th>
-                            <th data-i18n="main.colUdmDCantidadCama" data-col="colUdmDCantidadCama" data-group="menu.catCentroDistPresentaciones">Units per Layer (TI)</th>
-                            <th data-i18n="main.colUdmDCamasPallet" data-col="colUdmDCamasPallet" data-group="menu.catCentroDistPresentaciones">Layers per Pallet (HI)</th>
-                            <th data-i18n="main.colUdmDMaxEstiba" data-col="colUdmDMaxEstiba" data-group="menu.catCentroDistPresentaciones">Max Stacking</th>
+                            <th data-i18n="main.colArticuloRegistroUnico" data-col="colArticuloRegistroUnico" data-group="menu.classControlInterno" class="col-system">Unique Registration</th>
+                            <th data-i18n="main.colArticuloSku" data-col="colArticuloSku" data-group="menu.classArticuloDatosGenerales">SKU</th>
+                            <th data-i18n="main.colArticuloEstatus" data-col="colArticuloEstatus" data-group="menu.classArticuloDatosGenerales">Status</th>
+                            <th data-i18n="main.colArticuloUpc" data-col="colArticuloUpc" data-group="menu.classArticuloDatosGenerales">UPC</th>
+                            <th data-i18n="main.colArticuloCodigoCliente" data-col="colArticuloCodigoCliente" data-group="menu.classArticuloDatosGenerales">Client Code</th>
+                            <th data-i18n="main.colArticuloDescUnica" data-col="colArticuloDescUnica" data-group="menu.classArticuloDatosGenerales">Unique Description</th>
+                            <th data-i18n="main.colArticuloDescConocida" data-col="colArticuloDescConocida" data-group="menu.classArticuloDatosGenerales">Common Description</th>
+                            <th data-i18n="main.colArticuloDescPersonalizada" data-col="colArticuloDescPersonalizada" data-group="menu.classArticuloDatosGenerales">Custom Description</th>
+                            <th data-i18n="main.colArticuloUdm" data-col="colArticuloUdm" data-group="menu.classArticuloDatosGenerales">Primary UOM</th>
+                            <th data-i18n="main.colArticuloTipo" data-col="colArticuloTipo" data-group="menu.classArticuloDatosGenerales">Article Type</th>
+                            <th data-i18n="main.colArticuloAlto" data-col="colArticuloAlto" data-group="menu.classArticuloDimensiones">Height</th>
+                            <th data-i18n="main.colArticuloLargo" data-col="colArticuloLargo" data-group="menu.classArticuloDimensiones">Length</th>
+                            <th data-i18n="main.colArticuloAncho" data-col="colArticuloAncho" data-group="menu.classArticuloDimensiones">Width</th>
+                            <th data-i18n="main.colArticuloPesoArticulo" data-col="colArticuloPesoArticulo" data-group="menu.classArticuloDimensiones">Article Weight</th>
+                            <th data-i18n="main.colArticuloPesoEmpaque" data-col="colArticuloPesoEmpaque" data-group="menu.classArticuloDimensiones">Package Weight</th>
+                            <th data-i18n="main.colArticuloTipoAlmacenamiento" data-col="colArticuloTipoAlmacenamiento" data-group="menu.classArticuloAlmacenamiento">Storage Type</th>
+                            <th data-i18n="main.colArticuloCantidadCama" data-col="colArticuloCantidadCama" data-group="menu.classArticuloAlmacenamiento">Units per Layer (TI)</th>
+                            <th data-i18n="main.colArticuloCamasPallet" data-col="colArticuloCamasPallet" data-group="menu.classArticuloAlmacenamiento">Layers per Pallet (HI)</th>
+                            <th data-i18n="main.colArticuloMaxEstiba" data-col="colArticuloMaxEstiba" data-group="menu.classArticuloAlmacenamiento">Max Stacking</th>
+                            <th data-i18n="main.colArticuloEvidenceFront" data-col="colArticuloEvidenceFront" data-group="menu.classArticuloEvidencias">Evidence Front</th>
+                            <th data-i18n="main.colArticuloEvidenceBack" data-col="colArticuloEvidenceBack" data-group="menu.classArticuloEvidencias">Evidence Back</th>
+                            <th data-i18n="main.colArticuloEvidenceLeft" data-col="colArticuloEvidenceLeft" data-group="menu.classArticuloEvidencias">Evidence Left</th>
+                            <th data-i18n="main.colArticuloEvidenceRight" data-col="colArticuloEvidenceRight" data-group="menu.classArticuloEvidencias">Evidence Right</th>
+                            <th data-i18n="main.colArticuloEvidenceTop" data-col="colArticuloEvidenceTop" data-group="menu.classArticuloEvidencias">Evidence Top</th>
+                            <th data-i18n="main.colArticuloEvidenceBottom" data-col="colArticuloEvidenceBottom" data-group="menu.classArticuloEvidencias">Evidence Bottom</th>
+                            <th data-i18n="main.colArticuloCategoriaInventario" data-col="colArticuloCategoriaInventario" data-group="menu.classArticuloCategorias">Inventory Category</th>
+                            <th data-i18n="main.colArticuloClasificacion" data-col="colArticuloClasificacion" data-group="menu.classArticuloCategorias">Classification</th>
+                            <th data-i18n="main.colArticuloCategoriaCompra" data-col="colArticuloCategoriaCompra" data-group="menu.classArticuloCategorias">Purchasing Category</th>
+                            <th data-i18n="main.colArticuloCategoriaAlmacenamiento" data-col="colArticuloCategoriaAlmacenamiento" data-group="menu.classArticuloCategorias">Storage Category</th>
+                            <th data-i18n="main.colArticuloCategoriaRotacion" data-col="colArticuloCategoriaRotacion" data-group="menu.classArticuloCategorias">Turnover Category</th>
+                            <th data-i18n="main.colArticuloCategoriaManejo" data-col="colArticuloCategoriaManejo" data-group="menu.classArticuloCategorias">Special Handling Category</th>
+                            <th data-i18n="main.colArticuloCategoriaRiesgo" data-col="colArticuloCategoriaRiesgo" data-group="menu.classArticuloCategorias">Risk Category</th>
+                            <th data-i18n="main.colArticuloCategoriaVidautil" data-col="colArticuloCategoriaVidautil" data-group="menu.classArticuloCategorias">Shelf Life Category</th>
+                            <th data-i18n="main.colArticuloCategoriaTipoCodigo" data-col="colArticuloCategoriaTipoCodigo" data-group="menu.classArticuloCategorias">Code Type</th>
+                            <th data-i18n="main.colArticuloQr" data-col="colArticuloQr" data-group="menu.classArticuloQr">QR Code</th>
+                            <th data-i18n="main.colActions" data-col="actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="data-table-empty-cell" colspan="28">
+                            <td class="data-table-empty-cell" colspan="47">
                                 <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
                             </td>
                         </tr>
@@ -425,6 +447,81 @@
             </div>
         </div>
     </main>
+
+    <div class="modal-overlay" id="new-sku-modal" hidden>
+        <div class="modal-panel" style="max-width: 42rem;" role="dialog" aria-modal="true" aria-labelledby="new-sku-modal-title">
+            <h3 id="new-sku-modal-title" data-i18n="main.newSkuItem">New Article</h3>
+            <form id="new-sku-form" class="admin-form" novalidate>
+                <h4 data-i18n="menu.classArticuloDatosGenerales">General Data</h4>
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="new-sku-upc" data-i18n="main.colArticuloUpc">UPC</label>
+                        <input id="new-sku-upc" name="upc" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-client-code" data-i18n="main.colArticuloCodigoCliente">Client Code</label>
+                        <input id="new-sku-client-code" name="clientCode" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-desc-unica" data-i18n="main.colArticuloDescUnica">Unique Description</label>
+                        <input id="new-sku-desc-unica" name="uniqueDescription" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-desc-conocida" data-i18n="main.colArticuloDescConocida">Common Description</label>
+                        <input id="new-sku-desc-conocida" name="knownDescription" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-desc-personalizada" data-i18n="main.colArticuloDescPersonalizada">Custom Description</label>
+                        <input id="new-sku-desc-personalizada" name="customDescription" type="text">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-udm" data-i18n="main.colArticuloUdm">Primary UOM</label>
+                        <select id="new-sku-udm" name="mainUom"></select>
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-tipo" data-i18n="main.colArticuloTipo">Article Type</label>
+                        <select id="new-sku-tipo" name="articleType">
+                            <option value="" data-i18n="main.articleTypeSelect">Select...</option>
+                            <option value="articulo-terminado" data-i18n="main.articleTypeFinished">Finished Article</option>
+                            <option value="materia-prima" data-i18n="main.articleTypeRawMaterial">Raw Material</option>
+                        </select>
+                    </div>
+                </div>
+                <h4 data-i18n="menu.classArticuloDimensiones">Main Article Dimensions</h4>
+                <div class="admin-form-grid">
+                    <div class="admin-field">
+                        <label for="new-sku-alto" data-i18n="main.colArticuloAlto">Height</label>
+                        <input id="new-sku-alto" name="height" type="number" step="any">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-largo" data-i18n="main.colArticuloLargo">Length</label>
+                        <input id="new-sku-largo" name="length" type="number" step="any">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-ancho" data-i18n="main.colArticuloAncho">Width</label>
+                        <input id="new-sku-ancho" name="width" type="number" step="any">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-peso-articulo" data-i18n="main.colArticuloPesoArticulo">Article Weight</label>
+                        <input id="new-sku-peso-articulo" name="articleWeight" type="number" step="any">
+                    </div>
+                    <div class="admin-field">
+                        <label for="new-sku-peso-empaque" data-i18n="main.colArticuloPesoEmpaque">Package Weight</label>
+                        <input id="new-sku-peso-empaque" name="packageWeight" type="number" step="any">
+                    </div>
+                </div>
+                <h4 data-i18n="menu.classArticuloEvidencias">Evidence</h4>
+                <div class="admin-form-grid" id="new-sku-evidence-grid"></div>
+                <h4 data-i18n="menu.classArticuloCategorias">Article Categories</h4>
+                <div class="admin-form-grid" id="new-sku-category-grid"></div>
+                <div id="new-sku-form-error" class="admin-error" role="alert" hidden></div>
+                <div class="admin-form-actions">
+                    <button type="submit" class="btn" id="new-sku-save" data-i18n="admin.save">Save</button>
+                    <button type="button" class="btn btn-secondary" id="new-sku-cancel" data-i18n="admin.cancel">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
@@ -482,6 +579,6 @@
     <script src="SearchSyntax.js"></script>
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
-    <script src="CatCentroDistPresentaciones.js"></script>
+    <script src="OpCentroDistAltaArticulos.js"></script>
 </body>
 </html>

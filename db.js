@@ -3705,7 +3705,7 @@ const TABLE_GRANT_PATHS = {
     'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
     'marcas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-marcas' },
     'lugares-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-lugares-envio' },
-    'presentaciones-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-presentaciones-distribucion' },
+    'presentaciones-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-presentaciones-distribucion' },
     'clasificaciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
@@ -8259,7 +8259,7 @@ const PRESENTACIONES_CATALOG_SEED_KEY = 'seed-presentaciones-catalog-screen-v1';
 function seedPresentacionesCatalogGrants() {
     const path = TABLE_GRANT_PATHS['udm-distribucion'];
     if (!path) return;
-    seedLeavesForScreenHolders(PRESENTACIONES_CATALOG_SEED_KEY, path, ['cat-catalogos/cat-catalogos-centro-dist-presentaciones-distribucion'], 'the Presentaciones Distribución catalog screen');
+    seedLeavesForScreenHolders(PRESENTACIONES_CATALOG_SEED_KEY, path, ['cat-gestion/cat-gestion-centro-dist-presentaciones-distribucion'], 'the Presentaciones Distribución screen (Gestión)');
 }
 // Operaciones > Relación Código Envío (2026-11-10): la pantalla nueva la reciben, una sola vez, quienes ya tienen Relación Código (la de códigos internos). Los botones (nueva, eliminar, plantilla) los asigna el administrador desde el árbol.
 const RELACION_ENVIO_SEED_KEY = 'seed-relacion-envio-screen-v1';
@@ -8435,6 +8435,46 @@ function migrateLayoutSensorsToFixedAssetsOnce() {
     db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(LAYOUT_SENSORS_TO_ASSETS_KEY);
     console.log('[db] Alta Activos: los sensores ya dibujados pasaron al registro (una vez): ' + JSON.stringify(stats) + '.');
 }
+// Gestión (2026-11-12, Daniel: «Catálogos solo para listas de selección; lo terminado va a Gestión»): «Códigos» y «Presentaciones Distribución» salieron de Catálogos y quedaron en Gestión (ids y rutas nuevas). Los permisos
+// que ya se habían dado a las rutas viejas pasan, UNA vez, a las nuevas (en TODA tabla que guarda rutas del árbol: puestos, usuarios, planes, clientes, giros, Árbol Maestro y sus costos); así cada quien conserva su acceso y, en el
+// árbol, lo que ya estaba palomeado sigue palomeado. En los órdenes del Árbol Maestro se quitan los ids viejos de la lista de Catálogos.
+const MOVE_TO_GESTION_KEY = 'seed-move-codigos-presentaciones-to-gestion-v1';
+const SCREENS_MOVED_TO_GESTION = [
+    ['cat-catalogos/cat-catalogos-centro-dist-codigos', 'cat-gestion/cat-gestion-centro-dist-codigos', 'cat-catalogos-centro-dist-codigos'],
+    ['cat-catalogos/cat-catalogos-centro-dist-presentaciones-distribucion', 'cat-gestion/cat-gestion-centro-dist-presentaciones-distribucion', 'cat-catalogos-centro-dist-presentaciones-distribucion'],
+];
+function moveScreensToGestionOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(MOVE_TO_GESTION_KEY)) return;
+    const stats = {};
+    db.transaction(() => {
+        const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name);
+        tables.forEach((table) => {
+            const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+            if (cols.includes('submenu_id') && cols.includes('section_id') && cols.includes('item_id')) {
+                SCREENS_MOVED_TO_GESTION.forEach(([from, to]) => {
+                    // la pantalla (submenu_id = ruta) y todo lo que cuelga de ella (ruta/…): se cambia solo el prefijo
+                    const sql = `UPDATE OR IGNORE ${table} SET submenu_id = ? || substr(submenu_id, ?) WHERE section_id = 'supply-chain' AND item_id = 'sc-area-distribution-center' AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)`;
+                    const moved = db.prepare(sql).run(to, from.length + 1, from, from.length + 1, `${from}/`).changes;
+                    // si la ruta nueva ya existía (choque), la vieja sobra
+                    db.prepare(`DELETE FROM ${table} WHERE section_id = 'supply-chain' AND item_id = 'sc-area-distribution-center' AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)`).run(from, from.length + 1, `${from}/`);
+                    if (moved) stats[table] = (stats[table] || 0) + moved;
+                });
+            }
+            if (cols.includes('parent_key') && cols.includes('ordered_keys')) {
+                db.prepare(`SELECT id, ordered_keys FROM ${table} WHERE parent_key = 'pantalla::supply-chain::sc-area-distribution-center::cat-catalogos'`).all().forEach((row) => {
+                    let list = null;
+                    try { list = JSON.parse(row.ordered_keys); } catch { list = null; }
+                    if (!Array.isArray(list)) return;
+                    const old = new Set(SCREENS_MOVED_TO_GESTION.map((x) => x[2]));
+                    const kept = list.filter((k) => !old.has(k));
+                    if (kept.length !== list.length) { db.prepare(`UPDATE ${table} SET ordered_keys = ? WHERE id = ?`).run(JSON.stringify(kept), row.id); stats[`${table}(orden)`] = (stats[`${table}(orden)`] || 0) + 1; }
+                });
+            }
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(MOVE_TO_GESTION_KEY);
+    })();
+    console.log('[db] Gestión: los permisos de Códigos y Presentaciones Distribución pasaron de Catálogos a Gestión (una vez): ' + JSON.stringify(stats) + '.');
+}
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
     const path = TABLE_GRANT_PATHS['pedido-manual'];
@@ -8451,7 +8491,7 @@ const CODIGOS_SCREENS_SEED_KEY = 'seed-codigos-edicion-screens-v1';
 function seedCodigosScreensGrants() {
     const path = TABLE_GRANT_PATHS['nuestros-articulos'];
     if (!path) return;
-    seedLeavesForScreenHolders(CODIGOS_SCREENS_SEED_KEY, path, ['cat-catalogos/cat-catalogos-centro-dist-codigos', 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo'], 'Códigos and Edición Código screens');
+    seedLeavesForScreenHolders(CODIGOS_SCREENS_SEED_KEY, path, ['cat-gestion/cat-gestion-centro-dist-codigos', 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo'], 'Códigos (Gestión) and Edición Código screens');
 }
 
 // --- One-time data migration: seed pantalla-visibility for pre-existing --
@@ -13174,6 +13214,7 @@ seedAltaActivosGrants();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
 backfillFixedAssetHistoryOnce();
+moveScreensToGestionOnce();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
