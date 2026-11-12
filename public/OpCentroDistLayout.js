@@ -7591,14 +7591,26 @@ async function loadSheetData() {
 }
 // Con o sin medidas y m² para lo que se imprime: lo que se eligió en la ventana de descarga (si está abierta) o, si no, lo que se ve en el croquis.
 const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals: true, legend: true, openings: true, rotation: state.rotation || 0 };
+// Lo que se ve en pantalla, con los cambios que todavía no se guardan, con la misma forma que lo guardado (lo apagado no sale, las posiciones van como las lee la hoja y los totales se sacan de esto).
+function liveSheetData() {
+    const d = state.draft;
+    const on = (list) => (list || []).filter((x) => x.active !== false);
+    const spaces = on(d.spaces);
+    const liveSpaces = new Set(spaces.map((s) => s.id));
+    const positions = (d.positions || []).filter((p) => liveSpaces.has(p.spaceId)).map((p) => ({ s: p.spaceId, n: p.n, c: p.c, num: p.num, x: p.x, y: p.y, l: p.l, w: p.w, h: p.h, ...(Array.isArray(p.faces) && p.faces.length ? { faces: p.faces } : {}) }));
+    const layout = { ...d, zones: on(d.zones), floors: on(d.floors), ramps: on(d.ramps), footprints: on(d.footprints), spaces, positions };
+    return { layout, kpis: LC.computeKpis({ ...layout, obstacles: d.obstacles || [], transit: d.transit || [] }) };
+}
 function buildSheetSvgFrom(loaded) {
     const { data, logoRatio } = loaded;
+    // con cambios sin guardar la hoja sale con lo que se ve en pantalla (lo demás —el QR, la versión y el logo— sigue siendo de lo guardado)
+    const liveData = isDirty() && state.draft ? liveSheetData() : null;
     return window.LayoutSheet.buildSheetSvg({
         // Sitio: el que se escribe a mano en el Layout (Contorno > Sitio); sin él sale el texto de siempre. Después se llenará de la configuración (aquí es donde se conecta).
         companyName: data.companyName, siteName: data.siteName || t('main.layoutHojaArea'), logoDataUrl: data.logoDataUrl || '', logoRatio, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
-        url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
+        url: data.url, qrRows: data.qrRows, kpis: liveData ? liveData.kpis : data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
-        layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
+        layout: liveData ? liveData.layout : { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
         view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' || s === 'niveles' || s === 'ubicaciones' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, legend: sheetView().legend, openings: sheetView().openings !== false, rotation: sheetView().rotation },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }

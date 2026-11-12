@@ -1769,7 +1769,7 @@
     "layoutPreparandoHoja": "Preparando la hoja…",
     "layoutDescargaLista": "Descarga lista.",
     "layoutDescargaError": "No se pudo preparar la descarga.",
-    "layoutDescargaGuardado": "La hoja trae lo guardado: los cambios sin guardar no salen.",
+    "layoutDescargaGuardado": "La hoja sale con lo que ves en pantalla, también con los cambios que aún no guardas.",
     "layoutQrSinPermiso": "No tienes permiso para usar el QR del Layout.",
     "layoutQrSinLayout": "Todavía no hay un Layout guardado.",
     "layoutHojaArea": "C. Distribución · Cadena de Suministro",
