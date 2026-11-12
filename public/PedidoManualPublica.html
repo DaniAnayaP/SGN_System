@@ -197,6 +197,14 @@
         .cs-st{ display:block; font-size:.68rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
         .cs-st.supplied{ color:var(--xl); }
         .cs-st.pending{ color:var(--pdf); }
+        /* Presentación de cada artículo: una lista pequeña (pastilla) debajo del nombre; en la hoja del celular va arriba */
+        select.packsel{ display:block; width:max-content; max-width:100%; margin-top:.3rem; font:600 .72rem system-ui,sans-serif; border:1px solid var(--accent); border-radius:999px; padding:.18rem .6rem; background:var(--soft); color:var(--accent); cursor:pointer; }
+        .oline select.packsel{ margin-top:.25rem; }
+        .shpackrow{ display:flex; flex-direction:column; gap:.3rem; }
+        .shpackrow select.packsel{ width:100%; font-size:.92rem; padding:.55rem .8rem; border-radius:.9rem; margin-top:0; }
+        .shequiv{ font-size:.8rem; font-weight:700; color:var(--accent); text-align:right; }
+        .shequiv:empty{ display:none; }
+        .sel select.packsel{ margin:0; }
         .scroll.locked{ opacity:.6; pointer-events:none; }
         .whorow{ display:grid; grid-template-columns:1fr; gap:12px; }
         /* en pantalla ancha: «Quién pide», «Lugar que solicita» y «Enviar pedido» en un solo renglón; en la angosta (aunque se elija la tabla), uno debajo del otro */
@@ -403,6 +411,7 @@ const TEXT = {
         consultErr: 'No se pudo consultar. Revisa tu conexión e inténtalo de nuevo.', consultTooMany: 'Hiciste muchas consultas seguidas. Espera un minuto e inténtalo de nuevo.', consultLogin: 'Este QR pide iniciar sesión para consultar pedidos.',
         csWho: 'Pidió', csPlace: 'Lugar', csSent: 'Enviado', csItems: 'Artículos', csItemsVal: '{n} · {s} surtido', csItemsVals: '{n} · {s} surtidos', csList: 'Lo que se pidió', csFor: 'Para', csNote: 'Estatus al momento de consultar.',
         stPending: 'Pendiente', stPartial: 'Parcial', stSupplied: 'Surtido',
+        errPack: 'Una presentación ya no existe o no es de ese artículo: vuelve a elegirla.', packLabel: 'Presentación', packUnit: '{u} (unidad)', packLoose: 'Unidad suelta', packEquals: '= {n}', packChange: 'Al cambiar la presentación, la cantidad que ya pusiste se queda y cambia lo que equivale. ¿Cambiar?',
     },
     en: {
         title: 'Manual Order', loading: 'Loading…', notFound: 'This QR no longer matches any cost center.', searchTitle: 'Find an item', searchPlaceholder: 'Code, description, UoM or category',
@@ -423,6 +432,7 @@ const TEXT = {
         consultErr: 'It could not be looked up. Check your connection and try again.', consultTooMany: 'You made many lookups in a row. Wait a minute and try again.', consultLogin: 'This QR requires signing in to look up orders.',
         csWho: 'Ordered by', csPlace: 'Place', csSent: 'Sent', csItems: 'Items', csItemsVal: '{n} · {s} supplied', csItemsVals: '{n} · {s} supplied', csList: 'What was ordered', csFor: 'For', csNote: 'Status as of the moment you look it up.',
         stPending: 'Pending', stPartial: 'Partial', stSupplied: 'Supplied',
+        errPack: 'A presentation no longer exists or does not belong to that item: choose it again.', packLabel: 'Presentation', packUnit: '{u} (unit)', packLoose: 'Loose unit', packEquals: '= {n}', packChange: 'When you change the presentation, the quantity you already typed stays and what it equals changes. Change it?',
     },
 }[LANG];
 document.documentElement.lang = LANG;
@@ -623,7 +633,7 @@ function appendPhoneRows(added) {
 function drawSel() {
     const box = $('selbox');
     if (!box) return;
-    box.innerHTML = picked ? `<div class="card"><div class="sel"><b>${esc(picked.description)}</b><small>${esc([picked.code, picked.uom, picked.categories].filter(Boolean).join(' · '))}</small>
+    box.innerHTML = picked ? `<div class="card"><div class="sel"><b>${esc(picked.description)}</b><small>${esc([picked.code, picked.uom, picked.categories].filter(Boolean).join(' · '))}</small>${packsOf(picked).length ? `<select id="pickpack" class="packsel" aria-label="${esc(TEXT.packLabel)}">${packOptionsHtml(picked, picked.packId || 0)}</select>` : ''}
         <div class="qty"><button type="button" id="dec" aria-label="−">−</button><input type="number" id="qty" inputmode="decimal" step="any" min="0" value="${esc(picked.qty)}" aria-label="${esc(TEXT.qtyTitle)}"><button type="button" id="inc" aria-label="+">+</button><span>${esc(picked.uom)}</span></div>
         <div class="pickwhen"><label for="pickwhen">${esc(TEXT.needBy)}</label><select id="pickwhen" class="when">${whenOptions(picked.when || '')}</select></div>
         <button type="button" class="btn" id="add">${esc(TEXT.add)}</button><button type="button" class="link" id="cancel">${esc(TEXT.cancel)}</button></div></div>` : '';
@@ -644,6 +654,19 @@ const dayParts = (iso) => {
 const dayShort = (iso) => { const p = dayParts(iso); return `${cap(p.dow)} ${p.day} ${p.mon}`; };
 const whenLabel = (w) => (w ? dayShort(w) : TEXT.asap);
 const whenOptions = (selected) => `<option value=""${selected === '' ? ' selected' : ''}>${esc(TEXT.asap)}</option>${allDays().map((d) => `<option value="${d}"${selected === d ? ' selected' : ''}>${esc(dayShort(d))}</option>`).join('')}`;
+// ---- Presentación de cada artículo (Presentaciones de Distribución): UNA por artículo, vale para todos sus días. Cada artículo trae sus presentaciones (packs: [{ id, name, pieces }], pieces = cuántas unidades principales trae
+// UNA); la unidad suelta (0) siempre se puede pedir y es con la que arranca. La cantidad del pedido es de la presentación elegida y lo que equivale es cantidad × pieces, en la unidad del artículo. Un código sin presentaciones
+// no muestra la lista y se pide como siempre.
+const packChoice = new Map(); // id del artículo -> id de la presentación elegida (0 = la unidad suelta)
+const packsOf = (x) => (x && Array.isArray(x.packs) ? x.packs : []);
+const packFor = (x, packId) => packsOf(x).find((p) => p.id === packId) || null;
+const packIdOf = (x) => { const id = packChoice.get(x.id) || 0; return packFor(x, id) ? id : 0; };
+const unitName = (x, packId) => { const p = packFor(x, packId); return p ? p.name : (x.uom || ''); };
+const piecesOf = (x, packId) => { const p = packFor(x, packId); return p ? p.pieces : 1; };
+const equivText = (x, packId, qty) => `${fmtQty(Math.round(qty * piecesOf(x, packId) * 1000) / 1000)} ${x.uom || ''}`.trim();
+const looseLabel = (x) => (x.uom ? fill(TEXT.packUnit, { u: x.uom }) : TEXT.packLoose);
+const packOptionsHtml = (x, packId) => `<option value="0"${packId === 0 ? ' selected' : ''}>${esc(looseLabel(x))}</option>${packsOf(x).map((p) => `<option value="${p.id}"${p.id === packId ? ' selected' : ''}>${esc(`${p.name} · = ${fmtQty(p.pieces)} ${x.uom || ''}`.trim())}</option>`).join('')}`;
+const packSelectHtml = (x) => (packsOf(x).length ? `<select class="packsel" data-pack="${x.id}" aria-label="${esc(TEXT.packLabel)}">${packOptionsHtml(x, packIdOf(x))}</select>` : '');
 const partOf = (c, when) => c.parts.find((p) => p.when === when);
 const totalOf = (c) => Math.round(c.parts.reduce((s, p) => s + p.quantity, 0) * 1000) / 1000;
 const articleCount = () => cart.filter((c) => c.parts.length).length;
@@ -664,7 +687,7 @@ function setQty(c, when, quantity) {
 // Lo que se manda: un renglón por artículo y fecha.
 function flatLines() {
     const out = [];
-    cart.forEach((c) => c.parts.forEach((p) => { if (p.quantity > 0) out.push({ id: c.id, code: c.code, description: c.description, uom: c.uom, quantity: p.quantity, needBy: p.when }); }));
+    cart.forEach((c) => { const pid = packIdOf(c); c.parts.forEach((p) => { if (p.quantity > 0) out.push({ id: c.id, code: c.code, description: c.description, uom: c.uom, quantity: p.quantity, needBy: p.when, packId: pid, packName: packsOf(c).length ? unitName(c, pid) : '', pieces: piecesOf(c, pid) }); }); });
     return out;
 }
 // Cambiar la fecha de todo el pedido: lo que iba a la fecha de antes se pasa a la nueva (lo que se puso aparte se respeta) y las cantidades de una misma fecha se juntan.
@@ -688,15 +711,15 @@ function drawOrderList() {
     const chips = chip('', TEXT.asap, '') + days.slice(0, 3).map((d, i) => { const p = dayParts(d); return i === 0 ? chip(d, TEXT.tomorrow, `${p.dow} ${p.day}`) : chip(d, `${cap(p.dow)} ${p.day}`, ''); }).join('')
         + `<select class="dsel${rest.includes(defaultWhen) ? ' on' : ''}" id="defother" aria-label="${esc(TEXT.otherDate)}"><option value="">${esc(TEXT.otherDate)}</option>${rest.map((d) => `<option value="${d}"${defaultWhen === d ? ' selected' : ''}>${esc(dayShort(d))}</option>`).join('')}</select>`;
     const top = `<div><label>${esc(TEXT.whenTitle)}</label><div class="chips">${chips}</div></div>`;
-    const lines = !cart.length ? `<div class="msg">${esc(TEXT.empty)}</div>` : cart.map((c, i) => `<div class="oline"><div class="top"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small></span><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></div>`
-        + c.parts.map((p, j) => `<div class="sub"><div class="q"><button type="button" data-pdec="${i}:${j}" aria-label="−">−</button><b>${esc(fmtQty(p.quantity))}</b><button type="button" data-pinc="${i}:${j}" aria-label="+">+</button><span class="u">${esc(c.uom)}</span></div><select class="when${p.when !== defaultWhen ? ' diff' : ''}" data-part="${i}:${j}" aria-label="${esc(TEXT.needBy)}">${whenOptions(p.when)}</select>${c.parts.length > 1 ? `<button type="button" class="rm" data-prm="${i}:${j}" aria-label="${esc(TEXT.remove)}">×</button>` : ''}</div>`).join('')
+    const lines = !cart.length ? `<div class="msg">${esc(TEXT.empty)}</div>` : cart.map((c, i) => `<div class="oline"><div class="top"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small>${packSelectHtml(c)}</span><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></div>`
+        + c.parts.map((p, j) => `<div class="sub"><div class="q"><button type="button" data-pdec="${i}:${j}" aria-label="−">−</button><b>${esc(fmtQty(p.quantity))}</b><button type="button" data-pinc="${i}:${j}" aria-label="+">+</button><span class="u">${esc(unitName(c, packIdOf(c)))}</span></div><select class="when${p.when !== defaultWhen ? ' diff' : ''}" data-part="${i}:${j}" aria-label="${esc(TEXT.needBy)}">${whenOptions(p.when)}</select>${c.parts.length > 1 ? `<button type="button" class="rm" data-prm="${i}:${j}" aria-label="${esc(TEXT.remove)}">×</button>` : ''}</div>`).join('')
         + `<button type="button" class="split" data-addpart="${i}">${esc(TEXT.addDate)}</button></div>`).join('');
     return `${top}<div>${lines}</div>`;
 }
 // Lista del celular: cada artículo con un chip por día («Vie 13 · 10»); tocar el artículo o un chip abre su hoja para cambiar los días y las cantidades.
 function drawOrderListPhone() {
     if (!cart.length) return `<div class="msg">${esc(TEXT.empty)}</div>`;
-    return `<div>${cart.map((c, i) => `<div class="oline"><div class="top"><span>${esc(c.description)}<small>${esc([c.code, c.uom].filter(Boolean).join(' · '))}</small></span><div class="acts"><button type="button" class="link" data-edit="${i}">${esc(TEXT.change)}</button><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></div></div><div class="pchips">${sortedParts(c).map((p) => `<button type="button" class="pc${p.when && dayParts(p.when).weekend ? ' we' : ''}" data-edit="${i}" data-editday="${esc(p.when)}">${esc(whenLabel(p.when))} <b>${esc(fmtQty(p.quantity))}</b></button>`).join('')}</div></div>`).join('')}</div>`;
+    return `<div>${cart.map((c, i) => `<div class="oline"><div class="top"><span>${esc(c.description)}<small>${esc([c.code, packsOf(c).length ? unitName(c, packIdOf(c)) : c.uom].filter(Boolean).join(' · '))}${packsOf(c).length && packIdOf(c) ? ` · ${esc(fill(TEXT.packEquals, { n: equivText(c, packIdOf(c), totalOf(c)) }))}` : ''}</small></span><div class="acts"><button type="button" class="link" data-edit="${i}">${esc(TEXT.change)}</button><button type="button" class="rm" data-rm="${i}">${esc(TEXT.remove)}</button></div></div><div class="pchips">${sortedParts(c).map((p) => `<button type="button" class="pc${p.when && dayParts(p.when).weekend ? ' we' : ''}" data-edit="${i}" data-editday="${esc(p.when)}">${esc(whenLabel(p.when))} <b>${esc(fmtQty(p.quantity))}</b></button>`).join('')}</div></div>`).join('')}</div>`;
 }
 // Tabla por día (pantalla ancha), como la maqueta: DE INICIO sale toda la lista de códigos (con su descripción única), un renglón por código y una columna por día (los próximos 7; «+ Otra fecha» agrega más, hasta 14). «Lo antes posible»
 // sale como columna solo si se usa o se agrega. Se escribe la cantidad en el día que se quiera; lo que no lleva cantidad no se pide. Cada encabezado lleva su filtro (el embudo): Artículo filtra la lista (Contiene, Inicia con,
@@ -766,7 +789,7 @@ function summaryHtml() {
     return [...by.entries()].sort((a, z) => a[0].localeCompare(z[0])).map(([w, ids]) => `<div class="pill"><b>${esc(whenLabel(w))}</b>${esc(ids.size === 1 ? TEXT.item1 : TEXT.items.replace('{n}', ids.size))}</div>`).join('');
 }
 // Los renglones: toda la lista de códigos (ya filtrada por el encabezado Artículo) o, con un filtro de cantidad puesto, solo lo que lleva cantidad.
-const tableRowItems = () => (filterActive() ? cart.filter(rowVisible).map((c) => ({ id: c.id, code: c.code, description: c.description, uom: c.uom })) : catalog.items);
+const tableRowItems = () => (filterActive() ? cart.filter(rowVisible).map((c) => ({ id: c.id, code: c.code, description: c.description, uom: c.uom, packs: c.packs || [] })) : catalog.items);
 function rowHtml(it, cols) {
     const c = entryOf(it.id);
     const cells = cols.map((w) => {
@@ -774,7 +797,7 @@ function rowHtml(it, cols) {
         const weekend = w && dayParts(w).weekend;
         return `<td${weekend ? ' class="wk"' : ''}><input class="qc${part ? ' on' : ''}" type="number" min="0" step="any" inputmode="decimal" placeholder="–" data-item="${it.id}" data-when="${esc(w)}" value="${esc(part ? part.quantity : '')}" aria-label="${esc(`${it.description}, ${whenLabel(w)}`)}"></td>`;
     }).join('');
-    return `<tr><td class="art"><b>${esc(it.description)}</b><small>${esc([it.code, it.uom].filter(Boolean).join(' · '))}</small><button type="button" class="rm" data-clear="${it.id}"${c && c.parts.length ? '' : ' hidden'}>${esc(TEXT.remove)}</button></td>${cells}<td></td><td class="tot" data-id="${it.id}"></td></tr>`;
+    return `<tr><td class="art"><b>${esc(it.description)}</b><small>${esc([it.code, it.uom].filter(Boolean).join(' · '))}</small>${packSelectHtml(it)}<button type="button" class="rm" data-clear="${it.id}"${c && c.parts.length ? '' : ' hidden'}>${esc(TEXT.remove)}</button></td>${cells}<td></td><td class="tot" data-id="${it.id}"></td></tr>`;
 }
 function tableBodyHtml(cols) {
     const items = tableRowItems();
@@ -825,7 +848,8 @@ function refreshTable() {
     document.querySelectorAll('td.tot').forEach((td) => {
         const c = entryOf(Number(td.getAttribute('data-id')));
         const total = c ? totalOf(c) : 0;
-        td.innerHTML = total > 0 ? `${esc(fmtQty(total))}<small>${esc(TEXT.inTotal)}</small>` : '–';
+        const pid = c ? packIdOf(c) : 0;
+        td.innerHTML = total > 0 ? `${esc(fmtQty(total))}<small>${esc(pid ? fill(TEXT.packEquals, { n: equivText(c, pid, total) }) : TEXT.inTotal)}</small>` : '–';
     });
     const bar = $('sumbar');
     if (bar) bar.innerHTML = summaryHtml();
@@ -910,20 +934,28 @@ function openSheet(item, startDay) {
     const work = new Map(c ? c.parts.map((p) => [p.when, p.quantity]) : []);
     let day = startDay !== undefined ? startDay : (c && c.parts.length ? sortedParts(c)[0].when : (lastWhen !== null ? lastWhen : defaultWhen));
     if (day !== '' && !allDays().includes(day)) day = '';
-    sheet = { id: item.id, code: item.code, description: item.description, uom: item.uom || '', work, day, isNew: !c };
+    sheet = { id: item.id, code: item.code, description: item.description, uom: item.uom || '', packs: packsOf(item), packId: packIdOf(item), work, day, isNew: !c };
     const wrap = document.createElement('div');
     wrap.className = 'shwrap';
     wrap.id = 'shwrap';
     wrap.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(item.description)}" tabindex="-1"><div class="grab" aria-hidden="true"></div>
         <div class="shead"><div><b>${esc(item.description)}</b><small>${esc([item.code, item.uom].filter(Boolean).join(' · '))}</small></div><button type="button" class="shx" data-shclose aria-label="${esc(TEXT.close)}">✕</button></div>
-        <div class="shbody"><div class="shq">${esc(TEXT.sheetWhen)}</div><div class="shdays" id="shdays"></div>
+        <div class="shbody">${sheet.packs.length ? `<div class="shpackrow"><div class="shq"><label for="shpack" style="margin:0;color:inherit;font-size:inherit">${esc(TEXT.packLabel)}</label></div><select id="shpack" class="packsel">${packOptionsHtml(sheet, sheet.packId)}</select></div>` : ''}<div class="shq">${esc(TEXT.sheetWhen)}</div><div class="shdays" id="shdays"></div>
         <div class="shnote">${esc(fill(TEXT.sheetNote, { today: fill(TEXT.todayIs, { d: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(dayDate(todayIso())) }) }))}</div>
         <div class="shqty"><div class="shwhen" id="shwhen"></div><div class="shstep"><button type="button" id="shdec" aria-label="−">−</button><input type="number" id="shqty" inputmode="decimal" step="any" min="0" placeholder="0" aria-label="${esc(TEXT.qtyOfDay)}"><button type="button" class="add" id="shinc" aria-label="+">+</button></div><div class="shunit" id="shunit"></div></div>
-        <div class="shmine" id="shmine"></div></div>
+        <div class="shmine" id="shmine"></div><div class="shequiv" id="shequiv"></div></div>
         <div class="shfoot"><button type="button" class="btn" id="shdone"></button><button type="button" class="btn alt" data-shclose>${esc(TEXT.cancel)}</button></div></div>`;
     document.body.appendChild(wrap);
     document.body.classList.add('sheet-open');
     wrap.addEventListener('click', onSheetClick);
+    wrap.addEventListener('change', (event) => {
+        if (event.target.id !== 'shpack' || !sheet) return;
+        const next = Number(event.target.value) || 0;
+        // con cantidades ya puestas la cantidad se queda y cambia lo que equivale (con aviso)
+        if (sheet.work.size && next !== sheet.packId && !window.confirm(TEXT.packChange)) { event.target.value = String(sheet.packId); return; }
+        sheet.packId = next;
+        paintSheet(false);
+    });
     wrap.addEventListener('input', (event) => {
         if (event.target.id !== 'shqty' || !sheet) return;
         const n = Number(String(event.target.value).replace(',', '.'));
@@ -956,13 +988,16 @@ function paintSheet(full) {
     }).join('');
     box.scrollLeft = keep;
     $('shwhen').textContent = s.day === '' ? TEXT.asap : dayLong(s.day);
-    $('shunit').textContent = fill(TEXT.sheetUnitDay, { u: s.uom || TEXT.qtyTitle });
+    const unit = unitName(s, s.packId);
+    $('shunit').textContent = fill(TEXT.sheetUnitDay, { u: unit || TEXT.qtyTitle });
     if (full) $('shqty').value = sheetCur() ? sheetCur() : '';
     const whens = sheetWhens();
-    $('shmine').innerHTML = whens.length ? `<h3>${esc(TEXT.sheetMine)}</h3>${whens.map((w) => `<div class="shrow${w === s.day ? ' now' : ''}"><button type="button" class="shpick" data-shpick="${esc(w)}">${esc(whenLabel(w))}</button><b>${esc(fmtQty(s.work.get(w)))} ${esc(s.uom)}</b><button type="button" class="rm" data-shrm="${esc(w)}">${esc(TEXT.remove)}</button></div>`).join('')}` : '';
+    $('shmine').innerHTML = whens.length ? `<h3>${esc(TEXT.sheetMine)}</h3>${whens.map((w) => `<div class="shrow${w === s.day ? ' now' : ''}"><button type="button" class="shpick" data-shpick="${esc(w)}">${esc(whenLabel(w))}</button><b>${esc(fmtQty(s.work.get(w)))} ${esc(unit)}</b><button type="button" class="rm" data-shrm="${esc(w)}">${esc(TEXT.remove)}</button></div>`).join('')}` : '';
     const done = $('shdone');
     const total = sheetTotal();
-    done.textContent = total > 0 ? fill(TEXT.sheetDone, { n: `${fmtQty(total)} ${s.uom}`.trim() }) : (s.isNew ? TEXT.sheetDoneEmpty : TEXT.sheetRemoveAll);
+    done.textContent = total > 0 ? fill(TEXT.sheetDone, { n: `${fmtQty(total)} ${unit}`.trim() }) : (s.isNew ? TEXT.sheetDoneEmpty : TEXT.sheetRemoveAll);
+    const eq = $('shequiv');
+    if (eq) eq.textContent = total > 0 && s.packId ? fill(TEXT.packEquals, { n: equivText(s, s.packId, total) }) : '';
     done.disabled = total <= 0 && s.isNew;
 }
 function onSheetClick(event) {
@@ -986,7 +1021,8 @@ function applySheet() {
     const i = cart.findIndex((c) => c.id === s.id);
     if (!parts.length) { if (i >= 0) cart.splice(i, 1); }
     else if (i >= 0) cart[i].parts = parts;
-    else cart.push({ id: s.id, code: s.code, description: s.description, uom: s.uom, parts });
+    else cart.push({ id: s.id, code: s.code, description: s.description, uom: s.uom, packs: s.packs, parts });
+    if (parts.length) packChoice.set(s.id, s.packId);
     if (parts.length) lastWhen = parts.some((p) => p.when === s.day) ? s.day : parts[parts.length - 1].when;
     closeSheet();
     drawOrder();
@@ -1005,8 +1041,10 @@ function addPicked() {
     const q = Math.round(n * 1000) / 1000;
     const when = picked.when || '';
     const found = cart.find((c) => c.id === picked.id);
+    if (found && totalOf(found) > 0 && (picked.packId || 0) !== packIdOf(found) && !window.confirm(TEXT.packChange)) return;
+    packChoice.set(picked.id, picked.packId || 0);
     if (found) { const p = partOf(found, when); if (p) p.quantity = Math.round((p.quantity + q) * 1000) / 1000; else found.parts.push({ when, quantity: q }); }
-    else cart.push({ id: picked.id, code: picked.code, description: picked.description, uom: picked.uom, parts: [{ when, quantity: q }] });
+    else cart.push({ id: picked.id, code: picked.code, description: picked.description, uom: picked.uom, packs: picked.packs || [], parts: [{ when, quantity: q }] });
     picked = null;
     drawSel(); drawOrder();
 }
@@ -1061,6 +1099,18 @@ function setField(key, checked) {
     search();
 }
 
+// Cambiar la presentación de un artículo: la cantidad que ya tenía se queda y cambia lo que equivale (con aviso); la elección vale para todos sus días.
+function onPackChange(sel) {
+    const id = Number(sel.getAttribute('data-pack'));
+    const next = Number(sel.value) || 0;
+    const c = entryOf(id);
+    const it = c || findItem(id);
+    const prev = it ? packIdOf(it) : 0;
+    if (next === prev) return;
+    if (c && totalOf(c) > 0 && !window.confirm(TEXT.packChange)) { sel.value = String(prev); return; }
+    packChoice.set(id, next);
+    if (wide) refreshTable(); else drawOrder();
+}
 // Un solo oyente para todo lo que se toca en la página.
 $('view').addEventListener('click', (event) => {
     const t = event.target;
@@ -1084,7 +1134,7 @@ $('view').addEventListener('click', (event) => {
     if (pick && isNarrow()) { openSheet(catalog.items[Number(pick.getAttribute('data-pick'))]); return; } // celular: la hoja del código
     const edit = t.closest('[data-edit]');
     if (edit) { const c = cart[Number(edit.getAttribute('data-edit'))]; if (c) openSheet(c, edit.hasAttribute('data-editday') ? edit.getAttribute('data-editday') : undefined); return; }
-    if (pick) { picked = { ...results[Number(pick.getAttribute('data-pick'))], qty: 1, when: defaultWhen }; drawSel(); const qi = $('qty'); if (qi) { qi.focus(); qi.select(); } return; }
+    if (pick) { const found = results[Number(pick.getAttribute('data-pick'))]; picked = { ...found, qty: 1, when: defaultWhen, packId: packIdOf(found) }; drawSel(); const qi = $('qty'); if (qi) { qi.focus(); qi.select(); } return; }
     if (t.closest('#dec')) { picked.qty = Math.max(1, Math.round((Number(picked.qty) || 1) - 1)); $('qty').value = picked.qty; return; }
     if (t.closest('#inc')) { picked.qty = Math.round((Number(picked.qty) || 0) + 1); $('qty').value = picked.qty; return; }
     if (t.closest('#add')) { addPicked(); return; }
@@ -1145,7 +1195,7 @@ $('view').addEventListener('input', (event) => {
         const id = Number(t.dataset.item);
         const w = t.dataset.when || '';
         let c = entryOf(id);
-        if (!c) { const it = findItem(id); if (!it) return; c = { id, code: it.code, description: it.description, uom: it.uom, parts: [] }; cart.push(c); }
+        if (!c) { const it = findItem(id); if (!it) return; c = { id, code: it.code, description: it.description, uom: it.uom, packs: it.packs || [], parts: [] }; cart.push(c); }
         const n = Number(String(t.value).replace(',', '.'));
         const q = Number.isFinite(n) && n > 0 ? Math.round(n * 1000) / 1000 : 0;
         setQty(c, w, q);
@@ -1159,6 +1209,8 @@ $('view').addEventListener('change', (event) => {
     const box = t.closest('[data-field]');
     if (box) { setField(box.getAttribute('data-field'), box.checked); return; }
     if (t.id === 'pickwhen' && picked) { picked.when = t.value; return; }
+    if (t.id === 'pickpack' && picked) { picked.packId = Number(t.value) || 0; return; }
+    if (t.hasAttribute && t.hasAttribute('data-pack')) { onPackChange(t); return; }
     if (t.id === 'defother') { setDefault(t.value); return; }
     if (t.id === 'addcol') { if (t.value === '__asap') showAsap = true; else if (t.value) extraCols.push(t.value); if (t.value) drawOrder(); return; }
     const dayFilter = t.getAttribute && t.getAttribute('data-dayfilter');
@@ -1232,7 +1284,7 @@ async function downloadList(format, ctx) {
     btns.forEach((b) => { b.disabled = true; });
     if (note) { note.textContent = TEXT.preparing; note.hidden = false; }
     try {
-        const res = await fetch(`${API}/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ format, lang: LANG, name: String(c.name || '').replace(/\s+/g, ' ').trim(), ...((info.places || []).length ? { placeId: c.placeId } : {}), folio: c.folio || '', when: c.when || '', items: c.lines.map((l) => ({ id: l.id, quantity: l.quantity, needBy: l.needBy })) }) });
+        const res = await fetch(`${API}/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ format, lang: LANG, name: String(c.name || '').replace(/\s+/g, ' ').trim(), ...((info.places || []).length ? { placeId: c.placeId } : {}), folio: c.folio || '', when: c.when || '', items: c.lines.map((l) => ({ id: l.id, quantity: l.quantity, needBy: l.needBy, packId: l.packId || 0 })) }) });
         if (!res.ok) throw new Error('export');
         const file = `${LANG === 'en' ? 'Order' : 'Pedido'}-${c.folio || (LANG === 'en' ? 'draft' : 'borrador')}_${todayIso()}.${format}`;
         saveBlob(await res.blob(), file);
@@ -1261,13 +1313,13 @@ async function sendOrder() {
     btn.textContent = TEXT.sending;
     const items = flatLines();
     try {
-        const res = await fetch(`${API}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, ...((info.places || []).length ? { placeId } : {}), items: items.map((c) => ({ id: c.id, quantity: c.quantity, needBy: c.needBy })) }) });
+        const res = await fetch(`${API}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, ...((info.places || []).length ? { placeId } : {}), items: items.map((c) => ({ id: c.id, quantity: c.quantity, needBy: c.needBy, packId: c.packId || 0 })) }) });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
             btn.disabled = false; btn.textContent = idleLabel;
             if (body.code === 'LOCKED') { closeClose(); info.locks.register = false; view(); return; }
             if (body.code === 'LOGIN') { closeClose(); info.locks.signin = true; info.signedIn = false; view(); return; }
-            fail(body.code === 'NAME' ? TEXT.needName : (body.code === 'PLACE' ? TEXT.needPlace : (body.code === 'QTY' ? TEXT.errQty : (body.code === 'ITEMS' ? TEXT.errItems : (body.code === 'TOOMANY' ? TEXT.tooMany : (body.code === 'RELATED' ? TEXT.errRelated : (body.code === 'DATE' ? TEXT.errDate : TEXT.errGeneric)))))));
+            fail(body.code === 'NAME' ? TEXT.needName : (body.code === 'PLACE' ? TEXT.needPlace : (body.code === 'QTY' ? TEXT.errQty : (body.code === 'ITEMS' ? TEXT.errItems : (body.code === 'TOOMANY' ? TEXT.tooMany : (body.code === 'RELATED' ? TEXT.errRelated : (body.code === 'DATE' ? TEXT.errDate : (body.code === 'PACK' ? TEXT.errPack : TEXT.errGeneric))))))));
             return;
         }
         store.set(KEY_NAME, name);
@@ -1315,7 +1367,7 @@ function consultResultHtml(o) {
     const stText = { pending: TEXT.stPending, partial: TEXT.stPartial, supplied: TEXT.stSupplied };
     const itemsText = fill(o.supplied === 1 ? TEXT.csItemsVal : TEXT.csItemsVals, { n: o.lines.length, s: o.supplied });
     const meta = [[TEXT.csWho, o.name], [TEXT.csPlace, o.place], [TEXT.csSent, when], [TEXT.csItems, itemsText]].filter(([, v]) => v).map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join('');
-    const lines = o.lines.map((l) => `<div class="cs-it"><div><b>${esc(l.description)}</b><small>${esc([l.code, l.uom].filter(Boolean).join(' · '))}</small><small>${esc(TEXT.csFor)}: ${esc(whenLabel(l.needBy))}</small></div><div class="cs-q">${esc(fmtQty(l.quantity))}<small> ${esc(l.uom)}</small><span class="cs-st ${l.status}">${esc(stText[l.status] || '')}</span></div></div>`).join('');
+    const lines = o.lines.map((l) => `<div class="cs-it"><div><b>${esc(l.description)}</b><small>${esc([l.code, l.packName || l.uom].filter(Boolean).join(' · '))}${l.packName && l.packPieces !== 1 ? ` · ${esc(fill(TEXT.packEquals, { n: `${fmtQty(Math.round(l.quantity * l.packPieces * 1000) / 1000)} ${l.uom || ''}`.trim() }))}` : ''}</small><small>${esc(TEXT.csFor)}: ${esc(whenLabel(l.needBy))}</small></div><div class="cs-q">${esc(fmtQty(l.quantity))}<small> ${esc(l.packName || l.uom)}</small><span class="cs-st ${l.status}">${esc(stText[l.status] || '')}</span></div></div>`).join('');
     return `<div class="cs-sum"><div class="cs-top"><span class="cs-folio">${esc(o.folio)}</span><span class="cs-pill ${esc(o.status)}">${esc(stText[o.status] || '')}</span></div><div class="cs-meta">${meta}</div></div>
         <div class="shq">${esc(TEXT.csList)}</div><div>${lines}</div><div class="cs-hint">${esc(TEXT.csNote)}</div>`;
 }
@@ -1349,7 +1401,7 @@ async function doConsult() {
 // Lo enviado: el número de pedido y su lista de artículos.
 function viewSent() {
     const when = new Date(sentInfo.createdAt).toLocaleString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const lines = sentInfo.items.map((c) => `<div class="line"><span>${esc(c.description)}<small>${esc([c.code, c.uom, `${TEXT.needBy}: ${whenLabel(c.needBy)}`].filter(Boolean).join(' · '))}</small></span><div class="q"><b>${esc(fmtQty(c.quantity))}</b></div></div>`).join('');
+    const lines = sentInfo.items.map((c) => `<div class="line"><span>${esc(c.description)}<small>${esc([c.code, c.packName || c.uom, c.packId ? fill(TEXT.packEquals, { n: `${fmtQty(Math.round(c.quantity * c.pieces * 1000) / 1000)} ${c.uom || ''}`.trim() }) : '', `${TEXT.needBy}: ${whenLabel(c.needBy)}`].filter(Boolean).join(' · '))}</small></span><div class="q"><b>${esc(fmtQty(c.quantity))}</b></div></div>`).join('');
     $('view').innerHTML = `<div class="card done"><div class="tick" aria-hidden="true">✓</div><h1>${esc(TEXT.sentTitle)}</h1><div class="muted">${esc(TEXT.folio)}</div><div class="folio">${esc(sentInfo.folio)}</div>
         <div>${esc(TEXT.by)}: <b>${esc(sentInfo.name)}</b></div>${sentInfo.place ? `<div>${esc(TEXT.placeAt)}: <b>${esc(sentInfo.place)}</b></div>` : ''}<div>${esc(TEXT.at)}: <b>${esc(when)}</b></div>
         <div class="items"><h2>${esc(TEXT.list)} · ${esc(sentInfo.items.length === 1 ? TEXT.item1 : TEXT.items.replace('{n}', sentInfo.items.length))}</h2>${lines}</div>

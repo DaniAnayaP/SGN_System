@@ -5885,6 +5885,12 @@ if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name ===
 if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'client_ref')) db.exec('ALTER TABLE manual_orders ADD COLUMN client_ref TEXT');
 // need_by: para cuándo se quiere ese renglón (el día en la zona del cliente, AAAA-MM-DD; '' = lo antes posible). Un artículo pedido para dos días son dos renglones del mismo folio, uno por fecha.
 if (!db.prepare('PRAGMA table_info(manual_order_lines)').all().some((c) => c.name === 'need_by')) db.exec("ALTER TABLE manual_order_lines ADD COLUMN need_by TEXT NOT NULL DEFAULT ''");
+// La presentación en que se pidió el renglón (Presentaciones de Distribución): pack_id = su id (0 = la unidad suelta o un código sin presentaciones), pack_name = su nombre tal como estaba al pedir («Caja con 20 Sobres»;
+// en la unidad suelta de un código que SÍ tiene presentaciones, la unidad principal; '' = el código no tiene presentaciones y se pidió como siempre) y pack_pieces = cuántas unidades principales trae UNA de esa presentación
+// (1 en la unidad suelta). La cantidad del renglón es de esa presentación; lo que equivale es cantidad × pack_pieces. Se guarda aquí tal cual para que cambiar el catálogo después no mueva pedidos ya hechos.
+for (const [col, ddl] of [['pack_id', 'INTEGER NOT NULL DEFAULT 0'], ['pack_name', "TEXT NOT NULL DEFAULT ''"], ['pack_pieces', 'REAL NOT NULL DEFAULT 1']]) {
+    if (!db.prepare('PRAGMA table_info(manual_order_lines)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE manual_order_lines ADD COLUMN ${col} ${ddl}`);
+}
 // place_id / place_name: el «Lugar que solicita» (un lugar del catálogo Lugares de Envío; el nombre se guarda tal como estaba al pedir). 0 / '' = el pedido no lo trae (los de antes y los de la App, por ahora).
 if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'place_id')) db.exec('ALTER TABLE manual_orders ADD COLUMN place_id INTEGER NOT NULL DEFAULT 0');
 if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'place_name')) db.exec("ALTER TABLE manual_orders ADD COLUMN place_name TEXT NOT NULL DEFAULT ''");
@@ -5931,15 +5937,15 @@ function getManualOrderItem(clientId, id, isTest = false) {
     return db.prepare(`SELECT id, record_number, sku_code, client_code, upc, unique_description, known_description, custom_description, main_uom, ${MANUAL_CATEGORY_COLUMNS.join(', ')} FROM sku_items WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND id = ?`)
         .get(clientId, isTest ? 1 : 0, id);
 }
-// Guarda un pedido con todos sus renglones en una sola operación. lines = [{ skuItemId, code, description, uom, categories, quantity, needBy }]. La hora la pone el servidor.
+// Guarda un pedido con todos sus renglones en una sola operación. lines = [{ skuItemId, code, description, uom, categories, quantity, needBy, packId, packName, packPieces }]. La hora la pone el servidor.
 function createManualOrder({ clientId, costCenterId, requesterName, requesterUserId = null, source = 'qr', lines, createdAt = null, clientRef = null, placeId = 0, placeName = '' }) {
     return db.transaction(() => {
         // createdAt (UTC 'YYYY-MM-DD HH:MM:SS') solo viene de la App cuando el pedido se mandó sin señal: se guarda como hora del pedido y la del servidor como hora recibida.
         const info = db.prepare("INSERT INTO manual_orders (client_id, cost_center_id, requester_name, requester_user_id, source, created_at, received_at, client_ref, place_id, place_name) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')), CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?, ?, ?)")
             .run(clientId, costCenterId || 0, requesterName || '', requesterUserId, source, createdAt, createdAt, clientRef, Number(placeId) || 0, String(placeName || '').slice(0, 120));
         const orderId = Number(info.lastInsertRowid);
-        const insert = db.prepare('INSERT INTO manual_order_lines (order_id, client_id, line_no, sku_item_id, code, description, uom, categories, quantity, need_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-        lines.forEach((l, i) => insert.run(orderId, clientId, i + 1, l.skuItemId || null, l.code || '', l.description || '', l.uom || '', l.categories || '', l.quantity, l.needBy || ''));
+        const insert = db.prepare('INSERT INTO manual_order_lines (order_id, client_id, line_no, sku_item_id, code, description, uom, categories, quantity, need_by, pack_id, pack_name, pack_pieces) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        lines.forEach((l, i) => insert.run(orderId, clientId, i + 1, l.skuItemId || null, l.code || '', l.description || '', l.uom || '', l.categories || '', l.quantity, l.needBy || '', Number(l.packId) || 0, String(l.packName || '').slice(0, 160), Number(l.packPieces) > 0 ? Number(l.packPieces) : 1));
         const row = db.prepare('SELECT created_at FROM manual_orders WHERE id = ?').get(orderId);
         return { id: orderId, createdAt: row.created_at, lines: lines.length };
     })();
@@ -5962,7 +5968,7 @@ function listManualOrderLines(clientId, { costCenterId, limit } = {}) {
 function getManualOrderWithLines(clientId, orderId, costCenterId = 0) {
     const order = db.prepare('SELECT id, cost_center_id, requester_name, place_name, created_at, received_at FROM manual_orders WHERE id = ? AND client_id = ? AND cost_center_id = ?').get(orderId, clientId, costCenterId || 0);
     if (!order) return null;
-    const lines = db.prepare('SELECT line_no, code, description, uom, quantity, need_by, status FROM manual_order_lines WHERE order_id = ? AND client_id = ? ORDER BY line_no ASC, id ASC').all(orderId, clientId);
+    const lines = db.prepare('SELECT line_no, code, description, uom, quantity, need_by, status, pack_id, pack_name, pack_pieces FROM manual_order_lines WHERE order_id = ? AND client_id = ? ORDER BY line_no ASC, id ASC').all(orderId, clientId);
     return { order, lines };
 }
 // --- Incidentes (Operaciones, C. Distribución) ----------------------------------------------------------------------------------------------------------

@@ -8111,17 +8111,33 @@ function optionalSessionUser(req) {
         return { ...payload, ...session.fresh };
     } catch { return null; }
 }
+// Las presentaciones en que se puede pedir cada código (Presentaciones de Distribución): Map(id del código -> [{ id, name, pieces }]). Salen todas las presentaciones del código (el material principal NO va aquí: es la
+// «unidad suelta», que siempre se puede pedir) menos las marcas, que solo agrupan y se ven en el nombre de las suyas («Caja con 20 Sobres · Genérico»). pieces = cuántas unidades principales trae UNA de la presentación.
+// Sin filtrar por «Envíos a»: todas las del código. Un código sin presentaciones no aparece y se pide como siempre.
+function manualPacksFor(clientId, isTest) {
+    const bySku = new Map();
+    listSkuDistribution(clientId, isTest).forEach((r) => { if (!bySku.has(r.sku_item_id)) bySku.set(r.sku_item_id, []); bySku.get(r.sku_item_id).push(r); });
+    const out = new Map();
+    bySku.forEach((rows, skuId) => {
+        const packs = skuDistTree(rows).filter((n) => !n.isBrand && n.row.level >= 1 && n.name)
+            .map((n) => ({ id: n.row.id, name: `${n.name}${n.brand && n.brand.name ? ` · ${n.brand.name}` : ''}`, pieces: n.equivalent }))
+            .sort((a, z) => a.pieces - z.pieces || a.name.localeCompare(z.name)); // de la más chica a la más grande
+        if (packs.length) out.set(skuId, packs);
+    });
+    return out;
+}
 const manualItemsCache = new Map(); // clientId:prueba -> { at, items }: unos segundos, para no leer todos los artículos en cada letra
 // costCenterId > 0: solo los códigos relacionados con ese centro (Relación Código).
 function manualItemsFor(clientId, isTest, costCenterId = 0, placeId = 0) {
     const key = `${clientId}:${isTest ? 1 : 0}:${costCenterId || 0}:${placeId || 0}`;
     const hit = manualItemsCache.get(key);
     if (hit && Date.now() - hit.at < 20000) return hit.items;
+    const packsOf = manualPacksFor(clientId, isTest);
     const items = listManualOrderItems(clientId, isTest, costCenterId || 0, placeId || 0).map((r) => {
         const sku = padSku(r.record_number, r.sku_code);
         const cats = [r.category_inventario, r.category_compra, r.category_almacenamiento, r.category_rotacion, r.category_manejo, r.category_riesgo, r.category_vidautil].map((c) => String(c || '').trim()).filter(Boolean);
         return {
-            id: r.id, code: r.upc || sku, description: r.custom_description || r.known_description || r.unique_description || '', unique: r.unique_description || '', uom: r.main_uom || '', categories: [...new Set(cats)].join(' · '),
+            id: r.id, code: r.upc || sku, description: r.custom_description || r.known_description || r.unique_description || '', unique: r.unique_description || '', uom: r.main_uom || '', categories: [...new Set(cats)].join(' · '), packs: packsOf.get(r.id) || [],
             by: { code: [r.upc, r.client_code, sku, String(r.record_number), padSku(r.record_number)].map(foldText), desc: [r.unique_description, r.known_description, r.custom_description].map(foldText), uom: [r.main_uom].map(foldText), cat: cats.map(foldText) },
         };
     });
@@ -8141,10 +8157,12 @@ function manualLinesFrom(rawItems, clientId, isTest, costCenterId = 0, placeId =
     const minDay = manualAddDays(today, 1);
     const maxDay = manualAddDays(today, MANUAL_ORDER_MAX_DAYS);
     const wanted = new Map();
+    const packOfItem = new Map(); // una presentación por artículo (vale para todos sus días): la del primer renglón de ese artículo
     for (const it of raw) {
         const id = Number(it && it.id);
         const quantity = Number(it && it.quantity);
         if (!Number.isInteger(id) || id < 1 || !Number.isFinite(quantity) || quantity <= 0 || quantity > 999999) return { error: { message: 'Una cantidad no es válida.', code: 'QTY' } };
+        if (!packOfItem.has(id)) { const pid = Math.round(Number(it && it.packId)); packOfItem.set(id, Number.isInteger(pid) && pid > 0 ? pid : 0); }
         let needBy = '';
         const rawBy = it && it.needBy;
         if (rawBy !== undefined && rawBy !== null && rawBy !== '' && rawBy !== 'asap') {
@@ -8165,7 +8183,11 @@ function manualLinesFrom(rawItems, clientId, isTest, costCenterId = 0, placeId =
             if ((costCenterId || placeId) && manualItemsFor(clientId, isTest).some((x) => x.id === id)) return { error: { message: placeId ? 'Un artículo no está habilitado para enviarse a ese lugar.' : 'Un artículo no está relacionado con este centro de costos.', code: 'RELATED' } };
             return { error: { message: 'Un artículo ya no existe.', code: 'ITEM' } };
         }
-        lines.push({ skuItemId: it.id, code: it.code, description: it.description, uom: it.uom, categories: it.categories, quantity, needBy });
+        // La presentación en que se pide (la cantidad es de ella): una de las del código o la unidad suelta (0). Un código sin presentaciones se pide como siempre (sin nombre de presentación).
+        const packId = packOfItem.get(id) || 0;
+        const pack = packId ? (it.packs || []).find((p) => p.id === packId) : null;
+        if (packId && !pack) return { error: { message: 'Una presentación ya no existe o no es de ese artículo.', code: 'PACK' } };
+        lines.push({ skuItemId: it.id, code: it.code, description: it.description, uom: it.uom, categories: it.categories, quantity, needBy, packId: pack ? pack.id : 0, packName: pack ? pack.name : ((it.packs || []).length ? it.uom : ''), packPieces: pack ? pack.pieces : 1 });
     }
     return { lines };
 }
@@ -8226,7 +8248,7 @@ app.get('/api/public/pedido-manual/:token/search', publicManualSearchLimiter, (r
     if (!SearchSyntax.ready(mode, query)) return res.json({ total: 0, items: [] });
     const matches = publicSearchMatcher(mode, query);
     const found = manualItemsFor(row.clientId, isTest, row.costCenterId || 0, scope.placeId).filter((it) => matches(fields.flatMap((k) => it.by[k])));
-    res.json({ total: found.length, items: found.slice(0, 20).map(({ id, code, description, uom, categories }) => ({ id, code, description, uom, categories })) });
+    res.json({ total: found.length, items: found.slice(0, 20).map(({ id, code, description, uom, categories, packs }) => ({ id, code, description, uom, categories, packs })) });
 });
 // La tabla por día del QR muestra DE INICIO toda la lista de códigos relacionados con el centro (con su descripción única) y los filtros de sus encabezados la acotan: por páginas (offset y límite de hasta 200), con el mismo motor de búsqueda
 // (Contiene, Inicia con, Igual que, signos y «Buscar en»); sin buscar, o con una búsqueda todavía muy corta, trae todos.
@@ -8249,7 +8271,7 @@ app.get('/api/public/pedido-manual/:token/list', publicManualSearchLimiter, (req
     }
     const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 100));
-    res.json({ total: found.length, offset, items: found.slice(offset, offset + limit).map(({ id, code, description, unique, uom, categories }) => ({ id, code, description: unique || description, uom, categories })) });
+    res.json({ total: found.length, offset, items: found.slice(offset, offset + limit).map(({ id, code, description, unique, uom, categories, packs }) => ({ id, code, description: unique || description, uom, categories, packs })) });
 });
 app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req, res) => {
     const target = manualOrderTarget(req, res);
@@ -8301,7 +8323,7 @@ app.get('/api/public/pedido-manual/:token/order', publicManualLookupLimiter, (re
     res.json({
         folio: manualFolio(order.id), createdAt: sqlUtcIso(order.created_at), name: order.requester_name || '', place: order.place_name || '',
         status: !lines.length || supplied === 0 ? 'pending' : (supplied === lines.length ? 'supplied' : 'partial'), supplied,
-        lines: lines.map((l) => ({ lineNo: l.line_no, code: l.code, description: l.description, uom: l.uom, quantity: l.quantity, needBy: l.need_by || '', status: l.status === 'supplied' ? 'supplied' : 'pending' })),
+        lines: lines.map((l) => ({ lineNo: l.line_no, code: l.code, description: l.description, uom: l.uom, quantity: l.quantity, needBy: l.need_by || '', packName: l.pack_name || '', packPieces: l.pack_pieces > 0 ? l.pack_pieces : 1, status: l.status === 'supplied' ? 'supplied' : 'pending' })),
         now: new Date().toISOString(),
     });
 });
@@ -8309,8 +8331,8 @@ app.get('/api/public/pedido-manual/:token/order', publicManualLookupLimiter, (re
 // «Cerrar pedido…» del QR: la LISTA del pedido armado (o ya enviado, con su número) en PDF o Excel. Lo que sale en el archivo (código, descripción única, unidad, empresa, sitio, centro) se toma SIEMPRE del servidor a partir
 // de los artículos pedidos (id): del celular solo llegan el formato, el idioma, el nombre de quien pide, el lugar, el número de pedido (PM-0005), una hora ya escrita, y los artículos con su cantidad y su fecha. No guarda nada.
 const MANUAL_EXPORT_TEXT = {
-    es: { locale: 'es-MX', title: 'Pedido Manual', draft: 'Borrador', order: 'Pedido', company: 'Empresa', site: 'Sitio', center: 'Centro de costos', by: 'Pidió', place: 'Lugar que solicita', at: 'Fecha y hora', summary: 'Resumen', item1: '1 artículo', items: '{n} artículos', line1: '1 renglón', lines: '{n} renglones', code: 'Código', description: 'Descripción', uom: 'UdM', needBy: 'Para cuándo', quantity: 'Cantidad', asap: 'Urgente', filePrefix: 'Pedido', fileDraft: 'borrador' },
-    en: { locale: 'en-US', title: 'Manual Order', draft: 'Draft', order: 'Order', company: 'Company', site: 'Site', center: 'Cost center', by: 'Ordered by', place: 'Requesting place', at: 'Date and time', summary: 'Summary', item1: '1 item', items: '{n} items', line1: '1 line', lines: '{n} lines', code: 'Code', description: 'Description', uom: 'UoM', needBy: 'Needed by', quantity: 'Quantity', asap: 'Urgent', filePrefix: 'Order', fileDraft: 'draft' },
+    es: { locale: 'es-MX', title: 'Pedido Manual', draft: 'Borrador', order: 'Pedido', company: 'Empresa', site: 'Sitio', center: 'Centro de costos', by: 'Pidió', place: 'Lugar que solicita', at: 'Fecha y hora', summary: 'Resumen', item1: '1 artículo', items: '{n} artículos', line1: '1 renglón', lines: '{n} renglones', code: 'Código', description: 'Descripción', uom: 'UdM', needBy: 'Para cuándo', quantity: 'Cantidad', asap: 'Urgente', pack: 'Presentación', equiv: 'Equivale a', filePrefix: 'Pedido', fileDraft: 'borrador' },
+    en: { locale: 'en-US', title: 'Manual Order', draft: 'Draft', order: 'Order', company: 'Company', site: 'Site', center: 'Cost center', by: 'Ordered by', place: 'Requesting place', at: 'Date and time', summary: 'Summary', item1: '1 item', items: '{n} items', line1: '1 line', lines: '{n} lines', code: 'Code', description: 'Description', uom: 'UoM', needBy: 'Needed by', quantity: 'Quantity', asap: 'Urgent', pack: 'Presentation', equiv: 'Equivalent to', filePrefix: 'Order', fileDraft: 'draft' },
 };
 app.post('/api/public/pedido-manual/:token/export', publicManualOrderLimiter, async (req, res) => {
     const target = manualOrderTarget(req, res);
@@ -8332,7 +8354,10 @@ app.post('/api/public/pedido-manual/:token/export', publicManualOrderLimiter, as
         if (!it || !Number.isFinite(quantity) || quantity <= 0 || quantity > 999999) continue;
         const rawBy = raw && raw.needBy ? String(raw.needBy) : '';
         const needBy = /^\d{4}-\d{2}-\d{2}$/.test(rawBy) && !Number.isNaN(Date.parse(`${rawBy}T00:00:00Z`)) ? rawBy : '';
-        lines.push({ it, needBy, quantity: Math.round(quantity * 1000) / 1000 });
+        // la presentación sale del servidor (nombre y piezas), no de lo que mande el celular; una que ya no existe se trata como unidad suelta
+        const packId = Math.round(Number(raw && raw.packId)) || 0;
+        const pack = packId ? (it.packs || []).find((p) => p.id === packId) || null : null;
+        lines.push({ it, needBy, quantity: Math.round(quantity * 1000) / 1000, pack });
     }
     if (!lines.length) return res.status(400).json({ message: 'El pedido no trae artículos.', code: 'ITEMS' });
     const folio = /^PM-\d{4,}$/.test(String(body.folio || '')) ? String(body.folio) : '';
@@ -8345,14 +8370,21 @@ app.post('/api/public/pedido-manual/:token/export', publicManualOrderLimiter, as
         [L.by, oneLine(body.name, 60)], [L.place, place ? place.name : ''], [L.at, oneLine(body.when, 40)],
         [L.summary, `${itemsCount === 1 ? L.item1 : L.items.replace('{n}', itemsCount)} · ${lines.length === 1 ? L.line1 : L.lines.replace('{n}', lines.length)}`],
     ].filter(([, v]) => v);
-    const columns = [L.code, L.description, L.uom, L.needBy, L.quantity].map((label) => ({ label }));
-    const rows = lines.map(({ it, needBy, quantity }) => [it.code, it.unique || it.description, it.uom, dayText(needBy), String(quantity)]);
+    // Presentación y lo que equivale: solo se agregan si algún artículo del pedido tiene presentaciones (si ninguno, el archivo queda como siempre). La cantidad es de la presentación; «Equivale a» = cantidad × piezas de UNA presentación,
+    // en la unidad principal del código. Un artículo sin presentaciones lleva «—» en Presentación y su misma cantidad.
+    const withPacks = lines.some(({ it }) => (it.packs || []).length);
+    const columns = [L.code, L.description, L.uom, L.needBy, ...(withPacks ? [L.pack] : []), L.quantity, ...(withPacks ? [L.equiv] : [])].map((label) => ({ label }));
+    const rows = lines.map(({ it, needBy, quantity, pack }) => {
+        const hasPacks = (it.packs || []).length > 0;
+        const eq = quantity * (pack ? pack.pieces : 1);
+        return [it.code, it.unique || it.description, it.uom, dayText(needBy), ...(withPacks ? [pack ? pack.name : (hasPacks ? it.uom : '—')] : []), String(quantity), ...(withPacks ? [`${Math.round(eq * 1000) / 1000}${it.uom ? ` ${it.uom}` : ''}`] : [])];
+    });
     const fileBase = `${L.filePrefix}-${folio || L.fileDraft}_${clientLocalDay(row.clientId)}`;
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
     try {
         const title = `${L.title} · ${folio || L.draft}`;
         if (format === 'xlsx') await sendXlsxExport(res, { title: `${L.filePrefix} ${folio || L.fileDraft}`, fileBase, header, columns, rows, brand });
-        else sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: true, widths: [1.3, 3.6, 0.7, 1.7, 0.9], brand });
+        else sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: true, widths: withPacks ? [1.2, 3, 0.6, 1.5, 1.8, 0.8, 1.3] : [1.3, 3.6, 0.7, 1.7, 0.9], brand });
     } catch (err) {
         console.error('Pedido Manual: no se pudo armar el archivo del pedido', err);
         if (!res.headersSent) res.status(500).json({ message: 'No se pudo preparar el archivo.' });
@@ -8364,7 +8396,7 @@ function manualOrderRowOf(r, centers, client) {
     const cc = centers.get(r.cost_center_id);
     return {
         id: r.id, orderId: r.order_id, folio: manualFolio(r.order_id), lineNo: r.line_no, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
-        name: r.requester_name, placeId: r.place_id || 0, placeName: r.place_name || '', code: r.code, description: r.description, uom: r.uom, categories: r.categories, quantity: r.quantity, needBy: r.need_by || '',
+        name: r.requester_name, placeId: r.place_id || 0, placeName: r.place_name || '', code: r.code, description: r.description, uom: r.uom, categories: r.categories, quantity: r.quantity, needBy: r.need_by || '', packId: r.pack_id || 0, packName: r.pack_name || '', packPieces: r.pack_pieces > 0 ? r.pack_pieces : 1,
         status: r.status, statusAt: sqlUtcIso(r.status_at), statusBy: r.status_by || '', requestedAt: sqlUtcIso(r.order_created_at), receivedAt: sqlUtcIso(r.order_received_at), source: r.source,
         editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: MANUAL_ORDER_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.order_created_at }),
@@ -8457,7 +8489,7 @@ app.get('/api/business/pedido-manual/items', requireAuth, (req, res) => {
     const activePlaceIds = new Set(places.map((p) => p.id));
     const shipOf = new Map();
     if (places.length) listManualItemShips(req.user.clientId, !!req.user.isTestAccount).forEach((r) => { if (!activePlaceIds.has(r.place_id)) return; if (!shipOf.has(r.sku_item_id)) shipOf.set(r.sku_item_id, []); shipOf.get(r.sku_item_id).push([r.cost_center_id, r.place_id]); });
-    const items = manualItemsFor(req.user.clientId, !!req.user.isTestAccount).map(({ id, code, description, unique, uom, categories }) => ({ id, code, description, unique, uom, categories, centers: centersOf.get(id) || [], ...(places.length ? { ship: shipOf.get(id) || [] } : {}) }));
+    const items = manualItemsFor(req.user.clientId, !!req.user.isTestAccount).map(({ id, code, description, unique, uom, categories, packs }) => ({ id, code, description, unique, uom, categories, packs, centers: centersOf.get(id) || [], ...(places.length ? { ship: shipOf.get(id) || [] } : {}) }));
     res.set('Cache-Control', 'no-store');
     // today / maxDays: «para cuándo» (desde mañana, hasta 14 días) se cuenta con el día de la empresa; la App lo guarda para ofrecer las fechas también sin señal
     res.json({ items, places, today: clientLocalDay(req.user.clientId), maxDays: MANUAL_ORDER_MAX_DAYS, at: new Date().toISOString() });
