@@ -2168,6 +2168,9 @@
     "layoutHojaConSimbologia": "Simbología",
     "layoutSimbologiaOcultar": "Quitar la simbología de la hoja",
     "layoutSimbologiaVer": "Poner la simbología en la hoja",
+    "layoutHojaConPuertas": "Espacio de puertas",
+    "layoutPuertasOcultar": "Quitar de la hoja el espacio de las puertas (abiertas y su recorrido)",
+    "layoutPuertasVer": "Poner en la hoja el espacio de las puertas (abiertas y su recorrido)",
     "layoutAreaOcultar": "Ocultar m²",
     "layoutAreaVer": "Ver m²",
     "layoutNombresBtn": "Ver y ocultar los nombres de las zonas",
@@ -5995,7 +5998,7 @@
       "example": "ocultas los m² para que el croquis solo diga los nombres de las zonas y los vuelves a mostrar para revisar cuánto mide cada una."
     },
     "layoutSheetContent": {
-      "what": "Elige qué lleva la hoja que vas a descargar: las medidas (largo de cada pared, altura de las esquinas y medida de cada lado de las zonas), los m² de cada zona y los totales (las cifras de m² y m³ de abajo: superficie total, oficinas, pasillos, almacenamiento, espacios muertos y volumen) y la simbología (la leyenda con los colores y símbolos que salen en el croquis). Apagado, esa parte no se imprime y el croquis ocupa su lugar. Solo cambia esta descarga: lo que ves en la pantalla no se toca, y la vista previa se actualiza al momento.",
+      "what": "Elige qué lleva la hoja que vas a descargar: las medidas (largo de cada pared, altura de las esquinas y medida de cada lado de las zonas), los m² de cada zona, el espacio de las puertas (la sombra de lo que ocupa cada puerta al abrirse o al recorrer su riel, con su hoja abierta) y los totales (las cifras de m² y m³ de abajo: superficie total, oficinas, pasillos, almacenamiento, espacios muertos y volumen) y la simbología (la leyenda con los colores y símbolos que salen en el croquis). Apagado, esa parte no se imprime y el croquis ocupa su lugar. Solo cambia esta descarga: lo que ves en la pantalla no se toca, y la vista previa se actualiza al momento.",
       "example": "para pegar el Layout en la entrada apagas las medidas y la hoja sale solo con los nombres de las zonas; para el plano de obra las dejas encendidas; si el croquis es tan claro que la simbología sobra, la apagas y el mapa se hace más grande."
     },
     "layoutNames": {

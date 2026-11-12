@@ -101,8 +101,8 @@
         const leg = [];
         if (on('contorno')) leg.push(['contour', labels.contour || labels.area]);
         if (on('puertas') && (data.layout.doors || []).length) leg.push(['door', labels.door]);
-        if (on('puertas') && labels.openSwing && (data.layout.doors || []).some((d) => d.open === 'swing')) leg.push(['open:swing', labels.openSwing]);
-        if (on('puertas') && labels.openSlide && (data.layout.doors || []).some((d) => d.open === 'slide')) leg.push(['open:slide', labels.openSlide]);
+        if (on('puertas') && view.openings !== false && labels.openSwing && (data.layout.doors || []).some((d) => d.open === 'swing')) leg.push(['open:swing', labels.openSwing]);
+        if (on('puertas') && view.openings !== false && labels.openSlide && (data.layout.doors || []).some((d) => d.open === 'slide')) leg.push(['open:slide', labels.openSlide]);
         if (on('luz') && (data.layout.power || []).length) leg.push(['power', labels.power]);
         // La pared sale con su paso (Paredes) y columnas y desniveles con el suyo (Obstáculos); la leyenda solo nombra lo que se ve.
         const obstacleKinds = new Set((data.layout.obstacles || []).map((o) => o.kind));
@@ -200,7 +200,7 @@
         const innerW = frameW - 20 * f;
         const innerH = frameH - 20 * f;
         const h700 = Math.max(120, Math.round((700 * innerH) / Math.max(innerW, 1)));
-        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700, layers, measures: view.measures !== false, area: view.area !== false, names: view.names !== false, rotation: view.rotation || 0 }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+        const mapInner = window.LayoutMapSvg.mapSvg(data.layout, { theme: th, width: 700, height: h700, layers, measures: view.measures !== false, area: view.area !== false, names: view.names !== false, openings: view.openings !== false, rotation: view.rotation || 0 }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
         s += `<svg x="${frameX + 10 * f}" y="${top + 10 * f}" width="${innerW}" height="${innerH}" viewBox="0 0 700 ${h700}" preserveAspectRatio="xMidYMid meet">${mapInner}</svg>`;
         legPos.forEach(({ item: [key, text, zone], x, row }) => {
             if (tiny || !showLegend) return;

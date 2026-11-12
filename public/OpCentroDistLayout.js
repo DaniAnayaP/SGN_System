@@ -7586,7 +7586,7 @@ async function loadSheetData() {
     return { data, logoRatio: await logoRatioOf(data.logoDataUrl) };
 }
 // Con o sin medidas y m² para lo que se imprime: lo que se eligió en la ventana de descarga (si está abierta) o, si no, lo que se ve en el croquis.
-const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals: true, legend: true, rotation: state.rotation || 0 };
+const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals: true, legend: true, openings: true, rotation: state.rotation || 0 };
 function buildSheetSvgFrom(loaded) {
     const { data, logoRatio } = loaded;
     return window.LayoutSheet.buildSheetSvg({
@@ -7595,7 +7595,7 @@ function buildSheetSvgFrom(loaded) {
         url: data.url, qrRows: data.qrRows, kpis: data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
-        view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' || s === 'niveles' || s === 'ubicaciones' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, legend: sheetView().legend, rotation: sheetView().rotation },
+        view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' || s === 'niveles' || s === 'ubicaciones' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, legend: sheetView().legend, openings: sheetView().openings !== false, rotation: sheetView().rotation },
     }, sheetLabels(), Dashboard.lang, sheetOptions());
 }
 function renderSheetPreview() {
@@ -7617,6 +7617,7 @@ function ensureSheetModal() {
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-measures" data-sheet-tgl="measures" aria-pressed="true"><i class="bx bx-ruler" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConMedidas'))}</span></button>
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-area" data-sheet-tgl="area" aria-pressed="true"><i class="bx bx-area" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConM2'))}</span></button>
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-names" data-sheet-tgl="names" aria-pressed="true"><i class="bx bx-rename" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConNombres'))}</span></button>
+                <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-openings" data-sheet-tgl="openings" aria-pressed="true"><i class="bx bx-door-open" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConPuertas'))}</span></button>
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-totals" data-sheet-tgl="totals" aria-pressed="true"><i class="bx bx-bar-chart-alt-2" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConTotales'))}</span></button>
                 <button type="button" class="layout-sheet-tgl" id="layout-sheet-tgl-legend" data-sheet-tgl="legend" aria-pressed="true"><i class="bx bx-list-ul" aria-hidden="true"></i><span>${esc(t('main.layoutHojaConSimbologia'))}</span></button>
                 <button type="button" class="layout-sheet-tgl layout-sheet-rot" id="layout-sheet-rot" data-sheet-rot="1" aria-pressed="false"><i class="bx bx-rotate-right" aria-hidden="true"></i><span>${esc(t('main.layoutGirarBtn'))}</span></button></div>
@@ -7678,7 +7679,7 @@ const SHEET_LEGEND_KEY = 'sgn_layout_sheet_legend';
 function syncSheetToggles() {
     if (!sheetDialog || !sheetModalEl) return;
     // Los totales (las cifras de m² y m³ de abajo) no tienen icono propio en el croquis: quien puede descargar la hoja (Códigos QR) puede elegir si los lleva.
-    [['measures', 'canToggleMeasures', 'main.layoutMedidasOcultar', 'main.layoutMedidasVer'], ['area', 'canToggleArea', 'main.layoutAreaOcultar', 'main.layoutAreaVer'], ['names', 'canToggleNames', 'main.layoutNombresOcultar', 'main.layoutNombresVer'], ['totals', 'canUseQr', 'main.layoutTotalesOcultar', 'main.layoutTotalesVer'], ['legend', 'canUseQr', 'main.layoutSimbologiaOcultar', 'main.layoutSimbologiaVer']].forEach(([key, perm, hideKey, showKey]) => {
+    [['measures', 'canToggleMeasures', 'main.layoutMedidasOcultar', 'main.layoutMedidasVer'], ['area', 'canToggleArea', 'main.layoutAreaOcultar', 'main.layoutAreaVer'], ['names', 'canToggleNames', 'main.layoutNombresOcultar', 'main.layoutNombresVer'], ['totals', 'canUseQr', 'main.layoutTotalesOcultar', 'main.layoutTotalesVer'], ['legend', 'canUseQr', 'main.layoutSimbologiaOcultar', 'main.layoutSimbologiaVer'], ['openings', 'canUseQr', 'main.layoutPuertasOcultar', 'main.layoutPuertasVer']].forEach(([key, perm, hideKey, showKey]) => {
         const btn = sheetModalEl.querySelector(`[data-sheet-tgl="${key}"]`);
         const allowed = !!(state.perms && state.perms[perm]);
         btn.hidden = !allowed;
@@ -7708,7 +7709,7 @@ async function openSheetDialog(kind) {
     let totals = true;
     let legend = true;
     try { totals = localStorage.getItem(SHEET_TOTALS_KEY) !== '0'; legend = localStorage.getItem(SHEET_LEGEND_KEY) !== '0'; } catch (err) { /* sin almacenamiento: se incluyen */ }
-    sheetDialog = { kind, loaded, view: { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals, legend, rotation: state.rotation || 0 } };
+    sheetDialog = { kind, loaded, view: { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals, legend, openings: true, rotation: state.rotation || 0 } };
     syncSheetToggles();
     $('layout-size-w').value = sheetSize.w;
     $('layout-size-h').value = sheetSize.h;
