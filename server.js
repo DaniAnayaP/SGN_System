@@ -197,6 +197,12 @@ const {
     updateFixedAsset,
     countFixedAssetsByType,
     countFixedAssetsByClass,
+    getFixedAssetAnyScope,
+    listFixedAssetsOfCenterAnyScope,
+    listArticleCategoriesAnyScope,
+    listRawClientLayouts,
+    readRawClientLayout,
+    writeRawClientLayout,
     listSkuDistribution,
     listSkuDistributionBySku,
     getSkuDistributionById,
@@ -7086,6 +7092,8 @@ app.get('/api/business/layout', requireAuth, (req, res) => {
     res.json({
         layout: row ? row.layout : null, version: row ? row.version : 0, updatedAt: row ? row.updatedAt : '', updatedBy: row ? row.updatedBy : '',
         hasPlanImage: row ? row.hasPlanImage : false, permissions: layoutPermissions(req), costCenterId: row ? row.costCenterId : (center.id || null),
+        // Los activos del registro (Alta Activos) de este centro: los que el paso Activos puede colocar y los que ya están colocados.
+        fixedAssets: layoutFixedAssetsFor(req, row, row ? row.costCenterId : center.id),
         costCenter: costCenter ? { id: costCenter.id, code: costCenter.code, name: costCenter.name } : null,
         // Las revisiones por QR de los elementos de Seguridad (la última de cada uno y el día de la última que salió bien): con eso la pantalla calcula el estado y la próxima revisión que se recorre sola.
         safetyLast: row && (row.layout.safety || []).length ? getSafetyLast(req.user.clientId, row.costCenterId || 0) : {},
@@ -7287,6 +7295,18 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         return res.status(409).json({ code: 'COST_CENTER_REQUIRED', message: 'Ese centro de costos todavía no está completo: termina de llenarlo en Nuestros Centros Costos.' });
     }
     const existing = getClientLayout(req.user.clientId, { costCenterId: targetCenterId });
+    // Los activos vienen de Alta Activos: cada uno toma de su renglón el código, el nombre, el tipo, la clasificación y las medidas (lo que mande la pantalla no manda), y uno nuevo solo se coloca, no se crea aquí.
+    {
+        const hyd = applyFixedAssetsToLayout(body.layout, { clientId: req.user.clientId, centerId: targetCenterId, previous: existing ? existing.layout : null });
+        if (hyd.error) return res.status(400).json({ message: hyd.error.message, errors: [hyd.error.message], section: hyd.error.section });
+        if (hyd.touched) {
+            const again = LayoutCalc.sanitizeLayout(hyd.layout);
+            if (!again.ok) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: again.errors });
+            next = again.layout;
+        }
+        const knownSpaces = new Set(((existing && existing.layout.spaces) || []).map((s) => s.id));
+        if ((next.spaces || []).some((s) => !s.assetRef && !knownSpaces.has(s.id))) return res.status(400).json({ message: 'Los activos se dan de alta en Alta Activos y aquí solo se colocan: usa «+ Colocar activo».', errors: ['Los activos se dan de alta en Alta Activos y aquí solo se colocan.'], section: 'activos' });
+    }
     // Los códigos de las zonas (Z001…), de las huellas (H001… por zona) y de los activos (A001… por zona y tipo) los pone el sistema: lo que ya existía conserva el suyo y lo nuevo recibe el siguiente.
     next = LayoutCalc.lockCodes(next, existing ? existing.layout : null);
     // El nombre del sitio ya no se escribe en la pantalla: si llega vacío se conserva el que ya tenía el Layout (así no cuenta como un cambio del Contorno).
@@ -7409,7 +7429,7 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         for (const [field, type, label, end, pronoun] of catalogs) {
             const rows = new Map(listArticleCategories(req.user.clientId, type, req.user.isTestAccount).map((r) => [r.id, r]));
             for (const s of next.spaces || []) {
-                if (!s[field]) continue;
+                if (!s[field] || s.assetRef) continue; // un activo de Alta Activos ya trae su tipo y su clasificación del registro (ahí se validaron)
                 const row = rows.get(s[field]);
                 if (!row) return res.status(400).json({ message: `El espacio ${s.code || ''}: ${label} que elegiste ya no existe. Vuelve a elegir${pronoun}.`, section: 'activos' });
                 const before = prev.get(s.id);
@@ -11325,7 +11345,7 @@ function fixedAssetContext(req) {
         classes: new Map(listArticleCategories(clientId, 'activos-clasificacion', isTestAccount).map((r) => [r.id, r])),
     };
 }
-function mapFixedAsset(row, ctx, companyName, pendingByRecord) {
+function mapFixedAsset(row, ctx, companyName, pendingByRecord, placements) {
     const cc = ctx.centers.get(row.cost_center_id);
     const type = ctx.types.get(row.type_id);
     const cls = ctx.classes.get(row.class_id);
@@ -11337,6 +11357,8 @@ function mapFixedAsset(row, ctx, companyName, pendingByRecord) {
         shape: row.shape, height: row.height_cm, length: row.length_cm, depth: row.depth_cm, weight: row.weight_kg, volume: row.volume_m3,
         evidenceFront: row.evidence_front, evidenceBack: row.evidence_back, evidenceLeft: row.evidence_left, evidenceRight: row.evidence_right, evidenceTop: row.evidence_top, evidenceBottom: row.evidence_bottom,
         showInLayout: !!row.show_in_layout,
+        // dónde está dibujado (zona › huella) en el Layout de su centro; '' = no está colocado. En las respuestas de un solo renglón no se manda (la pantalla conserva el que tenía).
+        ...(placements ? { placement: placements.get(row.id) || '' } : {}),
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({ companyName, area: FIXED_ASSET_AREA_LABEL, modulo: FIXED_ASSET_MODULE_LABEL, pantalla: FIXED_ASSET_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: row.created_at }),
     };
@@ -11395,6 +11417,100 @@ function fixedAssetSanitizers(ctx) {
         ...Object.fromEntries(FIXED_ASSET_PHOTO_KEYS.map((k) => [k, (v) => (v ? '[imagen]' : '')])),
     };
 }
+// --- Activos del Layout que vienen de Alta Activos -------------------------------------------------------------------------------------------------------
+// Un activo del Layout (layout.spaces[].assetRef) es un renglón de Alta Activos: su código, su nombre, su tipo, su clasificación y sus medidas los manda el registro (LayoutCalc.applyAssetToSpace). En el Layout solo se colocan (en qué
+// huella van, sus niveles…). Al guardar el Layout el servidor vuelve a poner lo del registro (lo que mande la pantalla no manda) y al cambiar el registro se actualiza el Layout guardado (syncFixedAssetIntoLayout).
+function layoutAssetInfo(row) {
+    return { id: row.id, code: fixedAssetCodeOf(row), customName: row.custom_name, purchaseName: row.purchase_name, typeId: row.type_id || 0, classId: row.class_id || 0, length: row.length_cm, depth: row.depth_cm, height: row.height_cm };
+}
+function layoutAssetCatalogs(clientId) {
+    return {
+        types: new Map(listArticleCategoriesAnyScope(clientId, 'activos-fijos').map((r) => [r.id, r])),
+        classes: new Map(listArticleCategoriesAnyScope(clientId, 'activos-clasificacion').map((r) => [r.id, r])),
+    };
+}
+function layoutAssetOpts(row, cat) {
+    const type = cat.types.get(row.type_id);
+    const cls = cat.classes.get(row.class_id);
+    return { typeKind: type ? type.kind || '' : '', metric: cls ? cls.kind || '' : '' };
+}
+// El Layout que llega a guardarse: cada activo con assetRef toma del registro lo suyo. Valida que exista, que sea de este centro de costos, que no esté dos veces y que uno recién colocado esté activo, aparezca en el Layout y tenga medidas.
+function applyFixedAssetsToLayout(layoutIn, { clientId, centerId, previous }) {
+    const spaces = Array.isArray(layoutIn && layoutIn.spaces) ? layoutIn.spaces : [];
+    if (!spaces.some((s) => s && s.assetRef)) return { layout: layoutIn, touched: false };
+    const cat = layoutAssetCatalogs(clientId);
+    const before = new Set(((previous && previous.spaces) || []).map((s) => Number(s.assetRef)).filter(Boolean));
+    const seen = new Set();
+    const out = [];
+    for (const s of spaces) {
+        const ref = Math.round(Number(s && s.assetRef));
+        if (!(ref > 0)) { out.push(s); continue; }
+        const fail = (message) => ({ error: { message, section: 'activos' } });
+        const row = getFixedAssetAnyScope(ref, clientId);
+        if (!row) return fail('Un activo del Layout ya no existe en Alta Activos. Quítalo de la lista.');
+        const code = fixedAssetCodeOf(row);
+        if (row.cost_center_id !== centerId) return fail(`El activo ${code} es de otro centro de costos.`);
+        if (seen.has(ref)) return fail(`El activo ${code} está colocado dos veces: cada activo va una sola vez en el Layout.`);
+        seen.add(ref);
+        if (!before.has(ref)) {
+            if (row.status !== 'active') return fail(`El activo ${code} está desactivado en Alta Activos: actívalo para colocarlo.`);
+            if (!row.show_in_layout) return fail(`El activo ${code} no aparece en el Layout (Alta Activos > Aparece en el Layout).`);
+            if (!(row.length_cm > 0 && row.depth_cm > 0 && row.height_cm > 0)) return fail(`El activo ${code} no tiene largo, profundidad y alto en Alta Activos: captúralos para poder dibujarlo.`);
+        }
+        out.push(LayoutCalc.applyAssetToSpace(s, layoutAssetInfo(row), layoutAssetOpts(row, cat)));
+    }
+    return { layout: { ...layoutIn, spaces: out }, touched: true };
+}
+// Cambió algo del renglón (nombre, medidas, clasificación…): el Layout guardado de su centro lo recibe sin cambiar su versión.
+function syncFixedAssetIntoLayout(clientId, row) {
+    if (!row) return;
+    const raw = readRawClientLayout(clientId, row.cost_center_id);
+    if (!raw || !Array.isArray(raw.spaces) || !raw.spaces.some((s) => s && s.assetRef === row.id)) return;
+    const cat = layoutAssetCatalogs(clientId);
+    raw.spaces = raw.spaces.map((s) => (s && s.assetRef === row.id ? LayoutCalc.applyAssetToSpace(s, layoutAssetInfo(row), layoutAssetOpts(row, cat)) : s));
+    writeRawClientLayout(clientId, row.cost_center_id, raw);
+}
+// ¿Está este activo dibujado en el Layout de su centro? (no se desactiva ni se le quita «Aparece en el Layout» mientras lo esté)
+function fixedAssetPlacementOf(clientId, row) {
+    const raw = readRawClientLayout(clientId, row.cost_center_id);
+    const space = raw && Array.isArray(raw.spaces) ? raw.spaces.find((s) => s && s.assetRef === row.id) : null;
+    if (!space) return null;
+    const fp = (raw.footprints || []).find((f) => f.id === space.footprintId);
+    const zone = fp ? (raw.zones || []).find((z) => z.id === fp.zoneId) : null;
+    return { zone: zone ? (zone.name || zone.code || '') : '', footprint: fp ? fp.code || '' : '' };
+}
+const placementText = (p) => (p ? [p.zone, p.footprint].filter(Boolean).join(' › ') || '—' : '');
+// Dónde está cada activo del cliente (id → texto «Zona › huella»), de los Layouts guardados.
+function fixedAssetPlacementsMap(clientId) {
+    const map = new Map();
+    listRawClientLayouts(clientId).forEach(({ layout }) => {
+        const zones = new Map((layout.zones || []).map((z) => [z.id, z]));
+        const fps = new Map((layout.footprints || []).map((f) => [f.id, f]));
+        (layout.spaces || []).forEach((s) => {
+            if (!s || !s.assetRef) return;
+            const fp = fps.get(s.footprintId);
+            const zone = fp ? zones.get(fp.zoneId) : null;
+            map.set(s.assetRef, placementText({ zone: zone ? (zone.name || zone.code || '') : '', footprint: fp ? fp.code || '' : '' }));
+        });
+    });
+    return map;
+}
+// Los activos del centro de costos que el Layout ofrece para colocar (y los ya colocados), con lo que hace falta para dibujarlos. Medidas en cm.
+function layoutFixedAssetsFor(req, layoutRow, centerId) {
+    if (!centerId) return [];
+    const { clientId, isTestAccount } = req.user;
+    const cat = layoutAssetCatalogs(clientId);
+    const refs = new Set(((layoutRow && layoutRow.layout.spaces) || []).map((s) => s.assetRef).filter(Boolean));
+    return listFixedAssetsOfCenterAnyScope(clientId, centerId).filter((a) => !!a.is_test_data === !!isTestAccount || refs.has(a.id)).map((a) => {
+        const type = cat.types.get(a.type_id);
+        const cls = cat.classes.get(a.class_id);
+        return {
+            id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name, purchaseName: a.purchase_name, customName: a.custom_name,
+            typeId: a.type_id || 0, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
+            shape: a.shape, length: a.length_cm, depth: a.depth_cm, height: a.height_cm, status: a.status, showInLayout: !!a.show_in_layout,
+        };
+    });
+}
 app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
@@ -11403,7 +11519,7 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
     const pendingByRecord = getPendingColumnsByRecord(clientId, FIXED_ASSET_TABLE_KEY);
     res.set('Cache-Control', 'no-store');
     res.json({
-        assets: listFixedAssets(clientId, isTestAccount).map((r) => mapFixedAsset(r, ctx, client?.company_name, pendingByRecord)),
+        assets: listFixedAssets(clientId, isTestAccount).map((r) => mapFixedAsset(r, ctx, client?.company_name, pendingByRecord, fixedAssetPlacementsMap(clientId))),
         types: [...ctx.types.values()].filter((t) => t.name).map((t) => ({ id: t.id, name: t.name, letter: t.letter || '', kind: t.kind || '', active: t.status === 'active' })),
         classes: [...ctx.classes.values()].filter((c) => c.name).map((c) => ({ id: c.id, name: c.name, metric: c.kind || '', active: c.status === 'active' })),
         costCenters: [...ctx.centers.values()].map((c) => ({ id: c.id, name: c.name, code: c.code || '' })),
@@ -11460,6 +11576,11 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
     const norm = normalizeFixedAssetValues(raw, ctx, existing);
     if (norm.error) return res.status(norm.error.status).json({ message: norm.error.message, code: norm.error.code });
     if ('purchaseName' in norm.values && !norm.values.purchaseName) return res.status(400).json({ message: 'El nombre de compra no puede quedar vacío.', code: 'NAME' });
+    // un activo dibujado en el Layout no deja de aparecer en él mientras lo esté (primero se quita del Layout)
+    if (norm.values.showInLayout === 0 && existing.show_in_layout) {
+        const placed = fixedAssetPlacementOf(clientId, existing);
+        if (placed) return res.status(409).json({ message: `El activo ${fixedAssetCodeOf(existing)} está dibujado en el Layout (${placementText(placed)}). Quítalo del Layout primero.`, code: 'PLACED' });
+    }
     if ('volume' in raw && (raw.shape || existing.shape) !== 'irregular') return res.status(400).json({ message: 'El volumen se calcula solo con las medidas. Solo en la forma Irregular se escribe.', code: 'VOLUME_CALC' });
     if ('depth' in raw && (raw.shape || existing.shape) === 'cilindrica') return res.status(400).json({ message: 'En una forma cilíndrica la profundidad es igual al largo (el diámetro).', code: 'DEPTH_CALC' });
     // lo que solo se calcula (la profundidad de una cilíndrica, el volumen de una forma que lo calcula) no se pide como permiso aparte: viaja con la medida que lo causa
@@ -11472,6 +11593,7 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
         ['depth', 'volume'].forEach((key) => { if (!(key in appliedPatch) && key in recomputed) appliedPatch[key] = recomputed[key]; });
     }
     const row = updateFixedAsset(existing.id, clientId, appliedPatch, isTestAccount);
+    syncFixedAssetIntoLayout(clientId, row); // el Layout guardado recibe el nombre, las medidas, la clasificación… nuevos
     const client = getClientById(clientId);
     res.json({ asset: mapFixedAsset(row, ctx, client?.company_name, null), pendingFields, rejectedFields, conflictFields });
 });
@@ -11483,6 +11605,10 @@ app.post('/api/business/fixed-assets/:id/status', requireAuth, requireCostCenter
     if (!existing) return res.status(404).json({ message: 'Asset not found.' });
     if (!fixedAssetCanDelete(req)) return res.status(403).json({ message: 'No tienes permiso para desactivar activos.' });
     const status = req.body && req.body.status === 'inactive' ? 'inactive' : 'active';
+    if (status === 'inactive' && existing.status === 'active') {
+        const placed = fixedAssetPlacementOf(clientId, existing);
+        if (placed) return res.status(409).json({ message: `El activo ${fixedAssetCodeOf(existing)} está dibujado en el Layout (${placementText(placed)}). Quítalo del Layout primero.`, code: 'PLACED' });
+    }
     if (status === existing.status) return res.json({ asset: mapFixedAsset(existing, fixedAssetContext(req), getClientById(clientId)?.company_name, null) });
     const code = fixedAssetCodeOf(existing);
     logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey: 'main.colActEstatus', oldValue: FIXED_ASSET_STATUS_LABELS[existing.status], newValue: FIXED_ASSET_STATUS_LABELS[status], changedBy: changedByLabel(req) });
@@ -12890,7 +13016,9 @@ const PENDING_CHANGE_APPLIERS = {
         const existing = getFixedAssetById(recordId, clientId, false) || getFixedAssetById(recordId, clientId, true);
         if (!existing) return null;
         const norm = normalizeFixedAssetValues(patch, { classes: new Map(listArticleCategories(clientId, 'activos-clasificacion', !!existing.is_test_data).map((r) => [r.id, r])) }, existing);
-        return updateFixedAsset(recordId, clientId, norm.values || {}, !!existing.is_test_data);
+        const updated = updateFixedAsset(recordId, clientId, norm.values || {}, !!existing.is_test_data);
+        syncFixedAssetIntoLayout(clientId, updated);
+        return updated;
     },
 };
 const PENDING_CHANGE_SANITIZERS = {

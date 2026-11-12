@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 const TABLE_KEY = 'alta-activos';
 const ACTIVE_PAGE = 'cat-operaciones-centro-dist-alta-activos';
-const COLUMN_COUNT = 36;
+const COLUMN_COUNT = 37;
 const SHAPES = ['rectangular', 'cilindrica', 'irregular'];
 
 let assets = []; // todo lo que mandó el servidor
@@ -256,7 +256,7 @@ async function patchAsset(record, patch) {
 }
 // Lo que respondió el servidor al guardar: solo esa fila se vuelve a dibujar.
 function applySaved(updated, previous) {
-    const merged = { ...updated, pendingFields: (previous && previous.pendingFields) || [] };
+    const merged = { ...updated, placement: updated.placement !== undefined ? updated.placement : ((previous && previous.placement) || ''), pendingFields: (previous && previous.pendingFields) || [] };
     const at = assets.findIndex((r) => r.id === merged.id);
     if (at >= 0) assets[at] = merged;
     const tr = getTbody().querySelector(`tr[data-record-id="${merged.id}"]`);
@@ -308,6 +308,7 @@ function buildRow(record) {
             items: [{ value: '0', label: Dashboard.t('main.assetNo') }, { value: '1', label: Dashboard.t('main.assetYes') }], current: record.showInLayout ? '1' : '0', currentLabel: record.showInLayout ? Dashboard.t('main.assetYes') : '',
             helpKey: 'assetInLayout', toPatch: (v) => ({ showInLayout: v === '1' }),
         }),
+        textCell('colActDondeEsta', record.placement, 'assetWhere'), // dónde está dibujado en el Layout (zona › huella); se llena solo, desde el Layout
         buildActionsCell(record),
     );
     tr.classList.toggle('data-table-row-editable', !!tr.querySelector('td.editable-cell'));

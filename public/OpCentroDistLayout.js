@@ -1833,14 +1833,19 @@ function stepHtml(step) {
             const saved = isSavedRow('spaces', s.id);
             const fp = d.footprints.find((f) => f.id === s.footprintId);
             const zone = fp ? (fp.zoneId || '') : (zonePick.get(s.id) || '');
-            const letter = LC.ASSET_LETTER[s.type] || LC.ASSET_LETTER.rack;
-            const nameCell = `<td><input type="text" maxlength="${LC.LIMITS.text}" data-l="spaces" data-i="${i}" data-k="ownName" data-help-key="layoutActivoNombre" value="${esc(s.ownName || '')}" placeholder="${esc(fp && fp.name ? fp.name : '')}"${dis ? ' disabled' : ''}></td>`;
+            // Un activo que viene de Alta Activos (assetRef): su código, nombre, tipo, clasificación y medidas se leen y se cambian allá; aquí solo se acomoda (huella, niveles, frente, caras).
+            const ref = !!s.assetRef;
+            const reg = ref ? (state.fixedAssets || []).find((a) => a.id === s.assetRef) : null; // el renglón del registro: de ahí salen los nombres si el catálogo no los trae a esta cuenta
+            const letter = ref ? String(s.code || '').charAt(0).toUpperCase() : (LC.ASSET_LETTER[s.type] || LC.ASSET_LETTER.rack);
+            const calcText = (text) => `<td class="layout-calc" title="${esc(t('main.layoutActivoDeRegistro'))}" data-help-key="layoutActivoDeRegistro">${esc(text || '—')}</td>`;
+            const nameOf = (list, id) => (list.find((r) => r.id === id) || {}).name || '';
+            const nameCell = ref ? calcText(s.ownName) : `<td><input type="text" maxlength="${LC.LIMITS.text}" data-l="spaces" data-i="${i}" data-k="ownName" data-help-key="layoutActivoNombre" value="${esc(s.ownName || '')}" placeholder="${esc(fp && fp.name ? fp.name : '')}"${dis ? ' disabled' : ''}></td>`;
             const levelsCell = metricOf(s.assetClassId) === 'm2'
                 ? `<td><input type="number" step="1" data-l="spaces" data-i="${i}" data-k="levels" data-help-key="layoutActivoNivelFijo" value="${s.levels || 1}" title="${esc(t('main.layoutActivoNivelFijo'))}" disabled></td>`
                 : cellNum('spaces', i, 'levels', s.levels || 1, dis, '1');
-            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td>${nameCell}<td><select data-zone-pick="${esc(s.id)}" data-help-key="layoutActivoZona"${dis ? ' disabled' : ''}>${zoneOptions(zone)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId" data-help-key="layoutActivoZona"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptionsIn(zone, s.footprintId)}</select></td>${pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}<td class="layout-calc" data-help-key="layoutSpaceLetter"><b>${esc(letter)}</b></td>${levelsCell}${ownCells(s, i, dis, ['ol', 'od', 'oh'])}${frontCellHtml(s, i, dis)}${facesCellHtml('space', i, 0, 0, LC.facesOfSpace(s), null, s.faces !== undefined, dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
+            return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-sp-code="${i}">${esc(s.code || '')}</b></td>${nameCell}<td><select data-zone-pick="${esc(s.id)}" data-help-key="layoutActivoZona"${dis ? ' disabled' : ''}>${zoneOptions(zone)}</select></td><td><select data-l="spaces" data-i="${i}" data-k="footprintId" data-help-key="layoutActivoZona"${s.footprintId ? '' : ' class="layout-missing"'}${dis ? ' disabled' : ''}>${footprintOptionsIn(zone, s.footprintId)}</select></td>${ref ? calcText(nameOf(assetLists.classes, s.assetClassId) || (reg && reg.className)) : pick(i, 'assetClassId', 'layoutAssetClass', assetLists.classes, s.assetClassId)}${ref ? calcText(nameOf(assetLists.types, s.assetId) || (reg && reg.typeName)) : pick(i, 'assetId', 'layoutAssetType', assetLists.types, s.assetId)}<td class="layout-calc" data-help-key="layoutSpaceLetter"><b>${esc(letter)}</b></td>${levelsCell}${ownCells(s, i, dis || ref, ['ol', 'od', 'oh'])}${frontCellHtml(s, i, dis)}${facesCellHtml('space', i, 0, 0, LC.facesOfSpace(s), null, s.faces !== undefined, dis)}${saved ? savedRowButtons('spaces', i, s.off !== true, dis, assetFmtButton(s, i, dis)) : removeCell('spaces', i, dis, assetFmtButton(s, i, dis))}</tr>`;
         });
-        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutHuellaCol', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutActivoLetra', 'main.layoutNiveles', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutFrente', 'main.layoutCarasConsumo', ''], rows, 'layout-activos')}${state.perms && state.perms.canRenumber && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
+        return d.footprints.length ? `${table(['main.layoutCodigo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutHuellaCol', 'main.layoutActivoClase', 'main.layoutActivoTipo', 'main.layoutActivoLetra', 'main.layoutNiveles', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutFrente', 'main.layoutCarasConsumo', ''], rows, 'layout-activos')}${canEdit('activos') && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-place-assets="1" data-main-add="1" data-help-key="layoutColocarActivo">${esc(t('main.layoutColocarActivo'))}</button>` : ''}${state.perms && state.perms.canRenumber && !dis && d.spaces.some((x) => !x.assetRef) ? `<button type="button" class="btn btn-secondary layout-add" data-renumber-codes="1" data-main-add="1" data-help-key="layoutRenumerar">${esc(t('main.layoutRenumerarBtn'))}</button>` : ''}` : `<p class="layout-muted">${esc(t('main.layoutActivosSinEspacios'))}</p>`;
     }
     const zoneOptions = (selected) => `<option value="">—</option>${d.zones.map((z) => `<option value="${esc(z.id)}"${z.id === selected ? ' selected' : ''}>${esc(z.name)}</option>`).join('')}`;
     // Cada renglón es una HUELLA: el lugar en el piso. Al agregar una nace con 0 activos; la columna «Activos» pide cuántos lleva y los activos salen (ya ligados a esta huella) en el paso Activos, donde se les pone su tipo y medidas.
@@ -1848,7 +1853,7 @@ function stepHtml(step) {
         const saved = isSavedRow('footprints', s.id);
         const view = footprintZoneView(s);
         const actCount = d.spaces.filter((x) => x.footprintId === s.id).length;
-        const actCell = `<td><input type="number" min="0" max="${FP_ACTIVOS_MAX}" step="1" data-l="footprints" data-i="${i}" data-k="actCount" data-help-key="layoutHuellaActivos" value="${actCount}"${dis || !canEdit('activos') ? ' disabled' : ''}></td>`;
+        const actCell = `<td class="layout-calc" data-help-key="layoutHuellaActivos">${actCount}</td>`;
         return `<tr class="${s.active === false ? 'layout-off' : ''}"><td class="layout-calc"><b data-fp-code="${i}">${esc(s.code)}</b></td>${cellText('footprints', i, 'name', s.name || '', dis)}<td class="layout-calc${view.bad ? ' layout-bad' : ''}" data-fp-zone="${i}" data-help-key="layoutHuellaZona">${esc(view.text)}</td>${cellNum('footprints', i, 'x', s.x, dis)}${cellNum('footprints', i, 'y', s.y, dis)}${cellNum('footprints', i, 'l', s.l, dis)}${cellNum('footprints', i, 'd', s.d, dis)}${cellNum('footprints', i, 'h', s.h, dis)}${actCell}<td class="layout-calc" data-space-calc="${i}">${fmt(s.l * s.d)} m² · ${fmt(s.l * s.d * s.h)} m³</td>${saved ? savedRowButtons('footprints', i, s.active, dis, spaceFmtButton(s, i, dis)) : removeCell('footprints', i, dis, spaceFmtButton(s, i, dis))}</tr>`;
     });
     return `${table(['main.layoutCodigoHuella', 'main.layoutNombre', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutLargo', 'main.layoutFondo', 'main.layoutAlto', 'main.layoutHuellaActivos', 'main.layoutHuellaVolumen', ''], rows, 'layout-espacios')}${addButton('footprints', 'main.layoutAgregarEspacio', dis, true)}`;
@@ -1963,31 +1968,6 @@ function newPositionIn(sp, n, c) {
     state.draft.positions.push(pos);
     state.draft.posNext = { ...(state.draft.posNext || {}), [key]: next };
     return pos;
-}
-// La cantidad de activos de una huella (la columna «Activos» del paso Huella): son los renglones del paso Activos que van en esa huella. Al subirla nacen activos nuevos (sin tipo, ligados a la huella; el largo de la huella se
-// reparte entre ellos como siempre); al bajarla se quitan los últimos que todavía no se guardan. Un activo ya guardado no se quita desde aquí (se elimina o se desactiva en Activos, con su permiso y su aviso). Regresa true si algo cambió.
-const FP_ACTIVOS_MAX = 100;
-function setActivoCount(i, raw) {
-    const d = state.draft;
-    const f = d && d.footprints[i];
-    if (!f || !canEdit('espacios') || !canEdit('activos')) return false;
-    const want = Math.max(0, Math.min(FP_ACTIVOS_MAX, Math.round(Number(raw)) || 0));
-    const mine = d.spaces.filter((s) => s.footprintId === f.id);
-    if (want === mine.length) return false;
-    if (want > mine.length) {
-        if (d.spaces.length + (want - mine.length) > LC.LIMITS.spaces) { Dashboard.showToast(t('main.layoutHuellaActivosTope', { n: LC.LIMITS.spaces }), 'warning'); return false; }
-        clearFilterOf('activos');
-        for (let k = mine.length; k < want; k += 1) { const s = ROW_FACTORY.spaces(); s.footprintId = f.id; d.spaces.push(s); }
-        return true;
-    }
-    let drop = mine.length - want;
-    const gone = new Set();
-    for (let k = mine.length - 1; k >= 0 && drop > 0; k -= 1) {
-        if (!isSavedRow('spaces', mine[k].id)) { gone.add(mine[k].id); drop -= 1; }
-    }
-    if (gone.size) d.spaces = d.spaces.filter((s) => !gone.has(s.id));
-    if (drop > 0) Dashboard.showToast(t('main.layoutHuellaActivosGuardados', { n: drop }), 'warning');
-    return gone.size > 0;
 }
 // La cantidad de posiciones de un espacio (la columna «Posiciones» del paso Espacios): son las que salen en la tabla de Posiciones. Si todas siguen siendo de fábrica, el espacio se parte en esa cantidad de posiciones
 // iguales (de izquierda a derecha) que siguen su tamaño; si ya se acomodaron a mano, se agregan al final o se quitan las últimas. Regresa true si algo cambió.
@@ -4957,6 +4937,68 @@ function showEditor() {
 }
 
 // ---- cargar el Layout guardado -----------------------------------------------------------------------------------------
+// ---- Colocar activos de Alta Activos (paso Activos) -------------------------------------------------------------------------------------------------------
+// Los activos del Layout no se crean aquí: se dan de alta en Alta Activos y aquí solo se colocan (en qué huella van). La lista trae los del centro de costos que aparecen en el Layout (Alta Activos > «Aparece en el Layout» = Sí), están
+// activos y todavía no están colocados; uno sin largo, profundidad y alto no se puede dibujar. Al colocarlo toma de su renglón el código, el nombre, el tipo, la clasificación y las medidas (LayoutCalc.applyAssetToSpace).
+let placeModalEl = null;
+function closePlaceAssets() { if (placeModalEl) placeModalEl.hidden = true; }
+function openPlaceAssets() {
+    const d = state.draft;
+    if (!d || !canEdit('activos')) return;
+    const placed = new Set(d.spaces.map((s) => s.assetRef).filter(Boolean));
+    const list = (state.fixedAssets || []).filter((a) => a.status === 'active' && a.showInLayout && !placed.has(a.id));
+    const dimsOk = (a) => a.length > 0 && a.depth > 0 && a.height > 0;
+    if (!placeModalEl) {
+        placeModalEl = document.createElement('div');
+        placeModalEl.className = 'modal-overlay';
+        placeModalEl.hidden = true;
+        document.body.appendChild(placeModalEl);
+        placeModalEl.addEventListener('click', (event) => { if (event.target === placeModalEl || event.target.closest('[data-place-cancel]')) closePlaceAssets(); });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && placeModalEl && !placeModalEl.hidden) closePlaceAssets(); });
+    }
+    const zoneOptions = `<option value="">${esc(t('main.layoutActivoElegirZona'))}</option>${d.zones.filter((z) => z.active !== false).map((z) => `<option value="${esc(z.id)}">${esc(z.name || z.code)}</option>`).join('')}`;
+    const rows = list.map((a) => `<label class="layout-place-row${dimsOk(a) ? '' : ' is-off'}" data-place-text="${esc(`${a.code} ${a.name} ${a.typeName} ${a.className}`.toLowerCase())}"><input type="checkbox" data-place-asset="${a.id}"${dimsOk(a) ? '' : ' disabled'}> <b>${esc(a.code)}</b> · ${esc(a.name)} <small>${esc(a.typeName || '—')} · ${a.length} × ${a.depth} × ${a.height} cm${dimsOk(a) ? '' : ` ${esc(t('main.layoutColocarSinMedidas'))}`}</small></label>`).join('');
+    placeModalEl.innerHTML = `<div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="layout-place-title">
+        <h3 id="layout-place-title" data-help-key="layoutColocarActivo">${esc(t('main.layoutColocarTitulo'))}</h3>
+        <div class="admin-form-grid">
+            <div class="admin-field"><label for="layout-place-zone">${esc(t('main.layoutZona'))}</label><select id="layout-place-zone">${zoneOptions}</select></div>
+            <div class="admin-field"><label for="layout-place-fp">${esc(t('main.layoutHuellaCol'))}</label><select id="layout-place-fp"><option value="">${esc(t('main.layoutActivoElegirHuella'))}</option></select></div>
+        </div>
+        ${list.length ? `<input type="search" id="layout-place-search" placeholder="${esc(t('main.layoutColocarBuscar'))}" style="width:100%; margin-top:.6rem;"><div class="layout-place-list">${rows}</div>` : `<p class="layout-muted">${esc(t('main.layoutColocarVacio'))}</p>`}
+        <div id="layout-place-error" class="admin-error" role="alert" hidden></div>
+        <div class="admin-form-actions">
+            <button type="button" class="btn" id="layout-place-ok"${list.length ? '' : ' disabled'}>${esc(t('main.layoutColocarBtn'))}</button>
+            <button type="button" class="btn btn-secondary" data-place-cancel>${esc(t('admin.cancel'))}</button>
+        </div>
+    </div>`;
+    const err = (key) => { const el = placeModalEl.querySelector('#layout-place-error'); el.textContent = t(key); el.hidden = false; };
+    placeModalEl.querySelector('#layout-place-zone').addEventListener('change', (event) => {
+        const fps = d.footprints.filter((f) => f.zoneId === event.target.value);
+        placeModalEl.querySelector('#layout-place-fp').innerHTML = `<option value="">${esc(t('main.layoutActivoElegirHuella'))}</option>${fps.map((f) => `<option value="${esc(f.id)}">${esc(f.code)}${f.name ? ` · ${esc(f.name)}` : ''}</option>`).join('')}`;
+    });
+    const search = placeModalEl.querySelector('#layout-place-search');
+    if (search) search.addEventListener('input', () => { const q = search.value.trim().toLowerCase(); placeModalEl.querySelectorAll('.layout-place-row').forEach((row) => { row.hidden = !!q && !row.dataset.placeText.includes(q); }); });
+    placeModalEl.querySelector('#layout-place-ok').addEventListener('click', () => {
+        const footprintId = placeModalEl.querySelector('#layout-place-fp').value;
+        if (!footprintId) { err('main.layoutColocarSinHuella'); return; }
+        const picked = Array.from(placeModalEl.querySelectorAll('[data-place-asset]:checked')).map((el) => Number(el.dataset.placeAsset));
+        if (!picked.length) { err('main.layoutColocarSinElegir'); return; }
+        if (d.spaces.length + picked.length > LC.LIMITS.spaces) { Dashboard.showToast(t('main.layoutHuellaActivosTope', { n: LC.LIMITS.spaces }), 'warning'); return; }
+        clearFilterOf('activos');
+        picked.forEach((id) => {
+            const a = (state.fixedAssets || []).find((x) => x.id === id);
+            if (!a) return;
+            const s = LC.applyAssetToSpace(ROW_FACTORY.spaces(), a, { typeKind: a.typeKind, metric: a.metric });
+            s.footprintId = footprintId;
+            d.spaces.push(s);
+        });
+        closePlaceAssets();
+        panelScrollEnd = true;
+        renderPanel();
+        refreshLive();
+    });
+    placeModalEl.hidden = false;
+}
 // Las clasificaciones y los tipos de activo del cliente (catálogos Nuestras Clasificaciones de Activos y Nuestros Activos Fijos). Si no se pueden leer, el paso Activos sale sin opciones.
 async function loadAssetLists() {
     const read = async (type) => {
@@ -5020,6 +5062,7 @@ async function loadLayoutNow(opts = {}) {
     state.version = body.version;
     state.saved = body.layout;
     state.safetyLast = body.safetyLast || {};
+    state.fixedAssets = body.fixedAssets || []; // los activos de Alta Activos de este centro (los que se pueden colocar y los colocados)
     sfLastFetchedAt = Date.now();
     state.creating = false;
     state.planNew = false;
@@ -5284,10 +5327,6 @@ function onEdit(event) {
         if (row.lvl2 !== undefined && !row.rise) row.rise = 'right';
         if (row.lvl2 === undefined) delete row.rise;
         if (event.type === 'change') renderPanel();
-    } else if (list === 'footprints' && el.getAttribute('data-k') === 'actCount') {
-        // la cantidad de activos de la huella se aplica al terminar de escribir (no con cada tecla); si no se pudo del todo, el número vuelve a ser el real
-        if (event.type === 'change') { setActivoCount(Number(el.getAttribute('data-i')), value); renderPanel(); refreshLive(); }
-        return;
     } else if (list === 'bay') {
         // Un espacio (nivel × espacio) de un activo: solo se guarda lo que se cambió; lo que vuelve a ser como lo de por defecto se quita.
         const space = state.draft.spaces[Number(el.getAttribute('data-i'))];
@@ -5627,6 +5666,7 @@ $('layout-panel').addEventListener('click', (event) => {
     if (szOpen) { openSensorZonesPop(Number(szOpen.dataset.szOpen), szOpen); return; }
     const szDel = event.target.closest('[data-sz-del]');
     if (szDel) { toggleSensorZone(szDel.dataset.szDel, false); return; }
+    if (event.target.closest('[data-place-assets]')) { openPlaceAssets(); return; }
     const addObj = event.target.closest('[data-add-object]');
     if (addObj) { addObject(); return; }
     const lvApply = event.target.closest('[data-lvl-apply]');

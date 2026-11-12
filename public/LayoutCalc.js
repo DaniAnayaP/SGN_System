@@ -1659,6 +1659,8 @@
             const used = new Set();
             const kept = new Set();
             indexes.forEach((i) => {
+                // un activo que viene de Alta Activos (assetRef) conserva SU código tal cual (R001, L001…): lo manda el registro, no su tipo
+                if (out[i].assetRef && String(out[i].code == null ? '' : out[i].code).trim()) { const kc = String(out[i].code).trim(); if (kc[0].toUpperCase() === (ASSET_LETTER[type] || 'A')) used.add(kc); kept.add(i); return; }
                 if (!isSpaceCode(out[i].code, type)) return;
                 const code = spaceCodeOf(type, Number(String(out[i].code).trim().slice(1)));
                 if (used.has(code)) return;
@@ -1684,7 +1686,7 @@
     function renumberSpaceCodes(layout) {
         if (!layout || !Array.isArray(layout.spaces)) return layout;
         const groups = new Map();
-        layout.spaces.forEach((s, i) => { const key = `${s.zoneId || ''}|${s.type || 'rack'}`; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(i); });
+        layout.spaces.forEach((s, i) => { if (s.assetRef) return; /* los de Alta Activos no se renumeran: su código es del registro */ const key = `${s.zoneId || ''}|${s.type || 'rack'}`; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(i); });
         const spaces = layout.spaces.slice();
         let changed = false;
         groups.forEach((indexes, key) => {
@@ -1718,6 +1720,7 @@
         if (Array.isArray(out.spaces)) {
             const before = new Map(((previous && previous.spaces) || []).map((s) => [s.id, s]));
             const spaces = out.spaces.map((s) => {
+                if (s.assetRef) return s; // el código de un activo de Alta Activos es del registro: no se toca
                 const was = before.get(s.id);
                 let code = '';
                 if (was && (was.zoneId || '') === (s.zoneId || '') && (was.type || 'rack') === (s.type || 'rack')) code = was.code;
@@ -1733,6 +1736,29 @@
         const before = new Map(((previous && previous.footprints) || []).map((f) => [f.id, f]));
         const footprints = next.footprints.map((f) => { const was = before.get(f.id); const code = was && (was.zoneId || '') === (f.zoneId || '') ? was.code : ''; return code === f.code ? f : { ...f, code }; });
         return assignHuellaCodes({ ...next, footprints });
+    }
+    // Lo que el registro de Alta Activos le da al activo del Layout: su código, su nombre (el personalizado y, sin él, el de compra), su tipo y su clasificación (ids de los catálogos), el dibujo de su tipo y sus medidas
+    // en metros (largo = ol, profundidad = od, alto = oh). asset: { id, code, customName, purchaseName, typeId, classId, length, depth, height } con las medidas en cm. opts: { typeKind: el dibujo del tipo (SPACE_TYPES),
+    // metric: 'm2' | 'm3', la métrica de su clasificación }. Un activo en m² (operar o administrar) siempre tiene 1 nivel.
+    function assetSpaceFields(asset, opts) {
+        const o = opts || {};
+        const meters = (cm) => { const n = Number(cm); return Number.isFinite(n) && n > 0 ? Math.max(0.01, Math.round(n) / 100) : null; };
+        return {
+            assetRef: asset.id, code: String(asset.code || ''), ownName: String(asset.customName || asset.purchaseName || '').trim().slice(0, LIMITS.text),
+            assetId: asset.typeId > 0 ? asset.typeId : 0, assetClassId: asset.classId > 0 ? asset.classId : 0, type: SPACE_TYPES.includes(o.typeKind) ? o.typeKind : '',
+            ol: meters(asset.length), od: meters(asset.depth), oh: meters(asset.height), metric: o.metric || '',
+        };
+    }
+    function applyAssetToSpace(space, asset, opts) {
+        const f = assetSpaceFields(asset, opts);
+        const next = { ...space, assetRef: f.assetRef, code: f.code };
+        if (f.ownName) next.ownName = f.ownName; else delete next.ownName;
+        if (f.assetId) next.assetId = f.assetId; else delete next.assetId;
+        if (f.assetClassId) next.assetClassId = f.assetClassId; else delete next.assetClassId;
+        if (f.type) next.type = f.type;
+        ['ol', 'od', 'oh'].forEach((k) => { if (f[k] !== null) next[k] = f[k]; else delete next[k]; });
+        if (f.metric === 'm2') next.levels = 1;
+        return next;
     }
     // Pone en cada activo lo que viene de su huella (ver arriba). Es idempotente: se puede llamar cuantas veces haga falta. active del activo = no está apagado él (off) ni su huella.
     function deriveSpaces(layout) {
@@ -3571,6 +3597,8 @@
             // Sin elegir, el espacio se guarda sin esos campos.
             const assetClassId = Math.round(Number(s && s.assetClassId));
             const assetId = Math.round(Number(s && s.assetId));
+            // assetRef: el renglón de Alta Activos (fixed_assets.id) del que viene este activo; su código, nombre, tipo, clasificación y medidas los manda el registro (ver applyAssetToSpace)
+            const assetRef = Math.round(Number(s && s.assetRef));
             const assetFmt = sanitizeFmt(s && s.fmt);
             const tempMin = type === 'cold' ? rangeVal(s && s.tempMin, -100, 100) : null;
             const tempMax = type === 'cold' ? rangeVal(s && s.tempMax, -100, 100) : null;
@@ -3600,6 +3628,7 @@
                 ...(lvls.length ? { lvls } : {}),
                 ...(Number.isFinite(assetClassId) && assetClassId > 0 ? { assetClassId } : {}),
                 ...(Number.isFinite(assetId) && assetId > 0 ? { assetId } : {}),
+                ...(Number.isFinite(assetRef) && assetRef > 0 ? { assetRef } : {}),
                 drawers: text(s && s.drawers, label, false),
                 ...(s && s.off === true ? { off: true } : {}),
                 ...(assetFmt ? { fmt: assetFmt } : {}),
@@ -4311,9 +4340,9 @@
                 const first = !seen.has(s.footprintId);
                 seen.add(s.footprintId);
                 const f = byId.get(s.footprintId);
-                const plain = first && f && (s.type || 'rack') === 'rack' && !s.ownName && !s.faces && !s.front && !s.fmt && !s.assetClassId && !s.assetId && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off && !OWN_SPACE_KEYS.some((k) => s[k] !== undefined);
+                const plain = first && f && (s.type || 'rack') === 'rack' && !s.ownName && !s.faces && !s.front && !s.fmt && !s.assetClassId && !s.assetId && !s.assetRef && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off && !OWN_SPACE_KEYS.some((k) => s[k] !== undefined);
                 return !plain;
-            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, ...(s.ownName ? { ownName: s.ownName } : {}), ...(s.faces ? { faces: s.faces } : {}), ...(s.front ? { front: s.front } : {}), type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax', ...OWN_SPACE_KEYS].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
+            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, ...(s.ownName ? { ownName: s.ownName } : {}), ...(s.faces ? { faces: s.faces } : {}), ...(s.front ? { front: s.front } : {}), type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, ...(s.assetRef ? { assetRef: s.assetRef } : {}), levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax', ...OWN_SPACE_KEYS].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
         }
         if (section === 'ubicaciones') return layout.positions || [];
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
@@ -4324,7 +4353,7 @@
     }
     function sectionHasData(layout, section) {
         // Activos cuenta como llenado cuando algún espacio ya tiene su clasificación o su tipo de activo (los niveles de antes no cuentan).
-        if (section === 'activos') return (layout && layout.spaces || []).some((s) => s.assetClassId || s.assetId);
+        if (section === 'activos') return (layout && layout.spaces || []).some((s) => s.assetClassId || s.assetId || s.assetRef);
         const data = sectionData(layout, section);
         if (!data) return false;
         if (section === 'contorno') return (data.vertices || []).length > 0;
@@ -4340,7 +4369,7 @@
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, zoneClearHeights, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, WALK_RADIUS, walkColliders, walkBlockedAt, walkFreeSpot, HUNG_SAFETY, SAFETY_AIMS, CAMERA_DEFAULTS, isHungSafety, safetyHangOf, safetyAimOf, safetyFovOf, safetyRangeOf, safetyAimVector, migrateCeilingToSafety, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, CEILING_TYPES, CEILING_LETTER, CEILING_COLORS, CEILING_SIZE_DEFAULTS, ceilingSizeOf, ceilingLimitAt, ceilingHangOf, deriveCeilingZones, assignCeilingCodes, lockCeilingCodes, ceilingViolations, newCeilingViolations, ROOF_SHAPES, ROOF_COVERS, ROOF_MATERIALS, ROOF_COLORS, ROOF_COLOR_BY_SHAPE, ROOF_SHED_DIRS, ROOF_GABLE_DIRS, roofColorOf, roofRings, roofBox, roofHeightIn, roofSlopePct, roofRidge, roofAt, roofLimitAt, assignRoofCodes, lockRoofCodes, roofViolations, newRoofViolations, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, assetSpaceFields, applyAssetToSpace, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, BAY_COLORS, bayFmtOf, levelBayRects, levelHasPlaced, levelBayClashes, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

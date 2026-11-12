@@ -7720,6 +7720,13 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-loading[hidden]{ display: none; }
 .layout-loading > *{ align-self: flex-start; }
 .layout-loading span{ background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 999px; padding: 0.3rem 0.9rem; font-size: 0.8rem; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+/* Colocar activos de Alta Activos (paso Activos del Layout) */
+.layout-place-list{ max-height: 18rem; overflow: auto; display: flex; flex-direction: column; gap: 0.2rem; margin: 0.5rem 0; }
+.layout-place-row{ display: flex; gap: 0.5rem; align-items: baseline; padding: 0.3rem 0.4rem; border-radius: 0.5rem; cursor: pointer; }
+.layout-place-row:hover{ background: var(--color-bg); }
+.layout-place-row.is-off{ opacity: 0.55; cursor: not-allowed; }
+.layout-place-row small{ opacity: 0.7; }
+.layout-place-row[hidden]{ display: none; }
 .layout-loading i{ order: 2; font-size: 1.4rem; margin-top: 0.15rem; color: var(--color-accent); }
 .layout-zoom-float .layout-measures-btn{ box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 .layout-zoom-float.is-3d .layout-only2d{ display: none !important; }

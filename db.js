@@ -5809,6 +5809,33 @@ function updateFixedAsset(id, clientId, patch, forTestAccount = false) {
     if (sets.length) db.prepare(`UPDATE fixed_assets SET ${sets.join(', ')} WHERE id = ? AND client_id = ?`).run(...args, id, clientId);
     return getFixedAssetById(id, clientId, forTestAccount);
 }
+// El Layout comparte los activos con Alta Activos: un activo del Layout (layout.spaces[].assetRef) es un renglón de fixed_assets. Estas funciones leen un activo sin importar si lo dio de alta una cuenta de prueba o una real (el Layout es
+// de la empresa, no de la cuenta) y leen y escriben el Layout tal como está guardado (sin normalizar y sin cambiar su versión: lo que se sincroniza no es una edición de quien lo tenía abierto).
+function getFixedAssetAnyScope(id, clientId) {
+    return db.prepare('SELECT * FROM fixed_assets WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+function listFixedAssetsOfCenterAnyScope(clientId, costCenterId) {
+    return db.prepare('SELECT * FROM fixed_assets WHERE client_id = ? AND cost_center_id = ? ORDER BY code_letter ASC, code_number ASC, id ASC').all(clientId, costCenterId);
+}
+function listArticleCategoriesAnyScope(clientId, categoryType) {
+    return db.prepare('SELECT * FROM article_categories WHERE client_id = ? AND category_type = ? ORDER BY is_test_data ASC, record_number ASC').all(clientId, categoryType);
+}
+function listRawClientLayouts(clientId) {
+    return db.prepare('SELECT cost_center_id, data FROM client_layouts WHERE client_id = ? ORDER BY cost_center_id ASC').all(clientId).map((row) => {
+        let layout = null;
+        try { layout = JSON.parse(row.data); } catch { layout = null; }
+        return layout && typeof layout === 'object' ? { costCenterId: row.cost_center_id || 0, layout } : null;
+    }).filter(Boolean);
+}
+function readRawClientLayout(clientId, costCenterId) {
+    const row = db.prepare('SELECT data FROM client_layouts WHERE client_id = ? AND cost_center_id = ?').get(clientId, costCenterId || 0);
+    if (!row) return null;
+    try { const layout = JSON.parse(row.data); return layout && typeof layout === 'object' ? layout : null; } catch { return null; }
+}
+function writeRawClientLayout(clientId, costCenterId, layout) {
+    const { transitCatalog: omitted, ...toSave } = layout || {};
+    db.prepare('UPDATE client_layouts SET data = ? WHERE client_id = ? AND cost_center_id = ?').run(JSON.stringify(toSave), clientId, costCenterId || 0);
+}
 // Cuántos activos tienen un tipo / una clasificación (para no cambiar la letra de un tipo ni borrarlo del catálogo mientras se use).
 function countFixedAssetsByType(clientId, typeId) {
     return db.prepare('SELECT COUNT(*) AS n FROM fixed_assets WHERE client_id = ? AND type_id = ?').get(clientId, typeId).n;
@@ -8233,6 +8260,66 @@ function seedAltaActivosGrants() {
     const path = TABLE_GRANT_PATHS.layout;
     if (!path) return;
     seedLeavesForScreenHolders(ALTA_ACTIVOS_SCREEN_SEED_KEY, path, ['cat-operaciones/cat-operaciones-centro-dist-alta-activos'], 'the Alta Activos screen');
+}
+// Alta Activos (2026-11-12): los activos que ya estaban dibujados en un Layout pasan, UNA vez, al registro (fixed_assets) con el mismo código, el mismo nombre y las mismas medidas con las que se ven hoy, y el activo del Layout queda ligado
+// a su renglón (assetRef). Los códigos del Layout eran por zona y tipo (A001 en cada zona) y el registro es por centro de costos y letra: se conservan los que no chocan y a los que chocan se les da el siguiente número de su letra.
+// El tipo sale de su catálogo (el que ya traía o el primero con su mismo dibujo); sin tipo, el renglón queda sin tipo y con la letra de su código. Las medidas del activo en el Layout (ol, od, oh) quedan fijas con las de hoy: el croquis se ve igual.
+const LAYOUT_SPACES_TO_ASSETS_KEY = 'seed-layout-spaces-to-assets-v1';
+function migrateLayoutSpacesToFixedAssetsOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(LAYOUT_SPACES_TO_ASSETS_KEY)) return;
+    const stats = { layouts: 0, assets: 0, renumbered: 0, skipped: 0, failed: 0 };
+    const rows = db.prepare('SELECT client_id, cost_center_id, data FROM client_layouts').all();
+    rows.forEach((row) => {
+        try {
+            db.transaction(() => {
+                let raw = null;
+                try { raw = JSON.parse(row.data); } catch { raw = null; }
+                if (!raw || !Array.isArray(raw.spaces) || !raw.spaces.some((s) => s && !s.assetRef)) return;
+                if (!row.cost_center_id) { stats.skipped += 1; return; } // sin centro de costos no hay a quién ligar el registro
+                const normalized = LayoutCalc.normalize({ ...raw });
+                const derived = new Map((normalized.spaces || []).map((s) => [s.id, s]));
+                const zoneOrder = new Map((normalized.zones || []).map((z, i) => [z.id, i]));
+                const types = listArticleCategories(row.client_id, 'activos-fijos', false);
+                const used = new Map(); // letra -> números ya usados en este centro
+                const usedOf = (letter) => { if (!used.has(letter)) used.set(letter, new Set(db.prepare('SELECT code_number FROM fixed_assets WHERE client_id = ? AND cost_center_id = ? AND code_letter = ?').all(row.client_id, row.cost_center_id, letter).map((r) => r.code_number))); return used.get(letter); };
+                const parse = (s) => { const m = /^([A-Za-z])(\d{1,4})$/.exec(String((s && s.code) == null ? '' : s.code).trim()); return m ? { letter: m[1].toUpperCase(), n: Number(m[2]) } : { letter: LayoutCalc.ASSET_LETTER[s && s.type] || 'A', n: 0 }; };
+                const order = raw.spaces.map((s, i) => ({ s, i, d: derived.get(s && s.id) })).filter((x) => x.s && !x.s.assetRef);
+                order.sort((a, b) => ((zoneOrder.get(a.d && a.d.zoneId) ?? 9999) - (zoneOrder.get(b.d && b.d.zoneId) ?? 9999)) || (parse(a.s).n || 99999) - (parse(b.s).n || 99999) || a.i - b.i);
+                order.forEach(({ s, d }) => {
+                    const old = parse(s);
+                    const set = usedOf(old.letter);
+                    let number = old.n;
+                    if (!(number >= 1) || set.has(number)) { number = Math.max(0, ...set) + 1; stats.renumbered += 1; }
+                    set.add(number);
+                    const type = types.find((t) => t.id === s.assetId) || types.find((t) => t.kind === s.type && t.status === 'active') || types.find((t) => t.kind === s.type) || null;
+                    const cm = (m) => Math.round((Number(m) || 0) * 10000) / 100;
+                    const length = cm(d && d.l); const depth = cm(d && d.d); const height = cm(d && d.h);
+                    const code = old.letter + String(number).padStart(3, '0');
+                    const own = String(s.ownName || '').trim();
+                    const asset = createFixedAsset({
+                        clientId: row.client_id, isTestData: false, costCenterId: row.cost_center_id, typeId: type ? type.id : null, letter: old.letter, codeNumber: number, createdBy: 'Migración Alta Activos',
+                        values: {
+                            purchaseName: own || `${type ? type.name : 'Activo'} ${code}`, customName: own, classId: s.assetClassId > 0 ? s.assetClassId : null, shape: 'rectangular',
+                            height, length, depth, volume: Math.round(((length * depth * height) / 1e6) * 10000) / 10000, showInLayout: 1,
+                        },
+                    });
+                    s.assetRef = asset.id;
+                    s.code = code;
+                    if (d && d.l > 0) s.ol = Math.round(d.l * 100) / 100;
+                    if (d && d.d > 0) s.od = Math.round(d.d * 100) / 100;
+                    if (d && d.h > 0) s.oh = Math.round(d.h * 100) / 100;
+                    stats.assets += 1;
+                });
+                writeRawClientLayout(row.client_id, row.cost_center_id, raw);
+                stats.layouts += 1;
+            })();
+        } catch (err) {
+            stats.failed += 1;
+            console.error('[db] Alta Activos: no se pudo pasar un Layout al registro (cliente ' + row.client_id + ', centro ' + row.cost_center_id + '):', err.message);
+        }
+    });
+    db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(LAYOUT_SPACES_TO_ASSETS_KEY);
+    console.log('[db] Alta Activos: los activos ya dibujados pasaron al registro (una vez): ' + JSON.stringify(stats) + '.');
 }
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
@@ -12953,6 +13040,7 @@ seedPmDescargarSoloVer();
 seedPresentacionesCatalogGrants();
 seedRelacionEnvioGrants();
 seedAltaActivosGrants();
+migrateLayoutSpacesToFixedAssetsOnce();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
@@ -13179,6 +13267,12 @@ module.exports = {
     updateFixedAsset,
     countFixedAssetsByType,
     countFixedAssetsByClass,
+    getFixedAssetAnyScope,
+    listFixedAssetsOfCenterAnyScope,
+    listArticleCategoriesAnyScope,
+    listRawClientLayouts,
+    readRawClientLayout,
+    writeRawClientLayout,
     getCodeShipRelationById,
     findCodeShipRelation,
     createCodeShipRelation,

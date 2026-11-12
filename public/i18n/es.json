@@ -1825,7 +1825,7 @@
     "layoutActivoClase": "Clasificación del activo",
     "layoutActivoTipo": "Tipo de activo",
     "layoutActivoElegir": "Elige…",
-    "layoutActivosSinEspacios": "Todavía no hay huellas. Agrégalas en Huella, pon cuántos activos lleva cada una y aquí los acomodas.",
+    "layoutActivosSinEspacios": "Todavía no hay huellas. Agrégalas en Huella y aquí colocas los activos de Alta Activos.",
     "layoutHuellaCol": "Huella",
     "layoutCodigoHuella": "Código de huella",
     "layoutCodigoZona": "Código de zona",
@@ -1836,6 +1836,16 @@
     "layoutHuellaActivos": "Activos",
     "layoutHuellaActivosGuardados": "{n} activo(s) ya guardado(s) no se quitan desde aquí: elimínalos o desactívalos en el paso Activos.",
     "layoutHuellaActivosTope": "No caben más activos: el Layout llega al máximo de {n}.",
+    "layoutColocarActivo": "+ Colocar activo de Alta Activos",
+    "layoutColocarTitulo": "Colocar activos de Alta Activos",
+    "layoutColocarBuscar": "Buscar por código, nombre o tipo…",
+    "layoutColocarVacio": "No hay activos para colocar. Dalos de alta en Alta Activos (con «Aparece en el Layout» en Sí); los que ya están en el Layout no salen aquí.",
+    "layoutColocarSinMedidas": "(le faltan largo, profundidad o alto en Alta Activos)",
+    "layoutColocarSinHuella": "Elige la huella donde van.",
+    "layoutColocarSinElegir": "Marca al menos un activo.",
+    "layoutColocarBtn": "Colocar",
+    "layoutActivoDeRegistro": "Viene de Alta Activos: se cambia allá.",
+    "colActDondeEsta": "Dónde está",
     "layoutActivoElegirHuella": "Elige la huella…",
     "layoutActivoSinHuella": "Elige la huella del activo {n}: un activo siempre va dentro de una huella.",
     "layoutHuellaSinZona": "Fuera de toda zona",
@@ -6026,8 +6036,20 @@
       "example": "el espacio R001.N001.E002 pasa de 1 a 3 posiciones: en Posiciones salen R001.N001.E002.P001, P002 y P003, cada una de un tercio del largo."
     },
     "layoutHuellaActivos": {
-      "what": "Cuántos activos lleva esta huella. Son los que salen como renglones en el paso Activos, ya ligados a ella: al subir el número nacen activos nuevos (sin tipo; el largo de la huella se reparte entre ellos y luego le pones sus medidas a cada uno); al bajarlo se quitan los últimos que todavía no se guardan. Un activo ya guardado se elimina o se desactiva en el paso Activos.",
-      "example": "la huella H001 pasa de 0 a 3 activos: en Activos salen tres renglones de H001, donde eliges el tipo de cada uno y, si no ocupan todo el largo de la huella, les pones su largo."
+      "what": "Cuántos activos hay colocados en esta huella (solo se lee). Los activos se dan de alta en Alta Activos y se colocan en el paso Activos con «+ Colocar activo de Alta Activos».",
+      "example": "la huella H001 dice 3: en Activos hay tres renglones de H001."
+    },
+    "layoutColocarActivo": {
+      "what": "Coloca en una huella los activos que ya se dieron de alta en Alta Activos (solo salen los que aparecen en el Layout, están activos y todavía no están colocados). Cada activo trae de su renglón el código, el nombre, el tipo, la clasificación y las medidas; aquí solo eliges dónde va y le pones sus niveles.",
+      "example": "eliges la zona y la huella H001, marcas R001 y R002 y los colocas: salen dos renglones de H001 en el paso Activos."
+    },
+    "layoutActivoDeRegistro": {
+      "what": "Este dato viene de Alta Activos y se cambia allá (código, nombre, tipo, clasificación y medidas), para que el registro y el croquis nunca se contradigan.",
+      "example": "para cambiar el largo de R001, se cambia en Alta Activos y el croquis se actualiza solo."
+    },
+    "assetWhere": {
+      "what": "Dónde está dibujado el activo en el Layout de su centro de costos (zona › huella). Vacío = no está colocado. Se llena solo al colocarlo en el paso Activos del Layout; un activo colocado no se puede desactivar ni dejar de aparecer en el Layout hasta que se quite de ahí.",
+      "example": "Zona 6 › H001."
     },
     "layoutPosCeja": {
       "what": "El grueso de la reja (el travesaño) de este espacio, en metros. Va aparte del Alto: la altura libre (el Alto) empieza encima de la reja, así que el Alto de almacenamiento es el mismo Alto. Si no lo escribes toma el de su nivel (paso Niveles).",

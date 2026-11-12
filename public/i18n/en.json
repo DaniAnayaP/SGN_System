@@ -1825,7 +1825,7 @@
     "layoutActivoClase": "Asset Classification",
     "layoutActivoTipo": "Asset Type",
     "layoutActivoElegir": "Choose…",
-    "layoutActivosSinEspacios": "There are no footprints yet. Add them in Footprint, set how many assets each one holds and arrange them here.",
+    "layoutActivosSinEspacios": "There are no footprints yet. Add them in Footprint and place the Asset Registration assets here.",
     "layoutHuellaCol": "Footprint",
     "layoutCodigoHuella": "Footprint code",
     "layoutCodigoZona": "Zone code",
@@ -1836,6 +1836,16 @@
     "layoutHuellaActivos": "Assets",
     "layoutHuellaActivosGuardados": "{n} asset(s) already saved cannot be removed from here: delete or deactivate them in the Assets step.",
     "layoutHuellaActivosTope": "No more assets fit: the Layout is at its maximum of {n}.",
+    "layoutColocarActivo": "+ Place asset from Asset Registration",
+    "layoutColocarTitulo": "Place assets from Asset Registration",
+    "layoutColocarBuscar": "Search by code, name or type…",
+    "layoutColocarVacio": "There are no assets to place. Register them in Asset Registration (with «Shows in the Layout» set to Yes); the ones already in the Layout do not show here.",
+    "layoutColocarSinMedidas": "(missing length, depth or height in Asset Registration)",
+    "layoutColocarSinHuella": "Choose the footprint they go on.",
+    "layoutColocarSinElegir": "Check at least one asset.",
+    "layoutColocarBtn": "Place",
+    "layoutActivoDeRegistro": "It comes from Asset Registration: change it there.",
+    "colActDondeEsta": "Where it is",
     "layoutActivoElegirHuella": "Choose the footprint…",
     "layoutActivoSinHuella": "Choose the footprint of asset {n}: an asset always goes inside a footprint.",
     "layoutHuellaSinZona": "Outside every zone",
@@ -6027,8 +6037,20 @@
       "example": "space R001.N001.E002 goes from 1 to 3 positions: Positions shows R001.N001.E002.P001, P002 and P003, each one third of the length."
     },
     "layoutHuellaActivos": {
-      "what": "How many assets this footprint holds. They are the rows of the Assets step, already linked to it: raising the number creates new assets (without a type; the footprint length is shared between them and then you set each one's measures); lowering it removes the last ones that are not saved yet. An asset that is already saved is deleted or deactivated in the Assets step.",
-      "example": "footprint H001 goes from 0 to 3 assets: Assets shows three rows for H001, where you pick each one's type and, if they do not fill the whole footprint length, set their length."
+      "what": "How many assets are placed on this footprint (read only). Assets are registered in Asset Registration and placed in the Assets step with «+ Place asset from Asset Registration».",
+      "example": "footprint H001 says 3: Assets has three rows for H001."
+    },
+    "layoutColocarActivo": {
+      "what": "Places on a footprint the assets that were already registered in Asset Registration (only the ones that show in the Layout, are active and are not placed yet appear). Each asset brings its code, name, type, classification and measures from its row; here you only choose where it goes and set its levels.",
+      "example": "you choose the zone and footprint H001, check R001 and R002 and place them: two H001 rows appear in the Assets step."
+    },
+    "layoutActivoDeRegistro": {
+      "what": "This data comes from Asset Registration and is changed there (code, name, type, classification and measures), so the register and the plan never contradict each other.",
+      "example": "to change the length of R001, change it in Asset Registration and the plan updates by itself."
+    },
+    "assetWhere": {
+      "what": "Where the asset is drawn in the Layout of its cost center (zone › footprint). Empty = not placed. It fills in by itself when it is placed in the Layout Assets step; a placed asset cannot be deactivated or stop showing in the Layout until it is removed from there.",
+      "example": "Zone 6 › H001."
     },
     "layoutPosCeja": {
       "what": "The thickness of the beam (the crossbeam) of this space, in meters. It is separate from the Height: the free height (the Height) starts on top of the beam, so the Storage height is the same as the Height. If you leave it empty it takes the level's (Levels step).",
