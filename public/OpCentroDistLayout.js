@@ -6690,6 +6690,7 @@ function walkRefreshUi() {
     const place = walkUi.phase === 'place';
     const on = walkUi.phase === 'walk';
     $('layout-walk').hidden = walkUi.phase === 'off';
+    $('layout-zoom-float').hidden = walkUi.phase !== 'off'; // el zoom no se usa al recorrer (ni al colocar al monito: la planta ya cabe)
     $('layout-walk-tray').hidden = !place;
     $('layout-walk-tl').hidden = !on;
     $('layout-walk-cross').hidden = !on;
@@ -6894,6 +6895,7 @@ function updateViewBtns() {
     $('layout-svg').toggleAttribute('hidden', state.view3d); // un <svg> no tiene la propiedad hidden: va el atributo (el CSS ya lo esconde)
     $('layout-map3d').hidden = !state.view3d;
     $('layout-views').classList.toggle('is-3d', state.view3d);
+    $('layout-zoom-float').classList.toggle('is-3d', state.view3d);
     $('layout-mode').hidden = !allowed; // sin 3D no hay nada que elegir: el interruptor 2D | 3D no sale
     updateTextsMenu();
     [['layout-3d-zoom-in', 'main.layout3dAcercar'], ['layout-3d-zoom-out', 'main.layout3dAlejar']].forEach(([id, key]) => { $(id).setAttribute('aria-label', t(key)); $(id).title = t(key); });

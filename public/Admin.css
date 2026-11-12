@@ -7712,6 +7712,12 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-views{ display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
 .layout-views-icons{ display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; }
 .layout-zoom-tools{ display: contents; }
+/* el zoom del croquis y del 3D flota arriba a la derecha del dibujo (antes iba entre los iconos de Visualizaciones) */
+.layout-zoom-float{ position: absolute; top: 0.6rem; right: 0.6rem; z-index: 6; display: flex; flex-direction: column; gap: 0.3rem; }
+.layout-zoom-float[hidden]{ display: none; }
+.layout-zoom-float .layout-measures-btn{ box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.layout-zoom-float.is-3d .layout-only2d{ display: none !important; }
+.layout-zoom-float:not(.is-3d) .layout-only3d{ display: none !important; }
 .layout-zoom-tools[hidden]{ display: none; }
 .layout-canvas svg.can-zoom{ touch-action: pan-y; } /* con un dedo sigue moviéndose la página; con dos dedos se hace zoom */
 .layout-canvas svg.zoomed{ cursor: grab; touch-action: none; }
