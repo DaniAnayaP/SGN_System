@@ -2562,8 +2562,39 @@ function selectRowFrom(target) {
 }
 // Tocar una figura del croquis (sin arrastrarla) la elige: se marca su renglón en la tabla y la figura se resalta con el contorno grueso de siempre; volver a tocarla la regresa al contorno punteado. Solo cuenta
 // el paso que se está editando: en Zonas las zonas, en Huella-Espacio las huellas y en Activos los activos.
-function selectFromMap(target) {
-    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-clid], [data-rfid], [data-tid], [data-oid], [data-did], [data-pid], [data-nid], [data-sideid], [data-cornerid]') : null;
+// Qué se puede elegir tocando el croquis en cada paso: solo las figuras de lo que ese paso edita (en Paredes solo paredes, en Pisos solo pisos, en Activos solo activos…). Aunque haya otra cosa encima (la
+// losa de la nave, una zona) o la figura sea una línea delgada (una pared de 20 cm mide 2 píxeles), se elige la figura del paso más cercana al toque (a menos de 7 píxeles) y, entre las que lo contienen, la más chica.
+const MAP_PICK_SEL = { zonas: '[data-zid]', espacios: '[data-fid]', activos: '[data-sid]', paredes: '[data-obid]', obstaculos: '[data-obid]', puertas: '[data-did]', luz: '[data-pid]', sensores: '[data-nid]', seguridad: '[data-sfid]', techos: '[data-clid], [data-rfid]', transito: '[data-tid]', objetos: '[data-oid]', pisos: '[data-flid]', rampas: '[data-flid]' };
+const MAP_PICK_PX = 7;
+function stepPickable(el) {
+    const d = state.draft;
+    const ob = el.getAttribute('data-obid');
+    if (ob) { const o = (d.obstacles || []).find((x) => x.id === ob); return !!o && (state.focus === 'paredes' ? o.kind === 'wall' : o.kind !== 'wall'); }
+    const fl = el.getAttribute('data-flid');
+    if (fl) { const f = LC.floorsAll(d).find((x) => x.id === fl); return !!f && (state.focus === 'rampas') === !!f.isRamp; }
+    return true;
+}
+function pickStepElement(x, y) {
+    const sel = MAP_PICK_SEL[state.focus];
+    const svg = $('layout-svg');
+    if (!sel || !svg || !state.draft) return null;
+    let best = null;
+    svg.querySelectorAll(sel).forEach((el) => {
+        if (el.closest('defs') || !stepPickable(el)) return;
+        const r = el.getBoundingClientRect();
+        if (!(r.width >= 0 && r.height >= 0) || (r.width === 0 && r.height === 0)) return;
+        const dx = Math.max(r.left - x, 0, x - r.right);
+        const dy = Math.max(r.top - y, 0, y - r.bottom);
+        const dist = Math.hypot(dx, dy);
+        if (dist > MAP_PICK_PX) return;
+        const area = r.width * r.height;
+        if (!best || dist < best.dist - 0.5 || (Math.abs(dist - best.dist) <= 0.5 && area < best.area)) best = { el, dist, area };
+    });
+    return best ? best.el : null;
+}
+function selectFromMap(target, point) {
+    // primero lo del paso que se edita más cercano al toque; si no hay, lo que está justo debajo (el contorno: sus lados y esquinas)
+    const el = (point && state.draft ? pickStepElement(point.x, point.y) : null) || (target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-clid], [data-rfid], [data-tid], [data-oid], [data-did], [data-pid], [data-nid], [data-sideid], [data-cornerid]') : null);
     if (!el || !state.draft) return;
     let next = null;
     // en Contorno se eligen los lados (o las esquinas): se marca su renglón en la tabla y su línea en el croquis y en el 3D
@@ -2581,6 +2612,7 @@ function selectFromMap(target) {
     }
     if (state.focus === 'zonas' && el.getAttribute('data-zid')) next = { kind: 'zone', id: el.getAttribute('data-zid') };
     else if (state.focus === 'espacios' && el.getAttribute('data-fid')) next = { kind: 'footprint', id: el.getAttribute('data-fid') };
+    else if ((state.focus === 'pisos' || state.focus === 'rampas') && el.getAttribute('data-flid')) next = { kind: 'floor', id: el.getAttribute('data-flid') };
     else if (state.focus === 'activos' && el.getAttribute('data-sid')) next = { kind: 'space', id: el.getAttribute('data-sid') };
     else if (state.focus === 'seguridad' && el.getAttribute('data-sfid')) next = { kind: 'safety', id: el.getAttribute('data-sfid') };
     else if (state.focus === 'techos' && el.getAttribute('data-clid')) next = { kind: 'ceiling', id: el.getAttribute('data-clid') };
@@ -2605,6 +2637,9 @@ function selectEntity(next, reveal = true) {
 }
 // Tocar una figura en el 3D hace lo mismo que en el croquis: solo cuenta lo del paso que se está editando (en Zonas la zona, en Huella-Espacio la huella y en Activos el activo). Como en el 3D los activos tapan
 // el piso, tocar un activo en el paso Zonas elige la zona donde está y en Huella-Espacio la huella que lo lleva.
+// Lo que se puede tocar en el 3D en cada paso que edita cosas sueltas (los demás pasos ya tenían zona, huella, activo o lado): solo se elige lo de ese paso.
+const STEP_PICK_3D = { paredes: ['wall'], obstaculos: ['obstacle'], puertas: ['door'], luz: ['power'], sensores: ['sensor'], seguridad: ['safety'], techos: ['ceiling'], transito: ['transit'], objetos: ['object'], pisos: ['floor'], rampas: ['floor'] };
+const KIND_OF_3D_ITEM = { wall: 'obstacle', obstacle: 'obstacle', door: 'door', power: 'power', sensor: 'sensor', safety: 'safety', ceiling: 'ceiling', transit: 'transit', object: 'object', floor: 'floor' };
 function selectFrom3d(sel) {
     if (!sel || !state.draft) return;
     let next = null;
@@ -2616,6 +2651,7 @@ function selectFrom3d(sel) {
         if (footprintId) next = { kind: 'footprint', id: footprintId };
     } else if (state.focus === 'activos' && sel.kind === 'space') next = { kind: 'space', id: sel.space.id };
     else if (state.focus === 'contorno' && (sel.kind === 'side' || sel.kind === 'corner') && (sel.kind === 'side') === (state.contornoMode === 'sides')) next = { kind: sel.kind, id: String(sel.index) };
+    else if (sel.kind === 'item' && KIND_OF_3D_ITEM[sel.type] && (STEP_PICK_3D[state.focus] || []).includes(sel.type) && itemExists(state.draft, sel.type, sel.id) && (sel.type !== 'floor' || !!sel.ramp === (state.focus === 'rampas'))) next = { kind: KIND_OF_3D_ITEM[sel.type], id: sel.id };
     if (next) selectEntity(next);
 }
 let mapTap = null;
@@ -2625,7 +2661,7 @@ window.addEventListener('pointerup', (event) => {
     mapTap = null;
     if (!tap || !state.draft) return;
     if (Math.abs(event.clientX - tap.x) + Math.abs(event.clientY - tap.y) > 6) return; // arrastró una zona o recorrió el croquis: no es un toque
-    selectFromMap(tap.target);
+    selectFromMap(tap.target, { x: event.clientX, y: event.clientY });
 });
 
 // ---- croquis -----------------------------------------------------------------------------------------------------------
@@ -4131,7 +4167,7 @@ function renderSvg(underlay) {
     if (on('pisos') || on('rampas')) {
         LC.floorsAll(d).filter((f) => (f.isRamp ? on('rampas') : on('pisos'))).forEach((f) => {
             if (f.active === false || !(f.l > 0 && f.w > 0)) return;
-            s += `<rect class="hl-box" data-hlbox="floor:${esc(f.id)}" x="${X(f.x).toFixed(1)}" y="${Y(f.y).toFixed(1)}" width="${(X(f.x + f.l) - X(f.x)).toFixed(1)}" height="${(Y(f.y + f.w) - Y(f.y)).toFixed(1)}"/>`;
+            s += `<rect class="hl-box" data-flid="${esc(f.id)}" data-hlbox="floor:${esc(f.id)}" x="${X(f.x).toFixed(1)}" y="${Y(f.y).toFixed(1)}" width="${(X(f.x + f.l) - X(f.x)).toFixed(1)}" height="${(Y(f.y + f.w) - Y(f.y)).toFixed(1)}"/>`;
         });
     }
     // las medidas de adentro se calculan al final, cuando ya se conocen los nombres de TODAS las zonas
@@ -6592,7 +6628,7 @@ function ensureScene3d() {
             await loadScriptOnce('vendor/three/three.min.js');
             await loadScriptOnce('LayoutScene3D.js');
             await loadScriptOnce('LayoutAssetPicker.js');
-            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, onSelect: (sel) => { show3dInfo(sel); selectFrom3d(sel); } });
+            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, itemPickTypes: () => STEP_PICK_3D[state.focus] || [], onSelect: (sel) => { show3dInfo(sel); selectFrom3d(sel); } });
             picker3d = window.LayoutAssetPicker.create($('layout-3d-picker'), {
                 texts: { title: t('main.layout3dActivosTitulo'), count: t('main.layout3dActivosConteo'), all: t('main.layout3dTodos'), none: t('main.layout3dNinguno'), close: t('main.layout3dCerrar'), search: t('main.layout3dActivosBuscar'), noResults: t('main.layout3dSinResultados'), noZone: t('main.layoutSinZona') },
                 typeLabel: (type) => typeLabel('space', type),
@@ -6606,7 +6642,7 @@ function ensureScene3d() {
 }
 function show3dInfo(sel) {
     const box = $('layout-3d-info');
-    if (!sel || !state.draft || sel.kind === 'side' || sel.kind === 'corner') { box.hidden = true; return; }
+    if (!sel || !state.draft || sel.kind === 'side' || sel.kind === 'corner' || sel.kind === 'item') { box.hidden = true; return; } // una pared, puerta, piso… elegido: su renglón y su cuadro naranja ya lo dicen
     box.hidden = false;
     if (sel.kind === 'footprint') {
         const p = sel.footprint;

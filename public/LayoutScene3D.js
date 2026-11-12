@@ -202,6 +202,7 @@
         let hitSpaces = null;
         let spaceList = [];
         let zoneMeshes = [];
+        let floorMeshes = []; // las losas de los pisos y las rampas (se pueden tocar en el paso Pisos o Rampas)
         let fpMeshes = []; // las losas de las huellas (se pueden tocar)
         let contourHits = []; // las zonas de toque (invisibles) de los lados o las esquinas del contorno: solo las pide el editor con el paso Contorno
         let contourPickMode = null; // 'sides' | 'corners' | null
@@ -674,6 +675,7 @@
             hitSpaces = null;
             spaceList = [];
             zoneMeshes = [];
+            floorMeshes = [];
             fpMeshes = [];
             contourHits = [];
             center = null;
@@ -1136,7 +1138,11 @@
                     if (gradient) topMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
                     else if (fmtF.pattern === 'solid' || fmtF.pattern === 'none') topMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(fmtF.fill), side: THREE.DoubleSide });
                     else topMat = new THREE.MeshLambertMaterial({ map: patternTexture(fmtF.fill, fmtF.pattern, fmtF.pcolor), side: THREE.DoubleSide });
-                    group.zones.add(new THREE.Mesh(top, topMat));
+                    const floorTop = new THREE.Mesh(top, topMat);
+                    floorTop.userData.floorId = f.id;
+                    floorTop.userData.isRamp = !!f.isRamp;
+                    floorMeshes.push(floorTop);
+                    group.zones.add(floorTop);
                     // el borde del piso (con el color y el estilo de su formato; sin borde, nada)
                     if (fmtF.line !== 'none' && !pieces) {
                         const edge = corners.map((p) => new THREE.Vector3(PX(p[0]), lift + LCalc.zoneLevelAt(f, p[0], p[1]) + 0.006, PZ(p[1])));
@@ -1370,6 +1376,7 @@
                     );
                     wedge.rotation.x = -Math.PI / 2;
                     wedge.position.y = floorY;
+                    wedge.raycast = () => {};
                     g.add(wedge);
                     const edge = [];
                     if (fov < 359.5) edge.push(0, floorY + 0.01, 0);
@@ -1378,9 +1385,10 @@
                     if (fov < 359.5) edge.push(0, floorY + 0.01, 0);
                     const edgeGeo = new THREE.BufferGeometry();
                     edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(edge, 3));
-                    g.add(new THREE.Line(edgeGeo, new THREE.LineBasicMaterial({ color })));
+                    const edgeLine = new THREE.Line(edgeGeo, new THREE.LineBasicMaterial({ color }));
+                    edgeLine.raycast = () => {};
+                    g.add(edgeLine);
                     g.position.set(PX(ex), 0, PZ(ey));
-                    g.traverse((o) => { if (o.isMesh || o.isLine) o.raycast = () => {}; });
                     group.safety.add(g);
                     dueRing(ex, ey, e);
                     return;
@@ -2081,6 +2089,40 @@
         function pick(e) {
             const r = canvas.getBoundingClientRect();
             raycaster.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), cam);
+            // En un paso que edita cosas sueltas (paredes, puertas, pisos, seguridad…) solo se pueden tocar las cosas de ese paso: el editor dice sus tipos (itemPickTypes) y se toma la más cercana de ellas que esté a la vista.
+            const itemTypes = options.itemPickTypes ? options.itemPickTypes() : null;
+            if (itemTypes && itemTypes.length) {
+                let best = null;
+                const consider = (hit, type, id, obj) => { if (!best || hit.distance < best.hit.distance) best = { hit, type, id, obj }; };
+                Object.keys(ITEM_OF_LAYER).forEach((layerName) => {
+                    const ty = ITEM_OF_LAYER[layerName];
+                    if (!itemTypes.includes(ty) || !layerOn[layerName] || !group[layerName].visible) return;
+                    raycaster.intersectObjects(group[layerName].children, true).some((h) => {
+                        let o = h.object;
+                        while (o && !(o.userData && o.userData.fx)) o = o.parent;
+                        if (!o || o.userData.fx.type !== ty) return false;
+                        consider(h, ty, o.userData.fx.id, o);
+                        return true;
+                    });
+                });
+                if (itemTypes.includes('floor') && layerOn.zones && floorMeshes.length) {
+                    const fh = raycaster.intersectObjects(floorMeshes)[0];
+                    if (fh) consider(fh, 'floor', fh.object.userData.floorId, fh.object);
+                }
+                let itemPayload = null;
+                if (best) {
+                    const b3 = new THREE.Box3().setFromObject(best.obj);
+                    const c3 = b3.getCenter(new THREE.Vector3());
+                    const s3 = b3.getSize(new THREE.Vector3());
+                    itemPayload = { kind: 'item', type: best.type, id: best.id, ramp: !!(best.obj.userData && best.obj.userData.isRamp) };
+                    outline.visible = true;
+                    outline.position.set(c3.x, c3.y, c3.z);
+                    outline.scale.set(Math.max(s3.x, 0.2) + 0.06, Math.max(s3.y, 0.1) + 0.06, Math.max(s3.z, 0.2) + 0.06);
+                } else outline.visible = false;
+                dirty = true;
+                if (options.onSelect) options.onSelect(itemPayload);
+                return;
+            }
             // una capa oculta no se puede tocar
             let hit = hitSpaces && layerOn.assets ? raycaster.intersectObject(hitSpaces)[0] : null;
             let payload = null;
