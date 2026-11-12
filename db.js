@@ -5957,6 +5957,14 @@ function listManualOrderLines(clientId, { costCenterId, limit } = {}) {
     const cap = limit ? ` LIMIT ${Math.max(1, Math.min(Number(limit) || 50, 5000))}` : '';
     return db.prepare(`${MANUAL_LINE_SELECT} WHERE ${where.join(' AND ')} ORDER BY o.created_at DESC, l.order_id DESC, l.line_no ASC${cap}`).all(...args);
 }
+// Un pedido con todos sus renglones (para consultarlo por su número desde el QR): { order, lines } o null si no existe en esa empresa y ese centro de costos.
+// El centro de costos es parte de la búsqueda a propósito: el número de pedido es seguido y global, y el QR de un centro no debe poder ver los pedidos de otro.
+function getManualOrderWithLines(clientId, orderId, costCenterId = 0) {
+    const order = db.prepare('SELECT id, cost_center_id, requester_name, place_name, created_at, received_at FROM manual_orders WHERE id = ? AND client_id = ? AND cost_center_id = ?').get(orderId, clientId, costCenterId || 0);
+    if (!order) return null;
+    const lines = db.prepare('SELECT line_no, code, description, uom, quantity, need_by, status FROM manual_order_lines WHERE order_id = ? AND client_id = ? ORDER BY line_no ASC, id ASC').all(orderId, clientId);
+    return { order, lines };
+}
 // --- Incidentes (Operaciones, C. Distribución) ----------------------------------------------------------------------------------------------------------
 // Cada centro de costos tiene un QR (la dirección fija /inc/<código del Layout del centro>): quien lo escanea reporta un hallazgo. Escribe su nombre, elige la ZONA del Layout donde pasó, la categoría (No conformidad
 // Mayor, No conformidad Menor o Recomendación) y el criterio de esa categoría (catálogo «Criterios de Incidentes»), cuenta la situación con sus palabras y sube sus evidencias (fotos: mínimo una, sin máximo práctico).
@@ -13182,6 +13190,7 @@ module.exports = {
     createManualOrder,
     findManualOrderByRef,
     listManualOrderLines,
+    getManualOrderWithLines,
     getManualOrderLine,
     updateManualOrderLine,
     setManualOrderLineStatus,

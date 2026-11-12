@@ -166,7 +166,7 @@ const {
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, findCleaningByRef, finishCleaningFromApp, listOpenCleaningsOf, getCleaningLast, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
-    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, listManualItemShips,getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
+    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, listManualItemShips,getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderWithLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
     addTemperatureRecord, findTemperatureByRef, getTemperatureLast, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, findSafetyCheckByRef, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
@@ -8275,6 +8275,33 @@ app.post('/api/public/pedido-manual/:token/send', publicManualOrderLimiter, (req
     const out = createManualOrder({ clientId: row.clientId, costCenterId: row.costCenterId || 0, requesterName: name, requesterUserId: signedIn ? user.sub : null, source: signedIn ? 'user' : 'qr', lines, placeId: place ? place.id : 0, placeName: place ? place.name : '' });
     res.set('Cache-Control', 'no-store');
     res.status(201).json({ folio: manualFolio(out.id), createdAt: sqlUtcIso(out.createdAt), lines: out.lines, name, place: place ? place.name : '', now: new Date().toISOString() });
+});
+// «Consultar un pedido» del QR: se escribe el número (PM-0005, pm-5 o solo 5) y sale qué se pidió y en qué va (Pendiente, Parcial o Surtido, y el de cada artículo). Solo lectura. Solo salen los pedidos del MISMO centro de
+// costos del QR (los números son seguidos y de todo el sistema: otro centro nunca se ve) y el límite es más bajo que el de la búsqueda para que no se pueda recorrer número por número. Con el candado «Pedir inicio de sesión»
+// cerrado también se pide la sesión; con «registrar» apagado (QR solo para consultar) sí se puede consultar, que es justo para lo que sirve ese QR.
+const publicManualLookupLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.', code: 'RATE' } });
+app.get('/api/public/pedido-manual/:token/order', publicManualLookupLimiter, (req, res) => {
+    const target = manualOrderTarget(req, res);
+    if (!target) return;
+    const { row } = target;
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    const locks = qrLocksOf('manual_order', row.clientId, row.costCenterId || 0);
+    const user = optionalSessionUser(req);
+    const signedIn = !!user && Number(user.clientId) === Number(row.clientId);
+    if (locks.signin && !signedIn) return res.status(401).json({ message: 'Este QR pide iniciar sesión.', code: 'LOGIN' });
+    const match = /^(?:PM[\s-]*)?0*(\d{1,9})$/i.exec(String(req.query.n || '').trim());
+    const orderId = match ? Number(match[1]) : 0;
+    if (!orderId) return res.status(400).json({ message: 'Escribe el número del pedido, por ejemplo PM-0005.', code: 'NUMBER' });
+    const found = getManualOrderWithLines(row.clientId, orderId, row.costCenterId || 0);
+    if (!found) return res.status(404).json({ message: 'No existe ese pedido en este centro de costos.', code: 'NOTFOUND', folio: manualFolio(orderId) });
+    const { order, lines } = found;
+    const supplied = lines.filter((l) => l.status === 'supplied').length;
+    res.json({
+        folio: manualFolio(order.id), createdAt: sqlUtcIso(order.created_at), name: order.requester_name || '', place: order.place_name || '',
+        status: !lines.length || supplied === 0 ? 'pending' : (supplied === lines.length ? 'supplied' : 'partial'), supplied,
+        lines: lines.map((l) => ({ lineNo: l.line_no, code: l.code, description: l.description, uom: l.uom, quantity: l.quantity, needBy: l.need_by || '', status: l.status === 'supplied' ? 'supplied' : 'pending' })),
+        now: new Date().toISOString(),
+    });
 });
 
 // «Cerrar pedido…» del QR: la LISTA del pedido armado (o ya enviado, con su número) en PDF o Excel. Lo que sale en el archivo (código, descripción única, unidad, empresa, sitio, centro) se toma SIEMPRE del servidor a partir

@@ -9,10 +9,10 @@
     <link rel="icon" href="/icons/icon-512.png">
     <style>
         :root{
-            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --soft:#f1e4f5; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14); --xl:#1f7a4d; --xlsoft:#e3f3ea; --pdf:#b3402f; --pdfsoft:#fbe6e1;
+            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --soft:#f1e4f5; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14); --xl:#1f7a4d; --xlsoft:#e3f3ea; --pdf:#b3402f; --pdfsoft:#fbe6e1; --amber:#a86a00; --amberbg:#fdf0d4;
         }
         @media (prefers-color-scheme: dark){
-            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --soft:#3a2745; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); --xl:#6fd0a0; --xlsoft:#1f3a2e; --pdf:#ff9f8f; --pdfsoft:#432723; }
+            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --soft:#3a2745; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); --xl:#6fd0a0; --xlsoft:#1f3a2e; --pdf:#ff9f8f; --pdfsoft:#432723; --amber:#f0be63; --amberbg:#43341a; }
         }
         *{ box-sizing:border-box; }
         html,body{ margin:0; min-height:100%; }
@@ -167,7 +167,36 @@
         .whol{ font-size:.66rem; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
         .whosum b{ font-size:.95rem; line-height:1.3; overflow-wrap:anywhere; }
         .whosum .link{ flex:none; }
-        .whofoot{ display:flex; justify-content:flex-end; margin-top:-.2rem; }
+        .whofoot{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin-top:-.2rem; }
+        .whofoot [data-whodone]{ margin-left:auto; } /* «Listo» siempre a la derecha; «Consultar un pedido» a la izquierda */
+        /* «Consultar un pedido»: acceso en la tarjeta de arriba y hoja con el resultado (número de pedido, estatus y artículos) */
+        .consultlink{ display:inline-flex; align-items:center; gap:.45rem; }
+        .consultlink svg{ width:1rem; height:1rem; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+        .whosub{ border-top:1px solid var(--line); margin:.1rem -1rem -.2rem; padding:.25rem 1rem 0; display:flex; }
+        .cs-row{ display:flex; gap:.5rem; }
+        .cs-row input{ flex:1; min-width:0; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.04em; text-transform:uppercase; }
+        .cs-row input::placeholder{ text-transform:none; letter-spacing:0; font-family:system-ui,sans-serif; }
+        .cs-row .btn{ width:auto; padding-inline:1.1rem; }
+        .cs-hint{ font-size:.74rem; color:var(--muted); }
+        .cs-sum{ border:1.5px solid var(--accent); border-radius:1.1rem; padding:.75rem; display:flex; flex-direction:column; gap:.5rem; background:color-mix(in srgb, var(--soft) 55%, var(--surface)); }
+        .cs-top{ display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap; }
+        .cs-folio{ font:800 1.5rem ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.04em; }
+        .cs-pill{ font-size:.74rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; border-radius:999px; padding:.15rem .7rem; }
+        .cs-pill.supplied{ background:var(--xlsoft); color:var(--xl); }
+        .cs-pill.pending{ background:var(--pdfsoft); color:var(--pdf); }
+        .cs-pill.partial{ background:var(--amberbg); color:var(--amber); }
+        .cs-meta{ display:grid; grid-template-columns:auto minmax(0,1fr); gap:.12rem .8rem; font-size:.82rem; }
+        .cs-meta span{ color:var(--muted); }
+        .cs-meta b{ font-weight:600; overflow-wrap:anywhere; }
+        .cs-it{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.15rem .7rem; padding:.55rem 0; border-bottom:1px solid var(--line); }
+        .cs-it:last-child{ border-bottom:0; }
+        .cs-it b{ font-size:.88rem; font-weight:600; line-height:1.25; overflow-wrap:anywhere; }
+        .cs-it small{ display:block; color:var(--muted); font-size:.72rem; }
+        .cs-q{ text-align:right; font-weight:800; font-variant-numeric:tabular-nums; font-size:.95rem; white-space:nowrap; }
+        .cs-q small{ font-weight:500; }
+        .cs-st{ display:block; font-size:.68rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+        .cs-st.supplied{ color:var(--xl); }
+        .cs-st.pending{ color:var(--pdf); }
         .scroll.locked{ opacity:.6; pointer-events:none; }
         .whorow{ display:grid; grid-template-columns:1fr; gap:12px; }
         /* en pantalla ancha: «Quién pide», «Lugar que solicita» y «Enviar pedido» en un solo renglón; en la angosta (aunque se elija la tabla), uno debajo del otro */
@@ -369,6 +398,11 @@ const TEXT = {
         login: 'Iniciar sesión', loginHint: 'Inicia sesión en el sistema y vuelve a abrir este QR.', locked: 'Este QR ya no permite enviar pedidos.', tooMany: 'Un pedido lleva hasta 40 artículos.',
         whenTitle: 'Todo el pedido para', asap: 'Urgente', tomorrow: 'Mañana', otherDate: 'Otra fecha…', addDate: '+ Otra fecha para este artículo', needBy: 'Para', article: 'Artículo', total: 'Total', perDay: 'Lo que va a llegar cada día', nothingYet: 'Nada todavía: escribe una cantidad en un día.', addColumn: '+ Otra fecha', errDate: 'Una fecha no es válida: elige desde mañana y hasta 14 días.', layoutTitle: 'Ver el pedido como', layoutList: 'Lista', layoutTable: 'Tabla', todayIs: 'Hoy es {d}', emptyTable: 'Todavía no escribes ninguna cantidad. Escríbela en el día que la quieras.', noMatch: 'Ningún artículo cumple el filtro.', showing: 'Mostrando {n} de {m} códigos', showMore: 'Ver más', filterHint: 'La lista de la tabla se filtra mientras escribes.', inTotal: 'en total', onlyWithQty: 'Solo lo que lleva cantidad', onlyWithQtyDay: 'Solo artículos con cantidad este día',
         change: 'Cambiar', whoNow: 'Pide', close: 'Cerrar', closeOrder: 'Cerrar pedido…', closeTitle: 'Cerrar pedido', dlList: 'Descargar listado', dlThis: 'Descargar este pedido', fmtPdf: 'PDF', fmtXlsx: 'Excel', preparing: 'Preparando el archivo…', downloaded: 'Descargado: {f}', errDownload: 'No se pudo preparar el archivo. Revisa tu conexión e inténtalo de nuevo.', sheetWhen: '¿Para cuándo?', sheetMine: 'Lo que llevas de este código', sheetUnitDay: '{u} en ese día', sheetDone: 'Listo · {n}', sheetDoneEmpty: 'Listo', sheetRemoveAll: 'Quitar del pedido', sheetNote: '{today}. Se pide desde mañana y hasta 14 días.', gotDay: '1 día', gotDays: '{d} días', qtyOfDay: 'Cantidad de ese día',
+        consultLink: 'Consultar un pedido', consultTitle: 'Consultar un pedido', consultHelp: 'Escribe el número que te dieron al enviarlo.', consultPlaceholder: 'Número de pedido (PM-0005)', consultBtn: 'Consultar', consulting: 'Consultando…',
+        consultHint: 'También sirve escribir solo el número: 5 equivale a PM-0005.', consultBad: 'Escribe el número del pedido, por ejemplo PM-0005 (o solo 5).', consultNotFound: 'No encontramos el pedido {n} en este centro de costos. Revisa el número que te dieron al enviarlo.',
+        consultErr: 'No se pudo consultar. Revisa tu conexión e inténtalo de nuevo.', consultTooMany: 'Hiciste muchas consultas seguidas. Espera un minuto e inténtalo de nuevo.', consultLogin: 'Este QR pide iniciar sesión para consultar pedidos.',
+        csWho: 'Pidió', csPlace: 'Lugar', csSent: 'Enviado', csItems: 'Artículos', csItemsVal: '{n} · {s} surtido', csItemsVals: '{n} · {s} surtidos', csList: 'Lo que se pidió', csFor: 'Para', csNote: 'Estatus al momento de consultar.',
+        stPending: 'Pendiente', stPartial: 'Parcial', stSupplied: 'Surtido',
     },
     en: {
         title: 'Manual Order', loading: 'Loading…', notFound: 'This QR no longer matches any cost center.', searchTitle: 'Find an item', searchPlaceholder: 'Code, description, UoM or category',
@@ -384,6 +418,11 @@ const TEXT = {
         login: 'Sign in', loginHint: 'Sign in to the system and open this QR again.', locked: 'This QR no longer allows sending orders.', tooMany: 'An order takes up to 40 items.',
         whenTitle: 'The whole order for', asap: 'Urgent', tomorrow: 'Tomorrow', otherDate: 'Other date…', addDate: '+ Another date for this item', needBy: 'For', article: 'Item', total: 'Total', perDay: 'What will arrive each day', nothingYet: 'Nothing yet: type a quantity on a day.', addColumn: '+ Other date', errDate: 'A date is not valid: choose from tomorrow up to 14 days.', layoutTitle: 'View the order as', layoutList: 'List', layoutTable: 'Table', todayIs: 'Today is {d}', emptyTable: 'You have not typed any quantity yet. Type it on the day you want it.', noMatch: 'No item meets the filter.', showing: 'Showing {n} of {m} codes', showMore: 'Show more', filterHint: 'The table list is filtered as you type.', inTotal: 'in total', onlyWithQty: 'Only what has a quantity', onlyWithQtyDay: 'Only items with a quantity on this day',
         change: 'Edit', whoNow: 'Ordering', close: 'Close', closeOrder: 'Close order…', closeTitle: 'Close order', dlList: 'Download list', dlThis: 'Download this order', fmtPdf: 'PDF', fmtXlsx: 'Excel', preparing: 'Preparing the file…', downloaded: 'Downloaded: {f}', errDownload: 'The file could not be prepared. Check your connection and try again.', sheetWhen: 'For when?', sheetMine: 'What you have for this code', sheetUnitDay: '{u} on that day', sheetDone: 'Done · {n}', sheetDoneEmpty: 'Done', sheetRemoveAll: 'Remove from the order', sheetNote: '{today}. You can order from tomorrow and up to 14 days.', gotDay: '1 day', gotDays: '{d} days', qtyOfDay: 'Quantity for that day',
+        consultLink: 'Look up an order', consultTitle: 'Look up an order', consultHelp: 'Type the number you were given when you sent it.', consultPlaceholder: 'Order number (PM-0005)', consultBtn: 'Look up', consulting: 'Looking up…',
+        consultHint: 'Typing just the number also works: 5 is the same as PM-0005.', consultBad: 'Type the order number, for example PM-0005 (or just 5).', consultNotFound: 'We could not find order {n} in this cost center. Check the number you were given when you sent it.',
+        consultErr: 'It could not be looked up. Check your connection and try again.', consultTooMany: 'You made many lookups in a row. Wait a minute and try again.', consultLogin: 'This QR requires signing in to look up orders.',
+        csWho: 'Ordered by', csPlace: 'Place', csSent: 'Sent', csItems: 'Items', csItemsVal: '{n} · {s} supplied', csItemsVals: '{n} · {s} supplied', csList: 'What was ordered', csFor: 'For', csNote: 'Status as of the moment you look it up.',
+        stPending: 'Pending', stPartial: 'Partial', stSupplied: 'Supplied',
     },
 }[LANG];
 document.documentElement.lang = LANG;
@@ -394,6 +433,7 @@ const parts = location.pathname.split('/').filter(Boolean);
 const TOKEN = parts[1] || '';
 const API = `/api/public/pedido-manual/${encodeURIComponent(TOKEN)}`;
 const KEY_NAME = 'sgn_pm_name';
+const KEY_FOLIO = 'sgn_pm_folio';     // el último número de pedido enviado desde este aparato: «Consultar un pedido» lo trae escrito
 const KEY_LAYOUT = 'sgn_pm_layout';   // cómo se ve el pedido en este aparato: lista o tabla (si no se eligió, según el ancho de la pantalla)
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -480,9 +520,11 @@ const placeFieldHtml = () => {
 };
 let whoCollapsed = false; // la tarjeta de arriba (lista del celular): true = un renglón «Pide … · …» con «Cambiar»; false = sus dos campos
 const whoSummaryText = () => { const p = (info.places || []).find((x) => x.id === placeId); return [String(nameValue || '').replace(/\s+/g, ' ').trim(), p ? p.name : ''].filter(Boolean).join(' · '); };
+// «Consultar un pedido»: el acceso a la hoja donde se escribe el número y sale qué se pidió y en qué va (a la izquierda de «Listo» en la tarjeta de arriba; reducida, debajo de «Pide … · Cambiar»; en la tabla, junto a «Lista/Tabla»).
+const consultLinkHtml = () => `<button type="button" class="link consultlink" data-consult><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.search}</svg>${esc(TEXT.consultLink)}</button>`;
 const whoCardInner = () => (whoCollapsed
-    ? `<div class="whosum"><div><span class="whol">${esc(TEXT.whoNow)}</span><b>${esc(whoSummaryText())}</b></div><button type="button" class="link" data-whochange>${esc(TEXT.change)}</button></div>`
-    : `${whoFieldHtml()}${placeFieldHtml()}${listReady() ? `<div class="whofoot"><button type="button" class="link" data-whodone>${esc(TEXT.sheetDoneEmpty)}</button></div>` : ''}`);
+    ? `<div class="whosum"><div><span class="whol">${esc(TEXT.whoNow)}</span><b>${esc(whoSummaryText())}</b></div><button type="button" class="link" data-whochange>${esc(TEXT.change)}</button></div><div class="whosub">${consultLinkHtml()}</div>`
+    : `${whoFieldHtml()}${placeFieldHtml()}<div class="whofoot">${consultLinkHtml()}${listReady() ? `<button type="button" class="link" data-whodone>${esc(TEXT.sheetDoneEmpty)}</button>` : ''}</div>`);
 function setWhoCollapsed(v) {
     if (wide) return;
     whoCollapsed = v;
@@ -526,7 +568,8 @@ function view() {
     if (sentInfo) { viewSent(); return; }
     const locks = info.locks || {};
     // Sin tarjeta de título ni chip del centro: el encabezado de arriba (logo, «Pedido Manual», sitio y empresa) ya dice qué pantalla es y de dónde.
-    if (!locks.register) { $('view').innerHTML = `<div class="card"><div class="msg">${esc(TEXT.viewOnly)}</div></div>`; return; }
+    // QR solo para consultar (registrar apagado): lo único que se puede hacer es consultar un pedido (con el candado de sesión cerrado, solo con sesión)
+    if (!locks.register) { $('view').innerHTML = `<div class="card"><div class="msg">${esc(TEXT.viewOnly)}</div>${locks.signin && !info.signedIn ? '' : `<div class="whofoot" style="justify-content:center">${consultLinkHtml()}</div>`}</div>`; return; }
     if (locks.signin && !info.signedIn) { $('view').innerHTML = `<div class="card"><div class="msg">${esc(TEXT.loginNeeded)}</div><a class="btn alt" style="text-align:center;text-decoration:none" href="/">${esc(TEXT.login)}</a><div class="muted" style="text-align:center">${esc(TEXT.loginHint)}</div></div>`; return; }
     // Lista (celular): el buscador es una tarjeta aparte y el artículo elegido se afina abajo. Tabla: el buscador va DENTRO de la celda «Artículo» de la tabla y al elegir un artículo se agrega su renglón para escribir cuánto quieres cada día.
     // En la lista (celular) PRIMERO se pide quién pide y el lugar que solicita (tarjeta de arriba) y ya después se habilita la lista de códigos.
@@ -845,7 +888,7 @@ function drawOrder() {
     const sendbox = `<div class="sendbox" id="sendbox"${cart.length ? '' : ' hidden'}><button type="button" class="btn ok" id="send">${esc(TEXT.closeOrder)}</button></div>`;
     const whoRow = wide ? `<div class="whorow">${whoFieldHtml()}${placeFieldHtml() || '<div class="whospacer"></div>'}${sendbox}</div>` : sendbox;
     const today = wide ? `<span class="muted">${esc(fill(TEXT.todayIs, { d: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(dayDate(todayIso())) }))}</span>` : '';
-    box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${layoutToggle()}</div>${whoRow}<div class="err" id="err" role="alert" hidden></div>${body}`;
+    box.innerHTML = `<div class="ohd"><h2 id="ohead">${headText()}</h2>${today}${wide ? consultLinkHtml() : ''}${layoutToggle()}</div>${whoRow}<div class="err" id="err" role="alert" hidden></div>${body}`;
     if (wide) { syncLock(); refreshTable(); fitScroll(); if (!catalog.loaded && !catalog.loading) loadCatalog(false); }
     if (pop) { const a = document.querySelector(`[data-filter="${pop.kind}"]`); if (a) { pop.anchor = a; placePop(); } else closePop(); }
 }
@@ -1071,6 +1114,7 @@ $('view').addEventListener('click', (event) => {
     if (defwhen) { setDefault(defwhen.getAttribute('data-defwhen')); return; }
     const rm = t.closest('[data-rm]');
     if (rm) { cart.splice(Number(rm.getAttribute('data-rm')), 1); drawOrder(); drawResults(); return; }
+    if (t.closest('[data-consult]')) { openConsult(); return; }
     if (t.closest('[data-whochange]')) { setWhoCollapsed(false); const n = $('name'); if (n) n.focus(); return; }
     if (t.closest('[data-whodone]')) { if (listReady()) setWhoCollapsed(true); else { const n = !whoOk() ? $('name') : $('place'); if (n) n.focus(); } return; }
     if (t.closest('#send')) openClose();
@@ -1227,6 +1271,7 @@ async function sendOrder() {
             return;
         }
         store.set(KEY_NAME, name);
+        store.set(KEY_FOLIO, body.folio || '');
         sentInfo = { folio: body.folio, name: body.name, place: body.place || '', placeId, createdAt: body.createdAt, items };
         cart = [];
         closeClose();
@@ -1234,6 +1279,71 @@ async function sendOrder() {
     } catch (e) {
         btn.disabled = false; btn.textContent = idleLabel;
         fail(TEXT.errGeneric);
+    }
+}
+// «Consultar un pedido»: una hoja (como la de «Cerrar pedido») con la casilla del número y, debajo, el resultado: número, estatus del pedido (Pendiente, Parcial o Surtido), quién pidió, lugar, hora y cada artículo con su cantidad,
+// para cuándo y su estatus. Solo lee: lo pide al servidor, que solo contesta con pedidos de ESTE centro de costos.
+let csSeq = 0;
+function closeConsult() {
+    const wrap = $('cswrap');
+    if (wrap) wrap.remove();
+    csSeq++; // lo que todavía venga en camino ya no se dibuja
+    if (!sheet && !$('closewrap')) document.body.classList.remove('sheet-open');
+}
+function openConsult() {
+    closeConsult();
+    const wrap = document.createElement('div');
+    wrap.className = 'shwrap';
+    wrap.id = 'cswrap';
+    wrap.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(TEXT.consultTitle)}" tabindex="-1"><div class="grab" aria-hidden="true"></div>
+        <div class="shead"><div><b>${esc(TEXT.consultTitle)}</b><small>${esc(TEXT.consultHelp)}</small></div><button type="button" class="shx" data-csclose aria-label="${esc(TEXT.close)}">✕</button></div>
+        <div class="cs-row"><input type="text" id="csnum" maxlength="14" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search" placeholder="${esc(TEXT.consultPlaceholder)}" aria-label="${esc(TEXT.folio)}" value="${esc(store.get(KEY_FOLIO))}"><button type="button" class="btn" id="csgo">${esc(TEXT.consultBtn)}</button></div>
+        <div class="shbody" id="csres" role="status" aria-live="polite"><div class="cs-hint">${esc(TEXT.consultHint)}</div></div></div>`;
+    document.body.appendChild(wrap);
+    document.body.classList.add('sheet-open');
+    wrap.addEventListener('click', (event) => {
+        const t = event.target;
+        if (t.id === 'cswrap' || t.closest('[data-csclose]')) { closeConsult(); return; }
+        if (t.closest('#csgo')) doConsult();
+    });
+    wrap.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.target.id === 'csnum') { event.preventDefault(); doConsult(); } else if (event.key === 'Escape') closeConsult(); });
+    const input = $('csnum');
+    if (input) { input.focus({ preventScroll: true }); input.select(); }
+}
+function consultResultHtml(o) {
+    const when = new Date(o.createdAt).toLocaleString(locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const stText = { pending: TEXT.stPending, partial: TEXT.stPartial, supplied: TEXT.stSupplied };
+    const itemsText = fill(o.supplied === 1 ? TEXT.csItemsVal : TEXT.csItemsVals, { n: o.lines.length, s: o.supplied });
+    const meta = [[TEXT.csWho, o.name], [TEXT.csPlace, o.place], [TEXT.csSent, when], [TEXT.csItems, itemsText]].filter(([, v]) => v).map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join('');
+    const lines = o.lines.map((l) => `<div class="cs-it"><div><b>${esc(l.description)}</b><small>${esc([l.code, l.uom].filter(Boolean).join(' · '))}</small><small>${esc(TEXT.csFor)}: ${esc(whenLabel(l.needBy))}</small></div><div class="cs-q">${esc(fmtQty(l.quantity))}<small> ${esc(l.uom)}</small><span class="cs-st ${l.status}">${esc(stText[l.status] || '')}</span></div></div>`).join('');
+    return `<div class="cs-sum"><div class="cs-top"><span class="cs-folio">${esc(o.folio)}</span><span class="cs-pill ${esc(o.status)}">${esc(stText[o.status] || '')}</span></div><div class="cs-meta">${meta}</div></div>
+        <div class="shq">${esc(TEXT.csList)}</div><div>${lines}</div><div class="cs-hint">${esc(TEXT.csNote)}</div>`;
+}
+async function doConsult() {
+    const input = $('csnum');
+    const out = $('csres');
+    const btn = $('csgo');
+    if (!input || !out) return;
+    const raw = String(input.value || '').trim();
+    const showErr = (text) => { out.innerHTML = `<div class="err" role="alert">${esc(text)}</div><div class="cs-hint">${esc(TEXT.consultHint)}</div>`; };
+    if (!/^(?:pm[\s-]*)?\d{1,9}$/i.test(raw) || !/[1-9]/.test(raw.replace(/^pm/i, ''))) { showErr(TEXT.consultBad); return; }
+    const mine = ++csSeq;
+    btn.disabled = true;
+    btn.textContent = TEXT.consulting;
+    try {
+        const res = await fetch(`${API}/order?n=${encodeURIComponent(raw)}`, { cache: 'no-store' });
+        const body = await res.json().catch(() => ({}));
+        if (mine !== csSeq) return; // se cerró la hoja o se consultó otro número mientras tanto
+        if (res.status === 401 && body.code === 'LOGIN') { closeConsult(); info.locks.signin = true; info.signedIn = false; view(); return; }
+        if (res.ok) { out.innerHTML = consultResultHtml(body); out.scrollTop = 0; }
+        else if (res.status === 404) showErr(fill(TEXT.consultNotFound, { n: body.folio || raw.toUpperCase() }));
+        else if (res.status === 400) showErr(TEXT.consultBad);
+        else if (res.status === 429) showErr(TEXT.consultTooMany);
+        else showErr(TEXT.consultErr);
+    } catch (e) {
+        if (mine === csSeq) showErr(TEXT.consultErr);
+    } finally {
+        if (mine === csSeq) { btn.disabled = false; btn.textContent = TEXT.consultBtn; }
     }
 }
 // Lo enviado: el número de pedido y su lista de artículos.

@@ -6437,8 +6437,8 @@
       "example": "16 footprints × 180 per footprint = 2,880 bundles."
     },
     "pmQr": {
-      "what": "Shows the Manual Order QR of the cost center selected above. Stick it in the warehouse: whoever scans it searches for the item (by code, description, unit of measure or category), enters the quantity and sends the order; it arrives here with their name and the time. The same window downloads the image and opens or closes the QR locks.",
-      "example": "you print the Main Warehouse QR and stick it by the door: staff request what they need from their phones."
+      "what": "Shows the Manual Order QR of the cost center selected above. Stick it in the warehouse: whoever scans it searches for the item (by code, description, unit of measure or category), enters the quantity and sends the order; it arrives here with their name and the time. The same window downloads the image and opens or closes the QR locks. Whoever scans it can also tap “Look up an order”, type the number they were given when sending (PM-0005) and see what was ordered and its status; they only see orders from this same cost center.",
+      "example": "you print the Main Warehouse QR and stick it by the door: staff request what they need from their phones and later type their order number to see whether it was supplied."
     },
     "pmEstatusFiltro": {
       "what": "Shows only the order lines that have the status you choose: All, Pending or Supplied (in brackets, how many there are of each). It is only the view: it does not change any status. Each line status is changed in its own select and the whole order status in the orders table. The list you download from this window follows what you see.",

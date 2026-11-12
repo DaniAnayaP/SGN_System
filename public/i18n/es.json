@@ -6436,8 +6436,8 @@
       "example": "16 huellas × 180 por huella = 2,880 atados."
     },
     "pmQr": {
-      "what": "Muestra el QR de Pedido Manual del centro de costos que tienes marcado arriba. Pégalo en el almacén: quien lo escanea busca el artículo (por código, descripción, unidad de medida o categoría), pone la cantidad y envía el pedido; llega aquí con su nombre y la hora. Desde la misma ventana se descarga la imagen y se cierran o abren los candados del QR.",
-      "example": "imprimes el QR del Almacén Central y lo pegas junto a la puerta: el personal pide lo que necesita desde su celular."
+      "what": "Muestra el QR de Pedido Manual del centro de costos que tienes marcado arriba. Pégalo en el almacén: quien lo escanea busca el artículo (por código, descripción, unidad de medida o categoría), pone la cantidad y envía el pedido; llega aquí con su nombre y la hora. Desde la misma ventana se descarga la imagen y se cierran o abren los candados del QR. Quien escanea también puede tocar «Consultar un pedido», escribir el número que le dieron al enviarlo (PM-0005) y ver qué se pidió y en qué estatus va; solo ve pedidos de este mismo centro de costos.",
+      "example": "imprimes el QR del Almacén Central y lo pegas junto a la puerta: el personal pide lo que necesita desde su celular y, después, escribe su número de pedido para ver si ya se surtió."
     },
     "pmEstatusFiltro": {
       "what": "Muestra solo los renglones del pedido que tengan el estatus que elijas: Todo, Pendiente o Surtido (entre paréntesis, cuántos hay de cada uno). Es solo la vista: no cambia ningún estatus. El estatus de cada renglón se cambia en su propio select y el de todo el pedido en la tabla de pedidos. La lista que se descarga de esta ventana sigue lo que ves.",
