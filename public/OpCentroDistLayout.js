@@ -2700,22 +2700,20 @@ function fxToggleAll() {
     renderPanel();
     refreshLive();
 }
-// Resto de la nave al enfocar: oculto por completo (por omisión) o «tenue» de fondo; se recuerda en este navegador.
+// Resto de la nave al enfocar: «tenue» de fondo (por omisión), oculto o con enfoque. Siempre se abre en Tenue: lo que se elija vale mientras la pantalla esté abierta y NO se recuerda para la próxima vez
+// (en Oculto y en Enfoque no se ve lo que no se eligió y parecía que faltaban cosas).
 const FIND_DIM_KEY = 'sgn_layout_find_dim';
 // «Lo demás» tiene tres opciones: Tenue (todo el Layout apagado y lo elegido resaltado), Oculto (solo lo elegido, centrado y AL MISMO TAMAÑO que en el Layout completo: sin acercar) y Enfoque (solo lo elegido y el croquis y el 3D se acercan).
 // state.findMode lo guarda; state.findDim (tenue o no) lo siguen usando el buscador y la franja de Editar, donde ocultar siempre acerca (es el Enfoque).
 const FIND_MODE_KEY = 'sgn_layout_find_mode';
 const FIND_MODES = ['tenue', 'oculto', 'enfoque'];
-function setFindMode(mode, persist = true) {
+function setFindMode(mode) {
     state.findMode = FIND_MODES.includes(mode) ? mode : 'tenue';
     state.findDim = state.findMode === 'tenue';
-    if (persist) { try { localStorage.setItem(FIND_MODE_KEY, state.findMode); } catch (err) { /* no se recuerda */ } }
 }
-try {
-    let saved = localStorage.getItem(FIND_MODE_KEY);
-    if (!saved) { const old = localStorage.getItem(FIND_DIM_KEY); saved = old === '0' ? 'enfoque' : 'tenue'; } // el «Oculto» de antes acercaba: ahora se llama Enfoque
-    setFindMode(saved, false);
-} catch (err) { setFindMode('tenue', false); /* sin almacenamiento: tenue */ }
+setFindMode('tenue');
+// lo que se recordaba de antes ya no se usa: se limpia para no dejar basura en el navegador
+try { localStorage.removeItem(FIND_MODE_KEY); localStorage.removeItem(FIND_DIM_KEY); } catch (err) { /* sin almacenamiento */ }
 // ---- Buscar en zonas: lo que hay dentro de las zonas elegidas -----------------------------------------------------------------------------
 // El enfoque de zonas es de UNA o de VARIAS (state.find = { kind: 'zone', id, ids }; state.findScope = 'zones' cuando «Buscar en» está en Zonas). «Qué ver» (state.findTypes) dice qué tipos de cosas se listan y se dibujan dentro de ellas
 // (sin elegir ninguno, todos). Una cosa es de la zona si queda dentro o sobre su borde (a 30 cm): huellas, activos, sensores, seguridad y pasillos ya traen su zona; paredes, puertas, luz, obstáculos, objetos y pisos se miden contra el dibujo.
