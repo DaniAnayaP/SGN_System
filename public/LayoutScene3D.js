@@ -203,6 +203,7 @@
         let spaceList = [];
         let zoneMeshes = [];
         let floorMeshes = []; // las losas de los pisos y las rampas (se pueden tocar en el paso Pisos o Rampas)
+        let roofMeshes = []; // los pedazos de cada techo (cubierta): se pueden tocar en el paso Techos
         let fpMeshes = []; // las losas de las huellas (se pueden tocar)
         let contourHits = []; // las zonas de toque (invisibles) de los lados o las esquinas del contorno: solo las pide el editor con el paso Contorno
         let contourPickMode = null; // 'sides' | 'corners' | null
@@ -417,6 +418,16 @@
                 const sz = LCh.ceilingSizeOf(e);
                 const W = Math.max(sz.l, sz.w, 0.2) + 0.2;
                 return { x: PX(Number(e.x) || 0), y: LCh.ceilingHangOf(lastLayout, e), z: PZ(Number(e.y) || 0), sx: W, sy: sz.h + 0.2, sz: W };
+            }
+            // un techo (cubierta) elegido: un cuadro alrededor de todos sus pedazos
+            if (hl.kind === 'roof') {
+                const ms = roofMeshes.filter((m) => m.userData.roofId === hl.id);
+                if (!ms.length) return null;
+                const rb = new THREE.Box3();
+                ms.forEach((m) => rb.expandByObject(m));
+                const rc = rb.getCenter(new THREE.Vector3());
+                const rs = rb.getSize(new THREE.Vector3());
+                return { x: rc.x, y: rc.y, z: rc.z, sx: Math.max(rs.x, 0.2), sy: Math.max(rs.y, 0.3), sz: Math.max(rs.z, 0.2) };
             }
             if (hl.kind === 'transit') {
                 const p = (lastLayout.transit || []).find((x) => x.id === hl.id);
@@ -676,6 +687,7 @@
             spaceList = [];
             zoneMeshes = [];
             floorMeshes = [];
+            roofMeshes = [];
             fpMeshes = [];
             contourHits = [];
             center = null;
@@ -855,7 +867,9 @@
                             rg.setIndex(idx);
                             rg.computeVertexNormals();
                             const mesh = new THREE.Mesh(rg, new THREE.MeshLambertMaterial({ color: colorHex, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
-                            mesh.raycast = () => {}; // el techo no tapa los toques a lo de abajo
+                            // se puede tocar solo en el paso Techos (con la lista roofMeshes): los demás toques usan sus propias listas, así que el techo no tapa lo de abajo
+                            mesh.userData.roofId = r.id;
+                            roofMeshes.push(mesh);
                             group.roof.add(mesh);
                             const topEdges = [];
                             for (let i = 0; i < n; i++) { const j = (i + 1) % n; topEdges.push(PX(pts[i][0]), hAt(pts[i][0], pts[i][1]) + RT2, PZ(pts[i][1]), PX(pts[j][0]), hAt(pts[j][0], pts[j][1]) + RT2, PZ(pts[j][1])); }
@@ -2109,9 +2123,14 @@
                     const fh = raycaster.intersectObjects(floorMeshes)[0];
                     if (fh) consider(fh, 'floor', fh.object.userData.floorId, fh.object);
                 }
+                if (!best && itemTypes.includes('roof') && roofMeshes.length) {
+                    const rh = raycaster.intersectObjects(roofMeshes)[0];
+                    if (rh) consider(rh, 'roof', rh.object.userData.roofId, rh.object);
+                }
                 let itemPayload = null;
                 if (best) {
-                    const b3 = new THREE.Box3().setFromObject(best.obj);
+                    const b3 = new THREE.Box3();
+                    if (best.type === 'roof') roofMeshes.filter((m) => m.userData.roofId === best.id).forEach((m) => b3.expandByObject(m)); else b3.setFromObject(best.obj);
                     const c3 = b3.getCenter(new THREE.Vector3());
                     const s3 = b3.getSize(new THREE.Vector3());
                     itemPayload = { kind: 'item', type: best.type, id: best.id, ramp: !!(best.obj.userData && best.obj.userData.isRamp) };

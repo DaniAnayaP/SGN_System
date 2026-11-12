@@ -2638,8 +2638,8 @@ function selectEntity(next, reveal = true) {
 // Tocar una figura en el 3D hace lo mismo que en el croquis: solo cuenta lo del paso que se está editando (en Zonas la zona, en Huella-Espacio la huella y en Activos el activo). Como en el 3D los activos tapan
 // el piso, tocar un activo en el paso Zonas elige la zona donde está y en Huella-Espacio la huella que lo lleva.
 // Lo que se puede tocar en el 3D en cada paso que edita cosas sueltas (los demás pasos ya tenían zona, huella, activo o lado): solo se elige lo de ese paso.
-const STEP_PICK_3D = { paredes: ['wall'], obstaculos: ['obstacle'], puertas: ['door'], luz: ['power'], sensores: ['sensor'], seguridad: ['safety'], techos: ['ceiling'], transito: ['transit'], objetos: ['object'], pisos: ['floor'], rampas: ['floor'] };
-const KIND_OF_3D_ITEM = { wall: 'obstacle', obstacle: 'obstacle', door: 'door', power: 'power', sensor: 'sensor', safety: 'safety', ceiling: 'ceiling', transit: 'transit', object: 'object', floor: 'floor' };
+const STEP_PICK_3D = { paredes: ['wall'], obstaculos: ['obstacle'], puertas: ['door'], luz: ['power'], sensores: ['sensor'], seguridad: ['safety'], techos: ['ceiling', 'roof'], transito: ['transit'], objetos: ['object'], pisos: ['floor'], rampas: ['floor'] };
+const KIND_OF_3D_ITEM = { wall: 'obstacle', obstacle: 'obstacle', door: 'door', power: 'power', sensor: 'sensor', safety: 'safety', ceiling: 'ceiling', roof: 'roof', transit: 'transit', object: 'object', floor: 'floor' };
 function selectFrom3d(sel) {
     if (!sel || !state.draft) return;
     let next = null;
@@ -2842,7 +2842,7 @@ function chosenInside(d, f) {
     return out;
 }
 function itemExists(d, type, id) {
-    const lists = { zone: d.zones, footprint: d.footprints, space: d.spaces, wall: d.obstacles, obstacle: d.obstacles, door: d.doors, power: d.power, sensor: d.sensors, safety: d.safety, ceiling: d.ceiling, transit: d.transit, object: d.objects, floor: LC.floorsAll(d) };
+    const lists = { zone: d.zones, footprint: d.footprints, space: d.spaces, wall: d.obstacles, obstacle: d.obstacles, door: d.doors, power: d.power, sensor: d.sensors, safety: d.safety, ceiling: d.ceiling, roof: d.roofs, transit: d.transit, object: d.objects, floor: LC.floorsAll(d) };
     return (lists[type] || []).some((x) => x.id === id);
 }
 // Los puntos de lo elegido (para encuadrar el croquis y el 3D alrededor).
