@@ -7039,7 +7039,7 @@ function layoutSummary(layout, section) {
     if (section === 'transito') return `${(layout.transit || []).length} pasillos`;
     if (section === 'objetos') return `${(layout.objects || []).length} objetos`;
     if (section === 'seguridad') return `${(layout.safety || []).length} elementos de seguridad`;
-    if (section === 'techos') return `${(layout.ceiling || []).length} elementos del techo`;
+    if (section === 'techos') return `${(layout.roofs || []).length} techos y ${(layout.ceiling || []).length} elementos colgados del techo`;
     if (section === 'zonas') return `${(layout.zones || []).length} zonas`;
     if (section === 'pisos') return `${(layout.floors || []).length} pisos`;
     if (section === 'rampas') return `${(layout.ramps || []).length} rampas`;
@@ -7354,6 +7354,9 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
         if (freshSafety.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshSafety.map((v) => v.message), section: 'seguridad' });
         const freshCeiling = LayoutCalc.newCeilingViolations(next, existing ? existing.layout : null);
         if (freshCeiling.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshCeiling.map((v) => v.message), section: 'techos' });
+        // Techos (cubiertas): cada techo cubre algo, un área va dentro del contorno y la parte alta no es más baja que la baja. Lo nuevo o lo que cambió y no cumple no se guarda.
+        const freshRoofs = LayoutCalc.newRoofViolations(next, existing ? existing.layout : null);
+        if (freshRoofs.length) return res.status(400).json({ message: 'El Layout tiene datos no válidos.', errors: freshRoofs.map((v) => v.message), section: 'techos' });
     }
     // Obstáculos con altura propia: no pueden pasar del techo (altura del piso + alto). Lo nuevo o lo que cambió y no cumple no se guarda; lo que ya estaba así y no se tocó se deja pasar.
     {

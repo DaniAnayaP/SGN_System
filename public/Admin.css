@@ -7488,14 +7488,14 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-map svg.has-hl .lz:not(.hl-on), .layout-map svg.has-hl .lzf:not(.hl-on), .layout-map svg.has-hl .lhb:not(.hl-on), .layout-map svg.has-hl .lhbf:not(.hl-on), .layout-map svg.has-hl .ls:not(.hl-on), .layout-map svg.has-hl .lsf:not(.hl-on){ opacity: 0.4; }
 .hl-shape{ fill: none; stroke-linejoin: round; stroke-dasharray: none; vector-effect: non-scaling-stroke; pointer-events: none; }
 /* paredes, columnas y desniveles: al elegir uno, los demás se atenúan (como zonas, huellas y activos) y su contorno de resaltado es más grueso porque son figuras delgadas */
-.layout-map svg.has-hl .lo:not(.hl-on), .layout-map svg.has-hl .lsafe:not(.hl-on), .layout-map svg.has-hl .lceil:not(.hl-on), .layout-map svg.has-hl .lobj:not(.hl-on), .layout-map svg.has-hl .ld:not(.hl-on), .layout-map svg.has-hl .le:not(.hl-on), .layout-map svg.has-hl .lsn:not(.hl-on){ opacity: 0.4; }
+.layout-map svg.has-hl .lroof:not(.hl-on), .layout-map svg.has-hl .lo:not(.hl-on), .layout-map svg.has-hl .lsafe:not(.hl-on), .layout-map svg.has-hl .lceil:not(.hl-on), .layout-map svg.has-hl .lobj:not(.hl-on), .layout-map svg.has-hl .ld:not(.hl-on), .layout-map svg.has-hl .le:not(.hl-on), .layout-map svg.has-hl .lsn:not(.hl-on){ opacity: 0.4; }
 .layout-map svg .hl-box{ fill: none; stroke: none; pointer-events: none; }
 /* Zonas de toque del contorno (paso Contorno): invisibles y anchas para poder tocar un lado, o una esquina, y elegir su renglón de la tabla. */
 .layout-map svg .side-hit{ fill: none; stroke: transparent; stroke-width: 14; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: pointer; }
 .layout-map svg .corner-hit{ fill: transparent; stroke: none; pointer-events: all; cursor: pointer; }
 /* Las etiquetas de medida de los lados (P2 · 20 m) quedan justo en medio del lado: dejan pasar el toque para poder elegir el lado también ahí. */
 .layout-map svg .lt2.lx{ pointer-events: none; }
-.layout-map svg.has-hl.hl-soft-mode .lo:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lsafe:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lceil:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lobj:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .ld:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .le:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lsn:not(.hl-on){ opacity: 0.75; }
+.layout-map svg.has-hl.hl-soft-mode .lroof:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lo:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lsafe:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lceil:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lobj:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .ld:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .le:not(.hl-on), .layout-map svg.has-hl.hl-soft-mode .lsn:not(.hl-on){ opacity: 0.75; }
 .hl-obs.hl-under{ stroke-width: 11; }
 .hl-obs.hl-ring{ stroke-width: 6; }
 .hl-obs.hl-soft{ stroke-width: 4.5; stroke-dasharray: 6 3; }
@@ -8503,3 +8503,24 @@ th.sku-th-actions{ min-width: 9.5rem; white-space: nowrap; overflow: visible; te
 tr.sku-row-inactive > td:not(.admin-table-actions){ opacity: 0.55; }
 td.sku-status-inactive{ font-style: italic; }
 tr.sku-row-selected > td{ background-image: linear-gradient(color-mix(in srgb, var(--color-accent, #7d3f8f) 14%, transparent), color-mix(in srgb, var(--color-accent, #7d3f8f) 14%, transparent)); }
+
+/* Techos (cubiertas): el dibujo de cada techo en el croquis, su etiqueta, su tabla y su simbología */
+.layout-map svg .lroof{ stroke-width: 2; pointer-events: none; }
+.layout-map svg .lroof.lroof-pick{ pointer-events: all; cursor: pointer; }
+.layout-map svg .lroof-bad{ stroke: #c0392b !important; stroke-dasharray: 6 4; }
+.layout-map svg .lroof-arrow{ stroke-width: 2; fill: none; pointer-events: none; }
+.layout-map svg .lroof-ridge{ stroke-width: 3; stroke-dasharray: 10 6; fill: none; pointer-events: none; }
+.layout-map svg .lroof-lab rect{ fill: var(--color-surface, #ffffff); stroke-width: 1.5; }
+.layout-map svg .lroof-t1{ font-size: 10px; font-weight: 700; fill: var(--color-text-primary, #2a1b30); }
+.layout-map svg .lroof-t2{ font-size: 9px; fill: var(--color-text-secondary, #4f3d57); }
+.layout-roof-sub{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; margin-top: 1.1rem; }
+.layout-roof-sub h4{ margin: 0; font-size: 0.9rem; }
+.layout-roof-area{ display: flex; gap: 0.25rem; }
+.layout-roof-in{ width: 4.2rem; }
+.layout-roof-color{ display: flex; align-items: center; gap: 0.35rem; }
+.layout-roof-dot{ width: 0.85rem; height: 0.85rem; border-radius: 3px; border: 1px solid rgba(0, 0, 0, 0.3); flex: none; display: inline-block; }
+.layout-roof-zadd{ font-size: 0.72rem; padding: 0.05rem 0.3rem; max-width: 5.5rem; }
+.lg-roof{ display: inline-block; width: 22px; height: 13px; border-radius: 3px; border: 2px solid; vertical-align: middle; }
+.lg-roof-gable{ border-color: #a63fb5; background: repeating-linear-gradient(45deg, rgba(166, 63, 181, 0.55) 0 2px, transparent 2px 6px); }
+.lg-roof-shed{ border-color: #1f8a7d; background: repeating-linear-gradient(0deg, rgba(31, 138, 125, 0.55) 0 2px, transparent 2px 6px); }
+.lg-roof-flat{ border-color: #c27a1c; background: repeating-linear-gradient(45deg, rgba(194, 122, 28, 0.5) 0 2px, transparent 2px 6px), repeating-linear-gradient(-45deg, rgba(194, 122, 28, 0.5) 0 2px, transparent 2px 6px); }

@@ -191,9 +191,9 @@ function table(headKeys, rows, filterId) {
 }
 // Embudo de filtros de los encabezados: el menú vive en Dashboard.js y filtra por lo que muestra cada celda (el campo, no su texto). Se vuelve a enganchar cada vez que el
 // panel se dibuja de nuevo; los filtros puestos se conservan y se aplican otra vez. Los renglones se esconden, nunca se quitan, así que su número (data-i) no cambia.
-const FILTER_TABLE_IDS = ['layout-ubicaciones', 'layout-zonas', 'layout-pisos', 'layout-rampas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-niveles', 'layout-localizadores', 'layout-relacion', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-techos', 'layout-objetos', 'layout-transito'];
+const FILTER_TABLE_IDS = ['layout-ubicaciones', 'layout-zonas', 'layout-pisos', 'layout-rampas', 'layout-espacios', 'layout-activos', 'layout-posiciones', 'layout-niveles', 'layout-localizadores', 'layout-relacion', 'layout-paredes', 'layout-contorno-lados', 'layout-contorno-esquinas', 'layout-obstaculos', 'layout-puertas', 'layout-luz', 'layout-sensores', 'layout-seguridad', 'layout-techos', 'layout-cubiertas', 'layout-objetos', 'layout-transito'];
 // Qué tabla con filtro corresponde a cada lista que se agrega: al agregar un renglón se quitan sus filtros para que el nuevo siempre se vea.
-const FILTER_OF_LIST = { ubicaciones: 'layout-ubicaciones', obstacles: 'layout-obstaculos', doors: 'layout-puertas', power: 'layout-luz', sensors: 'layout-sensores', safety: 'layout-seguridad', ceiling: 'layout-techos', transit: 'layout-transito', objects: 'layout-objetos', vertices: 'layout-contorno-esquinas', contornoLados: 'layout-contorno-lados' };
+const FILTER_OF_LIST = { ubicaciones: 'layout-ubicaciones', obstacles: 'layout-obstaculos', doors: 'layout-puertas', power: 'layout-luz', sensors: 'layout-sensores', safety: 'layout-seguridad', ceiling: 'layout-techos', roofs: 'layout-cubiertas', transit: 'layout-transito', objects: 'layout-objetos', vertices: 'layout-contorno-esquinas', contornoLados: 'layout-contorno-lados' };
 function clearFilterOf(list) {
     if (window.Dashboard && Dashboard.clearExternalColumnFilters && FILTER_OF_LIST[list]) Dashboard.clearExternalColumnFilters(FILTER_OF_LIST[list]);
 }
@@ -785,6 +785,163 @@ function applyCeilingMarks() {
         box.innerHTML = all.map((v) => `<p>${esc(ceilingIssueText(v))}</p>`).join('');
     }
 }
+// ---- Techos (cubiertas): las secciones de techo del paso Techos -------------------------------------------------------------------------------------
+// Las faltas de cada techo (LayoutCalc.roofViolations): no cubre nada (empty), un área queda fuera del contorno (outside) o su parte alta es más baja que la baja (order). rfIssues = id -> { empty, outside, order }.
+let rfIssues = new Map();
+function computeRoofIssues() {
+    rfIssues = new Map();
+    if (!state.draft) return;
+    LC.roofViolations(state.draft).forEach((v) => { const m = rfIssues.get(v.id) || {}; m[v.kind] = v; rfIssues.set(v.id, m); });
+}
+const roofIssueText = (v) => t(`main.layoutVioRf_${v.kind}`, { code: v.code, ...(v.vars || {}) });
+// El código, la pendiente y el color de cada techo salen de lo escrito; las cajas del área y de las alturas se marcan en rojo si algo no cumple y abajo de la tabla va la lista de lo que falta.
+function applyRoofMarks() {
+    if (!state.draft) return;
+    computeRoofIssues();
+    (state.draft.roofs || []).forEach((r, i) => {
+        const bad = rfIssues.get(r.id) || {};
+        ['x', 'y', 'l', 'w'].forEach((key) => { const box = document.querySelector(`[data-l="roofs"][data-i="${i}"][data-k="${key}"]`); if (box) box.classList.toggle('layout-missing', !!(bad.outside || bad.empty)); });
+        ['h', 'h2'].forEach((key) => { const box = document.querySelector(`[data-l="roofs"][data-i="${i}"][data-k="${key}"]`); if (box) box.classList.toggle('layout-missing', !!bad.order); });
+        const codeCell = document.querySelector(`[data-rf-code="${i}"]`);
+        if (codeCell) codeCell.textContent = r.code || '';
+        const slopeCell = document.querySelector(`[data-rf-slope="${i}"]`);
+        if (slopeCell) slopeCell.textContent = `${fmt(LC.roofSlopePct(state.draft, r))} %`;
+        const dot = document.querySelector(`[data-rf-dot="${i}"]`);
+        if (dot) dot.style.background = LC.roofColorOf(r);
+    });
+    const box = document.querySelector('[data-rf-issues]');
+    if (box) {
+        const all = LC.roofViolations(state.draft);
+        box.hidden = !all.length;
+        box.innerHTML = all.map((v) => `<p>${esc(roofIssueText(v))}</p>`).join('');
+    }
+}
+// La tabla de los techos (arriba de lo que cuelga del techo): forma, qué cubre (toda la nave, zonas o un área), hacia dónde cae o cómo corre la cumbrera, alturas, pendiente (se calcula), material y color.
+function roofSectionHtml(d, dis) {
+    const roofs = d.roofs || [];
+    const dirCell = (r, i) => {
+        if (r.shape === 'shed') return cellSelect('roofs', i, 'dir', optionsHtml('roofDirShed', LC.ROOF_SHED_DIRS, r.dir || 's'), dis, 'layoutRoofCae');
+        if (r.shape === 'gable') return cellSelect('roofs', i, 'dir', optionsHtml('roofDirGable', LC.ROOF_GABLE_DIRS, r.dir || 'ew'), dis, 'layoutRoofCae');
+        return '<td class="layout-calc">—</td>';
+    };
+    const coverCell = (r, i) => {
+        if (r.cover === 'zones') {
+            const chosen = r.zoneIds || [];
+            const chips = chosen.map((zid) => { const z = (d.zones || []).find((x) => x.id === zid); return `<span class="layout-chip" data-help-key="layoutRoofZonas">${esc(z ? z.name : '—')}${dis ? '' : `<button type="button" class="layout-chip-x" data-roof-zdel="${i}:${esc(zid)}" aria-label="${esc(t('main.layoutQuitar'))}">×</button>`}</span>`; }).join('');
+            const left = (d.zones || []).filter((z) => z.active !== false && !chosen.includes(z.id));
+            const add = dis || !left.length ? '' : `<select class="layout-roof-zadd" data-roof-zadd="${i}" data-help-key="layoutRoofZonas" aria-label="${esc(t('main.layoutRoofZonaAgregar'))}"><option value="">＋</option>${left.map((z) => `<option value="${esc(z.id)}">${esc(z.name)}</option>`).join('')}</select>`;
+            return `<td><div class="layout-chips">${chips}${add}</div></td>`;
+        }
+        if (r.cover === 'area') {
+            const inputs = ['x', 'y', 'l', 'w'].map((k) => `<input type="number" step="0.1" class="layout-roof-in" data-l="roofs" data-i="${i}" data-k="${k}" data-help-key="layoutRoofArea" value="${r[k] === undefined ? '' : r[k]}" placeholder="${esc(t(`main.layoutRoofArea_${k}`))}" title="${esc(t(`main.layoutRoofAreaTitulo_${k}`))}" aria-label="${esc(t(`main.layoutRoofAreaTitulo_${k}`))}"${dis ? ' disabled' : ''}>`).join('');
+            return `<td><div class="layout-roof-area">${inputs}</div></td>`;
+        }
+        return '<td class="layout-calc">—</td>';
+    };
+    const rows = roofs.map((r, i) => {
+        const h2 = r.shape === 'flat' ? '<td class="layout-calc">—</td>' : cellNum('roofs', i, 'h2', r.h2 > 0 ? r.h2 : '', dis, '0.05');
+        const color = `<td><div class="layout-roof-color"><i class="layout-roof-dot" data-rf-dot="${i}" style="background:${LC.roofColorOf(r)}"></i><select data-l="roofs" data-i="${i}" data-k="color" data-help-key="layoutRoofColor"${dis ? ' disabled' : ''}>${optionsHtml('roofColor', Object.keys(LC.ROOF_COLORS), r.color || LC.ROOF_COLOR_BY_SHAPE[r.shape])}</select></div></td>`;
+        return `<tr><td class="layout-calc"><b data-rf-code="${i}">${esc(r.code || '')}</b></td>${cellSelect('roofs', i, 'shape', optionsHtml('roofShape', LC.ROOF_SHAPES, r.shape), dis, 'layoutRoofForma')}${cellText('roofs', i, 'name', r.name || '', dis)}${cellSelect('roofs', i, 'cover', optionsHtml('roofCover', LC.ROOF_COVERS, r.cover), dis, 'layoutRoofCubre')}${coverCell(r, i)}${dirCell(r, i)}${cellNum('roofs', i, 'h', r.h > 0 ? r.h : '', dis, '0.05')}${h2}<td class="layout-calc" data-rf-slope="${i}">${fmt(LC.roofSlopePct(d, r))} %</td>${cellSelect('roofs', i, 'material', optionsHtml('roofMaterial', LC.ROOF_MATERIALS, r.material || 'sheet'), dis)}${color}${removeCell('roofs', i, dis)}</tr>`;
+    });
+    const list = rows.length ? table(['main.layoutCodigo', 'main.layoutRoofForma', 'main.layoutNombre', 'main.layoutRoofCubre', 'main.layoutRoofDetalle', 'main.layoutRoofCae', 'main.layoutRoofAlero', 'main.layoutRoofCumbrera', 'main.layoutRoofPendiente', 'main.layoutRoofMaterial', 'main.layoutRoofColor', ''], rows, 'layout-cubiertas') : `<p class="layout-muted">${esc(t('main.layoutCubiertasVacio'))}</p>`;
+    return `${list}<div class="layout-vio" data-rf-issues hidden></div>`;
+}
+// Techos nuevos: al cambiar la forma se agregan (o se quitan) la altura alta y hacia dónde cae; al cambiar lo que cubre se limpian las zonas o el área.
+function setRoofShape(row, shape) {
+    if (!LC.ROOF_SHAPES.includes(shape)) return;
+    row.shape = shape;
+    if (shape === 'flat') { delete row.h2; delete row.dir; return; }
+    const h = Number(row.h) > 0 ? Number(row.h) : 6;
+    if (!(Number(row.h2) > 0)) row.h2 = round2(h + (shape === 'gable' ? 2 : 1));
+    const dirs = shape === 'shed' ? LC.ROOF_SHED_DIRS : LC.ROOF_GABLE_DIRS;
+    if (!dirs.includes(row.dir)) row.dir = shape === 'shed' ? 's' : 'ew';
+}
+function setRoofCover(row, cover) {
+    if (!LC.ROOF_COVERS.includes(cover)) return;
+    row.cover = cover;
+    delete row.zoneIds; delete row.x; delete row.y; delete row.l; delete row.w;
+    if (cover === 'zones') row.zoneIds = [];
+    if (cover === 'area') {
+        const xs = state.draft.vertices.map((p) => p[0]);
+        const ys = state.draft.vertices.map((p) => p[1]);
+        const x0 = Math.min(...xs); const y0 = Math.min(...ys);
+        row.x = round2(x0 + 1);
+        row.y = round2(y0 + 1);
+        row.l = round2(Math.max(1, Math.min(10, (Math.max(...xs) - x0) / 2)));
+        row.w = round2(Math.max(1, Math.min(10, (Math.max(...ys) - y0) / 2)));
+    }
+}
+// Elegir una zona más en un techo (o quitarla): el techo toma la forma de las zonas elegidas.
+function toggleRoofZone(i, zoneId, on) {
+    const row = (state.draft.roofs || [])[i];
+    if (!row || row.cover !== 'zones') return;
+    const set = new Set(row.zoneIds || []);
+    if (on) set.add(zoneId); else set.delete(zoneId);
+    row.zoneIds = [...set];
+}
+// El dibujo de los techos en el croquis: cada sección sobre las zonas, con su rayado y su color, su caída (flechas y, en dos aguas, la cumbrera) y una etiqueta con su código, su forma y sus alturas. Es translúcido para que se vean las zonas de abajo.
+function roofLayerSvg(d, X, Y, sc, pick) {
+    let defs = '';
+    let body = '';
+    (d.roofs || []).forEach((r) => {
+        const rings = LC.roofRings(d, r);
+        if (!rings.length) return;
+        const box = LC.roofBox(rings);
+        const col = LC.roofColorOf(r);
+        const safe = String(r.id).replace(/[^A-Za-z0-9_-]/g, '');
+        const bad = rfIssues.get(r.id);
+        const px0 = X(box.x0); const px1 = X(box.x1); const py0 = Y(box.y0); const py1 = Y(box.y1);
+        const lines = r.shape === 'gable' ? `<line x1="0" y1="0" x2="0" y2="9" stroke="${col}" stroke-width="2" opacity="0.42"/>` : (r.shape === 'shed' ? `<line x1="0" y1="3" x2="9" y2="3" stroke="${col}" stroke-width="2" opacity="0.45"/>` : `<path d="M0,0L9,9M9,0L0,9" stroke="${col}" stroke-width="1.4" opacity="0.45" fill="none"/>`);
+        defs += `<pattern id="rfp-${safe}" width="9" height="9" patternUnits="userSpaceOnUse"${r.shape === 'gable' ? ' patternTransform="rotate(45)"' : ''}><rect width="9" height="9" fill="${col}" opacity="0.1"/>${lines}</pattern><marker id="rfa-${safe}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0L8,4L0,8z" fill="${col}"/></marker>`;
+        const shapeName = typeLabel('roofShape', r.shape);
+        const slope = LC.roofSlopePct(d, r);
+        const title = `<title>${esc(r.code || '')} · ${esc(shapeName)}${r.name ? ` · ${esc(r.name)}` : ''} · ${esc(roofHeightsText(r, slope))}${bad ? `\n${esc(Object.values(bad).map(roofIssueText).join(' · '))}` : ''}</title>`;
+        rings.forEach((ring) => { body += `<polygon class="lroof${pick ? ' lroof-pick' : ''}${bad ? ' lroof-bad' : ''}" data-rfid="${esc(r.id)}" points="${ring.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ')}" style="fill:url(#rfp-${safe});stroke:${col}">${title}</polygon>`; });
+        const arrow = (x1, y1, x2, y2) => `<line class="lroof-arrow" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${col}" marker-end="url(#rfa-${safe})"/>`;
+        const cx = (px0 + px1) / 2;
+        const cy = (py0 + py1) / 2;
+        const spanX = px1 - px0;
+        const spanY = py1 - py0;
+        if (r.shape === 'shed') {
+            const dir = LC.ROOF_SHED_DIRS.includes(r.dir) ? r.dir : 's';
+            const vertical = dir === 'n' || dir === 's';
+            const along = vertical ? spanY : spanX;
+            const len = Math.max(14, Math.min(56, along * 0.3));
+            const sign = dir === 's' || dir === 'e' ? 1 : -1;
+            [0.2, 0.5, 0.8].forEach((f) => {
+                if (vertical) { const ax = px0 + spanX * f; body += arrow(ax, cy - sign * len / 2, ax, cy + sign * len / 2); } else { const ay = py0 + spanY * f; body += arrow(cx - sign * len / 2, ay, cx + sign * len / 2, ay); }
+            });
+        } else if (r.shape === 'gable') {
+            const ridge = LC.roofRidge(d, r);
+            body += `<line class="lroof-ridge" x1="${X(ridge.x1).toFixed(1)}" y1="${Y(ridge.y1).toFixed(1)}" x2="${X(ridge.x2).toFixed(1)}" y2="${Y(ridge.y2).toFixed(1)}" stroke="${col}"/>`;
+            const ns = r.dir === 'ns';
+            const half = (ns ? spanX : spanY) / 2;
+            const len = Math.max(14, Math.min(50, half * 0.55));
+            const off = half * 0.22;
+            [0.2, 0.5, 0.8].forEach((f) => {
+                if (ns) { const ay = py0 + spanY * f; body += arrow(cx - off, ay, cx - off - len, ay) + arrow(cx + off, ay, cx + off + len, ay); } else { const ax = px0 + spanX * f; body += arrow(ax, cy - off, ax, cy - off - len) + arrow(ax, cy + off, ax, cy + off + len); }
+            });
+        }
+        // la etiqueta: código y forma, y debajo las alturas (si el techo es muy chico solo el código)
+        if (spanX >= 40 && spanY >= 18) {
+            const l1 = `${r.code || ''} · ${shapeName}`;
+            const l2 = spanX >= 84 && spanY >= 36 ? roofHeightsText(r, slope) : '';
+            const w = Math.max(l1.length, l2.length) * 5.6 + 16;
+            const h = l2 ? 30 : 18;
+            const lx = r.shape === 'gable' && r.dir === 'ns' ? px0 + spanX * 0.5 : cx;
+            const ly = r.shape === 'gable' && r.dir !== 'ns' ? py0 + Math.max(h / 2 + 4, spanY * 0.2) : (r.shape === 'gable' ? py0 + Math.max(h / 2 + 4, spanY * 0.12) : cy);
+            body += `<g class="lroof-lab" pointer-events="none"><rect x="${(lx - w / 2).toFixed(1)}" y="${(ly - h / 2).toFixed(1)}" width="${w.toFixed(1)}" height="${h}" rx="6" stroke="${col}"/><text x="${lx.toFixed(1)}" y="${(ly + (l2 ? -3 : 3.5)).toFixed(1)}" text-anchor="middle" class="lroof-t1">${esc(l1)}</text>${l2 ? `<text x="${lx.toFixed(1)}" y="${(ly + 10).toFixed(1)}" text-anchor="middle" class="lroof-t2">${esc(l2)}</text>` : ''}</g>`;
+        }
+        body += `<rect class="hl-box" data-hlbox="roof:${esc(r.id)}" x="${px0.toFixed(1)}" y="${py0.toFixed(1)}" width="${spanX.toFixed(1)}" height="${spanY.toFixed(1)}"/>`;
+    });
+    return body ? `<defs>${defs}</defs>${body}` : '';
+}
+// Las alturas de un techo en una línea: «6 m», o «7 → 9.5 m · 25 %» y, en una agua, hacia dónde cae.
+function roofHeightsText(r, slope) {
+    if (r.shape === 'flat') return `${fmt(Number(r.h) || 0)} m`;
+    const fall = r.shape === 'shed' ? ` · ${t('main.layoutRoofCaeLabel', { dir: typeLabel('roofDirShed', r.dir || 's').toLowerCase() })}` : '';
+    return `${fmt(Number(r.h) || 0)} → ${fmt(Number(r.h2) || Number(r.h) || 0)} m · ${fmt(slope, 1)} %${fall}`;
+}
 const safetyIssueText = (v) => t(`main.layoutVioSg_${v.kind}${v.kind === 'tall' && v.vars && v.vars.level !== undefined ? 'Level' : ''}`, { code: v.code, ...(v.vars || {}) });
 // El código y la zona de cada elemento salen de su tipo y de su lugar; las cajas de X e Y (y de la llegada de la ruta) se marcan en rojo si algo no cumple y abajo del paso va la lista de lo que falta.
 // La leyenda de los símbolos solo se ve con el paso Seguridad encendido.
@@ -810,6 +967,7 @@ function applyLegend() {
         object: (type) => stepOn('objetos') && some('objects', (o) => o.type === type),
         transit: (type) => stepOn('transito') && some('transit', (p) => (type === 'between' ? p.type === 'between' : p.type !== 'between')),
         ceiling: (type) => stepOn('techos') && some('ceiling', (e) => e.type === type),
+        roof: (shape) => stepOn('techos') && some('roofs', (r) => r.shape === shape),
         safety: (type) => { const [tp, model] = String(type).split(':'); return stepOn('seguridad') && some('safety', (e) => e.type === tp && (tp !== 'hydrant' || LC.hydrantModelOf(e) === (model || 'column'))); },
     };
     // Pisos: un cuadrito por cada nivel que hay (con el color de ese nivel); los pisos con formato propio llevan el suyo y no salen aquí.
@@ -1475,7 +1633,8 @@ function stepHtml(step) {
             return `<tr><td class="layout-calc"><b data-cl-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('ceiling', i, 'type', optionsHtml('ceiling', LC.CEILING_TYPES, e.type), dis)}${cellText('ceiling', i, 'name', e.name || '', dis)}<td class="layout-calc" data-cl-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('ceiling', i, 'x', e.x, dis)}${cellNum('ceiling', i, 'y', e.y, dis)}${hang}<td class="layout-calc" data-cl-limit="${i}">${lim ? fmt(lim) : '—'}</td>${removeCell('ceiling', i, dis)}</tr>`;
         });
         const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutCuelgaA', 'main.layoutTechoAhi', ''], rows, 'layout-techos') : `<p class="layout-muted">${esc(t('main.layoutTechosVacio'))}</p>`;
-        return `${addButton('ceiling', 'main.layoutAgregarTecho', dis, true)}${list}<div class="layout-vio" data-cl-issues hidden></div>`;
+        // arriba, los techos (secciones dibujadas en el croquis); debajo, lo que cuelga del techo (cámaras, bocinas…), que pasará a Seguridad
+        return `${addButton('roofs', 'main.layoutAgregarCubierta', dis, true)}${roofSectionHtml(d, dis)}<div class="layout-roof-sub"><h4>${esc(t('main.layoutColgadoTitulo'))}</h4>${addButton('ceiling', 'main.layoutAgregarTecho', dis, false)}</div>${list}<div class="layout-vio" data-cl-issues hidden></div>`;
     }
     if (step === 'objetos') {
         // Cada renglón es una PERSONA, un MONTACARGAS, un carrito o una plataforma dibujado en el plano, a escala (lo que es se elige en «Equipo o persona»). Es una foto fija (como el plano de Excel), no sigue a nadie en vivo. X e Y son su centro, en metros; el giro dice hacia dónde mira
@@ -2032,7 +2191,7 @@ function renderPanel() {
     if (state.mode === 'edit') renderViewStrip(); // Qué ver (la franja) sigue a los pasos encendidos
     bindLayoutFilters();
     markSelectedRow();
-    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); applyTransitMarks(); applySafetyMarks(); applyCeilingMarks(); applyWallItemMarks(); }
+    if (state.draft) { applyFootprintMarks(); applyActivoMarks(); applyTransitMarks(); applySafetyMarks(); applyCeilingMarks(); applyRoofMarks(); applyWallItemMarks(); }
     applyFindToTables();
 }
 
@@ -2080,6 +2239,7 @@ function rowEntity(tr) {
     if (list === 'sensors' && (state.draft.sensors || [])[i]) return { kind: 'sensor', id: state.draft.sensors[i].id };
     if (list === 'safety' && (state.draft.safety || [])[i]) return { kind: 'safety', id: state.draft.safety[i].id };
     if (list === 'ceiling' && (state.draft.ceiling || [])[i]) return { kind: 'ceiling', id: state.draft.ceiling[i].id };
+    if (list === 'roofs' && (state.draft.roofs || [])[i]) return { kind: 'roof', id: state.draft.roofs[i].id };
     if (list === 'transit' && (state.draft.transit || [])[i]) return { kind: 'transit', id: state.draft.transit[i].id };
     if (list === 'objects' && (state.draft.objects || [])[i]) return { kind: 'object', id: state.draft.objects[i].id };
     if (list === 'lvl' && state.draft.spaces[i]) return { kind: 'space', id: state.draft.spaces[i].id, n: Number(ctl.getAttribute('data-n')) };
@@ -2295,9 +2455,9 @@ function applyHighlight(reveal) {
     if (!hlOnStep(h) || !state.draft) return;
     if (h.kind === 'sensor') drawSensorZones(svg, h.id);
     // una huella se ve como todos sus activos juntos (uno solo es la huella entera); un activo o un hueco, como su propio dibujo
-    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', ceiling: 'data-clid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid', side: 'data-sin-figura', corner: 'data-sin-figura', floor: 'data-sin-figura' };
+    const HL_ATTR = { zone: 'data-zid', footprint: 'data-fid', obstacle: 'data-obid', safety: 'data-sfid', ceiling: 'data-clid', roof: 'data-rfid', transit: 'data-tid', object: 'data-oid', door: 'data-did', power: 'data-pid', sensor: 'data-nid', side: 'data-sin-figura', corner: 'data-sin-figura', floor: 'data-sin-figura' };
     // un elemento de seguridad, un objeto, una puerta, una conexión de luz o un sensor son figuras sueltas (línea, símbolo, giro, etiqueta): su contorno sale de un cuadro invisible que se dibuja junto a ellos
-    const BOX_KINDS = ['safety', 'ceiling', 'object', 'door', 'power', 'sensor', 'side', 'corner', 'floor'];
+    const BOX_KINDS = ['safety', 'ceiling', 'roof', 'object', 'door', 'power', 'sensor', 'side', 'corner', 'floor'];
     // lo resaltado es una cosa (el renglón elegido) o varias (lo que marcó el Localizador: varios activos de una huella, varios niveles, espacios o posiciones); cada una se contornea una sola vez
     const entries = [];
     highlightedList().forEach((e) => { if (!entries.some((x) => x.kind === e.kind && x.id === e.id)) entries.push(e); });
@@ -2386,7 +2546,7 @@ function selectRowFrom(target) {
 // Tocar una figura del croquis (sin arrastrarla) la elige: se marca su renglón en la tabla y la figura se resalta con el contorno grueso de siempre; volver a tocarla la regresa al contorno punteado. Solo cuenta
 // el paso que se está editando: en Zonas las zonas, en Huella-Espacio las huellas y en Activos los activos.
 function selectFromMap(target) {
-    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-clid], [data-tid], [data-oid], [data-did], [data-pid], [data-nid], [data-sideid], [data-cornerid]') : null;
+    const el = target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-clid], [data-rfid], [data-tid], [data-oid], [data-did], [data-pid], [data-nid], [data-sideid], [data-cornerid]') : null;
     if (!el || !state.draft) return;
     let next = null;
     // en Contorno se eligen los lados (o las esquinas): se marca su renglón en la tabla y su línea en el croquis y en el 3D
@@ -2407,6 +2567,7 @@ function selectFromMap(target) {
     else if (state.focus === 'activos' && el.getAttribute('data-sid')) next = { kind: 'space', id: el.getAttribute('data-sid') };
     else if (state.focus === 'seguridad' && el.getAttribute('data-sfid')) next = { kind: 'safety', id: el.getAttribute('data-sfid') };
     else if (state.focus === 'techos' && el.getAttribute('data-clid')) next = { kind: 'ceiling', id: el.getAttribute('data-clid') };
+    else if (state.focus === 'techos' && el.getAttribute('data-rfid')) next = { kind: 'roof', id: el.getAttribute('data-rfid') };
     else if (state.focus === 'transito' && el.getAttribute('data-tid')) next = { kind: 'transit', id: el.getAttribute('data-tid') };
     else if (state.focus === 'objetos' && el.getAttribute('data-oid')) next = { kind: 'object', id: el.getAttribute('data-oid') };
     else if (state.focus === 'puertas' && el.getAttribute('data-did')) next = { kind: 'door', id: el.getAttribute('data-did') };
@@ -3947,6 +4108,8 @@ function renderSvg(underlay) {
         if (z.active !== false && Math.min(z.l, z.w) * sc >= 44) measureJobs.push([LC.zonePoints(z), 30, z.id]);
     });
     s += rampLayerOut; // las rampas van ENCIMA de las zonas
+    // Techos (paso Techos): cada sección de techo sobre las zonas (translúcida), con su caída y su etiqueta
+    if (on('techos') && !underlay) s += roofLayerSvg(d, X, Y, sc, state.focus === 'techos' && !finding);
     // El cuadro invisible de cada piso (paso Pisos): de ahí sale su contorno al elegir su renglón de la tabla, tenga o no rayas (un piso a nivel no se pinta).
     if (on('pisos') || on('rampas')) {
         LC.floorsAll(d).filter((f) => (f.isRamp ? on('rampas') : on('pisos'))).forEach((f) => {
@@ -4281,6 +4444,7 @@ function refreshLive() {
     // el código (según su tipo) y la zona de cada elemento de seguridad salen de su tipo y de su lugar: se vuelven a sacar con cada cambio
     applySafetyMarks();
     applyCeilingMarks();
+    applyRoofMarks();
     // el código y la zona de cada sensor salen de la pared donde se puso: se vuelven a sacar con cada cambio
     (state.draft.sensors || []).forEach((s, i) => {
         const codeCell = document.querySelector(`[data-sensor-code="${i}"]`);
@@ -4909,6 +5073,8 @@ const ROW_FACTORY = {
         const n = (d.ceiling || []).length;
         return { id: uid('c'), code: '', type: 'camera', name: '', zoneId: '', x: round2((Math.min(...xs) + Math.max(...xs)) / 2 + (n % 5) * 1.5), y: round2((Math.min(...ys) + Math.max(...ys)) / 2 + Math.floor(n / 5) * 1.5) };
     },
+    // un techo nuevo es plano y cubre toda la nave a la altura más alta de sus esquinas; su código (TE001…) lo pone el sistema
+    roofs: () => ({ id: uid('rf'), code: '', name: '', shape: 'flat', cover: 'nave', h: round2(Math.max(...state.draft.vertices.map((p) => Number(p[2]) || 0)) || 6), material: 'sheet' }),
     // un pasillo nuevo nace dentro de la primera zona con tipo (para que no empiece fuera de toda zona); sin zonas, cerca de la esquina
     transit: () => {
         const z = state.draft.zones.find((r) => r.type && !Array.isArray(r.pts) && r.l > 2 && r.w > 2);
@@ -4929,7 +5095,7 @@ const ROW_FACTORY = {
     // un activo siempre va dentro de una huella: nace sin huella y hay que elegirla (no se puede guardar hasta entonces)
     spaces: () => ({ id: uid('s'), footprintId: '', type: 'rack', code: '', levels: 1, drawers: '' }),
 };
-const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', safety: 'seguridad', ceiling: 'techos', transit: 'transito', objects: 'objetos', zones: 'zonas', floors: 'pisos', ramps: 'rampas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones', lvl: 'niveles' };
+const STEP_OF_LIST = { vertices: 'contorno', obstacles: 'contorno', doors: 'puertas', power: 'luz', sensors: 'sensores', safety: 'seguridad', ceiling: 'techos', roofs: 'techos', transit: 'transito', objects: 'objetos', zones: 'zonas', floors: 'pisos', ramps: 'rampas', footprints: 'espacios', spaces: 'activos', bay: 'posiciones', lvl: 'niveles' };
 // Los códigos los pone el sistema y no se editan: el de la zona (Z001…, consecutivo), el de la huella (H001… por zona, y su zona sale de dónde está en el croquis) y el del activo (letra de su tipo + número
 // consecutivo por zona y tipo: A001, G001…). Lo que ya estaba guardado y sigue igual conserva su código; lo nuevo (todavía sin guardar) y lo que cambió de zona o de tipo lo recibe cada vez que se acomoda,
 // así siempre es el que le toca, el mismo que le pondrá el servidor al guardar.
@@ -4963,6 +5129,9 @@ function syncHuellas() {
     // lo que cuelga del techo: igual (su zona, su código por tipo y el contador de los números ya dados)
     d.ceiling = next.ceiling || d.ceiling || [];
     if (next.ceilingNext && Object.keys(next.ceilingNext).length) d.ceilingNext = next.ceilingNext; else delete d.ceilingNext;
+    // los techos (cubiertas): su código (TE001…) y el contador de los números ya dados
+    d.roofs = next.roofs || d.roofs || [];
+    if (next.roofNext) d.roofNext = next.roofNext; else delete d.roofNext;
     d.spaces = state.renumber ? LC.renumberSpaceCodes(next).spaces : next.spaces; // Renumerar: consecutivos desde 001 por zona y tipo
 }
 
@@ -4989,6 +5158,11 @@ function onEdit(event) {
 
     if (state.draft && el.getAttribute('data-cat') !== null) { onCategoryEdit(el); return; }
     if (state.draft && el.getAttribute('data-zone-pick') !== null) { onZonePick(el, event); return; }
+    // Techos: elegir una zona más para lo que cubre el techo
+    if (state.draft && el.getAttribute('data-roof-zadd') !== null) {
+        if (event.type === 'change' && el.value) { toggleRoofZone(Number(el.getAttribute('data-roof-zadd')), el.value, true); renderPanel(); refreshLive(); }
+        return;
+    }
     const list = el.getAttribute('data-l');
     if (!list || !state.draft) return;
     const isNumber = el.type === 'number';
@@ -5124,6 +5298,26 @@ function onEdit(event) {
             setSafetyType(row, el.value);
         } else if (list === 'safety' && key === 'model') {
             setHydrantModel(row, el.value);
+        } else if (list === 'roofs' && key === 'shape') {
+            setRoofShape(row, el.value);
+        } else if (list === 'roofs' && key === 'cover') {
+            setRoofCover(row, el.value);
+        } else if (list === 'roofs' && (key === 'h' || key === 'h2')) {
+            // las alturas del techo se escriben en metros desde el piso: vacío = sin altura (no se puede guardar así)
+            const raw = String(el.value).trim();
+            const n = parseFloat(raw);
+            if (raw !== '' && Number.isFinite(n) && n > 0) row[key] = Math.min(n, LC.LIMITS.maxHeight); else delete row[key];
+        } else if (list === 'roofs' && ['x', 'y', 'l', 'w'].includes(key)) {
+            // el área que cubre un techo: lugar y medidas en metros
+            const raw = String(el.value).trim();
+            const n = parseFloat(raw);
+            if (raw !== '' && Number.isFinite(n)) row[key] = Math.min(Math.max(n, key === 'x' || key === 'y' ? -LC.LIMITS.maxM : 0), LC.LIMITS.maxM); else delete row[key];
+        } else if (list === 'roofs' && key === 'dir') {
+            row.dir = (row.shape === 'shed' ? LC.ROOF_SHED_DIRS : LC.ROOF_GABLE_DIRS).includes(el.value) ? el.value : row.dir;
+        } else if (list === 'roofs' && key === 'material') {
+            row.material = LC.ROOF_MATERIALS.includes(el.value) ? el.value : 'sheet';
+        } else if (list === 'roofs' && key === 'color') {
+            if (LC.ROOF_COLORS[el.value]) row.color = el.value; else delete row.color;
         } else if (list === 'ceiling' && key === 'h') {
             // «Cuelga a» es opcional: vacío = pegado al techo
             const raw = String(el.value).trim();
@@ -5200,6 +5394,8 @@ function onEdit(event) {
     if (event.type === 'change' && list === 'objects' && el.getAttribute('data-k') === 'equipId') renderPanel();
     // Al cambiar el tipo de un elemento de seguridad cambian sus celdas (la ruta lleva punto de llegada) y su código.
     if (event.type === 'change' && list === 'safety' && (el.getAttribute('data-k') === 'type' || el.getAttribute('data-k') === 'model')) renderPanel();
+    // Al cambiar la forma de un techo (o lo que cubre) cambian las celdas de su renglón.
+    if (event.type === 'change' && list === 'roofs' && ['shape', 'cover'].includes(el.getAttribute('data-k'))) renderPanel();
     // Al pasar un activo a otra huella cambia su zona (que se ve en el renglón).
     if (event.type === 'change' && list === 'spaces' && ['footprintId', 'assetId', 'assetClassId'].includes(el.getAttribute('data-k'))) renderPanel();
     refreshLive();
@@ -5335,6 +5531,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (whoOpen) { openWhoPop(Number(whoOpen.dataset.whoOpen), whoOpen); return; }
     const whoDel = event.target.closest('[data-who-del]');
     if (whoDel) { toggleTransitWho(whoDel.dataset.whoDel, false); return; }
+    const roofZdel = event.target.closest('[data-roof-zdel]');
+    if (roofZdel) { const v = roofZdel.dataset.roofZdel; const at = v.indexOf(':'); toggleRoofZone(Number(v.slice(0, at)), v.slice(at + 1), false); renderPanel(); refreshLive(); return; }
     const szOpen = event.target.closest('[data-sz-open]');
     if (szOpen) { openSensorZonesPop(Number(szOpen.dataset.szOpen), szOpen); return; }
     const szDel = event.target.closest('[data-sz-del]');
@@ -6290,10 +6488,10 @@ function effective3dLayers() {
     const f = activeFind();
     if (f && !state.findDim) {
         const zf = f.kind === 'zone' || f.kind === 'items';
-        return { contour: false, walls: zf && fxWant('wall'), columns: zf && fxWant('obstacle'), doors: zf && fxWant('door'), power: zf && fxWant('power'), sensors: zf && fxWant('sensor'), objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), ceiling: zf && fxWant('ceiling'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || (zf && fxWant('footprint')), assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones') || (zf && fxWant('space'))) };
+        return { contour: false, walls: zf && fxWant('wall'), columns: zf && fxWant('obstacle'), doors: zf && fxWant('door'), power: zf && fxWant('power'), sensors: zf && fxWant('sensor'), objects: zf && fxWant('object'), transit: zf && fxWant('transit'), safety: zf && fxWant('safety'), ceiling: zf && fxWant('ceiling'), roofs: false, zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || f.kind === 'zone', footprints: stepOn('espacios') || f.kind === 'footprint' || (zf && fxWant('footprint')), assets: (stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones') || (zf && fxWant('space'))) };
     }
     const layers = {
-        contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), ceiling: stepOn('techos'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || !!(f && f.kind === 'zone'),
+        contour: stepOn('contorno'), walls: stepOn('paredes'), columns: stepOn('obstaculos'), doors: stepOn('puertas'), objects: stepOn('objetos'), transit: stepOn('transito'), safety: stepOn('seguridad'), ceiling: stepOn('techos'), roofs: stepOn('techos'), zones: stepOn('zonas') || stepOn('pisos') || stepOn('rampas') || !!(f && f.kind === 'zone'),
         footprints: stepOn('espacios'), power: stepOn('luz'), sensors: stepOn('sensores'), assets: stepOn('activos') || stepOn('posiciones') || stepOn('niveles') || stepOn('ubicaciones'),
     };
     // zonas enfocadas con el resto «tenue»: las capas que «Qué ver» no pidió se apagan (y se ven tenues)
@@ -6794,6 +6992,15 @@ async function saveLayout() {
         renderPanel();
         refreshLive();
         Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${ceilingIssueText(freshCeiling[0])}`, 'warning');
+        return false;
+    }
+    // Techos (cubiertas): cada techo cubre algo, un área va dentro del contorno y la parte alta no es más baja que la baja; lo nuevo o lo que cambió y no cumple no se guarda.
+    const freshRoofs = LC.newRoofViolations(state.draft, state.saved);
+    if (freshRoofs.length) {
+        showStep('techos');
+        renderPanel();
+        refreshLive();
+        Dashboard.showToast(`${t('main.layoutVioTrAviso')} ${roofIssueText(freshRoofs[0])}`, 'warning');
         return false;
     }
     const clashed = LC.newColorClashes(state.draft, state.saved);

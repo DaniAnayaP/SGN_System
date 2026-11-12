@@ -66,7 +66,7 @@
         niveles: 'colLayoutNiveles',
         ubicaciones: 'colLayoutUbicaciones', // el paso «Posiciones» (lugares libres dentro de cada espacio); `posiciones` es el paso «Espacios»
     };
-    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, objects: 500, safety: 500, ceiling: 500, zones: 150, floors: 100, ramps: 100, zonePoints: 60, categories: 20, categoryText: 120, positions: 5000, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
+    const LIMITS = { vertices: 60, doors: 100, power: 300, sensors: 300, obstacles: 300, transit: 300, objects: 500, safety: 500, ceiling: 500, roofs: 100, zones: 150, floors: 100, ramps: 100, zonePoints: 60, categories: 20, categoryText: 120, positions: 5000, slots: 100, depth: 100, spaces: 5000, text: 80, maxM: 5000, maxHeight: 100 };
 
     function round2(n) { return Math.round(n * 100) / 100; }
 
@@ -113,10 +113,10 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateDoors(migrateWalls(migrateFloors({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], ceiling: Array.isArray(layout.ceiling) ? layout.ceiling : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))))));
+        const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateDoors(migrateWalls(migrateFloors({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], ceiling: Array.isArray(layout.ceiling) ? layout.ceiling : [], roofs: Array.isArray(layout.roofs) ? layout.roofs : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))))));
         // Seguridad: la zona de cada elemento sale de su lugar y su código (E001…) lo pone el sistema.
         // Todo espacio tiene al menos una posición: las que no están guardadas (los Layouts de antes, con sus filas y profundidades) se generan aquí, siempre iguales (ensurePositions)
-        return dropBayHeights(ensurePositions(assignItemCodes(assignRampCodes(assignFloorCodes(assignWallCodes(assignCeilingCodes(deriveCeilingZones(assignSafetyCodes(deriveSafetyZones(normalized))))))))));
+        return dropBayHeights(ensurePositions(assignItemCodes(assignRampCodes(assignFloorCodes(assignWallCodes(assignRoofCodes(assignCeilingCodes(deriveCeilingZones(assignSafetyCodes(deriveSafetyZones(normalized)))))))))));
     }
     // Los Layouts de antes guardaban en algunos huecos (espacios) su propia altura del piso y su propia ceja, de cuando se capturaban por espacio: el 3D y las hojas dibujaban ese espacio más arriba que los demás de su nivel.
     // La altura del piso y la ceja son del NIVEL (paso Niveles), así que al leer el Layout se quitan de los huecos (lo demás del hueco, como su largo, ancho, alto y caras, se queda).
@@ -1653,6 +1653,7 @@
         out = lockTransitCodes(out, previous);
         out = lockSafetyCodes(out, previous);
         out = lockCeilingCodes(out, previous);
+        out = lockRoofCodes(out, previous);
         out = lockWallCodes(out, previous);
         out = lockItemCodes(out, previous);
         if (Array.isArray(out.spaces)) {
@@ -2315,7 +2316,8 @@
         return assignCeilingCodes(base);
     }
     // El techo en un punto (lo que mide la nave ahí) y la altura a la que cuelga un elemento: la que se capturó o, vacía, pegado al techo (su parte de arriba toca el techo).
-    const ceilingLimitAt = (layout, e) => round2(naveHeightAt(layout, Number(e && e.x) || 0, Number(e && e.y) || 0));
+    // Si un techo (paso Techos) cubre el punto, el techo es el SUYO (la altura de ese techo ahí); si no, lo que mide la nave.
+    const ceilingLimitAt = (layout, e) => { const x = Number(e && e.x) || 0; const y = Number(e && e.y) || 0; const roof = roofLimitAt(layout, x, y); return roof !== null ? round2(roof) : round2(naveHeightAt(layout, x, y)); };
     function ceilingHangOf(layout, e) {
         if (e && Number(e.h) > 0) return Number(e.h);
         const sz = ceilingSizeOf(e);
@@ -2341,6 +2343,152 @@
     function newCeilingViolations(next, previous) {
         const before = new Set((previous ? ceilingViolations(previous) : []).map(ceilingKey));
         return ceilingViolations(next).filter((v) => !before.has(ceilingKey(v)));
+    }
+    // ---- Techos (cubiertas): las secciones de techo de la nave --------------------------------------------------------------------------------------
+    // Cada techo es una SECCIÓN con su forma (plano, una agua o dos aguas), lo que cubre (toda la nave, una o varias zonas, o un área con x, y, largo y ancho), sus alturas, su material y su color. Se dibuja en el croquis y en el 3D.
+    // Alturas, desde el piso: plano = h; una agua = h del lado BAJO (hacia donde cae el agua: dir n/s/e/w) y h2 del lado alto; dos aguas = h en los aleros y h2 en la cumbrera (dir = hacia dónde corre la cumbrera: ew o ns). La altura
+    // en un punto sube o baja en línea recta sobre la caja de lo que cubre. El código (TE001…) lo pone el sistema y NO se vuelve a usar aunque se borre un techo: roofNext guarda el último número que se dio.
+    const ROOF_SHAPES = ['flat', 'shed', 'gable'];
+    const ROOF_COVERS = ['nave', 'zones', 'area'];
+    const ROOF_MATERIALS = ['sheet', 'slab', 'panel', 'tile', 'poly', 'other'];
+    // El color de cada techo (el mismo en el croquis, el 3D y la leyenda); si no se elige, el de su forma.
+    const ROOF_COLORS = { violet: '#a63fb5', green: '#1f8a7d', amber: '#c27a1c', blue: '#3b6fd1', red: '#c0392b', grey: '#6b7280' };
+    const ROOF_COLOR_BY_SHAPE = { gable: 'violet', shed: 'green', flat: 'amber' };
+    const ROOF_SHED_DIRS = ['n', 's', 'e', 'w'];
+    const ROOF_GABLE_DIRS = ['ew', 'ns'];
+    const roofCodeOf = (n) => `TE${String(n).padStart(3, '0')}`;
+    const isRoofCode = (c) => /^TE\d{3,4}$/.test(String(c == null ? '' : c).trim().toUpperCase());
+    const roofColorOf = (r) => ROOF_COLORS[r && r.color] || ROOF_COLORS[ROOF_COLOR_BY_SHAPE[r && r.shape] || 'amber'];
+    // Los polígonos que cubre un techo: el contorno de la nave, las zonas elegidas (una zona que ya no existe se ignora) o un recuadro.
+    function roofRings(layout, r) {
+        if (!layout || !r) return [];
+        if (r.cover === 'zones') {
+            const ids = new Set(r.zoneIds || []);
+            return (layout.zones || []).filter((z) => ids.has(z.id) && z.active !== false).map((z) => zonePoints(z).map((p) => [p[0], p[1]])).filter((ring) => ring.length >= 3);
+        }
+        if (r.cover === 'area') {
+            const x = Number(r.x) || 0;
+            const y = Number(r.y) || 0;
+            const l = Number(r.l) || 0;
+            const w = Number(r.w) || 0;
+            return l > 0 && w > 0 ? [[[x, y], [x + l, y], [x + l, y + w], [x, y + w]]] : [];
+        }
+        const poly = (layout.vertices || []).map((p) => [p[0], p[1]]);
+        return poly.length >= 3 ? [poly] : [];
+    }
+    function roofBox(rings) {
+        const pts = rings.reduce((all, ring) => all.concat(ring), []);
+        if (!pts.length) return null;
+        const xs = pts.map((p) => p[0]);
+        const ys = pts.map((p) => p[1]);
+        return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+    }
+    // La altura del techo r en el punto (x, y): box = la caja de lo que cubre.
+    function roofHeightIn(r, box, x, y) {
+        const h = Number(r.h) || 0;
+        if (r.shape === 'flat' || !box) return round2(h);
+        const h2 = Number(r.h2) > 0 ? Number(r.h2) : h;
+        const spanX = box.x1 - box.x0 || 1;
+        const spanY = box.y1 - box.y0 || 1;
+        let t;
+        if (r.shape === 'shed') {
+            const dir = ROOF_SHED_DIRS.includes(r.dir) ? r.dir : 's';
+            t = dir === 's' ? (box.y1 - y) / spanY : (dir === 'n' ? (y - box.y0) / spanY : (dir === 'e' ? (box.x1 - x) / spanX : (x - box.x0) / spanX));
+        } else if (r.dir === 'ns') t = 1 - Math.abs(x - (box.x0 + box.x1) / 2) / (spanX / 2);
+        else t = 1 - Math.abs(y - (box.y0 + box.y1) / 2) / (spanY / 2);
+        return round2(h + (h2 - h) * Math.max(0, Math.min(1, t)));
+    }
+    // La pendiente en %: lo que sube sobre lo que recorre (una agua: todo el lado; dos aguas: de alero a cumbrera).
+    function roofSlopePct(layout, r) {
+        if (!r || r.shape === 'flat') return 0;
+        const box = roofBox(roofRings(layout, r));
+        if (!box) return 0;
+        const h = Number(r.h) || 0;
+        const h2 = Number(r.h2) > 0 ? Number(r.h2) : h;
+        const along = r.shape === 'shed' ? (r.dir === 'e' || r.dir === 'w' ? box.x1 - box.x0 : box.y1 - box.y0) : (r.dir === 'ns' ? box.x1 - box.x0 : box.y1 - box.y0) / 2;
+        return along > 0 ? Math.round(Math.abs(h2 - h) / along * 1000) / 10 : 0;
+    }
+    // La línea de la cumbrera (solo dos aguas) para dibujarla: de un extremo a otro de la caja, por el centro.
+    function roofRidge(layout, r) {
+        if (!r || r.shape !== 'gable') return null;
+        const box = roofBox(roofRings(layout, r));
+        if (!box) return null;
+        return r.dir === 'ns' ? { x1: (box.x0 + box.x1) / 2, y1: box.y0, x2: (box.x0 + box.x1) / 2, y2: box.y1 } : { x1: box.x0, y1: (box.y0 + box.y1) / 2, x2: box.x1, y2: (box.y0 + box.y1) / 2 };
+    }
+    // El techo que cubre el punto (el primero de la lista) y lo que mide ahí; null si ningún techo lo cubre (entonces vale lo que mide la nave).
+    function roofAt(layout, x, y) {
+        const roofs = (layout && layout.roofs) || [];
+        for (let i = 0; i < roofs.length; i++) {
+            const rings = roofRings(layout, roofs[i]);
+            if (rings.some((ring) => pointInPolygon(x, y, ring) || onPolygonEdge(x, y, ring))) return { roof: roofs[i], height: roofHeightIn(roofs[i], roofBox(rings), x, y) };
+        }
+        return null;
+    }
+    const roofLimitAt = (layout, x, y) => { const hit = roofAt(layout, x, y); return hit ? hit.height : null; };
+    // Cada techo que ya trae un código válido que no se repite lo conserva; el que no recibe el siguiente después del último que se dio (roofNext) o, si es mayor, del más alto que hay.
+    function assignRoofCodes(layout) {
+        if (!layout || !Array.isArray(layout.roofs)) return layout;
+        const given = Math.round(Number(layout.roofNext)) || 0;
+        if (!layout.roofs.length && !given) return layout;
+        const used = new Set();
+        const keep = layout.roofs.map((r) => {
+            const c = String(r.code == null ? '' : r.code).trim().toUpperCase();
+            if (isRoofCode(c) && !used.has(c)) { used.add(c); return c; }
+            return '';
+        });
+        let hi = given;
+        used.forEach((c) => { hi = Math.max(hi, Number(c.slice(2))); });
+        let changed = false;
+        const roofs = layout.roofs.map((r, i) => {
+            let code = keep[i];
+            if (!code) {
+                let n = hi + 1;
+                while (used.has(roofCodeOf(n))) n += 1;
+                code = roofCodeOf(n);
+                used.add(code);
+                hi = n;
+            }
+            if (code === r.code) return r;
+            changed = true;
+            return { ...r, code };
+        });
+        if (!changed && hi === given) return layout;
+        const out = { ...layout, roofs };
+        if (hi) out.roofNext = hi; else delete out.roofNext;
+        return out;
+    }
+    // Al guardar: los códigos no se editan. Un techo que ya existía conserva el suyo; uno nuevo recibe el siguiente después del último que se dio.
+    function lockRoofCodes(next, previous) {
+        if (!next || !Array.isArray(next.roofs)) return next;
+        const was = (previous && previous.roofs) || [];
+        const before = new Map(was.map((r) => [r.id, r]));
+        let hi = Math.round(Number(previous && previous.roofNext)) || 0;
+        was.forEach((r) => { if (isRoofCode(r.code)) hi = Math.max(hi, Number(String(r.code).trim().toUpperCase().slice(2))); });
+        const roofs = next.roofs.map((r) => { const w = before.get(r.id); const code = w ? w.code : ''; return code === r.code ? r : { ...r, code }; });
+        const base = { ...next, roofs };
+        if (hi) base.roofNext = hi; else delete base.roofNext;
+        return assignRoofCodes(base);
+    }
+    // Las faltas de los techos de un Layout normalizado: empty (no cubre nada), outside (un área queda fuera del contorno) y order (el lado alto o la cumbrera más bajos que el lado bajo o el alero). sig cambia cuando cambia algo de lo que
+    // importa: lo que ya estaba mal y no se tocó solo se marca; lo nuevo no se deja guardar.
+    function roofViolations(layout) {
+        const out = [];
+        const roofs = (layout && layout.roofs) || [];
+        if (!roofs.length) return out;
+        const poly = (layout.vertices || []).map((p) => [p[0], p[1]]);
+        roofs.forEach((r) => {
+            const rings = roofRings(layout, r);
+            const geo = JSON.stringify([r.cover, r.zoneIds || [], r.x, r.y, r.l, r.w, poly]);
+            if (!rings.length) out.push({ id: r.id, code: r.code, kind: 'empty', sig: geo, message: `El techo ${r.code} no cubre nada: elige toda la nave, una zona o un área con medidas.` });
+            else if (r.cover === 'area' && poly.length >= 3 && !rectInsidePolygon(poly, r.x, r.y, r.l, r.w)) out.push({ id: r.id, code: r.code, kind: 'outside', sig: geo, message: `El techo ${r.code} queda fuera del contorno de la nave: acomódalo dentro.` });
+            if (r.shape !== 'flat' && Number(r.h2) > 0 && Number(r.h) > 0 && Number(r.h2) < Number(r.h) - 0.005) out.push({ id: r.id, code: r.code, kind: 'order', sig: JSON.stringify([r.shape, r.h, r.h2]), vars: { high: round2(r.h2), low: round2(r.h) }, message: `El techo ${r.code}: la parte alta (${round2(r.h2)} m) no puede ser más baja que la baja (${round2(r.h)} m).` });
+        });
+        return out;
+    }
+    const roofKey = (v) => `${v.id}|${v.kind}|${v.sig}`;
+    function newRoofViolations(next, previous) {
+        const before = new Set((previous ? roofViolations(previous) : []).map(roofKey));
+        return roofViolations(next).filter((v) => !before.has(roofKey(v)));
     }
     // ---- Fechas de Seguridad: estado de cada elemento -----------------------------------------------------------------------------------------------
     // Cada elemento puede traer su caducidad (expires), cada cuántos días se revisa (every) y su próxima revisión (next), todo opcional. El ESTADO sale de la fecha más cercana contra HOY: vencida si ya pasó, «por vencer» si
@@ -2700,7 +2848,7 @@
         return {
             mode: 'scratch', heightM: 9,
             vertices: [[0, 0, 9], [30, 0, 9], [30, 20, 9], [0, 20, 9]],
-            doors: [], power: [], sensors: [], objects: [], safety: [], ceiling: [], obstacles: defaultWalls([[0, 0], [30, 0], [30, 20], [0, 20]]), wallsMigrated: true, floorsMigrated: true, rampsMigrated: true, floors: [], ramps: [], zones: [], footprints: [], spaces: [],
+            doors: [], power: [], sensors: [], objects: [], safety: [], ceiling: [], roofs: [], obstacles: defaultWalls([[0, 0], [30, 0], [30, 20], [0, 20]]), wallsMigrated: true, floorsMigrated: true, rampsMigrated: true, floors: [], ramps: [], zones: [], footprints: [], spaces: [],
             plan: null, ownAssetFmt: true,
         };
     }
@@ -3072,6 +3220,27 @@
             return item;
         });
         out.ceilingNext = cleanSafetyNext(src.ceilingNext);
+        // Techos (cubiertas): secciones de techo con su forma, lo que cubren, sus alturas, su material y su color. El código (TE001…) lo pone el sistema; las zonas elegidas que ya no existen se quitan más abajo.
+        const roofIds = new Set();
+        out.roofs = list(src.roofs, LIMITS.roofs, 'Techos').map((r, i) => {
+            const label = `Techo ${i + 1}`;
+            const shape = oneOf(r && r.shape, ROOF_SHAPES, 'flat');
+            const cover = oneOf(r && r.cover, ROOF_COVERS, 'nave');
+            const item = { id: idOf(r && r.id, roofIds, label), code: text(r && r.code, label, false), name: text(r && r.name, label, false), shape, cover };
+            if (cover === 'zones') item.zoneIds = Array.isArray(r && r.zoneIds) ? r.zoneIds.filter((zid) => typeof zid === 'string').slice(0, LIMITS.zones) : [];
+            if (cover === 'area') { item.x = meters(r && r.x, label, -LIMITS.maxM); item.y = meters(r && r.y, label, -LIMITS.maxM); item.l = meters(r && r.l, label); item.w = meters(r && r.w, label); }
+            const height = (v, what) => { const n = Number(v); if (Number.isFinite(n) && n > 0 && n <= LIMITS.maxHeight) return round2(n); errors.push(`${label}: ${what} no es válida (de 0.01 a ${LIMITS.maxHeight} m)`); return 0; };
+            item.h = height(r && r.h, shape === 'flat' ? 'la altura' : (shape === 'shed' ? 'la altura del lado bajo' : 'la altura del alero'));
+            if (shape !== 'flat') {
+                item.h2 = r && r.h2 !== undefined && r.h2 !== null && r.h2 !== '' ? height(r.h2, shape === 'shed' ? 'la altura del lado alto' : 'la altura de la cumbrera') : item.h;
+                item.dir = shape === 'shed' ? oneOf(r && r.dir, ROOF_SHED_DIRS, 's') : oneOf(r && r.dir, ROOF_GABLE_DIRS, 'ew');
+            }
+            item.material = oneOf(r && r.material, ROOF_MATERIALS, 'sheet');
+            // el color solo se guarda si se eligió uno (si no, el techo toma el de su forma y lo sigue si la forma cambia)
+            { const col = oneOf(r && r.color, Object.keys(ROOF_COLORS), ''); if (col) item.color = col; }
+            return item;
+        });
+        { const rn = Math.round(Number(src.roofNext)); if (Number.isFinite(rn) && rn > 0) out.roofNext = rn; }
         // Tránsito: los pasillos y las medidas de lo que transita por ellos.
         const transitIds = new Set();
         out.transit = list(src.transit, LIMITS.transit, 'Pasillos').map((p, i) => {
@@ -3316,6 +3485,8 @@
         { const coded = assignItemCodes(out); ITEM_CODES.forEach(({ list, next }) => { out[list] = coded[list]; if (coded[next]) out[next] = coded[next]; else delete out[next]; }); }
         { const safe = assignSafetyCodes(deriveSafetyZones(out)); out.safety = safe.safety; if (safe.safetyNext && Object.keys(safe.safetyNext).length) out.safetyNext = safe.safetyNext; else delete out.safetyNext; }
         { const ceil = assignCeilingCodes(deriveCeilingZones(out)); out.ceiling = ceil.ceiling; if (ceil.ceilingNext && Object.keys(ceil.ceilingNext).length) out.ceilingNext = ceil.ceilingNext; else delete out.ceilingNext; }
+        // techos: una zona elegida que ya no existe se quita (borrar una zona no bloquea el guardado) y cada techo recibe su código
+        { const known = new Set((out.zones || []).map((zz) => zz.id)); out.roofs = (out.roofs || []).map((r) => (r.cover === 'zones' ? { ...r, zoneIds: (r.zoneIds || []).filter((zid) => known.has(zid)) } : r)); const roofed = assignRoofCodes(out); out.roofs = roofed.roofs; if (roofed.roofNext) out.roofNext = roofed.roofNext; else delete out.roofNext; }
         out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
         // Posiciones (paso Posiciones): lugares libres dentro de un espacio (un nivel × una columna de un activo). Cada una lleva su lugar (x, y desde la esquina de arriba a la izquierda del espacio), su largo, su fondo y su alto, su número (P001…, el
         // consecutivo dentro del espacio, que no se reusa: posNext) y, solo si las cambió, sus caras de consumo. Una posición de un espacio que ya no existe (se quitó el activo, el nivel o la columna) se descarta sin avisar.
@@ -3462,6 +3633,8 @@
     }
     // Hacia qué lado del croquis sube una rampa, con el croquis girado q cuartos de vuelta a la derecha.
     const rotateRise = (rise, q) => { const order = ['up', 'right', 'down', 'left']; const i = order.indexOf(rise); return i < 0 ? rise : order[(i + q) % 4]; };
+    // Hacia qué lado cae un techo de una agua, con el croquis girado q cuartos de vuelta a la derecha.
+    const rotateCompass = (d, q) => { const order = ['n', 'e', 's', 'w']; const i = order.indexOf(d); return i < 0 ? d : order[(i + q) % 4]; };
     function rotateLayout(layout, quarters) {
         const q = ((Math.round(Number(quarters)) % 4) + 4) % 4;
         if (!q || !layout) return layout;
@@ -3486,6 +3659,8 @@
             objects: (layout.objects || []).map((o) => { const r = pt(o.x, o.y); return { ...o, x: round2(r[0]), y: round2(r[1]), angle: ((((Number(o.angle) || 0) + 90 * q) % 360) + 360) % 360 }; }),
             // un elemento de seguridad (y los dos extremos de la ruta) se mueve con el croquis
             ceiling: (layout.ceiling || []).map((e) => { const a = pt(e.x, e.y); return { ...e, x: round2(a[0]), y: round2(a[1]) }; }),
+            // un techo gira con el croquis: su área (si es un recuadro), hacia dónde cae (una agua) o hacia dónde corre la cumbrera (dos aguas)
+            roofs: (layout.roofs || []).map((r) => ({ ...r, ...(r.cover === 'area' ? box(r, 'l', 'w') : {}), ...(r.shape === 'shed' && r.dir ? { dir: rotateCompass(r.dir, q) } : {}), ...(r.shape === 'gable' && r.dir && q % 2 ? { dir: r.dir === 'ew' ? 'ns' : 'ew' } : {}) })),
             safety: (layout.safety || []).map((e) => { const a = pt(e.x, e.y); const moved = { ...e, x: round2(a[0]), y: round2(a[1]) }; if (e.type === 'route') { const b = pt(e.x2, e.y2); moved.x2 = round2(b[0]); moved.y2 = round2(b[1]); } return moved; }),
             spaces: (layout.spaces || []).map((s) => ({ ...s, ...box(s, 'l', 'd') })),
             footprints: (layout.footprints || []).map((f) => ({ ...f, ...box(f, 'l', 'd') })),
@@ -3977,7 +4152,8 @@
         // Los elementos (sin la zona, que sale del croquis) y los días de aviso de «Por vencer».
         if (section === 'seguridad') return { safety: (layout.safety || []).map(({ zoneId, ...rest }) => rest), warnDays: layout.safetyWarnDays || SAFETY_WARN_DAYS };
         // La zona de cada elemento del techo sale del croquis, no se captura (ni el contador de códigos).
-        if (section === 'techos') return (layout.ceiling || []).map(({ zoneId, ...rest }) => rest);
+        // Los techos (cubiertas) y, aparte, lo que cuelga de ellos (sin la zona, que sale del croquis, ni el contador de códigos).
+        if (section === 'techos') return { roofs: layout.roofs || [], ceiling: (layout.ceiling || []).map(({ zoneId, ...rest }) => rest) };
         // La zona de cada pasillo sale del croquis, no se captura; las medidas de lo que transita van con el paso.
         if (section === 'transito') return { transit: (layout.transit || []).map(({ zoneId, ...rest }) => rest) };
         if (section === 'zonas') return layout.zones;
@@ -4013,6 +4189,7 @@
         if (section === 'contorno') return (data.vertices || []).length > 0;
         if (section === 'transito') return (data.transit || []).length > 0;
         if (section === 'seguridad') return (data.safety || []).length > 0;
+        if (section === 'techos') return (data.roofs || []).length > 0 || (data.ceiling || []).length > 0;
         return (data || []).length > 0;
     }
 
@@ -4021,7 +4198,7 @@
         storageLocations, huellasThatFit, capacityOf,
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, zoneClearHeights, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
-        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, CEILING_TYPES, CEILING_LETTER, CEILING_COLORS, CEILING_SIZE_DEFAULTS, ceilingSizeOf, ceilingLimitAt, ceilingHangOf, deriveCeilingZones, assignCeilingCodes, lockCeilingCodes, ceilingViolations, newCeilingViolations, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
+        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, CEILING_TYPES, CEILING_LETTER, CEILING_COLORS, CEILING_SIZE_DEFAULTS, ceilingSizeOf, ceilingLimitAt, ceilingHangOf, deriveCeilingZones, assignCeilingCodes, lockCeilingCodes, ceilingViolations, newCeilingViolations, ROOF_SHAPES, ROOF_COVERS, ROOF_MATERIALS, ROOF_COLORS, ROOF_COLOR_BY_SHAPE, ROOF_SHED_DIRS, ROOF_GABLE_DIRS, roofColorOf, roofRings, roofBox, roofHeightIn, roofSlopePct, roofRidge, roofAt, roofLimitAt, assignRoofCodes, lockRoofCodes, roofViolations, newRoofViolations, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, BAY_COLORS, bayFmtOf, levelBayRects, levelHasPlaced, levelBayClashes, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

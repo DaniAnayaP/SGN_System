@@ -17,7 +17,7 @@
     const WOOD = 0xb98a52;
     const MAX_SPACE_LABELS = 300;
     const MAX_POS_LABELS = 80; // con el paso Posiciones encendido, hasta cuántos rótulos P001… se dibujan en el 3D
-    const LAYER_NAMES = ['contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'ceiling'];
+    const LAYER_NAMES = ['contour', 'walls', 'doors', 'power', 'sensors', 'columns', 'zones', 'footprints', 'assets', 'objects', 'transit', 'safety', 'ceiling', 'roofs'];
     // El color de cada elemento de Seguridad (los mismos del croquis: rojo del fuego, verde de emergencia, naranja de alarma, azul del agua).
     // Lo que cuelga del techo (paso Techos): el color de cada tipo, el mismo del croquis.
     const CEILING_COLOR = { camera: 0x4f5d7a, speaker: 0xd98a1f, ventilation: 0x2a9d8f, extractor: 0x7a5cc7, other: 0x8a8f9e };
@@ -811,7 +811,72 @@
             lg.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
             group.contour.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x4a5f8f })));
             // El techo: va ARRIBA de la medida que se da de pared. Por debajo mide la altura de cada esquina (con 2 paredes a 3 m y 2 a 2.5 m el techo queda inclinado) y encima lleva su grueso; translúcido para ver lo de adentro.
-            if (roofOn && frame.length < 3) { // con un enfoque (zonas) el techo de toda la nave taparía lo enfocado: no se dibuja
+            // Techos (paso Techos): cada sección de techo (plano, una agua o dos aguas) con su forma, su caída y su color. Cuando hay techos dibujados reemplazan a la losa de toda la nave; son translúcidos para ver lo de adentro.
+            const RC = root.LayoutCalc;
+            const roofList = RC && RC.roofRings ? (layout.roofs || []).filter((r) => RC.roofRings(layout, r).length) : [];
+            if (roofList.length && (roofOn || layerOn.roofs) && frame.length < 3) {
+                const RT2 = 0.14; // grueso del techo (m)
+                roofList.forEach((r) => {
+                    try {
+                        const rings = RC.roofRings(layout, r);
+                        const box = RC.roofBox(rings);
+                        const colorHex = parseInt(String(RC.roofColorOf(r)).slice(1), 16) || 0xc27a1c;
+                        const hAt = (x, y) => RC.roofHeightIn(r, box, x, y);
+                        // dos aguas: cada anillo se parte por la cumbrera (así la quiebra del techo queda en su lugar); plano y una agua son un solo plano
+                        const pieces = [];
+                        if (r.shape === 'gable') {
+                            const ew = r.dir !== 'ns';
+                            const mid = ew ? (box.y0 + box.y1) / 2 : (box.x0 + box.x1) / 2;
+                            const big = 100000;
+                            rings.forEach((ring) => {
+                                const a = ew ? RC.clipPolygonToRect(ring, -big, -big, big, mid) : RC.clipPolygonToRect(ring, -big, -big, mid, big);
+                                const b = ew ? RC.clipPolygonToRect(ring, -big, mid, big, big) : RC.clipPolygonToRect(ring, mid, -big, big, big);
+                                if (a.length >= 3) pieces.push(a);
+                                if (b.length >= 3) pieces.push(b);
+                            });
+                        } else rings.forEach((ring) => pieces.push(ring));
+                        pieces.forEach((pts0) => {
+                            const same = pts0.length > 1 && pts0[0][0] === pts0[pts0.length - 1][0] && pts0[0][1] === pts0[pts0.length - 1][1];
+                            const pts = same ? pts0.slice(0, -1) : pts0;
+                            const n = pts.length;
+                            if (n < 3) return;
+                            const tri = THREE.ShapeUtils.triangulateShape(pts.map((p) => new THREE.Vector2(PX(p[0]), PZ(p[1]))), []);
+                            const pos = [];
+                            pts.forEach((p) => pos.push(PX(p[0]), hAt(p[0], p[1]), PZ(p[1])));
+                            pts.forEach((p) => pos.push(PX(p[0]), hAt(p[0], p[1]) + RT2, PZ(p[1])));
+                            const idx = [];
+                            tri.forEach(([a, b, c]) => { idx.push(a, b, c, n + a, n + c, n + b); });
+                            for (let i = 0; i < n; i++) { const j = (i + 1) % n; idx.push(i, j, n + j, i, n + j, n + i); }
+                            const rg = new THREE.BufferGeometry();
+                            rg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+                            rg.setIndex(idx);
+                            rg.computeVertexNormals();
+                            const mesh = new THREE.Mesh(rg, new THREE.MeshLambertMaterial({ color: colorHex, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+                            mesh.raycast = () => {}; // el techo no tapa los toques a lo de abajo
+                            group.roof.add(mesh);
+                            const topEdges = [];
+                            for (let i = 0; i < n; i++) { const j = (i + 1) % n; topEdges.push(PX(pts[i][0]), hAt(pts[i][0], pts[i][1]) + RT2, PZ(pts[i][1]), PX(pts[j][0]), hAt(pts[j][0], pts[j][1]) + RT2, PZ(pts[j][1])); }
+                            const eg = new THREE.BufferGeometry();
+                            eg.setAttribute('position', new THREE.Float32BufferAttribute(topEdges, 3));
+                            const edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: colorHex }));
+                            edges.raycast = () => {};
+                            group.roof.add(edges);
+                        });
+                        // la cumbrera de dos aguas: una línea a lo largo de la quiebra
+                        if (r.shape === 'gable') {
+                            const rd = RC.roofRidge(layout, r);
+                            if (rd) {
+                                const hr = hAt((rd.x1 + rd.x2) / 2, (rd.y1 + rd.y2) / 2) + RT2;
+                                const lg2 = new THREE.BufferGeometry();
+                                lg2.setAttribute('position', new THREE.Float32BufferAttribute([PX(rd.x1), hr, PZ(rd.y1), PX(rd.x2), hr, PZ(rd.y2)], 3));
+                                const ridgeLine = new THREE.LineSegments(lg2, new THREE.LineBasicMaterial({ color: colorHex }));
+                                ridgeLine.raycast = () => {};
+                                group.roof.add(ridgeLine);
+                            }
+                        }
+                    } catch (err) { /* un techo que no se puede armar no se dibuja */ }
+                });
+            } else if (roofOn && frame.length < 3) { // con un enfoque (zonas) el techo de toda la nave taparía lo enfocado: no se dibuja
                 try {
                     const RT = 0.14; // grueso de la losa (m)
                     const tri = THREE.ShapeUtils.triangulateShape(V.map((p) => new THREE.Vector2(PX(p[0]), PZ(p[1]))), []);
