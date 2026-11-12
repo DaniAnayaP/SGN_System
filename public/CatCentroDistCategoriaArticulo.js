@@ -580,7 +580,7 @@ function buildExtraCells(record) {
             onCommit: (val) => ensureCreatedThenPatch(record, { letter: String(val || '').trim().toUpperCase() }),
         });
         // «Se dibuja como»: el tipo de espacio del Layout que le toca (cómo se ve y qué letra traían sus activos del Layout). Sin dibujo propio, su activo conserva el que ya tenía.
-        const kinds = ['rack', 'rackpal', 'cabinet', 'pallet', 'cold', 'cart'];
+        const kinds = ['rack', 'rackpal', 'cabinet', 'pallet', 'cold', 'cart', 'sensor']; // «Sensor» no es un activo de huella: se coloca sobre una pared en el paso Sensores del Layout
         return [letterTd, buildOptionCell(record, 'colActivoFijoLetra', 'kind', 'assetTypeLetter',
             kinds.map((k) => ({ value: k, label: Dashboard.t(`main.layoutType_space_${k}`) })), record.kind || '', '',
             (v) => ({ kind: v }))];

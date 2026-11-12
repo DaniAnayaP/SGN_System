@@ -1844,6 +1844,11 @@
     "layoutColocarSinHuella": "Choose the footprint they go on.",
     "layoutColocarSinElegir": "Check at least one asset.",
     "layoutColocarBtn": "Place",
+    "layoutColocarSensor": "+ Place sensor from Asset Registration",
+    "layoutColocarTituloSensor": "Place sensors from Asset Registration",
+    "layoutSensorEquipo": "Equipment",
+    "layoutColocarVacioSensor": "There are no sensors to place. Register them in Asset Registration with a type that is drawn as «Sensor» and «Shows in the Layout» set to Yes; the ones already in the Layout do not show here.",
+    "layoutType_space_sensor": "Sensor",
     "layoutActivoDeRegistro": "It comes from Asset Registration: change it there.",
     "colActDondeEsta": "Where it is",
     "layoutActivoElegirHuella": "Choose the footprint…",
@@ -6039,6 +6044,14 @@
     "layoutHuellaActivos": {
       "what": "How many assets are placed on this footprint (read only). Assets are registered in Asset Registration and placed in the Assets step with «+ Place asset from Asset Registration».",
       "example": "footprint H001 says 3: Assets has three rows for H001."
+    },
+    "layoutColocarSensor": {
+      "what": "Places a sensor that was already registered in Asset Registration (an asset of a type drawn as «Sensor»). It brings its code, name, model and S/N from its row; here you say which wall it goes on, how far along and how high, and what it measures (temperature, humidity or both).",
+      "example": "the Traceable 4410 (HT001): you place it, choose wall M002, 1.5 m from the start and 1.2 m high, and it measures temperature and humidity."
+    },
+    "layoutSensorEquipo": {
+      "what": "The Asset Registration equipment this sensor is: its name, model and serial number. It is changed in Asset Registration. Older sensors, which do not come from Asset Registration, do not have it.",
+      "example": "Ambient Temperature Sensor · TRACEABLE 4410TR · S/N 261237911."
     },
     "layoutColocarActivo": {
       "what": "Places on a footprint the assets that were already registered in Asset Registration (only the ones that show in the Layout, are active and are not placed yet appear). Each asset brings its code, name, type, classification and measures from its row; here you only choose where it goes and set its levels.",

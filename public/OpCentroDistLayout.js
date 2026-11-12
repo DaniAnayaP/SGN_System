@@ -1610,8 +1610,10 @@ function stepHtml(step) {
     if (step === 'sensores') {
         // Cada renglón es un SENSOR de temperatura y/o humedad, colocado sobre una pared como las conexiones de luz. El código (S001…) lo pone el sistema y la zona donde queda sale de la pared (no se captura); las zonas que MIDE sí se eligen (una o varias).
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
-        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td><td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${sensorZonesCell(x, i, d, dis)}${removeCell('sensors', i, dis)}</tr>`);
-        return `${table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutSensorZonaColocado', 'main.layoutSensorZonasMide', ''], rows, 'layout-sensores')}${addButton('sensors', 'main.layoutAgregarSensor', dis, true)}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
+        // el equipo del renglón de Alta Activos (nombre · modelo · S/N): los sensores de antes, sin renglón, salen con «—»
+        const equip = (x) => { const a = x.assetRef ? (state.fixedAssets || []).find((r) => r.id === x.assetRef) : null; return a ? [a.name, a.model, a.serialNumber ? `S/N ${a.serialNumber}` : ''].filter(Boolean).join(' · ') : '—'; };
+        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td><td class="layout-calc" title="${esc(t('main.layoutActivoDeRegistro'))}" data-help-key="layoutSensorEquipo">${esc(equip(x))}</td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td><td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${sensorZonesCell(x, i, d, dis)}${removeCell('sensors', i, dis)}</tr>`);
+        return `${table(['main.layoutCodigo', 'main.layoutSensorEquipo', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutSensorZonaColocado', 'main.layoutSensorZonasMide', ''], rows, 'layout-sensores')}${canEdit('sensores') && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-place-assets="sensors" data-main-add="1" data-help-key="layoutColocarSensor">${esc(t('main.layoutColocarSensor'))}</button>` : ''}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
     }
     if (step === 'seguridad') {
         // Cada renglón es un ELEMENTO de seguridad (extintor, hidrante, puerta de emergencia, botiquín, alarma o pulsador, regadera y lavaojos, punto de reunión o ruta de evacuación): un punto puesto en el plano con X e Y, en metros.
@@ -4937,17 +4939,19 @@ function showEditor() {
 }
 
 // ---- cargar el Layout guardado -----------------------------------------------------------------------------------------
-// ---- Colocar activos de Alta Activos (paso Activos) -------------------------------------------------------------------------------------------------------
-// Los activos del Layout no se crean aquí: se dan de alta en Alta Activos y aquí solo se colocan (en qué huella van). La lista trae los del centro de costos que aparecen en el Layout (Alta Activos > «Aparece en el Layout» = Sí), están
-// activos y todavía no están colocados; uno sin largo, profundidad y alto no se puede dibujar. Al colocarlo toma de su renglón el código, el nombre, el tipo, la clasificación y las medidas (LayoutCalc.applyAssetToSpace).
+// ---- Colocar activos y sensores de Alta Activos (pasos Activos y Sensores) ------------------------------------------------------------------------------------
+// Los activos del Layout no se crean aquí: se dan de alta en Alta Activos y aquí solo se colocan. La lista trae los del centro de costos que aparecen en el Layout (Alta Activos > «Aparece en el Layout» = Sí), están activos y todavía no
+// están colocados. En el paso Activos salen los que van sobre una huella (uno sin largo, profundidad y alto no se puede dibujar) y se elige la huella; en el paso Sensores, los de tipo «Sensor» (se dibujan como Sensor en el catálogo
+// Activos Fijos), que van sobre una pared: el renglón nace con la primera pared y ahí se le dice cuál, a qué distancia y a qué altura. Al colocarlo toma de su renglón el código y el nombre (LayoutCalc.applyAssetToSpace).
 let placeModalEl = null;
 function closePlaceAssets() { if (placeModalEl) placeModalEl.hidden = true; }
-function openPlaceAssets() {
+function openPlaceAssets(opts = {}) {
+    const sensors = !!opts.sensors;
     const d = state.draft;
-    if (!d || !canEdit('activos')) return;
-    const placed = new Set(d.spaces.map((s) => s.assetRef).filter(Boolean));
-    const list = (state.fixedAssets || []).filter((a) => a.status === 'active' && a.showInLayout && !placed.has(a.id));
-    const dimsOk = (a) => a.length > 0 && a.depth > 0 && a.height > 0;
+    if (!d || !canEdit(sensors ? 'sensores' : 'activos')) return;
+    const placed = new Set([...d.spaces, ...(d.sensors || [])].map((s) => s.assetRef).filter(Boolean));
+    const list = (state.fixedAssets || []).filter((a) => a.status === 'active' && a.showInLayout && !placed.has(a.id) && ((a.typeKind === 'sensor') === sensors));
+    const dimsOk = (a) => sensors || (a.length > 0 && a.depth > 0 && a.height > 0);
     if (!placeModalEl) {
         placeModalEl = document.createElement('div');
         placeModalEl.className = 'modal-overlay';
@@ -4957,14 +4961,15 @@ function openPlaceAssets() {
         document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && placeModalEl && !placeModalEl.hidden) closePlaceAssets(); });
     }
     const zoneOptions = `<option value="">${esc(t('main.layoutActivoElegirZona'))}</option>${d.zones.filter((z) => z.active !== false).map((z) => `<option value="${esc(z.id)}">${esc(z.name || z.code)}</option>`).join('')}`;
-    const rows = list.map((a) => `<label class="layout-place-row${dimsOk(a) ? '' : ' is-off'}" data-place-text="${esc(`${a.code} ${a.name} ${a.typeName} ${a.className}`.toLowerCase())}"><input type="checkbox" data-place-asset="${a.id}"${dimsOk(a) ? '' : ' disabled'}> <b>${esc(a.code)}</b> · ${esc(a.name)} <small>${esc(a.typeName || '—')} · ${a.length} × ${a.depth} × ${a.height} cm${dimsOk(a) ? '' : ` ${esc(t('main.layoutColocarSinMedidas'))}`}</small></label>`).join('');
+    const detail = (a) => (sensors ? `${a.typeName || '—'} · ${a.model || '—'} · S/N ${a.serialNumber || '—'}` : `${a.typeName || '—'} · ${a.length} × ${a.depth} × ${a.height} cm`);
+    const rows = list.map((a) => `<label class="layout-place-row${dimsOk(a) ? '' : ' is-off'}" data-place-text="${esc(`${a.code} ${a.name} ${a.typeName} ${a.className} ${a.model || ''} ${a.serialNumber || ''}`.toLowerCase())}"><input type="checkbox" data-place-asset="${a.id}"${dimsOk(a) ? '' : ' disabled'}> <b>${esc(a.code)}</b> · ${esc(a.name)} <small>${esc(detail(a))}${dimsOk(a) ? '' : ` ${esc(t('main.layoutColocarSinMedidas'))}`}</small></label>`).join('');
     placeModalEl.innerHTML = `<div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="layout-place-title">
-        <h3 id="layout-place-title" data-help-key="layoutColocarActivo">${esc(t('main.layoutColocarTitulo'))}</h3>
-        <div class="admin-form-grid">
+        <h3 id="layout-place-title" data-help-key="${sensors ? 'layoutColocarSensor' : 'layoutColocarActivo'}">${esc(t(sensors ? 'main.layoutColocarTituloSensor' : 'main.layoutColocarTitulo'))}</h3>
+        ${sensors ? '' : `<div class="admin-form-grid">
             <div class="admin-field"><label for="layout-place-zone">${esc(t('main.layoutZona'))}</label><select id="layout-place-zone">${zoneOptions}</select></div>
             <div class="admin-field"><label for="layout-place-fp">${esc(t('main.layoutHuellaCol'))}</label><select id="layout-place-fp"><option value="">${esc(t('main.layoutActivoElegirHuella'))}</option></select></div>
-        </div>
-        ${list.length ? `<input type="search" id="layout-place-search" placeholder="${esc(t('main.layoutColocarBuscar'))}" style="width:100%; margin-top:.6rem;"><div class="layout-place-list">${rows}</div>` : `<p class="layout-muted">${esc(t('main.layoutColocarVacio'))}</p>`}
+        </div>`}
+        ${list.length ? `<input type="search" id="layout-place-search" placeholder="${esc(t('main.layoutColocarBuscar'))}" style="width:100%; margin-top:.6rem;"><div class="layout-place-list">${rows}</div>` : `<p class="layout-muted">${esc(t(sensors ? 'main.layoutColocarVacioSensor' : 'main.layoutColocarVacio'))}</p>`}
         <div id="layout-place-error" class="admin-error" role="alert" hidden></div>
         <div class="admin-form-actions">
             <button type="button" class="btn" id="layout-place-ok"${list.length ? '' : ' disabled'}>${esc(t('main.layoutColocarBtn'))}</button>
@@ -4972,22 +4977,32 @@ function openPlaceAssets() {
         </div>
     </div>`;
     const err = (key) => { const el = placeModalEl.querySelector('#layout-place-error'); el.textContent = t(key); el.hidden = false; };
-    placeModalEl.querySelector('#layout-place-zone').addEventListener('change', (event) => {
-        const fps = d.footprints.filter((f) => f.zoneId === event.target.value);
-        placeModalEl.querySelector('#layout-place-fp').innerHTML = `<option value="">${esc(t('main.layoutActivoElegirHuella'))}</option>${fps.map((f) => `<option value="${esc(f.id)}">${esc(f.code)}${f.name ? ` · ${esc(f.name)}` : ''}</option>`).join('')}`;
-    });
+    if (!sensors) {
+        placeModalEl.querySelector('#layout-place-zone').addEventListener('change', (event) => {
+            const fps = d.footprints.filter((f) => f.zoneId === event.target.value);
+            placeModalEl.querySelector('#layout-place-fp').innerHTML = `<option value="">${esc(t('main.layoutActivoElegirHuella'))}</option>${fps.map((f) => `<option value="${esc(f.id)}">${esc(f.code)}${f.name ? ` · ${esc(f.name)}` : ''}</option>`).join('')}`;
+        });
+    }
     const search = placeModalEl.querySelector('#layout-place-search');
     if (search) search.addEventListener('input', () => { const q = search.value.trim().toLowerCase(); placeModalEl.querySelectorAll('.layout-place-row').forEach((row) => { row.hidden = !!q && !row.dataset.placeText.includes(q); }); });
     placeModalEl.querySelector('#layout-place-ok').addEventListener('click', () => {
-        const footprintId = placeModalEl.querySelector('#layout-place-fp').value;
-        if (!footprintId) { err('main.layoutColocarSinHuella'); return; }
+        const footprintId = sensors ? '' : placeModalEl.querySelector('#layout-place-fp').value;
+        if (!sensors && !footprintId) { err('main.layoutColocarSinHuella'); return; }
         const picked = Array.from(placeModalEl.querySelectorAll('[data-place-asset]:checked')).map((el) => Number(el.dataset.placeAsset));
         if (!picked.length) { err('main.layoutColocarSinElegir'); return; }
-        if (d.spaces.length + picked.length > LC.LIMITS.spaces) { Dashboard.showToast(t('main.layoutHuellaActivosTope', { n: LC.LIMITS.spaces }), 'warning'); return; }
-        clearFilterOf('activos');
+        const total = (sensors ? (d.sensors || []).length : d.spaces.length) + picked.length;
+        if (total > (sensors ? LC.LIMITS.sensors : LC.LIMITS.spaces)) { Dashboard.showToast(t('main.layoutHuellaActivosTope', { n: sensors ? LC.LIMITS.sensors : LC.LIMITS.spaces }), 'warning'); return; }
+        clearFilterOf(sensors ? 'sensors' : 'activos');
         picked.forEach((id) => {
             const a = (state.fixedAssets || []).find((x) => x.id === id);
             if (!a) return;
+            if (sensors) {
+                const s = ROW_FACTORY.sensors();
+                s.assetRef = a.id;
+                s.code = a.code;
+                (d.sensors = d.sensors || []).push(s);
+                return;
+            }
             const s = LC.applyAssetToSpace(ROW_FACTORY.spaces(), a, { typeKind: a.typeKind, metric: a.metric });
             s.footprintId = footprintId;
             d.spaces.push(s);
@@ -5666,7 +5681,8 @@ $('layout-panel').addEventListener('click', (event) => {
     if (szOpen) { openSensorZonesPop(Number(szOpen.dataset.szOpen), szOpen); return; }
     const szDel = event.target.closest('[data-sz-del]');
     if (szDel) { toggleSensorZone(szDel.dataset.szDel, false); return; }
-    if (event.target.closest('[data-place-assets]')) { openPlaceAssets(); return; }
+    const placeBtn = event.target.closest('[data-place-assets]');
+    if (placeBtn) { openPlaceAssets({ sensors: placeBtn.dataset.placeAssets === 'sensors' }); return; }
     const addObj = event.target.closest('[data-add-object]');
     if (addObj) { addObject(); return; }
     const lvApply = event.target.closest('[data-lvl-apply]');

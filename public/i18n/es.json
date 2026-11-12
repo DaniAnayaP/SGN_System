@@ -1844,6 +1844,11 @@
     "layoutColocarSinHuella": "Elige la huella donde van.",
     "layoutColocarSinElegir": "Marca al menos un activo.",
     "layoutColocarBtn": "Colocar",
+    "layoutColocarSensor": "+ Colocar sensor de Alta Activos",
+    "layoutColocarTituloSensor": "Colocar sensores de Alta Activos",
+    "layoutSensorEquipo": "Equipo",
+    "layoutColocarVacioSensor": "No hay sensores para colocar. Dalos de alta en Alta Activos con un tipo que se dibuje como «Sensor» y «Aparece en el Layout» en Sí; los que ya están en el Layout no salen aquí.",
+    "layoutType_space_sensor": "Sensor",
     "layoutActivoDeRegistro": "Viene de Alta Activos: se cambia allá.",
     "colActDondeEsta": "Dónde está",
     "layoutActivoElegirHuella": "Elige la huella…",
@@ -6038,6 +6043,14 @@
     "layoutHuellaActivos": {
       "what": "Cuántos activos hay colocados en esta huella (solo se lee). Los activos se dan de alta en Alta Activos y se colocan en el paso Activos con «+ Colocar activo de Alta Activos».",
       "example": "la huella H001 dice 3: en Activos hay tres renglones de H001."
+    },
+    "layoutColocarSensor": {
+      "what": "Coloca un sensor que ya se dio de alta en Alta Activos (un activo de un tipo que se dibuja como «Sensor»). Trae de su renglón el código, el nombre, el modelo y el S/N; aquí le dices en qué pared va, a qué distancia y a qué altura, y qué mide (temperatura, humedad o las dos).",
+      "example": "el Traceable 4410 (HT001): lo colocas, eliges la pared M002, 1.5 m desde el inicio y 1.2 m de altura, y mide temperatura y humedad."
+    },
+    "layoutSensorEquipo": {
+      "what": "El equipo de Alta Activos que es este sensor: su nombre, modelo y número de serie. Se cambia en Alta Activos. Los sensores de antes, que no vienen de Alta Activos, no lo traen.",
+      "example": "Sensor Temperatura del Ambiente · TRACEABLE 4410TR · S/N 261237911."
     },
     "layoutColocarActivo": {
       "what": "Coloca en una huella los activos que ya se dieron de alta en Alta Activos (solo salen los que aparecen en el Layout, están activos y todavía no están colocados). Cada activo trae de su renglón el código, el nombre, el tipo, la clasificación y las medidas; aquí solo eliges dónde va y le pones sus niveles.",

@@ -1430,7 +1430,8 @@
     function assignSensorCodes(layout) {
         if (!layout || !Array.isArray(layout.sensors)) return layout;
         const used = new Set();
-        const keep = layout.sensors.map((s) => { const c = String(s.code == null ? '' : s.code).trim().toUpperCase(); if (isSensorCode(c) && !used.has(c)) { used.add(c); return c; } return ''; });
+        // un sensor de Alta Activos (assetRef) conserva SU código (HT001…): lo manda el registro; los de antes llevan S###
+        const keep = layout.sensors.map((s) => { const c = String(s.code == null ? '' : s.code).trim().toUpperCase(); if (s.assetRef && c) return c; if (isSensorCode(c) && !used.has(c)) { used.add(c); return c; } return ''; });
         let next = Math.max(0, ...Array.from(used).map((c) => Number(c.slice(1)))) + 1;
         let changed = false;
         const sensors = layout.sensors.map((s, i) => {
@@ -1446,7 +1447,7 @@
     function lockSensorCodes(next, previous) {
         if (!next || !Array.isArray(next.sensors)) return next;
         const before = new Map(((previous && previous.sensors) || []).map((s) => [s.id, s.code]));
-        const sensors = next.sensors.map((s) => { const code = before.has(s.id) ? before.get(s.id) : ''; return code === s.code ? s : { ...s, code }; });
+        const sensors = next.sensors.map((s) => { if (s.assetRef) return s; /* el código de un sensor de Alta Activos es del registro */ const code = before.has(s.id) ? before.get(s.id) : ''; return code === s.code ? s : { ...s, code }; });
         return assignSensorCodes({ ...next, sensors });
     }
     // El código de una PARED es M001, M002… (M de muro: la P ya es de la puerta de emergencia) y lo pone el sistema: uno por pared (las columnas, los desniveles y los otros obstáculos no llevan), consecutivo, sin repetirse y SIN volver a
@@ -3234,7 +3235,9 @@
             const wall = Math.round(Number(e && e.wall));
             const wallId = e && typeof e.wallId === 'string' ? e.wallId.trim().slice(0, 64) : '';
             if (!wallId && e && e.wall !== undefined && e.wall !== null && !(wall >= 1 && wall <= walls)) errors.push(`${label}: pared no válida`);
-            const item = { id: idOf(e && e.id, sensorIds, label), code: text(e && e.code, label, false), type: oneOf(e && e.type, SENSOR_TYPES, 'both'), zoneId: '', dist: meters(e && e.dist, label), height: meters(e && e.height, label) };
+            // assetRef: el renglón de Alta Activos (un activo de tipo Sensor) de donde viene este sensor; su código lo manda el registro
+            const sensorRef = Math.round(Number(e && e.assetRef));
+            const item = { id: idOf(e && e.id, sensorIds, label), code: text(e && e.code, label, false), ...(Number.isFinite(sensorRef) && sensorRef > 0 ? { assetRef: sensorRef } : {}), type: oneOf(e && e.type, SENSOR_TYPES, 'both'), zoneId: '', dist: meters(e && e.dist, label), height: meters(e && e.height, label) };
             // Las zonas que mide (una o varias; sin elegir mide la zona donde está colocado): solo se guarda si se eligió alguna. Las que ya no existen se quitan más abajo, cuando las zonas ya están limpias.
             const measured = Array.isArray(e && e.zones) ? [...new Set(e.zones.filter((zid) => typeof zid === 'string' && zid).map((zid) => zid.slice(0, 64)))].slice(0, LIMITS.zones) : [];
             const withZones = (obj) => (measured.length ? { ...obj, zones: measured } : obj);

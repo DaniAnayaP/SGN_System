@@ -7305,6 +7305,8 @@ app.put('/api/business/layout', requireAuth, requireCostCenter, (req, res) => {
             next = again.layout;
         }
         const knownSpaces = new Set(((existing && existing.layout.spaces) || []).map((s) => s.id));
+        const knownSensors = new Set(((existing && existing.layout.sensors) || []).map((s) => s.id));
+        if ((next.sensors || []).some((s) => !s.assetRef && !knownSensors.has(s.id))) return res.status(400).json({ message: 'Los sensores se dan de alta en Alta Activos y aquí solo se colocan: usa «+ Colocar sensor de Alta Activos».', errors: ['Los sensores se dan de alta en Alta Activos y aquí solo se colocan.'], section: 'sensores' });
         if ((next.spaces || []).some((s) => !s.assetRef && !knownSpaces.has(s.id))) return res.status(400).json({ message: 'Los activos se dan de alta en Alta Activos y aquí solo se colocan: usa «+ Colocar activo».', errors: ['Los activos se dan de alta en Alta Activos y aquí solo se colocan.'], section: 'activos' });
     }
     // Los códigos de las zonas (Z001…), de las huellas (H001… por zona) y de los activos (A001… por zona y tipo) los pone el sistema: lo que ya existía conserva el suyo y lo nuevo recibe el siguiente.
@@ -10087,7 +10089,7 @@ function prepareClassificationPatch(req, categoryType, existing, patch) {
 // Clasificación de Activos: su campo propio es la métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
 const ASSET_CLASS_METRIC_LABELS = { m2: 'm² (activo para operar)', m3: 'm³ (activo para almacenar)' };
 // Tipo de activo: su campo propio es la LETRA del Localizador (kind = el tipo de espacio del Layout que le toca; vacío = sin letra todavía).
-const ASSET_TYPE_LETTER_LABELS = { rack: 'A · Anaquel', rackpal: 'R · Rack', cabinet: 'G · Gabeta', pallet: 'T · Tarima en piso', cold: 'F · Frío', cart: 'M · Rack móvil' };
+const ASSET_TYPE_LETTER_LABELS = { rack: 'A · Anaquel', rackpal: 'R · Rack', cabinet: 'G · Gabeta', pallet: 'T · Tarima en piso', cold: 'F · Frío', cart: 'M · Rack móvil', sensor: 'Sensor' }; // «Sensor» se coloca en el paso Sensores del Layout (sobre una pared), no sobre una huella
 function prepareFixedAssetPatch(categoryType, patch, req = null, existing = null) {
     const has = (key) => Object.prototype.hasOwnProperty.call(patch, key);
     if ((categoryType !== 'activos-clasificacion' && categoryType !== 'activos-fijos') || (!has('kind') && !(categoryType === 'activos-fijos' && has('letter')))) return { patch, sanitizers: {} };
@@ -10095,7 +10097,7 @@ function prepareFixedAssetPatch(categoryType, patch, req = null, existing = null
         const out = { patch: { ...patch }, sanitizers: {} };
         // «Se dibuja como»: el tipo de espacio del Layout que le toca (kind). Vacío = sin dibujo propio (su activo conserva el que ya tenía).
         if (has('kind')) {
-            if (patch.kind !== '' && !ASSET_TYPE_LETTER_LABELS[patch.kind]) return { error: { status: 400, message: 'El dibujo debe ser Anaquel, Rack, Gabeta, Tarima en piso, Frío o Rack móvil (o quedar vacío).' } };
+            if (patch.kind !== '' && !ASSET_TYPE_LETTER_LABELS[patch.kind]) return { error: { status: 400, message: 'El dibujo debe ser Anaquel, Rack, Gabeta, Tarima en piso, Frío, Rack móvil o Sensor (o quedar vacío).' } };
             out.sanitizers.kind = (v) => ASSET_TYPE_LETTER_LABELS[v] || '';
         }
         // «Letra del código»: con ella empieza el código de los activos de este tipo en Alta Activos (R001, L001…). Una letra de la A a la Z, distinta en cada tipo de la empresa; ya con activos no se cambia (sus códigos la llevan).
@@ -11463,53 +11465,74 @@ function layoutAssetOpts(row, cat) {
     const cls = cat.classes.get(row.class_id);
     return { typeKind: type ? type.kind || '' : '', metric: cls ? cls.kind || '' : '' };
 }
-// El Layout que llega a guardarse: cada activo con assetRef toma del registro lo suyo. Valida que exista, que sea de este centro de costos, que no esté dos veces y que uno recién colocado esté activo, aparezca en el Layout y tenga medidas.
+// El Layout que llega a guardarse: cada activo o sensor con assetRef toma del registro lo suyo. Valida que exista, que sea de este centro de costos, que no esté dos veces, que un activo de huella no sea un Sensor (esos van en el
+// paso Sensores) ni al revés, y que uno recién colocado esté activo, aparezca en el Layout y (si va en una huella) tenga medidas.
 function applyFixedAssetsToLayout(layoutIn, { clientId, centerId, previous }) {
     const spaces = Array.isArray(layoutIn && layoutIn.spaces) ? layoutIn.spaces : [];
-    if (!spaces.some((s) => s && s.assetRef)) return { layout: layoutIn, touched: false };
+    const sensors = Array.isArray(layoutIn && layoutIn.sensors) ? layoutIn.sensors : [];
+    if (!spaces.some((s) => s && s.assetRef) && !sensors.some((s) => s && s.assetRef)) return { layout: layoutIn, touched: false };
     const cat = layoutAssetCatalogs(clientId);
-    const before = new Set(((previous && previous.spaces) || []).map((s) => Number(s.assetRef)).filter(Boolean));
+    const before = new Set([...((previous && previous.spaces) || []), ...((previous && previous.sensors) || [])].map((s) => Number(s.assetRef)).filter(Boolean));
     const seen = new Set();
-    const out = [];
-    for (const s of spaces) {
-        const ref = Math.round(Number(s && s.assetRef));
-        if (!(ref > 0)) { out.push(s); continue; }
-        const fail = (message) => ({ error: { message, section: 'activos' } });
+    const take = (item, asSensor) => {
+        const ref = Math.round(Number(item && item.assetRef));
+        if (!(ref > 0)) return { item };
+        const fail = (message) => ({ error: { message, section: asSensor ? 'sensores' : 'activos' } });
         const row = getFixedAssetAnyScope(ref, clientId);
         if (!row) return fail('Un activo del Layout ya no existe en Alta Activos. Quítalo de la lista.');
         const code = fixedAssetCodeOf(row);
+        const opts = layoutAssetOpts(row, cat);
         if (row.cost_center_id !== centerId) return fail(`El activo ${code} es de otro centro de costos.`);
         if (seen.has(ref)) return fail(`El activo ${code} está colocado dos veces: cada activo va una sola vez en el Layout.`);
         seen.add(ref);
+        if (asSensor && opts.typeKind !== 'sensor') return fail(`El activo ${code} no es un sensor: se coloca en el paso Activos.`);
+        if (!asSensor && opts.typeKind === 'sensor') return fail(`El activo ${code} es un sensor: se coloca en el paso Sensores.`);
         if (!before.has(ref)) {
             if (row.status !== 'active') return fail(`El activo ${code} está desactivado en Alta Activos: actívalo para colocarlo.`);
             if (!row.show_in_layout) return fail(`El activo ${code} no aparece en el Layout (Alta Activos > Aparece en el Layout).`);
-            if (!(row.length_cm > 0 && row.depth_cm > 0 && row.height_cm > 0)) return fail(`El activo ${code} no tiene largo, profundidad y alto en Alta Activos: captúralos para poder dibujarlo.`);
+            if (!asSensor && !(row.length_cm > 0 && row.depth_cm > 0 && row.height_cm > 0)) return fail(`El activo ${code} no tiene largo, profundidad y alto en Alta Activos: captúralos para poder dibujarlo.`);
         }
-        out.push(LayoutCalc.applyAssetToSpace(s, layoutAssetInfo(row), layoutAssetOpts(row, cat)));
-    }
-    return { layout: { ...layoutIn, spaces: out }, touched: true };
+        return { item: asSensor ? { ...item, assetRef: ref, code } : LayoutCalc.applyAssetToSpace(item, layoutAssetInfo(row), opts) };
+    };
+    const outSpaces = [];
+    for (const s of spaces) { const r = take(s, false); if (r.error) return r; outSpaces.push(r.item); }
+    const outSensors = [];
+    for (const s of sensors) { const r = take(s, true); if (r.error) return r; outSensors.push(r.item); }
+    return { layout: { ...layoutIn, spaces: outSpaces, ...(Array.isArray(layoutIn.sensors) ? { sensors: outSensors } : {}) }, touched: true };
 }
-// Cambió algo del renglón (nombre, medidas, clasificación…): el Layout guardado de su centro lo recibe sin cambiar su versión.
+// Cambió algo del renglón (nombre, medidas, clasificación…): el Layout guardado de su centro lo recibe sin cambiar su versión (un sensor solo recibe el código).
 function syncFixedAssetIntoLayout(clientId, row) {
     if (!row) return;
     const raw = readRawClientLayout(clientId, row.cost_center_id);
-    if (!raw || !Array.isArray(raw.spaces) || !raw.spaces.some((s) => s && s.assetRef === row.id)) return;
+    const inSpaces = raw && Array.isArray(raw.spaces) && raw.spaces.some((s) => s && s.assetRef === row.id);
+    const inSensors = raw && Array.isArray(raw.sensors) && raw.sensors.some((s) => s && s.assetRef === row.id);
+    if (!inSpaces && !inSensors) return;
     const cat = layoutAssetCatalogs(clientId);
-    raw.spaces = raw.spaces.map((s) => (s && s.assetRef === row.id ? LayoutCalc.applyAssetToSpace(s, layoutAssetInfo(row), layoutAssetOpts(row, cat)) : s));
+    if (inSpaces) raw.spaces = raw.spaces.map((s) => (s && s.assetRef === row.id ? LayoutCalc.applyAssetToSpace(s, layoutAssetInfo(row), layoutAssetOpts(row, cat)) : s));
+    if (inSensors) raw.sensors = raw.sensors.map((s) => (s && s.assetRef === row.id ? { ...s, code: fixedAssetCodeOf(row) } : s));
     writeRawClientLayout(clientId, row.cost_center_id, raw);
 }
-// ¿Está este activo dibujado en el Layout de su centro? (no se desactiva ni se le quita «Aparece en el Layout» mientras lo esté)
+// ¿Está este activo dibujado en el Layout de su centro? (en una huella, o un sensor sobre una pared) Devuelve dónde: { zone, footprint } (de un sensor, footprint es el código de su pared).
 function fixedAssetPlacementOf(clientId, row) {
     const raw = readRawClientLayout(clientId, row.cost_center_id);
-    const space = raw && Array.isArray(raw.spaces) ? raw.spaces.find((s) => s && s.assetRef === row.id) : null;
-    if (!space) return null;
-    const fp = (raw.footprints || []).find((f) => f.id === space.footprintId);
-    const zone = fp ? (raw.zones || []).find((z) => z.id === fp.zoneId) : null;
-    return { zone: zone ? (zone.name || zone.code || '') : '', footprint: fp ? fp.code || '' : '' };
+    if (!raw) return null;
+    const zones = new Map((raw.zones || []).map((z) => [z.id, z]));
+    const space = Array.isArray(raw.spaces) ? raw.spaces.find((s) => s && s.assetRef === row.id) : null;
+    if (space) {
+        const fp = (raw.footprints || []).find((f) => f.id === space.footprintId);
+        const zone = fp ? zones.get(fp.zoneId) : null;
+        return { zone: zone ? (zone.name || zone.code || '') : '', footprint: fp ? fp.code || '' : '' };
+    }
+    const sensor = Array.isArray(raw.sensors) ? raw.sensors.find((s) => s && s.assetRef === row.id) : null;
+    if (sensor) {
+        const zone = zones.get(sensor.zoneId);
+        const wall = (raw.obstacles || []).find((o) => o.id === sensor.wallId);
+        return { zone: zone ? (zone.name || zone.code || '') : '', footprint: wall ? (wall.code || wall.name || '') : '' };
+    }
+    return null;
 }
 const placementText = (p) => (p ? [p.zone, p.footprint].filter(Boolean).join(' › ') || '—' : '');
-// Dónde está cada activo del cliente (id → texto «Zona › huella»), de los Layouts guardados.
+// Dónde está cada activo del cliente (id → texto «Zona › huella» o «Zona › pared»), de los Layouts guardados.
 function fixedAssetPlacementsMap(clientId) {
     const map = new Map();
     listRawClientLayouts(clientId).forEach(({ layout }) => {
@@ -11520,6 +11543,12 @@ function fixedAssetPlacementsMap(clientId) {
             const fp = fps.get(s.footprintId);
             const zone = fp ? zones.get(fp.zoneId) : null;
             map.set(s.assetRef, placementText({ zone: zone ? (zone.name || zone.code || '') : '', footprint: fp ? fp.code || '' : '' }));
+        });
+        (layout.sensors || []).forEach((s) => {
+            if (!s || !s.assetRef) return;
+            const zone = zones.get(s.zoneId);
+            const wall = (layout.obstacles || []).find((o) => o.id === s.wallId);
+            map.set(s.assetRef, placementText({ zone: zone ? (zone.name || zone.code || '') : '', footprint: wall ? (wall.code || wall.name || '') : '' }));
         });
     });
     return map;
@@ -11534,7 +11563,7 @@ function layoutFixedAssetsFor(req, layoutRow, centerId) {
         const type = cat.types.get(a.type_id);
         const cls = cat.classes.get(a.class_id);
         return {
-            id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name, purchaseName: a.purchase_name, customName: a.custom_name,
+            id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name, purchaseName: a.purchase_name, customName: a.custom_name, model: a.model, serialNumber: a.serial_number,
             typeId: a.type_id || 0, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
             shape: a.shape, length: a.length_cm, depth: a.depth_cm, height: a.height_cm, status: a.status, showInLayout: !!a.show_in_layout,
         };
