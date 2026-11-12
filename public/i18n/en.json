@@ -3255,7 +3255,7 @@
     "colPmCategoria": "Categories",
     "colPmCantidad": "Quantity",
     "colPmFechaRequerida": "Required date",
-    "pmLoAntesPosible": "As soon as possible",
+    "pmLoAntesPosible": "Urgent",
     "colPmEstatus": "Status",
     "colPmOrigen": "Origin",
     "colPmQr": "QR code",
@@ -4429,7 +4429,7 @@
     "pmNoRelatedPlace": "This place has no codes enabled for shipping from this cost center yet (Shipping Code Relation): there is nothing to order.",
     "pmNeedPlace": "Choose the requesting place to send.",
     "pmErrRelated": "An item is no longer enabled for that place (or cost center): remove it from the order.",
-    "pmAsap": "As soon as possible",
+    "pmAsap": "Urgent",
     "pmNeedBy": "For",
     "pmErrDate": "A date is not valid: choose from tomorrow up to 14 days.",
     "pmNewButton": "New order",
@@ -6207,7 +6207,7 @@
       "example": "you deliver the 24 milk units: you change the line to Supplied."
     },
     "pmFechaEntrega": {
-      "what": "When you want what you order to arrive: from tomorrow up to 14 days, or «As soon as possible». Tapping a code (or the pencil of an item already added) opens its sheet: you choose the day in the strip at the top and type (or use − and +) the quantity for THAT day; you can repeat it with other days and «Done» leaves all of them in the order. Each day becomes a line of the order and shows as a chip («Fri 13 Nov · 10»); tapping the chip opens the sheet on that day.",
+      "what": "When you want what you order to arrive: from tomorrow up to 14 days, or «Urgent». Tapping a code (or the pencil of an item already added) opens its sheet: you choose the day in the strip at the top and type (or use − and +) the quantity for THAT day; you can repeat it with other days and «Done» leaves all of them in the order. Each day becomes a line of the order and shows as a chip («Fri 13 Nov · 10»); tapping the chip opens the sheet on that day.",
       "example": "you order 20 boxes of milk: you choose Thursday and type 12, you choose Monday and type 8 — two days of the same item."
     },
     "pmCerrar": {

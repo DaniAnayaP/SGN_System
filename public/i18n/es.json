@@ -3254,7 +3254,7 @@
     "colPmCategoria": "Categorías",
     "colPmCantidad": "Cantidad",
     "colPmFechaRequerida": "Fecha requerida",
-    "pmLoAntesPosible": "Lo antes posible",
+    "pmLoAntesPosible": "Urgente",
     "colPmEstatus": "Estatus",
     "colPmOrigen": "Origen",
     "colPmQr": "Código QR",
@@ -4428,7 +4428,7 @@
     "pmNoRelatedPlace": "Este lugar todavía no tiene códigos habilitados para envío desde este centro de costos (Relación Código Envío): no hay nada que pedir.",
     "pmNeedPlace": "Elige el lugar que solicita para enviar.",
     "pmErrRelated": "Un artículo ya no está habilitado para ese lugar (o centro de costos): quítalo del pedido.",
-    "pmAsap": "Lo antes posible",
+    "pmAsap": "Urgente",
     "pmNeedBy": "Para",
     "pmErrDate": "Una fecha no es válida: elige desde mañana y hasta 14 días.",
     "pmNewButton": "Nuevo pedido",
@@ -6206,7 +6206,7 @@
       "example": "entregas las 24 piezas de leche: cambias el renglón a Surtido."
     },
     "pmFechaEntrega": {
-      "what": "Para cuándo quieres que llegue lo que pides: desde mañana y hasta 14 días, o «Lo antes posible». Al tocar un código (o el lápiz de un artículo ya agregado) se abre su hoja: eliges el día en la tira de arriba y escribes (o con − y +) la cantidad de ESE día; puedes repetirlo con otros días y «Listo» los deja todos en el pedido. Cada día queda como un renglón del pedido y se ve como un chip («Vie 13 nov · 10»); tocar el chip abre la hoja en ese día.",
+      "what": "Para cuándo quieres que llegue lo que pides: desde mañana y hasta 14 días, o «Urgente». Al tocar un código (o el lápiz de un artículo ya agregado) se abre su hoja: eliges el día en la tira de arriba y escribes (o con − y +) la cantidad de ESE día; puedes repetirlo con otros días y «Listo» los deja todos en el pedido. Cada día queda como un renglón del pedido y se ve como un chip («Vie 13 nov · 10»); tocar el chip abre la hoja en ese día.",
       "example": "pides 20 cajas de leche: eliges el jueves y pones 12, eliges el lunes y pones 8 — dos días del mismo artículo."
     },
     "pmCerrar": {
