@@ -2663,7 +2663,9 @@ function fxRowTarget() {
     if (!FX_ITEM_KINDS.includes(h.kind) || !itemExists(d, h.kind, h.id)) return null;
     const lists = { obstacle: d.obstacles, door: d.doors, power: d.power, sensor: d.sensors, safety: d.safety, ceiling: d.ceiling, transit: d.transit, object: d.objects, floor: LC.floorsAll(d) };
     const item = (lists[h.kind] || []).find((x) => x.id === h.id) || {};
-    return { kind: 'items', items: [{ type: h.kind, id: h.id }], from: 'row', label: item.code || item.name || '' };
+    // una pared es un obstáculo de tipo pared (su renglón sale como «obstacle»), pero el enfoque la distingue de una columna o un desnivel: sin ser «pared» el filtro la descartaba y Oculto/Enfoque no la mostraban
+    const type = h.kind === 'obstacle' && item.kind === 'wall' ? 'wall' : h.kind;
+    return { kind: 'items', items: [{ type, id: h.id }], from: 'row', label: item.code || item.name || '' };
 }
 // El enfoque que no viene del buscador: el activo (con su nivel, espacio y posición) del renglón elegido de la tabla o, en los demás pasos, el elemento del renglón.
 function virtualFind() {
