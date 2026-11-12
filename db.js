@@ -12777,7 +12777,7 @@ const activoFijoKindOf = (name) => ACTIVOS_FIJOS_LETRAS[String(name || '').trim(
 // La LETRA DEL CÓDIGO de cada tipo (Alta Activos: R001, A001, L001…), una por tipo y sin repetirse: la de su dibujo del Layout (rackpal R, rack A, cabinet G, pallet T, cold F, cart M) o, si no tiene dibujo, la que dijo Daniel (Teléfono = L; Escritorio = E).
 // Mesa queda SIN letra (la M ya la usa Rack móvil): el cliente la elige en su catálogo.
 const ACTIVOS_FIJOS_KIND_LETTER = { rackpal: 'R', rack: 'A', cabinet: 'G', pallet: 'T', cold: 'F', cart: 'M' };
-const ACTIVOS_FIJOS_NAME_LETTER = { escritorio: 'E', teléfono: 'L', telefono: 'L' };
+const ACTIVOS_FIJOS_NAME_LETTER = { escritorio: 'ES', teléfono: 'L', telefono: 'L' };
 const activoFijoLetterOf = (name, kind) => ACTIVOS_FIJOS_KIND_LETTER[kind] || ACTIVOS_FIJOS_NAME_LETTER[String(name || '').trim().toLowerCase()] || '';
 const ACTIVOS_FIJOS_SEED_KEY = 'seed-activos-fijos-values-v1';
 const ACTIVOS_FIJOS_TIPOS_SEED_KEY = 'seed-activos-fijos-tipos-v2';
@@ -12881,6 +12881,23 @@ function seedActivosFijosLetraCodigoOnce() {
         db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_FIJOS_LETRA_CODIGO_SEED_KEY);
     })();
     console.log(`[db] Activos Fijos: ${set} types got their code letter and ${added} «Teléfono» types were added (one-time).`);
+}
+// v6 (2026-11-12, Daniel: «vamos a tener que colocar 2 letras»): el código de un tipo lleva una o dos letras y la E sola es la pieza «espacio» del Localizador. Al «Escritorio» que traía la E de fábrica y todavía no tiene activos se le pone ES.
+const ACTIVOS_FIJOS_DOS_LETRAS_SEED_KEY = 'seed-activos-fijos-dos-letras-v6';
+function seedActivosFijosDosLetrasOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_DOS_LETRAS_SEED_KEY)) return;
+    let changed = 0;
+    db.transaction(() => {
+        db.prepare("SELECT id, client_id, name, letter FROM article_categories WHERE category_type = 'activos-fijos' AND letter = 'E'").all().forEach((r) => {
+            if (String(r.name || '').trim().toLowerCase() !== 'escritorio') return;
+            if (db.prepare('SELECT 1 FROM fixed_assets WHERE client_id = ? AND type_id = ? LIMIT 1').get(r.client_id, r.id)) return;
+            if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = 'activos-fijos' AND letter = 'ES' LIMIT 1").get(r.client_id)) return;
+            db.prepare("UPDATE article_categories SET letter = 'ES' WHERE id = ?").run(r.id);
+            changed += 1;
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_FIJOS_DOS_LETRAS_SEED_KEY);
+    })();
+    console.log(`[db] Activos Fijos: ${changed} «Escritorio» types changed from E to ES (one-time).`);
 }
 // La fila y la profundidad de cada relación pasan a ser la POSICIÓN que les tocó (el número que el Layout les da a las celdas de antes: (fila − 1) × profundidades + profundidad). Solo las relaciones cuya celda estaba completa (con fila y profundidad,
 // o en un hueco de una sola fila y profundidad con alguna de las dos dicha); las que no, siguen «A medias» como estaban. row_no y depth se conservan sin tocar (ya no se usan).
@@ -13068,6 +13085,7 @@ seedActivosFijosTiposOnce();
 seedActivosFijosLetrasOnce();
 seedActivosFijosRackMovilOnce();
 seedActivosFijosLetraCodigoOnce();
+seedActivosFijosDosLetrasOnce();
 seedActivosClasificacionValuesOnce();
 seedActivosClasificacionNombresOnce();
 seedActivosClasificacionAdministrarOnce();

@@ -4146,7 +4146,7 @@
     "recEditError_DESC": "Cuenta la situación: no puede quedar vacía.",
     "colActClasMetrica": "Se mide en",
     "colActivoFijoLetra": "Se dibuja como",
-    "colActivoFijoLetraCodigo": "Letra del código",
+    "colActivoFijoLetraCodigo": "Letras del código",
     "colActRegistroUnico": "Registro Único",
     "colActCodigo": "Código",
     "colActEstatus": "Estatus",
@@ -5884,8 +5884,8 @@
       "example": "Estante se dibuja como Anaquel y Refrigerador como Frío."
     },
     "assetTypeCodeLetter": {
-      "what": "La letra con la que empieza el código de los activos de este tipo en Alta Activos. Es una sola letra, distinta en cada tipo, y ya con activos de este tipo no se cambia (sus códigos la llevan). Sin letra no se pueden dar de alta activos de este tipo.",
-      "example": "Rack lleva la R (R001, R002…) y Teléfono la L (L001, L002…)."
+      "what": "Una o dos letras con las que empieza el código de los activos de este tipo en Alta Activos. Con dos letras hay más combinaciones y no se repiten tanto (RK001, ES001, HT001). Deben ser distintas en cada tipo y ya con activos de este tipo no se cambian (sus códigos las llevan). Z, H, N, E y P solas no se pueden: son las piezas del Localizador. Sin letras no se pueden dar de alta activos de este tipo.",
+      "example": "Rack lleva R (R001), Escritorio lleva ES (ES001) y Termohigrómetro lleva HT (HT001)."
     },
     "assetNew": {
       "what": "Da de alta un activo: todo lo que está dentro del sitio y se tiene para usar (racks, mobiliario, sensores, teléfonos, impresoras…). Los artículos (SKU) son lo que se distribuye; los activos son lo que se usa.",

@@ -1836,7 +1836,7 @@ function stepHtml(step) {
             // Un activo que viene de Alta Activos (assetRef): su código, nombre, tipo, clasificación y medidas se leen y se cambian allá; aquí solo se acomoda (huella, niveles, frente, caras).
             const ref = !!s.assetRef;
             const reg = ref ? (state.fixedAssets || []).find((a) => a.id === s.assetRef) : null; // el renglón del registro: de ahí salen los nombres si el catálogo no los trae a esta cuenta
-            const letter = ref ? String(s.code || '').charAt(0).toUpperCase() : (LC.ASSET_LETTER[s.type] || LC.ASSET_LETTER.rack);
+            const letter = ref ? ((String(s.code || '').match(/^[A-Za-z]+/) || [''])[0]).toUpperCase() : (LC.ASSET_LETTER[s.type] || LC.ASSET_LETTER.rack);
             const calcText = (text) => `<td class="layout-calc" title="${esc(t('main.layoutActivoDeRegistro'))}" data-help-key="layoutActivoDeRegistro">${esc(text || '—')}</td>`;
             const nameOf = (list, id) => (list.find((r) => r.id === id) || {}).name || '';
             const nameCell = ref ? calcText(s.ownName) : `<td><input type="text" maxlength="${LC.LIMITS.text}" data-l="spaces" data-i="${i}" data-k="ownName" data-help-key="layoutActivoNombre" value="${esc(s.ownName || '')}" placeholder="${esc(fp && fp.name ? fp.name : '')}"${dis ? ' disabled' : ''}></td>`;

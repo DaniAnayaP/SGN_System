@@ -1660,7 +1660,7 @@
             const kept = new Set();
             indexes.forEach((i) => {
                 // un activo que viene de Alta Activos (assetRef) conserva SU código tal cual (R001, L001…): lo manda el registro, no su tipo
-                if (out[i].assetRef && String(out[i].code == null ? '' : out[i].code).trim()) { const kc = String(out[i].code).trim(); if (kc[0].toUpperCase() === (ASSET_LETTER[type] || 'A')) used.add(kc); kept.add(i); return; }
+                if (out[i].assetRef && String(out[i].code == null ? '' : out[i].code).trim()) { const kc = String(out[i].code).trim(); if (/^[A-Za-z]\d{1,4}$/.test(kc) && kc[0].toUpperCase() === (ASSET_LETTER[type] || 'A')) used.add(kc.toUpperCase()); kept.add(i); return; }
                 if (!isSpaceCode(out[i].code, type)) return;
                 const code = spaceCodeOf(type, Number(String(out[i].code).trim().slice(1)));
                 if (used.has(code)) return;

@@ -4147,7 +4147,7 @@
     "recEditError_DESC": "Describe the situation: it cannot be empty.",
     "colActClasMetrica": "Measured in",
     "colActivoFijoLetra": "Drawn as",
-    "colActivoFijoLetraCodigo": "Code letter",
+    "colActivoFijoLetraCodigo": "Code letters",
     "colActRegistroUnico": "Unique Registration",
     "colActCodigo": "Code",
     "colActEstatus": "Status",
@@ -5885,8 +5885,8 @@
       "example": "Shelf is drawn as Rack and Refrigerator as Cold."
     },
     "assetTypeCodeLetter": {
-      "what": "The letter the code of this type's assets starts with in Alta Activos (Asset Registration). One single letter, different for each type, and once assets of this type exist it can no longer be changed (their codes carry it). With no letter, assets of this type cannot be registered.",
-      "example": "Rack uses R (R001, R002…) and Telephone uses L (L001, L002…)."
+      "what": "One or two letters the code of this type's assets starts with in Alta Activos (Asset Registration). Two letters give more combinations and repeat less (RK001, ES001, HT001). They must be different for each type and once assets of this type exist they can no longer be changed (their codes carry them). Z, H, N, E and P alone are not allowed: they are the Locator pieces. With no letters, assets of this type cannot be registered.",
+      "example": "Rack uses R (R001), Desk uses ES (ES001) and Thermo-hygrometer uses HT (HT001)."
     },
     "assetNew": {
       "what": "Registers an asset: everything inside the site that is kept for use (racks, furniture, sensors, telephones, printers…). Articles (SKU) are what is distributed; assets are what is used.",

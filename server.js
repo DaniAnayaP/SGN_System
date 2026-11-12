@@ -10101,11 +10101,13 @@ function prepareFixedAssetPatch(categoryType, patch, req = null, existing = null
         // «Letra del código»: con ella empieza el código de los activos de este tipo en Alta Activos (R001, L001…). Una letra de la A a la Z, distinta en cada tipo de la empresa; ya con activos no se cambia (sus códigos la llevan).
         if (has('letter')) {
             const letter = String(patch.letter == null ? '' : patch.letter).trim().toUpperCase();
-            if (letter && !/^[A-Z]$/.test(letter)) return { error: { status: 400, message: 'La letra del código debe ser una sola letra de la A a la Z (o quedar vacía).' } };
+            if (letter && !/^[A-Z]{1,2}$/.test(letter)) return { error: { status: 400, message: 'El código del tipo lleva una o dos letras de la A a la Z (por ejemplo R o RK), o queda vacío.' } };
+            // Z, H, N, E y P son las piezas del Localizador (zona, huella, nivel, espacio y posición): un código de activo de una sola de esas letras se confundiría con ellas. Con dos letras (ES, HT, PR…) sí se puede.
+            if (/^[ZHNEP]$/.test(letter)) return { error: { status: 400, message: `La letra ${letter} la usa el Localizador (Z zona, H huella, N nivel, E espacio, P posición): elige otra o usa dos letras (por ejemplo ${letter}K).` } };
             if (req && existing) {
                 if (letter) {
                     const other = listArticleCategories(req.user.clientId, 'activos-fijos', req.user.isTestAccount).find((r) => r.id !== existing.id && String(r.letter || '').toUpperCase() === letter);
-                    if (other) return { error: { status: 409, message: `La letra ${letter} ya la usa «${other.name || other.letter}». Cada tipo de activo lleva una letra distinta.` } };
+                    if (other) return { error: { status: 409, message: `La letra ${letter} ya la usa «${other.name || other.letter}». Cada tipo de activo lleva letras distintas.` } };
                 }
                 if (letter !== String(existing.letter || '').toUpperCase()) {
                     const used = countFixedAssetsByType(req.user.clientId, existing.id);

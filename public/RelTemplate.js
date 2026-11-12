@@ -107,7 +107,7 @@
         // con alguna C (columna) o F (fila) es la forma de antes: ahí la P es la profundidad
         out.legacy = parts.some((part) => /^[CcFf]\s*\d+$/.test(part));
         for (const part of parts) {
-            const m = part.match(/^([A-Za-z])\s*(\d+)$/);
+            const m = part.match(/^([A-Za-z]{1,2})\s*(\d+)$/);
             if (!m) return { error: 'locatorFormat' };
             const letter = m[1].toUpperCase();
             const n = Number(m[2]);
@@ -133,8 +133,10 @@
     function formatLocator(p) {
         const z = trailingNumber(p.zoneCode ? p.zoneCode : p.zoneName);
         const h = trailingNumber(p.footprintCode);
-        const a = trailingNumber(p.spaceCode);
-        const letter = LETTER_OF_TYPE[p.spaceType];
+        // la pieza del activo es SU código (R001, RK001): de una o dos letras y con su número; los códigos de antes que no traen letras propias usan la letra de su dibujo
+        const own = /^([A-Za-z]{1,2})\s*-?\s*(\d+)$/.exec(String(p.spaceCode == null ? '' : p.spaceCode).trim());
+        const a = own ? Number(own[2]) : trailingNumber(p.spaceCode);
+        const letter = own ? own[1].toUpperCase() : LETTER_OF_TYPE[p.spaceType];
         if (!(z >= 1) || !(h >= 1) || !(a >= 1) || !letter || !(p.level >= 1) || !(p.slot >= 1)) return '';
         return `Z${pad3(z)}.H${pad3(h)}.${letter}${pad3(a)}.N${pad3(p.level)}.E${pad3(p.slot)}.P${pad3(p.position || 1)}`;
     }
@@ -268,9 +270,11 @@
                 // la huella (H) y el activo (A) se buscan juntos: el activo tiene que estar encima de esa huella
                 const footprints = (zone.footprints || []).filter((f) => trailingNumber(f.code) === loc.footprint);
                 if (!footprints.length) return err('locator', 'locatorFootprint', { value: locRaw, zone: zone.name, footprint: `H${pad3(loc.footprint)}` });
-                const type = ASSET_TYPES[loc.asset.letter];
-                if (!type) return err('locator', 'locatorAsset', { value: locRaw, letter: loc.asset.letter });
-                const found = zone.spaces.filter((sp) => !entry.spaceIds.length || entry.spaceIds.includes(sp.id)).filter((sp) => footprints.some((f) => f.id === sp.footprintId) && sp.type === type && trailingNumber(sp.code) === loc.asset.num);
+                // el activo se busca por SU código (R001, RK001…): la letra la pone su tipo en Alta Activos y puede ser de una o de dos letras. Sin coincidencia exacta, los códigos de antes (la letra del dibujo + su número).
+                const wanted = `${loc.asset.letter}${pad3(loc.asset.num)}`;
+                const onZone = zone.spaces.filter((sp) => !entry.spaceIds.length || entry.spaceIds.includes(sp.id)).filter((sp) => footprints.some((f) => f.id === sp.footprintId));
+                let found = onZone.filter((sp) => String(sp.code == null ? '' : sp.code).replace(/[\s-]/g, '').toUpperCase() === wanted);
+                if (!found.length && ASSET_TYPES[loc.asset.letter]) found = onZone.filter((sp) => sp.type === ASSET_TYPES[loc.asset.letter] && trailingNumber(sp.code) === loc.asset.num);
                 if (!found.length) return err('locator', 'locatorRack', { value: locRaw, zone: zone.name });
                 if (found.length > 1) return err('locator', 'locatorAmbiguous', { value: locRaw });
                 rack = found[0];
