@@ -11590,7 +11590,7 @@ function layoutFixedAssetsFor(req, layoutRow, centerId) {
     if (!centerId) return [];
     const { clientId, isTestAccount } = req.user;
     const cat = layoutAssetCatalogs(clientId);
-    const refs = new Set(((layoutRow && layoutRow.layout.spaces) || []).map((s) => s.assetRef).filter(Boolean));
+    const refs = new Set([...((layoutRow && layoutRow.layout.spaces) || []), ...((layoutRow && layoutRow.layout.sensors) || [])].map((s) => s.assetRef).filter(Boolean));
     return listFixedAssetsOfCenterAnyScope(clientId, centerId).filter((a) => !!a.is_test_data === !!isTestAccount || refs.has(a.id)).map((a) => {
         const type = cat.types.get(a.type_id);
         const cls = cat.classes.get(a.class_id);

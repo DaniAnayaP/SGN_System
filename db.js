@@ -8335,6 +8335,71 @@ function migrateLayoutSpacesToFixedAssetsOnce() {
     db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(LAYOUT_SPACES_TO_ASSETS_KEY);
     console.log('[db] Alta Activos: los activos ya dibujados pasaron al registro (una vez): ' + JSON.stringify(stats) + '.');
 }
+// Alta Activos (2026-11-12, Daniel: «los sensores también son activos y no los veo en la tabla»): los sensores que ya estaban dibujados en el paso Sensores de un Layout pasan, UNA vez, al registro (fixed_assets) con el mismo código
+// (S001…) y quedan ligados a su renglón (assetRef): el croquis se ve igual. Su tipo es «Sensor» del catálogo Activos Fijos (Se dibuja como = Sensor): si la empresa ya tiene uno con ese nombre se usa (y se le pone el dibujo Sensor si no lo traía);
+// si no, se crea con la letra S (o SE, SN, SS si la S ya es de otro tipo). El sensor de antes no tiene nombre: el de compra sale de lo que mide («Sensor de temperatura y humedad S001») y se puede cambiar en Alta Activos. Sin medidas (no las necesita).
+const LAYOUT_SENSORS_TO_ASSETS_KEY = 'seed-layout-sensors-to-assets-v1';
+function migrateLayoutSensorsToFixedAssetsOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(LAYOUT_SENSORS_TO_ASSETS_KEY)) return;
+    const stats = { layouts: 0, assets: 0, renumbered: 0, typesCreated: 0, typesFixed: 0, skipped: 0, failed: 0 };
+    const NAMES = { both: 'Sensor de temperatura y humedad', temp: 'Sensor de temperatura', hum: 'Sensor de humedad' };
+    const typeOf = new Map(); // cliente -> el tipo «Sensor» de su catálogo
+    const sensorType = (clientId) => {
+        if (typeOf.has(clientId)) return typeOf.get(clientId);
+        const rows = db.prepare("SELECT id, name, kind, letter, status FROM article_categories WHERE client_id = ? AND category_type = 'activos-fijos' ORDER BY is_test_data ASC, record_number ASC").all(clientId);
+        const used = new Set(rows.map((r) => String(r.letter || '').toUpperCase()).filter(Boolean));
+        const freeLetter = () => ['S', 'SE', 'SN', 'SS'].find((l) => !used.has(l)) || '';
+        let type = rows.find((r) => String(r.name || '').trim().toLowerCase() === 'sensor' && r.kind === 'sensor') || rows.find((r) => String(r.name || '').trim().toLowerCase() === 'sensor') || null;
+        if (type) {
+            if (type.kind !== 'sensor' || !type.letter || type.status !== 'active') {
+                const letter = type.letter || freeLetter();
+                db.prepare("UPDATE article_categories SET kind = 'sensor', letter = ?, status = 'active' WHERE id = ?").run(letter, type.id);
+                stats.typesFixed += 1;
+            }
+        } else {
+            const row = createArticleCategory({ clientId, categoryType: 'activos-fijos', isTestData: false });
+            db.prepare("UPDATE article_categories SET name = 'Sensor', kind = 'sensor', letter = ?, status = 'active' WHERE id = ?").run(freeLetter(), row.id);
+            type = { id: row.id };
+            stats.typesCreated += 1;
+        }
+        typeOf.set(clientId, type);
+        return type;
+    };
+    db.prepare('SELECT client_id, cost_center_id, data FROM client_layouts').all().forEach((row) => {
+        try {
+            db.transaction(() => {
+                let raw = null;
+                try { raw = JSON.parse(row.data); } catch { raw = null; }
+                if (!raw || !Array.isArray(raw.sensors) || !raw.sensors.some((s) => s && !s.assetRef)) return;
+                if (!row.cost_center_id) { stats.skipped += 1; return; } // sin centro de costos no hay a quién ligar el registro
+                const type = sensorType(row.client_id);
+                const used = new Set(db.prepare("SELECT code_number FROM fixed_assets WHERE client_id = ? AND cost_center_id = ? AND code_letter = 'S'").all(row.client_id, row.cost_center_id).map((r) => r.code_number));
+                raw.sensors.forEach((s) => {
+                    if (!s || s.assetRef) return;
+                    const m = /^S(\d{1,4})$/i.exec(String(s.code == null ? '' : s.code).trim());
+                    let number = m ? Number(m[1]) : 0;
+                    if (!(number >= 1) || used.has(number)) { number = Math.max(0, ...used) + 1; stats.renumbered += 1; }
+                    used.add(number);
+                    const code = 'S' + String(number).padStart(3, '0');
+                    const asset = createFixedAsset({
+                        clientId: row.client_id, isTestData: false, costCenterId: row.cost_center_id, typeId: type.id, letter: 'S', codeNumber: number, createdBy: 'Migración Alta Activos',
+                        values: { purchaseName: `${NAMES[s.type] || NAMES.both} ${code}`, customName: '', shape: 'rectangular', height: 0, length: 0, depth: 0, volume: 0, showInLayout: 1 },
+                    });
+                    s.assetRef = asset.id;
+                    s.code = code;
+                    stats.assets += 1;
+                });
+                writeRawClientLayout(row.client_id, row.cost_center_id, raw);
+                stats.layouts += 1;
+            })();
+        } catch (err) {
+            stats.failed += 1;
+            console.error('[db] Alta Activos: no se pudieron pasar los sensores de un Layout al registro (cliente ' + row.client_id + ', centro ' + row.cost_center_id + '):', err.message);
+        }
+    });
+    db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(LAYOUT_SENSORS_TO_ASSETS_KEY);
+    console.log('[db] Alta Activos: los sensores ya dibujados pasaron al registro (una vez): ' + JSON.stringify(stats) + '.');
+}
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
     const path = TABLE_GRANT_PATHS['pedido-manual'];
@@ -13072,6 +13137,7 @@ seedPresentacionesCatalogGrants();
 seedRelacionEnvioGrants();
 seedAltaActivosGrants();
 migrateLayoutSpacesToFixedAssetsOnce();
+migrateLayoutSensorsToFixedAssetsOnce();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
