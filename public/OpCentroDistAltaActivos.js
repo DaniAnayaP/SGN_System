@@ -71,8 +71,17 @@ function inlineCell(record, colId, key, { inputType = 'text', unit = '', step, f
     return td;
 }
 // Una celda que solo se lee (se calcula): el volumen de una forma que lo calcula, la profundidad de una cilíndrica.
-function calcCell(colId, value, titleKey, helpKey) {
-    const td = textCell(colId, value > 0 ? value : '', helpKey);
+function calcCell(colId, value, titleKey, helpKey, unit) {
+    const td = textCell(colId, '', helpKey);
+    const has = Number(value) > 0;
+    if (has && unit) {
+        td.textContent = '';
+        const span = document.createElement('span');
+        span.className = 'editable-cell-value';
+        span.dataset.unit = unit;
+        span.textContent = String(value);
+        td.appendChild(span);
+    } else td.textContent = has ? String(value) : '—';
     td.classList.add('editable-cell-disabled');
     td.title = Dashboard.t(titleKey);
     return td;
@@ -293,11 +302,11 @@ function buildRow(record) {
         selectCell(record, 'colActForma', 'shape', { items: shapeItems, current: record.shape, helpKey: 'assetShape', toPatch: (v) => ({ shape: v }) }),
         inlineCell(record, 'colActAlto', 'height', { inputType: 'number', unit: 'cm', helpKey: 'assetSize', toValue: (v) => parseFloat(v) || 0 }),
         inlineCell(record, 'colActLargo', 'length', { inputType: 'number', unit: 'cm', helpKey: 'assetSize', toValue: (v) => parseFloat(v) || 0 }),
-        cyl ? calcCell('colActProfundidad', record.depth, 'main.assetDepthCyl', 'assetSize') : inlineCell(record, 'colActProfundidad', 'depth', { inputType: 'number', unit: 'cm', helpKey: 'assetSize', toValue: (v) => parseFloat(v) || 0 }),
+        cyl ? calcCell('colActProfundidad', record.depth, 'main.assetDepthCyl', 'assetSize', 'cm') : inlineCell(record, 'colActProfundidad', 'depth', { inputType: 'number', unit: 'cm', helpKey: 'assetSize', toValue: (v) => parseFloat(v) || 0 }),
         inlineCell(record, 'colActPeso', 'weight', { inputType: 'number', unit: 'kg', helpKey: 'assetWeight', toValue: (v) => parseFloat(v) || 0 }),
         irregular
             ? inlineCell(record, 'colActVolumen', 'volume', { inputType: 'number', unit: 'm³', step: '0.0001', helpKey: 'assetVolume', formatDisplay: (v) => Number(v).toFixed(3), toValue: (v) => parseFloat(v) || 0 })
-            : calcCell('colActVolumen', record.volume > 0 ? Number(record.volume).toFixed(3) : '', 'main.assetVolumeCalc', 'assetVolume'),
+            : calcCell('colActVolumen', record.volume > 0 ? Number(record.volume).toFixed(3) : '', 'main.assetVolumeCalc', 'assetVolume', 'm³'),
         evidenceCell(record, 'evidenceFront', 'colActFotoFrente'),
         evidenceCell(record, 'evidenceBack', 'colActFotoAtras'),
         evidenceCell(record, 'evidenceLeft', 'colActFotoIzq'),
