@@ -3359,6 +3359,8 @@
     "colPmDescripcion": "Description",
     "colPmUdm": "UoM",
     "colPmCategoria": "Categories",
+    "colPmPresentacion": "Presentation",
+    "colPmEquivale": "Equivalent to",
     "colPmCantidad": "Quantity",
     "colPmFechaRequerida": "Required date",
     "pmLoAntesPosible": "Urgent",

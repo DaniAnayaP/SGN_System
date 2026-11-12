@@ -69,6 +69,10 @@ const whenText = (iso) => (iso ? new Date(iso).toLocaleString(localeOf(), { day:
 function quantityText(q) {
     return Number(q).toLocaleString(localeOf(), { maximumFractionDigits: 3 });
 }
+// La presentación en que se pidió el renglón (Presentaciones de Distribución) y lo que equivale en la unidad principal del código: la cantidad es de la presentación; equivale = cantidad × piezas de UNA. Un código sin presentaciones
+// lleva «—» en Presentación y su misma cantidad.
+const packText = (l) => l.packName || '';
+const equivText = (l) => `${quantityText(Math.round(Number(l.quantity) * (Number(l.packPieces) > 0 ? Number(l.packPieces) : 1) * 1000) / 1000)}${l.uom ? ` ${l.uom}` : ''}`;
 // Para cuándo se quiere ese renglón: un día (AAAA-MM-DD, sin hora ni zona) o «Lo antes posible».
 function needByText(day) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day || '')) return t('main.pmLoAntesPosible');
@@ -94,7 +98,7 @@ function groupOrders(list) {
 const orderStatus = (o) => { const set = new Set(o.lines.map((l) => l.status)); return set.size === 1 ? [...set][0] : 'partial'; };
 const editedInfo = (o) => o.lines.filter((l) => l.editedAt).sort((a, z) => String(z.editedAt).localeCompare(String(a.editedAt)))[0] || null;
 function searchTextOf(o) {
-    return [o.folio, o.name, o.placeName, o.centroCostos, statusText(orderStatus(o)), originText(o.source), ...o.lines.flatMap((l) => [l.code, l.description, l.uom, l.categories])].filter(Boolean).join(' ').toLowerCase();
+    return [o.folio, o.name, o.placeName, o.centroCostos, statusText(orderStatus(o)), originText(o.source), ...o.lines.flatMap((l) => [l.code, l.description, l.uom, l.categories, l.packName])].filter(Boolean).join(' ').toLowerCase();
 }
 
 // El estatus del pedido: quien puede cambiarlo ve un selector (cambia TODOS sus artículos); los demás, el nombre. Para marcar un solo artículo se abre «Ver SKU solicitado».
@@ -493,14 +497,14 @@ function renderListModal() {
     filter.addEventListener('change', () => { listStatusFilter = filter.value; renderListModal(); });
     metaItem(t('main.colPmEstatus'), filter);
     const head = listOverlay.querySelector('#pm-list-head');
-    head.innerHTML = [t('main.pmListaNum'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmCategoria'), t('main.colPmCantidad'), t('main.colPmFechaRequerida'), t('main.colPmEstatus'), t('main.colActions')].map((h) => `<th>${esc(h)}</th>`).join('');
+    head.innerHTML = [t('main.pmListaNum'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmCategoria'), t('main.colPmPresentacion'), t('main.colPmCantidad'), t('main.colPmEquivale'), t('main.colPmFechaRequerida'), t('main.colPmEstatus'), t('main.colActions')].map((h) => `<th>${esc(h)}</th>`).join('');
     const body = listOverlay.querySelector('#pm-list-body');
     body.innerHTML = '';
     const shownLines = visibleLines(o);
     if (!shownLines.length) {
         const tr = document.createElement('tr');
         const emptyTd = document.createElement('td');
-        emptyTd.colSpan = 9;
+        emptyTd.colSpan = 11;
         emptyTd.className = 'rel-muted';
         emptyTd.textContent = t('main.pmFiltroVacio');
         tr.appendChild(emptyTd);
@@ -510,7 +514,7 @@ function renderListModal() {
         if (!shownLines.includes(l)) return;
         const tr = document.createElement('tr');
         const td = (text, cls) => { const c = document.createElement('td'); c.textContent = text === null || text === undefined || text === '' ? '—' : String(text); if (cls) c.className = cls; return c; };
-        tr.append(td(i + 1), td(l.code), td(l.description), td(l.uom), td(l.categories), td(quantityText(l.quantity), 'num'), td(needByText(l.needBy)));
+        tr.append(td(i + 1), td(l.code), td(l.description), td(l.uom), td(l.categories), td(packText(l)), td(quantityText(l.quantity), 'num'), td(equivText(l), 'num'), td(needByText(l.needBy)));
         const statusTd = document.createElement('td');
         statusTd.appendChild(lineStatusControl(l));
         tr.appendChild(statusTd);
@@ -546,18 +550,18 @@ const FORMATS = [['xlsx', 'bx-spreadsheet', 'main.pmFormatoXlsx'], ['pdf', 'bxs-
 const today = () => new Date().toISOString().slice(0, 10);
 const csvCell = (v) => { const s = String(v === null || v === undefined ? '' : v); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 const orderHeader = (o, lines = o.lines) => [[t('main.colPmFolio'), o.folio], [t('main.colPmSolicitante'), o.name], [t('main.colPmLugar'), o.placeName || '—'], [t('main.colPmFechaHora'), whenText(o.requestedAt)], [t('main.colPmOrigen'), originText(o.source)], [t('main.colPmEstatus'), statusText(orderStatus(o))], [t('main.colPmArticulos'), lines.length === o.lines.length ? lines.length : `${lines.length} / ${o.lines.length}`]];
-const lineColumns = () => [t('main.pmListaNum'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmCategoria'), t('main.colPmCantidad'), t('main.colPmFechaRequerida'), t('main.colPmEstatus')];
-const lineValues = (l, i) => [i + 1, l.code, l.description, l.uom, l.categories, quantityText(l.quantity), needByText(l.needBy), statusText(l.status)];
+const lineColumns = () => [t('main.pmListaNum'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmCategoria'), t('main.colPmPresentacion'), t('main.colPmCantidad'), t('main.colPmEquivale'), t('main.colPmFechaRequerida'), t('main.colPmEstatus')];
+const lineValues = (l, i) => [i + 1, l.code, l.description, l.uom, l.categories, packText(l) || '—', quantityText(l.quantity), equivText(l), needByText(l.needBy), statusText(l.status)];
 // El mismo renglón con los datos del pedido repetidos (para CSV y para juntar varios pedidos en una sola tabla).
-const flatColumns = () => [t('main.colPmFolio'), t('main.colPmSolicitante'), t('main.colPmLugar'), t('main.colPmFechaHora'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmCategoria'), t('main.colPmCantidad'), t('main.colPmFechaRequerida'), t('main.colPmEstatus')];
-const flatValues = (o, l) => [o.folio, o.name, o.placeName, whenText(o.requestedAt), l.code, l.description, l.uom, l.categories, quantityText(l.quantity), needByText(l.needBy), statusText(l.status)];
+const flatColumns = () => [t('main.colPmFolio'), t('main.colPmSolicitante'), t('main.colPmLugar'), t('main.colPmFechaHora'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmCategoria'), t('main.colPmPresentacion'), t('main.colPmCantidad'), t('main.colPmEquivale'), t('main.colPmFechaRequerida'), t('main.colPmEstatus')];
+const flatValues = (o, l) => [o.folio, o.name, o.placeName, whenText(o.requestedAt), l.code, l.description, l.uom, l.categories, packText(l) || '—', quantityText(l.quantity), equivText(l), needByText(l.needBy), statusText(l.status)];
 const orderJson = (o, lines = o.lines) => ({
     folio: o.folio, requestedBy: o.name, place: o.placeName || null, requestedAtUtc: o.requestedAt, receivedAtUtc: o.receivedAt || null, origin: o.source, status: orderStatus(o),
-    items: lines.map((l) => ({ no: o.lines.indexOf(l) + 1, code: l.code, description: l.description, uom: l.uom, categories: l.categories, quantity: l.quantity, requiredDate: /^\d{4}-\d{2}-\d{2}$/.test(l.needBy || '') ? l.needBy : null, asap: !/^\d{4}-\d{2}-\d{2}$/.test(l.needBy || ''), status: l.status })),
+    items: lines.map((l) => ({ no: o.lines.indexOf(l) + 1, code: l.code, description: l.description, uom: l.uom, categories: l.categories, presentation: l.packName || null, quantity: l.quantity, equivalentQuantity: Math.round(Number(l.quantity) * (Number(l.packPieces) > 0 ? Number(l.packPieces) : 1) * 1000) / 1000, requiredDate: /^\d{4}-\d{2}-\d{2}$/.test(l.needBy || '') ? l.needBy : null, asap: !/^\d{4}-\d{2}-\d{2}$/.test(l.needBy || ''), status: l.status })),
 });
 function orderTxt(o, lines = o.lines) {
     const head = orderHeader(o, lines).map(([k, v]) => `${k}: ${v}`);
-    const items = lines.map((l) => `${String(o.lines.indexOf(l) + 1).padStart(3, ' ')}. ${l.code} | ${l.description} | ${quantityText(l.quantity)} ${l.uom || ''} | ${t('main.colPmFechaRequerida')}: ${needByText(l.needBy)} | ${statusText(l.status)}`.replace(/\s+\|/g, ' |'));
+    const items = lines.map((l) => `${String(o.lines.indexOf(l) + 1).padStart(3, ' ')}. ${l.code} | ${l.description} | ${l.packName ? `${l.packName} · ` : ''}${quantityText(l.quantity)} ${l.packName ? '' : (l.uom || '')}${l.packName ? ` (${t('main.colPmEquivale')} ${equivText(l)})` : ''} | ${t('main.colPmFechaRequerida')}: ${needByText(l.needBy)} | ${statusText(l.status)}`.replace(/\s+\|/g, ' |'));
     return [`${t('main.pmPedidoTitulo').toUpperCase()} ${o.folio}`, ...head, '', ...items].join('\r\n');
 }
 // La lista de UN pedido: los datos del pedido arriba y sus artículos abajo (Excel y PDF); CSV, texto y JSON con la misma información.
@@ -565,7 +569,7 @@ function orderTxt(o, lines = o.lines) {
 function orderDataset(o, lines = o.lines) {
     return {
         title: `${t('main.pmPedidoTitulo')} ${o.folio}`, filename: `Pedido-${o.folio}_${today()}`, header: orderHeader(o, lines),
-        columns: lineColumns(), rows: lines.map((l) => lineValues(l, o.lines.indexOf(l))), widths: [0.35, 1.0, 3.4, 0.8, 1.7, 0.8, 1.2, 1.0],
+        columns: lineColumns(), rows: lines.map((l) => lineValues(l, o.lines.indexOf(l))), widths: [0.35, 1.0, 3.0, 0.7, 1.5, 1.5, 0.8, 1.1, 1.2, 1.0],
         flat: { columns: flatColumns(), rows: lines.map((l) => flatValues(o, l)) }, json: orderJson(o, lines), txt: orderTxt(o, lines),
     };
 }
@@ -590,7 +594,7 @@ function materialDataset() {
     const orders = visibleOrders();
     const columns = flatColumns();
     const rows = orders.flatMap((o) => o.lines.map((l) => flatValues(o, l)));
-    return { title: t('main.pmBajarMaterial'), filename: `Material-solicitado_${today()}`, columns, rows, widths: [0.9, 1.4, 1.2, 1.3, 0.9, 3, 0.7, 1.4, 0.8, 1.1, 0.9], flat: { columns, rows }, json: orders.map(orderJson), txt: orders.map(orderTxt).join('\r\n\r\n') };
+    return { title: t('main.pmBajarMaterial'), filename: `Material-solicitado_${today()}`, columns, rows, widths: [0.9, 1.4, 1.2, 1.3, 0.9, 3, 0.7, 1.4, 1.3, 0.8, 1.1, 1.1, 0.9], flat: { columns, rows }, json: orders.map(orderJson), txt: orders.map(orderTxt).join('\r\n\r\n') };
 }
 async function exportToFile(format, ds) {
     const base = ds.filename;
