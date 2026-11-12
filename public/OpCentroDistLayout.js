@@ -2577,7 +2577,7 @@ function stepPickable(el) {
 function pickStepElement(x, y) {
     const sel = MAP_PICK_SEL[state.focus];
     const svg = $('layout-svg');
-    if (!sel || !svg || !state.draft) return null;
+    if (state.mode !== 'edit' || !sel || !svg || !state.draft) return null; // en Ver no se elige lo de un paso (el paso que quedó de Editar no cuenta)
     let best = null;
     svg.querySelectorAll(sel).forEach((el) => {
         if (el.closest('defs') || !stepPickable(el)) return;
@@ -2593,6 +2593,7 @@ function pickStepElement(x, y) {
     return best ? best.el : null;
 }
 function selectFromMap(target, point) {
+    if (state.mode !== 'edit') return; // elegir tocando el croquis es de Editar: en Ver no se marca nada (el paso que quedó de Editar no cuenta)
     // primero lo del paso que se edita más cercano al toque; si no hay, lo que está justo debajo (el contorno: sus lados y esquinas)
     const el = (point && state.draft ? pickStepElement(point.x, point.y) : null) || (target && target.closest ? target.closest('[data-zid], [data-sid], [data-fid], [data-obid], [data-sfid], [data-clid], [data-rfid], [data-tid], [data-oid], [data-did], [data-pid], [data-nid], [data-sideid], [data-cornerid]') : null);
     if (!el || !state.draft) return;
@@ -2641,7 +2642,7 @@ function selectEntity(next, reveal = true) {
 const STEP_PICK_3D = { paredes: ['wall'], obstaculos: ['obstacle'], puertas: ['door'], luz: ['power'], sensores: ['sensor'], seguridad: ['safety'], techos: ['ceiling', 'roof'], transito: ['transit'], objetos: ['object'], pisos: ['floor'], rampas: ['floor'] };
 const KIND_OF_3D_ITEM = { wall: 'obstacle', obstacle: 'obstacle', door: 'door', power: 'power', sensor: 'sensor', safety: 'safety', ceiling: 'ceiling', roof: 'roof', transit: 'transit', object: 'object', floor: 'floor' };
 function selectFrom3d(sel) {
-    if (!sel || !state.draft) return;
+    if (!sel || !state.draft || state.mode !== 'edit') return; // igual que en el croquis: elegir tocando es de Editar
     let next = null;
     if (state.focus === 'zonas') {
         const zoneId = sel.kind === 'zone' ? sel.zone.id : (sel.kind === 'space' ? sel.space.zoneId : (sel.kind === 'footprint' ? sel.footprint.zoneId : ''));
@@ -3389,6 +3390,9 @@ async function goView() {
         if (!(await saveLayout())) return; // no se pudo guardar: se queda en Editar (ya avisó por qué)
     }
     state.mode = 'view';
+    // lo que se eligió en Editar (una puerta, una pared…) no se queda marcado al pasar a Ver
+    state.hl = null;
+    state.hlList = null;
     showAllLayers();
     applyMode();
     renderPanel();
@@ -6628,7 +6632,7 @@ function ensureScene3d() {
             await loadScriptOnce('vendor/three/three.min.js');
             await loadScriptOnce('LayoutScene3D.js');
             await loadScriptOnce('LayoutAssetPicker.js');
-            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, itemPickTypes: () => STEP_PICK_3D[state.focus] || [], onSelect: (sel) => { show3dInfo(sel); selectFrom3d(sel); } });
+            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, itemPickTypes: () => (state.mode === 'edit' ? STEP_PICK_3D[state.focus] || [] : []), onSelect: (sel) => { show3dInfo(sel); selectFrom3d(sel); } });
             picker3d = window.LayoutAssetPicker.create($('layout-3d-picker'), {
                 texts: { title: t('main.layout3dActivosTitulo'), count: t('main.layout3dActivosConteo'), all: t('main.layout3dTodos'), none: t('main.layout3dNinguno'), close: t('main.layout3dCerrar'), search: t('main.layout3dActivosBuscar'), noResults: t('main.layout3dSinResultados'), noZone: t('main.layoutSinZona') },
                 typeLabel: (type) => typeLabel('space', type),
