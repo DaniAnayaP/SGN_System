@@ -8275,6 +8275,39 @@ function seedAltaActivosGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(ALTA_ACTIVOS_SCREEN_SEED_KEY, path, ['cat-operaciones/cat-operaciones-centro-dist-alta-activos'], 'the Alta Activos screen');
 }
+// Historial de un activo que se dio de alta SIN pasar por la pantalla (lo pasó la migración del Layout): una fila «creado» y una por cada dato que ya traía, igual que cuando se da de alta a mano (server.js, POST /fixed-assets).
+// La hora es la de cuando se creó el activo; quien lo hizo, la migración. Sin esto el historial del renglón salía vacío («Aún no hay cambios registrados») aunque el activo ya existía.
+function logFixedAssetCreated(asset, changedBy) {
+    if (!asset) return;
+    const code = String(asset.code_letter || '') + String(asset.code_number || 0).padStart(3, '0');
+    const stamp = String(asset.created_at || '').trim() || new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const insert = db.prepare('INSERT INTO data_table_changes (client_id, table_key, record_id, record_label, action, field_key, old_value, new_value, changed_by, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    insert.run(asset.client_id, 'alta-activos', asset.id, code, 'create', '', '', '', changedBy, stamp);
+    const nameOf = (id) => { const r = id ? db.prepare('SELECT name FROM article_categories WHERE id = ?').get(id) : null; return r ? r.name : ''; };
+    const SHAPES = { rectangular: 'Rectangular', cilindrica: 'Cilíndrica', irregular: 'Irregular' };
+    const initial = {
+        typeId: nameOf(asset.type_id), classId: nameOf(asset.class_id), purchaseName: asset.purchase_name, customName: asset.custom_name, model: asset.model, serialNumber: asset.serial_number,
+        shape: SHAPES[asset.shape] || asset.shape, height: asset.height_cm, length: asset.length_cm, depth: asset.depth_cm, weight: asset.weight_kg, volume: asset.volume_m3, showInLayout: asset.show_in_layout ? 'Sí' : 'No',
+    };
+    Object.entries(initial).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === '' || value === 0) return;
+        insert.run(asset.client_id, 'alta-activos', asset.id, code, 'update', FIXED_ASSET_PATCHABLE_FIELDS[key].fieldKey, '', String(value), changedBy, stamp);
+    });
+}
+// Los activos que la migración del Layout ya había creado SIN historial lo reciben una sola vez (solo los que no tienen ninguna fila).
+const FIXED_ASSET_HISTORY_BACKFILL_KEY = 'seed-fixed-assets-history-backfill-v1';
+function backfillFixedAssetHistoryOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(FIXED_ASSET_HISTORY_BACKFILL_KEY)) return;
+    let filled = 0;
+    db.transaction(() => {
+        db.prepare("SELECT * FROM fixed_assets WHERE created_by = 'Migración Alta Activos' AND NOT EXISTS (SELECT 1 FROM data_table_changes c WHERE c.client_id = fixed_assets.client_id AND c.table_key = 'alta-activos' AND c.record_id = fixed_assets.id)").all().forEach((asset) => {
+            logFixedAssetCreated(asset, 'Migración Alta Activos');
+            filled += 1;
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(FIXED_ASSET_HISTORY_BACKFILL_KEY);
+    })();
+    console.log('[db] Alta Activos: ' + filled + ' activos pasados por la migración recibieron su historial de alta (una vez).');
+}
 // Alta Activos (2026-11-12): los activos que ya estaban dibujados en un Layout pasan, UNA vez, al registro (fixed_assets) con el mismo código, el mismo nombre y las mismas medidas con las que se ven hoy, y el activo del Layout queda ligado
 // a su renglón (assetRef). Los códigos del Layout eran por zona y tipo (A001 en cada zona) y el registro es por centro de costos y letra: se conservan los que no chocan y a los que chocan se les da el siguiente número de su letra.
 // El tipo sale de su catálogo (el que ya traía o el primero con su mismo dibujo); sin tipo, el renglón queda sin tipo y con la letra de su código. Las medidas del activo en el Layout (ol, od, oh) quedan fijas con las de hoy: el croquis se ve igual.
@@ -8317,6 +8350,7 @@ function migrateLayoutSpacesToFixedAssetsOnce() {
                             height, length, depth, volume: Math.round(((length * depth * height) / 1e6) * 10000) / 10000, showInLayout: 1,
                         },
                     });
+                    logFixedAssetCreated(asset, 'Migración Alta Activos');
                     s.assetRef = asset.id;
                     s.code = code;
                     if (d && d.l > 0) s.ol = Math.round(d.l * 100) / 100;
@@ -8385,6 +8419,7 @@ function migrateLayoutSensorsToFixedAssetsOnce() {
                         clientId: row.client_id, isTestData: false, costCenterId: row.cost_center_id, typeId: type.id, letter: 'S', codeNumber: number, createdBy: 'Migración Alta Activos',
                         values: { purchaseName: `${NAMES[s.type] || NAMES.both} ${code}`, customName: '', shape: 'rectangular', height: 0, length: 0, depth: 0, volume: 0, showInLayout: 1 },
                     });
+                    logFixedAssetCreated(asset, 'Migración Alta Activos');
                     s.assetRef = asset.id;
                     s.code = code;
                     stats.assets += 1;
@@ -13138,6 +13173,7 @@ seedRelacionEnvioGrants();
 seedAltaActivosGrants();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
+backfillFixedAssetHistoryOnce();
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
