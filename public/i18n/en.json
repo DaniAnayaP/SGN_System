@@ -1935,7 +1935,7 @@
     "layoutObjetosVacio": "Nothing is drawn yet. Add an object with the button above.",
     "layoutStepSeguridad": "Safety",
     "layoutAgregarSeguridad": "+ Add item",
-    "layoutSeguridadVacio": "There are no safety items yet. Add extinguishers, hydrants, emergency doors and more with the button above.",
+    "layoutSeguridadVacio": "There are no safety items yet. Add extinguishers, hydrants, emergency doors, cameras and more with the button above.",
     "layoutNombreModelo": "Name or model",
     "layoutXFinal": "End X (m)",
     "layoutYFinal": "End Y (m)",
@@ -1953,10 +1953,13 @@
     "layoutType_safety_firstaid": "First-aid kit",
     "layoutType_safety_alarm": "Alarm / pull station",
     "layoutType_safety_eyewash": "Shower and eyewash",
+    "layoutType_safety_camera": "Camera",
+    "layoutType_safety_speaker": "Speaker",
     "layoutType_safety_assembly": "Assembly point",
     "layoutType_safety_route": "Evacuation route",
     "layoutVioSg_outside": "{code} is outside the building outline: move it inside.",
     "layoutVioSg_route": "Route {code} needs two different points.",
+    "layoutVioSg_hang": "{code} hangs at {top} m and the ceiling there is only {height} m high: lower it.",
     "layoutVioSg_tallLevel": "{code} reaches {top} m (its zone floor is at {level} m, plus floor height and height) and the building there is only {height} m high: lower it or make it shorter.",
     "layoutVioSg_tall": "{code} reaches {top} m (height from floor + height) and the building there is only {height} m tall: lower it or make it shorter.",
     "layoutSgCaducidad": "Expiry",
@@ -2239,9 +2242,18 @@
     "colLayoutTechos": "Ceiling items",
     "layoutStepTechos": "Ceiling",
     "layoutAgregarTecho": "+ Add to the ceiling",
-    "layoutTechosVacio": "Nothing hangs from the ceiling yet. Add cameras, speakers, ventilation and extractors with the button here.",
-    "layoutType_ceiling_camera": "Camera",
-    "layoutType_ceiling_speaker": "Speaker",
+    "layoutTechosVacio": "Nothing hangs from the ceiling yet. Add ventilation and extractors with the button here; cameras and speakers are added in Safety.",
+    "layoutMiraHacia": "Looks toward",
+    "layoutAnguloVision": "Angle (°)",
+    "layoutAlcance": "Reach (m)",
+    "layoutType_aim_n": "North",
+    "layoutType_aim_ne": "Northeast",
+    "layoutType_aim_e": "East",
+    "layoutType_aim_se": "Southeast",
+    "layoutType_aim_s": "South",
+    "layoutType_aim_sw": "Southwest",
+    "layoutType_aim_w": "West",
+    "layoutType_aim_nw": "Northwest",
     "layoutType_ceiling_ventilation": "Ventilation",
     "layoutType_ceiling_extractor": "Extractor",
     "layoutType_ceiling_other": "Other",
@@ -6619,6 +6631,18 @@
       "what": "The body color of the forklift and of the other equipment of the catalog (cart, platform, other), on the plan and in 3D. By default the forklift is yellow and the rest gray. The person does not have it: she has the color of her vest and helmet.",
       "example": "electric forklifts in blue and combustion ones in yellow, to tell them apart at a glance."
     },
+    "layoutSgMiraHacia": {
+      "what": "Which way the camera looks (north, northeast, east… as on the sketch: north is up). It looks south by default. If you turn the sketch, the camera turns with it.",
+      "example": "a camera at the dock corner looking southeast to see the whole ramp."
+    },
+    "layoutSgAngulo": {
+      "what": "How many degrees the camera view cone opens (5 to 360). 90° by default. It is drawn as a fan on the sketch and on the floor in 3D.",
+      "example": "90° for a corner camera; 360° for a dome camera that sees all around."
+    },
+    "layoutSgAlcance": {
+      "what": "How many meters the camera sees or the speaker can be heard (1 to 200). 12 m for a camera and 15 m for a speaker by default. It is drawn as the length of the cone (camera) or as a circle (speaker).",
+      "example": "a camera covering 12 m to the end of the aisle; a speaker heard 15 m all around."
+    },
     "layoutHidranteModelo": {
       "what": "Which kind of hydrant it is: pillar (the usual red post standing on the floor), double-outlet post (a pipe with two valves on top), siamese connection (the Y-shaped connection that goes on the wall) or fire hose cabinet (the red box with a hose, which goes on the wall). Each model comes with its own height from the floor and size, which you can change in its row.",
       "example": "on the back wall you place a fire hose cabinet and at the entrance a double-outlet post hydrant: each one shows with its own symbol on the plan, in 3D and in the legend."
@@ -6636,10 +6660,10 @@
       "example": "you add a wall and move it to side 3 with a length of 8 m."
     },
     "layoutSec_seguridad": {
-      "what": "The safety items of the warehouse placed on the plan: fire extinguishers, hydrants, emergency doors, first-aid kits, alarms or pull stations, showers and eyewashes, assembly points and evacuation routes. Each one is a point (X and Y, in meters; a route also has its end point) with its type and its name or model. The system sets the code: each type with its own letter and count (E001, I001, P001, B001, L001, O001, U001, V001), and a number is never used again even if you delete the item. The zone comes from its place. Everything must be inside the building outline: otherwise it shows in red and can't be saved. Each item can have its expiry, how many days between checks and its next check: the status (Valid, Due soon, Overdue or No date) comes from the nearest date against today, they are counted at the top, and on the sketch those due soon get an amber ring and the overdue ones a red ring. This does not block saving. They show on the sketch, in 3D, on the public QR page and on the downloaded sheet while this step is on.",
+      "what": "The safety items of the warehouse placed on the plan: fire extinguishers, hydrants, emergency doors, first-aid kits, alarms or pull stations, showers and eyewashes, assembly points, evacuation routes and the cameras and speakers that hang from the ceiling. Each one is a point (X and Y, in meters; a route also has its end point) with its type and its name or model. The system sets the code: each type with its own letter and count (E001, I001, P001, B001, L001, O001, U001, V001, Q001 camera, N001 speaker), and a number is never used again even if you delete the item. The zone comes from its place. The camera and the speaker hang from the ceiling: «Hangs at» is the height from the floor (empty = against the ceiling; it cannot go above the ceiling at that point), the camera looks to one side with its view angle and both have a reach; the sketch and the 3D show the cone of what the camera sees and the circle the speaker reaches. Everything must be inside the building outline: otherwise it shows in red and can't be saved. Each item can have its expiry, how many days between checks and its next check: the status (Valid, Due soon, Overdue or No date) comes from the nearest date against today, they are counted at the top, and on the sketch those due soon get an amber ring and the overdue ones a red ring. This does not block saving. They show on the sketch, in 3D, on the public QR page and on the downloaded sheet while this step is on.",
       "example": "a 6 kg dry-chemical extinguisher at 5 m in X and 5 m in Y (E001), the west exit emergency door on the left side of the building (P001) and an evacuation route running from the central aisle to that door (V001)."
     },
-    "layoutSec_techos": {"what": "At the top are the ROOFS of the building, drawn on the sketch: each section has its shape (flat, single slope or gable), what it covers (the whole building, zones or an area), its heights from the floor (eave and ridge), its material and its color; the slope is calculated by itself and the system sets the code (TE001…). Below, what hangs from the warehouse ceiling placed on the plan: cameras, speakers, ventilation, extractors or other (with its name). Each one is a point (X and Y, in meters) with its type and name. «Hangs at» is the height, measured from the floor, where the device sits; if you leave it empty it sits against the ceiling. The ceiling is not flat (it follows the heights of the outline corners), so «Ceiling there» tells you how tall the building is at that point and «Hangs at» cannot go above it: if it does, it shows in red and can't be saved. The system sets the code: each type with its own letter and count (Q001, N001, W001, X001, Y001), and a number is never used again even if you delete the item. The zone comes from its place. Everything must be inside the building outline. It shows on the sketch (inside a dotted circle, meaning it is up high) and in 3D, hanging from the ceiling, while this step is on. Ceiling sensors will go in the Sensors step.", "example": "a camera at the entrance at 5 m in X and 2.8 m in Y, hanging at 6.5 m (Q001); an extractor in the middle of the warehouse hanging at 7.5 m (X001), where the ceiling is 9.4 m high."},
+    "layoutSec_techos": {"what": "At the top are the ROOFS of the building, drawn on the sketch: each section has its shape (flat, single slope or gable), what it covers (the whole building, zones or an area), its heights from the floor (eave and ridge), its material and its color; the slope is calculated by itself and the system sets the code (TE001…). Below, what hangs from the warehouse ceiling placed on the plan: ventilation, extractors or other (with its name); cameras and speakers are added in Safety. Each one is a point (X and Y, in meters) with its type and name. «Hangs at» is the height, measured from the floor, where the device sits; if you leave it empty it sits against the ceiling. The ceiling is not flat (it follows the heights of the outline corners), so «Ceiling there» tells you how tall the building is at that point and «Hangs at» cannot go above it: if it does, it shows in red and can't be saved. The system sets the code: each type with its own letter and count (W001, X001, Y001), and a number is never used again even if you delete the item. The zone comes from its place. Everything must be inside the building outline. It shows on the sketch (inside a dotted circle, meaning it is up high) and in 3D, hanging from the ceiling, while this step is on. Ceiling sensors will go in the Sensors step.", "example": "a ventilation unit at the dock at 5 m in X and 2.8 m in Y, hanging at 6.5 m (W001); an extractor in the middle of the warehouse hanging at 7.5 m (X001), where the ceiling is 9.4 m high."},
     "layoutRoofForma": {"what": "The roof shape: flat (a single height), single slope (rises from one side to the other and the water falls to one side) or gable (rises from the eaves to the ridge in the middle).", "example": "a warehouse with a gable roof: eaves at 7 m and ridge at 9.5 m."},
     "layoutRoofCubre": {"what": "What this section roofs: the whole building, one or several zones (the roof takes their shape) or an area with X, Y, length and width.", "example": "a single-slope roof over the offices: you choose «Zones» and add Offices."},
     "layoutRoofZonas": {"what": "The zones this section roofs. Tap the × of one to remove it and the + to add another.", "example": "Dry storage + Aisle under one gable roof."},

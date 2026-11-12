@@ -1935,7 +1935,7 @@
     "layoutObjetosVacio": "Todavía no hay nada dibujado. Agrega un objeto con el botón de arriba.",
     "layoutStepSeguridad": "Seguridad",
     "layoutAgregarSeguridad": "+ Agregar elemento",
-    "layoutSeguridadVacio": "Todavía no hay elementos de seguridad. Agrega extintores, hidrantes, puertas de emergencia y más con el botón de arriba.",
+    "layoutSeguridadVacio": "Todavía no hay elementos de seguridad. Agrega extintores, hidrantes, puertas de emergencia, cámaras y más con el botón de arriba.",
     "layoutNombreModelo": "Nombre o modelo",
     "layoutXFinal": "X final (m)",
     "layoutYFinal": "Y final (m)",
@@ -1953,10 +1953,13 @@
     "layoutType_safety_firstaid": "Botiquín",
     "layoutType_safety_alarm": "Alarma / pulsador",
     "layoutType_safety_eyewash": "Regadera y lavaojos",
+    "layoutType_safety_camera": "Cámara",
+    "layoutType_safety_speaker": "Bocina",
     "layoutType_safety_assembly": "Punto de reunión",
     "layoutType_safety_route": "Ruta de evacuación",
     "layoutVioSg_outside": "{code} queda fuera del contorno de la nave: acomódalo dentro.",
     "layoutVioSg_route": "La ruta {code} necesita dos puntos distintos.",
+    "layoutVioSg_hang": "{code} cuelga a {top} m y el techo ahí solo está a {height} m: bájalo.",
     "layoutVioSg_tallLevel": "{code} llega a {top} m (el piso de su zona está a {level} m, más la altura del piso y el alto) y la nave ahí solo mide {height} m de alto: bájalo o hazlo más bajo.",
     "layoutVioSg_tall": "{code} llega a {top} m (altura del piso + alto) y la nave ahí solo mide {height} m de alto: bájalo o hazlo más bajo.",
     "layoutSgCaducidad": "Caducidad",
@@ -2239,9 +2242,18 @@
     "colLayoutTechos": "Techos",
     "layoutStepTechos": "Techos",
     "layoutAgregarTecho": "+ Agregar al techo",
-    "layoutTechosVacio": "Todavía no hay nada colgado del techo. Agrega cámaras, bocinas, ventilación y extractores con el botón de aquí.",
-    "layoutType_ceiling_camera": "Cámara",
-    "layoutType_ceiling_speaker": "Bocina",
+    "layoutTechosVacio": "Todavía no hay nada colgado del techo. Agrega ventilación y extractores con el botón de aquí; las cámaras y las bocinas se agregan en Seguridad.",
+    "layoutMiraHacia": "Mira hacia",
+    "layoutAnguloVision": "Ángulo (°)",
+    "layoutAlcance": "Alcance (m)",
+    "layoutType_aim_n": "Norte",
+    "layoutType_aim_ne": "Noreste",
+    "layoutType_aim_e": "Este",
+    "layoutType_aim_se": "Sureste",
+    "layoutType_aim_s": "Sur",
+    "layoutType_aim_sw": "Suroeste",
+    "layoutType_aim_w": "Oeste",
+    "layoutType_aim_nw": "Noroeste",
     "layoutType_ceiling_ventilation": "Ventilación",
     "layoutType_ceiling_extractor": "Extractor",
     "layoutType_ceiling_other": "Otro",
@@ -6618,6 +6630,18 @@
       "what": "El color del cuerpo del montacargas y de los demás equipos del catálogo (carrito, plataforma, otro), en el croquis y en el 3D. De fábrica el montacargas es amarillo y los demás grises. La persona no lo lleva: ella tiene el color de su chaleco y de su casco.",
       "example": "los montacargas eléctricos en azul y los de combustión en amarillo, para distinguirlos de un vistazo."
     },
+    "layoutSgMiraHacia": {
+      "what": "Hacia qué lado mira la cámara (norte, noreste, este… como en el croquis: el norte es hacia arriba). De fábrica mira al sur. Si giras el croquis, la cámara gira con él.",
+      "example": "una cámara en la esquina del muelle que mira al sureste para ver toda la rampa."
+    },
+    "layoutSgAngulo": {
+      "what": "Cuántos grados abre el cono de visión de la cámara (de 5 a 360). De fábrica 90°. Se dibuja como un abanico en el croquis y sobre el piso en el 3D.",
+      "example": "90° para una cámara de esquina; 360° para una cámara domo que ve para todos lados."
+    },
+    "layoutSgAlcance": {
+      "what": "Hasta cuántos metros llega lo que ve la cámara o lo que se oye en la bocina (de 1 a 200). De fábrica 12 m la cámara y 15 m la bocina. Se dibuja como el largo del cono (cámara) o como un círculo (bocina).",
+      "example": "una cámara que cubre 12 m hasta el fondo del pasillo; una bocina que se oye 15 m a la redonda."
+    },
     "layoutHidranteModelo": {
       "what": "Qué clase de hidrante es: de columna (el poste rojo de siempre, parado en el piso), de poste doble (un tubo con dos válvulas arriba), toma siamesa (la conexión en «Y» que va a la pared) o gabinete contra incendio (la caja roja con manguera, que va a la pared). Cada modelo trae su propia altura al piso y tamaño, que puedes cambiar en su renglón.",
       "example": "en la pared del fondo pones un gabinete contra incendio y a la entrada de la nave un hidrante de poste doble: cada uno sale con su símbolo en el croquis, en el 3D y en la leyenda."
@@ -6635,10 +6659,10 @@
       "example": "agregas una pared y la pasas al lado 3 con un largo de 8 m."
     },
     "layoutSec_seguridad": {
-      "what": "Los elementos de seguridad de la nave puestos en el plano: extintores, hidrantes, puertas de emergencia, botiquines, alarmas o pulsadores, regaderas y lavaojos, puntos de reunión y rutas de evacuación. Cada uno es un punto (X e Y, en metros; la ruta lleva además el punto de llegada) con su tipo y su nombre o modelo. El código lo pone el sistema: cada tipo con su letra y su cuenta (E001, I001, P001, B001, L001, O001, U001, V001) y un número no se vuelve a usar aunque borres el elemento. La zona sale sola del lugar. Todo debe quedar dentro del contorno de la nave: si no, sale en rojo y no se deja guardar. Cada elemento puede llevar su caducidad, cada cuántos días se revisa y su próxima revisión: el estado (Vigente, Por vencer, Vencido o Sin fecha) sale de la fecha más cercana contra hoy, arriba se cuentan y en el croquis los que están por vencer llevan un aro ámbar y los vencidos uno rojo. Eso no bloquea el guardado. Se ven en el croquis, en el 3D, en la página pública del QR y en la hoja que se descarga mientras este paso esté encendido.",
+      "what": "Los elementos de seguridad de la nave puestos en el plano: extintores, hidrantes, puertas de emergencia, botiquines, alarmas o pulsadores, regaderas y lavaojos, puntos de reunión, rutas de evacuación y las cámaras y bocinas que cuelgan del techo. Cada uno es un punto (X e Y, en metros; la ruta lleva además el punto de llegada) con su tipo y su nombre o modelo. El código lo pone el sistema: cada tipo con su letra y su cuenta (E001, I001, P001, B001, L001, O001, U001, V001, Q001 cámara, N001 bocina) y un número no se vuelve a usar aunque borres el elemento. La zona sale sola del lugar. La cámara y la bocina cuelgan del techo: «Cuelga a» es la altura desde el piso (vacío = pegada al techo; no puede pasar del techo de ese punto), la cámara mira hacia un lado con su ángulo de visión y las dos llevan su alcance; en el croquis y en el 3D se ve el cono de lo que ve la cámara y el círculo que alcanza la bocina. Todo debe quedar dentro del contorno de la nave: si no, sale en rojo y no se deja guardar. Cada elemento puede llevar su caducidad, cada cuántos días se revisa y su próxima revisión: el estado (Vigente, Por vencer, Vencido o Sin fecha) sale de la fecha más cercana contra hoy, arriba se cuentan y en el croquis los que están por vencer llevan un aro ámbar y los vencidos uno rojo. Eso no bloquea el guardado. Se ven en el croquis, en el 3D, en la página pública del QR y en la hoja que se descarga mientras este paso esté encendido.",
       "example": "un extintor PQS de 6 kg a 5 m en X y 5 m en Y (E001), la puerta de emergencia de la salida oeste en el lado izquierdo de la nave (P001) y una ruta de evacuación que va del pasillo central hasta esa puerta (V001)."
     },
-    "layoutSec_techos": {"what": "Arriba van los TECHOS de la nave, dibujados en el croquis: cada sección tiene su forma (plano, una agua o dos aguas), lo que cubre (toda la nave, zonas o un área), sus alturas desde el piso (alero y cumbrera), su material y su color; la pendiente se calcula sola y el código (TE001…) lo pone el sistema. Debajo, lo que va colgado del techo de la nave puesto en el plano: cámaras, bocinas, ventilación, extractores u otro (con su nombre). Cada uno es un punto (X e Y, en metros) con su tipo y su nombre. «Cuelga a» es la altura, medida desde el piso, a la que queda el aparato; si lo dejas vacío queda pegado al techo. El techo no es plano (sigue las alturas de las esquinas del contorno), así que «Techo ahí» te dice cuánto mide la nave en ese punto y «Cuelga a» no puede pasar de ahí: si pasa, sale en rojo y no se deja guardar. El código lo pone el sistema: cada tipo con su letra y su cuenta (Q001, N001, W001, X001, Y001) y un número no se vuelve a usar aunque borres el elemento. La zona sale sola del lugar. Todo debe quedar dentro del contorno de la nave. Se ve en el croquis (dentro de un círculo punteado, que dice que está arriba) y en el 3D, colgado del techo, mientras este paso esté encendido. Los sensores del techo irán en el paso Sensores.", "example": "una cámara de la entrada a 5 m en X y 2.8 m en Y, colgada a 6.5 m (Q001); un extractor al centro del almacén colgado a 7.5 m (X001), donde el techo está a 9.4 m."},
+    "layoutSec_techos": {"what": "Arriba van los TECHOS de la nave, dibujados en el croquis: cada sección tiene su forma (plano, una agua o dos aguas), lo que cubre (toda la nave, zonas o un área), sus alturas desde el piso (alero y cumbrera), su material y su color; la pendiente se calcula sola y el código (TE001…) lo pone el sistema. Debajo, lo que va colgado del techo de la nave puesto en el plano: ventilación, extractores u otro (con su nombre); las cámaras y las bocinas se agregan en Seguridad. Cada uno es un punto (X e Y, en metros) con su tipo y su nombre. «Cuelga a» es la altura, medida desde el piso, a la que queda el aparato; si lo dejas vacío queda pegado al techo. El techo no es plano (sigue las alturas de las esquinas del contorno), así que «Techo ahí» te dice cuánto mide la nave en ese punto y «Cuelga a» no puede pasar de ahí: si pasa, sale en rojo y no se deja guardar. El código lo pone el sistema: cada tipo con su letra y su cuenta (W001, X001, Y001) y un número no se vuelve a usar aunque borres el elemento. La zona sale sola del lugar. Todo debe quedar dentro del contorno de la nave. Se ve en el croquis (dentro de un círculo punteado, que dice que está arriba) y en el 3D, colgado del techo, mientras este paso esté encendido. Los sensores del techo irán en el paso Sensores.", "example": "una ventilación del muelle a 5 m en X y 2.8 m en Y, colgada a 6.5 m (W001); un extractor al centro del almacén colgado a 7.5 m (X001), donde el techo está a 9.4 m."},
     "layoutRoofForma": {"what": "La forma del techo: plano (una sola altura), una agua (sube de un lado al otro y el agua cae hacia un lado) o dos aguas (sube de los aleros a la cumbrera del centro).", "example": "una bodega con techo a dos aguas: alero a 7 m y cumbrera a 9.5 m."},
     "layoutRoofCubre": {"what": "Qué techa esta sección: toda la nave, una o varias zonas (el techo toma su forma) o un área con X, Y, largo y ancho.", "example": "un techo de una agua sobre las oficinas: eliges «Zonas» y agregas Oficinas."},
     "layoutRoofZonas": {"what": "Las zonas que techa esta sección. Toca la × de una para quitarla y el + para agregar otra.", "example": "Almacén seco + Pasillo bajo un mismo techo a dos aguas."},

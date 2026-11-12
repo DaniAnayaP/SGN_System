@@ -21,7 +21,7 @@
     // El color de cada elemento de Seguridad (los mismos del croquis: rojo del fuego, verde de emergencia, naranja de alarma, azul del agua).
     // Lo que cuelga del techo (paso Techos): el color de cada tipo, el mismo del croquis.
     const CEILING_COLOR = { camera: 0x4f5d7a, speaker: 0xd98a1f, ventilation: 0x2a9d8f, extractor: 0x7a5cc7, other: 0x8a8f9e };
-    const SAFETY_COLOR = { extinguisher: 0xd9443a, hydrant: 0xd9443a, emergency_door: 0x2e9e5b, firstaid: 0x2e9e5b, alarm: 0xe8892b, eyewash: 0x2f7fc7, assembly: 0x2e9e5b, route: 0x2e9e5b };
+    const SAFETY_COLOR = { extinguisher: 0xd9443a, hydrant: 0xd9443a, emergency_door: 0x2e9e5b, firstaid: 0x2e9e5b, alarm: 0xe8892b, eyewash: 0x2f7fc7, assembly: 0x2e9e5b, camera: 0x4f5d7a, speaker: 0xd98a1f, route: 0x2e9e5b };
 
     function wallSegment(vertices, wall) {
         const n = vertices.length;
@@ -404,6 +404,7 @@
                 const sz = root.LayoutCalc && root.LayoutCalc.safetySizeOf ? root.LayoutCalc.safetySizeOf(e) : null;
                 if (!sz) return null;
                 const W = Math.max(sz.l, sz.w, 0.2) + 0.2;
+                if (root.LayoutCalc.isHungSafety && root.LayoutCalc.isHungSafety(e)) return { x: PX(ex), y: root.LayoutCalc.safetyHangOf(lastLayout, e), z: PZ(ey), sx: W, sy: sz.h + 0.2, sz: W };
                 const H = sz.h + (e.type === 'emergency_door' ? 0.35 : 0);
                 return { x: PX(ex), y: 0.08 + sz.elev + H / 2, z: PZ(ey), sx: W, sy: H, sz: W };
             }
@@ -1323,6 +1324,63 @@
                     tip.rotation.y = -ang;
                     g.add(tip);
                     g.position.set(PX(ex), FL(ex, ey), PZ(ey));
+                    group.safety.add(g);
+                    dueRing(ex, ey, e);
+                    return;
+                }
+                // Cámara y bocina (cuelgan del techo): el aparato queda a su altura «Cuelga a» (vacío = pegado al techo) sujeto por un cable delgado que sale del techo de ese punto (el techo que cubre el punto o, si no hay, la nave). La cámara mira
+                // hacia donde se capturó; en el piso se ve su cono de visión (ángulo y alcance) y la bocina, un círculo con su alcance.
+                if (LCalc.isHungSafety && LCalc.isHungSafety(e)) {
+                    const hsz = LCalc.safetySizeOf(e);
+                    const dark = 0x232733;
+                    const roofY = LCalc.ceilingLimitAt(layout, e);
+                    const hang = LCalc.safetyHangOf(layout, e);
+                    const body = new THREE.Group();
+                    if (e.type === 'camera') {
+                        body.add(new THREE.Mesh(new THREE.BoxGeometry(hsz.l, hsz.h, hsz.w), lam(color)));
+                        const lens = new THREE.Mesh(new THREE.CylinderGeometry(hsz.h * 0.32, hsz.h * 0.32, 0.05, 14), lam(dark));
+                        lens.rotation.z = Math.PI / 2;
+                        lens.position.x = hsz.l / 2 + 0.02;
+                        body.add(lens);
+                        const av = LCalc.safetyAimVector(LCalc.safetyAimOf(e));
+                        body.rotation.y = Math.atan2(-av[1], av[0]); // el lente (hacia +x del aparato) mira hacia donde se capturó
+                    } else {
+                        const horn = new THREE.Mesh(new THREE.CylinderGeometry(0.05, hsz.l / 2, hsz.h, 18), lam(color));
+                        const cap = new THREE.Mesh(new THREE.CylinderGeometry(hsz.l / 2 + 0.01, hsz.l / 2 + 0.01, 0.025, 18), lam(dark));
+                        cap.position.y = -hsz.h / 2;
+                        body.add(horn, cap);
+                    }
+                    body.position.y = hang;
+                    g.add(body);
+                    const cableLen = roofY - (hang + hsz.h / 2);
+                    if (cableLen > 0.03) {
+                        const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, cableLen, 6), lam(0x59606f));
+                        cable.position.y = hang + hsz.h / 2 + cableLen / 2;
+                        g.add(cable);
+                    }
+                    // lo que alcanza, sobre el piso: un abanico (cámara) o un círculo (bocina)
+                    const reachR = LCalc.safetyRangeOf(e);
+                    const floorY = 0.1 + FL(ex, ey);
+                    const fov = e.type === 'camera' ? LCalc.safetyFovOf(e) : 360;
+                    const mid = e.type === 'camera' ? Math.atan2(LCalc.safetyAimVector(LCalc.safetyAimOf(e))[1], LCalc.safetyAimVector(LCalc.safetyAimOf(e))[0]) : 0;
+                    const half = (fov * Math.PI) / 360;
+                    const wedge = new THREE.Mesh(
+                        fov >= 359.5 ? new THREE.CircleGeometry(reachR, 48) : new THREE.CircleGeometry(reachR, 40, -mid - half, 2 * half),
+                        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: e.type === 'camera' ? 0.2 : 0.1, side: THREE.DoubleSide, depthWrite: false })
+                    );
+                    wedge.rotation.x = -Math.PI / 2;
+                    wedge.position.y = floorY;
+                    g.add(wedge);
+                    const edge = [];
+                    if (fov < 359.5) edge.push(0, floorY + 0.01, 0);
+                    const steps = 36;
+                    for (let k = 0; k <= steps; k++) { const a = mid - half + (2 * half * k) / steps; edge.push(Math.cos(a) * reachR, floorY + 0.01, Math.sin(a) * reachR); }
+                    if (fov < 359.5) edge.push(0, floorY + 0.01, 0);
+                    const edgeGeo = new THREE.BufferGeometry();
+                    edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(edge, 3));
+                    g.add(new THREE.Line(edgeGeo, new THREE.LineBasicMaterial({ color })));
+                    g.position.set(PX(ex), 0, PZ(ey));
+                    g.traverse((o) => { if (o.isMesh || o.isLine) o.raycast = () => {}; });
                     group.safety.add(g);
                     dueRing(ex, ey, e);
                     return;

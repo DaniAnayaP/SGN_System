@@ -989,7 +989,7 @@ function applyLegend() {
     });
     document.querySelectorAll('[data-sf-glyph]').forEach((el) => {
         const [tp, model] = el.getAttribute('data-sf-glyph').split(':');
-        if (!el.firstChild && window.LayoutMapSvg) el.innerHTML = `<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">${window.LayoutMapSvg.safetyGlyph(tp, 10, 10, 8, model)}</svg>`;
+        if (!el.firstChild && window.LayoutMapSvg) el.innerHTML = `<svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">${window.LayoutMapSvg.safetyGlyph(tp, 10, 10, tp === 'camera' || tp === 'speaker' ? 6 : 8, model)}</svg>`;
     });
     document.querySelectorAll('[data-lg]').forEach((el) => {
         const rule = RULES[el.getAttribute('data-lg')];
@@ -1105,6 +1105,9 @@ function applySafetyMarks() {
             const box = document.querySelector(`[data-l="safety"][data-i="${i}"][data-k="${key}"]`);
             if (box) box.classList.toggle('layout-missing', !!bad.tall);
         });
+        // «Cuelga a» por encima del techo de ese punto pone en rojo su celda; la de fábrica (pegada al techo) se ve en gris y sigue al techo
+        const hangBox = document.querySelector(`[data-l="safety"][data-i="${i}"][data-k="hang"]`);
+        if (hangBox) { hangBox.classList.toggle('layout-missing', !!bad.hang); hangBox.placeholder = String(LC.safetyHangOf(state.draft, e)); }
         const codeCell = document.querySelector(`[data-sf-code="${i}"]`);
         if (codeCell) codeCell.textContent = e.code || '';
         const zoneCell = document.querySelector(`[data-sf-zone="${i}"]`);
@@ -1556,8 +1559,8 @@ function setHydrantModel(row, value) {
 function setSafetyType(row, value) {
     row.type = LC.SAFETY_TYPES.includes(value) ? value : 'extinguisher';
     if (row.type !== 'hydrant') delete row.model;
-    // la altura al piso y el tamaño son del tipo: al cambiarlo vuelven a ser los de fábrica del tipo nuevo
-    ['elev', 'l', 'w', 'h'].forEach((k) => { delete row[k]; });
+    // la altura al piso y el tamaño son del tipo: al cambiarlo vuelven a ser los de fábrica del tipo nuevo (y lo de la cámara y la bocina —cuelga a, hacia dónde mira, ángulo y alcance— también es del tipo)
+    ['elev', 'l', 'w', 'h', 'hang', 'aim', 'fov', 'range'].forEach((k) => { delete row[k]; });
     if (row.type === 'route') {
         if (row.x2 === undefined) row.x2 = round2((Number(row.x) || 0) + 5);
         if (row.y2 === undefined) row.y2 = round2(Number(row.y) || 0);
@@ -1618,12 +1621,21 @@ function stepHtml(step) {
             const route = e.type === 'route';
             const end = route ? `${cellNum('safety', i, 'x2', e.x2, dis)}${cellNum('safety', i, 'y2', e.y2, dis)}` : '<td class="layout-calc">—</td><td class="layout-calc">—</td>';
             // la ruta de evacuación es una marca en el piso: no lleva altura ni tamaño
-            const size = route ? '<td class="layout-calc">—</td>'.repeat(4) : ['elev', 'l', 'w', 'h'].map((k) => safetySizeCell(e, i, k, dis)).join('');
+            // la cámara y la bocina CUELGAN del techo: no llevan altura al piso (su altura es «Cuelga a»); la cámara además mira hacia un lado con un ángulo, y las dos llevan su alcance
+            const dash = '<td class="layout-calc">—</td>';
+            const hung = LC.isHungSafety(e);
+            const size = route ? dash.repeat(4) : ['elev', 'l', 'w', 'h'].map((k) => (k === 'elev' && hung ? dash : safetySizeCell(e, i, k, dis))).join('');
+            const hangCell = hung ? `<td><input type="number" step="0.05" min="0.01" data-l="safety" data-i="${i}" data-k="hang" data-help-key="layoutCuelgaA" value="${e.hang > 0 ? e.hang : ''}" placeholder="${LC.safetyHangOf(d, e)}"${dis ? ' disabled' : ''}></td>` : dash;
+            const aimCell = e.type === 'camera' ? cellSelect('safety', i, 'aim', optionsHtml('aim', LC.SAFETY_AIMS, LC.safetyAimOf(e)), dis, 'layoutSgMiraHacia') : dash;
+            const fovCell = e.type === 'camera' ? `<td><input type="number" step="5" min="5" max="360" data-l="safety" data-i="${i}" data-k="fov" data-help-key="layoutSgAngulo" value="${e.fov || ''}" placeholder="${LC.safetyFovOf(e)}"${dis ? ' disabled' : ''}></td>` : dash;
+            const rangeCell = hung ? `<td><input type="number" step="1" min="1" max="200" data-l="safety" data-i="${i}" data-k="range" data-help-key="layoutSgAlcance" value="${e.range || ''}" placeholder="${LC.safetyRangeOf(e)}"${dis ? ' disabled' : ''}></td>` : dash;
+            const hungCells = route ? dash.repeat(4) : `${hangCell}${aimCell}${fovCell}${rangeCell}`;
+
             // solo el hidrante tiene modelo (columna, poste doble, toma siamesa o gabinete): en los demás tipos la celda va con una raya
             const model = e.type === 'hydrant' ? cellSelect('safety', i, 'model', optionsHtml('hydrant', LC.HYDRANT_MODELS, LC.hydrantModelOf(e)), dis, 'layoutHidranteModelo') : '<td class="layout-calc">—</td>';
-            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${model}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}${size}<td><input type="date" data-l="safety" data-i="${i}" data-k="expires" value="${esc(e.expires || '')}"${dis ? ' disabled' : ''}></td><td><input type="number" step="1" min="1" max="3650" data-l="safety" data-i="${i}" data-k="every" value="${e.every || ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><input type="date" data-l="safety" data-i="${i}" data-k="next" value="${esc(e.next || '')}"${dis ? ' disabled' : ''}><small class="layout-sg-eff" data-sf-next="${i}">${esc(safetyNextNote(e))}</small></td><td class="layout-calc" data-sf-last="${i}">${safetyLastHtml(e)}</td><td class="layout-calc" data-sf-status="${i}">${safetyStatusTag(e)}</td>${removeCell('safety', i, dis)}</tr>`;
+            return `<tr><td class="layout-calc"><b data-sf-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('safety', i, 'type', optionsHtml('safety', LC.SAFETY_TYPES, e.type), dis)}${model}${cellText('safety', i, 'name', e.name || '', dis)}<td class="layout-calc" data-sf-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('safety', i, 'x', e.x, dis)}${cellNum('safety', i, 'y', e.y, dis)}${end}${size}${hungCells}<td><input type="date" data-l="safety" data-i="${i}" data-k="expires" value="${esc(e.expires || '')}"${dis ? ' disabled' : ''}></td><td><input type="number" step="1" min="1" max="3650" data-l="safety" data-i="${i}" data-k="every" value="${e.every || ''}" placeholder="—"${dis ? ' disabled' : ''}></td><td><input type="date" data-l="safety" data-i="${i}" data-k="next" value="${esc(e.next || '')}"${dis ? ' disabled' : ''}><small class="layout-sg-eff" data-sf-next="${i}">${esc(safetyNextNote(e))}</small></td><td class="layout-calc" data-sf-last="${i}">${safetyLastHtml(e)}</td><td class="layout-calc" data-sf-status="${i}">${safetyStatusTag(e)}</td>${removeCell('safety', i, dis)}</tr>`;
         });
-        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutModeloHidrante', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutAlturaPiso', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgUltima', 'main.layoutSgEstado', ''], rows, 'layout-seguridad') : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
+        const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutModeloHidrante', 'main.layoutNombreModelo', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutXFinal', 'main.layoutYFinal', 'main.layoutAlturaPiso', 'main.layoutLargo', 'main.layoutAncho', 'main.layoutAlto', 'main.layoutCuelgaA', 'main.layoutMiraHacia', 'main.layoutAnguloVision', 'main.layoutAlcance', 'main.layoutSgCaducidad', 'main.layoutSgCadaDias', 'main.layoutSgProxima', 'main.layoutSgUltima', 'main.layoutSgEstado', ''], rows, 'layout-seguridad') : `<p class="layout-muted">${esc(t('main.layoutSeguridadVacio'))}</p>`;
         // arriba: los contadores (Vigentes, Por vencer, Vencidos, Sin fecha) y con cuántos días de anticipación sale «Por vencer» (de fábrica 30); abajo, los vencidos
         const bar = `<div class="layout-sg-bar"><div class="layout-sg-counts" data-sf-counts data-help-key="layoutSgConteo">${safetyCountsHtml()}</div><div class="layout-fl"><label data-help-key="layoutSgAvisar">${esc(t('main.layoutSgAvisarCon'))}<input type="number" min="1" max="365" step="1" data-l="safetyWarn" value="${d.safetyWarnDays || LC.SAFETY_WARN_DAYS}"${dis ? ' disabled' : ''}></label></div></div>`;
         return `${addButton('safety', 'main.layoutAgregarSeguridad', dis, true)}${bar}${list}<div class="layout-vio" data-sf-issues hidden></div><div class="layout-due" data-sf-due hidden></div>`;
@@ -1638,7 +1650,7 @@ function stepHtml(step) {
             return `<tr><td class="layout-calc"><b data-cl-code="${i}">${esc(e.code || '')}</b></td>${cellSelect('ceiling', i, 'type', optionsHtml('ceiling', LC.CEILING_TYPES, e.type), dis)}${cellText('ceiling', i, 'name', e.name || '', dis)}<td class="layout-calc" data-cl-zone="${i}">${esc(zoneName(e.zoneId))}</td>${cellNum('ceiling', i, 'x', e.x, dis)}${cellNum('ceiling', i, 'y', e.y, dis)}${hang}<td class="layout-calc" data-cl-limit="${i}">${lim ? fmt(lim) : '—'}</td>${removeCell('ceiling', i, dis)}</tr>`;
         });
         const list = rows.length ? table(['main.layoutCodigo', 'main.layoutTipo', 'main.layoutNombre', 'main.layoutZona', 'main.layoutX', 'main.layoutY', 'main.layoutCuelgaA', 'main.layoutTechoAhi', ''], rows, 'layout-techos') : `<p class="layout-muted">${esc(t('main.layoutTechosVacio'))}</p>`;
-        // arriba, los techos (secciones dibujadas en el croquis); debajo, lo que cuelga del techo (cámaras, bocinas…), que pasará a Seguridad
+        // arriba, los techos (secciones dibujadas en el croquis); debajo, lo que cuelga del techo (ventilación, extractores…; las cámaras y bocinas viven en Seguridad)
         return `${addButton('roofs', 'main.layoutAgregarCubierta', dis, true)}${roofSectionHtml(d, dis)}<div class="layout-roof-sub"><h4>${esc(t('main.layoutColgadoTitulo'))}</h4>${addButton('ceiling', 'main.layoutAgregarTecho', dis, false)}</div>${list}<div class="layout-vio" data-cl-issues hidden></div>`;
     }
     if (step === 'objetos') {
@@ -4315,6 +4327,12 @@ function renderSvg(underlay) {
         const rs = Math.max(5, Math.min(8, sc * 0.45));
         const today = todayIso();
         (d.safety || []).filter((e) => e.type === 'route').forEach((e) => { s += SG.safetyRoute(X(e.x), Y(e.y), X(e.x2), Y(e.y2), 2.4); });
+        // el cono de cada cámara y el círculo de cada bocina, debajo de los símbolos y recortados al contorno de la nave (lo que alcanzan no se sale del edificio)
+        if ((d.safety || []).some((e) => LC.isHungSafety(e)) && d.vertices.length >= 3) {
+            s += `<clipPath id="lreach-clip"><polygon points="${d.vertices.map((p) => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(' ')}"/></clipPath><g clip-path="url(#lreach-clip)">`;
+            (d.safety || []).forEach((e) => { s += SG.safetyReach(e, X(e.x), Y(e.y), sc); });
+            s += '</g>';
+        }
         (d.safety || []).forEach((e) => {
             const bad = sfIssues.get(e.id);
             const px = X(e.x);
@@ -4323,20 +4341,21 @@ function renderSvg(underlay) {
             const why = bad ? Object.values(bad).map(safetyIssueText).join(' · ') : '';
             const due = LC.safetyStatus(e, today, d.safetyWarnDays, sfLast(e));
             const title = `<title>${esc(e.code || '')} · ${esc(typeLabel('safety', e.type))}${e.name ? ` · ${esc(e.name)}` : ''}${zone ? ` · ${esc(zone)}` : ''}${why ? `\n${esc(why)}` : ''}${due.state !== 'none' ? `\n${esc(safetyStatusText(due))}` : ''}</title>`;
+            const gr = LC.isHungSafety(e) ? rs * 1.55 : rs; // la cámara y la bocina llevan su símbolo dentro de un círculo punteado (más grande)
             // el cuadro (invisible) que usa el resaltado al elegir su renglón: el símbolo, o los dos extremos de la ruta
-            const hb = e.type === 'route' ? [Math.min(px, X(e.x2)) - 8, Math.min(py, Y(e.y2)) - 8, Math.abs(X(e.x2) - px) + 16, Math.abs(Y(e.y2) - py) + 16] : [px - rs - 4, py - rs - 4, 2 * rs + 8, 2 * rs + 8];
+            const hb = e.type === 'route' ? [Math.min(px, X(e.x2)) - 8, Math.min(py, Y(e.y2)) - 8, Math.abs(X(e.x2) - px) + 16, Math.abs(Y(e.y2) - py) + 16] : [px - gr - 4, py - gr - 4, 2 * gr + 8, 2 * gr + 8];
             s += `<rect class="hl-box" data-hlbox="safety:${esc(e.id)}" x="${hb[0].toFixed(1)}" y="${hb[1].toFixed(1)}" width="${hb[2].toFixed(1)}" height="${hb[3].toFixed(1)}" rx="3"/>`;
             if (e.type === 'route') {
                 s += `<g class="lsafe" data-sfid="${esc(e.id)}"><circle cx="${px}" cy="${py}" r="3.4" fill="${LC.SAFETY_COLORS.route}" stroke="#14602F" stroke-width="0.9"/>${title}</g>${SG.safetyLabel(px, py - 7, e.code || '')}`;
                 if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="9"/>`;
             } else {
-                s += `<g class="lsafe" data-sfid="${esc(e.id)}">${SG.safetyGlyph(e.type, px, py, rs, e.model)}${title}</g>${SG.safetyLabel(px, py - rs - 3, e.code || '')}`;
-                if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="${rs + 4}"/>`;
+                s += `<g class="lsafe" data-sfid="${esc(e.id)}">${SG.safetyGlyph(e.type, px, py, rs, e.model)}${title}</g>${SG.safetyLabel(px, py - gr - 3, e.code || '')}`;
+                if (bad) s += `<circle class="lbad" cx="${px}" cy="${py}" r="${(gr + 4).toFixed(1)}"/>`;
             }
             // por vencer = aro ámbar y vencido = aro rojo (con su palabra debajo), para verlos de lejos
             if (due.state === 'soon' || due.state === 'overdue' || due.state === 'fail') {
                 const col = due.state === 'soon' ? '#E8892B' : '#C0392B';
-                const rr = (e.type === 'route' ? 3.4 : rs) + 5;
+                const rr = (e.type === 'route' ? 3.4 : gr) + 5;
                 s += `<circle cx="${px}" cy="${py}" r="${rr}" fill="none" stroke="${col}" stroke-width="2.6" pointer-events="none"/>${SG.safetyLabel(px, py + rr + 8, t({ soon: 'main.layoutSgMapSoon', overdue: 'main.layoutSgMapLate', fail: 'main.layoutSgMapFail' }[due.state]), 'middle', col)}`;
             }
         });
@@ -5070,13 +5089,13 @@ const ROW_FACTORY = {
         const n = (d.safety || []).length;
         return { id: uid('g'), code: '', type: 'extinguisher', name: '', zoneId: '', x: round2((Math.min(...xs) + Math.max(...xs)) / 2 + (n % 5) * 1.5), y: round2((Math.min(...ys) + Math.max(...ys)) / 2 + Math.floor(n / 5) * 1.5) };
     },
-    // algo nuevo del techo nace como cámara en el centro de la nave (corrido un poco para que no se encimen), pegado al techo; se acomoda con X e Y y se le cambia el tipo en la lista
+    // algo nuevo del techo nace como ventilación (las cámaras y las bocinas se agregan en Seguridad) en el centro de la nave (corrido un poco para que no se encimen), pegado al techo; se acomoda con X e Y y se le cambia el tipo en la lista
     ceiling: () => {
         const d = state.draft;
         const xs = d.vertices.map((p) => p[0]);
         const ys = d.vertices.map((p) => p[1]);
         const n = (d.ceiling || []).length;
-        return { id: uid('c'), code: '', type: 'camera', name: '', zoneId: '', x: round2((Math.min(...xs) + Math.max(...xs)) / 2 + (n % 5) * 1.5), y: round2((Math.min(...ys) + Math.max(...ys)) / 2 + Math.floor(n / 5) * 1.5) };
+        return { id: uid('c'), code: '', type: 'ventilation', name: '', zoneId: '', x: round2((Math.min(...xs) + Math.max(...xs)) / 2 + (n % 5) * 1.5), y: round2((Math.min(...ys) + Math.max(...ys)) / 2 + Math.floor(n / 5) * 1.5) };
     },
     // un techo nuevo es plano y cubre toda la nave a la altura más alta de sus esquinas; su código (TE001…) lo pone el sistema
     roofs: () => ({ id: uid('rf'), code: '', name: '', shape: 'flat', cover: 'nave', h: round2(Math.max(...state.draft.vertices.map((p) => Number(p[2]) || 0)) || 6), material: 'sheet' }),
@@ -5305,6 +5324,15 @@ function onEdit(event) {
             setSafetyType(row, el.value);
         } else if (list === 'safety' && key === 'model') {
             setHydrantModel(row, el.value);
+        } else if (list === 'safety' && (key === 'hang' || key === 'fov' || key === 'range')) {
+            // «Cuelga a», el ángulo de visión y el alcance son opcionales: vacío = el de fábrica (pegado al techo, 90°, 12 m la cámara y 15 m la bocina)
+            const raw = String(el.value).trim();
+            const n = parseFloat(raw);
+            const lo = key === 'hang' ? 0.01 : (key === 'fov' ? 5 : 1);
+            const hi = key === 'hang' ? LC.LIMITS.maxHeight : (key === 'fov' ? 360 : 200);
+            if (raw !== '' && Number.isFinite(n) && n >= lo) row[key] = Math.min(key === 'fov' ? Math.round(n) : n, hi); else delete row[key];
+        } else if (list === 'safety' && key === 'aim') {
+            if (LC.SAFETY_AIMS.includes(el.value) && el.value !== LC.CAMERA_DEFAULTS.aim) row.aim = el.value; else delete row.aim;
         } else if (list === 'roofs' && key === 'shape') {
             setRoofShape(row, el.value);
         } else if (list === 'roofs' && key === 'cover') {

@@ -113,7 +113,7 @@
             const h = Number(p[2]);
             return [p[0], p[1], Number.isFinite(h) && h > 0 ? h : legacy];
         });
-        const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateDoors(migrateWalls(migrateFloors({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], ceiling: Array.isArray(layout.ceiling) ? layout.ceiling : [], roofs: Array.isArray(layout.roofs) ? layout.roofs : [], vertices, heightM: round2(meanHeight(vertices)) })))))))))))))));
+        const normalized = applyTransitCatalog(assignTransitCodes(deriveTransitZones(assignSensorCodes(deriveSensorZones(assignSpaceCodes(deriveSpaces(assignHuellaCodes(deriveFootprintZones(assignZoneCodes(migrateFootprints(migrateTransit(migrateDoors(migrateWalls(migrateFloors(migrateCeilingToSafety({ ...layout, sensors: Array.isArray(layout.sensors) ? layout.sensors : [], objects: Array.isArray(layout.objects) ? layout.objects : [], safety: Array.isArray(layout.safety) ? layout.safety : [], ceiling: Array.isArray(layout.ceiling) ? layout.ceiling : [], roofs: Array.isArray(layout.roofs) ? layout.roofs : [], vertices, heightM: round2(meanHeight(vertices)) }))))))))))))))));
         // Seguridad: la zona de cada elemento sale de su lugar y su código (E001…) lo pone el sistema.
         // Todo espacio tiene al menos una posición: las que no están guardadas (los Layouts de antes, con sus filas y profundidades) se generan aquí, siempre iguales (ensurePositions)
         return dropBayHeights(ensurePositions(assignItemCodes(assignRampCodes(assignFloorCodes(assignWallCodes(assignRoofCodes(assignCeilingCodes(deriveCeilingZones(assignSafetyCodes(deriveSafetyZones(normalized)))))))))));
@@ -2076,7 +2076,7 @@
     // Son PUNTOS pequeños puestos sobre el plano (no ocupan m² ni se bloquean con pasillos, huellas ni columnas: un extintor va pegado a una pared o a una columna). Cada uno lleva su tipo, su nombre o modelo y su lugar (x, y en
     // metros). La ruta de evacuación es la única que lleva dos puntos (de dónde a dónde: x, y y x2, y2). La ZONA no se captura: es la zona que contiene el punto (en la ruta, el de salida). El código (E001, E002…) lo pone el
     // sistema, con una serie por tipo (cada tipo con su letra), y NO se vuelve a usar aunque se borre un elemento: safetyNext guarda el último número que se dio de cada letra. Todo debe quedar dentro del contorno de la nave.
-    const SAFETY_TYPES = ['extinguisher', 'hydrant', 'emergency_door', 'firstaid', 'alarm', 'eyewash', 'assembly', 'route'];
+    const SAFETY_TYPES = ['extinguisher', 'hydrant', 'emergency_door', 'firstaid', 'alarm', 'eyewash', 'assembly', 'camera', 'speaker', 'route'];
     // El color de cada tipo (rojo del fuego, verde de emergencia, naranja de alarma, azul del agua): el mismo en el croquis, el 3D y la leyenda.
     // Altura al piso (elev: de dónde arranca el elemento) y tamaño (largo l, ancho w y alto h), en metros, de cada elemento de Seguridad en el 3D. De fábrica cada tipo trae la medida con la que ya se dibujaba; lo que se
     // captura en su renglón la cambia (vacío = la de fábrica). La ruta de evacuación es una marca en el piso y no lleva.
@@ -2088,6 +2088,9 @@
         alarm: { elev: 1.32, l: 0.16, w: 0.08, h: 0.16 },
         eyewash: { elev: 0, l: 0.44, w: 0.44, h: 1.1 },
         assembly: { elev: 0, l: 1.6, w: 1.6, h: 2.5 },
+        // la cámara y la bocina cuelgan del techo: no llevan altura al piso (su altura es «Cuelga a»); el tamaño es el que ya traían en el paso Techos
+        camera: { elev: 0, l: 0.2, w: 0.12, h: 0.14 },
+        speaker: { elev: 0, l: 0.25, w: 0.25, h: 0.3 },
     };
     // Los hidrantes son de cuatro modelos (model; sin elegir = columna, el de siempre): hidrante de columna, de poste doble, toma siamesa (va a la pared) y gabinete contra incendio con manguera (va a la pared).
     // Cada modelo trae su propia altura al piso y tamaño de fábrica; el código sigue siendo de la serie del hidrante (I001…).
@@ -2110,7 +2113,60 @@
         };
         return { elev: pick('elev'), l: pick('l'), w: pick('w'), h: pick('h') };
     }
-    const SAFETY_COLORS = { extinguisher: '#d9443a', hydrant: '#d9443a', emergency_door: '#2e9e5b', firstaid: '#2e9e5b', alarm: '#e8892b', eyewash: '#2f7fc7', assembly: '#2e9e5b', route: '#2e9e5b' };
+    const SAFETY_COLORS = { extinguisher: '#d9443a', hydrant: '#d9443a', emergency_door: '#2e9e5b', firstaid: '#2e9e5b', alarm: '#e8892b', eyewash: '#2f7fc7', assembly: '#2e9e5b', camera: '#4f5d7a', speaker: '#d98a1f', route: '#2e9e5b' };
+    // ---- Cámaras y bocinas: viven en Seguridad pero CUELGAN DEL TECHO ------------------------------------------------------------------------------
+    // Una cámara (código Q001…) o una bocina (N001…) es un punto del plano como los demás elementos de Seguridad, pero no se pega a una pared ni al piso: cuelga del techo. «Cuelga a» (hang) es la altura, desde el piso, a la que queda
+    // (vacío = pegada al techo, que es el techo que cubre ese punto: ceilingLimitAt). La cámara además mira hacia un lado (aim: n, ne, e, se, s, sw, w, nw; de fábrica al sur), con un ángulo de visión (fov, grados; de fábrica 90)
+    // y un alcance (range, metros; de fábrica 12). La bocina solo lleva su alcance (de fábrica 15). Antes vivían en el paso Techos (layout.ceiling): migrateCeilingToSafety las pasa solas, con su código.
+    const HUNG_SAFETY = ['camera', 'speaker'];
+    const isHungSafety = (e) => !!e && HUNG_SAFETY.includes(e.type);
+    const SAFETY_AIMS = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+    const CAMERA_DEFAULTS = { aim: 's', fov: 90, range: 12, speakerRange: 15 };
+    const safetyAimOf = (e) => (e && SAFETY_AIMS.includes(e.aim) ? e.aim : CAMERA_DEFAULTS.aim);
+    // hacia dónde mira, como un vector del plano (x a la derecha, y hacia abajo; el norte es hacia arriba del croquis)
+    const safetyAimVector = (aim) => {
+        const i = SAFETY_AIMS.indexOf(aim);
+        const ang = ((i < 0 ? SAFETY_AIMS.indexOf(CAMERA_DEFAULTS.aim) : i) * Math.PI) / 4;
+        return [Math.round(Math.sin(ang) * 1000) / 1000 + 0, Math.round(-Math.cos(ang) * 1000) / 1000 + 0];
+    };
+    const safetyFovOf = (e) => { const n = Number(e && e.fov); return Number.isFinite(n) && n >= 5 && n <= 360 ? n : CAMERA_DEFAULTS.fov; };
+    const safetyRangeOf = (e) => { const n = Number(e && e.range); return Number.isFinite(n) && n >= 1 && n <= 200 ? n : (e && e.type === 'speaker' ? CAMERA_DEFAULTS.speakerRange : CAMERA_DEFAULTS.range); };
+    // la altura a la que cuelga (el centro del aparato): la que se capturó o, vacía, pegado al techo de ese punto
+    const safetyHangOf = (layout, e) => {
+        if (e && Number(e.hang) > 0) return Number(e.hang);
+        const sz = safetySizeOf(e) || { h: 0.2 };
+        return round2(Math.max(ceilingLimitAt(layout, e) - sz.h / 2, sz.h / 2));
+    };
+    const rotateAim = (a, q) => { const i = SAFETY_AIMS.indexOf(a); return i < 0 ? a : SAFETY_AIMS[(i + 2 * q) % 8]; };
+    // Los Layouts de antes guardaban las cámaras y las bocinas en layout.ceiling (paso Techos). Se pasan a layout.safety con su mismo id, código, nombre y lugar («Cuelga a» ahora se llama hang) y los números de código
+    // que ya se habían dado (Q y N de ceilingNext) pasan a safetyNext para que no se vuelva a usar uno. Lo demás del techo (ventilación, extractor, otro) se queda. Se puede repetir sin cambiar nada más.
+    function migrateCeilingToSafety(layout) {
+        if (!layout || typeof layout !== 'object') return layout;
+        const moves = (c) => !!c && HUNG_SAFETY.includes(c.type);
+        const moved = Array.isArray(layout.ceiling) ? layout.ceiling.filter(moves) : [];
+        const cn = layout.ceilingNext && typeof layout.ceilingNext === 'object' && !Array.isArray(layout.ceilingNext) ? layout.ceilingNext : null;
+        const floorKeys = cn ? ['Q', 'N'].filter((k) => cn[k] !== undefined) : [];
+        if (!moved.length && !floorKeys.length) return layout;
+        if (layout.safety != null && !Array.isArray(layout.safety)) return layout; // entrada dañada: la validación lo reporta
+        const was = Array.isArray(layout.safety) ? layout.safety : [];
+        const have = new Set(was.map((e) => e && e.id).filter(Boolean));
+        const add = moved.filter((c) => !(c.id && have.has(c.id))).map((c) => {
+            const { h, ...rest } = c;
+            const item = { ...rest };
+            if (Number(h) > 0) item.hang = h;
+            return item;
+        });
+        const out = { ...layout, safety: [...was, ...add] };
+        if (Array.isArray(layout.ceiling)) out.ceiling = layout.ceiling.filter((c) => !moves(c));
+        if (cn) {
+            const sn = layout.safetyNext && typeof layout.safetyNext === 'object' && !Array.isArray(layout.safetyNext) ? { ...layout.safetyNext } : {};
+            const rest = {};
+            Object.keys(cn).forEach((k) => { if (k === 'Q' || k === 'N') sn[k] = Math.max(Number(sn[k]) || 0, Number(cn[k]) || 0); else rest[k] = cn[k]; });
+            out.safetyNext = sn;
+            if (Object.keys(rest).length) out.ceilingNext = rest; else delete out.ceilingNext;
+        }
+        return out;
+    }
     function deriveSafetyZones(layout) {
         if (!layout || !Array.isArray(layout.safety)) return layout;
         let changed = false;
@@ -2124,7 +2180,7 @@
     }
     // Cada tipo tiene su propia serie y su letra (Extintor E001, Hidrante I001, Puerta de emergencia P001, Botiquín B001, Alarma L001, Regadera y lavaojos O001, Punto de reunión U001, Ruta de evacuación V001): cada serie cuenta por su
     // lado y el número de un elemento borrado no se vuelve a usar. Si a un elemento le cambian el tipo, recibe el siguiente de su tipo nuevo (y si regresa a su tipo guardado, recupera su código).
-    const SAFETY_LETTER = { extinguisher: 'E', hydrant: 'I', emergency_door: 'P', firstaid: 'B', alarm: 'L', eyewash: 'O', assembly: 'U', route: 'V' };
+    const SAFETY_LETTER = { extinguisher: 'E', hydrant: 'I', emergency_door: 'P', firstaid: 'B', alarm: 'L', eyewash: 'O', assembly: 'U', camera: 'Q', speaker: 'N', route: 'V' };
     const safetyLetter = (type) => SAFETY_LETTER[type] || 'E';
     const safetyCode = (type, n) => `${safetyLetter(type)}${String(n).padStart(3, '0')}`;
     const isSafetyCode = (type, c) => new RegExp(`^${safetyLetter(type)}\\d{3,4}$`).test(String(c == null ? '' : c).trim());
@@ -2232,7 +2288,12 @@
             if (pts.some(([x, y]) => !inside(Number(x) || 0, Number(y) || 0))) out.push({ id: e.id, code: e.code, kind: 'outside', sig: geo, message: `El elemento de seguridad ${e.code} queda fuera del contorno de la nave: acomódalo dentro.` });
             if (isRoute && Number(e.x) === Number(e.x2) && Number(e.y) === Number(e.y2)) out.push({ id: e.id, code: e.code, kind: 'route', sig: geo, message: `La ruta de evacuación ${e.code} necesita dos puntos distintos.` });
             // la ruta es una marca en el piso (no lleva altura); lo demás llega hasta su altura del piso + su alto, que no puede pasar de lo que mide la nave ahí
-            const sz = isRoute ? null : safetySizeOf(e);
+            // una cámara o bocina cuelga del techo: «Cuelga a» no puede pasar del techo que hay en ese punto (no lleva altura al piso ni se revisa contra el alto de la nave como los demás)
+            if (isHungSafety(e)) {
+                const hangLimit = ceilingLimitAt(layout, e);
+                if (Number(e.hang) > 0 && hangLimit > 0 && Number(e.hang) > hangLimit + 0.005) out.push({ id: e.id, code: e.code, kind: 'hang', sig: JSON.stringify([e.hang, hangLimit]), vars: { top: round2(e.hang), height: hangLimit }, message: `El elemento de seguridad ${e.code} cuelga a ${round2(e.hang)} m y el techo ahí solo está a ${hangLimit} m: bájalo.` });
+            }
+            const sz = isRoute || isHungSafety(e) ? null : safetySizeOf(e);
             if (sz) {
                 const lvlS = round2(floorLevelAt(layout, Number(e.x) || 0, Number(e.y) || 0));
                 const top = round2(lvlS + sz.elev + sz.h);
@@ -2246,7 +2307,7 @@
     // Son PUNTOS puestos sobre el plano (x, y en metros) que cuelgan del techo de la nave. «Cuelga a» (h) es la altura, medida desde el piso, a la que queda el aparato (vacío = pegado al techo). El techo NO es plano (sigue las alturas
     // de las esquinas del contorno), así que lo que mide la nave en ese punto (naveHeightAt) es el límite: lo que cuelga no puede pasar de ahí. La ZONA no se captura: es la zona que contiene el punto. El código lo pone el sistema,
     // con una serie por tipo (cada tipo con su letra: Cámara Q001, Bocina N001, Ventilación W001, Extractor X001, Otro Y001) y NO se vuelve a usar aunque se borre un elemento: ceilingNext guarda el último número que se dio de cada letra.
-    const CEILING_TYPES = ['camera', 'speaker', 'ventilation', 'extractor', 'other'];
+    const CEILING_TYPES = ['ventilation', 'extractor', 'other']; // las cámaras y las bocinas pasaron a Seguridad (migrateCeilingToSafety)
     const CEILING_LETTER = { camera: 'Q', speaker: 'N', ventilation: 'W', extractor: 'X', other: 'Y' };
     // El color de cada tipo (el mismo en el croquis, el 3D y la leyenda) y el tamaño con el que se dibuja en el 3D (largo l, ancho w y alto h, en metros).
     const CEILING_COLORS = { camera: '#4f5d7a', speaker: '#d98a1f', ventilation: '#2a9d8f', extractor: '#7a5cc7', other: '#8a8f9e' };
@@ -3011,7 +3072,7 @@
     function sanitizeLayout(input) {
         const errors = [];
         // Una pantalla vieja (sin paredes como obstáculos) manda el Layout como lo conocía: se lee igual que al abrirlo, con una pared por lado, para que no cuente como un cambio del contorno.
-        const src = migrateTransit(migrateDoors(migrateWalls(migrateFloors(migrateFootprints(input && typeof input === 'object' ? input : {})))));
+        const src = migrateCeilingToSafety(migrateTransit(migrateDoors(migrateWalls(migrateFloors(migrateFootprints(input && typeof input === 'object' ? input : {}))))));
         const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
         const meters = (v, label, min = 0) => {
             const n = Number(v);
@@ -3183,12 +3244,33 @@
             if (type === 'hydrant' && e && HYDRANT_MODELS.includes(e.model) && e.model !== 'column') item.model = e.model;
             // Altura al piso y tamaño (todo opcional: vacío = la medida de fábrica de su tipo; la ruta de evacuación no lleva).
             if (type !== 'route') {
-                [['elev', 0, LIMITS.maxHeight, 'la altura del piso'], ['l', 0.01, LIMITS.maxM, 'el largo'], ['w', 0.01, LIMITS.maxM, 'el ancho'], ['h', 0.01, LIMITS.maxHeight, 'el alto']].forEach(([k, min, max, what]) => {
+                [['elev', 0, LIMITS.maxHeight, 'la altura del piso'], ['l', 0.01, LIMITS.maxM, 'el largo'], ['w', 0.01, LIMITS.maxM, 'el ancho'], ['h', 0.01, LIMITS.maxHeight, 'el alto']].filter(([k]) => k !== 'elev' || !HUNG_SAFETY.includes(type)).forEach(([k, min, max, what]) => {
                     const v = e && e[k];
                     if (v === undefined || v === null || v === '') return;
                     const n = Number(v);
                     if (Number.isFinite(n) && n >= min && n <= max) item[k] = round2(n); else errors.push(`${label}: ${what} no es válido (de ${min} a ${max} m)`);
                 });
+            }
+            // Cámara y bocina (cuelgan del techo): «Cuelga a» (hang, opcional: vacío = pegada al techo) y su alcance (range, opcional); la cámara además hacia dónde mira (aim), su ángulo de visión (fov). Lo que es de fábrica no se guarda.
+            if (HUNG_SAFETY.includes(type)) {
+                const hv = e && e.hang;
+                if (hv !== undefined && hv !== null && hv !== '') {
+                    const n = Number(hv);
+                    if (Number.isFinite(n) && n > 0 && n <= LIMITS.maxHeight) item.hang = round2(n); else errors.push(`${label}: «Cuelga a» no es válido (de 0.01 a ${LIMITS.maxHeight} m)`);
+                }
+                const rv = e && e.range;
+                if (rv !== undefined && rv !== null && rv !== '') {
+                    const n = Number(rv);
+                    if (Number.isFinite(n) && n >= 1 && n <= 200) item.range = round2(n); else errors.push(`${label}: el alcance no es válido (de 1 a 200 m)`);
+                }
+                if (type === 'camera') {
+                    if (e && SAFETY_AIMS.includes(e.aim) && e.aim !== CAMERA_DEFAULTS.aim) item.aim = e.aim;
+                    const fv = e && e.fov;
+                    if (fv !== undefined && fv !== null && fv !== '') {
+                        const n = Math.round(Number(fv));
+                        if (Number.isFinite(n) && n >= 5 && n <= 360) { if (n !== CAMERA_DEFAULTS.fov) item.fov = n; } else errors.push(`${label}: el ángulo de la cámara no es válido (de 5 a 360°)`);
+                    }
+                }
             }
             // Fechas (todas opcionales): caducidad (cuándo deja de servir), cada cuántos días se revisa y próxima revisión. Una fecha es AAAA-MM-DD; lo vacío no se guarda.
             ['expires', 'next'].forEach((k) => {
@@ -3212,7 +3294,7 @@
         const ceilingIds = new Set();
         out.ceiling = list(src.ceiling, LIMITS.ceiling, 'Techos').map((e, i) => {
             const label = `Elemento del techo ${i + 1}`;
-            const type = oneOf(e && e.type, CEILING_TYPES, 'camera');
+            const type = oneOf(e && e.type, CEILING_TYPES, 'ventilation');
             const item = {
                 id: idOf(e && e.id, ceilingIds, label), code: text(e && e.code, label, false), type, name: text(e && e.name, label, false), zoneId: '',
                 x: meters(e && e.x, label, -LIMITS.maxM), y: meters(e && e.y, label, -LIMITS.maxM),
@@ -3667,7 +3749,7 @@
             ceiling: (layout.ceiling || []).map((e) => { const a = pt(e.x, e.y); return { ...e, x: round2(a[0]), y: round2(a[1]) }; }),
             // un techo gira con el croquis: su área (si es un recuadro), hacia dónde cae (una agua) o hacia dónde corre la cumbrera (dos aguas)
             roofs: (layout.roofs || []).map((r) => ({ ...r, ...(r.cover === 'area' ? box(r, 'l', 'w') : {}), ...(r.shape === 'shed' && r.dir ? { dir: rotateCompass(r.dir, q) } : {}), ...(r.shape === 'gable' && r.dir && q % 2 ? { dir: r.dir === 'ew' ? 'ns' : 'ew' } : {}) })),
-            safety: (layout.safety || []).map((e) => { const a = pt(e.x, e.y); const moved = { ...e, x: round2(a[0]), y: round2(a[1]) }; if (e.type === 'route') { const b = pt(e.x2, e.y2); moved.x2 = round2(b[0]); moved.y2 = round2(b[1]); } return moved; }),
+            safety: (layout.safety || []).map((e) => { const a = pt(e.x, e.y); const moved = { ...e, x: round2(a[0]), y: round2(a[1]) }; if (e.type === 'route') { const b = pt(e.x2, e.y2); moved.x2 = round2(b[0]); moved.y2 = round2(b[1]); } if (e.type === 'camera') moved.aim = rotateAim(e.aim || CAMERA_DEFAULTS.aim, q); return moved; }),
             spaces: (layout.spaces || []).map((s) => ({ ...s, ...box(s, 'l', 'd') })),
             footprints: (layout.footprints || []).map((f) => ({ ...f, ...box(f, 'l', 'd') })),
             zones: (layout.zones || []).map((z) => {
@@ -4204,7 +4286,7 @@
         storageLocations, huellasThatFit, capacityOf,
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, zoneClearHeights, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
-        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, CEILING_TYPES, CEILING_LETTER, CEILING_COLORS, CEILING_SIZE_DEFAULTS, ceilingSizeOf, ceilingLimitAt, ceilingHangOf, deriveCeilingZones, assignCeilingCodes, lockCeilingCodes, ceilingViolations, newCeilingViolations, ROOF_SHAPES, ROOF_COVERS, ROOF_MATERIALS, ROOF_COLORS, ROOF_COLOR_BY_SHAPE, ROOF_SHED_DIRS, ROOF_GABLE_DIRS, roofColorOf, roofRings, roofBox, roofHeightIn, roofSlopePct, roofRidge, roofAt, roofLimitAt, assignRoofCodes, lockRoofCodes, roofViolations, newRoofViolations, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
+        levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, HUNG_SAFETY, SAFETY_AIMS, CAMERA_DEFAULTS, isHungSafety, safetyHangOf, safetyAimOf, safetyFovOf, safetyRangeOf, safetyAimVector, migrateCeilingToSafety, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, CEILING_TYPES, CEILING_LETTER, CEILING_COLORS, CEILING_SIZE_DEFAULTS, ceilingSizeOf, ceilingLimitAt, ceilingHangOf, deriveCeilingZones, assignCeilingCodes, lockCeilingCodes, ceilingViolations, newCeilingViolations, ROOF_SHAPES, ROOF_COVERS, ROOF_MATERIALS, ROOF_COLORS, ROOF_COLOR_BY_SHAPE, ROOF_SHED_DIRS, ROOF_GABLE_DIRS, roofColorOf, roofRings, roofBox, roofHeightIn, roofSlopePct, roofRidge, roofAt, roofLimitAt, assignRoofCodes, lockRoofCodes, roofViolations, newRoofViolations, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
         polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, BAY_COLORS, bayFmtOf, levelBayRects, levelHasPlaced, levelBayClashes, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,

@@ -130,6 +130,7 @@
     // Todo va con atributos (sin CSS) para que se vea igual en el editor, en la vista pública y en la hoja que se descarga. (x, y) = el centro del símbolo en píxeles del dibujo; r = su tamaño (la mitad del lado).
     const SAFETY_OUTLINE = { extinguisher: '#7a1f17', hydrant: '#7a1f17', emergency_door: '#14602f', firstaid: '#14602f', alarm: '#8a4a0c', eyewash: '#134a80', assembly: '#14602f', route: '#14602f' };
     function safetyGlyph(type, x, y, r, model) {
+        if (type === 'camera' || type === 'speaker') return ceilingGlyph(type, x, y, r); // cuelgan del techo: el símbolo va dentro de un círculo punteado
         const color = (LC.SAFETY_COLORS || {})[type] || '#d9443a';
         const line = SAFETY_OUTLINE[type] || '#7a1f17';
         const k = (v) => Math.round(v * 100) / 100;
@@ -151,6 +152,25 @@
         if (type === 'eyewash') return `${disc}<path d="M${P(0, -0.6)} C${P(0.55, 0.05)} ${P(0.55, 0.55)} ${P(0, 0.55)} C${P(-0.55, 0.55)} ${P(-0.55, 0.05)} ${P(0, -0.6)} Z" fill="#FFFFFF"/>`;
         if (type === 'assembly') return `${disc}<circle cx="${k(x)}" cy="${k(y)}" r="${k(r * 0.55)}" fill="none" stroke="#FFFFFF" stroke-width="${k(Math.max(1, r * 0.2))}" stroke-dasharray="${k(r * 0.5)} ${k(r * 0.35)}"/>`;
         return `${square}${letter('E', 0.4, 1.2)}`; // extintor
+    }
+    // Lo que alcanza una cámara o una bocina, dibujado debajo de su símbolo: la cámara, un cono (abanico) desde su lugar hacia donde mira, con su ángulo de visión y su alcance; la bocina, un círculo con su alcance.
+    // (px, py) = el lugar en píxeles del dibujo; sc = píxeles por metro del dibujo. Es solo un tinte con línea punteada (no toma toques). Lo demás de Seguridad no lleva alcance.
+    function safetyReach(e, px, py, sc) {
+        if (!e || (e.type !== 'camera' && e.type !== 'speaker')) return '';
+        const color = (LC.SAFETY_COLORS || {})[e.type] || '#4f5d7a';
+        const k = (v) => Math.round(v * 100) / 100;
+        const r = Math.max(2, (LC.safetyRangeOf ? LC.safetyRangeOf(e) : 10) * sc);
+        const style = `fill="${color}" fill-opacity="0.13" stroke="${color}" stroke-width="1" stroke-dasharray="4 3" stroke-opacity="0.8" pointer-events="none"`;
+        if (e.type === 'speaker') return `<circle class="lreach" cx="${k(px)}" cy="${k(py)}" r="${k(r)}" ${style}/>`;
+        const fov = LC.safetyFovOf(e);
+        if (fov >= 359.5) return `<circle class="lreach" cx="${k(px)}" cy="${k(py)}" r="${k(r)}" ${style}/>`;
+        const v = LC.safetyAimVector(LC.safetyAimOf(e));
+        const mid = Math.atan2(v[1], v[0]);
+        const a0 = mid - (fov * Math.PI) / 360;
+        const a1 = mid + (fov * Math.PI) / 360;
+        const p0 = [px + r * Math.cos(a0), py + r * Math.sin(a0)];
+        const p1 = [px + r * Math.cos(a1), py + r * Math.sin(a1)];
+        return `<path class="lreach" d="M${k(px)} ${k(py)} L${k(p0[0])} ${k(p0[1])} A${k(r)} ${k(r)} 0 ${fov > 180 ? 1 : 0} 1 ${k(p1[0])} ${k(p1[1])} Z" ${style} stroke-linejoin="round"/>`;
     }
     // La ruta de evacuación: una línea punteada con la punta de flecha en el punto de llegada. w = grosor de la línea, en píxeles.
     function safetyRoute(x1, y1, x2, y2, w) {
@@ -506,6 +526,12 @@
         if (on('seguridad') && (layout.safety || []).length) {
             const rs = Math.max(5, Math.min(8, sc * 0.45));
             (layout.safety || []).filter((e) => e.type === 'route').forEach((e) => { s += safetyRoute(X(e.x), Y(e.y), X(e.x2), Y(e.y2), 2.4); });
+            // lo que alcanzan las cámaras y las bocinas, recortado al contorno de la nave
+            if ((layout.safety || []).some((e) => LC.isHungSafety && LC.isHungSafety(e)) && layout.vertices.length >= 3) {
+                s += `<clipPath id="lreach-clip"><polygon points="${layout.vertices.map((p) => `${Math.round(X(p[0]) * 10) / 10},${Math.round(Y(p[1]) * 10) / 10}`).join(' ')}"/></clipPath><g clip-path="url(#lreach-clip)">`;
+                (layout.safety || []).forEach((e) => { s += safetyReach(e, X(e.x), Y(e.y), sc); });
+                s += '</g>';
+            }
             (layout.safety || []).forEach((e) => {
                 const cx = X(e.x);
                 const cy = Y(e.y);
@@ -621,5 +647,5 @@
         return `<svg class="aplan" viewBox="0 0 ${W} ${(inner.height + 16).toFixed(0)}" width="100%" role="img" font-family="inherit" xmlns="http://www.w3.org/2000/svg"><g transform="translate(8,8)">${inner.svg}</g></svg>`;
     }
 
-    window.LayoutMapSvg = { assetLevelsSvg, assetLevelsDoc, safetyGlyph, safetyRoute, safetyLabel, ceilingGlyph, ceilingLabel, mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, defaultAssetFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
+    window.LayoutMapSvg = { assetLevelsSvg, assetLevelsDoc, safetyGlyph, safetyRoute, safetyReach, safetyLabel, ceilingGlyph, ceilingLabel, mapSvg, theme, DEFAULT_THEME, zonePaint, defaultFmt, defaultSpaceFmt, defaultAssetFmt, inkFor, CATEGORY_ICON_PATHS, categoryGlyph };
 }());
