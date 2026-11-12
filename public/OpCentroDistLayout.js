@@ -6691,13 +6691,15 @@ function walkRefreshUi() {
     const on = walkUi.phase === 'walk';
     $('layout-walk').hidden = walkUi.phase === 'off';
     $('layout-zoom-float').hidden = walkUi.phase !== 'off'; // el zoom no se usa al recorrer (ni al colocar al monito: la planta ya cabe)
-    $('layout-walk-tray').hidden = !place;
+    $('layout-walk-peg').hidden = !place; // el monito y «Entrar» están arriba a la derecha, junto a «Salir»
+    $('layout-walk-enter').hidden = !place;
     $('layout-walk-tl').hidden = !on;
     $('layout-walk-cross').hidden = !on;
     $('layout-walk-mini-box').hidden = !on;
     $('layout-walk-pad').hidden = !on;
-    $('layout-walk-hint').hidden = !on;
-    $('layout-walk-hint').textContent = on ? t('main.layoutWalkHint') : '';
+    $('layout-walk-hint').hidden = walkUi.phase === 'off';
+    $('layout-walk-hint').textContent = on ? t('main.layoutWalkHint') : (place ? t('main.layoutWalkPonerTxt') : '');
+    $('layout-walk-peg').title = t('main.layoutWalkPonerTxt');
     $('layout-walk-card').hidden = true;
     const btn = $('layout-walk-btn');
     btn.setAttribute('aria-pressed', String(walkUi.phase !== 'off'));

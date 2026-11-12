@@ -183,11 +183,10 @@ function buildShell() {
                     <span class="lyw-chip" id="lyw-pos"></span>
                     <label class="lyw-chip lyw-eye"><span>${esc(t('main.layoutWalkOjos'))}</span> <select id="lyw-eye"><option value="1.7">${esc(t('main.layoutWalkOjosPersona'))}</option><option value="2.4">${esc(t('main.layoutWalkOjosMontacargas'))}</option></select></label>
                 </div>
-                <div class="lyw-tr"><button type="button" class="home-carga-secondary-btn" id="lyw-exit">${esc(t('main.layoutWalkSalir'))}</button></div>
-                <div class="lyw-tray" id="lyw-tray">
+                <div class="lyw-tr">
                     <button type="button" class="lyw-peg" id="lyw-peg" aria-label="${esc(t('main.layoutWalkMonito'))}">${PEG}</button>
-                    <span class="lyw-tray-txt">${esc(t('main.layoutWalkPonerTxt'))}</span>
                     <button type="button" class="home-carga-new-btn lyw-enter" id="lyw-enter">${esc(t('main.layoutWalkEntrar'))}</button>
+                    <button type="button" class="home-carga-secondary-btn" id="lyw-exit">${esc(t('main.layoutWalkSalir'))}</button>
                 </div>
                 <div class="lyw-cross" id="lyw-cross" hidden></div>
                 <div class="lyw-mini" id="lyw-mini-box" hidden><canvas id="lyw-mini" width="340" height="232" aria-label="${esc(t('main.layoutWalkMini'))}"></canvas></div>
@@ -202,6 +201,7 @@ function buildShell() {
             </div>
             <div class="lyw-card" id="lyw-card" hidden></div>
         </div>
+        <p class="lyw-tip" id="lyw-tip" hidden>${esc(t('main.layoutWalkPonerTxt'))}</p>
         <div class="lyw-row" id="lyw-views" hidden>
             <button type="button" class="lyw-pill" data-view="general" aria-pressed="true">${esc(t('main.layout3dGeneral'))}</button>
             <button type="button" class="lyw-pill" data-view="planta" aria-pressed="false">${esc(t('main.layout3dPlanta'))}</button>
@@ -330,7 +330,9 @@ function walkRefreshUi() {
     const place = walkUi.phase === 'place';
     const on = walkUi.phase === 'walk';
     $('lyw-over').hidden = walkUi.phase === 'off';
-    $('lyw-tray').hidden = !place;
+    $('lyw-peg').hidden = !place; // el monito y «Entrar» van arriba a la derecha, junto a «Salir»
+    $('lyw-enter').hidden = !place;
+    $('lyw-tip').hidden = !place;
     $('lyw-tl').hidden = !on;
     $('lyw-cross').hidden = !on;
     $('lyw-mini-box').hidden = !on;

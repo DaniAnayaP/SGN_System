@@ -2246,14 +2246,14 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .lyw-over > *{ pointer-events: auto; }
 .lyw-over[hidden], .lyw-over [hidden], .lyw-card[hidden]{ display: none !important; }
 .lyw-tl{ position: absolute; left: 0.5rem; top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.3rem; max-width: calc(100% - 5.5rem); }
-.lyw-tr{ position: absolute; right: 0.5rem; top: 0.5rem; }
+.lyw-tr{ position: absolute; right: 0.5rem; top: 0.5rem; display: flex; align-items: center; gap: 0.4rem; }
+.lyw-tip{ margin: 0; font-size: 0.8rem; color: var(--home-text-secondary); }
+.lyw-tr .home-carga-new-btn{ width: auto; margin: 0; padding: 0.4rem 0.9rem; }
 .lyw-tr .home-carga-secondary-btn{ width: auto; padding: 0.4rem 0.9rem; margin: 0; background: var(--home-surface); color: var(--home-text-primary); border: 1px solid var(--home-border); box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 .lyw-chip{ background: var(--home-surface); color: var(--home-text-primary); border: 1px solid var(--home-border); border-radius: 999px; padding: 0.2rem 0.65rem; font-size: 0.72rem; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
 .lyw-eye select{ border: 0; background: transparent; padding: 0; font-size: 0.72rem; }
-.lyw-tray{ position: absolute; left: 50%; bottom: 0.7rem; transform: translateX(-50%); display: flex; align-items: center; gap: 0.6rem; max-width: calc(100% - 1rem); background: var(--home-surface); color: var(--home-text-primary); border: 1px solid var(--home-border); border-radius: 0.9rem; padding: 0.45rem 0.7rem; box-shadow: 0 2px 10px rgba(0,0,0,.3); }
-.lyw-peg{ width: 2.3rem; height: 2.9rem; padding: 0; border: 0; background: transparent; cursor: grab; touch-action: none; flex: 0 0 auto; }
+.lyw-peg{ width: 2.7rem; height: 3rem; padding: 0.25rem 0.45rem; border: 1px solid var(--home-border); border-radius: 0.8rem; background: var(--home-surface); box-shadow: 0 2px 8px rgba(0,0,0,.3); cursor: grab; touch-action: none; flex: 0 0 auto; }
 .lyw-peg svg, .lyw-ghost svg{ width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 3px rgba(0,0,0,.4)); }
-.lyw-tray-txt{ font-size: 0.74rem; line-height: 1.35; color: var(--home-text-secondary); max-width: 11rem; }
 .lyw-enter{ width: auto; margin: 0; padding: 0.5rem 1rem; }
 .lyw-ghost{ position: fixed; z-index: 9999; width: 2.3rem; height: 2.9rem; pointer-events: none; transform: translate(-50%, -92%); }
 .lyw-cross{ position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.5); pointer-events: none !important; }
@@ -2272,4 +2272,3 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .lyw-pill[aria-pressed="true"]{ background: var(--home-accent); color: var(--home-on-accent); border-color: var(--home-accent); }
 .lyw-pill:not([aria-pressed="true"]){ opacity: 0.75; }
 .lyw-pill-walk{ border-color: var(--home-accent); }
-@container (max-width: 26rem){ .lyw-tray-txt{ display: none; } }
