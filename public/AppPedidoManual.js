@@ -327,7 +327,8 @@ async function refreshQueuedOrders() {
         try { body = JSON.parse(item.body || '{}'); } catch { return; }
         const lines = (body.items || []).map((it) => {
             const art = catalogById.get(it.id) || {};
-            return { code: art.code || '', description: artName(art) || `#${it.id}`, uom: art.uom || '', quantity: it.quantity, needBy: it.needBy || '', status: 'pending' };
+            const pk = packFor(art, Number(it.packId) || 0);
+            return { code: art.code || '', description: artName(art) || `#${it.id}`, uom: art.uom || '', quantity: it.quantity, needBy: it.needBy || '', packName: packsOf(art).length ? unitName(art, Number(it.packId) || 0) : '', packPieces: pk ? pk.pieces : 1, status: 'pending' };
         });
         const cc = costCenters.find((c) => c.id === body.costCenterId);
         const place = catalogPlaces.find((p) => p.id === body.placeId);
@@ -445,6 +446,18 @@ function renderList() {
     });
 }
 
+// Presentación de cada artículo (Presentaciones de Distribución): UNA por artículo, vale para todos sus días. Cada artículo del catálogo trae sus presentaciones (packs: [{ id, name, pieces }], pieces = cuántas unidades principales
+// trae UNA); la unidad suelta (0) siempre se puede pedir y es con la que arranca. La cantidad es de la presentación y lo que equivale es cantidad × pieces en la unidad del artículo. Un código sin presentaciones se pide como siempre.
+const packsOf = (item) => (item && Array.isArray(item.packs) ? item.packs : []);
+const packFor = (item, packId) => packsOf(item).find((p) => p.id === packId) || null;
+const unitName = (item, packId) => { const p = packFor(item, packId); return p ? p.name : (item.uom || ''); };
+const piecesOf = (item, packId) => { const p = packFor(item, packId); return p ? p.pieces : 1;
+};
+const equivText = (item, packId, qty) => `${qtyText(Math.round(qty * piecesOf(item, packId) * 1000) / 1000)} ${item.uom || ''}`.trim();
+const looseLabel = (item) => (item.uom ? t('home.pmPackUnit', { u: item.uom }) : t('home.pmPackLoose'));
+const packOptions = (item) => [{ value: 0, label: looseLabel(item) }, ...packsOf(item).map((p) => ({ value: p.id, label: `${p.name} · = ${qtyText(p.pieces)} ${item.uom || ''}`.trim() }))];
+// Lo que dice el renglón de un pedido ya hecho: su presentación (o la unidad) y, con presentación, lo que equivale.
+const lineUnitText = (l) => [l.packName || l.uom, l.packName && Number(l.packPieces) > 0 && Number(l.packPieces) !== 1 ? t('home.pmPackEquals', { n: `${qtyText(Math.round(Number(l.quantity) * Number(l.packPieces) * 1000) / 1000)} ${l.uom || ''}`.trim() }) : ''].filter(Boolean);
 function renderOrder() {
     const o = allOrders().find((x) => x.key === openKey);
     if (!o) { view = 'list'; render(); return; }
@@ -465,7 +478,7 @@ function renderOrder() {
         const row = document.createElement('div');
         row.className = 'pm-app-line';
         const editable = canStatus && !o.queued;
-        row.innerHTML = `<div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, l.uom].filter(Boolean).join(' · '))}</span><span class="pm-app-need">${esc(`${t('home.pmNeedBy')}: ${whenLabel(l.needBy)}`)}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b>`;
+        row.innerHTML = `<div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, ...lineUnitText(l)].filter(Boolean).join(' · '))}</span><span class="pm-app-need">${esc(`${t('home.pmNeedBy')}: ${whenLabel(l.needBy)}`)}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b>`;
         const pill = document.createElement(editable ? 'button' : 'span');
         if (editable) { pill.type = 'button'; pill.setAttribute('data-help-key', 'pmEstatus'); pill.setAttribute('aria-label', t('main.colPmEstatus')); }
         pill.className = `pm-app-pill pm-app-pill-${o.queued ? 'queued' : l.status}${editable ? ' pm-app-pill-btn' : ''}`;
@@ -804,7 +817,8 @@ function renderNew() {
             box.className = 'pm-app-oline';
             const head = document.createElement('div');
             head.className = 'pm-app-line';
-            head.innerHTML = `<div class="pm-app-line-main"><p>${esc(artName(item))}</p><span>${esc([item.code, item.uom].filter(Boolean).join(' · '))}</span></div>`;
+            const cpid = c.packId || 0;
+            head.innerHTML = `<div class="pm-app-line-main"><p>${esc(artName(item))}</p><span>${esc([item.code, packsOf(item).length ? unitName(item, cpid) : item.uom, packsOf(item).length && cpid ? t('home.pmPackEquals', { n: equivText(item, cpid, roundQ(c.parts.reduce((s, p) => s + p.quantity, 0))) }) : ''].filter(Boolean).join(' · '))}</span></div>`;
             const edit = document.createElement('button');
             edit.type = 'button';
             edit.className = 'pm-app-remove';
@@ -850,6 +864,8 @@ function openQuantity(item, startDay) {
     sheet.className = 'home-select-sheet pm-app-daysheet';
     const inCart = draft.cart.get(item.id);
     const work = new Map(inCart ? inCart.parts.map((p) => [p.when, p.quantity]) : []);
+    let packId = inCart ? (inCart.packId || 0) : 0; // una presentación por artículo (vale para todos sus días); arranca con la unidad suelta
+    const unit = () => unitName(item, packId);
     let day = startDay !== undefined ? startDay : (inCart && inCart.parts.length ? sortedParts(inCart)[0].when : (draft.lastWhen !== undefined ? draft.lastWhen : draft.when));
     if (day !== '' && !allDays().includes(day) && !work.has(day)) day = '';
     const todayText = t('home.pmTodayIs', { d: dayLong(appToday()) });
@@ -857,6 +873,7 @@ function openQuantity(item, startDay) {
         <div class="pm-app-daybody">
             <div class="home-select-sheet-title">${esc(artName(item))}</div>
             <p class="pm-app-note pm-app-sheet-meta">${esc([item.code, item.uom, item.categories].filter(Boolean).join(' · '))}</p>
+            ${packsOf(item).length ? `<span class="pm-app-qty-label">${esc(t('home.pmPack'))}</span><button type="button" class="home-carga-field-row pm-app-cc" id="pm-app-pack"></button>` : ''}
             <span class="pm-app-qty-label">${esc(t('home.pmDayWhen'))}</span>
             <div class="pm-app-days" id="pm-app-days"></div>
             <p class="pm-app-note pm-app-sheet-meta">${esc(t('home.pmDayNote', { today: todayText }))}</p>
@@ -864,6 +881,7 @@ function openQuantity(item, startDay) {
                 <div class="pm-app-stepper"><button type="button" id="pm-app-minus" aria-label="−"><i class="bx bx-minus" aria-hidden="true"></i></button><input id="pm-app-qty" type="number" inputmode="decimal" min="0" step="any" placeholder="0" aria-label="${esc(t('home.pmQtyOfDay'))}"><button type="button" id="pm-app-plus" aria-label="+"><i class="bx bx-plus" aria-hidden="true"></i></button></div>
                 <span class="pm-app-dayunit" id="pm-app-dayunit"></span></div>
             <div class="pm-app-mine" id="pm-app-mine"></div>
+            <p class="pm-app-note" id="pm-app-equiv" style="text-align:right;font-weight:700"></p>
         </div>
         <div class="pm-app-dayfoot"><button type="button" class="home-carga-new-btn" id="pm-app-done"></button><button type="button" class="home-carga-secondary-btn" id="pm-app-cancel">${esc(t('home.pmCancel'))}</button></div>`;
     scrim.appendChild(sheet);
@@ -887,13 +905,17 @@ function openQuantity(item, startDay) {
         }).join('');
         strip.scrollLeft = keep;
         $s('#pm-app-daywhen').textContent = day === '' ? t('home.pmAsap') : dayLong(day);
-        $s('#pm-app-dayunit').textContent = t('home.pmDayUnit', { u: item.uom || t('home.pmQuantity') });
+        $s('#pm-app-dayunit').textContent = t('home.pmDayUnit', { u: unit() || t('home.pmQuantity') });
+        const packBtn = $s('#pm-app-pack');
+        if (packBtn) packBtn.innerHTML = `<span class="home-carga-field-label"><p>${esc(packId ? unit() : looseLabel(item))}</p><span>${esc(t('home.pmPackEquals', { n: `${qtyText(piecesOf(item, packId))} ${item.uom || ''}`.trim() }))}</span></span><i class="bx bx-chevron-down home-carga-field-trailing" aria-hidden="true"></i>`;
         if (full) input.value = cur() ? String(cur()) : '';
         const ws = whens();
-        $s('#pm-app-mine').innerHTML = ws.length ? `<span class="pm-app-qty-label">${esc(t('home.pmDayMine'))}</span>${ws.map((w) => `<div class="pm-app-mrow${w === day ? ' pm-app-now' : ''}"><button type="button" class="pm-app-mpick" data-pm-pick="${esc(w)}">${esc(whenLabel(w))}</button><b>${esc(qtyText(work.get(w)))} ${esc(item.uom || '')}</b><button type="button" class="pm-app-mrm" data-pm-rm="${esc(w)}">${esc(t('home.pmRemove'))}</button></div>`).join('')}` : '';
+        $s('#pm-app-mine').innerHTML = ws.length ? `<span class="pm-app-qty-label">${esc(t('home.pmDayMine'))}</span>${ws.map((w) => `<div class="pm-app-mrow${w === day ? ' pm-app-now' : ''}"><button type="button" class="pm-app-mpick" data-pm-pick="${esc(w)}">${esc(whenLabel(w))}</button><b>${esc(qtyText(work.get(w)))} ${esc(unit())}</b><button type="button" class="pm-app-mrm" data-pm-rm="${esc(w)}">${esc(t('home.pmRemove'))}</button></div>`).join('')}` : '';
         const done = $s('#pm-app-done');
         const sum = total();
-        done.querySelector('span').textContent = sum > 0 ? t('home.pmDayDone', { n: `${qtyText(sum)} ${item.uom || ''}`.trim() }) : (inCart ? t('home.pmDayRemoveAll') : t('home.pmDayDoneEmpty'));
+        done.querySelector('span').textContent = sum > 0 ? t('home.pmDayDone', { n: `${qtyText(sum)} ${unit()}`.trim() }) : (inCart ? t('home.pmDayRemoveAll') : t('home.pmDayDoneEmpty'));
+        const eq = $s('#pm-app-equiv');
+        if (eq) eq.textContent = sum > 0 && packId ? t('home.pmPackEquals', { n: equivText(item, packId, sum) }) : '';
         done.disabled = sum <= 0 && !inCart;
     };
     $s('#pm-app-done').innerHTML = '<i class="bx bx-check" aria-hidden="true"></i><span></span>';
@@ -902,6 +924,11 @@ function openQuantity(item, startDay) {
     $s('#pm-app-cancel').addEventListener('click', close);
     sheet.addEventListener('click', (event) => {
         const t2 = event.target;
+        if (t2.closest('#pm-app-pack')) {
+            // con cantidades ya puestas la cantidad se queda y cambia lo que equivale (con aviso)
+            openSheet(t('home.pmPack'), packOptions(item), packId, (value) => { if (value === packId) return; if (work.size && !window.confirm(t('home.pmPackChange'))) return; packId = value; paint(false); });
+            return;
+        }
         const d = t2.closest('[data-pm-day]');
         if (d) { day = d.getAttribute('data-pm-day'); paint(true); return; }
         const pk = t2.closest('[data-pm-pick]');
@@ -912,7 +939,7 @@ function openQuantity(item, startDay) {
         if (t2.closest('#pm-app-plus')) { setQ(Math.round(cur() + 1)); paint(true); return; }
         if (t2.closest('#pm-app-done')) {
             const parts = whens().map((w) => ({ when: w, quantity: work.get(w) }));
-            if (!parts.length) draft.cart.delete(item.id); else draft.cart.set(item.id, { item, parts });
+            if (!parts.length) draft.cart.delete(item.id); else draft.cart.set(item.id, { item, parts, packId });
             if (parts.length) draft.lastWhen = parts.some((p) => p.when === day) ? day : parts[parts.length - 1].when;
             close();
             draft.redrawCart();
@@ -926,7 +953,7 @@ function openQuantity(item, startDay) {
 }
 
 // ---- «Cerrar pedido…»: una hoja con DOS cosas: descargar el listado (PDF o Excel: solo baja el archivo y la hoja se queda, para poder enviar después) o enviar el pedido como siempre. ----
-const draftLines = () => Array.from(draft.cart.values()).flatMap(({ item, parts }) => parts.map((p) => ({ code: item.code, description: artName(item), uom: item.uom, quantity: p.quantity, needBy: p.when })));
+const draftLines = () => Array.from(draft.cart.values()).flatMap(({ item, parts, packId }) => parts.map((p) => ({ code: item.code, description: artName(item), uom: item.uom, quantity: p.quantity, needBy: p.when, packName: packsOf(item).length ? unitName(item, packId || 0) : '', packPieces: piecesOf(item, packId || 0), hasPacks: packsOf(item).length > 0 })));
 // El listado como lo arma el servidor de exportar (el mismo de la pantalla Pedido Manual de la computadora): datos del pedido arriba y una tabla de código, descripción, UdM, para cuándo y cantidad.
 function exportDataset({ folio, lines, name, placeName, centroCostos, at, costCenterId }) {
     return {
@@ -935,9 +962,10 @@ function exportDataset({ folio, lines, name, placeName, centroCostos, at, costCe
         title: t('menu.opCentroDistPedidoManual'),
         filename: `${t('home.pmFilePrefix')}-${folio || t('home.pmDraftFile')}_${isoOf(new Date())}`,
         header: [[t('main.pmQrCentro'), centroCostos], [t('main.colPmLugar'), placeName], [t('home.pmRequestedBy'), name], [t('home.pmWhen'), formatTime(at)], [t('home.pmListTitle'), itemsText(new Set(lines.map((l) => l.code)).size)]].filter(([, v]) => v),
-        columns: [t('home.pmFCode'), t('home.pmFDesc'), t('home.pmFUom'), t('home.pmNeedBy'), t('home.pmQuantity')].map((label) => ({ label })),
-        rows: lines.map((l) => [l.code, l.description, l.uom, whenLabel(l.needBy), qtyText(l.quantity)]),
-        widths: [1.3, 3.6, 0.7, 1.7, 0.9],
+        // con presentaciones en el pedido el archivo agrega «Presentación» y «Equivale a» (un código sin presentaciones lleva — y su misma cantidad); sin ellas queda como siempre
+        columns: [t('home.pmFCode'), t('home.pmFDesc'), t('home.pmFUom'), t('home.pmNeedBy'), ...(lines.some((l) => l.packName) ? [t('home.pmPack')] : []), t('home.pmQuantity'), ...(lines.some((l) => l.packName) ? [t('main.colPmEquivale')] : [])].map((label) => ({ label })),
+        rows: lines.map((l) => (lines.some((x) => x.packName) ? [l.code, l.description, l.uom, whenLabel(l.needBy), l.packName || '—', qtyText(l.quantity), `${qtyText(Math.round(Number(l.quantity) * (Number(l.packPieces) > 0 ? Number(l.packPieces) : 1) * 1000) / 1000)} ${l.uom || ''}`.trim()] : [l.code, l.description, l.uom, whenLabel(l.needBy), qtyText(l.quantity)])),
+        widths: lines.some((l) => l.packName) ? [1.2, 3, 0.6, 1.5, 1.8, 0.8, 1.3] : [1.3, 3.6, 0.7, 1.7, 0.9],
     };
 }
 const fmtButtonsHtml = () => `<div class="pm-app-two"><button type="button" class="pm-app-fmt pm-app-fmt-pdf" data-pm-dl="pdf"><i class="bx bxs-file-pdf" aria-hidden="true"></i><span>${esc(t('home.pmFmtPdf'))}</span></button><button type="button" class="pm-app-fmt pm-app-fmt-xlsx" data-pm-dl="xlsx"><i class="bx bx-spreadsheet" aria-hidden="true"></i><span>${esc(t('home.pmFmtXlsx'))}</span></button></div>`;
@@ -1015,7 +1043,7 @@ async function sendDraft() {
     const valid = new Set(allDays());
     if (Array.from(draft.cart.values()).some((c) => c.parts.some((p) => p.when && !valid.has(p.when)))) { showToast(t('home.pmErrDate')); draft.redrawCart(); return; }
     // un renglón por artículo y fecha ('' = lo antes posible: no lleva needBy, igual que antes de que hubiera fechas)
-    const items = Array.from(draft.cart.values()).flatMap((c) => c.parts.map((p) => ({ id: c.item.id, quantity: p.quantity, ...(p.when ? { needBy: p.when } : {}) })));
+    const items = Array.from(draft.cart.values()).flatMap((c) => c.parts.map((p) => ({ id: c.item.id, quantity: p.quantity, ...(p.when ? { needBy: p.when } : {}), ...(c.packId ? { packId: c.packId } : {}) })));
     const body = { costCenterId: draft.costCenterId, requesterName, items, clientAt: new Date().toISOString(), clientRef: draft.clientRef };
     const place = usesPlaces() ? catalogPlaces.find((p) => p.id === draft.placeId) : null;
     if (place) body.placeId = place.id;
@@ -1039,7 +1067,7 @@ async function sendDraft() {
         // lo que se ve al terminar: el número de pedido (si se mandó sin señal todavía no lo hay) y su lista de artículos
         doneInfo = {
             queued: !!result.queued, folio: result.queued ? '' : (result.body.folio || ''), name: requesterName, placeName: place ? place.name : '', at: result.queued ? body.clientAt : (result.body.createdAt || body.clientAt), centroCostos: cc ? cc.name : '', costCenterId: draft.costCenterId,
-            lines: Array.from(draft.cart.values()).flatMap(({ item, parts }) => parts.map((p) => ({ code: item.code, description: artName(item), uom: item.uom, quantity: p.quantity, needBy: p.when }))),
+            lines: draftLines(),
         };
         if (!result.queued) await loadOrders();
         draft = null;
@@ -1065,7 +1093,7 @@ function renderDone() {
         ${d.queued ? `<p class="pm-app-note">${esc(t('home.pmNumberOnSync'))}</p>` : ''}
         <div class="pm-app-meta pm-app-meta-flat">${[[t('home.pmRequestedBy'), d.name], [t('main.colPmLugar'), d.placeName], [t('home.pmWhen'), formatTime(d.at)], [t('main.pmQrCentro'), d.centroCostos]].filter(([, v]) => v).map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
         <h4 class="pm-app-title">${esc(t('home.pmListTitle'))} · ${esc(itemsText(new Set(d.lines.map((l) => l.code)).size))}</h4>
-        ${d.lines.map((l) => `<div class="pm-app-line"><div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, l.uom].filter(Boolean).join(' · '))}</span><span class="pm-app-need">${esc(`${t('home.pmNeedBy')}: ${whenLabel(l.needBy)}`)}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b></div>`).join('')}`;
+        ${d.lines.map((l) => `<div class="pm-app-line"><div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, ...lineUnitText(l)].filter(Boolean).join(' · '))}</span><span class="pm-app-need">${esc(`${t('home.pmNeedBy')}: ${whenLabel(l.needBy)}`)}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b></div>`).join('')}`;
     // el pedido ya enviado (con su número) también se puede bajar en PDF o Excel; el que se guardó sin señal todavía no tiene número ni se puede preparar
     if (!d.queued) {
         const dl = document.createElement('div');
