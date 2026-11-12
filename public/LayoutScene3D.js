@@ -2240,6 +2240,8 @@
             if (k) walk.keys[k] = false;
             if (e.key === 'Shift') walk.keys.run = false;
         }
+        // Ángulo de visión (vertical, en grados) al recorrer. Era 72 y se sentía «con mucho zoom»; con 85 se ve un poco más alejado y las verticales siguen derechas (sin curvas, como una foto normal).
+        const WALK_FOV = 85;
         function walkStart(o) {
             if (!center || !lastLayout || walk.on) return false;
             walk.saved = Object.assign({}, st); walk.savedFov = cam.fov;
@@ -2249,7 +2251,7 @@
             walkBuild();
             const f = walkFree(Number(o && o.x) || 0, Number(o && o.y) || 0);
             walk.x = f[0]; walk.y = f[1]; walk.gy = walkFloorAt(walk.x, walk.y);
-            cam.fov = 72; cam.updateProjectionMatrix();
+            cam.fov = WALK_FOV; cam.updateProjectionMatrix();
             window.addEventListener('keydown', walkKeyDown);
             window.addEventListener('keyup', walkKeyUp);
             outline.visible = false;
