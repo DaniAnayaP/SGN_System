@@ -323,6 +323,7 @@
     // Nada sale de la nave: una columna, un desnivel, otro obstáculo (en cualquier forma de ponerlos) y una pared libre (la que se pone «Dentro de la nave», no las que van sobre el contorno) tienen que caber ENTEROS adentro; pegados a la
     // pared de la nave cuentan como adentro. Lo que ya estaba afuera antes de esta regla solo se marca; lo NUEVO o lo que cambió (el obstáculo o el contorno) no se deja guardar (ver newObstacleInsideViolations). section = el paso donde se arregla.
     const OBSTACLE_WORDS = { wall: ['La pared', 'Pared', 'acomódala'], column: ['La columna', 'Columna', 'acomódala'], step: ['El desnivel', 'Desnivel', 'acomódalo'], other: ['El obstáculo', 'Obstáculo', 'acomódalo'] };
+    const OBSTACLE_EDGE_TOL = 0.02; // metros: lo que sobresale menos de 2 cm de la pared de la nave cuenta como pegado a ella
     function obstacleInsideViolations(layout) {
         const out = [];
         const nave = Array.isArray(layout && layout.vertices) ? layout.vertices.map((p) => [Number(p[0]), Number(p[1])]) : [];
@@ -333,7 +334,12 @@
             if (isWall && o.mode === 'contour') return; // las paredes sobre el contorno SON el marco
             const g = obstacleGeometry(o, layout.vertices);
             if (!g || !(g.l > 0 && g.w > 0) || !Array.isArray(g.pts) || g.pts.length < 3) return;
-            if (!zoneOutsideNave(nave, { pts: g.pts })) return;
+            // pegado a la pared de la nave cuenta como adentro: las esquinas se redondean a centímetros y una pared apenas inclinada (unos milímetros) las deja a un pelo de afuera. Se acercan 2 cm al centro antes de revisar:
+            // lo que sobresale más que eso sí se marca.
+            const cx = g.pts.reduce((a, p) => a + p[0], 0) / g.pts.length;
+            const cy = g.pts.reduce((a, p) => a + p[1], 0) / g.pts.length;
+            const snug = g.pts.map((p) => { const dx = cx - p[0]; const dy = cy - p[1]; const d = Math.hypot(dx, dy); return d > OBSTACLE_EDGE_TOL ? [p[0] + (dx / d) * OBSTACLE_EDGE_TOL, p[1] + (dy / d) * OBSTACLE_EDGE_TOL] : [cx, cy]; });
+            if (!zoneOutsideNave(nave, { pts: snug })) return;
             const what = OBSTACLE_WORDS[o.kind] ? o.kind : 'other';
             const [article, fallback, fix] = OBSTACLE_WORDS[what];
             const name = String(o.name || fallback);
