@@ -779,6 +779,11 @@ body.dark-mode .admin-generated-email-status-warn{
 .admin-icon-btn-toggle-on:hover{ color: #1E7B3C; background-color: #E4F5E9; }
 .admin-icon-btn-toggle-off{ color: #c9503f; }
 .admin-icon-btn-toggle-off:hover{ color: #c9503f; background-color: var(--color-bg); }
+/* Celda de foto (evidencias): cargada = verde intenso, sin cargar = rojo, para ver de un vistazo qué falta */
+.admin-icon-btn.evidence-done{ color: #0f9d3f; font-size: 1.25rem; }
+.admin-icon-btn.evidence-done:hover{ color: #0b7f31; background-color: #E4F5E9; }
+.admin-icon-btn.evidence-empty{ color: #d92d20; }
+.admin-icon-btn.evidence-empty:hover{ color: #b3261e; background-color: #FDECEA; }
 .admin-empty{
     padding: 1.5rem 0;
     text-align: center;

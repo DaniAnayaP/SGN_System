@@ -148,8 +148,10 @@ function attachEvidenceControl(td, { value, pending, labelKey, recordId, fieldKe
     let stored = value || null;
     let busy = false;
     function render() {
-        const icon = busy ? 'bx-loader-alt bx-spin' : (pending ? 'bx-time-five' : (stored ? 'bx-check-circle' : 'bx-camera'));
+        const icon = busy ? 'bx-loader-alt bx-spin' : (pending ? 'bx-time-five' : (stored ? 'bxs-check-circle' : 'bx-camera'));
         btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+        btn.classList.toggle('evidence-done', !busy && !pending && !!stored); // cargada = verde intenso
+        btn.classList.toggle('evidence-empty', !busy && !pending && !stored); // sin cargar = rojo
         const label = pending ? 'main.changePending' : labelKey;
         btn.setAttribute('aria-label', Dashboard.t(label));
         btn.title = Dashboard.t(label);

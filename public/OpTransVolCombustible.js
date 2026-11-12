@@ -117,6 +117,7 @@ async function patchFuelRecord(id, patch) {
         // rejected — reload the table from the server so the UI always
         // reflects what actually got written, not what the user typed.
         await refreshTable();
+        return !body.rejectedFields?.length && !body.pendingFields?.length && !body.conflictFields?.length; // true = se guardó tal cual (las fotos lo usan para avisar «cargada correctamente»)
     } catch (err) {
         console.error('Registro Combustible: failed to save change', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
@@ -305,6 +306,8 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
     function render() {
         const icon = busy ? 'bx-loader-alt bx-spin' : (pending ? 'bx-time-five' : (stored ? 'bx-receipt' : 'bx-image-add'));
         btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+        btn.classList.toggle('evidence-done', !busy && !pending && !!stored); // cargada = verde intenso
+        btn.classList.toggle('evidence-empty', !busy && !pending && !stored); // sin cargar = rojo
         const label = pending ? 'main.changePending' : (stored ? viewLabelKey : uploadLabelKey);
         btn.setAttribute('aria-label', Dashboard.t(label));
         btn.title = Dashboard.t(label);
@@ -334,8 +337,10 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
         try {
             const key = await Dashboard.uploadEvidenceFile(file, { tableKey, recordId, fieldKey });
             stored = key;
-            onCommit(key);
+            const saving = onCommit(key);
             applyFieldFillRules(TABLE_KEY);
+            const saved = await saving; // el renglón se guarda con la llave de la foto; solo si quedó guardado se avisa que cargó
+            if (saved === true) Dashboard.showToast(Dashboard.t('main.evidenceUploaded'), 'success');
         } catch (err) {
             console.error('evidence upload failed', err);
             Dashboard.showToast(Dashboard.t(err.status === 403 ? 'main.fieldLocked' : 'admin.saveError'), err.status === 403 ? 'warning' : 'error');
