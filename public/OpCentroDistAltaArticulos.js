@@ -288,6 +288,7 @@ async function patchSkuItem(id, patch) {
         const clean = body.skuItem && !body.rejectedFields?.length && !body.pendingFields?.length && !body.conflictFields?.length;
         if (clean && skuRecords.some((r) => r.id === body.skuItem.id)) applySavedSkuRecord(body.skuItem, skuRecords.find((r) => r.id === body.skuItem.id));
         else await refreshTable();
+        return !!clean; // true = se guardó tal cual (las fotos lo usan para avisar «cargada correctamente»)
     } catch (err) {
         console.error('Alta Nuestros Artículos: failed to save change', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
@@ -367,7 +368,8 @@ function attachEvidenceControl(td, { value, pending, uploadLabelKey, viewLabelKe
         try {
             const key = await Dashboard.uploadEvidenceFile(file, { tableKey, recordId, fieldKey });
             stored = key;
-            onCommit(key);
+            const saved = await onCommit(key); // el renglón se guarda con la llave de la foto; solo si quedó guardado se avisa que cargó
+            if (saved === true) Dashboard.showToast(Dashboard.t('main.evidenceUploaded'), 'success');
         } catch (err) {
             console.error('evidence upload failed', err);
             // el aviso dice en qué paso falló (igual que en Alta Activos); si R2 rechazó al servidor se agrega el código que dio
@@ -1277,23 +1279,30 @@ createForm?.addEventListener('submit', async (event) => {
                 body: JSON.stringify(body),
             });
             if (patched.ok) lastSaved = (await patched.json().catch(() => null))?.skuItem || lastSaved;
+            return patched.ok;
         };
         await patchNew(patch);
 
-        for (const [, key] of EVIDENCE_FIELDS) {
+        const failedPhotos = []; // las fotos que no se pudieron subir (el artículo ya quedó guardado): se avisan al final, no se quedan calladas
+        let uploadedPhotos = 0;
+        for (const [labelKey, key] of EVIDENCE_FIELDS) {
             const file = createEvidenceFiles.get(key);
             if (!file) continue;
             try {
                 const evidenceKey = await Dashboard.uploadEvidenceFile(file, { tableKey: TABLE_KEY, recordId: skuItem.id, fieldKey: key });
-                await patchNew({ [key]: evidenceKey });
+                if (!(await patchNew({ [key]: evidenceKey }))) throw new Error('PATCH failed');
+                uploadedPhotos += 1;
             } catch (err) {
                 console.error(`Alta Nuestros Artículos: evidence upload failed for ${key}`, err);
+                failedPhotos.push(Dashboard.t(`main.${labelKey}`));
             }
         }
 
         closeCreateModal();
         announceMoved(lastSaved);
         await refreshTable();
+        if (failedPhotos.length) Dashboard.showToast(Dashboard.t('main.skuPhotosFailed').replace('{list}', failedPhotos.join(', ')), 'error');
+        else if (uploadedPhotos) Dashboard.showToast(Dashboard.t(uploadedPhotos === 1 ? 'main.evidenceUploaded' : 'main.evidencesUploaded'), 'success');
     } catch (err) {
         console.error('Alta Nuestros Artículos: failed to save new record', err);
         createFormError.textContent = err.message === 'create failed' ? Dashboard.t('admin.saveError') : err.message;

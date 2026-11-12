@@ -176,7 +176,8 @@ function attachEvidenceControl(td, { value, pending, labelKey, recordId, fieldKe
         try {
             const key = await Dashboard.uploadEvidenceFile(file, { tableKey: TABLE_KEY, recordId, fieldKey });
             stored = key;
-            onCommit(key);
+            const saved = await onCommit(key); // el renglón se guarda con la llave de la foto; solo si quedó guardado se avisa que cargó
+            if (saved === true) Dashboard.showToast(Dashboard.t('main.evidenceUploaded'), 'success');
         } catch (err) {
             console.error('evidence upload failed', err);
             // el aviso dice en qué paso falló: sin permiso, el almacenamiento no recibió el archivo, el almacenamiento no está disponible, o (otro caso) un error al guardar
@@ -262,6 +263,7 @@ async function patchAsset(record, patch) {
         const clean = body.asset && !body.rejectedFields?.length && !body.pendingFields?.length && !body.conflictFields?.length;
         if (clean) applySaved(body.asset, record);
         else await refreshTable();
+        return !!clean; // true = se guardó tal cual (las fotos lo usan para avisar «cargada correctamente»)
     } catch (err) {
         console.error('Alta Activos: failed to save change', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
@@ -533,6 +535,7 @@ createForm?.addEventListener('submit', async (event) => {
         }
         const { asset } = await res.json();
         const failedPhotos = []; // las fotos que no se pudieron subir (el activo ya quedó guardado): se avisan al final, no se quedan calladas
+        let uploadedPhotos = 0;
         for (const [labelKey, key] of EVIDENCE_FIELDS) {
             const file = createEvidenceFiles.get(key);
             if (!file) continue;
@@ -540,6 +543,7 @@ createForm?.addEventListener('submit', async (event) => {
                 const evidenceKey = await Dashboard.uploadEvidenceFile(file, { tableKey: TABLE_KEY, recordId: asset.id, fieldKey: key });
                 const patched = await fetch(`/api/business/fixed-assets/${asset.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ [key]: evidenceKey }) });
                 if (!patched.ok) throw new Error(`PATCH ${patched.status}`);
+                uploadedPhotos += 1;
             } catch (err) {
                 console.error(`Alta Activos: evidence upload failed for ${key}`, err);
                 failedPhotos.push(Dashboard.t(`main.${labelKey}`));
@@ -548,6 +552,7 @@ createForm?.addEventListener('submit', async (event) => {
         closeCreateModal();
         await refreshTable();
         if (failedPhotos.length) Dashboard.showToast(Dashboard.t('main.assetPhotosFailed').replace('{list}', failedPhotos.join(', ')), 'error');
+        else if (uploadedPhotos) Dashboard.showToast(Dashboard.t(uploadedPhotos === 1 ? 'main.evidenceUploaded' : 'main.evidencesUploaded'), 'success');
     } catch (err) {
         console.error('Alta Activos: failed to save new record', err);
         createFormError.textContent = err.message;
