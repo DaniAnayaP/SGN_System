@@ -136,7 +136,7 @@ async function openGrantAccessModal(user) {
             grantLimits: grantLimitsForUser(data),
             historyEndpoint: '/api/business/user-grant-change-log', historyParams: { userId: user.id },
         });
-        await grantTree.init(data.jobPositionGrants || [], [], data.grants || []);
+        await grantTree.init(data.jobPositionGrants || [], [], data.grants || [], null, data.exclusions || []);
         // Solo los Estatus que la cuenta del administrador puede ver se pueden dar; si el usuario tenía de más, queda en lo permitido.
         const assignable = Array.isArray(data.assignableStatuses) && data.assignableStatuses.length ? data.assignableStatuses : ['habilitado'];
         const currentStatuses = (data.visibleStatuses && data.visibleStatuses.length ? data.visibleStatuses : ['habilitado']).filter((s) => assignable.includes(s));
@@ -170,7 +170,7 @@ grantAccessSaveBtn.addEventListener('click', async () => {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ grants: grantTree.getClientGrants() }),
+                body: JSON.stringify({ grants: grantTree.getClientGrants(), exclusions: grantTree.getExclusions(), keep: grantTree.getKeepGrants() }),
             }),
             fetch(`/api/business/users/${activeUserId}/visible-statuses`, {
                 method: 'PUT',

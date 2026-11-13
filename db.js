@@ -13598,6 +13598,67 @@ function setUserUiScale(userId, level) {
 // --- Query helpers: permission grants (módulo / apartado / pantalla) ---------
 // (Perfiles/profiles removed -- Roles is now Puesto de Trabajo-based, see
 // job_position_grants/getJobPositionGrants above.)
+// --- Quitar a UNA persona lo que le da su puesto (2026-11-13; lo aprobó Daniel el 2026-11-05) -----------------------------------------------------------------------
+// El puesto da lo mismo a todos los que tiene; «Otorgar Accesos» solo SUMABA. Esta capa RESTA por persona: user_grant_exclusions guarda, por usuario, las llaves que se le quitan (kind 'exclude': la pantalla, sus columnas y sus
+// iconos, tal como los marca el árbol) y, cuando el puesto da algo con un permiso de CONTENEDOR (un departamento o un área completa, que no se puede quitar a medias), las llaves que SÍ se conservan (kind 'keep': lo que ese
+// contenedor cubría menos lo quitado, calculado por el árbol al guardar). getUserEffectiveGrants resta todo esto de lo que le da el puesto y de sus adicionales: es el único punto por el que pasa toda comprobación de acceso y el menú.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS user_grant_exclusions (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind        TEXT NOT NULL DEFAULT 'exclude',
+        section_id  TEXT NOT NULL,
+        item_id     TEXT,
+        submenu_id  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_grant_exclusions_user ON user_grant_exclusions (user_id);
+`);
+const exclusionKeyOf = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+function getUserExclusions(userId) {
+    const rows = db.prepare('SELECT kind, section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM user_grant_exclusions WHERE user_id = ?').all(userId);
+    return { exclude: rows.filter((r) => r.kind === 'exclude').map(({ kind, ...g }) => g), keep: rows.filter((r) => r.kind === 'keep').map(({ kind, ...g }) => g) };
+}
+// ¿El permiso p cubre la llave k (siendo otra)? Una llave sin pantalla cubre todo su departamento o área; una pantalla cubre lo que cuelga de ella (sus columnas e iconos).
+function grantTupleCovers(p, k) {
+    if (exclusionKeyOf(p) === exclusionKeyOf(k)) return false;
+    if (p.sectionId !== k.sectionId) return false;
+    if (p.itemId && p.itemId !== k.itemId) return false;
+    if (!p.itemId) return true;
+    if (!p.submenuId) return true;
+    return typeof k.submenuId === 'string' && k.submenuId.startsWith(`${p.submenuId}/`);
+}
+// Resta las exclusiones de una lista de permisos: lo excluido sale, un permiso de contenedor que cubre algo excluido se reemplaza por lo que el árbol marcó para conservar.
+function applyUserExclusions(grants, ex) {
+    if (!ex || !ex.exclude.length) return grants;
+    const excluded = new Set(ex.exclude.map(exclusionKeyOf));
+    const out = [];
+    const seen = new Set();
+    const add = (g) => { const key = exclusionKeyOf(g); if (seen.has(key)) return; seen.add(key); out.push(g); };
+    grants.forEach((g) => {
+        if (excluded.has(exclusionKeyOf(g))) return;
+        if (ex.exclude.some((e) => grantTupleCovers(g, e))) return;
+        add(g);
+    });
+    ex.keep.forEach((g) => { if (!excluded.has(exclusionKeyOf(g))) add(g); });
+    return out;
+}
+function logUserExclusionChange(userId, nodeKey, excluded, changedBy) {
+    db.prepare("INSERT INTO user_grant_change_log (user_id, node_key, field, old_value, new_value, changed_by) VALUES (?, ?, 'excluded', ?, ?, ?)").run(userId, nodeKey, String(!excluded), String(excluded), changedBy || '');
+}
+// Reemplaza las exclusiones de la persona (lo que llega es la lista completa) y deja en el historial de cada llave si se le quitó o se le devolvió.
+function setUserExclusions(userId, { exclude = [], keep = [] }, changedBy) {
+    const before = new Set(getUserExclusions(userId).exclude.map(exclusionKeyOf));
+    const after = new Set(exclude.map(exclusionKeyOf));
+    db.transaction(() => {
+        db.prepare('DELETE FROM user_grant_exclusions WHERE user_id = ?').run(userId);
+        const insert = db.prepare('INSERT INTO user_grant_exclusions (user_id, kind, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?, ?)');
+        exclude.forEach((g) => insert.run(userId, 'exclude', g.sectionId, g.itemId || null, g.submenuId || null));
+        keep.forEach((g) => insert.run(userId, 'keep', g.sectionId, g.itemId || null, g.submenuId || null));
+    })();
+    after.forEach((key) => { if (!before.has(key)) logUserExclusionChange(userId, key, true, changedBy); });
+    before.forEach((key) => { if (!after.has(key)) logUserExclusionChange(userId, key, false, changedBy); });
+    return getUserExclusions(userId);
+}
 function getUserGrants(userId) {
     return db
         .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM user_grants WHERE user_id = ?')
@@ -13651,7 +13712,7 @@ function getUserEffectiveGrantsRaw(userId) {
 // menú. No se filtra a las cuentas del equipo SaaS (sin cliente) ni al administrador del cliente: su acceso lo da ser administrador, no una
 // lista (con la lista vacía el administrador pasa a "sin restricciones"; filtrarlo ahí le SUBIRÍA el acceso, no se lo bajaría).
 function getUserEffectiveGrants(userId) {
-    const combined = getUserEffectiveGrantsRaw(userId);
+    const combined = applyUserExclusions(getUserEffectiveGrantsRaw(userId), getUserExclusions(userId)); // lo que se le quitó a esta persona no vale
     const account = db.prepare('SELECT client_id AS clientId, is_client_admin AS isClientAdmin, is_test_account AS isTest FROM users WHERE id = ?').get(userId);
     if (!account || !account.clientId || account.isClientAdmin) return combined;
     const ctx = getLimitsContext(account.clientId);
@@ -14516,6 +14577,7 @@ seedTransitoEquiposValuesOnce();
 seedIncidentesCriteriosValuesOnce();
 
 module.exports = {
+    getUserExclusions, setUserExclusions, applyUserExclusions,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,
     latestAssetReadingRows, listAssetReadingsOfAsset, lastAssetReadingTimes, listMaintenanceRunsOfAsset, latestMaintenanceRunRows,
     getAssetLimitsOf, countAssetLimitsOfCriterion, countAssetReadingsOfCatalog,

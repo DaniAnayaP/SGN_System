@@ -207,6 +207,7 @@ const {
     parseFixedAssetEditing,
     parseFixedAssetBackup,
     startFixedAssetEditionWithFields,
+    getUserExclusions, setUserExclusions,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,
     latestAssetReadingRows, listAssetReadingsOfAsset, lastAssetReadingTimes, listMaintenanceRunsOfAsset, latestMaintenanceRunRows,
     getAssetLimitsOf, setAssetLimit, listAssetLimitsMap, deleteAssetLimitsOfCriterion, countAssetLimitsOfCriterion, countAssetReadingsOfCatalog,
@@ -4343,6 +4344,8 @@ app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     // mismo en el modal").
     res.json({
         grants: getUserGrants(req.params.id),
+        // lo que se le QUITÓ a esta persona de lo que le da su puesto (la lista completa de llaves, para volver a dibujarlas en el árbol)
+        exclusions: getUserExclusions(req.params.id).exclude,
         jobPositionGrants: jobPositionGrantsWithAssignment(req.params.id),
         visibleStatuses: getUserVisibleStatuses(req.params.id),
         // Los Estatus que esta cuenta (la del administrador) puede dar: un nivel no da más de lo que ve el de arriba.
@@ -4365,11 +4368,23 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     if (rejectUncontractedNewGrants(res, req.user.clientId, grantsBefore, grants)) return;
     const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: grantsBefore, after: grants, allowedCenterIds: getHrAssignedCenterIds(req.params.id) });
     const savedGrants = setUserGrants(req.params.id, limited.allowed, changedByLabel(req));
+    // Quitar a esta persona lo que le da su puesto: llega la lista completa de exclusiones y lo que se conserva de un permiso de contenedor (ver applyUserExclusions). Sin la lista, se deja como estaba.
+    let exclusionsChanged = false;
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'exclusions')) {
+        const { exclusions, keep } = req.body;
+        const exError = validateGrants(exclusions) || validateGrants(keep || []);
+        if (exError) return res.status(400).json({ message: exError });
+        if (exclusions.length > 8000 || (keep || []).length > 20000) return res.status(400).json({ message: 'Too many entries.' });
+        const exBefore = getUserExclusions(req.params.id).exclude;
+        const exAfter = setUserExclusions(req.params.id, { exclude: exclusions, keep: keep || [] }, changedByLabel(req)).exclude;
+        exclusionsChanged = exBefore.length !== exAfter.length || grantsSignature(exBefore) !== grantsSignature(exAfter);
+        if (exclusionsChanged) logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyExclusions', exBefore.length, exAfter.length);
+    }
     if (grantsSignature(grantsBefore) !== grantsSignature(savedGrants)) {
         logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyExtraGrants', grantsBefore.length, savedGrants.length);
         notifyAccessChange({ req, affectedUsers: [{ id: user.id, name: user.name || user.username }], scopeKind: 'usuario', before: grantsBefore, after: savedGrants });
     }
-    res.json({ grants: savedGrants, dropped: summarizeDroppedGrants(limited.dropped) });
+    res.json({ grants: savedGrants, exclusions: getUserExclusions(req.params.id).exclude, dropped: summarizeDroppedGrants(limited.dropped) });
 });
 
 // Per-node "Cambios" for the tree above -- same reasoning as the client
@@ -4426,6 +4441,7 @@ app.post('/api/business/users/:id/reset-role', requireAuth, requireClientAdmin, 
     logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyResetRole', '', '');
     const grantsBeforeReset = getUserGrants(req.params.id);
     const grantsAfterReset = setUserGrants(req.params.id, []);
+    setUserExclusions(req.params.id, { exclude: [], keep: [] }, changedByLabel(req)); // «Reestablecer Rol» también devuelve lo que se le había quitado
     if (grantsBeforeReset.length) {
         notifyAccessChange({ req, affectedUsers: [{ id: user.id, name: user.name || user.username }], scopeKind: 'usuario', before: grantsBeforeReset, after: grantsAfterReset });
     }
@@ -4440,6 +4456,7 @@ app.post('/api/business/users/reset-all-roles', requireAuth, requireClientAdmin,
     const affected = listBusinessUsers(req.user.clientId);
     affected.forEach((u) => {
         setUserGrants(u.id, []);
+        setUserExclusions(u.id, { exclude: [], keep: [] }, changedByLabel(req));
         logBusinessChange(req, 'usuarios', u.id, u.name || u.username, 'business.historyResetRole', '', '');
     });
     res.json({ count: affected.length });

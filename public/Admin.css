@@ -1894,6 +1894,8 @@ body.dark-mode .perm-tree-depth-2{
 /* Otorgar Accesos de una persona: lo que ya se le dio como adicional (ámbar) se dibuja como casilla marcada para poder quitarlo. */
 .perm-tree-check-extra input{ accent-color: #c9860b; }
 .perm-tree-check-extra span{ color: #c9860b; }
+.perm-tree-check-plan input{ accent-color: #2c8f4a; }
+.perm-tree-check-plan span{ color: #2c8f4a; }
 /* Criterios, límites y avisos de activos (Alta Activos, Gestión y modelos): N/A, chips de alertas, ventanas de detalle. */
 .asset-na{ color: var(--color-text-secondary); opacity: .75; font-size: .76em; font-weight: 600; letter-spacing: .04em; }
 .asset-nolimit{ color: #a4410a; font-size: .78em; font-weight: 600; }
