@@ -112,16 +112,29 @@ const AssetModels = (() => {
     }
     // «Apariencia en el Layout» (2026-11-13): cómo se dibujan en el Layout las piezas de este modelo. Vacío = «La del Tipo» (lo de siempre); si no, una de las apariencias del dibujo de su Tipo, con su vista previa. De momento solo los
     // sensores tienen apariencias: en los demás tipos la celda queda en «La del Tipo» y cerrada.
+    // Fotos del modelo (2026-11-13): «Desde las fotos del modelo» sirve para CUALQUIER tipo (cada modelo se dibuja como es) y se elige sola al subir la primera foto; para elegirla a mano hace falta al menos una foto.
+    const photosOf = (model) => model.photos || {};
+    const photoCount = (model) => Object.keys(photosOf(model)).length;
+    const photoThumbUrl = (model, face) => (photosOf(model)[face] ? window.AssetLooks.photoUrl(model.id, face, photosOf(model)[face].ver) : '');
     function lookCell(model) {
         const td = document.createElement('td');
         td.dataset.col = 'colActModApariencia';
         td.setAttribute('data-help-key', 'assetModelLook');
         const kind = (types.find((r) => r.id === model.parentId) || {}).kind || '';
         const looks = window.AssetLooks ? window.AssetLooks.looksFor(kind) : [];
+        const hasPhotos = !!model.id && photoCount(model) > 0;
         const effective = window.AssetLooks ? window.AssetLooks.effective(kind, model.look) : '';
         const wrap = document.createElement('span');
         wrap.className = 'asset-look-pick';
-        if (window.AssetLooks && effective) wrap.insertAdjacentHTML('beforeend', window.AssetLooks.thumb(effective));
+        // con fotos, la vista previa es la foto de frente (o la primera que tenga) del propio modelo
+        const previewFace = hasPhotos && model.look === 'photos' ? ['front', 'top', 'back', 'left', 'right', 'bottom'].find((f) => photosOf(model)[f]) : '';
+        if (previewFace) {
+            const img = document.createElement('img');
+            img.className = 'asset-look-thumb asset-look-thumb-photo';
+            img.alt = '';
+            img.src = photoThumbUrl(model, previewFace);
+            wrap.appendChild(img);
+        } else if (window.AssetLooks && effective) wrap.insertAdjacentHTML('beforeend', window.AssetLooks.thumb(effective));
         const select = document.createElement('select');
         select.className = 'editable-cell-select asset-select';
         const typeLabel = looks.length ? fillText('main.assetLookType', { look: t(`main.assetLook_${window.AssetLooks.effective(kind, '')}`) }) : t('main.assetLookTypeOnly');
@@ -135,12 +148,56 @@ const AssetModels = (() => {
             opt.textContent = t(`main.assetLook_${id}`);
             select.appendChild(opt);
         });
-        select.value = looks.includes(model.look) ? model.look : '';
-        select.disabled = !looks.length || isPending(model, 'look') || !Dashboard.canEditField(TABLE, 'colActModApariencia', model.id ? model.look || '' : '');
-        if (select.disabled) select.title = !looks.length ? t('main.assetLookNoneYet') : t(isPending(model, 'look') ? 'main.changePending' : 'main.fieldLocked');
+        // «Desde las fotos del modelo»: siempre en la lista; sin fotos sale apagada (se sube una foto y se elige sola)
+        const photosOpt = document.createElement('option');
+        photosOpt.value = 'photos';
+        photosOpt.textContent = t('main.assetLook_photos');
+        photosOpt.disabled = !hasPhotos;
+        if (!hasPhotos) photosOpt.title = t('main.assetLookNoPhotos');
+        select.appendChild(photosOpt);
+        select.value = looks.includes(model.look) || (model.look === 'photos' && hasPhotos) ? model.look : '';
+        select.disabled = isPending(model, 'look') || !Dashboard.canEditField(TABLE, 'colActModApariencia', model.id ? model.look || '' : '');
+        if (select.disabled) select.title = t(isPending(model, 'look') ? 'main.changePending' : 'main.fieldLocked');
         select.addEventListener('change', () => commit(model, { look: select.value }));
         wrap.appendChild(select);
         td.appendChild(wrap);
+        return td;
+    }
+    // La columna «Fotos»: las miniaturas de las 6 caras, cuántas tienen foto y el botón de la cámara que abre la ventana donde se suben, se cambian y se quitan.
+    const FACES = ['front', 'back', 'left', 'right', 'top', 'bottom'];
+    function photosCell(model) {
+        const td = document.createElement('td');
+        td.dataset.col = 'colActModFotos';
+        td.setAttribute('data-help-key', 'assetModelPhotos');
+        const strip = document.createElement('div');
+        strip.className = 'mp-strip';
+        const n = model.id ? photoCount(model) : 0;
+        FACES.forEach((face) => {
+            const mini = document.createElement('span');
+            mini.className = 'mp-mini';
+            if (photosOf(model)[face]) {
+                const img = document.createElement('img');
+                img.alt = t(`main.modelPhotoFace_${face}`);
+                img.title = t(`main.modelPhotoFace_${face}`);
+                img.loading = 'lazy';
+                img.src = photoThumbUrl(model, face);
+                mini.appendChild(img);
+            } else mini.classList.add('mp-mini-empty');
+            strip.appendChild(mini);
+        });
+        const count = document.createElement('span');
+        count.className = `mp-count${n >= 6 ? ' mp-count-ok' : (n > 0 ? ' mp-count-part' : '')}`;
+        count.textContent = fillText('main.modelPhotoCount', { n });
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'admin-icon-btn';
+        btn.setAttribute('data-help-key', 'assetModelPhotos');
+        btn.setAttribute('aria-label', t('main.modelPhotosOpenBtn'));
+        btn.title = model.id ? t('main.modelPhotosOpenBtn') : t('main.modelPhotosNeedsSave');
+        btn.disabled = !model.id;
+        btn.innerHTML = '<i class="bx bx-camera" aria-hidden="true"></i>';
+        btn.addEventListener('click', () => openPhotosDialog(model.id));
+        td.append(strip, count, btn);
         return td;
     }
     function statusCell(model) {
@@ -206,6 +263,7 @@ const AssetModels = (() => {
                 ? inlineCell(model, 'colActModVolumen', 'volume', { inputType: 'number', unit: 'm³', helpKey: 'assetModelVolume', toValue: num, formatDisplay: (v) => Number(v).toFixed(3) })
                 : readonlyCell('colActModVolumen', Number(model.volume) > 0 ? Number(model.volume).toFixed(3) : '', 'm³', closedTitle || t('main.assetVolumeCalc'), 'assetModelVolume'),
             lookCell(model),
+            photosCell(model),
             statusCell(model),
             textCell('colActModUso', used, 'assetModelUse'),
             actionsCell(model),
@@ -243,11 +301,240 @@ const AssetModels = (() => {
         }
     }
 
+    // --- fotos del modelo --------------------------------------------------------------------------------------------------------------------------------------
+    // La ventana «Fotos del modelo»: seis cuadros (uno por cara, mirando el equipo de frente) con el fondo de cuadritos para ver si la foto es transparente, y la caja ya armada que gira. El navegador recorta los bordes transparentes y
+    // reduce la foto (lado más largo: 640 px) antes de mandarla; el servidor la guarda en la base y el Layout la usa en el 3D y en el croquis.
+    const PHOTO_MAX_SIDE = 640;
+    const PHOTO_READ_SIDE = 1600; // una foto muy grande se baja a esto antes de revisar sus píxeles
+    const canvasBlob = (canvas, type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+    async function prepareModelPhoto(file) {
+        if (!file || !/^image\/(png|webp|jpe?g)$/i.test(file.type || '')) throw Object.assign(new Error('type'), { code: 'type' });
+        const bmp = await createImageBitmap(file);
+        const k0 = Math.min(1, PHOTO_READ_SIDE / Math.max(bmp.width, bmp.height));
+        const w0 = Math.max(1, Math.round(bmp.width * k0));
+        const h0 = Math.max(1, Math.round(bmp.height * k0));
+        const c0 = document.createElement('canvas');
+        c0.width = w0; c0.height = h0;
+        const g0 = c0.getContext('2d', { willReadFrequently: true });
+        g0.drawImage(bmp, 0, 0, w0, h0);
+        if (bmp.close) bmp.close();
+        let box = { x: 0, y: 0, w: w0, h: h0 };
+        let hasAlpha = false;
+        if (!/jpe?g/i.test(file.type)) {
+            const px = g0.getImageData(0, 0, w0, h0).data;
+            let minX = w0; let minY = h0; let maxX = -1; let maxY = -1;
+            for (let y = 0; y < h0; y++) {
+                for (let x = 0; x < w0; x++) {
+                    const a = px[(y * w0 + x) * 4 + 3];
+                    if (a < 250) hasAlpha = true;
+                    if (a > 12) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+                }
+            }
+            if (hasAlpha && maxX >= minX && maxY >= minY) box = { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 }; // los bordes transparentes se recortan: el equipo llena su cara
+        }
+        const k = Math.min(1, PHOTO_MAX_SIDE / Math.max(box.w, box.h));
+        const w = Math.max(1, Math.round(box.w * k));
+        const h = Math.max(1, Math.round(box.h * k));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const g = c.getContext('2d');
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(c0, box.x, box.y, box.w, box.h, 0, 0, w, h);
+        let blob = await canvasBlob(c, 'image/webp', 0.92);
+        if (!blob || blob.type !== 'image/webp') blob = await canvasBlob(c, 'image/png');
+        if (!blob) throw Object.assign(new Error('encode'), { code: 'type' });
+        return { blob, width: w, height: h, hasAlpha };
+    }
+    // La caja del modelo (CSS 3D) con sus fotos: el frente al frente; derecha e izquierda se cuentan mirando el equipo de frente.
+    function previewCube(model) {
+        const L = Number(model.length) > 0 ? Number(model.length) : 10;
+        const H = Number(model.height) > 0 ? Number(model.height) : 10;
+        const D = Number(model.shape === 'cilindrica' ? model.length : model.depth) > 0 ? Number(model.shape === 'cilindrica' ? model.length : model.depth) : Math.min(L, H) * 0.3;
+        const k = 150 / Math.max(L, H, D);
+        const stage = document.createElement('div');
+        stage.className = 'mp-stage';
+        const cube = document.createElement('div');
+        cube.className = 'mp-cube';
+        cube.style.setProperty('--w', `${(L * k).toFixed(1)}px`);
+        cube.style.setProperty('--h', `${(H * k).toFixed(1)}px`);
+        cube.style.setProperty('--d', `${Math.max(D * k, 6).toFixed(1)}px`);
+        FACES.forEach((face) => {
+            const f = document.createElement('div');
+            f.className = `mp-face mp-face-${face}`;
+            if (photosOf(model)[face]) f.style.backgroundImage = `url("${photoThumbUrl(model, face)}")`;
+            cube.appendChild(f);
+        });
+        stage.appendChild(cube);
+        return stage;
+    }
+    function openPhotosDialog(modelId) {
+        const current = () => models.find((m) => m.id === modelId);
+        if (!current()) return;
+        const canEditPhotos = Dashboard.canEditField(TABLE, 'colActModFotos', '');
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        const panel = document.createElement('div');
+        panel.className = 'modal-panel mp-win';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+        const onKey = (event) => { if (event.key === 'Escape') close(); };
+        const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+        document.addEventListener('keydown', onKey);
+        overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+        let busy = false;
+        const refreshFrom = (category) => {
+            const at = models.findIndex((m) => m.id === modelId);
+            if (at >= 0 && category) models[at] = category;
+            draw();
+            if (typeof refreshTable === 'function') refreshTable(); else render();
+        };
+        async function upload(face, file) {
+            if (busy) return;
+            busy = true;
+            try {
+                const prepared = await prepareModelPhoto(file);
+                const res = await fetch(`/api/business/asset-models/${modelId}/photos/${face}?w=${prepared.width}&h=${prepared.height}&alpha=${prepared.hasAlpha ? 1 : 0}`, {
+                    method: 'PUT', headers: { 'Content-Type': prepared.blob.type }, credentials: 'include', body: prepared.blob,
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok) { Dashboard.showToast(body.message || t('admin.saveError'), res.status === 403 ? 'warning' : 'error'); return; }
+                Dashboard.showToast(fillText('main.modelPhotoUploaded', { cara: t(`main.modelPhotoFace_${face}`) }), 'success');
+                if (body.autoLook) Dashboard.showToast(t('main.modelPhotoAutoLook'), 'info');
+                if (!prepared.hasAlpha) Dashboard.showToast(fillText('main.modelPhotoBackground', { cara: t(`main.modelPhotoFace_${face}`) }), 'warning');
+                refreshFrom(body.category);
+            } catch (err) {
+                Dashboard.showToast(t(err && err.code === 'type' ? 'main.modelPhotoBadFile' : 'admin.saveError'), 'error');
+            } finally { busy = false; }
+        }
+        async function remove(face) {
+            if (busy) return;
+            if (!(await Dashboard.confirm(fillText('main.modelPhotoRemoveConfirm', { cara: t(`main.modelPhotoFace_${face}`) }), { accept: t('main.modelPhotoRemoveAccept') }))) return;
+            busy = true;
+            try {
+                const res = await fetch(`/api/business/asset-models/${modelId}/photos/${face}`, { method: 'DELETE', credentials: 'include' });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok) { Dashboard.showToast(body.message || t('admin.saveError'), res.status === 403 ? 'warning' : 'error'); return; }
+                Dashboard.showToast(fillText('main.modelPhotoRemoved', { cara: t(`main.modelPhotoFace_${face}`) }), 'success');
+                refreshFrom(body.category);
+            } catch (err) {
+                Dashboard.showToast(t('admin.saveError'), 'error');
+            } finally { busy = false; }
+        }
+        function draw() {
+            const model = current();
+            if (!model) { close(); return; }
+            panel.innerHTML = '';
+            const head = document.createElement('header');
+            head.className = 'mp-head';
+            const titles = document.createElement('div');
+            const h3 = document.createElement('h3');
+            h3.setAttribute('data-help-key', 'assetModelPhotos');
+            h3.textContent = fillText('main.modelPhotosTitle', { modelo: [model.name, model.modelNumber].filter(Boolean).join(' · ') || `#${model.id}` });
+            const hint = document.createElement('p');
+            hint.className = 'mp-hint';
+            hint.textContent = t('main.modelPhotosHint');
+            titles.append(h3, hint);
+            head.appendChild(titles);
+            const slots = document.createElement('div');
+            slots.className = 'mp-slots';
+            FACES.forEach((face) => {
+                const info = photosOf(model)[face];
+                const slot = document.createElement('div');
+                slot.className = 'mp-slot';
+                slot.setAttribute('data-help-key', 'assetModelPhotoSlot');
+                const lab = document.createElement('div');
+                lab.className = 'mp-lab';
+                const name = document.createElement('span');
+                name.textContent = t(`main.modelPhotoFace_${face}`);
+                const state = document.createElement('span');
+                state.className = info ? 'mp-ok' : 'mp-no';
+                state.textContent = info ? '✓' : t('main.modelPhotoMissing');
+                lab.append(name, state);
+                const thumb = document.createElement('div');
+                thumb.className = `mp-thumb${info ? '' : ' mp-thumb-empty'}`;
+                if (info) {
+                    const img = document.createElement('img');
+                    img.alt = t(`main.modelPhotoFace_${face}`);
+                    img.src = photoThumbUrl(model, face);
+                    thumb.appendChild(img);
+                } else thumb.textContent = t('main.modelPhotoEmpty');
+                const acts = document.createElement('div');
+                acts.className = 'mp-acts';
+                if (canEditPhotos) {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/png,image/webp,image/jpeg';
+                    input.hidden = true;
+                    input.id = `mp-file-${face}`;
+                    input.addEventListener('change', () => { if (input.files && input.files[0]) upload(face, input.files[0]); input.value = ''; });
+                    const pick = document.createElement('button');
+                    pick.type = 'button';
+                    pick.className = info ? 'btn btn-secondary' : 'btn';
+                    pick.textContent = t(info ? 'main.modelPhotoChange' : 'main.modelPhotoUpload');
+                    pick.addEventListener('click', () => input.click());
+                    acts.append(input, pick);
+                    if (info) {
+                        const del = document.createElement('button');
+                        del.type = 'button';
+                        del.className = 'btn btn-secondary mp-del';
+                        del.textContent = t('main.modelPhotoRemove');
+                        del.addEventListener('click', () => remove(face));
+                        acts.appendChild(del);
+                    }
+                }
+                slot.append(lab, thumb, acts);
+                slots.appendChild(slot);
+            });
+            const notes = document.createElement('div');
+            notes.className = 'mp-notes';
+            const n = photoCount(model);
+            if (!canEditPhotos) {
+                const ro = document.createElement('p');
+                ro.className = 'mp-note';
+                ro.textContent = t('main.modelPhotosReadOnly');
+                notes.appendChild(ro);
+            }
+            if (n > 0 && n < 6) {
+                const miss = document.createElement('p');
+                miss.className = 'mp-note mp-note-warn';
+                miss.textContent = fillText('main.modelPhotosMissingNote', { n: 6 - n });
+                notes.appendChild(miss);
+            }
+            if (FACES.some((f) => photosOf(model)[f] && !photosOf(model)[f].alpha)) {
+                const bg = document.createElement('p');
+                bg.className = 'mp-note mp-note-warn';
+                bg.textContent = t('main.modelPhotosBackgroundNote');
+                notes.appendChild(bg);
+            }
+            const prev = document.createElement('div');
+            prev.className = 'mp-preview';
+            const prevText = document.createElement('div');
+            const prevTitle = document.createElement('b');
+            prevTitle.textContent = t('main.modelPhotosPreview');
+            const prevSize = document.createElement('small');
+            prevSize.textContent = Number(model.length) > 0 && Number(model.height) > 0 ? fillText('main.modelPhotosPreviewSize', { l: model.length, h: model.height, d: model.shape === 'cilindrica' ? model.length : model.depth }) : t('main.modelPhotosPreviewNoSize');
+            prevText.append(prevTitle, prevSize);
+            prev.append(prevText, previewCube(model));
+            const foot = document.createElement('footer');
+            foot.className = 'mp-foot';
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'btn btn-secondary';
+            closeBtn.textContent = t('main.modelPhotosClose');
+            closeBtn.addEventListener('click', close);
+            foot.appendChild(closeBtn);
+            panel.append(head, slots, notes, prev, foot);
+        }
+        draw();
+    }
+
     // --- el panel ----------------------------------------------------------------------------------------------------------------------------------------------
     const COLUMNS = [
         ['colActModNombreCompra', 'main.colActModNombreCompra'], ['colActModNombrePersonalizado', 'main.colActModNombrePersonalizado'], ['colActModModelo', 'main.colActModModelo'], ['colActModForma', 'main.colActModForma'],
         ['colActModAlto', 'main.colActModAlto'], ['colActModLargo', 'main.colActModLargo'], ['colActModProfundidad', 'main.colActModProfundidad'], ['colActModPeso', 'main.colActModPeso'],
-        ['colActModVolumen', 'main.colActModVolumen'], ['colActModApariencia', 'main.colActModApariencia'], ['colCatStatus', 'main.colCatStatus'], ['colActModUso', 'main.colActModUso'], ['actions', 'main.colActions'],
+        ['colActModVolumen', 'main.colActModVolumen'], ['colActModApariencia', 'main.colActModApariencia'], ['colActModFotos', 'main.colActModFotos'], ['colCatStatus', 'main.colCatStatus'], ['colActModUso', 'main.colActModUso'], ['actions', 'main.colActions'],
     ];
     function ensurePanel() {
         if (panel && panel.isConnected) return panel;

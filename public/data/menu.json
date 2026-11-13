@@ -1464,6 +1464,7 @@
             { "id": "colActModPeso", "labelKey": "main.colActModPeso", "permissionOnly": true },
             { "id": "colActModVolumen", "labelKey": "main.colActModVolumen", "permissionOnly": true },
             { "id": "colActModApariencia", "labelKey": "main.colActModApariencia", "permissionOnly": true },
+            { "id": "colActModFotos", "labelKey": "main.colActModFotos", "permissionOnly": true },
             { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,

@@ -250,6 +250,7 @@ function ensureScene() {
     if (scene) return scene;
     scene = window.LayoutScene3D.create($('lyw-stage'), {
         labels: true,
+        modelPhotoUrl: (id, face, ver) => apiUrl(`/api/business/asset-models/${encodeURIComponent(id)}/photos/${encodeURIComponent(face)}?v=${encodeURIComponent(ver || 1)}`), // las fotos del modelo (2026-11-13)
         itemPickTypes: () => [],
         onSelect: (sel) => showCard(sel),
         onWalkFrame: (p) => onWalkFrame(p),

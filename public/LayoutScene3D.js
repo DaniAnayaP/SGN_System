@@ -274,6 +274,79 @@
             sensorFaceCache.set(key, tex);
             return tex;
         }
+        // Fotos del modelo (2026-11-13, Daniel: «que cada activo tenga su apariencia propia»): un elemento del Layout con la apariencia «Desde las fotos del modelo» (look 'photos', con modelId y photos = { cara: versión }) se dibuja como una caja
+        // con SUS medidas y cada foto en su cara (frente al frente; derecha e izquierda se cuentan mirando el equipo de frente). Las fotos las manda el mismo servidor (options.modelPhotoUrl(modelId, cara, versión) da la dirección) y se piden
+        // una sola vez por dirección; mientras llegan, y en las caras sin foto, la caja se ve del color del modelo (el promedio de su foto de frente). Las áreas transparentes de la foto dejan ver ese color.
+        const photoCache = new Map(); // dirección → { tex, img, listeners }
+        function modelPhoto(modelId, face, ver, onLoad) {
+            const url = options.modelPhotoUrl ? options.modelPhotoUrl(modelId, face, ver) : '';
+            if (!url) return null;
+            let entry = photoCache.get(url);
+            if (!entry) {
+                entry = { tex: new THREE.Texture(), img: null, listeners: [] };
+                try { entry.tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); } catch (e) { /* sin anisotropía */ }
+                photoCache.set(url, entry);
+                fetch(url, { credentials: 'include' }).then((r) => (r.ok ? r.blob() : null)).then((blob) => {
+                    if (!blob || destroyed) return;
+                    // la página no deja cargar imágenes blob: (CSP img-src): la foto se lee como data: y así carga igual en la web y en la App
+                    const img = new Image();
+                    img.onload = () => { entry.img = img; entry.tex.image = img; entry.tex.needsUpdate = true; entry.listeners.splice(0).forEach((fn) => fn(img)); dirty = true; };
+                    const reader = new FileReader();
+                    reader.onload = () => { img.src = reader.result; };
+                    reader.readAsDataURL(blob);
+                }).catch(() => { /* sin foto: la cara queda del color del modelo */ });
+            }
+            if (onLoad) { if (entry.img) onLoad(entry.img); else entry.listeners.push(onLoad); }
+            return entry.tex;
+        }
+        // El color promedio de lo que NO es transparente en una foto (para el color base de la caja).
+        function photoAverage(img) {
+            try {
+                const c = document.createElement('canvas');
+                c.width = 16; c.height = 16;
+                const g2 = c.getContext('2d', { willReadFrequently: true });
+                g2.drawImage(img, 0, 0, 16, 16);
+                const px = g2.getImageData(0, 0, 16, 16).data;
+                let r = 0; let g = 0; let b = 0; let n = 0;
+                for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 128) { r += px[i]; g += px[i + 1]; b += px[i + 2]; n++; }
+                return n ? [r / n / 255, g / n / 255, b / n / 255] : null;
+            } catch (e) { return null; }
+        }
+        // item = { modelId, photos }; w = ancho de la cara del frente, h = alto, d = fondo (metros). El frente mira a +z; quien lo coloca lo gira. pickable: se puede tocar (un sensor sí; un activo se elige por su caja).
+        function photoBox(item, w, h, d, pickable) {
+            const grp = new THREE.Group();
+            const baseMat = new THREE.MeshLambertMaterial({ color: 0x9aa1ad });
+            const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), baseMat);
+            if (!pickable) base.raycast = () => {};
+            grp.add(base);
+            const eps = 0.002;
+            let tinted = false;
+            const FACE_DEF = {
+                front: { pw: w, ph: h, pos: [0, 0, d / 2 + eps], rot: [0, 0, 0] },
+                back: { pw: w, ph: h, pos: [0, 0, -d / 2 - eps], rot: [0, Math.PI, 0] },
+                right: { pw: d, ph: h, pos: [w / 2 + eps, 0, 0], rot: [0, Math.PI / 2, 0] },
+                left: { pw: d, ph: h, pos: [-w / 2 - eps, 0, 0], rot: [0, -Math.PI / 2, 0] },
+                top: { pw: w, ph: d, pos: [0, h / 2 + eps, 0], rot: [-Math.PI / 2, 0, 0] },
+                bottom: { pw: w, ph: d, pos: [0, -h / 2 - eps, 0], rot: [Math.PI / 2, 0, 0] },
+            };
+            Object.keys(FACE_DEF).forEach((face) => {
+                const ver = item.photos && item.photos[face];
+                if (!ver) return;
+                const def = FACE_DEF[face];
+                const tex = modelPhoto(item.modelId, face, ver, (img) => {
+                    if (tinted && face !== 'front') return;
+                    const avg = photoAverage(img);
+                    if (avg) { baseMat.color.setRGB(avg[0], avg[1], avg[2]); tinted = true; dirty = true; }
+                });
+                if (!tex) return;
+                const plane = new THREE.Mesh(new THREE.PlaneGeometry(def.pw, def.ph), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+                plane.position.set(def.pos[0], def.pos[1], def.pos[2]);
+                plane.rotation.set(def.rot[0], def.rot[1], def.rot[2]);
+                if (!pickable) plane.raycast = () => {};
+                grp.add(plane);
+            });
+            return grp;
+        }
         // Un color (0xRRGGBB) mezclado con otro: k = cuánto del otro (0 = el mismo, 1 = el otro). Sirve para ver «tenue» lo que no se enfocó.
         const mixHex = (c, to, k) => { const r = (c >> 16) & 255; const g = (c >> 8) & 255; const b = c & 255; const R = (to >> 16) & 255; const G = (to >> 8) & 255; const B = to & 255; return (Math.round(r + (R - r) * k) << 16) | (Math.round(g + (G - g) * k) << 8) | Math.round(b + (B - b) * k); };
 
@@ -638,6 +711,7 @@
                 const o = g.children.pop();
                 if (o.geometry) o.geometry.dispose();
                 if (o.material && !o.material.map) o.material.dispose();
+                if (o.isGroup) o.traverse((c) => { if (c !== o) { if (c.geometry) c.geometry.dispose(); if (c.material && !c.material.map) c.material.dispose(); } });
             }
         }
 
@@ -1032,6 +1106,22 @@
                 const sg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(layout, { ...e, width: 0 }) : null;
                 if (!sg) return;
                 const y = (sg.base || 0) + Math.max(0.2, Number(e.height) || 1.5);
+                if (e.look === 'photos' && e.photos && e.modelId && options.modelPhotoUrl) {
+                    const spP = root.LayoutCalc.sensorPoint ? root.LayoutCalc.sensorPoint(layout, e) : null;
+                    let pdx = 0; let pdz = 1; // hacia dónde mira el frente (el lado de la pared donde está montado)
+                    if (spP) { const vx = spP.inx - spP.x; const vy = spP.iny - spP.y; const len = Math.hypot(vx, vy); if (len > 1e-6) { pdx = vx / len; pdz = vy / len; } }
+                    const dmP = e.dim || {};
+                    const pw = Math.max(0.03, (Number(dmP.w) || 11) / 100);
+                    const ph = Math.max(0.03, (Number(dmP.h) || 11) / 100);
+                    const pd = Math.max(0.01, (Number(dmP.d) || 2.5) / 100);
+                    const devP = photoBox(e, pw, ph, pd, true);
+                    const offP = (sg.thick || 0) / 2 + pd / 2 + 0.003;
+                    devP.position.set(PX(sg.a.x) + pdx * offP, y, PZ(sg.a.y) + pdz * offP);
+                    devP.rotation.y = Math.atan2(pdx, pdz);
+                    group.sensors.add(devP);
+                    addLabel(group.sensorLabels, e.code, PX(sg.a.x), y + 0.45, PZ(sg.a.y), 0.3, false);
+                    return;
+                }
                 if (e.look === 'sensor-wall' || e.look === 'sensor-probe') {
                     const sp = root.LayoutCalc.sensorPoint ? root.LayoutCalc.sensorPoint(layout, e) : null;
                     let dx = 0; let dz = 1; // hacia dónde mira el frente del equipo (el lado de la pared donde está montado)
@@ -1904,6 +1994,18 @@
                     spaceList.push({ s, x: cx, z: cz, fl, box: drawnBox });
                     return;
                 }
+                if (s.look === 'photos' && s.photos && s.modelId && options.modelPhotoUrl && !dimS) {
+                    const LCp = root.LayoutCalc;
+                    const sideP = frontSides[s.id] || (LCp && LCp.activoFront ? (LCp.activoFront(layout, s) || {}).side : '') || 'S';
+                    const fv = ((LCp && LCp.faceVectors ? LCp.faceVectors(sideP) : null) || { front: [0, 1] }).front || [0, 1];
+                    const frontAlongZ = Math.abs(fv[1]) >= Math.abs(fv[0]); // si el frente mira a ±z, su ancho va a lo largo (x); si no, a lo ancho
+                    const pbox = photoBox(s, frontAlongZ ? s.l : s.d, s.h, frontAlongZ ? s.d : s.l, false);
+                    pbox.position.set(cx, fl + s.h / 2, cz);
+                    pbox.rotation.y = Math.atan2(fv[0], fv[1]);
+                    group.assets.add(pbox);
+                    spaceList.push({ s, x: cx, z: cz, fl });
+                    return;
+                }
                 if (s.type === 'pallet') {
                     blk.push({ x: cx, y: 0.07 + fl, z: cz, sx: s.l, sy: 0.14, sz: s.d, c: mute(own !== null ? own : WOOD) });
                     const loadH = (s.h - 0.14) / lv;
@@ -2386,6 +2488,7 @@
             canvas.removeEventListener('wheel', onWheel);
             Object.keys(group).forEach((n) => clearGroup(group[n]));
             textureCache.forEach((e) => e.tex.dispose());
+            photoCache.forEach((e) => e.tex.dispose());
             patTex.forEach((tx) => tx.dispose());
             renderer.dispose();
             canvas.remove();

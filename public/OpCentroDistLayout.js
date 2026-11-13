@@ -4264,6 +4264,22 @@ function renderSvg(underlay) {
             } else {
                 s += `<rect class="ls ls-${sp.type}${spaceOff}" data-sid="${esc(sp.id)}" data-fid="${esc(sp.footprintId)}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" rx="2">${spaceTitle}</rect>`;
             }
+            if (sp.look === 'photos' && sp.modelId && sp.photos && (sp.photos.top || sp.photos.front)) {
+                const bigEnough = aw >= 22 && ah >= 22;
+                const useTop = !!sp.photos.top && (bigEnough || !sp.photos.front);
+                const faceP = useTop ? 'top' : 'front';
+                const hrefP = window.AssetLooks.photoUrl(sp.modelId, faceP, sp.photos[faceP]);
+                if (useTop) {
+                    // la foto de arriba tiene el frente hacia abajo de la imagen: se gira para que el frente quede del lado que mira el activo (N, S, E u O)
+                    const sideP = (LC.activoFront ? (LC.activoFront(d, sp) || {}).side : '') || 'S';
+                    const deg = { S: 0, N: 180, E: -90, W: 90 }[sideP] || 0;
+                    const mcx = ax + aw / 2; const mcy = ay + ah / 2;
+                    const iw2 = deg % 180 === 0 ? aw : ah; const ih2 = deg % 180 === 0 ? ah : aw;
+                    s += `<image href="${hrefP}" x="${(mcx - iw2 / 2).toFixed(1)}" y="${(mcy - ih2 / 2).toFixed(1)}" width="${iw2.toFixed(1)}" height="${ih2.toFixed(1)}" preserveAspectRatio="none"${deg ? ` transform="rotate(${deg} ${mcx.toFixed(1)} ${mcy.toFixed(1)})"` : ''} pointer-events="none"/>`;
+                } else {
+                    s += `<image href="${hrefP}" x="${ax.toFixed(1)}" y="${ay.toFixed(1)}" width="${aw.toFixed(1)}" height="${ah.toFixed(1)}" preserveAspectRatio="xMidYMid meet" pointer-events="none"/>`;
+                }
+            }
             const spaceInk = window.LayoutMapSvg.inkFor(sp.fmt || LC.FMT_ASSET_DEFAULT);
             if (w >= 26 && h >= 9) s += `<text class="lt3" data-lf="${esc(sp.footprintId)}" data-ls="${esc(sp.id)}"${spaceInk ? ` style="fill:${spaceInk}"` : ''} x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" text-anchor="middle">${esc(sp.code)}</text>`;
         });
@@ -4336,6 +4352,15 @@ function renderSvg(underlay) {
         // sin apariencia propia («La del Tipo») sigue el círculo con «°» de siempre.
         const look = sensorLookOf(e);
         const cx = Number(X(a.x)); const cy = Number(Y(a.y));
+        if (look === 'photos' && e.modelId && e.photos && (e.photos.front || e.photos.top)) {
+            // Fotos del modelo (2026-11-13): el equipo se ve con su foto de frente (la de arriba si no tiene frente), con la forma de sus medidas, y su código arriba.
+            const photoFace = e.photos.front ? 'front' : 'top';
+            const dmS = e.dim || {};
+            const ratioS = Math.min(Math.max((Number(dmS.w) || 11) / Math.max(Number(dmS.h) || 11, 1), 0.4), 2.5);
+            const ihS = 20; const iwS = Math.min(ihS * ratioS, 34);
+            s += `<rect class="lsn lsn-dev${moveS ? ' ld-drag' : ''}" data-nid="${esc(e.id)}" x="${(cx - iwS / 2 - 1.5).toFixed(1)}" y="${(cy - ihS / 2 - 1.5).toFixed(1)}" width="${(iwS + 3).toFixed(1)}" height="${(ihS + 3).toFixed(1)}" rx="3"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></rect><image href="${window.AssetLooks.photoUrl(e.modelId, photoFace, e.photos[photoFace])}" x="${(cx - iwS / 2).toFixed(1)}" y="${(cy - ihS / 2).toFixed(1)}" width="${iwS.toFixed(1)}" height="${ihS.toFixed(1)}" preserveAspectRatio="xMidYMid meet" pointer-events="none"/><text class="lt lx lt-sensor" x="${cx}" y="${(cy - ihS / 2 - 5).toFixed(1)}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
+            return;
+        }
         if (look === 'sensor-wall' || look === 'sensor-probe') {
             const measuresT = e.type !== 'hum'; const measuresH = e.type !== 'temp';
             const tx = measuresH ? cx - 3.8 : cx;
@@ -5072,12 +5097,14 @@ function openPlaceAssets(opts = {}) {
                 s.assetRef = a.id;
                 s.code = a.code;
                 s.look = a.look || ''; // solo para dibujarlo (no se guarda): la apariencia de su modelo y las medidas del equipo
+                if (a.look === 'photos' && a.photos) { s.modelId = a.modelId; s.photos = a.photos; }
                 s.dim = { w: a.length || 0, h: a.height || 0, d: a.depth || 0 };
                 (d.sensors = d.sensors || []).push(s);
                 return;
             }
             const s = LC.applyAssetToSpace(ROW_FACTORY.spaces(), a, { typeKind: a.typeKind, metric: a.metric });
             s.footprintId = footprintId;
+            if (a.look === 'photos' && a.photos) { s.look = 'photos'; s.modelId = a.modelId; s.photos = a.photos; } // solo para dibujarlo (no se guarda)
             d.spaces.push(s);
         });
         closePlaceAssets();
@@ -6781,7 +6808,7 @@ function ensureScene3d() {
             await loadScriptOnce('vendor/three/three.min.js');
             await loadScriptOnce('LayoutScene3D.js');
             await loadScriptOnce('LayoutAssetPicker.js');
-            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, itemPickTypes: () => (state.mode === 'edit' ? STEP_PICK_3D[state.focus] || [] : []), onSelect: (sel) => { show3dInfo(sel); selectFrom3d(sel); }, onWalkFrame: (p) => onWalkFrame(p), onWalkPick: (sel) => onWalkPick(sel), onWalkExit: () => walkExit() });
+            scene3d = window.LayoutScene3D.create($('layout-3d-stage'), { labels: scene3dLabels, modelPhotoUrl: (id, face, ver) => window.AssetLooks.photoUrl(id, face, ver), itemPickTypes: () => (state.mode === 'edit' ? STEP_PICK_3D[state.focus] || [] : []), onSelect: (sel) => { show3dInfo(sel); selectFrom3d(sel); }, onWalkFrame: (p) => onWalkFrame(p), onWalkPick: (sel) => onWalkPick(sel), onWalkExit: () => walkExit() });
             picker3d = window.LayoutAssetPicker.create($('layout-3d-picker'), {
                 texts: { title: t('main.layout3dActivosTitulo'), count: t('main.layout3dActivosConteo'), all: t('main.layout3dTodos'), none: t('main.layout3dNinguno'), close: t('main.layout3dCerrar'), search: t('main.layout3dActivosBuscar'), noResults: t('main.layout3dSinResultados'), noZone: t('main.layoutSinZona') },
                 typeLabel: (type) => typeLabel('space', type),

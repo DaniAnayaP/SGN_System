@@ -6088,6 +6088,60 @@ function migrateAssetUseAuthOnce() {
     db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ASSET_USE_AUTH_MIGRATION_KEY);
     console.log(`[db] Assets already complete stay authorized for use (one-time migration): ${result.changes} assets.`);
 }
+// --- Fotos del modelo (2026-11-13) ---------------------------------------------------------------------------------------------------------------------------
+// Daniel: «que pida cargar una foto del modelo y de ahí convierta a un diseño 3D, para que sea lo más parecido»: cada MODELO de activo (catálogo Activos Fijos > Modelos) lleva hasta 6 fotos, una por cara (frente, atrás, izquierda,
+// derecha, arriba, abajo) y el Layout dibuja el equipo como una caja con sus medidas reales y cada foto en su cara. Las fotos viven AQUÍ (como el logo de la empresa), ya reducidas por el navegador, para servirlas por el mismo servidor
+// (sin URL de otro origen: el 3D, el croquis y la App las necesitan del mismo origen). ver = cuántas veces se ha reemplazado (sirve para que el navegador no use una copia vieja).
+const ASSET_MODEL_FACES = ['front', 'back', 'left', 'right', 'top', 'bottom'];
+db.exec(`
+    CREATE TABLE IF NOT EXISTS asset_model_photos (
+        model_id    INTEGER NOT NULL,
+        face        TEXT NOT NULL,
+        client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        mime        TEXT NOT NULL,
+        data        BLOB NOT NULL,
+        width       INTEGER NOT NULL DEFAULT 0,
+        height      INTEGER NOT NULL DEFAULT 0,
+        has_alpha   INTEGER NOT NULL DEFAULT 0,
+        ver         INTEGER NOT NULL DEFAULT 1,
+        updated_by  TEXT NOT NULL DEFAULT '',
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (model_id, face)
+    );
+    CREATE INDEX IF NOT EXISTS idx_asset_model_photos_client ON asset_model_photos (client_id);
+`);
+function setAssetModelPhoto({ clientId, modelId, face, mime, data, width = 0, height = 0, hasAlpha = false, updatedBy = '' }) {
+    if (!ASSET_MODEL_FACES.includes(face)) return null;
+    db.prepare(`
+        INSERT INTO asset_model_photos (model_id, face, client_id, mime, data, width, height, has_alpha, ver, updated_by)
+        VALUES (@modelId, @face, @clientId, @mime, @data, @width, @height, @hasAlpha, 1, @updatedBy)
+        ON CONFLICT(model_id, face) DO UPDATE SET mime = excluded.mime, data = excluded.data, width = excluded.width, height = excluded.height, has_alpha = excluded.has_alpha,
+            ver = asset_model_photos.ver + 1, updated_by = excluded.updated_by, updated_at = datetime('now')
+    `).run({ modelId, face, clientId, mime, data, width: Math.round(width) || 0, height: Math.round(height) || 0, hasAlpha: hasAlpha ? 1 : 0, updatedBy: String(updatedBy || '').slice(0, 160) });
+    return getAssetModelPhotoMeta(clientId, modelId, face);
+}
+function getAssetModelPhoto(clientId, modelId, face) {
+    return db.prepare('SELECT mime, data, ver, updated_at FROM asset_model_photos WHERE client_id = ? AND model_id = ? AND face = ?').get(clientId, modelId, face);
+}
+function getAssetModelPhotoMeta(clientId, modelId, face) {
+    return db.prepare('SELECT face, width, height, has_alpha AS hasAlpha, ver FROM asset_model_photos WHERE client_id = ? AND model_id = ? AND face = ?').get(clientId, modelId, face);
+}
+function deleteAssetModelPhoto(clientId, modelId, face) {
+    return db.prepare('DELETE FROM asset_model_photos WHERE client_id = ? AND model_id = ? AND face = ?').run(clientId, modelId, face).changes > 0;
+}
+// Qué fotos tiene cada modelo de la empresa: Map(modelId → { face: { ver, w, h, alpha } }). Sin los bytes (solo para pintar las pantallas).
+function assetModelPhotoMap(clientId) {
+    const out = new Map();
+    db.prepare('SELECT model_id AS modelId, face, width, height, has_alpha AS alpha, ver FROM asset_model_photos WHERE client_id = ?').all(clientId).forEach((r) => {
+        const entry = out.get(r.modelId) || {};
+        entry[r.face] = { ver: r.ver, w: r.width, h: r.height, alpha: !!r.alpha };
+        out.set(r.modelId, entry);
+    });
+    return out;
+}
+function countAssetModelPhotos(clientId, modelId) {
+    return db.prepare('SELECT COUNT(*) AS n FROM asset_model_photos WHERE client_id = ? AND model_id = ?').get(clientId, modelId).n;
+}
 // Cuántos modelos tiene un Tipo (para no borrar un Tipo con modelos).
 function countAssetModelsByType(clientId, typeId) {
     return db.prepare("SELECT COUNT(*) AS n FROM article_categories WHERE client_id = ? AND category_type = 'activos-modelos' AND parent_id = ?").get(clientId, typeId).n;
@@ -13622,6 +13676,8 @@ function seedAssetModelLeaves() {
     if (alta) seedLeavesForScreenHolders(ASSET_MODEL_PICKER_SEED_KEY, alta, levels.map((level) => `${alta.submenuPrefix}/colActElegirModelo/${level}`), 'the Alta Activos model picker column', { contractOnly: true });
     // La columna «Apariencia en el Layout» del catálogo de modelos (2026-11-13): solo en lo contratado, como las demás columnas del modelo.
     if (fijos) seedLeavesForScreenHolders('seed-activos-modelos-apariencia-v1', fijos, levels.map((level) => `${fijos.submenuPrefix}/colActModApariencia/${level}`), 'the asset model look column', { contractOnly: true });
+    // La columna «Fotos» del catálogo de modelos (2026-11-13): subir, cambiar y quitar las fotos de las 6 caras; solo en lo contratado (escribe datos: quién la recibe lo decide el administrador desde el árbol).
+    if (fijos) seedLeavesForScreenHolders('seed-activos-modelos-fotos-v1', fijos, levels.map((level) => `${fijos.submenuPrefix}/colActModFotos/${level}`), 'the asset model photos column', { contractOnly: true });
 }
 
 // Gestión > Activos (2026-11-12): la pantalla nueva y su botón Editar los reciben, una sola vez, quienes ya tienen la pantalla Alta Activos (como Códigos y Edición Código con Alta Artículos).
@@ -13946,6 +14002,13 @@ module.exports = {
     listAssetAuthorizationsRequestedBy,
     markAssetAuthorizationsSeenForRequester,
     assetAuthorizationSummaryMap,
+    ASSET_MODEL_FACES,
+    setAssetModelPhoto,
+    getAssetModelPhoto,
+    getAssetModelPhotoMeta,
+    deleteAssetModelPhoto,
+    assetModelPhotoMap,
+    countAssetModelPhotos,
     countAssetModelsByType,
     listFixedAssets,
     getFixedAssetById,

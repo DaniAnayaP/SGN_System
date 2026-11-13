@@ -210,6 +210,13 @@ const {
     setFixedAssetPendingChoices,
     setFixedAssetEditing,
     FIXED_ASSET_EMPTY_ON_EDIT,
+    ASSET_MODEL_FACES,
+    setAssetModelPhoto,
+    getAssetModelPhoto,
+    getAssetModelPhotoMeta,
+    deleteAssetModelPhoto,
+    assetModelPhotoMap,
+    countAssetModelPhotos,
     getAssetAuthorizationById,
     getLatestAssetAuthorization,
     getPendingAssetAuthorization,
@@ -10335,7 +10342,7 @@ function parseClassificationIds(text) {
 
 // Contexto que necesitan los registros del catálogo para mostrar nombres: almacenes / sub almacenes (centros de costos, almacenes) o Inventario (nombres de sus clasificaciones).
 function categoryContext(req, categoryType) {
-    if (categoryType === 'activos-modelos') return { modelUse: fixedAssetModelUseCounts(req.user.clientId) }; // cuántos activos usa cada modelo
+    if (categoryType === 'activos-modelos') return { modelUse: fixedAssetModelUseCounts(req.user.clientId), modelPhotos: assetModelPhotoMap(req.user.clientId) }; // cuántos activos usa cada modelo y qué fotos tiene cada uno
     const warehouse = warehouseContext(req, categoryType);
     if (warehouse || categoryType !== 'inventario') return warehouse;
     const { clientId, isTestAccount } = req.user;
@@ -10387,7 +10394,7 @@ function isAssetModelComplete(row) {
 }
 // Apariencias que un MODELO puede tomar en el Layout según el «Se dibuja como» (kind) de su Tipo; '' = la del Tipo (lo que ya se dibujaba). De momento solo los sensores (2026-11-13); gabinetes, anaqueles y racks siguen uno por uno.
 const ASSET_LOOKS = { sensor: ['sensor-wall', 'sensor-probe', 'sensor-disc'] };
-const ASSET_LOOK_LABELS = { '': 'La del Tipo', 'sensor-wall': 'Termohigrómetro de pared', 'sensor-probe': 'Registrador con sonda', 'sensor-disc': 'Sensor compacto' };
+const ASSET_LOOK_LABELS = { '': 'La del Tipo', 'sensor-wall': 'Termohigrómetro de pared', 'sensor-probe': 'Registrador con sonda', 'sensor-disc': 'Sensor compacto', photos: 'Desde las fotos del modelo' };
 const ASSET_MODEL_FROM_KEYS = ['purchaseName', 'customName', 'model', 'shape', 'height', 'length', 'depth', 'weight', 'volume']; // lo que un activo toma de su modelo
 const ASSET_MODEL_LOCKED_KEYS = ['shape', 'height', 'length', 'depth', 'weight', 'volume']; // lo que se cierra del modelo cuando algún activo lo usa
 const assetModelLabel = (m) => [m.name, m.model_number].filter(Boolean).join(' · ');
@@ -10418,7 +10425,9 @@ function prepareAssetModelPatch(req, categoryType, existing, patch) {
     if (has('look')) {
         const look = String(patch.look == null ? '' : patch.look);
         const typeRow = existing.parent_id ? getArticleCategoryById(existing.parent_id, req.user.clientId, req.user.isTestAccount) : null;
-        if (look !== '' && !(ASSET_LOOKS[typeRow && typeRow.kind] || []).includes(look)) return bad(400, 'Esa apariencia no es de este tipo de activo.', 'LOOK');
+        if (look === 'photos') {
+            if (!countAssetModelPhotos(req.user.clientId, existing.id)) return bad(400, 'Sube al menos una foto del modelo para usar «Desde las fotos del modelo».', 'LOOK_PHOTOS');
+        } else if (look !== '' && !(ASSET_LOOKS[typeRow && typeRow.kind] || []).includes(look)) return bad(400, 'Esa apariencia no es de este tipo de activo.', 'LOOK');
         out.look = look;
     }
     const shape = has('shape') ? out.shape : existing.shape;
@@ -10457,6 +10466,94 @@ function finishAssetModelPatch(req, existing, category, appliedPatch) {
     }
     return current;
 }
+
+// --- Fotos del modelo (2026-11-13) ----------------------------------------------------------------------------------------------------------------------------
+// Cada modelo lleva hasta 6 fotos (una por cara) y el Layout lo dibuja como una caja con sus medidas reales y cada foto en su cara (3D y croquis). Las sube quien tiene la hoja «Fotos» (Catálogos > Activos Fijos > Modelos) en Ver y operar
+// o Modificar; el navegador las recorta (bordes transparentes) y las reduce antes de mandarlas. Se guardan en la base (db.js asset_model_photos) y se sirven por este mismo servidor. Al subir la primera foto la apariencia del modelo pasa
+// sola a «Desde las fotos» (look 'photos'), salvo en equipo ABIERTO (rack, anaquel, rack móvil, tarima): la caja taparía sus niveles y posiciones, ahí la elige quien administra el catálogo. Al quitar la última foto vuelve a «La del Tipo».
+const ASSET_MODEL_FACE_LABELS = { front: 'Frente', back: 'Atrás', left: 'Izquierda', right: 'Derecha', top: 'Arriba', bottom: 'Abajo' };
+const ASSET_MODEL_PHOTO_MAX_BYTES = 1536 * 1024;
+const ASSET_OPEN_STORAGE_KINDS = new Set(['rack', 'rackpal', 'cart', 'pallet']);
+const assetModelPhotosCan = (req) => !!req.user.isClientAdmin || ['ver-y-operar', 'editar'].includes(getColumnGrantLevel(getUserEffectiveGrants(req.user.sub), 'activos-modelos', 'colActModFotos'));
+// Solo imágenes de verdad: PNG, WebP o JPEG, con sus primeros bytes correctos (no se confía en lo que diga el encabezado).
+function assetModelPhotoMime(buf) {
+    if (!Buffer.isBuffer(buf) || buf.length < 12) return '';
+    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png';
+    if (buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+    return '';
+}
+const assetModelPhotoRaw = express.raw({ type: (req) => /^image\//i.test(String(req.headers['content-type'] || '')), limit: '2mb' });
+function ownAssetModel(req, res) {
+    const model = getArticleCategoryById(intOf(req.params.id), req.user.clientId, req.user.isTestAccount);
+    if (!model || model.category_type !== 'activos-modelos') { res.status(404).json({ message: 'Model not found.' }); return null; }
+    return model;
+}
+function assetModelResponse(req, model) {
+    const fresh = getArticleCategoryById(model.id, req.user.clientId, req.user.isTestAccount);
+    return mapArticleCategoryRecord(fresh, null, getClientById(req.user.clientId)?.company_name, categoryContext(req, 'activos-modelos'));
+}
+function logAssetModelPhoto(req, model, text, meta = {}) {
+    logTableChange({ clientId: req.user.clientId, tableKey: 'activos-modelos', recordId: model.id, recordLabel: `#${model.id}`, action: 'update', fieldKey: 'main.colActModFotos', oldValue: meta.oldText || '', newValue: text, changedBy: changedByLabel(req) });
+}
+function logAssetModelLookChange(req, model, from, to) {
+    logTableChange({ clientId: req.user.clientId, tableKey: 'activos-modelos', recordId: model.id, recordLabel: `#${model.id}`, action: 'update', fieldKey: 'main.colActModApariencia', oldValue: ASSET_LOOK_LABELS[from || ''] || from || '', newValue: ASSET_LOOK_LABELS[to || ''] || to || '', changedBy: changedByLabel(req) });
+}
+app.put('/api/business/asset-models/:id/photos/:face', requireAuth, assetModelPhotoRaw, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const face = String(req.params.face || '');
+    if (!ASSET_MODEL_FACES.includes(face)) return res.status(400).json({ message: 'Esa cara no existe: frente, atrás, izquierda, derecha, arriba o abajo.', code: 'FACE' });
+    const model = ownAssetModel(req, res);
+    if (!model) return;
+    if (!assetModelPhotosCan(req)) return res.status(403).json({ message: 'No tienes permiso para subir las fotos del modelo.' });
+    const data = req.body;
+    if (!Buffer.isBuffer(data) || !data.length) return res.status(400).json({ message: 'La foto no es válida.', code: 'FILE' });
+    if (data.length > ASSET_MODEL_PHOTO_MAX_BYTES) return res.status(413).json({ message: 'La foto pesa demasiado (máximo 1.5 MB): redúcela e inténtalo otra vez.', code: 'SIZE' });
+    const mime = assetModelPhotoMime(data);
+    if (!mime) return res.status(400).json({ message: 'La foto debe ser PNG, WebP o JPEG.', code: 'FILE' });
+    const had = !!getAssetModelPhotoMeta(req.user.clientId, model.id, face);
+    const meta = setAssetModelPhoto({
+        clientId: req.user.clientId, modelId: model.id, face, mime, data, width: Number(req.query.w) || 0, height: Number(req.query.h) || 0, hasAlpha: String(req.query.alpha || '') === '1', updatedBy: changedByLabel(req),
+    });
+    logAssetModelPhoto(req, model, `${ASSET_MODEL_FACE_LABELS[face]}: ${had ? 'foto cambiada' : 'foto subida'}`, { oldText: had ? `${ASSET_MODEL_FACE_LABELS[face]}: [imagen]` : '' });
+    // la primera foto activa «Desde las fotos» (salvo en equipo abierto o si ya se eligió otra apariencia a propósito)
+    const type = model.parent_id ? getArticleCategoryById(model.parent_id, req.user.clientId, req.user.isTestAccount) : null;
+    let autoLook = false;
+    if (!(model.look || '') && !ASSET_OPEN_STORAGE_KINDS.has((type && type.kind) || '')) {
+        updateArticleCategory(model.id, req.user.clientId, { look: 'photos' }, req.user.isTestAccount);
+        logAssetModelLookChange(req, model, '', 'photos');
+        autoLook = true;
+    }
+    res.json({ category: assetModelResponse(req, model), photo: { face, ver: meta.ver, w: meta.width, h: meta.height, alpha: !!meta.hasAlpha }, autoLook });
+});
+app.delete('/api/business/asset-models/:id/photos/:face', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const face = String(req.params.face || '');
+    if (!ASSET_MODEL_FACES.includes(face)) return res.status(400).json({ message: 'Esa cara no existe.', code: 'FACE' });
+    const model = ownAssetModel(req, res);
+    if (!model) return;
+    if (!assetModelPhotosCan(req)) return res.status(403).json({ message: 'No tienes permiso para quitar las fotos del modelo.' });
+    if (!deleteAssetModelPhoto(req.user.clientId, model.id, face)) return res.status(404).json({ message: 'Esa cara no tiene foto.', code: 'NOPHOTO' });
+    logAssetModelPhoto(req, model, `${ASSET_MODEL_FACE_LABELS[face]}: foto quitada`, { oldText: `${ASSET_MODEL_FACE_LABELS[face]}: [imagen]` });
+    // sin ninguna foto, «Desde las fotos» ya no tiene de dónde dibujar: vuelve a «La del Tipo»
+    let resetLook = false;
+    if (model.look === 'photos' && !countAssetModelPhotos(req.user.clientId, model.id)) {
+        updateArticleCategory(model.id, req.user.clientId, { look: '' }, req.user.isTestAccount);
+        logAssetModelLookChange(req, model, 'photos', '');
+        resetLook = true;
+    }
+    res.json({ category: assetModelResponse(req, model), resetLook });
+});
+// La foto misma (para el 3D, el croquis y la ventana de fotos). ?v= es la versión: cambia al reemplazarla, así la copia guardada por el navegador nunca queda vieja.
+app.get('/api/business/asset-models/:id/photos/:face', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).end();
+    const face = String(req.params.face || '');
+    if (!ASSET_MODEL_FACES.includes(face)) return res.status(404).end();
+    const photo = getAssetModelPhoto(req.user.clientId, intOf(req.params.id), face);
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
+});
 
 // Clasificación de Activos: su campo propio es la métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
 const ASSET_CLASS_METRIC_LABELS = { m2: 'm² (activo para operar)', m3: 'm³ (activo para almacenar)' };
@@ -10547,7 +10644,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
         ...(row.category_type === 'activos-modelos' ? {
             parentId: row.parent_id, customName: row.custom_name || '', modelNumber: row.model_number || '', shape: row.shape || 'rectangular',
             height: row.height_cm, length: row.length_cm, depth: row.depth_cm, weight: row.weight_kg, volume: row.volume_m3,
-            complete: isAssetModelComplete(row), usedBy: ctx && ctx.modelUse ? (ctx.modelUse.get(row.id) || 0) : 0, look: row.look || '',
+            complete: isAssetModelComplete(row), usedBy: ctx && ctx.modelUse ? (ctx.modelUse.get(row.id) || 0) : 0, look: row.look || '', photos: ctx && ctx.modelPhotos ? (ctx.modelPhotos.get(row.id) || {}) : {},
         } : {}),
         ...(row.category_type === 'incidentes-criterios' ? { kind: row.kind } : {}),
         ...(row.category_type === 'transito-equipos' ? { kind: row.kind, widthM: row.width_m || 0, lengthM: row.length_m || 0, heightM: row.height_m || 0 } : {}),
@@ -11921,19 +12018,40 @@ function layoutAssetCatalogs(clientId) {
 }
 // Apariencia de los sensores en el Layout (2026-11-13): cada sensor con assetRef sale con la apariencia del MODELO de su activo (look; '' = la del Tipo) y las medidas del equipo (dim en cm: ancho, alto y fondo) para dibujarlo como es.
 // Son datos SOLO para dibujar: no se guardan (el Layout limpio los quita) y se vuelven a sacar en cada lectura.
+// Fotos del modelo (2026-11-13): con la apariencia «Desde las fotos» (look 'photos') el elemento sale además con modelId y photos ({ cara: versión }) para pedir cada foto a /api/business/asset-models/:id/photos/:cara?v=<versión>; los activos
+// (no solo los sensores) también reciben su apariencia: un activo sin fotos sigue dibujándose como su tipo.
 function layoutWithSensorLooks(clientId, centerId, layout) {
-    if (!layout || !Array.isArray(layout.sensors) || !layout.sensors.some((s) => s && s.assetRef)) return layout;
+    if (!layout) return layout;
+    const hasRef = (list) => Array.isArray(list) && list.some((s) => s && s.assetRef);
+    if (!hasRef(layout.sensors) && !hasRef(layout.spaces)) return layout;
     const models = new Map(listArticleCategoriesAnyScope(clientId, 'activos-modelos').map((r) => [r.id, r]));
     const assets = new Map(listFixedAssetsOfCenterAnyScope(clientId, centerId).map((a) => [a.id, a]));
-    return {
-        ...layout,
-        sensors: layout.sensors.map((s) => {
+    const photoMap = assetModelPhotoMap(clientId);
+    const photosOf = (m) => {
+        if (!m || m.look !== 'photos') return null;
+        const faces = photoMap.get(m.id);
+        if (!faces || !Object.keys(faces).length) return null;
+        return Object.fromEntries(Object.entries(faces).map(([face, v]) => [face, v.ver]));
+    };
+    const out = { ...layout };
+    if (hasRef(layout.sensors)) {
+        out.sensors = layout.sensors.map((s) => {
             const a = s && s.assetRef ? assets.get(s.assetRef) : null;
             if (!a) return s;
             const m = a.model_id ? models.get(a.model_id) : null;
-            return { ...s, look: (m && m.look) || '', dim: { w: a.length_cm || 0, h: a.height_cm || 0, d: a.depth_cm || 0 } };
-        }),
-    };
+            const photos = photosOf(m);
+            return { ...s, look: photos ? 'photos' : ((m && m.look !== 'photos' && m.look) || ''), dim: { w: a.length_cm || 0, h: a.height_cm || 0, d: a.depth_cm || 0 }, ...(photos ? { modelId: m.id, photos } : {}) };
+        });
+    }
+    if (hasRef(layout.spaces)) {
+        out.spaces = layout.spaces.map((sp) => {
+            const a = sp && sp.assetRef ? assets.get(sp.assetRef) : null;
+            const m = a && a.model_id ? models.get(a.model_id) : null;
+            const photos = photosOf(m);
+            return photos ? { ...sp, look: 'photos', modelId: m.id, photos } : sp;
+        });
+    }
+    return out;
 }
 function layoutAssetOpts(row, cat) {
     const type = cat.types.get(row.type_id);
@@ -12042,7 +12160,7 @@ function layoutFixedAssetsFor(req, layoutRow, centerId) {
         const cls = cat.classes.get(a.class_id);
         return {
             id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name, purchaseName: a.purchase_name, customName: a.custom_name, model: a.model, serialNumber: a.serial_number,
-            typeId: a.type_id || 0, modelId: a.model_id || 0, look: ((cat.models.get(a.model_id) || {}).look) || '', typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
+            typeId: a.type_id || 0, modelId: a.model_id || 0, ...(() => { const m = cat.models.get(a.model_id); const faces = m && m.look === 'photos' ? assetModelPhotoMap(clientId).get(m.id) : null; return faces && Object.keys(faces).length ? { look: 'photos', photos: Object.fromEntries(Object.entries(faces).map(([f, v]) => [f, v.ver])) } : { look: (m && m.look) || '' }; })(), typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
             // solo los activos completos Y autorizados para usarse se pueden colocar en el Layout; el selector dice qué le falta a los demás (awaitingAuth: está completo y espera la autorización de uso)
             ...(() => { const done = fixedAssetCompleteness(a, type); const authorized = !!a.use_auth; return { complete: done.complete && authorized, missing: done.missing, photoCount: done.photos, awaitingAuth: done.complete && !authorized && !a.editing }; })(),
             shape: a.shape, length: a.length_cm, depth: a.depth_cm, height: a.height_cm, status: a.status, showInLayout: !!a.show_in_layout,

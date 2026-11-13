@@ -8656,6 +8656,41 @@ td.sku-cell-marked select.editable-cell-select{ min-width: 7.5rem; }
 td.asset-missing{ color: color-mix(in srgb, #b54708 70%, var(--color-text-primary)); font-weight: 600; }
 .sku-editing-chip{ display: inline-block; margin-left: 0.45rem; padding: 0.05rem 0.5rem; border-radius: 999px; background: #fef0c7; color: #93370d; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
 .sku-editing-chip.asset-auth-chip-bad{ background: #fee4e2; color: #912018; }
+/* Fotos del modelo (Catálogos > Activos Fijos > Modelos): la columna, la ventana de seis caras y la caja 3D que gira */
+.asset-look-thumb-photo{ object-fit: contain; background: repeating-conic-gradient(var(--color-surface, #fff) 0 25%, color-mix(in srgb, var(--color-border) 55%, var(--color-surface, #fff)) 0 50%) 0 0 / 8px 8px; border-radius: 0.5rem; }
+.mp-strip{ display: inline-flex; gap: 0.2rem; align-items: center; vertical-align: middle; }
+.mp-mini{ width: 1.7rem; height: 1.7rem; border-radius: 0.35rem; border: 1px solid var(--color-border); display: grid; place-items: center; overflow: hidden; background: repeating-conic-gradient(var(--color-surface, #fff) 0 25%, color-mix(in srgb, var(--color-border) 55%, var(--color-surface, #fff)) 0 50%) 0 0 / 0.6rem 0.6rem; }
+.mp-mini img{ max-width: 100%; max-height: 100%; display: block; }
+.mp-mini-empty{ background: none; border-style: dashed; }
+.mp-count{ margin: 0 0.4rem; font-size: 0.78rem; font-weight: 600; white-space: nowrap; color: var(--color-text-secondary); }
+.mp-count-ok{ color: #1d7f55; } .mp-count-part{ color: #a4410a; }
+.mp-win{ width: min(46rem, 94vw); max-height: 92vh; overflow: auto; display: flex; flex-direction: column; gap: 0.9rem; }
+.mp-head h3{ margin: 0; font-size: 1.05rem; } .mp-hint{ margin: 0.2rem 0 0; font-size: 0.8rem; color: var(--color-text-secondary); }
+.mp-slots{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+.mp-slot{ border: 1px solid var(--color-border); border-radius: 0.75rem; padding: 0.5rem; display: grid; gap: 0.4rem; background: var(--color-surface, #fff); }
+.mp-lab{ display: flex; justify-content: space-between; align-items: center; font-size: 0.76rem; font-weight: 700; }
+.mp-ok{ color: #1d7f55; } .mp-no{ color: var(--color-text-secondary); font-weight: 500; }
+.mp-thumb{ aspect-ratio: 1 / 1; border-radius: 0.5rem; display: grid; place-items: center; overflow: hidden; background: repeating-conic-gradient(var(--color-surface, #fff) 0 25%, color-mix(in srgb, var(--color-border) 55%, var(--color-surface, #fff)) 0 50%) 0 0 / 0.8rem 0.8rem; }
+.mp-thumb img{ max-width: 92%; max-height: 92%; display: block; }
+.mp-thumb-empty{ background: none; border: 1.5px dashed var(--color-border); color: var(--color-text-secondary); font-size: 0.74rem; text-align: center; padding: 0.4rem; }
+.mp-acts{ display: flex; gap: 0.35rem; flex-wrap: wrap; } .mp-acts .btn{ padding: 0.25rem 0.7rem; font-size: 0.78rem; } .mp-del{ color: #a4410a; }
+.mp-notes{ display: grid; gap: 0.4rem; } .mp-note{ margin: 0; padding: 0.5rem 0.75rem; border-radius: 0.6rem; font-size: 0.8rem; background: color-mix(in srgb, var(--color-border) 40%, var(--color-surface, #fff)); }
+.mp-note-warn{ background: #fdeed8; color: #a4410a; }
+.mp-preview{ display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.6rem 0.9rem; border-radius: 0.75rem; background: color-mix(in srgb, var(--color-accent, #7d3f8f) 9%, var(--color-surface, #fff)); }
+.mp-preview small{ display: block; color: var(--color-text-secondary); font-size: 0.76rem; }
+.mp-foot{ display: flex; justify-content: flex-end; }
+.mp-stage{ perspective: 900px; display: grid; place-items: center; min-width: 11rem; min-height: 11rem; }
+.mp-cube{ position: relative; width: var(--w); height: var(--h); transform-style: preserve-3d; transform: rotateX(-20deg) rotateY(-35deg); animation: mp-spin 16s linear infinite; }
+@keyframes mp-spin{ from{ transform: rotateX(-20deg) rotateY(-35deg); } to{ transform: rotateX(-20deg) rotateY(325deg); } }
+@media (prefers-reduced-motion: reduce){ .mp-cube{ animation: none; } }
+.mp-face{ position: absolute; left: 0; top: 0; background: #9aa1ad center / 100% 100% no-repeat; backface-visibility: hidden; }
+.mp-face-front{ width: var(--w); height: var(--h); transform: translateZ(calc(var(--d) / 2)); }
+.mp-face-back{ width: var(--w); height: var(--h); transform: rotateY(180deg) translateZ(calc(var(--d) / 2)); }
+.mp-face-right{ width: var(--d); height: var(--h); left: calc((var(--w) - var(--d)) / 2); transform: rotateY(90deg) translateZ(calc(var(--w) / 2)); }
+.mp-face-left{ width: var(--d); height: var(--h); left: calc((var(--w) - var(--d)) / 2); transform: rotateY(-90deg) translateZ(calc(var(--w) / 2)); }
+.mp-face-top{ width: var(--w); height: var(--d); top: calc((var(--h) - var(--d)) / 2); transform: rotateX(90deg) translateZ(calc(var(--h) / 2)); }
+.mp-face-bottom{ width: var(--w); height: var(--d); top: calc((var(--h) - var(--d)) / 2); transform: rotateX(-90deg) translateZ(calc(var(--h) / 2)); }
+@media (max-width: 560px){ .mp-slots{ grid-template-columns: repeat(2, 1fr); } }
 .sku-editing-chip.asset-auth-chip-block{ display: block; width: fit-content; max-width: 100%; margin: 0.2rem 0 0; white-space: normal; border-radius: 0.6rem; line-height: 1.25; }
 .notifications-asset-reason{ display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.4rem; }
 .notifications-asset-reason[hidden]{ display: none; }
