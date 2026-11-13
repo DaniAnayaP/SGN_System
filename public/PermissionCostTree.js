@@ -162,7 +162,7 @@
     // keeps showing there exactly as before -- GEIPSA needs to see
     // everything, contracted or not, to decide what to sell.
     function create(container, {
-        mode = 'costEdit', currency = 'MXN', interactive = false, allowedSectionIds = null, columnLevels = false,
+        mode = 'costEdit', currency = 'MXN', interactive = false, allowRemove = false, allowedSectionIds = null, columnLevels = false,
         // clientTricolor only -- see the "Cambios" section below. historyEndpoint
         // is the GET route to query (a caller-owned URL, since which entity a
         // clientTricolor tree is scoped to -- a client or a user -- differs by
@@ -234,6 +234,8 @@
         let planGrantSet = new PlanSet(); // clientTricolor: coverage granted by the client's PLAN (green)
         let clientGrantSet = new Set(); // clientTricolor: already-saved "+ adicionales" sold to THIS client (yellow)
         let pendingAdditions = new Set(); // clientTricolor + interactive: unsaved additions toggled in this session
+        // allowRemove (solo «Otorgar Accesos» de una persona): lo que ya se había dado como adicional y se quita en esta sesión (todavía sin guardar). Lo que da el puesto (verde) nunca se quita aquí.
+        let pendingRemovals = new Set();
         let costMap = new Map(); // tupleKey -> cost, editable in costEdit mode, read-only reference otherwise
         // grantReadonlyCost only -- a Plan's own Sector's CURRENT raw grants
         // (see Sector -> Plan, Admin-Planes.js), used only to label a LEAF
@@ -260,9 +262,25 @@
         // read-only "Permisos Contratados" modal never has pendingAdditions,
         // so this degenerates to plain clientGrantSet there.
         function effectiveClientSet() {
-            if (!interactive || pendingAdditions.size === 0) return clientGrantSet;
-            return new Set([...clientGrantSet, ...pendingAdditions]);
+            if (!interactive || (pendingAdditions.size === 0 && pendingRemovals.size === 0)) return clientGrantSet;
+            const set = new Set([...clientGrantSet].filter((k) => !pendingRemovals.has(k)));
+            pendingAdditions.forEach((k) => set.add(k));
+            return set;
         }
+        // Marcar / desmarcar una llave en esta sesión: lo ya guardado que se vuelve a marcar solo deja de estar «por quitar»; lo nuevo que se desmarca solo deja de estar «por agregar».
+        function stageAdd(k) {
+            if (clientGrantSet.has(k)) pendingRemovals.delete(k);
+            else pendingAdditions.add(k);
+        }
+        function stageDrop(k) {
+            pendingAdditions.delete(k);
+            if (!allowRemove) return;
+            if (clientGrantSet.has(k)) pendingRemovals.add(k);
+            // la versión App de una llave no se queda sin su Web
+            if (!k.endsWith(APP_SUFFIX) && (clientGrantSet.has(k + APP_SUFFIX) || pendingAdditions.has(k + APP_SUFFIX))) stageDrop(k + APP_SUFFIX);
+        }
+        // Lo que esta persona tiene como adicional (ni lo da el puesto ni está por quitar): lo único que se puede quitar aquí.
+        const isOwnExtra = (k) => !planGrantSet.has(k) && effectiveClientSet().has(k);
 
         // Same expansion init() already did for grantSet in the other two
         // modes (fan out every container-level grant onto its leaf
@@ -487,13 +505,15 @@
                 }
             } else if (mode === 'clientTricolor') {
                 const isRedInteractive = !!(colorSlot && colorSlot.color === 'red' && interactive && !colorSlot.limitReason);
-                if (isRedInteractive) {
+                const isRemovable = !!(colorSlot && colorSlot.color === 'yellow' && interactive && colorSlot.removeKeys && colorSlot.removeKeys.length);
+                if (isRedInteractive || isRemovable) {
                     const labelEl = document.createElement('label');
-                    labelEl.className = 'perm-tree-check';
+                    labelEl.className = isRemovable ? 'perm-tree-check perm-tree-check-extra' : 'perm-tree-check';
+                    if (isRemovable) labelEl.title = t('main.permRemoveExtra');
                     input = document.createElement('input');
                     input.type = 'checkbox';
-                    input.checked = !!colorSlot.checked;
-                    input.addEventListener('change', () => { colorSlot.onChange(input.checked); render(); });
+                    input.checked = isRemovable ? true : !!colorSlot.checked;
+                    input.addEventListener('change', () => { if (isRemovable) colorSlot.onRemove(); else colorSlot.onChange(input.checked); render(); });
                     const span = document.createElement('span');
                     span.textContent = labelText;
                     applyClassificationColorTo(span, classificationId);
@@ -607,13 +627,16 @@
             const nested = [...new Set(deeper)].filter((k) => !leafKeys.includes(k) && !covered(k));
             const own = grantLimits ? leafKeys.filter((k) => !isLimitLocked(k)) : leafKeys;
             const stageable = [...own, ...(grantLimits ? nested.filter((k) => !isLimitLocked(k)) : nested)];
+            const removeKeys = allowRemove && interactive && color === 'yellow' ? [...new Set([...leafKeys, ...deeper])].filter(isOwnExtra) : [];
             const lockedReason = grantLimits && leafKeys.length > 0 && own.length === 0 ? limitReasonKey(leafKeys[0]) : null;
             return [ownKey, {
                 color,
                 limitReason: color === 'red' ? lockedReason : null,
-                checked: color === 'red' && own.length > 0 && stageable.every((k) => pendingAdditions.has(k)),
+                checked: color === 'red' && own.length > 0 && stageable.every((k) => pendingAdditions.has(k) || (clientGrantSet.has(k) && !pendingRemovals.has(k))),
+                removeKeys,
+                onRemove: () => removeKeys.forEach(stageDrop),
                 onChange: (checked) => {
-                    stageable.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k)));
+                    stageable.forEach((k) => (checked ? stageAdd(k) : stageDrop(k)));
                     // «Marcar todo» de un contenedor salta lo que no está habilitado para servicio: se avisa cuántos accesos no se marcaron.
                     if (checked && grantLimits && stageable.length < leafKeys.length + nested.length) {
                         const skipped = [...leafKeys, ...nested].filter((k) => { const r = limitReasonKey(k); return typeof r === 'string' && r.indexOf('service:') === 0; }).length;
@@ -640,7 +663,9 @@
                 color,
                 locked: !webCovered,
                 checked: color === 'red' && appKeys.length > 0 && appKeys.every((k) => pendingAdditions.has(k)),
-                onChange: (checked) => appKeys.forEach((k) => (checked ? pendingAdditions.add(k) : pendingAdditions.delete(k))),
+                removeKeys: allowRemove && interactive && color === 'yellow' ? appKeys.filter(isOwnExtra) : [],
+                onRemove: () => appKeys.filter(isOwnExtra).forEach(stageDrop),
+                onChange: (checked) => appKeys.forEach((k) => (checked ? stageAdd(k) : stageDrop(k))),
             };
         }
 
@@ -657,7 +682,9 @@
                 color,
                 locked: !webCovered,
                 checked: color === 'red' && pendingAdditions.has(appKey),
-                onChange: (checked) => (checked ? pendingAdditions.add(appKey) : pendingAdditions.delete(appKey)),
+                removeKeys: allowRemove && interactive && color === 'yellow' && isOwnExtra(appKey) ? [appKey] : [],
+                onRemove: () => stageDrop(appKey),
+                onChange: (checked) => (checked ? stageAdd(appKey) : stageDrop(appKey)),
             };
         }
 
@@ -880,14 +907,15 @@
         function appendClientAppSlot(row, appColorSlot, costKey) {
             if (!appColorSlot) return;
             const isRedInteractive = !!(appColorSlot.color === 'red' && interactive && !appColorSlot.locked);
-            if (isRedInteractive) {
+            const isRemovable = !!(appColorSlot.color === 'yellow' && interactive && appColorSlot.removeKeys && appColorSlot.removeKeys.length);
+            if (isRedInteractive || isRemovable) {
                 const label = document.createElement('label');
-                label.className = 'perm-tree-app-toggle';
-                label.title = t('main.appVisionColumn');
+                label.className = isRemovable ? 'perm-tree-app-toggle perm-tree-check-extra' : 'perm-tree-app-toggle';
+                label.title = isRemovable ? t('main.permRemoveExtra') : t('main.appVisionColumn');
                 const input = document.createElement('input');
                 input.type = 'checkbox';
-                input.checked = !!appColorSlot.checked;
-                input.addEventListener('change', () => { appColorSlot.onChange(input.checked); render(); });
+                input.checked = isRemovable ? true : !!appColorSlot.checked;
+                input.addEventListener('change', () => { if (isRemovable) appColorSlot.onRemove(); else appColorSlot.onChange(input.checked); render(); });
                 const icon = document.createElement('i');
                 icon.className = 'bx bx-mobile-alt';
                 icon.setAttribute('aria-hidden', 'true');
@@ -999,17 +1027,20 @@
                 const soloVerColor = columnColorFor([soloVerKeyTri]);
                 const colTreeKey = `col::${section.id}::${item.id}::${base}`;
                 const colExpanded = expandedItems.has(colTreeKey);
+                const columnRemoveKeys = allowRemove && interactive && soloVerColor === 'yellow' ? [soloVerKeyTri, ...subLevelKeys].filter(isOwnExtra) : [];
                 const colorSlot = {
                     color: soloVerColor,
                     limitReason: soloVerColor === 'red' ? limitReasonKey(soloVerKeyTri) : null,
                     checked: soloVerColor === 'red' && interactive && pendingAdditions.has(soloVerKeyTri),
+                    removeKeys: columnRemoveKeys,
+                    onRemove: () => columnRemoveKeys.forEach(stageDrop),
                     onChange: (checked) => {
                         if (checked && isLimitLocked(soloVerKeyTri)) return;
-                        if (checked) pendingAdditions.add(soloVerKeyTri);
+                        if (checked) stageAdd(soloVerKeyTri);
                         else {
-                            pendingAdditions.delete(soloVerKeyTri);
+                            stageDrop(soloVerKeyTri);
                             // Operar/Editar/Autorizar can't stay pending without Ver.
-                            subLevelKeys.forEach((k) => pendingAdditions.delete(k));
+                            subLevelKeys.forEach((k) => stageDrop(k));
                         }
                         render();
                     },
@@ -1025,14 +1056,15 @@
                 const items = COLUMN_LEVELS.filter((l) => l.id !== 'solo-ver').concat(COLUMN_AUTHORIZE, COLUMN_ELIMINAR).map((level) => {
                     const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
                     const levelColor = columnColorFor([levelKey]);
-                    const locked = levelColor !== 'red';
+                    const removableLevel = allowRemove && interactive && levelColor === 'yellow' && isOwnExtra(levelKey);
+                    const locked = levelColor !== 'red' && !removableLevel;
                     return {
                         icon: COLUMN_LEVEL_ICONS[level.id],
                         label: t(level.labelKey),
-                        checked: locked || (interactive && pendingAdditions.has(levelKey)),
-                        disabled: locked || !interactive || !verGranted || isLimitLocked(levelKey),
-                        lockedColor: locked ? levelColor : undefined,
-                        onChange: (checked) => { if (checked) pendingAdditions.add(levelKey); else pendingAdditions.delete(levelKey); render(); },
+                        checked: locked || removableLevel || (interactive && pendingAdditions.has(levelKey)),
+                        disabled: removableLevel ? false : (locked || !interactive || !verGranted || isLimitLocked(levelKey)),
+                        lockedColor: levelColor !== 'red' ? levelColor : undefined,
+                        onChange: (checked) => { if (checked) stageAdd(levelKey); else stageDrop(levelKey); render(); },
                     };
                 });
                 container.appendChild(buildLevelSequenceRow(depth + 1, items));
@@ -1662,6 +1694,7 @@
                 }
 
                 pendingAdditions = new Set();
+                pendingRemovals = new Set();
                 if (mode === 'clientTricolor') {
                     grantSet = new Set();
                     planGrantSet = new PlanSet(buildExpandedSet(initialGrants));

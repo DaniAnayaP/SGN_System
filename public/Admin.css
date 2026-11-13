@@ -1891,6 +1891,9 @@ body.dark-mode .perm-tree-depth-2{
     background-color: color-mix(in srgb, #c9860b 18%, transparent);
     color: #c9860b;
 }
+/* Otorgar Accesos de una persona: lo que ya se le dio como adicional (ámbar) se dibuja como casilla marcada para poder quitarlo. */
+.perm-tree-check-extra input{ accent-color: #c9860b; }
+.perm-tree-check-extra span{ color: #c9860b; }
 /* colorFor's "partial" case — a container whose children are covered by a
    genuine MIX of green/yellow/red, not all one color (see PermissionCostTree
    .js's own comment on colorFor). Used to render no badge at all, which read

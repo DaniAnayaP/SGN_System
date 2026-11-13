@@ -132,7 +132,7 @@ async function openGrantAccessModal(user) {
         const order = await fetch(`/api/business/permission-order?level=usuario&entityId=${user.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classOverrides = await fetch(`/api/business/permission-classifications?level=usuario&entityId=${user.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         grantTree = window.PermissionCostTree.create(grantAccessContainer, {
-            order, classOverrides, mode: 'clientTricolor', interactive: true, allowedSectionIds, columnLevels: true, costCenters,
+            order, classOverrides, mode: 'clientTricolor', interactive: true, allowRemove: true, allowedSectionIds, columnLevels: true, costCenters,
             grantLimits: grantLimitsForUser(data),
             historyEndpoint: '/api/business/user-grant-change-log', historyParams: { userId: user.id },
         });
