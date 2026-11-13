@@ -587,6 +587,10 @@ function buildExtraCells(record) {
         const serialTd = buildOptionCell(record, 'colActivoFijoSerie', 'needsSerial', 'assetTypeSerial',
             [{ value: '1', label: Dashboard.t('main.assetYes') }, { value: '0', label: Dashboard.t('main.assetNo') }], record.needsSerial === false ? '0' : '1', '',
             (v) => ({ needsSerial: v !== '0' }));
+        // «Lleva calibración» (2026-11-13): Sí (sensores) o No (racks, sillas). Con Sí, sus activos llevan certificados en Operaciones > Calibraciones y salen marcados sin calibración vigente; la vigencia en meses se pone en cada modelo.
+        const calibrationTd = buildOptionCell(record, 'colActivoFijoCalibracion', 'needsCalibration', 'assetTypeCalibration',
+            [{ value: '1', label: Dashboard.t('main.assetYes') }, { value: '0', label: Dashboard.t('main.assetNo') }], record.needsCalibration ? '1' : '0', '',
+            (v) => ({ needsCalibration: v === '1' }));
         // «Modelos»: abre debajo de la tabla la lista de modelos de este tipo (CatCentroDistActivosModelos.js).
         const modelsTd = document.createElement('td');
         modelsTd.dataset.col = 'colActivoFijoModelos';
@@ -603,7 +607,7 @@ function buildExtraCells(record) {
         modelsTd.appendChild(modelsBtn);
         return [letterTd, buildOptionCell(record, 'colActivoFijoLetra', 'kind', 'assetTypeLetter',
             kinds.map((k) => ({ value: k, label: Dashboard.t(`main.layoutType_space_${k}`) })), record.kind || '', '',
-            (v) => ({ kind: v })), serialTd, modelsTd];
+            (v) => ({ kind: v })), serialTd, calibrationTd, modelsTd];
     }
     if (CATEGORY_TYPE === 'activos-clasificacion') {
         return [buildOptionCell(record, 'colActClasMetrica', 'kind', 'assetClassMetric',

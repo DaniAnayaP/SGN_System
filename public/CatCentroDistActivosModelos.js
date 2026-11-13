@@ -239,6 +239,14 @@ const AssetModels = (() => {
         return td;
     }
     const num = (val) => parseFloat(val) || 0;
+    // «Vigencia de calibración» (2026-11-13): cada cuántos meses se vuelve a calibrar este modelo; con ella Operaciones > Calibraciones propone el vencimiento de cada certificado. Solo la llevan los modelos de un Tipo con «Lleva calibración» = Sí.
+    function calibrationMonthsCell(model) {
+        const type = types.find((r) => r.id === model.parentId);
+        if (!type || !type.needsCalibration) return readonlyCell('colActModVigenciaCal', '', '', t('main.calTypeNoCal'), 'assetModelCalibration');
+        return inlineCell({ ...model, calibrationMonths: model.calibrationMonths > 0 ? model.calibrationMonths : '' }, 'colActModVigenciaCal', 'calibrationMonths', {
+            inputType: 'number', unit: t('main.calMonthsUnit'), helpKey: 'assetModelCalibration', toValue: (v) => Math.max(0, parseInt(v, 10) || 0),
+        });
+    }
 
     function buildRow(model) {
         const used = model.usedBy || 0;
@@ -264,6 +272,7 @@ const AssetModels = (() => {
                 : readonlyCell('colActModVolumen', Number(model.volume) > 0 ? Number(model.volume).toFixed(3) : '', 'm³', closedTitle || t('main.assetVolumeCalc'), 'assetModelVolume'),
             lookCell(model),
             photosCell(model),
+            calibrationMonthsCell(model),
             statusCell(model),
             textCell('colActModUso', used, 'assetModelUse'),
             actionsCell(model),
@@ -534,7 +543,7 @@ const AssetModels = (() => {
     const COLUMNS = [
         ['colActModNombreCompra', 'main.colActModNombreCompra'], ['colActModNombrePersonalizado', 'main.colActModNombrePersonalizado'], ['colActModModelo', 'main.colActModModelo'], ['colActModForma', 'main.colActModForma'],
         ['colActModAlto', 'main.colActModAlto'], ['colActModLargo', 'main.colActModLargo'], ['colActModProfundidad', 'main.colActModProfundidad'], ['colActModPeso', 'main.colActModPeso'],
-        ['colActModVolumen', 'main.colActModVolumen'], ['colActModApariencia', 'main.colActModApariencia'], ['colActModFotos', 'main.colActModFotos'], ['colCatStatus', 'main.colCatStatus'], ['colActModUso', 'main.colActModUso'], ['actions', 'main.colActions'],
+        ['colActModVolumen', 'main.colActModVolumen'], ['colActModApariencia', 'main.colActModApariencia'], ['colActModFotos', 'main.colActModFotos'], ['colActModVigenciaCal', 'main.colActModVigenciaCal'], ['colCatStatus', 'main.colCatStatus'], ['colActModUso', 'main.colActModUso'], ['actions', 'main.colActions'],
     ];
     function ensurePanel() {
         if (panel && panel.isConnected) return panel;
@@ -578,7 +587,7 @@ const AssetModels = (() => {
             add.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('main.assetModelsAdd').replace(/^\+\s*/, '')}</span>`;
             add.addEventListener('click', () => {
                 if (draft) return;
-                draft = { id: null, parentId: type.id, name: '', customName: '', modelNumber: '', shape: 'rectangular', height: 0, length: 0, depth: 0, weight: 0, volume: 0, look: '', status: 'active', usedBy: 0, complete: false, pendingFields: [] };
+                draft = { id: null, parentId: type.id, name: '', customName: '', modelNumber: '', shape: 'rectangular', height: 0, length: 0, depth: 0, weight: 0, volume: 0, look: '', calibrationMonths: 0, status: 'active', usedBy: 0, complete: false, pendingFields: [] };
                 render();
                 const firstCell = host.querySelector('tbody tr:last-child td.editable-cell');
                 if (firstCell) firstCell.click();

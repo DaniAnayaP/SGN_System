@@ -291,10 +291,12 @@
     "catCentroDistUdm": "UOM",
     "opCentroDistAltaArticulos": "New Sku Registration",
     "opCentroDistAltaActivos": "Asset Registration",
+    "opCentroDistCalibraciones": "Calibrations",
     "classActDatosGenerales": "General Data",
     "classActFormaMedidas": "Shape and Dimensions",
     "classActEvidencias": "Evidence · 6 faces",
     "classActLayout": "Layout",
+    "classActCalibracion": "Calibration",
     "opCentroDistEdicionCodigo": "Code Editing",
     "opCentroDistEdicionCodigoAbbr1": "Code Edit.",
     "opCentroDistEdicionCodigoAbbr2": "Edit",
@@ -4348,6 +4350,68 @@
     "colActivoFijoLetra": "Drawn as",
     "colActivoFijoLetraCodigo": "Code letters",
     "colActivoFijoSerie": "Has serial number",
+    "colCalActivo": "Asset",
+    "colCalModelo": "Model",
+    "colCalCertificado": "Certificate",
+    "colCalCalibrado": "Calibrated on",
+    "colCalVence": "Due",
+    "colCalEstado": "Status",
+    "colCalLaboratorio": "Laboratory",
+    "colCalResultado": "Result",
+    "colCalObservaciones": "Notes",
+    "colCalArchivo": "Certificate file",
+    "colCalCreateAuth": "Authorization to Create",
+    "colActCalibracion": "Calibration",
+    "colActivoFijoCalibracion": "Needs calibration",
+    "colActModVigenciaCal": "Calibration validity",
+    "filterCalSearchHint": "Certificate, asset, S/N...",
+    "newCalibration": "New calibration",
+    "calFormHint": "The data comes from the certificate.",
+    "calFileLabel": "Certificate (photo or PDF)",
+    "calSaveBtn": "Save calibration",
+    "calPickAsset": "Choose the asset",
+    "calNoAssets": "No asset needs calibration: turn on «Needs calibration» in its Type (Catalogs > Fixed Assets).",
+    "calNoMonths": "This model has no «Calibration validity»: type the due date shown on the certificate.",
+    "calProposed": "Suggested: {n} months (the model's validity). If the certificate shows another date, correct it.",
+    "calNeedCertificate": "Type the certificate number.",
+    "calNeedDate": "Type the calibration date.",
+    "calNeedDue": "Type the due date.",
+    "calFileTooBig": "The file is larger than 3 MB: reduce it and try again.",
+    "calFileBadType": "The certificate must be a PDF or a JPG or PNG photo.",
+    "calFileSaved": "Certificate uploaded.",
+    "calViewFile": "View the certificate",
+    "calReplaceFile": "Change the file",
+    "calUploadFile": "Upload the certificate",
+    "calSaved": "Calibration of {code} saved.",
+    "calResult_ok": "Within tolerance",
+    "calResult_adjusted": "Adjusted and within tolerance",
+    "calResult_out": "Out of tolerance",
+    "calCertificatesOf": "{n} certificates",
+    "calFilteringAsset": "Only the certificates of {code}.",
+    "calFilteringClear": "Clear the filter",
+    "calChip_none": "No calibration",
+    "calChip_failed": "Out of tolerance",
+    "calChip_history": "History",
+    "calChipDate_valid": "Valid · {date}",
+    "calChipDate_soon": "Due soon · {date}",
+    "calChipDate_expired": "Expired · {date}",
+    "calChipDays_valid": "Valid · {n} days",
+    "calChipDays_valid1": "Valid · 1 day",
+    "calChipDays_soon": "Due soon · {n} days",
+    "calChipDays_soon1": "Due soon · 1 day",
+    "calChipDays_today": "Due today",
+    "calChipDays_expired": "Expired · {n} days ago",
+    "calChipDays_expired1": "Expired · 1 day ago",
+    "calChipTip": "Due {date}",
+    "calTypeNoCal": "This model's Type does not need calibration (turn it on in the Type's «Needs calibration» column).",
+    "calMonthsUnit": "months",
+    "noticeCalibrationSoon": "Calibration due soon",
+    "noticeCalibrationDueToday": "Calibration is due today",
+    "noticeCalibrationExpired": "Calibration expired",
+    "noticeCalibrationLineSoon": "{asset} is due on {date} (in {n} days).",
+    "noticeCalibrationLineToday": "{asset} is due today ({date}).",
+    "noticeCalibrationLineExpired": "{asset} expired on {date} ({n} days ago).",
+    "noticeCalibrationView": "View calibrations",
     "colActivoFijoModelos": "Models",
     "colActModNombreCompra": "Purchase Name",
     "colActModNombrePersonalizado": "Custom Name",
@@ -6283,6 +6347,62 @@
     "assetGestionPantalla": {
       "what": "The complete assets (classification, model, serial number and the 6 photos), to search and look up. Here they are only viewed; to fix something use Edit.",
       "example": "You search «Thermohygrometer» and see all the ones already finished."
+    },
+    "assetCalibration": {
+        "what": "The asset's current calibration: the latest certificate on record and how it stands. Green = valid, amber = due soon (30 days or less), red = expired or out of tolerance, grey = no calibration. Read-only here; it is entered in Operations > Calibrations. An asset without a valid calibration is not blocked, just flagged.",
+        "example": "Thermohygrometer H003: «Due soon · 05 Dec 2026». Rack: blank (its type needs no calibration)."
+    },
+    "assetTypeCalibration": {
+        "what": "Whether the assets of this type need calibration (sensors, scales). Yes = its assets have certificates in Operations > Calibrations and are flagged when they have no valid calibration; the validity in months is set on each model.",
+        "example": "Sensor: Yes. Rack and chair: No."
+    },
+    "assetModelCalibration": {
+        "what": "How many months between calibrations of this model. With it, when a certificate is entered the due date is suggested (calibration date + these months) and can be corrected. Only models of a type with «Needs calibration» set to Yes have it.",
+        "example": "24 months: calibrated on 01 Jun 2026, due on 01 Jun 2028."
+    },
+    "calAsset": {
+        "what": "The asset the certificate belongs to: its code and serial number. If it has more than one certificate, the link below shows only that asset's (the current one and its history).",
+        "example": "H001 · S/N 261163760 · «2 certificates»."
+    },
+    "calModel": {
+        "what": "The asset's model (it comes from Asset Registration; it is not typed here).",
+        "example": "TRACEABLE 4227 94460-74."
+    },
+    "calCertificate": {
+        "what": "The certificate number, as the laboratory prints it. It cannot repeat on the same asset.",
+        "example": "4227-16787565."
+    },
+    "calCalibratedOn": {
+        "what": "The date the asset was calibrated, as the certificate says. It cannot be in the future. Of an asset's certificates, the one with the latest date is the one that counts.",
+        "example": "01 Jun 2026."
+    },
+    "calDue": {
+        "what": "The date the calibration expires. When entering, it is suggested from the model's validity and can be corrected if the certificate says otherwise. 30 days before and on the due date a notice reaches the bell of whoever entered it, their direct manager and anyone with «Notify» on this column.",
+        "example": "01 Jun 2028."
+    },
+    "calStatus": {
+        "what": "How the asset's current certificate stands: Valid, Due soon (30 days or less), Expired or Out of tolerance. Earlier certificates say «History». It is counted with your own today.",
+        "example": "Due soon · 22 days."
+    },
+    "calLaboratory": {
+        "what": "The laboratory that calibrated the asset. While typing, the ones you already entered are offered.",
+        "example": "Control Company (A2LA)."
+    },
+    "calResult": {
+        "what": "What the laboratory concluded: Within tolerance, Adjusted and within tolerance or Out of tolerance. A certificate out of tolerance flags the asset in red even if it has not expired.",
+        "example": "Within tolerance."
+    },
+    "calNotes": {
+        "what": "Any note from the certificate or from whoever entered it (optional).",
+        "example": "The laboratory adjusted the sensor by -0.2 °C."
+    },
+    "calFile": {
+        "what": "The certificate as a PDF or photo (JPG or PNG, 3 MB at most). Click to open it in another tab; if there is none, whoever enters can upload it. Changing a file already uploaded needs «Modify» on this column.",
+        "example": "certificate-4227.pdf."
+    },
+    "calNew": {
+        "what": "Opens a window to enter a calibration certificate: choose the asset, type what the certificate says and upload its photo or PDF. A new certificate for the same asset becomes the current one and the previous one goes to history.",
+        "example": "H001, certificate 4227-16787565, calibrated on 01 Jun 2026, due on 01 Jun 2028."
     },
     "assetTypeSerial": {
       "what": "Whether the assets of this type have a serial number. Yes for sensors, phones and printers; No for chairs and tables. Only when it says Yes does the serial number count for an asset of this type to be 100% complete.",

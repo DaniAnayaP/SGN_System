@@ -291,10 +291,12 @@
     "catCentroDistUdm": "UDM",
     "opCentroDistAltaArticulos": "Alta Nuestros Artículos (Sku)",
     "opCentroDistAltaActivos": "Alta Activos",
+    "opCentroDistCalibraciones": "Calibraciones",
     "classActDatosGenerales": "Datos Generales",
     "classActFormaMedidas": "Forma y Medidas",
     "classActEvidencias": "Evidencia · 6 caras",
     "classActLayout": "Layout",
+    "classActCalibracion": "Calibración",
     "opCentroDistEdicionCodigo": "Edición Código",
     "opCentroDistEdicionCodigoAbbr1": "Edic. Código",
     "opCentroDistEdicionCodigoAbbr2": "Edic. Cód.",
@@ -4347,6 +4349,68 @@
     "colActivoFijoLetra": "Se dibuja como",
     "colActivoFijoLetraCodigo": "Letras del código",
     "colActivoFijoSerie": "Lleva número de serie",
+    "colCalActivo": "Activo",
+    "colCalModelo": "Modelo",
+    "colCalCertificado": "Certificado",
+    "colCalCalibrado": "Calibrado",
+    "colCalVence": "Vence",
+    "colCalEstado": "Estado",
+    "colCalLaboratorio": "Laboratorio",
+    "colCalResultado": "Resultado",
+    "colCalObservaciones": "Observaciones",
+    "colCalArchivo": "Archivo del certificado",
+    "colCalCreateAuth": "Autorización para Crear",
+    "colActCalibracion": "Calibración",
+    "colActivoFijoCalibracion": "Lleva calibración",
+    "colActModVigenciaCal": "Vigencia de calibración",
+    "filterCalSearchHint": "Certificado, activo, S/N...",
+    "newCalibration": "Nueva calibración",
+    "calFormHint": "Los datos salen del certificado.",
+    "calFileLabel": "Certificado (foto o PDF)",
+    "calSaveBtn": "Guardar calibración",
+    "calPickAsset": "Elige el activo",
+    "calNoAssets": "Ningún activo lleva calibración: activa «Lleva calibración» en su Tipo (Catálogos > Activos Fijos).",
+    "calNoMonths": "Este modelo no tiene «Vigencia de calibración»: escribe el vencimiento que dice el certificado.",
+    "calProposed": "Propuesta: {n} meses (la vigencia del modelo). Si el certificado dice otra fecha, corrígela.",
+    "calNeedCertificate": "Escribe el número del certificado.",
+    "calNeedDate": "Escribe la fecha de calibración.",
+    "calNeedDue": "Escribe la fecha de vencimiento.",
+    "calFileTooBig": "El archivo pesa más de 3 MB: redúcelo e inténtalo otra vez.",
+    "calFileBadType": "El certificado debe ser un PDF o una foto JPG o PNG.",
+    "calFileSaved": "Certificado subido.",
+    "calViewFile": "Ver el certificado",
+    "calReplaceFile": "Cambiar el archivo",
+    "calUploadFile": "Subir el certificado",
+    "calSaved": "Calibración de {code} registrada.",
+    "calResult_ok": "Dentro de tolerancia",
+    "calResult_adjusted": "Ajustado y dentro de tolerancia",
+    "calResult_out": "Fuera de tolerancia",
+    "calCertificatesOf": "{n} certificados",
+    "calFilteringAsset": "Solo los certificados de {code}.",
+    "calFilteringClear": "Quitar el filtro",
+    "calChip_none": "Sin calibración",
+    "calChip_failed": "Fuera de tolerancia",
+    "calChip_history": "Historial",
+    "calChipDate_valid": "Vigente · {date}",
+    "calChipDate_soon": "Por vencer · {date}",
+    "calChipDate_expired": "Vencida · {date}",
+    "calChipDays_valid": "Vigente · {n} días",
+    "calChipDays_valid1": "Vigente · 1 día",
+    "calChipDays_soon": "Por vencer · {n} días",
+    "calChipDays_soon1": "Por vencer · 1 día",
+    "calChipDays_today": "Vence hoy",
+    "calChipDays_expired": "Vencida · hace {n} días",
+    "calChipDays_expired1": "Vencida · hace 1 día",
+    "calChipTip": "Vence el {date}",
+    "calTypeNoCal": "El Tipo de este modelo no lleva calibración (actívalo en la columna «Lleva calibración» del Tipo).",
+    "calMonthsUnit": "meses",
+    "noticeCalibrationSoon": "Calibración por vencer",
+    "noticeCalibrationDueToday": "La calibración vence hoy",
+    "noticeCalibrationExpired": "Calibración vencida",
+    "noticeCalibrationLineSoon": "{asset} vence el {date} (en {n} días).",
+    "noticeCalibrationLineToday": "{asset} vence hoy ({date}).",
+    "noticeCalibrationLineExpired": "{asset} venció el {date} (hace {n} días).",
+    "noticeCalibrationView": "Ver calibraciones",
     "colActivoFijoModelos": "Modelos",
     "colActModNombreCompra": "Nombre de compra",
     "colActModNombrePersonalizado": "Nombre personalizado",
@@ -6282,6 +6346,62 @@
     "assetGestionPantalla": {
       "what": "Los activos completos (clasificación, modelo, número de serie y las 6 fotos), para buscarlos y consultarlos. Aquí solo se ven; para corregir algo se usa Editar.",
       "example": "Buscas «Termohigrómetro» y ves todos los que ya están terminados."
+    },
+    "assetCalibration": {
+        "what": "La calibración vigente del activo: el último certificado registrado y cómo va. Verde = vigente, ámbar = por vencer (30 días o menos), rojo = vencida o fuera de tolerancia, gris = sin calibración. Solo se lee aquí; se captura en Operaciones > Calibraciones. Un activo sin calibración vigente no se bloquea: solo se marca.",
+        "example": "Termohigrómetro H003: «Por vencer · 05 dic 2026». Rack: sin dato (su tipo no lleva calibración)."
+    },
+    "assetTypeCalibration": {
+        "what": "Si los activos de este tipo llevan calibración (sensores, básculas). Sí = sus activos tienen certificados en Operaciones > Calibraciones y salen marcados cuando no tienen una calibración vigente; la vigencia en meses se pone en cada modelo.",
+        "example": "Sensor: Sí. Rack y silla: No."
+    },
+    "assetModelCalibration": {
+        "what": "Cada cuántos meses se vuelve a calibrar este modelo. Con ella, al registrar un certificado el vencimiento se propone solo (fecha de calibración + estos meses) y se puede corregir. Solo la llevan los modelos de un tipo con «Lleva calibración» en Sí.",
+        "example": "24 meses: calibrado el 01 jun 2026, vence el 01 jun 2028."
+    },
+    "calAsset": {
+        "what": "El activo al que pertenece el certificado: su código y su número de serie. Si tiene más de un certificado, el vínculo debajo deja ver solo los de ese activo (el vigente y su historial).",
+        "example": "H001 · S/N 261163760 · «2 certificados»."
+    },
+    "calModel": {
+        "what": "El modelo del activo (viene de Alta Activos; no se escribe aquí).",
+        "example": "TRACEABLE 4227 94460-74."
+    },
+    "calCertificate": {
+        "what": "El número del certificado, tal como lo imprime el laboratorio. No se repite en el mismo activo.",
+        "example": "4227-16787565."
+    },
+    "calCalibratedOn": {
+        "what": "La fecha en que se calibró el activo, la que dice el certificado. No puede ser futura. De los certificados de un activo, el de fecha más reciente es el que vale.",
+        "example": "01 jun 2026."
+    },
+    "calDue": {
+        "what": "La fecha en que vence la calibración. Al registrar se propone con la vigencia del modelo y se puede corregir si el certificado dice otra. 30 días antes y el día que vence llega un aviso a la campana de quien registró, de su jefe directo y de quien tenga «Notificar» en esta columna.",
+        "example": "01 jun 2028."
+    },
+    "calStatus": {
+        "what": "Cómo va el certificado vigente del activo: Vigente, Por vencer (30 días o menos), Vencida o Fuera de tolerancia. Los certificados anteriores dicen «Historial». Se cuenta con tu día de hoy.",
+        "example": "Por vencer · 22 días."
+    },
+    "calLaboratory": {
+        "what": "El laboratorio que calibró el activo. Al escribir se ofrecen los que ya registraste.",
+        "example": "Control Company (A2LA)."
+    },
+    "calResult": {
+        "what": "Lo que concluyó el laboratorio: Dentro de tolerancia, Ajustado y dentro de tolerancia o Fuera de tolerancia. Un certificado fuera de tolerancia marca el activo en rojo aunque no haya vencido.",
+        "example": "Dentro de tolerancia."
+    },
+    "calNotes": {
+        "what": "Cualquier observación del certificado o de quien lo registró (opcional).",
+        "example": "El laboratorio ajustó el sensor a -0.2 °C."
+    },
+    "calFile": {
+        "what": "El certificado en PDF o foto (JPG o PNG, máximo 3 MB). Con el clic se abre en otra pestaña; si no tiene, quien registra puede subirlo. Cambiar un archivo ya subido pide «Modificar» en esta columna.",
+        "example": "certificado-4227.pdf."
+    },
+    "calNew": {
+        "what": "Abre una ventana para registrar un certificado de calibración: se elige el activo, se escribe lo que dice el certificado y se sube su foto o PDF. Un certificado nuevo del mismo activo pasa a ser el vigente y el anterior queda de historial.",
+        "example": "H001, certificado 4227-16787565, calibrado el 01 jun 2026, vence el 01 jun 2028."
     },
     "assetTypeSerial": {
       "what": "Si los activos de este tipo llevan número de serie. Sí para sensores, teléfonos e impresoras; No para sillas y mesas. Solo cuando dice Sí, el número de serie cuenta para que un activo de este tipo quede al 100%.",

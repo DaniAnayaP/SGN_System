@@ -229,6 +229,8 @@ const {
     markAssetAuthorizationsSeenForRequester,
     assetAuthorizationSummaryMap,
     countAssetModelsByType,
+    CALIBRATION_RESULTS, CALIBRATION_SOON_DAYS, CALIBRATION_PATCHABLE_FIELDS, listAssetCalibrations, getAssetCalibrationById, createAssetCalibration, updateAssetCalibration, setAssetCalibrationFile,
+    getAssetCalibrationFile, latestCalibrationMap, latestCalibrationOfAsset, countAssetCalibrationsByAsset, recordCalibrationAlert, clearCalibrationAlerts, publishCalibrationNotice, listColumnNotifyRecipientUserIds,
     countFixedAssetsByClass,
     getFixedAssetAnyScope,
     listFixedAssetsOfCenterAnyScope,
@@ -588,7 +590,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
+const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -9567,6 +9569,15 @@ app.get('/s/:token/:sensorId', publicLayoutLimiter, (req, res) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(self)' });
     res.sendFile(path.join(PUBLIC_DIR, 'TemperaturaPublica.html'));
 });
+// La calibración del sensor para quien escanea su QR: null = su activo no lleva calibración (o no viene del registro); si la lleva, el certificado que vale (sin certificado: id null). Solo las fechas y el resultado; el estado lo calcula la página con la fecha de quien mira.
+function publicSensorCalibration(clientId, sensor) {
+    if (!sensor || !sensor.assetRef) return null;
+    const asset = getFixedAssetAnyScope(sensor.assetRef, clientId);
+    const type = asset ? listArticleCategoriesAnyScope(clientId, 'activos-fijos').find((t) => t.id === asset.type_id) : null;
+    if (!type || type.needs_calibration !== 1) return null;
+    const cal = latestCalibrationOfAsset(asset.id, clientId);
+    return cal ? { id: cal.id, calibratedOn: cal.calibrated_on, dueOn: cal.due_on, result: cal.result } : { id: null };
+}
 app.get('/api/public/sensor/:token/:sensorId', publicLayoutLimiter, (req, res) => {
     const target = sensorTarget(req.params.token, req.params.sensorId);
     if (!target) return res.status(404).json({ message: 'Not found.' });
@@ -9578,6 +9589,7 @@ app.get('/api/public/sensor/:token/:sensorId', publicLayoutLimiter, (req, res) =
     res.json({
         companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
         space: { id: sensor.id, code: sensor.code, type: sensor.type, locator, zoneName: zone ? zone.name : '', footprintCode: '', limits: {} },
+        calibration: publicSensorCalibration(row.clientId, sensor),
         records: records.map((r) => lockedSensorRecord(r, locks)), locks, now: new Date().toISOString(),
     });
 });
@@ -10450,6 +10462,13 @@ function prepareAssetModelPatch(req, categoryType, existing, patch) {
         } else if (look !== '' && !(ASSET_LOOKS[typeRow && typeRow.kind] || []).includes(look)) return bad(400, 'Esa apariencia no es de este tipo de activo.', 'LOOK');
         out.look = look;
     }
+    // «Vigencia de calibración»: cada cuántos meses se vuelve a calibrar este modelo (0 = sin dato; con ella se propone el vencimiento al registrar un certificado). Número entero de 0 a 240.
+    if (has('calibrationMonths')) {
+        const raw = patch.calibrationMonths;
+        const n = raw === '' || raw == null ? 0 : Number(raw);
+        if (!Number.isInteger(n) || n < 0 || n > 240) return bad(400, 'La vigencia de calibración son meses completos, de 0 a 240.', 'CAL_MONTHS');
+        out.calibrationMonths = n;
+    }
     const shape = has('shape') ? out.shape : existing.shape;
     if (has('volume') && shape !== 'irregular') return bad(400, 'El volumen se calcula solo con las medidas. Solo en la forma Irregular se escribe.', 'VOLUME_CALC');
     if (has('depth') && shape === 'cilindrica') return bad(400, 'En una forma cilíndrica la profundidad es igual al largo (el diámetro).', 'DEPTH_CALC');
@@ -10459,7 +10478,7 @@ function prepareAssetModelPatch(req, categoryType, existing, patch) {
         const changed = ASSET_MODEL_LOCKED_KEYS.filter((key) => has(key) && String(out[key]) !== String(existing[colOf[key]]));
         if (changed.length) return bad(409, `Ya hay ${used === 1 ? 'un activo' : `${used} activos`} con este modelo: su forma, sus medidas y su peso están cerrados. Da de alta otro modelo y deja este como Inactivo.`, 'MODEL_LOCKED');
     }
-    return { patch: out, sanitizers: { shape: (v) => FIXED_ASSET_SHAPE_LABELS[v] || String(v == null ? '' : v), look: (v) => ASSET_LOOK_LABELS[v == null ? '' : v] || String(v) } };
+    return { patch: out, sanitizers: { shape: (v) => FIXED_ASSET_SHAPE_LABELS[v] || String(v == null ? '' : v), look: (v) => ASSET_LOOK_LABELS[v == null ? '' : v] || String(v), calibrationMonths: (v) => (Number(v) > 0 ? `${Number(v)} meses` : '') } };
 }
 // Después de guardar un cambio del modelo: el volumen (y la profundidad de una cilíndrica) se recalculan con las medidas y, si cambió algún nombre, todos los activos que lo usan lo reciben (queda en el historial de cada activo).
 function finishAssetModelPatch(req, existing, category, appliedPatch) {
@@ -10581,13 +10600,18 @@ const ASSET_CLASS_METRIC_LABELS = { m2: 'm² (activo para operar)', m3: 'm³ (ac
 const ASSET_TYPE_LETTER_LABELS = { rack: 'A · Anaquel', rackpal: 'R · Rack', cabinet: 'G · Gabeta', pallet: 'T · Tarima en piso', cold: 'F · Frío', cart: 'M · Rack móvil', sensor: 'Sensor' }; // «Sensor» se coloca en el paso Sensores del Layout (sobre una pared), no sobre una huella
 function prepareFixedAssetPatch(categoryType, patch, req = null, existing = null) {
     const has = (key) => Object.prototype.hasOwnProperty.call(patch, key);
-    if ((categoryType !== 'activos-clasificacion' && categoryType !== 'activos-fijos') || (!has('kind') && !(categoryType === 'activos-fijos' && (has('letter') || has('needsSerial'))))) return { patch, sanitizers: {} };
+    if ((categoryType !== 'activos-clasificacion' && categoryType !== 'activos-fijos') || (!has('kind') && !(categoryType === 'activos-fijos' && (has('letter') || has('needsSerial') || has('needsCalibration'))))) return { patch, sanitizers: {} };
     if (categoryType === 'activos-fijos') {
         const out = { patch: { ...patch }, sanitizers: {} };
         // «Lleva número de serie»: Sí (sensores, teléfonos, impresoras) o No (sillas, mesas). Cuenta para el 100% de sus activos solo cuando lo lleva.
         if (has('needsSerial')) {
             out.patch.needsSerial = patch.needsSerial === true || patch.needsSerial === 1 || patch.needsSerial === '1' || patch.needsSerial === 'true' ? 1 : 0;
             out.sanitizers.needsSerial = (v) => (Number(v) ? 'Sí' : 'No');
+        }
+        // «Lleva calibración» (2026-11-13): Sí (sensores) o No (racks, sillas). Con Sí, sus activos tienen su pantalla de Calibraciones y salen marcados en rojo sin calibración vigente.
+        if (has('needsCalibration')) {
+            out.patch.needsCalibration = patch.needsCalibration === true || patch.needsCalibration === 1 || patch.needsCalibration === '1' || patch.needsCalibration === 'true' ? 1 : 0;
+            out.sanitizers.needsCalibration = (v) => (Number(v) ? 'Sí' : 'No');
         }
         // «Se dibuja como»: el tipo de espacio del Layout que le toca (kind). Vacío = sin dibujo propio (su activo conserva el que ya tenía).
         if (has('kind')) {
@@ -10660,11 +10684,11 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             kind: row.kind, locations: row.kind === 'physical' ? parseWarehouseLocations(row.locations) : [],
         } : {}),
         ...(row.category_type === 'activos-clasificacion' || row.category_type === 'activos-fijos' ? { kind: row.kind } : {}),
-        ...(row.category_type === 'activos-fijos' ? { letter: row.letter || '', needsSerial: row.needs_serial !== 0 } : {}),
+        ...(row.category_type === 'activos-fijos' ? { letter: row.letter || '', needsSerial: row.needs_serial !== 0, needsCalibration: row.needs_calibration === 1 } : {}),
         ...(row.category_type === 'activos-modelos' ? {
             parentId: row.parent_id, customName: row.custom_name || '', modelNumber: row.model_number || '', shape: row.shape || 'rectangular',
             height: row.height_cm, length: row.length_cm, depth: row.depth_cm, weight: row.weight_kg, volume: row.volume_m3,
-            complete: isAssetModelComplete(row), usedBy: ctx && ctx.modelUse ? (ctx.modelUse.get(row.id) || 0) : 0, look: row.look || '', photos: ctx && ctx.modelPhotos ? (ctx.modelPhotos.get(row.id) || {}) : {},
+            complete: isAssetModelComplete(row), usedBy: ctx && ctx.modelUse ? (ctx.modelUse.get(row.id) || 0) : 0, look: row.look || '', photos: ctx && ctx.modelPhotos ? (ctx.modelPhotos.get(row.id) || {}) : {}, calibrationMonths: row.calibration_months || 0,
         } : {}),
         ...(row.category_type === 'incidentes-criterios' ? { kind: row.kind } : {}),
         ...(row.category_type === 'transito-equipos' ? { kind: row.kind, widthM: row.width_m || 0, lengthM: row.length_m || 0, heightM: row.height_m || 0 } : {}),
@@ -11956,6 +11980,8 @@ function mapFixedAsset(row, ctx, companyName, pendingByRecord, placements) {
         // «Editar» con elección de datos: lo que se marcó (null = no está en edición), lo que falta por elegir (modelo, «Aparece en el Layout», estatus)
         editing: !!row.editing, editingFields: (parseFixedAssetEditing(row) || {}).fields || null, pendingChoices: (parseFixedAssetEditing(row) || {}).pending || [],
         modelId: row.model_id || null, modelLabel: model ? assetModelLabel(model) : '', typeNeedsSerial: type ? type.needs_serial !== 0 : true,
+        // Calibración (solo lectura aquí; se captura en Operaciones > Calibraciones): null = su tipo no la lleva; si la lleva, el certificado que VALE (id null = todavía sin ninguno)
+        calibration: type && type.needs_calibration === 1 ? mapCalibrationSummary(ctx.latest ? ctx.latest.get(row.id) : latestCalibrationOfAsset(row.id, row.client_id)) : null,
         costCenterId: row.cost_center_id, typeId: row.type_id, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '',
         classId: row.class_id, className: cls ? cls.name : '',
         purchaseName: row.purchase_name, customName: row.custom_name, model: row.model, serialNumber: row.serial_number,
@@ -12194,6 +12220,7 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
     const ctx = fixedAssetContext(req);
     const pendingByRecord = getPendingColumnsByRecord(clientId, FIXED_ASSET_TABLE_KEY);
     ctx.authMap = assetAuthorizationSummaryMap(clientId, isTestAccount);
+    ctx.latest = latestCalibrationMap(clientId);
     res.set('Cache-Control', 'no-store');
     // scope=pending: Operaciones > Alta Activos (los que todavía no están completos, los que regresaron a edición y los completos que esperan la autorización de uso); scope=complete: Gestión > Activos (los completos
     // y autorizados que no están en edición); sin scope, todos.
@@ -12204,7 +12231,7 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
         canAuthorize: assetAuthActorCanAuthorize(req),
         assets: listFixedAssets(clientId, isTestAccount).map((r) => mapFixedAsset(r, ctx, client?.company_name, pendingByRecord, fixedAssetPlacementsMap(clientId))).filter(inScope),
         canEdit: fixedAssetCanEdit(req),
-        types: [...ctx.types.values()].filter((t) => t.name).map((t) => ({ id: t.id, name: t.name, letter: t.letter || '', kind: t.kind || '', active: t.status === 'active', needsSerial: t.needs_serial !== 0 })),
+        types: [...ctx.types.values()].filter((t) => t.name).map((t) => ({ id: t.id, name: t.name, letter: t.letter || '', kind: t.kind || '', active: t.status === 'active', needsSerial: t.needs_serial !== 0, needsCalibration: t.needs_calibration === 1 })),
         // los modelos del catálogo (los activos eligen uno del Tipo que tienen; uno inactivo o incompleto no se ofrece)
         models: [...ctx.models.values()].filter((m) => m.name).map((m) => ({
             id: m.id, typeId: m.parent_id, label: assetModelLabel(m), purchaseName: m.name, customName: m.custom_name || '', model: m.model_number || '', shape: m.shape,
@@ -12483,6 +12510,267 @@ function startApprovedFixedAssetEdition(req, existing, payload, ctx, meta = {}) 
     return row;
 }
 const assetAuthEditText = (payload) => (Array.isArray(payload.marked) ? payload.marked : payload.fields || []).map((k) => FIXED_ASSET_EDIT_LABELS[k] || k).join(', ');
+// --- Calibraciones (Operaciones, C. Distribución) ---------------------------------------------------------------------------------------------------------
+// Un renglón por CERTIFICADO de calibración de un activo (el Tipo decide con «Lleva calibración» cuáles activos la llevan: los sensores). El más reciente por fecha de calibración es el que VALE; los anteriores quedan de historial. El
+// vencimiento se propone con la «Vigencia de calibración» (meses) del modelo y se puede corregir. Un activo sin calibración vigente NO se bloquea: se marca (Gestión > Activos y su QR). Estados: Vigente, Por vencer (30 días o menos),
+// Vencida, Fuera de tolerancia (el resultado del certificado) y Sin calibración. Las fechas son de calendario (AAAA-MM-DD): «hoy» lo manda el navegador (?today=) para que el día cambie a la medianoche de quien mira, no a la del servidor.
+const CALIBRATION_TABLE_KEY = 'calibraciones';
+const CALIBRATION_AREA_LABEL = 'C. Distribución';
+const CALIBRATION_MODULE_LABEL = 'Cadena de Suministro';
+const CALIBRATION_SCREEN_LABEL = 'Calibraciones';
+const CALIBRATION_RESULT_LABELS = { ok: 'Dentro de tolerancia', adjusted: 'Ajustado y dentro de tolerancia', out: 'Fuera de tolerancia' };
+const CALIBRATION_FILE_MAX_BYTES = 3 * 1024 * 1024;
+const CALIBRATION_TEXT_LIMITS = { certificateNumber: 80, laboratory: 120 };
+const CALIBRATION_FILE_EXT = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' };
+const calibrationFileRaw = express.raw({ type: (req) => /^(application\/pdf|image\/jpeg|image\/png)$/i.test(String(req.headers['content-type'] || '').split(';')[0].trim()), limit: '3mb' });
+// El tipo del archivo se reconoce por sus primeros bytes (no por lo que diga el navegador): PDF, JPEG o PNG.
+function calibrationFileMime(buf) {
+    if (!Buffer.isBuffer(buf) || buf.length < 8) return null;
+    if (buf.subarray(0, 5).toString('latin1') === '%PDF-') return 'application/pdf';
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+    if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+    return null;
+}
+const isoDateOk = (v) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))) return false;
+    const [y, m, d] = v.split('-').map(Number);
+    const t = new Date(Date.UTC(y, m - 1, d));
+    return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d && y >= 1990 && y <= 2100;
+};
+const isoDays = (iso) => { const [y, m, d] = iso.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / 86400000); };
+const todayIsoUtc = () => new Date().toISOString().slice(0, 10);
+const calibrationToday = (req) => (isoDateOk(req.query && req.query.today) ? req.query.today : todayIsoUtc());
+// iso + meses, con el día ajustado al último del mes cuando el mes no lo tiene (31 ene + 1 mes = 28 feb).
+function addMonthsIso(iso, months) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const total = y * 12 + (m - 1) + months;
+    const ny = Math.floor(total / 12);
+    const nm = total % 12;
+    const last = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+    return `${String(ny).padStart(4, '0')}-${String(nm + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+}
+// El estado del certificado que VALE de un activo (cal = su renglón; null = no tiene ninguno). daysLeft: días que faltan (negativo = ya venció).
+function calibrationStatus(cal, todayIso) {
+    if (!cal) return { key: 'none', daysLeft: null };
+    const daysLeft = isoDays(cal.due_on) - isoDays(todayIso);
+    if (cal.result === 'out') return { key: 'failed', daysLeft };
+    if (daysLeft < 0) return { key: 'expired', daysLeft };
+    if (daysLeft <= CALIBRATION_SOON_DAYS) return { key: 'soon', daysLeft };
+    return { key: 'valid', daysLeft };
+}
+const mapCalibrationSummary = (cal) => (cal ? { id: cal.id, certificateNumber: cal.certificate_number, laboratory: cal.laboratory, calibratedOn: cal.calibrated_on, dueOn: cal.due_on, result: cal.result } : { id: null });
+const calibrationCan = (req) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), CALIBRATION_TABLE_KEY, 'colCalCreateAuth');
+function calibrationContext(req) {
+    const { clientId, isTestAccount } = req.user;
+    return { ...fixedAssetContext(req), assets: new Map(listFixedAssets(clientId, isTestAccount).map((a) => [a.id, a])), latest: latestCalibrationMap(clientId) };
+}
+function mapCalibration(row, ctx, todayIso, counts, pendingByRecord, companyName) {
+    const asset = ctx.assets.get(row.asset_id);
+    const type = asset ? ctx.types.get(asset.type_id) : null;
+    const model = asset && asset.model_id ? ctx.models.get(asset.model_id) : null;
+    const latest = ctx.latest.get(row.asset_id);
+    const current = !!latest && latest.id === row.id;
+    const st = current ? calibrationStatus(row, todayIso) : { key: 'history', daysLeft: null };
+    const cc = ctx.centers.get(row.cost_center_id);
+    return {
+        id: row.id, registroUnico: row.db_id, assetId: row.asset_id, assetCode: asset ? fixedAssetCodeOf(asset) : '', assetSerial: asset ? asset.serial_number : '',
+        assetName: asset ? (asset.custom_name || asset.purchase_name) : '', assetModel: model ? assetModelLabel(model) : (asset ? asset.model : ''), typeName: type ? type.name : '',
+        certificateNumber: row.certificate_number, laboratory: row.laboratory, calibratedOn: row.calibrated_on, dueOn: row.due_on, result: row.result, resultLabel: CALIBRATION_RESULT_LABELS[row.result] || row.result,
+        notes: row.notes, hasFile: !!row.has_file, fileName: row.file_name, fileSize: row.file_size, fileMime: row.file_mime,
+        current, status: st.key, daysLeft: st.daysLeft, certificates: counts.get(row.asset_id) || 1, costCenterId: row.cost_center_id, createdBy: row.created_by,
+        pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({ companyName, area: CALIBRATION_AREA_LABEL, modulo: CALIBRATION_MODULE_LABEL, pantalla: CALIBRATION_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: row.created_at }),
+    };
+}
+// Los activos a los que se les puede registrar un certificado: activos cuyo Tipo lleva calibración. months = la vigencia de su modelo (con ella se propone el vencimiento).
+function calibrationPickList(ctx) {
+    return [...ctx.assets.values()].filter((a) => a.status === 'active' && (ctx.types.get(a.type_id) || {}).needs_calibration === 1).map((a) => {
+        const model = a.model_id ? ctx.models.get(a.model_id) : null;
+        const type = ctx.types.get(a.type_id);
+        return {
+            id: a.id, code: fixedAssetCodeOf(a), serialNumber: a.serial_number || '', modelLabel: model ? assetModelLabel(model) : a.model || '', typeName: type ? type.name : '',
+            costCenterId: a.cost_center_id, months: model ? model.calibration_months || 0 : 0,
+        };
+    }).sort((x, y) => x.code.localeCompare(y.code, 'es', { numeric: true }));
+}
+// Revisa lo que llega (alta o cambio). existing = el renglón de antes (null en un alta). Devuelve { values } (solo lo que llegó) o { error: { status, message, code } }.
+function normalizeCalibrationValues(input, existing) {
+    const bad = (message, code, status = 400) => ({ error: { status, message, code } });
+    const has = (key) => Object.prototype.hasOwnProperty.call(input, key);
+    const values = {};
+    for (const [key, max] of Object.entries(CALIBRATION_TEXT_LIMITS)) {
+        if (has(key)) values[key] = String(input[key] == null ? '' : input[key]).replace(/\s+/g, ' ').trim().slice(0, max);
+    }
+    if (has('notes')) values.notes = String(input.notes == null ? '' : input.notes).trim().slice(0, 500);
+    if (has('result')) {
+        if (!CALIBRATION_RESULTS.includes(input.result)) return bad('El resultado debe ser Dentro de tolerancia, Ajustado y dentro de tolerancia o Fuera de tolerancia.', 'RESULT');
+        values.result = input.result;
+    }
+    if (has('calibratedOn')) {
+        if (!isoDateOk(input.calibratedOn)) return bad('La fecha de calibración no es válida.', 'DATE');
+        if (isoDays(input.calibratedOn) > isoDays(todayIsoUtc()) + 1) return bad('La fecha de calibración no puede ser futura.', 'FUTURE');
+        values.calibratedOn = input.calibratedOn;
+    }
+    if (has('dueOn')) {
+        if (!isoDateOk(input.dueOn)) return bad('La fecha de vencimiento no es válida.', 'DUE');
+        values.dueOn = input.dueOn;
+    }
+    if (has('certificateNumber') && !values.certificateNumber) return bad('Escribe el número del certificado.', 'CERT');
+    const calibrated = values.calibratedOn || (existing && existing.calibrated_on);
+    const due = values.dueOn || (existing && existing.due_on);
+    if (calibrated && due && isoDays(due) <= isoDays(calibrated)) return bad('El vencimiento debe ser después de la fecha de calibración.', 'DUE_ORDER');
+    return { values };
+}
+const calibrationSanitizers = { result: (v) => CALIBRATION_RESULT_LABELS[v] || String(v == null ? '' : v) };
+const calibrationDuplicate = (clientId, isTest, assetId, certificate, exceptId) => listAssetCalibrations(clientId, isTest)
+    .some((r) => r.asset_id === assetId && r.id !== exceptId && String(r.certificate_number).toLowerCase() === String(certificate).toLowerCase());
+
+app.get('/api/business/calibrations', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const ctx = calibrationContext(req);
+    const todayIso = calibrationToday(req);
+    const rows = listAssetCalibrations(clientId, isTestAccount);
+    const counts = new Map();
+    rows.forEach((r) => counts.set(r.asset_id, (counts.get(r.asset_id) || 0) + 1));
+    const pendingByRecord = getPendingColumnsByRecord(clientId, CALIBRATION_TABLE_KEY);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        calibrations: rows.map((r) => mapCalibration(r, ctx, todayIso, counts, pendingByRecord, client?.company_name)),
+        assets: calibrationPickList(ctx),
+        laboratories: [...new Set(rows.map((r) => r.laboratory).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')),
+        resultOptions: CALIBRATION_RESULTS, soonDays: CALIBRATION_SOON_DAYS, maxFileBytes: CALIBRATION_FILE_MAX_BYTES,
+        costCenters: [...ctx.centers.values()].map((c) => ({ id: c.id, name: c.name, code: c.code || '' })),
+        canCreate: calibrationCan(req), canReplaceFile: !!req.user.isClientAdmin || getColumnGrantLevel(getUserEffectiveGrants(req.user.sub), CALIBRATION_TABLE_KEY, 'colCalArchivo') === 'editar',
+    });
+});
+app.post('/api/business/calibrations', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!calibrationCan(req)) return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    const { clientId, isTestAccount } = req.user;
+    const ctx = calibrationContext(req);
+    const body = req.body || {};
+    const asset = ctx.assets.get(intOf(body.assetId));
+    const type = asset ? ctx.types.get(asset.type_id) : null;
+    if (!asset || asset.status !== 'active') return res.status(400).json({ message: 'Elige el activo al que pertenece el certificado.', code: 'ASSET' });
+    if (!type || type.needs_calibration !== 1) return res.status(400).json({ message: `El tipo «${type ? type.name : ''}» no lleva calibración. Actívalo en Catálogos > Activos Fijos (columna «Lleva calibración»).`, code: 'NO_CAL' });
+    const input = { ...body };
+    delete input.assetId;
+    if (!String(input.certificateNumber || '').trim()) return res.status(400).json({ message: 'Escribe el número del certificado.', code: 'CERT' });
+    if (!input.calibratedOn) return res.status(400).json({ message: 'Escribe la fecha de calibración.', code: 'DATE' });
+    const dateCheck = normalizeCalibrationValues({ calibratedOn: input.calibratedOn }, null); // la fecha de calibración se revisa primero: con una fecha mala no se propone ningún vencimiento
+    if (dateCheck.error) return res.status(dateCheck.error.status).json({ message: dateCheck.error.message, code: dateCheck.error.code });
+    // sin vencimiento escrito, se propone con la vigencia del modelo
+    const model = asset.model_id ? ctx.models.get(asset.model_id) : null;
+    if (!input.dueOn && isoDateOk(input.calibratedOn) && model && model.calibration_months > 0) input.dueOn = addMonthsIso(input.calibratedOn, model.calibration_months);
+    if (!input.dueOn) return res.status(400).json({ message: 'Escribe la fecha de vencimiento (el modelo todavía no tiene su vigencia de calibración).', code: 'DUE' });
+    if (!('result' in input) || !input.result) input.result = 'ok';
+    const norm = normalizeCalibrationValues(input, null);
+    if (norm.error) return res.status(norm.error.status).json({ message: norm.error.message, code: norm.error.code });
+    const v = norm.values;
+    if (calibrationDuplicate(clientId, isTestAccount, asset.id, v.certificateNumber, 0)) return res.status(409).json({ message: `El activo ${fixedAssetCodeOf(asset)} ya tiene registrado el certificado ${v.certificateNumber}.`, code: 'DUP' });
+    const row = createAssetCalibration({
+        clientId, isTestData: isTestAccount, assetId: asset.id, costCenterId: asset.cost_center_id, certificateNumber: v.certificateNumber, laboratory: v.laboratory || '', calibratedOn: v.calibratedOn, dueOn: v.dueOn,
+        result: v.result, notes: v.notes || '', createdBy: changedByLabel(req), createdByUserId: req.user.sub,
+    });
+    const label = `${fixedAssetCodeOf(asset)} · ${row.certificate_number}`;
+    logTableChange({ clientId, tableKey: CALIBRATION_TABLE_KEY, recordId: row.id, recordLabel: label, action: 'create', changedBy: changedByLabel(req) });
+    const initial = { assetId: fixedAssetCodeOf(asset), ...v };
+    [['assetId', 'main.colCalActivo'], ...Object.entries(CALIBRATION_PATCHABLE_FIELDS).map(([k, d]) => [k, d.fieldKey])].forEach(([key, fieldKey]) => {
+        const val = initial[key];
+        if (val === undefined || val === null || val === '') return;
+        logTableChange({ clientId, tableKey: CALIBRATION_TABLE_KEY, recordId: row.id, recordLabel: label, action: 'update', fieldKey, oldValue: '', newValue: calibrationSanitizers[key] ? calibrationSanitizers[key](val) : val, changedBy: changedByLabel(req) });
+    });
+    notifyButtonAction(req, CALIBRATION_TABLE_KEY, 'create', label);
+    generateCalibrationAlerts(clientId, true);
+    const counts = new Map([[asset.id, countAssetCalibrationsByAsset(clientId, asset.id)]]);
+    const fresh = calibrationContext(req);
+    res.status(201).json({ calibration: mapCalibration(row, fresh, calibrationToday(req), counts, null, getClientById(clientId)?.company_name) });
+});
+app.patch('/api/business/calibrations/:id', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getAssetCalibrationById(intOf(req.params.id), clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Calibration not found.' });
+    const { baseline, overrideConflicts, ...raw } = req.body || {};
+    if (Object.prototype.hasOwnProperty.call(raw, 'assetId')) return res.status(400).json({ message: 'El activo de un certificado no se cambia: registra el certificado en el activo correcto.', code: 'ASSET_LOCKED' });
+    const norm = normalizeCalibrationValues(raw, existing);
+    if (norm.error) return res.status(norm.error.status).json({ message: norm.error.message, code: norm.error.code });
+    if ('certificateNumber' in norm.values && calibrationDuplicate(clientId, isTestAccount, existing.asset_id, norm.values.certificateNumber, existing.id)) {
+        return res.status(409).json({ message: `Este activo ya tiene registrado el certificado ${norm.values.certificateNumber}.`, code: 'DUP' });
+    }
+    const direct = {};
+    Object.keys(norm.values).forEach((key) => { if (Object.prototype.hasOwnProperty.call(raw, key)) direct[key] = norm.values[key]; });
+    const asset = getFixedAssetAnyScope(existing.asset_id, clientId);
+    const label = `${asset ? fixedAssetCodeOf(asset) : existing.asset_id} · ${existing.certificate_number}`;
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, direct, CALIBRATION_PATCHABLE_FIELDS, CALIBRATION_TABLE_KEY, label, calibrationSanitizers, { baseline, overrideConflicts });
+    const row = updateAssetCalibration(existing.id, clientId, appliedPatch, isTestAccount);
+    if ('dueOn' in appliedPatch || 'result' in appliedPatch) clearCalibrationAlerts(existing.id); // otra fecha de vencimiento: sus avisos se vuelven a generar
+    generateCalibrationAlerts(clientId, true);
+    const ctx = calibrationContext(req);
+    const counts = new Map([[existing.asset_id, countAssetCalibrationsByAsset(clientId, existing.asset_id)]]);
+    res.json({ calibration: mapCalibration(row, ctx, calibrationToday(req), counts, null, getClientById(clientId)?.company_name), pendingFields, rejectedFields, conflictFields });
+});
+// El archivo del certificado (foto o PDF). La primera vez lo sube quien registra (botón de crear); cambiar uno ya subido pide «Modificar» en la columna Certificado.
+app.put('/api/business/calibrations/:id/file', requireAuth, calibrationFileRaw, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getAssetCalibrationById(intOf(req.params.id), clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Calibration not found.' });
+    const canReplace = !!req.user.isClientAdmin || getColumnGrantLevel(getUserEffectiveGrants(req.user.sub), CALIBRATION_TABLE_KEY, 'colCalArchivo') === 'editar';
+    if (existing.has_file ? !canReplace : !calibrationCan(req)) return res.status(403).json({ message: existing.has_file ? 'No tienes permiso para cambiar el archivo del certificado.' : 'No tienes permiso para subir el certificado.' });
+    const data = req.body;
+    if (!Buffer.isBuffer(data) || !data.length) return res.status(400).json({ message: 'El archivo no es válido.', code: 'FILE' });
+    if (data.length > CALIBRATION_FILE_MAX_BYTES) return res.status(413).json({ message: 'El archivo pesa demasiado (máximo 3 MB): redúcelo e inténtalo otra vez.', code: 'SIZE' });
+    const mime = calibrationFileMime(data);
+    if (!mime) return res.status(400).json({ message: 'El certificado debe ser un PDF, una foto JPG o una foto PNG.', code: 'FILE' });
+    const rawName = String(req.query.name || '').replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim().slice(0, 120);
+    const name = rawName || `certificado.${CALIBRATION_FILE_EXT[mime]}`;
+    setAssetCalibrationFile(existing.id, clientId, { name, mime, data });
+    const asset = getFixedAssetAnyScope(existing.asset_id, clientId);
+    logTableChange({ clientId, tableKey: CALIBRATION_TABLE_KEY, recordId: existing.id, recordLabel: `${asset ? fixedAssetCodeOf(asset) : existing.asset_id} · ${existing.certificate_number}`, action: 'update', fieldKey: 'main.colCalArchivo', oldValue: existing.has_file ? '[archivo]' : '', newValue: '[archivo]', changedBy: changedByLabel(req) });
+    res.json({ file: { name, mime, size: data.length } });
+});
+app.get('/api/business/calibrations/:id/file', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const file = getAssetCalibrationFile(intOf(req.params.id), req.user.clientId, req.user.isTestAccount);
+    if (!file) return res.status(404).json({ message: 'Este certificado no tiene archivo.' });
+    const ascii = String(file.name || 'certificado').replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '');
+    res.set({ 'Content-Type': file.mime, 'Content-Disposition': `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(file.name || 'certificado')}`, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' });
+    res.send(file.data);
+});
+
+// Los avisos de la campana: uno 30 días antes del vencimiento y otro el día que vence (o si ya venció), por certificado y una sola vez. Le llegan a quien registró la calibración, a su jefe directo y a quienes tienen «Notificar» en la
+// columna «Vence». Se generan cuando alguien abre la campana (cada 5 minutos como máximo por empresa) y al registrar o corregir un certificado.
+const calibrationAlertRuns = new Map();
+function generateCalibrationAlerts(clientId, force = false) {
+    try {
+        const nowMs = Date.now();
+        if (!force && nowMs - (calibrationAlertRuns.get(clientId) || 0) < 5 * 60 * 1000) return;
+        calibrationAlertRuns.set(clientId, nowMs);
+        const todayIso = todayIsoUtc();
+        const types = new Map(listArticleCategoriesAnyScope(clientId, 'activos-fijos').map((r) => [r.id, r]));
+        latestCalibrationMap(clientId).forEach((cal, assetId) => {
+            const st = calibrationStatus(cal, todayIso);
+            if (st.key === 'failed' || st.key === 'valid' || st.key === 'none') return;
+            const asset = getFixedAssetAnyScope(assetId, clientId);
+            if (!asset || asset.status !== 'active') return;
+            const type = types.get(asset.type_id);
+            if (!type || type.needs_calibration !== 1) return;
+            const kind = st.daysLeft <= 0 ? 'due' : 'soon';
+            if (!recordCalibrationAlert(cal.id, kind)) return;
+            const recipients = [cal.created_by_user_id];
+            const boss = cal.created_by_user_id ? resolveDirectSupervisorUserId(cal.created_by_user_id) : null;
+            if (boss) recipients.push(boss);
+            recipients.push(...listColumnNotifyRecipientUserIds(clientId, CALIBRATION_TABLE_KEY, 'colCalVence', 'change', []));
+            publishCalibrationNotice({ recipients, payload: { calibrationId: cal.id, alertKind: kind, assetId, assetCode: fixedAssetCodeOf(asset), serial: asset.serial_number || '', dueOn: cal.due_on, certificate: cal.certificate_number } });
+        });
+    } catch (err) {
+        console.error('[calibraciones] no se pudieron generar los avisos:', err.message);
+    }
+}
+
 // Decidir: la solicitud pasa de pending a approved / rejected y el activo cambia (o se queda) según su tipo. Quien la pidió lo ve en la pestaña Avisos de su campana.
 app.post('/api/business/asset-authorizations/:id/approve', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -14075,6 +14363,15 @@ const PENDING_CHANGE_APPLIERS = {
         syncFixedAssetIntoLayout(clientId, updated);
         return updated;
     },
+    // Cambiar un dato de un certificado de Calibraciones cuando lo autoriza otra persona (otro vencimiento o resultado: sus avisos se vuelven a generar).
+    'calibraciones': (recordId, clientId, patch) => {
+        const existing = getAssetCalibrationById(recordId, clientId, false) || getAssetCalibrationById(recordId, clientId, true);
+        if (!existing) return null;
+        const norm = normalizeCalibrationValues(patch, existing);
+        const updated = updateAssetCalibration(recordId, clientId, norm.values || {}, !!existing.is_test_data);
+        if (norm.values && ('dueOn' in norm.values || 'result' in norm.values)) clearCalibrationAlerts(recordId);
+        return updated;
+    },
 };
 const PENDING_CHANGE_SANITIZERS = {
     'registro-combustible': {
@@ -14170,6 +14467,7 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
             autorizar: colors.autorizar.map(asNotification),
         });
     }
+    generateCalibrationAlerts(req.user.clientId); // los avisos de calibración por vencer / vencida salen cuando alguien abre la campana (máx. cada 5 minutos)
     const allPending = listPendingChangesForClient(req.user.clientId);
     let autorizar = allPending;
     if (!req.user.isClientAdmin) {

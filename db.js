@@ -2421,7 +2421,9 @@ if (!articleCategoryColumns.some((c) => c.name === 'letter')) db.exec("ALTER TAB
 for (const [col, ddl] of [['custom_name', "TEXT NOT NULL DEFAULT ''"], ['model_number', "TEXT NOT NULL DEFAULT ''"], ['shape', "TEXT NOT NULL DEFAULT 'rectangular'"], ['height_cm', 'REAL NOT NULL DEFAULT 0'], ['length_cm', 'REAL NOT NULL DEFAULT 0'],
     ['depth_cm', 'REAL NOT NULL DEFAULT 0'], ['weight_kg', 'REAL NOT NULL DEFAULT 0'], ['volume_m3', 'REAL NOT NULL DEFAULT 0'], ['needs_serial', 'INTEGER NOT NULL DEFAULT 1'],
     // Apariencia del MODELO en el Layout (2026-11-13, Daniel: «que se elija conforme el modelo cómo se verá en el layout»): '' = la del Tipo (como se dibujaba hasta hoy); si no, una de las apariencias de ese tipo (ver ASSET_LOOKS en server.js).
-    ['look', "TEXT NOT NULL DEFAULT ''"]]) {
+    ['look', "TEXT NOT NULL DEFAULT ''"],
+    // Calibración (2026-11-13): needs_calibration es del TIPO (1 = sus activos llevan calibración: los sensores; 0 = no) y calibration_months es del MODELO (cada cuántos meses se vuelve a calibrar; con él se propone la fecha de vencimiento).
+    ['needs_calibration', 'INTEGER NOT NULL DEFAULT 0'], ['calibration_months', 'INTEGER NOT NULL DEFAULT 0']]) {
     if (!articleCategoryColumns.some((c) => c.name === col)) db.exec(`ALTER TABLE article_categories ADD COLUMN ${col} ${ddl}`);
 }
 
@@ -3355,6 +3357,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'udm-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones de Distribución' },
     'relacion-envio': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código Envío' },
     'alta-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Activos' },
+    'calibraciones': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Calibraciones' },
     'presentaciones-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones Distribución' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
     'surtido-pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Surtido Pedido Manual' },
@@ -3698,6 +3701,7 @@ const TABLE_GRANT_PATHS = {
     'udm-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion' },
     'relacion-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-envio' },
     'alta-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-activos' },
+    'calibraciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-calibraciones' },
     // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
@@ -3940,6 +3944,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'udm-distribucion': { create: 'colUdmDCreateAuth', delete: 'colUdmDDeleteAuth' },
     'relacion-envio': { create: 'colEnvCreateAuth', delete: 'colEnvDeleteAuth' },
     'alta-activos': { create: 'colActCreateAuth', delete: 'colActDeleteAuth' },
+    'calibraciones': { create: 'colCalCreateAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -6147,6 +6152,120 @@ function countAssetModelsByType(clientId, typeId) {
     return db.prepare("SELECT COUNT(*) AS n FROM article_categories WHERE client_id = ? AND category_type = 'activos-modelos' AND parent_id = ?").get(clientId, typeId).n;
 }
 
+// --- Calibraciones (2026-11-13) ------------------------------------------------------------------------------------------------------------------------------
+// Operaciones > C. Distribución > Calibraciones: un renglón por CERTIFICADO de calibración de un activo (los sensores: el Tipo decide con «Lleva calibración»). Los certificados anteriores de un activo no se pierden: quedan como historial y el MÁS
+// RECIENTE (por fecha de calibración, y a igual fecha el último que se registró) es el que vale. Las fechas son de calendario (AAAA-MM-DD, sin hora). El archivo del certificado (foto o PDF, máx. 3 MB) vive aquí mismo, como las fotos del modelo.
+// Un activo sin calibración vigente NO se bloquea: se marca en rojo (Gestión > Activos y su QR). calibration_alerts evita repetir el aviso de la campana (uno 30 días antes y otro el día que vence, por certificado).
+const CALIBRATION_RESULTS = ['ok', 'adjusted', 'out']; // dentro de tolerancia | ajustado y dentro de tolerancia | fuera de tolerancia
+const CALIBRATION_SOON_DAYS = 30;
+db.exec(`
+    CREATE TABLE IF NOT EXISTS asset_calibrations (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id           INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data        INTEGER NOT NULL DEFAULT 0,
+        db_id               TEXT NOT NULL,
+        record_number       INTEGER NOT NULL,
+        asset_id            INTEGER NOT NULL,
+        cost_center_id      INTEGER NOT NULL DEFAULT 0,
+        certificate_number  TEXT NOT NULL DEFAULT '',
+        laboratory          TEXT NOT NULL DEFAULT '',
+        calibrated_on       TEXT NOT NULL DEFAULT '',
+        due_on              TEXT NOT NULL DEFAULT '',
+        result              TEXT NOT NULL DEFAULT 'ok',
+        notes               TEXT NOT NULL DEFAULT '',
+        file_name           TEXT NOT NULL DEFAULT '',
+        file_mime           TEXT NOT NULL DEFAULT '',
+        file_size           INTEGER NOT NULL DEFAULT 0,
+        file_data           BLOB,
+        created_by          TEXT NOT NULL DEFAULT '',
+        created_by_user_id  INTEGER,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_asset_calibrations_asset ON asset_calibrations (asset_id, calibrated_on, id);
+    CREATE INDEX IF NOT EXISTS idx_asset_calibrations_client ON asset_calibrations (client_id, is_test_data);
+    CREATE TABLE IF NOT EXISTS calibration_alerts (
+        calibration_id  INTEGER NOT NULL,
+        kind            TEXT NOT NULL,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (calibration_id, kind)
+    );
+`);
+const CALIBRATION_PATCHABLE_FIELDS = {
+    certificateNumber: { column: 'certificate_number', fieldKey: 'main.colCalCertificado' },
+    laboratory: { column: 'laboratory', fieldKey: 'main.colCalLaboratorio' },
+    calibratedOn: { column: 'calibrated_on', fieldKey: 'main.colCalCalibrado' },
+    dueOn: { column: 'due_on', fieldKey: 'main.colCalVence' },
+    result: { column: 'result', fieldKey: 'main.colCalResultado' },
+    notes: { column: 'notes', fieldKey: 'main.colCalObservaciones' },
+};
+// Todo del certificado menos los bytes del archivo (has_file dice si lo tiene).
+const CALIBRATION_SELECT = `id, client_id, is_test_data, db_id, record_number, asset_id, cost_center_id, certificate_number, laboratory, calibrated_on, due_on, result, notes, file_name, file_mime, file_size,
+    (file_data IS NOT NULL) AS has_file, created_by, created_by_user_id, created_at`;
+function listAssetCalibrations(clientId, forTestAccount = false) {
+    return db.prepare(`SELECT ${CALIBRATION_SELECT} FROM asset_calibrations WHERE client_id = ? AND is_test_data = ? ORDER BY calibrated_on DESC, id DESC`).all(clientId, forTestAccount ? 1 : 0);
+}
+function getAssetCalibrationById(id, clientId, forTestAccount = false) {
+    return db.prepare(`SELECT ${CALIBRATION_SELECT} FROM asset_calibrations WHERE id = ? AND client_id = ? AND is_test_data = ?`).get(id, clientId, forTestAccount ? 1 : 0);
+}
+function createAssetCalibration({ clientId, isTestData = false, assetId, costCenterId = 0, certificateNumber = '', laboratory = '', calibratedOn = '', dueOn = '', result = 'ok', notes = '', createdBy = '', createdByUserId = null }) {
+    const test = isTestData ? 1 : 0;
+    return db.transaction(() => {
+        const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM asset_calibrations WHERE client_id = ? AND is_test_data = ?').get(clientId, test).n;
+        const info = db.prepare(`
+            INSERT INTO asset_calibrations (client_id, is_test_data, db_id, record_number, asset_id, cost_center_id, certificate_number, laboratory, calibrated_on, due_on, result, notes, created_by, created_by_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(clientId, test, generateBigDateId(), recordNumber, assetId, costCenterId || 0, certificateNumber, laboratory, calibratedOn, dueOn, CALIBRATION_RESULTS.includes(result) ? result : 'ok', notes, String(createdBy || '').slice(0, 120), createdByUserId || null);
+        return getAssetCalibrationById(info.lastInsertRowid, clientId, isTestData);
+    })();
+}
+function updateAssetCalibration(id, clientId, patch, forTestAccount = false) {
+    const sets = [];
+    const args = [];
+    Object.entries(patch || {}).forEach(([key, value]) => {
+        const def = CALIBRATION_PATCHABLE_FIELDS[key];
+        if (!def) return;
+        sets.push(`${def.column} = ?`);
+        args.push(value);
+    });
+    if (sets.length) db.prepare(`UPDATE asset_calibrations SET ${sets.join(', ')} WHERE id = ? AND client_id = ?`).run(...args, id, clientId);
+    return getAssetCalibrationById(id, clientId, forTestAccount);
+}
+function setAssetCalibrationFile(id, clientId, { name, mime, data }) {
+    db.prepare('UPDATE asset_calibrations SET file_name = ?, file_mime = ?, file_size = ?, file_data = ? WHERE id = ? AND client_id = ?').run(String(name || '').slice(0, 160), mime, data ? data.length : 0, data || null, id, clientId);
+}
+function getAssetCalibrationFile(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT file_name AS name, file_mime AS mime, file_data AS data FROM asset_calibrations WHERE id = ? AND client_id = ? AND is_test_data = ? AND file_data IS NOT NULL').get(id, clientId, forTestAccount ? 1 : 0);
+}
+// El certificado que VALE de cada activo (el más reciente), sin importar si lo registró una cuenta de prueba o una real: la calibración es del activo y el Layout, Gestión y el QR la leen de la empresa. Map(assetId → certificado).
+function latestCalibrationMap(clientId) {
+    const map = new Map();
+    db.prepare(`SELECT ${CALIBRATION_SELECT} FROM asset_calibrations WHERE client_id = ? ORDER BY calibrated_on ASC, id ASC`).all(clientId).forEach((row) => { map.set(row.asset_id, row); });
+    return map;
+}
+function latestCalibrationOfAsset(assetId, clientId) {
+    return db.prepare(`SELECT ${CALIBRATION_SELECT} FROM asset_calibrations WHERE asset_id = ? AND client_id = ? ORDER BY calibrated_on DESC, id DESC LIMIT 1`).get(assetId, clientId);
+}
+function countAssetCalibrationsByAsset(clientId, assetId) {
+    return db.prepare('SELECT COUNT(*) AS n FROM asset_calibrations WHERE client_id = ? AND asset_id = ?').get(clientId, assetId).n;
+}
+// Aviso de la campana ya generado para ese certificado y momento ('soon' = faltan 30 días o menos, 'due' = llegó el día)? recordCalibrationAlert devuelve true solo la primera vez.
+function recordCalibrationAlert(calibrationId, kind) {
+    return db.prepare('INSERT OR IGNORE INTO calibration_alerts (calibration_id, kind) VALUES (?, ?)').run(calibrationId, kind).changes > 0;
+}
+// Si el vencimiento de un certificado cambia (se corrige la fecha), sus avisos vuelven a poder generarse para la fecha nueva.
+function clearCalibrationAlerts(calibrationId) {
+    db.prepare('DELETE FROM calibration_alerts WHERE calibration_id = ?').run(calibrationId);
+}
+// Aviso de la campana (kind 'calibration', scope 'data'): una fila por persona en saas_tree_notices. payload = { calibrationId, alertKind: 'soon' | 'due', assetId, assetCode, serial, dueOn, certificate }. Sin quien lo hizo: lo genera el sistema.
+function publishCalibrationNotice({ recipients, payload }) {
+    const ids = [...new Set((recipients || []).filter((id) => Number.isInteger(id)))];
+    if (!ids.length) return [];
+    const json = JSON.stringify(payload);
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'calibration', 'data', ?, NULL, '')");
+    db.transaction(() => ids.forEach((id) => insert.run(id, json)))();
+    return ids;
+}
+
 // --- Pedido Manual (Operaciones > C. Distribución) --------------------------------------------------------------------------------------------------
 // Cada centro de costos tiene un QR (la dirección fija /pm/<código del Layout del centro>): quien lo escanea NO necesita sesión (salvo que el candado «Pedir inicio de sesión» esté cerrado): busca el artículo por
 // código, descripción, unidad de medida o categoría, pone la cantidad y envía. Un pedido (manual_orders) puede traer varios artículos (manual_order_lines): comparten folio, solicitante y hora; la hora la pone el
@@ -7076,6 +7195,7 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
         kind: { column: 'kind', fieldKey: 'main.colActivoFijoLetra' },
         letter: { column: 'letter', fieldKey: 'main.colActivoFijoLetraCodigo' },
         needsSerial: { column: 'needs_serial', fieldKey: 'main.colActivoFijoSerie' },
+        needsCalibration: { column: 'needs_calibration', fieldKey: 'main.colActivoFijoCalibracion' },
     },
     'activos-modelos': {
         name: { column: 'name', fieldKey: 'main.colActModNombreCompra' },
@@ -7088,6 +7208,7 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
         weight: { column: 'weight_kg', fieldKey: 'main.colActModPeso' },
         volume: { column: 'volume_m3', fieldKey: 'main.colActModVolumen' },
         look: { column: 'look', fieldKey: 'main.colActModApariencia' },
+        calibrationMonths: { column: 'calibration_months', fieldKey: 'main.colActModVigenciaCal' },
     },
     'activos-clasificacion': {
         kind: { column: 'kind', fieldKey: 'main.colActClasMetrica' },
@@ -7107,7 +7228,7 @@ function articleCategoryPatchableFields(categoryType) {
 }
 const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' }, widthM: { column: 'width_m' }, lengthM: { column: 'length_m' }, heightM: { column: 'height_m' }, letter: { column: 'letter' },
     needsSerial: { column: 'needs_serial' }, customName: { column: 'custom_name' }, modelNumber: { column: 'model_number' }, shape: { column: 'shape' }, height: { column: 'height_cm' }, length: { column: 'length_cm' }, depth: { column: 'depth_cm' },
-    weight: { column: 'weight_kg' }, volume: { column: 'volume_m3' }, look: { column: 'look' } };
+    weight: { column: 'weight_kg' }, volume: { column: 'volume_m3' }, look: { column: 'look' }, needsCalibration: { column: 'needs_calibration' }, calibrationMonths: { column: 'calibration_months' } };
 
 function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
     const sets = [];
@@ -13697,6 +13818,31 @@ function seedAssetAuthorizeLeaf() {
     if (!alta) return;
     seedLeavesForScreenHolders(ASSET_AUTHORIZE_SEED_KEY, alta, [`${alta.submenuPrefix}/class-botones/colActAutorizar/autorizar`], 'the Alta Activos Autorizar button', { contractOnly: true });
 }
+// Calibraciones (2026-11-13): (1) la pantalla nueva la reciben, una sola vez, quienes ya tienen Alta Activos (es del mismo registro de activos); (2) su botón «Nueva calibración» ESCRIBE datos: se agrega solo a lo contratado (planes,
+// adicionales del cliente y giros) y el administrador del cliente lo reparte desde el árbol; (3) las dos columnas nuevas del catálogo Activos Fijos («Lleva calibración» en Tipos y «Vigencia de calibración» en Modelos), solo en lo contratado
+// como las demás columnas del modelo. (4) Los Tipos que ya se dibujan como Sensor pasan a «Lleva calibración» = Sí (una sola vez); los demás quedan en No y se cambian en el catálogo.
+const CALIBRATION_SCREEN_SEED_KEY = 'seed-calibraciones-screen-v1';
+const CALIBRATION_BUTTON_SEED_KEY = 'seed-calibraciones-boton-v1';
+const CALIBRATION_CATALOG_SEED_KEY = 'seed-calibraciones-catalogo-v1';
+const CALIBRATION_SENSOR_TYPES_KEY = 'migrate-calibracion-tipos-sensor-v1';
+function seedCalibrationGrants() {
+    const alta = TABLE_GRANT_PATHS['alta-activos'];
+    const cal = TABLE_GRANT_PATHS.calibraciones;
+    const fijos = TABLE_GRANT_PATHS['activos-fijos'];
+    if (alta && cal) {
+        seedLeavesForScreenHolders(CALIBRATION_SCREEN_SEED_KEY, alta, [cal.submenuPrefix], 'the Calibraciones screen');
+        seedLeavesForScreenHolders(CALIBRATION_BUTTON_SEED_KEY, alta, ['solo-ver', 'ver-y-operar'].map((level) => `${cal.submenuPrefix}/class-botones/colCalCreateAuth/${level}`), 'the Calibraciones create button', { contractOnly: true });
+    }
+    if (fijos) seedLeavesForScreenHolders(CALIBRATION_CATALOG_SEED_KEY, fijos, ['colActivoFijoCalibracion', 'colActModVigenciaCal'].flatMap((col) => ['ver-y-operar', 'editar'].map((level) => `${fijos.submenuPrefix}/${col}/${level}`)), 'the calibration catalog columns', { contractOnly: true });
+}
+function migrateCalibrationSensorTypesOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CALIBRATION_SENSOR_TYPES_KEY)) return;
+    db.transaction(() => {
+        const changed = db.prepare("UPDATE article_categories SET needs_calibration = 1 WHERE category_type = 'activos-fijos' AND kind = 'sensor' AND needs_calibration = 0").run().changes;
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(CALIBRATION_SENSOR_TYPES_KEY);
+        if (changed) console.log(`[db] Marked ${changed} sensor asset type(s) as «Lleva calibración» (one-time).`);
+    })();
+}
 // Operaciones > QR's > Compra Pedido Manual y Surtido Pedido Manual (2026-11-12): las dos pantallas nuevas y los botones de descargar de Compra los reciben, una sola vez, quienes ya tienen la pantalla Pedido Manual (lo que se baja
 // sale de los mismos pedidos que ya ven). Los botones «Solo ver» y «Ver y operar», como el de descargar del Pedido Manual.
 const COMPRA_SURTIDO_SEED_KEY = 'seed-compra-surtido-pedido-manual-v1';
@@ -13745,6 +13891,8 @@ seedSurtidoPedidoManualButtons();
 backfillManualLegacyDeliveriesOnce();
 seedAssetModelLeaves();
 seedAssetAuthorizeLeaf();
+seedCalibrationGrants();
+migrateCalibrationSensorTypesOnce();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
 migrateFixedAssetsToModelsOnce();
@@ -13830,6 +13978,7 @@ module.exports = {
     canAuthorizeColumn,
     canDeleteColumn,
     canNotifyColumn,
+    listColumnNotifyRecipientUserIds,
     getSearchGatedColumns,
     publishDataChangeNotice,
     publishButtonActionNotice,
@@ -14010,6 +14159,8 @@ module.exports = {
     assetModelPhotoMap,
     countAssetModelPhotos,
     countAssetModelsByType,
+    CALIBRATION_RESULTS, CALIBRATION_SOON_DAYS, CALIBRATION_PATCHABLE_FIELDS, listAssetCalibrations, getAssetCalibrationById, createAssetCalibration, updateAssetCalibration, setAssetCalibrationFile,
+    getAssetCalibrationFile, latestCalibrationMap, latestCalibrationOfAsset, countAssetCalibrationsByAsset, recordCalibrationAlert, clearCalibrationAlerts, publishCalibrationNotice,
     listFixedAssets,
     getFixedAssetById,
     nextFixedAssetCodeNumber,

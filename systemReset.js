@@ -50,6 +50,9 @@ const TABLES = {
     transfers: { action: WIPE, group: 'captures' },
     sku_items: { action: WIPE, group: 'captures' },
     fixed_assets: { action: WIPE, group: 'captures' }, // Alta Activos (2026-11-12)
+    asset_authorizations: { action: WIPE, group: 'captures' }, // autorización del jefe directo para usar y editar activos (2026-11-13)
+    asset_model_photos: { action: WIPE, group: 'captures' }, // fotos de las 6 caras de cada modelo de activo (2026-11-13)
+    asset_calibrations: { action: WIPE, group: 'captures' }, // certificados de calibración y su archivo (Calibraciones, 2026-11-13)
     article_categories: { action: WIPE, group: 'captures' },
     unit_types: { action: WIPE, group: 'captures' },
     catalog_value_requests: { action: WIPE, group: 'captures' },
@@ -67,6 +70,7 @@ const TABLES = {
     scheduled_reports: { action: WIPE, group: 'clientSettings' },
     // Solicitudes y alertas
     pending_changes: { action: WIPE, group: 'requests' },
+    calibration_alerts: { action: WIPE, group: 'requests' }, // avisos de calibración ya generados (uno por certificado y momento)
     column_color_requests: { action: WIPE, group: 'requests' },
     access_denied_alerts: { action: WIPE, group: 'requests' },
     saas_tree_notices: { action: WIPE, group: 'requests' },

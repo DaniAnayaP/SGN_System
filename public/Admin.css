@@ -8724,3 +8724,17 @@ tr.sku-row-selected > td{ background-image: linear-gradient(color-mix(in srgb, v
 .lg-roof-gable{ border-color: #a63fb5; background: repeating-linear-gradient(45deg, rgba(166, 63, 181, 0.55) 0 2px, transparent 2px 6px); }
 .lg-roof-shed{ border-color: #1f8a7d; background: repeating-linear-gradient(0deg, rgba(31, 138, 125, 0.55) 0 2px, transparent 2px 6px); }
 .lg-roof-flat{ border-color: #c27a1c; background: repeating-linear-gradient(45deg, rgba(194, 122, 28, 0.5) 0 2px, transparent 2px 6px), repeating-linear-gradient(-45deg, rgba(194, 122, 28, 0.5) 0 2px, transparent 2px 6px); }
+
+/* Calibraciones (Operaciones > Calibraciones, Gestión > Activos y los QR de sensores): el estado de la calibración de un activo y la pantalla de certificados */
+.cal-chip{ --cal-hue: #8a7b91; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; font-weight: 600; line-height: 1.25; padding: 0.15rem 0.65rem; border-radius: 999px; white-space: nowrap; background: color-mix(in srgb, var(--cal-hue) 16%, transparent); color: color-mix(in srgb, var(--cal-hue) 75%, var(--color-text-primary, #2a1b30)); }
+.cal-chip::before{ content: ""; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--cal-hue); flex: none; }
+.cal-chip-valid{ --cal-hue: #1d7f55; }
+.cal-chip-soon{ --cal-hue: #b7791f; }
+.cal-chip-expired, .cal-chip-failed{ --cal-hue: #c0392b; }
+.cal-chip-none, .cal-chip-history{ --cal-hue: #8a7b91; }
+td[data-col="colActCalibracion"] .cal-chip{ white-space: normal; }
+.cal-row-history td{ opacity: 0.72; }
+.cal-serial{ color: var(--color-text-secondary); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.cal-assets-link{ background: none; border: 0; padding: 0; font: inherit; font-size: 0.75rem; font-weight: 600; color: var(--color-primary, #7d3f8f); cursor: pointer; text-decoration: underline; }
+.cal-file-preview{ margin-top: 0.5rem; display: flex; align-items: center; gap: 0.75rem; font-size: 0.8rem; color: var(--color-text-secondary); }
+.cal-file-preview img{ max-width: 9rem; max-height: 7rem; border-radius: 0.5rem; border: 1px solid var(--color-border); object-fit: contain; background: var(--color-surface, #fff); }

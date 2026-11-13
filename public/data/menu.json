@@ -1454,6 +1454,7 @@
             { "id": "colActivoFijoLetraCodigo", "labelKey": "main.colActivoFijoLetraCodigo", "permissionOnly": true },
             { "id": "colActivoFijoLetra", "labelKey": "main.colActivoFijoLetra", "permissionOnly": true },
             { "id": "colActivoFijoSerie", "labelKey": "main.colActivoFijoSerie", "permissionOnly": true },
+            { "id": "colActivoFijoCalibracion", "labelKey": "main.colActivoFijoCalibracion", "permissionOnly": true },
             { "id": "colActModNombreCompra", "labelKey": "main.colActModNombreCompra", "permissionOnly": true },
             { "id": "colActModNombrePersonalizado", "labelKey": "main.colActModNombrePersonalizado", "permissionOnly": true },
             { "id": "colActModModelo", "labelKey": "main.colActModModelo", "permissionOnly": true },
@@ -1465,6 +1466,7 @@
             { "id": "colActModVolumen", "labelKey": "main.colActModVolumen", "permissionOnly": true },
             { "id": "colActModApariencia", "labelKey": "main.colActModApariencia", "permissionOnly": true },
             { "id": "colActModFotos", "labelKey": "main.colActModFotos", "permissionOnly": true },
+            { "id": "colActModVigenciaCal", "labelKey": "main.colActModVigenciaCal", "permissionOnly": true },
             { "id": "colCatStatus", "labelKey": "main.colCatStatus", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
@@ -1759,6 +1761,7 @@
             { "id": "colActFotoAbajo", "labelKey": "main.colActFotoAbajo", "permissionOnly": true },
             { "id": "colActEnLayout", "labelKey": "main.colActEnLayout", "permissionOnly": true },
             { "id": "colActDondeEsta", "labelKey": "main.colActDondeEsta", "permissionOnly": true },
+            { "id": "colActCalibracion", "labelKey": "main.colActCalibracion", "permissionOnly": true },
             { "id": "colActFalta", "labelKey": "main.colActFalta", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
@@ -2464,6 +2467,59 @@
               "submenu": [
                 { "id": "colSurSurtir", "labelKey": "main.colSurSurtir", "permissionOnly": true },
                 { "id": "colSurAnularAuth", "labelKey": "main.colSurAnularAuth", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-operaciones-centro-dist-calibraciones", "labelKey": "menu.opCentroDistCalibraciones", "icon": "bx-badge-check", "href": "OpCentroDistCalibraciones.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colCalActivo", "labelKey": "main.colCalActivo", "permissionOnly": true },
+            { "id": "colCalModelo", "labelKey": "main.colCalModelo", "permissionOnly": true },
+            { "id": "colCalCertificado", "labelKey": "main.colCalCertificado", "permissionOnly": true },
+            { "id": "colCalCalibrado", "labelKey": "main.colCalCalibrado", "permissionOnly": true },
+            { "id": "colCalVence", "labelKey": "main.colCalVence", "permissionOnly": true },
+            { "id": "colCalEstado", "labelKey": "main.colCalEstado", "permissionOnly": true },
+            { "id": "colCalLaboratorio", "labelKey": "main.colCalLaboratorio", "permissionOnly": true },
+            { "id": "colCalResultado", "labelKey": "main.colCalResultado", "permissionOnly": true },
+            { "id": "colCalObservaciones", "labelKey": "main.colCalObservaciones", "permissionOnly": true },
+            { "id": "colCalArchivo", "labelKey": "main.colCalArchivo", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colCalCreateAuth", "labelKey": "main.colCalCreateAuth", "permissionOnly": true }
               ]
             }
           ],

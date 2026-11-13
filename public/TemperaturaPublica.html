@@ -9,10 +9,10 @@
     <link rel="icon" href="/icons/icon-512.png">
     <style>
         :root{
-            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14);
+            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --ok:#2e8b57; --soon:#a86a00; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14);
         }
         @media (prefers-color-scheme: dark){
-            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); }
+            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --ok:#5cc58a; --soon:#f0b429; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5); }
         }
         *{ box-sizing:border-box; }
         html,body{ margin:0; min-height:100%; }
@@ -47,6 +47,11 @@
         .sum div{ border:1px solid var(--line); border-radius:14px; padding:8px 12px; }
         .sum small{ display:block; color:var(--muted); font-size:11px; }
         .sum b{ font-size:16px; }
+        .cal{ display:inline-flex; align-items:center; gap:6px; width:max-content; max-width:100%; font-weight:600; font-size:13px; padding:4px 12px; border-radius:999px; border:1px solid var(--ok); color:var(--ok); }
+        .cal::before{ content:""; width:8px; height:8px; border-radius:50%; background:currentColor; flex:none; }
+        .cal.soon{ border-color:var(--soon); color:var(--soon); }
+        .cal.bad{ border-color:var(--warn); color:var(--warn); }
+        .cal.none{ border-color:var(--line); color:var(--muted); }
         .tag{ display:inline-block; font-weight:600; font-size:12px; padding:2px 10px; border-radius:999px; border:1px solid var(--ok); color:var(--ok); white-space:nowrap; }
         .list{ display:flex; flex-direction:column; gap:8px; }
         .item{ display:grid; grid-template-columns:56px 1fr auto; gap:8px; align-items:center; border:1px solid var(--line); border-radius:14px; padding:8px; }
@@ -84,6 +89,7 @@ const TEXT = {
         done: 'Listo', saved: 'Guardado', when: 'Hora', newOne: 'Nueva lectura', recordsTitle: 'Registros', readOnly: 'Solo lectura', noRecords: 'Todavía no hay lecturas de este refrigerador.',
         needName: 'Escribe tu nombre para empezar.', needTemp: 'Escribe la temperatura que marca (por ejemplo 4.5 o -18).', badTemp: 'Esa temperatura no es válida: usa un número entre -100 y 100.', outTitle: 'Fuera de rango', outSaved: 'Se guardará con la alerta.', tempLow: 'La temperatura está por debajo del mínimo ({n} °C).', tempHigh: 'La temperatura está por encima del máximo ({n} °C).', humLow: 'La humedad está por debajo del mínimo ({n} %).', humHigh: 'La humedad está por encima del máximo ({n} %).', needHum: 'Escribe la humedad que marca (por ejemplo 55).', viewOnly: 'Este QR solo sirve para consultar.', anonymous: 'Personal', lastN: 'Se ven las últimas {n} lecturas.', locked: 'Este QR ya no permite registrar.', nothing: 'Este QR no tiene opciones disponibles.', badHum: 'Esa humedad no es válida: usa un número entre 0 y 100.', humidity: 'Humedad que marca', saving: 'Guardando…',
         errPhoto: 'La foto no se pudo guardar. Intenta de nuevo.', errGeneric: 'No se pudo guardar. Revisa tu conexión e intenta de nuevo.', close: 'Cerrar', reading: 'Lectura',
+        calOk: 'Calibrado hasta el {date}', calSoon: 'Calibración por vencer · {date}', calToday: 'La calibración vence hoy', calExpired: 'Calibración vencida desde el {date}', calFailed: 'Calibración fuera de tolerancia', calNone: 'Sin calibración registrada',
     },
     en: {
         title: 'Temperatures', loading: 'Loading…', notFound: 'This QR no longer matches any refrigerator.', yourName: 'Your name', namePlaceholder: 'Who is checking', temperature: 'Temperature shown',
@@ -93,6 +99,7 @@ const TEXT = {
         done: 'Done', saved: 'Saved', when: 'Time', newOne: 'New reading', recordsTitle: 'Records', readOnly: 'Read-only', noRecords: 'There are no readings of this refrigerator yet.',
         needName: 'Type your name to start.', needTemp: 'Type the temperature shown (for example 4.5 or -18).', badTemp: 'That temperature is not valid: use a number between -100 and 100.', outTitle: 'Out of range', outSaved: 'It will be saved with the alert.', tempLow: 'The temperature is below the minimum ({n} °C).', tempHigh: 'The temperature is above the maximum ({n} °C).', humLow: 'The humidity is below the minimum ({n} %).', humHigh: 'The humidity is above the maximum ({n} %).', needHum: 'Type the humidity shown (for example 55).', viewOnly: 'This QR is for viewing only.', anonymous: 'Staff', lastN: 'The last {n} readings are shown.', locked: 'This QR no longer allows registering.', nothing: 'This QR has no options available.', badHum: 'That humidity is not valid: use a number between 0 and 100.', humidity: 'Humidity shown', saving: 'Saving…',
         errPhoto: 'The photo could not be saved. Try again.', errGeneric: 'It could not be saved. Check your connection and try again.', close: 'Close', reading: 'Reading',
+        calOk: 'Calibrated until {date}', calSoon: 'Calibration due soon · {date}', calToday: 'Calibration is due today', calExpired: 'Calibration expired since {date}', calFailed: 'Calibration out of tolerance', calNone: 'No calibration on record',
     },
 }[LANG];
 document.documentElement.lang = LANG;
@@ -168,6 +175,21 @@ const wantsHum = () => !SENSOR || info.space.type !== 'temp';
 // Lo que marcó una lectura, sin lo que su sensor no mide.
 const readingText = (r) => [r.temperature === null || r.temperature === undefined ? '' : fmtTemp(r.temperature), r.humidity === null || r.humidity === undefined ? '' : fmtHum(r.humidity)].filter(Boolean).join(' · ');
 const placeHtml = () => `<span class="chip">${esc(info.space.code)} · ${esc(TYPE_NAMES[info.space.type] || info.space.type)}</span>${info.space.locator ? `<div class="loc">${esc(info.space.locator)}${info.space.zoneName ? ` · ${esc(info.space.zoneName)}` : ''}</div>` : ''}`;
+// Calibración del sensor (solo en su QR): quien escanea ve de inmediato si sigue calibrado. El estado se calcula con el día de quien mira.
+const fmtDay = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+function calibrationHtml() {
+    const c = SENSOR && info && info.calibration;
+    if (!c) return '';
+    let kind = 'none'; let text = TEXT.calNone;
+    if (c.id !== null && c.id !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(c.dueOn || '')) {
+        const now = new Date();
+        const [y, m, d] = c.dueOn.split('-').map(Number);
+        const left = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+        const date = fmtDay(c.dueOn);
+        if (c.result === 'out') { kind = 'bad'; text = TEXT.calFailed; } else if (left < 0) { kind = 'bad'; text = TEXT.calExpired.replace('{date}', date); } else if (left === 0) { kind = 'soon'; text = TEXT.calToday; } else if (left <= 30) { kind = 'soon'; text = TEXT.calSoon.replace('{date}', date); } else { kind = ''; text = TEXT.calOk.replace('{date}', date); }
+    }
+    return `<span class="cal ${kind}" id="cal-chip">${esc(text)}</span>`;
+}
 const errBox = () => (note ? `<div class="err" role="alert">${esc(note)}</div>` : '');
 
 // ---- pantallas ----------------------------------------------------------------------------------------------------------------------
@@ -176,7 +198,7 @@ function viewHome() {
     const lk = info.locks || {};
     const canReg = lk.register !== false;
     const canSee = lk.records !== false;
-    show(`<div class="card"><h1>${esc(TEXT.title)}</h1>${placeHtml()}${errBox()}
+    show(`<div class="card"><h1>${esc(TEXT.title)}</h1>${placeHtml()}${calibrationHtml()}${errBox()}
         ${canReg ? `<div><label for="person">${esc(TEXT.yourName)}</label><input type="text" id="person" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(name)}"></div>
         ${wantsTemp() ? `<div><label for="temp">${esc(TEXT.temperature)}</label><div class="temp-row"><button type="button" class="sign" id="sign" aria-label="${esc(TEXT.toggleSign)}" title="${esc(TEXT.toggleSign)}">±</button><input type="text" id="temp" inputmode="decimal" autocomplete="off" maxlength="7" placeholder="${esc(TEXT.tempPlaceholder)}" value="${esc(draft.temp)}"><span class="unit">°C</span></div></div>` : ''}
         ${wantsHum() ? `<div><label for="hum">${esc(TEXT.humidity)}</label><div class="temp-row hum-row"><input type="text" id="hum" inputmode="decimal" autocomplete="off" maxlength="6" placeholder="0" value="${esc(draft.hum)}"><span class="unit">%</span></div></div>` : ''}

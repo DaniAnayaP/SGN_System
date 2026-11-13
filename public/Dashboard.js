@@ -9932,6 +9932,7 @@ document.addEventListener('dashboard:language-changed', migrateAdminSubtitleInto
 const PENDING_CHANGE_TABLE_LABELS = {
     'registro-combustible': 'menu.opTransVolCombustible',
     'mi-recurso-humano': 'menu.opRrhhMiRecursoHumano',
+    'calibraciones': 'menu.opCentroDistCalibraciones',
 };
 const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar'];
 // Titles collapse to just these icons under the same narrow-screen
@@ -10493,7 +10494,41 @@ function renderAccessChangeNoticeRow(item) {
     return row;
 }
 
+// Aviso de calibración (kind 'calibration', ver generateCalibrationAlerts en server.js): un activo con la calibración por vencer (30 días antes) o vencida (el día que vence). Los días se cuentan con el día de quien lo ve.
+function renderCalibrationNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const due = item.alertKind === 'due';
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    const now = new Date();
+    const [y, m, d] = String(item.dueOn || '').split('-').map(Number);
+    const left = y ? Math.round((Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000) : null;
+    // «2026-12-05» -> «05 dic 2026» (fecha de calendario: sin zona horaria)
+    const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(item.dueOn || '') ? new Date(`${item.dueOn}T00:00:00Z`) : null;
+    const loc = (currentLang === 'en' ? 'en-US' : 'es-MX');
+    const dateText = dueDate ? `${String(dueDate.getUTCDate()).padStart(2, '0')} ${new Intl.DateTimeFormat(loc, { timeZone: 'UTC', month: 'short' }).format(dueDate).replace('.', '')} ${dueDate.getUTCFullYear()}` : (item.dueOn || '');
+    tag.textContent = t(due ? (left !== null && left < 0 ? 'main.noticeCalibrationExpired' : 'main.noticeCalibrationDueToday') : 'main.noticeCalibrationSoon');
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${t('menu.opCentroDistCalibraciones')} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    const who = [item.assetCode, item.serial ? `S/N ${item.serial}` : ''].filter(Boolean).join(' · ');
+    let key = 'main.noticeCalibrationLineSoon';
+    if (due) key = left !== null && left < 0 ? 'main.noticeCalibrationLineExpired' : 'main.noticeCalibrationLineToday';
+    desc.textContent = t(key, { asset: who, date: dateText, n: left === null ? '' : Math.abs(left), cert: item.certificate || '—' });
+    const link = document.createElement('a');
+    link.href = 'OpCentroDistCalibraciones.html';
+    link.className = 'notifications-item-meta';
+    link.textContent = t('main.noticeCalibrationView');
+    row.append(tag, meta, desc, link);
+    return row;
+}
 function renderTreeNoticeRow(item) {
+    if (item.kind === 'calibration') return renderCalibrationNoticeRow(item);
     if (item.kind === 'access-denied') return renderAccessDeniedNoticeRow(item);
     if (item.kind === 'data-change') return renderDataChangeNoticeRow(item);
     if (item.kind === 'access-change') return renderAccessChangeNoticeRow(item);
@@ -10921,7 +10956,7 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change') row = renderTreeNoticeRow(item);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (item.kind === 'asset-auth') row = renderAssetAuthRow(item, activeNotificationTab);
@@ -12966,6 +13001,7 @@ const TABLE_GRANT_PATHS = {
     'udm-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion' },
     'relacion-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-envio' },
     'alta-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-activos' },
+    'calibraciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-calibraciones' },
     'localizadores': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-localizadores' },
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
