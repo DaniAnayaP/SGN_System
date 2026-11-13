@@ -111,6 +111,8 @@
 
     // /q/<token>: el token es el último tramo de la dirección.
     const publicToken = () => decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop() || '');
+    // La foto de un modelo (Fotos del modelo, 2026-11-13) por la ruta pública de este Layout: solo de modelos que se dibujan en él.
+    const publicPhotoUrl = (modelId, face, ver) => `/api/public/layout/${encodeURIComponent(publicToken())}/model-photo/${encodeURIComponent(modelId)}/${encodeURIComponent(face)}?v=${encodeURIComponent(ver || 1)}`;
 
     // El QR de la hoja por Zona trae ?z=<zona>&k=<tipo.número de la categoría>: el servidor responde en ese momento el nombre actual de la categoría y cuántos códigos hay hoy
     // en esa zona (la dirección del QR nunca cambia; esto sí). Si la categoría ya no existe, no se muestra nada.
@@ -343,7 +345,7 @@
         if (mapView.mode3d) return map3dHtml();
         const theme = window.LayoutMapSvg.theme(data.companyColor);
         viewFocus.key = JSON.stringify(viewFocus.value);
-        return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, layers: [...mapView.layers, 'paredes'], measures: mapView.measures, area: mapView.area, names: mapView.names, rotation: mapView.rotation, focus: viewFocus.value, posFocus: positionsOn() ? mapView.posFocus : null })}${mapToolsHtml()}`;
+        return `${window.LayoutMapSvg.mapSvg(data.layout, { theme, photoHref: publicPhotoUrl, layers: [...mapView.layers, 'paredes'], measures: mapView.measures, area: mapView.area, names: mapView.names, rotation: mapView.rotation, focus: viewFocus.value, posFocus: positionsOn() ? mapView.posFocus : null })}${mapToolsHtml()}`;
     }
     // Barra de botones + croquis + el lugar donde salen los resultados del buscador (la lupa); igual en el Layout general, en una zona y en una categoría.
     const mapBlockHtml = (data) => `${mapToolbarHtml()}<div class="map">${mapInnerHtml(data)}</div><div id="pos-pick" class="pospick"${positionsOn() && mapView.posFocus ? '' : ' hidden'}>${posPickInner(data)}</div><div id="sres" class="sres" aria-live="polite"></div>`;
@@ -448,7 +450,7 @@
             await loadScriptOnce('/LayoutAssetPicker.js');
             if (document.getElementById('m3d-stage') !== stage || !mapView.mode3d) return; // mientras cargaba se cambió de pantalla o se volvió al 2D
             destroy3d();
-            scene3d = window.LayoutScene3D.create(stage, { labels: mapView.names, layers: layers3d(), onSelect: show3dInfo });
+            scene3d = window.LayoutScene3D.create(stage, { labels: mapView.names, layers: layers3d(), onSelect: show3dInfo, modelPhotoUrl: publicPhotoUrl });
             msg.hidden = true;
             picker3d = window.LayoutAssetPicker.create(document.getElementById('m3d-picker'), {
                 texts: { title: TEXT.apTitle, count: TEXT.apCount, all: TEXT.apAll, none: TEXT.apNone, close: TEXT.apClose, search: TEXT.apSearch, noResults: TEXT.apNoResults, noZone: TEXT.noZone },

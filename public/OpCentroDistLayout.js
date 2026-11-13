@@ -7933,10 +7933,30 @@ const logoRatioOf = (dataUrl) => (dataUrl ? new Promise((resolve) => {
     img.onerror = () => resolve(1);
     img.src = dataUrl;
 }) : Promise.resolve(1));
+// Fotos del modelo (2026-11-13): la hoja se convierte a imagen, así que las fotos que usa el croquis (la de arriba, o la de frente en un activo chico) se bajan ANTES y entran como data: URL. Se juntan las de lo guardado y las de lo que se ve en pantalla.
+async function loadSheetPhotos(data) {
+    const wanted = new Map();
+    const collect = (spaces) => (spaces || []).forEach((sp) => {
+        if (!sp || sp.look !== 'photos' || !sp.modelId || !sp.photos) return;
+        ['top', 'front'].forEach((face) => { if (sp.photos[face]) wanted.set(`${sp.modelId}|${face}|${sp.photos[face]}`, [sp.modelId, face, sp.photos[face]]); });
+    });
+    collect((data.layout || {}).spaces);
+    collect(state.draft && state.draft.spaces);
+    const photos = {};
+    await Promise.all([...wanted].map(async ([key, [modelId, face, ver]]) => {
+        try {
+            const res = await fetch(window.AssetLooks.photoUrl(modelId, face, ver), { credentials: 'include' });
+            if (!res.ok) return;
+            const blob = await res.blob();
+            photos[key] = await new Promise((resolve) => { const fr = new FileReader(); fr.onload = () => resolve(fr.result); fr.onerror = () => resolve(''); fr.readAsDataURL(blob); });
+        } catch (err) { /* sin esa foto: el activo se dibuja como siempre */ }
+    }));
+    return photos;
+}
 async function loadSheetData() {
     const data = await fetchQrData();
     if (!data) return null;
-    return { data, logoRatio: await logoRatioOf(data.logoDataUrl) };
+    return { data, logoRatio: await logoRatioOf(data.logoDataUrl), photos: await loadSheetPhotos(data) };
 }
 // Con o sin medidas y m² para lo que se imprime: lo que se eligió en la ventana de descarga (si está abierta) o, si no, lo que se ve en el croquis.
 const sheetView = () => (sheetDialog && sheetDialog.view) || { measures: state.showMeasures, area: state.showArea, names: state.showNames, totals: true, legend: true, openings: true, rotation: state.rotation || 0 };
@@ -7951,13 +7971,13 @@ function liveSheetData() {
     return { layout, kpis: LC.computeKpis({ ...layout, obstacles: d.obstacles || [], transit: d.transit || [] }) };
 }
 function buildSheetSvgFrom(loaded) {
-    const { data, logoRatio } = loaded;
+    const { data, logoRatio, photos } = loaded;
     // con cambios sin guardar la hoja sale con lo que se ve en pantalla (lo demás —el QR, la versión y el logo— sigue siendo de lo guardado)
     const liveData = isDirty() && state.draft ? liveSheetData() : null;
     return window.LayoutSheet.buildSheetSvg({
         // Sitio: el que se escribe a mano en el Layout (Contorno > Sitio); sin él sale el texto de siempre. Después se llenará de la configuración (aquí es donde se conecta).
         companyName: data.companyName, siteName: data.siteName || t('main.layoutHojaArea'), logoDataUrl: data.logoDataUrl || '', logoRatio, version: data.version, updatedAt: new Date(`${String(data.updatedAt).replace(' ', 'T')}Z`), printedAt: new Date(),
-        url: data.url, qrRows: data.qrRows, kpis: liveData ? liveData.kpis : data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor),
+        url: data.url, qrRows: data.qrRows, kpis: liveData ? liveData.kpis : data.kpis, theme: window.LayoutMapSvg.theme(data.companyColor), photoHref: (id, face, ver) => (photos && photos[`${id}|${face}|${ver}`]) || '',
         // el reporte sale como se ve el croquis ahorita: sus capas activas y las medidas visibles u ocultas
         layout: liveData ? liveData.layout : { ...data.layout, obstacles: (data.extras && data.extras.obstacles) || [], power: (data.extras && data.extras.power) || [] },
         view: { layers: [...new Set(state.steps.map((s) => (s === 'espacios' ? 'huellas' : (s === 'posiciones' || s === 'niveles' || s === 'ubicaciones' ? 'activos' : s))))], measures: sheetView().measures, area: sheetView().area, names: sheetView().names, totals: sheetView().totals, legend: sheetView().legend, openings: sheetView().openings !== false, rotation: sheetView().rotation },

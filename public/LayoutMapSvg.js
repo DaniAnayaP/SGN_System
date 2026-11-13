@@ -445,6 +445,25 @@
             } else {
                 s += `<rect data-sid="${esc(sp.id)}" x="${ax}" y="${ay}" width="${aw}" height="${ah}" rx="2" fill="${hit ? esc(hit) : '#FFFFFF'}" stroke="${hit ? esc(hit) : T.chrome.line}" stroke-width="${hit ? 2.2 : 1}"${dim ? ' opacity="0.3"' : ''}/>`;
             }
+            // Fotos del modelo (2026-11-13): options.photoHref(modelId, cara, versión) da la dirección de la foto (en la hoja que se convierte a imagen, un data: URL); sin ella el activo se dibuja como siempre.
+            if (typeof options.photoHref === 'function' && sp.look === 'photos' && sp.modelId && sp.photos && (sp.photos.top || sp.photos.front)) {
+                const useTop = !!sp.photos.top && ((aw >= 22 && ah >= 22) || !sp.photos.front);
+                const faceP = useTop ? 'top' : 'front';
+                const hrefP = options.photoHref(sp.modelId, faceP, sp.photos[faceP]);
+                if (hrefP) {
+                    const opacityP = dim ? ' opacity="0.3"' : '';
+                    if (useTop) {
+                        // la foto de arriba tiene el frente hacia abajo de la imagen: se gira para que el frente quede del lado que mira el activo
+                        const sideP = (LC.activoFront ? (LC.activoFront(layout, sp) || {}).side : '') || 'S';
+                        const deg = { S: 0, N: 180, E: -90, W: 90 }[sideP] || 0;
+                        const mcx = ax + aw / 2; const mcy = ay + ah / 2;
+                        const iw2 = deg % 180 === 0 ? aw : ah; const ih2 = deg % 180 === 0 ? ah : aw;
+                        s += `<image href="${esc(hrefP)}" x="${(mcx - iw2 / 2).toFixed(1)}" y="${(mcy - ih2 / 2).toFixed(1)}" width="${iw2.toFixed(1)}" height="${ih2.toFixed(1)}" preserveAspectRatio="none"${deg ? ` transform="rotate(${deg} ${mcx.toFixed(1)} ${mcy.toFixed(1)})"` : ''}${opacityP} pointer-events="none"/>`;
+                    } else {
+                        s += `<image href="${esc(hrefP)}" x="${ax.toFixed(1)}" y="${ay.toFixed(1)}" width="${aw.toFixed(1)}" height="${ah.toFixed(1)}" preserveAspectRatio="xMidYMid meet"${opacityP} pointer-events="none"/>`;
+                    }
+                }
+            }
             if (w >= 26 && h >= 9) s += `<text x="${X(sp.x) + w / 2}" y="${Y(sp.y) + h / 2 + 3}" font-size="7.5" font-weight="${hit ? 800 : 600}" fill="${hit ? '#FFFFFF' : (own && inkFor(own)) || T.chrome.cardInk}" text-anchor="middle"${dim ? ' opacity="0.4"' : ''}>${esc(sp.code)}</text>`;
         });
         // Las posiciones sobre el croquis: al tocar un activo (options.posFocus = { id, n }) se marca con un contorno naranja y, con un nivel elegido (n), se dibuja ENCIMA de él la distribución de ese nivel: cada espacio

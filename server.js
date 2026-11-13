@@ -7192,6 +7192,8 @@ function clientLogoDataUrl(clientId) {
 
 function buildPublicLayoutPayload(clientId, row) {
     const l = row.layout;
+    // Fotos del modelo (2026-11-13): los activos con la apariencia «Desde las fotos» llevan su modelo y la versión de cada foto, para dibujarlos con ellas en la hoja (PDF/PNG) y en la página pública (croquis y 3D).
+    const publicLooks = layoutWithSensorLooks(clientId, row.costCenterId || 0, l) || l;
     const client = getClientById(clientId);
     const pub = {
         heightM: l.heightM,
@@ -7203,7 +7205,7 @@ function buildPublicLayoutPayload(clientId, row) {
         zones: (l.zones || []).filter((z) => z.active !== false).map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}), ...(z.fmt ? { fmt: z.fmt } : {}), ...(Array.isArray(z.categories) && z.categories.length ? { categories: z.categories } : {}) })),
         // La huella (el lugar en el piso, con su color si lo tiene) se dibuja debajo y el activo, con su propio color, encima.
         footprints: (l.footprints || []).filter((f) => f.active !== false).map((f) => ({ id: f.id, code: f.code, x: f.x, y: f.y, l: f.l, d: f.d, h: f.h, ...(f.fmt ? { fmt: f.fmt } : {}) })),
-        spaces: (l.spaces || []).filter((s) => s.active !== false).map((s) => ({ id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, footprintId: s.footprintId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels, ...(s.slots > 1 ? { slots: s.slots } : {}), ...(Array.isArray(s.faces) && s.faces.length ? { faces: s.faces } : {}), ...(s.front ? { front: s.front } : {}), ...(Array.isArray(s.lvls) && s.lvls.length ? { lvls: s.lvls } : {}), ...(Array.isArray(s.bays) && s.bays.some((b) => b.h !== undefined || b.l !== undefined || b.w !== undefined || b.faces !== undefined) ? { bays: s.bays.filter((b) => b.h !== undefined || b.l !== undefined || b.w !== undefined || b.faces !== undefined).map((b) => ({ n: b.n, c: b.c, ...(Array.isArray(b.faces) && b.faces.length ? { faces: b.faces } : {}), ...(b.h !== undefined ? { h: b.h } : {}), ...(b.l !== undefined ? { l: b.l } : {}), ...(b.w !== undefined ? { w: b.w } : {}) })) } : {}), ...(s.fmt ? { fmt: s.fmt } : {}) })),
+        spaces: (publicLooks.spaces || l.spaces || []).filter((s) => s.active !== false).map((s) => ({ ...(s.look === 'photos' && s.modelId && s.photos ? { look: 'photos', modelId: s.modelId, photos: s.photos } : {}), id: s.id, type: s.type, code: s.code, zoneId: s.zoneId, footprintId: s.footprintId, x: s.x, y: s.y, l: s.l, d: s.d, h: s.h, levels: s.levels, ...(s.slots > 1 ? { slots: s.slots } : {}), ...(Array.isArray(s.faces) && s.faces.length ? { faces: s.faces } : {}), ...(s.front ? { front: s.front } : {}), ...(Array.isArray(s.lvls) && s.lvls.length ? { lvls: s.lvls } : {}), ...(Array.isArray(s.bays) && s.bays.some((b) => b.h !== undefined || b.l !== undefined || b.w !== undefined || b.faces !== undefined) ? { bays: s.bays.filter((b) => b.h !== undefined || b.l !== undefined || b.w !== undefined || b.faces !== undefined).map((b) => ({ n: b.n, c: b.c, ...(Array.isArray(b.faces) && b.faces.length ? { faces: b.faces } : {}), ...(b.h !== undefined ? { h: b.h } : {}), ...(b.l !== undefined ? { l: b.l } : {}), ...(b.w !== undefined ? { w: b.w } : {}) })) } : {}), ...(s.fmt ? { fmt: s.fmt } : {}) })),
         // Las posiciones de los espacios de cada activo (su lugar y medidas) para dibujarlas en la hoja y en la página pública; el candado «positions» del QR las quita de la página pública.
         positions: (() => { const live = new Set((l.spaces || []).filter((s) => s.active !== false).map((s) => s.id)); return (l.positions || []).filter((p) => live.has(p.spaceId)).map((p) => ({ s: p.spaceId, n: p.n, c: p.c, num: p.num, x: p.x, y: p.y, l: p.l, w: p.w, h: p.h, ...(Array.isArray(p.faces) && p.faces.length ? { faces: p.faces } : {}) })); })(),
         // Las conexiones de luz salen en la página pública (con su propia capa, apagada al entrar) porque Daniel pidió esos botones ahí; las columnas y el plano de fondo no.
@@ -7921,6 +7923,24 @@ app.get('/api/public/layout/:token/category', publicLayoutLimiter, (req, res) =>
     // cuántos códigos hay hoy en esa zona solo se manda con el candado de conteos abierto
     const counted = qrLocksOf('layout', row.clientId, row.costCenterId || 0).counts ? { codes: countZoneCodesInCategory(row.clientId, false, zone.id, match[1], name) } : {};
     res.json({ zoneName: zone.name, type: match[1], name, seed, ...counted });
+});
+// La foto de una cara de un modelo para la página pública (3D y croquis): solo sirve fotos de modelos que algún activo de ESE Layout usa (el token del QR no da acceso a otras fotos de la empresa). ?v= es la versión de la foto.
+const publicModelPhotoLimiter = rateLimit({ windowMs: 60 * 1000, max: 600, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
+app.get('/api/public/layout/:token/model-photo/:modelId/:face', publicModelPhotoLimiter, (req, res) => {
+    const row = getLayoutByPublicToken(req.params.token);
+    const modelId = intOf(req.params.modelId);
+    const face = String(req.params.face || '');
+    if (!row || !modelId || !ASSET_MODEL_FACES.includes(face)) return res.status(404).end();
+    const used = (row.layout.spaces || []).some((s) => {
+        if (!s || s.active === false || !s.assetRef) return false;
+        const a = getFixedAssetAnyScope(s.assetRef, row.clientId);
+        return !!a && a.model_id === modelId;
+    });
+    if (!used) return res.status(404).end();
+    const photo = getAssetModelPhoto(row.clientId, modelId, face);
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'public, max-age=86400', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
 });
 app.get('/api/public/layout/:token', publicLayoutLimiter, (req, res) => {
     const row = getLayoutByPublicToken(req.params.token);
