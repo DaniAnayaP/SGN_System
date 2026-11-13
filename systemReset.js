@@ -53,6 +53,10 @@ const TABLES = {
     asset_authorizations: { action: WIPE, group: 'captures' }, // autorización del jefe directo para usar y editar activos (2026-11-13)
     asset_model_photos: { action: WIPE, group: 'captures' }, // fotos de las 6 caras de cada modelo de activo (2026-11-13)
     asset_calibrations: { action: WIPE, group: 'captures' }, // certificados de calibración y su archivo (Calibraciones, 2026-11-13)
+    maintenance_programs: { action: WIPE, group: 'captures' }, // Mantenimiento Preventivo: programas (2026-11-13)
+    maintenance_runs: { action: WIPE, group: 'captures' }, // lo que se hizo en cada programa
+    maintenance_faults: { action: WIPE, group: 'captures' }, // Mantenimiento Correctivo: fallas
+    maintenance_photos: { action: WIPE, group: 'captures' }, // fotos de las corridas y de las fallas
     article_categories: { action: WIPE, group: 'captures' },
     unit_types: { action: WIPE, group: 'captures' },
     catalog_value_requests: { action: WIPE, group: 'captures' },
@@ -71,6 +75,7 @@ const TABLES = {
     // Solicitudes y alertas
     pending_changes: { action: WIPE, group: 'requests' },
     calibration_alerts: { action: WIPE, group: 'requests' }, // avisos de calibración ya generados (uno por certificado y momento)
+    maintenance_alerts: { action: WIPE, group: 'requests' }, // avisos de mantenimiento ya generados (uno por programa, fecha y momento; uno por falla y motivo)
     column_color_requests: { action: WIPE, group: 'requests' },
     access_denied_alerts: { action: WIPE, group: 'requests' },
     saas_tree_notices: { action: WIPE, group: 'requests' },

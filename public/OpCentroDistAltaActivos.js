@@ -14,7 +14,7 @@ const TABLE_KEY = 'alta-activos';
 const GESTION = document.body.dataset.activePage === 'cat-gestion-centro-dist-activos';
 const ACTIVE_PAGE = GESTION ? 'cat-gestion-centro-dist-activos' : 'cat-operaciones-centro-dist-alta-activos';
 const SCOPE = GESTION ? 'complete' : 'pending';
-const COLUMN_COUNT = 39; // Gestión no lleva la columna «Falta» pero sí la de Calibración (solo lectura)
+const COLUMN_COUNT = 40; // Gestión no lleva la columna «Falta» pero sí las de Calibración y Mantenimiento (solo lectura)
 const SHAPES = ['rectangular', 'cilindrica', 'irregular'];
 
 let assets = []; // todo lo que mandó el servidor
@@ -35,7 +35,7 @@ let loadToken = 0;
         await refreshTable();
         if (!GESTION) renderNewRecordButton();
         // las columnas con desplegable llevan un ancho mínimo para que se lea la opción completa («Rectangular», «Activo para almacenar») y se vea la flecha
-        if (Dashboard.ensureColumnMinWidth) [['colActElegirModelo', 300], ['colActForma', 150], ['colActClasificacion', 230], ['colActEnLayout', 130], ['colActCodigo', GESTION ? 160 : 100], ['colActCalibracion', 190]].forEach(([col, px]) => Dashboard.ensureColumnMinWidth(TABLE_KEY, col, px));
+        if (Dashboard.ensureColumnMinWidth) [['colActElegirModelo', 300], ['colActForma', 150], ['colActClasificacion', 230], ['colActEnLayout', 130], ['colActCodigo', GESTION ? 160 : 100], ['colActCalibracion', 190], ['colActMantenimiento', 200]].forEach(([col, px]) => Dashboard.ensureColumnMinWidth(TABLE_KEY, col, px));
     } catch (err) {
         console.error('Alta Activos failed to initialize:', err);
     }
@@ -643,6 +643,15 @@ function calibrationCell(record) {
     if (c.id) td.title = [c.certificateNumber, c.laboratory].filter(Boolean).join(' · ');
     return td;
 }
+// El mantenimiento del activo (solo Gestión > Activos, solo lectura): Fuera de servicio · falla abierta, Falla abierta, Preventivo vencido, Preventivo por vencer o Al corriente. Lo que se captura vive en Operaciones > Mtto. de activos; sin programas ni fallas no muestra nada.
+function maintenanceCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colActMantenimiento';
+    td.setAttribute('data-help-key', 'assetMaintenance');
+    const chip = window.AssetMaintenance ? AssetMaintenance.summaryChip(record.maintenance) : null;
+    if (chip) td.appendChild(chip);
+    return td;
+}
 // Gestión > Activos es solo lectura: las celdas no se abren, los desplegables y las fotos no se cambian (las fotos sí se pueden ver). Para corregir algo se usa Editar.
 function makeAssetRowReadOnly(tr, titleKey = 'main.assetSoloLectura') {
     tr.querySelectorAll('td.editable-cell, td.editable-cell-locked').forEach((td) => {
@@ -737,7 +746,7 @@ function buildRow(record) {
         evidenceCell(record, 'evidenceBottom', 'colActFotoAbajo'),
         layoutSelectCell(record),
         textCell('colActDondeEsta', record.placement, 'assetWhere'), // dónde está dibujado en el Layout (zona › huella); se llena solo, desde el Layout
-        ...(GESTION ? [calibrationCell(record)] : [faltaCell(record)]),
+        ...(GESTION ? [calibrationCell(record), maintenanceCell(record)] : [faltaCell(record)]),
         buildActionsCell(record),
     );
     if (GESTION) { makeAssetRowReadOnly(tr); applyAssetEditAuthChip(tr, record); }

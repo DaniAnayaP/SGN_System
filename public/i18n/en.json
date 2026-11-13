@@ -292,11 +292,17 @@
     "opCentroDistAltaArticulos": "New Sku Registration",
     "opCentroDistAltaActivos": "Asset Registration",
     "opCentroDistCalibraciones": "Calibrations",
+    "opCentroDistMtto": "Asset Maintenance",
+    "opCentroDistMttoAbbr1": "Asset maint.",
+    "opCentroDistMttoAbbr2": "Maint.",
+    "opCentroDistMttoPreventivo": "Preventive",
+    "opCentroDistMttoCorrectivo": "Corrective",
     "classActDatosGenerales": "General Data",
     "classActFormaMedidas": "Shape and Dimensions",
     "classActEvidencias": "Evidence · 6 faces",
     "classActLayout": "Layout",
     "classActCalibracion": "Calibration",
+    "classActMantenimiento": "Maintenance",
     "opCentroDistEdicionCodigo": "Code Editing",
     "opCentroDistEdicionCodigoAbbr1": "Code Edit.",
     "opCentroDistEdicionCodigoAbbr2": "Edit",
@@ -4356,6 +4362,144 @@
     "colActivoFijoLetra": "Drawn as",
     "colActivoFijoLetraCodigo": "Code letters",
     "colActivoFijoSerie": "Has serial number",
+    "colMpActivo": "Asset",
+    "colMpTarea": "Task",
+    "colMpCada": "Every",
+    "colMpUltima": "Last time",
+    "colMpProxima": "Next",
+    "colMpEstado": "Status",
+    "colMpResponsable": "Responsible",
+    "colMpVeces": "Times",
+    "colMpCreateAuth": "Authorization to Create",
+    "colMpRegistrar": "Record maintenance",
+    "colMpDeleteAuth": "Authorization to Deactivate",
+    "colMcFolio": "Number",
+    "colMcFecha": "Reported",
+    "colMcActivo": "Asset",
+    "colMcFalla": "What failed",
+    "colMcPrioridad": "Priority",
+    "colMcEstatus": "Status",
+    "colMcReporto": "Reported by",
+    "colMcAtiende": "Handled by",
+    "colMcFuera": "Out of service",
+    "colMcCosto": "Cost",
+    "colMcCreateAuth": "Report fault",
+    "colMcAtender": "Handle fault",
+    "colMcCerrar": "Close fault",
+    "colMcCausa": "Cause",
+    "colMcQueSeHizo": "What was done",
+    "colMcReparo": "Repaired by",
+    "colMcCierre": "Closing date",
+    "colActMantenimiento": "Maintenance",
+    "filterMtSearchHint": "Asset, task, number...",
+    "mtState_inactive": "Deactivated",
+    "mtChip_ok": "On track · {n} days",
+    "mtChip_ok1": "On track · 1 day",
+    "mtChip_soon": "Due soon · {n} days",
+    "mtChip_soon1": "Due soon · 1 day",
+    "mtChip_today": "Due today",
+    "mtChip_overdue": "Overdue · {n} days ago",
+    "mtChip_overdue1": "Overdue · 1 day ago",
+    "mtChip_none": "No date",
+    "mtChipTip": "Next: {date}",
+    "mtSum_down": "Out of service · open fault",
+    "mtSum_fault": "Open fault",
+    "mtSum_overdue": "Preventive overdue",
+    "mtSum_soon": "Preventive due soon",
+    "mtSum_ok": "On track",
+    "mtClose": "Close",
+    "mtPhotoAdd": "Add photo",
+    "mtPhotoRemove": "Remove the photo",
+    "mtPhotoCount": "{n} of {max} photos",
+    "mtExternal": "External provider",
+    "mtUnit_days": "days",
+    "mtUnit_days1": "day",
+    "mtUnit_months": "months",
+    "mtUnit_months1": "month",
+    "mtUnitLabel": "Unit",
+    "mtRunsOpen": "See what was done",
+    "mtRegister": "Record",
+    "mtActivate": "Activate",
+    "mtDeactivate": "Deactivate",
+    "mtDeactivateConfirm": "The program «{task}» of asset {code} will be deactivated: it stops warning and no longer counts as pending. It can be activated again.",
+    "mtDeactivateAccept": "Deactivate",
+    "mtDeactivated": "Program deactivated.",
+    "mtActivated": "Program activated.",
+    "mtNewProgram": "New program",
+    "mtNewProgramHint": "Created once per asset and task.",
+    "mtSaveProgram": "Save program",
+    "mtPickAsset": "Choose the asset",
+    "mtNoAssets": "There are no assets in the chosen cost centers (they are registered in Asset Registration).",
+    "mtNeedTask": "Type the task (what is done to the asset).",
+    "mtNeedFirst": "Type the date of the first time.",
+    "mtFirstOn": "First time",
+    "mtFirstOnHint": "The frequency runs from this date.",
+    "mtResponsibleHint": "A person on your team or «External provider».",
+    "mtProgramSaved": "Program for {code} saved.",
+    "mtRegisterTitle": "Record maintenance",
+    "mtSaveRun": "Save maintenance",
+    "mtDoneOn": "Date it was done",
+    "mtDoneBy": "Who did it",
+    "mtDoneByHint": "A person on your team or the provider's name.",
+    "mtNextOn": "Next time",
+    "mtNextOnHint": "Suggested: {n} {unit} after the date it was done. If it is due another day, correct it.",
+    "mtCostOpt": "Cost (optional)",
+    "mtCost": "Cost",
+    "mtNotes": "Notes",
+    "mtNotesHint": "Optional: what was found or changed.",
+    "mtPhotosOpt": "Photos (optional)",
+    "mtPhotos": "Photos",
+    "mtNeedDoneOn": "Type the date it was done.",
+    "mtNeedDoneBy": "Type who did it.",
+    "mtRunSaved": "Maintenance of {code} recorded.",
+    "mtRunSavedPhotosFailed": "Maintenance recorded, but {n} photo(s) could not be uploaded.",
+    "mtRunsTitle": "History · {code} · {task}",
+    "mtPriority_high": "High",
+    "mtPriority_medium": "Medium",
+    "mtPriority_low": "Low",
+    "mtStatus_open": "Open",
+    "mtStatus_repair": "Under repair",
+    "mtStatus_closed": "Closed",
+    "mtAttend": "Handle",
+    "mtCloseFault": "Close",
+    "mtPhotosOpen": "See {n} photo(s)",
+    "mtDays": "{n} days",
+    "mtDays1": "1 day",
+    "mtReport": "Report fault",
+    "mtReportHint": "Anyone with the screen's sheet can fill it in.",
+    "mtReportSave": "Report fault",
+    "mtPriorityHint": "High warns the direct manager right away.",
+    "mtOutOfServiceQ": "Did it stop working?",
+    "mtOutOfServiceHint": "With «Yes» the days out of service are counted.",
+    "mtNeedFault": "Type what failed.",
+    "mtFaultSaved": "Fault {folio} reported.",
+    "mtFaultSavedPhotosFailed": "Fault {folio} reported, but {n} photo(s) could not be uploaded.",
+    "mtAttendTitle": "Handle fault",
+    "mtAttendSave": "Move to Under repair",
+    "mtAttendHint": "A person on your team or the provider repairing it.",
+    "mtNeedAssigned": "Type who is handling it.",
+    "mtAttended": "Fault {folio} under repair.",
+    "mtCloseTitle": "Close fault",
+    "mtCloseSave": "Close fault",
+    "mtNeedCause": "Type the cause of the fault.",
+    "mtNeedAction": "Type what was done to repair it.",
+    "mtNeedRepairedBy": "Type who repaired it.",
+    "mtNeedClosedOn": "Type the closing date.",
+    "mtDownNone": "It did not stop working",
+    "mtDownCalc": "Calculated automatically.",
+    "mtClosed": "Fault {folio} closed.",
+    "noticeMaintProgramSoon": "Maintenance due soon",
+    "noticeMaintProgramToday": "Maintenance is due today",
+    "noticeMaintProgramOverdue": "Maintenance overdue",
+    "noticeMaintFaultHigh": "High priority fault",
+    "noticeMaintFaultStale": "Fault open for several days",
+    "noticeMaintLineSoon": "{asset} · {task} is due on {date} (in {n} days).",
+    "noticeMaintLineToday": "{asset} · {task} is due today ({date}).",
+    "noticeMaintLineOverdue": "{asset} · {task} was due on {date} ({n} days ago).",
+    "noticeMaintLineFaultHigh": "{folio} · {asset}: {task}. Reported by {by}.",
+    "noticeMaintLineFaultStale": "{folio} · {asset} has been open since {date}: {task}.",
+    "noticeMaintViewPrev": "View preventive",
+    "noticeMaintViewCorr": "View corrective",
     "colCalActivo": "Asset",
     "colCalModelo": "Model",
     "colCalCertificado": "Certificate",
@@ -6409,6 +6553,110 @@
     "calNew": {
         "what": "Opens a window to enter a calibration certificate: choose the asset, type what the certificate says and upload its photo or PDF. A new certificate for the same asset becomes the current one and the previous one goes to history.",
         "example": "H001, certificate 4227-16787565, calibrated on 01 Jun 2026, due on 01 Jun 2028."
+    },
+    "assetMaintenance": {
+        "what": "The asset's maintenance: Out of service · open fault (red), Open fault (red), Preventive overdue (red), Preventive due soon (amber, 7 days or less) or On track (green). Read-only here; it is entered in Operations > Asset Maintenance. An asset with an open fault or overdue preventive is not blocked, just flagged. With no programs or faults it shows nothing.",
+        "example": "F002: «Out of service · open fault». H001: «Preventive due soon»."
+    },
+    "mtAsset": {
+        "what": "The asset the record belongs to: its code and name (they come from Asset Registration).",
+        "example": "F002 · Imbera refrigerator."
+    },
+    "mtTask": {
+        "what": "What is done to the asset in this program. One click corrects it (with the usual authorization if it already had a value).",
+        "example": "Condenser cleaning."
+    },
+    "mtEvery": {
+        "what": "How often the maintenance repeats, in days or months (the unit is chosen when the program is created; for another unit create another program). One click changes the number.",
+        "example": "3 months."
+    },
+    "mtLast": {
+        "what": "The date it was last done, from the latest recorded run. Empty if it has not been done yet.",
+        "example": "10 Aug 2026."
+    },
+    "mtNext": {
+        "what": "When the next one is due: what was entered when the last maintenance was recorded (suggested as the date it was done + the frequency) or, if it has not been done yet, the program's first time.",
+        "example": "10 Nov 2026."
+    },
+    "mtProgramState": {
+        "what": "How the program stands with your today: On track, Due soon (7 days or less) or Overdue. A deactivated program says Deactivated. 7 days before and on the due date a notice reaches the bell.",
+        "example": "Due soon · 5 days."
+    },
+    "mtResponsible": {
+        "what": "Who takes care of this maintenance: a person on your team (they get the notices) or «External provider».",
+        "example": "Luis Pérez."
+    },
+    "mtRuns": {
+        "what": "How many times this maintenance has been done. One click shows the history: date, who, cost, notes and photos of each time.",
+        "example": "4."
+    },
+    "mtRegister": {
+        "what": "Records that the maintenance was done: date, who, cost, notes and up to 3 photos. The next date is suggested from the frequency and can be corrected.",
+        "example": "Condenser cleaning done on 13 Nov 2026; next time 13 Feb 2027."
+    },
+    "mtActivate": {
+        "what": "Activates a deactivated program again: it warns again and counts as pending.",
+        "example": "F002 condenser cleaning program."
+    },
+    "mtDeactivate": {
+        "what": "Deactivates the program (programs are never deleted): it stops warning and counting. It can be activated again. Needs the «Authorization to Deactivate» sheet.",
+        "example": "The asset was retired and no longer gets this maintenance."
+    },
+    "mtNewProgram": {
+        "what": "Opens a window to create a program: choose the asset, the task, how often, the first date and the person responsible.",
+        "example": "F002 · Condenser cleaning · every 3 months · from 10 Nov 2026."
+    },
+    "mtFolio": {
+        "what": "The fault number, sequential for your company: MC-0001, MC-0002…",
+        "example": "MC-0003."
+    },
+    "mtReportedOn": {
+        "what": "The day the fault was reported.",
+        "example": "11 Nov 2026."
+    },
+    "mtFault": {
+        "what": "What failed, in the words of whoever reported it. One click corrects it while the fault is open; a closed fault can no longer be changed (its cause and what was done show on hover).",
+        "example": "It does not cool; the compressor makes noise."
+    },
+    "mtPriority": {
+        "what": "How urgent it is: High, Medium or Low. A High fault warns the reporter's direct manager right away.",
+        "example": "High."
+    },
+    "mtFaultStatus": {
+        "what": "Where the fault stands: Open (reported), Under repair (being handled) or Closed (repaired and the cause recorded). An Open fault changes with «Handle» and any unclosed one with «Close».",
+        "example": "Under repair."
+    },
+    "mtReportedBy": {
+        "what": "Who reported the fault (filled in automatically with your user).",
+        "example": "Luis Pérez."
+    },
+    "mtAssigned": {
+        "what": "Who is handling it: a person on your team or the provider. It is entered with «Handle».",
+        "example": "Frío Industrial."
+    },
+    "mtDown": {
+        "what": "How many days the asset was out of service: from when it was reported until it was closed (or until today if still open). It only counts if the report said it stopped working.",
+        "example": "2 days."
+    },
+    "mtCost": {
+        "what": "What the repair cost; entered when closing the fault (optional).",
+        "example": "$ 2,300.00."
+    },
+    "mtReport": {
+        "what": "Opens a window to report a fault: choose the asset, type what failed, the priority, whether it stopped working and up to 3 photos.",
+        "example": "F002 does not cool; High priority; it stopped working."
+    },
+    "mtAttend": {
+        "what": "Moves the fault from Open to Under repair and records who is handling it (a person or a provider). Needs the «Handle fault» sheet.",
+        "example": "Frío Industrial handles F002."
+    },
+    "mtClose": {
+        "what": "Closes the fault: the cause, what was done, who repaired it and the closing date are required; the cost is optional. It counts the days out of service and the fault can no longer be changed. Needs the «Close fault» sheet.",
+        "example": "Damaged compressor capacitor; replaced; repaired by Frío Industrial."
+    },
+    "mtFaultPhotos": {
+        "what": "The photos uploaded when the fault was reported.",
+        "example": "2 photos."
     },
     "assetTypeSerial": {
       "what": "Whether the assets of this type have a serial number. Yes for sensors, phones and printers; No for chairs and tables. Only when it says Yes does the serial number count for an asset of this type to be 100% complete.",

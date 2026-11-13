@@ -3358,6 +3358,8 @@ const TABLE_CHANGES_SYSTEM_META = {
     'relacion-envio': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código Envío' },
     'alta-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Activos' },
     'calibraciones': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Calibraciones' },
+    'mtto-preventivo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Mantenimiento Preventivo' },
+    'mtto-correctivo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Mantenimiento Correctivo' },
     'presentaciones-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones Distribución' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
     'surtido-pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Surtido Pedido Manual' },
@@ -3702,6 +3704,8 @@ const TABLE_GRANT_PATHS = {
     'relacion-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-envio' },
     'alta-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-activos' },
     'calibraciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-calibraciones' },
+    'mtto-preventivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-mtto-preventivo' },
+    'mtto-correctivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-mtto-correctivo' },
     // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },
@@ -3945,6 +3949,8 @@ const BUTTON_NOTIFY_COLUMNS = {
     'relacion-envio': { create: 'colEnvCreateAuth', delete: 'colEnvDeleteAuth' },
     'alta-activos': { create: 'colActCreateAuth', delete: 'colActDeleteAuth' },
     'calibraciones': { create: 'colCalCreateAuth' },
+    'mtto-preventivo': { create: 'colMpCreateAuth', delete: 'colMpDeleteAuth' },
+    'mtto-correctivo': { create: 'colMcCreateAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -6262,6 +6268,244 @@ function publishCalibrationNotice({ recipients, payload }) {
     if (!ids.length) return [];
     const json = JSON.stringify(payload);
     const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'calibration', 'data', ?, NULL, '')");
+    db.transaction(() => ids.forEach((id) => insert.run(id, json)))();
+    return ids;
+}
+
+// --- Mantenimiento de activos (2026-11-13) --------------------------------------------------------------------------------------------------------------------
+// Operaciones > C. Distribución > Mtto. de activos, con dos pantallas: PREVENTIVO (programas: qué se le hace a un activo y cada cuánto; cada vez que se hace se registra una corrida y la próxima fecha se corre) y CORRECTIVO (fallas: se reportan,
+// se atienden y se cierran con su causa). Los programas y las fallas NUNCA se eliminan (un programa se desactiva). Las fechas son de calendario (AAAA-MM-DD). Las fotos (hasta 3 por corrida o falla, ya reducidas por el navegador) viven en la base
+// como las del modelo. maintenance_alerts evita repetir un aviso de la campana (uno por programa, fecha y momento; uno por falla y motivo).
+const MAINTENANCE_UNITS = ['days', 'months'];
+const MAINTENANCE_PRIORITIES = ['high', 'medium', 'low'];
+const MAINTENANCE_FAULT_STATUSES = ['open', 'repair', 'closed'];
+const MAINTENANCE_SOON_DAYS = 7;
+const MAINTENANCE_STALE_DAYS = 7;
+const MAINTENANCE_MAX_PHOTOS = 3;
+db.exec(`
+    CREATE TABLE IF NOT EXISTS maintenance_programs (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id            INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data         INTEGER NOT NULL DEFAULT 0,
+        db_id                TEXT NOT NULL,
+        record_number        INTEGER NOT NULL,
+        asset_id             INTEGER NOT NULL,
+        cost_center_id       INTEGER NOT NULL DEFAULT 0,
+        task                 TEXT NOT NULL DEFAULT '',
+        every_value          INTEGER NOT NULL DEFAULT 1,
+        every_unit           TEXT NOT NULL DEFAULT 'months',
+        first_on             TEXT NOT NULL DEFAULT '',
+        responsible_user_id  INTEGER,
+        responsible_label    TEXT NOT NULL DEFAULT '',
+        status               TEXT NOT NULL DEFAULT 'active',
+        created_by           TEXT NOT NULL DEFAULT '',
+        created_by_user_id   INTEGER,
+        created_at           TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_maint_programs_client ON maintenance_programs (client_id, is_test_data, asset_id);
+    CREATE TABLE IF NOT EXISTS maintenance_runs (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id            INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data         INTEGER NOT NULL DEFAULT 0,
+        db_id                TEXT NOT NULL,
+        record_number        INTEGER NOT NULL,
+        program_id           INTEGER NOT NULL,
+        asset_id             INTEGER NOT NULL,
+        cost_center_id       INTEGER NOT NULL DEFAULT 0,
+        done_on              TEXT NOT NULL DEFAULT '',
+        done_by_user_id      INTEGER,
+        done_by_label        TEXT NOT NULL DEFAULT '',
+        next_on              TEXT NOT NULL DEFAULT '',
+        cost                 REAL NOT NULL DEFAULT 0,
+        notes                TEXT NOT NULL DEFAULT '',
+        created_by           TEXT NOT NULL DEFAULT '',
+        created_by_user_id   INTEGER,
+        created_at           TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_maint_runs_program ON maintenance_runs (program_id, done_on, id);
+    CREATE TABLE IF NOT EXISTS maintenance_faults (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id            INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data         INTEGER NOT NULL DEFAULT 0,
+        db_id                TEXT NOT NULL,
+        record_number        INTEGER NOT NULL,
+        asset_id             INTEGER NOT NULL,
+        cost_center_id       INTEGER NOT NULL DEFAULT 0,
+        reported_on          TEXT NOT NULL DEFAULT '',
+        description          TEXT NOT NULL DEFAULT '',
+        priority             TEXT NOT NULL DEFAULT 'medium',
+        status               TEXT NOT NULL DEFAULT 'open',
+        out_of_service       INTEGER NOT NULL DEFAULT 0,
+        reported_by_label    TEXT NOT NULL DEFAULT '',
+        reported_by_user_id  INTEGER,
+        assigned_to_user_id  INTEGER,
+        assigned_to_label    TEXT NOT NULL DEFAULT '',
+        cause                TEXT NOT NULL DEFAULT '',
+        action_done          TEXT NOT NULL DEFAULT '',
+        repaired_by          TEXT NOT NULL DEFAULT '',
+        closed_on            TEXT NOT NULL DEFAULT '',
+        cost                 REAL NOT NULL DEFAULT 0,
+        created_at           TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_maint_faults_client ON maintenance_faults (client_id, is_test_data, asset_id, status);
+    CREATE TABLE IF NOT EXISTS maintenance_photos (
+        kind        TEXT NOT NULL,
+        ref_id      INTEGER NOT NULL,
+        n           INTEGER NOT NULL,
+        client_id   INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        mime        TEXT NOT NULL,
+        data        BLOB NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (kind, ref_id, n)
+    );
+    CREATE TABLE IF NOT EXISTS maintenance_alerts (
+        ref_kind    TEXT NOT NULL,
+        ref_id      INTEGER NOT NULL,
+        alert_key   TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (ref_kind, ref_id, alert_key)
+    );
+`);
+const MAINTENANCE_PROGRAM_PATCHABLE_FIELDS = {
+    task: { column: 'task', fieldKey: 'main.colMpTarea' },
+    everyValue: { column: 'every_value', fieldKey: 'main.colMpCada' },
+    responsibleUserId: { column: 'responsible_user_id', fieldKey: 'main.colMpResponsable' },
+};
+const MAINTENANCE_FAULT_PATCHABLE_FIELDS = {
+    description: { column: 'description', fieldKey: 'main.colMcFalla' },
+    priority: { column: 'priority', fieldKey: 'main.colMcPrioridad' },
+    outOfService: { column: 'out_of_service', fieldKey: 'main.colMcFuera' },
+};
+// --- personas que se pueden elegir como responsable (activas, de la misma empresa y del mismo tipo de cuenta: real o de prueba)
+function listActiveUsersBrief(clientId, forTestAccount = false) {
+    return db.prepare('SELECT id, name, username FROM users WHERE client_id = ? AND active != 0 AND COALESCE(is_test_account, 0) = ? ORDER BY name COLLATE NOCASE ASC').all(clientId, forTestAccount ? 1 : 0);
+}
+function maintenancePersonLabel(userId, clientId) {
+    const u = userId ? db.prepare('SELECT name, username FROM users WHERE id = ? AND client_id = ?').get(userId, clientId) : null;
+    return u ? (u.name || u.username) : '';
+}
+// --- programas (Preventivo)
+function listMaintenancePrograms(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM maintenance_programs WHERE client_id = ? AND is_test_data = ? ORDER BY id DESC').all(clientId, forTestAccount ? 1 : 0);
+}
+function getMaintenanceProgramById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM maintenance_programs WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+function createMaintenanceProgram({ clientId, isTestData = false, assetId, costCenterId = 0, task, everyValue, everyUnit, firstOn, responsibleUserId = null, responsibleLabel = '', createdBy = '', createdByUserId = null }) {
+    const test = isTestData ? 1 : 0;
+    return db.transaction(() => {
+        const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM maintenance_programs WHERE client_id = ? AND is_test_data = ?').get(clientId, test).n;
+        const info = db.prepare(`
+            INSERT INTO maintenance_programs (client_id, is_test_data, db_id, record_number, asset_id, cost_center_id, task, every_value, every_unit, first_on, responsible_user_id, responsible_label, created_by, created_by_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(clientId, test, generateBigDateId(), recordNumber, assetId, costCenterId || 0, task, everyValue, MAINTENANCE_UNITS.includes(everyUnit) ? everyUnit : 'months', firstOn, responsibleUserId || null, responsibleLabel || '', String(createdBy || '').slice(0, 120), createdByUserId || null);
+        return getMaintenanceProgramById(info.lastInsertRowid, clientId, isTestData);
+    })();
+}
+function updateMaintenanceProgram(id, clientId, patch, forTestAccount = false) {
+    const sets = [];
+    const args = [];
+    Object.entries(patch || {}).forEach(([key, value]) => {
+        if (key === 'status') { sets.push('status = ?'); args.push(value === 'inactive' ? 'inactive' : 'active'); return; }
+        const def = MAINTENANCE_PROGRAM_PATCHABLE_FIELDS[key];
+        if (!def) return;
+        sets.push(`${def.column} = ?`);
+        args.push(key === 'responsibleUserId' ? (value || null) : value);
+        if (key === 'responsibleUserId') { sets.push('responsible_label = ?'); args.push(value ? maintenancePersonLabel(value, clientId) : 'Proveedor externo'); }
+    });
+    if (sets.length) db.prepare(`UPDATE maintenance_programs SET ${sets.join(', ')} WHERE id = ? AND client_id = ?`).run(...args, id, clientId);
+    return getMaintenanceProgramById(id, clientId, forTestAccount);
+}
+// --- corridas (lo que se hizo en un programa)
+function listMaintenanceRunsOfProgram(programId, clientId) {
+    return db.prepare('SELECT * FROM maintenance_runs WHERE program_id = ? AND client_id = ? ORDER BY done_on DESC, id DESC').all(programId, clientId);
+}
+function createMaintenanceRun({ clientId, isTestData = false, programId, assetId, costCenterId = 0, doneOn, doneByUserId = null, doneByLabel = '', nextOn, cost = 0, notes = '', createdBy = '', createdByUserId = null }) {
+    const test = isTestData ? 1 : 0;
+    return db.transaction(() => {
+        const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM maintenance_runs WHERE client_id = ? AND is_test_data = ?').get(clientId, test).n;
+        const info = db.prepare(`
+            INSERT INTO maintenance_runs (client_id, is_test_data, db_id, record_number, program_id, asset_id, cost_center_id, done_on, done_by_user_id, done_by_label, next_on, cost, notes, created_by, created_by_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(clientId, test, generateBigDateId(), recordNumber, programId, assetId, costCenterId || 0, doneOn, doneByUserId || null, doneByLabel, nextOn, cost, notes, String(createdBy || '').slice(0, 120), createdByUserId || null);
+        return db.prepare('SELECT * FROM maintenance_runs WHERE id = ?').get(info.lastInsertRowid);
+    })();
+}
+function getMaintenanceRunById(id, clientId) {
+    return db.prepare('SELECT * FROM maintenance_runs WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+// La última corrida (por fecha en que se hizo; igual fecha, la última registrada) de cada programa de la empresa: Map(programId → corrida). Y cuántas lleva cada uno.
+function latestMaintenanceRunMap(clientId) {
+    const map = new Map();
+    db.prepare('SELECT * FROM maintenance_runs WHERE client_id = ? ORDER BY done_on ASC, id ASC').all(clientId).forEach((r) => { map.set(r.program_id, r); });
+    return map;
+}
+function maintenanceRunCountMap(clientId) {
+    const map = new Map();
+    db.prepare('SELECT program_id AS id, COUNT(*) AS n FROM maintenance_runs WHERE client_id = ? GROUP BY program_id').all(clientId).forEach((r) => map.set(r.id, r.n));
+    return map;
+}
+// --- fallas (Correctivo)
+function listMaintenanceFaults(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM maintenance_faults WHERE client_id = ? AND is_test_data = ? ORDER BY id DESC').all(clientId, forTestAccount ? 1 : 0);
+}
+function listMaintenanceFaultsAnyScope(clientId) {
+    return db.prepare('SELECT * FROM maintenance_faults WHERE client_id = ? ORDER BY id DESC').all(clientId);
+}
+function getMaintenanceFaultById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM maintenance_faults WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+function createMaintenanceFault({ clientId, isTestData = false, assetId, costCenterId = 0, reportedOn, description, priority = 'medium', outOfService = false, reportedByLabel = '', reportedByUserId = null }) {
+    const test = isTestData ? 1 : 0;
+    return db.transaction(() => {
+        const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM maintenance_faults WHERE client_id = ? AND is_test_data = ?').get(clientId, test).n;
+        const info = db.prepare(`
+            INSERT INTO maintenance_faults (client_id, is_test_data, db_id, record_number, asset_id, cost_center_id, reported_on, description, priority, out_of_service, reported_by_label, reported_by_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(clientId, test, generateBigDateId(), recordNumber, assetId, costCenterId || 0, reportedOn, description, MAINTENANCE_PRIORITIES.includes(priority) ? priority : 'medium', outOfService ? 1 : 0, String(reportedByLabel || '').slice(0, 120), reportedByUserId || null);
+        return getMaintenanceFaultById(info.lastInsertRowid, clientId, isTestData);
+    })();
+}
+function updateMaintenanceFault(id, clientId, patch, forTestAccount = false) {
+    const sets = [];
+    const args = [];
+    const extra = { status: 'status', assignedToUserId: 'assigned_to_user_id', assignedToLabel: 'assigned_to_label', cause: 'cause', actionDone: 'action_done', repairedBy: 'repaired_by', closedOn: 'closed_on', cost: 'cost' };
+    Object.entries(patch || {}).forEach(([key, value]) => {
+        const def = MAINTENANCE_FAULT_PATCHABLE_FIELDS[key];
+        const column = def ? def.column : extra[key];
+        if (!column) return;
+        sets.push(`${column} = ?`);
+        args.push(key === 'outOfService' ? (value ? 1 : 0) : value);
+    });
+    if (sets.length) db.prepare(`UPDATE maintenance_faults SET ${sets.join(', ')} WHERE id = ? AND client_id = ?`).run(...args, id, clientId);
+    return getMaintenanceFaultById(id, clientId, forTestAccount);
+}
+// --- fotos (de una corrida o de una falla)
+function setMaintenancePhoto({ clientId, kind, refId, n, mime, data }) {
+    db.prepare('INSERT INTO maintenance_photos (kind, ref_id, n, client_id, mime, data) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(kind, ref_id, n) DO UPDATE SET mime = excluded.mime, data = excluded.data, created_at = datetime(\'now\')').run(kind, refId, n, clientId, mime, data);
+}
+function getMaintenancePhoto(clientId, kind, refId, n) {
+    return db.prepare('SELECT mime, data FROM maintenance_photos WHERE client_id = ? AND kind = ? AND ref_id = ? AND n = ?').get(clientId, kind, refId, n);
+}
+function deleteMaintenancePhoto(clientId, kind, refId, n) {
+    return db.prepare('DELETE FROM maintenance_photos WHERE client_id = ? AND kind = ? AND ref_id = ? AND n = ?').run(clientId, kind, refId, n).changes > 0;
+}
+// Qué fotos tiene cada registro de un tipo: Map(refId → [n, n…]).
+function maintenancePhotoMap(clientId, kind) {
+    const map = new Map();
+    db.prepare('SELECT ref_id AS id, n FROM maintenance_photos WHERE client_id = ? AND kind = ? ORDER BY n ASC').all(clientId, kind).forEach((r) => { const list = map.get(r.id) || []; list.push(r.n); map.set(r.id, list); });
+    return map;
+}
+// --- avisos de la campana ya generados (uno por programa, fecha y momento; uno por falla y motivo)
+function recordMaintenanceAlert(refKind, refId, alertKey) {
+    return db.prepare('INSERT OR IGNORE INTO maintenance_alerts (ref_kind, ref_id, alert_key) VALUES (?, ?, ?)').run(refKind, refId, alertKey).changes > 0;
+}
+// Aviso de la campana (kind 'maintenance', scope 'data'): una fila por persona. payload = { alertKind: 'program-soon' | 'program-due' | 'fault-high' | 'fault-stale', refId, assetCode, serial, text, dueOn, folio }.
+function publishMaintenanceNotice({ recipients, payload }) {
+    const ids = [...new Set((recipients || []).filter((id) => Number.isInteger(id)))];
+    if (!ids.length) return [];
+    const json = JSON.stringify(payload);
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'maintenance', 'data', ?, NULL, '')");
     db.transaction(() => ids.forEach((id) => insert.run(id, json)))();
     return ids;
 }
@@ -13835,6 +14079,23 @@ function seedCalibrationGrants() {
     }
     if (fijos) seedLeavesForScreenHolders(CALIBRATION_CATALOG_SEED_KEY, fijos, ['colActivoFijoCalibracion', 'colActModVigenciaCal'].flatMap((col) => ['ver-y-operar', 'editar'].map((level) => `${fijos.submenuPrefix}/${col}/${level}`)), 'the calibration catalog columns', { contractOnly: true });
 }
+// Mantenimiento de activos (2026-11-13): las dos pantallas nuevas (Preventivo y Correctivo) las reciben, una sola vez, quienes ya tienen Alta Activos; sus botones (Nuevo programa, Registrar, Desactivar, Reportar falla, Atender y Cerrar falla) ESCRIBEN
+// datos: solo en lo contratado (planes, adicionales del cliente y giros); el administrador del cliente los reparte desde el árbol.
+const MTTO_SCREENS_SEED_KEY = 'seed-mtto-activos-pantallas-v1';
+const MTTO_BUTTONS_SEED_KEY = 'seed-mtto-activos-botones-v1';
+function seedMaintenanceGrants() {
+    const alta = TABLE_GRANT_PATHS['alta-activos'];
+    const prev = TABLE_GRANT_PATHS['mtto-preventivo'];
+    const corr = TABLE_GRANT_PATHS['mtto-correctivo'];
+    if (!alta || !prev || !corr) return;
+    seedLeavesForScreenHolders(MTTO_SCREENS_SEED_KEY, alta, [prev.submenuPrefix, corr.submenuPrefix], 'the Mantenimiento de activos screens');
+    const btn = (path, col, levels) => levels.map((level) => `${path.submenuPrefix}/class-botones/${col}/${level}`);
+    const leaves = [
+        ...['colMpCreateAuth', 'colMpRegistrar'].flatMap((col) => btn(prev, col, ['solo-ver', 'ver-y-operar'])), ...btn(prev, 'colMpDeleteAuth', ['eliminar']),
+        ...['colMcCreateAuth', 'colMcAtender', 'colMcCerrar'].flatMap((col) => btn(corr, col, ['solo-ver', 'ver-y-operar'])),
+    ];
+    seedLeavesForScreenHolders(MTTO_BUTTONS_SEED_KEY, alta, leaves, 'the Mantenimiento de activos buttons', { contractOnly: true });
+}
 function migrateCalibrationSensorTypesOnce() {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CALIBRATION_SENSOR_TYPES_KEY)) return;
     db.transaction(() => {
@@ -13892,6 +14153,7 @@ backfillManualLegacyDeliveriesOnce();
 seedAssetModelLeaves();
 seedAssetAuthorizeLeaf();
 seedCalibrationGrants();
+seedMaintenanceGrants();
 migrateCalibrationSensorTypesOnce();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
@@ -14161,6 +14423,10 @@ module.exports = {
     countAssetModelsByType,
     CALIBRATION_RESULTS, CALIBRATION_SOON_DAYS, CALIBRATION_PATCHABLE_FIELDS, listAssetCalibrations, getAssetCalibrationById, createAssetCalibration, updateAssetCalibration, setAssetCalibrationFile,
     getAssetCalibrationFile, latestCalibrationMap, latestCalibrationOfAsset, countAssetCalibrationsByAsset, recordCalibrationAlert, clearCalibrationAlerts, publishCalibrationNotice,
+    MAINTENANCE_UNITS, MAINTENANCE_PRIORITIES, MAINTENANCE_FAULT_STATUSES, MAINTENANCE_SOON_DAYS, MAINTENANCE_STALE_DAYS, MAINTENANCE_MAX_PHOTOS, MAINTENANCE_PROGRAM_PATCHABLE_FIELDS, MAINTENANCE_FAULT_PATCHABLE_FIELDS,
+    listActiveUsersBrief, maintenancePersonLabel, listMaintenancePrograms, getMaintenanceProgramById, createMaintenanceProgram, updateMaintenanceProgram, listMaintenanceRunsOfProgram, createMaintenanceRun, getMaintenanceRunById,
+    latestMaintenanceRunMap, maintenanceRunCountMap, listMaintenanceFaults, listMaintenanceFaultsAnyScope, getMaintenanceFaultById, createMaintenanceFault, updateMaintenanceFault,
+    setMaintenancePhoto, getMaintenancePhoto, deleteMaintenancePhoto, maintenancePhotoMap, recordMaintenanceAlert, publishMaintenanceNotice,
     listFixedAssets,
     getFixedAssetById,
     nextFixedAssetCodeNumber,

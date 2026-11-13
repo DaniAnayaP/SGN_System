@@ -8747,3 +8747,20 @@ td[data-col="colActCalibracion"] .cal-chip{ white-space: normal; }
 .layout-turn-btn:hover:not(:disabled){ color: var(--color-primary, #7d3f8f); border-color: var(--color-primary, #7d3f8f); }
 .layout-turn-btn.on{ color: var(--color-primary, #7d3f8f); border-color: var(--color-primary, #7d3f8f); background: color-mix(in srgb, var(--color-primary, #7d3f8f) 12%, transparent); }
 .layout-turn-btn:disabled{ opacity: 0.45; cursor: default; }
+
+/* Mantenimiento de activos (Operaciones > Mtto. de activos > Preventivo y Correctivo): botón Registrar, fotos y su visor, historial de corridas */
+.mt-register{ padding: 0.2rem 0.8rem; font-size: 0.78rem; margin-right: 0.3rem; }
+.mt-photos{ display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.mt-photo{ position: relative; width: 4.2rem; height: 3.4rem; border-radius: 0.6rem; border: 1px solid var(--color-border); overflow: hidden; background: var(--color-surface, #fff); }
+.mt-photo img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.mt-photo-rm{ position: absolute; top: 2px; right: 2px; width: 1.2rem; height: 1.2rem; border-radius: 50%; border: 0; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.7rem; cursor: pointer; line-height: 1; }
+.mt-photo-add[hidden]{ display: none; }
+.mt-thumb{ border: 1px solid var(--color-border); border-radius: 0.4rem; padding: 0; width: 2.4rem; height: 2rem; overflow: hidden; background: none; cursor: pointer; margin-right: 0.25rem; }
+.mt-thumb img{ width: 100%; height: 100%; object-fit: cover; display: block; }
+.mt-viewer{ width: min(46rem, 94vw); display: grid; gap: 0.8rem; }
+.mt-viewer img{ max-width: 100%; max-height: 70vh; display: block; margin: 0 auto; border-radius: 0.6rem; }
+.mt-runs-wrap{ overflow-x: auto; max-height: 60vh; margin: 0.6rem 0; }
+table.mt-runs{ border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+.mt-runs th, .mt-runs td{ padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--color-border); text-align: left; vertical-align: top; }
+.mt-runs th{ font-size: 0.7rem; text-transform: uppercase; color: var(--color-text-secondary); white-space: nowrap; }
+.mt-static{ opacity: 0.75; }

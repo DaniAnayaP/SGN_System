@@ -1340,6 +1340,8 @@ function applyAreaFilter(data) {
 const SIDEBAR_GROUPS = {
     categorias: { labelKey: 'menu.catCentroDistCategorias', icon: 'bx-category' },
     qrs: { labelKey: 'menu.opCentroDistQrs', icon: 'bx-qr', minItems: 1 },
+    // Operaciones > Mtto. de activos (2026-11-13): Preventivo y Correctivo. Sale desde la primera pantalla que se ve.
+    mtto: { labelKey: 'menu.opCentroDistMtto', icon: 'bx-wrench', minItems: 1, abbrKeys: ['menu.opCentroDistMttoAbbr1', 'menu.opCentroDistMttoAbbr2'] },
 };
 function groupSidebarScreens(pantallas, categoryId) {
     const counts = {};
@@ -1355,6 +1357,7 @@ function groupSidebarScreens(pantallas, categoryId) {
             id: `grp-${categoryId}-${key}`,
             labelKey: SIDEBAR_GROUPS[key].labelKey,
             icon: SIDEBAR_GROUPS[key].icon,
+            ...(SIDEBAR_GROUPS[key].abbrKeys ? { abbrKeys: SIDEBAR_GROUPS[key].abbrKeys } : {}),
             href: '#',
             submenu: pantallas.filter((q) => q.sidebarGroup === key),
         });
@@ -9933,6 +9936,8 @@ const PENDING_CHANGE_TABLE_LABELS = {
     'registro-combustible': 'menu.opTransVolCombustible',
     'mi-recurso-humano': 'menu.opRrhhMiRecursoHumano',
     'calibraciones': 'menu.opCentroDistCalibraciones',
+    'mtto-preventivo': 'menu.opCentroDistMttoPreventivo',
+    'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo',
 };
 const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar'];
 // Titles collapse to just these icons under the same narrow-screen
@@ -10527,7 +10532,47 @@ function renderCalibrationNoticeRow(item) {
     row.append(tag, meta, desc, link);
     return row;
 }
+// Aviso de mantenimiento (kind 'maintenance', ver generateMaintenanceAlerts en server.js): un programa preventivo por vencer o vencido, una falla de prioridad Alta o una falla abierta varios días.
+function renderMaintenanceNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const kind = item.alertKind || '';
+    const isProgram = kind.startsWith('program');
+    const now = new Date();
+    const [y, m, d] = String(item.dueOn || '').split('-').map(Number);
+    const left = y ? Math.round((Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000) : null;
+    const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(item.dueOn || '') ? new Date(`${item.dueOn}T00:00:00Z`) : null;
+    const loc = (currentLang === 'en' ? 'en-US' : 'es-MX');
+    const dateText = dueDate ? `${String(dueDate.getUTCDate()).padStart(2, '0')} ${new Intl.DateTimeFormat(loc, { timeZone: 'UTC', month: 'short' }).format(dueDate).replace('.', '')} ${dueDate.getUTCFullYear()}` : (item.dueOn || '');
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    let tagKey = 'main.noticeMaintProgramSoon';
+    if (kind === 'program-due') tagKey = left !== null && left < 0 ? 'main.noticeMaintProgramOverdue' : 'main.noticeMaintProgramToday';
+    else if (kind === 'fault-high') tagKey = 'main.noticeMaintFaultHigh';
+    else if (kind === 'fault-stale') tagKey = 'main.noticeMaintFaultStale';
+    tag.textContent = t(tagKey);
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${t(isProgram ? 'menu.opCentroDistMttoPreventivo' : 'menu.opCentroDistMttoCorrectivo')} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    const who = [item.assetCode, item.serial ? `S/N ${item.serial}` : ''].filter(Boolean).join(' · ');
+    let key = 'main.noticeMaintLineSoon';
+    if (kind === 'program-due') key = left !== null && left < 0 ? 'main.noticeMaintLineOverdue' : 'main.noticeMaintLineToday';
+    else if (kind === 'fault-high') key = 'main.noticeMaintLineFaultHigh';
+    else if (kind === 'fault-stale') key = 'main.noticeMaintLineFaultStale';
+    desc.textContent = t(key, { asset: who, task: item.text || '—', date: dateText, n: left === null ? '' : Math.abs(left), folio: item.folio || '', by: item.reportedBy || '—' });
+    const link = document.createElement('a');
+    link.href = isProgram ? 'OpCentroDistMttoPreventivo.html' : 'OpCentroDistMttoCorrectivo.html';
+    link.className = 'notifications-item-meta';
+    link.textContent = t(isProgram ? 'main.noticeMaintViewPrev' : 'main.noticeMaintViewCorr');
+    row.append(tag, meta, desc, link);
+    return row;
+}
 function renderTreeNoticeRow(item) {
+    if (item.kind === 'maintenance') return renderMaintenanceNoticeRow(item);
     if (item.kind === 'calibration') return renderCalibrationNoticeRow(item);
     if (item.kind === 'access-denied') return renderAccessDeniedNoticeRow(item);
     if (item.kind === 'data-change') return renderDataChangeNoticeRow(item);
@@ -10956,7 +11001,7 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration') row = renderTreeNoticeRow(item);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (item.kind === 'asset-auth') row = renderAssetAuthRow(item, activeNotificationTab);
@@ -13002,6 +13047,8 @@ const TABLE_GRANT_PATHS = {
     'relacion-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-envio' },
     'alta-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-activos' },
     'calibraciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-calibraciones' },
+    'mtto-preventivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-mtto-preventivo' },
+    'mtto-correctivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-mtto-correctivo' },
     'localizadores': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-localizadores' },
     'limpieza': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-limpieza' },
     'pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-pedido-manual' },

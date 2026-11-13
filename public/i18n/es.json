@@ -292,11 +292,17 @@
     "opCentroDistAltaArticulos": "Alta Nuestros Artículos (Sku)",
     "opCentroDistAltaActivos": "Alta Activos",
     "opCentroDistCalibraciones": "Calibraciones",
+    "opCentroDistMtto": "Mtto. de activos",
+    "opCentroDistMttoAbbr1": "Mtto. activos",
+    "opCentroDistMttoAbbr2": "Mtto.",
+    "opCentroDistMttoPreventivo": "Preventivo",
+    "opCentroDistMttoCorrectivo": "Correctivo",
     "classActDatosGenerales": "Datos Generales",
     "classActFormaMedidas": "Forma y Medidas",
     "classActEvidencias": "Evidencia · 6 caras",
     "classActLayout": "Layout",
     "classActCalibracion": "Calibración",
+    "classActMantenimiento": "Mantenimiento",
     "opCentroDistEdicionCodigo": "Edición Código",
     "opCentroDistEdicionCodigoAbbr1": "Edic. Código",
     "opCentroDistEdicionCodigoAbbr2": "Edic. Cód.",
@@ -4355,6 +4361,144 @@
     "colActivoFijoLetra": "Se dibuja como",
     "colActivoFijoLetraCodigo": "Letras del código",
     "colActivoFijoSerie": "Lleva número de serie",
+    "colMpActivo": "Activo",
+    "colMpTarea": "Tarea",
+    "colMpCada": "Cada",
+    "colMpUltima": "Última vez",
+    "colMpProxima": "Próxima",
+    "colMpEstado": "Estado",
+    "colMpResponsable": "Responsable",
+    "colMpVeces": "Veces",
+    "colMpCreateAuth": "Autorización para Crear",
+    "colMpRegistrar": "Registrar mantenimiento",
+    "colMpDeleteAuth": "Autorización para Desactivar",
+    "colMcFolio": "Folio",
+    "colMcFecha": "Reportada",
+    "colMcActivo": "Activo",
+    "colMcFalla": "Qué falló",
+    "colMcPrioridad": "Prioridad",
+    "colMcEstatus": "Estatus",
+    "colMcReporto": "Reportó",
+    "colMcAtiende": "Atiende",
+    "colMcFuera": "Fuera de servicio",
+    "colMcCosto": "Costo",
+    "colMcCreateAuth": "Reportar falla",
+    "colMcAtender": "Atender falla",
+    "colMcCerrar": "Cerrar falla",
+    "colMcCausa": "Causa",
+    "colMcQueSeHizo": "Qué se hizo",
+    "colMcReparo": "Quién la reparó",
+    "colMcCierre": "Fecha de cierre",
+    "colActMantenimiento": "Mantenimiento",
+    "filterMtSearchHint": "Activo, tarea, folio...",
+    "mtState_inactive": "Desactivado",
+    "mtChip_ok": "Al corriente · {n} días",
+    "mtChip_ok1": "Al corriente · 1 día",
+    "mtChip_soon": "Por vencer · {n} días",
+    "mtChip_soon1": "Por vencer · 1 día",
+    "mtChip_today": "Vence hoy",
+    "mtChip_overdue": "Vencido · hace {n} días",
+    "mtChip_overdue1": "Vencido · hace 1 día",
+    "mtChip_none": "Sin fecha",
+    "mtChipTip": "Próxima: {date}",
+    "mtSum_down": "Fuera de servicio · falla abierta",
+    "mtSum_fault": "Falla abierta",
+    "mtSum_overdue": "Preventivo vencido",
+    "mtSum_soon": "Preventivo por vencer",
+    "mtSum_ok": "Al corriente",
+    "mtClose": "Cerrar",
+    "mtPhotoAdd": "Agregar foto",
+    "mtPhotoRemove": "Quitar la foto",
+    "mtPhotoCount": "{n} de {max} fotos",
+    "mtExternal": "Proveedor externo",
+    "mtUnit_days": "días",
+    "mtUnit_days1": "día",
+    "mtUnit_months": "meses",
+    "mtUnit_months1": "mes",
+    "mtUnitLabel": "Unidad",
+    "mtRunsOpen": "Ver lo que se hizo",
+    "mtRegister": "Registrar",
+    "mtActivate": "Activar",
+    "mtDeactivate": "Desactivar",
+    "mtDeactivateConfirm": "Se desactiva el programa «{task}» del activo {code}: deja de avisar y de contar como pendiente. Se puede volver a activar.",
+    "mtDeactivateAccept": "Desactivar",
+    "mtDeactivated": "Programa desactivado.",
+    "mtActivated": "Programa activado.",
+    "mtNewProgram": "Nuevo programa",
+    "mtNewProgramHint": "Se crea una vez por activo y tarea.",
+    "mtSaveProgram": "Guardar programa",
+    "mtPickAsset": "Elige el activo",
+    "mtNoAssets": "No hay activos en los centros de costos elegidos (se dan de alta en Alta Activos).",
+    "mtNeedTask": "Escribe la tarea (qué se le hace al activo).",
+    "mtNeedFirst": "Escribe la fecha de la primera vez.",
+    "mtFirstOn": "Primera vez",
+    "mtFirstOnHint": "Desde esta fecha corre la frecuencia.",
+    "mtResponsibleHint": "Una persona de tu equipo o «Proveedor externo».",
+    "mtProgramSaved": "Programa de {code} guardado.",
+    "mtRegisterTitle": "Registrar mantenimiento",
+    "mtSaveRun": "Guardar mantenimiento",
+    "mtDoneOn": "Fecha en que se hizo",
+    "mtDoneBy": "Quién lo hizo",
+    "mtDoneByHint": "Una persona de tu equipo o el nombre del proveedor.",
+    "mtNextOn": "Próxima vez",
+    "mtNextOnHint": "Propuesta: {n} {unit} después de la fecha en que se hizo. Si toca otra fecha, corrígela.",
+    "mtCostOpt": "Costo (opcional)",
+    "mtCost": "Costo",
+    "mtNotes": "Observaciones",
+    "mtNotesHint": "Opcional: lo que se encontró o se cambió.",
+    "mtPhotosOpt": "Fotos (opcional)",
+    "mtPhotos": "Fotos",
+    "mtNeedDoneOn": "Escribe la fecha en que se hizo.",
+    "mtNeedDoneBy": "Escribe quién lo hizo.",
+    "mtRunSaved": "Mantenimiento de {code} registrado.",
+    "mtRunSavedPhotosFailed": "Mantenimiento registrado, pero {n} foto(s) no se pudieron subir.",
+    "mtRunsTitle": "Historial · {code} · {task}",
+    "mtPriority_high": "Alta",
+    "mtPriority_medium": "Media",
+    "mtPriority_low": "Baja",
+    "mtStatus_open": "Abierta",
+    "mtStatus_repair": "En reparación",
+    "mtStatus_closed": "Cerrada",
+    "mtAttend": "Atender",
+    "mtCloseFault": "Cerrar",
+    "mtPhotosOpen": "Ver {n} foto(s)",
+    "mtDays": "{n} días",
+    "mtDays1": "1 día",
+    "mtReport": "Reportar falla",
+    "mtReportHint": "Lo puede llenar cualquiera que tenga la hoja de la pantalla.",
+    "mtReportSave": "Reportar falla",
+    "mtPriorityHint": "Alta avisa de inmediato al jefe directo.",
+    "mtOutOfServiceQ": "¿Dejó de operar?",
+    "mtOutOfServiceHint": "Con «Sí» cuenta los días fuera de servicio.",
+    "mtNeedFault": "Escribe qué falló.",
+    "mtFaultSaved": "Falla {folio} reportada.",
+    "mtFaultSavedPhotosFailed": "Falla {folio} reportada, pero {n} foto(s) no se pudieron subir.",
+    "mtAttendTitle": "Atender falla",
+    "mtAttendSave": "Pasar a En reparación",
+    "mtAttendHint": "Una persona de tu equipo o el proveedor que la repara.",
+    "mtNeedAssigned": "Escribe quién la atiende.",
+    "mtAttended": "Falla {folio} en reparación.",
+    "mtCloseTitle": "Cerrar falla",
+    "mtCloseSave": "Cerrar falla",
+    "mtNeedCause": "Escribe la causa de la falla.",
+    "mtNeedAction": "Escribe qué se hizo para repararla.",
+    "mtNeedRepairedBy": "Escribe quién la reparó.",
+    "mtNeedClosedOn": "Escribe la fecha de cierre.",
+    "mtDownNone": "No dejó de operar",
+    "mtDownCalc": "Se calcula solo.",
+    "mtClosed": "Falla {folio} cerrada.",
+    "noticeMaintProgramSoon": "Mantenimiento por vencer",
+    "noticeMaintProgramToday": "El mantenimiento vence hoy",
+    "noticeMaintProgramOverdue": "Mantenimiento vencido",
+    "noticeMaintFaultHigh": "Falla de prioridad alta",
+    "noticeMaintFaultStale": "Falla abierta varios días",
+    "noticeMaintLineSoon": "{asset} · {task} vence el {date} (en {n} días).",
+    "noticeMaintLineToday": "{asset} · {task} vence hoy ({date}).",
+    "noticeMaintLineOverdue": "{asset} · {task} venció el {date} (hace {n} días).",
+    "noticeMaintLineFaultHigh": "{folio} · {asset}: {task}. Reportó {by}.",
+    "noticeMaintLineFaultStale": "{folio} · {asset} sigue abierta desde el {date}: {task}.",
+    "noticeMaintViewPrev": "Ver preventivo",
+    "noticeMaintViewCorr": "Ver correctivo",
     "colCalActivo": "Activo",
     "colCalModelo": "Modelo",
     "colCalCertificado": "Certificado",
@@ -6408,6 +6552,110 @@
     "calNew": {
         "what": "Abre una ventana para registrar un certificado de calibración: se elige el activo, se escribe lo que dice el certificado y se sube su foto o PDF. Un certificado nuevo del mismo activo pasa a ser el vigente y el anterior queda de historial.",
         "example": "H001, certificado 4227-16787565, calibrado el 01 jun 2026, vence el 01 jun 2028."
+    },
+    "assetMaintenance": {
+        "what": "El mantenimiento del activo: Fuera de servicio · falla abierta (rojo), Falla abierta (rojo), Preventivo vencido (rojo), Preventivo por vencer (ámbar, 7 días o menos) o Al corriente (verde). Solo se lee aquí; se captura en Operaciones > Mtto. de activos. Un activo con falla abierta o preventivo vencido no se bloquea: solo se marca. Sin programas ni fallas no muestra nada.",
+        "example": "F002: «Fuera de servicio · falla abierta». H001: «Preventivo por vencer»."
+    },
+    "mtAsset": {
+        "what": "El activo al que pertenece el registro: su código y su nombre (vienen de Alta Activos).",
+        "example": "F002 · Refrigerador Imbera."
+    },
+    "mtTask": {
+        "what": "Qué se le hace al activo en este programa. Con un clic se corrige (con la autorización de siempre si ya había un dato).",
+        "example": "Limpieza de condensador."
+    },
+    "mtEvery": {
+        "what": "Cada cuánto se repite el mantenimiento, en días o en meses (la unidad se elige al crear el programa; para otra unidad se crea otro programa). Con un clic se cambia el número.",
+        "example": "3 meses."
+    },
+    "mtLast": {
+        "what": "La fecha en que se hizo por última vez, de la última corrida registrada. Vacía si todavía no se ha hecho.",
+        "example": "10 ago 2026."
+    },
+    "mtNext": {
+        "what": "Cuándo toca el siguiente: lo que se anotó al registrar el último mantenimiento (la propuesta es la fecha en que se hizo + la frecuencia) o, si todavía no se ha hecho, la primera vez del programa.",
+        "example": "10 nov 2026."
+    },
+    "mtProgramState": {
+        "what": "Cómo va el programa con tu día de hoy: Al corriente, Por vencer (7 días o menos) o Vencido. Un programa desactivado dice Desactivado. 7 días antes y el día que vence llega un aviso a la campana.",
+        "example": "Por vencer · 5 días."
+    },
+    "mtResponsible": {
+        "what": "Quién se encarga de este mantenimiento: una persona de tu equipo (le llegan los avisos) o «Proveedor externo».",
+        "example": "Luis Pérez."
+    },
+    "mtRuns": {
+        "what": "Cuántas veces se ha hecho este mantenimiento. Con un clic se ve el historial: fecha, quién, costo, observaciones y fotos de cada vez.",
+        "example": "4."
+    },
+    "mtRegister": {
+        "what": "Registra que el mantenimiento se hizo: fecha, quién, costo, observaciones y hasta 3 fotos. La próxima fecha se propone con la frecuencia y se puede corregir.",
+        "example": "Limpieza de condensador hecha el 13 nov 2026; próxima vez el 13 feb 2027."
+    },
+    "mtActivate": {
+        "what": "Vuelve a activar un programa desactivado: otra vez avisa y cuenta como pendiente.",
+        "example": "Programa de limpieza de condensador del F002."
+    },
+    "mtDeactivate": {
+        "what": "Desactiva el programa (los programas nunca se eliminan): deja de avisar y de contar. Se puede volver a activar. Pide la hoja «Autorización para Desactivar».",
+        "example": "El activo se dio de baja y ya no se le hace este mantenimiento."
+    },
+    "mtNewProgram": {
+        "what": "Abre una ventana para crear un programa: se elige el activo, la tarea, cada cuánto, la primera fecha y el responsable.",
+        "example": "F002 · Limpieza de condensador · cada 3 meses · desde el 10 nov 2026."
+    },
+    "mtFolio": {
+        "what": "El número de la falla, consecutivo de tu empresa: MC-0001, MC-0002…",
+        "example": "MC-0003."
+    },
+    "mtReportedOn": {
+        "what": "El día en que se reportó la falla.",
+        "example": "11 nov 2026."
+    },
+    "mtFault": {
+        "what": "Qué falló, con las palabras de quien lo reportó. Con un clic se corrige mientras la falla esté abierta; una falla cerrada ya no se cambia (su causa y lo que se hizo salen al pasar el cursor).",
+        "example": "No enfría; el compresor hace ruido."
+    },
+    "mtPriority": {
+        "what": "Qué tan urgente es: Alta, Media o Baja. Una falla Alta avisa de inmediato al jefe directo de quien la reportó.",
+        "example": "Alta."
+    },
+    "mtFaultStatus": {
+        "what": "En qué va la falla: Abierta (se reportó), En reparación (ya se atiende) o Cerrada (ya se reparó y se anotó la causa). Una falla Abierta cambia con «Atender» y cualquiera sin cerrar con «Cerrar».",
+        "example": "En reparación."
+    },
+    "mtReportedBy": {
+        "what": "Quién reportó la falla (se pone solo con tu usuario).",
+        "example": "Luis Pérez."
+    },
+    "mtAssigned": {
+        "what": "Quién la atiende: una persona de tu equipo o el proveedor. Se anota con «Atender».",
+        "example": "Frío Industrial."
+    },
+    "mtDown": {
+        "what": "Cuántos días estuvo el activo fuera de servicio: desde que se reportó hasta que se cerró (o hasta hoy si sigue abierta). Solo cuenta si al reportar se dijo que dejó de operar.",
+        "example": "2 días."
+    },
+    "mtCost": {
+        "what": "Lo que costó la reparación; se anota al cerrar la falla (opcional).",
+        "example": "$ 2,300.00."
+    },
+    "mtReport": {
+        "what": "Abre una ventana para reportar una falla: se elige el activo, se escribe qué falló, la prioridad, si dejó de operar y hasta 3 fotos.",
+        "example": "F002 no enfría; prioridad Alta; dejó de operar."
+    },
+    "mtAttend": {
+        "what": "Pasa la falla de Abierta a En reparación y anota quién la atiende (una persona o un proveedor). Pide la hoja «Atender falla».",
+        "example": "Frío Industrial atiende el F002."
+    },
+    "mtClose": {
+        "what": "Cierra la falla: se piden la causa, qué se hizo, quién la reparó y la fecha de cierre; el costo es opcional. Cuenta los días fuera de servicio y la falla ya no se cambia. Pide la hoja «Cerrar falla».",
+        "example": "Capacitor del compresor dañado; se cambió; lo reparó Frío Industrial."
+    },
+    "mtFaultPhotos": {
+        "what": "Las fotos que se subieron al reportar la falla.",
+        "example": "2 fotos."
     },
     "assetTypeSerial": {
       "what": "Si los activos de este tipo llevan número de serie. Sí para sensores, teléfonos e impresoras; No para sillas y mesas. Solo cuando dice Sí, el número de serie cuenta para que un activo de este tipo quede al 100%.",

@@ -231,6 +231,10 @@ const {
     countAssetModelsByType,
     CALIBRATION_RESULTS, CALIBRATION_SOON_DAYS, CALIBRATION_PATCHABLE_FIELDS, listAssetCalibrations, getAssetCalibrationById, createAssetCalibration, updateAssetCalibration, setAssetCalibrationFile,
     getAssetCalibrationFile, latestCalibrationMap, latestCalibrationOfAsset, countAssetCalibrationsByAsset, recordCalibrationAlert, clearCalibrationAlerts, publishCalibrationNotice, listColumnNotifyRecipientUserIds,
+    MAINTENANCE_UNITS, MAINTENANCE_PRIORITIES, MAINTENANCE_FAULT_STATUSES, MAINTENANCE_SOON_DAYS, MAINTENANCE_STALE_DAYS, MAINTENANCE_MAX_PHOTOS, MAINTENANCE_PROGRAM_PATCHABLE_FIELDS, MAINTENANCE_FAULT_PATCHABLE_FIELDS,
+    listActiveUsersBrief, maintenancePersonLabel, listMaintenancePrograms, getMaintenanceProgramById, createMaintenanceProgram, updateMaintenanceProgram, listMaintenanceRunsOfProgram, createMaintenanceRun, getMaintenanceRunById,
+    latestMaintenanceRunMap, maintenanceRunCountMap, listMaintenanceFaults, listMaintenanceFaultsAnyScope, getMaintenanceFaultById, createMaintenanceFault, updateMaintenanceFault,
+    setMaintenancePhoto, getMaintenancePhoto, deleteMaintenancePhoto, maintenancePhotoMap, recordMaintenanceAlert, publishMaintenanceNotice,
     countFixedAssetsByClass,
     getFixedAssetAnyScope,
     listFixedAssetsOfCenterAnyScope,
@@ -590,7 +594,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
+const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -11981,6 +11985,8 @@ function mapFixedAsset(row, ctx, companyName, pendingByRecord, placements) {
         editing: !!row.editing, editingFields: (parseFixedAssetEditing(row) || {}).fields || null, pendingChoices: (parseFixedAssetEditing(row) || {}).pending || [],
         modelId: row.model_id || null, modelLabel: model ? assetModelLabel(model) : '', typeNeedsSerial: type ? type.needs_serial !== 0 : true,
         // Calibración (solo lectura aquí; se captura en Operaciones > Calibraciones): null = su tipo no la lleva; si la lleva, el certificado que VALE (id null = todavía sin ninguno)
+        // Mantenimiento (solo lectura aquí; se captura en Operaciones > Mtto. de activos): programas activos y fallas abiertas del activo (null = ninguno)
+        maintenance: ctx.maint ? (ctx.maint.get(row.id) || null) : null,
         calibration: type && type.needs_calibration === 1 ? mapCalibrationSummary(ctx.latest ? ctx.latest.get(row.id) : latestCalibrationOfAsset(row.id, row.client_id)) : null,
         costCenterId: row.cost_center_id, typeId: row.type_id, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '',
         classId: row.class_id, className: cls ? cls.name : '',
@@ -12221,6 +12227,7 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
     const pendingByRecord = getPendingColumnsByRecord(clientId, FIXED_ASSET_TABLE_KEY);
     ctx.authMap = assetAuthorizationSummaryMap(clientId, isTestAccount);
     ctx.latest = latestCalibrationMap(clientId);
+    ctx.maint = maintenanceSummaryMap(clientId);
     res.set('Cache-Control', 'no-store');
     // scope=pending: Operaciones > Alta Activos (los que todavía no están completos, los que regresaron a edición y los completos que esperan la autorización de uso); scope=complete: Gestión > Activos (los completos
     // y autorizados que no están en edición); sin scope, todos.
@@ -12768,6 +12775,438 @@ function generateCalibrationAlerts(clientId, force = false) {
         });
     } catch (err) {
         console.error('[calibraciones] no se pudieron generar los avisos:', err.message);
+    }
+}
+
+// --- Mantenimiento de activos (Operaciones > C. Distribución > Mtto. de activos) ------------------------------------------------------------------------
+// PREVENTIVO: un renglón por programa (activo + tarea + cada cuánto + responsable). Al hacerlo se registra una corrida (fecha, quién, costo, observaciones, fotos) y la próxima fecha se corre (la propuesta es fecha + frecuencia; se corrige). Estados con el
+// día de quien mira: Al corriente, Por vencer (7 días o menos) y Vencido. Un programa nunca se elimina: se desactiva (hoja «Desactivar»).
+// CORRECTIVO: un renglón por falla (folio MC-0001…): se reporta, se atiende (En reparación) y se cierra con su causa, lo que se hizo, quién la reparó, fecha de cierre y costo. Si el activo dejó de operar cuenta los días fuera de servicio.
+// Un activo con falla abierta o preventivo vencido NO se bloquea: sale marcado en Gestión > Activos (columna Mantenimiento). Avisos en la campana (ver generateMaintenanceAlerts). Cada acción pide su propia hoja del árbol.
+const MP_TABLE_KEY = 'mtto-preventivo';
+const MC_TABLE_KEY = 'mtto-correctivo';
+const MAINT_AREA_LABEL = 'C. Distribución';
+const MAINT_MODULE_LABEL = 'Cadena de Suministro';
+const MP_SCREEN_LABEL = 'Mantenimiento Preventivo';
+const MC_SCREEN_LABEL = 'Mantenimiento Correctivo';
+const MAINT_PRIORITY_LABELS = { high: 'Alta', medium: 'Media', low: 'Baja' };
+const MAINT_FAULT_STATUS_LABELS = { open: 'Abierta', repair: 'En reparación', closed: 'Cerrada' };
+const MAINT_UNIT_LABELS = { days: 'días', months: 'meses' };
+const MAINT_PHOTO_MAX_BYTES = 700 * 1024;
+const maintPhotoRaw = express.raw({ type: (req) => /^image\/(jpeg|png|webp)$/i.test(String(req.headers['content-type'] || '').split(';')[0].trim()), limit: '800kb' });
+const maintPad4 = (n) => String(n).padStart(4, '0');
+const maintFolioOf = (fault) => `MC-${maintPad4(fault.record_number)}`;
+const maintCan = (req, tableKey, colKey) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), tableKey, colKey);
+const maintCanDelete = (req, tableKey, colKey) => !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), tableKey, colKey);
+const addDaysIso = (iso, n) => new Date((isoDays(iso) + n) * 86400000).toISOString().slice(0, 10);
+const addEveryIso = (iso, value, unit) => (unit === 'days' ? addDaysIso(iso, value) : addMonthsIso(iso, value));
+// El próximo mantenimiento de un programa: lo que dice su última corrida o, sin corridas, su primera fecha.
+const programNextOn = (program, latestRun) => (latestRun ? latestRun.next_on : program.first_on);
+function programState(nextOn, todayIso) {
+    const daysLeft = isoDays(nextOn) - isoDays(todayIso);
+    return { key: daysLeft < 0 ? 'overdue' : (daysLeft <= MAINTENANCE_SOON_DAYS ? 'soon' : 'ok'), daysLeft };
+}
+function maintPhotoMime(buf) {
+    if (!Buffer.isBuffer(buf) || buf.length < 12) return null;
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+    if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+    if (buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+    return null;
+}
+function maintenanceContext(req) {
+    const { clientId, isTestAccount } = req.user;
+    return { ...fixedAssetContext(req), assets: new Map(listFixedAssets(clientId, isTestAccount).map((a) => [a.id, a])) };
+}
+// Los activos a los que se les puede dar mantenimiento: los activos (todos los tipos).
+function maintenanceAssetList(ctx) {
+    return [...ctx.assets.values()].filter((a) => a.status === 'active').map((a) => {
+        const type = ctx.types.get(a.type_id);
+        const model = a.model_id ? ctx.models.get(a.model_id) : null;
+        return { id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name || '', serialNumber: a.serial_number || '', typeName: type ? type.name : '', modelLabel: model ? assetModelLabel(model) : a.model || '', costCenterId: a.cost_center_id };
+    }).sort((x, y) => x.code.localeCompare(y.code, 'es', { numeric: true }));
+}
+function maintAssetFields(ctx, assetId) {
+    const asset = ctx.assets.get(assetId);
+    const type = asset ? ctx.types.get(asset.type_id) : null;
+    const model = asset && asset.model_id ? ctx.models.get(asset.model_id) : null;
+    return { assetCode: asset ? fixedAssetCodeOf(asset) : '', assetSerial: asset ? asset.serial_number : '', assetName: asset ? (asset.custom_name || asset.purchase_name) : '', assetModel: model ? assetModelLabel(model) : (asset ? asset.model : ''), typeName: type ? type.name : '' };
+}
+const maintPeopleList = (req) => listActiveUsersBrief(req.user.clientId, req.user.isTestAccount).map((u) => ({ id: u.id, name: u.name || u.username }));
+function mapProgram(row, ctx, todayIso, latestMap, countMap, pendingByRecord, companyName) {
+    const latest = latestMap.get(row.id);
+    const next = programNextOn(row, latest);
+    const st = row.status === 'inactive' ? { key: 'inactive', daysLeft: null } : programState(next, todayIso);
+    const cc = ctx.centers.get(row.cost_center_id);
+    return {
+        id: row.id, registroUnico: row.db_id, assetId: row.asset_id, ...maintAssetFields(ctx, row.asset_id), task: row.task, everyValue: row.every_value, everyUnit: row.every_unit,
+        firstOn: row.first_on, lastOn: latest ? latest.done_on : '', nextOn: next, status: row.status, state: st.key, daysLeft: st.daysLeft,
+        responsibleUserId: row.responsible_user_id || 0, responsibleLabel: row.responsible_label, runs: countMap.get(row.id) || 0, costCenterId: row.cost_center_id, createdBy: row.created_by,
+        pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({ companyName, area: MAINT_AREA_LABEL, modulo: MAINT_MODULE_LABEL, pantalla: MP_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: row.created_at }),
+    };
+}
+function mapFault(row, ctx, todayIso, photoMap, pendingByRecord, companyName) {
+    const cc = ctx.centers.get(row.cost_center_id);
+    const downDays = row.out_of_service && /^\d{4}-\d{2}-\d{2}$/.test(row.reported_on) ? Math.max(0, isoDays(row.closed_on || todayIso) - isoDays(row.reported_on)) : null;
+    return {
+        id: row.id, registroUnico: row.db_id, folio: maintFolioOf(row), reportedOn: row.reported_on, assetId: row.asset_id, ...maintAssetFields(ctx, row.asset_id),
+        description: row.description, priority: row.priority, priorityLabel: MAINT_PRIORITY_LABELS[row.priority] || row.priority, status: row.status, statusLabel: MAINT_FAULT_STATUS_LABELS[row.status] || row.status,
+        outOfService: !!row.out_of_service, downDays, reportedBy: row.reported_by_label, assignedTo: row.assigned_to_label, cause: row.cause, actionDone: row.action_done, repairedBy: row.repaired_by,
+        closedOn: row.closed_on, cost: row.cost, photos: photoMap.get(row.id) || [], costCenterId: row.cost_center_id, pendingFields: pendingByRecord?.get(row.id) || [],
+        ...getSystemColumnsForRecord({ companyName, area: MAINT_AREA_LABEL, modulo: MAINT_MODULE_LABEL, pantalla: MC_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: row.created_at }),
+    };
+}
+// Lo que cada activo de la empresa trae de mantenimiento para Gestión > Activos (solo lectura): cuántos programas activos y el más próximo, y sus fallas abiertas (y cuántas lo dejaron fuera de servicio). El estado (vencido, por vencer) lo calcula la pantalla con el día de quien mira.
+function maintenanceSummaryMap(clientId) {
+    const map = new Map();
+    const get = (id) => { let e = map.get(id); if (!e) { e = { programs: 0, nextOn: '', openFaults: 0, down: 0 }; map.set(id, e); } return e; };
+    const latest = latestMaintenanceRunMap(clientId);
+    [false, true].forEach((test) => {
+        listMaintenancePrograms(clientId, test).filter((p) => p.status !== 'inactive').forEach((p) => {
+            const e = get(p.asset_id);
+            e.programs += 1;
+            const next = programNextOn(p, latest.get(p.id));
+            if (next && (!e.nextOn || next < e.nextOn)) e.nextOn = next;
+        });
+    });
+    listMaintenanceFaultsAnyScope(clientId).filter((f) => f.status !== 'closed').forEach((f) => { const e = get(f.asset_id); e.openFaults += 1; if (f.out_of_service) e.down += 1; });
+    return map;
+}
+function logMaintFields(req, tableKey, record, label, entries) {
+    entries.forEach(([fieldKey, oldValue, newValue]) => {
+        if (newValue === undefined || newValue === null || newValue === '') return;
+        logTableChange({ clientId: req.user.clientId, tableKey, recordId: record.id, recordLabel: label, action: 'update', fieldKey, oldValue: oldValue === undefined || oldValue === null ? '' : oldValue, newValue, changedBy: changedByLabel(req) });
+    });
+}
+const maintCleanText = (v, max) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
+const maintMoney = (v) => { const n = v === '' || v == null ? 0 : Number(v); return Number.isFinite(n) && n >= 0 && n <= 1e9 ? Math.round(n * 100) / 100 : null; };
+// «Quién lo hizo»: si el texto es el nombre o el usuario de una persona activa de la empresa se liga a ella; si no, queda como texto (un proveedor).
+function maintResolvePerson(req, text) {
+    const label = maintCleanText(text, 120);
+    if (!label) return { id: null, label: '' };
+    const hit = listActiveUsersBrief(req.user.clientId, req.user.isTestAccount).find((u) => String(u.name || '').toLowerCase() === label.toLowerCase() || String(u.username || '').toLowerCase() === label.toLowerCase());
+    return hit ? { id: hit.id, label: hit.name || hit.username } : { id: null, label };
+}
+const maintProgramSanitizers = { responsibleUserId: (v) => (Number(v) ? '' : 'Proveedor externo'), everyValue: (v) => String(v) };
+const maintFaultSanitizers = { priority: (v) => MAINT_PRIORITY_LABELS[v] || String(v), outOfService: (v) => (Number(v) ? 'Sí' : 'No') };
+
+// ---- Preventivo
+app.get('/api/business/maintenance/programs', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const ctx = maintenanceContext(req);
+    const todayIso = calibrationToday(req);
+    const rows = listMaintenancePrograms(clientId, isTestAccount);
+    const latest = latestMaintenanceRunMap(clientId);
+    const counts = maintenanceRunCountMap(clientId);
+    const pending = getPendingColumnsByRecord(clientId, MP_TABLE_KEY);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        programs: rows.map((r) => mapProgram(r, ctx, todayIso, latest, counts, pending, client?.company_name)),
+        assets: maintenanceAssetList(ctx), people: maintPeopleList(req), soonDays: MAINTENANCE_SOON_DAYS, maxPhotos: MAINTENANCE_MAX_PHOTOS,
+        costCenters: [...ctx.centers.values()].map((c) => ({ id: c.id, name: c.name, code: c.code || '' })),
+        canCreate: maintCan(req, MP_TABLE_KEY, 'colMpCreateAuth'), canRegister: maintCan(req, MP_TABLE_KEY, 'colMpRegistrar'), canDelete: maintCanDelete(req, MP_TABLE_KEY, 'colMpDeleteAuth'),
+    });
+});
+app.post('/api/business/maintenance/programs', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!maintCan(req, MP_TABLE_KEY, 'colMpCreateAuth')) return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    const { clientId, isTestAccount } = req.user;
+    const ctx = maintenanceContext(req);
+    const body = req.body || {};
+    const asset = ctx.assets.get(intOf(body.assetId));
+    if (!asset || asset.status !== 'active') return res.status(400).json({ message: 'Elige el activo al que se le da mantenimiento.', code: 'ASSET' });
+    const task = maintCleanText(body.task, 160);
+    if (!task) return res.status(400).json({ message: 'Escribe la tarea (qué se le hace al activo).', code: 'TASK' });
+    const everyValue = intOf(body.everyValue);
+    if (!(everyValue >= 1 && everyValue <= 999)) return res.status(400).json({ message: 'La frecuencia son números enteros de 1 a 999.', code: 'EVERY' });
+    if (!MAINTENANCE_UNITS.includes(body.everyUnit)) return res.status(400).json({ message: 'La frecuencia es en días o en meses.', code: 'UNIT' });
+    if (!isoDateOk(body.firstOn)) return res.status(400).json({ message: 'Escribe la fecha de la primera vez.', code: 'FIRST' });
+    let responsibleUserId = null; let responsibleLabel = 'Proveedor externo';
+    if (intOf(body.responsibleUserId) > 0) {
+        const person = listActiveUsersBrief(clientId, isTestAccount).find((u) => u.id === intOf(body.responsibleUserId));
+        if (!person) return res.status(400).json({ message: 'Elige una persona de tu equipo o «Proveedor externo».', code: 'RESP' });
+        responsibleUserId = person.id; responsibleLabel = person.name || person.username;
+    }
+    if (listMaintenancePrograms(clientId, isTestAccount).some((p) => p.asset_id === asset.id && p.status !== 'inactive' && p.task.toLowerCase() === task.toLowerCase())) {
+        return res.status(409).json({ message: `El activo ${fixedAssetCodeOf(asset)} ya tiene un programa «${task}».`, code: 'DUP' });
+    }
+    const row = createMaintenanceProgram({ clientId, isTestData: isTestAccount, assetId: asset.id, costCenterId: asset.cost_center_id, task, everyValue, everyUnit: body.everyUnit, firstOn: body.firstOn, responsibleUserId, responsibleLabel, createdBy: changedByLabel(req), createdByUserId: req.user.sub });
+    const label = `${fixedAssetCodeOf(asset)} · ${task}`;
+    logTableChange({ clientId, tableKey: MP_TABLE_KEY, recordId: row.id, recordLabel: label, action: 'create', changedBy: changedByLabel(req) });
+    logMaintFields(req, MP_TABLE_KEY, row, label, [['main.colMpActivo', '', fixedAssetCodeOf(asset)], ['main.colMpTarea', '', task], ['main.colMpCada', '', `${everyValue} ${MAINT_UNIT_LABELS[body.everyUnit]}`], ['main.colMpProxima', '', body.firstOn], ['main.colMpResponsable', '', responsibleLabel]]);
+    notifyButtonAction(req, MP_TABLE_KEY, 'create', label);
+    generateMaintenanceAlerts(clientId, true);
+    const fresh = maintenanceContext(req);
+    res.status(201).json({ program: mapProgram(row, fresh, calibrationToday(req), latestMaintenanceRunMap(clientId), maintenanceRunCountMap(clientId), null, getClientById(clientId)?.company_name) });
+});
+app.patch('/api/business/maintenance/programs/:id', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getMaintenanceProgramById(intOf(req.params.id), clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Program not found.' });
+    const { baseline, overrideConflicts, ...raw } = req.body || {};
+    if (Object.prototype.hasOwnProperty.call(raw, 'assetId')) return res.status(400).json({ message: 'El activo de un programa no se cambia: crea el programa en el activo correcto.', code: 'ASSET_LOCKED' });
+    const direct = {};
+    if ('task' in raw) { const task = maintCleanText(raw.task, 160); if (!task) return res.status(400).json({ message: 'La tarea no puede quedar vacía.', code: 'TASK' }); direct.task = task; }
+    if ('everyValue' in raw) { const n = intOf(raw.everyValue); if (!(n >= 1 && n <= 999)) return res.status(400).json({ message: 'La frecuencia son números enteros de 1 a 999.', code: 'EVERY' }); direct.everyValue = n; }
+    if ('responsibleUserId' in raw) {
+        const id = intOf(raw.responsibleUserId);
+        if (id > 0 && !listActiveUsersBrief(clientId, isTestAccount).some((u) => u.id === id)) return res.status(400).json({ message: 'Elige una persona de tu equipo o «Proveedor externo».', code: 'RESP' });
+        direct.responsibleUserId = id > 0 ? id : 0;
+    }
+    const asset = getFixedAssetAnyScope(existing.asset_id, clientId);
+    const label = `${asset ? fixedAssetCodeOf(asset) : existing.asset_id} · ${existing.task}`;
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, direct, MAINTENANCE_PROGRAM_PATCHABLE_FIELDS, MP_TABLE_KEY, label, maintProgramSanitizers, { baseline, overrideConflicts });
+    const row = updateMaintenanceProgram(existing.id, clientId, appliedPatch, isTestAccount);
+    generateMaintenanceAlerts(clientId, true);
+    const ctx = maintenanceContext(req);
+    res.json({ program: mapProgram(row, ctx, calibrationToday(req), latestMaintenanceRunMap(clientId), maintenanceRunCountMap(clientId), null, getClientById(clientId)?.company_name), pendingFields, rejectedFields, conflictFields });
+});
+// Desactivar (o volver a activar) un programa: nunca se eliminan. Pide la hoja «Desactivar».
+app.post('/api/business/maintenance/programs/:id/status', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getMaintenanceProgramById(intOf(req.params.id), clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Program not found.' });
+    if (!maintCanDelete(req, MP_TABLE_KEY, 'colMpDeleteAuth')) return res.status(403).json({ message: 'No tienes permiso para desactivar programas.' });
+    const status = req.body && req.body.status === 'inactive' ? 'inactive' : 'active';
+    if (status !== existing.status) {
+        const asset = getFixedAssetAnyScope(existing.asset_id, clientId);
+        updateMaintenanceProgram(existing.id, clientId, { status }, isTestAccount);
+        logMaintFields(req, MP_TABLE_KEY, existing, `${asset ? fixedAssetCodeOf(asset) : existing.asset_id} · ${existing.task}`, [['main.colMpEstado', status === 'inactive' ? 'Activo' : 'Inactivo', status === 'inactive' ? 'Inactivo' : 'Activo']]);
+    }
+    const ctx = maintenanceContext(req);
+    res.json({ program: mapProgram(getMaintenanceProgramById(existing.id, clientId, isTestAccount), ctx, calibrationToday(req), latestMaintenanceRunMap(clientId), maintenanceRunCountMap(clientId), null, getClientById(clientId)?.company_name) });
+});
+app.get('/api/business/maintenance/programs/:id/runs', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const program = getMaintenanceProgramById(intOf(req.params.id), clientId, isTestAccount);
+    if (!program) return res.status(404).json({ message: 'Program not found.' });
+    const photos = maintenancePhotoMap(clientId, 'run');
+    res.set('Cache-Control', 'no-store');
+    res.json({ runs: listMaintenanceRunsOfProgram(program.id, clientId).map((r) => ({ id: r.id, doneOn: r.done_on, doneBy: r.done_by_label, nextOn: r.next_on, cost: r.cost, notes: r.notes, photos: photos.get(r.id) || [], createdBy: r.created_by })) });
+});
+app.post('/api/business/maintenance/programs/:id/runs', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const program = getMaintenanceProgramById(intOf(req.params.id), clientId, isTestAccount);
+    if (!program) return res.status(404).json({ message: 'Program not found.' });
+    if (!maintCan(req, MP_TABLE_KEY, 'colMpRegistrar')) return res.status(403).json({ message: 'No tienes permiso para registrar mantenimientos.' });
+    if (program.status === 'inactive') return res.status(409).json({ message: 'Este programa está desactivado: actívalo para registrar un mantenimiento.', code: 'INACTIVE' });
+    const body = req.body || {};
+    if (!isoDateOk(body.doneOn)) return res.status(400).json({ message: 'Escribe la fecha en que se hizo.', code: 'DATE' });
+    if (isoDays(body.doneOn) > isoDays(todayIsoUtc()) + 1) return res.status(400).json({ message: 'La fecha en que se hizo no puede ser futura.', code: 'FUTURE' });
+    const who = maintResolvePerson(req, body.doneBy);
+    if (!who.label) return res.status(400).json({ message: 'Escribe quién lo hizo (una persona de tu equipo o el proveedor).', code: 'WHO' });
+    const nextOn = isoDateOk(body.nextOn) ? body.nextOn : addEveryIso(body.doneOn, program.every_value, program.every_unit);
+    if (isoDays(nextOn) <= isoDays(body.doneOn)) return res.status(400).json({ message: 'La próxima vez debe ser después de la fecha en que se hizo.', code: 'NEXT' });
+    const cost = maintMoney(body.cost);
+    if (cost === null) return res.status(400).json({ message: 'El costo debe ser un número de cero en adelante.', code: 'COST' });
+    const prevLatest = latestMaintenanceRunMap(clientId).get(program.id);
+    const run = createMaintenanceRun({ clientId, isTestData: isTestAccount, programId: program.id, assetId: program.asset_id, costCenterId: program.cost_center_id, doneOn: body.doneOn, doneByUserId: who.id, doneByLabel: who.label, nextOn, cost, notes: String(body.notes == null ? '' : body.notes).trim().slice(0, 500), createdBy: changedByLabel(req), createdByUserId: req.user.sub });
+    const asset = getFixedAssetAnyScope(program.asset_id, clientId);
+    logMaintFields(req, MP_TABLE_KEY, program, `${asset ? fixedAssetCodeOf(asset) : program.asset_id} · ${program.task}`, [['main.colMpUltima', prevLatest ? prevLatest.done_on : '', body.doneOn], ['main.colMpProxima', programNextOn(program, prevLatest), nextOn]]);
+    generateMaintenanceAlerts(clientId, true);
+    const ctx = maintenanceContext(req);
+    res.status(201).json({ run: { id: run.id, doneOn: run.done_on, doneBy: run.done_by_label, nextOn: run.next_on, cost: run.cost, notes: run.notes, photos: [] }, program: mapProgram(program, ctx, calibrationToday(req), latestMaintenanceRunMap(clientId), maintenanceRunCountMap(clientId), null, getClientById(clientId)?.company_name) });
+});
+
+// ---- Correctivo
+app.get('/api/business/maintenance/faults', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const ctx = maintenanceContext(req);
+    const todayIso = calibrationToday(req);
+    const rows = listMaintenanceFaults(clientId, isTestAccount);
+    const photos = maintenancePhotoMap(clientId, 'fault');
+    const pending = getPendingColumnsByRecord(clientId, MC_TABLE_KEY);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        faults: rows.map((r) => mapFault(r, ctx, todayIso, photos, pending, client?.company_name)),
+        assets: maintenanceAssetList(ctx), people: maintPeopleList(req), providers: [...new Set(rows.map((r) => r.repaired_by || r.assigned_to_label).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')),
+        priorities: MAINTENANCE_PRIORITIES, statuses: MAINTENANCE_FAULT_STATUSES, maxPhotos: MAINTENANCE_MAX_PHOTOS, staleDays: MAINTENANCE_STALE_DAYS,
+        costCenters: [...ctx.centers.values()].map((c) => ({ id: c.id, name: c.name, code: c.code || '' })),
+        canCreate: maintCan(req, MC_TABLE_KEY, 'colMcCreateAuth'), canAttend: maintCan(req, MC_TABLE_KEY, 'colMcAtender'), canClose: maintCan(req, MC_TABLE_KEY, 'colMcCerrar'),
+    });
+});
+app.post('/api/business/maintenance/faults', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!maintCan(req, MC_TABLE_KEY, 'colMcCreateAuth')) return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
+    const { clientId, isTestAccount } = req.user;
+    const ctx = maintenanceContext(req);
+    const body = req.body || {};
+    const asset = ctx.assets.get(intOf(body.assetId));
+    if (!asset || asset.status !== 'active') return res.status(400).json({ message: 'Elige el activo que falló.', code: 'ASSET' });
+    const description = maintCleanText(body.description, 300);
+    if (!description) return res.status(400).json({ message: 'Escribe qué falló.', code: 'DESC' });
+    const priority = body.priority || 'medium';
+    if (!MAINTENANCE_PRIORITIES.includes(priority)) return res.status(400).json({ message: 'La prioridad es Alta, Media o Baja.', code: 'PRIORITY' });
+    const reportedOn = isoDateOk(body.reportedOn) && isoDays(body.reportedOn) <= isoDays(todayIsoUtc()) + 1 ? body.reportedOn : todayIsoUtc();
+    const row = createMaintenanceFault({ clientId, isTestData: isTestAccount, assetId: asset.id, costCenterId: asset.cost_center_id, reportedOn, description, priority, outOfService: body.outOfService === true || body.outOfService === 1 || body.outOfService === '1', reportedByLabel: changedByLabel(req), reportedByUserId: req.user.sub });
+    const label = `${maintFolioOf(row)} · ${fixedAssetCodeOf(asset)}`;
+    logTableChange({ clientId, tableKey: MC_TABLE_KEY, recordId: row.id, recordLabel: label, action: 'create', changedBy: changedByLabel(req) });
+    logMaintFields(req, MC_TABLE_KEY, row, label, [['main.colMcActivo', '', fixedAssetCodeOf(asset)], ['main.colMcFalla', '', description], ['main.colMcPrioridad', '', MAINT_PRIORITY_LABELS[priority]], ['main.colMcEstatus', '', MAINT_FAULT_STATUS_LABELS.open], ['main.colMcFuera', '', row.out_of_service ? 'Sí' : 'No']]);
+    notifyButtonAction(req, MC_TABLE_KEY, 'create', label);
+    generateMaintenanceAlerts(clientId, true);
+    const fresh = maintenanceContext(req);
+    res.status(201).json({ fault: mapFault(row, fresh, calibrationToday(req), maintenancePhotoMap(clientId, 'fault'), null, getClientById(clientId)?.company_name) });
+});
+app.patch('/api/business/maintenance/faults/:id', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getMaintenanceFaultById(intOf(req.params.id), clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Fault not found.' });
+    if (existing.status === 'closed') return res.status(409).json({ message: 'Una falla cerrada ya no se cambia.', code: 'CLOSED' });
+    const { baseline, overrideConflicts, ...raw } = req.body || {};
+    if (Object.prototype.hasOwnProperty.call(raw, 'assetId')) return res.status(400).json({ message: 'El activo de una falla no se cambia.', code: 'ASSET_LOCKED' });
+    const direct = {};
+    if ('description' in raw) { const d = maintCleanText(raw.description, 300); if (!d) return res.status(400).json({ message: 'Escribe qué falló.', code: 'DESC' }); direct.description = d; }
+    if ('priority' in raw) { if (!MAINTENANCE_PRIORITIES.includes(raw.priority)) return res.status(400).json({ message: 'La prioridad es Alta, Media o Baja.', code: 'PRIORITY' }); direct.priority = raw.priority; }
+    if ('outOfService' in raw) direct.outOfService = raw.outOfService === true || raw.outOfService === 1 || raw.outOfService === '1' ? 1 : 0;
+    const asset = getFixedAssetAnyScope(existing.asset_id, clientId);
+    const label = `${maintFolioOf(existing)} · ${asset ? fixedAssetCodeOf(asset) : existing.asset_id}`;
+    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, direct, MAINTENANCE_FAULT_PATCHABLE_FIELDS, MC_TABLE_KEY, label, maintFaultSanitizers, { baseline, overrideConflicts });
+    const row = updateMaintenanceFault(existing.id, clientId, appliedPatch, isTestAccount);
+    generateMaintenanceAlerts(clientId, true);
+    const ctx = maintenanceContext(req);
+    res.json({ fault: mapFault(row, ctx, calibrationToday(req), maintenancePhotoMap(clientId, 'fault'), null, getClientById(clientId)?.company_name), pendingFields, rejectedFields, conflictFields });
+});
+// Atender: la falla pasa de Abierta a En reparación y se anota quién la atiende (una persona o un proveedor). Pide la hoja «Atender».
+app.post('/api/business/maintenance/faults/:id/attend', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getMaintenanceFaultById(intOf(req.params.id), clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Fault not found.' });
+    if (!maintCan(req, MC_TABLE_KEY, 'colMcAtender')) return res.status(403).json({ message: 'No tienes permiso para atender fallas.' });
+    if (existing.status !== 'open') return res.status(409).json({ message: existing.status === 'closed' ? 'Esta falla ya está cerrada.' : 'Esta falla ya se está atendiendo.', code: 'STATUS' });
+    const who = maintResolvePerson(req, req.body && req.body.assignedTo);
+    if (!who.label) return res.status(400).json({ message: 'Escribe quién la atiende (una persona de tu equipo o el proveedor).', code: 'WHO' });
+    const row = updateMaintenanceFault(existing.id, clientId, { status: 'repair', assignedToUserId: who.id, assignedToLabel: who.label }, isTestAccount);
+    const asset = getFixedAssetAnyScope(existing.asset_id, clientId);
+    logMaintFields(req, MC_TABLE_KEY, existing, `${maintFolioOf(existing)} · ${asset ? fixedAssetCodeOf(asset) : existing.asset_id}`, [['main.colMcEstatus', MAINT_FAULT_STATUS_LABELS.open, MAINT_FAULT_STATUS_LABELS.repair], ['main.colMcAtiende', existing.assigned_to_label, who.label]]);
+    const ctx = maintenanceContext(req);
+    res.json({ fault: mapFault(row, ctx, calibrationToday(req), maintenancePhotoMap(clientId, 'fault'), null, getClientById(clientId)?.company_name) });
+});
+// Cerrar: causa, lo que se hizo, quién la reparó y la fecha de cierre son obligatorios; el costo es opcional. Pide la hoja «Cerrar falla».
+app.post('/api/business/maintenance/faults/:id/close', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getMaintenanceFaultById(intOf(req.params.id), clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Fault not found.' });
+    if (!maintCan(req, MC_TABLE_KEY, 'colMcCerrar')) return res.status(403).json({ message: 'No tienes permiso para cerrar fallas.' });
+    if (existing.status === 'closed') return res.status(409).json({ message: 'Esta falla ya está cerrada.', code: 'STATUS' });
+    const body = req.body || {};
+    const cause = maintCleanText(body.cause, 300);
+    const actionDone = maintCleanText(body.actionDone, 300);
+    const repairedBy = maintCleanText(body.repairedBy, 120);
+    if (!cause) return res.status(400).json({ message: 'Escribe la causa de la falla.', code: 'CAUSE' });
+    if (!actionDone) return res.status(400).json({ message: 'Escribe qué se hizo para repararla.', code: 'ACTION' });
+    if (!repairedBy) return res.status(400).json({ message: 'Escribe quién la reparó.', code: 'WHO' });
+    if (!isoDateOk(body.closedOn)) return res.status(400).json({ message: 'Escribe la fecha de cierre.', code: 'DATE' });
+    if (isoDays(body.closedOn) > isoDays(todayIsoUtc()) + 1) return res.status(400).json({ message: 'La fecha de cierre no puede ser futura.', code: 'FUTURE' });
+    if (isoDays(body.closedOn) < isoDays(existing.reported_on)) return res.status(400).json({ message: 'La fecha de cierre no puede ser antes de la fecha en que se reportó.', code: 'ORDER' });
+    const cost = maintMoney(body.cost);
+    if (cost === null) return res.status(400).json({ message: 'El costo debe ser un número de cero en adelante.', code: 'COST' });
+    const row = updateMaintenanceFault(existing.id, clientId, { status: 'closed', cause, actionDone, repairedBy, closedOn: body.closedOn, cost }, isTestAccount);
+    const asset = getFixedAssetAnyScope(existing.asset_id, clientId);
+    logMaintFields(req, MC_TABLE_KEY, existing, `${maintFolioOf(existing)} · ${asset ? fixedAssetCodeOf(asset) : existing.asset_id}`, [['main.colMcEstatus', MAINT_FAULT_STATUS_LABELS[existing.status], MAINT_FAULT_STATUS_LABELS.closed], ['main.colMcCausa', '', cause], ['main.colMcQueSeHizo', '', actionDone], ['main.colMcReparo', '', repairedBy], ['main.colMcCierre', '', body.closedOn], ['main.colMcCosto', '', cost > 0 ? String(cost) : '']]);
+    const ctx = maintenanceContext(req);
+    res.json({ fault: mapFault(row, ctx, calibrationToday(req), maintenancePhotoMap(clientId, 'fault'), null, getClientById(clientId)?.company_name) });
+});
+
+// ---- Fotos (de una corrida o de una falla): hasta 3, ya reducidas por el navegador
+function maintPhotoTarget(req, res) {
+    const kind = req.params.kind;
+    const refId = intOf(req.params.id);
+    const n = intOf(req.params.n);
+    if (!['run', 'fault'].includes(kind)) { res.status(400).json({ message: 'Tipo de foto no válido.' }); return null; }
+    if (!(n >= 1 && n <= MAINTENANCE_MAX_PHOTOS)) { res.status(400).json({ message: `Solo hay lugar para ${MAINTENANCE_MAX_PHOTOS} fotos.`, code: 'N' }); return null; }
+    const { clientId, isTestAccount } = req.user;
+    if (kind === 'run') {
+        const run = getMaintenanceRunById(refId, clientId);
+        if (!run) { res.status(404).json({ message: 'Run not found.' }); return null; }
+        return { kind, refId, n, can: maintCan(req, MP_TABLE_KEY, 'colMpRegistrar') };
+    }
+    const fault = getMaintenanceFaultById(refId, clientId, isTestAccount);
+    if (!fault) { res.status(404).json({ message: 'Fault not found.' }); return null; }
+    return { kind, refId, n, can: maintCan(req, MC_TABLE_KEY, 'colMcCreateAuth') || maintCan(req, MC_TABLE_KEY, 'colMcAtender') || maintCan(req, MC_TABLE_KEY, 'colMcCerrar') };
+}
+app.put('/api/business/maintenance/photos/:kind/:id/:n', requireAuth, maintPhotoRaw, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const target = maintPhotoTarget(req, res);
+    if (!target) return;
+    if (!target.can) return res.status(403).json({ message: 'No tienes permiso para subir fotos aquí.' });
+    const data = req.body;
+    if (!Buffer.isBuffer(data) || !data.length) return res.status(400).json({ message: 'La foto no es válida.', code: 'FILE' });
+    if (data.length > MAINT_PHOTO_MAX_BYTES) return res.status(413).json({ message: 'La foto pesa demasiado (máximo 700 KB): redúcela e inténtalo otra vez.', code: 'SIZE' });
+    const mime = maintPhotoMime(data);
+    if (!mime) return res.status(400).json({ message: 'La foto debe ser JPG, PNG o WebP.', code: 'FILE' });
+    setMaintenancePhoto({ clientId: req.user.clientId, kind: target.kind, refId: target.refId, n: target.n, mime, data });
+    res.json({ photo: { n: target.n, mime, size: data.length } });
+});
+app.get('/api/business/maintenance/photos/:kind/:id/:n', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const target = maintPhotoTarget(req, res);
+    if (!target) return;
+    const photo = getMaintenancePhoto(req.user.clientId, target.kind, target.refId, target.n);
+    if (!photo) return res.status(404).json({ message: 'No photo.' });
+    res.set({ 'Content-Type': photo.mime, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, max-age=3600' });
+    res.send(photo.data);
+});
+app.delete('/api/business/maintenance/photos/:kind/:id/:n', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const target = maintPhotoTarget(req, res);
+    if (!target) return;
+    if (!target.can) return res.status(403).json({ message: 'No tienes permiso para quitar fotos aquí.' });
+    if (!deleteMaintenancePhoto(req.user.clientId, target.kind, target.refId, target.n)) return res.status(404).json({ message: 'No photo.' });
+    res.json({ ok: true });
+});
+
+// ---- Avisos de la campana
+// Preventivo: uno 7 días antes de la fecha del programa y otro el día que llega (o si ya pasó), una sola vez por programa y fecha; le llegan a quien lo creó, al responsable, a sus jefes directos y a quienes tienen «Notificar» en la columna Próxima.
+// Correctivo: una falla Alta avisa al jefe directo de quien la reportó (y a quienes tienen «Notificar» en Estatus) al reportarse; una falla que sigue abierta 7 días avisa al jefe directo y a quien la reportó. Se generan al abrir la campana (máx. cada 5 minutos por empresa) y al guardar.
+const maintenanceAlertRuns = new Map();
+function generateMaintenanceAlerts(clientId, force = false) {
+    try {
+        const nowMs = Date.now();
+        if (!force && nowMs - (maintenanceAlertRuns.get(clientId) || 0) < 5 * 60 * 1000) return;
+        maintenanceAlertRuns.set(clientId, nowMs);
+        const todayIso = todayIsoUtc();
+        const bossOf = (userId) => (userId ? resolveDirectSupervisorUserId(userId) : null);
+        const latest = latestMaintenanceRunMap(clientId);
+        [false, true].forEach((test) => {
+            listMaintenancePrograms(clientId, test).forEach((p) => {
+                if (p.status === 'inactive') return;
+                const asset = getFixedAssetAnyScope(p.asset_id, clientId);
+                if (!asset || asset.status !== 'active') return;
+                const next = programNextOn(p, latest.get(p.id));
+                if (!next) return;
+                const st = programState(next, todayIso);
+                if (st.key === 'ok') return;
+                const due = st.daysLeft <= 0;
+                if (!recordMaintenanceAlert('program', p.id, `${due ? 'due' : 'soon'}@${next}`)) return;
+                const recipients = [p.created_by_user_id, p.responsible_user_id, bossOf(p.created_by_user_id), bossOf(p.responsible_user_id), ...listColumnNotifyRecipientUserIds(clientId, MP_TABLE_KEY, 'colMpProxima', 'change', [])];
+                publishMaintenanceNotice({ recipients, payload: { alertKind: due ? 'program-due' : 'program-soon', refId: p.id, assetCode: fixedAssetCodeOf(asset), serial: asset.serial_number || '', text: p.task, dueOn: next, folio: '' } });
+            });
+        });
+        listMaintenanceFaultsAnyScope(clientId).forEach((f) => {
+            if (f.status === 'closed') return;
+            const asset = getFixedAssetAnyScope(f.asset_id, clientId);
+            if (!asset) return;
+            const base = { refId: f.id, assetCode: fixedAssetCodeOf(asset), serial: asset.serial_number || '', text: f.description, dueOn: f.reported_on, folio: maintFolioOf(f) };
+            if (f.priority === 'high' && recordMaintenanceAlert('fault', f.id, 'high')) {
+                publishMaintenanceNotice({ recipients: [bossOf(f.reported_by_user_id), ...listColumnNotifyRecipientUserIds(clientId, MC_TABLE_KEY, 'colMcEstatus', 'change', [f.reported_by_user_id])], payload: { alertKind: 'fault-high', ...base, reportedBy: f.reported_by_label } });
+            }
+            if (/^\d{4}-\d{2}-\d{2}$/.test(f.reported_on) && isoDays(todayIso) - isoDays(f.reported_on) >= MAINTENANCE_STALE_DAYS && recordMaintenanceAlert('fault', f.id, 'stale')) {
+                publishMaintenanceNotice({ recipients: [bossOf(f.reported_by_user_id), f.reported_by_user_id], payload: { alertKind: 'fault-stale', ...base, reportedBy: f.reported_by_label } });
+            }
+        });
+    } catch (err) {
+        console.error('[mantenimiento] no se pudieron generar los avisos:', err.message);
     }
 }
 
@@ -14363,6 +14802,25 @@ const PENDING_CHANGE_APPLIERS = {
         syncFixedAssetIntoLayout(clientId, updated);
         return updated;
     },
+    // Cambiar un dato de un programa de Mantenimiento Preventivo o de una falla del Correctivo cuando lo autoriza otra persona.
+    'mtto-preventivo': (recordId, clientId, patch) => {
+        const existing = getMaintenanceProgramById(recordId, clientId, false) || getMaintenanceProgramById(recordId, clientId, true);
+        if (!existing) return null;
+        const clean = {};
+        if ('task' in patch) clean.task = maintCleanText(patch.task, 160);
+        if ('everyValue' in patch && intOf(patch.everyValue) >= 1 && intOf(patch.everyValue) <= 999) clean.everyValue = intOf(patch.everyValue);
+        if ('responsibleUserId' in patch) clean.responsibleUserId = intOf(patch.responsibleUserId) > 0 ? intOf(patch.responsibleUserId) : 0;
+        return updateMaintenanceProgram(recordId, clientId, clean, !!existing.is_test_data);
+    },
+    'mtto-correctivo': (recordId, clientId, patch) => {
+        const existing = getMaintenanceFaultById(recordId, clientId, false) || getMaintenanceFaultById(recordId, clientId, true);
+        if (!existing) return null;
+        const clean = {};
+        if ('description' in patch) clean.description = maintCleanText(patch.description, 300);
+        if ('priority' in patch && MAINTENANCE_PRIORITIES.includes(patch.priority)) clean.priority = patch.priority;
+        if ('outOfService' in patch) clean.outOfService = ['1', 'true'].includes(String(patch.outOfService)) ? 1 : 0;
+        return updateMaintenanceFault(recordId, clientId, clean, !!existing.is_test_data);
+    },
     // Cambiar un dato de un certificado de Calibraciones cuando lo autoriza otra persona (otro vencimiento o resultado: sus avisos se vuelven a generar).
     'calibraciones': (recordId, clientId, patch) => {
         const existing = getAssetCalibrationById(recordId, clientId, false) || getAssetCalibrationById(recordId, clientId, true);
@@ -14467,6 +14925,7 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
             autorizar: colors.autorizar.map(asNotification),
         });
     }
+    generateMaintenanceAlerts(req.user.clientId); // preventivo por vencer o vencido y fallas altas o abiertas mucho tiempo (máx. cada 5 minutos)
     generateCalibrationAlerts(req.user.clientId); // los avisos de calibración por vencer / vencida salen cuando alguien abre la campana (máx. cada 5 minutos)
     const allPending = listPendingChangesForClient(req.user.clientId);
     let autorizar = allPending;

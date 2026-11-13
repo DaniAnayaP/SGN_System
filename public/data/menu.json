@@ -1762,6 +1762,7 @@
             { "id": "colActEnLayout", "labelKey": "main.colActEnLayout", "permissionOnly": true },
             { "id": "colActDondeEsta", "labelKey": "main.colActDondeEsta", "permissionOnly": true },
             { "id": "colActCalibracion", "labelKey": "main.colActCalibracion", "permissionOnly": true },
+            { "id": "colActMantenimiento", "labelKey": "main.colActMantenimiento", "permissionOnly": true },
             { "id": "colActFalta", "labelKey": "main.colActFalta", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
@@ -2520,6 +2521,115 @@
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
                 { "id": "colCalCreateAuth", "labelKey": "main.colCalCreateAuth", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-operaciones-centro-dist-mtto-preventivo", "sidebarGroup": "mtto", "labelKey": "menu.opCentroDistMttoPreventivo", "icon": "bx-calendar-check", "href": "OpCentroDistMttoPreventivo.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colMpActivo", "labelKey": "main.colMpActivo", "permissionOnly": true },
+            { "id": "colMpTarea", "labelKey": "main.colMpTarea", "permissionOnly": true },
+            { "id": "colMpCada", "labelKey": "main.colMpCada", "permissionOnly": true },
+            { "id": "colMpUltima", "labelKey": "main.colMpUltima", "permissionOnly": true },
+            { "id": "colMpProxima", "labelKey": "main.colMpProxima", "permissionOnly": true },
+            { "id": "colMpEstado", "labelKey": "main.colMpEstado", "permissionOnly": true },
+            { "id": "colMpResponsable", "labelKey": "main.colMpResponsable", "permissionOnly": true },
+            { "id": "colMpVeces", "labelKey": "main.colMpVeces", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colMpCreateAuth", "labelKey": "main.colMpCreateAuth", "permissionOnly": true },
+                { "id": "colMpRegistrar", "labelKey": "main.colMpRegistrar", "permissionOnly": true },
+                { "id": "colMpDeleteAuth", "labelKey": "main.colMpDeleteAuth", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
+        }
+,
+        {
+          "id": "cat-operaciones-centro-dist-mtto-correctivo", "sidebarGroup": "mtto", "labelKey": "menu.opCentroDistMttoCorrectivo", "icon": "bx-error", "href": "OpCentroDistMttoCorrectivo.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colMcFolio", "labelKey": "main.colMcFolio", "permissionOnly": true },
+            { "id": "colMcFecha", "labelKey": "main.colMcFecha", "permissionOnly": true },
+            { "id": "colMcActivo", "labelKey": "main.colMcActivo", "permissionOnly": true },
+            { "id": "colMcFalla", "labelKey": "main.colMcFalla", "permissionOnly": true },
+            { "id": "colMcPrioridad", "labelKey": "main.colMcPrioridad", "permissionOnly": true },
+            { "id": "colMcEstatus", "labelKey": "main.colMcEstatus", "permissionOnly": true },
+            { "id": "colMcReporto", "labelKey": "main.colMcReporto", "permissionOnly": true },
+            { "id": "colMcAtiende", "labelKey": "main.colMcAtiende", "permissionOnly": true },
+            { "id": "colMcFuera", "labelKey": "main.colMcFuera", "permissionOnly": true },
+            { "id": "colMcCosto", "labelKey": "main.colMcCosto", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colMcCreateAuth", "labelKey": "main.colMcCreateAuth", "permissionOnly": true },
+                { "id": "colMcAtender", "labelKey": "main.colMcAtender", "permissionOnly": true },
+                { "id": "colMcCerrar", "labelKey": "main.colMcCerrar", "permissionOnly": true }
               ]
             }
           ],
