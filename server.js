@@ -11990,7 +11990,7 @@ function layoutFixedAssetsFor(req, layoutRow, centerId) {
         const cls = cat.classes.get(a.class_id);
         return {
             id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name, purchaseName: a.purchase_name, customName: a.custom_name, model: a.model, serialNumber: a.serial_number,
-            typeId: a.type_id || 0, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
+            typeId: a.type_id || 0, modelId: a.model_id || 0, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
             ...(() => { const done = fixedAssetCompleteness(a, type); return { complete: done.complete, missing: done.missing, photoCount: done.photos }; })(), // solo los activos completos se pueden colocar en el Layout; el selector dice qué le falta a los demás
             shape: a.shape, length: a.length_cm, depth: a.depth_cm, height: a.height_cm, status: a.status, showInLayout: !!a.show_in_layout,
         };

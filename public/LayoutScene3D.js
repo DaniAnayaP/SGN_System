@@ -475,7 +475,7 @@
             const sz0 = root.LayoutCalc && root.LayoutCalc.floorLevelAt ? root.LayoutCalc.floorLevelAt(lastLayout, s.x + s.l / 2, s.y + s.d / 2) : 0;
             return { x: PX(s.x + s.l / 2), y: s.h / 2 + sz0, z: PZ(s.y + s.d / 2), sx: s.l, sy: s.h, sz: s.d };
         }
-        // Al elegir un sensor: sobre el piso de cada zona que mide (las que se eligieron en su renglón o, sin elegir ninguna, la zona donde está colocado) un tinte azul verdoso muy suave y su borde. Se quita al elegir otra cosa.
+        // Al elegir un sensor: sobre el piso de cada zona que mide (las que se eligieron en su renglón o, sin elegir ninguna, la zona donde está colocado) un sombreado VERDE bien visible (antes era un tinte azul verdoso al 20 % que se perdía contra los muros azules) y su borde. Se quita al elegir otra cosa.
         function applyMeasured() {
             while (measuredGroup.children.length) {
                 const c = measuredGroup.children[0];
@@ -496,13 +496,13 @@
                 const y = 0.075 + 0.004 * i + level;
                 let flat;
                 try {
-                    flat = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0] - center.x, -(p[1] - center.y))))), new THREE.MeshBasicMaterial({ color: 0x2b8ca3, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false }));
+                    flat = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0] - center.x, -(p[1] - center.y))))), new THREE.MeshBasicMaterial({ color: 0x1fa37a, transparent: true, opacity: 0.42, side: THREE.DoubleSide, depthWrite: false }));
                 } catch (err) { return; }
                 flat.rotation.x = -Math.PI / 2;
                 flat.position.y = y;
                 flat.renderOrder = 2;
                 measuredGroup.add(flat);
-                measuredGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(p[0] - center.x, y + 0.005, p[1] - center.y))), new THREE.LineBasicMaterial({ color: 0x2b8ca3, transparent: true, opacity: 0.55 })));
+                measuredGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(p[0] - center.x, y + 0.005, p[1] - center.y))), new THREE.LineBasicMaterial({ color: 0x0f7a58, transparent: true, opacity: 1 })));
             });
         }
         function applyHl() {

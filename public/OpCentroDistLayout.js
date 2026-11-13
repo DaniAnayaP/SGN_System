@@ -1610,9 +1610,11 @@ function stepHtml(step) {
     if (step === 'sensores') {
         // Cada renglón es un SENSOR de temperatura y/o humedad, colocado sobre una pared como las conexiones de luz. El código (S001…) lo pone el sistema y la zona donde queda sale de la pared (no se captura); las zonas que MIDE sí se eligen (una o varias).
         const zoneName = (id) => (d.zones.find((z) => z.id === id) || {}).name || '—';
-        // el equipo del renglón de Alta Activos (nombre · modelo · S/N): los sensores de antes, sin renglón, salen con «—»
-        const equip = (x) => { const a = x.assetRef ? (state.fixedAssets || []).find((r) => r.id === x.assetRef) : null; return a ? [a.name, a.model, a.serialNumber ? `S/N ${a.serialNumber}` : ''].filter(Boolean).join(' · ') : '—'; };
-        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td><td class="layout-calc" title="${esc(t('main.layoutActivoDeRegistro'))}" data-help-key="layoutSensorEquipo">${esc(equip(x))}</td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td><td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${sensorZonesCell(x, i, d, dis)}${removeCell('sensors', i, dis)}</tr>`);
+        // el equipo del renglón de Alta Activos: en la columna sale SOLO el número de serie (lo demás hacía la columna muy larga) y, al pasar el cursor, el equipo completo (nombre · modelo · S/N); los sensores de antes, sin renglón, salen con «—»
+        const assetOf = (x) => (x.assetRef ? (state.fixedAssets || []).find((r) => r.id === x.assetRef) : null);
+        const equip = (x) => { const a = assetOf(x); return a && a.serialNumber ? a.serialNumber : '—'; };
+        const equipFull = (x) => { const a = assetOf(x); return a ? [a.name, a.model, a.serialNumber ? `S/N ${a.serialNumber}` : ''].filter(Boolean).join(' · ') : ''; };
+        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td><td class="layout-calc" title="${esc([equipFull(x), t('main.layoutActivoDeRegistro')].filter(Boolean).join(' — '))}" data-help-key="layoutSensorEquipo">${esc(equip(x))}</td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td><td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${sensorZonesCell(x, i, d, dis)}${removeCell('sensors', i, dis)}</tr>`);
         return `${table(['main.layoutCodigo', 'main.layoutSensorEquipo', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutSensorZonaColocado', 'main.layoutSensorZonasMide', ''], rows, 'layout-sensores')}${canEdit('sensores') && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-place-assets="sensors" data-main-add="1" data-help-key="layoutColocarSensor">${esc(t('main.layoutColocarSensor'))}</button>` : ''}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
     }
     if (step === 'seguridad') {
@@ -4964,15 +4966,24 @@ function openPlaceAssets(opts = {}) {
         document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && placeModalEl && !placeModalEl.hidden) closePlaceAssets(); });
     }
     const zoneOptions = `<option value="">${esc(t('main.layoutActivoElegirZona'))}</option>${d.zones.filter((z) => z.active !== false).map((z) => `<option value="${esc(z.id)}">${esc(z.name || z.code)}</option>`).join('')}`;
-    const detail = (a) => (sensors ? `${a.typeName || '—'} · ${a.model || '—'} · S/N ${a.serialNumber || '—'}` : `${a.typeName || '—'} · ${a.length} × ${a.depth} × ${a.height} cm`);
-    const rows = list.map((a) => `<label class="layout-place-row${dimsOk(a) ? '' : ' is-off'}" data-place-text="${esc(`${a.code} ${a.name} ${a.typeName} ${a.className} ${a.model || ''} ${a.serialNumber || ''}`.toLowerCase())}"><input type="checkbox" data-place-asset="${a.id}"${dimsOk(a) ? '' : ' disabled'}> <span class="layout-place-name"><b>${esc(a.code)}</b> · ${esc(a.name)}</span> <small>${esc(detail(a))}${dimsOk(a) ? '' : ` ${esc(a.complete ? t('main.layoutColocarSinMedidas') : t('main.layoutColocarFalta', { falta: faltaText(a) }))}`}</small></label>`).join('');
+    // Tipo → Modelo → piezas (2026-11-13, Daniel: «primero me debe pedir el tipo, y colocando el tipo, ya solo me debe dejar seleccionar los modelos»): se elige el TIPO, luego solo salen los MODELOS de ese tipo y entonces las piezas de ese modelo
+    // (su código y su número de serie) para marcarlas; los activos de antes, sin modelo, salen en «Sin modelo». En el paso Activos además se elige la huella; las medidas salen en cada pieza.
+    const types = new Map();
+    list.forEach((a) => { const id = a.typeId || 0; if (!types.has(id)) types.set(id, a.typeName || '—'); });
+    const typeOptions = `<option value="">${esc(t('main.layoutColocarElegirTipo'))}</option>${[...types].sort((x, y) => String(x[1]).localeCompare(String(y[1]))).map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('')}`;
+    const modelLabel = (a) => (a.modelId ? [a.purchaseName || a.name, a.model].filter(Boolean).join(' · ') : t('main.layoutColocarSinModelo'));
+    const rows = list.map((a) => `<label class="layout-place-row${dimsOk(a) ? '' : ' is-off'}" hidden data-place-type="${a.typeId || 0}" data-place-model="${a.modelId || 0}" data-place-text="${esc(`${a.code} ${a.name} ${a.model || ''} ${a.serialNumber || ''}`.toLowerCase())}"><input type="checkbox" data-place-asset="${a.id}"${dimsOk(a) ? '' : ' disabled'}> <span class="layout-place-name"><b>${esc(a.code)}</b>${a.serialNumber ? ` · S/N ${esc(a.serialNumber)}` : ''}</span> <small>${esc([sensors ? '' : `${a.length} × ${a.depth} × ${a.height} cm`, dimsOk(a) ? '' : (a.complete ? t('main.layoutColocarSinMedidas') : t('main.layoutColocarFalta', { falta: faltaText(a) }))].filter(Boolean).join(' '))}</small></label>`).join('');
     placeModalEl.innerHTML = `<div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="layout-place-title">
         <h3 id="layout-place-title" data-help-key="${sensors ? 'layoutColocarSensor' : 'layoutColocarActivo'}">${esc(t(sensors ? 'main.layoutColocarTituloSensor' : 'main.layoutColocarTitulo'))}</h3>
+        ${list.length ? `<div class="admin-form-grid">
+            <div class="admin-field"><label for="layout-place-type">${esc(t('main.layoutColocarTipoCol'))}</label><select id="layout-place-type" data-help-key="layoutColocarTipo">${typeOptions}</select></div>
+            <div class="admin-field"><label for="layout-place-model">${esc(t('main.layoutColocarModeloCol'))}</label><select id="layout-place-model" data-help-key="layoutColocarModelo" disabled><option value="">${esc(t('main.layoutColocarElegirModelo'))}</option></select></div>
+        </div>` : ''}
         ${sensors ? '' : `<div class="admin-form-grid">
             <div class="admin-field"><label for="layout-place-zone">${esc(t('main.layoutZona'))}</label><select id="layout-place-zone">${zoneOptions}</select></div>
             <div class="admin-field"><label for="layout-place-fp">${esc(t('main.layoutHuellaCol'))}</label><select id="layout-place-fp"><option value="">${esc(t('main.layoutActivoElegirHuella'))}</option></select></div>
         </div>`}
-        ${list.length ? `<input type="search" id="layout-place-search" class="layout-place-search" placeholder="${esc(t('main.layoutColocarBuscar'))}"><div class="layout-place-list">${rows}</div>` : `<p class="layout-muted">${esc(t(sensors ? 'main.layoutColocarVacioSensor' : 'main.layoutColocarVacio'))}</p>`}
+        ${list.length ? `<p class="layout-muted" id="layout-place-hint">${esc(t('main.layoutColocarPistaTipo'))}</p><input type="search" id="layout-place-search" class="layout-place-search" hidden placeholder="${esc(t('main.layoutColocarBuscar'))}"><div class="layout-place-list" hidden>${rows}</div>` : `<p class="layout-muted">${esc(t(sensors ? 'main.layoutColocarVacioSensor' : 'main.layoutColocarVacio'))}</p>`}
         <div id="layout-place-error" class="admin-error" role="alert" hidden></div>
         <div class="admin-form-actions">
             <button type="button" class="btn" id="layout-place-ok"${pickable ? '' : ' disabled'}>${esc(t('main.layoutColocarBtn'))}</button>
@@ -4987,7 +4998,34 @@ function openPlaceAssets(opts = {}) {
         });
     }
     const search = placeModalEl.querySelector('#layout-place-search');
-    if (search) search.addEventListener('input', () => { const q = search.value.trim().toLowerCase(); placeModalEl.querySelectorAll('.layout-place-row').forEach((row) => { row.hidden = !!q && !row.dataset.placeText.includes(q); }); });
+    const typeSel = placeModalEl.querySelector('#layout-place-type');
+    const modelSel = placeModalEl.querySelector('#layout-place-model');
+    const hint = placeModalEl.querySelector('#layout-place-hint');
+    const listEl = placeModalEl.querySelector('.layout-place-list');
+    const rowEls = Array.from(placeModalEl.querySelectorAll('.layout-place-row'));
+    // las piezas solo se ven con el tipo Y el modelo elegidos; el buscador filtra dentro de ese modelo
+    const applyRows = () => {
+        const ready = !!typeSel && typeSel.value !== '' && !!modelSel && modelSel.value !== '';
+        const q = search ? search.value.trim().toLowerCase() : '';
+        rowEls.forEach((row) => { row.hidden = !ready || row.dataset.placeType !== typeSel.value || row.dataset.placeModel !== modelSel.value || (!!q && !row.dataset.placeText.includes(q)); });
+        if (listEl) listEl.hidden = !ready;
+        if (search) search.hidden = !ready;
+        if (hint) { hint.hidden = ready; hint.textContent = t(typeSel && typeSel.value !== '' ? 'main.layoutColocarPistaModelo' : 'main.layoutColocarPistaTipo'); }
+    };
+    // al cambiar de tipo o de modelo se desmarca lo que se había marcado (no se quedan piezas marcadas que ya no se ven)
+    const clearChecks = () => { placeModalEl.querySelectorAll('[data-place-asset]:checked').forEach((cb) => { cb.checked = false; }); if (search) search.value = ''; };
+    if (typeSel && modelSel) {
+        typeSel.addEventListener('change', () => {
+            const models = new Map();
+            list.filter((a) => String(a.typeId || 0) === typeSel.value).forEach((a) => { const id = a.modelId || 0; if (!models.has(id)) models.set(id, { label: modelLabel(a), n: 0 }); models.get(id).n += 1; });
+            modelSel.innerHTML = `<option value="">${esc(t('main.layoutColocarElegirModelo'))}</option>${[...models].sort((x, y) => x[1].label.localeCompare(y[1].label)).map(([id, m]) => `<option value="${id}">${esc(m.label)} (${m.n})</option>`).join('')}`;
+            modelSel.disabled = typeSel.value === '';
+            clearChecks();
+            applyRows();
+        });
+        modelSel.addEventListener('change', () => { clearChecks(); applyRows(); });
+    }
+    if (search) search.addEventListener('input', applyRows);
     placeModalEl.querySelector('#layout-place-ok').addEventListener('click', () => {
         const footprintId = sensors ? '' : placeModalEl.querySelector('#layout-place-fp').value;
         if (!sensors && !footprintId) { err('main.layoutColocarSinHuella'); return; }

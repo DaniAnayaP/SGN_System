@@ -1858,7 +1858,14 @@
     "layoutColocarBtn": "Colocar",
     "layoutColocarSensor": "+ Colocar sensor de Alta Activos",
     "layoutColocarTituloSensor": "Colocar sensores de Alta Activos",
-    "layoutSensorEquipo": "Equipo",
+    "layoutSensorEquipo": "S/N",
+    "layoutColocarTipoCol": "Tipo",
+    "layoutColocarModeloCol": "Modelo",
+    "layoutColocarElegirTipo": "Elige el tipo…",
+    "layoutColocarElegirModelo": "Elige el modelo…",
+    "layoutColocarPistaTipo": "Elige el tipo y luego el modelo para ver sus piezas.",
+    "layoutColocarPistaModelo": "Elige el modelo para ver sus piezas.",
+    "layoutColocarSinModelo": "Sin modelo",
     "layoutColocarVacioSensor": "No hay sensores para colocar. Dalos de alta en Alta Activos con un tipo que se dibuje como «Sensor» y «Aparece en el Layout» en Sí, y complétalos (clasificación, modelo, número de serie y las 6 fotos): solo los completos se pueden colocar. Los que ya están en el Layout no salen aquí.",
     "layoutType_space_sensor": "Sensor",
     "layoutActivoDeRegistro": "Viene de Alta Activos: se cambia allá.",
@@ -6376,9 +6383,17 @@
       "what": "Coloca un sensor que ya está completo en Alta Activos (un activo de un tipo que se dibuja como «Sensor», con su clasificación, modelo, número de serie y las 6 fotos). Trae de su renglón el código, el nombre, el modelo y el S/N; aquí le dices en qué pared va, a qué distancia y a qué altura, y qué mide (temperatura, humedad o las dos).",
       "example": "el Traceable 4410 (HT001): lo colocas, eliges la pared M002, 1.5 m desde el inicio y 1.2 m de altura, y mide temperatura y humedad."
     },
+    "layoutColocarTipo": {
+      "what": "El primer paso para colocar: el Tipo de activo (por ejemplo Termohigrómetro o Gabinete). Al elegirlo, solo salen los modelos de ese tipo.",
+      "example": "eliges Termohigrómetro para ver solo los modelos de termohigrómetros."
+    },
+    "layoutColocarModelo": {
+      "what": "El segundo paso: el modelo del tipo elegido (entre paréntesis, cuántas piezas hay de ese modelo sin colocar). Al elegirlo salen sus piezas, con su código y su número de serie, para marcar las que vas a colocar. «Sin modelo» son los activos de antes que todavía no tienen modelo en Alta Activos.",
+      "example": "eliges TRACEABLE 4410TR (3) y salen H001, H002 y H003 con su S/N."
+    },
     "layoutSensorEquipo": {
-      "what": "El equipo de Alta Activos que es este sensor: su nombre, modelo y número de serie. Se cambia en Alta Activos. Los sensores de antes, que no vienen de Alta Activos, no lo traen.",
-      "example": "Sensor Temperatura del Ambiente · TRACEABLE 4410TR · S/N 261237911."
+      "what": "El número de serie (S/N) del equipo de Alta Activos que es este sensor. Al pasar el cursor sale el equipo completo: nombre, modelo y número de serie. Se cambia en Alta Activos. Los sensores de antes, que no vienen de Alta Activos, no lo traen.",
+      "example": "261237911 (al pasar el cursor: Sensor Temperatura del Ambiente · TRACEABLE 4410TR · S/N 261237911)."
     },
     "layoutColocarActivo": {
       "what": "Coloca en una huella los activos que ya se dieron de alta en Alta Activos (solo salen los que están completos, aparecen en el Layout, están activos y todavía no están colocados). Cada activo trae de su renglón el código, el nombre, el tipo, la clasificación y las medidas; aquí solo eliges dónde va y le pones sus niveles.",
