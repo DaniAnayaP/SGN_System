@@ -15,6 +15,8 @@ const AssetModels = (() => {
     const SHAPES = ['rectangular', 'cilindrica', 'irregular'];
     let models = [];
     let types = [];
+    let criteriaCatalog = []; // Catálogos > Qué se mide
+    let avisoCatalog = []; // Catálogos > Qué se avisa
     let selectedId = null;
     let draft = null; // un renglón nuevo que todavía no existe en el servidor: nace con el primer dato que se escribe
     let panel = null;
@@ -33,6 +35,26 @@ const AssetModels = (() => {
             console.error('Modelos de activos: failed to load', err);
             models = [];
         }
+        await Promise.all([reloadCatalog('activos-criterios'), reloadCatalog('activos-avisos')]);
+    }
+    // Los dos catálogos que el modelo solo elige (se piden otra vez al crear uno nuevo desde la lista).
+    async function reloadCatalog(type) {
+        let rows = [];
+        try {
+            const res = await fetch(`/api/business/article-categories/${type}`, { credentials: 'include' });
+            if (res.ok) rows = ((await res.json()).categories || []).slice().sort((a, z) => a.id - z.id);
+        } catch (err) { console.error('Modelos de activos: failed to load catalog', type, err); }
+        if (type === 'activos-criterios') criteriaCatalog = rows; else avisoCatalog = rows;
+        return rows;
+    }
+    function pickerCell(model, kind) {
+        const isCrit = kind === 'criteria';
+        return AssetCriteria.catalogPickerCell({
+            model, kind, colId: isCrit ? 'colActModCriterios' : 'colActModAvisos', apiKey: isCrit ? 'criteriaIds' : 'avisoIds', catalog: isCrit ? criteriaCatalog : avisoCatalog,
+            tableKey: TABLE, canCreate: true, helpKey: isCrit ? 'assetModelCriteria' : 'assetModelAvisos', isPending,
+            onSave: (ids) => commit(model, { [isCrit ? 'criteriaIds' : 'avisoIds']: ids }),
+            reload: () => reloadCatalog(isCrit ? 'activos-criterios' : 'activos-avisos'),
+        });
     }
     const countFor = (typeId) => models.filter((m) => m.parentId === typeId && m.name).length;
     const isOpen = (typeId) => selectedId === typeId;
@@ -273,6 +295,8 @@ const AssetModels = (() => {
             lookCell(model),
             photosCell(model),
             calibrationMonthsCell(model),
+            pickerCell(model, 'criteria'),
+            pickerCell(model, 'avisos'),
             statusCell(model),
             textCell('colActModUso', used, 'assetModelUse'),
             actionsCell(model),
@@ -612,7 +636,7 @@ const AssetModels = (() => {
     const COLUMNS = [
         ['colActModNombreCompra', 'main.colActModNombreCompra'], ['colActModNombrePersonalizado', 'main.colActModNombrePersonalizado'], ['colActModModelo', 'main.colActModModelo'], ['colActModForma', 'main.colActModForma'],
         ['colActModAlto', 'main.colActModAlto'], ['colActModLargo', 'main.colActModLargo'], ['colActModProfundidad', 'main.colActModProfundidad'], ['colActModPeso', 'main.colActModPeso'],
-        ['colActModVolumen', 'main.colActModVolumen'], ['colActModApariencia', 'main.colActModApariencia'], ['colActModFotos', 'main.colActModFotos'], ['colActModVigenciaCal', 'main.colActModVigenciaCal'], ['colCatStatus', 'main.colCatStatus'], ['colActModUso', 'main.colActModUso'], ['actions', 'main.colActions'],
+        ['colActModVolumen', 'main.colActModVolumen'], ['colActModApariencia', 'main.colActModApariencia'], ['colActModFotos', 'main.colActModFotos'], ['colActModVigenciaCal', 'main.colActModVigenciaCal'], ['colActModCriterios', 'main.colActModCriterios'], ['colActModAvisos', 'main.colActModAvisos'], ['colCatStatus', 'main.colCatStatus'], ['colActModUso', 'main.colActModUso'], ['actions', 'main.colActions'],
     ];
     function ensurePanel() {
         if (panel && panel.isConnected) return panel;

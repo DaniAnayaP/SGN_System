@@ -1894,6 +1894,33 @@ body.dark-mode .perm-tree-depth-2{
 /* Otorgar Accesos de una persona: lo que ya se le dio como adicional (ámbar) se dibuja como casilla marcada para poder quitarlo. */
 .perm-tree-check-extra input{ accent-color: #c9860b; }
 .perm-tree-check-extra span{ color: #c9860b; }
+/* Criterios, límites y avisos de activos (Alta Activos, Gestión y modelos): N/A, chips de alertas, ventanas de detalle. */
+.asset-na{ color: var(--color-text-secondary); opacity: .75; font-size: .76em; font-weight: 600; letter-spacing: .04em; }
+.asset-nolimit{ color: #a4410a; font-size: .78em; font-weight: 600; }
+.asset-clickable{ cursor: pointer; }
+.asset-sev-stack{ display: grid; gap: 4px; justify-items: start; }
+.asset-sev{ display: inline-flex; align-items: baseline; gap: 6px; flex-wrap: wrap; padding: 3px 10px; border-radius: 999px; font-size: .78em; line-height: 1.35; }
+.asset-sev small{ font-weight: 500; opacity: .85; }
+.asset-sev-high{ background-color: color-mix(in srgb, #b42318 16%, transparent); color: #b42318; }
+.asset-sev-mid{ background-color: color-mix(in srgb, #c9860b 18%, transparent); color: #a4410a; }
+.asset-sev-ok{ background-color: color-mix(in srgb, #2c8f4a 16%, transparent); color: #1d7f55; font-weight: 600; }
+.asset-act{ display: grid; gap: 1px; font-size: .85em; }
+.asset-act small{ color: var(--color-text-secondary); font-size: .8em; }
+.asset-crit-win{ max-width: 560px; width: 92vw; }
+.asset-crit-body{ display: grid; gap: 8px; margin: 10px 0; max-height: 60vh; overflow-y: auto; }
+.asset-crit-body h4{ margin: 8px 0 0; font-size: .8em; letter-spacing: .05em; text-transform: uppercase; color: var(--color-text-secondary); }
+.asset-crit-row{ display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, var(--color-text-secondary) 20%, transparent); }
+.asset-crit-main{ display: grid; gap: 3px; min-width: 0; }
+.asset-crit-main small, .asset-crit-hint{ color: var(--color-text-secondary); font-size: .8em; }
+.asset-crit-empty{ color: var(--color-text-secondary); font-size: .88em; margin: 2px 0; }
+.asset-crit-create{ display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; align-items: center; }
+.asset-crit-create input, .asset-crit-create select{ padding: 6px 10px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--color-text-secondary) 35%, transparent); font: inherit; }
+.asset-limit-form{ display: grid; gap: 10px; margin: 12px 0; }
+.asset-limit-field{ display: grid; grid-template-columns: 110px 1fr auto; gap: 8px; align-items: center; }
+.asset-limit-field input{ padding: 7px 10px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--color-text-secondary) 35%, transparent); font: inherit; }
+.asset-chip-list{ display: flex; flex-wrap: wrap; gap: 4px; }
+.asset-chip{ padding: 2px 9px; border-radius: 999px; font-size: .78em; font-weight: 600; background-color: color-mix(in srgb, var(--color-accent) 14%, transparent); color: var(--color-accent); }
+.asset-chip-off{ opacity: .55; text-decoration: line-through; }
 /* colorFor's "partial" case — a container whose children are covered by a
    genuine MIX of green/yellow/red, not all one color (see PermissionCostTree
    .js's own comment on colorFor). Used to render no badge at all, which read

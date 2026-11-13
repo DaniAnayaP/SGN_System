@@ -15,6 +15,8 @@ const GESTION = document.body.dataset.activePage === 'cat-gestion-centro-dist-ac
 const ACTIVE_PAGE = GESTION ? 'cat-gestion-centro-dist-activos' : 'cat-operaciones-centro-dist-alta-activos';
 const SCOPE = GESTION ? 'complete' : 'pending';
 const COLUMN_COUNT = 40; // Gestión no lleva la columna «Falta» pero sí las de Calibración y Mantenimiento (solo lectura)
+let assetCriteria = []; // Catálogos > Qué se mide: una columna por criterio (llegan con la lista de activos)
+const columnCount = () => COLUMN_COUNT + assetCriteria.length + (GESTION ? 2 : 0); // + Alertas y Avisos en Gestión
 const SHAPES = ['rectangular', 'cilindrica', 'irregular'];
 
 let assets = []; // todo lo que mandó el servidor
@@ -30,6 +32,11 @@ let loadToken = 0;
 
 (async function init() {
     try {
+        // las columnas de criterios (una por criterio de «Qué se mide») se ponen ANTES de iniciar las columnas de la tabla, para que entren en su orden, su visibilidad y sus bandas de grupo
+        try {
+            const cr = await fetch('/api/business/asset-criteria-columns', { credentials: 'include' });
+            if (cr.ok) { assetCriteria = (await cr.json()).criteria || []; syncCriteriaHeaders(); }
+        } catch { /* sin conexión: la tabla sigue sin esas columnas */ }
         const role = await Dashboard.initDashboard({ activePage: ACTIVE_PAGE });
         if (!role) return;
         await refreshTable();
@@ -381,7 +388,7 @@ function openAssetEditDialog(record) {
         const legend = document.createElement('legend');
         legend.textContent = Dashboard.t(labelKey);
         set.appendChild(legend);
-        entries.forEach(({ key, colId, allowed, reason }) => {
+        entries.forEach(({ key, colId, allowed, reason, text: optText }) => {
             const label = document.createElement('label');
             label.className = 'sku-edit-opt';
             const box = document.createElement('input');
@@ -391,7 +398,7 @@ function openAssetEditDialog(record) {
             box.disabled = !allowed;
             if (!allowed) label.title = reason || Dashboard.t('main.fieldLocked');
             const text = document.createElement('span');
-            text.textContent = Dashboard.t(`main.${colId}`);
+            text.textContent = optText || Dashboard.t(`main.${colId}`);
             label.append(box, text);
             set.appendChild(label);
             boxes.push(box);
@@ -403,6 +410,8 @@ function openAssetEditDialog(record) {
         const noSerial = key === 'serialNumber' && record.typeNeedsSerial === false;
         return { key, colId, allowed: !noSerial && Dashboard.hasColumnEditGrant(TABLE_KEY, colId), reason: noSerial ? Dashboard.t('main.assetEditarSinTipoSerie') : '' };
     })));
+    const limitEntries = AssetCriteria.editableCriteria(record, assetCriteria).map((c) => ({ key: `crit:${c.id}`, colId: c.colId, text: c.name, allowed: Dashboard.hasColumnEditGrant(TABLE_KEY, c.colId) }));
+    if (limitEntries.length) addGroup('main.assetEditarGrupoLimites', limitEntries);
     addGroup('main.assetEditarGrupoEstatus', [{ key: 'status', colId: 'colActEstatus', allowed: Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colActDeleteAuth') }]);
     const actions = document.createElement('div');
     actions.className = 'admin-form-actions';
@@ -460,7 +469,7 @@ function openAssetEditDialog(record) {
 // Un activo completo no pasa solo a Gestión: espera la autorización de uso de su jefe directo (o de quien tenga el permiso Autorizar), que la decide en la campana. Editar también se autoriza. Aquí se ve cómo va, se retira la solicitud
 // mientras está pendiente y, si la rechazaron o la retiraron, se vuelve a pedir. Todo lo vuelve a exigir el servidor.
 const authBossText = (auth) => (auth && auth.boss) || Dashboard.t('main.assetAuthQuienAutoriza');
-const assetFieldLabel = (key) => (key === 'status' ? Dashboard.t('main.colActEstatus') : Dashboard.t(`main.${ASSET_FIELD_COLS[key] || key}`));
+const assetFieldLabel = (key) => (key === 'status' ? Dashboard.t('main.colActEstatus') : /^crit:\d+$/.test(key) ? critName(key) : Dashboard.t(`main.${ASSET_FIELD_COLS[key] || key}`));
 // ¿Completo y esperando (o sin) autorización de uso? Solo en Alta Activos.
 const assetWaitingUse = (record) => !GESTION && record.complete && !record.editing && !record.useAuth;
 const assetUsePending = (record) => assetWaitingUse(record) && !!(record.auth && record.auth.use && record.auth.use.status === 'pending');
@@ -546,7 +555,8 @@ function lockAssetCell(td) {
     td.querySelectorAll('input[type="file"]').forEach((input) => { input.disabled = true; });
     td.querySelectorAll('button.admin-icon-btn i.bx-camera').forEach((icon) => { const btn = icon.closest('button'); btn.disabled = true; btn.title = Dashboard.t('main.assetCeldaCerrada'); });
 }
-const assetEditNames = (record) => (record.editingFields || []).map((key) => Dashboard.t(`main.${ASSET_FIELD_COLS[key]}`)).concat((record.pendingChoices || []).includes('status') ? [Dashboard.t('main.colActEstatus')] : []);
+const critName = (key) => ((assetCriteria.find((c) => `crit:${c.id}` === key) || {}).name || key);
+const assetEditNames = (record) => (record.editingFields || []).map((key) => (/^crit:\d+$/.test(key) ? critName(key) : Dashboard.t(`main.${ASSET_FIELD_COLS[key]}`))).concat((record.pendingChoices || []).includes('status') ? [Dashboard.t('main.colActEstatus')] : []);
 function applyAssetEditMarks(tr, record) {
     const marked = new Set(record.editingFields);
     const choices = new Set(record.pendingChoices || []);
@@ -631,6 +641,28 @@ function faltaCell(record) {
     td.textContent = text ? text.charAt(0).toUpperCase() + text.slice(1) : '—';
     if (text) td.classList.add('asset-missing');
     return td;
+}
+// Una celda por criterio de «Qué se mide» (N/A si el modelo no lo mide); en Gestión se leen, en Alta Activos se escriben al tocarlas.
+function criteriaCells(record) {
+    return assetCriteria.map((criterion) => AssetCriteria.limitCell(record, criterion, { tableKey: TABLE_KEY, readOnly: GESTION, onSave: (limits) => patchAsset(record, { limits }) }));
+}
+// Las cabeceras de esos criterios (una por criterio, con el nombre del catálogo) antes de «Falta» (Alta Activos) o de «Alertas» (Gestión).
+function syncCriteriaHeaders() {
+    const anchorSel = GESTION ? 'th[data-col="colActAlertas"]' : 'th[data-col="colActFalta"]';
+    const headRow = [...document.querySelectorAll('[data-table-id] thead tr')].find((r) => r.querySelector(anchorSel));
+    if (!headRow) return;
+    headRow.querySelectorAll('th.asset-crit-th').forEach((th) => th.remove());
+    const anchor = headRow.querySelector(GESTION ? 'th[data-col="colActAlertas"]' : 'th[data-col="colActFalta"]');
+    if (!anchor) return;
+    assetCriteria.forEach((criterion) => {
+        const th = document.createElement('th');
+        th.className = 'asset-crit-th';
+        th.dataset.col = criterion.colId;
+        th.dataset.group = 'menu.classActCriterios';
+        th.textContent = criterion.name;
+        th.title = Dashboard.t(`main.critKind_${criterion.kind}`) + (criterion.unit ? ` · ${criterion.unit}` : '');
+        headRow.insertBefore(th, anchor);
+    });
 }
 // La calibración del activo (solo Gestión > Activos, solo lectura): el certificado que vale y su estado. Lo que se captura vive en Operaciones > Calibraciones. Un activo cuyo Tipo no lleva calibración no muestra nada.
 function calibrationCell(record) {
@@ -746,7 +778,7 @@ function buildRow(record) {
         evidenceCell(record, 'evidenceBottom', 'colActFotoAbajo'),
         layoutSelectCell(record),
         textCell('colActDondeEsta', record.placement, 'assetWhere'), // dónde está dibujado en el Layout (zona › huella); se llena solo, desde el Layout
-        ...(GESTION ? [calibrationCell(record), maintenanceCell(record)] : [faltaCell(record)]),
+        ...(GESTION ? [calibrationCell(record), maintenanceCell(record), ...criteriaCells(record), AssetCriteria.alertsCell(record, { onOpen: (r) => AssetCriteria.openAlertsDialog(r, { onChanged: refreshTable }) }), AssetCriteria.activityCell(record, { onOpen: (r) => AssetCriteria.openActivityDialog(r) })] : [...criteriaCells(record), faltaCell(record)]),
         buildActionsCell(record),
     );
     if (GESTION) { makeAssetRowReadOnly(tr); applyAssetEditAuthChip(tr, record); }
@@ -763,7 +795,7 @@ function ensureEmptyState() {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.className = 'data-table-empty-cell';
-    td.colSpan = COLUMN_COUNT;
+    td.colSpan = columnCount();
     const inner = document.createElement('div');
     inner.className = 'data-table-empty-inner';
     inner.textContent = Dashboard.t('main.emptyStateText');
@@ -806,6 +838,7 @@ async function refreshTable() {
         assetTypes = data.types || [];
         assetClasses = data.classes || [];
         assetModels = data.models || [];
+        if (!assetCriteria.length && (data.criteria || []).length) { assetCriteria = data.criteria; syncCriteriaHeaders(); } // por si las columnas no llegaron antes de iniciar
         costCenters = data.costCenters || [];
         canCreate = !!data.canCreate;
         canDelete = !!data.canDelete;

@@ -53,6 +53,9 @@ const TABLES = {
     asset_authorizations: { action: WIPE, group: 'captures' }, // autorización del jefe directo para usar y editar activos (2026-11-13)
     asset_model_photos: { action: WIPE, group: 'captures' }, // fotos de las 6 caras de cada modelo de activo (2026-11-13)
     asset_calibrations: { action: WIPE, group: 'captures' }, // certificados de calibración y su archivo (Calibraciones, 2026-11-13)
+    asset_limits: { action: WIPE, group: 'captures' }, // el límite de cada activo en cada criterio (Alta Activos, 2026-11-13)
+    asset_readings: { action: WIPE, group: 'captures' }, // Operaciones > Lecturas (2026-11-13)
+    asset_alert_episodes: { action: WIPE, group: 'captures' }, // alertas por activo con su historial (2026-11-13)
     maintenance_programs: { action: WIPE, group: 'captures' }, // Mantenimiento Preventivo: programas (2026-11-13)
     maintenance_runs: { action: WIPE, group: 'captures' }, // lo que se hizo en cada programa
     maintenance_faults: { action: WIPE, group: 'captures' }, // Mantenimiento Correctivo: fallas

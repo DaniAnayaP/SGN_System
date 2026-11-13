@@ -37,6 +37,9 @@ const CATEGORY_TYPE_TABLE_KEYS = {
     // Activos Fijos (el tipo de activo) y su Clasificación (con su métrica propia: m² o m³).
     'activos-fijos': 'activos-fijos',
     'activos-clasificacion': 'activos-clasificacion',
+    // Qué se mide y Qué se avisa (criterios y avisos que un modelo de activo elige)
+    'activos-criterios': 'activos-criterios',
+    'activos-avisos': 'activos-avisos',
     // Lo que transita (personas, montacargas…): tipo, ancho, largo y alto.
     'transito-equipos': 'transito-equipos',
     // Criterios de Incidentes: cada criterio lleva su categoría (No conformidad Mayor, No conformidad Menor o Recomendación).
@@ -48,7 +51,7 @@ const TABLE_KEY = CATEGORY_TYPE_TABLE_KEYS[CATEGORY_TYPE];
 const CATEGORY_API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
 const DELETE_AUTH_COL = 'colCatDeleteAuth';
 const IS_WAREHOUSE = CATEGORY_TYPE === 'almacenes' || CATEGORY_TYPE === 'sub-almacenes';
-const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'transito-equipos' ? 'main.newTransitEquip' : CATEGORY_TYPE === 'incidentes-criterios' ? 'main.newIncCriterion' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : CATEGORY_TYPE === 'marcas' ? 'main.newBrand' : CATEGORY_TYPE === 'lugares-envio' ? 'main.newShipPlace' : 'main.newArticleCategory';
+const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'transito-equipos' ? 'main.newTransitEquip' : CATEGORY_TYPE === 'incidentes-criterios' ? 'main.newIncCriterion' : CATEGORY_TYPE === 'activos-criterios' ? 'main.newAssetCriterion' : CATEGORY_TYPE === 'activos-avisos' ? 'main.newAssetAviso' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : CATEGORY_TYPE === 'marcas' ? 'main.newBrand' : CATEGORY_TYPE === 'lugares-envio' ? 'main.newShipPlace' : 'main.newArticleCategory';
 // Centros de costos completos, almacenes y, por cada centro, las zonas / anaqueles de su Layout (GET /api/business/warehouse-options).
 let warehouseOptions = { costCenters: [], warehouses: [], zonesByCenter: {} };
 // Categorías de Inventario: cada una elige cuáles clasificaciones (catálogo Nuestras Clasificaciones) tiene; aquí van todas las del catálogo con su estatus.
@@ -177,7 +180,7 @@ function buildActionsCell(record, tr) {
         historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
         td.appendChild(historyBtn);
     }
-    if (CATEGORY_TYPE !== 'activos-clasificacion' && (!record.id || Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL))) { // las clasificaciones de activos son fijas: no se eliminan
+    if (CATEGORY_TYPE !== 'activos-clasificacion' && !record.builtinKey && (!record.id || Dashboard.hasColumnDeleteGrant(TABLE_KEY, DELETE_AUTH_COL))) { // los criterios y avisos de fábrica tampoco se eliminan (solo Inactivos); // las clasificaciones de activos son fijas: no se eliminan
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'admin-icon-btn admin-icon-btn-danger';
@@ -294,7 +297,7 @@ function applyCategoryFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colActivoFijoLetraCodigo', 'colActivoFijoLetra', 'colTrEquipTipo', 'colIncCritCategoria']
+        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colActivoFijoLetraCodigo', 'colActivoFijoLetra', 'colTrEquipTipo', 'colIncCritCategoria', 'colCritLimite', 'colCritUnidad']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
@@ -608,6 +611,23 @@ function buildExtraCells(record) {
         return [letterTd, buildOptionCell(record, 'colActivoFijoLetra', 'kind', 'assetTypeLetter',
             kinds.map((k) => ({ value: k, label: Dashboard.t(`main.layoutType_space_${k}`) })), record.kind || '', '',
             (v) => ({ kind: v })), serialTd, calibrationTd, modelsTd];
+    }
+    if (CATEGORY_TYPE === 'activos-criterios') {
+        // «Cómo se limita» (rango, solo máximo, solo mínimo o cada N horas) y su unidad: lo que pide la celda de cada activo en Alta Activos. Los de fábrica no cambian de forma ni de unidad; «Zona» todavía no existe.
+        const builtin = !!record.builtinKey;
+        const kindTd = buildOptionCell(record, 'colCritLimite', 'kind', 'critKind', ['range', 'max', 'min', 'every'].map((k) => ({ value: k, label: Dashboard.t(`main.critKind_${k}`) })), record.kind || '', record.kind === 'zone' ? Dashboard.t('main.critKind_zone') : '', (v) => ({ kind: v }));
+        const unitTd = document.createElement('td');
+        unitTd.dataset.col = 'colCritUnidad';
+        unitTd.setAttribute('data-help-key', 'critUnit');
+        if (builtin) {
+            kindTd.querySelector('select').disabled = true;
+            kindTd.querySelector('select').title = Dashboard.t('main.critBuiltinLocked');
+            unitTd.textContent = record.unit || '';
+            unitTd.title = Dashboard.t('main.critBuiltinLocked');
+        } else {
+            Dashboard.attachInlineEdit(unitTd, { value: record.unit || '', inputType: 'text', tableKey: TABLE_KEY, colKey: 'colCritUnidad', pending: isPending(record, 'unit'), onCommit: (val) => ensureCreatedThenPatch(record, { unit: String(val || '').trim() }) });
+        }
+        return [kindTd, unitTd];
     }
     if (CATEGORY_TYPE === 'activos-clasificacion') {
         return [buildOptionCell(record, 'colActClasMetrica', 'kind', 'assetClassMetric',

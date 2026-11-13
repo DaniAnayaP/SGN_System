@@ -12398,7 +12398,7 @@ function syncAssetAlerts(clientId, isTest, force = false) {
 const assetAlertDto = (ep, asset) => {
     let extra = {};
     try { extra = JSON.parse(ep.detail) || {}; } catch { extra = { t: ep.detail }; }
-    return { id: ep.id, assetId: ep.asset_id, assetCode: asset ? fixedAssetCodeOf(asset) : '', key: ep.alert_key, label: ep.label, severity: ep.severity, code: extra.c || '', params: extra.p || {}, text: extra.t || '', startedAt: ep.started_at, endedAt: ep.ended_at || null, ackBy: ep.ack_by || '', ackAt: ep.ack_at || null };
+    return { id: ep.id, assetId: ep.asset_id, assetCode: asset ? fixedAssetCodeOf(asset) : '', key: ep.alert_key, label: ep.label, severity: ep.severity, code: extra.c || '', params: extra.p || {}, text: extra.t || '', startedAt: ep.started_at, endedAt: ep.ended_at || null, ackBy: ep.ack_by || '', ackAt: ep.ack_at ? isoOfMs(msOfTs(ep.ack_at)) : null };
 };
 // Los avisos de actividad de un activo, del más nuevo al más viejo: [{ kind, label, detail, at, by, fieldKey? }]. Solo los tipos de aviso que da su modelo; limit = cuántos devolver.
 function assetActivityOf(clientId, isTest, asset, env, limit = 30) {
@@ -12440,6 +12440,12 @@ function assetAlertColumns(clientId, isTest, assets) {
     return { env, forAsset: (asset) => ({ alerts: (episodes.get(asset.id) || []).map((e) => assetAlertDto(e, byId.get(e.asset_id))), activity: (assetActivityOf(clientId, isTest, asset, env, 1)[0]) || null }) };
 }
 
+// Las columnas de criterios de las tablas de activos (se piden antes de que la tabla arme sus columnas).
+app.get('/api/business/asset-criteria-columns', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.json({ criteria: [] });
+    res.set('Cache-Control', 'no-store');
+    res.json({ criteria: assetCriteriaColumns(fixedAssetContext(req)) });
+});
 app.get('/api/business/asset-alerts', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
