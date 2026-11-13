@@ -3572,6 +3572,7 @@
     "cpSinLugar": "Sin lugar",
     "cpTotalesTitulo": "Totales por código",
     "cpDesgloseTitulo": "Desglose: quién pide qué",
+    "cpTotalGrupo": "Total {total}",
     "cpPedidos": "Pedidos",
     "cpUnPedido": "{n} pedido",
     "cpNPedidos": "{n} pedidos",

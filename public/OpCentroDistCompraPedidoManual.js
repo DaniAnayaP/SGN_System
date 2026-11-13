@@ -299,22 +299,48 @@ function groupSummary(group) {
 
 // ---- las tablas --------------------------------------------------------------------------------------------------------------------------------
 const TOTAL_COLUMNS = () => [t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmPresentacion'), t('main.colPmCantidad'), t('main.colPmEquivale'), t('main.cpPedidos')];
-const DETAIL_COLUMNS = () => [t('main.colPmFolio'), t('main.colPmFechaHora'), t('main.colPmSolicitante'), t('main.colPmLugar'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmPresentacion'), t('main.colPmCantidad'), t('main.colPmEquivale'), t('main.colPmFechaRequerida'), t('main.colPmEstatus')];
+// El desglose agrupa por código: la primera columna lleva el código, su descripción y su total en UNA celda combinada (sin franjas); las demás son lo que se pidió, renglón por renglón.
+const DETAIL_COLUMNS = () => [t('main.colPmCodigo'), t('main.colPmFolio'), t('main.colPmFechaHora'), t('main.colPmSolicitante'), t('main.colPmLugar'), t('main.colPmPresentacion'), t('main.colPmCantidad'), t('main.colPmEquivale'), t('main.colPmFechaRequerida'), t('main.colPmEstatus')];
 // Las llaves de las columnas (para el embudo de filtros de cada encabezado: el mismo de todas las tablas, ver Dashboard.bindExternalColumnFilters).
 const TOTAL_KEYS = ['cpTCodigo', 'cpTDescripcion', 'cpTUdm', 'cpTPresentacion', 'cpTCantidad', 'cpTEquivale', 'cpTPedidos'];
-const DETAIL_KEYS = ['cpDFolio', 'cpDFecha', 'cpDSolicitante', 'cpDLugar', 'cpDCodigo', 'cpDDescripcion', 'cpDPresentacion', 'cpDCantidad', 'cpDEquivale', 'cpDRequerida', 'cpDEstatus'];
+const DETAIL_KEYS = ['cpDCodigo', 'cpDFolio', 'cpDFecha', 'cpDSolicitante', 'cpDLugar', 'cpDPresentacion', 'cpDCantidad', 'cpDEquivale', 'cpDRequerida', 'cpDEstatus'];
 const ordersText = (n) => t(n === 1 ? 'main.cpUnPedido' : 'main.cpNPedidos', { n });
 const equivText = (value, uom) => `${quantityText(round3(value))}${uom ? ` ${uom}` : ''}`;
 function totalValues(row) { return [row.code, row.description, row.uom || '—', row.pack || '—', quantityText(round3(row.quantity)), equivText(row.equivalent, row.uom), ordersText(row.orders.size)]; }
-function detailValues(o, l) { return [o.folio, whenText(o.requestedAt), o.name || '—', o.placeName || '—', l.code, l.description, l.packName || '—', quantityText(l.quantity), equivText(equivOf(l), l.uom), needByText(l.needBy), statusText(l.status)]; }
-function buildTable(columns, numericFrom, keys, { noSort = false } = {}) {
+// Lo de cada renglón (sin el código, que va en la celda del grupo).
+function detailCells(o, l) { return [o.folio, whenText(o.requestedAt), o.name || '—', o.placeName || '—', l.packName || '—', quantityText(l.quantity), equivText(equivOf(l), l.uom), needByText(l.needBy), statusText(l.status)]; }
+// Con qué se ordena cada columna dentro de cada código (el orden de los códigos se queda).
+const DETAIL_SORT = {
+    cpDFolio: (o) => o.orderId, cpDFecha: (o) => o.requestedAt || '', cpDSolicitante: (o) => o.name || '', cpDLugar: (o) => o.placeName || '',
+    cpDPresentacion: (o, l) => l.packName || '', cpDCantidad: (o, l) => Number(l.quantity) || 0, cpDEquivale: (o, l) => equivOf(l), cpDRequerida: (o, l) => l.needBy || '', cpDEstatus: (o, l) => statusText(l.status),
+};
+let detailSort = { key: null, dir: 'asc' };
+let detailState = []; // lo dibujado del desglose: [{ group, rows: [{ tr, o, l }], cell, totalEl }]
+let totalsState = []; // lo dibujado de los totales: [{ row, tr }]
+// Cada código muestra su celda combinada en el primer renglón que el filtro deja a la vista, con las filas que quedan y su total; un código sin renglones a la vista desaparece completo.
+function syncDetailGroups() {
+    detailState.forEach((g) => {
+        const visible = g.rows.filter((r) => !r.tr.classList.contains('data-table-row-col-filtered'));
+        g.rows.forEach((r) => r.tr.classList.toggle('cp-first', visible[0] === r));
+        if (!visible.length) { g.cell.remove(); return; }
+        const target = visible[0].tr;
+        if (g.cell.parentElement !== target) target.insertBefore(g.cell, target.firstChild);
+        g.cell.rowSpan = visible.length;
+        g.totalEl.textContent = t('main.cpTotalGrupo', { total: groupSummary({ ...g.group, rows: visible.map(({ o, l }) => ({ o, l })) }) });
+    });
+}
+function buildTable(columns, numericFrom, keys, { noSort = false, onSort = null } = {}) {
     const table = el('table', 'data-table cp-table');
     const thead = el('thead');
     const headRow = el('tr');
     columns.forEach((label, i) => {
         const th = el('th', numericFrom.includes(i) ? 'cp-num' : '', label);
         if (keys && keys[i]) th.dataset.col = keys[i];
-        if (noSort) th.dataset.sortBound = '1'; // la tabla va agrupada por código: ordenar por una columna la desarmaría (el filtro sí)
+        if (noSort) th.dataset.sortBound = '1'; // el desglose se ordena por su cuenta: dentro de cada código (ordenar toda la tabla desarmaría los grupos)
+        if (onSort && keys && DETAIL_SORT[keys[i]]) {
+            th.classList.add('data-table-col-sortable'); // mismo aspecto (hueco del embudo y flecha) que el orden de las demás tablas
+            th.addEventListener('click', (event) => { if (!event.target.closest('.data-table-col-filter-trigger')) onSort(keys[i]); });
+        }
         headRow.appendChild(th);
     });
     thead.appendChild(headRow);
@@ -336,6 +362,7 @@ function render() {
     const groups = breakdownOf(list);
     // totales
     totalsHost.innerHTML = '';
+    totalsState = [];
     const totalsTable = buildTable(TOTAL_COLUMNS(), [4, 5], TOTAL_KEYS);
     if (!totals.length) emptyRow(totalsTable.tbody, TOTAL_COLUMNS().length);
     else {
@@ -343,6 +370,7 @@ function render() {
             const tr = el('tr');
             totalValues(row).forEach((value, i) => { const td = el('td', [0].includes(i) ? 'cp-code' : ([4, 5].includes(i) ? 'cp-num' : ''), value); td.dataset.col = TOTAL_KEYS[i]; tr.appendChild(td); });
             totalsTable.tbody.appendChild(tr);
+            totalsState.push({ row, tr });
         });
         const foot = el('tr', 'cp-sum');
         const codes = new Set(totals.map((r) => r.code)).size;
@@ -355,41 +383,50 @@ function render() {
     }
     totalsHost.appendChild(totalsTable.table);
     if (window.Dashboard && Dashboard.bindExternalColumnFilters) Dashboard.bindExternalColumnFilters('cp-totales', totalsTable.table);
-    // desglose
+    // desglose: agrupado por código, con el código y su descripción en UNA celda combinada (sin franjas)
     detailHost.innerHTML = '';
-    const detailTable = buildTable(DETAIL_COLUMNS(), [7, 8], DETAIL_KEYS, { noSort: true });
+    detailState = [];
+    const toggleSort = (key) => { detailSort = detailSort.key !== key ? { key, dir: 'asc' } : (detailSort.dir === 'asc' ? { key, dir: 'desc' } : { key: null, dir: 'asc' }); render(); };
+    const detailTable = buildTable(DETAIL_COLUMNS(), [6, 7], DETAIL_KEYS, { noSort: true, onSort: toggleSort });
     if (!groups.length) emptyRow(detailTable.tbody, DETAIL_COLUMNS().length);
     else {
+        const sorter = detailSort.key ? DETAIL_SORT[detailSort.key] : null;
         groups.forEach((group) => {
-            const head = el('tr', 'cp-group');
-            const hc = el('td', '', `${group.code} · ${group.description || ''} — ${groupSummary(group)}`);
-            hc.colSpan = DETAIL_COLUMNS().length;
-            head.appendChild(hc);
-            detailTable.tbody.appendChild(head);
-            group.rows.forEach(({ o, l }) => {
+            const entries = group.rows.slice();
+            if (sorter) {
+                entries.sort((a, b) => {
+                    const x = sorter(a.o, a.l);
+                    const y = sorter(b.o, b.l);
+                    const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), localeOf(), { numeric: true });
+                    return detailSort.dir === 'desc' ? -c : c;
+                });
+            }
+            const rows = entries.map(({ o, l }) => {
                 const tr = el('tr');
-                detailValues(o, l).forEach((value, i) => { const td = el('td', i === 0 ? 'cp-code' : ([7, 8].includes(i) ? 'cp-num' : ''), value); td.dataset.col = DETAIL_KEYS[i]; tr.appendChild(td); });
+                const hiddenCode = el('td', '', group.code);
+                hiddenCode.dataset.col = DETAIL_KEYS[0];
+                hiddenCode.hidden = true; // la celda del grupo ocupa su lugar; esta lleva el valor del código para los filtros
+                tr.appendChild(hiddenCode);
+                detailCells(o, l).forEach((value, i) => { const td = el('td', [5, 6].includes(i) ? 'cp-num' : '', value); td.dataset.col = DETAIL_KEYS[i + 1]; tr.appendChild(td); });
                 detailTable.tbody.appendChild(tr);
+                return { tr, o, l };
             });
+            const cell = el('td', 'cp-gcell');
+            cell.dataset.col = DETAIL_KEYS[0];
+            cell.dataset.filterFrom = '.cp-gcode';
+            const totalEl = el('em', 'cp-gtotal');
+            const inner = el('div', 'cp-ginner'); // se queda pegado arriba mientras se recorren los renglones del grupo
+            inner.append(el('b', 'cp-gcode', group.code), el('span', 'cp-gdesc', group.description || ''), totalEl);
+            cell.appendChild(inner);
+            detailState.push({ group, rows, cell, totalEl });
         });
     }
     detailHost.appendChild(detailTable.table);
-    if (window.Dashboard && Dashboard.bindExternalColumnFilters) {
-        Dashboard.bindExternalColumnFilters('cp-desglose', detailTable.table);
-        // el encabezado de cada código sigue a sus renglones: se esconde cuando el filtro dejó sin nada a su código
-        const sync = () => {
-            let group = null;
-            let any = false;
-            const flush = () => { if (group) group.classList.toggle('data-table-row-col-filtered', !any); };
-            Array.from(detailTable.tbody.rows).forEach((tr) => {
-                if (tr.classList.contains('cp-group')) { flush(); group = tr; any = false; return; }
-                if (!tr.classList.contains('data-table-row-col-filtered')) any = true;
-            });
-            flush();
-        };
-        new MutationObserver(sync).observe(detailTable.tbody, { attributes: true, attributeFilter: ['class'], subtree: true });
-        sync();
-    }
+    if (window.Dashboard && Dashboard.bindExternalColumnFilters) Dashboard.bindExternalColumnFilters('cp-desglose', detailTable.table);
+    // la flecha del orden de esta tabla (el motor de filtros borra las suyas al enlazar, así que se pone después)
+    if (detailSort.key) Array.from(detailTable.table.tHead.rows[0].cells).filter((th) => th.dataset.col === detailSort.key).forEach((th) => th.classList.add(detailSort.dir === 'desc' ? 'data-table-col-sort-desc' : 'data-table-col-sort-asc'));
+    syncDetailGroups();
+    new MutationObserver(syncDetailGroups).observe(detailTable.tbody, { attributes: true, attributeFilter: ['class'], subtree: true });
     noteEl.hidden = !truncated;
     if (truncated) noteEl.textContent = t('main.pmCortado', { n: maxLines });
 }
@@ -422,11 +459,19 @@ function saveBlob(blob, name) {
 async function download(format) {
     const list = visibleOrders();
     if (!list.length) { Dashboard.showToast(t('main.cpVacio'), 'warning'); return; }
-    const totals = totalsOf(list);
-    const groups = breakdownOf(list);
+    // lo que se ve: los filtros de arriba y también los embudos de las columnas; el desglose va agrupado (el código una vez por grupo, con su descripción y su total)
+    const shown = (tr) => !tr.classList.contains('data-table-row-col-filtered');
+    const totalsRows = totalsState.filter((x) => shown(x.tr)).map((x) => totalValues(x.row));
+    const detailRows = [];
+    detailState.forEach((g) => {
+        const vis = g.rows.filter((r) => shown(r.tr));
+        const label = `${g.group.code}\n${g.group.description || ''}\n${t('main.cpTotalGrupo', { total: groupSummary({ ...g.group, rows: vis.map(({ o, l }) => ({ o, l })) }) })}`;
+        vis.forEach((r, i) => detailRows.push([i === 0 ? label : '', ...detailCells(r.o, r.l)]));
+    });
+    if (!totalsRows.length && !detailRows.length) { Dashboard.showToast(t('main.cpVacio'), 'warning'); return; }
     const sections = [
-        { title: t('main.cpTotalesTitulo'), columns: TOTAL_COLUMNS().map((label) => ({ label })), rows: totals.map(totalValues), widths: [1.2, 3.2, 0.8, 1.6, 0.9, 1.2, 0.9] },
-        { title: t('main.cpDesgloseTitulo'), columns: DETAIL_COLUMNS().map((label) => ({ label })), rows: groups.flatMap((g) => g.rows.map(({ o, l }) => detailValues(o, l))), widths: [0.8, 1.3, 1.2, 1.4, 1.1, 2.6, 1.3, 0.8, 1.1, 1.1, 0.9] },
+        { title: t('main.cpTotalesTitulo'), columns: TOTAL_COLUMNS().map((label) => ({ label })), rows: totalsRows, widths: [1.2, 3.2, 0.8, 1.6, 0.9, 1.2, 0.9] },
+        { title: t('main.cpDesgloseTitulo'), columns: DETAIL_COLUMNS().map((label) => ({ label })), rows: detailRows, widths: [2.4, 0.8, 1.7, 1.4, 1.2, 1.2, 0.8, 1.1, 0.9, 0.9], groupFirst: true },
     ];
     // el formato de la compañía (logo o iniciales, «Pedido Manual», sitio y empresa) lo pone el servidor arriba del archivo, como en los demás reportes; con un solo centro de costos sale también su sitio
     const centers = [...new Set(list.flatMap((o) => o.lines.map((l) => l.cc)).filter(Boolean))];

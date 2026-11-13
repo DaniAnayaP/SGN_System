@@ -3573,6 +3573,7 @@
     "cpSinLugar": "No place",
     "cpTotalesTitulo": "Totals by code",
     "cpDesgloseTitulo": "Breakdown: who orders what",
+    "cpTotalGrupo": "Total {total}",
     "cpPedidos": "Orders",
     "cpUnPedido": "{n} order",
     "cpNPedidos": "{n} orders",

@@ -5627,7 +5627,8 @@ function drawPdfBrand(doc, brand) {
 }
 
 // Llena UNA hoja de Excel: datos de arriba opcionales (y la marca de la compañía), columnas y renglones.
-function fillXlsxSheet(workbook, sheet, { header, columns, rows, brand }) {
+// groupFirst: los renglones con la primera celda vacía pertenecen al grupo de arriba: esa celda se combina hacia abajo (celda combinada por grupo).
+function fillXlsxSheet(workbook, sheet, { header, columns, rows, brand, groupFirst }) {
     const cellText = (cell) => (cell == null ? '' : String(cell));
     if (!header.length) {
         sheet.columns = columns.map((col) => {
@@ -5645,7 +5646,20 @@ function fillXlsxSheet(workbook, sheet, { header, columns, rows, brand }) {
         const head = sheet.addRow(columns.map((col) => String(col?.label ?? '')));
         head.font = { bold: true };
         head.eachCell((c) => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: brand ? `FF${brand.scale[1].slice(1).toUpperCase()}` : 'FFEDE7F2' } }; });
+        const firstRowNumber = sheet.rowCount + 1;
         rows.forEach((row) => { sheet.addRow(Array.isArray(row) ? row.map(cellText) : []); });
+        if (groupFirst) {
+            let start = null;
+            const close = (endRow) => {
+                if (start !== null && endRow > start) sheet.mergeCells(start, 1, endRow, 1);
+                if (start !== null) { const c = sheet.getCell(start, 1); c.alignment = { vertical: 'top', wrapText: true }; c.font = { bold: true }; }
+            };
+            rows.forEach((row, i) => {
+                const n = firstRowNumber + i;
+                if (cellText(Array.isArray(row) ? row[0] : '').trim() !== '' || start === null) { close(n - 1); start = n; }
+            });
+            close(firstRowNumber + rows.length - 1);
+        }
         columns.forEach((col, i) => {
             const widest = rows.reduce((m, row) => Math.max(m, cellText(Array.isArray(row) ? row[i] : '').length), String(col?.label ?? '').length);
             sheet.getColumn(i + 1).width = Math.min(60, Math.max(12, widest + 3));
@@ -5663,7 +5677,7 @@ async function sendXlsxExport(res, { title, fileBase, header, columns, rows, bra
         let name = String(part.title || title).replace(/[\\/*?:[\]]/g, ' ').slice(0, 31).trim() || 'Reporte';
         while (used.has(name.toLowerCase())) name = `${name.slice(0, 28)} ${used.size + 1}`;
         used.add(name.toLowerCase());
-        fillXlsxSheet(workbook, workbook.addWorksheet(name), { header, columns: part.columns, rows: part.rows, brand });
+        fillXlsxSheet(workbook, workbook.addWorksheet(name), { header, columns: part.columns, rows: part.rows, brand, groupFirst: !!part.groupFirst });
     });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -5678,7 +5692,7 @@ function exportSectionsFrom(raw) {
     const parts = [];
     for (const p of raw) {
         if (!p || !Array.isArray(p.columns) || !p.columns.length || !Array.isArray(p.rows) || p.rows.length > EXPORT_MAX_ROWS || p.columns.length > EXPORT_MAX_COLUMNS) return false;
-        parts.push({ title: String(p.title || '').slice(0, 80), columns: p.columns, rows: p.rows, widths: Array.isArray(p.widths) ? p.widths : null });
+        parts.push({ title: String(p.title || '').slice(0, 80), columns: p.columns, rows: p.rows, widths: Array.isArray(p.widths) ? p.widths : null, groupFirst: p.groupFirst === true });
     }
     return parts;
 }
@@ -5728,7 +5742,7 @@ function drawPdfTable(doc, columns, rows) {
 }
 
 // Tabla para listas de texto largo (por ejemplo, los artículos de un pedido): las columnas se reparten por pesos (widths) y el texto se parte en renglones; el encabezado se repite en cada hoja.
-function drawPdfTableWrapped(doc, columns, rows, weights, headFill) {
+function drawPdfTableWrapped(doc, columns, rows, weights, headFill, groupFirst = false) {
     const startX = doc.page.margins.left;
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const w = columns.map((_, i) => Math.max(0.2, Number(weights && weights[i]) || 1));
@@ -5736,12 +5750,15 @@ function drawPdfTableWrapped(doc, columns, rows, weights, headFill) {
     const widths = w.map((x) => (x / total) * pageWidth);
     const pad = 3;
     const labels = columns.map((c) => String(c?.label ?? ''));
+    const bottomLimit = () => doc.page.height - doc.page.margins.bottom;
     let y = doc.y;
+    doc.font('Helvetica-Bold').fontSize(8);
+    const headerH = Math.max(...labels.map((txt, i) => doc.heightOfString(txt, { width: widths[i] - pad * 2 })), 8) + pad * 2;
     function drawRow(values, isHeader) {
         doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
         const cells = values.map((val) => String(val ?? ''));
         const h = Math.max(...cells.map((txt, i) => doc.heightOfString(txt, { width: widths[i] - pad * 2 })), 8) + pad * 2;
-        if (y + h > doc.page.height - doc.page.margins.bottom) {
+        if (y + h > bottomLimit()) {
             doc.addPage();
             y = doc.page.margins.top;
             if (!isHeader) drawRow(labels, true);
@@ -5755,8 +5772,66 @@ function drawPdfTableWrapped(doc, columns, rows, weights, headFill) {
         });
         y += h;
     }
+    function newPage() {
+        doc.addPage();
+        y = doc.page.margins.top;
+        drawRow(labels, true);
+    }
+    // Un grupo (groupFirst): la primera celda abarca todos sus renglones (el código en negritas, abajo su descripción y su total). Un grupo que cabe en una hoja pero no en lo que queda de esta pasa completo a la siguiente;
+    // uno más largo que una hoja se parte: en cada hoja su celda abarca los renglones que caben y repite el código.
+    function drawGroup(group) {
+        const lines = String(group[0][0] ?? '').split('\n');
+        const textW = widths[0] - pad * 2;
+        doc.font('Helvetica').fontSize(8);
+        const rowH = group.map((r) => Math.max(...r.slice(1).map((txt, i) => doc.heightOfString(String(txt ?? ''), { width: widths[i + 1] - pad * 2 })), 8) + pad * 2);
+        doc.font('Helvetica-Bold');
+        const headH = doc.heightOfString(lines[0] || '', { width: textW });
+        doc.font('Helvetica');
+        const restH = lines.length > 1 ? doc.heightOfString(lines.slice(1).join('\n'), { width: textW }) : 0;
+        const cellH = headH + restH + pad * 2;
+        const rowsSum = rowH.reduce((p, q) => p + q, 0);
+        const wholeH = Math.max(rowsSum, cellH);
+        let i = 0;
+        let first = true;
+        while (i < group.length) {
+            if (first && y + wholeH > bottomLimit()) {
+                const room = bottomLimit() - doc.page.margins.top - headerH;
+                if (wholeH <= room || y + cellH > bottomLimit()) newPage();
+            } else if (y + rowH[i] > bottomLimit()) newPage();
+            let j = i;
+            let acc = 0;
+            while (j < group.length && (j === i || y + acc + rowH[j] <= bottomLimit())) { acc += rowH[j]; j += 1; }
+            const heights = rowH.slice(i, j);
+            const minCell = first ? cellH : headH + pad * 2;
+            if (acc < minCell) { heights[heights.length - 1] += minCell - acc; acc = minCell; }
+            doc.rect(startX, y, widths[0], acc).fillAndStroke('#F4EEF7', '#CCCCCC');
+            doc.fillColor('#000000').font('Helvetica-Bold').fontSize(8).text(lines[0] || '', startX + pad, y + pad, { width: textW, height: headH, ellipsis: true });
+            if (first && lines.length > 1) doc.font('Helvetica').text(lines.slice(1).join('\n'), startX + pad, y + pad + headH, { width: textW, height: Math.max(8, acc - pad * 2 - headH), ellipsis: true });
+            let yy = y;
+            for (let k = i; k < j; k += 1) {
+                let x = startX + widths[0];
+                doc.font('Helvetica').fontSize(8);
+                group[k].slice(1).forEach((txt, c) => {
+                    doc.rect(x, yy, widths[c + 1], heights[k - i]).stroke('#CCCCCC');
+                    doc.fillColor('#000000').text(String(txt ?? ''), x + pad, yy + pad, { width: widths[c + 1] - pad * 2 });
+                    x += widths[c + 1];
+                });
+                yy += heights[k - i];
+            }
+            y += acc;
+            i = j;
+            first = false;
+        }
+    }
     drawRow(labels, true);
-    rows.forEach((row) => drawRow(Array.isArray(row) ? row : [], false));
+    if (groupFirst) {
+        const groups = [];
+        rows.forEach((row) => {
+            const arr = Array.isArray(row) ? row : [];
+            if (!groups.length || String(arr[0] ?? '').trim() !== '') groups.push([arr]); else groups[groups.length - 1].push(arr);
+        });
+        groups.forEach(drawGroup);
+    } else rows.forEach((row) => drawRow(Array.isArray(row) ? row : [], false));
     doc.y = y;
 }
 
@@ -5789,7 +5864,7 @@ function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widt
             doc.fillColor('#000000');
             doc.moveDown(0.4);
             doc.x = doc.page.margins.left;
-            if (wrap) drawPdfTableWrapped(doc, part.columns, part.rows, part.widths, brand ? brand.scale[1] : undefined);
+            if (wrap) drawPdfTableWrapped(doc, part.columns, part.rows, part.widths, brand ? brand.scale[1] : undefined, !!part.groupFirst);
             else drawPdfTable(doc, part.columns, part.rows);
         });
     } else if (wrap) drawPdfTableWrapped(doc, columns, rows, Array.isArray(widths) ? widths : null, brand ? brand.scale[1] : undefined);
