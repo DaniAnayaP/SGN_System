@@ -10571,7 +10571,50 @@ function renderMaintenanceNoticeRow(item) {
     row.append(tag, meta, desc, link);
     return row;
 }
+// Alertas y avisos de activos (2026-11-13): el texto de una alerta (code + params que manda el servidor) y de un aviso de actividad, en el idioma de quien lo ve. Gestión > Activos y la campana lo comparten.
+function assetAlertText(alert) {
+    const code = alert.code || '';
+    const p = alert.params || {};
+    const key = `main.assetAlertL_${code}`;
+    const label = t(key, p);
+    const base = label === key ? (alert.label || alert.text || '') : label;
+    const dkey = (code === 'late-read' || code === 'late-clean' || code === 'late-custom') ? (p.since ? 'main.assetAlertD_late' : 'main.assetAlertD_late0') : `main.assetAlertD_${code}`;
+    const detail = t(dkey, { ...p, unit: p.unit || '' });
+    return { label: base, detail: detail === dkey ? '' : detail.replace(/\s+\)/g, ')').replace(/\s{2,}/g, ' ').trim() };
+}
+function assetActivityText(item) {
+    const key = `main.assetActCode_${item.code || ''}`;
+    const label = t(key);
+    return { label: label === key ? (item.label || '') : label, detail: item.fieldKey ? t(item.fieldKey) : (item.detail || '') };
+}
+// Fila de la campana de una alerta de activo (kind 'asset-alert', pestaña Alertas) o de un aviso de actividad (kind 'asset-activity', pestaña Avisos).
+function renderAssetNoticeRow(item) {
+    const row = document.createElement('div');
+    const isAlert = item.kind === 'asset-alert';
+    row.className = `notifications-item${isAlert ? ' notifications-item-alert' : ''}${item.seen_at ? '' : ' notifications-item-unseen'}`;
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    const text = isAlert ? assetAlertText(item) : { label: item.label || '', detail: item.text || '' };
+    tag.textContent = isAlert ? `${t(item.severity === 'high' ? 'main.assetSevHigh' : 'main.assetSevMid')} · ${text.label}` : (item.code ? assetActivityText(item).label : (item.label || t('main.assetActCode_reading')));
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    const when = item.startedAt || item.at || item.createdAt;
+    meta.textContent = `${t('menu.gesCentroDistActivos')} · ${formatNotificationDate(when)}`;
+    meta.title = timeStampTitle(when);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    const who = [item.assetCode, item.serial ? `S/N ${item.serial}` : ''].filter(Boolean).join(' · ');
+    desc.textContent = isAlert ? `${who} · ${text.label}${text.detail ? ` · ${text.detail}` : ''}` : `${who} · ${text.detail}${item.by ? ` · ${item.by}` : ''}`;
+    const link = document.createElement('a');
+    link.href = 'GesCentroDistActivos.html';
+    link.className = 'notifications-item-meta';
+    link.textContent = t('main.assetNoticeView');
+    row.append(tag, meta, desc, link);
+    return row;
+}
 function renderTreeNoticeRow(item) {
+    if (item.kind === 'asset-alert' || item.kind === 'asset-activity') return renderAssetNoticeRow(item);
     if (item.kind === 'maintenance') return renderMaintenanceNoticeRow(item);
     if (item.kind === 'calibration') return renderCalibrationNoticeRow(item);
     if (item.kind === 'access-denied') return renderAccessDeniedNoticeRow(item);
@@ -11001,7 +11044,7 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance') row = renderTreeNoticeRow(item);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (item.kind === 'asset-auth') row = renderAssetAuthRow(item, activeNotificationTab);
@@ -13668,6 +13711,8 @@ window.Dashboard = {
     bindExternalColumnFilters,
     clearExternalColumnFilters,
     canEditField,
+    assetAlertText,
+    assetActivityText,
     openChangeHistory,
     hasSaasScreenGrant,
     formatCurrency,

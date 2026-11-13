@@ -3362,6 +3362,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'relacion-envio': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código Envío' },
     'alta-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Activos' },
     'calibraciones': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Calibraciones' },
+    'lecturas': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Lecturas' },
     'mtto-preventivo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Mantenimiento Preventivo' },
     'mtto-correctivo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Mantenimiento Correctivo' },
     'presentaciones-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones Distribución' },
@@ -3708,6 +3709,7 @@ const TABLE_GRANT_PATHS = {
     'relacion-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-envio' },
     'alta-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-activos' },
     'calibraciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-calibraciones' },
+    'lecturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-lecturas' },
     'mtto-preventivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-mtto-preventivo' },
     'mtto-correctivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-mtto-correctivo' },
     // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
@@ -3957,6 +3959,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'relacion-envio': { create: 'colEnvCreateAuth', delete: 'colEnvDeleteAuth' },
     'alta-activos': { create: 'colActCreateAuth', delete: 'colActDeleteAuth' },
     'calibraciones': { create: 'colCalCreateAuth' },
+    'lecturas': { create: 'colLecCreateAuth' },
     'mtto-preventivo': { create: 'colMpCreateAuth', delete: 'colMpDeleteAuth' },
     'mtto-correctivo': { create: 'colMcCreateAuth' },
 };
@@ -11683,8 +11686,13 @@ function publishIconUpdateNotice({ clientId, tableKey, screenKey, iconId, action
     db.transaction(() => recipients.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
     return recipients;
 }
-function markTreeNoticesSeen(userId) {
-    db.prepare("UPDATE saas_tree_notices SET seen_at = datetime('now') WHERE user_id = ? AND seen_at IS NULL").run(userId);
+// Los avisos de árbol que son ALERTAS (pestaña Alertas de la campana): las alertas de activos, la calibración vencida (o que vence hoy) y de mantenimiento el preventivo vencido y las fallas altas o abiertas mucho tiempo. Lo demás son Avisos.
+const ALERT_NOTICE_SQL = "(kind = 'asset-alert' OR (kind = 'calibration' AND json_extract(payload, '$.alertKind') = 'due') OR (kind = 'maintenance' AND json_extract(payload, '$.alertKind') IN ('program-due', 'fault-high', 'fault-stale')))";
+const isAlertNotice = (n) => !!n && (n.kind === 'asset-alert' || (n.kind === 'calibration' && n.alertKind === 'due') || (n.kind === 'maintenance' && ['program-due', 'fault-high', 'fault-stale'].includes(n.alertKind)));
+// bucket: 'alertas' | 'avisos' | sin indicar (todos)
+function markTreeNoticesSeen(userId, bucket) {
+    const extra = bucket === 'alertas' ? ` AND ${ALERT_NOTICE_SQL}` : bucket === 'avisos' ? ` AND NOT ${ALERT_NOTICE_SQL}` : '';
+    db.prepare(`UPDATE saas_tree_notices SET seen_at = datetime('now') WHERE user_id = ? AND seen_at IS NULL${extra}`).run(userId);
 }
 function decideColorRequest(id, status, { userId, label }) {
     db.prepare(`
@@ -14025,6 +14033,16 @@ function seedActivosCriteriosAvisosOnce() {
     console.log(`[db] Seeded the «Qué se mide» and «Qué se avisa» catalogs for existing clients: ${seeded} values (one-time).`);
 }
 // Las dos pantallas nuevas las reciben, una sola vez, quienes ya tienen el catálogo Activos Fijos (los datos de las columnas no piden hoja: por omisión «Solo ver»).
+// Operaciones > Lecturas (2026-11-13): la pantalla la reciben, una sola vez, quienes ya tienen Alta Activos; su botón «Nueva lectura» solo en lo contratado (escribe datos). Con «Solo ver» + «Ver y operar».
+const LECTURAS_SCREEN_SEED_KEY = 'seed-lecturas-pantalla-v1';
+const LECTURAS_BUTTON_SEED_KEY = 'seed-lecturas-boton-v1';
+function seedLecturasGrants() {
+    const alta = TABLE_GRANT_PATHS['alta-activos'];
+    const lec = TABLE_GRANT_PATHS.lecturas;
+    if (!alta || !lec) return;
+    seedLeavesForScreenHolders(LECTURAS_SCREEN_SEED_KEY, alta, [lec.submenuPrefix], 'the Lecturas screen');
+    seedLeavesForScreenHolders(LECTURAS_BUTTON_SEED_KEY, alta, ['solo-ver', 'ver-y-operar'].map((level) => `${lec.submenuPrefix}/class-botones/colLecCreateAuth/${level}`), 'the Lecturas create button', { contractOnly: true });
+}
 const CRITERIOS_SCREENS_SEED_KEY = 'seed-activos-criterios-avisos-pantallas-v1';
 function seedCriteriosCatalogScreens() {
     const fijos = TABLE_GRANT_PATHS['activos-fijos'];
@@ -14090,17 +14108,73 @@ db.exec(`
 // Los límites de todos los activos de una empresa: Map(assetId -> { [criterionId]: { min, max } }).
 function listAssetLimitsMap(clientId) {
     const map = new Map();
-    db.prepare('SELECT l.asset_id, l.criterion_id, l.min_value, l.max_value FROM asset_limits l JOIN fixed_assets a ON a.id = l.asset_id WHERE a.client_id = ?').all(clientId).forEach((r) => {
+    db.prepare('SELECT l.asset_id, l.criterion_id, l.min_value, l.max_value, l.updated_at FROM asset_limits l JOIN fixed_assets a ON a.id = l.asset_id WHERE a.client_id = ?').all(clientId).forEach((r) => {
         let e = map.get(r.asset_id);
         if (!e) { e = {}; map.set(r.asset_id, e); }
-        e[r.criterion_id] = { min: r.min_value, max: r.max_value };
+        e[r.criterion_id] = { min: r.min_value, max: r.max_value, at: r.updated_at };
     });
     return map;
+}
+// --- Fuentes de las alertas y de los avisos de actividad de los activos ------------------------------------------------------------------------------------
+// Las lecturas de temperatura y las limpiezas se guardan por espacio del Layout (o por sensor); el activo las alcanza por layout.spaces[].assetRef / layout.sensors[].assetRef (lo arma el servidor).
+function latestTemperatureRowsAll(clientId) {
+    return db.prepare(`SELECT r.id, r.cost_center_id, r.space_id, r.sensor_id, r.temperature, r.humidity, r.checked_at, r.person_name, r.reporter_user_id FROM temperature_records r
+        JOIN (SELECT MAX(id) AS mid FROM temperature_records WHERE client_id = ? GROUP BY cost_center_id, space_id, sensor_id) m ON m.mid = r.id`).all(clientId);
+}
+function listTemperatureRowsOfPlace(clientId, costCenterId, spaceId, sensorId, limit = 10) {
+    if (sensorId) return db.prepare('SELECT id, temperature, humidity, checked_at, person_name FROM temperature_records WHERE client_id = ? AND cost_center_id = ? AND sensor_id = ? ORDER BY checked_at DESC, id DESC LIMIT ?').all(clientId, costCenterId || 0, sensorId, limit);
+    return db.prepare("SELECT id, temperature, humidity, checked_at, person_name FROM temperature_records WHERE client_id = ? AND cost_center_id = ? AND space_id = ? AND sensor_id = '' ORDER BY checked_at DESC, id DESC LIMIT ?").all(clientId, costCenterId || 0, spaceId, limit);
+}
+function latestCleaningRowsAll(clientId) {
+    return db.prepare(`SELECT c.cost_center_id, c.space_id, c.person_name, c.started_at, c.finished_at FROM cleaning_records c
+        JOIN (SELECT MAX(id) AS mid FROM cleaning_records WHERE client_id = ? GROUP BY cost_center_id, space_id) m ON m.mid = c.id`).all(clientId);
+}
+function listCleaningRowsOfSpace(clientId, costCenterId, spaceId, limit = 10) {
+    return db.prepare('SELECT id, person_name, started_at, finished_at FROM cleaning_records WHERE client_id = ? AND cost_center_id = ? AND space_id = ? ORDER BY started_at DESC, id DESC LIMIT ?').all(clientId, costCenterId || 0, spaceId, limit);
+}
+// Los datos del activo que cambiaron (el historial de Alta Activos sin los movimientos de pantalla ni de autorización): el último de cada activo, o los últimos de uno.
+const ASSET_DATA_CHANGE_SKIP = ['main.assetAutorizacion', 'main.assetUbicacionPantalla'];
+function latestAssetDataChanges(clientId) {
+    const map = new Map();
+    db.prepare("SELECT record_id, field_key, changed_by, changed_at FROM data_table_changes WHERE client_id = ? AND table_key = 'alta-activos' AND action = 'update' AND field_key NOT IN ('main.assetAutorizacion', 'main.assetUbicacionPantalla') ORDER BY changed_at ASC, id ASC").all(clientId)
+        .forEach((r) => map.set(r.record_id, r));
+    return map;
+}
+function listAssetDataChanges(clientId, assetId, limit = 10) {
+    return db.prepare("SELECT field_key, new_value, changed_by, changed_at FROM data_table_changes WHERE client_id = ? AND table_key = 'alta-activos' AND record_id = ? AND action = 'update' AND field_key NOT IN ('main.assetAutorizacion', 'main.assetUbicacionPantalla') ORDER BY changed_at DESC, id DESC LIMIT ?").all(clientId, assetId, limit);
+}
+// Lecturas capturadas (Operaciones > Lecturas): la más reciente de cada (activo, tipo) para la lista, y las últimas de un activo para el detalle.
+function latestAssetReadingRows(clientId) {
+    return db.prepare(`SELECT r.* FROM asset_readings r WHERE r.client_id = ? AND r.id = (SELECT r2.id FROM asset_readings r2 WHERE r2.asset_id = r.asset_id AND r2.kind = r.kind ORDER BY r2.read_at DESC, r2.id DESC LIMIT 1)`).all(clientId);
+}
+function listAssetReadingsOfAsset(clientId, assetId, limit = 20) {
+    return db.prepare('SELECT * FROM asset_readings WHERE client_id = ? AND asset_id = ? ORDER BY read_at DESC, id DESC LIMIT ?').all(clientId, assetId, limit);
+}
+function lastAssetReadingTimes(clientId) {
+    const map = new Map();
+    db.prepare("SELECT asset_id, MAX(read_at) AS at FROM asset_readings WHERE client_id = ? AND kind = 'value' GROUP BY asset_id").all(clientId).forEach((r) => map.set(r.asset_id, r.at));
+    return map;
+}
+function listMaintenanceRunsOfAsset(clientId, assetId, limit = 10) {
+    return db.prepare('SELECT * FROM maintenance_runs WHERE client_id = ? AND asset_id = ? ORDER BY created_at DESC, id DESC LIMIT ?').all(clientId, assetId, limit);
+}
+function latestMaintenanceRunRows(clientId) {
+    return db.prepare('SELECT m.* FROM maintenance_runs m WHERE m.client_id = ? AND m.id = (SELECT m2.id FROM maintenance_runs m2 WHERE m2.asset_id = m.asset_id ORDER BY m2.created_at DESC, m2.id DESC LIMIT 1)').all(clientId);
+}
+// Avisos de la campana de los activos: kind 'asset-alert' (alerta nueva: va a la pestaña Alertas) y 'asset-activity' (aviso de actividad: pestaña Avisos). Una fila por persona.
+function publishAssetNotice(kind, { recipients, payload }) {
+    if (!['asset-alert', 'asset-activity'].includes(kind)) return [];
+    const ids = [...new Set((recipients || []).filter((id) => Number.isInteger(id)))];
+    if (!ids.length) return [];
+    const json = JSON.stringify(payload);
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, ?, 'data', ?, NULL, '')");
+    db.transaction(() => ids.forEach((id) => insert.run(id, kind, json)))();
+    return ids;
 }
 // Los límites de UN activo: { [criterionId]: { min, max } }.
 function getAssetLimitsOf(assetId) {
     const out = {};
-    db.prepare('SELECT criterion_id, min_value, max_value FROM asset_limits WHERE asset_id = ?').all(assetId).forEach((r) => { out[r.criterion_id] = { min: r.min_value, max: r.max_value }; });
+    db.prepare('SELECT criterion_id, min_value, max_value, updated_at FROM asset_limits WHERE asset_id = ?').all(assetId).forEach((r) => { out[r.criterion_id] = { min: r.min_value, max: r.max_value, at: r.updated_at }; });
     return out;
 }
 function countAssetLimitsOfCriterion(clientId, criterionId) {
@@ -14141,10 +14215,10 @@ function createAssetReading({ clientId, isTestData = false, costCenterId, assetI
 // La lectura más reciente de cada (activo, criterio) con valor: Map('assetId:criterionId' -> { value, readAt }).
 function latestAssetReadingValues(clientId) {
     const map = new Map();
-    db.prepare(`SELECT r.asset_id, r.criterion_id, r.value, r.read_at FROM asset_readings r
+    db.prepare(`SELECT r.asset_id, r.criterion_id, r.value, r.read_at, r.created_by_user_id FROM asset_readings r
         WHERE r.client_id = ? AND r.kind = 'value' AND r.criterion_id IS NOT NULL AND r.value IS NOT NULL AND r.id = (
             SELECT r2.id FROM asset_readings r2 WHERE r2.asset_id = r.asset_id AND r2.criterion_id = r.criterion_id AND r2.kind = 'value' AND r2.value IS NOT NULL ORDER BY r2.read_at DESC, r2.id DESC LIMIT 1)`)
-        .all(clientId).forEach((r) => map.set(`${r.asset_id}:${r.criterion_id}`, { value: r.value, readAt: r.read_at }));
+        .all(clientId).forEach((r) => map.set(`${r.asset_id}:${r.criterion_id}`, { value: r.value, readAt: r.read_at, userId: r.created_by_user_id || null }));
     return map;
 }
 // Alertas: episodios activos de la empresa y su historial.
@@ -14160,11 +14234,11 @@ function getAssetAlertEpisode(id, clientId, forTestAccount = false) {
 }
 function openAssetAlertEpisode({ clientId, isTestData = false, costCenterId = 0, assetId, alertKey, label, severity, detail = '', startedAt }) {
     const info = db.prepare(`INSERT OR IGNORE INTO asset_alert_episodes (client_id, is_test_data, cost_center_id, asset_id, alert_key, label, severity, detail, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(clientId, isTestData ? 1 : 0, costCenterId || 0, assetId, alertKey, String(label || '').slice(0, 160), severity === 'high' ? 'high' : 'medium', String(detail || '').slice(0, 300), startedAt);
+        .run(clientId, isTestData ? 1 : 0, costCenterId || 0, assetId, alertKey, String(label || '').slice(0, 160), severity === 'high' ? 'high' : 'medium', String(detail || '').slice(0, 700), startedAt);
     return info.changes ? db.prepare('SELECT * FROM asset_alert_episodes WHERE id = ?').get(info.lastInsertRowid) : null;
 }
 function updateAssetAlertEpisode(id, { label, severity, detail }) {
-    db.prepare('UPDATE asset_alert_episodes SET label = ?, severity = ?, detail = ? WHERE id = ? AND ended_at IS NULL').run(String(label || '').slice(0, 160), severity === 'high' ? 'high' : 'medium', String(detail || '').slice(0, 300), id);
+    db.prepare('UPDATE asset_alert_episodes SET label = ?, severity = ?, detail = ? WHERE id = ? AND ended_at IS NULL').run(String(label || '').slice(0, 160), severity === 'high' ? 'high' : 'medium', String(detail || '').slice(0, 700), id);
 }
 function closeAssetAlertEpisode(id, endedAt, endDetail = '') {
     db.prepare('UPDATE asset_alert_episodes SET ended_at = ?, end_detail = ? WHERE id = ? AND ended_at IS NULL').run(endedAt, String(endDetail || '').slice(0, 300), id);
@@ -14404,6 +14478,7 @@ seedAssetAuthorizeLeaf();
 seedCalibrationGrants();
 seedMaintenanceGrants();
 seedMttoDeleteSoloVer();
+seedLecturasGrants();
 migrateCalibrationSensorTypesOnce();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
@@ -14441,6 +14516,8 @@ seedTransitoEquiposValuesOnce();
 seedIncidentesCriteriosValuesOnce();
 
 module.exports = {
+    isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,
+    latestAssetReadingRows, listAssetReadingsOfAsset, lastAssetReadingTimes, listMaintenanceRunsOfAsset, latestMaintenanceRunRows,
     getAssetLimitsOf, countAssetLimitsOfCriterion, countAssetReadingsOfCatalog,
     listAssetLimitsMap, setAssetLimit, deleteAssetLimitsOfCriterion, listAssetReadings, getAssetReadingById, createAssetReading, latestAssetReadingValues,
     listAssetAlertEpisodes, getAssetAlertEpisode, openAssetAlertEpisode, updateAssetAlertEpisode, closeAssetAlertEpisode, ackAssetAlertEpisode, markAssetAlertEpisodeNotified,

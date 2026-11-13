@@ -207,6 +207,8 @@ const {
     parseFixedAssetEditing,
     parseFixedAssetBackup,
     startFixedAssetEditionWithFields,
+    isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,
+    latestAssetReadingRows, listAssetReadingsOfAsset, lastAssetReadingTimes, listMaintenanceRunsOfAsset, latestMaintenanceRunRows,
     getAssetLimitsOf, setAssetLimit, listAssetLimitsMap, deleteAssetLimitsOfCriterion, countAssetLimitsOfCriterion, countAssetReadingsOfCatalog,
     listAssetReadings, getAssetReadingById, createAssetReading, latestAssetReadingValues,
     listAssetAlertEpisodes, getAssetAlertEpisode, openAssetAlertEpisode, updateAssetAlertEpisode, closeAssetAlertEpisode, ackAssetAlertEpisode, markAssetAlertEpisodeNotified,
@@ -597,7 +599,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
+const EXTRA_SCREEN_LABEL_KEYS = { lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -12231,6 +12233,355 @@ function prepareCriteriaCatalogPatch(req, categoryType, existing, patch) {
     }
     return { patch: out, sanitizers };
 }
+// --- Alertas y avisos de actividad por activo (2026-11-13) --------------------------------------------------------------------------------------------------
+// ALERTAS = lo que ya pasó un criterio (columna «Alertas» de Gestión > Activos). Se calculan de lo que hay (lecturas, límites del activo, calibración, mantenimiento) y se guardan como EPISODIOS (asset_alert_episodes): empiezan cuando
+// se cumple la condición y se apagan SOLAS cuando deja de cumplirse (la lectura vuelve al rango, el trámite se pone al corriente); queda el historial (desde cuándo, hasta cuándo). «Enterado» solo anota quién la vio.
+// Solo cuentan los criterios que el MODELO mide y en los que el activo tiene límite; calibración y mantenimiento solo si el modelo los avisa. AVISOS = la última actividad del activo (lectura, dato actualizado, calibración,
+// mantenimiento, limpieza o una actividad registrada en Lecturas), solo de los tipos de aviso que el modelo da; sale de los historiales que ya existen, no se captura aparte.
+const ASSET_ALERT_SEVERITY = { temperature: 'high', humidity: 'medium', weight: 'high' };
+const msOfTs = (s) => {
+    if (!s) return NaN;
+    const t = String(s);
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(t)) return Date.parse(`${t.replace(' ', 'T')}Z`);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return Date.parse(`${t}T00:00:00Z`);
+    return Date.parse(t);
+};
+const isoOfMs = (ms) => (Number.isFinite(ms) ? new Date(ms).toISOString() : null);
+const hoursLabel = (h) => (h >= 48 ? `${Math.round(h / 24)} d` : `${Math.round(h * 10) / 10} h`);
+// El Layout de cada centro liga sus activos con las lecturas y las limpiezas: espacios (refrigeradores…) y sensores por su assetRef.
+function assetLayoutPlaces(clientId) {
+    const spaceAsset = new Map();
+    const sensorAsset = new Map();
+    const places = new Map(); // assetId -> [{ cc, spaceId, sensorId }]
+    const add = (assetId, place) => { if (!places.has(assetId)) places.set(assetId, []); places.get(assetId).push(place); };
+    listClientLayouts(clientId).forEach((l) => {
+        const cc = l.costCenterId || 0;
+        ((l.layout && l.layout.spaces) || []).forEach((s) => { if (s && s.assetRef && s.id) { spaceAsset.set(`${cc}|${s.id}`, Number(s.assetRef)); add(Number(s.assetRef), { cc, spaceId: s.id, sensorId: '' }); } });
+        ((l.layout && l.layout.sensors) || []).forEach((s) => { if (s && s.assetRef && s.id) { sensorAsset.set(`${cc}|${s.id}`, Number(s.assetRef)); add(Number(s.assetRef), { cc, spaceId: '', sensorId: s.id }); } });
+    });
+    return { spaceAsset, sensorAsset, places };
+}
+function assetAlertEnv(clientId, isTest) {
+    const layout = assetLayoutPlaces(clientId);
+    const temp = new Map();
+    latestTemperatureRowsAll(clientId).forEach((r) => {
+        const assetId = r.sensor_id ? layout.sensorAsset.get(`${r.cost_center_id}|${r.sensor_id}`) : layout.spaceAsset.get(`${r.cost_center_id}|${r.space_id}`);
+        if (!assetId) return;
+        const at = msOfTs(r.checked_at);
+        const cur = temp.get(assetId);
+        if (!cur || at > cur.at) temp.set(assetId, { temperature: r.temperature, humidity: r.humidity, at, userId: r.reporter_user_id || null, person: r.person_name });
+    });
+    const clean = new Map();
+    latestCleaningRowsAll(clientId).forEach((r) => {
+        const assetId = layout.spaceAsset.get(`${r.cost_center_id}|${r.space_id}`);
+        if (!assetId) return;
+        const at = msOfTs(r.finished_at || r.started_at);
+        if (!clean.has(assetId) || at > clean.get(assetId)) clean.set(assetId, at);
+    });
+    const lastRead = new Map();
+    lastAssetReadingTimes(clientId).forEach((at, assetId) => lastRead.set(assetId, msOfTs(at)));
+    const faultsByAsset = new Map();
+    listMaintenanceFaultsAnyScope(clientId).forEach((f) => { if (!faultsByAsset.has(f.asset_id)) faultsByAsset.set(f.asset_id, []); faultsByAsset.get(f.asset_id).push(f); });
+    const progsByAsset = new Map();
+    listMaintenancePrograms(clientId, isTest).filter((p) => p.status !== 'inactive').forEach((p) => { if (!progsByAsset.has(p.asset_id)) progsByAsset.set(p.asset_id, []); progsByAsset.get(p.asset_id).push(p); });
+    return {
+        layout, temp, clean, lastRead, faultsByAsset, progsByAsset,
+        readings: latestAssetReadingValues(clientId), limits: listAssetLimitsMap(clientId), calMap: latestCalibrationMap(clientId), runs: latestMaintenanceRunMap(clientId),
+        models: new Map(listArticleCategories(clientId, 'activos-modelos', isTest).map((r) => [r.id, r])),
+        criteria: new Map(listArticleCategories(clientId, 'activos-criterios', isTest).filter(criterionUsable).map((r) => [r.id, r])),
+        avisos: new Map(listArticleCategories(clientId, 'activos-avisos', isTest).map((r) => [r.id, r])),
+    };
+}
+// Las alertas que hoy cumple un activo: [{ key, label, severity, code, params, text, startedAt, userId }]. code y params permiten escribirlas en el idioma de quien las mira.
+function computeAssetAlerts(asset, env, nowMs, todayIso) {
+    const out = [];
+    const model = asset.model_id ? env.models.get(asset.model_id) : null;
+    if (!model) return out;
+    const measured = parseClassificationIds(model.criteria_ids).filter((id) => env.criteria.has(id));
+    const noticeKeys = new Set(parseClassificationIds(model.aviso_ids).map((id) => (env.avisos.get(id) || {}).builtin_key).filter(Boolean));
+    const mine = env.limits.get(asset.id) || {};
+    const t = env.temp.get(asset.id);
+    const lastAny = Math.max(env.lastRead.get(asset.id) || 0, t ? t.at : 0) || NaN;
+    const add = (key, severity, code, params, text, startedAt, userId = null) => out.push({ key, severity, code, params, text, label: text, startedAt, userId });
+    measured.forEach((id) => {
+        const c = env.criteria.get(id);
+        const lim = mine[id];
+        if (!lim) return; // sin límite no hay alerta de ese criterio
+        const unit = c.unit ? ` ${c.unit}` : '';
+        if (c.kind === 'every') {
+            const hours = lim.max;
+            if (!(hours > 0)) return;
+            let last = NaN;
+            let code = 'late-custom';
+            let what = c.name;
+            if (c.builtin_key === 'readOnTime') { last = lastAny; code = 'late-read'; what = 'Lectura'; } else if (c.builtin_key === 'cleanOnTime') { last = env.clean.has(asset.id) ? env.clean.get(asset.id) : NaN; code = 'late-clean'; what = 'Limpieza'; } else { const r = env.readings.get(`${asset.id}:${id}`); last = r ? msOfTs(r.readAt) : NaN; }
+            const base = Number.isFinite(last) ? last : Math.max(msOfTs(asset.created_at) || 0, msOfTs(lim.at) || 0);
+            const due = base + hours * 3600000;
+            if (nowMs <= due) return;
+            const since = Number.isFinite(last) ? hoursLabel((nowMs - last) / 3600000) : '';
+            add(`crit:${id}`, 'medium', code, { name: c.name, hours: limitNumText(hours), since }, `${what} atrasada${since ? ` · hace ${since}` : ' · sin registros'} (debía cada ${limitNumText(hours)} h)`, isoOfMs(due));
+            return;
+        }
+        let reading = env.readings.get(`${asset.id}:${id}`);
+        if ((c.builtin_key === 'temperature' || c.builtin_key === 'humidity') && t) {
+            const tv = c.builtin_key === 'temperature' ? t.temperature : t.humidity;
+            if (tv !== null && tv !== undefined && Number.isFinite(Number(tv)) && (!reading || t.at > msOfTs(reading.readAt))) reading = { value: Number(tv), readAt: isoOfMs(t.at), userId: t.userId };
+        }
+        if (!reading) return;
+        const v = Number(reading.value);
+        let side = null;
+        if ((c.kind === 'range' || c.kind === 'min') && lim.min !== null && v < lim.min) side = 'low';
+        if ((c.kind === 'range' || c.kind === 'max') && lim.max !== null && v > lim.max) side = 'high';
+        if (!side) return;
+        const limitVal = side === 'high' ? lim.max : lim.min;
+        const code = c.kind === 'range' ? (side === 'high' ? 'range-high' : 'range-low') : (side === 'high' ? 'max-over' : 'min-under');
+        const word = c.kind === 'range' ? (side === 'high' ? 'alta' : 'baja') : (side === 'high' ? 'arriba del límite' : 'abajo del límite');
+        add(`crit:${id}`, ASSET_ALERT_SEVERITY[c.builtin_key] || 'medium', code, { name: c.name, value: limitNumText(v), unit: c.unit || '', limit: limitNumText(limitVal) }, `${c.name} ${word} · ${limitNumText(v)}${unit} (${side === 'high' ? 'máx.' : 'mín.'} ${limitNumText(limitVal)})`, reading.readAt, reading.userId || null);
+    });
+    if (noticeKeys.has('calibration')) {
+        const cal = env.calMap.get(asset.id);
+        const st = calibrationStatus(cal, todayIso);
+        if (st.key === 'failed') add('calibration', 'high', 'cal-failed', { date: cal.calibrated_on }, 'Calibración fuera de tolerancia', isoOfMs(msOfTs(cal.created_at)), cal.created_by_user_id || null);
+        else if (st.key === 'expired') add('calibration', 'high', 'cal-expired', { date: cal.due_on }, `Calibración vencida · el ${cal.due_on}`, isoOfMs(msOfTs(cal.due_on)), cal.created_by_user_id || null);
+    }
+    if (noticeKeys.has('maintenance')) {
+        (env.faultsByAsset.get(asset.id) || []).filter((f) => f.status !== 'closed').forEach((f) => {
+            const down = !!f.out_of_service;
+            add(`fault:${f.id}`, f.priority === 'high' || down ? 'high' : 'medium', down ? 'fault-down' : 'fault', { folio: maintFolioOf(f), desc: String(f.description || '').slice(0, 60) }, `${down ? 'Fuera de servicio · falla abierta' : 'Falla abierta'} · ${maintFolioOf(f)}`, isoOfMs(msOfTs(f.reported_on) || nowMs), f.reported_by_user_id || null);
+        });
+        (env.progsByAsset.get(asset.id) || []).forEach((p) => {
+            const next = programNextOn(p, env.runs.get(p.id));
+            if (!next || programState(next, todayIso).key !== 'overdue') return;
+            add(`preventive:${p.id}`, 'medium', 'preventive', { task: String(p.task || '').slice(0, 60), date: next }, `Preventivo vencido · ${p.task}`, isoOfMs(msOfTs(next)), p.created_by_user_id || null);
+        });
+    }
+    return out;
+}
+const assetAlertRuns = new Map();
+// Pone al día los episodios de alertas de una empresa: abre los nuevos (y avisa en la campana), actualiza el texto de los vigentes y apaga los que ya no se cumplen. Una vez cada 15 segundos como máximo salvo force.
+function syncAssetAlerts(clientId, isTest, force = false) {
+    try {
+        const runKey = `${clientId}:${isTest ? 1 : 0}`;
+        const nowMs = Date.now();
+        if (!force && nowMs - (assetAlertRuns.get(runKey) || 0) < 15000) return;
+        assetAlertRuns.set(runKey, nowMs);
+        const env = assetAlertEnv(clientId, isTest);
+        const todayIso = todayIsoUtc();
+        const active = new Map(listAssetAlertEpisodes(clientId, isTest, { activeOnly: true, limit: 2000 }).map((e) => [`${e.asset_id}|${e.alert_key}`, e]));
+        const nowIso = isoOfMs(nowMs);
+        const fresh = [];
+        listFixedAssets(clientId, isTest).filter((a) => a.status === 'active').forEach((asset) => {
+            computeAssetAlerts(asset, env, nowMs, todayIso).forEach((d) => {
+                const k = `${asset.id}|${d.key}`;
+                const detail = JSON.stringify({ c: d.code, p: d.params, t: d.text });
+                const cur = active.get(k);
+                if (cur) {
+                    if (cur.label !== d.label.slice(0, 160) || cur.severity !== d.severity || cur.detail !== detail) updateAssetAlertEpisode(cur.id, { label: d.label, severity: d.severity, detail });
+                    active.delete(k);
+                    return;
+                }
+                const ep = openAssetAlertEpisode({ clientId, isTestData: isTest, costCenterId: asset.cost_center_id, assetId: asset.id, alertKey: d.key, label: d.label, severity: d.severity, detail, startedAt: d.startedAt || nowIso });
+                if (ep) fresh.push({ ep, asset, d });
+            });
+        });
+        active.forEach((ep) => closeAssetAlertEpisode(ep.id, nowIso));
+        fresh.forEach(({ ep, asset, d }) => {
+            const boss = d.userId ? resolveDirectSupervisorUserId(d.userId) : null;
+            const recipients = [boss, ...listColumnNotifyRecipientUserIds(clientId, FIXED_ASSET_TABLE_KEY, 'colActAlertas', 'change', [])];
+            publishAssetNotice('asset-alert', { recipients, payload: { episodeId: ep.id, assetId: asset.id, assetCode: fixedAssetCodeOf(asset), serial: asset.serial_number || '', severity: d.severity, code: d.code, params: d.params, text: d.text, startedAt: ep.started_at } });
+            markAssetAlertEpisodeNotified(ep.id);
+        });
+    } catch (err) {
+        console.error('[alertas de activos] no se pudieron calcular:', err.message);
+    }
+}
+const assetAlertDto = (ep, asset) => {
+    let extra = {};
+    try { extra = JSON.parse(ep.detail) || {}; } catch { extra = { t: ep.detail }; }
+    return { id: ep.id, assetId: ep.asset_id, assetCode: asset ? fixedAssetCodeOf(asset) : '', key: ep.alert_key, label: ep.label, severity: ep.severity, code: extra.c || '', params: extra.p || {}, text: extra.t || '', startedAt: ep.started_at, endedAt: ep.ended_at || null, ackBy: ep.ack_by || '', ackAt: ep.ack_at || null };
+};
+// Los avisos de actividad de un activo, del más nuevo al más viejo: [{ kind, label, detail, at, by, fieldKey? }]. Solo los tipos de aviso que da su modelo; limit = cuántos devolver.
+function assetActivityOf(clientId, isTest, asset, env, limit = 30) {
+    const n = Math.max(limit, 5);
+    const model = asset.model_id ? env.models.get(asset.model_id) : null;
+    if (!model) return [];
+    const avisoRows = parseClassificationIds(model.aviso_ids).map((id) => env.avisos.get(id)).filter(Boolean);
+    const keys = new Set(avisoRows.map((r) => r.builtin_key).filter(Boolean));
+    const customIds = new Set(avisoRows.filter((r) => !r.builtin_key).map((r) => r.id));
+    if (!avisoRows.length) return [];
+    const items = [];
+    const CODES = { 'Lectura registrada': 'reading', 'Datos actualizados': 'data', 'Calibración registrada': 'cal', 'Mantenimiento registrado': 'run', 'Falla reportada': 'fault-open', 'Falla cerrada': 'fault-closed', 'Limpieza terminada': 'clean' };
+    const push = (kind, label, detail, atMs, by, extra = {}) => { if (Number.isFinite(atMs)) items.push({ kind, code: kind === 'custom' ? 'custom' : (CODES[label] || ''), label, detail, at: isoOfMs(atMs), by: by || '', ...extra }); };
+    const critName = (id) => (env.criteria.get(id) || {}).name || '';
+    const critUnit = (id) => (env.criteria.get(id) || {}).unit || '';
+    if (keys.has('readings')) {
+        listAssetReadingsOfAsset(clientId, asset.id, n).filter((r) => r.kind === 'value').forEach((r) => push('readings', 'Lectura registrada', `${critName(r.criterion_id)} ${limitNumText(r.value)} ${critUnit(r.criterion_id)}`.trim(), msOfTs(r.read_at), r.person_name || r.created_by));
+        (env.layout.places.get(asset.id) || []).forEach((p) => listTemperatureRowsOfPlace(clientId, p.cc, p.spaceId, p.sensorId, 10).forEach((r) => push('readings', 'Lectura registrada', `Temperatura ${limitNumText(r.temperature)} °C${r.humidity !== null && r.humidity !== undefined ? ` · Humedad ${limitNumText(r.humidity)} %` : ''}`, msOfTs(r.checked_at), r.person_name)));
+    }
+    if (customIds.size) listAssetReadingsOfAsset(clientId, asset.id, n).filter((r) => r.kind === 'activity' && customIds.has(r.aviso_id)).forEach((r) => push('custom', (env.avisos.get(r.aviso_id) || {}).name || 'Actividad', r.note || '', msOfTs(r.read_at), r.person_name || r.created_by));
+    if (keys.has('assetData')) listAssetDataChanges(clientId, asset.id, 10).forEach((r) => push('assetData', 'Datos actualizados', '', msOfTs(r.changed_at), r.changed_by, { fieldKey: r.field_key }));
+    if (keys.has('calibration')) listAssetCalibrations(clientId, isTest).filter((r) => r.asset_id === asset.id).slice(-5).forEach((r) => push('calibration', 'Calibración registrada', r.certificate_number || '', msOfTs(r.created_at), r.created_by));
+    if (keys.has('maintenance')) {
+        listMaintenanceRunsOfAsset(clientId, asset.id, 10).forEach((r) => push('maintenance', 'Mantenimiento registrado', '', msOfTs(r.created_at), r.done_by_label || r.created_by));
+        (env.faultsByAsset.get(asset.id) || []).forEach((f) => {
+            push('maintenance', 'Falla reportada', maintFolioOf(f), msOfTs(f.created_at), f.reported_by_label);
+            if (f.status === 'closed' && f.closed_on) push('maintenance', 'Falla cerrada', maintFolioOf(f), msOfTs(f.closed_on) + 12 * 3600000, f.repaired_by);
+        });
+    }
+    if (keys.has('cleaning')) (env.layout.places.get(asset.id) || []).filter((p) => p.spaceId).forEach((p) => listCleaningRowsOfSpace(clientId, p.cc, p.spaceId, 10).forEach((r) => { if (r.finished_at) push('cleaning', 'Limpieza terminada', '', msOfTs(r.finished_at), r.person_name); }));
+    return items.sort((a, z) => (a.at < z.at ? 1 : a.at > z.at ? -1 : 0)).slice(0, limit);
+}
+// Lo que cada activo trae para sus columnas Alertas y Avisos en Gestión: { alerts: [...], activity: {…} | null }.
+function assetAlertColumns(clientId, isTest, assets) {
+    const env = assetAlertEnv(clientId, isTest);
+    const episodes = new Map();
+    listAssetAlertEpisodes(clientId, isTest, { activeOnly: true, limit: 2000 }).forEach((e) => { if (!episodes.has(e.asset_id)) episodes.set(e.asset_id, []); episodes.get(e.asset_id).push(e); });
+    const byId = new Map(assets.map((a) => [a.id, a]));
+    return { env, forAsset: (asset) => ({ alerts: (episodes.get(asset.id) || []).map((e) => assetAlertDto(e, byId.get(e.asset_id))), activity: (assetActivityOf(clientId, isTest, asset, env, 1)[0]) || null }) };
+}
+
+app.get('/api/business/asset-alerts', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const assetId = intOf(req.query.assetId);
+    if (!assetId) return res.status(400).json({ message: 'Falta el activo.', code: 'ASSET' });
+    const asset = getFixedAssetById(assetId, clientId, isTestAccount);
+    if (!asset) return res.status(404).json({ message: 'Asset not found.' });
+    syncAssetAlerts(clientId, isTestAccount, true);
+    const all = listAssetAlertEpisodes(clientId, isTestAccount, { assetId, limit: 300 }).map((e) => assetAlertDto(e, asset));
+    res.set('Cache-Control', 'no-store');
+    res.json({ assetId, assetCode: fixedAssetCodeOf(asset), active: all.filter((e) => !e.endedAt), history: all.filter((e) => e.endedAt), canAck: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), FIXED_ASSET_TABLE_KEY, 'colActAlertas') });
+});
+app.post('/api/business/asset-alerts/:id/ack', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const ep = getAssetAlertEpisode(intOf(req.params.id), clientId, isTestAccount);
+    if (!ep) return res.status(404).json({ message: 'Alerta no encontrada.' });
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), FIXED_ASSET_TABLE_KEY, 'colActAlertas')) return res.status(403).json({ message: 'No tienes permiso para marcar alertas como enteradas.' });
+    ackAssetAlertEpisode(ep.id, changedByLabel(req), req.user.sub);
+    res.json({ alert: assetAlertDto(getAssetAlertEpisode(ep.id, clientId, isTestAccount), getFixedAssetById(ep.asset_id, clientId, isTestAccount)) });
+});
+app.get('/api/business/asset-activity', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const asset = getFixedAssetById(intOf(req.query.assetId), clientId, isTestAccount);
+    if (!asset) return res.status(404).json({ message: 'Asset not found.' });
+    const env = assetAlertEnv(clientId, isTestAccount);
+    res.set('Cache-Control', 'no-store');
+    res.json({ assetId: asset.id, assetCode: fixedAssetCodeOf(asset), items: assetActivityOf(clientId, isTestAccount, asset, env, 40) });
+});
+
+// --- Lecturas (Operaciones, C. Distribución) -----------------------------------------------------------------------------------------------------------------
+// Una lectura de un criterio que el modelo del activo mide (kind 'value': temperatura, humedad, peso, presión… con su valor; en un criterio «cada N horas» solo se anota que se cumplió) o una actividad de un aviso que creó la
+// empresa (kind 'activity': activo, aviso y nota). Los criterios y avisos de fábrica entran por su pantalla de siempre (Temperaturas, Limpieza, Calibraciones, Mtto.). Una lectura no se edita ni se elimina: se corrige con otra
+// más nueva (la última es la que cuenta). La hora la pone el servidor (UTC); se acepta una hora propia dentro de los últimos 7 días. Al guardar se vuelven a calcular las alertas del activo.
+const LECTURAS_TABLE_KEY = 'lecturas';
+const LECTURAS_SCREEN_LABEL = 'Lecturas';
+const lecturasCan = (req) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), LECTURAS_TABLE_KEY, 'colLecCreateAuth');
+function lecturasContext(req) {
+    const { clientId, isTestAccount } = req.user;
+    const base = fixedAssetContext(req);
+    return { ...base, assets: new Map(listFixedAssets(clientId, isTestAccount).map((a) => [a.id, a])), avisos: new Map(listArticleCategories(clientId, 'activos-avisos', isTestAccount).map((r) => [r.id, r])), limits: listAssetLimitsMap(clientId) };
+}
+// Lo que se puede registrar de un activo: los criterios de su modelo que se capturan aquí (todos menos «salir de la zona») y las actividades de los avisos creados por la empresa.
+function lecturasTargetsOf(asset, ctx) {
+    const model = asset.model_id ? ctx.models.get(asset.model_id) : null;
+    if (!model) return { criteria: [], avisos: [] };
+    const criteria = parseClassificationIds(model.criteria_ids).map((id) => ctx.criteria.get(id)).filter(Boolean).map((c) => ({ id: c.id, name: c.name, kind: c.kind, unit: c.unit || '' }));
+    const avisos = parseClassificationIds(model.aviso_ids).map((id) => ctx.avisos.get(id)).filter((r) => r && r.status === 'active' && r.name && !r.builtin_key).map((r) => ({ id: r.id, name: r.name }));
+    return { criteria, avisos };
+}
+function mapReading(row, ctx, companyName) {
+    const asset = ctx.assets.get(row.asset_id);
+    const type = asset ? ctx.types.get(asset.type_id) : null;
+    const crit = row.criterion_id ? ctx.criteriaAll.get(row.criterion_id) : null;
+    const aviso = row.aviso_id ? ctx.avisos.get(row.aviso_id) : null;
+    const cc = ctx.centers.get(row.cost_center_id);
+    let result = '';
+    if (row.kind === 'value' && crit && crit.kind !== 'every' && row.value !== null) {
+        const lim = ((ctx.limits.get(row.asset_id) || {})[crit.id]) || null;
+        if (lim) result = ((lim.min !== null && row.value < lim.min) || (lim.max !== null && row.value > lim.max)) ? 'out' : 'ok';
+    }
+    return {
+        id: row.id, registroUnico: row.db_id, assetId: row.asset_id, assetCode: asset ? fixedAssetCodeOf(asset) : '', assetName: asset ? (asset.custom_name || asset.purchase_name) : '', typeName: type ? type.name : '',
+        kind: row.kind, criterionId: row.criterion_id || null, criterionName: crit ? crit.name : '', avisoId: row.aviso_id || null, avisoName: aviso ? aviso.name : '',
+        value: row.value, unit: crit ? crit.unit || '' : '', limitKind: crit ? crit.kind : '', note: row.note, readAt: row.read_at, personName: row.person_name, result, costCenterId: row.cost_center_id, createdBy: row.created_by,
+        ...getSystemColumnsForRecord({ companyName, area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: LECTURAS_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: row.created_at }),
+    };
+}
+app.get('/api/business/readings', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const ctx = lecturasContext(req);
+    ctx.criteriaAll = new Map(listArticleCategories(clientId, 'activos-criterios', isTestAccount).map((r) => [r.id, r]));
+    const rows = listAssetReadings(clientId, isTestAccount).slice(0, 2000);
+    const picks = [...ctx.assets.values()].filter((a) => a.status === 'active').map((a) => {
+        const t = lecturasTargetsOf(a, ctx);
+        const type = ctx.types.get(a.type_id);
+        return { id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name || '', typeName: type ? type.name : '', costCenterId: a.cost_center_id, ...t };
+    }).filter((p) => p.criteria.length || p.avisos.length).sort((x, y) => x.code.localeCompare(y.code, 'es', { numeric: true }));
+    res.set('Cache-Control', 'no-store');
+    res.json({ readings: rows.map((r) => mapReading(r, ctx, client?.company_name)), assets: picks, canCreate: lecturasCan(req) });
+});
+app.post('/api/business/readings', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!lecturasCan(req)) return res.status(403).json({ message: 'No tienes permiso para registrar lecturas.' });
+    const { clientId, isTestAccount } = req.user;
+    const body = req.body || {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    const ctx = lecturasContext(req);
+    ctx.criteriaAll = new Map(listArticleCategories(clientId, 'activos-criterios', isTestAccount).map((r) => [r.id, r]));
+    const asset = ctx.assets.get(intOf(body.assetId));
+    if (!asset || asset.status !== 'active') return bad('Elige un activo activo de tu empresa.', 'ASSET');
+    const targets = lecturasTargetsOf(asset, ctx);
+    const kind = body.kind === 'activity' ? 'activity' : 'value';
+    let criterionId = null;
+    let avisoId = null;
+    let value = null;
+    let note = String(body.note == null ? '' : body.note).replace(/\s+/g, ' ').trim().slice(0, 500);
+    if (kind === 'value') {
+        const crit = targets.criteria.find((c) => c.id === intOf(body.criterionId));
+        if (!crit) return bad('Ese criterio no lo mide el modelo de este activo.', 'CRITERION');
+        criterionId = crit.id;
+        if (crit.kind === 'every') value = 0;
+        else {
+            const n = body.value === '' || body.value === null || body.value === undefined ? NaN : Number(body.value);
+            if (!Number.isFinite(n) || Math.abs(n) > 1e9) return bad(`Escribe el valor de «${crit.name}» (un número).`, 'VALUE');
+            value = Math.round(n * 1000) / 1000;
+        }
+    } else {
+        const aviso = targets.avisos.find((a) => a.id === intOf(body.avisoId));
+        if (!aviso) return bad('Ese aviso no está disponible para este activo (los de fábrica entran por su pantalla).', 'AVISO');
+        avisoId = aviso.id;
+        if (!note) return bad('Escribe una nota de lo que se hizo.', 'NOTE');
+    }
+    const nowMs = Date.now();
+    let readAtMs = nowMs;
+    if (body.readAt) {
+        readAtMs = Date.parse(body.readAt);
+        if (!Number.isFinite(readAtMs) || readAtMs > nowMs + 5 * 60000 || readAtMs < nowMs - 7 * 86400000) return bad('La hora debe ser de los últimos 7 días y no futura.', 'TIME');
+    }
+    const who = changedByLabel(req);
+    const row = createAssetReading({ clientId, isTestData: isTestAccount, costCenterId: asset.cost_center_id, assetId: asset.id, kind, criterionId, avisoId, value, note, readAt: new Date(readAtMs).toISOString(), personName: maintCleanText(body.personName, 120) || who, createdBy: who, createdByUserId: req.user.sub });
+    const code = fixedAssetCodeOf(asset);
+    logTableChange({ clientId, tableKey: LECTURAS_TABLE_KEY, recordId: row.id, recordLabel: code, action: 'create', changedBy: who });
+    notifyButtonAction(req, LECTURAS_TABLE_KEY, 'create', code);
+    syncAssetAlerts(clientId, isTestAccount, true);
+    // aviso de actividad en la campana (pestaña Avisos) de quien tiene «Notificar» en la columna Avisos, solo si el modelo da ese aviso
+    try {
+        const model = asset.model_id ? ctx.models.get(asset.model_id) : null;
+        const keys = new Set(model ? parseClassificationIds(model.aviso_ids).map((id) => (ctx.avisos.get(id) || {}).builtin_key || `#${id}`) : []);
+        if (kind === 'activity' ? keys.has(`#${avisoId}`) : keys.has('readings')) {
+            const crit = criterionId ? ctx.criteriaAll.get(criterionId) : null;
+            const text = kind === 'activity' ? `${(ctx.avisos.get(avisoId) || {}).name || ''} · ${note}` : `${crit.name}${crit.kind === 'every' ? '' : ` ${limitNumText(value)} ${crit.unit || ''}`.trimEnd()}`;
+            publishAssetNotice('asset-activity', { recipients: listColumnNotifyRecipientUserIds(clientId, FIXED_ASSET_TABLE_KEY, 'colActAvisos', 'change', [req.user.sub]), payload: { assetId: asset.id, assetCode: code, text, label: kind === 'activity' ? 'Actividad registrada' : 'Lectura registrada', by: who, at: new Date(readAtMs).toISOString() } });
+        }
+    } catch (err) { console.error('[lecturas] no se pudo avisar la actividad:', err.message); }
+    const client = getClientById(clientId);
+    res.status(201).json({ reading: mapReading(row, ctx, client?.company_name) });
+});
+
 // --- Activos del Layout que vienen de Alta Activos -------------------------------------------------------------------------------------------------------
 // Un activo del Layout (layout.spaces[].assetRef) es un renglón de Alta Activos: su código, su nombre, su tipo, su clasificación y sus medidas los manda el registro (LayoutCalc.applyAssetToSpace). En el Layout solo se colocan (en qué
 // huella van, sus niveles…). Al guardar el Layout el servidor vuelve a poner lo del registro (lo que mande la pantalla no manda) y al cambiar el registro se actualiza el Layout guardado (syncFixedAssetIntoLayout).
@@ -12405,6 +12756,8 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
     ctx.latest = latestCalibrationMap(clientId);
     ctx.maint = maintenanceSummaryMap(clientId);
     ctx.limits = listAssetLimitsMap(clientId);
+    syncAssetAlerts(clientId, isTestAccount); // las alertas se ponen al día al abrir la tabla (máx. cada 15 segundos)
+    const alertCols = assetAlertColumns(clientId, isTestAccount, listFixedAssets(clientId, isTestAccount));
     res.set('Cache-Control', 'no-store');
     // scope=pending: Operaciones > Alta Activos (los que todavía no están completos, los que regresaron a edición y los completos que esperan la autorización de uso); scope=complete: Gestión > Activos (los completos
     // y autorizados que no están en edición); sin scope, todos.
@@ -12415,7 +12768,7 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
         canAuthorize: assetAuthActorCanAuthorize(req),
         // las columnas de criterios (Catálogos > Qué se mide), en el orden del catálogo
         criteria: assetCriteriaColumns(ctx),
-        assets: listFixedAssets(clientId, isTestAccount).map((r) => mapFixedAsset(r, ctx, client?.company_name, pendingByRecord, fixedAssetPlacementsMap(clientId))).filter(inScope),
+        assets: listFixedAssets(clientId, isTestAccount).map((r) => ({ ...mapFixedAsset(r, ctx, client?.company_name, pendingByRecord, fixedAssetPlacementsMap(clientId)), ...alertCols.forAsset(r) })).filter(inScope),
         canEdit: fixedAssetCanEdit(req),
         types: [...ctx.types.values()].filter((t) => t.name).map((t) => ({ id: t.id, name: t.name, letter: t.letter || '', kind: t.kind || '', active: t.status === 'active', needsSerial: t.needs_serial !== 0, needsCalibration: t.needs_calibration === 1 })),
         // los modelos del catálogo (los activos eligen uno del Tipo que tienen; uno inactivo o incompleto no se ofrece)
@@ -15146,6 +15499,7 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
         });
     }
     generateMaintenanceAlerts(req.user.clientId); // preventivo por vencer o vencido y fallas altas o abiertas mucho tiempo (máx. cada 5 minutos)
+    syncAssetAlerts(req.user.clientId, req.user.isTestAccount); // alertas por activo (límites, horarios, calibración y mantenimiento del modelo)
     generateCalibrationAlerts(req.user.clientId); // los avisos de calibración por vencer / vencida salen cuando alguien abre la campana (máx. cada 5 minutos)
     const allPending = listPendingChangesForClient(req.user.clientId);
     let autorizar = allPending;
@@ -15180,10 +15534,11 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
     const assetToAct = listPendingAssetAuthorizations(req.user.clientId, req.user.isTestAccount).filter((r) => assetAuthCanDecide(req, r)).map(asAssetAuth);
     const assetMinePending = listAssetAuthorizationsRequestedBy(req.user.clientId, req.user.sub, ['pending'], req.user.isTestAccount).map(asAssetAuth);
     const assetMineResolved = listAssetAuthorizationsRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected'], req.user.isTestAccount).map(asAssetAuth);
+    const treeNotices = listTreeNoticesForUser(req.user.sub).map((n) => ({ ...n, seen_at: n.seenAt }));
     res.json({
-        alertas: listAccessDeniedAlertsForUser(req.user.clientId, req.user.sub),
+        alertas: [...treeNotices.filter(isAlertNotice), ...listAccessDeniedAlertsForUser(req.user.clientId, req.user.sub)],
         // Los avisos de "Color actualizado" / "Orden actualizado" del Árbol de Permisos Maestro (a quien se le modificó) van aquí también.
-        avisos: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']), ...catalogMineResolved, ...assetMineResolved, ...layoutRequests.avisos.map(asLayoutNotification), ...listTreeNoticesForUser(req.user.sub).map((n) => ({ ...n, seen_at: n.seenAt }))],
+        avisos: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']), ...catalogMineResolved, ...assetMineResolved, ...layoutRequests.avisos.map(asLayoutNotification), ...treeNotices.filter((n) => !isAlertNotice(n))],
         solicitudes: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']), ...catalogMinePending, ...assetMinePending, ...layoutRequests.solicitudes.map(asLayoutNotification)],
         autorizar: [...autorizar, ...catalogToAct, ...assetToAct, ...layoutRequests.autorizar.map(asLayoutNotification)],
     });
@@ -15215,6 +15570,7 @@ app.post('/api/business/notifications/alertas/mark-seen', requireAuth, (req, res
         return res.status(404).json({ message: 'No client for this account.' });
     }
     markAccessDeniedAlertsSeen(req.user.clientId, req.user.sub);
+    markTreeNoticesSeen(req.user.sub, 'alertas');
     res.json({ ok: true });
 });
 
@@ -15228,7 +15584,7 @@ app.post('/api/business/notifications/avisos/mark-seen', requireAuth, (req, res)
     markPendingChangesSeenForRequester(req.user.clientId, req.user.sub);
     markAssetAuthorizationsSeenForRequester(req.user.clientId, req.user.sub);
     markColorRequestsSeen(req.user.sub);
-    markTreeNoticesSeen(req.user.sub);
+    markTreeNoticesSeen(req.user.sub, 'avisos');
     res.json({ ok: true });
 });
 
