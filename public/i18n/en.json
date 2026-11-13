@@ -2174,6 +2174,7 @@
     "layoutTxtPisos": "Floors (code and level)",
     "layoutTxtSensores": "Sensor codes",
     "layoutTxtSeguridad": "Safety codes",
+    "layoutTxtPosiciones": "Spaces and positions (E001, P001)",
     "layoutTxtRotulos": "3D labels",
     "layoutCapasBtn": "Layers",
     "layout3dActivosBtn": "Choose assets",
@@ -6529,7 +6530,7 @@
       "example": "you type 10.5 by 14.8 for a card: it comes out on a Letter page with the card drawn with a dashed line, ready to cut."
     },
     "layoutTxtOtros": {
-      "what": "Shows or hides that text on the map: the codes of footprints, assets and aisles; the code and level of each floor; the code of each sensor; or the safety codes. It only changes what you see: it does not change what is saved and it is remembered in this browser.",
+      "what": "Shows or hides that text on the map: the codes of footprints, assets and aisles; the code and level of each floor; the code of each sensor; the safety codes; or the labels of the spaces and positions (E001, P001) drawn over the assets. It only changes what you see: it does not change what is saved and it is remembered in this browser.",
       "example": "you remove the asset codes to see the side measures better, and put them back when you need them."
     },
     "layoutMeasures": {

@@ -2174,6 +2174,7 @@
     "layoutTxtPisos": "Pisos (código y nivel)",
     "layoutTxtSensores": "Códigos de sensores",
     "layoutTxtSeguridad": "Códigos de seguridad",
+    "layoutTxtPosiciones": "Espacios y posiciones (E001, P001)",
     "layoutTxtRotulos": "Rótulos del 3D",
     "layoutCapasBtn": "Capas",
     "layout3dActivosBtn": "Elegir activos",
@@ -6528,7 +6529,7 @@
       "example": "escribes 10.5 por 14.8 para una tarjeta: sale en una hoja Carta con la tarjeta dibujada con línea punteada, lista para recortar."
     },
     "layoutTxtOtros": {
-      "what": "Muestra u oculta ese texto en el croquis: los códigos de las huellas, de los activos y de los pasillos; el código y el nivel de cada piso; el código de cada sensor; o los códigos de seguridad. Solo cambia lo que ves: no cambia lo guardado y se recuerda en este navegador.",
+      "what": "Muestra u oculta ese texto en el croquis: los códigos de las huellas, de los activos y de los pasillos; el código y el nivel de cada piso; el código de cada sensor; los códigos de seguridad; o los rótulos de los espacios y las posiciones (E001, P001) que se dibujan sobre los activos. Solo cambia lo que ves: no cambia lo guardado y se recuerda en este navegador.",
       "example": "quitas los códigos de los activos para ver mejor las medidas de los lados, y los vuelves a poner cuando los necesites."
     },
     "layoutMeasures": {

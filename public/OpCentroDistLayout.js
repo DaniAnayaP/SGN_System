@@ -4662,6 +4662,7 @@ const TEXT_GROUPS = {
     floors: { id: 'layout-txt-floors-btn', key: 'sgn_layout_txt_floors', cls: 'hide-t-floors' },
     sensors: { id: 'layout-txt-sensors-btn', key: 'sgn_layout_txt_sensors', cls: 'hide-t-sensors' },
     safety: { id: 'layout-txt-safety-btn', key: 'sgn_layout_txt_safety', cls: 'hide-t-safety' },
+    positions: { id: 'layout-txt-positions-btn', key: 'sgn_layout_txt_positions', cls: 'hide-t-positions' }, // los rótulos E001 (espacios) y P001 (posiciones) que dibuja el paso Posiciones sobre los activos
 };
 state.txtOff = {};
 Object.entries(TEXT_GROUPS).forEach(([g, o]) => { try { state.txtOff[g] = localStorage.getItem(o.key) === '0'; } catch (err) { /* sin almacenamiento: se ven */ } });
