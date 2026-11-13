@@ -11341,6 +11341,27 @@ function skuDistSanitizers(req) {
     return { canLay: (v) => (v ? 'Sí' : 'No'), shape: (v) => (v === 'cilindrica' ? 'Cilíndrica' : 'Rectangular'), storageTypes: (v) => (v === null || v === undefined || v === '' ? 'Ninguno' : String(v).split(',').map((k) => typeNames[k] || k).join(', ')), shipTo: (v) => (v === null || v === undefined || v === '' ? 'Ninguno' : String(v).split(',').map((k) => places.get(k) || `#${k}`).join(', ')) };
 }
 
+// ¿Cuándo un código está TERMINADO en Presentaciones de Distribución? (Gestión solo muestra lo terminado; lo demás se queda en Operaciones, donde se captura.) Cuando el código ya está completo en Alta Artículos y tiene al
+// menos una presentación (sin contar el material principal ni las marcas, que solo agrupan) y TODAS tienen sus datos obligatorios: unidad, cuántas contiene, forma, largo, ancho (el diámetro en una cilíndrica), alto y peso.
+// Son opcionales: el tipo de almacenamiento, «Envíos a», «Se puede acostar» y la estiba (TI, HI y máxima estiba). (2026-11-12, Daniel: «en Operaciones se queda hasta que se llena el 100% de las columnas requeridas».)
+function isSkuDistRowComplete(r) {
+    if (!String(r.uom || '').trim()) return false;
+    if (!(Number(r.contains) >= 1)) return false;
+    const dims = r.shape === 'cilindrica' ? [r.length, r.height] : [r.length, r.width, r.height];
+    return dims.every((v) => Number(v) > 0) && Number(r.weight_g) > 0;
+}
+function skuDistDoneSkus(distRows, skuItems) {
+    const complete = new Set(skuItems.filter((s) => isSkuItemComplete(s)).map((s) => s.id));
+    const bySku = new Map();
+    distRows.forEach((r) => { if (!bySku.has(r.sku_item_id)) bySku.set(r.sku_item_id, []); bySku.get(r.sku_item_id).push(r); });
+    const done = new Set();
+    bySku.forEach((rows, skuId) => {
+        if (!complete.has(skuId)) return;
+        const packs = rows.filter((r) => r.level >= 1 && r.kind !== 'marca');
+        if (packs.length && packs.every(isSkuDistRowComplete)) done.add(skuId);
+    });
+    return done;
+}
 app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
@@ -11372,8 +11393,14 @@ app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
         }
     } else {
         source = listSkuDistribution(clientId, isTestAccount);
-        const bare = listSkuItemsWithoutDistribution(clientId, isTestAccount).map(skuDistPlaceholderRow);
-        if (bare.length) source = source.concat(bare).sort((a, z) => a.sku_number - z.sku_number);
+        if (req.query.catalog === '1') {
+            // Gestión > Presentaciones Distribución: solo los códigos terminados (los que faltan por capturar o completar se quedan en Operaciones)
+            const done = skuDistDoneSkus(source, listSkuItems(clientId, isTestAccount));
+            source = source.filter((r) => done.has(r.sku_item_id));
+        } else {
+            const bare = listSkuItemsWithoutDistribution(clientId, isTestAccount).map(skuDistPlaceholderRow);
+            if (bare.length) source = source.concat(bare).sort((a, z) => a.sku_number - z.sku_number);
+        }
     }
     const pantalla = req.query.catalog === '1' ? 'Presentaciones Distribución' : undefined; // el catálogo se rotula con su propio nombre en la columna Pantalla de Control Interno
     res.json({
