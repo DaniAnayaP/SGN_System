@@ -318,6 +318,7 @@
     "opCentroDistQrFicha": "Ficha del código",
     "opCentroDistQrFichaAbbr1": "Ficha código",
     "opCentroDistQrFichaAbbr2": "Ficha",
+    "catCentroDistActivos": "Activos",
     "opCentroDistCompraPedidoManual": "Compra Pedido Manual",
     "opCentroDistCompraPedidoManualAbbr1": "Compra ped. manual",
     "opCentroDistCompraPedidoManualAbbr2": "Compra ped.",
@@ -3391,6 +3392,32 @@
     "colPmCantidad": "Cantidad",
     "colPmFechaRequerida": "Fecha requerida",
     "pmLoAntesPosible": "Urgente",
+    "colActFalta": "Falta",
+    "colActEditar": "Editar",
+    "assetUbicacionPantalla": "Pantalla del activo",
+    "assetEditarTitulo": "¿Qué dato quieres modificar?",
+    "assetEditarGrupoDatos": "Datos",
+    "assetEditarGrupoEvidencias": "Evidencias",
+    "assetEditarGrupoEstatus": "Estatus",
+    "assetEditarAceptar": "Pasar a Alta Activos",
+    "assetEditarCancelar": "Cancelar",
+    "assetEditarMarcaUno": "Marca al menos un dato para modificar.",
+    "assetEditarSinTipoSerie": "No aplica: este tipo no lleva número de serie.",
+    "assetPasoAEdicion": "El activo {code} pasó a Operaciones > Alta Activos para editarse.",
+    "assetTerminoEdicion": "El activo {code} terminó su edición y regresó a Gestión > Activos.",
+    "assetQuedoCompleto": "El activo {code} quedó completo: ya no se ve aquí, pasó a Gestión > Activos.",
+    "assetCancelarEdicionBtn": "Cancelar edición",
+    "assetCancelarEdicionConfirm": "¿Cancelar la edición del activo {code}? Lo que se había vaciado o elegido regresa como estaba y el activo vuelve a Gestión > Activos.",
+    "assetCancelarEdicionAceptar": "Cancelar edición",
+    "assetCancelo": "Se canceló la edición del activo {code}: regresó a Gestión > Activos.",
+    "assetEnEdicion": "En edición",
+    "assetEnEdicionDatos": "En edición: {datos}",
+    "assetElegir": "Elige…",
+    "assetElegirModelo": "Elige otro modelo…",
+    "assetCeldaCerrada": "Cerrado: este dato no se marcó para modificar.",
+    "assetSoloLectura": "Solo lectura: para corregir un activo, elige Editar.",
+    "assetFaltaNada": "—",
+    "assetFaltaCol": "Falta: {falta}",
     "colCpPdf": "Descargar PDF",
     "colCpExcel": "Descargar Excel",
     "cpFiltroPedido": "Pedido",
@@ -6024,6 +6051,26 @@
     "spPantalla": {
       "what": "Surtido Pedido Manual: por ahora la pantalla está vacía; falta definir cómo funciona.",
       "example": "Aquí se verá el surtido de los pedidos del QR."
+    },
+    "assetFalta": {
+      "what": "Lo que todavía le falta al activo para estar completo: clasificación, modelo, número de serie (si su tipo lo lleva) y las 6 fotos. Con todo lleno, el activo pasa solo a Gestión > Activos. En un activo que regresó de Gestión dice qué dato se está editando.",
+      "example": "Falta: número de serie, fotos (4 de 6)."
+    },
+    "assetEditar": {
+      "what": "Pregunta qué dato quieres modificar y regresa este activo a Operaciones > Alta Activos con «En edición». Los datos marcados (clasificación, número de serie, fotos) se vacían y quedan pendientes en rojo; el modelo, «Aparece en el Layout» y el estatus quedan por elegir (el modelo conserva el actual hasta que elijas otro). Lo anterior queda en el historial. Al llenar todo lo marcado, el activo regresa solo a Gestión.",
+      "example": "La foto de frente salió borrosa: eliges Editar, marcas «Foto frente», la subes de nuevo y el activo regresa a Gestión."
+    },
+    "assetEditarDatos": {
+      "what": "Marca el dato o los datos que quieres corregir; solo esos se podrán modificar en Alta Activos y lo demás queda cerrado. El tipo no se cambia porque el código lleva su letra. «Estatus» sirve para desactivar o volver a activar el activo. Si no quieres cambiar el modelo, cancela la edición.",
+      "example": "Marcas «Número de serie» y «Foto atrás»: en Alta Activos solo esas dos celdas se abren, en rojo, hasta que las llenes."
+    },
+    "assetCancelarEdicion": {
+      "what": "Cancela la edición: lo que se había vaciado o elegido regresa como estaba, queda en el historial y el activo vuelve a Gestión > Activos.",
+      "example": "Marcaste el número de serie por error: eliges Cancelar edición y el de antes regresa."
+    },
+    "assetGestionPantalla": {
+      "what": "Los activos completos (clasificación, modelo, número de serie y las 6 fotos), para buscarlos y consultarlos. Aquí solo se ven; para corregir algo se usa Editar.",
+      "example": "Buscas «Termohigrómetro» y ves todos los que ya están terminados."
     },
     "assetTypeSerial": {
       "what": "Si los activos de este tipo llevan número de serie. Sí para sensores, teléfonos e impresoras; No para sillas y mesas. Solo cuando dice Sí, el número de serie cuenta para que un activo de este tipo quede al 100%.",

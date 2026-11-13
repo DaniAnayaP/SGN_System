@@ -3727,6 +3727,8 @@ const TABLE_GRANT_PATHS = {
     'transito-equipos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-transito-equipos' },
     'incidentes-criterios': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-incidentes-criterios' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
+    // Gestión > Activos: su botón Editar (colActEditar)
+    'gestion-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-activos' },
     // Operaciones > QR's > Compra Pedido Manual: sus botones Descargar PDF y Descargar Excel (colCpPdf, colCpExcel)
     'compra-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-compra-pedido-manual' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
@@ -5809,6 +5811,12 @@ db.exec(`
 `);
 // El modelo (catálogo Activos Fijos > Modelos) de un activo: de él vienen el nombre de compra, el personalizado, el modelo, la forma, las medidas y el peso. NULL = activo de antes, que conserva lo que tenía hasta que se le elige modelo.
 if (!db.prepare('PRAGMA table_info(fixed_assets)').all().some((c) => c.name === 'model_id')) db.exec('ALTER TABLE fixed_assets ADD COLUMN model_id INTEGER');
+// «Editar» un activo completo con elección de datos (2026-11-12, igual que en Códigos): un activo completo vive en Gestión > Activos; al editarlo regresa a Alta Activos (editing = 1) con SOLO lo marcado abierto.
+// editing_fields = JSON { fields: [claves marcadas], pending: [lo que falta ELEGIR: 'modelId', 'showInLayout' y/o 'status'] }; editing_backup = JSON { clave: lo que tenía } para «Cancelar edición».
+for (const col of ['editing_fields', 'editing_backup']) {
+    if (!db.prepare('PRAGMA table_info(fixed_assets)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE fixed_assets ADD COLUMN ${col} TEXT`);
+}
+if (!db.prepare('PRAGMA table_info(fixed_assets)').all().some((c) => c.name === 'editing')) db.exec('ALTER TABLE fixed_assets ADD COLUMN editing INTEGER NOT NULL DEFAULT 0');
 const FIXED_ASSET_PATCHABLE_FIELDS = {
     typeId: { column: 'type_id', fieldKey: 'main.colActTipo' },
     modelId: { column: 'model_id', fieldKey: 'main.colActElegirModelo' },
@@ -5917,6 +5925,49 @@ function fixedAssetModelUseCounts(clientId) {
     const out = new Map();
     db.prepare('SELECT model_id AS id, COUNT(*) AS n FROM fixed_assets WHERE client_id = ? AND model_id IS NOT NULL GROUP BY model_id').all(clientId).forEach((r) => out.set(r.id, r.n));
     return out;
+}
+// --- Editar un activo completo (Gestión > Activos) ---------------------------------------------------------------------------------------------------------
+// Lo que se VACÍA al marcarlo (queda pendiente hasta llenarlo otra vez): la clasificación, el número de serie y las 6 fotos. El modelo y «Aparece en el Layout» no se vacían (el activo sigue dibujado con lo que tiene): quedan por
+// ELEGIR (pending) hasta que se escoja; igual el estatus.
+const FIXED_ASSET_EMPTY_ON_EDIT = { classId: null, serialNumber: '', evidenceFront: '', evidenceBack: '', evidenceLeft: '', evidenceRight: '', evidenceTop: '', evidenceBottom: '' };
+function parseFixedAssetEditing(row) {
+    if (!row || !row.editing || !row.editing_fields) return null;
+    try {
+        const parsed = JSON.parse(row.editing_fields);
+        if (!parsed || !Array.isArray(parsed.fields)) return null;
+        return { fields: parsed.fields.filter((k) => Object.prototype.hasOwnProperty.call(FIXED_ASSET_PATCHABLE_FIELDS, k)), pending: (Array.isArray(parsed.pending) ? parsed.pending : []).filter((k) => ['modelId', 'showInLayout', 'status'].includes(k)) };
+    } catch { return null; }
+}
+function parseFixedAssetBackup(row) {
+    if (!row || !row.editing_backup) return {};
+    try { const parsed = JSON.parse(row.editing_backup); return parsed && typeof parsed === 'object' ? parsed : {}; } catch { return {}; }
+}
+function startFixedAssetEditionWithFields(id, clientId, forTestAccount, { fields, pending }) {
+    const row = getFixedAssetById(id, clientId, forTestAccount);
+    const backup = {};
+    const emptied = {};
+    fields.forEach((key) => {
+        backup[key] = row[FIXED_ASSET_PATCHABLE_FIELDS[key].column];
+        if (Object.prototype.hasOwnProperty.call(FIXED_ASSET_EMPTY_ON_EDIT, key)) emptied[key] = FIXED_ASSET_EMPTY_ON_EDIT[key];
+    });
+    db.transaction(() => {
+        updateFixedAsset(id, clientId, emptied, forTestAccount);
+        db.prepare('UPDATE fixed_assets SET editing = 1, editing_fields = ?, editing_backup = ? WHERE id = ? AND client_id = ?').run(JSON.stringify({ fields, pending }), JSON.stringify(backup), id, clientId);
+    })();
+    return getFixedAssetById(id, clientId, forTestAccount);
+}
+// Lo que falta por elegir de una edición en curso (se va quitando al elegir el modelo, «Aparece en el Layout» o el estatus).
+function setFixedAssetPendingChoices(id, clientId, forTestAccount, pending) {
+    const row = getFixedAssetById(id, clientId, forTestAccount);
+    const info = parseFixedAssetEditing(row);
+    if (!info) return row;
+    db.prepare('UPDATE fixed_assets SET editing_fields = ? WHERE id = ? AND client_id = ?').run(JSON.stringify({ fields: info.fields, pending }), id, clientId);
+    return getFixedAssetById(id, clientId, forTestAccount);
+}
+// Regresa el activo a Gestión (flag = false) y borra lo marcado y la copia; o lo manda a edición de siempre (flag = true).
+function setFixedAssetEditing(id, clientId, flag, forTestAccount = false) {
+    db.prepare(`UPDATE fixed_assets SET editing = ?${flag ? '' : ', editing_fields = NULL, editing_backup = NULL'} WHERE id = ? AND client_id = ?`).run(flag ? 1 : 0, id, clientId);
+    return getFixedAssetById(id, clientId, forTestAccount);
 }
 // Cuántos modelos tiene un Tipo (para no borrar un Tipo con modelos).
 function countAssetModelsByType(clientId, typeId) {
@@ -13303,6 +13354,15 @@ function seedAssetModelLeaves() {
     if (alta) seedLeavesForScreenHolders(ASSET_MODEL_PICKER_SEED_KEY, alta, levels.map((level) => `${alta.submenuPrefix}/colActElegirModelo/${level}`), 'the Alta Activos model picker column', { contractOnly: true });
 }
 
+// Gestión > Activos (2026-11-12): la pantalla nueva y su botón Editar los reciben, una sola vez, quienes ya tienen la pantalla Alta Activos (como Códigos y Edición Código con Alta Artículos).
+const GESTION_ACTIVOS_SEED_KEY = 'seed-gestion-activos-screen-v1';
+function seedGestionActivosGrants() {
+    const alta = TABLE_GRANT_PATHS['alta-activos'];
+    const gestion = TABLE_GRANT_PATHS['gestion-activos'];
+    if (!alta || !gestion) return;
+    const leaves = [gestion.submenuPrefix, ...['solo-ver', 'ver-y-operar'].map((level) => `${gestion.submenuPrefix}/class-botones/colActEditar/${level}`)];
+    seedLeavesForScreenHolders(GESTION_ACTIVOS_SEED_KEY, alta, leaves, 'the Gestión > Activos screen and its Editar button');
+}
 // Operaciones > QR's > Compra Pedido Manual y Surtido Pedido Manual (2026-11-12): las dos pantallas nuevas y los botones de descargar de Compra los reciben, una sola vez, quienes ya tienen la pantalla Pedido Manual (lo que se baja
 // sale de los mismos pedidos que ya ven). Los botones «Solo ver» y «Ver y operar», como el de descargar del Pedido Manual.
 const COMPRA_SURTIDO_SEED_KEY = 'seed-compra-surtido-pedido-manual-v1';
@@ -13335,6 +13395,7 @@ seedPmDescargarSoloVer();
 seedPresentacionesCatalogGrants();
 seedRelacionEnvioGrants();
 seedAltaActivosGrants();
+seedGestionActivosGrants();
 seedCompraSurtidoPedidoManualGrants();
 seedAssetModelLeaves();
 migrateLayoutSpacesToFixedAssetsOnce();
@@ -13570,6 +13631,12 @@ module.exports = {
     listFixedAssetsByModel,
     countFixedAssetsByModel,
     fixedAssetModelUseCounts,
+    parseFixedAssetEditing,
+    parseFixedAssetBackup,
+    startFixedAssetEditionWithFields,
+    setFixedAssetPendingChoices,
+    setFixedAssetEditing,
+    FIXED_ASSET_EMPTY_ON_EDIT,
     countAssetModelsByType,
     listFixedAssets,
     getFixedAssetById,

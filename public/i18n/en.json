@@ -318,6 +318,7 @@
     "opCentroDistQrFicha": "Code sheet",
     "opCentroDistQrFichaAbbr1": "Sheet",
     "opCentroDistQrFichaAbbr2": "Sheet",
+    "catCentroDistActivos": "Assets",
     "opCentroDistCompraPedidoManual": "Manual Order Purchase",
     "opCentroDistCompraPedidoManualAbbr1": "Purch. man. order",
     "opCentroDistCompraPedidoManualAbbr2": "Purch. order",
@@ -3392,6 +3393,32 @@
     "colPmCantidad": "Quantity",
     "colPmFechaRequerida": "Required date",
     "pmLoAntesPosible": "Urgent",
+    "colActFalta": "Missing",
+    "colActEditar": "Edit",
+    "assetUbicacionPantalla": "Asset screen",
+    "assetEditarTitulo": "Which data do you want to change?",
+    "assetEditarGrupoDatos": "Data",
+    "assetEditarGrupoEvidencias": "Evidence",
+    "assetEditarGrupoEstatus": "Status",
+    "assetEditarAceptar": "Move to Asset Registration",
+    "assetEditarCancelar": "Cancel",
+    "assetEditarMarcaUno": "Mark at least one data to change.",
+    "assetEditarSinTipoSerie": "Not applicable: this type has no serial number.",
+    "assetPasoAEdicion": "Asset {code} moved to Operations > Asset Registration to be edited.",
+    "assetTerminoEdicion": "Asset {code} finished editing and went back to Management > Assets.",
+    "assetQuedoCompleto": "Asset {code} is complete: it is no longer listed here, it moved to Management > Assets.",
+    "assetCancelarEdicionBtn": "Cancel editing",
+    "assetCancelarEdicionConfirm": "Cancel the editing of asset {code}? Whatever was emptied or chosen goes back as it was and the asset returns to Management > Assets.",
+    "assetCancelarEdicionAceptar": "Cancel editing",
+    "assetCancelo": "Editing of asset {code} was canceled: it went back to Management > Assets.",
+    "assetEnEdicion": "Editing",
+    "assetEnEdicionDatos": "Editing: {datos}",
+    "assetElegir": "Choose…",
+    "assetElegirModelo": "Choose another model…",
+    "assetCeldaCerrada": "Closed: this data was not marked to change.",
+    "assetSoloLectura": "Read only: to fix an asset, choose Edit.",
+    "assetFaltaNada": "—",
+    "assetFaltaCol": "Missing: {falta}",
     "colCpPdf": "Download PDF",
     "colCpExcel": "Download Excel",
     "cpFiltroPedido": "Order",
@@ -6025,6 +6052,26 @@
     "spPantalla": {
       "what": "Manual Order Fulfillment: for now the screen is empty; how it works is still to be defined.",
       "example": "The fulfillment of the QR orders will be seen here."
+    },
+    "assetFalta": {
+      "what": "What the asset still needs to be complete: classification, model, serial number (if its type has one) and the 6 photos. With everything filled in, the asset moves by itself to Management > Assets. For an asset that came back from Management it says which data is being edited.",
+      "example": "Missing: serial number, photos (4 of 6)."
+    },
+    "assetEditar": {
+      "what": "Asks which data you want to change and sends this asset back to Operations > Asset Registration as «Editing». The marked data (classification, serial number, photos) is emptied and left pending in red; the model, «Shows in the Layout» and the status are left to choose (the model keeps the current one until you choose another). What it had stays in the history. Once everything marked is filled in, the asset goes back to Management by itself.",
+      "example": "The front photo came out blurry: you choose Edit, mark «Front photo», upload it again and the asset goes back to Management."
+    },
+    "assetEditarDatos": {
+      "what": "Mark the data you want to fix; only those can be changed in Asset Registration and the rest stays closed. The type is not changed because the code carries its letter. «Status» is for deactivating or activating the asset again. If you do not want to change the model, cancel the editing.",
+      "example": "You mark «Serial number» and «Back photo»: in Asset Registration only those two cells open, in red, until you fill them in."
+    },
+    "assetCancelarEdicion": {
+      "what": "Cancels the editing: whatever was emptied or chosen goes back as it was, it is kept in the history and the asset returns to Management > Assets.",
+      "example": "You marked the serial number by mistake: you choose Cancel editing and the previous one is back."
+    },
+    "assetGestionPantalla": {
+      "what": "The complete assets (classification, model, serial number and the 6 photos), to search and look up. Here they are only viewed; to fix something use Edit.",
+      "example": "You search «Thermohygrometer» and see all the ones already finished."
     },
     "assetTypeSerial": {
       "what": "Whether the assets of this type have a serial number. Yes for sensors, phones and printers; No for chairs and tables. Only when it says Yes does the serial number count for an asset of this type to be 100% complete.",

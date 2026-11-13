@@ -1757,6 +1757,7 @@
             { "id": "colActFotoAbajo", "labelKey": "main.colActFotoAbajo", "permissionOnly": true },
             { "id": "colActEnLayout", "labelKey": "main.colActEnLayout", "permissionOnly": true },
             { "id": "colActDondeEsta", "labelKey": "main.colActDondeEsta", "permissionOnly": true },
+            { "id": "colActFalta", "labelKey": "main.colActFalta", "permissionOnly": true },
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
@@ -2477,6 +2478,17 @@
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
             { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-gestion-centro-dist-activos", "labelKey": "menu.catCentroDistActivos", "icon": "bx-cabinet", "href": "GesCentroDistActivos.html",
+          "submenu": [
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colActEditar", "labelKey": "main.colActEditar", "permissionOnly": true }
+              ]
+            }
           ]
         }
       ],

@@ -12911,6 +12911,8 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-centro-dist-qr-donde-esta': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-qr-donde-esta' },
     // Operaciones > QR's > Incidentes: el QR de Incidentes del centro de costos, desde la computadora.
     'cat-operaciones-centro-dist-qr-incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-qr-incidentes' },
+    // Gestión > Activos (2026-11-12): los activos completos, solo para buscar y consultar; Editar los regresa a Alta Activos con el dato marcado.
+    'cat-gestion-centro-dist-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-activos' },
     // Operaciones > QR's > Compra Pedido Manual y Surtido Pedido Manual (2026-11-12): lo que hay que comprar de los pedidos del QR (totales por código y desglose, PDF y Excel) y, por ahora vacía, el surtido.
     'cat-operaciones-centro-dist-compra-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-compra-pedido-manual' },
     'cat-operaciones-centro-dist-surtido-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-surtido-pedido-manual' },

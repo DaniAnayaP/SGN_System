@@ -204,6 +204,12 @@ const {
     listFixedAssetsByModel,
     countFixedAssetsByModel,
     fixedAssetModelUseCounts,
+    parseFixedAssetEditing,
+    parseFixedAssetBackup,
+    startFixedAssetEditionWithFields,
+    setFixedAssetPendingChoices,
+    setFixedAssetEditing,
+    FIXED_ASSET_EMPTY_ON_EDIT,
     countAssetModelsByType,
     countFixedAssetsByClass,
     getFixedAssetAnyScope,
@@ -11720,6 +11726,8 @@ function mapFixedAsset(row, ctx, companyName, pendingByRecord, placements) {
     return {
         id: row.id, registroUnico: row.db_id, code: fixedAssetCodeOf(row), status: row.status,
         complete: done.complete, missing: done.missing, photoCount: done.photos,
+        // «Editar» con elección de datos: lo que se marcó (null = no está en edición), lo que falta por elegir (modelo, «Aparece en el Layout», estatus)
+        editing: !!row.editing, editingFields: (parseFixedAssetEditing(row) || {}).fields || null, pendingChoices: (parseFixedAssetEditing(row) || {}).pending || [],
         modelId: row.model_id || null, modelLabel: model ? assetModelLabel(model) : '', typeNeedsSerial: type ? type.needs_serial !== 0 : true,
         costCenterId: row.cost_center_id, typeId: row.type_id, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '',
         classId: row.class_id, className: cls ? cls.name : '',
@@ -11919,8 +11927,12 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
     const ctx = fixedAssetContext(req);
     const pendingByRecord = getPendingColumnsByRecord(clientId, FIXED_ASSET_TABLE_KEY);
     res.set('Cache-Control', 'no-store');
+    // scope=pending: Operaciones > Alta Activos (los que todavía no están completos y los que regresaron a edición); scope=complete: Gestión > Activos (los completos que no están en edición); sin scope, todos.
+    const scope = ['pending', 'complete'].includes(req.query.scope) ? req.query.scope : 'all';
+    const inScope = (a) => scope === 'all' || (scope === 'complete' ? a.complete && !a.editing : !a.complete || a.editing);
     res.json({
-        assets: listFixedAssets(clientId, isTestAccount).map((r) => mapFixedAsset(r, ctx, client?.company_name, pendingByRecord, fixedAssetPlacementsMap(clientId))),
+        assets: listFixedAssets(clientId, isTestAccount).map((r) => mapFixedAsset(r, ctx, client?.company_name, pendingByRecord, fixedAssetPlacementsMap(clientId))).filter(inScope),
+        canEdit: fixedAssetCanEdit(req),
         types: [...ctx.types.values()].filter((t) => t.name).map((t) => ({ id: t.id, name: t.name, letter: t.letter || '', kind: t.kind || '', active: t.status === 'active', needsSerial: t.needs_serial !== 0 })),
         // los modelos del catálogo (los activos eligen uno del Tipo que tienen; uno inactivo o incompleto no se ofrece)
         models: [...ctx.models.values()].filter((m) => m.name).map((m) => ({
@@ -11987,6 +11999,12 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
     if (!existing) return res.status(404).json({ message: 'Asset not found.' });
     const { baseline, overrideConflicts, ...raw } = req.body || {};
     if (Object.prototype.hasOwnProperty.call(raw, 'typeId')) return res.status(400).json({ message: 'El tipo de un activo no se cambia: su código lleva la letra del tipo. Da de alta otro activo.', code: 'TYPE_LOCKED' });
+    // Un activo en edición con datos elegidos solo deja cambiar ESOS datos (también lo exige el servidor, no solo la pantalla).
+    const editInfo = parseFixedAssetEditing(existing);
+    if (editInfo) {
+        const locked = Object.keys(raw).filter((k) => Object.prototype.hasOwnProperty.call(FIXED_ASSET_PATCHABLE_FIELDS, k) && !editInfo.fields.includes(k));
+        if (locked.length) return res.status(403).json({ message: 'Este activo está en edición: solo se puede modificar lo que se marcó.', code: 'EDIT_LOCKED', fields: locked });
+    }
     // El nombre de compra, el personalizado, el modelo, la forma, las medidas y el peso vienen del modelo: no se escriben a mano (se elige otro modelo, o se corrige el modelo en Catálogos > Activos Fijos).
     if (ASSET_MODEL_FROM_KEYS.some((key) => Object.prototype.hasOwnProperty.call(raw, key))) return res.status(400).json({ message: 'Ese dato viene del modelo del activo: elige otro modelo, o corrígelo en Catálogos > Activos Fijos.', code: 'FROM_MODEL' });
     const ctx = fixedAssetContext(req);
@@ -12025,10 +12043,20 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
             logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey, oldValue: sanitizers[key] ? sanitizers[key](existing[column]) : existing[column], newValue: sanitizers[key] ? sanitizers[key](fromModel[key]) : fromModel[key], changedBy: changedByLabel(req) });
         });
     }
-    const row = updateFixedAsset(existing.id, clientId, appliedPatch, isTestAccount);
+    let row = updateFixedAsset(existing.id, clientId, appliedPatch, isTestAccount);
     syncFixedAssetIntoLayout(clientId, row); // el Layout guardado recibe el nombre, las medidas, la clasificación… nuevos
+    // Una edición con datos elegidos: elegir el modelo o «Aparece en el Layout» (aunque sea el mismo valor, si el cambio no quedó por autorizar) lo da por resuelto; con todo lo marcado lleno y nada por elegir, el activo regresa solo a Gestión.
+    let movedToGestion = false;
+    if (editInfo) {
+        const resolved = (key) => Object.prototype.hasOwnProperty.call(raw, key) && !pendingFields.includes(FIXED_ASSET_PATCHABLE_FIELDS[key].fieldKey) && !rejectedFields.includes(FIXED_ASSET_PATCHABLE_FIELDS[key].fieldKey) && !conflictFields.length;
+        const stillPending = editInfo.pending.filter((k) => !(['modelId', 'showInLayout'].includes(k) && resolved(k)));
+        if (stillPending.length !== editInfo.pending.length) row = setFixedAssetPendingChoices(existing.id, clientId, isTestAccount, stillPending);
+        const finished = finishFixedAssetEditionIfDone(req, row, ctx);
+        row = finished.row;
+        movedToGestion = finished.movedToGestion;
+    }
     const client = getClientById(clientId);
-    res.json({ asset: mapFixedAsset(row, ctx, client?.company_name, null), pendingFields, rejectedFields, conflictFields });
+    res.json({ asset: mapFixedAsset(row, ctx, client?.company_name, null), pendingFields, rejectedFields, conflictFields, movedToGestion });
 });
 // Desactivar (o volver a activar): los activos nunca se eliminan. Pide la hoja «Autorización para Desactivar».
 app.post('/api/business/fixed-assets/:id/status', requireAuth, requireCostCenter, (req, res) => {
@@ -12038,16 +12066,139 @@ app.post('/api/business/fixed-assets/:id/status', requireAuth, requireCostCenter
     if (!existing) return res.status(404).json({ message: 'Asset not found.' });
     if (!fixedAssetCanDelete(req)) return res.status(403).json({ message: 'No tienes permiso para desactivar activos.' });
     const status = req.body && req.body.status === 'inactive' ? 'inactive' : 'active';
+    // En una edición con datos elegidos el estatus solo se cambia si se marcó; elegirlo (aunque sea el mismo) lo da por resuelto.
+    const statusEdit = parseFixedAssetEditing(existing);
+    if (statusEdit && !statusEdit.pending.includes('status')) return res.status(403).json({ message: 'Este activo está en edición: solo se puede modificar lo que se marcó.', code: 'EDIT_LOCKED' });
+    const resolvingStatus = !!(statusEdit && statusEdit.pending.includes('status'));
     if (status === 'inactive' && existing.status === 'active') {
         const placed = fixedAssetPlacementOf(clientId, existing);
         if (placed) return res.status(409).json({ message: `El activo ${fixedAssetCodeOf(existing)} está dibujado en el Layout (${placementText(placed)}). Quítalo del Layout primero.`, code: 'PLACED' });
     }
-    if (status === existing.status) return res.json({ asset: mapFixedAsset(existing, fixedAssetContext(req), getClientById(clientId)?.company_name, null) });
+    if (status === existing.status && !resolvingStatus) return res.json({ asset: mapFixedAsset(existing, fixedAssetContext(req), getClientById(clientId)?.company_name, null) });
     const code = fixedAssetCodeOf(existing);
+    if (status === existing.status && resolvingStatus) {
+        logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey: 'main.colActEstatus', oldValue: '', newValue: FIXED_ASSET_STATUS_LABELS[status], changedBy: changedByLabel(req) });
+        let row = setFixedAssetPendingChoices(existing.id, clientId, isTestAccount, statusEdit.pending.filter((k) => k !== 'status'));
+        const ctx2 = fixedAssetContext(req);
+        const finished = finishFixedAssetEditionIfDone(req, row, ctx2);
+        return res.json({ asset: mapFixedAsset(finished.row, ctx2, getClientById(clientId)?.company_name, null), movedToGestion: finished.movedToGestion });
+    }
     logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey: 'main.colActEstatus', oldValue: FIXED_ASSET_STATUS_LABELS[existing.status], newValue: FIXED_ASSET_STATUS_LABELS[status], changedBy: changedByLabel(req) });
     notifyDataChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordLabel: code, fieldKey: 'main.colActEstatus', oldValue: FIXED_ASSET_STATUS_LABELS[existing.status], newValue: FIXED_ASSET_STATUS_LABELS[status], actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
-    const row = updateFixedAsset(existing.id, clientId, { status }, isTestAccount);
-    res.json({ asset: mapFixedAsset(row, fixedAssetContext(req), getClientById(clientId)?.company_name, null) });
+    let row = updateFixedAsset(existing.id, clientId, { status }, isTestAccount);
+    const ctxS = fixedAssetContext(req);
+    let movedToGestion = false;
+    if (resolvingStatus) {
+        row = setFixedAssetPendingChoices(existing.id, clientId, isTestAccount, statusEdit.pending.filter((k) => k !== 'status'));
+        const finished = finishFixedAssetEditionIfDone(req, row, ctxS);
+        row = finished.row;
+        movedToGestion = finished.movedToGestion;
+    }
+    res.json({ asset: mapFixedAsset(row, ctxS, getClientById(clientId)?.company_name, null), movedToGestion });
+});
+
+// --- «Editar» un activo completo (Gestión > Activos) -------------------------------------------------------------------------------------------------------
+// Un activo completo vive en Gestión > Activos (solo lectura, con historial y Editar). Editar pregunta QUÉ dato se quiere modificar y el activo regresa a Alta Activos con la etiqueta «En edición» y SOLO ese dato abierto: la clasificación, el número de
+// serie y las fotos marcados se vacían y quedan pendientes (lo que tenían queda en el historial); el modelo no se vacía (el activo sigue dibujado con el que tiene) y, igual que «Aparece en el Layout» y el estatus, queda por ELEGIR. Al volver a llenar
+// y elegir todo lo marcado, el activo regresa SOLO a Gestión; «Cancelar edición» regresa lo vaciado y lo elegido a como estaba. El Tipo no se cambia (el código lleva su letra).
+const FIXED_ASSET_EDIT_FIELD_COLS = {
+    classId: 'colActClasificacion', modelId: 'colActElegirModelo', serialNumber: 'colActSerie', showInLayout: 'colActEnLayout',
+    evidenceFront: 'colActFotoFrente', evidenceBack: 'colActFotoAtras', evidenceLeft: 'colActFotoIzq', evidenceRight: 'colActFotoDer', evidenceTop: 'colActFotoArriba', evidenceBottom: 'colActFotoAbajo',
+};
+const FIXED_ASSET_EDIT_LABELS = {
+    classId: 'Clasificación', modelId: 'Modelo', serialNumber: 'Número de serie', showInLayout: 'Aparece en el Layout', status: 'Estatus',
+    evidenceFront: 'Foto frente', evidenceBack: 'Foto atrás', evidenceLeft: 'Foto izquierda', evidenceRight: 'Foto derecha', evidenceTop: 'Foto arriba', evidenceBottom: 'Foto abajo',
+};
+// El botón Editar de Gestión > Activos pide su hoja en el árbol (colActEditar, clasificación Botones); el administrador del cliente no depende de hojas.
+const fixedAssetCanEdit = (req) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'gestion-activos', 'colActEditar');
+// ¿Ya se llenó todo lo marcado y se eligió lo que faltaba? Entonces la edición termina SOLA y el activo regresa a Gestión.
+function fixedAssetEditionIsDone(row, type) {
+    const info = parseFixedAssetEditing(row);
+    if (!info || info.pending.length) return false;
+    const filled = info.fields.every((key) => {
+        if (!Object.prototype.hasOwnProperty.call(FIXED_ASSET_EMPTY_ON_EDIT, key)) return true;
+        const v = row[FIXED_ASSET_PATCHABLE_FIELDS[key].column];
+        return v !== null && v !== undefined && String(v).trim() !== '';
+    });
+    return filled && fixedAssetCompleteness(row, type).complete;
+}
+function logFixedAssetScreenMove(req, row, from, to) {
+    logTableChange({ clientId: req.user.clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: row.id, recordLabel: fixedAssetCodeOf(row), action: 'update', fieldKey: 'main.assetUbicacionPantalla', oldValue: from, newValue: to, changedBy: changedByLabel(req) });
+}
+function finishFixedAssetEditionIfDone(req, row, ctx) {
+    if (!row || !row.editing || !fixedAssetEditionIsDone(row, ctx.types.get(row.type_id))) return { row, movedToGestion: false };
+    const done = setFixedAssetEditing(row.id, req.user.clientId, false, !!row.is_test_data);
+    logFixedAssetScreenMove(req, done, 'Alta Activos', 'Gestión > Activos');
+    return { row: done, movedToGestion: true };
+}
+app.post('/api/business/fixed-assets/:id/edit', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!fixedAssetCanEdit(req)) return res.status(403).json({ message: 'No tienes permiso para editar activos.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getFixedAssetById(intOf(req.params.id), clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Asset not found.' });
+    const ctx = fixedAssetContext(req);
+    const type = ctx.types.get(existing.type_id);
+    if (existing.editing) return res.status(409).json({ message: 'Este activo ya está en edición.', code: 'EDITING' });
+    if (!fixedAssetCompleteness(existing, type).complete) return res.status(409).json({ message: 'Este activo todavía no está completo: se termina de llenar en Alta Activos.', code: 'INCOMPLETE' });
+    const marked = [...new Set((Array.isArray(req.body && req.body.fields) ? req.body.fields : []).map(String))];
+    if (!marked.length) return res.status(400).json({ message: 'Marca al menos un dato para modificar.', code: 'EMPTY' });
+    const unknown = marked.filter((k) => k !== 'status' && !Object.prototype.hasOwnProperty.call(FIXED_ASSET_EDIT_FIELD_COLS, k));
+    if (unknown.length) return res.status(400).json({ message: 'Hay datos que no se pueden editar: ' + unknown.join(', ') + '.', code: 'UNKNOWN', fields: unknown });
+    if (marked.includes('serialNumber') && type && type.needs_serial === 0) return res.status(400).json({ message: 'El tipo de este activo no lleva número de serie.', code: 'NOSERIAL' });
+    if (marked.includes('status') && !fixedAssetCanDelete(req)) return res.status(403).json({ message: 'No tienes permiso para cambiar el estatus de los activos.', code: 'noPermission', field: 'status' });
+    if (!req.user.isClientAdmin) {
+        // modificar un dato que ya tiene valor pide el nivel «Modificar» de su hoja, igual que en la tabla
+        const grants = getUserEffectiveGrants(req.user.sub);
+        for (const key of marked.filter((k) => k !== 'status')) {
+            if (getColumnGrantLevel(grants, FIXED_ASSET_TABLE_KEY, FIXED_ASSET_EDIT_FIELD_COLS[key]) !== 'editar') {
+                return res.status(403).json({ message: 'No tienes permiso para modificar «' + (FIXED_ASSET_EDIT_LABELS[key] || key) + '».', code: 'noPermission', field: key });
+            }
+        }
+    }
+    const fields = marked.filter((k) => k !== 'status');
+    const pending = [...fields.filter((k) => k === 'modelId' || k === 'showInLayout'), ...(marked.includes('status') ? ['status'] : [])];
+    const sanitizers = fixedAssetSanitizers(ctx);
+    const row = startFixedAssetEditionWithFields(existing.id, clientId, isTestAccount, { fields, pending });
+    const code = fixedAssetCodeOf(existing);
+    fields.filter((k) => Object.prototype.hasOwnProperty.call(FIXED_ASSET_EMPTY_ON_EDIT, k)).forEach((key) => {
+        const { column, fieldKey } = FIXED_ASSET_PATCHABLE_FIELDS[key];
+        logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey, oldValue: sanitizers[key] ? sanitizers[key](existing[column]) : existing[column], newValue: '', changedBy: changedByLabel(req) });
+    });
+    if (marked.includes('status')) logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey: 'main.colActEstatus', oldValue: FIXED_ASSET_STATUS_LABELS[existing.status], newValue: '', changedBy: changedByLabel(req) });
+    logFixedAssetScreenMove(req, row, 'Gestión > Activos', 'Alta Activos');
+    res.json({ asset: mapFixedAsset(row, ctx, getClientById(clientId)?.company_name, null) });
+});
+// Cancelar una edición con datos elegidos: lo vaciado y lo elegido regresan a como estaba (queda en el historial) y el activo vuelve a Gestión.
+app.post('/api/business/fixed-assets/:id/cancel-edit', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!fixedAssetCanEdit(req)) return res.status(403).json({ message: 'No tienes permiso para cancelar la edición de activos.' });
+    const { clientId, isTestAccount } = req.user;
+    const existing = getFixedAssetById(intOf(req.params.id), clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Asset not found.' });
+    const info = parseFixedAssetEditing(existing);
+    if (!info) return res.status(409).json({ message: 'Este activo no está en una edición con datos elegidos.', code: 'notFields' });
+    const ctx = fixedAssetContext(req);
+    const backup = parseFixedAssetBackup(existing);
+    const patch = {};
+    info.fields.forEach((key) => { if (Object.prototype.hasOwnProperty.call(backup, key)) patch[key] = backup[key]; });
+    // si ya eligió otro modelo, regresan el modelo y sus datos
+    if ('modelId' in patch && patch.modelId && patch.modelId !== existing.model_id) {
+        const model = ctx.models.get(Number(patch.modelId));
+        if (model) Object.assign(patch, normalizeFixedAssetValues(assetValuesFromModel(model), ctx, null).values || {});
+    }
+    const sanitizers = fixedAssetSanitizers(ctx);
+    const code = fixedAssetCodeOf(existing);
+    Object.keys(patch).forEach((key) => {
+        const def = FIXED_ASSET_PATCHABLE_FIELDS[key];
+        if (!def || String(existing[def.column] ?? '') === String(patch[key] ?? '')) return;
+        logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey: def.fieldKey, oldValue: sanitizers[key] ? sanitizers[key](existing[def.column]) : existing[def.column], newValue: sanitizers[key] ? sanitizers[key](patch[key]) : patch[key], changedBy: changedByLabel(req) });
+    });
+    updateFixedAsset(existing.id, clientId, patch, isTestAccount);
+    const row = setFixedAssetEditing(existing.id, clientId, false, isTestAccount);
+    syncFixedAssetIntoLayout(clientId, row);
+    logFixedAssetScreenMove(req, row, 'Alta Activos', 'Gestión > Activos');
+    res.json({ asset: mapFixedAsset(row, ctx, getClientById(clientId)?.company_name, null), movedToGestion: true });
 });
 
 // --- Capacidad Almacenamiento (Operaciones, C. Distribución) ---------------------------------------------------------------------------------------------
