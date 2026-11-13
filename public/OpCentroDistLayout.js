@@ -4940,8 +4940,8 @@ function showEditor() {
 
 // ---- cargar el Layout guardado -----------------------------------------------------------------------------------------
 // ---- Colocar activos y sensores de Alta Activos (pasos Activos y Sensores) ------------------------------------------------------------------------------------
-// Los activos del Layout no se crean aquí: se dan de alta en Alta Activos y aquí solo se colocan. La lista trae los del centro de costos que aparecen en el Layout (Alta Activos > «Aparece en el Layout» = Sí), están activos y todavía no
-// están colocados. En el paso Activos salen los que van sobre una huella (uno sin largo, profundidad y alto no se puede dibujar) y se elige la huella; en el paso Sensores, los de tipo «Sensor» (se dibujan como Sensor en el catálogo
+// Los activos del Layout no se crean aquí: se dan de alta en Alta Activos y aquí solo se colocan. La lista trae los del centro de costos que aparecen en el Layout (Alta Activos > «Aparece en el Layout» = Sí), están activos, están COMPLETOS
+// (tipo, clasificación, modelo, número de serie y las 6 fotos) y todavía no están colocados. En el paso Activos salen los que van sobre una huella (uno sin largo, profundidad y alto no se puede dibujar) y se elige la huella; en el paso Sensores, los de tipo «Sensor» (se dibujan como Sensor en el catálogo
 // Activos Fijos), que van sobre una pared: el renglón nace con la primera pared y ahí se le dice cuál, a qué distancia y a qué altura. Al colocarlo toma de su renglón el código y el nombre (LayoutCalc.applyAssetToSpace).
 let placeModalEl = null;
 function closePlaceAssets() { if (placeModalEl) placeModalEl.hidden = true; }
@@ -4950,7 +4950,7 @@ function openPlaceAssets(opts = {}) {
     const d = state.draft;
     if (!d || !canEdit(sensors ? 'sensores' : 'activos')) return;
     const placed = new Set([...d.spaces, ...(d.sensors || [])].map((s) => s.assetRef).filter(Boolean));
-    const list = (state.fixedAssets || []).filter((a) => a.status === 'active' && a.showInLayout && !placed.has(a.id) && ((a.typeKind === 'sensor') === sensors));
+    const list = (state.fixedAssets || []).filter((a) => a.status === 'active' && a.showInLayout && a.complete && !placed.has(a.id) && ((a.typeKind === 'sensor') === sensors)); // solo los activos completos en Alta Activos se pueden colocar
     const dimsOk = (a) => sensors || (a.length > 0 && a.depth > 0 && a.height > 0);
     if (!placeModalEl) {
         placeModalEl = document.createElement('div');

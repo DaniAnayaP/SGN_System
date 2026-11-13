@@ -11679,6 +11679,19 @@ const FIXED_ASSET_PHOTO_KEYS = ['evidenceFront', 'evidenceBack', 'evidenceLeft',
 const FIXED_ASSET_TEXT_KEYS = { purchaseName: 160, customName: 160, model: 120, serialNumber: 120 };
 const FIXED_ASSET_NUM_LIMITS = { height: [100000, 2], length: [100000, 2], depth: [100000, 2], weight: [10000000, 3], volume: [1000000, 4] }; // [máximo, decimales]
 const fixedAssetCodeOf = (row) => `${row.code_letter || ''}${String(row.code_number || 0).padStart(3, '0')}`;
+// ¿Está COMPLETO un activo? (2026-11-12, Daniel: «solo los activos que estén completos se pueden agregar al Layout».) Tipo, clasificación, modelo elegido, número de serie (solo si su Tipo lo lleva) y las 6 fotos. Son opcionales el nombre personalizado y
+// «Aparece en el Layout»; el nombre, la forma, las medidas y el peso vienen del modelo. Devuelve { complete, missing: ['class' | 'model' | 'serial' | 'photos'], photos }.
+function fixedAssetCompleteness(row, type) {
+    const missing = [];
+    if (!row.class_id) missing.push('class');
+    if (!row.model_id) missing.push('model');
+    if ((!type || type.needs_serial !== 0) && !String(row.serial_number || '').trim()) missing.push('serial');
+    const photos = [row.evidence_front, row.evidence_back, row.evidence_left, row.evidence_right, row.evidence_top, row.evidence_bottom].filter((v) => String(v || '').trim()).length;
+    if (photos < 6) missing.push('photos');
+    return { complete: !missing.length, missing, photos };
+}
+const FIXED_ASSET_MISSING_LABELS = { class: 'clasificación', model: 'modelo', serial: 'número de serie' };
+const fixedAssetMissingText = (done) => done.missing.map((k) => (k === 'photos' ? `fotos (${done.photos} de 6)` : FIXED_ASSET_MISSING_LABELS[k])).join(', ');
 const fixedAssetCan = (req, colKey) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), FIXED_ASSET_TABLE_KEY, colKey);
 const fixedAssetCanDelete = (req) => !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), FIXED_ASSET_TABLE_KEY, 'colActDeleteAuth');
 // Volumen en m³: rectangular = alto × largo × profundidad; cilíndrica = π × (largo ÷ 2)² × alto (el largo es el diámetro); irregular = el que escribió quien lo dio de alta.
@@ -11703,8 +11716,10 @@ function mapFixedAsset(row, ctx, companyName, pendingByRecord, placements) {
     const type = ctx.types.get(row.type_id);
     const cls = ctx.classes.get(row.class_id);
     const model = ctx.models ? ctx.models.get(row.model_id) : null;
+    const done = fixedAssetCompleteness(row, type);
     return {
         id: row.id, registroUnico: row.db_id, code: fixedAssetCodeOf(row), status: row.status,
+        complete: done.complete, missing: done.missing, photoCount: done.photos,
         modelId: row.model_id || null, modelLabel: model ? assetModelLabel(model) : '', typeNeedsSerial: type ? type.needs_serial !== 0 : true,
         costCenterId: row.cost_center_id, typeId: row.type_id, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '',
         classId: row.class_id, className: cls ? cls.name : '',
@@ -11815,6 +11830,8 @@ function applyFixedAssetsToLayout(layoutIn, { clientId, centerId, previous }) {
         if (!before.has(ref)) {
             if (row.status !== 'active') return fail(`El activo ${code} está desactivado en Alta Activos: actívalo para colocarlo.`);
             if (!row.show_in_layout) return fail(`El activo ${code} no aparece en el Layout (Alta Activos > Aparece en el Layout).`);
+            const done = fixedAssetCompleteness(row, cat.types.get(row.type_id));
+            if (!done.complete) return fail(`El activo ${code} todavía no está completo en Alta Activos (le falta: ${fixedAssetMissingText(done)}): termínalo para colocarlo.`);
             if (!asSensor && !(row.length_cm > 0 && row.depth_cm > 0 && row.height_cm > 0)) return fail(`El activo ${code} no tiene largo, profundidad y alto en Alta Activos: captúralos para poder dibujarlo.`);
         }
         return { item: asSensor ? { ...item, assetRef: ref, code } : LayoutCalc.applyAssetToSpace(item, layoutAssetInfo(row), opts) };
@@ -11890,6 +11907,7 @@ function layoutFixedAssetsFor(req, layoutRow, centerId) {
         return {
             id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name, purchaseName: a.purchase_name, customName: a.custom_name, model: a.model, serialNumber: a.serial_number,
             typeId: a.type_id || 0, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
+            complete: fixedAssetCompleteness(a, type).complete, // solo los activos completos se pueden colocar en el Layout
             shape: a.shape, length: a.length_cm, depth: a.depth_cm, height: a.height_cm, status: a.status, showInLayout: !!a.show_in_layout,
         };
     });

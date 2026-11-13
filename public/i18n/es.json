@@ -1845,7 +1845,7 @@
     "layoutColocarActivo": "+ Colocar activo de Alta Activos",
     "layoutColocarTitulo": "Colocar activos de Alta Activos",
     "layoutColocarBuscar": "Buscar por código, nombre o tipo…",
-    "layoutColocarVacio": "No hay activos para colocar. Dalos de alta en Alta Activos (con «Aparece en el Layout» en Sí); los que ya están en el Layout no salen aquí.",
+    "layoutColocarVacio": "No hay activos para colocar. Solo salen los activos completos en Alta Activos (tipo, clasificación, modelo, número de serie y las 6 fotos) con «Aparece en el Layout» en Sí; los que ya están en el Layout no salen aquí.",
     "layoutColocarSinMedidas": "(le faltan largo, profundidad o alto en Alta Activos)",
     "layoutColocarSinHuella": "Elige la huella donde van.",
     "layoutColocarSinElegir": "Marca al menos un activo.",
@@ -1853,7 +1853,7 @@
     "layoutColocarSensor": "+ Colocar sensor de Alta Activos",
     "layoutColocarTituloSensor": "Colocar sensores de Alta Activos",
     "layoutSensorEquipo": "Equipo",
-    "layoutColocarVacioSensor": "No hay sensores para colocar. Dalos de alta en Alta Activos con un tipo que se dibuje como «Sensor» y «Aparece en el Layout» en Sí; los que ya están en el Layout no salen aquí.",
+    "layoutColocarVacioSensor": "No hay sensores para colocar. Solo salen los sensores completos en Alta Activos (tipo que se dibuje como «Sensor», clasificación, modelo, número de serie y las 6 fotos) con «Aparece en el Layout» en Sí; los que ya están en el Layout no salen aquí.",
     "layoutType_space_sensor": "Sensor",
     "layoutActivoDeRegistro": "Viene de Alta Activos: se cambia allá.",
     "colActDondeEsta": "Dónde está",
@@ -6233,7 +6233,7 @@
       "example": "la huella H001 dice 3: en Activos hay tres renglones de H001."
     },
     "layoutColocarSensor": {
-      "what": "Coloca un sensor que ya se dio de alta en Alta Activos (un activo de un tipo que se dibuja como «Sensor»). Trae de su renglón el código, el nombre, el modelo y el S/N; aquí le dices en qué pared va, a qué distancia y a qué altura, y qué mide (temperatura, humedad o las dos).",
+      "what": "Coloca un sensor que ya está completo en Alta Activos (un activo de un tipo que se dibuja como «Sensor», con su clasificación, modelo, número de serie y las 6 fotos). Trae de su renglón el código, el nombre, el modelo y el S/N; aquí le dices en qué pared va, a qué distancia y a qué altura, y qué mide (temperatura, humedad o las dos).",
       "example": "el Traceable 4410 (HT001): lo colocas, eliges la pared M002, 1.5 m desde el inicio y 1.2 m de altura, y mide temperatura y humedad."
     },
     "layoutSensorEquipo": {
@@ -6241,7 +6241,7 @@
       "example": "Sensor Temperatura del Ambiente · TRACEABLE 4410TR · S/N 261237911."
     },
     "layoutColocarActivo": {
-      "what": "Coloca en una huella los activos que ya se dieron de alta en Alta Activos (solo salen los que aparecen en el Layout, están activos y todavía no están colocados). Cada activo trae de su renglón el código, el nombre, el tipo, la clasificación y las medidas; aquí solo eliges dónde va y le pones sus niveles.",
+      "what": "Coloca en una huella los activos que ya se dieron de alta en Alta Activos (solo salen los que están completos, aparecen en el Layout, están activos y todavía no están colocados). Cada activo trae de su renglón el código, el nombre, el tipo, la clasificación y las medidas; aquí solo eliges dónde va y le pones sus niveles.",
       "example": "eliges la zona y la huella H001, marcas R001 y R002 y los colocas: salen dos renglones de H001 en el paso Activos."
     },
     "layoutActivoDeRegistro": {
