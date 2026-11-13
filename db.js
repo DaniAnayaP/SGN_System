@@ -2423,7 +2423,10 @@ for (const [col, ddl] of [['custom_name', "TEXT NOT NULL DEFAULT ''"], ['model_n
     // Apariencia del MODELO en el Layout (2026-11-13, Daniel: «que se elija conforme el modelo cómo se verá en el layout»): '' = la del Tipo (como se dibujaba hasta hoy); si no, una de las apariencias de ese tipo (ver ASSET_LOOKS en server.js).
     ['look', "TEXT NOT NULL DEFAULT ''"],
     // Calibración (2026-11-13): needs_calibration es del TIPO (1 = sus activos llevan calibración: los sensores; 0 = no) y calibration_months es del MODELO (cada cuántos meses se vuelve a calibrar; con él se propone la fecha de vencimiento).
-    ['needs_calibration', 'INTEGER NOT NULL DEFAULT 0'], ['calibration_months', 'INTEGER NOT NULL DEFAULT 0']]) {
+    ['needs_calibration', 'INTEGER NOT NULL DEFAULT 0'], ['calibration_months', 'INTEGER NOT NULL DEFAULT 0'],
+    // Criterios y avisos de activos (2026-11-13): del catálogo «Qué se mide» (activos-criterios): unit = su unidad (°C, %, kg, h) y builtin_key = a cuál de los de fábrica corresponde ('' = lo creó la empresa); kind = cómo se limita
+    // (range | max | min | every | zone). Del catálogo «Qué se avisa» (activos-avisos): builtin_key. Del MODELO (activos-modelos): criteria_ids y aviso_ids = lo que mide y lo que avisa, como texto JSON canónico [id, id, ...] ('' = nada).
+    ['unit', "TEXT NOT NULL DEFAULT ''"], ['builtin_key', "TEXT NOT NULL DEFAULT ''"], ['criteria_ids', "TEXT NOT NULL DEFAULT ''"], ['aviso_ids', "TEXT NOT NULL DEFAULT ''"]]) {
     if (!articleCategoryColumns.some((c) => c.name === col)) db.exec(`ALTER TABLE article_categories ADD COLUMN ${col} ${ddl}`);
 }
 
@@ -3154,6 +3157,7 @@ function createClient({
     seedTipoCodigoValues(created.id);
     seedActivosFijosValues(created.id);
     seedActivosClasificacionValues(created.id);
+    seedActivosCriteriosAvisosValues(created.id);
     seedTransitoEquiposValues(created.id);
     seedIncidentesCriteriosValues(created.id);
     resetClientTimeZoneCache();
@@ -3735,6 +3739,8 @@ const TABLE_GRANT_PATHS = {
     // los modelos viven en la misma pantalla que los Tipos (Catálogos > Activos Fijos): comparten su nodo del árbol y sus hojas de botones
     'activos-modelos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-fijos' },
     'activos-clasificacion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-clasificacion' },
+    'activos-criterios': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-criterios' },
+    'activos-avisos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-avisos' },
     'transito-equipos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-transito-equipos' },
     'incidentes-criterios': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-incidentes-criterios' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
@@ -3941,6 +3947,8 @@ const BUTTON_NOTIFY_COLUMNS = {
     'activos-fijos': CATEGORY_BUTTON_NOTIFY,
     'activos-modelos': CATEGORY_BUTTON_NOTIFY,
     'activos-clasificacion': CATEGORY_BUTTON_NOTIFY,
+    'activos-criterios': CATEGORY_BUTTON_NOTIFY,
+    'activos-avisos': CATEGORY_BUTTON_NOTIFY,
     'transito-equipos': CATEGORY_BUTTON_NOTIFY,
     'incidentes-criterios': CATEGORY_BUTTON_NOTIFY,
     'layout': { create: 'colLayoutCrearDesdeCero' },
@@ -5951,7 +5959,7 @@ function parseFixedAssetEditing(row) {
     try {
         const parsed = JSON.parse(row.editing_fields);
         if (!parsed || !Array.isArray(parsed.fields)) return null;
-        return { fields: parsed.fields.filter((k) => Object.prototype.hasOwnProperty.call(FIXED_ASSET_PATCHABLE_FIELDS, k)), pending: (Array.isArray(parsed.pending) ? parsed.pending : []).filter((k) => ['modelId', 'showInLayout', 'status'].includes(k)) };
+        return { fields: parsed.fields.filter((k) => Object.prototype.hasOwnProperty.call(FIXED_ASSET_PATCHABLE_FIELDS, k) || /^crit:\d+$/.test(String(k))), pending: (Array.isArray(parsed.pending) ? parsed.pending : []).filter((k) => /^crit:\d+$/.test(String(k)) || ['modelId', 'showInLayout', 'status'].includes(k)) };
     } catch { return null; }
 }
 function parseFixedAssetBackup(row) {
@@ -5963,6 +5971,7 @@ function startFixedAssetEditionWithFields(id, clientId, forTestAccount, { fields
     const backup = {};
     const emptied = {};
     fields.forEach((key) => {
+        if (/^crit:\d+$/.test(key)) { const l = getAssetLimitsOf(id)[Number(key.slice(5))]; backup[key] = l ? { min: l.min, max: l.max } : null; return; }
         backup[key] = row[FIXED_ASSET_PATCHABLE_FIELDS[key].column];
         if (Object.prototype.hasOwnProperty.call(FIXED_ASSET_EMPTY_ON_EDIT, key)) emptied[key] = FIXED_ASSET_EMPTY_ON_EDIT[key];
     });
@@ -7331,6 +7340,10 @@ const ARTICLE_CATEGORY_TYPES = {
     'activos-modelos': { prefix: 'MOD', tableKey: 'activos-modelos', pantalla: 'Nuestros Activos Fijos' },
     // Clasificación de Activos (Mobiliario operativo, Mobiliario almacenamiento…): la lista que va ANTES del tipo. Cada una lleva su métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
     'activos-clasificacion': { prefix: 'ACL', tableKey: 'activos-clasificacion', pantalla: 'Nuestras Clasificaciones de Activos' },
+    // Qué se mide (2026-11-13): la lista de criterios que un modelo de activo puede medir (temperatura, humedad, peso, lectura a tiempo…). Cada criterio es UNA columna de las tablas de activos (Alta Activos y Gestión); lo que se limita se escribe en cada activo.
+    'activos-criterios': { prefix: 'CRI', tableKey: 'activos-criterios', pantalla: 'Qué se mide' },
+    // Qué se avisa (2026-11-13): los tipos de aviso de actividad que un modelo puede dar (lecturas, datos del activo, calibración, mantenimiento, limpieza…).
+    'activos-avisos': { prefix: 'AVI', tableKey: 'activos-avisos', pantalla: 'Qué se avisa' },
     // Lo que transita (personas, montacargas, carritos, plataformas… con su ancho, largo y alto): lo eligen los pasillos (Layout > Tránsito) y los objetos (Layout > Objetos).
     'transito-equipos': { prefix: 'TRE', tableKey: 'transito-equipos', pantalla: 'Lo que Transita' },
     // Criterios de Incidentes (Pickeo cruzado, Error de lote, Acomodar por agrupación…): cada criterio pertenece a UNA categoría (kind = mayor | menor | recomendacion). Los eligen quienes reportan en el QR de Incidentes.
@@ -7453,10 +7466,17 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
         volume: { column: 'volume_m3', fieldKey: 'main.colActModVolumen' },
         look: { column: 'look', fieldKey: 'main.colActModApariencia' },
         calibrationMonths: { column: 'calibration_months', fieldKey: 'main.colActModVigenciaCal' },
+        criteriaIds: { column: 'criteria_ids', fieldKey: 'main.colActModCriterios' },
+        avisoIds: { column: 'aviso_ids', fieldKey: 'main.colActModAvisos' },
     },
     'activos-clasificacion': {
         kind: { column: 'kind', fieldKey: 'main.colActClasMetrica' },
     },
+    'activos-criterios': {
+        kind: { column: 'kind', fieldKey: 'main.colCritLimite' },
+        unit: { column: 'unit', fieldKey: 'main.colCritUnidad' },
+    },
+    'activos-avisos': {},
     'incidentes-criterios': {
         kind: { column: 'kind', fieldKey: 'main.colIncCritCategoria' },
     },
@@ -7472,7 +7492,8 @@ function articleCategoryPatchableFields(categoryType) {
 }
 const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' }, widthM: { column: 'width_m' }, lengthM: { column: 'length_m' }, heightM: { column: 'height_m' }, letter: { column: 'letter' },
     needsSerial: { column: 'needs_serial' }, customName: { column: 'custom_name' }, modelNumber: { column: 'model_number' }, shape: { column: 'shape' }, height: { column: 'height_cm' }, length: { column: 'length_cm' }, depth: { column: 'depth_cm' },
-    weight: { column: 'weight_kg' }, volume: { column: 'volume_m3' }, look: { column: 'look' }, needsCalibration: { column: 'needs_calibration' }, calibrationMonths: { column: 'calibration_months' } };
+    weight: { column: 'weight_kg' }, volume: { column: 'volume_m3' }, look: { column: 'look' }, needsCalibration: { column: 'needs_calibration' }, calibrationMonths: { column: 'calibration_months' },
+    unit: { column: 'unit' }, criteriaIds: { column: 'criteria_ids' }, avisoIds: { column: 'aviso_ids' } };
 
 function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
     const sets = [];
@@ -9630,6 +9651,8 @@ const WEB_SCREEN_CATALOG = [
     { key: 'activos-fijos', labelKey: 'menu.catCentroDistActivosFijos' },
     { key: 'activos-modelos', labelKey: 'menu.catCentroDistActivosFijos' },
     { key: 'activos-clasificacion', labelKey: 'menu.catCentroDistActivosClasificacion' },
+    { key: 'activos-criterios', labelKey: 'menu.catCentroDistActivosCriterios' },
+    { key: 'activos-avisos', labelKey: 'menu.catCentroDistActivosAvisos' },
     { key: 'transito-equipos', labelKey: 'menu.catCentroDistTransitoEquipos' },
     { key: 'incidentes-criterios', labelKey: 'menu.catCentroDistIncidentesCriterios' },
     { key: 'nuestras-cotizaciones', labelKey: 'menu.opTransVolCotizaciones' },
@@ -13951,6 +13974,208 @@ function seedActivosClasificacionAdministrarOnce() {
     })();
     console.log(`[db] Activos clasificación: ${added} «Activo para administrar» created (one-time).`);
 }
+
+// --- Criterios, límites y avisos de activos (2026-11-13) -----------------------------------------------------------------------------------------------
+// Dos catálogos nuevos (Catálogos > Activos Fijos): «Qué se mide» (activos-criterios: temperatura, humedad, peso, lectura a tiempo, limpieza a tiempo, salir de la zona) y «Qué se avisa» (activos-avisos: lecturas, datos del activo,
+// calibración, mantenimiento, limpieza). El MODELO solo elige de ahí (article_categories.criteria_ids / aviso_ids). Cada criterio es UNA columna de las tablas de activos; el límite lo escribe cada activo (asset_limits). Lo que no mide
+// el modelo sale «N/A». Las lecturas de los criterios y avisos sin pantalla propia se capturan en Operaciones > Lecturas (asset_readings). Las alertas vigentes y su historial viven en asset_alert_episodes.
+const ASSET_CRITERIA_DEFAULTS = [
+    { key: 'temperature', name: 'Temperatura', kind: 'range', unit: '°C', description: 'Rango (mínimo y máximo). La lectura llega del QR y la App de Temperaturas o de Operaciones > Lecturas.' },
+    { key: 'humidity', name: 'Humedad', kind: 'range', unit: '%', description: 'Rango (mínimo y máximo). La lectura llega del QR y la App de Temperaturas o de Operaciones > Lecturas.' },
+    { key: 'weight', name: 'Peso', kind: 'max', unit: 'kg', description: 'Solo máximo. La lectura se captura en Operaciones > Lecturas.' },
+    { key: 'readOnTime', name: 'Lectura a tiempo', kind: 'every', unit: 'h', description: 'Cada cuántas horas debe leerse el activo; si pasa ese tiempo sin ninguna lectura hay alerta.' },
+    { key: 'cleanOnTime', name: 'Limpieza a tiempo', kind: 'every', unit: 'h', description: 'Cada cuántas horas debe limpiarse el activo (QR de Limpieza); si pasa ese tiempo sin limpiar hay alerta.' },
+    { key: 'leaveZone', name: 'Salir de la zona (GPS)', kind: 'zone', unit: '', status: 'inactive', description: 'Próximamente: el equipo sale de su zona permitida. Necesita el GPS del celular.' },
+];
+const ASSET_AVISOS_DEFAULTS = [
+    { key: 'readings', name: 'Lecturas', description: 'Cada temperatura, humedad, peso u otra lectura registrada.' },
+    { key: 'assetData', name: 'Datos del activo', description: 'Código, serie, modelo, límites o fotos actualizados.' },
+    { key: 'calibration', name: 'Calibración', description: 'Certificado registrado. Vencida o fuera de tolerancia es alerta.' },
+    { key: 'maintenance', name: 'Mantenimiento', description: 'Preventivo registrado, falla reportada, atendida o cerrada. Vencido o falla abierta es alerta.' },
+    { key: 'cleaning', name: 'Limpieza', description: 'Limpieza terminada por el QR.' },
+];
+// Una empresa nueva (o una que todavía no los tiene) recibe los de fábrica. Los de fábrica no se eliminan ni cambian de forma (solo nombre, descripción y estatus); cada empresa agrega los suyos.
+function seedActivosCriteriosAvisosValues(clientId) {
+    let added = 0;
+    const has = (type) => db.prepare('SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = ? AND is_test_data = 0 LIMIT 1').get(clientId, type);
+    if (!has('activos-criterios')) {
+        ASSET_CRITERIA_DEFAULTS.forEach((d) => {
+            const row = createArticleCategory({ clientId, categoryType: 'activos-criterios', isTestData: false });
+            db.prepare('UPDATE article_categories SET name = ?, description = ?, kind = ?, unit = ?, builtin_key = ?, status = ? WHERE id = ?').run(d.name, d.description, d.kind, d.unit, d.key, d.status || 'active', row.id);
+            added += 1;
+        });
+    }
+    if (!has('activos-avisos')) {
+        ASSET_AVISOS_DEFAULTS.forEach((d) => {
+            const row = createArticleCategory({ clientId, categoryType: 'activos-avisos', isTestData: false });
+            db.prepare("UPDATE article_categories SET name = ?, description = ?, builtin_key = ?, status = 'active' WHERE id = ?").run(d.name, d.description, d.key, row.id);
+            added += 1;
+        });
+    }
+    return added;
+}
+const ACTIVOS_CRITERIOS_SEED_KEY = 'seed-activos-criterios-avisos-v1';
+function seedActivosCriteriosAvisosOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_CRITERIOS_SEED_KEY)) return;
+    let seeded = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => { seeded += seedActivosCriteriosAvisosValues(c.id); });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ACTIVOS_CRITERIOS_SEED_KEY);
+    })();
+    console.log(`[db] Seeded the «Qué se mide» and «Qué se avisa» catalogs for existing clients: ${seeded} values (one-time).`);
+}
+// Las dos pantallas nuevas las reciben, una sola vez, quienes ya tienen el catálogo Activos Fijos (los datos de las columnas no piden hoja: por omisión «Solo ver»).
+const CRITERIOS_SCREENS_SEED_KEY = 'seed-activos-criterios-avisos-pantallas-v1';
+function seedCriteriosCatalogScreens() {
+    const fijos = TABLE_GRANT_PATHS['activos-fijos'];
+    const crit = TABLE_GRANT_PATHS['activos-criterios'];
+    const avi = TABLE_GRANT_PATHS['activos-avisos'];
+    if (!fijos || !crit || !avi) return;
+    seedLeavesForScreenHolders(CRITERIOS_SCREENS_SEED_KEY, fijos, [crit.submenuPrefix, avi.submenuPrefix], 'the Qué se mide and Qué se avisa catalogs');
+}
+db.exec(`
+    -- El límite de cada activo en cada criterio que su modelo mide: rango = min y max; solo máximo = max; solo mínimo = min; cada N horas = max (las horas).
+    CREATE TABLE IF NOT EXISTS asset_limits (
+        asset_id      INTEGER NOT NULL REFERENCES fixed_assets(id) ON DELETE CASCADE,
+        criterion_id  INTEGER NOT NULL,
+        min_value     REAL,
+        max_value     REAL,
+        updated_by    TEXT NOT NULL DEFAULT '',
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (asset_id, criterion_id)
+    );
+    -- Operaciones > Lecturas: una lectura de un criterio (kind 'value': valor en unidad del criterio) o una actividad de un aviso (kind 'activity': solo nota). La hora la pone el servidor (UTC) salvo que la lectura traiga la suya.
+    CREATE TABLE IF NOT EXISTS asset_readings (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id        INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        db_id            TEXT NOT NULL,
+        record_number    INTEGER NOT NULL,
+        is_test_data     INTEGER NOT NULL DEFAULT 0,
+        cost_center_id   INTEGER NOT NULL DEFAULT 0,
+        asset_id         INTEGER NOT NULL REFERENCES fixed_assets(id) ON DELETE CASCADE,
+        kind             TEXT NOT NULL DEFAULT 'value',
+        criterion_id     INTEGER,
+        aviso_id         INTEGER,
+        value            REAL,
+        note             TEXT NOT NULL DEFAULT '',
+        read_at          TEXT NOT NULL,
+        person_name      TEXT NOT NULL DEFAULT '',
+        created_by       TEXT NOT NULL DEFAULT '',
+        created_by_user_id INTEGER,
+        created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_asset_readings_asset ON asset_readings (client_id, asset_id, read_at);
+    -- Alertas por activo: un episodio = una alerta desde que empieza hasta que se apaga sola (ended_at). alert_key identifica la causa ('crit:12', 'calibration', 'fault', 'preventive'); solo una activa por activo y causa.
+    CREATE TABLE IF NOT EXISTS asset_alert_episodes (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id        INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data     INTEGER NOT NULL DEFAULT 0,
+        cost_center_id   INTEGER NOT NULL DEFAULT 0,
+        asset_id         INTEGER NOT NULL REFERENCES fixed_assets(id) ON DELETE CASCADE,
+        alert_key        TEXT NOT NULL,
+        label            TEXT NOT NULL DEFAULT '',
+        severity         TEXT NOT NULL DEFAULT 'medium',
+        detail           TEXT NOT NULL DEFAULT '',
+        started_at       TEXT NOT NULL,
+        ended_at         TEXT,
+        end_detail       TEXT NOT NULL DEFAULT '',
+        ack_by           TEXT NOT NULL DEFAULT '',
+        ack_by_user_id   INTEGER,
+        ack_at           TEXT,
+        notified_at      TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_alert_active ON asset_alert_episodes (asset_id, alert_key) WHERE ended_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_asset_alert_client ON asset_alert_episodes (client_id, is_test_data, ended_at);
+`);
+// Los límites de todos los activos de una empresa: Map(assetId -> { [criterionId]: { min, max } }).
+function listAssetLimitsMap(clientId) {
+    const map = new Map();
+    db.prepare('SELECT l.asset_id, l.criterion_id, l.min_value, l.max_value FROM asset_limits l JOIN fixed_assets a ON a.id = l.asset_id WHERE a.client_id = ?').all(clientId).forEach((r) => {
+        let e = map.get(r.asset_id);
+        if (!e) { e = {}; map.set(r.asset_id, e); }
+        e[r.criterion_id] = { min: r.min_value, max: r.max_value };
+    });
+    return map;
+}
+// Los límites de UN activo: { [criterionId]: { min, max } }.
+function getAssetLimitsOf(assetId) {
+    const out = {};
+    db.prepare('SELECT criterion_id, min_value, max_value FROM asset_limits WHERE asset_id = ?').all(assetId).forEach((r) => { out[r.criterion_id] = { min: r.min_value, max: r.max_value }; });
+    return out;
+}
+function countAssetLimitsOfCriterion(clientId, criterionId) {
+    return db.prepare('SELECT COUNT(*) AS n FROM asset_limits WHERE criterion_id = ? AND asset_id IN (SELECT id FROM fixed_assets WHERE client_id = ?)').get(criterionId, clientId).n;
+}
+// Cuántas lecturas usan un criterio ('criterion_id') o un aviso ('aviso_id').
+function countAssetReadingsOfCatalog(clientId, field, id) {
+    if (!['criterion_id', 'aviso_id'].includes(field)) return 0;
+    return db.prepare(`SELECT COUNT(*) AS n FROM asset_readings WHERE client_id = ? AND ${field} = ?`).get(clientId, id).n;
+}
+// Guarda (o quita, con min y max en null) el límite de un activo en un criterio.
+function setAssetLimit(assetId, criterionId, minValue, maxValue, who = '') {
+    if (minValue === null && maxValue === null) { db.prepare('DELETE FROM asset_limits WHERE asset_id = ? AND criterion_id = ?').run(assetId, criterionId); return; }
+    db.prepare(`INSERT INTO asset_limits (asset_id, criterion_id, min_value, max_value, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(asset_id, criterion_id) DO UPDATE SET min_value = excluded.min_value, max_value = excluded.max_value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`)
+        .run(assetId, criterionId, minValue, maxValue, String(who || '').slice(0, 120));
+}
+function deleteAssetLimitsOfCriterion(clientId, criterionId) {
+    return db.prepare('DELETE FROM asset_limits WHERE criterion_id = ? AND asset_id IN (SELECT id FROM fixed_assets WHERE client_id = ?)').run(criterionId, clientId).changes;
+}
+// Lecturas (Operaciones > Lecturas)
+function listAssetReadings(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM asset_readings WHERE client_id = ? AND is_test_data = ? ORDER BY read_at DESC, id DESC').all(clientId, forTestAccount ? 1 : 0);
+}
+function getAssetReadingById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM asset_readings WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+function createAssetReading({ clientId, isTestData = false, costCenterId, assetId, kind, criterionId = null, avisoId = null, value = null, note = '', readAt, personName = '', createdBy = '', createdByUserId = null }) {
+    const test = isTestData ? 1 : 0;
+    return db.transaction(() => {
+        const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM asset_readings WHERE client_id = ? AND is_test_data = ?').get(clientId, test).n;
+        const info = db.prepare(`INSERT INTO asset_readings (client_id, db_id, record_number, is_test_data, cost_center_id, asset_id, kind, criterion_id, aviso_id, value, note, read_at, person_name, created_by, created_by_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+            .run(clientId, generateBigDateId(), recordNumber, test, costCenterId || 0, assetId, kind, criterionId, avisoId, value, String(note || '').slice(0, 500), readAt, String(personName || '').slice(0, 120), String(createdBy || '').slice(0, 120), createdByUserId);
+        return getAssetReadingById(info.lastInsertRowid, clientId, isTestData);
+    })();
+}
+// La lectura más reciente de cada (activo, criterio) con valor: Map('assetId:criterionId' -> { value, readAt }).
+function latestAssetReadingValues(clientId) {
+    const map = new Map();
+    db.prepare(`SELECT r.asset_id, r.criterion_id, r.value, r.read_at FROM asset_readings r
+        WHERE r.client_id = ? AND r.kind = 'value' AND r.criterion_id IS NOT NULL AND r.value IS NOT NULL AND r.id = (
+            SELECT r2.id FROM asset_readings r2 WHERE r2.asset_id = r.asset_id AND r2.criterion_id = r.criterion_id AND r2.kind = 'value' AND r2.value IS NOT NULL ORDER BY r2.read_at DESC, r2.id DESC LIMIT 1)`)
+        .all(clientId).forEach((r) => map.set(`${r.asset_id}:${r.criterion_id}`, { value: r.value, readAt: r.read_at }));
+    return map;
+}
+// Alertas: episodios activos de la empresa y su historial.
+function listAssetAlertEpisodes(clientId, forTestAccount, { activeOnly = false, assetId = null, limit = 500 } = {}) {
+    const where = ['client_id = ?', 'is_test_data = ?'];
+    const params = [clientId, forTestAccount ? 1 : 0];
+    if (activeOnly) where.push('ended_at IS NULL');
+    if (assetId) { where.push('asset_id = ?'); params.push(assetId); }
+    return db.prepare(`SELECT * FROM asset_alert_episodes WHERE ${where.join(' AND ')} ORDER BY (ended_at IS NULL) DESC, started_at DESC, id DESC LIMIT ${Math.min(Math.max(limit, 1), 2000)}`).all(...params);
+}
+function getAssetAlertEpisode(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM asset_alert_episodes WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+function openAssetAlertEpisode({ clientId, isTestData = false, costCenterId = 0, assetId, alertKey, label, severity, detail = '', startedAt }) {
+    const info = db.prepare(`INSERT OR IGNORE INTO asset_alert_episodes (client_id, is_test_data, cost_center_id, asset_id, alert_key, label, severity, detail, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(clientId, isTestData ? 1 : 0, costCenterId || 0, assetId, alertKey, String(label || '').slice(0, 160), severity === 'high' ? 'high' : 'medium', String(detail || '').slice(0, 300), startedAt);
+    return info.changes ? db.prepare('SELECT * FROM asset_alert_episodes WHERE id = ?').get(info.lastInsertRowid) : null;
+}
+function updateAssetAlertEpisode(id, { label, severity, detail }) {
+    db.prepare('UPDATE asset_alert_episodes SET label = ?, severity = ?, detail = ? WHERE id = ? AND ended_at IS NULL').run(String(label || '').slice(0, 160), severity === 'high' ? 'high' : 'medium', String(detail || '').slice(0, 300), id);
+}
+function closeAssetAlertEpisode(id, endedAt, endDetail = '') {
+    db.prepare('UPDATE asset_alert_episodes SET ended_at = ?, end_detail = ? WHERE id = ? AND ended_at IS NULL').run(endedAt, String(endDetail || '').slice(0, 300), id);
+}
+function ackAssetAlertEpisode(id, who, userId) {
+    db.prepare("UPDATE asset_alert_episodes SET ack_by = ?, ack_by_user_id = ?, ack_at = datetime('now') WHERE id = ? AND ack_at IS NULL").run(String(who || '').slice(0, 120), userId || null, id);
+}
+function markAssetAlertEpisodeNotified(id) {
+    db.prepare("UPDATE asset_alert_episodes SET notified_at = datetime('now') WHERE id = ?").run(id);
+}
+
 const ACTIVOS_CLASIFICACION_SEED_KEY = 'seed-activos-clasificacion-v1';
 function seedActivosClasificacionValues(clientId) {
     if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type = 'activos-clasificacion' LIMIT 1").get(clientId)) return 0;
@@ -14207,6 +14432,8 @@ seedActivosFijosRackMovilOnce();
 seedActivosFijosLetraCodigoOnce();
 seedActivosFijosDosLetrasOnce();
 seedActivosClasificacionValuesOnce();
+seedActivosCriteriosAvisosOnce();
+seedCriteriosCatalogScreens();
 seedActivosClasificacionNombresOnce();
 seedActivosClasificacionAdministrarOnce();
 migrateCodeRelationPositionsOnce();
@@ -14214,6 +14441,10 @@ seedTransitoEquiposValuesOnce();
 seedIncidentesCriteriosValuesOnce();
 
 module.exports = {
+    getAssetLimitsOf, countAssetLimitsOfCriterion, countAssetReadingsOfCatalog,
+    listAssetLimitsMap, setAssetLimit, deleteAssetLimitsOfCriterion, listAssetReadings, getAssetReadingById, createAssetReading, latestAssetReadingValues,
+    listAssetAlertEpisodes, getAssetAlertEpisode, openAssetAlertEpisode, updateAssetAlertEpisode, closeAssetAlertEpisode, ackAssetAlertEpisode, markAssetAlertEpisodeNotified,
+    seedActivosCriteriosAvisosValues,
     db,
     systemReset,
     getSessionsValidAfter,

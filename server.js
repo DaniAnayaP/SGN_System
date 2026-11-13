@@ -207,6 +207,9 @@ const {
     parseFixedAssetEditing,
     parseFixedAssetBackup,
     startFixedAssetEditionWithFields,
+    getAssetLimitsOf, setAssetLimit, listAssetLimitsMap, deleteAssetLimitsOfCriterion, countAssetLimitsOfCriterion, countAssetReadingsOfCatalog,
+    listAssetReadings, getAssetReadingById, createAssetReading, latestAssetReadingValues,
+    listAssetAlertEpisodes, getAssetAlertEpisode, openAssetAlertEpisode, updateAssetAlertEpisode, closeAssetAlertEpisode, ackAssetAlertEpisode, markAssetAlertEpisodeNotified,
     setFixedAssetPendingChoices,
     setFixedAssetEditing,
     FIXED_ASSET_EMPTY_ON_EDIT,
@@ -10693,8 +10696,11 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             parentId: row.parent_id, customName: row.custom_name || '', modelNumber: row.model_number || '', shape: row.shape || 'rectangular',
             height: row.height_cm, length: row.length_cm, depth: row.depth_cm, weight: row.weight_kg, volume: row.volume_m3,
             complete: isAssetModelComplete(row), usedBy: ctx && ctx.modelUse ? (ctx.modelUse.get(row.id) || 0) : 0, look: row.look || '', photos: ctx && ctx.modelPhotos ? (ctx.modelPhotos.get(row.id) || {}) : {}, calibrationMonths: row.calibration_months || 0,
+            criteriaIds: parseClassificationIds(row.criteria_ids), avisoIds: parseClassificationIds(row.aviso_ids),
         } : {}),
         ...(row.category_type === 'incidentes-criterios' ? { kind: row.kind } : {}),
+        ...(row.category_type === 'activos-criterios' ? { kind: row.kind || '', unit: row.unit || '', builtinKey: row.builtin_key || '', colId: criterionCol(row) } : {}),
+        ...(row.category_type === 'activos-avisos' ? { builtinKey: row.builtin_key || '' } : {}),
         ...(row.category_type === 'transito-equipos' ? { kind: row.kind, widthM: row.width_m || 0, lengthM: row.length_m || 0, heightM: row.height_m || 0 } : {}),
         ...(ctx && row.category_type === 'inventario' ? (() => {
             const ids = parseClassificationIds(row.classification_ids);
@@ -10769,9 +10775,11 @@ app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, req
     if (preparedTransit.error) return res.status(preparedTransit.error.status).json({ message: preparedTransit.error.message });
     const preparedIncident = prepareIncidentCriterionPatch(req.params.categoryType, preparedTransit.patch);
     if (preparedIncident.error) return res.status(preparedIncident.error.status).json({ message: preparedIncident.error.message });
-    const preparedModel = prepareAssetModelPatch(req, req.params.categoryType, existing, preparedIncident.patch);
+    const preparedCrit = prepareCriteriaCatalogPatch(req, req.params.categoryType, existing, preparedIncident.patch);
+    if (preparedCrit.error) return res.status(preparedCrit.error.status).json({ message: preparedCrit.error.message, code: preparedCrit.error.code });
+    const preparedModel = prepareAssetModelPatch(req, req.params.categoryType, existing, preparedCrit.patch);
     if (preparedModel.error) return res.status(preparedModel.error.status).json({ message: preparedModel.error.message, code: preparedModel.error.code });
-    const prepared = { patch: preparedModel.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers, ...preparedTransit.sanitizers, ...preparedIncident.sanitizers, ...preparedModel.sanitizers } };
+    const prepared = { patch: preparedModel.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers, ...preparedTransit.sanitizers, ...preparedIncident.sanitizers, ...preparedCrit.sanitizers, ...preparedModel.sanitizers } };
     const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, articleCategoryPatchableFields(req.params.categoryType), config.tableKey, `#${existing.id}`, prepared.sanitizers, { baseline, overrideConflicts });
     const category = finishAssetModelPatch(req, existing, updateArticleCategory(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount), appliedPatch);
     const client = getClientById(req.user.clientId);
@@ -10786,6 +10794,16 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, re
     if (!existing || existing.category_type !== req.params.categoryType) return res.status(404).json({ message: 'Category not found.' });
     if (req.params.categoryType === 'activos-clasificacion' && !req.user.isTestAccount) return res.status(403).json({ message: 'Las clasificaciones de activos son fijas: no se eliminan (solo se pueden dejar Inactivas).' });
     if (req.params.categoryType === 'activos-modelos') return res.status(403).json({ message: 'Los modelos de activos no se eliminan: márcalo como Inactivo.' });
+    // «Qué se mide» y «Qué se avisa»: los de fábrica no se eliminan; uno que algún modelo elige o que ya tiene límites o lecturas se deja Inactivo.
+    if (req.params.categoryType === 'activos-criterios' || req.params.categoryType === 'activos-avisos') {
+        if (existing.builtin_key) return res.status(403).json({ message: 'Los de fábrica no se eliminan: márcalo como Inactivo.' });
+        const field = req.params.categoryType === 'activos-criterios' ? 'criteria_ids' : 'aviso_ids';
+        const usedModels = listArticleCategories(req.user.clientId, 'activos-modelos', req.user.isTestAccount).filter((m) => parseClassificationIds(m[field]).includes(existing.id)).length;
+        if (usedModels) return res.status(409).json({ message: `Hay ${usedModels === 1 ? 'un modelo' : `${usedModels} modelos`} que lo elige. Quítalo de ahí primero o márcalo como Inactivo.` });
+        const usedData = (req.params.categoryType === 'activos-criterios' ? countAssetLimitsOfCriterion(req.user.clientId, existing.id) : 0)
+            + countAssetReadingsOfCatalog(req.user.clientId, req.params.categoryType === 'activos-criterios' ? 'criterion_id' : 'aviso_id', existing.id);
+        if (usedData) return res.status(409).json({ message: 'Ya tiene límites o lecturas registradas: márcalo como Inactivo en vez de eliminarlo.' });
+    }
     if (req.params.categoryType === 'activos-fijos') {
         const models = countAssetModelsByType(req.user.clientId, existing.id);
         if (models) return res.status(409).json({ message: `Este tipo tiene ${models === 1 ? 'un modelo' : `${models} modelos`}. Márcalo como Inactivo en vez de eliminarlo.` });
@@ -11957,6 +11975,7 @@ function fixedAssetContext(req) {
         types: new Map(listArticleCategories(clientId, 'activos-fijos', isTestAccount).map((r) => [r.id, r])),
         classes: new Map(listArticleCategories(clientId, 'activos-clasificacion', isTestAccount).map((r) => [r.id, r])),
         models: new Map(listArticleCategories(clientId, 'activos-modelos', isTestAccount).map((r) => [r.id, r])),
+        criteria: new Map(listArticleCategories(clientId, 'activos-criterios', isTestAccount).filter(criterionUsable).map((r) => [r.id, r])),
     };
 }
 // Una solicitud de autorización (uso o edición) como la ve la pantalla: quién la pidió, a quién le tocó, cómo va y el motivo si la rechazaron. Una edición trae los datos que se quieren modificar.
@@ -11966,7 +11985,7 @@ function mapAssetAuthorization(r) {
     return {
         id: r.id, kind: r.kind, status: r.status, auto: !!r.auto, requestedBy: r.requested_by, requestedByUserId: r.requested_by_user_id || null,
         boss: r.escalated_to_label || '', bossUserId: r.escalated_to_user_id || null, reason: r.reason || '', resolvedBy: r.resolved_by || '',
-        createdAt: r.created_at, resolvedAt: r.resolved_at || null, fields: r.kind === 'edit' ? (Array.isArray(payload.marked) ? payload.marked : payload.fields || []) : [],
+        createdAt: r.created_at, resolvedAt: r.resolved_at || null, fields: r.kind === 'edit' ? (Array.isArray(payload.marked) ? payload.marked : payload.fields || []) : [], fieldLabels: r.kind === 'edit' && payload.labels ? payload.labels : {},
     };
 }
 function mapFixedAsset(row, ctx, companyName, pendingByRecord, placements) {
@@ -11988,6 +12007,8 @@ function mapFixedAsset(row, ctx, companyName, pendingByRecord, placements) {
         // Mantenimiento (solo lectura aquí; se captura en Operaciones > Mtto. de activos): programas activos y fallas abiertas del activo (null = ninguno)
         maintenance: ctx.maint ? (ctx.maint.get(row.id) || null) : null,
         calibration: type && type.needs_calibration === 1 ? mapCalibrationSummary(ctx.latest ? ctx.latest.get(row.id) : latestCalibrationOfAsset(row.id, row.client_id)) : null,
+        // Criterios (Catálogos > Qué se mide) que mide el modelo de este activo y el límite que este activo tiene en cada uno; lo que no mide sale N/A en la pantalla.
+        ...assetCriteriaFields(row, ctx),
         costCenterId: row.cost_center_id, typeId: row.type_id, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '',
         classId: row.class_id, className: cls ? cls.name : '',
         purchaseName: row.purchase_name, customName: row.custom_name, model: row.model, serialNumber: row.serial_number,
@@ -12054,6 +12075,161 @@ function fixedAssetSanitizers(ctx) {
         showInLayout: (v) => (Number(v) ? 'Sí' : 'No'),
         ...Object.fromEntries(FIXED_ASSET_PHOTO_KEYS.map((k) => [k, (v) => (v ? '[imagen]' : '')])),
     };
+}
+// --- Criterios, límites y avisos de activos (2026-11-13) ---------------------------------------------------------------------------------------------------
+// El catálogo «Qué se mide» (activos-criterios) dice cómo se limita cada criterio (kind): range = mínimo y máximo, max = solo máximo, min = solo mínimo, every = cada N horas, zone = zona (próximamente). El MODELO elige cuáles mide
+// (article_categories.criteria_ids); el LÍMITE lo escribe cada activo (asset_limits) y se muestra como UN texto («2 a 8 °C», «máx. 1200 kg», «cada 4 h»). Ese mismo texto es el valor que viaja en el historial de cambios, en las
+// autorizaciones y en la campana (se lee de vuelta con parseLimitDisplay), así no hace falta traducirlo en cada lugar.
+const CRITERION_KINDS = ['range', 'max', 'min', 'every', 'zone'];
+const CRITERION_KIND_LABELS = { range: 'Rango (mínimo y máximo)', max: 'Solo máximo', min: 'Solo mínimo', every: 'Cada N horas', zone: 'Zona permitida' };
+const CRITERION_BUILTIN_COL = { temperature: 'colActCritTemperature', humidity: 'colActCritHumidity', weight: 'colActCritWeight', readOnTime: 'colActCritReadOnTime', cleanOnTime: 'colActCritCleanOnTime' };
+// La hoja del árbol (columna de Alta Activos / Gestión) de un criterio: una por cada criterio de fábrica y UNA compartida («Criterios nuevos») para los que crea la empresa.
+const criterionCol = (row) => CRITERION_BUILTIN_COL[row.builtin_key] || 'colActCritNuevos';
+// Un criterio sin nombre o sin forma está incompleto; uno inactivo no sale como columna; «zona» todavía no existe.
+const criterionUsable = (row) => !!row && row.status === 'active' && !!row.name && CRITERION_KINDS.includes(row.kind) && row.kind !== 'zone';
+const limitNumText = (n) => String(Math.round(Number(n) * 1000) / 1000);
+function limitDisplay(kind, unit, lim) {
+    if (!lim) return '';
+    const hasMin = lim.min !== null && lim.min !== undefined;
+    const hasMax = lim.max !== null && lim.max !== undefined;
+    const u = unit ? ` ${unit}` : '';
+    if (kind === 'every') return hasMax ? `cada ${limitNumText(lim.max)}${u}` : '';
+    if (kind === 'max') return hasMax ? `máx. ${limitNumText(lim.max)}${u}` : '';
+    if (kind === 'min') return hasMin ? `mín. ${limitNumText(lim.min)}${u}` : '';
+    if (kind === 'range') {
+        if (hasMin && hasMax) return `${limitNumText(lim.min)} a ${limitNumText(lim.max)}${u}`;
+        if (hasMin) return `mín. ${limitNumText(lim.min)}${u}`;
+        if (hasMax) return `máx. ${limitNumText(lim.max)}${u}`;
+    }
+    return '';
+}
+function parseLimitDisplay(kind, text) {
+    const raw = String(text == null ? '' : text).trim();
+    const nums = (raw.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+    if (!nums.length) return { min: null, max: null };
+    if (kind === 'every' || kind === 'max') return { min: null, max: nums[0] };
+    if (kind === 'min') return { min: nums[0], max: null };
+    if (/^mín\./i.test(raw)) return { min: nums[0], max: null };
+    if (/^máx\./i.test(raw)) return { min: null, max: nums[0] };
+    return nums.length >= 2 ? { min: nums[0], max: nums[1] } : { min: null, max: nums[0] };
+}
+// Lo que llega para un límite: null / '' = quitarlo; un número (según la forma) o { min, max }. Devuelve { lim: { min, max } } o { error }.
+function normalizeLimitInput(kind, input, label) {
+    const bad = (message) => ({ error: { status: 400, message, code: 'LIMIT' } });
+    if (input === null || input === undefined || input === '') return { lim: { min: null, max: null } };
+    const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
+    let min;
+    let max;
+    if (typeof input === 'object') { min = num(input.min); max = num(input.max); } else if (kind === 'min') { min = num(input); max = null; } else { min = null; max = num(input); }
+    if ((min !== null && !Number.isFinite(min)) || (max !== null && !Number.isFinite(max))) return bad(`El límite de «${label}» debe ser un número.`);
+    if ((min !== null && Math.abs(min) > 1e9) || (max !== null && Math.abs(max) > 1e9)) return bad(`El límite de «${label}» es demasiado grande.`);
+    const round = (v) => (v === null ? null : Math.round(v * 1000) / 1000);
+    min = round(min);
+    max = round(max);
+    if (kind === 'max' || kind === 'every') min = null;
+    if (kind === 'min') max = null;
+    if (kind === 'every' && max !== null && !(max > 0 && max <= 8760)) return bad(`Las horas de «${label}» deben ser un número mayor que 0 y hasta 8760.`);
+    if (kind === 'range' && min !== null && max !== null && min > max) return bad(`En «${label}» el mínimo no puede ser mayor que el máximo.`);
+    return { lim: { min, max } };
+}
+// Lo que el activo trae de criterios para sus tablas: los que su modelo mide (ids) y su límite en cada uno (texto y números).
+function assetCriteriaFields(row, ctx) {
+    if (!ctx || !ctx.criteria) return {};
+    const model = ctx.models && row.model_id ? ctx.models.get(row.model_id) : null;
+    const ids = model ? parseClassificationIds(model.criteria_ids).filter((id) => ctx.criteria.has(id)) : [];
+    const mine = ctx.limits ? (ctx.limits.get(row.id) || {}) : getAssetLimitsOf(row.id);
+    const limits = {};
+    const limitValues = {};
+    ids.forEach((id) => {
+        const c = ctx.criteria.get(id);
+        const l = mine[id];
+        limits[id] = l ? limitDisplay(c.kind, c.unit, l) : '';
+        limitValues[id] = l ? { min: l.min, max: l.max } : null;
+    });
+    const noticeIds = model ? parseClassificationIds(model.aviso_ids) : [];
+    return { measures: ids, limits, limitValues, noticeIds };
+}
+// El catálogo de criterios como lo ven las tablas de activos: las columnas, en el orden del catálogo.
+const assetCriteriaColumns = (ctx) => [...ctx.criteria.values()].map((c) => ({ id: c.id, name: c.name, kind: c.kind, unit: c.unit || '', builtinKey: c.builtin_key || '', colId: criterionCol(c) }));
+// Guarda los límites que llegan en el PATCH de un activo ({ "<criterioId>": número | { min, max } | null }) con las mismas reglas de cualquier dato: Ver y operar para llenar uno vacío, Modificar (con autorización) para
+// cambiar uno que ya tiene valor, historial por columna y aviso a quien tiene Notificar. Devuelve { appliedKeys, pendingFields, rejectedFields, conflictFields, resolvedIds } o { error }.
+function applyAssetLimitsPatch(req, existing, limitsIn, ctx, editInfo) {
+    const bad = (status, message, code, extra = {}) => ({ error: { status, message, code, ...extra } });
+    if (!limitsIn || typeof limitsIn !== 'object' || Array.isArray(limitsIn) || !Object.keys(limitsIn).length) return bad(400, 'No llegó ningún límite.', 'LIMIT');
+    const model = existing.model_id ? ctx.models.get(existing.model_id) : null;
+    const measured = new Set(model ? parseClassificationIds(model.criteria_ids) : []);
+    const current = getAssetLimitsOf(existing.id);
+    const fieldsMap = {};
+    const fakeExisting = { id: existing.id, client_id: existing.client_id };
+    const direct = {};
+    const critOf = {};
+    const lockedFields = [];
+    for (const [idText, value] of Object.entries(limitsIn)) {
+        const id = intOf(idText);
+        const crit = ctx.criteria.get(id);
+        if (!crit) return bad(400, 'Ese criterio no existe o no está activo en Catálogos > Qué se mide.', 'CRITERION');
+        if (!measured.has(id)) return bad(400, `El modelo de este activo no mide «${crit.name}».`, 'NOT_MEASURED');
+        if (editInfo && !editInfo.fields.includes(`crit:${id}`)) { lockedFields.push(`crit:${id}`); continue; }
+        const norm = normalizeLimitInput(crit.kind, value, crit.name);
+        if (norm.error) return { error: norm.error };
+        const key = `crit${id}`;
+        fieldsMap[key] = { column: key, fieldKey: `main.${criterionCol(crit)}` };
+        fakeExisting[key] = limitDisplay(crit.kind, crit.unit, current[id]);
+        direct[key] = limitDisplay(crit.kind, crit.unit, norm.lim);
+        critOf[key] = crit;
+    }
+    if (lockedFields.length) return bad(403, 'Este activo está en edición: solo se puede modificar lo que se marcó.', 'EDIT_LOCKED', { fields: lockedFields });
+    const code = fixedAssetCodeOf(existing);
+    const result = checkAndLogFieldChanges(req, fakeExisting, direct, fieldsMap, FIXED_ASSET_TABLE_KEY, code, {}, {});
+    const who = changedByLabel(req);
+    Object.entries(result.appliedPatch).forEach(([key, text]) => {
+        const lim = parseLimitDisplay(critOf[key].kind, text);
+        setAssetLimit(existing.id, critOf[key].id, lim.min, lim.max, who);
+    });
+    const blocked = new Set([...result.pendingFields, ...result.rejectedFields]);
+    const resolvedIds = Object.keys(fieldsMap).filter((key) => !blocked.has(fieldsMap[key].fieldKey) && !result.conflictFields.length).map((key) => critOf[key].id);
+    return { appliedKeys: Object.keys(result.appliedPatch), pendingFields: result.pendingFields, rejectedFields: result.rejectedFields, conflictFields: result.conflictFields, resolvedIds };
+}
+// El parche de los catálogos «Qué se mide» y «Qué se avisa» y de las dos elecciones del MODELO (criteria_ids y aviso_ids).
+function prepareCriteriaCatalogPatch(req, categoryType, existing, patch) {
+    const has = (key) => Object.prototype.hasOwnProperty.call(patch, key);
+    const bad = (status, message, code) => ({ error: { status, message, code } });
+    const out = { ...patch };
+    const sanitizers = {};
+    if (categoryType === 'activos-criterios') {
+        const builtin = !!existing.builtin_key;
+        if (has('kind')) {
+            if (!CRITERION_KINDS.includes(patch.kind)) return bad(400, 'Elige cómo se limita: Rango, Solo máximo, Solo mínimo, Cada N horas o Zona.', 'KIND');
+            if (builtin && patch.kind !== existing.kind) return bad(403, 'Un criterio de fábrica no cambia de forma: crea uno nuevo si necesitas otra.', 'BUILTIN');
+            if (existing.kind && patch.kind !== existing.kind && countAssetLimitsOfCriterion(req.user.clientId, existing.id)) return bad(409, 'Hay activos con límite en este criterio: no cambia de forma. Crea uno nuevo o márcalo como Inactivo.', 'IN_USE');
+            sanitizers.kind = (v) => CRITERION_KIND_LABELS[v] || '';
+        }
+        if (has('unit')) {
+            const unit = String(patch.unit == null ? '' : patch.unit).trim();
+            if (builtin && unit !== (existing.unit || '')) return bad(403, 'La unidad de un criterio de fábrica no se cambia.', 'BUILTIN');
+            if (unit.length > 12 || /\d/.test(unit)) return bad(400, 'La unidad es corta y sin números (°C, %, kg, bar…).', 'UNIT');
+            out.unit = unit;
+        }
+        if (has('status') && patch.status === 'active' && existing.builtin_key === 'leaveZone') return bad(400, 'Salir de la zona todavía no está disponible: necesita el GPS del celular.', 'SOON');
+    }
+    if (categoryType === 'activos-modelos') {
+        for (const [key, type, label] of [['criteriaIds', 'activos-criterios', 'criterio'], ['avisoIds', 'activos-avisos', 'aviso']]) {
+            if (!has(key)) continue;
+            const input = Array.isArray(patch[key]) ? patch[key].map(Number) : null;
+            if (!input || input.some((n) => !Number.isInteger(n))) return bad(400, `La lista de ${label}s no es válida.`, 'IDS');
+            const catalog = new Map(listArticleCategories(req.user.clientId, type, req.user.isTestAccount).map((r) => [r.id, r]));
+            const before = new Set(parseClassificationIds(existing[key === 'criteriaIds' ? 'criteria_ids' : 'aviso_ids']));
+            for (const id of input) {
+                const row = catalog.get(id);
+                const ok = row && row.name && (type === 'activos-avisos' ? true : criterionUsable(row)) && (row.status === 'active' || before.has(id));
+                if (!ok) return bad(400, `Elige solo ${label}s activos y completos del catálogo.`, 'IDS');
+            }
+            const ordered = [...catalog.values()].filter((r) => input.includes(r.id)).sort((a, z) => a.record_number - z.record_number).map((r) => r.id);
+            out[key] = ordered.length ? JSON.stringify(ordered) : '';
+            sanitizers[key] = (v) => parseClassificationIds(v).map((id) => (catalog.get(id) || {}).name).filter(Boolean).join(', ');
+        }
+    }
+    return { patch: out, sanitizers };
 }
 // --- Activos del Layout que vienen de Alta Activos -------------------------------------------------------------------------------------------------------
 // Un activo del Layout (layout.spaces[].assetRef) es un renglón de Alta Activos: su código, su nombre, su tipo, su clasificación y sus medidas los manda el registro (LayoutCalc.applyAssetToSpace). En el Layout solo se colocan (en qué
@@ -12228,6 +12404,7 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
     ctx.authMap = assetAuthorizationSummaryMap(clientId, isTestAccount);
     ctx.latest = latestCalibrationMap(clientId);
     ctx.maint = maintenanceSummaryMap(clientId);
+    ctx.limits = listAssetLimitsMap(clientId);
     res.set('Cache-Control', 'no-store');
     // scope=pending: Operaciones > Alta Activos (los que todavía no están completos, los que regresaron a edición y los completos que esperan la autorización de uso); scope=complete: Gestión > Activos (los completos
     // y autorizados que no están en edición); sin scope, todos.
@@ -12236,6 +12413,8 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
     res.json({
         // quién puede autorizar con su permiso (para mostrar o esconder «Autorizar» en la pantalla; el servidor lo vuelve a revisar)
         canAuthorize: assetAuthActorCanAuthorize(req),
+        // las columnas de criterios (Catálogos > Qué se mide), en el orden del catálogo
+        criteria: assetCriteriaColumns(ctx),
         assets: listFixedAssets(clientId, isTestAccount).map((r) => mapFixedAsset(r, ctx, client?.company_name, pendingByRecord, fixedAssetPlacementsMap(clientId))).filter(inScope),
         canEdit: fixedAssetCanEdit(req),
         types: [...ctx.types.values()].filter((t) => t.name).map((t) => ({ id: t.id, name: t.name, letter: t.letter || '', kind: t.kind || '', active: t.status === 'active', needsSerial: t.needs_serial !== 0, needsCalibration: t.needs_calibration === 1 })),
@@ -12317,6 +12496,15 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
     // El nombre de compra, el personalizado, el modelo, la forma, las medidas y el peso vienen del modelo: no se escriben a mano (se elige otro modelo, o se corrige el modelo en Catálogos > Activos Fijos).
     if (ASSET_MODEL_FROM_KEYS.some((key) => Object.prototype.hasOwnProperty.call(raw, key))) return res.status(400).json({ message: 'Ese dato viene del modelo del activo: elige otro modelo, o corrígelo en Catálogos > Activos Fijos.', code: 'FROM_MODEL' });
     const ctx = fixedAssetContext(req);
+    // Límites por criterio (Catálogos > Qué se mide): un activo completo y autorizado solo los cambia con Editar; uno en edición, solo los marcados.
+    let limitsResult = null;
+    if (Object.prototype.hasOwnProperty.call(raw, 'limits')) {
+        const limitsIn = raw.limits;
+        delete raw.limits;
+        if (!editInfo && existing.use_auth && fixedAssetCompleteness(existing, ctx.types.get(existing.type_id)).complete) return res.status(409).json({ message: 'Este activo ya está en Gestión: usa «Editar» para cambiar un límite.', code: 'USE_EDIT' });
+        limitsResult = applyAssetLimitsPatch(req, existing, limitsIn, ctx, editInfo);
+        if (limitsResult.error) return res.status(limitsResult.error.status).json({ message: limitsResult.error.message, code: limitsResult.error.code, fields: limitsResult.error.fields });
+    }
     let chosenModel = null;
     if (Object.prototype.hasOwnProperty.call(raw, 'modelId')) {
         chosenModel = ctx.models.get(intOf(raw.modelId));
@@ -12339,7 +12527,11 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
     const direct = {};
     Object.keys(norm.values).forEach((key) => { if (Object.prototype.hasOwnProperty.call(raw, key)) direct[key] = norm.values[key]; });
     if (chosenModel) direct.modelId = chosenModel.id;
-    const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, direct, FIXED_ASSET_PATCHABLE_FIELDS, FIXED_ASSET_TABLE_KEY, code, fixedAssetSanitizers(ctx), { baseline, overrideConflicts });
+    const baseChanges = checkAndLogFieldChanges(req, existing, direct, FIXED_ASSET_PATCHABLE_FIELDS, FIXED_ASSET_TABLE_KEY, code, fixedAssetSanitizers(ctx), { baseline, overrideConflicts });
+    const { appliedPatch } = baseChanges;
+    const pendingFields = [...baseChanges.pendingFields, ...(limitsResult ? limitsResult.pendingFields : [])];
+    const rejectedFields = [...baseChanges.rejectedFields, ...(limitsResult ? limitsResult.rejectedFields : [])];
+    const conflictFields = [...baseChanges.conflictFields, ...(limitsResult ? limitsResult.conflictFields : [])];
     // Al elegir el modelo (si el cambio se aplicó) el activo recibe sus datos: cada uno queda en el historial del activo.
     if (chosenModel && 'modelId' in appliedPatch) {
         const sanitizers = fixedAssetSanitizers(ctx);
@@ -12359,7 +12551,8 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
     let awaitingAuth = false;
     if (editInfo) {
         const resolved = (key) => Object.prototype.hasOwnProperty.call(raw, key) && !pendingFields.includes(FIXED_ASSET_PATCHABLE_FIELDS[key].fieldKey) && !rejectedFields.includes(FIXED_ASSET_PATCHABLE_FIELDS[key].fieldKey) && !conflictFields.length;
-        const stillPending = editInfo.pending.filter((k) => !(['modelId', 'showInLayout'].includes(k) && resolved(k)));
+        const limitsDone = new Set(limitsResult ? limitsResult.resolvedIds.map((id) => `crit:${id}`) : []);
+        const stillPending = editInfo.pending.filter((k) => !(['modelId', 'showInLayout'].includes(k) && resolved(k)) && !limitsDone.has(k));
         if (stillPending.length !== editInfo.pending.length) row = setFixedAssetPendingChoices(existing.id, clientId, isTestAccount, stillPending);
         const finished = finishFixedAssetEditionIfDone(req, row, ctx);
         row = finished.row;
@@ -12516,7 +12709,7 @@ function startApprovedFixedAssetEdition(req, existing, payload, ctx, meta = {}) 
     logFixedAssetScreenMove(req, row, 'Gestión > Activos', 'Alta Activos', by);
     return row;
 }
-const assetAuthEditText = (payload) => (Array.isArray(payload.marked) ? payload.marked : payload.fields || []).map((k) => FIXED_ASSET_EDIT_LABELS[k] || k).join(', ');
+const assetAuthEditText = (payload) => (Array.isArray(payload.marked) ? payload.marked : payload.fields || []).map((k) => FIXED_ASSET_EDIT_LABELS[k] || (payload.labels && payload.labels[k]) || k).join(', ');
 // --- Calibraciones (Operaciones, C. Distribución) ---------------------------------------------------------------------------------------------------------
 // Un renglón por CERTIFICADO de calibración de un activo (el Tipo decide con «Lleva calibración» cuáles activos la llevan: los sensores). El más reciente por fecha de calibración es el que VALE; los anteriores quedan de historial. El
 // vencimiento se propone con la «Vigencia de calibración» (meses) del modelo y se puede corregir. Un activo sin calibración vigente NO se bloquea: se marca (Gestión > Activos y su QR). Estados: Vigente, Por vencer (30 días o menos),
@@ -13297,7 +13490,15 @@ app.post('/api/business/fixed-assets/:id/edit', requireAuth, requireCostCenter, 
     if (getPendingAssetAuthorization(existing.id, 'edit')) return res.status(409).json({ message: 'Ya hay una solicitud de edición esperando autorización para este activo.', code: 'EDIT_PENDING' });
     const marked = [...new Set((Array.isArray(req.body && req.body.fields) ? req.body.fields : []).map(String))];
     if (!marked.length) return res.status(400).json({ message: 'Marca al menos un dato para modificar.', code: 'EMPTY' });
-    const unknown = marked.filter((k) => k !== 'status' && !Object.prototype.hasOwnProperty.call(FIXED_ASSET_EDIT_FIELD_COLS, k));
+    // Los límites que se quieren modificar viajan como crit:<id> (solo de criterios que el modelo del activo mide).
+    const critMeasured = new Set(existing.model_id && ctx.models.get(existing.model_id) ? parseClassificationIds(ctx.models.get(existing.model_id).criteria_ids) : []);
+    const critCols = {};
+    const critLabels = {};
+    marked.filter((k) => /^crit:\d+$/.test(k)).forEach((k) => {
+        const crit = ctx.criteria.get(Number(k.slice(5)));
+        if (crit && critMeasured.has(crit.id)) { critCols[k] = criterionCol(crit); critLabels[k] = crit.name; }
+    });
+    const unknown = marked.filter((k) => k !== 'status' && !Object.prototype.hasOwnProperty.call(FIXED_ASSET_EDIT_FIELD_COLS, k) && !critCols[k]);
     if (unknown.length) return res.status(400).json({ message: 'Hay datos que no se pueden editar: ' + unknown.join(', ') + '.', code: 'UNKNOWN', fields: unknown });
     if (marked.includes('serialNumber') && type && type.needs_serial === 0) return res.status(400).json({ message: 'El tipo de este activo no lleva número de serie.', code: 'NOSERIAL' });
     if (marked.includes('status') && !fixedAssetCanDelete(req)) return res.status(403).json({ message: 'No tienes permiso para cambiar el estatus de los activos.', code: 'noPermission', field: 'status' });
@@ -13305,14 +13506,14 @@ app.post('/api/business/fixed-assets/:id/edit', requireAuth, requireCostCenter, 
         // modificar un dato que ya tiene valor pide el nivel «Modificar» de su hoja, igual que en la tabla
         const grants = getUserEffectiveGrants(req.user.sub);
         for (const key of marked.filter((k) => k !== 'status')) {
-            if (getColumnGrantLevel(grants, FIXED_ASSET_TABLE_KEY, FIXED_ASSET_EDIT_FIELD_COLS[key]) !== 'editar') {
-                return res.status(403).json({ message: 'No tienes permiso para modificar «' + (FIXED_ASSET_EDIT_LABELS[key] || key) + '».', code: 'noPermission', field: key });
+            if (getColumnGrantLevel(grants, FIXED_ASSET_TABLE_KEY, FIXED_ASSET_EDIT_FIELD_COLS[key] || critCols[key]) !== 'editar') {
+                return res.status(403).json({ message: 'No tienes permiso para modificar «' + (FIXED_ASSET_EDIT_LABELS[key] || critLabels[key] || key) + '».', code: 'noPermission', field: key });
             }
         }
     }
     const fields = marked.filter((k) => k !== 'status');
-    const pending = [...fields.filter((k) => k === 'modelId' || k === 'showInLayout'), ...(marked.includes('status') ? ['status'] : [])];
-    const payload = { fields, pending, marked };
+    const pending = [...fields.filter((k) => k === 'modelId' || k === 'showInLayout' || critCols[k]), ...(marked.includes('status') ? ['status'] : [])];
+    const payload = { fields, pending, marked, labels: critLabels };
     const who = changedByLabel(req);
     const authBase = { clientId, isTestData: isTestAccount, assetId: existing.id, assetCode: fixedAssetCodeOf(existing), assetLabel: assetAuthAssetLabel(existing), kind: 'edit', payload, requestedBy: who, requestedByUserId: req.user.sub };
     // La edición tampoco abre el activo hasta que se autoriza: quien ya puede autorizar (permiso Autorizar o administrador) se autoriza solo; los demás la piden a su jefe directo y el activo sigue en Gestión, en uso.
@@ -13351,6 +13552,18 @@ app.post('/api/business/fixed-assets/:id/cancel-edit', requireAuth, requireCostC
         const def = FIXED_ASSET_PATCHABLE_FIELDS[key];
         if (!def || String(existing[def.column] ?? '') === String(patch[key] ?? '')) return;
         logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey: def.fieldKey, oldValue: sanitizers[key] ? sanitizers[key](existing[def.column]) : existing[def.column], newValue: sanitizers[key] ? sanitizers[key](patch[key]) : patch[key], changedBy: changedByLabel(req) });
+    });
+    // los límites marcados regresan a como estaban al abrir la edición (cada uno queda en el historial)
+    info.fields.filter((k) => /^crit:\d+$/.test(k)).forEach((k) => {
+        const crit = ctx.criteria.get(Number(k.slice(5)));
+        if (!crit || !Object.prototype.hasOwnProperty.call(backup, k)) return;
+        const was = backup[k] ? { min: backup[k].min, max: backup[k].max } : { min: null, max: null };
+        const now = getAssetLimitsOf(existing.id)[crit.id] || { min: null, max: null };
+        const from = limitDisplay(crit.kind, crit.unit, now);
+        const to = limitDisplay(crit.kind, crit.unit, was);
+        if (from === to) return;
+        setAssetLimit(existing.id, crit.id, was.min, was.max, changedByLabel(req));
+        logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey: `main.${criterionCol(crit)}`, oldValue: from, newValue: to, changedBy: changedByLabel(req) });
     });
     updateFixedAsset(existing.id, clientId, patch, isTestAccount);
     const row = setFixedAssetEditing(existing.id, clientId, false, isTestAccount);
@@ -14789,6 +15002,13 @@ const PENDING_CHANGE_APPLIERS = {
     'alta-activos': (recordId, clientId, patch) => {
         const existing = getFixedAssetById(recordId, clientId, false) || getFixedAssetById(recordId, clientId, true);
         if (!existing) return null;
+        // un límite autorizado (crit<id>: el texto del límite): se lee de vuelta con la forma de su criterio
+        Object.keys(patch).filter((k) => /^crit\d+$/.test(k)).forEach((k) => {
+            const crit = getArticleCategoryById(Number(k.slice(4)), clientId, !!existing.is_test_data);
+            if (!crit || crit.category_type !== 'activos-criterios') return;
+            const lim = parseLimitDisplay(crit.kind, patch[k]);
+            setAssetLimit(existing.id, crit.id, lim.min, lim.max, 'autorizado');
+        });
         let input = patch;
         let model = null;
         if (Object.prototype.hasOwnProperty.call(patch, 'modelId')) {
