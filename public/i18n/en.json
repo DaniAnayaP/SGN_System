@@ -4355,6 +4355,15 @@
     "assetCostCenter": "Cost center",
     "assetModelChoose": "Choose the model",
     "assetModelNoModels": "No models: add them in Fixed Assets",
+    "assetModelNoComplete": "No model is complete yet",
+    "assetModelFalta": "incomplete, missing: {falta}",
+    "assetModelMiss_name": "purchase name",
+    "assetModelMiss_model": "model",
+    "assetModelMiss_height": "height",
+    "assetModelMiss_length": "length",
+    "assetModelMiss_depth": "depth",
+    "assetModelMiss_weight": "weight",
+    "assetModelMiss_volume": "volume",
     "assetPickTypeFirst": "Choose the type first",
     "assetFromModel": "Comes from the model: it is chosen in the «Choose Model» column.",
     "assetNoSerial": "Not applicable",
@@ -6238,7 +6247,7 @@
       "example": "Rack uses R (R001), Desk uses ES (ES001) and Thermo-hygrometer uses HT (HT001)."
     },
     "assetModelPicker": {
-      "what": "The asset model, from the list of models of its type (added in Catalogs > Fixed Assets). When chosen, the purchase name, custom name, model, shape, measurements and weight are filled in and closed. An older asset keeps what it had until its model is chosen; that day its data is replaced by the model data.",
+      "what": "The asset model, from the list of models of its type (added in Catalogs > Fixed Assets). When chosen, the purchase name, custom name, model, shape, measurements and weight are filled in and closed. An older asset keeps what it had until its model is chosen; that day its data is replaced by the model data. Models that are still incomplete appear in gray, with what they are missing: finish them in Catalogs > Fixed Assets > Models.",
       "example": "You choose «Selective rack 2.7 m · SR-2700» and only the serial number is left to type."
     },
     "assetNew": {

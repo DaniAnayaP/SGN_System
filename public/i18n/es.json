@@ -4354,6 +4354,15 @@
     "assetCostCenter": "Centro de costos",
     "assetModelChoose": "Elige el modelo",
     "assetModelNoModels": "Sin modelos: agrégalos en Activos Fijos",
+    "assetModelNoComplete": "Ningún modelo está completo todavía",
+    "assetModelFalta": "incompleto, le falta: {falta}",
+    "assetModelMiss_name": "nombre de compra",
+    "assetModelMiss_model": "modelo",
+    "assetModelMiss_height": "alto",
+    "assetModelMiss_length": "largo",
+    "assetModelMiss_depth": "profundidad",
+    "assetModelMiss_weight": "peso",
+    "assetModelMiss_volume": "volumen",
     "assetPickTypeFirst": "Primero elige el tipo",
     "assetFromModel": "Viene del modelo: se elige en la columna «Elegir modelo».",
     "assetNoSerial": "No lleva",
@@ -6237,7 +6246,7 @@
       "example": "Rack lleva R (R001), Escritorio lleva ES (ES001) y Termohigrómetro lleva HT (HT001)."
     },
     "assetModelPicker": {
-      "what": "El modelo del activo, de la lista de modelos de su tipo (se dan de alta en Catálogos > Activos Fijos). Al elegirlo se llenan solos, y quedan cerrados, el nombre de compra, el nombre personalizado, el modelo, la forma, las medidas y el peso. Un activo de antes conserva lo que tenía hasta que se le elige su modelo; ese día sus datos se reemplazan por los del modelo.",
+      "what": "El modelo del activo, de la lista de modelos de su tipo (se dan de alta en Catálogos > Activos Fijos). Al elegirlo se llenan solos, y quedan cerrados, el nombre de compra, el nombre personalizado, el modelo, la forma, las medidas y el peso. Un activo de antes conserva lo que tenía hasta que se le elige su modelo; ese día sus datos se reemplazan por los del modelo. Los modelos que todavía están incompletos salen en gris, con lo que les falta: se terminan en Catálogos > Activos Fijos > Modelos.",
       "example": "Eliges «Rack selectivo 2.7 m · SR-2700» y ya solo escribes el número de serie."
     },
     "assetNew": {

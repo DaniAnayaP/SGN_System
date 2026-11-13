@@ -95,6 +95,7 @@ function selectCell(record, colId, key, { items, current, currentLabel, helpKey,
         const opt = document.createElement('option');
         opt.value = String(i.value);
         opt.textContent = i.label;
+        if (i.disabled) opt.disabled = true; // un modelo incompleto se ve pero no se elige
         select.appendChild(opt);
     });
     select.value = current === null || current === undefined ? '' : String(current);
@@ -134,12 +135,33 @@ function serialCell(record) {
     }
     return inlineCell(record, 'colActSerie', 'serialNumber', { helpKey: 'assetSerial' });
 }
-// El modelo: se elige de los modelos activos y completos del tipo del activo (y se conserva el que ya tiene aunque ya no se ofrezca). Sin modelo, el activo es de antes: conserva lo que tenía hasta que se elija.
+// Lo que le falta a un modelo para estar completo (lo mismo que pide el servidor: nombre de compra, modelo, alto, largo, profundidad —salvo la cilíndrica— y peso; el volumen solo en la irregular).
+function modelMissing(m) {
+    const miss = [];
+    if (!String(m.purchaseName || '').trim()) miss.push('name');
+    if (!String(m.model || '').trim()) miss.push('model');
+    if (!(m.height > 0)) miss.push('height');
+    if (!(m.length > 0)) miss.push('length');
+    if (m.shape !== 'cilindrica' && !(m.depth > 0)) miss.push('depth');
+    if (!(m.weight > 0)) miss.push('weight');
+    if (m.shape === 'irregular' && !(m.volume > 0)) miss.push('volume');
+    return miss;
+}
+// Los modelos ACTIVOS de un tipo para el selector: los completos se pueden elegir; los incompletos salen en gris con lo que les falta (así se sabe qué terminar en Catálogos > Activos Fijos > Modelos y no parece que «no existen»).
+function modelChoicesFor(typeId) {
+    return assetModels.filter((m) => m.typeId === typeId && m.active).map((m) => {
+        if (m.complete) return { value: m.id, label: m.label, ready: true };
+        const falta = modelMissing(m).map((k) => Dashboard.t(`main.assetModelMiss_${k}`)).join(', ');
+        return { value: m.id, label: `${m.label} — ${Dashboard.t('main.assetModelFalta').replace('{falta}', falta)}`, disabled: true, ready: false };
+    });
+}
+// El modelo: se elige de los modelos activos y completos del tipo del activo (los incompletos salen en gris, con lo que les falta) y se conserva el que ya tiene aunque ya no se ofrezca. Sin modelo, el activo es de antes: conserva lo que tenía hasta que se elija.
 function modelPickerCell(record) {
-    const items = assetModels.filter((m) => m.typeId === record.typeId && m.active && m.complete).map((m) => ({ value: m.id, label: m.label }));
+    const items = modelChoicesFor(record.typeId);
+    const ready = items.filter((i) => i.ready).length;
     const td = selectCell(record, 'colActElegirModelo', 'modelId', {
         items, current: record.modelId, currentLabel: record.modelLabel, helpKey: 'assetModelPicker',
-        blankKey: items.length || record.modelId ? 'main.assetModelChoose' : 'main.assetModelNoModels',
+        blankKey: ready || record.modelId ? 'main.assetModelChoose' : (items.length ? 'main.assetModelNoComplete' : 'main.assetModelNoModels'),
         toPatch: (v) => (v === '' ? null : { modelId: Number(v) }),
     });
     td.classList.toggle('asset-model-missing', !record.modelId);
@@ -724,8 +746,9 @@ function chosenType() { return assetTypes.find((t) => String(t.id) === formEl('t
 function chosenModel() { const id = Number(formEl('modelId').value) || 0; return assetModels.find((m) => m.id === id) || null; }
 function fillModelChoices() {
     const type = chosenType();
-    const items = type ? assetModels.filter((m) => m.typeId === type.id && m.active && m.complete).map((m) => ({ value: m.id, label: m.label })) : [];
-    fillSelect(formEl('modelId'), items, { blankKey: !type ? 'main.assetPickTypeFirst' : (items.length ? 'main.assetModelChoose' : 'main.assetModelNoModels') });
+    const items = type ? modelChoicesFor(type.id) : [];
+    const ready = items.filter((i) => i.ready).length;
+    fillSelect(formEl('modelId'), items, { blankKey: !type ? 'main.assetPickTypeFirst' : (ready ? 'main.assetModelChoose' : (items.length ? 'main.assetModelNoComplete' : 'main.assetModelNoModels')) });
 }
 // Al elegir el modelo se llenan, y quedan cerrados, el nombre de compra, el personalizado, el modelo, la forma, las medidas y el peso; el volumen se muestra calculado.
 function fillFromModel() {
