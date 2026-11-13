@@ -2077,7 +2077,7 @@ function frontCellHtml(s, i, dis) {
     const sideName = (side) => t(`main.layoutLado_${side}`);
     const auto = LC.activoFront(state.draft, { ...s, front: undefined });
     const options = ['N', 'S', 'W', 'E'].map((k) => `<option value="${k}"${s.front === k ? ' selected' : ''}>${esc(sideName(k))}</option>`).join('');
-    return `<td><select data-front="${i}" data-help-key="layoutFrenteActivo"${s.front ? ' class="layout-edited"' : ''}${dis ? ' disabled' : ''}><option value=""${s.front ? '' : ' selected'}>${esc(t('main.layoutFrenteAuto', { side: sideName(auto.side).toLowerCase() }))}</option>${options}</select>${turnButtonHtml(s, i, dis)}</td>`;
+    return `<td><div class="layout-front-row"><select data-front="${i}" data-help-key="layoutFrenteActivo"${s.front ? ' class="layout-edited"' : ''}${dis ? ' disabled' : ''}><option value=""${s.front ? '' : ' selected'}>${esc(t('main.layoutFrenteAuto', { side: sideName(auto.side).toLowerCase() }))}</option>${options}</select>${turnButtonHtml(s, i, dis)}</div></td>`;
 }
 // «Girar 90°» (2026-11-13): un activo que viene de Alta Activos trae sus medidas fijas del registro; para acomodarlo (por ejemplo de pie en una huella angosta) se gira un cuarto de vuelta a la derecha: su largo y su fondo se intercambian en el croquis y
 // su frente gira con él. Ver LayoutCalc.turnAssetSpace.

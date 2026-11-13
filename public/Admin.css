@@ -8740,7 +8740,10 @@ td[data-col="colActCalibracion"] .cal-chip{ white-space: normal; }
 .cal-file-preview img{ max-width: 9rem; max-height: 7rem; border-radius: 0.5rem; border: 1px solid var(--color-border); object-fit: contain; background: var(--color-surface, #fff); }
 
 /* Girar 90° un activo del Layout (paso Activos, junto al Frente) */
-.layout-turn-btn{ display: inline-grid; place-items: center; width: 1.7rem; height: 1.7rem; margin-left: 0.3rem; vertical-align: middle; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; font-size: 1rem; }
+/* el Frente y el botón de girar van en la MISMA línea (un div dentro de la celda: nunca display:flex directo en un td) */
+.layout-front-row{ display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap; }
+.layout-front-row select{ flex: 1 1 auto; width: auto; min-width: 6.4rem; }
+.layout-turn-btn{ display: inline-grid; place-items: center; flex: none; align-self: stretch; width: 1.9rem; min-height: 1.7rem; vertical-align: middle; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; font-size: 1rem; }
 .layout-turn-btn:hover:not(:disabled){ color: var(--color-primary, #7d3f8f); border-color: var(--color-primary, #7d3f8f); }
 .layout-turn-btn.on{ color: var(--color-primary, #7d3f8f); border-color: var(--color-primary, #7d3f8f); background: color-mix(in srgb, var(--color-primary, #7d3f8f) 12%, transparent); }
 .layout-turn-btn:disabled{ opacity: 0.45; cursor: default; }
