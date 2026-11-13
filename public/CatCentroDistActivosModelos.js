@@ -316,20 +316,89 @@ const AssetModels = (() => {
     const PHOTO_MAX_SIDE = 640;
     const PHOTO_READ_SIDE = 1600; // una foto muy grande se baja a esto antes de revisar sus píxeles
     const canvasBlob = (canvas, type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+    // Fondo blanco de una foto de catálogo (2026-11-13, Daniel: «se ve raro el contorno blanco al frente»): si el borde de la foto es blanco y sin transparencia, el blanco que toca el borde se vuelve transparente (se recorre desde
+    // los bordes hacia adentro, así los blancos de adentro —el vidrio, un reflejo— se conservan) y la foto se recorta a lo que quedó, para que el equipo llene su cara. Una foto que ya trae transparencia, o cuyo fondo no es blanco, no se toca.
+    // (La misma regla está en CatCentroDistActivosModelos.js para las fotos que se suben; aquí cubre las que ya estaban subidas.) src = imagen o canvas; devuelve un canvas nuevo, o null si no hay nada que quitar.
+    function cutoutWhiteBackground(src, maxSide) {
+        const sw = src.naturalWidth || src.width;
+        const sh = src.naturalHeight || src.height;
+        if (!(sw > 0 && sh > 0)) return null;
+        const k = Math.min(1, (maxSide || 768) / Math.max(sw, sh));
+        const w = Math.max(1, Math.round(sw * k));
+        const h = Math.max(1, Math.round(sh * k));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const g = c.getContext('2d', { willReadFrequently: true });
+        g.drawImage(src, 0, 0, w, h);
+        let id;
+        try { id = g.getImageData(0, 0, w, h); } catch (e) { return null; }
+        const d = id.data;
+        const near = (i) => d[i + 3] > 240 && d[i] >= 242 && d[i + 1] >= 242 && d[i + 2] >= 242 && Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2]) <= 14;
+        const edge = [];
+        for (let x = 0; x < w; x++) { edge.push(x, (h - 1) * w + x); }
+        for (let y = 1; y < h - 1; y++) { edge.push(y * w, y * w + w - 1); }
+        let whiteEdge = 0;
+        for (const p of edge) {
+            if (d[p * 4 + 3] < 250) return null; // ya trae transparencia: es un recorte
+            if (near(p * 4)) whiteEdge += 1;
+        }
+        if (whiteEdge / edge.length < 0.85) return null; // el fondo no es blanco
+        const gone = new Uint8Array(w * h);
+        const queue = new Int32Array(w * h);
+        let head = 0; let tail = 0;
+        for (const p of edge) if (near(p * 4) && !gone[p]) { gone[p] = 1; queue[tail++] = p; }
+        while (head < tail) {
+            const p = queue[head++];
+            const x = p % w; const y = (p - x) / w;
+            const next = [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1];
+            for (const q of next) if (q >= 0 && !gone[q] && near(q * 4)) { gone[q] = 1; queue[tail++] = q; }
+        }
+        if (tail < w * h * 0.005 || tail > w * h * 0.985) return null; // casi nada que quitar, o casi todo (no es una foto de equipo)
+        // un borde suave: el pixel claro que toca lo quitado se vuelve medio transparente (sin halo blanco)
+        const fade = [];
+        for (let p = 0; p < w * h; p++) {
+            if (gone[p]) continue;
+            const x = p % w; const y = (p - x) / w;
+            const touches = (x > 0 && gone[p - 1]) || (x < w - 1 && gone[p + 1]) || (y > 0 && gone[p - w]) || (y < h - 1 && gone[p + w]);
+            if (!touches) continue;
+            const m = Math.min(d[p * 4], d[p * 4 + 1], d[p * 4 + 2]);
+            if (m > 200) fade.push(p, Math.round(255 * Math.max(0, Math.min(1, (244 - m) / 44))));
+        }
+        let minX = w; let minY = h; let maxX = -1; let maxY = -1;
+        for (let p = 0; p < w * h; p++) {
+            if (gone[p]) { d[p * 4 + 3] = 0; continue; }
+            const x = p % w; const y = (p - x) / w;
+            if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+        for (let i = 0; i < fade.length; i += 2) d[fade[i] * 4 + 3] = Math.min(d[fade[i] * 4 + 3], fade[i + 1]);
+        if (maxX < minX || maxY < minY) return null;
+        g.putImageData(id, 0, 0);
+        const bw = maxX - minX + 1; const bh = maxY - minY + 1;
+        const out = document.createElement('canvas');
+        out.width = bw; out.height = bh;
+        out.getContext('2d').drawImage(c, minX, minY, bw, bh, 0, 0, bw, bh);
+        return out;
+    }
     async function prepareModelPhoto(file) {
         if (!file || !/^image\/(png|webp|jpe?g)$/i.test(file.type || '')) throw Object.assign(new Error('type'), { code: 'type' });
         const bmp = await createImageBitmap(file);
         const k0 = Math.min(1, PHOTO_READ_SIDE / Math.max(bmp.width, bmp.height));
-        const w0 = Math.max(1, Math.round(bmp.width * k0));
-        const h0 = Math.max(1, Math.round(bmp.height * k0));
-        const c0 = document.createElement('canvas');
+        let w0 = Math.max(1, Math.round(bmp.width * k0));
+        let h0 = Math.max(1, Math.round(bmp.height * k0));
+        let c0 = document.createElement('canvas');
         c0.width = w0; c0.height = h0;
-        const g0 = c0.getContext('2d', { willReadFrequently: true });
+        let g0 = c0.getContext('2d', { willReadFrequently: true });
         g0.drawImage(bmp, 0, 0, w0, h0);
         if (bmp.close) bmp.close();
+        // fondo blanco de catálogo: se quita antes de recortar (la foto sale sin el contorno blanco y el equipo llena su cara)
+        let cleaned = false;
+        try {
+            const cut = cutoutWhiteBackground(c0, PHOTO_READ_SIDE);
+            if (cut) { c0 = cut; w0 = cut.width; h0 = cut.height; g0 = c0.getContext('2d', { willReadFrequently: true }); cleaned = true; }
+        } catch (err) { /* sin limpieza: la foto sube como vino */ }
         let box = { x: 0, y: 0, w: w0, h: h0 };
         let hasAlpha = false;
-        if (!/jpe?g/i.test(file.type)) {
+        if (cleaned || !/jpe?g/i.test(file.type)) {
             const px = g0.getImageData(0, 0, w0, h0).data;
             let minX = w0; let minY = h0; let maxX = -1; let maxY = -1;
             for (let y = 0; y < h0; y++) {
