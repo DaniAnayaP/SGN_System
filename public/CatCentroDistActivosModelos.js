@@ -110,6 +110,39 @@ const AssetModels = (() => {
         td.appendChild(select);
         return td;
     }
+    // «Apariencia en el Layout» (2026-11-13): cómo se dibujan en el Layout las piezas de este modelo. Vacío = «La del Tipo» (lo de siempre); si no, una de las apariencias del dibujo de su Tipo, con su vista previa. De momento solo los
+    // sensores tienen apariencias: en los demás tipos la celda queda en «La del Tipo» y cerrada.
+    function lookCell(model) {
+        const td = document.createElement('td');
+        td.dataset.col = 'colActModApariencia';
+        td.setAttribute('data-help-key', 'assetModelLook');
+        const kind = (types.find((r) => r.id === model.parentId) || {}).kind || '';
+        const looks = window.AssetLooks ? window.AssetLooks.looksFor(kind) : [];
+        const effective = window.AssetLooks ? window.AssetLooks.effective(kind, model.look) : '';
+        const wrap = document.createElement('span');
+        wrap.className = 'asset-look-pick';
+        if (window.AssetLooks && effective) wrap.insertAdjacentHTML('beforeend', window.AssetLooks.thumb(effective));
+        const select = document.createElement('select');
+        select.className = 'editable-cell-select asset-select';
+        const typeLabel = looks.length ? fillText('main.assetLookType', { look: t(`main.assetLook_${window.AssetLooks.effective(kind, '')}`) }) : t('main.assetLookTypeOnly');
+        const none = document.createElement('option');
+        none.value = '';
+        none.textContent = typeLabel;
+        select.appendChild(none);
+        looks.forEach((id) => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = t(`main.assetLook_${id}`);
+            select.appendChild(opt);
+        });
+        select.value = looks.includes(model.look) ? model.look : '';
+        select.disabled = !looks.length || isPending(model, 'look') || !Dashboard.canEditField(TABLE, 'colActModApariencia', model.id ? model.look || '' : '');
+        if (select.disabled) select.title = !looks.length ? t('main.assetLookNoneYet') : t(isPending(model, 'look') ? 'main.changePending' : 'main.fieldLocked');
+        select.addEventListener('change', () => commit(model, { look: select.value }));
+        wrap.appendChild(select);
+        td.appendChild(wrap);
+        return td;
+    }
     function statusCell(model) {
         const td = document.createElement('td');
         td.dataset.col = 'colCatStatus';
@@ -172,6 +205,7 @@ const AssetModels = (() => {
             irregular && !closedTitle
                 ? inlineCell(model, 'colActModVolumen', 'volume', { inputType: 'number', unit: 'm³', helpKey: 'assetModelVolume', toValue: num, formatDisplay: (v) => Number(v).toFixed(3) })
                 : readonlyCell('colActModVolumen', Number(model.volume) > 0 ? Number(model.volume).toFixed(3) : '', 'm³', closedTitle || t('main.assetVolumeCalc'), 'assetModelVolume'),
+            lookCell(model),
             statusCell(model),
             textCell('colActModUso', used, 'assetModelUse'),
             actionsCell(model),
@@ -213,7 +247,7 @@ const AssetModels = (() => {
     const COLUMNS = [
         ['colActModNombreCompra', 'main.colActModNombreCompra'], ['colActModNombrePersonalizado', 'main.colActModNombrePersonalizado'], ['colActModModelo', 'main.colActModModelo'], ['colActModForma', 'main.colActModForma'],
         ['colActModAlto', 'main.colActModAlto'], ['colActModLargo', 'main.colActModLargo'], ['colActModProfundidad', 'main.colActModProfundidad'], ['colActModPeso', 'main.colActModPeso'],
-        ['colActModVolumen', 'main.colActModVolumen'], ['colCatStatus', 'main.colCatStatus'], ['colActModUso', 'main.colActModUso'], ['actions', 'main.colActions'],
+        ['colActModVolumen', 'main.colActModVolumen'], ['colActModApariencia', 'main.colActModApariencia'], ['colCatStatus', 'main.colCatStatus'], ['colActModUso', 'main.colActModUso'], ['actions', 'main.colActions'],
     ];
     function ensurePanel() {
         if (panel && panel.isConnected) return panel;
@@ -257,7 +291,7 @@ const AssetModels = (() => {
             add.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('main.assetModelsAdd').replace(/^\+\s*/, '')}</span>`;
             add.addEventListener('click', () => {
                 if (draft) return;
-                draft = { id: null, parentId: type.id, name: '', customName: '', modelNumber: '', shape: 'rectangular', height: 0, length: 0, depth: 0, weight: 0, volume: 0, status: 'active', usedBy: 0, complete: false, pendingFields: [] };
+                draft = { id: null, parentId: type.id, name: '', customName: '', modelNumber: '', shape: 'rectangular', height: 0, length: 0, depth: 0, weight: 0, volume: 0, look: '', status: 'active', usedBy: 0, complete: false, pendingFields: [] };
                 render();
                 const firstCell = host.querySelector('tbody tr:last-child td.editable-cell');
                 if (firstCell) firstCell.click();

@@ -7255,7 +7255,7 @@ app.get('/api/business/layout', requireAuth, (req, res) => {
     const row = getClientLayout(req.user.clientId, { costCenterId: center.id });
     const costCenter = center.costCenter || (row && row.costCenterId ? getCostCenterById(row.costCenterId, req.user.clientId, req.user.isTestAccount) : null);
     res.json({
-        layout: row ? row.layout : null, version: row ? row.version : 0, updatedAt: row ? row.updatedAt : '', updatedBy: row ? row.updatedBy : '',
+        layout: row ? layoutWithSensorLooks(req.user.clientId, row.costCenterId, row.layout) : null, version: row ? row.version : 0, updatedAt: row ? row.updatedAt : '', updatedBy: row ? row.updatedBy : '',
         hasPlanImage: row ? row.hasPlanImage : false, permissions: layoutPermissions(req), costCenterId: row ? row.costCenterId : (center.id || null),
         // Los activos del registro (Alta Activos) de este centro: los que el paso Activos puede colocar y los que ya están colocados.
         fixedAssets: layoutFixedAssetsFor(req, row, row ? row.costCenterId : center.id),
@@ -10374,6 +10374,9 @@ function isAssetModelComplete(row) {
     if (!(row.depth_cm > 0)) return false;
     return row.shape !== 'irregular' || row.volume_m3 > 0;
 }
+// Apariencias que un MODELO puede tomar en el Layout según el «Se dibuja como» (kind) de su Tipo; '' = la del Tipo (lo que ya se dibujaba). De momento solo los sensores (2026-11-13); gabinetes, anaqueles y racks siguen uno por uno.
+const ASSET_LOOKS = { sensor: ['sensor-wall', 'sensor-probe', 'sensor-disc'] };
+const ASSET_LOOK_LABELS = { '': 'La del Tipo', 'sensor-wall': 'Termohigrómetro de pared', 'sensor-probe': 'Registrador con sonda', 'sensor-disc': 'Sensor compacto' };
 const ASSET_MODEL_FROM_KEYS = ['purchaseName', 'customName', 'model', 'shape', 'height', 'length', 'depth', 'weight', 'volume']; // lo que un activo toma de su modelo
 const ASSET_MODEL_LOCKED_KEYS = ['shape', 'height', 'length', 'depth', 'weight', 'volume']; // lo que se cierra del modelo cuando algún activo lo usa
 const assetModelLabel = (m) => [m.name, m.model_number].filter(Boolean).join(' · ');
@@ -10400,6 +10403,13 @@ function prepareAssetModelPatch(req, categoryType, existing, patch) {
         if (!Number.isFinite(n) || n < 0 || n > limit) return bad(400, `La medida debe ser un número entre 0 y ${limit}.`, 'NUM');
         out[key] = Math.round(n * 10 ** decimals) / 10 ** decimals;
     }
+    // La apariencia en el Layout: vacío = la del Tipo, o una de las del tipo de su dibujo (por ahora solo sensores).
+    if (has('look')) {
+        const look = String(patch.look == null ? '' : patch.look);
+        const typeRow = existing.parent_id ? getArticleCategoryById(existing.parent_id, req.user.clientId, req.user.isTestAccount) : null;
+        if (look !== '' && !(ASSET_LOOKS[typeRow && typeRow.kind] || []).includes(look)) return bad(400, 'Esa apariencia no es de este tipo de activo.', 'LOOK');
+        out.look = look;
+    }
     const shape = has('shape') ? out.shape : existing.shape;
     if (has('volume') && shape !== 'irregular') return bad(400, 'El volumen se calcula solo con las medidas. Solo en la forma Irregular se escribe.', 'VOLUME_CALC');
     if (has('depth') && shape === 'cilindrica') return bad(400, 'En una forma cilíndrica la profundidad es igual al largo (el diámetro).', 'DEPTH_CALC');
@@ -10409,7 +10419,7 @@ function prepareAssetModelPatch(req, categoryType, existing, patch) {
         const changed = ASSET_MODEL_LOCKED_KEYS.filter((key) => has(key) && String(out[key]) !== String(existing[colOf[key]]));
         if (changed.length) return bad(409, `Ya hay ${used === 1 ? 'un activo' : `${used} activos`} con este modelo: su forma, sus medidas y su peso están cerrados. Da de alta otro modelo y deja este como Inactivo.`, 'MODEL_LOCKED');
     }
-    return { patch: out, sanitizers: { shape: (v) => FIXED_ASSET_SHAPE_LABELS[v] || String(v == null ? '' : v) } };
+    return { patch: out, sanitizers: { shape: (v) => FIXED_ASSET_SHAPE_LABELS[v] || String(v == null ? '' : v), look: (v) => ASSET_LOOK_LABELS[v == null ? '' : v] || String(v) } };
 }
 // Después de guardar un cambio del modelo: el volumen (y la profundidad de una cilíndrica) se recalculan con las medidas y, si cambió algún nombre, todos los activos que lo usan lo reciben (queda en el historial de cada activo).
 function finishAssetModelPatch(req, existing, category, appliedPatch) {
@@ -10526,7 +10536,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
         ...(row.category_type === 'activos-modelos' ? {
             parentId: row.parent_id, customName: row.custom_name || '', modelNumber: row.model_number || '', shape: row.shape || 'rectangular',
             height: row.height_cm, length: row.length_cm, depth: row.depth_cm, weight: row.weight_kg, volume: row.volume_m3,
-            complete: isAssetModelComplete(row), usedBy: ctx && ctx.modelUse ? (ctx.modelUse.get(row.id) || 0) : 0,
+            complete: isAssetModelComplete(row), usedBy: ctx && ctx.modelUse ? (ctx.modelUse.get(row.id) || 0) : 0, look: row.look || '',
         } : {}),
         ...(row.category_type === 'incidentes-criterios' ? { kind: row.kind } : {}),
         ...(row.category_type === 'transito-equipos' ? { kind: row.kind, widthM: row.width_m || 0, lengthM: row.length_m || 0, heightM: row.height_m || 0 } : {}),
@@ -11882,6 +11892,23 @@ function layoutAssetCatalogs(clientId) {
     return {
         types: new Map(listArticleCategoriesAnyScope(clientId, 'activos-fijos').map((r) => [r.id, r])),
         classes: new Map(listArticleCategoriesAnyScope(clientId, 'activos-clasificacion').map((r) => [r.id, r])),
+        models: new Map(listArticleCategoriesAnyScope(clientId, 'activos-modelos').map((r) => [r.id, r])),
+    };
+}
+// Apariencia de los sensores en el Layout (2026-11-13): cada sensor con assetRef sale con la apariencia del MODELO de su activo (look; '' = la del Tipo) y las medidas del equipo (dim en cm: ancho, alto y fondo) para dibujarlo como es.
+// Son datos SOLO para dibujar: no se guardan (el Layout limpio los quita) y se vuelven a sacar en cada lectura.
+function layoutWithSensorLooks(clientId, centerId, layout) {
+    if (!layout || !Array.isArray(layout.sensors) || !layout.sensors.some((s) => s && s.assetRef)) return layout;
+    const models = new Map(listArticleCategoriesAnyScope(clientId, 'activos-modelos').map((r) => [r.id, r]));
+    const assets = new Map(listFixedAssetsOfCenterAnyScope(clientId, centerId).map((a) => [a.id, a]));
+    return {
+        ...layout,
+        sensors: layout.sensors.map((s) => {
+            const a = s && s.assetRef ? assets.get(s.assetRef) : null;
+            if (!a) return s;
+            const m = a.model_id ? models.get(a.model_id) : null;
+            return { ...s, look: (m && m.look) || '', dim: { w: a.length_cm || 0, h: a.height_cm || 0, d: a.depth_cm || 0 } };
+        }),
     };
 }
 function layoutAssetOpts(row, cat) {
@@ -11990,7 +12017,7 @@ function layoutFixedAssetsFor(req, layoutRow, centerId) {
         const cls = cat.classes.get(a.class_id);
         return {
             id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name, purchaseName: a.purchase_name, customName: a.custom_name, model: a.model, serialNumber: a.serial_number,
-            typeId: a.type_id || 0, modelId: a.model_id || 0, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
+            typeId: a.type_id || 0, modelId: a.model_id || 0, look: ((cat.models.get(a.model_id) || {}).look) || '', typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
             ...(() => { const done = fixedAssetCompleteness(a, type); return { complete: done.complete, missing: done.missing, photoCount: done.photos }; })(), // solo los activos completos se pueden colocar en el Layout; el selector dice qué le falta a los demás
             shape: a.shape, length: a.length_cm, depth: a.depth_cm, height: a.height_cm, status: a.status, showInLayout: !!a.show_in_layout,
         };

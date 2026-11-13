@@ -7379,6 +7379,7 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .le-hit:active{ cursor: grabbing; }
 .le{ fill: var(--color-report-calc-bg); stroke: var(--color-report-calc-text); stroke-width: 1.5; }
 .lsn{ fill: var(--color-report-calc-bg); stroke: #2B8CA3; stroke-width: 2; }
+.lsn-dev{ stroke-width: 1.8; }
 .lv{ fill: var(--color-text-secondary); }
 .lt{ font: 600 10px var(--font-family, system-ui, sans-serif); fill: var(--color-text-primary); paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; }
 .lt2{ font: 500 8.5px var(--font-family, system-ui, sans-serif); fill: var(--color-text-secondary); paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; }
@@ -8582,6 +8583,8 @@ td.sku-status-inactive{ font-style: italic; }
 .asset-models-letter{ display: inline-block; margin-left: 0.3rem; padding: 0.05rem 0.55rem; border-radius: 999px; background: color-mix(in srgb, var(--color-accent, #7d3f8f) 14%, transparent); color: var(--color-accent, #7d3f8f); font-size: 0.8rem; font-weight: 700; }
 .asset-models-scroll{ border: 1px solid var(--color-border); border-radius: 0.6rem; background-color: var(--color-surface); overflow: auto; }
 .asset-models-table td.asset-model-closed{ opacity: 0.7; }
+.asset-look-pick{ display: inline-flex; align-items: center; gap: 0.5rem; }
+.asset-look-thumb{ width: 2.1rem; height: 2.1rem; flex: none; }
 .asset-model-tag{ display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.5rem; border-radius: 999px; background: #fef0c7; color: #93370d; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
 .asset-models-open{ display: inline-flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
 td.asset-model-missing select{ border-color: #b26a00; background-color: #fff3dc; color: #b26a00; }

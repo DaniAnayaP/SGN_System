@@ -1859,6 +1859,14 @@
     "layoutColocarSensor": "+ Colocar sensor de Alta Activos",
     "layoutColocarTituloSensor": "Colocar sensores de Alta Activos",
     "layoutSensorEquipo": "S/N",
+    "colActModApariencia": "Apariencia en el Layout",
+    "assetLookType": "La del Tipo ({look})",
+    "assetLookTypeOnly": "La del Tipo",
+    "assetLook_": "La del Tipo",
+    "assetLook_sensor-wall": "Termohigrómetro de pared",
+    "assetLook_sensor-probe": "Registrador con sonda",
+    "assetLook_sensor-disc": "Sensor compacto",
+    "assetLookNoneYet": "Por ahora solo los sensores se dibujan según su modelo; los demás tipos siguen con la apariencia de su Tipo.",
     "layoutSensorLado": "Lado de la pared",
     "layoutSensorLadoAuto": "Automático",
     "layoutSensorLadoA": "Lado A · {zone}",
@@ -6387,6 +6395,10 @@
     "layoutColocarSensor": {
       "what": "Coloca un sensor que ya está completo en Alta Activos (un activo de un tipo que se dibuja como «Sensor», con su clasificación, modelo, número de serie y las 6 fotos). Trae de su renglón el código, el nombre, el modelo y el S/N; aquí le dices en qué pared va, a qué distancia y a qué altura, y qué mide (temperatura, humedad o las dos).",
       "example": "el Traceable 4410 (HT001): lo colocas, eliges la pared M002, 1.5 m desde el inicio y 1.2 m de altura, y mide temperatura y humedad."
+    },
+    "assetModelLook": {
+      "what": "Cómo se dibujan en el Layout (croquis y 3D) las piezas de este modelo. «La del Tipo» es lo de siempre; si el modelo se ve distinto, elige su apariencia con su vista previa (por ejemplo un termohigrómetro de pared con pantalla). Aplica a todas las piezas de este modelo. De momento solo los sensores; los demás tipos vendrán uno por uno.",
+      "example": "el Traceable 4410 es una cajita con pantalla: eliges «Termohigrómetro de pared» y en el Layout sus sensores se ven así, no como un círculo."
     },
     "layoutColocarTipo": {
       "what": "El primer paso para colocar: el Tipo de activo (por ejemplo Termohigrómetro o Gabinete). Al elegirlo, solo salen los modelos de ese tipo.",

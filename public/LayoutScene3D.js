@@ -253,6 +253,27 @@
 
         const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
         const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
+        // La cara de un sensor con apariencia propia (2026-11-13): el cuerpo del equipo con su pantalla (temperatura y/o humedad según lo que mide) y sus botones, dibujado una vez en un lienzo y guardado por apariencia y tipo de medida.
+        const sensorFaceCache = new Map();
+        function sensorFaceTexture(look, kind) {
+            const key = look + '|' + kind;
+            if (sensorFaceCache.has(key)) return sensorFaceCache.get(key);
+            const c = document.createElement('canvas');
+            c.width = 128; c.height = 128;
+            const g2 = c.getContext('2d');
+            g2.fillStyle = '#F4F5F8'; g2.fillRect(0, 0, 128, 128);
+            g2.strokeStyle = '#9AA2B8'; g2.lineWidth = 6; g2.strokeRect(3, 3, 122, 122);
+            const probe = look === 'sensor-probe';
+            g2.fillStyle = '#16302A'; g2.fillRect(14, 14, 100, probe ? 70 : 62);
+            g2.fillStyle = '#7BE3A6'; g2.textAlign = 'center';
+            if (kind === 'hum') { g2.font = 'bold 30px sans-serif'; g2.fillText('45 %HR', 64, probe ? 62 : 56); }
+            else if (kind === 'temp' || probe) { g2.font = 'bold 32px sans-serif'; g2.fillText(probe ? '4.2°C' : '24.5°C', 64, probe ? 62 : 56); }
+            else { g2.font = 'bold 27px sans-serif'; g2.fillText('24.5°C', 64, 46); g2.font = '16px sans-serif'; g2.fillText('45 %HR', 64, 67); }
+            if (!probe) { g2.fillStyle = '#9AA2B8'; [40, 64, 88].forEach((x) => { g2.beginPath(); g2.arc(x, 98, 7, 0, Math.PI * 2); g2.fill(); }); }
+            const tex = new THREE.CanvasTexture(c);
+            sensorFaceCache.set(key, tex);
+            return tex;
+        }
         // Un color (0xRRGGBB) mezclado con otro: k = cuánto del otro (0 = el mismo, 1 = el otro). Sirve para ver «tenue» lo que no se enfocó.
         const mixHex = (c, to, k) => { const r = (c >> 16) & 255; const g = (c >> 8) & 255; const b = c & 255; const R = (to >> 16) & 255; const G = (to >> 8) & 255; const B = to & 255; return (Math.round(r + (R - r) * k) << 16) | (Math.round(g + (G - g) * k) << 8) | Math.round(b + (B - b) * k); };
 
@@ -1004,12 +1025,40 @@
                 m.rotation.y = -Math.atan2(pg.uy, pg.ux);
                 group.power.add(m);
             });
-            // un sensor (de temperatura y/o humedad) va sobre su pared, a su altura del piso: un disco turquesa pegado a la pared (como el del croquis) con su código arriba
+            // un sensor (de temperatura y/o humedad) va sobre su pared, a su altura del piso, con su código arriba. Con la apariencia de su MODELO (Catálogos > Activos Fijos > Modelos: «Termohigrómetro de pared» o «Registrador con sonda»)
+            // se dibuja como el equipo: una cajita con pantalla del tamaño del modelo, pegada a la pared del lado donde está montado; sin apariencia propia («La del Tipo»), el disco turquesa de siempre.
             (layout.sensors || []).forEach((e) => {
                 fxItem = { type: 'sensor', id: e.id };
                 const sg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(layout, { ...e, width: 0 }) : null;
                 if (!sg) return;
                 const y = (sg.base || 0) + Math.max(0.2, Number(e.height) || 1.5);
+                if (e.look === 'sensor-wall' || e.look === 'sensor-probe') {
+                    const sp = root.LayoutCalc.sensorPoint ? root.LayoutCalc.sensorPoint(layout, e) : null;
+                    let dx = 0; let dz = 1; // hacia dónde mira el frente del equipo (el lado de la pared donde está montado)
+                    if (sp) { const vx = sp.inx - sp.x; const vy = sp.iny - sp.y; const len = Math.hypot(vx, vy); if (len > 1e-6) { dx = vx / len; dz = vy / len; } }
+                    const dm = e.dim || {};
+                    const w = Math.max(0.08, (Number(dm.w) || 11) / 100);
+                    const h = Math.max(0.08, (Number(dm.h) || 11) / 100);
+                    const dp = Math.max(0.02, (Number(dm.d) || 2.5) / 100);
+                    const side = lam(0xF4F5F8);
+                    const face = new THREE.MeshBasicMaterial({ map: sensorFaceTexture(e.look, e.type) });
+                    const dev = new THREE.Group();
+                    dev.add(new THREE.Mesh(new THREE.BoxGeometry(w, h, dp), [side, side, side, side, face, side]));
+                    if (e.look === 'sensor-probe') {
+                        // el cable del registrador baja del cuerpo hasta su sonda (una cajita turquesa)
+                        const cable = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -h / 2, 0), new THREE.Vector3(w * 0.3, -h / 2 - 0.12, dp * 0.4), new THREE.Vector3(w * 0.1, -h / 2 - 0.26, dp * 0.3)]);
+                        dev.add(new THREE.Mesh(new THREE.TubeGeometry(cable, 12, 0.004, 5), lam(0x6B7089)));
+                        const tip = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.02), lam(SENSOR_COLOR));
+                        tip.position.set(w * 0.1, -h / 2 - 0.29, dp * 0.3);
+                        dev.add(tip);
+                    }
+                    const off = (sg.thick || 0) / 2 + dp / 2 + 0.003;
+                    dev.position.set(PX(sg.a.x) + dx * off, y, PZ(sg.a.y) + dz * off);
+                    dev.rotation.y = Math.atan2(dx, dz);
+                    group.sensors.add(dev);
+                    addLabel(group.sensorLabels, e.code, PX(sg.a.x), y + 0.45, PZ(sg.a.y), 0.3, false);
+                    return;
+                }
                 const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, Math.max(0.16, sg.thick + 0.06), 18), lam(SENSOR_COLOR));
                 disc.rotation.x = Math.PI / 2;
                 const g = new THREE.Group();

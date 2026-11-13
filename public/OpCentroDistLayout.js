@@ -643,6 +643,11 @@ function openWhoPop(i, anchor) {
     pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8))}px`;
     pop.addEventListener('change', (event) => { const el = event.target.closest('[data-who-pick]'); if (el) toggleTransitWho(el.getAttribute('data-who-pick'), el.checked); });
 }
+// La apariencia con que se dibuja un sensor (2026-11-13): la de su modelo, que llega con el Layout (look) o, si es un sensor recién colocado, la de su activo del registro. '' / sensor-disc = el círculo de siempre.
+function sensorLookOf(e) {
+    const raw = e && e.look !== undefined ? e.look : ((state.fixedAssets || []).find((a) => a.id === (e && e.assetRef)) || {}).look;
+    return window.AssetLooks ? window.AssetLooks.effective('sensor', raw) : '';
+}
 // «Zonas que mide» de un sensor: la pared solo sirve para colocarlo; aquí se eligen las zonas cuya temperatura y humedad mide (una o varias). Sin elegir ninguna mide la zona donde está colocado. La celda muestra lo elegido en
 // etiquetas chicas (con su ×) y un ＋ abre la lista de zonas para marcar más, igual que «Quién transita».
 function sensorZonesCell(x, i, d, dis) {
@@ -4327,6 +4332,20 @@ function renderSvg(underlay) {
         s += `<rect class="hl-box" data-hlbox="sensor:${esc(e.id)}" x="${(X(a.x) - 11).toFixed(1)}" y="${(Y(a.y) - 19).toFixed(1)}" width="22" height="30" rx="3"/>`;
         const moveS = canMoveWallItem('sensors') && !sg.legacy;
         if (moveS) s += `<circle class="le-hit" data-nid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="15"/>`;
+        // La apariencia de su MODELO (Catálogos > Activos Fijos > Modelos): «Termohigrómetro de pared» o «Registrador con sonda» se dibujan como un equipo (rectángulo con el termómetro y/o la gota de lo que mide, y el cable de la sonda);
+        // sin apariencia propia («La del Tipo») sigue el círculo con «°» de siempre.
+        const look = sensorLookOf(e);
+        const cx = Number(X(a.x)); const cy = Number(Y(a.y));
+        if (look === 'sensor-wall' || look === 'sensor-probe') {
+            const measuresT = e.type !== 'hum'; const measuresH = e.type !== 'temp';
+            const tx = measuresH ? cx - 3.8 : cx;
+            const glyphT = measuresT ? `<path d="M${(tx).toFixed(1)} ${(cy - 4.2).toFixed(1)} V${(cy + 1.4).toFixed(1)}" stroke="#2B8CA3" stroke-width="1.7" stroke-linecap="round" fill="none"/><circle cx="${tx.toFixed(1)}" cy="${(cy + 2.8).toFixed(1)}" r="2.1" fill="#2B8CA3"/>` : '';
+            const hx = measuresT ? cx + 3.8 : cx;
+            const glyphH = measuresH ? `<path d="M${hx.toFixed(1)} ${(cy - 4.4).toFixed(1)} C${(hx - 3.6).toFixed(1)} ${(cy - 0.2).toFixed(1)} ${(hx - 3.6).toFixed(1)} ${(cy + 1.2).toFixed(1)} ${hx.toFixed(1)} ${(cy + 3.6).toFixed(1)} C${(hx + 3.6).toFixed(1)} ${(cy + 1.2).toFixed(1)} ${(hx + 3.6).toFixed(1)} ${(cy - 0.2).toFixed(1)} ${hx.toFixed(1)} ${(cy - 4.4).toFixed(1)}Z" fill="#2B8CA3" opacity="0.9"/>` : '';
+            const cable = look === 'sensor-probe' ? `<path d="M${cx.toFixed(1)} ${(cy + 7.5).toFixed(1)} q 3 4 5 6" stroke="#6B7089" stroke-width="1.4" fill="none" pointer-events="none"/><rect x="${(cx + 3.5).toFixed(1)}" y="${(cy + 12.5).toFixed(1)}" width="3.4" height="3.4" rx="0.8" fill="#2B8CA3" pointer-events="none"/>` : '';
+            s += `<rect class="lsn lsn-dev${moveS ? ' ld-drag' : ''}" data-nid="${esc(e.id)}" x="${(cx - 9).toFixed(1)}" y="${(cy - 7.5).toFixed(1)}" width="18" height="15" rx="3"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></rect><g pointer-events="none">${glyphT}${glyphH}${cable}</g><text class="lt lx lt-sensor" x="${cx}" y="${(cy - 11.5).toFixed(1)}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
+            return;
+        }
         s += `<circle class="lsn${moveS ? ' ld-drag' : ''}" data-nid="${esc(e.id)}" cx="${X(a.x)}" cy="${Y(a.y)}" r="6.5"><title>${esc(e.code)} · ${esc(typeLabel('sensor', e.type))}</title></circle><text class="lt lx" x="${X(a.x)}" y="${Y(a.y) + 3.5}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">°</text><text class="lt lx lt-sensor" x="${X(a.x)}" y="${Y(a.y) - 10}" text-anchor="middle" style="fill:var(--color-report-calc-text)" pointer-events="none">${esc(e.code || '')}</text>`;
     });
     // Objetos (paso Objetos): personas y montacargas dibujados a escala y girados hacia donde miran (foto fija del plano).
@@ -5052,6 +5071,8 @@ function openPlaceAssets(opts = {}) {
                 const s = ROW_FACTORY.sensors();
                 s.assetRef = a.id;
                 s.code = a.code;
+                s.look = a.look || ''; // solo para dibujarlo (no se guarda): la apariencia de su modelo y las medidas del equipo
+                s.dim = { w: a.length || 0, h: a.height || 0, d: a.depth || 0 };
                 (d.sensors = d.sensors || []).push(s);
                 return;
             }

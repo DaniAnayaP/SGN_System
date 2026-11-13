@@ -1859,6 +1859,14 @@
     "layoutColocarSensor": "+ Place sensor from Asset Registration",
     "layoutColocarTituloSensor": "Place sensors from Asset Registration",
     "layoutSensorEquipo": "S/N",
+    "colActModApariencia": "Look in the Layout",
+    "assetLookType": "The Type's ({look})",
+    "assetLookTypeOnly": "The Type's",
+    "assetLook_": "The Type's",
+    "assetLook_sensor-wall": "Wall thermohygrometer",
+    "assetLook_sensor-probe": "Logger with probe",
+    "assetLook_sensor-disc": "Compact sensor",
+    "assetLookNoneYet": "For now only sensors are drawn according to their model; the other types keep their Type's look.",
     "layoutSensorLado": "Side of the wall",
     "layoutSensorLadoAuto": "Automatic",
     "layoutSensorLadoA": "Side A · {zone}",
@@ -6388,6 +6396,10 @@
     "layoutColocarSensor": {
       "what": "Places a sensor that is already complete in Asset Registration (an asset of a type drawn as «Sensor», with its classification, model, serial number and the 6 photos). It brings its code, name, model and S/N from its row; here you say which wall it goes on, how far along and how high, and what it measures (temperature, humidity or both).",
       "example": "the Traceable 4410 (HT001): you place it, choose wall M002, 1.5 m from the start and 1.2 m high, and it measures temperature and humidity."
+    },
+    "assetModelLook": {
+      "what": "How the pieces of this model are drawn in the Layout (map and 3D). «The Type’s» is the usual one; if the model looks different, choose its look with its preview (for example a wall thermohygrometer with a screen). It applies to all the pieces of this model. For now only sensors; the other types will come one by one.",
+      "example": "the Traceable 4410 is a small box with a screen: you choose «Wall thermohygrometer» and in the Layout its sensors look like that, not like a circle."
     },
     "layoutColocarTipo": {
       "what": "The first step to place: the asset Type (for example Thermohygrometer or Cabinet). When you choose it, only the models of that type are offered.",

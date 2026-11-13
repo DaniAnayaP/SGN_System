@@ -2419,7 +2419,9 @@ if (!articleCategoryColumns.some((c) => c.name === 'letter')) db.exec("ALTER TAB
 // (category_type 'activos-modelos') ligado a su Tipo con parent_id: name = el nombre de compra; y custom_name (nombre personalizado), model_number, shape (rectangular | cilindrica | irregular), alto/largo/profundidad en cm,
 // peso en kg y volumen en m³ (calculado salvo en la forma irregular). needs_serial es del TIPO: 1 = sus activos llevan número de serie (sensores, teléfonos, impresoras), 0 = no (sillas, mesas).
 for (const [col, ddl] of [['custom_name', "TEXT NOT NULL DEFAULT ''"], ['model_number', "TEXT NOT NULL DEFAULT ''"], ['shape', "TEXT NOT NULL DEFAULT 'rectangular'"], ['height_cm', 'REAL NOT NULL DEFAULT 0'], ['length_cm', 'REAL NOT NULL DEFAULT 0'],
-    ['depth_cm', 'REAL NOT NULL DEFAULT 0'], ['weight_kg', 'REAL NOT NULL DEFAULT 0'], ['volume_m3', 'REAL NOT NULL DEFAULT 0'], ['needs_serial', 'INTEGER NOT NULL DEFAULT 1']]) {
+    ['depth_cm', 'REAL NOT NULL DEFAULT 0'], ['weight_kg', 'REAL NOT NULL DEFAULT 0'], ['volume_m3', 'REAL NOT NULL DEFAULT 0'], ['needs_serial', 'INTEGER NOT NULL DEFAULT 1'],
+    // Apariencia del MODELO en el Layout (2026-11-13, Daniel: «que se elija conforme el modelo cómo se verá en el layout»): '' = la del Tipo (como se dibujaba hasta hoy); si no, una de las apariencias de ese tipo (ver ASSET_LOOKS en server.js).
+    ['look', "TEXT NOT NULL DEFAULT ''"]]) {
     if (!articleCategoryColumns.some((c) => c.name === col)) db.exec(`ALTER TABLE article_categories ADD COLUMN ${col} ${ddl}`);
 }
 
@@ -6917,6 +6919,7 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
         depth: { column: 'depth_cm', fieldKey: 'main.colActModProfundidad' },
         weight: { column: 'weight_kg', fieldKey: 'main.colActModPeso' },
         volume: { column: 'volume_m3', fieldKey: 'main.colActModVolumen' },
+        look: { column: 'look', fieldKey: 'main.colActModApariencia' },
     },
     'activos-clasificacion': {
         kind: { column: 'kind', fieldKey: 'main.colActClasMetrica' },
@@ -6936,7 +6939,7 @@ function articleCategoryPatchableFields(categoryType) {
 }
 const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' }, widthM: { column: 'width_m' }, lengthM: { column: 'length_m' }, heightM: { column: 'height_m' }, letter: { column: 'letter' },
     needsSerial: { column: 'needs_serial' }, customName: { column: 'custom_name' }, modelNumber: { column: 'model_number' }, shape: { column: 'shape' }, height: { column: 'height_cm' }, length: { column: 'length_cm' }, depth: { column: 'depth_cm' },
-    weight: { column: 'weight_kg' }, volume: { column: 'volume_m3' } };
+    weight: { column: 'weight_kg' }, volume: { column: 'volume_m3' }, look: { column: 'look' } };
 
 function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
     const sets = [];
@@ -13503,6 +13506,8 @@ function seedAssetModelLeaves() {
     const alta = TABLE_GRANT_PATHS['alta-activos'];
     if (fijos) seedLeavesForScreenHolders(ASSET_MODEL_COLS_SEED_KEY, fijos, ASSET_MODEL_CATALOG_COLS.flatMap((col) => levels.map((level) => `${fijos.submenuPrefix}/${col}/${level}`)), 'the asset model catalog columns', { contractOnly: true });
     if (alta) seedLeavesForScreenHolders(ASSET_MODEL_PICKER_SEED_KEY, alta, levels.map((level) => `${alta.submenuPrefix}/colActElegirModelo/${level}`), 'the Alta Activos model picker column', { contractOnly: true });
+    // La columna «Apariencia en el Layout» del catálogo de modelos (2026-11-13): solo en lo contratado, como las demás columnas del modelo.
+    if (fijos) seedLeavesForScreenHolders('seed-activos-modelos-apariencia-v1', fijos, levels.map((level) => `${fijos.submenuPrefix}/colActModApariencia/${level}`), 'the asset model look column', { contractOnly: true });
 }
 
 // Gestión > Activos (2026-11-12): la pantalla nueva y su botón Editar los reciben, una sola vez, quienes ya tienen la pantalla Alta Activos (como Códigos y Edición Código con Alta Artículos).
