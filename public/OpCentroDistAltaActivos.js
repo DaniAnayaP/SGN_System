@@ -11,12 +11,13 @@
 // ---------------------------------------------------------------------------
 const TABLE_KEY = 'alta-activos';
 const ACTIVE_PAGE = 'cat-operaciones-centro-dist-alta-activos';
-const COLUMN_COUNT = 37;
+const COLUMN_COUNT = 38;
 const SHAPES = ['rectangular', 'cilindrica', 'irregular'];
 
 let assets = []; // todo lo que mandó el servidor
 let assetTypes = [];
 let assetClasses = [];
+let assetModels = []; // los modelos del catálogo Activos Fijos (cada activo elige uno del tipo que tiene)
 let costCenters = [];
 let canCreate = false;
 let canDelete = false;
@@ -30,7 +31,7 @@ let loadToken = 0;
         await refreshTable();
         renderNewRecordButton();
         // las columnas con desplegable llevan un ancho mínimo para que se lea la opción completa («Rectangular», «Activo para almacenar») y se vea la flecha
-        if (Dashboard.ensureColumnMinWidth) [['colActForma', 190], ['colActClasificacion', 230], ['colActEnLayout', 130], ['colActCodigo', 100]].forEach(([col, px]) => Dashboard.ensureColumnMinWidth(TABLE_KEY, col, px));
+        if (Dashboard.ensureColumnMinWidth) [['colActElegirModelo', 300], ['colActForma', 150], ['colActClasificacion', 230], ['colActEnLayout', 130], ['colActCodigo', 100]].forEach(([col, px]) => Dashboard.ensureColumnMinWidth(TABLE_KEY, col, px));
     } catch (err) {
         console.error('Alta Activos failed to initialize:', err);
     }
@@ -72,22 +73,6 @@ function inlineCell(record, colId, key, { inputType = 'text', unit = '', step, f
     });
     return td;
 }
-// Una celda que solo se lee (se calcula): el volumen de una forma que lo calcula, la profundidad de una cilíndrica.
-function calcCell(colId, value, titleKey, helpKey, unit) {
-    const td = textCell(colId, '', helpKey);
-    const has = Number(value) > 0;
-    if (has && unit) {
-        td.textContent = '';
-        const span = document.createElement('span');
-        span.className = 'editable-cell-value';
-        span.dataset.unit = unit;
-        span.textContent = String(value);
-        td.appendChild(span);
-    } else td.textContent = has ? String(value) : '—';
-    td.classList.add('editable-cell-disabled');
-    td.title = Dashboard.t(titleKey);
-    return td;
-}
 function selectCell(record, colId, key, { items, current, currentLabel, helpKey, blankKey, toPatch }) {
     const td = document.createElement('td');
     td.dataset.col = colId;
@@ -111,8 +96,49 @@ function selectCell(record, colId, key, { items, current, currentLabel, helpKey,
     select.value = current === null || current === undefined ? '' : String(current);
     select.disabled = isPending(record, key) || !Dashboard.canEditField(TABLE_KEY, colId, currentLabel || (current === null || current === undefined ? '' : String(current)));
     if (select.disabled) select.title = Dashboard.t(isPending(record, key) ? 'main.changePending' : 'main.fieldLocked');
-    select.addEventListener('change', () => patchAsset(record, toPatch(select.value)));
+    select.addEventListener('change', () => {
+        const patch = toPatch(select.value);
+        if (patch) patchAsset(record, patch);
+        else select.value = current === null || current === undefined ? '' : String(current);
+    });
     td.appendChild(select);
+    return td;
+}
+// Un dato que viene del modelo del activo: se lee, no se escribe aquí.
+function boundCell(colId, value, { unit = '', helpKey } = {}) {
+    const td = textCell(colId, '', helpKey);
+    const has = !(value === '' || value === null || value === undefined || value === 0);
+    if (has) {
+        td.textContent = '';
+        const span = document.createElement('span');
+        span.className = 'editable-cell-value';
+        if (unit) span.dataset.unit = unit;
+        span.textContent = String(value);
+        td.appendChild(span);
+    } else td.textContent = '—';
+    td.classList.add('editable-cell-disabled');
+    td.title = Dashboard.t('main.assetFromModel');
+    return td;
+}
+// El número de serie se escribe aquí; si el tipo del activo no lleva número de serie (sillas, mesas) no aplica.
+function serialCell(record) {
+    if (record.typeNeedsSerial === false) {
+        const td = textCell('colActSerie', Dashboard.t('main.assetNoSerial'), 'assetSerial');
+        td.classList.add('editable-cell-disabled');
+        td.title = Dashboard.t('main.assetNoSerialTip');
+        return td;
+    }
+    return inlineCell(record, 'colActSerie', 'serialNumber', { helpKey: 'assetSerial' });
+}
+// El modelo: se elige de los modelos activos y completos del tipo del activo (y se conserva el que ya tiene aunque ya no se ofrezca). Sin modelo, el activo es de antes: conserva lo que tenía hasta que se elija.
+function modelPickerCell(record) {
+    const items = assetModels.filter((m) => m.typeId === record.typeId && m.active && m.complete).map((m) => ({ value: m.id, label: m.label }));
+    const td = selectCell(record, 'colActElegirModelo', 'modelId', {
+        items, current: record.modelId, currentLabel: record.modelLabel, helpKey: 'assetModelPicker',
+        blankKey: items.length || record.modelId ? 'main.assetModelChoose' : 'main.assetModelNoModels',
+        toPatch: (v) => (v === '' ? null : { modelId: Number(v) }),
+    });
+    td.classList.toggle('asset-model-missing', !record.modelId);
     return td;
 }
 
@@ -283,10 +309,7 @@ function applySaved(updated, previous) {
 
 // --- La fila ------------------------------------------------------------------------------------------------------------------------------------------------------------
 function buildRow(record) {
-    const shapeItems = SHAPES.map((s) => ({ value: s, label: Dashboard.t(`main.assetShape_${s}`) }));
     const classItems = assetClasses.filter((c) => c.active).map((c) => ({ value: c.id, label: c.name }));
-    const cyl = record.shape === 'cilindrica';
-    const irregular = record.shape === 'irregular';
     const statusTd = textCell('colActEstatus', Dashboard.t(record.status === 'inactive' ? 'main.skuStatusInactive' : 'main.skuStatusActive'));
     statusTd.classList.toggle('sku-status-inactive', record.status === 'inactive');
     const codeTd = textCell('colActCodigo', record.code, 'assetCode');
@@ -304,18 +327,18 @@ function buildRow(record) {
             items: classItems, current: record.classId, currentLabel: record.className, helpKey: 'assetClass', blankKey: 'main.articleTypeSelect',
             toPatch: (v) => ({ classId: v === '' ? null : Number(v) }),
         }),
-        inlineCell(record, 'colActNombreCompra', 'purchaseName', { helpKey: 'assetPurchaseName' }),
-        inlineCell(record, 'colActNombrePersonalizado', 'customName', { helpKey: 'assetCustomName' }),
-        inlineCell(record, 'colActModelo', 'model', { helpKey: 'assetModel' }),
-        inlineCell(record, 'colActSerie', 'serialNumber', { helpKey: 'assetSerial' }),
-        selectCell(record, 'colActForma', 'shape', { items: shapeItems, current: record.shape, helpKey: 'assetShape', toPatch: (v) => ({ shape: v }) }),
-        inlineCell(record, 'colActAlto', 'height', { inputType: 'number', unit: 'cm', helpKey: 'assetSize', toValue: (v) => parseFloat(v) || 0 }),
-        inlineCell(record, 'colActLargo', 'length', { inputType: 'number', unit: 'cm', helpKey: 'assetSize', toValue: (v) => parseFloat(v) || 0 }),
-        cyl ? calcCell('colActProfundidad', record.depth, 'main.assetDepthCyl', 'assetSize', 'cm') : inlineCell(record, 'colActProfundidad', 'depth', { inputType: 'number', unit: 'cm', helpKey: 'assetSize', toValue: (v) => parseFloat(v) || 0 }),
-        inlineCell(record, 'colActPeso', 'weight', { inputType: 'number', unit: 'kg', helpKey: 'assetWeight', toValue: (v) => parseFloat(v) || 0 }),
-        irregular
-            ? inlineCell(record, 'colActVolumen', 'volume', { inputType: 'number', unit: 'm³', step: '0.0001', helpKey: 'assetVolume', formatDisplay: (v) => Number(v).toFixed(3), toValue: (v) => parseFloat(v) || 0 })
-            : calcCell('colActVolumen', record.volume > 0 ? Number(record.volume).toFixed(3) : '', 'main.assetVolumeCalc', 'assetVolume', 'm³'),
+        modelPickerCell(record),
+        // El nombre de compra, el personalizado, el modelo, la forma, las medidas y el peso vienen del MODELO elegido (Catálogos > Activos Fijos): aquí solo se leen; lo que se escribe es el número de serie.
+        boundCell('colActNombreCompra', record.purchaseName, { helpKey: 'assetPurchaseName' }),
+        boundCell('colActNombrePersonalizado', record.customName, { helpKey: 'assetCustomName' }),
+        boundCell('colActModelo', record.model, { helpKey: 'assetModel' }),
+        serialCell(record),
+        boundCell('colActForma', record.shape ? Dashboard.t(`main.assetShape_${record.shape}`) : '', { helpKey: 'assetShape' }),
+        boundCell('colActAlto', record.height, { unit: 'cm', helpKey: 'assetSize' }),
+        boundCell('colActLargo', record.length, { unit: 'cm', helpKey: 'assetSize' }),
+        boundCell('colActProfundidad', record.depth, { unit: 'cm', helpKey: 'assetSize' }),
+        boundCell('colActPeso', record.weight, { unit: 'kg', helpKey: 'assetWeight' }),
+        boundCell('colActVolumen', record.volume > 0 ? Number(record.volume).toFixed(3) : '', { unit: 'm³', helpKey: 'assetVolume' }),
         evidenceCell(record, 'evidenceFront', 'colActFotoFrente'),
         evidenceCell(record, 'evidenceBack', 'colActFotoAtras'),
         evidenceCell(record, 'evidenceLeft', 'colActFotoIzq'),
@@ -356,7 +379,7 @@ function visibleAssets() {
     return assets.filter((a) => {
         if (selected && !selected.includes(a.costCenterId)) return false;
         if (!text) return true;
-        const haystack = [a.code, a.purchaseName, a.customName, a.model, a.serialNumber, a.typeName, a.className].map((v) => String(v || '')).join(' ').toLowerCase();
+        const haystack = [a.code, a.purchaseName, a.customName, a.model, a.modelLabel, a.serialNumber, a.typeName, a.className].map((v) => String(v || '')).join(' ').toLowerCase();
         return SearchSyntax.matches('contains', text, haystack);
     });
 }
@@ -381,6 +404,7 @@ async function refreshTable() {
         assets = data.assets || [];
         assetTypes = data.types || [];
         assetClasses = data.classes || [];
+        assetModels = data.models || [];
         costCenters = data.costCenters || [];
         canCreate = !!data.canCreate;
         canDelete = !!data.canDelete;
@@ -417,12 +441,12 @@ const EVIDENCE_FIELDS = [
     ['colActFotoFrente', 'evidenceFront'], ['colActFotoAtras', 'evidenceBack'], ['colActFotoIzq', 'evidenceLeft'],
     ['colActFotoDer', 'evidenceRight'], ['colActFotoArriba', 'evidenceTop'], ['colActFotoAbajo', 'evidenceBottom'],
 ];
-// [columna del árbol, nombre del campo en el formulario, clave en la API]
+// [columna del árbol, nombre del campo en el formulario, clave en la API] — lo que se elige o se escribe al dar de alta
 const FORM_FIELDS = [
-    ['colActClasificacion', 'classId', 'classId'], ['colActNombreCompra', 'purchaseName', 'purchaseName'], ['colActNombrePersonalizado', 'customName', 'customName'],
-    ['colActModelo', 'model', 'model'], ['colActSerie', 'serialNumber', 'serialNumber'], ['colActEnLayout', 'showInLayout', 'showInLayout'], ['colActForma', 'shape', 'shape'],
-    ['colActAlto', 'height', 'height'], ['colActLargo', 'length', 'length'], ['colActProfundidad', 'depth', 'depth'], ['colActPeso', 'weight', 'weight'], ['colActVolumen', 'volume', 'volume'],
+    ['colActClasificacion', 'classId', 'classId'], ['colActElegirModelo', 'modelId', 'modelId'], ['colActSerie', 'serialNumber', 'serialNumber'], ['colActEnLayout', 'showInLayout', 'showInLayout'],
 ];
+// Lo que viene del modelo (solo se lee en el formulario; se llena al elegir el modelo)
+const MODEL_FORM_FIELDS = ['purchaseName', 'customName', 'model', 'shape', 'height', 'length', 'depth', 'weight', 'volume'];
 const formEl = (name) => createForm.elements.namedItem(name);
 let layoutTouched = false; // si quien da de alta ya cambió «Aparece en el Layout», ya no se propone según el tipo
 
@@ -442,12 +466,34 @@ function fillSelect(select, items, { blankKey, blankValue = '' } = {}) {
         select.appendChild(opt);
     });
 }
-// La forma manda: en la cilíndrica la profundidad es el largo (el diámetro); el volumen solo se escribe en la irregular.
-function syncShapeFields() {
-    const shape = formEl('shape').value;
-    const depth = formEl('depth');
-    if (shape === 'cilindrica') { depth.value = formEl('length').value; depth.disabled = true; } else depth.disabled = !Dashboard.canEditField(TABLE_KEY, 'colActProfundidad', '');
-    formEl('volume').closest('.admin-field').hidden = shape !== 'irregular';
+// Los modelos que se ofrecen para el tipo elegido (activos y completos) y lo que cambia al elegir tipo o modelo.
+function chosenType() { return assetTypes.find((t) => String(t.id) === formEl('typeId').value) || null; }
+function chosenModel() { const id = Number(formEl('modelId').value) || 0; return assetModels.find((m) => m.id === id) || null; }
+function fillModelChoices() {
+    const type = chosenType();
+    const items = type ? assetModels.filter((m) => m.typeId === type.id && m.active && m.complete).map((m) => ({ value: m.id, label: m.label })) : [];
+    fillSelect(formEl('modelId'), items, { blankKey: !type ? 'main.assetPickTypeFirst' : (items.length ? 'main.assetModelChoose' : 'main.assetModelNoModels') });
+}
+// Al elegir el modelo se llenan, y quedan cerrados, el nombre de compra, el personalizado, el modelo, la forma, las medidas y el peso; el volumen se muestra calculado.
+function fillFromModel() {
+    const m = chosenModel();
+    const set = (name, value) => { formEl(name).value = value === 0 || value ? String(value) : ''; };
+    set('purchaseName', m && m.purchaseName); set('customName', m && m.customName); set('model', m && m.model);
+    formEl('shape').value = m ? m.shape : 'rectangular';
+    ['height', 'length', 'depth', 'weight'].forEach((key) => set(key, m && m[key] > 0 ? m[key] : ''));
+    set('volume', m && m.volume > 0 ? m.volume : '');
+    formEl('volume').closest('.admin-field').hidden = !m;
+}
+// Un tipo que no lleva número de serie (sillas, mesas) no lo pide.
+function syncSerialField() {
+    const type = chosenType();
+    formEl('serialNumber').closest('.admin-field').hidden = !!(type && type.needsSerial === false);
+}
+function syncTypeDependents() {
+    fillModelChoices();
+    fillFromModel();
+    syncSerialField();
+    syncLayoutFromType();
 }
 function syncLayoutFromType() {
     if (layoutTouched) return;
@@ -456,6 +502,7 @@ function syncLayoutFromType() {
 }
 function applyCreatePermissions() {
     FORM_FIELDS.forEach(([colId, name]) => { const el = formEl(name); if (el) el.disabled = !Dashboard.canEditField(TABLE_KEY, colId, ''); });
+    MODEL_FORM_FIELDS.forEach((name) => { formEl(name).disabled = true; }); // vienen del modelo
     formEl('typeId').disabled = !Dashboard.canEditField(TABLE_KEY, 'colActTipo', '');
 }
 function buildEvidencePickerFields() {
@@ -497,18 +544,17 @@ async function openCreateModal() {
     fillSelect(formEl('classId'), assetClasses.filter((c) => c.active).map((c) => ({ value: c.id, label: c.name })), { blankKey: 'main.articleTypeSelect' });
     fillSelect(formEl('shape'), SHAPES.map((s) => ({ value: s, label: Dashboard.t(`main.assetShape_${s}`) })));
     formEl('showInLayout').value = '0';
+    syncTypeDependents();
     applyCreatePermissions();
-    syncShapeFields();
     buildEvidencePickerFields();
     createModal.hidden = false;
 }
 const closeCreateModal = () => { createModal.hidden = true; };
 document.getElementById('new-asset-cancel')?.addEventListener('click', closeCreateModal);
 createModal?.addEventListener('click', (event) => { if (event.target === createModal) closeCreateModal(); });
-formEl('typeId')?.addEventListener('change', syncLayoutFromType);
+formEl('typeId')?.addEventListener('change', syncTypeDependents);
+formEl('modelId')?.addEventListener('change', fillFromModel);
 formEl('showInLayout')?.addEventListener('change', () => { layoutTouched = true; });
-formEl('shape')?.addEventListener('change', syncShapeFields);
-formEl('length')?.addEventListener('input', syncShapeFields);
 
 createForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -522,14 +568,12 @@ createForm?.addEventListener('submit', async (event) => {
             const el = formEl(name);
             if (!el || el.disabled || el.closest('.admin-field').hidden) return;
             const value = el.value.trim();
-            if (key === 'classId') { if (value) body.classId = Number(value); return; }
+            if (key === 'classId' || key === 'modelId') { if (value) body[key] = Number(value); return; }
             if (key === 'showInLayout') { body.showInLayout = value === '1'; return; }
-            if (['height', 'length', 'depth', 'weight', 'volume'].includes(key)) { if (value !== '') body[key] = parseFloat(value) || 0; return; }
-            if (key === 'shape') { body.shape = value; return; }
             body[key] = value;
         });
-        // la profundidad de una cilíndrica la pone el servidor (es el largo)
-        if (body.shape === 'cilindrica') delete body.depth;
+        // el nombre, la forma, las medidas y el peso los pone el servidor con el modelo elegido
+        if (!body.modelId) throw new Error(Dashboard.t('main.assetModelRequired'));
         const res = await fetch('/api/business/fixed-assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
         if (!res.ok) {
             const err = await res.json().catch(() => null);

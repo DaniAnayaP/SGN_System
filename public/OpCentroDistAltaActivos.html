@@ -402,6 +402,7 @@
                             <th data-i18n="main.colActEstatus" data-col="colActEstatus" data-group="menu.classActDatosGenerales">Status</th>
                             <th data-i18n="main.colActTipo" data-col="colActTipo" data-group="menu.classActDatosGenerales">Asset Type</th>
                             <th data-i18n="main.colActClasificacion" data-col="colActClasificacion" data-group="menu.classActDatosGenerales">Classification</th>
+                            <th data-i18n="main.colActElegirModelo" data-col="colActElegirModelo" data-group="menu.classActDatosGenerales">Choose Model</th>
                             <th data-i18n="main.colActNombreCompra" data-col="colActNombreCompra" data-group="menu.classActDatosGenerales">Purchase Name</th>
                             <th data-i18n="main.colActNombrePersonalizado" data-col="colActNombrePersonalizado" data-group="menu.classActDatosGenerales">Custom Name</th>
                             <th data-i18n="main.colActModelo" data-col="colActModelo" data-group="menu.classActDatosGenerales">Model</th>
@@ -425,7 +426,7 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="data-table-empty-cell" colspan="37">
+                            <td class="data-table-empty-cell" colspan="38">
                                 <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
                             </td>
                         </tr>
@@ -454,16 +455,20 @@
                         <select id="new-asset-class" name="classId"></select>
                     </div>
                     <div class="admin-field">
+                        <label for="new-asset-modelid" data-i18n="main.colActElegirModelo">Choose Model</label>
+                        <select id="new-asset-modelid" name="modelId" required></select>
+                    </div>
+                    <div class="admin-field">
                         <label for="new-asset-purchase" data-i18n="main.colActNombreCompra">Purchase Name</label>
-                        <input id="new-asset-purchase" name="purchaseName" type="text" maxlength="160" required>
+                        <input id="new-asset-purchase" name="purchaseName" type="text" maxlength="160" readonly>
                     </div>
                     <div class="admin-field">
                         <label for="new-asset-custom" data-i18n="main.colActNombrePersonalizado">Custom Name</label>
-                        <input id="new-asset-custom" name="customName" type="text" maxlength="160">
+                        <input id="new-asset-custom" name="customName" type="text" maxlength="160" readonly>
                     </div>
                     <div class="admin-field">
                         <label for="new-asset-model" data-i18n="main.colActModelo">Model</label>
-                        <input id="new-asset-model" name="model" type="text" maxlength="120">
+                        <input id="new-asset-model" name="model" type="text" maxlength="120" readonly>
                     </div>
                     <div class="admin-field">
                         <label for="new-asset-serial" data-i18n="main.colActSerie">S/N (serial number)</label>

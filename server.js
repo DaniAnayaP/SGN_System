@@ -201,6 +201,10 @@ const {
     createFixedAsset,
     updateFixedAsset,
     countFixedAssetsByType,
+    listFixedAssetsByModel,
+    countFixedAssetsByModel,
+    fixedAssetModelUseCounts,
+    countAssetModelsByType,
     countFixedAssetsByClass,
     getFixedAssetAnyScope,
     listFixedAssetsOfCenterAnyScope,
@@ -10194,6 +10198,7 @@ function parseClassificationIds(text) {
 
 // Contexto que necesitan los registros del catálogo para mostrar nombres: almacenes / sub almacenes (centros de costos, almacenes) o Inventario (nombres de sus clasificaciones).
 function categoryContext(req, categoryType) {
+    if (categoryType === 'activos-modelos') return { modelUse: fixedAssetModelUseCounts(req.user.clientId) }; // cuántos activos usa cada modelo
     const warehouse = warehouseContext(req, categoryType);
     if (warehouse || categoryType !== 'inventario') return warehouse;
     const { clientId, isTestAccount } = req.user;
@@ -10232,15 +10237,94 @@ function prepareClassificationPatch(req, categoryType, existing, patch) {
     return { patch: { ...patch, classificationIds: ordered.length ? JSON.stringify(ordered) : '' }, sanitizers: { classificationIds: nameOf } };
 }
 
+// --- Modelos de activos (Catálogos > Activos Fijos) --------------------------------------------------------------------------------------------------------
+// Un modelo es un renglón del catálogo (category_type 'activos-modelos') ligado a su Tipo (parent_id). De él vienen, ya cerrados, el nombre de compra, el nombre personalizado, el modelo, la forma, las medidas y el peso de cada activo
+// de Alta Activos; ahí solo se elige el modelo y se escribe el número de serie. Un modelo está COMPLETO cuando tiene nombre de compra, modelo, forma, medidas y peso (un modelo incompleto no se ofrece en Alta Activos).
+// Con activos usándolo, su forma, sus medidas y su peso se cierran (el croquis ya dibujó con ellas); los nombres sí se actualizan en todos sus activos. Un modelo nunca se elimina: se deja Inactivo.
+function isAssetModelComplete(row) {
+    if (!row || !String(row.name || '').trim() || !String(row.model_number || '').trim()) return false;
+    if (!(row.height_cm > 0 && row.length_cm > 0 && row.weight_kg > 0)) return false;
+    if (row.shape === 'cilindrica') return true;
+    if (!(row.depth_cm > 0)) return false;
+    return row.shape !== 'irregular' || row.volume_m3 > 0;
+}
+const ASSET_MODEL_FROM_KEYS = ['purchaseName', 'customName', 'model', 'shape', 'height', 'length', 'depth', 'weight', 'volume']; // lo que un activo toma de su modelo
+const ASSET_MODEL_LOCKED_KEYS = ['shape', 'height', 'length', 'depth', 'weight', 'volume']; // lo que se cierra del modelo cuando algún activo lo usa
+const assetModelLabel = (m) => [m.name, m.model_number].filter(Boolean).join(' · ');
+function assetValuesFromModel(m) {
+    return {
+        purchaseName: m.name || '', customName: m.custom_name || '', model: m.model_number || '', shape: m.shape || 'rectangular',
+        height: m.height_cm, length: m.length_cm, depth: m.shape === 'cilindrica' ? m.length_cm : m.depth_cm, weight: m.weight_kg, volume: m.volume_m3,
+    };
+}
+function prepareAssetModelPatch(req, categoryType, existing, patch) {
+    if (categoryType !== 'activos-modelos') return { patch, sanitizers: {} };
+    const has = (key) => Object.prototype.hasOwnProperty.call(patch, key);
+    const bad = (status, message, code) => ({ error: { status, message, code } });
+    if (has('parentId')) return bad(400, 'El tipo de un modelo no se cambia: da de alta el modelo en el otro tipo.', 'TYPE_LOCKED');
+    const out = { ...patch };
+    for (const [key, max] of [['name', 160], ['customName', 160], ['modelNumber', 120]]) {
+        if (has(key)) out[key] = String(patch[key] == null ? '' : patch[key]).trim().slice(0, max);
+    }
+    if (has('shape') && !FIXED_ASSET_SHAPES.includes(patch.shape)) return bad(400, 'La forma debe ser Rectangular, Cilíndrica o Irregular.', 'SHAPE');
+    for (const [key, [limit, decimals]] of Object.entries(FIXED_ASSET_NUM_LIMITS)) {
+        if (!has(key)) continue;
+        const raw = patch[key];
+        const n = raw === '' || raw == null ? 0 : Number(raw);
+        if (!Number.isFinite(n) || n < 0 || n > limit) return bad(400, `La medida debe ser un número entre 0 y ${limit}.`, 'NUM');
+        out[key] = Math.round(n * 10 ** decimals) / 10 ** decimals;
+    }
+    const shape = has('shape') ? out.shape : existing.shape;
+    if (has('volume') && shape !== 'irregular') return bad(400, 'El volumen se calcula solo con las medidas. Solo en la forma Irregular se escribe.', 'VOLUME_CALC');
+    if (has('depth') && shape === 'cilindrica') return bad(400, 'En una forma cilíndrica la profundidad es igual al largo (el diámetro).', 'DEPTH_CALC');
+    const used = countFixedAssetsByModel(req.user.clientId, existing.id);
+    if (used) {
+        const colOf = { shape: 'shape', height: 'height_cm', length: 'length_cm', depth: 'depth_cm', weight: 'weight_kg', volume: 'volume_m3' };
+        const changed = ASSET_MODEL_LOCKED_KEYS.filter((key) => has(key) && String(out[key]) !== String(existing[colOf[key]]));
+        if (changed.length) return bad(409, `Ya hay ${used === 1 ? 'un activo' : `${used} activos`} con este modelo: su forma, sus medidas y su peso están cerrados. Da de alta otro modelo y deja este como Inactivo.`, 'MODEL_LOCKED');
+    }
+    return { patch: out, sanitizers: { shape: (v) => FIXED_ASSET_SHAPE_LABELS[v] || String(v == null ? '' : v) } };
+}
+// Después de guardar un cambio del modelo: el volumen (y la profundidad de una cilíndrica) se recalculan con las medidas y, si cambió algún nombre, todos los activos que lo usan lo reciben (queda en el historial de cada activo).
+function finishAssetModelPatch(req, existing, category, appliedPatch) {
+    if (!category || existing.category_type !== 'activos-modelos') return category;
+    const { clientId, isTestAccount } = req.user;
+    let current = category;
+    if (['shape', 'height', 'length', 'depth', 'volume'].some((key) => key in appliedPatch)) {
+        const depth = current.shape === 'cilindrica' ? current.length_cm : current.depth_cm;
+        const volume = fixedAssetVolume(current.shape, current.height_cm, current.length_cm, depth, current.volume_m3);
+        current = updateArticleCategory(current.id, clientId, { depth, volume }, isTestAccount);
+    }
+    if (['name', 'customName', 'modelNumber'].some((key) => key in appliedPatch)) {
+        const next = { purchaseName: current.name, customName: current.custom_name, model: current.model_number };
+        listFixedAssetsByModel(clientId, current.id).forEach((asset) => {
+            const toSet = {};
+            for (const [key, value] of Object.entries(next)) {
+                const { column, fieldKey } = FIXED_ASSET_PATCHABLE_FIELDS[key];
+                if (String(asset[column] ?? '') === String(value ?? '')) continue;
+                toSet[key] = value;
+                logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: asset.id, recordLabel: fixedAssetCodeOf(asset), action: 'update', fieldKey, oldValue: asset[column], newValue: value, changedBy: changedByLabel(req) });
+            }
+            if (Object.keys(toSet).length) syncFixedAssetIntoLayout(clientId, updateFixedAsset(asset.id, clientId, toSet, !!asset.is_test_data));
+        });
+    }
+    return current;
+}
+
 // Clasificación de Activos: su campo propio es la métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
 const ASSET_CLASS_METRIC_LABELS = { m2: 'm² (activo para operar)', m3: 'm³ (activo para almacenar)' };
 // Tipo de activo: su campo propio es la LETRA del Localizador (kind = el tipo de espacio del Layout que le toca; vacío = sin letra todavía).
 const ASSET_TYPE_LETTER_LABELS = { rack: 'A · Anaquel', rackpal: 'R · Rack', cabinet: 'G · Gabeta', pallet: 'T · Tarima en piso', cold: 'F · Frío', cart: 'M · Rack móvil', sensor: 'Sensor' }; // «Sensor» se coloca en el paso Sensores del Layout (sobre una pared), no sobre una huella
 function prepareFixedAssetPatch(categoryType, patch, req = null, existing = null) {
     const has = (key) => Object.prototype.hasOwnProperty.call(patch, key);
-    if ((categoryType !== 'activos-clasificacion' && categoryType !== 'activos-fijos') || (!has('kind') && !(categoryType === 'activos-fijos' && has('letter')))) return { patch, sanitizers: {} };
+    if ((categoryType !== 'activos-clasificacion' && categoryType !== 'activos-fijos') || (!has('kind') && !(categoryType === 'activos-fijos' && (has('letter') || has('needsSerial'))))) return { patch, sanitizers: {} };
     if (categoryType === 'activos-fijos') {
         const out = { patch: { ...patch }, sanitizers: {} };
+        // «Lleva número de serie»: Sí (sensores, teléfonos, impresoras) o No (sillas, mesas). Cuenta para el 100% de sus activos solo cuando lo lleva.
+        if (has('needsSerial')) {
+            out.patch.needsSerial = patch.needsSerial === true || patch.needsSerial === 1 || patch.needsSerial === '1' || patch.needsSerial === 'true' ? 1 : 0;
+            out.sanitizers.needsSerial = (v) => (Number(v) ? 'Sí' : 'No');
+        }
         // «Se dibuja como»: el tipo de espacio del Layout que le toca (kind). Vacío = sin dibujo propio (su activo conserva el que ya tenía).
         if (has('kind')) {
             if (patch.kind !== '' && !ASSET_TYPE_LETTER_LABELS[patch.kind]) return { error: { status: 400, message: 'El dibujo debe ser Anaquel, Rack, Gabeta, Tarima en piso, Frío, Rack móvil o Sensor (o quedar vacío).' } };
@@ -10312,7 +10396,12 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             kind: row.kind, locations: row.kind === 'physical' ? parseWarehouseLocations(row.locations) : [],
         } : {}),
         ...(row.category_type === 'activos-clasificacion' || row.category_type === 'activos-fijos' ? { kind: row.kind } : {}),
-        ...(row.category_type === 'activos-fijos' ? { letter: row.letter || '' } : {}),
+        ...(row.category_type === 'activos-fijos' ? { letter: row.letter || '', needsSerial: row.needs_serial !== 0 } : {}),
+        ...(row.category_type === 'activos-modelos' ? {
+            parentId: row.parent_id, customName: row.custom_name || '', modelNumber: row.model_number || '', shape: row.shape || 'rectangular',
+            height: row.height_cm, length: row.length_cm, depth: row.depth_cm, weight: row.weight_kg, volume: row.volume_m3,
+            complete: isAssetModelComplete(row), usedBy: ctx && ctx.modelUse ? (ctx.modelUse.get(row.id) || 0) : 0,
+        } : {}),
         ...(row.category_type === 'incidentes-criterios' ? { kind: row.kind } : {}),
         ...(row.category_type === 'transito-equipos' ? { kind: row.kind, widthM: row.width_m || 0, lengthM: row.length_m || 0, heightM: row.height_m || 0 } : {}),
         ...(ctx && row.category_type === 'inventario' ? (() => {
@@ -10353,7 +10442,15 @@ app.post('/api/business/article-categories/:categoryType', requireAuth, requireC
     if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), config.tableKey, 'colCatCreateAuth')) {
         return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
     }
-    const category = createArticleCategory({ clientId: req.user.clientId, categoryType: req.params.categoryType, isTestData: req.user.isTestAccount });
+    // Un modelo de activo nace ligado a su Tipo (activo y del catálogo Activos Fijos).
+    let modelType = null;
+    if (req.params.categoryType === 'activos-modelos') {
+        modelType = listArticleCategories(req.user.clientId, 'activos-fijos', req.user.isTestAccount).find((r) => r.id === Number(req.body && req.body.typeId));
+        if (!modelType) return res.status(400).json({ message: 'Elige el tipo de activo al que pertenece el modelo.', code: 'TYPE' });
+        if (modelType.status !== 'active') return res.status(400).json({ message: `El tipo «${modelType.name || modelType.letter || modelType.id}» está inactivo: no se le agregan modelos.`, code: 'TYPE' });
+    }
+    let category = createArticleCategory({ clientId: req.user.clientId, categoryType: req.params.categoryType, isTestData: req.user.isTestAccount });
+    if (modelType) category = updateArticleCategory(category.id, req.user.clientId, { parentId: modelType.id }, req.user.isTestAccount);
     logTableChange({
         clientId: req.user.clientId, tableKey: config.tableKey, recordId: category.id,
         recordLabel: `#${category.id}`, action: 'create', changedBy: changedByLabel(req),
@@ -10380,9 +10477,11 @@ app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, req
     if (preparedTransit.error) return res.status(preparedTransit.error.status).json({ message: preparedTransit.error.message });
     const preparedIncident = prepareIncidentCriterionPatch(req.params.categoryType, preparedTransit.patch);
     if (preparedIncident.error) return res.status(preparedIncident.error.status).json({ message: preparedIncident.error.message });
-    const prepared = { patch: preparedIncident.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers, ...preparedTransit.sanitizers, ...preparedIncident.sanitizers } };
+    const preparedModel = prepareAssetModelPatch(req, req.params.categoryType, existing, preparedIncident.patch);
+    if (preparedModel.error) return res.status(preparedModel.error.status).json({ message: preparedModel.error.message, code: preparedModel.error.code });
+    const prepared = { patch: preparedModel.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers, ...preparedTransit.sanitizers, ...preparedIncident.sanitizers, ...preparedModel.sanitizers } };
     const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, articleCategoryPatchableFields(req.params.categoryType), config.tableKey, `#${existing.id}`, prepared.sanitizers, { baseline, overrideConflicts });
-    const category = updateArticleCategory(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
+    const category = finishAssetModelPatch(req, existing, updateArticleCategory(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount), appliedPatch);
     const client = getClientById(req.user.clientId);
     res.json({ category: mapArticleCategoryRecord(category, null, client?.company_name, categoryContext(req, req.params.categoryType)), pendingFields, rejectedFields, conflictFields });
 });
@@ -10394,6 +10493,11 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, re
     const existing = getArticleCategoryById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing || existing.category_type !== req.params.categoryType) return res.status(404).json({ message: 'Category not found.' });
     if (req.params.categoryType === 'activos-clasificacion' && !req.user.isTestAccount) return res.status(403).json({ message: 'Las clasificaciones de activos son fijas: no se eliminan (solo se pueden dejar Inactivas).' });
+    if (req.params.categoryType === 'activos-modelos') return res.status(403).json({ message: 'Los modelos de activos no se eliminan: márcalo como Inactivo.' });
+    if (req.params.categoryType === 'activos-fijos') {
+        const models = countAssetModelsByType(req.user.clientId, existing.id);
+        if (models) return res.status(409).json({ message: `Este tipo tiene ${models === 1 ? 'un modelo' : `${models} modelos`}. Márcalo como Inactivo en vez de eliminarlo.` });
+    }
     if (!req.user.isClientAdmin) {
         const grants = getUserEffectiveGrants(req.user.sub);
         if (!canDeleteColumn(grants, config.tableKey, 'colCatDeleteAuth')) {
@@ -11520,14 +11624,17 @@ function fixedAssetContext(req) {
         centers: new Map(listCostCenters(clientId, isTestAccount).map((c) => [c.id, c])),
         types: new Map(listArticleCategories(clientId, 'activos-fijos', isTestAccount).map((r) => [r.id, r])),
         classes: new Map(listArticleCategories(clientId, 'activos-clasificacion', isTestAccount).map((r) => [r.id, r])),
+        models: new Map(listArticleCategories(clientId, 'activos-modelos', isTestAccount).map((r) => [r.id, r])),
     };
 }
 function mapFixedAsset(row, ctx, companyName, pendingByRecord, placements) {
     const cc = ctx.centers.get(row.cost_center_id);
     const type = ctx.types.get(row.type_id);
     const cls = ctx.classes.get(row.class_id);
+    const model = ctx.models ? ctx.models.get(row.model_id) : null;
     return {
         id: row.id, registroUnico: row.db_id, code: fixedAssetCodeOf(row), status: row.status,
+        modelId: row.model_id || null, modelLabel: model ? assetModelLabel(model) : '', typeNeedsSerial: type ? type.needs_serial !== 0 : true,
         costCenterId: row.cost_center_id, typeId: row.type_id, typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '',
         classId: row.class_id, className: cls ? cls.name : '',
         purchaseName: row.purchase_name, customName: row.custom_name, model: row.model, serialNumber: row.serial_number,
@@ -11588,6 +11695,7 @@ function normalizeFixedAssetValues(input, ctx, existing) {
 function fixedAssetSanitizers(ctx) {
     return {
         typeId: (v) => { const t = ctx.types.get(Number(v)); return t ? t.name : ''; },
+        modelId: (v) => { const m = ctx.models && ctx.models.get(Number(v)); return m ? assetModelLabel(m) : ''; },
         classId: (v) => { const c = ctx.classes.get(Number(v)); return c ? c.name : ''; },
         shape: (v) => FIXED_ASSET_SHAPE_LABELS[v] || String(v == null ? '' : v),
         showInLayout: (v) => (Number(v) ? 'Sí' : 'No'),
@@ -11724,7 +11832,12 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({
         assets: listFixedAssets(clientId, isTestAccount).map((r) => mapFixedAsset(r, ctx, client?.company_name, pendingByRecord, fixedAssetPlacementsMap(clientId))),
-        types: [...ctx.types.values()].filter((t) => t.name).map((t) => ({ id: t.id, name: t.name, letter: t.letter || '', kind: t.kind || '', active: t.status === 'active' })),
+        types: [...ctx.types.values()].filter((t) => t.name).map((t) => ({ id: t.id, name: t.name, letter: t.letter || '', kind: t.kind || '', active: t.status === 'active', needsSerial: t.needs_serial !== 0 })),
+        // los modelos del catálogo (los activos eligen uno del Tipo que tienen; uno inactivo o incompleto no se ofrece)
+        models: [...ctx.models.values()].filter((m) => m.name).map((m) => ({
+            id: m.id, typeId: m.parent_id, label: assetModelLabel(m), purchaseName: m.name, customName: m.custom_name || '', model: m.model_number || '', shape: m.shape,
+            height: m.height_cm, length: m.length_cm, depth: m.shape === 'cilindrica' ? m.length_cm : m.depth_cm, weight: m.weight_kg, volume: m.volume_m3, active: m.status === 'active', complete: isAssetModelComplete(m),
+        })),
         classes: [...ctx.classes.values()].filter((c) => c.name).map((c) => ({ id: c.id, name: c.name, metric: c.kind || '', active: c.status === 'active' })),
         costCenters: [...ctx.centers.values()].map((c) => ({ id: c.id, name: c.name, code: c.code || '' })),
         canCreate: fixedAssetCan(req, 'colActCreateAuth'), canDelete: fixedAssetCanDelete(req),
@@ -11741,8 +11854,17 @@ app.post('/api/business/fixed-assets', requireAuth, requireCostCenter, (req, res
     const type = ctx.types.get(intOf(body.typeId));
     if (!type || type.status !== 'active' || !type.name) return res.status(400).json({ message: 'Elige un tipo de activo activo del catálogo Activos Fijos.', code: 'TYPE' });
     if (!type.letter) return res.status(400).json({ message: `El tipo «${type.name}» todavía no tiene letra para el código. Elígela en Catálogos > Activos Fijos.`, code: 'LETTER' });
-    const norm = normalizeFixedAssetValues(body, ctx, null);
+    // El nombre de compra, el personalizado, el modelo, la forma, las medidas y el peso vienen del MODELO (catálogo Activos Fijos): aquí solo se elige el modelo del Tipo y se escribe el número de serie.
+    const model = ctx.models.get(intOf(body.modelId));
+    if (!model || model.parent_id !== type.id || model.status !== 'active' || !model.name || !isAssetModelComplete(model)) {
+        return res.status(400).json({ message: `Elige un modelo activo y completo del tipo «${type.name}». Los modelos se dan de alta en Catálogos > Activos Fijos.`, code: 'MODEL' });
+    }
+    const input = { ...body };
+    ASSET_MODEL_FROM_KEYS.forEach((key) => { delete input[key]; });
+    Object.assign(input, assetValuesFromModel(model));
+    const norm = normalizeFixedAssetValues(input, ctx, null);
     if (norm.error) return res.status(norm.error.status).json({ message: norm.error.message, code: norm.error.code });
+    norm.values.modelId = model.id;
     if (!norm.values.purchaseName) return res.status(400).json({ message: 'Escribe el nombre de compra del activo.', code: 'NAME' });
     if (!('shape' in norm.values)) norm.values.shape = 'rectangular';
     if (!('showInLayout' in norm.values)) norm.values.showInLayout = type.kind ? 1 : 0; // lo que se dibuja en el Layout (rack, anaquel, gabeta…) sale propuesto con «Sí»; lo demás con «No»
@@ -11776,7 +11898,16 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
     if (!existing) return res.status(404).json({ message: 'Asset not found.' });
     const { baseline, overrideConflicts, ...raw } = req.body || {};
     if (Object.prototype.hasOwnProperty.call(raw, 'typeId')) return res.status(400).json({ message: 'El tipo de un activo no se cambia: su código lleva la letra del tipo. Da de alta otro activo.', code: 'TYPE_LOCKED' });
+    // El nombre de compra, el personalizado, el modelo, la forma, las medidas y el peso vienen del modelo: no se escriben a mano (se elige otro modelo, o se corrige el modelo en Catálogos > Activos Fijos).
+    if (ASSET_MODEL_FROM_KEYS.some((key) => Object.prototype.hasOwnProperty.call(raw, key))) return res.status(400).json({ message: 'Ese dato viene del modelo del activo: elige otro modelo, o corrígelo en Catálogos > Activos Fijos.', code: 'FROM_MODEL' });
     const ctx = fixedAssetContext(req);
+    let chosenModel = null;
+    if (Object.prototype.hasOwnProperty.call(raw, 'modelId')) {
+        chosenModel = ctx.models.get(intOf(raw.modelId));
+        if (!chosenModel || chosenModel.parent_id !== existing.type_id || (chosenModel.status !== 'active' && existing.model_id !== chosenModel.id) || !chosenModel.name || !isAssetModelComplete(chosenModel)) {
+            return res.status(400).json({ message: 'Elige un modelo activo y completo del tipo de este activo (se da de alta en Catálogos > Activos Fijos).', code: 'MODEL' });
+        }
+    }
     const norm = normalizeFixedAssetValues(raw, ctx, existing);
     if (norm.error) return res.status(norm.error.status).json({ message: norm.error.message, code: norm.error.code });
     if ('purchaseName' in norm.values && !norm.values.purchaseName) return res.status(400).json({ message: 'El nombre de compra no puede quedar vacío.', code: 'NAME' });
@@ -11791,10 +11922,19 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
     const code = fixedAssetCodeOf(existing);
     const direct = {};
     Object.keys(norm.values).forEach((key) => { if (Object.prototype.hasOwnProperty.call(raw, key)) direct[key] = norm.values[key]; });
+    if (chosenModel) direct.modelId = chosenModel.id;
     const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, direct, FIXED_ASSET_PATCHABLE_FIELDS, FIXED_ASSET_TABLE_KEY, code, fixedAssetSanitizers(ctx), { baseline, overrideConflicts });
-    if (['shape', 'height', 'length', 'depth', 'volume'].some((key) => key in appliedPatch)) {
-        const recomputed = normalizeFixedAssetValues(appliedPatch, ctx, existing).values || {};
-        ['depth', 'volume'].forEach((key) => { if (!(key in appliedPatch) && key in recomputed) appliedPatch[key] = recomputed[key]; });
+    // Al elegir el modelo (si el cambio se aplicó) el activo recibe sus datos: cada uno queda en el historial del activo.
+    if (chosenModel && 'modelId' in appliedPatch) {
+        const sanitizers = fixedAssetSanitizers(ctx);
+        const fromModel = normalizeFixedAssetValues(assetValuesFromModel(chosenModel), ctx, null).values || {};
+        ASSET_MODEL_FROM_KEYS.forEach((key) => {
+            if (!(key in fromModel)) return;
+            const { column, fieldKey } = FIXED_ASSET_PATCHABLE_FIELDS[key];
+            appliedPatch[key] = fromModel[key];
+            if (String(existing[column] ?? '') === String(fromModel[key] ?? '')) return;
+            logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey, oldValue: sanitizers[key] ? sanitizers[key](existing[column]) : existing[column], newValue: sanitizers[key] ? sanitizers[key](fromModel[key]) : fromModel[key], changedBy: changedByLabel(req) });
+        });
     }
     const row = updateFixedAsset(existing.id, clientId, appliedPatch, isTestAccount);
     syncFixedAssetIntoLayout(clientId, row); // el Layout guardado recibe el nombre, las medidas, la clasificación… nuevos
@@ -13251,7 +13391,15 @@ const PENDING_CHANGE_APPLIERS = {
     'alta-activos': (recordId, clientId, patch) => {
         const existing = getFixedAssetById(recordId, clientId, false) || getFixedAssetById(recordId, clientId, true);
         if (!existing) return null;
-        const norm = normalizeFixedAssetValues(patch, { classes: new Map(listArticleCategories(clientId, 'activos-clasificacion', !!existing.is_test_data).map((r) => [r.id, r])) }, existing);
+        let input = patch;
+        let model = null;
+        if (Object.prototype.hasOwnProperty.call(patch, 'modelId')) {
+            model = getArticleCategoryById(Number(patch.modelId), clientId, !!existing.is_test_data);
+            if (model && model.category_type === 'activos-modelos') input = { ...patch, ...assetValuesFromModel(model) };
+            else model = null;
+        }
+        const norm = normalizeFixedAssetValues(input, { classes: new Map(listArticleCategories(clientId, 'activos-clasificacion', !!existing.is_test_data).map((r) => [r.id, r])) }, existing);
+        if (model) norm.values = { ...(norm.values || {}), modelId: model.id };
         const updated = updateFixedAsset(recordId, clientId, norm.values || {}, !!existing.is_test_data);
         syncFixedAssetIntoLayout(clientId, updated);
         return updated;

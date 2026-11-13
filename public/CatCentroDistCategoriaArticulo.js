@@ -274,11 +274,13 @@ async function refreshTable() {
     const tbody = getTbody();
     if (tbody.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
     try {
+        if (window.AssetModels && CATEGORY_TYPE === 'activos-fijos') await AssetModels.load(); // los modelos de cada tipo (su cuenta sale en el botón «Ver modelos»)
         const res = await fetch(CATEGORY_API_BASE, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const body = await res.json();
         const categories = IS_WAREHOUSE ? body.categories.filter(isInSelectedCenters) : body.categories;
         tbody.innerHTML = '';
+        if (window.AssetModels && CATEGORY_TYPE === 'activos-fijos') AssetModels.render(categories);
         if (!categories.length) { ensureEmptyState(); return; }
         categories.forEach((record) => tbody.appendChild(buildRow(record)));
         applyCategoryFilters();
@@ -581,9 +583,27 @@ function buildExtraCells(record) {
         });
         // «Se dibuja como»: el tipo de espacio del Layout que le toca (cómo se ve y qué letra traían sus activos del Layout). Sin dibujo propio, su activo conserva el que ya tenía.
         const kinds = ['rack', 'rackpal', 'cabinet', 'pallet', 'cold', 'cart', 'sensor']; // «Sensor» no es un activo de huella: se coloca sobre una pared en el paso Sensores del Layout
+        // «Lleva número de serie»: Sí (sensores, teléfonos, impresoras) o No (sillas, mesas); cuenta para el 100% de sus activos solo cuando lo lleva.
+        const serialTd = buildOptionCell(record, 'colActivoFijoSerie', 'needsSerial', 'assetTypeSerial',
+            [{ value: '1', label: Dashboard.t('main.assetYes') }, { value: '0', label: Dashboard.t('main.assetNo') }], record.needsSerial === false ? '0' : '1', '',
+            (v) => ({ needsSerial: v !== '0' }));
+        // «Modelos»: abre debajo de la tabla la lista de modelos de este tipo (CatCentroDistActivosModelos.js).
+        const modelsTd = document.createElement('td');
+        modelsTd.dataset.col = 'colActivoFijoModelos';
+        modelsTd.setAttribute('data-help-key', 'assetTypeModels');
+        const modelsBtn = document.createElement('button');
+        modelsBtn.type = 'button';
+        modelsBtn.className = 'btn btn-secondary asset-models-open';
+        const modelsOpen = !!record.id && window.AssetModels && AssetModels.isOpen(record.id);
+        modelsBtn.classList.toggle('is-open', !!modelsOpen);
+        modelsBtn.innerHTML = `<i class="bx ${modelsOpen ? 'bx-chevron-down' : 'bx-chevron-right'}" aria-hidden="true"></i><span></span>`;
+        modelsBtn.querySelector('span').textContent = Dashboard.t('main.assetModelsView').replace('{n}', String(window.AssetModels && record.id ? AssetModels.countFor(record.id) : 0));
+        modelsBtn.disabled = !record.id || !window.AssetModels;
+        modelsBtn.addEventListener('click', () => AssetModels.open(record));
+        modelsTd.appendChild(modelsBtn);
         return [letterTd, buildOptionCell(record, 'colActivoFijoLetra', 'kind', 'assetTypeLetter',
             kinds.map((k) => ({ value: k, label: Dashboard.t(`main.layoutType_space_${k}`) })), record.kind || '', '',
-            (v) => ({ kind: v }))];
+            (v) => ({ kind: v })), serialTd, modelsTd];
     }
     if (CATEGORY_TYPE === 'activos-clasificacion') {
         return [buildOptionCell(record, 'colActClasMetrica', 'kind', 'assetClassMetric',

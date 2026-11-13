@@ -2415,6 +2415,13 @@ if (!articleCategoryColumns.some((c) => c.name === 'height_m')) db.exec('ALTER T
 // Tipo de activo (Catálogos > Activos Fijos): letter = la letra con la que empieza el código de sus activos en Alta Activos (R001, A001, L001…). Una por tipo y no se repite entre los tipos de la empresa; '' = todavía sin letra.
 // (kind sigue siendo cómo se DIBUJA el tipo en el Layout: Anaquel, Rack, Gabeta…)
 if (!articleCategoryColumns.some((c) => c.name === 'letter')) db.exec("ALTER TABLE article_categories ADD COLUMN letter TEXT NOT NULL DEFAULT ''");
+// Modelos de activos (Catálogos > Activos Fijos, 2026-11-12, Daniel: cada Tipo trae su lista de modelos y en Alta Activos solo se elige el modelo y se escribe el número de serie). Un MODELO es un renglón de este catálogo
+// (category_type 'activos-modelos') ligado a su Tipo con parent_id: name = el nombre de compra; y custom_name (nombre personalizado), model_number, shape (rectangular | cilindrica | irregular), alto/largo/profundidad en cm,
+// peso en kg y volumen en m³ (calculado salvo en la forma irregular). needs_serial es del TIPO: 1 = sus activos llevan número de serie (sensores, teléfonos, impresoras), 0 = no (sillas, mesas).
+for (const [col, ddl] of [['custom_name', "TEXT NOT NULL DEFAULT ''"], ['model_number', "TEXT NOT NULL DEFAULT ''"], ['shape', "TEXT NOT NULL DEFAULT 'rectangular'"], ['height_cm', 'REAL NOT NULL DEFAULT 0'], ['length_cm', 'REAL NOT NULL DEFAULT 0'],
+    ['depth_cm', 'REAL NOT NULL DEFAULT 0'], ['weight_kg', 'REAL NOT NULL DEFAULT 0'], ['volume_m3', 'REAL NOT NULL DEFAULT 0'], ['needs_serial', 'INTEGER NOT NULL DEFAULT 1']]) {
+    if (!articleCategoryColumns.some((c) => c.name === col)) db.exec(`ALTER TABLE article_categories ADD COLUMN ${col} ${ddl}`);
+}
 
 // Relación Código (Operaciones, C. Distribución): dónde vive un código. Una fila por LUGAR (un mismo artículo puede tener varios): centro de costos > almacén > sub almacén >
 // zona > anaquel > nivel > espacio. Lo que está debajo del almacén es opcional (la fila queda "A medias" hasta completarlo). Zonas y anaqueles son ids del Layout guardado.
@@ -3714,6 +3721,8 @@ const TABLE_GRANT_PATHS = {
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
     'activos-fijos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-fijos' },
+    // los modelos viven en la misma pantalla que los Tipos (Catálogos > Activos Fijos): comparten su nodo del árbol y sus hojas de botones
+    'activos-modelos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-fijos' },
     'activos-clasificacion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-clasificacion' },
     'transito-equipos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-transito-equipos' },
     'incidentes-criterios': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-incidentes-criterios' },
@@ -3913,6 +3922,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'almacenes': CATEGORY_BUTTON_NOTIFY,
     'sub-almacenes': CATEGORY_BUTTON_NOTIFY,
     'activos-fijos': CATEGORY_BUTTON_NOTIFY,
+    'activos-modelos': CATEGORY_BUTTON_NOTIFY,
     'activos-clasificacion': CATEGORY_BUTTON_NOTIFY,
     'transito-equipos': CATEGORY_BUTTON_NOTIFY,
     'incidentes-criterios': CATEGORY_BUTTON_NOTIFY,
@@ -5795,8 +5805,11 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_fixed_assets_client ON fixed_assets (client_id, is_test_data, cost_center_id);
     CREATE INDEX IF NOT EXISTS idx_fixed_assets_type ON fixed_assets (client_id, type_id);
 `);
+// El modelo (catálogo Activos Fijos > Modelos) de un activo: de él vienen el nombre de compra, el personalizado, el modelo, la forma, las medidas y el peso. NULL = activo de antes, que conserva lo que tenía hasta que se le elige modelo.
+if (!db.prepare('PRAGMA table_info(fixed_assets)').all().some((c) => c.name === 'model_id')) db.exec('ALTER TABLE fixed_assets ADD COLUMN model_id INTEGER');
 const FIXED_ASSET_PATCHABLE_FIELDS = {
     typeId: { column: 'type_id', fieldKey: 'main.colActTipo' },
+    modelId: { column: 'model_id', fieldKey: 'main.colActElegirModelo' },
     classId: { column: 'class_id', fieldKey: 'main.colActClasificacion' },
     purchaseName: { column: 'purchase_name', fieldKey: 'main.colActNombreCompra' },
     customName: { column: 'custom_name', fieldKey: 'main.colActNombrePersonalizado' },
@@ -5890,6 +5903,22 @@ function countFixedAssetsByType(clientId, typeId) {
 }
 function countFixedAssetsByClass(clientId, classId) {
     return db.prepare('SELECT COUNT(*) AS n FROM fixed_assets WHERE client_id = ? AND class_id = ?').get(clientId, classId).n;
+}
+// Los activos que usan un modelo (de cualquier cuenta: el modelo es del catálogo de la empresa) y cuántos usa cada uno ({ idDelModelo: n }).
+function listFixedAssetsByModel(clientId, modelId) {
+    return db.prepare('SELECT * FROM fixed_assets WHERE client_id = ? AND model_id = ? ORDER BY id ASC').all(clientId, modelId);
+}
+function countFixedAssetsByModel(clientId, modelId) {
+    return db.prepare('SELECT COUNT(*) AS n FROM fixed_assets WHERE client_id = ? AND model_id = ?').get(clientId, modelId).n;
+}
+function fixedAssetModelUseCounts(clientId) {
+    const out = new Map();
+    db.prepare('SELECT model_id AS id, COUNT(*) AS n FROM fixed_assets WHERE client_id = ? AND model_id IS NOT NULL GROUP BY model_id').all(clientId).forEach((r) => out.set(r.id, r.n));
+    return out;
+}
+// Cuántos modelos tiene un Tipo (para no borrar un Tipo con modelos).
+function countAssetModelsByType(clientId, typeId) {
+    return db.prepare("SELECT COUNT(*) AS n FROM article_categories WHERE client_id = ? AND category_type = 'activos-modelos' AND parent_id = ?").get(clientId, typeId).n;
 }
 
 // --- Pedido Manual (Operaciones > C. Distribución) --------------------------------------------------------------------------------------------------
@@ -6618,6 +6647,8 @@ const ARTICLE_CATEGORY_TYPES = {
     'sub-almacenes': { prefix: 'SUB', tableKey: 'sub-almacenes', pantalla: 'Nuestros Sub Almacenes' },
     // Activos Fijos = el TIPO de activo (rack, gabinete, refrigerador, estante, escritorio, mesa…): misma forma (código, nombre, descripción, estatus). Cada Huella-Espacio del Layout elegirá uno en su paso «Activos».
     'activos-fijos': { prefix: 'AFI', tableKey: 'activos-fijos', pantalla: 'Nuestros Activos Fijos' },
+    // Modelos de activos (2026-11-12): la lista de modelos de cada Tipo (parent_id = el Tipo). Misma pantalla que los Tipos; el nombre de compra es su name.
+    'activos-modelos': { prefix: 'MOD', tableKey: 'activos-modelos', pantalla: 'Nuestros Activos Fijos' },
     // Clasificación de Activos (Mobiliario operativo, Mobiliario almacenamiento…): la lista que va ANTES del tipo. Cada una lleva su métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
     'activos-clasificacion': { prefix: 'ACL', tableKey: 'activos-clasificacion', pantalla: 'Nuestras Clasificaciones de Activos' },
     // Lo que transita (personas, montacargas, carritos, plataformas… con su ancho, largo y alto): lo eligen los pasillos (Layout > Tránsito) y los objetos (Layout > Objetos).
@@ -6727,6 +6758,18 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
     'activos-fijos': {
         kind: { column: 'kind', fieldKey: 'main.colActivoFijoLetra' },
         letter: { column: 'letter', fieldKey: 'main.colActivoFijoLetraCodigo' },
+        needsSerial: { column: 'needs_serial', fieldKey: 'main.colActivoFijoSerie' },
+    },
+    'activos-modelos': {
+        name: { column: 'name', fieldKey: 'main.colActModNombreCompra' },
+        customName: { column: 'custom_name', fieldKey: 'main.colActModNombrePersonalizado' },
+        modelNumber: { column: 'model_number', fieldKey: 'main.colActModModelo' },
+        shape: { column: 'shape', fieldKey: 'main.colActModForma' },
+        height: { column: 'height_cm', fieldKey: 'main.colActModAlto' },
+        length: { column: 'length_cm', fieldKey: 'main.colActModLargo' },
+        depth: { column: 'depth_cm', fieldKey: 'main.colActModProfundidad' },
+        weight: { column: 'weight_kg', fieldKey: 'main.colActModPeso' },
+        volume: { column: 'volume_m3', fieldKey: 'main.colActModVolumen' },
     },
     'activos-clasificacion': {
         kind: { column: 'kind', fieldKey: 'main.colActClasMetrica' },
@@ -6744,7 +6787,9 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
 function articleCategoryPatchableFields(categoryType) {
     return { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, ...(ARTICLE_CATEGORY_EXTRA_FIELDS[categoryType] || {}) };
 }
-const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' }, widthM: { column: 'width_m' }, lengthM: { column: 'length_m' }, heightM: { column: 'height_m' }, letter: { column: 'letter' } };
+const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' }, widthM: { column: 'width_m' }, lengthM: { column: 'length_m' }, heightM: { column: 'height_m' }, letter: { column: 'letter' },
+    needsSerial: { column: 'needs_serial' }, customName: { column: 'custom_name' }, modelNumber: { column: 'model_number' }, shape: { column: 'shape' }, height: { column: 'height_cm' }, length: { column: 'length_cm' }, depth: { column: 'depth_cm' },
+    weight: { column: 'weight_kg' }, volume: { column: 'volume_m3' } };
 
 function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
     const sets = [];
@@ -8843,6 +8888,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'almacenes', labelKey: 'menu.catCentroDistAlmacenes' },
     { key: 'sub-almacenes', labelKey: 'menu.catCentroDistSubAlmacenes' },
     { key: 'activos-fijos', labelKey: 'menu.catCentroDistActivosFijos' },
+    { key: 'activos-modelos', labelKey: 'menu.catCentroDistActivosFijos' },
     { key: 'activos-clasificacion', labelKey: 'menu.catCentroDistActivosClasificacion' },
     { key: 'transito-equipos', labelKey: 'menu.catCentroDistTransitoEquipos' },
     { key: 'incidentes-criterios', labelKey: 'menu.catCentroDistIncidentesCriterios' },
@@ -13242,6 +13288,19 @@ function seedActivosFijosValuesOnce() {
     console.log(`[db] Seeded the Activos Fijos catalog (rack, cabinet, fridge, shelf, desk, table) for existing clients: ${seeded} values (one-time).`);
 }
 
+// Modelos de activos (2026-11-12): las columnas nuevas del catálogo Activos Fijos (modelos y «Lleva número de serie») y la columna «Modelo» (la que se elige) de Alta Activos son hojas nuevas del árbol. Se agregan, UNA vez,
+// a lo contratado por quien ya tiene esas pantallas (planes, adicionales del cliente y giros), para que el administrador del cliente pueda dársela a su gente; a puestos y usuarios no se les da sola (esas hojas escriben datos).
+const ASSET_MODEL_COLS_SEED_KEY = 'seed-activos-modelos-columnas-v1';
+const ASSET_MODEL_PICKER_SEED_KEY = 'seed-activos-modelos-selector-v1';
+const ASSET_MODEL_CATALOG_COLS = ['colActivoFijoSerie', 'colActModNombreCompra', 'colActModNombrePersonalizado', 'colActModModelo', 'colActModForma', 'colActModAlto', 'colActModLargo', 'colActModProfundidad', 'colActModPeso', 'colActModVolumen'];
+function seedAssetModelLeaves() {
+    const levels = ['ver-y-operar', 'editar'];
+    const fijos = TABLE_GRANT_PATHS['activos-fijos'];
+    const alta = TABLE_GRANT_PATHS['alta-activos'];
+    if (fijos) seedLeavesForScreenHolders(ASSET_MODEL_COLS_SEED_KEY, fijos, ASSET_MODEL_CATALOG_COLS.flatMap((col) => levels.map((level) => `${fijos.submenuPrefix}/${col}/${level}`)), 'the asset model catalog columns', { contractOnly: true });
+    if (alta) seedLeavesForScreenHolders(ASSET_MODEL_PICKER_SEED_KEY, alta, levels.map((level) => `${alta.submenuPrefix}/colActElegirModelo/${level}`), 'the Alta Activos model picker column', { contractOnly: true });
+}
+
 // Siembra de Opciones de Búsqueda (definida arriba): aquí ya existe todo lo que usa findPantallaNode.
 seedColumnSearchOptionGrants();
 seedLayoutNewIconGrants();
@@ -13259,6 +13318,7 @@ seedPmDescargarSoloVer();
 seedPresentacionesCatalogGrants();
 seedRelacionEnvioGrants();
 seedAltaActivosGrants();
+seedAssetModelLeaves();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
 backfillFixedAssetHistoryOnce();
@@ -13489,6 +13549,10 @@ module.exports = {
     listSkuDistributionBySkus,
     listCodeShipRelations,
     FIXED_ASSET_PATCHABLE_FIELDS,
+    listFixedAssetsByModel,
+    countFixedAssetsByModel,
+    fixedAssetModelUseCounts,
+    countAssetModelsByType,
     listFixedAssets,
     getFixedAssetById,
     nextFixedAssetCodeNumber,

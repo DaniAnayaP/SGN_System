@@ -4171,6 +4171,29 @@
     "colActClasMetrica": "Se mide en",
     "colActivoFijoLetra": "Se dibuja como",
     "colActivoFijoLetraCodigo": "Letras del código",
+    "colActivoFijoSerie": "Lleva número de serie",
+    "colActivoFijoModelos": "Modelos",
+    "colActModNombreCompra": "Nombre de compra",
+    "colActModNombrePersonalizado": "Nombre personalizado",
+    "colActModModelo": "Modelo",
+    "colActModForma": "Forma",
+    "colActModAlto": "Alto (cm)",
+    "colActModLargo": "Largo (cm)",
+    "colActModProfundidad": "Profundidad (cm)",
+    "colActModPeso": "Peso (kg)",
+    "colActModVolumen": "Volumen (m³)",
+    "colActModUso": "Activos que lo usan",
+    "colActElegirModelo": "Elegir modelo",
+    "assetModelsView": "Ver modelos ({n})",
+    "assetModelsTitle": "Modelos de «{tipo}»",
+    "assetModelsAdd": "+ Agregar modelo",
+    "assetModelsClose": "Cerrar",
+    "assetModelsEmpty": "Este tipo todavía no tiene modelos.",
+    "assetModelsTypeInactive": "Tipo inactivo: no se le agregan modelos.",
+    "assetModelIncomplete": "Incompleto",
+    "assetModelIncompleteTip": "Le falta un dato: no se ofrece en Alta Activos hasta completarlo.",
+    "assetModelClosedTip": "Cerrado: ya hay {n} activo(s) con este modelo. Para cambiar su forma, medidas o peso da de alta otro modelo y deja este Inactivo.",
+    "assetModelNamesUpdated": "Los nombres se actualizaron en {n} activo(s) de Alta Activos.",
     "colActRegistroUnico": "Registro Único",
     "colActCodigo": "Código",
     "colActEstatus": "Estatus",
@@ -4209,6 +4232,13 @@
     "assetYes": "Sí",
     "assetNo": "No",
     "assetCostCenter": "Centro de costos",
+    "assetModelChoose": "Elige el modelo",
+    "assetModelNoModels": "Sin modelos: agrégalos en Activos Fijos",
+    "assetPickTypeFirst": "Primero elige el tipo",
+    "assetFromModel": "Viene del modelo: se elige en la columna «Elegir modelo».",
+    "assetNoSerial": "No lleva",
+    "assetNoSerialTip": "Este tipo de activo no lleva número de serie (Catálogos > Activos Fijos).",
+    "assetModelRequired": "Elige el modelo del activo (los modelos se dan de alta en Catálogos > Activos Fijos).",
     "assetNoLetter": "(sin letra)",
     "assetPickType": "Elige el tipo de activo",
     "assetVolumeCalc": "Se calcula con las medidas",
@@ -5918,9 +5948,65 @@
       "what": "Cómo se dibuja este tipo de activo en el Layout: Anaquel, Rack, Gabeta, Tarima en piso, Frío o Rack móvil. Sin dibujo propio, su activo conserva el que ya tenía.",
       "example": "Estante se dibuja como Anaquel y Refrigerador como Frío."
     },
+    "assetTypeSerial": {
+      "what": "Si los activos de este tipo llevan número de serie. Sí para sensores, teléfonos e impresoras; No para sillas y mesas. Solo cuando dice Sí, el número de serie cuenta para que un activo de este tipo quede al 100%.",
+      "example": "Termohigrómetro: Sí. Silla: No (no tiene número de serie y no se le pide)."
+    },
+    "assetTypeModels": {
+      "what": "Abre debajo de la tabla la lista de MODELOS de este tipo. En Alta Activos solo se elige uno de estos modelos y se escribe el número de serie; los demás datos vienen del modelo.",
+      "example": "En el tipo Rack abres «Ver modelos» y das de alta «Rack selectivo 2.7 m · SR-2700»."
+    },
+    "assetModelsPanel": {
+      "what": "Los modelos del tipo elegido: lo que antes se escribía activo por activo (nombre de compra, nombre personalizado, modelo, forma, medidas y peso) se escribe una sola vez aquí. Un modelo nunca se elimina: se deja Inactivo.",
+      "example": "Los cuatro racks de 2.7 m del almacén usan el mismo modelo «SR-2700»."
+    },
+    "assetModelsAdd": {
+      "what": "Agrega un modelo nuevo a este tipo. Se llena con un clic en cada celda; hasta que tiene todos sus datos no se ofrece en Alta Activos.",
+      "example": "Agregas «Rack selectivo 3.6 m» con sus medidas y peso y ya se puede elegir."
+    },
+    "assetModelName": {
+      "what": "El nombre con el que se compró el activo. Si cambia, se actualiza en todos los activos que usan el modelo.",
+      "example": "Rack selectivo 2.7 m."
+    },
+    "assetModelCustom": {
+      "what": "El nombre con el que se le conoce adentro (opcional). Es el que se ve en el croquis; si falta, se ve el de compra. Si cambia, se actualiza en todos sus activos.",
+      "example": "Rack de pasillo."
+    },
+    "assetModelNumber": {
+      "what": "El número de modelo del fabricante. Es obligatorio para que el modelo quede completo.",
+      "example": "SR-2700."
+    },
+    "assetModelShape": {
+      "what": "Rectangular, Cilíndrica o Irregular. De ella depende cómo se calcula el volumen. Con activos usando el modelo, la forma se cierra.",
+      "example": "Un rack es Rectangular; un tanque es Cilíndrica."
+    },
+    "assetModelSize": {
+      "what": "Alto, largo y profundidad en centímetros. En una forma cilíndrica la profundidad es igual al largo (el diámetro). Con activos usando el modelo, las medidas se cierran porque el croquis ya dibujó con ellas.",
+      "example": "270 de alto, 120 de largo y 100 de profundidad."
+    },
+    "assetModelWeight": {
+      "what": "El peso en kilogramos. Es obligatorio para que el modelo quede completo.",
+      "example": "95 kg."
+    },
+    "assetModelVolume": {
+      "what": "El volumen en m³. Se calcula solo con las medidas (rectangular: alto × largo × profundidad; cilíndrica: π × (largo ÷ 2)² × alto). Solo en la forma Irregular se escribe.",
+      "example": "270 × 120 × 100 cm = 3.240 m³."
+    },
+    "assetModelStatus": {
+      "what": "Activo o Inactivo. Un modelo inactivo, o con «Incompleto», no se ofrece al dar de alta o cambiar un activo en Alta Activos; los activos que ya lo tienen lo conservan.",
+      "example": "Dejas de comprar el rack de 3.6 m: lo pasas a Inactivo."
+    },
+    "assetModelUse": {
+      "what": "Cuántos activos de Alta Activos usan este modelo. Mientras sea más de cero, su forma, medidas y peso están cerrados.",
+      "example": "4 activos usan «SR-2700»."
+    },
     "assetTypeCodeLetter": {
       "what": "Una o dos letras con las que empieza el código de los activos de este tipo en Alta Activos. Con dos letras hay más combinaciones y no se repiten tanto (RK001, ES001, HT001). Deben ser distintas en cada tipo y ya con activos de este tipo no se cambian (sus códigos las llevan). Z, H, N, E y P solas no se pueden: son las piezas del Localizador. Sin letras no se pueden dar de alta activos de este tipo.",
       "example": "Rack lleva R (R001), Escritorio lleva ES (ES001) y Termohigrómetro lleva HT (HT001)."
+    },
+    "assetModelPicker": {
+      "what": "El modelo del activo, de la lista de modelos de su tipo (se dan de alta en Catálogos > Activos Fijos). Al elegirlo se llenan solos, y quedan cerrados, el nombre de compra, el nombre personalizado, el modelo, la forma, las medidas y el peso. Un activo de antes conserva lo que tenía hasta que se le elige su modelo; ese día sus datos se reemplazan por los del modelo.",
+      "example": "Eliges «Rack selectivo 2.7 m · SR-2700» y ya solo escribes el número de serie."
     },
     "assetNew": {
       "what": "Da de alta un activo: todo lo que está dentro del sitio y se tiene para usar (racks, mobiliario, sensores, teléfonos, impresoras…). Los artículos (SKU) son lo que se distribuye; los activos son lo que se usa.",
@@ -5939,35 +6025,35 @@
       "example": "Un rack es para almacenar; un montacargas, para operar; un teléfono, para administrar."
     },
     "assetPurchaseName": {
-      "what": "Cómo se compró el activo: el nombre de la factura o de la orden de compra. Es obligatorio.",
-      "example": "Rack selectivo 2.7 m SR-2700."
+      "what": "Cómo se compró el activo: el nombre de la factura o de la orden de compra. Viene del MODELO que se elige (se da de alta en Catálogos > Activos Fijos) y aquí no se escribe.",
+      "example": "Rack selectivo 2.7 m."
     },
     "assetCustomName": {
-      "what": "Cómo le dicen ustedes al activo. Es opcional; el croquis y las fichas muestran este nombre y, si está vacío, el de compra.",
-      "example": "Rack pasillo 1."
+      "what": "Cómo le dicen ustedes al activo. Viene del modelo y es opcional; el croquis y las fichas muestran este nombre y, si está vacío, el de compra.",
+      "example": "Rack de pasillo."
     },
     "assetModel": {
-      "what": "El modelo del activo, el que trae en su placa o en su caja.",
+      "what": "El modelo del activo, el que trae en su placa o en su caja. Viene del modelo que se elige.",
       "example": "SR-2700."
     },
     "assetSerial": {
-      "what": "El número de serie (S/N) del activo, el que trae en su placa.",
+      "what": "El número de serie (S/N) del activo, el que trae en su placa. Es lo único que se escribe a mano de cada activo. Si su tipo no lleva número de serie (sillas, mesas) no aplica.",
       "example": "RK-88213."
     },
     "assetShape": {
-      "what": "La forma del activo: rectangular (una caja), cilíndrica (un tambo o un tanque) o irregular (cualquier otra). Con la forma se calcula el volumen.",
+      "what": "La forma del activo: rectangular (una caja), cilíndrica (un tambo o un tanque) o irregular (cualquier otra). Viene del modelo y de ella depende el volumen.",
       "example": "Un rack es rectangular; un tambo de agua, cilíndrico; una silla, irregular."
     },
     "assetSize": {
-      "what": "Alto, largo y profundidad, en centímetros. En una forma cilíndrica el largo es el diámetro y la profundidad es igual al largo. En una irregular son las medidas de la caja que lo contiene.",
+      "what": "Alto, largo y profundidad, en centímetros. Vienen del modelo. En una forma cilíndrica el largo es el diámetro y la profundidad es igual al largo. En una irregular son las medidas de la caja que lo contiene.",
       "example": "270 de alto × 120 de largo × 100 de profundidad."
     },
     "assetWeight": {
-      "what": "Cuánto pesa el activo, en kilogramos.",
+      "what": "Cuánto pesa el activo, en kilogramos. Viene del modelo.",
       "example": "95 kg."
     },
     "assetVolume": {
-      "what": "El volumen en m³. Se calcula solo: alto × largo × profundidad (rectangular) o π × (largo ÷ 2)² × alto (cilíndrica). En la forma irregular lo escribes tú.",
+      "what": "El volumen en m³. Viene del modelo y se calcula con sus medidas: alto × largo × profundidad (rectangular) o π × (largo ÷ 2)² × alto (cilíndrica). En la forma irregular lo escribió quien dio de alta el modelo.",
       "example": "270 × 120 × 100 cm = 3.240 m³."
     },
     "assetPhotos": {

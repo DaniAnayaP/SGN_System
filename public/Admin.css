@@ -8567,6 +8567,19 @@ th.sku-th-actions{ min-width: 9.5rem; white-space: nowrap; overflow: visible; te
 /* un código inactivo (los códigos no se eliminan: se desactivan) se ve apagado, salvo sus botones */
 tr.sku-row-inactive > td:not(.admin-table-actions){ opacity: 0.55; }
 td.sku-status-inactive{ font-style: italic; }
+/* Modelos de activos (Catálogos > Activos Fijos): el panel con la lista de modelos del tipo elegido, debajo de la tabla de tipos */
+.asset-models{ margin-top: 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.asset-models[hidden]{ display: none; }
+.asset-models-head{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; }
+.asset-models-head h3{ margin: 0; font-size: 1rem; }
+.asset-models-actions{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.asset-models-letter{ display: inline-block; margin-left: 0.3rem; padding: 0.05rem 0.55rem; border-radius: 999px; background: color-mix(in srgb, var(--color-accent, #7d3f8f) 14%, transparent); color: var(--color-accent, #7d3f8f); font-size: 0.8rem; font-weight: 700; }
+.asset-models-scroll{ border: 1px solid var(--color-border); border-radius: 0.6rem; background-color: var(--color-surface); overflow: auto; }
+.asset-models-table td.asset-model-closed{ opacity: 0.7; }
+.asset-model-tag{ display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.5rem; border-radius: 999px; background: #fef0c7; color: #93370d; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.asset-models-open{ display: inline-flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
+td.asset-model-missing select{ border-color: #b26a00; background-color: #fff3dc; color: #b26a00; }
+.asset-models-open.is-open{ border-color: var(--color-accent, #7d3f8f); color: var(--color-accent, #7d3f8f); }
 /* «Editar» con elección de datos (Edición Código): lo no marcado queda cerrado, lo marcado va en rojo mientras está pendiente y en verde cuando ya se llenó */
 td.sku-cell-locked{ opacity: 0.6; }
 td.sku-cell-marked{ box-shadow: inset 0 0 0 0.125rem #0f9d3f; }

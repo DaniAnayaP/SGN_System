@@ -4172,6 +4172,29 @@
     "colActClasMetrica": "Measured in",
     "colActivoFijoLetra": "Drawn as",
     "colActivoFijoLetraCodigo": "Code letters",
+    "colActivoFijoSerie": "Has serial number",
+    "colActivoFijoModelos": "Models",
+    "colActModNombreCompra": "Purchase Name",
+    "colActModNombrePersonalizado": "Custom Name",
+    "colActModModelo": "Model",
+    "colActModForma": "Shape",
+    "colActModAlto": "Height (cm)",
+    "colActModLargo": "Length (cm)",
+    "colActModProfundidad": "Depth (cm)",
+    "colActModPeso": "Weight (kg)",
+    "colActModVolumen": "Volume (m³)",
+    "colActModUso": "Assets using it",
+    "colActElegirModelo": "Choose Model",
+    "assetModelsView": "View models ({n})",
+    "assetModelsTitle": "Models of «{tipo}»",
+    "assetModelsAdd": "+ Add model",
+    "assetModelsClose": "Close",
+    "assetModelsEmpty": "This type has no models yet.",
+    "assetModelsTypeInactive": "Inactive type: no models can be added.",
+    "assetModelIncomplete": "Incomplete",
+    "assetModelIncompleteTip": "A value is missing: it is not offered in Alta Activos until it is complete.",
+    "assetModelClosedTip": "Closed: {n} asset(s) already use this model. To change its shape, measurements or weight, add another model and set this one to Inactive.",
+    "assetModelNamesUpdated": "The names were updated in {n} asset(s) of Alta Activos.",
     "colActRegistroUnico": "Unique Registration",
     "colActCodigo": "Code",
     "colActEstatus": "Status",
@@ -4210,6 +4233,13 @@
     "assetYes": "Yes",
     "assetNo": "No",
     "assetCostCenter": "Cost center",
+    "assetModelChoose": "Choose the model",
+    "assetModelNoModels": "No models: add them in Fixed Assets",
+    "assetPickTypeFirst": "Choose the type first",
+    "assetFromModel": "Comes from the model: it is chosen in the «Choose Model» column.",
+    "assetNoSerial": "Not applicable",
+    "assetNoSerialTip": "This asset type has no serial number (Catalogs > Fixed Assets).",
+    "assetModelRequired": "Choose the model of the asset (models are added in Catalogs > Fixed Assets).",
     "assetNoLetter": "(no letter)",
     "assetPickType": "Choose the asset type",
     "assetVolumeCalc": "Calculated from the measurements",
@@ -5919,9 +5949,65 @@
       "what": "How this asset type is drawn in the Layout: Rack, Pallet rack, Cabinet, Floor pallet, Cold or Mobile rack. With no drawing of its own, its asset keeps the one it already had.",
       "example": "Shelf is drawn as Rack and Refrigerator as Cold."
     },
+    "assetTypeSerial": {
+      "what": "Whether the assets of this type have a serial number. Yes for sensors, phones and printers; No for chairs and tables. Only when it says Yes does the serial number count for an asset of this type to be 100% complete.",
+      "example": "Thermohygrometer: Yes. Chair: No (it has no serial number and none is asked for)."
+    },
+    "assetTypeModels": {
+      "what": "Opens, below the table, the list of MODELS of this type. In Alta Activos you only choose one of these models and type the serial number; the rest of the data comes from the model.",
+      "example": "In the Rack type you open «View models» and add «Selective rack 2.7 m · SR-2700»."
+    },
+    "assetModelsPanel": {
+      "what": "The models of the chosen type: what used to be typed asset by asset (purchase name, custom name, model, shape, measurements and weight) is typed once here. A model is never deleted: it is set to Inactive.",
+      "example": "The four 2.7 m racks of the warehouse use the same model «SR-2700»."
+    },
+    "assetModelsAdd": {
+      "what": "Adds a new model to this type. It is filled in with a click on each cell; until it has all its data it is not offered in Alta Activos.",
+      "example": "You add «Selective rack 3.6 m» with its measurements and weight and it can be chosen."
+    },
+    "assetModelName": {
+      "what": "The name the asset was bought under. If it changes, it is updated in every asset that uses the model.",
+      "example": "Selective rack 2.7 m."
+    },
+    "assetModelCustom": {
+      "what": "The name it is known by inside (optional). It is the one shown on the floor plan; if missing, the purchase name is shown. If it changes, it is updated in all its assets.",
+      "example": "Aisle rack."
+    },
+    "assetModelNumber": {
+      "what": "The manufacturer's model number. It is required for the model to be complete.",
+      "example": "SR-2700."
+    },
+    "assetModelShape": {
+      "what": "Rectangular, Cylindrical or Irregular. It decides how the volume is calculated. With assets using the model, the shape is closed.",
+      "example": "A rack is Rectangular; a tank is Cylindrical."
+    },
+    "assetModelSize": {
+      "what": "Height, length and depth in centimeters. In a cylindrical shape the depth equals the length (the diameter). With assets using the model, the measurements are closed because the floor plan was already drawn with them.",
+      "example": "270 high, 120 long and 100 deep."
+    },
+    "assetModelWeight": {
+      "what": "The weight in kilograms. It is required for the model to be complete.",
+      "example": "95 kg."
+    },
+    "assetModelVolume": {
+      "what": "The volume in m³. It is calculated from the measurements (rectangular: height × length × depth; cylindrical: π × (length ÷ 2)² × height). Only in the Irregular shape is it typed.",
+      "example": "270 × 120 × 100 cm = 3.240 m³."
+    },
+    "assetModelStatus": {
+      "what": "Active or Inactive. An inactive model, or one marked «Incomplete», is not offered when adding or changing an asset in Alta Activos; assets that already have it keep it.",
+      "example": "You stop buying the 3.6 m rack: you set it to Inactive."
+    },
+    "assetModelUse": {
+      "what": "How many Alta Activos assets use this model. While it is more than zero, its shape, measurements and weight are closed.",
+      "example": "4 assets use «SR-2700»."
+    },
     "assetTypeCodeLetter": {
       "what": "One or two letters the code of this type's assets starts with in Alta Activos (Asset Registration). Two letters give more combinations and repeat less (RK001, ES001, HT001). They must be different for each type and once assets of this type exist they can no longer be changed (their codes carry them). Z, H, N, E and P alone are not allowed: they are the Locator pieces. With no letters, assets of this type cannot be registered.",
       "example": "Rack uses R (R001), Desk uses ES (ES001) and Thermo-hygrometer uses HT (HT001)."
+    },
+    "assetModelPicker": {
+      "what": "The asset model, from the list of models of its type (added in Catalogs > Fixed Assets). When chosen, the purchase name, custom name, model, shape, measurements and weight are filled in and closed. An older asset keeps what it had until its model is chosen; that day its data is replaced by the model data.",
+      "example": "You choose «Selective rack 2.7 m · SR-2700» and only the serial number is left to type."
     },
     "assetNew": {
       "what": "Registers an asset: everything inside the site that is kept for use (racks, furniture, sensors, telephones, printers…). Articles (SKU) are what is distributed; assets are what is used.",
@@ -5940,35 +6026,35 @@
       "example": "A rack is for storing; a forklift, for operating; a telephone, for administering."
     },
     "assetPurchaseName": {
-      "what": "How the asset was bought: the name on the invoice or purchase order. Required.",
-      "example": "Selective rack 2.7 m SR-2700."
+      "what": "How the asset was bought: the name on the invoice or purchase order. It comes from the chosen MODEL (added in Catalogs > Fixed Assets) and is not typed here.",
+      "example": "Selective rack 2.7 m."
     },
     "assetCustomName": {
-      "what": "What you call the asset. Optional; the plan and the sheets show this name and, if empty, the purchase name.",
-      "example": "Aisle 1 rack."
+      "what": "What you call the asset. It comes from the model and is optional; the floor plan and the sheets show this name and, if empty, the purchase name.",
+      "example": "Aisle rack."
     },
     "assetModel": {
-      "what": "The model of the asset, the one on its plate or box.",
+      "what": "The asset model, the one on its plate or box. It comes from the chosen model.",
       "example": "SR-2700."
     },
     "assetSerial": {
-      "what": "The serial number (S/N) of the asset, the one on its plate.",
+      "what": "The serial number (S/N) of the asset, the one on its plate. It is the only thing typed by hand for each asset. If its type has no serial number (chairs, tables) it does not apply.",
       "example": "RK-88213."
     },
     "assetShape": {
-      "what": "The shape of the asset: rectangular (a box), cylindrical (a drum or tank) or irregular (any other). The shape is used to calculate the volume.",
+      "what": "The shape of the asset: rectangular (a box), cylindrical (a drum or a tank) or irregular (any other). It comes from the model and the volume depends on it.",
       "example": "A rack is rectangular; a water drum, cylindrical; a chair, irregular."
     },
     "assetSize": {
-      "what": "Height, length and depth, in centimeters. In a cylindrical shape the length is the diameter and the depth equals the length. In an irregular one they are the measures of the box that contains it.",
+      "what": "Height, length and depth, in centimeters. They come from the model. In a cylindrical shape the length is the diameter and the depth equals the length. In an irregular one they are the measurements of the box that contains it.",
       "example": "270 high × 120 long × 100 deep."
     },
     "assetWeight": {
-      "what": "How much the asset weighs, in kilograms.",
+      "what": "How much the asset weighs, in kilograms. It comes from the model.",
       "example": "95 kg."
     },
     "assetVolume": {
-      "what": "The volume in m³. It is calculated automatically: height × length × depth (rectangular) or π × (length ÷ 2)² × height (cylindrical). In the irregular shape you type it.",
+      "what": "The volume in m³. It comes from the model and is calculated from its measurements: height × length × depth (rectangular) or π × (length ÷ 2)² × height (cylindrical). In the irregular shape it was typed by whoever added the model.",
       "example": "270 × 120 × 100 cm = 3.240 m³."
     },
     "assetPhotos": {
