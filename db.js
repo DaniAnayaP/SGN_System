@@ -3727,6 +3727,8 @@ const TABLE_GRANT_PATHS = {
     'transito-equipos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-transito-equipos' },
     'incidentes-criterios': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-incidentes-criterios' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
+    // Operaciones > QR's > Compra Pedido Manual: sus botones Descargar PDF y Descargar Excel (colCpPdf, colCpExcel)
+    'compra-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-compra-pedido-manual' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
     'nuestros-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestros-traslados' },
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
@@ -13301,6 +13303,21 @@ function seedAssetModelLeaves() {
     if (alta) seedLeavesForScreenHolders(ASSET_MODEL_PICKER_SEED_KEY, alta, levels.map((level) => `${alta.submenuPrefix}/colActElegirModelo/${level}`), 'the Alta Activos model picker column', { contractOnly: true });
 }
 
+// Operaciones > QR's > Compra Pedido Manual y Surtido Pedido Manual (2026-11-12): las dos pantallas nuevas y los botones de descargar de Compra los reciben, una sola vez, quienes ya tienen la pantalla Pedido Manual (lo que se baja
+// sale de los mismos pedidos que ya ven). Los botones «Solo ver» y «Ver y operar», como el de descargar del Pedido Manual.
+const COMPRA_SURTIDO_SEED_KEY = 'seed-compra-surtido-pedido-manual-v1';
+function seedCompraSurtidoPedidoManualGrants() {
+    const pedido = TABLE_GRANT_PATHS['pedido-manual'];
+    const compra = TABLE_GRANT_PATHS['compra-pedido-manual'];
+    if (!pedido || !compra) return;
+    const leaves = [
+        'cat-operaciones/cat-operaciones-centro-dist-compra-pedido-manual',
+        'cat-operaciones/cat-operaciones-centro-dist-surtido-pedido-manual',
+        ...['colCpPdf', 'colCpExcel'].flatMap((col) => ['solo-ver', 'ver-y-operar'].map((level) => `${compra.submenuPrefix}/class-botones/${col}/${level}`)),
+    ];
+    seedLeavesForScreenHolders(COMPRA_SURTIDO_SEED_KEY, pedido, leaves, "the QR's Compra and Surtido Pedido Manual screens");
+}
+
 // Siembra de Opciones de Búsqueda (definida arriba): aquí ya existe todo lo que usa findPantallaNode.
 seedColumnSearchOptionGrants();
 seedLayoutNewIconGrants();
@@ -13318,6 +13335,7 @@ seedPmDescargarSoloVer();
 seedPresentacionesCatalogGrants();
 seedRelacionEnvioGrants();
 seedAltaActivosGrants();
+seedCompraSurtidoPedidoManualGrants();
 seedAssetModelLeaves();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();

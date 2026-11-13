@@ -8579,6 +8579,34 @@ td.sku-status-inactive{ font-style: italic; }
 .asset-model-tag{ display: inline-block; margin-left: 0.4rem; padding: 0.05rem 0.5rem; border-radius: 999px; background: #fef0c7; color: #93370d; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
 .asset-models-open{ display: inline-flex; align-items: center; gap: 0.25rem; white-space: nowrap; }
 td.asset-model-missing select{ border-color: #b26a00; background-color: #fff3dc; color: #b26a00; }
+/* Compra Pedido Manual (Operaciones > QR's): los filtros, las listas con casillas y las dos tablas (totales y desglose) */
+.cp{ display: flex; flex-direction: column; gap: 0.7rem; padding: 0.2rem 0 1rem; }
+.cp-filters{ display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.7rem 1rem; padding: 0.7rem 0.9rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background-color: var(--color-surface); }
+.cp-field{ display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.cp-field > label{ font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-secondary); }
+.cp-box{ min-width: 9.5rem; padding: 0.35rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background-color: var(--color-surface); color: var(--color-text-primary); font: inherit; font-size: 0.85rem; }
+.cp-box:focus-visible{ outline: 2px solid var(--color-accent, #7d3f8f); outline-offset: 1px; }
+.cp-multi{ position: relative; }
+.cp-multi-btn{ display: inline-flex; align-items: center; justify-content: space-between; gap: 0.6rem; width: 100%; min-width: 12rem; text-align: left; cursor: pointer; }
+.cp-multi-btn::after{ content: "▾"; color: var(--color-text-secondary); }
+.cp-panel{ position: absolute; z-index: 60; top: calc(100% + 0.25rem); left: 0; min-width: 100%; width: max-content; max-width: 22rem; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background-color: var(--color-surface); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; gap: 0.3rem; }
+.cp-panel[hidden]{ display: none; }
+.cp-search{ width: 100%; padding: 0.3rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background-color: var(--color-surface); color: var(--color-text-primary); font: inherit; font-size: 0.82rem; }
+.cp-opts{ max-height: 14rem; overflow-y: auto; display: flex; flex-direction: column; }
+.cp-opt{ display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.4rem; border-radius: 0.5rem; font-size: 0.85rem; cursor: pointer; }
+.cp-opt:hover{ background-color: color-mix(in srgb, var(--color-accent, #7d3f8f) 10%, transparent); }
+.cp-opt input{ accent-color: var(--color-accent, #7d3f8f); }
+.cp-opt-all{ font-weight: 700; }
+.cp-opt-empty{ padding: 0.4rem; color: var(--color-text-secondary); font-size: 0.82rem; }
+.cp-downloads{ display: flex; flex-wrap: wrap; gap: 0.5rem; margin-left: auto; }
+.cp-downloads .btn{ display: inline-flex; align-items: center; gap: 0.35rem; }
+.cp-title{ margin: 0.4rem 0.1rem 0; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-secondary); }
+.cp-note{ margin: 0; font-size: 0.8rem; color: var(--color-text-secondary); }
+.cp-scroll{ max-height: min(30rem, 56vh); overflow: auto; border: 1px solid var(--color-border); border-radius: 0.6rem; background-color: var(--color-surface); }
+.cp-table td.cp-code{ font-weight: 700; }
+.cp-table td.cp-num, .cp-table th.cp-num{ text-align: right; font-variant-numeric: tabular-nums; }
+.cp-table tr.cp-group td{ background-color: color-mix(in srgb, var(--color-accent, #7d3f8f) 12%, var(--color-surface)); font-weight: 700; }
+.cp-table tr.cp-sum td{ background-color: color-mix(in srgb, #2c8f4a 12%, var(--color-surface)); font-weight: 700; }
 .asset-models-open.is-open{ border-color: var(--color-accent, #7d3f8f); color: var(--color-accent, #7d3f8f); }
 /* «Editar» con elección de datos (Edición Código): lo no marcado queda cerrado, lo marcado va en rojo mientras está pendiente y en verde cuando ya se llenó */
 td.sku-cell-locked{ opacity: 0.6; }

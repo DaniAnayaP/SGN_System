@@ -2409,6 +2409,21 @@
         },
         {
           "id": "cat-operaciones-centro-dist-qr-ficha", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistQrFicha", "abbrKeys": ["menu.opCentroDistQrFichaAbbr1", "menu.opCentroDistQrFichaAbbr2"], "icon": "bx-id-card", "href": "OpCentroDistQrFicha.html"
+        },
+        {
+          "id": "cat-operaciones-centro-dist-compra-pedido-manual", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistCompraPedidoManual", "abbrKeys": ["menu.opCentroDistCompraPedidoManualAbbr1", "menu.opCentroDistCompraPedidoManualAbbr2"], "icon": "bx-receipt", "href": "OpCentroDistCompraPedidoManual.html",
+          "submenu": [
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colCpPdf", "labelKey": "main.colCpPdf", "permissionOnly": true },
+                { "id": "colCpExcel", "labelKey": "main.colCpExcel", "permissionOnly": true }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "cat-operaciones-centro-dist-surtido-pedido-manual", "sidebarGroup": "qrs", "labelKey": "menu.opCentroDistSurtidoPedidoManual", "abbrKeys": ["menu.opCentroDistSurtidoPedidoManualAbbr1", "menu.opCentroDistSurtidoPedidoManualAbbr2"], "icon": "bx-package", "href": "OpCentroDistSurtidoPedidoManual.html"
         }
       ],
       "cat-gestion": [

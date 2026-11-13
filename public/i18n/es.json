@@ -318,6 +318,12 @@
     "opCentroDistQrFicha": "Ficha del código",
     "opCentroDistQrFichaAbbr1": "Ficha código",
     "opCentroDistQrFichaAbbr2": "Ficha",
+    "opCentroDistCompraPedidoManual": "Compra Pedido Manual",
+    "opCentroDistCompraPedidoManualAbbr1": "Compra ped. manual",
+    "opCentroDistCompraPedidoManualAbbr2": "Compra ped.",
+    "opCentroDistSurtidoPedidoManual": "Surtido Pedido Manual",
+    "opCentroDistSurtidoPedidoManualAbbr1": "Surtido ped. manual",
+    "opCentroDistSurtidoPedidoManualAbbr2": "Surtido ped.",
     "opCentroDistTemperaturas": "Temperaturas",
     "opCentroDistSeguridad": "Seguridad",
     "adminMapaCalor": "Mapa de calor",
@@ -3380,6 +3386,28 @@
     "colPmCantidad": "Cantidad",
     "colPmFechaRequerida": "Fecha requerida",
     "pmLoAntesPosible": "Urgente",
+    "colCpPdf": "Descargar PDF",
+    "colCpExcel": "Descargar Excel",
+    "cpFiltroPedido": "Pedido",
+    "cpFiltroDesde": "Fecha desde",
+    "cpFiltroHasta": "Fecha hasta",
+    "cpFiltroLugar": "Lugar que solicita",
+    "cpFiltroEstatus": "Estatus",
+    "cpTodos": "Todos",
+    "cpTodosN": "Todos ({n})",
+    "cpNdeM": "{n} de {m}",
+    "cpBuscar": "Buscar…",
+    "cpSinOpciones": "Sin opciones",
+    "cpSinLugar": "Sin lugar",
+    "cpTotalesTitulo": "Totales por código",
+    "cpDesgloseTitulo": "Desglose: quién pide qué",
+    "cpPedidos": "Pedidos",
+    "cpUnPedido": "{n} pedido",
+    "cpNPedidos": "{n} pedidos",
+    "cpTotalFila": "{codigos} códigos · {renglones} renglones",
+    "cpVacio": "No hay pedidos con esos filtros.",
+    "cpHdrCentro": "Centro de costos",
+    "cpHdrGenerado": "Generado",
     "colPmEstatus": "Estatus",
     "colPmOrigen": "Origen",
     "colPmQr": "Código QR",
@@ -5947,6 +5975,50 @@
     "assetTypeLetter": {
       "what": "Cómo se dibuja este tipo de activo en el Layout: Anaquel, Rack, Gabeta, Tarima en piso, Frío o Rack móvil. Sin dibujo propio, su activo conserva el que ya tenía.",
       "example": "Estante se dibuja como Anaquel y Refrigerador como Frío."
+    },
+    "cpPantalla": {
+      "what": "Todo lo que se pidió con el QR de Pedido Manual, junto, para comprar: arriba cuánto hay que comprar de cada código y abajo quién pidió qué. Se filtra y se descarga en PDF y en Excel. Solo salen los pedidos de los centros de costos marcados arriba.",
+      "example": "Juntas los pedidos de la semana de todos los lugares y sacas la lista de compra."
+    },
+    "cpFiltroPedido": {
+      "what": "Elige uno, varios o Todos los pedidos (por su folio). Sirve para sacar solo lo que pidieron en ciertos pedidos.",
+      "example": "Marcas PM-0005 y PM-0006 y los totales son solo de esos dos."
+    },
+    "cpFiltroDesde": {
+      "what": "Desde qué día, contando la fecha en que se hizo el pedido (en tu hora). Se puede dejar vacía.",
+      "example": "11/nov/2026: no salen los pedidos de antes de ese día."
+    },
+    "cpFiltroHasta": {
+      "what": "Hasta qué día, contando la fecha en que se hizo el pedido (en tu hora), incluido ese día. Se puede dejar vacía.",
+      "example": "12/nov/2026: salen los pedidos hechos hasta el 12 de noviembre."
+    },
+    "cpFiltroLugar": {
+      "what": "Elige uno, varios o Todos los lugares que solicitan (el «Lugar que solicita» del pedido). «Sin lugar» es para los pedidos que no lo trajeron.",
+      "example": "Marcas solo Hospital Ángeles y ves lo que ese hospital pidió."
+    },
+    "cpFiltroEstatus": {
+      "what": "El estatus del pedido: Pendiente (nada surtido), Parcial (algo surtido) o Surtido (todo). Con Todos salen todos.",
+      "example": "Eliges Pendiente para sacar solo lo que todavía falta."
+    },
+    "cpTotales": {
+      "what": "Una fila por código y presentación con lo que se pidió en total, lo que equivale en la unidad principal y en cuántos pedidos salió. Es lo que hay que comprar.",
+      "example": "Paracetamol, Caja con 20: 10 cajas = 200 tabletas, en 3 pedidos."
+    },
+    "cpDesglose": {
+      "what": "De cada código, quién lo pidió: el pedido, la fecha y hora, el solicitante, el lugar que solicita, la presentación, la cantidad, a cuánto equivale, el día requerido y el estatus. Arriba de cada código va lo que se pidió en total.",
+      "example": "Luis Gómez pidió 3 cajas para el Hospital Muguerza en el pedido PM-0006."
+    },
+    "cpPdf": {
+      "what": "Baja un PDF con lo que se ve: los totales por código y, debajo, el desglose, con los filtros puestos.",
+      "example": "Filtras Pendiente y bajas el PDF para llevarlo a compras."
+    },
+    "cpExcel": {
+      "what": "Baja un Excel con lo que se ve, en dos hojas: una con los totales por código y otra con el desglose, con los filtros puestos.",
+      "example": "Filtras por fecha y bajas el Excel para trabajarlo en tu computadora."
+    },
+    "spPantalla": {
+      "what": "Surtido Pedido Manual: por ahora la pantalla está vacía; falta definir cómo funciona.",
+      "example": "Aquí se verá el surtido de los pedidos del QR."
     },
     "assetTypeSerial": {
       "what": "Si los activos de este tipo llevan número de serie. Sí para sensores, teléfonos e impresoras; No para sillas y mesas. Solo cuando dice Sí, el número de serie cuenta para que un activo de este tipo quede al 100%.",

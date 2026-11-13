@@ -318,6 +318,12 @@
     "opCentroDistQrFicha": "Code sheet",
     "opCentroDistQrFichaAbbr1": "Sheet",
     "opCentroDistQrFichaAbbr2": "Sheet",
+    "opCentroDistCompraPedidoManual": "Manual Order Purchase",
+    "opCentroDistCompraPedidoManualAbbr1": "Purch. man. order",
+    "opCentroDistCompraPedidoManualAbbr2": "Purch. order",
+    "opCentroDistSurtidoPedidoManual": "Manual Order Fulfillment",
+    "opCentroDistSurtidoPedidoManualAbbr1": "Fulfill. man. order",
+    "opCentroDistSurtidoPedidoManualAbbr2": "Fulfill. order",
     "opCentroDistTemperaturas": "Temperatures",
     "opCentroDistSeguridad": "Safety",
     "adminMapaCalor": "Heat map",
@@ -3381,6 +3387,28 @@
     "colPmCantidad": "Quantity",
     "colPmFechaRequerida": "Required date",
     "pmLoAntesPosible": "Urgent",
+    "colCpPdf": "Download PDF",
+    "colCpExcel": "Download Excel",
+    "cpFiltroPedido": "Order",
+    "cpFiltroDesde": "Date from",
+    "cpFiltroHasta": "Date to",
+    "cpFiltroLugar": "Requesting place",
+    "cpFiltroEstatus": "Status",
+    "cpTodos": "All",
+    "cpTodosN": "All ({n})",
+    "cpNdeM": "{n} of {m}",
+    "cpBuscar": "Search…",
+    "cpSinOpciones": "No options",
+    "cpSinLugar": "No place",
+    "cpTotalesTitulo": "Totals by code",
+    "cpDesgloseTitulo": "Breakdown: who orders what",
+    "cpPedidos": "Orders",
+    "cpUnPedido": "{n} order",
+    "cpNPedidos": "{n} orders",
+    "cpTotalFila": "{codigos} codes · {renglones} rows",
+    "cpVacio": "No orders match these filters.",
+    "cpHdrCentro": "Cost center",
+    "cpHdrGenerado": "Generated",
     "colPmEstatus": "Status",
     "colPmOrigen": "Origin",
     "colPmQr": "QR code",
@@ -5948,6 +5976,50 @@
     "assetTypeLetter": {
       "what": "How this asset type is drawn in the Layout: Rack, Pallet rack, Cabinet, Floor pallet, Cold or Mobile rack. With no drawing of its own, its asset keeps the one it already had.",
       "example": "Shelf is drawn as Rack and Refrigerator as Cold."
+    },
+    "cpPantalla": {
+      "what": "Everything ordered with the Manual Order QR, together, for purchasing: above, how much to buy of each code; below, who ordered what. It can be filtered and downloaded as PDF and Excel. Only orders from the cost centers selected above show.",
+      "example": "You put together the week's orders from every place and get the shopping list."
+    },
+    "cpFiltroPedido": {
+      "what": "Choose one, several or All orders (by folio). Useful to get only what was ordered in certain orders.",
+      "example": "You tick PM-0005 and PM-0006 and the totals are only for those two."
+    },
+    "cpFiltroDesde": {
+      "what": "From which day, counting the date the order was made (in your time). It can be left empty.",
+      "example": "11/Nov/2026: orders from before that day do not show."
+    },
+    "cpFiltroHasta": {
+      "what": "Up to which day, counting the date the order was made (in your time), that day included. It can be left empty.",
+      "example": "12/Nov/2026: orders made up to November 12 show."
+    },
+    "cpFiltroLugar": {
+      "what": "Choose one, several or All requesting places (the order's «Requesting place»). «No place» is for orders that did not bring one.",
+      "example": "You tick only Hospital Ángeles and see what that hospital ordered."
+    },
+    "cpFiltroEstatus": {
+      "what": "The order status: Pending (nothing supplied), Partial (something supplied) or Supplied (everything). With All, every order shows.",
+      "example": "You choose Pending to get only what is still missing."
+    },
+    "cpTotales": {
+      "what": "One row per code and presentation with the total ordered, what it equals in the main unit and in how many orders it appeared. This is what has to be bought.",
+      "example": "Paracetamol, Box of 20: 10 boxes = 200 tablets, in 3 orders."
+    },
+    "cpDesglose": {
+      "what": "For each code, who ordered it: the order, date and time, requester, requesting place, presentation, quantity, what it equals, required day and status. Above each code goes the total ordered.",
+      "example": "Luis Gómez ordered 3 boxes for Hospital Muguerza in order PM-0006."
+    },
+    "cpPdf": {
+      "what": "Downloads a PDF with what you see: the totals by code and, below, the breakdown, with the filters applied.",
+      "example": "You filter Pending and download the PDF to take it to purchasing."
+    },
+    "cpExcel": {
+      "what": "Downloads an Excel with what you see, in two sheets: one with the totals by code and one with the breakdown, with the filters applied.",
+      "example": "You filter by date and download the Excel to work on it on your computer."
+    },
+    "spPantalla": {
+      "what": "Manual Order Fulfillment: for now the screen is empty; how it works is still to be defined.",
+      "example": "The fulfillment of the QR orders will be seen here."
     },
     "assetTypeSerial": {
       "what": "Whether the assets of this type have a serial number. Yes for sensors, phones and printers; No for chairs and tables. Only when it says Yes does the serial number count for an asset of this type to be 100% complete.",

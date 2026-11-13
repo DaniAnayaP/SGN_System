@@ -5574,11 +5574,8 @@ function drawPdfBrand(doc, brand) {
     }
 }
 
-// Escribe un Excel (título, datos de arriba opcionales, columnas y renglones) como respuesta; lo usan la ruta de exportar de siempre y el QR del Pedido Manual. brand (opcional): el formato de la compañía arriba.
-async function sendXlsxExport(res, { title, fileBase, header, columns, rows, brand }) {
-    const workbook = new ExcelJS.Workbook();
-    // Excel sheet names: max 31 chars, can't contain \ / * ? : [ ]
-    const sheet = workbook.addWorksheet(title.replace(/[\\/*?:[\]]/g, ' ').slice(0, 31) || 'Reporte');
+// Llena UNA hoja de Excel: datos de arriba opcionales (y la marca de la compañía), columnas y renglones.
+function fillXlsxSheet(workbook, sheet, { header, columns, rows, brand }) {
     const cellText = (cell) => (cell == null ? '' : String(cell));
     if (!header.length) {
         sheet.columns = columns.map((col) => {
@@ -5602,20 +5599,47 @@ async function sendXlsxExport(res, { title, fileBase, header, columns, rows, bra
             sheet.getColumn(i + 1).width = Math.min(60, Math.max(12, widest + 3));
         });
     }
+}
+// Escribe un Excel (título, datos de arriba opcionales, columnas y renglones) como respuesta; lo usan la ruta de exportar de siempre y el QR del Pedido Manual. brand (opcional): el formato de la compañía arriba.
+// sections (opcional): varias tablas, cada una en su propia hoja ({ title, columns, rows }); sin ellas, una sola hoja con columns y rows.
+async function sendXlsxExport(res, { title, fileBase, header, columns, rows, brand, sections }) {
+    const workbook = new ExcelJS.Workbook();
+    const parts = Array.isArray(sections) && sections.length ? sections : [{ title, columns, rows }];
+    const used = new Set();
+    parts.forEach((part) => {
+        // Excel sheet names: max 31 chars, can't contain \ / * ? : [ ]
+        let name = String(part.title || title).replace(/[\\/*?:[\]]/g, ' ').slice(0, 31).trim() || 'Reporte';
+        while (used.has(name.toLowerCase())) name = `${name.slice(0, 28)} ${used.size + 1}`;
+        used.add(name.toLowerCase());
+        fillXlsxSheet(workbook, workbook.addWorksheet(name), { header, columns: part.columns, rows: part.rows, brand });
+    });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', buildContentDisposition(`${fileBase}.xlsx`));
     await workbook.xlsx.write(res);
     res.end();
 }
+// Varias tablas en un solo archivo (Compra Pedido Manual: totales y desglose): [{ title, columns, rows, widths }]. null = no vienen; false = vienen mal.
+function exportSectionsFrom(raw) {
+    if (raw === undefined || raw === null) return null;
+    if (!Array.isArray(raw) || !raw.length || raw.length > 6) return false;
+    const parts = [];
+    for (const p of raw) {
+        if (!p || !Array.isArray(p.columns) || !p.columns.length || !Array.isArray(p.rows) || p.rows.length > EXPORT_MAX_ROWS || p.columns.length > EXPORT_MAX_COLUMNS) return false;
+        parts.push({ title: String(p.title || '').slice(0, 80), columns: p.columns, rows: p.rows, widths: Array.isArray(p.widths) ? p.widths : null });
+    }
+    return parts;
+}
 app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
     const payload = validateExportPayload(req, res);
     if (!payload) return;
     const { columns, rows } = payload;
+    const sections = exportSectionsFrom(req.body.sections);
+    if (sections === false) return res.status(400).json({ message: 'sections are not valid.' });
     const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
     const fileBase = String(req.body.filename || title).trim() || title;
     const header = exportHeaderPairs(req.body.header); // datos que van ARRIBA de la tabla (por ejemplo, los del pedido): [[etiqueta, valor], ...]
-    await sendXlsxExport(res, { title, fileBase, header, columns, rows, brand: exportBrandFromRequest(req) });
+    await sendXlsxExport(res, { title, fileBase, header, columns, rows, brand: exportBrandFromRequest(req), sections });
 });
 
 // pdfkit has no built-in table widget -- draws a simple even-width grid by
@@ -5685,10 +5709,13 @@ function drawPdfTableWrapped(doc, columns, rows, weights, headFill) {
 }
 
 // Escribe un PDF (título, datos de arriba opcionales y una tabla) como respuesta; lo usan la ruta de exportar de siempre y el QR del Pedido Manual.
-function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widths, brand }) {
+// sections (opcional): varias tablas una debajo de otra, cada una con su subtítulo ({ title, columns, rows, widths }).
+function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widths, brand, sections }) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', buildContentDisposition(`${fileBase}.pdf`));
-    const doc = new PDFDocument({ margin: 30, size: 'A4', layout: columns.length > 5 ? 'landscape' : 'portrait' });
+    const parts = Array.isArray(sections) && sections.length ? sections : null;
+    const widest = parts ? Math.max(...parts.map((p) => p.columns.length)) : columns.length;
+    const doc = new PDFDocument({ margin: 30, size: 'A4', layout: widest > 5 ? 'landscape' : 'portrait' });
     doc.pipe(res);
     if (brand) drawPdfBrand(doc, brand);
     else {
@@ -5701,7 +5728,19 @@ function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widt
         });
         doc.moveDown(0.8);
     }
-    if (wrap) drawPdfTableWrapped(doc, columns, rows, Array.isArray(widths) ? widths : null, brand ? brand.scale[1] : undefined);
+    if (parts) {
+        parts.forEach((part, i) => {
+            if (i > 0) doc.moveDown(1);
+            if (doc.y > doc.page.height - doc.page.margins.bottom - 110) doc.addPage();
+            doc.x = doc.page.margins.left;
+            doc.font('Helvetica-Bold').fontSize(11).fillColor('#2A1B30').text(part.title || '', doc.page.margins.left, doc.y);
+            doc.fillColor('#000000');
+            doc.moveDown(0.4);
+            doc.x = doc.page.margins.left;
+            if (wrap) drawPdfTableWrapped(doc, part.columns, part.rows, part.widths, brand ? brand.scale[1] : undefined);
+            else drawPdfTable(doc, part.columns, part.rows);
+        });
+    } else if (wrap) drawPdfTableWrapped(doc, columns, rows, Array.isArray(widths) ? widths : null, brand ? brand.scale[1] : undefined);
     else drawPdfTable(doc, columns, rows);
     doc.end();
 }
@@ -5712,7 +5751,9 @@ app.post('/api/business/export/pdf', requireAuth, (req, res) => {
     const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
     const fileBase = String(req.body.filename || title).trim() || title;
     const header = exportHeaderPairs(req.body.header);
-    sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: !!req.body.wrap, widths: Array.isArray(req.body.widths) ? req.body.widths : null, brand: exportBrandFromRequest(req) });
+    const sections = exportSectionsFrom(req.body.sections);
+    if (sections === false) return res.status(400).json({ message: 'sections are not valid.' });
+    sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: !!req.body.wrap, widths: Array.isArray(req.body.widths) ? req.body.widths : null, brand: exportBrandFromRequest(req), sections });
 });
 
 app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {
@@ -8552,6 +8593,9 @@ app.get('/api/business/pedido-manual', requireAuth, (req, res) => {
         truncated: rows.length >= LIMIT, max: LIMIT,
         canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), MANUAL_ORDER_TABLE_KEY, 'colPmDeleteAuth'),
         canQr: manualCan(req, 'colPmQr'), canLock: manualCan(req, 'colPmQrLock'), canStatus: manualCan(req, 'colPmEstatus'), canDownload: manualCan(req, 'colPmDescargar'),
+        // Compra Pedido Manual (Operaciones > QR's) lee esta misma lista: sus botones de descargar tienen su propia hoja en el árbol
+        canBuyPdf: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'compra-pedido-manual', 'colCpPdf'),
+        canBuyExcel: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'compra-pedido-manual', 'colCpExcel'),
         editable: manualEditable(req),
         orders: rows.map((r) => { const o = manualOrderRowOf(r, centers, client); if (lite) delete o.system; return o; }),
     });
