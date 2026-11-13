@@ -14091,10 +14091,34 @@ function seedMaintenanceGrants() {
     seedLeavesForScreenHolders(MTTO_SCREENS_SEED_KEY, alta, [prev.submenuPrefix, corr.submenuPrefix], 'the Mantenimiento de activos screens');
     const btn = (path, col, levels) => levels.map((level) => `${path.submenuPrefix}/class-botones/${col}/${level}`);
     const leaves = [
-        ...['colMpCreateAuth', 'colMpRegistrar'].flatMap((col) => btn(prev, col, ['solo-ver', 'ver-y-operar'])), ...btn(prev, 'colMpDeleteAuth', ['eliminar']),
+        ...['colMpCreateAuth', 'colMpRegistrar'].flatMap((col) => btn(prev, col, ['solo-ver', 'ver-y-operar'])), ...btn(prev, 'colMpDeleteAuth', ['solo-ver', 'eliminar']),
         ...['colMcCreateAuth', 'colMcAtender', 'colMcCerrar'].flatMap((col) => btn(corr, col, ['solo-ver', 'ver-y-operar'])),
     ];
     seedLeavesForScreenHolders(MTTO_BUTTONS_SEED_KEY, alta, leaves, 'the Mantenimiento de activos buttons', { contractOnly: true });
+}
+// Arreglo de la siembra de arriba (2026-11-13): el botón «Desactivar» de Preventivo se sembró solo con «Eliminar» y le faltó «Solo ver», el nivel de abajo. En el árbol del cliente (Permisos Adicionales) el
+// grupo «Botones», la «Tabla Preventivo» y la pantalla salían en gris («−», incompleto) aunque todo estuviera seleccionado, porque cada contenedor se mide con «Solo ver» de cada botón. Una sola vez se le agrega
+// «Solo ver» a todo dueño que tiene «Eliminar» de ese botón y no tiene «Solo ver» (puestos, usuarios, planes, clientes y sectores). Lo que el botón permite hacer no cambia: ya lo tenían por «Eliminar».
+const MTTO_DELETE_SOLO_VER_SEED_KEY = 'seed-mtto-desactivar-solo-ver-v1';
+function seedMttoDeleteSoloVer() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(MTTO_DELETE_SOLO_VER_SEED_KEY)) return;
+    const path = TABLE_GRANT_PATHS['mtto-preventivo'];
+    if (!path) return;
+    const base = `${path.submenuPrefix}/class-botones/colMpDeleteAuth`;
+    const counts = {};
+    db.transaction(() => {
+        for (const [table, ownerColumn] of [['job_position_grants', 'job_position_id'], ['user_grants', 'user_id'], ['plan_grants', 'plan_id'], ['client_permission_grants', 'client_id'], ['sector_grants', 'business_sector_id']]) {
+            const result = db.prepare(`
+                INSERT INTO ${table} (${ownerColumn}, section_id, item_id, submenu_id)
+                SELECT g.${ownerColumn}, g.section_id, g.item_id, ? FROM ${table} g
+                WHERE g.section_id = ? AND g.item_id = ? AND g.submenu_id = ?
+                  AND NOT EXISTS (SELECT 1 FROM ${table} x WHERE x.${ownerColumn} = g.${ownerColumn} AND x.section_id = g.section_id AND x.item_id = g.item_id AND x.submenu_id = ?)
+            `).run(`${base}/solo-ver`, path.sectionId, path.itemId, `${base}/eliminar`, `${base}/solo-ver`);
+            counts[table] = result.changes;
+        }
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(MTTO_DELETE_SOLO_VER_SEED_KEY);
+    })();
+    console.log(`[db] Added "Solo ver" to the Mantenimiento Preventivo deactivate button where only "Eliminar" was granted (one-time migration): ${JSON.stringify(counts)}.`);
 }
 function migrateCalibrationSensorTypesOnce() {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CALIBRATION_SENSOR_TYPES_KEY)) return;
@@ -14154,6 +14178,7 @@ seedAssetModelLeaves();
 seedAssetAuthorizeLeaf();
 seedCalibrationGrants();
 seedMaintenanceGrants();
+seedMttoDeleteSoloVer();
 migrateCalibrationSensorTypesOnce();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
