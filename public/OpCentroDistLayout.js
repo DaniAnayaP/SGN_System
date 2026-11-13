@@ -2077,7 +2077,31 @@ function frontCellHtml(s, i, dis) {
     const sideName = (side) => t(`main.layoutLado_${side}`);
     const auto = LC.activoFront(state.draft, { ...s, front: undefined });
     const options = ['N', 'S', 'W', 'E'].map((k) => `<option value="${k}"${s.front === k ? ' selected' : ''}>${esc(sideName(k))}</option>`).join('');
-    return `<td><select data-front="${i}" data-help-key="layoutFrenteActivo"${s.front ? ' class="layout-edited"' : ''}${dis ? ' disabled' : ''}><option value=""${s.front ? '' : ' selected'}>${esc(t('main.layoutFrenteAuto', { side: sideName(auto.side).toLowerCase() }))}</option>${options}</select></td>`;
+    return `<td><select data-front="${i}" data-help-key="layoutFrenteActivo"${s.front ? ' class="layout-edited"' : ''}${dis ? ' disabled' : ''}><option value=""${s.front ? '' : ' selected'}>${esc(t('main.layoutFrenteAuto', { side: sideName(auto.side).toLowerCase() }))}</option>${options}</select>${turnButtonHtml(s, i, dis)}</td>`;
+}
+// «Girar 90°» (2026-11-13): un activo que viene de Alta Activos trae sus medidas fijas del registro; para acomodarlo (por ejemplo de pie en una huella angosta) se gira un cuarto de vuelta a la derecha: su largo y su fondo se intercambian en el croquis y
+// su frente gira con él. Ver LayoutCalc.turnAssetSpace.
+function turnButtonHtml(s, i, dis) {
+    if (!s.assetRef) return '';
+    const turns = (Number(s.rot) || 0) * 90;
+    const label = turns ? t('main.layoutGirarActivoGirado', { grados: turns }) : t('main.layoutGirarActivo');
+    return `<button type="button" class="layout-turn-btn${turns ? ' on' : ''}" data-turn="${i}" data-help-key="layoutGirarActivo" aria-label="${esc(label)}" title="${esc(label)}"${dis ? ' disabled' : ''}><i class="bx bx-rotate-right" aria-hidden="true"></i></button>`;
+}
+function turnSpace(i) {
+    if (!state.draft || !canEdit('activos')) return;
+    const space = state.draft.spaces[i];
+    if (!space) return;
+    const check = LC.canTurnSpace(state.draft, space);
+    if (!check.ok) { Dashboard.showToast(t(`main.layoutGirarNo_${check.code}`, { code: space.code, n: check.n }), 'warning'); return; }
+    const asset = (state.fixedAssets || []).find((a) => a.id === space.assetRef);
+    if (!asset) { Dashboard.showToast(t('main.layoutGirarNo_noreg', { code: space.code }), 'warning'); return; }
+    // las posiciones acomodadas a mano giran con el activo (se calculan ANTES, con las medidas de ahora)
+    const turnedPositions = LC.turnSpacePositions(state.draft, space);
+    state.draft.spaces[i] = LC.turnAssetSpace(state.draft, space, asset, { typeKind: asset.typeKind, metric: asset.metric });
+    if (Array.isArray(state.draft.positions) && state.draft.positions.length) state.draft.positions = turnedPositions;
+    state.draft.spaces = LC.deriveSpaces(state.draft).spaces;
+    renderPanel();
+    refreshLive();
 }
 // «la cara trasera» / «las caras frontal, izquierda»
 function facesText(list) {
@@ -2139,6 +2163,8 @@ function toggleFace(btn) {
 $('layout-panel').addEventListener('click', (event) => {
     const btn = event.target.closest('button.layout-face');
     if (btn && !btn.disabled) toggleFace(btn);
+    const turn = event.target.closest('button[data-turn]');
+    if (turn && !turn.disabled) turnSpace(Number(turn.getAttribute('data-turn')));
 });
 $('layout-panel').addEventListener('change', (event) => {
     const sel = event.target.closest('select[data-front]');

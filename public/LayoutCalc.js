@@ -1764,9 +1764,47 @@
         if (f.assetId) next.assetId = f.assetId; else delete next.assetId;
         if (f.assetClassId) next.assetClassId = f.assetClassId; else delete next.assetClassId;
         if (f.type) next.type = f.type;
-        ['ol', 'od', 'oh'].forEach((k) => { if (f[k] !== null) next[k] = f[k]; else delete next[k]; });
+        // un activo girado un cuarto (o tres) de vuelta ocupa en el croquis su fondo a lo ancho (eje x) y su largo a lo alto (eje y); con media vuelta o sin giro, igual que el registro
+        const turned = (Number(space && space.rot) || 0) % 2 === 1;
+        const sizes = { ol: turned ? f.od : f.ol, od: turned ? f.ol : f.od, oh: f.oh };
+        ['ol', 'od', 'oh'].forEach((k) => { if (sizes[k] !== null) next[k] = sizes[k]; else delete next[k]; });
         if (f.metric === 'm2') next.levels = 1;
         return next;
+    }
+    // ---- Girar un activo del Layout ----------------------------------------------------------------------------------------------------------
+    // «Girar 90°» da un cuarto de vuelta a la derecha al activo (space.rot: 0, 1, 2, 3): intercambia su largo y su fondo en el croquis y gira con él su frente (N → E → S → O → N), así sus caras de consumo (frente, atrás, izquierda y derecha) siguen
+    // siendo las del activo. Si el frente salía solo del pasillo, el giro lo deja puesto a mano (el lado al que miraba, girado). Las posiciones acomodadas a mano de un nivel de UNA sola columna giran con el activo (turnSpacePositions). No se gira un
+    // activo con espacios de medidas o lugar propios (x, y, largo o fondo), ni con posiciones a mano en un nivel de varias columnas: esas medidas son del croquis, las columnas siempre se reparten a lo ancho y no hay cómo girarlas con el activo.
+    const TURN_SIDES = ['N', 'E', 'S', 'W'];
+    const turnSide = (side, quarters) => TURN_SIDES[(Math.max(0, TURN_SIDES.indexOf(side)) + (Number(quarters) || 0) + 400) % 4];
+    function canTurnSpace(layout, space) {
+        if (!space || !(Number(space.assetRef) > 0)) return { ok: false, code: 'noref', n: 0 };
+        const bays = (space.bays || []).filter((b) => ['l', 'w', 'x', 'y'].some((k) => b[k] !== undefined && b[k] !== null));
+        if (bays.length) return { ok: false, code: 'bays', n: bays.length };
+        const pos = ((layout && layout.positions) || []).filter((p) => p.spaceId === space.id && p.auto !== true && levelSlots(space, p.n) > 1);
+        if (pos.length) return { ok: false, code: 'positions', n: pos.length };
+        return { ok: true, code: '', n: 0 };
+    }
+    // Las posiciones del Layout con las del activo giradas un cuarto de vuelta a la derecha junto con él (las acomodadas a mano de un nivel de una sola columna: su rectángulo es relativo al activo completo, que de ancho × alto pasa a alto × ancho).
+    // Las automáticas se quedan como están: siguen el tamaño de su espacio. Se llama ANTES de girar el activo (usa sus medidas de ahora).
+    function turnSpacePositions(layout, space) {
+        const derived = deriveSpaces(layout);
+        const now = (derived.spaces || []).find((x) => x.id === space.id) || space;
+        const D = Number(now.d) || 0;
+        const r3 = (n) => Math.round(n * 1000) / 1000;
+        return ((layout && layout.positions) || []).map((p) => {
+            if (p.spaceId !== space.id || p.auto === true || levelSlots(space, p.n) > 1) return p;
+            return { ...p, x: r3(Math.max(0, D - (p.y + p.w))), y: r3(p.x), l: r3(p.w), w: r3(p.l) };
+        });
+    }
+    // El espacio un cuarto de vuelta a la derecha más: asset e opts son los de applyAssetToSpace (las medidas del registro). layout = el Layout al que pertenece (para saber el frente que salía solo).
+    function turnAssetSpace(layout, space, asset, opts) {
+        const derived = deriveSpaces(layout);
+        const withPlace = (derived.spaces || []).find((x) => x.id === space.id) || space;
+        const side = (activoFront(derived, withPlace) || {}).side || 'S';
+        const next = { ...space, rot: ((Number(space.rot) || 0) + 1) % 4, front: turnSide(side, 1) };
+        if (!next.rot) delete next.rot;
+        return applyAssetToSpace(next, asset, opts);
     }
     // Pone en cada activo lo que viene de su huella (ver arriba). Es idempotente: se puede llamar cuantas veces haga falta. active del activo = no está apagado él (off) ni su huella.
     function deriveSpaces(layout) {
@@ -3629,11 +3667,14 @@
             });
             const spaceFaces = sanitizeFaces(s && s.faces); // sus caras de consumo (sin guardar: el frente)
             const spaceFront = s && ['N', 'S', 'E', 'W'].includes(s.front) ? s.front : ''; // el frente puesto a mano (sin él sale del pasillo principal)
+            // Giro del activo (2026-11-13, icono «Girar 90°» del paso Activos): cuartos de vuelta a la derecha (1, 2 o 3; sin giro no se guarda). Solo lo tienen los activos que vienen de Alta Activos: con un cuarto o tres cuartos de vuelta su largo y su fondo se intercambian en el croquis (ver applyAssetToSpace).
+            const spaceRot = assetRef > 0 && [1, 2, 3].includes(Math.round(Number(s && s.rot))) ? Math.round(Number(s.rot)) : 0;
             return {
                 id: idOf(s && s.id, spaceIds, label), footprintId, type, code,
                 ...(ownName ? { ownName } : {}),
                 ...(spaceFaces ? { faces: spaceFaces } : {}),
                 ...(spaceFront ? { front: spaceFront } : {}),
+                ...(spaceRot ? { rot: spaceRot } : {}),
                 levels: Number.isFinite(levels) && levels >= 1 && levels <= 50 ? levels : 1,
                 ...(Number.isFinite(slots) && slots > 1 ? { slots: Math.min(slots, LIMITS.slots) } : {}),
                 ...(bays.length ? { bays } : {}),
@@ -4352,9 +4393,9 @@
                 const first = !seen.has(s.footprintId);
                 seen.add(s.footprintId);
                 const f = byId.get(s.footprintId);
-                const plain = first && f && (s.type || 'rack') === 'rack' && !s.ownName && !s.faces && !s.front && !s.fmt && !s.assetClassId && !s.assetId && !s.assetRef && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off && !OWN_SPACE_KEYS.some((k) => s[k] !== undefined);
+                const plain = first && f && (s.type || 'rack') === 'rack' && !s.ownName && !s.faces && !s.front && !s.rot && !s.fmt && !s.assetClassId && !s.assetId && !s.assetRef && (s.levels || 1) === 1 && (s.slots || 1) === 1 && !s.drawers && !s.off && !OWN_SPACE_KEYS.some((k) => s[k] !== undefined);
                 return !plain;
-            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, ...(s.ownName ? { ownName: s.ownName } : {}), ...(s.faces ? { faces: s.faces } : {}), ...(s.front ? { front: s.front } : {}), type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, ...(s.assetRef ? { assetRef: s.assetRef } : {}), levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax', ...OWN_SPACE_KEYS].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
+            }).map((s) => ({ id: s.id, footprintId: s.footprintId, code: s.code, ...(s.ownName ? { ownName: s.ownName } : {}), ...(s.faces ? { faces: s.faces } : {}), ...(s.front ? { front: s.front } : {}), ...(s.rot ? { rot: s.rot } : {}), type: s.type || 'rack', assetClassId: s.assetClassId || 0, assetId: s.assetId || 0, ...(s.assetRef ? { assetRef: s.assetRef } : {}), levels: s.levels || 1, slots: s.slots || 1, drawers: s.drawers || '', off: !!s.off, ...(s.fmt ? { fmt: s.fmt } : {}), ...['tempMin', 'tempMax', 'humMin', 'humMax', ...OWN_SPACE_KEYS].reduce((acc, k) => (s[k] !== undefined ? { ...acc, [k]: s[k] } : acc), {}) }));
         }
         if (section === 'ubicaciones') return layout.positions || [];
         // Posiciones: solo los activos que ya tienen algún hueco con datos propios (filas, profundidades o medidas distintas de las de por defecto).
@@ -4381,7 +4422,7 @@
         ZONE_TYPES, STORAGE_ZONE_TYPES, ZONE_USES, SPACE_TYPES, DOOR_TYPES, POWER_TYPES, SENSOR_TYPES, deriveSensorZones, assignSensorCodes, assignWallCodes, lockWallCodes, assignItemCodes, lockItemCodes, ITEM_CODES, sensorPoint, SECTIONS, LIMITS, wallSides, wallSideInfo, wallMark, ZONE_RISES, zoneHasLevel, zoneLevelAt, floorLevelAt, raisedVolume, polygonCentroid, zoneClearHeights, floorsOf, floorsAll, rampsAsFloors, rampInfo, rampIssues, assignRampCodes, migrateRamps, floorLevelColors, floorFmtOf, mixHex, rampEndColors, floorOverlaps, floorViolations, newFloorViolations, floorsOfZone, zonesOfFloor, zoneAvgLevel, migrateFloors, assignFloorCodes, splitByRect, clipPolygonToRect, DOOR_OPENS, DOOR_ENDS, DOOR_SIDES, SLIDE_DEPTH, doorOpenOf, doorOpening, doorOpeningClashes, convexOverlap, sanitizeBays, bayOf, bayMeasures, levelLengthSum, sanitizeLevels, levelOf, levelMeasures, levelsTop, levelsWithSame,
         OBSTACLE_KINDS, OBSTACLE_MODES, WALL_THICKNESS, obstacleGeometry, obstacleShapes, obstacleViolations, newObstacleViolations, defaultWalls, netVolume, wallAxis, doorGeometry, migrateDoors, doorViolations, newDoorViolations, wallItemViolations, newWallItemViolations,
         levelSlots, slotsByLevelOf, maxSlots, FACES, FACE_NAMES_ES, sanitizeFaces, facesOfSpace, facesOfLevel, facesOfBay, facesOfPosition, faceVectors, positionCode, positionViolations, newPositionViolations, defaultPositions, ensurePositions, positionsOfBay, positionIndex, legacyPositionNum, activoFront, faceSide, TRANSIT_TYPES, TRANSIT_WHO, TRANSIT_SIZE_DEFAULTS, ZONE_TYPES_CHOOSABLE, transitSizesOf, deriveTransitZones, assignTransitCodes, lockTransitCodes, transitViolations, newTransitViolations, transitArea, transitProblemsOf, rectOverlapsConvex, OBJECT_TYPES, objectDefaultSize, objectPolygon, SAFETY_TYPES, SAFETY_COLORS, SAFETY_LETTER, SAFETY_SIZE_DEFAULTS, HYDRANT_MODELS, WALK_RADIUS, walkColliders, walkBlockedAt, walkFreeSpot, HUNG_SAFETY, SAFETY_AIMS, CAMERA_DEFAULTS, isHungSafety, safetyHangOf, safetyAimOf, safetyFovOf, safetyRangeOf, safetyAimVector, migrateCeilingToSafety, HYDRANT_SIZE_DEFAULTS, hydrantModelOf, safetySizeOf, naveHeightAt, CEILING_TYPES, CEILING_LETTER, CEILING_COLORS, CEILING_SIZE_DEFAULTS, ceilingSizeOf, ceilingLimitAt, ceilingHangOf, deriveCeilingZones, assignCeilingCodes, lockCeilingCodes, ceilingViolations, newCeilingViolations, ROOF_SHAPES, ROOF_COVERS, ROOF_MATERIALS, ROOF_COLORS, ROOF_COLOR_BY_SHAPE, ROOF_SHED_DIRS, ROOF_GABLE_DIRS, roofColorOf, roofRings, roofBox, roofHeightIn, roofSlopePct, roofRidge, roofAt, roofLimitAt, assignRoofCodes, lockRoofCodes, roofViolations, newRoofViolations, deriveSafetyZones, assignSafetyCodes, lockSafetyCodes, safetyViolations, newSafetyViolations, SAFETY_WARN_DAYS, isIsoDate, addDaysIso, safetyNextOf, safetyStatus, safetyCounts, TRANSIT_KINDS, transitWhoInfo, transitCatalogOf, applyTransitCatalog, objectShapeOfKind, PERSON_COLORS, personColorsOf, EQUIP_COLORS, equipColorOf, growPolygonShapes,
-        polygonArea, wallSegment, perimeter, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, assetSpaceFields, applyAssetToSpace, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
+        polygonArea, wallSegment, perimeter, turnSide, canTurnSpace, turnAssetSpace, turnSpacePositions, emptyLayout, computeKpis, metricRows, METRIC_KEYS, sanitizeLayout, sectionData, sectionHasData, rotateLayout, migrateFootprints, assignHuellaCodes, assignZoneCodes, assignSpaceCodes, renumberSpaceCodes, assetSpaceFields, applyAssetToSpace, lockHuellaCodes, lockCodes, ASSET_LETTER, rectInsidePolygon, footprintViolations, newFootprintViolations, footprintZoneChanges, spaceViolations, newSpaceViolations, obstacleInsideViolations, newObstacleInsideViolations, zoneOverlapViolations, newZoneOverlapViolations, polygonOverlapArea, objectInsideViolations, newObjectInsideViolations, outOfContainer, OUT_LEVELS, placeGroup, OWN_SPACE_KEYS, locatorRows, sameFmt, colorClashes, newColorClashes, FMT_HUELLA_DEFAULT, FMT_ASSET_DEFAULT, FILL_ZONE_DEFAULT, zoneOfPoint, deriveFootprintZones, deriveSpaces,
         normalize, heightRange, volumeOf, triangulate, zoneLabelSpot, HALO_STEPS, labelBox, placeZoneLabel, coveredArea,
         FMT_PATTERNS, FMT_LINES, CATEGORY_ICONS, CATEGORY_COLORS, categoryLook, sanitizeFmt, zonePoints, zoneArea, hasPoints, pointInPolygon, onPolygonEdge, BAY_COLORS, bayFmtOf, levelBayRects, levelHasPlaced, levelBayClashes, zoneOutsideNave, zoneViolations, newZoneViolations, zoneLabelAnchor, walkSides, pointsFromSides, sidesFromPoints, closingSides, closingLine, sideOf, sideMeasures, DIR_ANGLE,
     };

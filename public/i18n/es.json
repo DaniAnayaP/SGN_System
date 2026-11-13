@@ -2152,6 +2152,12 @@
     "layoutCarasConsumo": "Caras de consumo",
     "layoutFrente": "Frente",
     "layoutFrenteAuto": "Automático ({side})",
+    "layoutGirarActivo": "Girar 90°",
+    "layoutGirarActivoGirado": "Girado {grados}° · girar 90° más",
+    "layoutGirarNo_noreg": "El activo {code} ya no está en Alta Activos: no se puede girar.",
+    "layoutGirarNo_noref": "Solo se giran los activos que vienen de Alta Activos.",
+    "layoutGirarNo_bays": "El activo {code} tiene {n} espacio(s) con medidas o lugar propios (paso Espacios): esas medidas son del croquis y no giran con el activo. Quítalos o acomódalos para poder girarlo.",
+    "layoutGirarNo_positions": "El activo {code} tiene {n} posición(es) acomodada(s) a mano en un nivel de varias columnas (paso Posiciones): no giran con el activo. Quítalas para poder girarlo.",
     "layoutLado_N": "Arriba",
     "layoutLado_S": "Abajo",
     "layoutLado_W": "Izquierda",
@@ -6694,6 +6700,10 @@
     "layoutCarasConsumo": {
       "what": "Por qué cara o caras se consume (se toma) lo que hay ahí: frente, atrás, izquierda o derecha (la izquierda y la derecha son las de quien mira el activo de frente). Puede ser una o varias. Lo de adentro solo puede usar caras que lo que lo contiene tiene: si el rack solo se consume por el frente, un nivel o un espacio no puede declarar la cara trasera; sí puede quitar caras (un nivel por las 4 y un espacio solo por el frente). Si no las cambias, cada nivel y cada espacio usa las de lo que lo contiene; el activo, sin cambios, se consume por el frente. Lo que no cumpla se marca en rojo y no se guarda.",
       "example": "el rack se consume por el frente y por atrás; el nivel 1 usa las dos y el espacio 2 de ese nivel solo por atrás. Si le quitas «Atrás» al rack, el espacio 2 se marca en rojo."
+    },
+    "layoutGirarActivo": {
+        "what": "Gira el activo un cuarto de vuelta a la derecha (90°) para acomodarlo, por ejemplo de pie en una huella angosta. Sus medidas del registro no cambian: solo se intercambian su largo y su fondo en el croquis, y su frente gira con él (arriba → derecha → abajo → izquierda), así sus caras de consumo siguen siendo las suyas. Cada clic gira 90° más; a los 360° vuelve a como estaba. No se gira un activo con espacios o posiciones acomodados a mano.",
+        "example": "El refrigerador F002 mide 1.5 × 0.7 m y la huella es de 0.7 de ancho: con «Girar 90°» pasa a 0.7 × 1.5 y cabe."
     },
     "layoutFrenteActivo": {
       "what": "La cara del activo que mira al pasillo principal (los pasillos «Principal» del paso Tránsito). Sale sola: si un pasillo principal toca el activo, esa es su cara frontal; si toca dos pasillos principales en esquina, es la de la izquierda al mirar la esquina desde el cruce de los pasillos; si no toca ninguno, mira al principal más cercano y, sin pasillos principales, hacia abajo del croquis. Aquí lo puedes cambiar a mano. Atrás, izquierda y derecha se cuentan desde el frente.",

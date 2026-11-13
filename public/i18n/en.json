@@ -2152,6 +2152,12 @@
     "layoutCarasConsumo": "Consumption faces",
     "layoutFrente": "Front",
     "layoutFrenteAuto": "Automatic ({side})",
+    "layoutGirarActivo": "Turn 90°",
+    "layoutGirarActivoGirado": "Turned {grados}° · turn 90° more",
+    "layoutGirarNo_noreg": "Asset {code} is no longer in Asset Registration: it cannot be turned.",
+    "layoutGirarNo_noref": "Only assets that come from Asset Registration can be turned.",
+    "layoutGirarNo_bays": "Asset {code} has {n} space(s) with their own size or place (Spaces step): those measures belong to the sketch and do not turn with the asset. Remove or rearrange them to turn it.",
+    "layoutGirarNo_positions": "Asset {code} has {n} position(s) placed by hand on a level with several columns (Positions step): they do not turn with the asset. Remove them to turn it.",
     "layoutLado_N": "Up",
     "layoutLado_S": "Down",
     "layoutLado_W": "Left",
@@ -6695,6 +6701,10 @@
     "layoutCarasConsumo": {
       "what": "From which face or faces what is there is consumed (taken): front, back, left or right (left and right are the ones of someone looking at the asset from the front). It can be one or several. What is inside can only use faces that what holds it has: if the rack is only consumed from the front, a level or a space cannot declare the back face; it can remove faces (a level from all 4 and a space only from the front). If you do not change them, each level and each space uses those of what holds it; the asset, unchanged, is consumed from the front. What does not comply turns red and cannot be saved.",
       "example": "the rack is consumed from the front and the back; level 1 uses both and space 2 of that level only the back. If you remove «Back» from the rack, space 2 turns red."
+    },
+    "layoutGirarActivo": {
+        "what": "Turns the asset a quarter turn to the right (90°) to arrange it, for example standing in a narrow footprint. Its registered measures do not change: only its length and depth are swapped on the sketch, and its front turns with it (top → right → bottom → left), so its consumption faces stay its own. Each click turns 90° more; at 360° it is back as it was. An asset with spaces or positions placed by hand cannot be turned.",
+        "example": "Refrigerator F002 measures 1.5 × 0.7 m and the footprint is 0.7 wide: with «Turn 90°» it becomes 0.7 × 1.5 and fits."
     },
     "layoutFrenteActivo": {
       "what": "The face of the asset that looks at the main aisle (the «Main» aisles of the Transit step). It comes by itself: if a main aisle touches the asset, that is its front face; if it touches two main aisles at a corner, it is the one on the left when looking at the corner from where the aisles cross; if it touches none, it looks at the nearest main one and, with no main aisles, down on the plan. You can change it by hand here. Back, left and right are counted from the front.",
