@@ -6,7 +6,7 @@
 //     Cada cantidad lleva su fecha («Para»: desde mañana y hasta 14 días, o lo antes posible): «Todo el pedido para» arriba y, por artículo, «+ Otra fecha» reparte la cantidad en dos fechas (igual que el QR en el celular).
 //     El catálogo (con los lugares, qué código va a cuál y el día de la empresa) se guarda en el celular, así que se puede buscar y armar el pedido SIN señal: el pedido queda en la cola
 //     de AppOfflineSync.js ("En tu celular") y se envía solo al reconectar con la hora a la que se mandó (el servidor guarda aparte la hora en que lo recibió);
-//   · con permiso (Ver y Operar en la columna Estatus del árbol), cada renglón se marca Pendiente / Surtido; sin señal el cambio también queda en la cola.
+//   · el estatus de cada renglón (Pendiente / Parcial / Surtido) solo se VE: ya no se cambia a mano, sale de lo que se surte en Surtido Pedido Manual (Web, 2026-11-12).
 // El nombre de quien pide sale de la cuenta. Es una parte de lo que hace la pantalla Web: corregir cantidades, eliminar y el QR se siguen haciendo allá.
 // ---------------------------------------------------------------------------
 
@@ -142,7 +142,6 @@ let effectiveGrants = [];
 let costCenters = [];
 let orders = [];            // pedidos del servidor (ya agrupados, el más nuevo primero)
 let queuedOrders = [];      // pedidos que se mandaron sin señal y siguen en la cola de este celular
-let canStatus = false;
 let catalog = [];           // los artículos que se pueden pedir
 let catalogPlaces = [];     // «Lugar que solicita»: los lugares de envío activos [{ id, name }]; vacío = la empresa no usa lugares y el pedido es el de siempre (por centro de costos)
 let dayShift = 0;           // días de diferencia entre el día de la empresa y el del reloj del celular cuando se bajó el catálogo (para ofrecer «mañana» y los 14 días también sin señal)
@@ -278,7 +277,8 @@ function groupOrders(lines) {
 }
 function orderStatus(o) {
     const supplied = o.lines.filter((l) => l.status === 'supplied').length;
-    if (!supplied) return 'pending';
+    const started = o.lines.filter((l) => l.status === 'supplied' || l.status === 'partial').length;
+    if (!started) return 'pending';
     return supplied === o.lines.length ? 'supplied' : 'mixed';
 }
 const statusLabel = (s) => (s === 'mixed' ? t('home.pmStatusMixed') : t(`main.pmEstatus_${s}`));
@@ -293,9 +293,7 @@ async function loadOrders() {
         const res = await fetch(apiUrl(`${ORDERS_URL}?lite=1`), { credentials: 'include' });
         if (!res.ok) return;
         const body = await res.json();
-        canStatus = !!body.canStatus;
         orders = groupOrders(body.orders || []);
-        await applyQueuedStatuses();
     } catch { /* sin señal: se queda con lo que ya se veía */ }
 }
 async function loadCostCenters() {
@@ -336,16 +334,6 @@ async function refreshQueuedOrders() {
     });
     queuedOrders.reverse();
 }
-async function applyQueuedStatuses() {
-    const queue = await readQueue();
-    queue.forEach((item) => {
-        const m = item.method === 'POST' && item.url ? STATUS_QUEUE_URL.exec(item.url) : null;
-        if (!m) return;
-        let body;
-        try { body = JSON.parse(item.body || '{}'); } catch { return; }
-        orders.forEach((o) => o.lines.forEach((l) => { if (String(l.id) === m[1] && (body.status === 'pending' || body.status === 'supplied')) l.status = body.status; }));
-    });
-}
 // AppOfflineSync avisa cada 30 s aunque nada haya cambiado: solo se vuelve a dibujar si cambió lo que esta pantalla tenía en la cola, y nunca en "Nuevo pedido" (se perdería lo que se está escribiendo).
 document.addEventListener('sgn:offline-queue-changed', async () => {
     const before = queueMineCount;
@@ -358,33 +346,6 @@ document.addEventListener('sgn:offline-queue-changed', async () => {
 document.addEventListener('sgn:offline-rejected', () => { if (view === 'list') render(); });
 
 function allOrders() { return [...queuedOrders, ...orders].filter(orderVisible); }
-
-// --- Cambiar el estatus de un renglón ---------------------------------------------------------------------------------------------------
-async function changeLineStatus(order, line, status) {
-    if (line.status === status) return;
-    const description = `${t('menu.opCentroDistPedidoManual')} · ${order.folio} · ${line.code}`;
-    const before = line.status;
-    try {
-        const result = await sync().offlineAwareFetch(
-            `${ORDERS_URL}/${line.id}/status`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status }) },
-            description, `${ORDER_RECORD_PREFIX}:${line.id}`, null, { rejectable: true },
-        );
-        if (result.queued) {
-            line.status = status;
-            showToast(t('home.pmStatusSavedOffline'));
-        } else if (!result.ok) {
-            showToast(result.body.message || t('admin.saveError'));
-        } else {
-            line.status = status;
-            showToast(t('home.pmStatusSaved'));
-        }
-    } catch {
-        line.status = before;
-        showToast(t('admin.saveError'));
-    }
-    render();
-}
 
 // --- Pantalla --------------------------------------------------------------------------------------------------------------------------
 const titleEl = document.getElementById('carga-title');
@@ -477,17 +438,12 @@ function renderOrder() {
     o.lines.forEach((l) => {
         const row = document.createElement('div');
         row.className = 'pm-app-line';
-        const editable = canStatus && !o.queued;
         row.innerHTML = `<div class="pm-app-line-main"><p>${esc(l.description)}</p><span>${esc([l.code, ...lineUnitText(l)].filter(Boolean).join(' · '))}</span><span class="pm-app-need">${esc(`${t('home.pmNeedBy')}: ${whenLabel(l.needBy)}`)}</span></div><b class="pm-app-qty">${esc(qtyText(l.quantity))}</b>`;
-        const pill = document.createElement(editable ? 'button' : 'span');
-        if (editable) { pill.type = 'button'; pill.setAttribute('data-help-key', 'pmEstatus'); pill.setAttribute('aria-label', t('main.colPmEstatus')); }
-        pill.className = `pm-app-pill pm-app-pill-${o.queued ? 'queued' : l.status}${editable ? ' pm-app-pill-btn' : ''}`;
-        pill.innerHTML = editable ? `${esc(statusLabel(l.status))} <i class="bx bx-chevron-down" aria-hidden="true"></i>` : esc(o.queued ? t('home.pmOnPhone') : statusLabel(l.status));
-        if (editable) {
-            pill.addEventListener('click', () => openSheet(t('main.colPmEstatus'), [
-                { value: 'pending', label: statusLabel('pending') }, { value: 'supplied', label: statusLabel('supplied') },
-            ], l.status, (value) => changeLineStatus(o, l, value)));
-        }
+        // solo se ve (el estatus sale de lo que se surte en Surtido Pedido Manual); con Parcial también cuánto se lleva
+        const pill = document.createElement('span');
+        pill.className = `pm-app-pill pm-app-pill-${o.queued ? 'queued' : (l.status === 'partial' ? 'mixed' : l.status)}`;
+        const done = l.status === 'partial' && Number(l.suppliedQty) > 0 ? ` ${qtyText(l.suppliedQty)}/${qtyText(l.quantity)}` : '';
+        pill.textContent = o.queued ? t('home.pmOnPhone') : `${statusLabel(l.status)}${done}`;
         row.appendChild(pill);
         bodyEl.appendChild(row);
     });

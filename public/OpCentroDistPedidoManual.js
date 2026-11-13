@@ -18,7 +18,6 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
-const STATUSES = ['pending', 'supplied'];
 
 const t = (key, params) => {
     let text = Dashboard.t(key);
@@ -31,7 +30,6 @@ let editable = {};
 let canDelete = false;
 let canQr = false;
 let canLock = false;
-let canStatus = false;
 let canDownload = false;
 
 (async function init() {
@@ -101,35 +99,20 @@ function searchTextOf(o) {
     return [o.folio, o.name, o.placeName, o.centroCostos, statusText(orderStatus(o)), originText(o.source), ...o.lines.flatMap((l) => [l.code, l.description, l.uom, l.categories, l.packName])].filter(Boolean).join(' ').toLowerCase();
 }
 
-// El estatus del pedido: quien puede cambiarlo ve un selector (cambia TODOS sus artículos); los demás, el nombre. Para marcar un solo artículo se abre «Ver SKU solicitado».
-function statusTag(text, title) {
+// El estatus (2026-11-12, Surtido Pedido Manual): ya NO se cambia aquí. Sale de lo que se surte en Operaciones > QR's > Surtido Pedido Manual: Pendiente = nada surtido, Parcial = una parte, Surtido = lo surtido cubre lo pedido.
+// Aquí solo se ve (con quién y cuándo cambió, al pasar el cursor en cada artículo).
+function statusTag(text, title, status, helpKey) {
     const tag = document.createElement('span');
-    tag.className = 'rel-tag';
+    tag.className = 'sur-tag';
+    tag.dataset.s = status;
     tag.textContent = text;
     if (title) tag.title = title;
+    if (helpKey) tag.setAttribute('data-help-key', helpKey);
     return tag;
-}
-function statusSelect(current, extraPartial, helpKey, label, onChange) {
-    const select = document.createElement('select');
-    select.className = 'pm-status';
-    select.dataset.s = current;
-    select.setAttribute('data-help-key', helpKey);
-    select.setAttribute('aria-label', label);
-    (extraPartial ? ['partial', ...STATUSES] : STATUSES).forEach((s) => {
-        const opt = document.createElement('option');
-        opt.value = s;
-        opt.textContent = statusText(s);
-        if (s === current) opt.selected = true;
-        if (s === 'partial') opt.disabled = true; // «Parcial» solo describe; no se elige
-        select.appendChild(opt);
-    });
-    select.addEventListener('change', () => onChange(select));
-    return select;
 }
 function orderStatusControl(o) {
     const current = orderStatus(o);
-    if (!canStatus) return statusTag(statusText(current));
-    return statusSelect(current, current === 'partial', 'pmEstatusPedido', t('main.colPmEstatus'), (select) => setOrderStatus(o, select));
+    return statusTag(statusText(current), t('main.surEstatusSoloLectura'), current, 'pmEstatusPedido');
 }
 function statusCell(o) {
     const td = document.createElement('td');
@@ -138,43 +121,9 @@ function statusCell(o) {
     return td;
 }
 function lineStatusControl(l) {
-    const title = l.statusAt ? `${l.statusBy || '—'} · ${whenText(l.statusAt)} (UTC ${l.statusAt.replace('T', ' ').replace('Z', '')})` : '';
-    if (!canStatus) return statusTag(statusText(l.status), title);
-    const select = statusSelect(l.status, false, 'pmEstatus', t('main.colPmEstatus'), (sel) => setLineStatus(l, sel));
-    if (title) select.title = title;
-    return select;
-}
-// Cambia un artículo y deja en memoria lo que contestó el servidor; true si se pudo.
-async function postLineStatus(l, next) {
-    try {
-        const res = await fetch(`${API}/${l.id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status: next }) });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok || !body.order) { Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'warning'); return false; }
-        applyLineUpdate(body.order);
-        return true;
-    } catch (err) {
-        console.error('Pedido Manual: failed to change status', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
-        return false;
-    }
-}
-async function setLineStatus(l, select) {
-    select.disabled = true;
-    const ok = await postLineStatus(l, select.value);
-    if (ok) Dashboard.showToast(t('main.pmEstatusCambiado'), 'success');
-    refreshOrder(l.orderId);
-}
-async function setOrderStatus(o, select) {
-    const next = select.value;
-    if (!STATUSES.includes(next)) return;
-    select.disabled = true;
-    let ok = true;
-    for (const l of o.lines.filter((x) => x.status !== next)) {
-        ok = await postLineStatus(l, next);
-        if (!ok) break;
-    }
-    if (ok) Dashboard.showToast(t('main.pmEstatusCambiado'), 'success');
-    refreshOrder(o.orderId);
+    const title = l.statusAt ? `${l.statusBy || '—'} · ${whenText(l.statusAt)} (UTC ${l.statusAt.replace('T', ' ').replace('Z', '')})` : t('main.surEstatusSoloLectura');
+    const supplied = Number(l.suppliedQty) > 0 && l.status !== 'supplied' ? ` (${quantityText(l.suppliedQty)}/${quantityText(l.quantity)})` : '';
+    return statusTag(`${statusText(l.status)}${supplied}`, title, l.status, 'pmEstatus');
 }
 // Pone al día un artículo con lo que mandó el servidor.
 function applyLineUpdate(updated) {
@@ -305,7 +254,6 @@ async function refreshTable() {
         canDelete = !!body.canDelete;
         canQr = !!body.canQr;
         canLock = !!body.canLock;
-        canStatus = !!body.canStatus;
         canDownload = !!body.canDownload;
         document.getElementById('pm-qr-btn').hidden = !canQr;
         document.getElementById('pm-dl-btn').hidden = !canDownload;
@@ -450,7 +398,7 @@ function ensureListModal() {
         listOverlay.hidden = true;
     }, true);
 }
-// «Estatus» de la ventana «Ver SKU solicitado»: un FILTRO de los renglones del pedido (Todo / Pendiente / Surtido). Es solo de vista: no cambia ningún estatus (el del pedido completo se cambia en la tabla de pedidos y el de cada renglón en su select).
+// «Estatus» de la ventana «Ver SKU solicitado»: un FILTRO de los renglones del pedido (Todo / Pendiente / Parcial / Surtido). Es solo de vista: el estatus sale de lo que se surte en Surtido Pedido Manual.
 let listStatusFilter = 'all';
 const visibleLines = (o) => (listStatusFilter === 'all' ? o.lines : o.lines.filter((l) => l.status === listStatusFilter));
 function openListModal(orderId) {
@@ -481,13 +429,13 @@ function renderListModal() {
     metaItem(t('main.colPmLugar'), o.placeName);
     metaItem(t('main.colPmFechaHora'), whenText(o.requestedAt));
     metaItem(t('main.colPmOrigen'), originText(o.source));
-    const counts = { all: o.lines.length, pending: o.lines.filter((l) => l.status === 'pending').length, supplied: o.lines.filter((l) => l.status === 'supplied').length };
+    const counts = { all: o.lines.length, pending: o.lines.filter((l) => l.status === 'pending').length, partial: o.lines.filter((l) => l.status === 'partial').length, supplied: o.lines.filter((l) => l.status === 'supplied').length };
     const filter = document.createElement('select');
     filter.className = 'pm-status';
     filter.dataset.s = listStatusFilter;
     filter.setAttribute('data-help-key', 'pmEstatusFiltro');
     filter.setAttribute('aria-label', t('main.colPmEstatus'));
-    [['all', t('main.pmFiltroTodo')], ['pending', statusText('pending')], ['supplied', statusText('supplied')]].forEach(([value, label]) => {
+    [['all', t('main.pmFiltroTodo')], ['pending', statusText('pending')], ['partial', statusText('partial')], ['supplied', statusText('supplied')]].forEach(([value, label]) => {
         const opt = document.createElement('option');
         opt.value = value;
         opt.textContent = `${label} (${counts[value]})`;

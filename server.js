@@ -171,7 +171,7 @@ const {
     regenerateLayoutPublicToken,
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, findCleaningByRef, finishCleaningFromApp, listOpenCleaningsOf, getCleaningLast, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
-    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, listManualItemShips,getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderWithLines, getManualOrderLine, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
+    MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, listManualItemShips,getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderWithLines, getManualOrderLine, listManualLineDeliveries, getManualDelivery, addManualLineDelivery, voidManualLineDelivery, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
     addTemperatureRecord, findTemperatureByRef, getTemperatureLast, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, findSafetyCheckByRef, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
@@ -570,7 +570,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos' };
+const EXTRA_SCREEN_LABEL_KEYS = { limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -8260,7 +8260,7 @@ const MANUAL_ORDER_SCREEN_LABEL = 'Pedido Manual';
 const MANUAL_ORDER_MAX_LINES = 40;
 const MANUAL_ORDER_MAX_DAYS = 14; // para cuándo: desde mañana y hasta 14 días (o «lo antes posible»)
 const MANUAL_ORDER_SEARCH_FIELDS = ['code', 'desc', 'uom', 'cat'];
-const MANUAL_ORDER_STATUS_LABELS = { pending: 'Pendiente', supplied: 'Surtido' };
+const MANUAL_ORDER_STATUS_LABELS = { pending: 'Pendiente', partial: 'Parcial', supplied: 'Surtido' };
 const publicManualOrderLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
 const publicManualSearchLimiter = rateLimit({ windowMs: 60 * 1000, max: 240, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } }); // más alto: se pide al ir escribiendo
 const manualFolio = (orderId) => `PM-${String(orderId).padStart(4, '0')}`;
@@ -8484,11 +8484,13 @@ app.get('/api/public/pedido-manual/:token/order', publicManualLookupLimiter, (re
     const found = getManualOrderWithLines(row.clientId, orderId, row.costCenterId || 0);
     if (!found) return res.status(404).json({ message: 'No existe ese pedido en este centro de costos.', code: 'NOTFOUND', folio: manualFolio(orderId) });
     const { order, lines } = found;
+    // Parcial por renglón (2026-11-12, Surtido Pedido Manual): el pedido está Pendiente si ningún renglón se surtió ni en parte, Surtido si todos y Parcial en cualquier otro caso; cada renglón trae cuánto se ha surtido.
     const supplied = lines.filter((l) => l.status === 'supplied').length;
+    const started = lines.filter((l) => l.status === 'supplied' || l.status === 'partial').length;
     res.json({
         folio: manualFolio(order.id), createdAt: sqlUtcIso(order.created_at), name: order.requester_name || '', place: order.place_name || '',
-        status: !lines.length || supplied === 0 ? 'pending' : (supplied === lines.length ? 'supplied' : 'partial'), supplied,
-        lines: lines.map((l) => ({ lineNo: l.line_no, code: l.code, description: l.description, uom: l.uom, quantity: l.quantity, needBy: l.need_by || '', packName: l.pack_name || '', packPieces: l.pack_pieces > 0 ? l.pack_pieces : 1, status: l.status === 'supplied' ? 'supplied' : 'pending' })),
+        status: !lines.length || started === 0 ? 'pending' : (supplied === lines.length ? 'supplied' : 'partial'), supplied,
+        lines: lines.map((l) => ({ lineNo: l.line_no, code: l.code, description: l.description, uom: l.uom, quantity: l.quantity, suppliedQty: l.supplied_qty || 0, needBy: l.need_by || '', packName: l.pack_name || '', packPieces: l.pack_pieces > 0 ? l.pack_pieces : 1, status: l.status === 'supplied' || l.status === 'partial' ? l.status : 'pending' })),
         now: new Date().toISOString(),
     });
 });
@@ -8562,6 +8564,7 @@ function manualOrderRowOf(r, centers, client) {
     return {
         id: r.id, orderId: r.order_id, folio: manualFolio(r.order_id), lineNo: r.line_no, cc: r.cost_center_id, centroCostos: cc ? cc.name : '', company: client ? client.company_name : '',
         name: r.requester_name, placeId: r.place_id || 0, placeName: r.place_name || '', code: r.code, description: r.description, uom: r.uom, categories: r.categories, quantity: r.quantity, needBy: r.need_by || '', packId: r.pack_id || 0, packName: r.pack_name || '', packPieces: r.pack_pieces > 0 ? r.pack_pieces : 1,
+        suppliedQty: Number(r.supplied_qty) || 0, missingQty: Math.max(0, Math.round((Number(r.quantity) - (Number(r.supplied_qty) || 0)) * 1000) / 1000),
         status: r.status, statusAt: sqlUtcIso(r.status_at), statusBy: r.status_by || '', requestedAt: sqlUtcIso(r.order_created_at), receivedAt: sqlUtcIso(r.order_received_at), source: r.source,
         editedAt: sqlUtcIso(r.edited_at), editedBy: r.edited_by || '',
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: CODE_RELATION_AREA_LABEL, modulo: CODE_RELATION_MODULE_LABEL, pantalla: MANUAL_ORDER_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.order_created_at }),
@@ -8600,6 +8603,7 @@ app.get('/api/business/pedido-manual', requireAuth, (req, res) => {
         canDelete: !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), MANUAL_ORDER_TABLE_KEY, 'colPmDeleteAuth'),
         canQr: manualCan(req, 'colPmQr'), canLock: manualCan(req, 'colPmQrLock'), canStatus: manualCan(req, 'colPmEstatus'), canDownload: manualCan(req, 'colPmDescargar'),
         // Compra Pedido Manual (Operaciones > QR's) lee esta misma lista: sus botones de descargar tienen su propia hoja en el árbol
+        canSurtir: surCan(req, 'colSurSurtir'), canAnular: surCanAnular(req),
         canBuyPdf: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'compra-pedido-manual', 'colCpPdf'),
         canBuyExcel: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'compra-pedido-manual', 'colCpExcel'),
         editable: manualEditable(req),
@@ -8616,6 +8620,7 @@ app.patch('/api/business/pedido-manual/:id', requireAuth, (req, res) => {
     if (prepared.error) return res.status(400).json({ message: prepared.error, code: prepared.code });
     const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, rec, prepared.patch, MANUAL_ORDER_PATCHABLE_FIELDS, MANUAL_ORDER_TABLE_KEY, `Pedido ${manualFolio(rec.order_id)} · ${rec.code}`);
     const updated = updateManualOrderLine(id, req.user.clientId, appliedPatch, { editedBy: changedByLabel(req) });
+    if (updated && updated.status !== rec.status) logManualStatusChange(req, rec, updated.status);
     const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
     res.json({ order: manualOrderRowOf(updated, centers, getClientById(req.user.clientId)), pendingFields, rejectedFields });
 });
@@ -8625,16 +8630,87 @@ app.post('/api/business/pedido-manual/:id/status', requireAuth, (req, res) => {
     const id = Number(req.params.id);
     const rec = Number.isInteger(id) ? getManualOrderLine(id, req.user.clientId) : null;
     if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
-    if (!manualCan(req, 'colPmEstatus')) return res.status(403).json({ message: 'No tienes permiso para cambiar el estatus.' });
-    const status = String((req.body && req.body.status) || '');
-    if (!MANUAL_ORDER_STATUSES.includes(status)) return res.status(400).json({ message: 'El estatus no es válido.', code: 'STATUS' });
-    const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
-    if (status === rec.status) return res.json({ order: manualOrderRowOf(rec, centers, getClientById(req.user.clientId)) });
-    const updated = setManualOrderLineStatus(id, req.user.clientId, status, changedByLabel(req));
+    // 2026-11-12 (Surtido Pedido Manual): el estatus ya NO se cambia a mano; sale de lo que se va surtiendo en Operaciones > QR's > Surtido Pedido Manual (cantidad, lote, caducidad, quién recibe).
+    return res.status(403).json({ message: 'El estatus ya no se cambia a mano: sale de lo que se surte en Surtido Pedido Manual.', code: 'STATUS_BY_SURTIDO' });
+});
+// ---- Surtido Pedido Manual (Operaciones > QR's) -----------------------------------------------------------------------------------------------------
+// Quien surte anota cada ENTREGA de un renglón (cuánto, lote, caducidad, quién recibe, observaciones); lo surtido (sin las anuladas) da el estatus del renglón: Pendiente, Parcial o Surtido. Solo se marca: no mueve existencias.
+// Surtir pide Ver y Operar en el botón Surtir; anular una entrega pide el permiso Eliminar del botón Anular entrega. Una entrega equivocada NO se borra: se anula y queda en el historial.
+const SURTIDO_TABLE_KEY = 'surtido-pedido-manual';
+const surCan = (req, colKey) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), SURTIDO_TABLE_KEY, colKey);
+const surCanAnular = (req) => !!req.user.isClientAdmin || canDeleteColumn(getUserEffectiveGrants(req.user.sub), SURTIDO_TABLE_KEY, 'colSurAnularAuth');
+const manualDeliveryOf = (d) => ({ id: d.id, lineId: d.line_id, orderId: d.order_id, quantity: d.quantity, lot: d.lot || '', expiry: d.expiry || '', receivedBy: d.received_by || '', notes: d.notes || '', deliveredBy: d.delivered_by || '', deliveredAt: sqlUtcIso(d.delivered_at), voidedAt: sqlUtcIso(d.voided_at), voidedBy: d.voided_by || '' });
+const manualLineLabel = (rec) => `Pedido ${manualFolio(rec.order_id)} · ${rec.code}`;
+// El cambio de estatus del renglón queda en el historial de las dos pantallas (Pedido Manual y Surtido).
+function logManualStatusChange(req, rec, nextStatus) {
     try {
-        logTableChange({ clientId: req.user.clientId, tableKey: MANUAL_ORDER_TABLE_KEY, recordId: rec.id, recordLabel: `Pedido ${manualFolio(rec.order_id)} · ${rec.code}`, action: 'update', fieldKey: 'main.colPmEstatus', oldValue: MANUAL_ORDER_STATUS_LABELS[rec.status] || rec.status, newValue: MANUAL_ORDER_STATUS_LABELS[status], changedBy: changedByLabel(req) });
+        [MANUAL_ORDER_TABLE_KEY, SURTIDO_TABLE_KEY].forEach((tableKey) => logTableChange({ clientId: req.user.clientId, tableKey, recordId: rec.id, recordLabel: manualLineLabel(rec), action: 'update', fieldKey: 'main.colPmEstatus', oldValue: MANUAL_ORDER_STATUS_LABELS[rec.status] || rec.status, newValue: MANUAL_ORDER_STATUS_LABELS[nextStatus] || nextStatus, changedBy: changedByLabel(req) }));
     } catch (err) { console.error('manual order status log failed', err); }
-    res.json({ order: manualOrderRowOf(updated, centers, getClientById(req.user.clientId)) });
+}
+const manualQtyText = (n) => String(Math.round(Number(n) * 1000) / 1000);
+function manualDeliveryText(d, rec) {
+    const parts = [`${manualQtyText(d.quantity)}${rec && rec.pack_name ? ` ${rec.pack_name}` : ''}`];
+    if (d.lot) parts.push(`Lote ${d.lot}`);
+    if (d.expiry) parts.push(`Cad. ${/^\d{4}-\d{2}$/.test(d.expiry) ? `${d.expiry.slice(5)}/${d.expiry.slice(0, 4)}` : d.expiry}`);
+    if (d.received_by) parts.push(`Recibió: ${d.received_by}`);
+    if (d.notes) parts.push(d.notes);
+    return parts.join(' · ');
+}
+const manualExpiryValid = (v) => {
+    if (v === '') return true;
+    if (/^\d{4}-(0[1-9]|1[0-2])$/.test(v)) return Number(v.slice(0, 4)) >= 2000 && Number(v.slice(0, 4)) <= 2100;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(`${v}T00:00:00Z`)) || new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) !== v) return false;
+    return Number(v.slice(0, 4)) >= 2000 && Number(v.slice(0, 4)) <= 2100;
+};
+app.get('/api/business/pedido-manual/:id/deliveries', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getManualOrderLine(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
+    res.set('Cache-Control', 'no-store');
+    res.json({ order: manualOrderRowOf(rec, centers, getClientById(req.user.clientId)), deliveries: listManualLineDeliveries(id, req.user.clientId).map(manualDeliveryOf), canSurtir: surCan(req, 'colSurSurtir'), canAnular: surCanAnular(req) });
+});
+app.post('/api/business/pedido-manual/:id/deliveries', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getManualOrderLine(id, req.user.clientId) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
+    if (!surCan(req, 'colSurSurtir')) return res.status(403).json({ message: 'No tienes permiso para surtir.', code: 'DENIED' });
+    const src = req.body && typeof req.body === 'object' ? req.body : {};
+    const oneLine = (v, max) => String(v === undefined || v === null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
+    const quantity = src.quantity;
+    if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity <= 0 || quantity > 999999) return res.status(400).json({ message: 'La cantidad no es válida.', code: 'QTY' });
+    const receivedBy = oneLine(src.receivedBy, 60);
+    if (!receivedBy) return res.status(400).json({ message: 'Falta quién recibe.', code: 'RECEIVER' });
+    const expiry = oneLine(src.expiry, 10);
+    if (!manualExpiryValid(expiry)) return res.status(400).json({ message: 'La caducidad no es válida (mes y año, por ejemplo 03/2028).', code: 'EXPIRY' });
+    const out = addManualLineDelivery({ lineId: id, clientId: req.user.clientId, quantity, lot: oneLine(src.lot, 60), expiry, receivedBy, notes: oneLine(src.notes, 300), deliveredBy: changedByLabel(req) });
+    if (out.error === 'NOTFOUND') return res.status(404).json({ message: 'Ese registro no existe.' });
+    if (out.error === 'DONE') return res.status(409).json({ message: 'Este renglón ya está surtido completo.', code: 'DONE' });
+    if (out.error === 'MAX') return res.status(400).json({ message: `Solo falta surtir ${manualQtyText(out.missing)}: la cantidad no puede pasar de eso.`, code: 'MAX', missing: out.missing });
+    try {
+        logTableChange({ clientId: req.user.clientId, tableKey: SURTIDO_TABLE_KEY, recordId: rec.id, recordLabel: manualLineLabel(rec), action: 'update', fieldKey: 'main.colSurEntrega', oldValue: '', newValue: manualDeliveryText(out.delivery, rec), changedBy: changedByLabel(req) });
+    } catch (err) { console.error('manual delivery log failed', err); }
+    if (out.line.status !== out.before.status) logManualStatusChange(req, out.before, out.line.status);
+    const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
+    res.status(201).json({ delivery: manualDeliveryOf(out.delivery), order: manualOrderRowOf(out.line, centers, getClientById(req.user.clientId)) });
+});
+app.post('/api/business/pedido-manual/deliveries/:deliveryId/void', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const deliveryId = Number(req.params.deliveryId);
+    const found = Number.isInteger(deliveryId) ? getManualDelivery(deliveryId, req.user.clientId) : null;
+    if (!found) return res.status(404).json({ message: 'Esa entrega no existe.' });
+    if (!surCanAnular(req)) return res.status(403).json({ message: 'No tienes permiso para anular entregas.', code: 'DENIED' });
+    const out = voidManualLineDelivery(deliveryId, req.user.clientId, changedByLabel(req));
+    if (out.error === 'NOTFOUND') return res.status(404).json({ message: 'Esa entrega no existe.' });
+    if (out.error === 'VOIDED') return res.status(409).json({ message: 'Esa entrega ya estaba anulada.', code: 'VOIDED' });
+    try {
+        logTableChange({ clientId: req.user.clientId, tableKey: SURTIDO_TABLE_KEY, recordId: out.before.id, recordLabel: manualLineLabel(out.before), action: 'update', fieldKey: 'main.colSurEntregaAnulada', oldValue: manualDeliveryText(out.delivery, out.before), newValue: 'Anulada', changedBy: changedByLabel(req) });
+    } catch (err) { console.error('manual delivery void log failed', err); }
+    if (out.line.status !== out.before.status) logManualStatusChange(req, out.before, out.line.status);
+    const centers = new Map(listCostCenters(req.user.clientId, req.user.isTestAccount).map((c) => [c.id, c]));
+    res.json({ delivery: manualDeliveryOf(out.delivery), order: manualOrderRowOf(out.line, centers, getClientById(req.user.clientId)) });
 });
 app.delete('/api/business/pedido-manual/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });

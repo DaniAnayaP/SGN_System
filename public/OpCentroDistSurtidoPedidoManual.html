@@ -365,9 +365,64 @@
         </div>
 
         <div class="page-content">
-            <div class="empty-state" data-help-key="spPantalla">
-                <i class="bx bx-package" aria-hidden="true"></i>
-                <p data-i18n="main.emptyStateText">No data yet.</p>
+            <div class="filter-bar" id="filter-bar">
+                <div class="filter-bar-panel">
+                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
+                    <div class="filter-bar-fields">
+                        <div class="filter-field">
+                            <label for="filter-search-text" data-i18n="main.filterCatSearchHint">Code, name, description...</label>
+                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterCatSearchHint" placeholder="Code, name, description...">
+                        </div>
+                    </div>
+                    <div class="filter-bar-actions">
+                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cp-filters" id="sur-filters" data-help-key="surFiltroEstatus"></div>
+            <p class="cp-note" id="sur-note" hidden></p>
+            <div class="data-table-wrapper" data-table-id="surtido-pedido-manual">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="main.colSysEmpresa" data-col="colSysEmpresa" data-group="menu.classControlInterno" class="col-system">Company</th>
+                            <th data-i18n="main.colSysArea" data-col="colSysArea" data-group="menu.classControlInterno" class="col-system">Area</th>
+                            <th data-i18n="main.colSysModulo" data-col="colSysModulo" data-group="menu.classControlInterno" class="col-system">Module</th>
+                            <th data-i18n="main.colSysPantalla" data-col="colSysPantalla" data-group="menu.classControlInterno" class="col-system">Screen</th>
+                            <th data-i18n="main.colSysCentroCostos" data-col="colSysCentroCostos" data-group="menu.classControlInterno" class="col-system">Cost Center</th>
+                            <th data-i18n="main.colSysFecha" data-col="colSysFecha" data-group="menu.classControlInterno" class="col-system">Date (dd/mmm/yyyy)</th>
+                            <th data-i18n="main.colSysDiaNum" data-col="colSysDiaNum" data-group="menu.classControlInterno" class="col-system">Day (dd)</th>
+                            <th data-i18n="main.colSysDiaTexto" data-col="colSysDiaTexto" data-group="menu.classControlInterno" class="col-system">Day (ddd)</th>
+                            <th data-i18n="main.colSysMesNum" data-col="colSysMesNum" data-group="menu.classControlInterno" class="col-system">Month (mm)</th>
+                            <th data-i18n="main.colSysMesTexto" data-col="colSysMesTexto" data-group="menu.classControlInterno" class="col-system">Month (mmm)</th>
+                            <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group="menu.classControlInterno" class="col-system">Year (yyyy)</th>
+                            <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
+                            <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
+                            <th data-i18n="main.colCatRegistroUnico" data-col="colCatRegistroUnico" data-group="menu.classControlInterno" class="col-system">Unique Registration</th>
+                            <th data-i18n="main.colPmFolio" data-col="colSurFolio" data-group="menu.opCentroDistSurtidoPedidoManual">Folio</th>
+                            <th data-i18n="main.colPmFechaHora" data-col="colSurFechaHora" data-group="menu.opCentroDistSurtidoPedidoManual">Date and time</th>
+                            <th data-i18n="main.colPmSolicitante" data-col="colSurSolicitante" data-group="menu.opCentroDistSurtidoPedidoManual">Requested by</th>
+                            <th data-i18n="main.colPmLugar" data-col="colSurLugar" data-group="menu.opCentroDistSurtidoPedidoManual">Requesting place</th>
+                            <th data-i18n="main.colPmCodigo" data-col="colSurCodigo" data-group="menu.opCentroDistSurtidoPedidoManual">Code</th>
+                            <th data-i18n="main.colPmDescripcion" data-col="colSurDescripcion" data-group="menu.opCentroDistSurtidoPedidoManual">Description</th>
+                            <th data-i18n="main.colPmPresentacion" data-col="colSurPresentacion" data-group="menu.opCentroDistSurtidoPedidoManual">Presentation</th>
+                            <th data-i18n="main.colSurPedido" data-col="colSurPedido" data-group="menu.opCentroDistSurtidoPedidoManual">Ordered</th>
+                            <th data-i18n="main.colSurSurtido" data-col="colSurSurtido" data-group="menu.opCentroDistSurtidoPedidoManual">Fulfilled</th>
+                            <th data-i18n="main.colSurFalta" data-col="colSurFalta" data-group="menu.opCentroDistSurtidoPedidoManual">Missing</th>
+                            <th data-i18n="main.colPmFechaRequerida" data-col="colSurFechaRequerida" data-group="menu.opCentroDistSurtidoPedidoManual">Needed by</th>
+                            <th data-i18n="main.colPmEstatus" data-col="colSurEstatus" data-group="menu.opCentroDistSurtidoPedidoManual">Status</th>
+                            <th data-i18n="main.colActions" data-col="actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="data-table-empty-cell" colspan="27">
+                                <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </main>

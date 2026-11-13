@@ -197,6 +197,7 @@
         .cs-st{ display:block; font-size:.68rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
         .cs-st.supplied{ color:var(--xl); }
         .cs-st.pending{ color:var(--pdf); }
+        .cs-st.partial{ color:var(--amber); }
         /* Presentación de cada artículo: una lista pequeña (pastilla) debajo del nombre; en la hoja del celular va arriba */
         select.packsel{ display:block; width:max-content; max-width:100%; margin-top:.3rem; font:600 .72rem system-ui,sans-serif; border:1px solid var(--accent); border-radius:999px; padding:.18rem .6rem; background:var(--soft); color:var(--accent); cursor:pointer; }
         .oline select.packsel{ margin-top:.25rem; }
@@ -1367,7 +1368,7 @@ function consultResultHtml(o) {
     const stText = { pending: TEXT.stPending, partial: TEXT.stPartial, supplied: TEXT.stSupplied };
     const itemsText = fill(o.supplied === 1 ? TEXT.csItemsVal : TEXT.csItemsVals, { n: o.lines.length, s: o.supplied });
     const meta = [[TEXT.csWho, o.name], [TEXT.csPlace, o.place], [TEXT.csSent, when], [TEXT.csItems, itemsText]].filter(([, v]) => v).map(([k, v]) => `<span>${esc(k)}</span><b>${esc(v)}</b>`).join('');
-    const lines = o.lines.map((l) => `<div class="cs-it"><div><b>${esc(l.description)}</b><small>${esc([l.code, l.packName || l.uom].filter(Boolean).join(' · '))}${l.packName && l.packPieces !== 1 ? ` · ${esc(fill(TEXT.packEquals, { n: `${fmtQty(Math.round(l.quantity * l.packPieces * 1000) / 1000)} ${l.uom || ''}`.trim() }))}` : ''}</small><small>${esc(TEXT.csFor)}: ${esc(whenLabel(l.needBy))}</small></div><div class="cs-q">${esc(fmtQty(l.quantity))}<small> ${esc(l.packName || l.uom)}</small><span class="cs-st ${l.status}">${esc(stText[l.status] || '')}</span></div></div>`).join('');
+    const lines = o.lines.map((l) => `<div class="cs-it"><div><b>${esc(l.description)}</b><small>${esc([l.code, l.packName || l.uom].filter(Boolean).join(' · '))}${l.packName && l.packPieces !== 1 ? ` · ${esc(fill(TEXT.packEquals, { n: `${fmtQty(Math.round(l.quantity * l.packPieces * 1000) / 1000)} ${l.uom || ''}`.trim() }))}` : ''}</small><small>${esc(TEXT.csFor)}: ${esc(whenLabel(l.needBy))}</small></div><div class="cs-q">${esc(fmtQty(l.quantity))}<small> ${esc(l.packName || l.uom)}</small><span class="cs-st ${l.status}">${esc((stText[l.status] || '') + (l.status === 'partial' && l.suppliedQty > 0 ? ` ${fmtQty(l.suppliedQty)}/${fmtQty(l.quantity)}` : ''))}</span></div></div>`).join('');
     return `<div class="cs-sum"><div class="cs-top"><span class="cs-folio">${esc(o.folio)}</span><span class="cs-pill ${esc(o.status)}">${esc(stText[o.status] || '')}</span></div><div class="cs-meta">${meta}</div></div>
         <div class="shq">${esc(TEXT.csList)}</div><div>${lines}</div><div class="cs-hint">${esc(TEXT.csNote)}</div>`;
 }

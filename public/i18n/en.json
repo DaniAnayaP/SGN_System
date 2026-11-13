@@ -3421,6 +3421,46 @@
     "assetFaltaCol": "Missing: {falta}",
     "colCpPdf": "Download PDF",
     "colCpExcel": "Download Excel",
+    "colSurPedido": "Ordered",
+    "colSurSurtido": "Fulfilled",
+    "colSurFalta": "Missing",
+    "colSurSurtir": "Fulfill",
+    "colSurAnularAuth": "Authorization to Void Delivery",
+    "colSurEntrega": "Delivery",
+    "colSurEntregaAnulada": "Voided delivery",
+    "surBotonSurtir": "Fulfill",
+    "surVerSurtidos": "View deliveries",
+    "surFiltroPorSurtir": "To fulfill (Pending and Partial)",
+    "surVacio": "No lines with those filters.",
+    "surDlgTitulo": "Fulfill · {folio}",
+    "surDlgYaSurtido": "Already fulfilled",
+    "surDlgCantidad": "Quantity I fulfill now",
+    "surDlgRecibe": "Received by",
+    "surDlgLote": "Lot",
+    "surDlgCaducidad": "Expiry",
+    "surDlgNotas": "Notes",
+    "surDlgEntregas": "Deliveries of this line",
+    "surDlgSinEntregas": "Nothing has been fulfilled on this line yet.",
+    "surDlgCerrar": "Close",
+    "surDlgConfirmar": "Fulfill {n}",
+    "surDlgYaCompleto": "This line is already fully fulfilled.",
+    "surDlgObligatorio": "Required: the quantity and who receives. Lot, expiry and notes are optional.",
+    "surEntregaDe": "{who} · {when}",
+    "surRecibio": "Received by: {who}",
+    "surLoteDe": "Lot {lot}",
+    "surCaduca": "Exp. {date}",
+    "surAnulada": "Voided",
+    "surAnularEntrega": "Void delivery",
+    "surAnularConfirm": "Void this delivery ({text})? It is not deleted: it stays crossed out in the history and the fulfilled quantity of the line is recalculated.",
+    "surAnularAceptar": "Void",
+    "surSurtido": "Delivery recorded.",
+    "surAnuladoAviso": "Delivery voided.",
+    "surErrQty": "The quantity is not valid.",
+    "surErrMax": "Only {n} is left to fulfill: the quantity cannot exceed that.",
+    "surErrRecibe": "Type who receives.",
+    "surErrCaducidad": "The expiry is not valid: choose month and year.",
+    "surErrSinPermiso": "You do not have permission for this.",
+    "surEstatusSoloLectura": "The status comes from what is fulfilled in Manual Order Fulfillment.",
     "cpFiltroPedido": "Order",
     "cpFiltroDesde": "Date from",
     "cpFiltroHasta": "Date to",
@@ -5866,8 +5906,8 @@
       "example": "download order PM-0003 as Excel to send it to the warehouse."
     },
     "pmEstatusPedido": {
-      "what": "The status of the whole order: Pending if no item has been supplied, Supplied if all have and Partial if only some. Changing it changes all its items; to mark just one, open the order list.",
-      "example": "you mark the whole order Supplied once you have sent everything."
+      "what": "The status of the whole order: Pending if no item has been fulfilled even in part, Supplied if all have and Partial in any other case. It is no longer changed by hand: it comes from what is fulfilled in Operations › QR's › Manual Order Fulfillment.",
+      "example": "the order has 3 items and you already fulfilled 2: it shows Partial."
     },
     "udmOpsBuscar": {
       "what": "The whole catalog is not shown here: type the description (or the code) of the product and only the presentations of the matching codes appear, with the ones they already have. From there you add a new one (with the «+» of the presentation it comes from) or edit one that already exists. To see everything registered, with its branching, there is the Distribution Presentations catalog.",
@@ -6050,8 +6090,56 @@
       "example": "You filter by date and download the Excel to work on it on your computer."
     },
     "spPantalla": {
-      "what": "Manual Order Fulfillment: for now the screen is empty; how it works is still to be defined.",
-      "example": "The fulfillment of the QR orders will be seen here."
+      "what": "Here whoever fulfills orders sees what is still to be delivered from the orders made with the Manual Order QR: one line per ordered item, with what was ordered, what is already fulfilled and what is missing. The Fulfill button records each delivery; it is only a record: it does not move stock.",
+      "example": "an order for 3 boxes of paracetamol arrives: you open Fulfill, record 2 boxes with their lot and who receives them, and the line becomes Partial."
+    },
+    "surSurtir": {
+      "what": "Opens the window to record a delivery of this line: the quantity you fulfill now (it comes with what is missing), who receives and, if you want, lot, expiry and notes. If you fulfill less than ordered the line becomes Partial and you can fulfill again later. It needs View and Operate on the Fulfill button in the tree.",
+      "example": "you fulfill 2 of 3 boxes today and the missing one tomorrow: the line goes from Partial to Supplied."
+    },
+    "surVerSurtidos": {
+      "what": "Opens the list of deliveries of a line that is already fully fulfilled: how many, lot, expiry, who received and who fulfilled.",
+      "example": "you check which lot the paracetamol of order PM-0007 left from."
+    },
+    "surEstatus": {
+      "what": "Where the line is: Pending (nothing fulfilled), Partial (part fulfilled, less than ordered) or Supplied (what is fulfilled covers what was ordered). It is no longer changed by hand: it comes from the deliveries recorded here.",
+      "example": "you fulfill what was missing and the line goes to Supplied by itself."
+    },
+    "surSurtido": {
+      "what": "How much of the line is already fulfilled, in the same presentation it was ordered in (boxes, loose tablets…). It adds up the deliveries that were not voided.",
+      "example": "they ordered 3 boxes and 2 are done: Fulfilled 2."
+    },
+    "surFalta": {
+      "what": "What is still missing to fulfill on the line: what was ordered minus what is already fulfilled.",
+      "example": "they ordered 3 boxes and 2 are done: Missing 1."
+    },
+    "surFiltroEstatus": {
+      "what": "Choose which lines you see: To fulfill (Pending and Partial, the usual), All, or only Pending, Partial or Supplied. What you see is not downloaded: it is only the view.",
+      "example": "you leave To fulfill to see only what is still to be delivered."
+    },
+    "surDlgCantidad": {
+      "what": "How much you fulfill now of this line, in the presentation it was ordered in. It comes with what is missing; if you enter less, the line becomes Partial. It cannot exceed what is missing.",
+      "example": "3 boxes are missing and you deliver 2: you enter 2."
+    },
+    "surDlgRecibe": {
+      "what": "Who receives what you fulfill. Required.",
+      "example": "Luis Gómez, from Hospital Muguerza."
+    },
+    "surDlgLote": {
+      "what": "The lot of what you fulfill (optional). Each delivery has its own lot: if a line leaves in two lots, they are two deliveries.",
+      "example": "L2406-B."
+    },
+    "surDlgCaducidad": {
+      "what": "Expiry month and year of what you fulfill (optional).",
+      "example": "03/2028."
+    },
+    "surDlgNotas": {
+      "what": "A free note for this delivery (optional).",
+      "example": "box with intact seal; one piece is missing and is fulfilled tomorrow."
+    },
+    "surAnular": {
+      "what": "Voids a wrong delivery. It is not deleted: it stays crossed out in the history and the fulfilled quantity of the line is recalculated (the status can go back from Supplied to Partial or Pending). It needs the Delete permission on the Void delivery button in the tree.",
+      "example": "you recorded 5 boxes and it was 2: you void the delivery and fulfill another with 2."
     },
     "assetFalta": {
       "what": "What the asset still needs to be complete: classification, model, serial number (if its type has one) and the 6 photos. With everything filled in, the asset moves by itself to Management > Assets. For an asset that came back from Management it says which data is being edited.",
@@ -6706,12 +6794,12 @@
       "example": "you print the Main Warehouse QR and stick it by the door: staff request what they need from their phones and later type their order number to see whether it was supplied."
     },
     "pmEstatusFiltro": {
-      "what": "Shows only the order lines that have the status you choose: All, Pending or Supplied (in brackets, how many there are of each). It is only the view: it does not change any status. Each line status is changed in its own select and the whole order status in the orders table. The list you download from this window follows what you see.",
-      "example": "you choose Pending: only the lines still to be supplied are left."
+      "what": "Shows only the order lines that have the status you choose: All, Pending, Partial or Supplied (in brackets, how many there are of each). It is only the view: the status comes from what is fulfilled in Manual Order Fulfillment. The list you download from this window follows what you see.",
+      "example": "you choose Pending: only the lines not yet fulfilled are left."
     },
     "pmEstatus": {
-      "what": "Where each order line is: Pending (just arrived) or Supplied (already delivered). Whoever has View and Operate on the Status column changes it here; every change is kept in the history.",
-      "example": "you deliver the 24 milk units: you change the line to Supplied."
+      "what": "Where each order line is: Pending (nothing fulfilled yet), Partial (part fulfilled) or Supplied (what is fulfilled covers what was ordered). It is not changed here: it comes from what is recorded in Operations › QR's › Manual Order Fulfillment, and every change is kept in the history.",
+      "example": "you fulfill the 24 milk units in Manual Order Fulfillment: the line goes to Supplied by itself."
     },
     "pmFechaEntrega": {
       "what": "When you want what you order to arrive: from tomorrow up to 14 days, or «Urgent». Tapping a code (or the pencil of an item already added) opens its sheet: you choose the day in the strip at the top and type (or use − and +) the quantity for THAT day; you can repeat it with other days and «Done» leaves all of them in the order. Each day becomes a line of the order and shows as a chip («Fri 13 Nov · 10»); tapping the chip opens the sheet on that day.",

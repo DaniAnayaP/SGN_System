@@ -3355,6 +3355,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'alta-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Activos' },
     'presentaciones-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones Distribución' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
+    'surtido-pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Surtido Pedido Manual' },
     'capacidad-almacenamiento': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Capacidad Almacenamiento' },
     'incidentes': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Incidentes' },
 };
@@ -3731,6 +3732,8 @@ const TABLE_GRANT_PATHS = {
     'gestion-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-activos' },
     // Operaciones > QR's > Compra Pedido Manual: sus botones Descargar PDF y Descargar Excel (colCpPdf, colCpExcel)
     'compra-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-compra-pedido-manual' },
+    // Operaciones > QR's > Surtido Pedido Manual: sus botones Surtir (colSurSurtir) y Anular entrega (colSurAnularAuth)
+    'surtido-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-surtido-pedido-manual' },
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
     'nuestros-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestros-traslados' },
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
@@ -6024,13 +6027,36 @@ for (const [col, ddl] of [['pack_id', 'INTEGER NOT NULL DEFAULT 0'], ['pack_name
 // place_id / place_name: el «Lugar que solicita» (un lugar del catálogo Lugares de Envío; el nombre se guarda tal como estaba al pedir). 0 / '' = el pedido no lo trae (los de antes y los de la App, por ahora).
 if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'place_id')) db.exec('ALTER TABLE manual_orders ADD COLUMN place_id INTEGER NOT NULL DEFAULT 0');
 if (!db.prepare('PRAGMA table_info(manual_orders)').all().some((c) => c.name === 'place_name')) db.exec("ALTER TABLE manual_orders ADD COLUMN place_name TEXT NOT NULL DEFAULT ''");
-const MANUAL_ORDER_STATUSES = ['pending', 'supplied'];
-// Lo que se puede corregir de un pedido ya enviado: quién lo pidió (vale para todo el pedido) y la cantidad de un renglón. La hora, el artículo y el centro nunca cambian. El estatus se cambia aparte (setManualOrderLineStatus).
+// Estatus de un renglón (2026-11-12, Surtido Pedido Manual): ya NO se escribe a mano, sale de lo que se va surtiendo: Pendiente = nada surtido, Parcial = una parte, Surtido = lo surtido cubre lo pedido.
+const MANUAL_ORDER_STATUSES = ['pending', 'partial', 'supplied'];
+// Surtido Pedido Manual (Operaciones > QR's, 2026-11-12): cada ENTREGA de un renglón (cuánto se surtió, de qué lote y caducidad, quién recibió y observaciones). Un renglón se puede surtir en varias entregas; la suma (sin las anuladas)
+// da lo surtido y de ahí sale el estatus del renglón. Una entrega equivocada NO se borra: se anula (voided_at / voided_by) y queda en el historial. Solo se marca: no mueve existencias.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_order_deliveries (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        order_id      INTEGER NOT NULL,
+        line_id       INTEGER NOT NULL,
+        quantity      REAL NOT NULL DEFAULT 0,
+        lot           TEXT NOT NULL DEFAULT '',
+        expiry        TEXT NOT NULL DEFAULT '',
+        received_by   TEXT NOT NULL DEFAULT '',
+        notes         TEXT NOT NULL DEFAULT '',
+        delivered_by  TEXT NOT NULL DEFAULT '',
+        delivered_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        voided_at     TEXT,
+        voided_by     TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_manual_deliveries_line ON manual_order_deliveries(line_id);
+    CREATE INDEX IF NOT EXISTS idx_manual_deliveries_client ON manual_order_deliveries(client_id, id);
+`);
+// Lo que se puede corregir de un pedido ya enviado: quién lo pidió (vale para todo el pedido) y la cantidad de un renglón. La hora, el artículo y el centro nunca cambian. El estatus sale de lo surtido (refreshManualLineStatus).
 const MANUAL_ORDER_PATCHABLE_FIELDS = {
     name: { column: 'requester_name', fieldKey: 'main.colPmSolicitante' },
     quantity: { column: 'quantity', fieldKey: 'main.colPmCantidad' },
 };
-const MANUAL_LINE_SELECT = `SELECT l.*, o.cost_center_id, o.requester_name, o.requester_user_id, o.source, o.place_id, o.place_name, o.created_at AS order_created_at, o.received_at AS order_received_at FROM manual_order_lines l JOIN manual_orders o ON o.id = l.order_id`;
+// supplied_qty = lo surtido del renglón (la suma de sus entregas, sin las anuladas), en la misma presentación en que se pidió.
+const MANUAL_LINE_SELECT = `SELECT l.*, o.cost_center_id, o.requester_name, o.requester_user_id, o.source, o.place_id, o.place_name, o.created_at AS order_created_at, o.received_at AS order_received_at, ROUND(COALESCE((SELECT SUM(d.quantity) FROM manual_order_deliveries d WHERE d.line_id = l.id AND d.voided_at IS NULL), 0), 3) AS supplied_qty FROM manual_order_lines l JOIN manual_orders o ON o.id = l.order_id`;
 const MANUAL_CATEGORY_COLUMNS = ['category_inventario', 'category_compra', 'category_almacenamiento', 'category_rotacion', 'category_manejo', 'category_riesgo', 'category_vidautil'];
 // Los artículos con los que se puede pedir: los de la empresa, con su código, descripciones, UdM y categorías (las siete listas de Alta Nuestros Artículos).
 // costCenterId > 0: solo los códigos RELACIONADOS con ese centro de costos en Relación Código (de cualquier almacén, zona o clasificación); sin centro, todos los de la empresa.
@@ -6098,7 +6124,7 @@ function listManualOrderLines(clientId, { costCenterId, limit } = {}) {
 function getManualOrderWithLines(clientId, orderId, costCenterId = 0) {
     const order = db.prepare('SELECT id, cost_center_id, requester_name, place_name, created_at, received_at FROM manual_orders WHERE id = ? AND client_id = ? AND cost_center_id = ?').get(orderId, clientId, costCenterId || 0);
     if (!order) return null;
-    const lines = db.prepare('SELECT line_no, code, description, uom, quantity, need_by, status, pack_id, pack_name, pack_pieces FROM manual_order_lines WHERE order_id = ? AND client_id = ? ORDER BY line_no ASC, id ASC').all(orderId, clientId);
+    const lines = db.prepare('SELECT l.line_no, l.code, l.description, l.uom, l.quantity, l.need_by, l.status, l.pack_id, l.pack_name, l.pack_pieces, ROUND(COALESCE((SELECT SUM(d.quantity) FROM manual_order_deliveries d WHERE d.line_id = l.id AND d.voided_at IS NULL), 0), 3) AS supplied_qty FROM manual_order_lines l WHERE l.order_id = ? AND l.client_id = ? ORDER BY l.line_no ASC, l.id ASC').all(orderId, clientId);
     return { order, lines };
 }
 // --- Incidentes (Operaciones, C. Distribución) ----------------------------------------------------------------------------------------------------------
@@ -6335,19 +6361,87 @@ function updateManualOrderLine(id, clientId, patch, { editedBy = '' } = {}) {
         }
         if (changed) db.prepare("UPDATE manual_order_lines SET edited_at = datetime('now'), edited_by = ? WHERE id = ? AND client_id = ?").run(String(editedBy || '').slice(0, 120), id, clientId);
     })();
-    return getManualOrderLine(id, clientId);
+    // si cambió la cantidad pedida, el estatus (lo surtido contra lo pedido) se vuelve a calcular
+    return refreshManualLineStatus(id, clientId, editedBy);
 }
-// El estatus de un renglón (Pendiente / Surtido): quién y cuándo lo cambió.
+// El estatus de un renglón (Pendiente / Parcial / Surtido): quién y cuándo lo cambió. Lo pone el sistema a partir de lo surtido; ya no se escribe a mano.
 function setManualOrderLineStatus(id, clientId, status, by = '') {
     if (!MANUAL_ORDER_STATUSES.includes(status)) return null;
     db.prepare("UPDATE manual_order_lines SET status = ?, status_at = datetime('now'), status_by = ? WHERE id = ? AND client_id = ?").run(status, String(by || '').slice(0, 120), id, clientId);
     return getManualOrderLine(id, clientId);
+}
+// Pendiente si nada se surtió, Surtido si lo surtido cubre lo pedido y Parcial si es algo en medio.
+function manualLineStatusFor(quantity, supplied) {
+    const q = Math.round(Number(quantity) * 1000) / 1000;
+    const s = Math.round(Number(supplied) * 1000) / 1000;
+    if (!(s > 0)) return 'pending';
+    return s >= q ? 'supplied' : 'partial';
+}
+// Vuelve a calcular el estatus del renglón con lo surtido; solo escribe (con quién y cuándo) si cambió.
+function refreshManualLineStatus(lineId, clientId, by = '') {
+    const line = getManualOrderLine(lineId, clientId);
+    if (!line) return null;
+    const next = manualLineStatusFor(line.quantity, line.supplied_qty);
+    if (next !== line.status) return setManualOrderLineStatus(lineId, clientId, next, by);
+    return line;
+}
+const MANUAL_DELIVERY_SELECT = 'SELECT id, line_id, order_id, quantity, lot, expiry, received_by, notes, delivered_by, delivered_at, voided_at, voided_by FROM manual_order_deliveries';
+// Las entregas de un renglón, de la primera a la última (las anuladas se ven, tachadas, para que el historial cuente todo).
+function listManualLineDeliveries(lineId, clientId) {
+    return db.prepare(`${MANUAL_DELIVERY_SELECT} WHERE line_id = ? AND client_id = ? ORDER BY id ASC`).all(lineId, clientId);
+}
+function getManualDelivery(id, clientId) {
+    return db.prepare(`${MANUAL_DELIVERY_SELECT} WHERE id = ? AND client_id = ?`).get(id, clientId);
+}
+// Anota una entrega y recalcula el estatus. Dentro de una transacción: la cantidad no puede pasar de lo que falta ({ error: 'MAX', missing }).
+function addManualLineDelivery({ lineId, clientId, quantity, lot = '', expiry = '', receivedBy = '', notes = '', deliveredBy = '' }) {
+    return db.transaction(() => {
+        const before = getManualOrderLine(lineId, clientId);
+        if (!before) return { error: 'NOTFOUND' };
+        const q = Math.round(Number(quantity) * 1000) / 1000;
+        const missing = Math.round((Number(before.quantity) - Number(before.supplied_qty)) * 1000) / 1000;
+        if (!(missing > 0)) return { error: 'DONE', missing: 0, before };
+        if (q > missing) return { error: 'MAX', missing, before };
+        const info = db.prepare('INSERT INTO manual_order_deliveries (client_id, order_id, line_id, quantity, lot, expiry, received_by, notes, delivered_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(clientId, before.order_id, lineId, q, String(lot || '').slice(0, 60), String(expiry || '').slice(0, 10), String(receivedBy || '').slice(0, 60), String(notes || '').slice(0, 300), String(deliveredBy || '').slice(0, 120));
+        const line = refreshManualLineStatus(lineId, clientId, deliveredBy);
+        return { delivery: getManualDelivery(Number(info.lastInsertRowid), clientId), before, line };
+    })();
+}
+// Anula una entrega (no se borra: queda con quién y cuándo) y recalcula el estatus.
+function voidManualLineDelivery(deliveryId, clientId, by = '') {
+    return db.transaction(() => {
+        const delivery = getManualDelivery(deliveryId, clientId);
+        if (!delivery) return { error: 'NOTFOUND' };
+        if (delivery.voided_at) return { error: 'VOIDED', delivery };
+        const before = getManualOrderLine(delivery.line_id, clientId);
+        db.prepare("UPDATE manual_order_deliveries SET voided_at = datetime('now'), voided_by = ? WHERE id = ? AND client_id = ?").run(String(by || '').slice(0, 120), deliveryId, clientId);
+        const line = refreshManualLineStatus(delivery.line_id, clientId, by);
+        return { delivery: getManualDelivery(deliveryId, clientId), before, line };
+    })();
+}
+// Los renglones que ya estaban marcados «Surtido» a mano (antes de Surtido Pedido Manual) reciben UNA entrega que cubre todo lo pedido, para que su estatus y lo surtido cuadren con lo nuevo. Se ve como «Marcado Surtido antes de Surtido
+// Pedido Manual»; quién y cuándo son los de su marca de estatus. Corre una sola vez (schema_migrations_data).
+const MANUAL_LEGACY_DELIVERIES_KEY = 'seed-manual-legacy-deliveries-v1';
+function backfillManualLegacyDeliveriesOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(MANUAL_LEGACY_DELIVERIES_KEY)) return;
+    let made = 0;
+    db.transaction(() => {
+        db.prepare("SELECT id, client_id, order_id, quantity, status_by, status_at FROM manual_order_lines WHERE status = 'supplied' AND NOT EXISTS (SELECT 1 FROM manual_order_deliveries d WHERE d.line_id = manual_order_lines.id)").all().forEach((l) => {
+            db.prepare("INSERT INTO manual_order_deliveries (client_id, order_id, line_id, quantity, notes, delivered_by, delivered_at) VALUES (?, ?, ?, ?, 'Marcado Surtido antes de Surtido Pedido Manual', ?, COALESCE(?, datetime('now')))")
+                .run(l.client_id, l.order_id, l.id, l.quantity, l.status_by || '', l.status_at);
+            made += 1;
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(MANUAL_LEGACY_DELIVERIES_KEY);
+    })();
+    console.log('[db] Surtido Pedido Manual: ' + made + ' renglones que ya estaban Surtido recibieron su entrega (una vez).');
 }
 // Elimina un renglón; si era el último del pedido, el pedido también se va.
 function deleteManualOrderLine(id, clientId) {
     return db.transaction(() => {
         const line = db.prepare('SELECT order_id FROM manual_order_lines WHERE id = ? AND client_id = ?').get(id, clientId);
         if (!line) return false;
+        db.prepare('DELETE FROM manual_order_deliveries WHERE line_id = ? AND client_id = ?').run(id, clientId);
         db.prepare('DELETE FROM manual_order_lines WHERE id = ? AND client_id = ?').run(id, clientId);
         if (!db.prepare('SELECT 1 FROM manual_order_lines WHERE order_id = ?').get(line.order_id)) db.prepare('DELETE FROM manual_orders WHERE id = ? AND client_id = ?').run(line.order_id, clientId);
         return true;
@@ -13434,6 +13528,16 @@ function seedCompraSurtidoPedidoManualGrants() {
     ];
     seedLeavesForScreenHolders(COMPRA_SURTIDO_SEED_KEY, pedido, leaves, "the QR's Compra and Surtido Pedido Manual screens");
 }
+// Surtido Pedido Manual ya funciona (2026-11-12): sus botones Surtir y Anular entrega los reciben, una sola vez y solo en lo contratado, quienes ya tienen la pantalla (surtir ESCRIBE datos: quien lo reciba en su puesto o usuario lo decide
+// el administrador desde el árbol; el administrador del cliente no depende de hojas). Cada botón con «Solo ver» y su nivel de operar / eliminar.
+const SURTIDO_BUTTONS_SEED_KEY = 'seed-surtido-pedido-manual-buttons-v1';
+function seedSurtidoPedidoManualButtons() {
+    const path = TABLE_GRANT_PATHS['surtido-pedido-manual'];
+    if (!path) return;
+    const base = `${path.submenuPrefix}/class-botones`;
+    const leaves = [`${base}/colSurSurtir/solo-ver`, `${base}/colSurSurtir/ver-y-operar`, `${base}/colSurAnularAuth/solo-ver`, `${base}/colSurAnularAuth/eliminar`];
+    seedLeavesForScreenHolders(SURTIDO_BUTTONS_SEED_KEY, path, leaves, 'the Surtido Pedido Manual buttons', { contractOnly: true });
+}
 
 // Siembra de Opciones de Búsqueda (definida arriba): aquí ya existe todo lo que usa findPantallaNode.
 seedColumnSearchOptionGrants();
@@ -13454,6 +13558,8 @@ seedRelacionEnvioGrants();
 seedAltaActivosGrants();
 seedGestionActivosGrants();
 seedCompraSurtidoPedidoManualGrants();
+seedSurtidoPedidoManualButtons();
+backfillManualLegacyDeliveriesOnce();
 seedAssetModelLeaves();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
@@ -13609,6 +13715,11 @@ module.exports = {
     listManualOrderLines,
     getManualOrderWithLines,
     getManualOrderLine,
+    listManualLineDeliveries,
+    getManualDelivery,
+    addManualLineDelivery,
+    voidManualLineDelivery,
+    manualLineStatusFor,
     updateManualOrderLine,
     setManualOrderLineStatus,
     deleteManualOrderLine,

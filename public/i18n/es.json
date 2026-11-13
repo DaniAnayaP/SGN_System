@@ -3420,6 +3420,46 @@
     "assetFaltaCol": "Falta: {falta}",
     "colCpPdf": "Descargar PDF",
     "colCpExcel": "Descargar Excel",
+    "colSurPedido": "Pedido",
+    "colSurSurtido": "Surtido",
+    "colSurFalta": "Falta",
+    "colSurSurtir": "Surtir",
+    "colSurAnularAuth": "Autorización para Anular entrega",
+    "colSurEntrega": "Entrega",
+    "colSurEntregaAnulada": "Entrega anulada",
+    "surBotonSurtir": "Surtir",
+    "surVerSurtidos": "Ver surtidos",
+    "surFiltroPorSurtir": "Por surtir (Pendiente y Parcial)",
+    "surVacio": "No hay renglones con esos filtros.",
+    "surDlgTitulo": "Surtir · {folio}",
+    "surDlgYaSurtido": "Ya surtido",
+    "surDlgCantidad": "Cantidad que surto ahora",
+    "surDlgRecibe": "Quién recibe",
+    "surDlgLote": "Lote",
+    "surDlgCaducidad": "Caducidad",
+    "surDlgNotas": "Observaciones",
+    "surDlgEntregas": "Entregas de este renglón",
+    "surDlgSinEntregas": "Todavía no se surte nada de este renglón.",
+    "surDlgCerrar": "Cerrar",
+    "surDlgConfirmar": "Surtir {n}",
+    "surDlgYaCompleto": "Este renglón ya está surtido completo.",
+    "surDlgObligatorio": "Obligatorio: la cantidad y quién recibe. Lote, caducidad y observaciones son opcionales.",
+    "surEntregaDe": "{who} · {when}",
+    "surRecibio": "Recibió: {who}",
+    "surLoteDe": "Lote {lot}",
+    "surCaduca": "Cad. {date}",
+    "surAnulada": "Anulada",
+    "surAnularEntrega": "Anular entrega",
+    "surAnularConfirm": "¿Anular esta entrega ({text})? No se borra: queda tachada en el historial y lo surtido del renglón se recalcula.",
+    "surAnularAceptar": "Anular",
+    "surSurtido": "Entrega registrada.",
+    "surAnuladoAviso": "Entrega anulada.",
+    "surErrQty": "La cantidad no es válida.",
+    "surErrMax": "Solo falta surtir {n}: la cantidad no puede pasar de eso.",
+    "surErrRecibe": "Escribe quién recibe.",
+    "surErrCaducidad": "La caducidad no es válida: elige mes y año.",
+    "surErrSinPermiso": "No tienes permiso para esto.",
+    "surEstatusSoloLectura": "El estatus sale de lo que se surte en Surtido Pedido Manual.",
     "cpFiltroPedido": "Pedido",
     "cpFiltroDesde": "Fecha desde",
     "cpFiltroHasta": "Fecha hasta",
@@ -5865,8 +5905,8 @@
       "example": "descargar el pedido PM-0003 en Excel para mandarlo al almacén."
     },
     "pmEstatusPedido": {
-      "what": "El estatus de todo el pedido: Pendiente si ningún artículo se ha surtido, Surtido si ya se surtieron todos y Parcial si solo algunos. Al cambiarlo se cambian todos sus artículos; para marcar uno solo, abre la lista del pedido.",
-      "example": "marcas Surtido el pedido completo cuando ya enviaste todo."
+      "what": "El estatus de todo el pedido: Pendiente si ningún artículo se ha surtido ni en parte, Surtido si ya se surtieron todos y Parcial en cualquier otro caso. Ya no se cambia a mano: sale de lo que se surte en Operaciones › QR's › Surtido Pedido Manual.",
+      "example": "el pedido tiene 3 artículos y ya surtiste 2: aparece Parcial."
     },
     "udmOpsBuscar": {
       "what": "Aquí no se ve todo el catálogo: escribe la descripción (o el código) del producto y salen solo las presentaciones de los códigos que coinciden, con las que ya tienen. Desde ahí agregas una nueva (con el «+» de la presentación de la que sale) o editas una que ya exista. Para ver todo lo registrado, con su ramificación, está el catálogo Presentaciones Distribución.",
@@ -6049,8 +6089,56 @@
       "example": "Filtras por fecha y bajas el Excel para trabajarlo en tu computadora."
     },
     "spPantalla": {
-      "what": "Surtido Pedido Manual: por ahora la pantalla está vacía; falta definir cómo funciona.",
-      "example": "Aquí se verá el surtido de los pedidos del QR."
+      "what": "Aquí quien surte ve lo que falta por entregar de los pedidos hechos con el QR de Pedido Manual: un renglón por artículo pedido, con lo pedido, lo ya surtido y lo que falta. Con el botón Surtir anota cada entrega; solo se marca: no mueve existencias.",
+      "example": "llega un pedido de 3 cajas de paracetamol: abres Surtir, anotas 2 cajas con su lote y quién recibe, y el renglón queda Parcial."
+    },
+    "surSurtir": {
+      "what": "Abre la ventana para anotar una entrega de este renglón: la cantidad que surtes ahora (ya viene con lo que falta), quién recibe y, si quieres, lote, caducidad y observaciones. Si surtes menos de lo pedido el renglón queda Parcial y puedes volver a surtir después. Pide Ver y Operar en el botón Surtir del árbol.",
+      "example": "surtes 2 de 3 cajas hoy y la que falta mañana: el renglón pasa de Parcial a Surtido."
+    },
+    "surVerSurtidos": {
+      "what": "Abre la lista de entregas de un renglón ya surtido por completo: cuánto, lote, caducidad, quién recibió y quién surtió.",
+      "example": "revisas con qué lote salió el paracetamol del pedido PM-0007."
+    },
+    "surEstatus": {
+      "what": "En qué va el renglón: Pendiente (no se surte nada), Parcial (se surtió una parte, menos de lo pedido) o Surtido (lo surtido cubre lo pedido). Ya no se cambia a mano: sale de las entregas que se anotan aquí.",
+      "example": "surtes lo que faltaba y el renglón pasa solo a Surtido."
+    },
+    "surSurtido": {
+      "what": "Cuánto del renglón ya se surtió, en la misma presentación en que se pidió (cajas, tabletas sueltas…). Suma las entregas que no se anularon.",
+      "example": "pidieron 3 cajas y ya van 2: Surtido 2."
+    },
+    "surFalta": {
+      "what": "Lo que todavía falta por surtir del renglón: lo pedido menos lo ya surtido.",
+      "example": "pidieron 3 cajas y van 2: Falta 1."
+    },
+    "surFiltroEstatus": {
+      "what": "Elige qué renglones ves: Por surtir (Pendiente y Parcial, lo normal), Todos, o solo Pendiente, Parcial o Surtido. Lo que ves no se descarga: es solo la vista.",
+      "example": "dejas Por surtir para ver solo lo que todavía falta entregar."
+    },
+    "surDlgCantidad": {
+      "what": "Cuánto surtes ahora de este renglón, en la presentación en que se pidió. Ya viene con lo que falta; si pones menos, el renglón queda Parcial. No puede pasar de lo que falta.",
+      "example": "faltan 3 cajas y entregas 2: pones 2."
+    },
+    "surDlgRecibe": {
+      "what": "Quién recibe lo que surtes. Es obligatorio.",
+      "example": "Luis Gómez, del Hospital Muguerza."
+    },
+    "surDlgLote": {
+      "what": "El lote de lo que surtes (opcional). Cada entrega lleva su lote: si un renglón sale en dos lotes, son dos entregas.",
+      "example": "L2406-B."
+    },
+    "surDlgCaducidad": {
+      "what": "Mes y año de caducidad de lo que surtes (opcional).",
+      "example": "03/2028."
+    },
+    "surDlgNotas": {
+      "what": "Una nota libre de esta entrega (opcional).",
+      "example": "caja con sello intacto; falta una pieza y se surte mañana."
+    },
+    "surAnular": {
+      "what": "Anula una entrega equivocada. No se borra: queda tachada en el historial y lo surtido del renglón se recalcula (el estatus puede bajar de Surtido a Parcial o a Pendiente). Pide el permiso Eliminar en el botón Anular entrega del árbol.",
+      "example": "anotaste 5 cajas y eran 2: anulas la entrega y surtes otra con 2."
     },
     "assetFalta": {
       "what": "Lo que todavía le falta al activo para estar completo: clasificación, modelo, número de serie (si su tipo lo lleva) y las 6 fotos. Con todo lleno, el activo pasa solo a Gestión > Activos. En un activo que regresó de Gestión dice qué dato se está editando.",
@@ -6705,12 +6793,12 @@
       "example": "imprimes el QR del Almacén Central y lo pegas junto a la puerta: el personal pide lo que necesita desde su celular y, después, escribe su número de pedido para ver si ya se surtió."
     },
     "pmEstatusFiltro": {
-      "what": "Muestra solo los renglones del pedido que tengan el estatus que elijas: Todo, Pendiente o Surtido (entre paréntesis, cuántos hay de cada uno). Es solo la vista: no cambia ningún estatus. El estatus de cada renglón se cambia en su propio select y el de todo el pedido en la tabla de pedidos. La lista que se descarga de esta ventana sigue lo que ves.",
-      "example": "eliges Pendiente: quedan solo los renglones que todavía faltan por surtir."
+      "what": "Muestra solo los renglones del pedido que tengan el estatus que elijas: Todo, Pendiente, Parcial o Surtido (entre paréntesis, cuántos hay de cada uno). Es solo la vista: el estatus sale de lo que se surte en Surtido Pedido Manual. La lista que se descarga de esta ventana sigue lo que ves.",
+      "example": "eliges Pendiente: quedan solo los renglones que todavía no se surten."
     },
     "pmEstatus": {
-      "what": "En qué va cada renglón del pedido: Pendiente (recién llegó) o Surtido (ya se entregó). Quien tiene Ver y Operar en la columna Estatus lo cambia desde aquí; cada cambio queda en el historial.",
-      "example": "entregas las 24 piezas de leche: cambias el renglón a Surtido."
+      "what": "En qué va cada renglón del pedido: Pendiente (no se ha surtido nada), Parcial (se surtió una parte) o Surtido (lo surtido cubre lo pedido). No se cambia aquí: sale de lo que se anota en Operaciones › QR's › Surtido Pedido Manual, y cada cambio queda en el historial.",
+      "example": "surtes las 24 piezas de leche en Surtido Pedido Manual: el renglón pasa solo a Surtido."
     },
     "pmFechaEntrega": {
       "what": "Para cuándo quieres que llegue lo que pides: desde mañana y hasta 14 días, o «Urgente». Al tocar un código (o el lápiz de un artículo ya agregado) se abre su hoja: eliges el día en la tira de arriba y escribes (o con − y +) la cantidad de ESE día; puedes repetirlo con otros días y «Listo» los deja todos en el pedido. Cada día queda como un renglón del pedido y se ve como un chip («Vie 13 nov · 10»); tocar el chip abre la hoja en ese día.",
