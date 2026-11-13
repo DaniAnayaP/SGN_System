@@ -300,15 +300,23 @@ function groupSummary(group) {
 // ---- las tablas --------------------------------------------------------------------------------------------------------------------------------
 const TOTAL_COLUMNS = () => [t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmUdm'), t('main.colPmPresentacion'), t('main.colPmCantidad'), t('main.colPmEquivale'), t('main.cpPedidos')];
 const DETAIL_COLUMNS = () => [t('main.colPmFolio'), t('main.colPmFechaHora'), t('main.colPmSolicitante'), t('main.colPmLugar'), t('main.colPmCodigo'), t('main.colPmDescripcion'), t('main.colPmPresentacion'), t('main.colPmCantidad'), t('main.colPmEquivale'), t('main.colPmFechaRequerida'), t('main.colPmEstatus')];
+// Las llaves de las columnas (para el embudo de filtros de cada encabezado: el mismo de todas las tablas, ver Dashboard.bindExternalColumnFilters).
+const TOTAL_KEYS = ['cpTCodigo', 'cpTDescripcion', 'cpTUdm', 'cpTPresentacion', 'cpTCantidad', 'cpTEquivale', 'cpTPedidos'];
+const DETAIL_KEYS = ['cpDFolio', 'cpDFecha', 'cpDSolicitante', 'cpDLugar', 'cpDCodigo', 'cpDDescripcion', 'cpDPresentacion', 'cpDCantidad', 'cpDEquivale', 'cpDRequerida', 'cpDEstatus'];
 const ordersText = (n) => t(n === 1 ? 'main.cpUnPedido' : 'main.cpNPedidos', { n });
 const equivText = (value, uom) => `${quantityText(round3(value))}${uom ? ` ${uom}` : ''}`;
 function totalValues(row) { return [row.code, row.description, row.uom || '—', row.pack || '—', quantityText(round3(row.quantity)), equivText(row.equivalent, row.uom), ordersText(row.orders.size)]; }
 function detailValues(o, l) { return [o.folio, whenText(o.requestedAt), o.name || '—', o.placeName || '—', l.code, l.description, l.packName || '—', quantityText(l.quantity), equivText(equivOf(l), l.uom), needByText(l.needBy), statusText(l.status)]; }
-function buildTable(columns, numericFrom) {
+function buildTable(columns, numericFrom, keys, { noSort = false } = {}) {
     const table = el('table', 'data-table cp-table');
     const thead = el('thead');
     const headRow = el('tr');
-    columns.forEach((label, i) => { const th = el('th', numericFrom.includes(i) ? 'cp-num' : '', label); headRow.appendChild(th); });
+    columns.forEach((label, i) => {
+        const th = el('th', numericFrom.includes(i) ? 'cp-num' : '', label);
+        if (keys && keys[i]) th.dataset.col = keys[i];
+        if (noSort) th.dataset.sortBound = '1'; // la tabla va agrupada por código: ordenar por una columna la desarmaría (el filtro sí)
+        headRow.appendChild(th);
+    });
     thead.appendChild(headRow);
     const tbody = el('tbody');
     table.append(thead, tbody);
@@ -328,12 +336,12 @@ function render() {
     const groups = breakdownOf(list);
     // totales
     totalsHost.innerHTML = '';
-    const totalsTable = buildTable(TOTAL_COLUMNS(), [4, 5]);
+    const totalsTable = buildTable(TOTAL_COLUMNS(), [4, 5], TOTAL_KEYS);
     if (!totals.length) emptyRow(totalsTable.tbody, TOTAL_COLUMNS().length);
     else {
         totals.forEach((row) => {
             const tr = el('tr');
-            totalValues(row).forEach((value, i) => { const td = el('td', [0].includes(i) ? 'cp-code' : ([4, 5].includes(i) ? 'cp-num' : ''), value); tr.appendChild(td); });
+            totalValues(row).forEach((value, i) => { const td = el('td', [0].includes(i) ? 'cp-code' : ([4, 5].includes(i) ? 'cp-num' : ''), value); td.dataset.col = TOTAL_KEYS[i]; tr.appendChild(td); });
             totalsTable.tbody.appendChild(tr);
         });
         const foot = el('tr', 'cp-sum');
@@ -341,12 +349,15 @@ function render() {
         const cell = el('td', '', t('main.cpTotalFila', { codigos: codes, renglones: totals.length }));
         cell.colSpan = 6;
         foot.append(cell, el('td', '', ordersText(list.length)));
-        totalsTable.tbody.appendChild(foot);
+        const tfoot = el('tfoot'); // el total va aparte de las filas para que los filtros no lo quiten
+        tfoot.appendChild(foot);
+        totalsTable.table.appendChild(tfoot);
     }
     totalsHost.appendChild(totalsTable.table);
+    if (window.Dashboard && Dashboard.bindExternalColumnFilters) Dashboard.bindExternalColumnFilters('cp-totales', totalsTable.table);
     // desglose
     detailHost.innerHTML = '';
-    const detailTable = buildTable(DETAIL_COLUMNS(), [7, 8]);
+    const detailTable = buildTable(DETAIL_COLUMNS(), [7, 8], DETAIL_KEYS, { noSort: true });
     if (!groups.length) emptyRow(detailTable.tbody, DETAIL_COLUMNS().length);
     else {
         groups.forEach((group) => {
@@ -357,12 +368,28 @@ function render() {
             detailTable.tbody.appendChild(head);
             group.rows.forEach(({ o, l }) => {
                 const tr = el('tr');
-                detailValues(o, l).forEach((value, i) => tr.appendChild(el('td', i === 0 ? 'cp-code' : ([7, 8].includes(i) ? 'cp-num' : ''), value)));
+                detailValues(o, l).forEach((value, i) => { const td = el('td', i === 0 ? 'cp-code' : ([7, 8].includes(i) ? 'cp-num' : ''), value); td.dataset.col = DETAIL_KEYS[i]; tr.appendChild(td); });
                 detailTable.tbody.appendChild(tr);
             });
         });
     }
     detailHost.appendChild(detailTable.table);
+    if (window.Dashboard && Dashboard.bindExternalColumnFilters) {
+        Dashboard.bindExternalColumnFilters('cp-desglose', detailTable.table);
+        // el encabezado de cada código sigue a sus renglones: se esconde cuando el filtro dejó sin nada a su código
+        const sync = () => {
+            let group = null;
+            let any = false;
+            const flush = () => { if (group) group.classList.toggle('data-table-row-col-filtered', !any); };
+            Array.from(detailTable.tbody.rows).forEach((tr) => {
+                if (tr.classList.contains('cp-group')) { flush(); group = tr; any = false; return; }
+                if (!tr.classList.contains('data-table-row-col-filtered')) any = true;
+            });
+            flush();
+        };
+        new MutationObserver(sync).observe(detailTable.tbody, { attributes: true, attributeFilter: ['class'], subtree: true });
+        sync();
+    }
     noteEl.hidden = !truncated;
     if (truncated) noteEl.textContent = t('main.pmCortado', { n: maxLines });
 }
@@ -401,11 +428,14 @@ async function download(format) {
         { title: t('main.cpTotalesTitulo'), columns: TOTAL_COLUMNS().map((label) => ({ label })), rows: totals.map(totalValues), widths: [1.2, 3.2, 0.8, 1.6, 0.9, 1.2, 0.9] },
         { title: t('main.cpDesgloseTitulo'), columns: DETAIL_COLUMNS().map((label) => ({ label })), rows: groups.flatMap((g) => g.rows.map(({ o, l }) => detailValues(o, l))), widths: [0.8, 1.3, 1.2, 1.4, 1.1, 2.6, 1.3, 0.8, 1.1, 1.1, 0.9] },
     ];
+    // el formato de la compañía (logo o iniciales, «Pedido Manual», sitio y empresa) lo pone el servidor arriba del archivo, como en los demás reportes; con un solo centro de costos sale también su sitio
+    const centers = [...new Set(list.flatMap((o) => o.lines.map((l) => l.cc)).filter(Boolean))];
+    const brand = { kind: t('menu.opCentroDistPedidoManual'), docTitle: t('menu.opCentroDistCompraPedidoManual'), costCenterId: centers.length === 1 ? centers[0] : 0 };
     const base = `${t('menu.opCentroDistCompraPedidoManual').replace(/[^\p{L}\p{N}]+/gu, '-')}_${today()}`;
     const btn = format === 'pdf' ? pdfBtn : excelBtn;
     btn.disabled = true;
     try {
-        const body = { title: t('menu.opCentroDistCompraPedidoManual'), filename: base, header: filterHeader(list), columns: sections[0].columns, rows: sections[0].rows, sections, wrap: true, widths: sections[0].widths };
+        const body = { brand, title: t('menu.opCentroDistCompraPedidoManual'), filename: base, header: filterHeader(list), columns: sections[0].columns, rows: sections[0].rows, sections, wrap: true, widths: sections[0].widths };
         const res = await fetch(`/api/business/export/${format}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
         if (!res.ok) throw new Error(`export ${format} failed`);
         saveBlob(await res.blob(), `${base}.${format === 'xlsx' ? 'xlsx' : 'pdf'}`);
