@@ -7737,11 +7737,16 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .unit-wrap{ position: relative; display: block; }
 .unit-wrap input{ width: 100%; padding-right: 3.2rem; }
 .unit-wrap .unit{ position: absolute; right: 0.9rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary); font-size: 0.85em; pointer-events: none; }
+/* El selector «Colocar activos / sensores de Alta Activos»: la letra va con el tamaño del resto de las listas del Layout (rem: sigue al «Tamaño del sistema»); antes la fila heredaba la letra grande del cuerpo y se veía fuera de tamaño. Código y nombre a la izquierda, el detalle a la derecha. */
+.layout-place-search{ width: 100%; margin-top: 0.6rem; padding: 0.45rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.4rem; background-color: var(--color-bg); color: var(--color-text-primary); font: inherit; font-size: 0.8rem; box-sizing: border-box; }
 .layout-place-list{ max-height: 18rem; overflow: auto; display: flex; flex-direction: column; gap: 0.2rem; margin: 0.5rem 0; }
-.layout-place-row{ display: flex; gap: 0.5rem; align-items: baseline; padding: 0.3rem 0.4rem; border-radius: 0.5rem; cursor: pointer; }
+.layout-place-row{ display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); gap: 0.2rem 0.6rem; align-items: start; padding: 0.3rem 0.4rem; border-radius: 0.5rem; cursor: pointer; font-size: 0.8rem; line-height: 1.35; }
+.layout-place-row input{ margin: 0.15rem 0 0; }
 .layout-place-row:hover{ background: var(--color-bg); }
 .layout-place-row.is-off{ opacity: 0.55; cursor: not-allowed; }
-.layout-place-row small{ opacity: 0.7; }
+.layout-place-row small{ font-size: 0.72rem; opacity: 0.7; overflow-wrap: anywhere; }
+.layout-place-name{ min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 34rem){ .layout-place-row{ grid-template-columns: auto minmax(0, 1fr); } .layout-place-row small{ grid-column: 2; } }
 .layout-place-row[hidden]{ display: none; }
 .layout-loading i{ order: 2; font-size: 1.4rem; margin-top: 0.15rem; color: var(--color-accent); }
 .layout-zoom-float .layout-measures-btn{ box-shadow: 0 2px 8px rgba(0,0,0,.18); }

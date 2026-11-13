@@ -4965,14 +4965,14 @@ function openPlaceAssets(opts = {}) {
     }
     const zoneOptions = `<option value="">${esc(t('main.layoutActivoElegirZona'))}</option>${d.zones.filter((z) => z.active !== false).map((z) => `<option value="${esc(z.id)}">${esc(z.name || z.code)}</option>`).join('')}`;
     const detail = (a) => (sensors ? `${a.typeName || '—'} · ${a.model || '—'} · S/N ${a.serialNumber || '—'}` : `${a.typeName || '—'} · ${a.length} × ${a.depth} × ${a.height} cm`);
-    const rows = list.map((a) => `<label class="layout-place-row${dimsOk(a) ? '' : ' is-off'}" data-place-text="${esc(`${a.code} ${a.name} ${a.typeName} ${a.className} ${a.model || ''} ${a.serialNumber || ''}`.toLowerCase())}"><input type="checkbox" data-place-asset="${a.id}"${dimsOk(a) ? '' : ' disabled'}> <b>${esc(a.code)}</b> · ${esc(a.name)} <small>${esc(detail(a))}${dimsOk(a) ? '' : ` ${esc(a.complete ? t('main.layoutColocarSinMedidas') : t('main.layoutColocarFalta', { falta: faltaText(a) }))}`}</small></label>`).join('');
+    const rows = list.map((a) => `<label class="layout-place-row${dimsOk(a) ? '' : ' is-off'}" data-place-text="${esc(`${a.code} ${a.name} ${a.typeName} ${a.className} ${a.model || ''} ${a.serialNumber || ''}`.toLowerCase())}"><input type="checkbox" data-place-asset="${a.id}"${dimsOk(a) ? '' : ' disabled'}> <span class="layout-place-name"><b>${esc(a.code)}</b> · ${esc(a.name)}</span> <small>${esc(detail(a))}${dimsOk(a) ? '' : ` ${esc(a.complete ? t('main.layoutColocarSinMedidas') : t('main.layoutColocarFalta', { falta: faltaText(a) }))}`}</small></label>`).join('');
     placeModalEl.innerHTML = `<div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="layout-place-title">
         <h3 id="layout-place-title" data-help-key="${sensors ? 'layoutColocarSensor' : 'layoutColocarActivo'}">${esc(t(sensors ? 'main.layoutColocarTituloSensor' : 'main.layoutColocarTitulo'))}</h3>
         ${sensors ? '' : `<div class="admin-form-grid">
             <div class="admin-field"><label for="layout-place-zone">${esc(t('main.layoutZona'))}</label><select id="layout-place-zone">${zoneOptions}</select></div>
             <div class="admin-field"><label for="layout-place-fp">${esc(t('main.layoutHuellaCol'))}</label><select id="layout-place-fp"><option value="">${esc(t('main.layoutActivoElegirHuella'))}</option></select></div>
         </div>`}
-        ${list.length ? `<input type="search" id="layout-place-search" placeholder="${esc(t('main.layoutColocarBuscar'))}" style="width:100%; margin-top:.6rem;"><div class="layout-place-list">${rows}</div>` : `<p class="layout-muted">${esc(t(sensors ? 'main.layoutColocarVacioSensor' : 'main.layoutColocarVacio'))}</p>`}
+        ${list.length ? `<input type="search" id="layout-place-search" class="layout-place-search" placeholder="${esc(t('main.layoutColocarBuscar'))}"><div class="layout-place-list">${rows}</div>` : `<p class="layout-muted">${esc(t(sensors ? 'main.layoutColocarVacioSensor' : 'main.layoutColocarVacio'))}</p>`}
         <div id="layout-place-error" class="admin-error" role="alert" hidden></div>
         <div class="admin-form-actions">
             <button type="button" class="btn" id="layout-place-ok"${pickable ? '' : ' disabled'}>${esc(t('main.layoutColocarBtn'))}</button>
