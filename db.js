@@ -2390,6 +2390,10 @@ if (!skuItemColumns.some((c) => c.name === 'packaging')) db.exec("ALTER TABLE sk
 if (!skuItemColumns.some((c) => c.name === 'editing')) {
     db.exec('ALTER TABLE sku_items ADD COLUMN editing INTEGER NOT NULL DEFAULT 0');
 }
+// «Editar» con elección de datos (2026-11-12, Daniel: lo terminado vive en Gestión y al editarlo se dice QUÉ dato se va a modificar). editing_fields = JSON { fields: [claves del dato], statusPending: bool } con lo que se marcó;
+// editing_backup = JSON { clave: valor que tenía } de lo que se vació, para «Cancelar edición». NULL en un código que está en edición «de siempre» (todo abierto, con su botón Terminar edición).
+if (!skuItemColumns.some((c) => c.name === 'editing_fields')) db.exec('ALTER TABLE sku_items ADD COLUMN editing_fields TEXT');
+if (!skuItemColumns.some((c) => c.name === 'editing_backup')) db.exec('ALTER TABLE sku_items ADD COLUMN editing_backup TEXT');
 // Clasificación del código (Patente, Genérico…): el id de una fila de Nuestras Clasificaciones (article_categories, tipo clasificaciones), NO su nombre, para que la dirección de su QR y
 // la relación sigan firmes si la clasificación se renombra. Es opcional (un código sin clasificación sale en "SIN CLASIFICAR") y solo puede ser una de las que tiene la Categoría Inventario del código.
 if (!skuItemColumns.some((c) => c.name === 'classification_id')) {
@@ -5428,7 +5432,51 @@ function setSkuItemStatus(id, clientId, status, forTestAccount = false) {
 
 // Pasa un código a Edición Código (flag = true) o lo regresa a Códigos (flag = false).
 function setSkuItemEditing(id, clientId, flag, forTestAccount = false) {
-    db.prepare('UPDATE sku_items SET editing = ? WHERE id = ? AND client_id = ? AND is_test_data = ?').run(flag ? 1 : 0, id, clientId, forTestAccount ? 1 : 0);
+    // al regresar a Gestión (flag = false) se borra también lo que se había marcado y la copia de lo vaciado
+    db.prepare(`UPDATE sku_items SET editing = ?${flag ? '' : ', editing_fields = NULL, editing_backup = NULL'} WHERE id = ? AND client_id = ? AND is_test_data = ?`).run(flag ? 1 : 0, id, clientId, forTestAccount ? 1 : 0);
+    return getSkuItemById(id, clientId, forTestAccount);
+}
+// Lo que vale un dato «vacío» (pendiente): los números en 0, la clasificación sin elegir (NULL) y todo lo demás en texto vacío.
+const SKU_NUMBER_KEYS = ['height', 'length', 'width', 'articleWeight', 'packageWeight', 'unitsPerLayer', 'layersPerPallet', 'maxStack'];
+function skuEmptyValueFor(key) {
+    if (key === 'classificationId') return null;
+    return SKU_NUMBER_KEYS.includes(key) ? 0 : '';
+}
+// Lo marcado de un código en edición: { fields: [...], statusPending } o null si es una edición «de siempre» (o no está en edición).
+function parseSkuEditingFields(row) {
+    if (!row || !row.editing || !row.editing_fields) return null;
+    try {
+        const parsed = JSON.parse(row.editing_fields);
+        if (!parsed || !Array.isArray(parsed.fields)) return null;
+        return { fields: parsed.fields.filter((k) => Object.prototype.hasOwnProperty.call(SKU_ITEM_PATCHABLE_FIELDS, k)), statusPending: !!parsed.statusPending };
+    } catch { return null; }
+}
+function parseSkuEditingBackup(row) {
+    if (!row || !row.editing_backup) return {};
+    try { const parsed = JSON.parse(row.editing_backup); return parsed && typeof parsed === 'object' ? parsed : {}; } catch { return {}; }
+}
+// Manda un código completo a Edición Código con SOLO los datos marcados: guarda lo que tenían (backup), los vacía (quedan pendientes) y lo deja en edición. «Estatus» no se vacía: queda por elegir (statusPending).
+function startSkuItemEditionWithFields(id, clientId, forTestAccount, { fields, statusPending }) {
+    const row = getSkuItemById(id, clientId, forTestAccount);
+    const backup = {};
+    const patch = {};
+    fields.forEach((key) => {
+        backup[key] = row[SKU_ITEM_PATCHABLE_FIELDS[key].column];
+        patch[key] = skuEmptyValueFor(key);
+    });
+    db.transaction(() => {
+        updateSkuItem(id, clientId, patch, forTestAccount);
+        db.prepare('UPDATE sku_items SET editing = 1, editing_fields = ?, editing_backup = ? WHERE id = ? AND client_id = ? AND is_test_data = ?')
+            .run(JSON.stringify({ fields, statusPending: !!statusPending }), JSON.stringify(backup), id, clientId, forTestAccount ? 1 : 0);
+    })();
+    return getSkuItemById(id, clientId, forTestAccount);
+}
+// Cambia lo que falta por elegir del estatus sin tocar lo demás (se llama al elegir el estatus de un código en edición).
+function setSkuItemStatusPending(id, clientId, forTestAccount, pending) {
+    const row = getSkuItemById(id, clientId, forTestAccount);
+    const info = parseSkuEditingFields(row);
+    if (!info) return row;
+    db.prepare('UPDATE sku_items SET editing_fields = ? WHERE id = ? AND client_id = ? AND is_test_data = ?').run(JSON.stringify({ fields: info.fields, statusPending: !!pending }), id, clientId, forTestAccount ? 1 : 0);
     return getSkuItemById(id, clientId, forTestAccount);
 }
 
@@ -13318,6 +13366,11 @@ module.exports = {
     createSkuItem,
     updateSkuItem,
     setSkuItemEditing,
+    skuEmptyValueFor,
+    parseSkuEditingFields,
+    parseSkuEditingBackup,
+    startSkuItemEditionWithFields,
+    setSkuItemStatusPending,
     deleteSkuItem,
     getSkuNumberingInfo,
     buildSkuCode,

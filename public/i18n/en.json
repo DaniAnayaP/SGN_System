@@ -2022,6 +2022,23 @@
     "codigoPasoACatalogo": "Code {sku} is complete: it is no longer listed here, it moved to Management > Codes.",
     "skuEditarBtn": "Edit",
     "skuTerminarEdicionBtn": "Finish editing",
+    "skuCancelarEdicionBtn": "Cancel editing",
+    "skuCancelarEdicionConfirm": "Cancel the editing of code {sku}? Whatever was emptied goes back as it was and the code returns to Management > Codes.",
+    "skuCancelarEdicionAceptar": "Cancel editing",
+    "skuCancelarDescRepetida": "The Unique Description it had was already taken by code {sku}. Choose another one to finish editing.",
+    "skuCancelo": "Editing of code {sku} was canceled: it went back to Management > Codes.",
+    "skuEditarTitulo": "Which data do you want to change?",
+    "skuEditarGrupoDatos": "Data",
+    "skuEditarGrupoEvidencias": "Evidence",
+    "skuEditarGrupoCategorias": "Categories",
+    "skuEditarGrupoEstatus": "Status",
+    "skuEditarAceptar": "Move to Operations",
+    "skuEditarCancelar": "Cancel",
+    "skuEditarMarcaUno": "Mark at least one data to change.",
+    "skuEnEdicion": "Editing",
+    "skuEnEdicionDatos": "Editing: {datos}",
+    "skuEstatusElegir": "Choose…",
+    "skuCeldaCerrada": "Closed: this data was not marked to change.",
     "skuPasoAEdicion": "Code {sku} moved to Operations > Code Editing.",
     "skuTerminoEdicion": "Code {sku} finished editing and went back to Management > Codes.",
     "skuFaltanDatos": "The code is missing data: fill it in to finish editing.",
@@ -6299,11 +6316,23 @@
       "example": "the medicine is back in the catalog: you activate it and it shows up when making a new relation."
     },
     "skuEditar": {
-      "what": "Sends this code to Operations > Code Editing so you can fix it. Here, in Codes, they are only viewed. It is noted in the code history.",
-      "example": "you got the weight wrong: you choose Edit, fix it in Code Editing and when finished it comes back here."
+      "what": "Asks which data you want to change and sends this code to Operations > Code Editing with THAT data emptied and pending. Here, in Management, codes are only viewed. It is noted in the code history.",
+      "example": "you got the weight wrong: you choose Edit, mark «Article Weight», fill it in again in Code Editing and the code goes back to Management by itself."
+    },
+    "skuEditarDatos": {
+      "what": "Mark the data you want to fix. Each marked data is emptied and left pending (what it had is kept in the history) and only those can be filled in; the rest of the code stays closed. «Status» is for deactivating or activating the code again.",
+      "example": "you mark «Article Weight» and «Front Evidence»: in Code Editing only those two cells open, in red, until you fill them in."
+    },
+    "skuEditarAceptar": {
+      "what": "Sends the code to Operations > Code Editing with what you marked emptied. If you change your mind, you can cancel the editing right there and everything goes back as it was.",
+      "example": "you marked «Article Weight» and press Move to Operations: the line leaves Management and shows up in Code Editing."
+    },
+    "skuCancelarEdicion": {
+      "what": "Cancels the editing: whatever was emptied goes back as it was, it is noted in the history and the code returns to Management > Codes.",
+      "example": "you marked the weight by mistake: you choose Cancel editing and the previous weight is back."
     },
     "skuTerminarEdicion": {
-      "what": "Finishes this code editing and sends it back to Catalogs > Codes. It is only possible when the code has all 24 data filled in.",
+      "what": "Finishes this code editing and sends it back to Management > Codes. It is only possible when the code has all 24 data filled in. (Editings with chosen data finish by themselves once filled in.)",
       "example": "you fixed the weight and the photos are complete: you choose Finish editing."
     },
     "layoutZoneUse": {

@@ -2022,6 +2022,23 @@
     "codigoPasoACatalogo": "El código {sku} quedó completo: ya no se ve aquí, pasó a Gestión > Códigos.",
     "skuEditarBtn": "Editar",
     "skuTerminarEdicionBtn": "Terminar edición",
+    "skuCancelarEdicionBtn": "Cancelar edición",
+    "skuCancelarEdicionConfirm": "¿Cancelar la edición del código {sku}? Lo que se había vaciado regresa como estaba y el código vuelve a Gestión > Códigos.",
+    "skuCancelarEdicionAceptar": "Cancelar edición",
+    "skuCancelarDescRepetida": "La Descripción Única que tenía ya la tomó el código {sku}. Elige otra para terminar la edición.",
+    "skuCancelo": "Se canceló la edición del código {sku}: regresó a Gestión > Códigos.",
+    "skuEditarTitulo": "¿Qué dato quieres modificar?",
+    "skuEditarGrupoDatos": "Datos",
+    "skuEditarGrupoEvidencias": "Evidencias",
+    "skuEditarGrupoCategorias": "Categorías",
+    "skuEditarGrupoEstatus": "Estatus",
+    "skuEditarAceptar": "Pasar a Operaciones",
+    "skuEditarCancelar": "Cancelar",
+    "skuEditarMarcaUno": "Marca al menos un dato para modificar.",
+    "skuEnEdicion": "En edición",
+    "skuEnEdicionDatos": "En edición: {datos}",
+    "skuEstatusElegir": "Elige…",
+    "skuCeldaCerrada": "Cerrado: este dato no se marcó para modificar.",
     "skuPasoAEdicion": "El código {sku} pasó a Operaciones > Edición Código.",
     "skuTerminoEdicion": "El código {sku} terminó su edición y regresó a Gestión > Códigos.",
     "skuFaltanDatos": "Al código le faltan datos: llénalos para terminar la edición.",
@@ -6298,11 +6315,23 @@
       "example": "el medicamento regresó al catálogo: lo activas y ya sale al hacer una relación nueva."
     },
     "skuEditar": {
-      "what": "Manda este código a Operaciones > Edición Código para corregirlo. Aquí, en Códigos, solo se ven. Queda anotado en el historial del código.",
-      "example": "te equivocaste en el peso: eliges Editar, lo corriges en Edición Código y al terminar regresa aquí."
+      "what": "Pregunta qué dato quieres modificar y manda este código a Operaciones > Edición Código con ESE dato vacío y pendiente. Aquí, en Gestión, los códigos solo se ven. Queda anotado en el historial del código.",
+      "example": "te equivocaste en el peso: eliges Editar, marcas «Peso Artículo», lo llenas de nuevo en Edición Código y el código regresa solo a Gestión."
+    },
+    "skuEditarDatos": {
+      "what": "Marca el dato o los datos que quieres corregir. Cada dato marcado se vacía y queda pendiente (lo que tenía se guarda en el historial) y solo esos se podrán llenar; lo demás del código queda cerrado. «Estatus» sirve para desactivar o volver a activar el código.",
+      "example": "marcas «Peso Artículo» y «Evidencia Enfrente»: en Edición Código solo esas dos celdas se abren, en rojo, hasta que las llenes."
+    },
+    "skuEditarAceptar": {
+      "what": "Manda el código a Operaciones > Edición Código con lo marcado vacío. Si te arrepientes, ahí mismo puedes cancelar la edición y todo regresa como estaba.",
+      "example": "marcaste «Peso Artículo» y das Pasar a Operaciones: la línea sale de Gestión y aparece en Edición Código."
+    },
+    "skuCancelarEdicion": {
+      "what": "Cancela la edición: lo que se había vaciado regresa como estaba, queda anotado en el historial y el código vuelve a Gestión > Códigos.",
+      "example": "marcaste el peso por error: eliges Cancelar edición y el peso de antes regresa."
     },
     "skuTerminarEdicion": {
-      "what": "Termina la edición de este código y lo regresa a Catálogos > Códigos. Solo se puede si el código tiene sus 24 datos llenos.",
+      "what": "Termina la edición de este código y lo regresa a Gestión > Códigos. Solo se puede si el código tiene sus 24 datos llenos. (Las ediciones con datos elegidos terminan solas al llenarlos.)",
       "example": "ya corregiste el peso y las fotos están completas: eliges Terminar edición."
     },
     "layoutZoneUse": {

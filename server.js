@@ -152,6 +152,11 @@ const {
     SKU_ITEM_PATCHABLE_FIELDS,
     updateSkuItem,
     setSkuItemEditing,
+    skuEmptyValueFor,
+    parseSkuEditingFields,
+    parseSkuEditingBackup,
+    startSkuItemEditionWithFields,
+    setSkuItemStatusPending,
     deleteSkuItem,
     getSkuNumberingInfo,
     buildSkuCode,
@@ -6483,6 +6488,9 @@ function mapSkuItemRecord(row, pendingByRecord, companyName) {
         // ¿Ya tiene sus 24 datos? Si sí, ya no se ve en Alta Nuestros Artículos y pasa a Catálogos > Códigos (solo lectura). editing = lo mandaron a Operaciones > Edición Código.
         complete: isSkuItemComplete(row),
         editing: !!row.editing,
+        // «Editar» con elección de datos: lo que se marcó para modificar (null = edición de siempre, todo abierto) y si falta elegir el estatus
+        editingFields: (parseSkuEditingFields(row) || {}).fields || null,
+        statusPending: !!(parseSkuEditingFields(row) || {}).statusPending,
         pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({
             companyName,
@@ -6730,6 +6738,23 @@ function logSkuScreenMove(req, skuItem, from, to) {
         fieldKey: 'main.skuUbicacionPantalla', oldValue: from, newValue: to, changedBy: changedByLabel(req),
     });
 }
+// Nombre (en español) de cada dato marcable, para los mensajes.
+const SKU_EDIT_LABELS = {
+    ...Object.fromEntries(require('./public/SkuTemplate.js').ALL_COLUMNS.filter((c) => c.kind !== 'sku').map((c) => [c.key, c.es])),
+    evidenceFront: 'Evidencia Enfrente', evidenceBack: 'Evidencia Atrás', evidenceLeft: 'Evidencia Izquierda', evidenceRight: 'Evidencia Derecha', evidenceTop: 'Evidencia Arriba', evidenceBottom: 'Evidencia Abajo',
+};
+// ¿Ya se volvieron a llenar los datos marcados (y se eligió el estatus, si se marcó)? Entonces la edición termina SOLA: el código regresa a Gestión > Códigos sin que nadie lo pida.
+function skuEditionIsDone(row) {
+    const info = parseSkuEditingFields(row);
+    if (!info) return false;
+    return !info.statusPending && info.fields.every((k) => isSkuFieldFilled(row[SKU_ITEM_PATCHABLE_FIELDS[k].column])) && isSkuItemComplete(row);
+}
+function finishSkuEditionIfDone(req, skuItem) {
+    if (!skuItem || !skuItem.editing || !skuEditionIsDone(skuItem)) return { skuItem, movedToGestion: false };
+    const done = setSkuItemEditing(skuItem.id, req.user.clientId, false, req.user.isTestAccount);
+    logSkuScreenMove(req, done, 'Edición Código', 'Códigos');
+    return { skuItem: done, movedToGestion: true };
+}
 app.post('/api/business/sku-items/:id/edit', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!canUseEdicionCodigo(req)) return res.status(403).json({ message: 'No tienes permiso para mandar códigos a Edición Código.' });
@@ -6737,10 +6762,80 @@ app.post('/api/business/sku-items/:id/edit', requireAuth, requireCostCenter, (re
     if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
     if (existing.editing) return res.status(409).json({ message: 'Este código ya está en Edición Código.' });
     if (!isSkuItemComplete(existing)) return res.status(409).json({ message: 'Este código todavía no está completo: se termina de llenar en Alta Nuestros Artículos.' });
-    const skuItem = setSkuItemEditing(existing.id, req.user.clientId, true, req.user.isTestAccount);
-    logSkuScreenMove(req, skuItem, 'Códigos', 'Edición Código');
     const client = getClientById(req.user.clientId);
+    const body = req.body || {};
+    // Edición de siempre (sin elegir datos): queda todo abierto y se termina con «Terminar edición».
+    if (!Array.isArray(body.fields)) {
+        const skuItem = setSkuItemEditing(existing.id, req.user.clientId, true, req.user.isTestAccount);
+        logSkuScreenMove(req, skuItem, 'Códigos', 'Edición Código');
+        return res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name) });
+    }
+    // Edición con elección de datos: se marca QUÉ dato(s) se va(n) a modificar. Cada dato marcado se vacía (queda pendiente; lo que tenía se guarda para «Cancelar edición» y queda en el historial) y solo ESOS se podrán llenar.
+    const marked = [...new Set(body.fields.map(String))];
+    if (!marked.length) return res.status(400).json({ message: 'Marca al menos un dato para modificar.', code: 'EMPTY' });
+    const unknown = marked.filter((k) => k !== 'status' && !Object.prototype.hasOwnProperty.call(SKU_ITEM_PATCHABLE_FIELDS, k));
+    if (unknown.length) return res.status(400).json({ message: 'Hay datos que no existen: ' + unknown.join(', ') + '.', code: 'UNKNOWN', fields: unknown });
+    const statusPending = marked.includes('status');
+    const fields = marked.filter((k) => k !== 'status');
+    if (statusPending && !canChangeSkuStatus(req)) return res.status(403).json({ message: 'No tienes permiso para cambiar el estatus de los códigos.', code: 'noPermission', field: 'status' });
+    if (!req.user.isClientAdmin) {
+        // modificar un dato que ya tiene valor pide el nivel «Modificar» de su hoja, igual que en la tabla
+        const grants = getUserEffectiveGrants(req.user.sub);
+        for (const key of fields) {
+            const colKey = SKU_ITEM_PATCHABLE_FIELDS[key].fieldKey.split('.').pop();
+            if (getColumnGrantLevel(grants, 'nuestros-articulos', colKey) !== 'editar') {
+                return res.status(403).json({ message: 'No tienes permiso para modificar «' + (SKU_EDIT_LABELS[key] || key) + '».', code: 'noPermission', field: key });
+            }
+        }
+    }
+    const { clientId, isTestAccount } = req.user;
+    const classNameOf = (id) => classificationNameOf(clientId, isTestAccount, id);
+    const skuItem = startSkuItemEditionWithFields(existing.id, clientId, isTestAccount, { fields, statusPending });
+    fields.forEach((key) => {
+        const { column, fieldKey } = SKU_ITEM_PATCHABLE_FIELDS[key];
+        logTableChange({
+            clientId, tableKey: 'nuestros-articulos', recordId: existing.id, recordLabel: '#' + existing.id, action: 'update', fieldKey,
+            oldValue: key === 'classificationId' ? classNameOf(existing[column]) : existing[column], newValue: '', changedBy: changedByLabel(req),
+        });
+    });
+    if (statusPending) {
+        logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: existing.id, recordLabel: '#' + existing.id, action: 'update', fieldKey: 'main.colArticuloEstatus', oldValue: SKU_STATUS_LABELS[existing.status === 'inactive' ? 'inactive' : 'active'], newValue: '', changedBy: changedByLabel(req) });
+    }
+    logSkuScreenMove(req, skuItem, 'Códigos', 'Edición Código');
     res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name) });
+});
+// Cancelar una edición con datos elegidos: lo vaciado regresa a como estaba (queda en el historial) y el código vuelve a Gestión.
+app.post('/api/business/sku-items/:id/cancel-edit', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!canUseEdicionCodigo(req)) return res.status(403).json({ message: 'No tienes permiso para cancelar la edición de códigos.' });
+    const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
+    const info = parseSkuEditingFields(existing);
+    if (!info) return res.status(409).json({ message: 'Este código no está en una edición con datos elegidos.', code: 'notFields' });
+    const { clientId, isTestAccount } = req.user;
+    const backup = parseSkuEditingBackup(existing);
+    const patch = {};
+    info.fields.forEach((key) => { if (Object.prototype.hasOwnProperty.call(backup, key)) patch[key] = backup[key]; });
+    // la Descripción Única no se repite: si mientras tanto otro código la tomó, no se puede regresar
+    if (Object.prototype.hasOwnProperty.call(patch, 'uniqueDescription')) {
+        const owner = skuUniqueDescriptionOwner(clientId, isTestAccount, patch.uniqueDescription, existing.id);
+        if (owner) return res.status(409).json({ message: 'La Descripción Única que tenía ya la tomó el código ' + owner + '. Elige otra para terminar la edición.', code: 'DESC_UNIQUE', sku: owner });
+    }
+    const classNameOf = (id) => classificationNameOf(clientId, isTestAccount, id);
+    updateSkuItem(existing.id, clientId, patch, isTestAccount);
+    Object.keys(patch).forEach((key) => {
+        const { column, fieldKey } = SKU_ITEM_PATCHABLE_FIELDS[key];
+        if (String(existing[column] ?? '') === String(patch[key] ?? '')) return;
+        logTableChange({
+            clientId, tableKey: 'nuestros-articulos', recordId: existing.id, recordLabel: '#' + existing.id, action: 'update', fieldKey,
+            oldValue: key === 'classificationId' ? classNameOf(existing[column]) : existing[column],
+            newValue: key === 'classificationId' ? classNameOf(patch[key]) : patch[key], changedBy: changedByLabel(req),
+        });
+    });
+    const skuItem = setSkuItemEditing(existing.id, clientId, false, isTestAccount);
+    logSkuScreenMove(req, skuItem, 'Edición Código', 'Códigos');
+    const client = getClientById(req.user.clientId);
+    res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name), movedToGestion: true });
 });
 app.post('/api/business/sku-items/:id/finish-edit', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -6771,6 +6866,12 @@ app.patch('/api/business/sku-items/:id', requireAuth, requireCostCenter, (req, r
     const existing = getSkuItemById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Sku item not found.' });
     const { baseline, overrideConflicts, ...rawPatch } = req.body || {};
+    // Un código en edición con datos elegidos solo deja llenar ESOS datos (también lo exige el servidor, no solo la pantalla).
+    const editInfo = parseSkuEditingFields(existing);
+    if (editInfo) {
+        const locked = Object.keys(rawPatch).filter((k) => Object.prototype.hasOwnProperty.call(SKU_ITEM_PATCHABLE_FIELDS, k) && !editInfo.fields.includes(k));
+        if (locked.length) return res.status(403).json({ message: 'Este código está en edición: solo se puede modificar lo que se marcó.', code: 'EDIT_LOCKED', fields: locked });
+    }
     const stackingError = validateSkuStackingPatch(rawPatch);
     if (stackingError) return res.status(400).json({ message: stackingError });
     // La Descripción Única nunca se repite: se rechaza antes de guardar nada (el código del mensaje lo traduce la pantalla).
@@ -6794,8 +6895,11 @@ app.patch('/api/business/sku-items/:id', requireAuth, requireCostCenter, (req, r
         });
     }
     skuItem = maybeIssueSkuPublicToken(skuItem, req.user.clientId, req.user.isTestAccount);
+    // si con esto ya se llenó todo lo que se marcó, la edición termina sola y el código regresa a Gestión
+    const finished = finishSkuEditionIfDone(req, skuItem);
+    skuItem = finished.skuItem;
     const client = getClientById(req.user.clientId);
-    res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name), pendingFields, rejectedFields, conflictFields });
+    res.json({ skuItem: mapSkuItemRecord(skuItem, null, client?.company_name), pendingFields, rejectedFields, conflictFields, movedToGestion: finished.movedToGestion });
 });
 
 // Los códigos NUNCA se eliminan: se DESACTIVAN (y se vuelven a activar). Un código es la rama de conexión de todo (relaciones, ubicaciones, presentaciones, QR, pedidos): si se borrara, se borrarían los registros que cuelgan de él.
@@ -6825,9 +6929,19 @@ app.post('/api/business/sku-items/:id/status', requireAuth, requireCostCenter, (
     if (changed) {
         notifyDataChange({ clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordLabel: `#${existing.id}`, fieldKey: 'main.colArticuloEstatus', oldValue: SKU_STATUS_LABELS[status === 'inactive' ? 'active' : 'inactive'], newValue: SKU_STATUS_LABELS[status], actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
     }
+    // Si el estatus se había marcado para modificar, elegirlo (aunque sea el mismo) lo da por resuelto; si ya no falta nada, el código regresa solo a Gestión.
+    let current = getSkuItemById(existing.id, req.user.clientId, req.user.isTestAccount);
+    let movedToGestion = false;
+    const editInfo = parseSkuEditingFields(current);
+    if (editInfo && editInfo.statusPending) {
+        if (!changed) logTableChange({ clientId: req.user.clientId, tableKey: 'nuestros-articulos', recordId: existing.id, recordLabel: `#${existing.id}`, action: 'update', fieldKey: 'main.colArticuloEstatus', oldValue: '', newValue: SKU_STATUS_LABELS[status], changedBy: changedByLabel(req) });
+        const finished = finishSkuEditionIfDone(req, setSkuItemStatusPending(existing.id, req.user.clientId, req.user.isTestAccount, false));
+        movedToGestion = finished.movedToGestion;
+        current = finished.skuItem;
+    }
     const client = getClientById(req.user.clientId);
     res.set('Cache-Control', 'no-store');
-    res.json({ skuItem: mapSkuItemRecord(getSkuItemById(existing.id, req.user.clientId, req.user.isTestAccount), null, client?.company_name), changed });
+    res.json({ skuItem: mapSkuItemRecord(current, null, client?.company_name), changed, movedToGestion });
 });
 // Varios a la vez (Alta: «Seleccionar» lo filtrado y «Desactivar seleccionados»): las mismas reglas; devuelve los ids que sí cambiaron (los que ya estaban así no cuentan) y manda UN solo aviso. Hasta 500 por petición.
 app.post('/api/business/sku-items/bulk-status', requireAuth, requireCostCenter, (req, res) => {

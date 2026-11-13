@@ -246,7 +246,178 @@ function announceMoved(skuItem) {
     if (!CODES_MODE && !EDIT_MODE && skuItem.complete) Dashboard.showToast(Dashboard.t('main.codigoPasoACatalogo').replace('{sku}', skuItem.sku), 'success');
 }
 
-// Editar (en Códigos): manda el código a Edición Código. Terminar edición (en Edición Código): lo regresa a Códigos; solo si ya tiene los 24 datos.
+// «Editar» con elección de datos (2026-11-12): en Gestión > Códigos, Editar pregunta QUÉ dato(s) se quiere(n) modificar; el código pasa a Operaciones > Edición Código con ESE dato vaciado y pendiente (en rojo) y
+// solo ese se deja llenar (también lo exige el servidor). Al llenarlo de nuevo la edición termina sola y el código regresa a Gestión; «Cancelar edición» regresa lo vaciado a como estaba.
+const SKU_FIELD_COLS = {
+    upc: 'colArticuloUpc', clientCode: 'colArticuloCodigoCliente', uniqueDescription: 'colArticuloDescUnica', knownDescription: 'colArticuloDescConocida', customDescription: 'colArticuloDescPersonalizada',
+    mainUom: 'colArticuloUdm', articleType: 'colArticuloTipo', height: 'colArticuloAlto', length: 'colArticuloLargo', width: 'colArticuloAncho', articleWeight: 'colArticuloPesoArticulo', packageWeight: 'colArticuloPesoEmpaque',
+    storageType: 'colArticuloTipoAlmacenamiento', unitsPerLayer: 'colArticuloCantidadCama', layersPerPallet: 'colArticuloCamasPallet', maxStack: 'colArticuloMaxEstiba',
+    evidenceFront: 'colArticuloEvidenceFront', evidenceBack: 'colArticuloEvidenceBack', evidenceLeft: 'colArticuloEvidenceLeft', evidenceRight: 'colArticuloEvidenceRight', evidenceTop: 'colArticuloEvidenceTop', evidenceBottom: 'colArticuloEvidenceBottom',
+    categoryInventario: 'colArticuloCategoriaInventario', categoryCompra: 'colArticuloCategoriaCompra', categoryAlmacenamiento: 'colArticuloCategoriaAlmacenamiento', categoryRotacion: 'colArticuloCategoriaRotacion',
+    categoryManejo: 'colArticuloCategoriaManejo', categoryRiesgo: 'colArticuloCategoriaRiesgo', categoryVidautil: 'colArticuloCategoriaVidautil', categoryTipoCodigo: 'colArticuloCategoriaTipoCodigo', classificationId: 'colArticuloClasificacion',
+};
+// Lo que se puede marcar en el diálogo (el tipo de almacenamiento y la estiba ya no se capturan aquí: pasaron a Presentaciones de Distribución).
+const SKU_EDIT_GROUPS = [
+    ['main.skuEditarGrupoDatos', ['upc', 'clientCode', 'uniqueDescription', 'knownDescription', 'customDescription', 'mainUom', 'articleType', 'height', 'length', 'width', 'articleWeight', 'packageWeight']],
+    ['main.skuEditarGrupoEvidencias', ['evidenceFront', 'evidenceBack', 'evidenceLeft', 'evidenceRight', 'evidenceTop', 'evidenceBottom']],
+    ['main.skuEditarGrupoCategorias', ['categoryInventario', 'categoryCompra', 'categoryAlmacenamiento', 'categoryRotacion', 'categoryManejo', 'categoryRiesgo', 'categoryVidautil', 'categoryTipoCodigo', 'classificationId']],
+];
+function openSkuEditDialog(record) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    const panel = document.createElement('div');
+    panel.className = 'modal-panel sku-edit-win';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    const title = document.createElement('h3');
+    title.textContent = Dashboard.t('main.skuEditarTitulo');
+    title.setAttribute('data-help-key', 'skuEditarDatos');
+    const who = document.createElement('p');
+    who.className = 'sku-edit-who';
+    who.textContent = [record.sku, record.uniqueDescription || record.knownDescription || record.customDescription].filter(Boolean).join(' · ');
+    panel.append(title, who);
+    const boxes = [];
+    const addGroup = (labelKey, entries) => {
+        const set = document.createElement('fieldset');
+        set.className = 'sku-edit-group';
+        const legend = document.createElement('legend');
+        legend.textContent = Dashboard.t(labelKey);
+        set.appendChild(legend);
+        entries.forEach(({ key, colId, allowed }) => {
+            const label = document.createElement('label');
+            label.className = 'sku-edit-opt';
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.id = `sku-edit-${key}`;
+            box.value = key;
+            box.disabled = !allowed;
+            if (!allowed) label.title = Dashboard.t('main.fieldLocked');
+            const text = document.createElement('span');
+            text.textContent = Dashboard.t(`main.${colId}`);
+            label.append(box, text);
+            set.appendChild(label);
+            boxes.push(box);
+        });
+        panel.appendChild(set);
+    };
+    SKU_EDIT_GROUPS.forEach(([labelKey, keys]) => addGroup(labelKey, keys.map((key) => ({ key, colId: SKU_FIELD_COLS[key], allowed: Dashboard.hasColumnEditGrant(TABLE_KEY, SKU_FIELD_COLS[key]) }))));
+    addGroup('main.skuEditarGrupoEstatus', [{ key: 'status', colId: 'colArticuloEstatus', allowed: Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth') }]);
+    const actions = document.createElement('div');
+    actions.className = 'admin-form-actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn btn-secondary';
+    cancel.textContent = Dashboard.t('main.skuEditarCancelar');
+    const accept = document.createElement('button');
+    accept.type = 'button';
+    accept.className = 'btn';
+    accept.id = 'sku-edit-accept';
+    accept.textContent = Dashboard.t('main.skuEditarAceptar');
+    accept.setAttribute('data-help-key', 'skuEditarAceptar');
+    accept.disabled = true;
+    actions.append(cancel, accept);
+    panel.appendChild(actions);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+    cancel.addEventListener('click', close);
+    panel.addEventListener('change', () => { accept.disabled = !boxes.some((b) => b.checked); });
+    accept.addEventListener('click', async () => {
+        const fields = boxes.filter((b) => b.checked).map((b) => b.value);
+        if (!fields.length) { Dashboard.showToast(Dashboard.t('main.skuEditarMarcaUno'), 'warning'); return; }
+        accept.disabled = true;
+        try {
+            const res = await fetch(`/api/business/sku-items/${record.id}/edit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ fields }) });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), res.status === 403 ? 'warning' : 'error');
+                if (res.status === 409) { close(); await refreshTable(); } else accept.disabled = false;
+                return;
+            }
+            close();
+            Dashboard.showToast(fillText('main.skuPasoAEdicion', { sku: record.sku }), 'success');
+            removeSkuRecord(record.id);
+        } catch (err) {
+            console.error('Códigos: failed to start the edition', err);
+            Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+            accept.disabled = false;
+        }
+    });
+    boxes.find((b) => !b.disabled)?.focus();
+}
+// Cancelar una edición con datos elegidos: lo vaciado regresa a como estaba y el código vuelve a Gestión > Códigos.
+async function cancelSkuEdition(record) {
+    if (!(await Dashboard.confirm(fillText('main.skuCancelarEdicionConfirm', { sku: record.sku }), { accept: Dashboard.t('main.skuCancelarEdicionAceptar') }))) return;
+    try {
+        const res = await fetch(`/api/business/sku-items/${record.id}/cancel-edit`, { method: 'POST', credentials: 'include' });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            Dashboard.showToast(body.code === 'DESC_UNIQUE' ? fillText('main.skuCancelarDescRepetida', { sku: body.sku }) : (body.message || Dashboard.t('admin.saveError')), body.code === 'DESC_UNIQUE' ? 'warning' : 'error');
+            if (res.status === 409 && body.code !== 'DESC_UNIQUE') await refreshTable();
+            return;
+        }
+        Dashboard.showToast(fillText('main.skuCancelo', { sku: record.sku }), 'success');
+        removeSkuRecord(record.id);
+    } catch (err) {
+        console.error('Edición Código: failed to cancel the edition', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+// Edición con datos elegidos: lo que NO se marcó queda cerrado (solo se ve), lo marcado se ve en rojo mientras está pendiente y en verde cuando ya se llenó; el estatus marcado se elige en su celda.
+function lockSkuCell(td) {
+    td.onclick = null;
+    td.classList.remove('editable-cell');
+    td.classList.add('sku-cell-locked');
+    td.removeAttribute('title');
+    td.querySelectorAll('select').forEach((select) => { select.disabled = true; select.title = Dashboard.t('main.skuCeldaCerrada'); });
+    td.querySelectorAll('input[type="file"]').forEach((input) => { input.disabled = true; });
+    td.querySelectorAll('button.admin-icon-btn i.bx-camera').forEach((icon) => { const btn = icon.closest('button'); btn.disabled = true; btn.title = Dashboard.t('main.skuCeldaCerrada'); });
+}
+function applySkuEditMarks(tr, record) {
+    const marked = new Set(record.editingFields);
+    Object.entries(SKU_FIELD_COLS).forEach(([key, colId]) => {
+        const td = tr.querySelector(`td[data-col="${colId}"]`);
+        if (!td) return;
+        if (!marked.has(key)) { lockSkuCell(td); return; }
+        td.classList.add('sku-cell-marked');
+        td.classList.toggle('sku-cell-pending', !isSkuFieldFilled(record[key]));
+    });
+    const names = [...marked].map((key) => Dashboard.t(`main.${SKU_FIELD_COLS[key]}`)).concat(record.statusPending ? [Dashboard.t('main.colArticuloEstatus')] : []);
+    const skuTd = tr.querySelector('td[data-col="colArticuloSku"]');
+    if (skuTd) {
+        const chip = document.createElement('span');
+        chip.className = 'sku-editing-chip';
+        chip.textContent = Dashboard.t('main.skuEnEdicion');
+        chip.title = fillText('main.skuEnEdicionDatos', { datos: names.join(', ') });
+        skuTd.appendChild(chip);
+    }
+    tr.classList.add('sku-row-editing');
+}
+// El estatus marcado para modificar: una lista con «Elige…» que queda en rojo hasta escoger Activo o Inactivo (al escoger, si ya no falta nada el código regresa a Gestión).
+function buildStatusPendingCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colArticuloEstatus';
+    td.classList.add('sku-cell-marked', 'sku-cell-pending');
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    select.setAttribute('data-help-key', 'colArticuloEstatus');
+    select.innerHTML = `<option value="">${Dashboard.t('main.skuEstatusElegir')}</option><option value="active">${Dashboard.t('main.skuStatusActive')}</option><option value="inactive">${Dashboard.t('main.skuStatusInactive')}</option>`;
+    select.value = '';
+    select.disabled = !Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth');
+    if (select.disabled) select.title = Dashboard.t('main.fieldLocked');
+    select.addEventListener('change', async () => {
+        if (!select.value) return;
+        const applied = await changeSkuStatus(record, select.value);
+        if (!applied && select.isConnected) select.value = '';
+    });
+    td.appendChild(select);
+    return td;
+}
+
+// Terminar edición (solo en la edición de siempre, con todo abierto): lo regresa a Códigos; solo si ya tiene los 24 datos.
 async function moveSkuItem(record, action) {
     try {
         const res = await fetch(`/api/business/sku-items/${record.id}/${action}`, { method: 'POST', credentials: 'include' });
@@ -285,6 +456,7 @@ async function patchSkuItem(id, patch) {
             Dashboard.showToast(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'info');
         }
         announceMoved(body.skuItem);
+        if (body.movedToGestion && body.skuItem) Dashboard.showToast(fillText('main.skuTerminoEdicion', { sku: body.skuItem.sku }), 'success'); // se llenó lo marcado: el código regresó solo a Gestión
         const clean = body.skuItem && !body.rejectedFields?.length && !body.pendingFields?.length && !body.conflictFields?.length;
         if (clean && skuRecords.some((r) => r.id === body.skuItem.id)) applySavedSkuRecord(body.skuItem, skuRecords.find((r) => r.id === body.skuItem.id));
         else await refreshTable();
@@ -497,16 +669,18 @@ function buildActionsCell(record, tr) {
         const moveBtn = document.createElement('button');
         moveBtn.type = 'button';
         moveBtn.className = 'admin-icon-btn';
-        moveBtn.setAttribute('data-help-key', CODES_MODE ? 'skuEditar' : 'skuTerminarEdicion');
-        const label = Dashboard.t(CODES_MODE ? 'main.skuEditarBtn' : 'main.skuTerminarEdicionBtn');
+        // Edición con datos elegidos: termina sola al llenarlos (no hay «Terminar edición») y se puede cancelar; la edición de siempre conserva su botón.
+        const byFields = EDIT_MODE && Array.isArray(record.editingFields);
+        moveBtn.setAttribute('data-help-key', CODES_MODE ? 'skuEditar' : (byFields ? 'skuCancelarEdicion' : 'skuTerminarEdicion'));
+        const label = Dashboard.t(CODES_MODE ? 'main.skuEditarBtn' : (byFields ? 'main.skuCancelarEdicionBtn' : 'main.skuTerminarEdicionBtn'));
         moveBtn.setAttribute('aria-label', label);
         moveBtn.title = label;
-        moveBtn.innerHTML = `<i class="bx ${CODES_MODE ? 'bx-edit' : 'bx-check-circle'}" aria-hidden="true"></i>`;
-        moveBtn.addEventListener('click', () => moveSkuItem(record, CODES_MODE ? 'edit' : 'finish-edit'));
+        moveBtn.innerHTML = `<i class="bx ${CODES_MODE ? 'bx-edit' : (byFields ? 'bx-x-circle' : 'bx-check-circle')}" aria-hidden="true"></i>`;
+        moveBtn.addEventListener('click', () => (CODES_MODE ? openSkuEditDialog(record) : (byFields ? cancelSkuEdition(record) : moveSkuItem(record, 'finish-edit'))));
         td.appendChild(moveBtn);
     }
     // Los códigos NUNCA se eliminan: se desactivan (y se vuelven a activar). Pide la hoja «Autorización para Desactivar».
-    if (!CODES_MODE && Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth')) {
+    if (!CODES_MODE && !(EDIT_MODE && Array.isArray(record.editingFields)) && Dashboard.hasColumnDeleteGrant(TABLE_KEY, 'colArticuloDeleteAuth')) {
         const inactive = record.status === 'inactive';
         const statusBtn = document.createElement('button');
         statusBtn.type = 'button';
@@ -524,19 +698,27 @@ function buildActionsCell(record, tr) {
 
 // Desactivar (pide confirmar: deja de ofrecerse para relaciones y pedidos nuevos) o volver a activar un código.
 async function changeSkuStatus(record, status) {
-    if (status === 'inactive' && !(await Dashboard.confirm(fillText('main.skuDesactivarConfirm', { sku: record.sku }), { items: [Dashboard.t('main.skuDesactivarItem1'), Dashboard.t('main.skuDesactivarItem2')], accept: Dashboard.t('main.skuDesactivarAceptar') }))) return;
+    if (status === 'inactive' && !(await Dashboard.confirm(fillText('main.skuDesactivarConfirm', { sku: record.sku }), { items: [Dashboard.t('main.skuDesactivarItem1'), Dashboard.t('main.skuDesactivarItem2')], accept: Dashboard.t('main.skuDesactivarAceptar') }))) return false;
     try {
         const res = await fetch(`/api/business/sku-items/${record.id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status }) });
         if (!res.ok) {
-            if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return; }
+            if (res.status === 403) { Dashboard.showToast(Dashboard.t('main.fieldLocked'), 'warning'); return false; }
             throw new Error('status failed');
         }
         const body = await res.json();
+        if (body.movedToGestion) {
+            // el estatus era lo último que faltaba de la edición: el código regresó solo a Gestión > Códigos
+            removeSkuRecord(record.id);
+            Dashboard.showToast(fillText('main.skuTerminoEdicion', { sku: record.sku }), 'success');
+            return true;
+        }
         applySavedSkuRecord(body.skuItem, record);
         Dashboard.showToast(fillText(status === 'inactive' ? 'main.skuDesactivado' : 'main.skuActivado', { sku: record.sku }), 'success');
+        return true;
     } catch (err) {
         console.error('Alta Nuestros Artículos: failed to change the status', err);
         Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        return false;
     }
 }
 
@@ -624,7 +806,7 @@ function buildRow(record) {
         ...buildSystemCells(record),
         textCellSystem('colArticuloRegistroUnico', record.registroUnico),
         textCell('colArticuloSku', record.sku),
-        statusCell(record),
+        EDIT_MODE && record.statusPending ? buildStatusPendingCell(record) : statusCell(record),
         cells.colArticuloUpc,
         cells.colArticuloCodigoCliente,
         cells.colArticuloDescUnica,
@@ -656,6 +838,7 @@ function buildRow(record) {
         buildActionsCell(record, tr),
     );
     if (CODES_MODE) makeRowReadOnly(tr);
+    if (EDIT_MODE && Array.isArray(record.editingFields)) applySkuEditMarks(tr, record);
     tr.classList.toggle('data-table-row-editable', !!tr.querySelector('td.editable-cell'));
     if (skuSelectMode) decorateRowSelection(tr);
     return tr;
