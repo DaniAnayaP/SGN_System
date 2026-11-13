@@ -8581,6 +8581,63 @@ function migrateLayoutSensorsToFixedAssetsOnce() {
     db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(LAYOUT_SENSORS_TO_ASSETS_KEY);
     console.log('[db] Alta Activos: los sensores ya dibujados pasaron al registro (una vez): ' + JSON.stringify(stats) + '.');
 }
+// Activos de antes + modelos (2026-11-12, Daniel: «no veo en Gestión los H-Thermohygrometer; hazla tú»): los activos dados de alta ANTES del catálogo de modelos traen sus datos escritos a mano (nombre de compra, modelo, forma, medidas y peso) pero
+// sin modelo elegido, y sin modelo nunca están completos (no pasan a Gestión ni se colocan en el Layout). UNA vez, a cada activo sin modelo que ya trae TODOS los datos de un modelo completo (los mismos que pide isAssetModelComplete en server.js)
+// se le crea su modelo en el catálogo Activos Fijos (ligado a su Tipo, con esos mismos datos) y se le asigna: los activos con exactamente los mismos datos comparten un solo modelo. No cambia ningún dato del activo; los que no traen
+// todos los datos (sin medidas, sin modelo, sin peso…) no se tocan. Todo queda en el historial («Migración Alta Activos») y se puede revisar en Catálogos > Activos Fijos > Modelos.
+const ASSETS_TO_MODELS_KEY = 'seed-assets-to-models-v1';
+function migrateFixedAssetsToModelsOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ASSETS_TO_MODELS_KEY)) return;
+    const stats = { models: 0, assets: 0, skipped: 0, failed: 0 };
+    const WHO = 'Migración Alta Activos';
+    const SHAPES = { rectangular: 'Rectangular', cilindrica: 'Cilíndrica', irregular: 'Irregular' };
+    const round = (n, d) => Math.round(Number(n || 0) * 10 ** d) / 10 ** d;
+    const modelFields = ARTICLE_CATEGORY_EXTRA_FIELDS['activos-modelos'];
+    const insert = db.prepare('INSERT INTO data_table_changes (client_id, table_key, record_id, record_label, action, field_key, old_value, new_value, changed_by, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const stamp = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const candidates = db.prepare('SELECT * FROM fixed_assets WHERE model_id IS NULL AND type_id IS NOT NULL ORDER BY client_id, is_test_data, id').all();
+    const made = new Map(); // datos exactos -> id del modelo
+    try {
+        db.transaction(() => {
+            candidates.forEach((a) => {
+                const name = String(a.purchase_name || '').trim();
+                const model = String(a.model || '').trim();
+                const shape = SHAPES[a.shape] ? a.shape : 'rectangular';
+                const cyl = shape === 'cilindrica';
+                const complete = name && model && a.height_cm > 0 && a.length_cm > 0 && a.weight_kg > 0 && (cyl || a.depth_cm > 0) && (shape !== 'irregular' || a.volume_m3 > 0);
+                const type = db.prepare("SELECT id, name FROM article_categories WHERE id = ? AND client_id = ? AND category_type = 'activos-fijos'").get(a.type_id, a.client_id);
+                if (!complete || !type) { stats.skipped += 1; return; }
+                const data = { name, customName: String(a.custom_name || '').trim(), modelNumber: model, shape, height: round(a.height_cm, 2), length: round(a.length_cm, 2), depth: cyl ? round(a.length_cm, 2) : round(a.depth_cm, 2), weight: round(a.weight_kg, 3), volume: round(a.volume_m3, 4) };
+                const key = JSON.stringify([a.client_id, a.is_test_data, a.type_id, data]);
+                let modelId = made.get(key);
+                if (!modelId) {
+                    const row = createArticleCategory({ clientId: a.client_id, categoryType: 'activos-modelos', isTestData: !!a.is_test_data });
+                    db.prepare("UPDATE article_categories SET parent_id = ?, status = 'active', name = ?, custom_name = ?, model_number = ?, shape = ?, height_cm = ?, length_cm = ?, depth_cm = ?, weight_kg = ?, volume_m3 = ? WHERE id = ?")
+                        .run(type.id, data.name, data.customName, data.modelNumber, data.shape, data.height, data.length, data.depth, data.weight, data.volume, row.id);
+                    modelId = row.id;
+                    made.set(key, modelId);
+                    const when = stamp();
+                    insert.run(a.client_id, 'activos-modelos', modelId, `#${modelId}`, 'create', '', '', '', WHO, when);
+                    Object.entries(data).forEach(([k, v]) => {
+                        if (v === '' || v === 0) return;
+                        insert.run(a.client_id, 'activos-modelos', modelId, `#${modelId}`, 'update', modelFields[k].fieldKey, '', String(k === 'shape' ? SHAPES[v] : v), WHO, when);
+                    });
+                    stats.models += 1;
+                }
+                db.prepare('UPDATE fixed_assets SET model_id = ? WHERE id = ?').run(modelId, a.id);
+                const code = String(a.code_letter || '') + String(a.code_number || 0).padStart(3, '0');
+                insert.run(a.client_id, 'alta-activos', a.id, code, 'update', FIXED_ASSET_PATCHABLE_FIELDS.modelId.fieldKey, '', [data.name, data.modelNumber].filter(Boolean).join(' · '), WHO, stamp());
+                stats.assets += 1;
+            });
+        })();
+    } catch (err) {
+        stats.failed += 1;
+        console.error('[db] Alta Activos: no se pudieron asignar modelos a los activos de antes (se reintentará al arrancar):', err.message);
+        return; // todo o nada: sin la marca, el siguiente arranque lo intenta de nuevo
+    }
+    db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ASSETS_TO_MODELS_KEY);
+    console.log('[db] Alta Activos: los activos de antes con todos sus datos recibieron su modelo (una vez): ' + JSON.stringify(stats) + '.');
+}
 // Gestión (2026-11-12, Daniel: «Catálogos solo para listas de selección; lo terminado va a Gestión»): «Códigos» y «Presentaciones Distribución» salieron de Catálogos y quedaron en Gestión (ids y rutas nuevas). Los permisos
 // que ya se habían dado a las rutas viejas pasan, UNA vez, a las nuevas (en TODA tabla que guarda rutas del árbol: puestos, usuarios, planes, clientes, giros, Árbol Maestro y sus costos); así cada quien conserva su acceso y, en el
 // árbol, lo que ya estaba palomeado sigue palomeado. En los órdenes del Árbol Maestro se quitan los ids viejos de la lista de Catálogos.
@@ -13400,6 +13457,7 @@ seedCompraSurtidoPedidoManualGrants();
 seedAssetModelLeaves();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
+migrateFixedAssetsToModelsOnce();
 backfillFixedAssetHistoryOnce();
 moveScreensToGestionOnce();
 seedQrSeguridadScreenGrants();
