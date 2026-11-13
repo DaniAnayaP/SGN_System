@@ -1398,6 +1398,13 @@
         const verts = layout.vertices || [];
         const x = g.a.x;
         const y = g.a.y;
+        // El LADO de la pared donde está montado (2026-11-13, Daniel: «el sensor está del lado de Recepción pero dice que está en la zona 7»): side 'a' o 'b' (el Lado A y el Lado B del paso Paredes, wallProbe); la zona sale del punto de ese lado,
+        // pegado a la pared y a la altura del sensor a lo largo de ella. Sin lado elegido (los de antes) se hace como siempre (abajo): el lado que da al interior de la nave.
+        if (!g.legacy && (s.side === 'a' || s.side === 'b') && (g.nx || g.ny)) {
+            const sd = s.side === 'a' ? 1 : -1;
+            const off = (g.thick || 0) / 2 + 0.15;
+            return { x, y, inx: x + sd * g.nx * off, iny: y + sd * g.ny * off };
+        }
         const pts = verts.map((p) => [p[0], p[1]]);
         // hacia qué lado queda el interior de la nave: se mira a 30 cm de la pared (una pared sobre el contorno tiene su grosor y a 5 cm todavía podría caer del lado del contorno); la zona se toma a 5 cm de su centro, de ese lado
         const at = (k) => [x + g.uy * k, y - g.ux * k];
@@ -3240,7 +3247,9 @@
             const item = { id: idOf(e && e.id, sensorIds, label), code: text(e && e.code, label, false), ...(Number.isFinite(sensorRef) && sensorRef > 0 ? { assetRef: sensorRef } : {}), type: oneOf(e && e.type, SENSOR_TYPES, 'both'), zoneId: '', dist: meters(e && e.dist, label), height: meters(e && e.height, label) };
             // Las zonas que mide (una o varias; sin elegir mide la zona donde está colocado): solo se guarda si se eligió alguna. Las que ya no existen se quitan más abajo, cuando las zonas ya están limpias.
             const measured = Array.isArray(e && e.zones) ? [...new Set(e.zones.filter((zid) => typeof zid === 'string' && zid).map((zid) => zid.slice(0, 64)))].slice(0, LIMITS.zones) : [];
-            const withZones = (obj) => (measured.length ? { ...obj, zones: measured } : obj);
+            // El lado de la pared donde está montado (a = Lado A, b = Lado B): opcional; sin elegir, el sensor toma el lado de siempre. Solo vale con una pared elegida.
+            const side = e && (e.side === 'a' || e.side === 'b') ? e.side : '';
+            const withZones = (obj) => { const withMeasured = measured.length ? { ...obj, zones: measured } : obj; return side && obj.wallId ? { ...withMeasured, side } : withMeasured; };
             if (wallId) return withZones({ ...item, wallId });
             return wall >= 1 && wall <= walls ? withZones({ ...item, wall }) : withZones({ ...item, wallId: '' });
         });

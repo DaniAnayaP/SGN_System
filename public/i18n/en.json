@@ -1859,6 +1859,10 @@
     "layoutColocarSensor": "+ Place sensor from Asset Registration",
     "layoutColocarTituloSensor": "Place sensors from Asset Registration",
     "layoutSensorEquipo": "S/N",
+    "layoutSensorLado": "Side of the wall",
+    "layoutSensorLadoAuto": "Automatic",
+    "layoutSensorLadoA": "Side A · {zone}",
+    "layoutSensorLadoB": "Side B · {zone}",
     "layoutColocarTipoCol": "Type",
     "layoutColocarModeloCol": "Model",
     "layoutColocarElegirTipo": "Choose the type…",
@@ -6391,6 +6395,10 @@
     "layoutColocarModelo": {
       "what": "The second step: the model of the chosen type (in brackets, how many unplaced pieces there are of that model). When you choose it, its pieces appear, with their code and serial number, to tick the ones you will place. «No model» are the older assets that do not have a model in Asset Registration yet.",
       "example": "you choose TRACEABLE 4410TR (3) and H001, H002 and H003 appear with their S/N."
+    },
+    "layoutSensorLado": {
+      "what": "Which side of the wall the sensor is mounted on. Each wall has a Side A and a Side B and each side faces a zone (shown in each option). «Zone where it is» comes from it. «Automatic» is the usual side: it is used by older sensors until you choose their side. Changing the wall goes back to Automatic.",
+      "example": "the wall separates Reception and Zone 7 and the sensor is on the Reception side: you choose «Side A · Reception» and «Zone where it is» says Reception."
     },
     "layoutSensorEquipo": {
       "what": "The serial number (S/N) of the Asset Registration equipment this sensor is. Hover to see the full equipment: name, model and serial number. It is changed in Asset Registration. Older sensors, which do not come from Asset Registration, do not have it.",

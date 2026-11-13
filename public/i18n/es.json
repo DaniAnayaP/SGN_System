@@ -1859,6 +1859,10 @@
     "layoutColocarSensor": "+ Colocar sensor de Alta Activos",
     "layoutColocarTituloSensor": "Colocar sensores de Alta Activos",
     "layoutSensorEquipo": "S/N",
+    "layoutSensorLado": "Lado de la pared",
+    "layoutSensorLadoAuto": "Automático",
+    "layoutSensorLadoA": "Lado A · {zone}",
+    "layoutSensorLadoB": "Lado B · {zone}",
     "layoutColocarTipoCol": "Tipo",
     "layoutColocarModeloCol": "Modelo",
     "layoutColocarElegirTipo": "Elige el tipo…",
@@ -6390,6 +6394,10 @@
     "layoutColocarModelo": {
       "what": "El segundo paso: el modelo del tipo elegido (entre paréntesis, cuántas piezas hay de ese modelo sin colocar). Al elegirlo salen sus piezas, con su código y su número de serie, para marcar las que vas a colocar. «Sin modelo» son los activos de antes que todavía no tienen modelo en Alta Activos.",
       "example": "eliges TRACEABLE 4410TR (3) y salen H001, H002 y H003 con su S/N."
+    },
+    "layoutSensorLado": {
+      "what": "De qué lado de la pared está montado el sensor. Cada pared tiene un Lado A y un Lado B y cada lado da a una zona (se ve en cada opción). De ahí sale «Zona donde está». «Automático» es el lado de siempre: se usa en los sensores de antes, hasta que elijas su lado. Al cambiar de pared vuelve a Automático.",
+      "example": "la pared separa Recepción y Zona 7 y el sensor está del lado de Recepción: eliges «Lado A · Recepción» y «Zona donde está» dice Recepción."
     },
     "layoutSensorEquipo": {
       "what": "El número de serie (S/N) del equipo de Alta Activos que es este sensor. Al pasar el cursor sale el equipo completo: nombre, modelo y número de serie. Se cambia en Alta Activos. Los sensores de antes, que no vienen de Alta Activos, no lo traen.",

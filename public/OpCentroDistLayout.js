@@ -652,6 +652,16 @@ function sensorZonesCell(x, i, d, dis) {
     const add = dis ? '' : `<button type="button" class="layout-chip-add" data-sz-open="${i}" data-help-key="layoutSensorZonas" aria-label="${esc(t('main.layoutSensorZonasAgregar'))}" title="${esc(t('main.layoutSensorZonasAgregar'))}">＋</button>`;
     return `<td><div class="layout-chips">${chips}${own}${add}</div></td>`;
 }
+// «Lado de la pared» de un sensor (2026-11-13): la pared tiene dos lados y cada uno da a una zona; aquí se dice de qué lado está montado el sensor y de ahí sale «Zona donde está». Las dos opciones llevan la zona de cada lado
+// (Lado A · Recepción / Lado B · Zona 7; «Afuera» si ese lado cae fuera de la nave). «Automático» = el lado de siempre (los sensores de antes).
+function sensorSideCell(x, i, dis) {
+    const wall = x.wallId ? (state.draft.obstacles || []).find((o) => o.id === x.wallId && o.kind === 'wall') : null;
+    const info = wall ? LC.wallSideInfo(state.draft, wall) : null;
+    const zoneText = (k) => { const s = info && info[k]; return s ? (s.zoneName || (s.outside ? t('main.layoutParedAfuera').replace(/^./, (c) => c.toUpperCase()) : '—')) : '—'; };
+    const opt = (value, label) => `<option value="${value}"${(x.side || '') === value ? ' selected' : ''}>${esc(label)}</option>`;
+    const options = opt('', t('main.layoutSensorLadoAuto')) + opt('a', t('main.layoutSensorLadoA', { zone: zoneText('a') })) + opt('b', t('main.layoutSensorLadoB', { zone: zoneText('b') }));
+    return cellSelect('sensors', i, 'side', options, dis || !wall, 'layoutSensorLado');
+}
 function toggleSensorZone(spec, on) {
     const at = String(spec).indexOf(':');
     const i = String(spec).slice(0, at);
@@ -1614,8 +1624,8 @@ function stepHtml(step) {
         const assetOf = (x) => (x.assetRef ? (state.fixedAssets || []).find((r) => r.id === x.assetRef) : null);
         const equip = (x) => { const a = assetOf(x); return a && a.serialNumber ? a.serialNumber : '—'; };
         const equipFull = (x) => { const a = assetOf(x); return a ? [a.name, a.model, a.serialNumber ? `S/N ${a.serialNumber}` : ''].filter(Boolean).join(' · ') : ''; };
-        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td><td class="layout-calc" title="${esc([equipFull(x), t('main.layoutActivoDeRegistro')].filter(Boolean).join(' — '))}" data-help-key="layoutSensorEquipo">${esc(equip(x))}</td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td><td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${sensorZonesCell(x, i, d, dis)}${removeCell('sensors', i, dis)}</tr>`);
-        return `${table(['main.layoutCodigo', 'main.layoutSensorEquipo', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutSensorZonaColocado', 'main.layoutSensorZonasMide', ''], rows, 'layout-sensores')}${canEdit('sensores') && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-place-assets="sensors" data-main-add="1" data-help-key="layoutColocarSensor">${esc(t('main.layoutColocarSensor'))}</button>` : ''}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
+        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td><td class="layout-calc" title="${esc([equipFull(x), t('main.layoutActivoDeRegistro')].filter(Boolean).join(' — '))}" data-help-key="layoutSensorEquipo">${esc(equip(x))}</td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis)}${sensorSideCell(x, i, dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td><td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${sensorZonesCell(x, i, d, dis)}${removeCell('sensors', i, dis)}</tr>`);
+        return `${table(['main.layoutCodigo', 'main.layoutSensorEquipo', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutSensorLado', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutSensorZonaColocado', 'main.layoutSensorZonasMide', ''], rows, 'layout-sensores')}${canEdit('sensores') && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-place-assets="sensors" data-main-add="1" data-help-key="layoutColocarSensor">${esc(t('main.layoutColocarSensor'))}</button>` : ''}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
     }
     if (step === 'seguridad') {
         // Cada renglón es un ELEMENTO de seguridad (extintor, hidrante, puerta de emergencia, botiquín, alarma o pulsador, regadera y lavaojos, punto de reunión o ruta de evacuación): un punto puesto en el plano con X e Y, en metros.
@@ -5503,6 +5513,9 @@ function onEdit(event) {
             row.material = LC.ROOF_MATERIALS.includes(el.value) ? el.value : 'sheet';
         } else if (list === 'roofs' && key === 'color') {
             if (LC.ROOF_COLORS[el.value]) row.color = el.value; else delete row.color;
+        } else if (list === 'sensors' && key === 'side') {
+            // el lado de la pared donde está el sensor (A o B); vacío = automático (el lado de siempre)
+            if (el.value === 'a' || el.value === 'b') row.side = el.value; else delete row.side;
         } else if (list === 'ceiling' && key === 'h') {
             // «Cuelga a» es opcional: vacío = pegado al techo
             const raw = String(el.value).trim();
@@ -5575,6 +5588,8 @@ function onEdit(event) {
     if (event.type === 'change' && list === 'obstacles' && ['kind', 'mode'].includes(el.getAttribute('data-k'))) renderPanel();
     // Al cambiar cómo abre una puerta, la bisagra y el lado se apagan si es fija.
     if (event.type === 'change' && list === 'doors' && el.getAttribute('data-k') === 'open') renderPanel();
+    // Al cambiar la pared de un sensor, el lado vuelve a «Automático» (el lado A y el B son de la pared nueva) y las dos opciones del lado se vuelven a escribir con las zonas de esa pared.
+    if (event.type === 'change' && list === 'sensors' && el.getAttribute('data-k') === 'wallId') { const sn = state.draft.sensors[Number(el.getAttribute('data-i'))]; if (sn) delete sn.side; renderPanel(); }
     // Al cambiar de persona a montacargas cambian sus medidas (si eran las de partida) y su nombre.
     if (event.type === 'change' && list === 'objects' && el.getAttribute('data-k') === 'equipId') renderPanel();
     // Al cambiar el tipo de un elemento de seguridad cambian sus celdas (la ruta lleva punto de llegada) y su código.
