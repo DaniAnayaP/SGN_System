@@ -210,6 +210,17 @@ const {
     setFixedAssetPendingChoices,
     setFixedAssetEditing,
     FIXED_ASSET_EMPTY_ON_EDIT,
+    getAssetAuthorizationById,
+    getLatestAssetAuthorization,
+    getPendingAssetAuthorization,
+    createAssetAuthorization,
+    resolveAssetAuthorization,
+    parseAssetAuthorizationPayload,
+    setFixedAssetUseAuth,
+    listPendingAssetAuthorizations,
+    listAssetAuthorizationsRequestedBy,
+    markAssetAuthorizationsSeenForRequester,
+    assetAuthorizationSummaryMap,
     countAssetModelsByType,
     countFixedAssetsByClass,
     getFixedAssetAnyScope,
@@ -11803,15 +11814,28 @@ function fixedAssetContext(req) {
         models: new Map(listArticleCategories(clientId, 'activos-modelos', isTestAccount).map((r) => [r.id, r])),
     };
 }
+// Una solicitud de autorización (uso o edición) como la ve la pantalla: quién la pidió, a quién le tocó, cómo va y el motivo si la rechazaron. Una edición trae los datos que se quieren modificar.
+function mapAssetAuthorization(r) {
+    if (!r) return null;
+    const payload = parseAssetAuthorizationPayload(r) || {};
+    return {
+        id: r.id, kind: r.kind, status: r.status, auto: !!r.auto, requestedBy: r.requested_by, requestedByUserId: r.requested_by_user_id || null,
+        boss: r.escalated_to_label || '', bossUserId: r.escalated_to_user_id || null, reason: r.reason || '', resolvedBy: r.resolved_by || '',
+        createdAt: r.created_at, resolvedAt: r.resolved_at || null, fields: r.kind === 'edit' ? (Array.isArray(payload.marked) ? payload.marked : payload.fields || []) : [],
+    };
+}
 function mapFixedAsset(row, ctx, companyName, pendingByRecord, placements) {
     const cc = ctx.centers.get(row.cost_center_id);
     const type = ctx.types.get(row.type_id);
     const cls = ctx.classes.get(row.class_id);
     const model = ctx.models ? ctx.models.get(row.model_id) : null;
     const done = fixedAssetCompleteness(row, type);
+    const authEntry = ctx.authMap ? ctx.authMap.get(row.id) : { use: getLatestAssetAuthorization(row.id, 'use'), edit: getLatestAssetAuthorization(row.id, 'edit') };
     return {
         id: row.id, registroUnico: row.db_id, code: fixedAssetCodeOf(row), status: row.status,
         complete: done.complete, missing: done.missing, photoCount: done.photos,
+        // Autorización del jefe directo: useAuth = ya está autorizado para usarse (pasa a Gestión); auth.use / auth.edit = la última solicitud de cada tipo (null si nunca hubo).
+        useAuth: !!row.use_auth, auth: { use: mapAssetAuthorization(authEntry && authEntry.use), edit: mapAssetAuthorization(authEntry && authEntry.edit) },
         // «Editar» con elección de datos: lo que se marcó (null = no está en edición), lo que falta por elegir (modelo, «Aparece en el Layout», estatus)
         editing: !!row.editing, editingFields: (parseFixedAssetEditing(row) || {}).fields || null, pendingChoices: (parseFixedAssetEditing(row) || {}).pending || [],
         modelId: row.model_id || null, modelLabel: model ? assetModelLabel(model) : '', typeNeedsSerial: type ? type.needs_serial !== 0 : true,
@@ -11943,6 +11967,7 @@ function applyFixedAssetsToLayout(layoutIn, { clientId, centerId, previous }) {
             if (!row.show_in_layout) return fail(`El activo ${code} no aparece en el Layout (Alta Activos > Aparece en el Layout).`);
             const done = fixedAssetCompleteness(row, cat.types.get(row.type_id));
             if (!done.complete) return fail(`El activo ${code} todavía no está completo en Alta Activos (le falta: ${fixedAssetMissingText(done)}): termínalo para colocarlo.`);
+            if (!row.use_auth) return fail(`El activo ${code} está completo pero espera la autorización de su jefe directo para usarse: cuando la tenga se podrá colocar.`);
             if (!asSensor && !(row.length_cm > 0 && row.depth_cm > 0 && row.height_cm > 0)) return fail(`El activo ${code} no tiene largo, profundidad y alto en Alta Activos: captúralos para poder dibujarlo.`);
         }
         return { item: asSensor ? { ...item, assetRef: ref, code } : LayoutCalc.applyAssetToSpace(item, layoutAssetInfo(row), opts) };
@@ -12018,7 +12043,8 @@ function layoutFixedAssetsFor(req, layoutRow, centerId) {
         return {
             id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name, purchaseName: a.purchase_name, customName: a.custom_name, model: a.model, serialNumber: a.serial_number,
             typeId: a.type_id || 0, modelId: a.model_id || 0, look: ((cat.models.get(a.model_id) || {}).look) || '', typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
-            ...(() => { const done = fixedAssetCompleteness(a, type); return { complete: done.complete, missing: done.missing, photoCount: done.photos }; })(), // solo los activos completos se pueden colocar en el Layout; el selector dice qué le falta a los demás
+            // solo los activos completos Y autorizados para usarse se pueden colocar en el Layout; el selector dice qué le falta a los demás (awaitingAuth: está completo y espera la autorización de uso)
+            ...(() => { const done = fixedAssetCompleteness(a, type); const authorized = !!a.use_auth; return { complete: done.complete && authorized, missing: done.missing, photoCount: done.photos, awaitingAuth: done.complete && !authorized && !a.editing }; })(),
             shape: a.shape, length: a.length_cm, depth: a.depth_cm, height: a.height_cm, status: a.status, showInLayout: !!a.show_in_layout,
         };
     });
@@ -12029,11 +12055,15 @@ app.get('/api/business/fixed-assets', requireAuth, (req, res) => {
     const client = getClientById(clientId);
     const ctx = fixedAssetContext(req);
     const pendingByRecord = getPendingColumnsByRecord(clientId, FIXED_ASSET_TABLE_KEY);
+    ctx.authMap = assetAuthorizationSummaryMap(clientId, isTestAccount);
     res.set('Cache-Control', 'no-store');
-    // scope=pending: Operaciones > Alta Activos (los que todavía no están completos y los que regresaron a edición); scope=complete: Gestión > Activos (los completos que no están en edición); sin scope, todos.
+    // scope=pending: Operaciones > Alta Activos (los que todavía no están completos, los que regresaron a edición y los completos que esperan la autorización de uso); scope=complete: Gestión > Activos (los completos
+    // y autorizados que no están en edición); sin scope, todos.
     const scope = ['pending', 'complete'].includes(req.query.scope) ? req.query.scope : 'all';
-    const inScope = (a) => scope === 'all' || (scope === 'complete' ? a.complete && !a.editing : !a.complete || a.editing);
+    const inScope = (a) => scope === 'all' || (scope === 'complete' ? a.complete && !a.editing && a.useAuth : !a.complete || a.editing || !a.useAuth);
     res.json({
+        // quién puede autorizar con su permiso (para mostrar o esconder «Autorizar» en la pantalla; el servidor lo vuelve a revisar)
+        canAuthorize: assetAuthActorCanAuthorize(req),
         assets: listFixedAssets(clientId, isTestAccount).map((r) => mapFixedAsset(r, ctx, client?.company_name, pendingByRecord, fixedAssetPlacementsMap(clientId))).filter(inScope),
         canEdit: fixedAssetCanEdit(req),
         types: [...ctx.types.values()].filter((t) => t.name).map((t) => ({ id: t.id, name: t.name, letter: t.letter || '', kind: t.kind || '', active: t.status === 'active', needsSerial: t.needs_serial !== 0 })),
@@ -12092,8 +12122,10 @@ app.post('/api/business/fixed-assets', requireAuth, requireCostCenter, (req, res
         logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: row.id, recordLabel: code, action: 'update', fieldKey, oldValue: '', newValue: sanitizers[key] ? sanitizers[key](v) : v, changedBy: changedByLabel(req) });
     });
     notifyButtonAction(req, FIXED_ASSET_TABLE_KEY, 'create', `${code} · ${row.purchase_name}`);
+    // (por la API puede llegar ya completo: entonces pide, o se da solo, la autorización de uso)
+    const reconciled = reconcileFixedAssetAuthorization(req, row, ctx);
     const client = getClientById(clientId);
-    res.status(201).json({ asset: mapFixedAsset(row, ctx, client?.company_name, null) });
+    res.status(201).json({ asset: mapFixedAsset(reconciled.row, ctx, client?.company_name, null), awaitingAuth: reconciled.awaiting });
 });
 app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -12108,6 +12140,8 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
         const locked = Object.keys(raw).filter((k) => Object.prototype.hasOwnProperty.call(FIXED_ASSET_PATCHABLE_FIELDS, k) && !editInfo.fields.includes(k));
         if (locked.length) return res.status(403).json({ message: 'Este activo está en edición: solo se puede modificar lo que se marcó.', code: 'EDIT_LOCKED', fields: locked });
     }
+    // Un activo completo que espera la autorización de uso no se cambia (lo que se autoriza es lo que está capturado): primero se retira la solicitud.
+    if (!editInfo && getPendingAssetAuthorization(existing.id, 'use')) return res.status(409).json({ message: 'Este activo espera la autorización de uso: retira la solicitud para poder cambiarlo.', code: 'AUTH_PENDING' });
     // El nombre de compra, el personalizado, el modelo, la forma, las medidas y el peso vienen del modelo: no se escriben a mano (se elige otro modelo, o se corrige el modelo en Catálogos > Activos Fijos).
     if (ASSET_MODEL_FROM_KEYS.some((key) => Object.prototype.hasOwnProperty.call(raw, key))) return res.status(400).json({ message: 'Ese dato viene del modelo del activo: elige otro modelo, o corrígelo en Catálogos > Activos Fijos.', code: 'FROM_MODEL' });
     const ctx = fixedAssetContext(req);
@@ -12150,6 +12184,7 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
     syncFixedAssetIntoLayout(clientId, row); // el Layout guardado recibe el nombre, las medidas, la clasificación… nuevos
     // Una edición con datos elegidos: elegir el modelo o «Aparece en el Layout» (aunque sea el mismo valor, si el cambio no quedó por autorizar) lo da por resuelto; con todo lo marcado lleno y nada por elegir, el activo regresa solo a Gestión.
     let movedToGestion = false;
+    let awaitingAuth = false;
     if (editInfo) {
         const resolved = (key) => Object.prototype.hasOwnProperty.call(raw, key) && !pendingFields.includes(FIXED_ASSET_PATCHABLE_FIELDS[key].fieldKey) && !rejectedFields.includes(FIXED_ASSET_PATCHABLE_FIELDS[key].fieldKey) && !conflictFields.length;
         const stillPending = editInfo.pending.filter((k) => !(['modelId', 'showInLayout'].includes(k) && resolved(k)));
@@ -12157,9 +12192,16 @@ app.patch('/api/business/fixed-assets/:id', requireAuth, requireCostCenter, (req
         const finished = finishFixedAssetEditionIfDone(req, row, ctx);
         row = finished.row;
         movedToGestion = finished.movedToGestion;
+        awaitingAuth = finished.awaitingAuth;
+    } else {
+        // Un activo que con este cambio quedó completo no pasa solo a Gestión: pide la autorización de uso (o, si quien lo completó puede autorizar, se autoriza solo).
+        const reconciled = reconcileFixedAssetAuthorization(req, row, ctx);
+        row = reconciled.row;
+        movedToGestion = reconciled.authorized;
+        awaitingAuth = reconciled.awaiting;
     }
     const client = getClientById(clientId);
-    res.json({ asset: mapFixedAsset(row, ctx, client?.company_name, null), pendingFields, rejectedFields, conflictFields, movedToGestion });
+    res.json({ asset: mapFixedAsset(row, ctx, client?.company_name, null), pendingFields, rejectedFields, conflictFields, movedToGestion, awaitingAuth });
 });
 // Desactivar (o volver a activar): los activos nunca se eliminan. Pide la hoja «Autorización para Desactivar».
 app.post('/api/business/fixed-assets/:id/status', requireAuth, requireCostCenter, (req, res) => {
@@ -12184,20 +12226,22 @@ app.post('/api/business/fixed-assets/:id/status', requireAuth, requireCostCenter
         let row = setFixedAssetPendingChoices(existing.id, clientId, isTestAccount, statusEdit.pending.filter((k) => k !== 'status'));
         const ctx2 = fixedAssetContext(req);
         const finished = finishFixedAssetEditionIfDone(req, row, ctx2);
-        return res.json({ asset: mapFixedAsset(finished.row, ctx2, getClientById(clientId)?.company_name, null), movedToGestion: finished.movedToGestion });
+        return res.json({ asset: mapFixedAsset(finished.row, ctx2, getClientById(clientId)?.company_name, null), movedToGestion: finished.movedToGestion, awaitingAuth: finished.awaitingAuth });
     }
     logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey: 'main.colActEstatus', oldValue: FIXED_ASSET_STATUS_LABELS[existing.status], newValue: FIXED_ASSET_STATUS_LABELS[status], changedBy: changedByLabel(req) });
     notifyDataChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordLabel: code, fieldKey: 'main.colActEstatus', oldValue: FIXED_ASSET_STATUS_LABELS[existing.status], newValue: FIXED_ASSET_STATUS_LABELS[status], actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
     let row = updateFixedAsset(existing.id, clientId, { status }, isTestAccount);
     const ctxS = fixedAssetContext(req);
     let movedToGestion = false;
+    let awaitingAuth = false;
     if (resolvingStatus) {
         row = setFixedAssetPendingChoices(existing.id, clientId, isTestAccount, statusEdit.pending.filter((k) => k !== 'status'));
         const finished = finishFixedAssetEditionIfDone(req, row, ctxS);
         row = finished.row;
         movedToGestion = finished.movedToGestion;
+        awaitingAuth = finished.awaitingAuth;
     }
-    res.json({ asset: mapFixedAsset(row, ctxS, getClientById(clientId)?.company_name, null), movedToGestion });
+    res.json({ asset: mapFixedAsset(row, ctxS, getClientById(clientId)?.company_name, null), movedToGestion, awaitingAuth });
 });
 
 // --- «Editar» un activo completo (Gestión > Activos) -------------------------------------------------------------------------------------------------------
@@ -12225,15 +12269,155 @@ function fixedAssetEditionIsDone(row, type) {
     });
     return filled && fixedAssetCompleteness(row, type).complete;
 }
-function logFixedAssetScreenMove(req, row, from, to) {
-    logTableChange({ clientId: req.user.clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: row.id, recordLabel: fixedAssetCodeOf(row), action: 'update', fieldKey: 'main.assetUbicacionPantalla', oldValue: from, newValue: to, changedBy: changedByLabel(req) });
+function logFixedAssetScreenMove(req, row, from, to, meta = {}) {
+    logTableChange({ clientId: req.user.clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: row.id, recordLabel: fixedAssetCodeOf(row), action: 'update', fieldKey: 'main.assetUbicacionPantalla', oldValue: from, newValue: to, changedBy: meta.changedBy || changedByLabel(req), requestedBy: meta.requestedBy, authorizedBy: meta.authorizedBy });
+}
+
+// --- Autorización del jefe directo para el USO y la EDICIÓN de los activos (2026-11-13) -------------------------------------------------------------------------
+// (1) USO: un activo que se completa no pasa solo a Gestión > Activos: espera «Esperando autorización de uso» en Alta Activos (no se puede colocar en el Layout) hasta que su jefe directo —el de quien lo completó, según Mi Recurso Humano›
+// Reporta a— o quien tenga el permiso Autorizar (Alta Activos › Botones › Autorizar activos) lo apruebe en la campana (pestaña Autorizar). Con el rechazo (motivo opcional) se queda en Alta Activos y se puede volver a pedir.
+// (2) EDICIÓN: «Editar» en Gestión no abre el activo hasta que el jefe lo autoriza (mientras tanto sigue en uso y en el Layout). Al volver a completarse tras editar pide otra vez la de uso.
+// Si quien completa o pide editar ya puede autorizar (permiso Autorizar o administrador del cliente), se autoriza solo: queda en el historial como «autorizado por él mismo» y no se molesta a nadie. Los activos que ya estaban completos al
+// estrenar esto quedaron autorizados (migrateAssetUseAuthOnce). Sin jefe directo (nadie en su puesto superior), la solicitud le llega a quienes tienen Autorizar y al administrador del cliente.
+const ASSET_AUTH_COL = 'colActAutorizar';
+const assetAuthActorCanAuthorize = (req) => !!req.user.isClientAdmin || canAuthorizeColumn(getUserEffectiveGrants(req.user.sub), FIXED_ASSET_TABLE_KEY, ASSET_AUTH_COL);
+// ¿Puede esta persona decidir esta solicitud? El administrador, quien tiene Autorizar, o a quien se la mandó (el jefe directo de quien la pidió).
+const assetAuthCanDecide = (req, authRow) => assetAuthActorCanAuthorize(req) || authRow.escalated_to_user_id === req.user.sub;
+function assetAuthBoss(req) {
+    const userId = resolveDirectSupervisorUserId(req.user.sub) || null;
+    if (!userId) return { userId: null, label: '' };
+    const boss = getUserById(userId, req.user.clientId);
+    return { userId, label: boss ? (boss.nickname || boss.name || boss.username || '') : '' };
+}
+const assetAuthAssetLabel = (row) => row.custom_name || row.purchase_name || '';
+function logAssetAuthHistory(req, row, text, meta = {}) {
+    logTableChange({ clientId: req.user.clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: row.id, recordLabel: fixedAssetCodeOf(row), action: 'update', fieldKey: 'main.assetAutorizacion', oldValue: '', newValue: text, changedBy: meta.changedBy || changedByLabel(req), requestedBy: meta.requestedBy, authorizedBy: meta.authorizedBy });
+}
+// Pide la autorización de USO de un activo completo (la forzada: tras terminar una edición o al volver a pedirla). Devuelve { row, awaiting, authorized, auth }.
+function requestFixedAssetUse(req, row) {
+    const { clientId, isTestAccount } = req.user;
+    const who = changedByLabel(req);
+    const base = { clientId, isTestData: isTestAccount, assetId: row.id, assetCode: fixedAssetCodeOf(row), assetLabel: assetAuthAssetLabel(row), kind: 'use', requestedBy: who, requestedByUserId: req.user.sub };
+    if (assetAuthActorCanAuthorize(req)) {
+        const auth = createAssetAuthorization({ ...base, status: 'approved', auto: true, resolvedBy: who, resolvedByUserId: req.user.sub });
+        const done = setFixedAssetUseAuth(row.id, clientId, true, isTestAccount);
+        logAssetAuthHistory(req, done, 'Uso autorizado por quien lo completó (tiene el permiso Autorizar)', { authorizedBy: who });
+        logFixedAssetScreenMove(req, done, 'Alta Activos', 'Gestión > Activos', { authorizedBy: who });
+        return { row: done, awaiting: false, authorized: true, auth };
+    }
+    const boss = assetAuthBoss(req);
+    const auth = createAssetAuthorization({ ...base, escalatedToUserId: boss.userId, escalatedToLabel: boss.label });
+    logAssetAuthHistory(req, row, boss.label ? `Uso: autorización pedida a ${boss.label}` : 'Uso: autorización pedida a quien tiene el permiso Autorizar', { requestedBy: who });
+    return { row, awaiting: true, authorized: false, auth };
+}
+// Después de cualquier cambio: un activo que quedó completo, sin autorización de uso y sin ninguna solicitud de uso (ni pendiente ni rechazada ni cancelada) pide la suya. No hace nada si ya está en edición o autorizado.
+function reconcileFixedAssetAuthorization(req, row, ctx) {
+    const none = { row, awaiting: false, authorized: false };
+    if (!row || row.editing || row.use_auth) return none;
+    if (!fixedAssetCompleteness(row, ctx.types.get(row.type_id)).complete) return none;
+    if (getLatestAssetAuthorization(row.id, 'use')) return { ...none, awaiting: !!getPendingAssetAuthorization(row.id, 'use') };
+    return requestFixedAssetUse(req, row);
 }
 function finishFixedAssetEditionIfDone(req, row, ctx) {
-    if (!row || !row.editing || !fixedAssetEditionIsDone(row, ctx.types.get(row.type_id))) return { row, movedToGestion: false };
+    if (!row || !row.editing || !fixedAssetEditionIsDone(row, ctx.types.get(row.type_id))) return { row, movedToGestion: false, awaitingAuth: false };
     const done = setFixedAssetEditing(row.id, req.user.clientId, false, !!row.is_test_data);
-    logFixedAssetScreenMove(req, done, 'Alta Activos', 'Gestión > Activos');
-    return { row: done, movedToGestion: true };
+    // Terminó de editarse: antes de volver a usarse pide, otra vez, la autorización de uso (nunca queda autorizado de la vez anterior).
+    const reset = setFixedAssetUseAuth(done.id, req.user.clientId, false, !!row.is_test_data);
+    const requested = requestFixedAssetUse(req, reset);
+    if (requested.awaiting) logFixedAssetScreenMove(req, requested.row, 'En edición', 'Alta Activos (espera autorización de uso)');
+    return { row: requested.row, movedToGestion: requested.authorized, awaitingAuth: requested.awaiting };
 }
+// Aplica una edición YA autorizada: el activo regresa a Alta Activos con SOLO lo marcado abierto (lo que tenía queda en el historial). meta = quién lo pidió y quién lo autorizó (es la misma persona cuando se autoriza sola).
+function startApprovedFixedAssetEdition(req, existing, payload, ctx, meta = {}) {
+    const { clientId, isTestAccount } = req.user;
+    const sanitizers = fixedAssetSanitizers(ctx);
+    const fields = Array.isArray(payload.fields) ? payload.fields : [];
+    const marked = Array.isArray(payload.marked) ? payload.marked : fields;
+    const row = startFixedAssetEditionWithFields(existing.id, clientId, isTestAccount, { fields, pending: Array.isArray(payload.pending) ? payload.pending : [] });
+    const code = fixedAssetCodeOf(existing);
+    const by = { changedBy: meta.requestedBy || changedByLabel(req), requestedBy: meta.requestedBy, authorizedBy: meta.authorizedBy };
+    fields.filter((k) => Object.prototype.hasOwnProperty.call(FIXED_ASSET_EMPTY_ON_EDIT, k)).forEach((key) => {
+        const { column, fieldKey } = FIXED_ASSET_PATCHABLE_FIELDS[key];
+        logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey, oldValue: sanitizers[key] ? sanitizers[key](existing[column]) : existing[column], newValue: '', ...by });
+    });
+    if (marked.includes('status')) logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey: 'main.colActEstatus', oldValue: FIXED_ASSET_STATUS_LABELS[existing.status], newValue: '', ...by });
+    logFixedAssetScreenMove(req, row, 'Gestión > Activos', 'Alta Activos', by);
+    return row;
+}
+const assetAuthEditText = (payload) => (Array.isArray(payload.marked) ? payload.marked : payload.fields || []).map((k) => FIXED_ASSET_EDIT_LABELS[k] || k).join(', ');
+// Decidir: la solicitud pasa de pending a approved / rejected y el activo cambia (o se queda) según su tipo. Quien la pidió lo ve en la pestaña Avisos de su campana.
+app.post('/api/business/asset-authorizations/:id/approve', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const auth = getAssetAuthorizationById(intOf(req.params.id), req.user.clientId);
+    if (!auth || !!auth.is_test_data !== !!req.user.isTestAccount) return res.status(404).json({ message: 'Solicitud no encontrada.' });
+    if (auth.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya se resolvió.', code: 'RESOLVED' });
+    if (!assetAuthCanDecide(req, auth)) return res.status(403).json({ message: 'No tienes permiso para autorizar activos.' });
+    const { clientId, isTestAccount } = req.user;
+    const asset = getFixedAssetById(auth.asset_id, clientId, isTestAccount);
+    const ctx = fixedAssetContext(req);
+    const who = changedByLabel(req);
+    const stale = (message) => {
+        resolveAssetAuthorization(auth.id, { status: 'cancelled', resolvedBy: who, resolvedByUserId: req.user.sub, reason: message });
+        return res.status(409).json({ message, code: 'STALE' });
+    };
+    if (!asset) return stale('El activo ya no existe.');
+    const complete = fixedAssetCompleteness(asset, ctx.types.get(asset.type_id)).complete;
+    if (auth.kind === 'use') {
+        if (!complete || asset.editing || asset.use_auth) return stale('El activo cambió: esta solicitud de uso ya no aplica.');
+        const done = setFixedAssetUseAuth(asset.id, clientId, true, isTestAccount);
+        resolveAssetAuthorization(auth.id, { status: 'approved', resolvedBy: who, resolvedByUserId: req.user.sub });
+        logAssetAuthHistory(req, done, `Uso autorizado por ${who}`, { changedBy: auth.requested_by, requestedBy: auth.requested_by, authorizedBy: who });
+        logFixedAssetScreenMove(req, done, 'Alta Activos', 'Gestión > Activos', { changedBy: auth.requested_by, requestedBy: auth.requested_by, authorizedBy: who });
+        return res.json({ ok: true, kind: 'use', asset: mapFixedAsset(done, ctx, getClientById(clientId)?.company_name, null) });
+    }
+    if (!complete || asset.editing || !asset.use_auth) return stale('El activo cambió: esta solicitud de edición ya no aplica.');
+    const payload = parseAssetAuthorizationPayload(auth) || {};
+    const row = startApprovedFixedAssetEdition(req, asset, payload, ctx, { requestedBy: auth.requested_by, authorizedBy: who });
+    resolveAssetAuthorization(auth.id, { status: 'approved', resolvedBy: who, resolvedByUserId: req.user.sub });
+    logAssetAuthHistory(req, row, `Edición autorizada por ${who}: ${assetAuthEditText(payload)}`, { changedBy: auth.requested_by, requestedBy: auth.requested_by, authorizedBy: who });
+    res.json({ ok: true, kind: 'edit', asset: mapFixedAsset(row, ctx, getClientById(clientId)?.company_name, null) });
+});
+app.post('/api/business/asset-authorizations/:id/reject', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const auth = getAssetAuthorizationById(intOf(req.params.id), req.user.clientId);
+    if (!auth || !!auth.is_test_data !== !!req.user.isTestAccount) return res.status(404).json({ message: 'Solicitud no encontrada.' });
+    if (auth.status !== 'pending') return res.status(409).json({ message: 'Esta solicitud ya se resolvió.', code: 'RESOLVED' });
+    if (!assetAuthCanDecide(req, auth)) return res.status(403).json({ message: 'No tienes permiso para autorizar activos.' });
+    const reason = String((req.body && req.body.reason) || '').trim().slice(0, 300);
+    const who = changedByLabel(req);
+    resolveAssetAuthorization(auth.id, { status: 'rejected', resolvedBy: who, resolvedByUserId: req.user.sub, reason });
+    const asset = getFixedAssetById(auth.asset_id, req.user.clientId, req.user.isTestAccount);
+    if (asset) logAssetAuthHistory(req, asset, `${auth.kind === 'use' ? 'Uso' : 'Edición'} rechazado por ${who}${reason ? `: ${reason}` : ''}`, { changedBy: auth.requested_by, requestedBy: auth.requested_by, authorizedBy: who });
+    res.json({ ok: true });
+});
+// Quien pidió una autorización (o quien puede autorizar) la retira mientras está pendiente: el activo se queda como estaba (uso: en Alta Activos, sin solicitud; edición: en Gestión).
+app.post('/api/business/fixed-assets/:id/cancel-authorization', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const asset = getFixedAssetById(intOf(req.params.id), clientId, isTestAccount);
+    if (!asset) return res.status(404).json({ message: 'Asset not found.' });
+    const kind = req.body && req.body.kind === 'edit' ? 'edit' : 'use';
+    const auth = getPendingAssetAuthorization(asset.id, kind);
+    if (!auth) return res.status(409).json({ message: 'Este activo no tiene una solicitud pendiente.', code: 'NOPENDING' });
+    if (auth.requested_by_user_id !== req.user.sub && !assetAuthActorCanAuthorize(req)) return res.status(403).json({ message: 'Solo quien la pidió o quien puede autorizar la retira.' });
+    resolveAssetAuthorization(auth.id, { status: 'cancelled', resolvedBy: changedByLabel(req), resolvedByUserId: req.user.sub });
+    logAssetAuthHistory(req, asset, `${kind === 'use' ? 'Uso' : 'Edición'}: solicitud de autorización retirada`);
+    res.json({ asset: mapFixedAsset(asset, fixedAssetContext(req), getClientById(clientId)?.company_name, null) });
+});
+// Volver a pedir la autorización de uso (después de un rechazo o de retirarla).
+app.post('/api/business/fixed-assets/:id/request-use-auth', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const asset = getFixedAssetById(intOf(req.params.id), clientId, isTestAccount);
+    if (!asset) return res.status(404).json({ message: 'Asset not found.' });
+    const ctx = fixedAssetContext(req);
+    const latest = getLatestAssetAuthorization(asset.id, 'use');
+    if (!fixedAssetCan(req, 'colActCreateAuth') && !(latest && latest.requested_by_user_id === req.user.sub)) return res.status(403).json({ message: 'No tienes permiso para pedir la autorización de este activo.' });
+    if (asset.editing || asset.use_auth || !fixedAssetCompleteness(asset, ctx.types.get(asset.type_id)).complete) return res.status(409).json({ message: 'Este activo no está esperando la autorización de uso.', code: 'NOTWAITING' });
+    if (getPendingAssetAuthorization(asset.id, 'use')) return res.status(409).json({ message: 'Ya hay una solicitud de uso pendiente.', code: 'PENDING' });
+    const requested = requestFixedAssetUse(req, asset);
+    res.json({ asset: mapFixedAsset(requested.row, ctx, getClientById(clientId)?.company_name, null), movedToGestion: requested.authorized, awaitingAuth: requested.awaiting });
+});
 app.post('/api/business/fixed-assets/:id/edit', requireAuth, requireCostCenter, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!fixedAssetCanEdit(req)) return res.status(403).json({ message: 'No tienes permiso para editar activos.' });
@@ -12244,6 +12428,8 @@ app.post('/api/business/fixed-assets/:id/edit', requireAuth, requireCostCenter, 
     const type = ctx.types.get(existing.type_id);
     if (existing.editing) return res.status(409).json({ message: 'Este activo ya está en edición.', code: 'EDITING' });
     if (!fixedAssetCompleteness(existing, type).complete) return res.status(409).json({ message: 'Este activo todavía no está completo: se termina de llenar en Alta Activos.', code: 'INCOMPLETE' });
+    if (!existing.use_auth) return res.status(409).json({ message: 'Este activo espera la autorización de uso de su jefe directo: cuando la tenga se podrá editar.', code: 'NOT_AUTHORIZED' });
+    if (getPendingAssetAuthorization(existing.id, 'edit')) return res.status(409).json({ message: 'Ya hay una solicitud de edición esperando autorización para este activo.', code: 'EDIT_PENDING' });
     const marked = [...new Set((Array.isArray(req.body && req.body.fields) ? req.body.fields : []).map(String))];
     if (!marked.length) return res.status(400).json({ message: 'Marca al menos un dato para modificar.', code: 'EMPTY' });
     const unknown = marked.filter((k) => k !== 'status' && !Object.prototype.hasOwnProperty.call(FIXED_ASSET_EDIT_FIELD_COLS, k));
@@ -12261,16 +12447,20 @@ app.post('/api/business/fixed-assets/:id/edit', requireAuth, requireCostCenter, 
     }
     const fields = marked.filter((k) => k !== 'status');
     const pending = [...fields.filter((k) => k === 'modelId' || k === 'showInLayout'), ...(marked.includes('status') ? ['status'] : [])];
-    const sanitizers = fixedAssetSanitizers(ctx);
-    const row = startFixedAssetEditionWithFields(existing.id, clientId, isTestAccount, { fields, pending });
-    const code = fixedAssetCodeOf(existing);
-    fields.filter((k) => Object.prototype.hasOwnProperty.call(FIXED_ASSET_EMPTY_ON_EDIT, k)).forEach((key) => {
-        const { column, fieldKey } = FIXED_ASSET_PATCHABLE_FIELDS[key];
-        logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey, oldValue: sanitizers[key] ? sanitizers[key](existing[column]) : existing[column], newValue: '', changedBy: changedByLabel(req) });
-    });
-    if (marked.includes('status')) logTableChange({ clientId, tableKey: FIXED_ASSET_TABLE_KEY, recordId: existing.id, recordLabel: code, action: 'update', fieldKey: 'main.colActEstatus', oldValue: FIXED_ASSET_STATUS_LABELS[existing.status], newValue: '', changedBy: changedByLabel(req) });
-    logFixedAssetScreenMove(req, row, 'Gestión > Activos', 'Alta Activos');
-    res.json({ asset: mapFixedAsset(row, ctx, getClientById(clientId)?.company_name, null) });
+    const payload = { fields, pending, marked };
+    const who = changedByLabel(req);
+    const authBase = { clientId, isTestData: isTestAccount, assetId: existing.id, assetCode: fixedAssetCodeOf(existing), assetLabel: assetAuthAssetLabel(existing), kind: 'edit', payload, requestedBy: who, requestedByUserId: req.user.sub };
+    // La edición tampoco abre el activo hasta que se autoriza: quien ya puede autorizar (permiso Autorizar o administrador) se autoriza solo; los demás la piden a su jefe directo y el activo sigue en Gestión, en uso.
+    if (assetAuthActorCanAuthorize(req)) {
+        createAssetAuthorization({ ...authBase, status: 'approved', auto: true, resolvedBy: who, resolvedByUserId: req.user.sub });
+        const row = startApprovedFixedAssetEdition(req, existing, payload, ctx, { requestedBy: who, authorizedBy: who });
+        logAssetAuthHistory(req, row, `Edición autorizada por quien la pidió (tiene el permiso Autorizar): ${assetAuthEditText(payload)}`, { authorizedBy: who });
+        return res.json({ asset: mapFixedAsset(row, ctx, getClientById(clientId)?.company_name, null), awaitingAuth: false });
+    }
+    const boss = assetAuthBoss(req);
+    const auth = createAssetAuthorization({ ...authBase, escalatedToUserId: boss.userId, escalatedToLabel: boss.label });
+    logAssetAuthHistory(req, existing, `Edición: autorización pedida a ${boss.label || 'quien tiene el permiso Autorizar'} (${assetAuthEditText(payload)})`, { requestedBy: who });
+    res.status(202).json({ asset: mapFixedAsset(existing, ctx, getClientById(clientId)?.company_name, null), awaitingAuth: true, request: mapAssetAuthorization(auth) });
 });
 // Cancelar una edición con datos elegidos: lo vaciado y lo elegido regresan a como estaba (queda en el historial) y el activo vuelve a Gestión.
 app.post('/api/business/fixed-assets/:id/cancel-edit', requireAuth, requireCostCenter, (req, res) => {
@@ -13870,12 +14060,17 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
     // Solicitudes de orden y clasificación de Perfil y Usuario (las que me tocan decidir, las que yo pedí y las ya resueltas), en las mismas 3 pestañas.
     const layoutRequests = listColorNotificationsForUser({ userId: req.user.sub, isSuperAdmin: false });
     const asLayoutNotification = (r) => ({ ...r, kind: 'color-request', seen_at: r.seenAt });
+    // Autorizaciones de activos (uso y edición, kind 'asset-auth'): las que me tocan decidir (mi jefe directo lo soy yo, tengo el permiso Autorizar o soy administrador), las que yo pedí y las ya resueltas.
+    const asAssetAuth = (r) => ({ ...mapAssetAuthorization(r), kind: 'asset-auth', authKind: r.kind, assetId: r.asset_id, assetCode: r.asset_code, assetLabel: r.asset_label, seen_at: r.requester_seen_at || null });
+    const assetToAct = listPendingAssetAuthorizations(req.user.clientId, req.user.isTestAccount).filter((r) => assetAuthCanDecide(req, r)).map(asAssetAuth);
+    const assetMinePending = listAssetAuthorizationsRequestedBy(req.user.clientId, req.user.sub, ['pending'], req.user.isTestAccount).map(asAssetAuth);
+    const assetMineResolved = listAssetAuthorizationsRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected'], req.user.isTestAccount).map(asAssetAuth);
     res.json({
         alertas: listAccessDeniedAlertsForUser(req.user.clientId, req.user.sub),
         // Los avisos de "Color actualizado" / "Orden actualizado" del Árbol de Permisos Maestro (a quien se le modificó) van aquí también.
-        avisos: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']), ...catalogMineResolved, ...layoutRequests.avisos.map(asLayoutNotification), ...listTreeNoticesForUser(req.user.sub).map((n) => ({ ...n, seen_at: n.seenAt }))],
-        solicitudes: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']), ...catalogMinePending, ...layoutRequests.solicitudes.map(asLayoutNotification)],
-        autorizar: [...autorizar, ...catalogToAct, ...layoutRequests.autorizar.map(asLayoutNotification)],
+        avisos: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']), ...catalogMineResolved, ...assetMineResolved, ...layoutRequests.avisos.map(asLayoutNotification), ...listTreeNoticesForUser(req.user.sub).map((n) => ({ ...n, seen_at: n.seenAt }))],
+        solicitudes: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']), ...catalogMinePending, ...assetMinePending, ...layoutRequests.solicitudes.map(asLayoutNotification)],
+        autorizar: [...autorizar, ...catalogToAct, ...assetToAct, ...layoutRequests.autorizar.map(asLayoutNotification)],
     });
 });
 
@@ -13916,6 +14111,7 @@ app.post('/api/business/notifications/avisos/mark-seen', requireAuth, (req, res)
         return res.json({ ok: true });
     }
     markPendingChangesSeenForRequester(req.user.clientId, req.user.sub);
+    markAssetAuthorizationsSeenForRequester(req.user.clientId, req.user.sub);
     markColorRequestsSeen(req.user.sub);
     markTreeNoticesSeen(req.user.sub);
     res.json({ ok: true });

@@ -35,7 +35,7 @@ let loadToken = 0;
         await refreshTable();
         if (!GESTION) renderNewRecordButton();
         // las columnas con desplegable llevan un ancho mínimo para que se lea la opción completa («Rectangular», «Activo para almacenar») y se vea la flecha
-        if (Dashboard.ensureColumnMinWidth) [['colActElegirModelo', 300], ['colActForma', 150], ['colActClasificacion', 230], ['colActEnLayout', 130], ['colActCodigo', 100]].forEach(([col, px]) => Dashboard.ensureColumnMinWidth(TABLE_KEY, col, px));
+        if (Dashboard.ensureColumnMinWidth) [['colActElegirModelo', 300], ['colActForma', 150], ['colActClasificacion', 230], ['colActEnLayout', 130], ['colActCodigo', GESTION ? 160 : 100]].forEach(([col, px]) => Dashboard.ensureColumnMinWidth(TABLE_KEY, col, px));
     } catch (err) {
         console.error('Alta Activos failed to initialize:', err);
     }
@@ -269,7 +269,22 @@ function buildActionsCell(record) {
     td.appendChild(historyBtn);
     // Gestión > Activos: solo el historial y Editar (pide su hoja del árbol). En Alta Activos, un activo en edición con datos elegidos lleva «Cancelar edición» (no se desactiva desde el botón: el estatus se elige en su celda si se marcó).
     const byFields = !GESTION && record.editing && Array.isArray(record.editingFields);
-    if (GESTION && canEdit) {
+    const mkIconBtn = (helpKey, labelKey, icon, onClick) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'admin-icon-btn';
+        btn.setAttribute('data-help-key', helpKey);
+        btn.setAttribute('aria-label', Dashboard.t(labelKey));
+        btn.title = Dashboard.t(labelKey);
+        btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+        btn.addEventListener('click', onClick);
+        return btn;
+    };
+    // Autorización: un activo completo que espera la de uso lleva «Retirar la solicitud» (pendiente) o «Pedir autorización de uso» (rechazada o retirada); en Gestión, una edición que espera autorización se retira con su propio botón.
+    if (assetUsePending(record)) td.appendChild(mkIconBtn('assetAuthRetirar', 'main.assetAuthRetirarBtn', 'bx-undo', () => cancelAuthorization(record, 'use')));
+    else if (assetWaitingUse(record)) td.appendChild(mkIconBtn('assetAuthPedir', 'main.assetAuthPedirBtn', 'bx-send', () => requestUseAuthorization(record)));
+    if (GESTION && assetEditPending(record)) td.appendChild(mkIconBtn('assetAuthRetirar', 'main.assetAuthRetirarEdicionBtn', 'bx-undo', () => cancelAuthorization(record, 'edit')));
+    if (GESTION && canEdit && !assetEditPending(record)) {
         const editBtn = document.createElement('button');
         editBtn.type = 'button';
         editBtn.className = 'admin-icon-btn';
@@ -318,7 +333,7 @@ async function changeStatus(record, status) {
         }
         const body = await res.json();
         applySaved(body.asset, record);
-        Dashboard.showToast(fillText(body.movedToGestion ? 'main.assetTerminoEdicion' : (status === 'inactive' ? 'main.assetDesactivado' : 'main.assetActivado'), { code: record.code }), 'success');
+        Dashboard.showToast(fillText(body.awaitingAuth ? 'main.assetAuthTerminoEspera' : (body.movedToGestion ? 'main.assetTerminoEdicion' : (status === 'inactive' ? 'main.assetDesactivado' : 'main.assetActivado')), { code: record.code }), 'success');
         return true;
     } catch (err) {
         console.error('Alta Activos: failed to change the status', err);
@@ -425,6 +440,12 @@ function openAssetEditDialog(record) {
                 return;
             }
             close();
+            // La edición también pide autorización: el activo sigue aquí, en uso, hasta que su jefe directo la dé (quien ya puede autorizar la abre de inmediato).
+            if (body.awaitingAuth) {
+                Dashboard.showToast(fillText('main.assetAuthPidioEdicion', { code: record.code, jefe: authBossText(body.request) }), 'success');
+                if (body.asset) applySaved(body.asset, record);
+                return;
+            }
             Dashboard.showToast(fillText('main.assetPasoAEdicion', { code: record.code }), 'success');
             removeAsset(record.id);
         } catch (err) {
@@ -434,6 +455,68 @@ function openAssetEditDialog(record) {
         }
     });
     boxes.find((b) => !b.disabled)?.focus();
+}
+// --- Autorización del jefe directo (uso y edición) --------------------------------------------------------------------------------------------------------------
+// Un activo completo no pasa solo a Gestión: espera la autorización de uso de su jefe directo (o de quien tenga el permiso Autorizar), que la decide en la campana. Editar también se autoriza. Aquí se ve cómo va, se retira la solicitud
+// mientras está pendiente y, si la rechazaron o la retiraron, se vuelve a pedir. Todo lo vuelve a exigir el servidor.
+const authBossText = (auth) => (auth && auth.boss) || Dashboard.t('main.assetAuthQuienAutoriza');
+const assetFieldLabel = (key) => (key === 'status' ? Dashboard.t('main.colActEstatus') : Dashboard.t(`main.${ASSET_FIELD_COLS[key] || key}`));
+// ¿Completo y esperando (o sin) autorización de uso? Solo en Alta Activos.
+const assetWaitingUse = (record) => !GESTION && record.complete && !record.editing && !record.useAuth;
+const assetUsePending = (record) => assetWaitingUse(record) && !!(record.auth && record.auth.use && record.auth.use.status === 'pending');
+const assetEditPending = (record) => !!(record.auth && record.auth.edit && record.auth.edit.status === 'pending' && !record.editing);
+async function cancelAuthorization(record, kind) {
+    if (kind === 'use' && !(await Dashboard.confirm(fillText('main.assetAuthRetirarConfirm', { code: record.code }), { accept: Dashboard.t('main.assetAuthRetirarAceptar') }))) return;
+    try {
+        const res = await fetch(`/api/business/fixed-assets/${record.id}/cancel-authorization`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ kind }) });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), res.status === 403 ? 'warning' : 'error');
+            if (res.status === 409) await refreshTable();
+            return;
+        }
+        applySaved(body.asset, record);
+        Dashboard.showToast(fillText('main.assetAuthRetiro', { code: record.code }), 'success');
+    } catch (err) {
+        console.error('Alta Activos: failed to withdraw the authorization request', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+async function requestUseAuthorization(record) {
+    try {
+        const res = await fetch(`/api/business/fixed-assets/${record.id}/request-use-auth`, { method: 'POST', credentials: 'include' });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), res.status === 403 ? 'warning' : 'error');
+            if (res.status === 409) await refreshTable();
+            return;
+        }
+        applySaved(body.asset, record);
+        Dashboard.showToast(fillText(body.movedToGestion ? 'main.assetQuedoCompleto' : 'main.assetAuthPidioUso', { code: record.code, jefe: authBossText(body.asset.auth && body.asset.auth.use) }), 'success');
+    } catch (err) {
+        console.error('Alta Activos: failed to request the use authorization', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+// La edición de un activo de Gestión que espera autorización (o que fue rechazada hace poco) se ve junto a su código, con los datos que se pidieron y el motivo del rechazo.
+function applyAssetEditAuthChip(tr, record) {
+    const e = record.auth && record.auth.edit;
+    if (!e || record.editing) return;
+    const recent = e.resolvedAt ? (Date.now() - new Date(`${String(e.resolvedAt).replace(' ', 'T')}Z`).getTime()) < 3 * 24 * 3600 * 1000 : false;
+    if (e.status !== 'pending' && !(e.status === 'rejected' && recent)) return;
+    const codeTd = tr.querySelector('td[data-col="colActCodigo"]');
+    if (!codeTd) return;
+    const chip = document.createElement('span');
+    chip.className = 'sku-editing-chip asset-auth-chip asset-auth-chip-block';
+    chip.setAttribute('data-help-key', 'assetEdicionEspera');
+    if (e.status === 'pending') {
+        chip.textContent = Dashboard.t('main.assetAuthEdicionEspera');
+        chip.title = `${fillText('main.assetAuthEdicionDatos', { datos: (e.fields || []).map(assetFieldLabel).join(', ') })} · ${fillText('main.notificationAssetWaiting', { jefe: authBossText(e) })}`;
+    } else {
+        chip.classList.add('asset-auth-chip-bad');
+        chip.textContent = e.reason ? fillText('main.assetAuthEdicionRechazada', { motivo: e.reason }) : Dashboard.t('main.assetAuthEdicionRechazadaSin');
+    }
+    codeTd.appendChild(chip);
 }
 // Cancelar una edición con datos elegidos: lo vaciado y lo elegido regresan a como estaba y el activo vuelve a Gestión > Activos.
 async function cancelAssetEdition(record) {
@@ -518,6 +601,24 @@ function layoutSelectCell(record) {
 // La columna «Falta» de Alta Activos: lo que todavía le falta al activo para estar completo; en uno que regresó de Gestión, qué dato se está editando.
 function faltaCell(record) {
     const td = textCell('colActFalta', '', 'assetFalta');
+    // Completo, pero todavía no se puede usar: espera (o le falta pedir) la autorización de uso de su jefe directo
+    if (assetWaitingUse(record)) {
+        td.textContent = '';
+        const u = record.auth && record.auth.use;
+        const chip = document.createElement('span');
+        chip.className = 'sku-editing-chip asset-auth-chip';
+        chip.setAttribute('data-help-key', 'assetEsperaAutorizacion');
+        if (u && u.status === 'pending') {
+            chip.textContent = fillText('main.assetEsperaUso', { jefe: authBossText(u) });
+        } else if (u && u.status === 'rejected') {
+            chip.classList.add('asset-auth-chip-bad');
+            chip.textContent = u.reason ? fillText('main.assetUsoRechazadoMotivo', { motivo: u.reason }) : Dashboard.t('main.assetUsoRechazado');
+        } else {
+            chip.textContent = Dashboard.t('main.assetUsoSinSolicitud');
+        }
+        td.appendChild(chip);
+        return td;
+    }
     if (record.editing && Array.isArray(record.editingFields)) {
         td.textContent = '';
         const chip = document.createElement('span');
@@ -532,15 +633,15 @@ function faltaCell(record) {
     return td;
 }
 // Gestión > Activos es solo lectura: las celdas no se abren, los desplegables y las fotos no se cambian (las fotos sí se pueden ver). Para corregir algo se usa Editar.
-function makeAssetRowReadOnly(tr) {
+function makeAssetRowReadOnly(tr, titleKey = 'main.assetSoloLectura') {
     tr.querySelectorAll('td.editable-cell, td.editable-cell-locked').forEach((td) => {
         td.onclick = null;
         td.classList.remove('editable-cell');
         td.removeAttribute('title');
     });
-    tr.querySelectorAll('select').forEach((select) => { select.disabled = true; select.title = Dashboard.t('main.assetSoloLectura'); });
+    tr.querySelectorAll('select').forEach((select) => { select.disabled = true; select.title = Dashboard.t(titleKey); });
     tr.querySelectorAll('input[type="file"]').forEach((input) => { input.disabled = true; });
-    tr.querySelectorAll('td button.admin-icon-btn i.bx-camera').forEach((icon) => { const btn = icon.closest('button'); btn.disabled = true; btn.title = Dashboard.t('main.assetSoloLectura'); });
+    tr.querySelectorAll('td button.admin-icon-btn i.bx-camera').forEach((icon) => { const btn = icon.closest('button'); btn.disabled = true; btn.title = Dashboard.t(titleKey); });
 }
 
 // --- Guardar un cambio de celda ----------------------------------------------------------------------------------------------------------------------------
@@ -558,9 +659,12 @@ async function patchAsset(record, patch) {
         else if (body.pendingFields?.length) Dashboard.showToast(`${Dashboard.t('main.changePending')}: ${body.pendingFields.map((fk) => Dashboard.t(fk)).join(', ')}`, 'info');
         const clean = body.asset && !body.rejectedFields?.length && !body.pendingFields?.length && !body.conflictFields?.length;
         if (clean) {
-            const leaves = !assetInScope(body.asset); // con esto el activo cambió de pantalla (quedó completo, o terminó su edición)
+            const leaves = !assetInScope(body.asset); // con esto el activo cambió de pantalla (quedó completo y autorizado, o terminó su edición)
+            const wasWaiting = !!(record.auth && record.auth.use && record.auth.use.status === 'pending');
             applySaved(body.asset, record);
             if (leaves) Dashboard.showToast(fillText(body.movedToGestion ? 'main.assetTerminoEdicion' : 'main.assetQuedoCompleto', { code: record.code }), 'success');
+            // quedó completo pero no pasa solo a Gestión: pidió la autorización de uso a su jefe directo
+            else if (body.awaitingAuth && !wasWaiting) Dashboard.showToast(fillText(record.editing ? 'main.assetAuthTerminoEspera' : 'main.assetAuthPidioUso', { code: record.code, jefe: authBossText(body.asset.auth && body.asset.auth.use) }), 'success');
         } else await refreshTable();
         return !!clean; // true = se guardó tal cual (las fotos lo usan para avisar «cargada correctamente»)
     } catch (err) {
@@ -570,7 +674,8 @@ async function patchAsset(record, patch) {
     }
 }
 // Lo que respondió el servidor al guardar: solo esa fila se vuelve a dibujar.
-const assetInScope = (a) => (GESTION ? a.complete && !a.editing : !a.complete || a.editing);
+// Alta Activos: lo que no está completo, lo que está en edición y lo completo que todavía espera la autorización de uso; Gestión: lo completo y autorizado.
+const assetInScope = (a) => (GESTION ? a.complete && !a.editing && a.useAuth : !a.complete || a.editing || !a.useAuth);
 function applySaved(updated, previous) {
     if (!assetInScope(updated)) { removeAsset(updated.id); return; }
     const merged = { ...updated, placement: updated.placement !== undefined ? updated.placement : ((previous && previous.placement) || ''), pendingFields: (previous && previous.pendingFields) || [] };
@@ -624,8 +729,10 @@ function buildRow(record) {
         ...(GESTION ? [] : [faltaCell(record)]),
         buildActionsCell(record),
     );
-    if (GESTION) makeAssetRowReadOnly(tr);
+    if (GESTION) { makeAssetRowReadOnly(tr); applyAssetEditAuthChip(tr, record); }
     else if (record.editing && Array.isArray(record.editingFields)) applyAssetEditMarks(tr, record);
+    // esperando la autorización de uso: lo que se autoriza es lo capturado, así que no se cambia (se retira la solicitud para corregir)
+    else if (assetUsePending(record)) makeAssetRowReadOnly(tr, 'main.assetAuthEdicionBloqueadaUso');
     tr.classList.toggle('data-table-row-editable', !!tr.querySelector('td.editable-cell'));
     return tr;
 }

@@ -1763,7 +1763,8 @@
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
                 { "id": "colActDeleteAuth", "labelKey": "main.colActDeleteAuth", "permissionOnly": true },
-                { "id": "colActCreateAuth", "labelKey": "main.colActCreateAuth", "permissionOnly": true }
+                { "id": "colActCreateAuth", "labelKey": "main.colActCreateAuth", "permissionOnly": true },
+                { "id": "colActAutorizar", "labelKey": "main.colActAutorizar", "permissionOnly": true }
               ]
             }
           ],

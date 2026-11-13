@@ -5974,6 +5974,120 @@ function setFixedAssetEditing(id, clientId, flag, forTestAccount = false) {
     db.prepare(`UPDATE fixed_assets SET editing = ?${flag ? '' : ', editing_fields = NULL, editing_backup = NULL'} WHERE id = ? AND client_id = ?`).run(flag ? 1 : 0, id, clientId);
     return getFixedAssetById(id, clientId, forTestAccount);
 }
+// --- Autorización del jefe directo para los activos (2026-11-13) ---------------------------------------------------------------------------------------------------
+// Dos autorizaciones, las dos con la misma tubería: (1) de USO: cuando un activo se completa NO pasa solo a Gestión > Activos; espera la autorización de su jefe directo (o de quien tenga el permiso Autorizar) y mientras tanto
+// se queda en Alta Activos y no se puede colocar en el Layout; (2) de EDICIÓN: «Editar» en Gestión no abre el activo hasta que el jefe lo autoriza, y al volver a completarse pide otra vez la de uso. fixed_assets.use_auth = 1 es «ya
+// está autorizado para usarse»; los activos que ya estaban completos al estrenar esto quedan autorizados (una sola vez, migrateAssetUseAuthOnce). Cada solicitud vive en asset_authorizations.
+if (!db.prepare('PRAGMA table_info(fixed_assets)').all().some((c) => c.name === 'use_auth')) db.exec('ALTER TABLE fixed_assets ADD COLUMN use_auth INTEGER NOT NULL DEFAULT 0');
+db.exec(`
+    CREATE TABLE IF NOT EXISTS asset_authorizations (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id               INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data            INTEGER NOT NULL DEFAULT 0,
+        asset_id                INTEGER NOT NULL,
+        asset_code              TEXT NOT NULL DEFAULT '',
+        asset_label             TEXT NOT NULL DEFAULT '',
+        kind                    TEXT NOT NULL,
+        status                  TEXT NOT NULL DEFAULT 'pending',
+        payload                 TEXT,
+        requested_by            TEXT NOT NULL DEFAULT '',
+        requested_by_user_id    INTEGER,
+        escalated_to_user_id    INTEGER,
+        escalated_to_label      TEXT NOT NULL DEFAULT '',
+        reason                  TEXT NOT NULL DEFAULT '',
+        auto                    INTEGER NOT NULL DEFAULT 0,
+        resolved_by             TEXT NOT NULL DEFAULT '',
+        resolved_by_user_id     INTEGER,
+        resolved_at             TEXT,
+        requester_seen_at       TEXT,
+        created_at              TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_asset_auth_asset ON asset_authorizations (asset_id, kind, id);
+    CREATE INDEX IF NOT EXISTS idx_asset_auth_client ON asset_authorizations (client_id, is_test_data, status);
+`);
+function getAssetAuthorizationById(id, clientId) {
+    return db.prepare('SELECT * FROM asset_authorizations WHERE id = ? AND client_id = ?').get(id, clientId);
+}
+// kind: 'use' | 'edit'. Devuelve la solicitud más reciente de ese tipo para el activo (o undefined).
+function getLatestAssetAuthorization(assetId, kind) {
+    return db.prepare('SELECT * FROM asset_authorizations WHERE asset_id = ? AND kind = ? ORDER BY id DESC LIMIT 1').get(assetId, kind);
+}
+function getPendingAssetAuthorization(assetId, kind) {
+    return db.prepare("SELECT * FROM asset_authorizations WHERE asset_id = ? AND kind = ? AND status = 'pending' ORDER BY id DESC LIMIT 1").get(assetId, kind);
+}
+function createAssetAuthorization({ clientId, isTestData = false, assetId, assetCode, assetLabel, kind, status = 'pending', payload = null, requestedBy, requestedByUserId, escalatedToUserId = null, escalatedToLabel = '', auto = false, resolvedBy = '', resolvedByUserId = null }) {
+    const result = db.prepare(`
+        INSERT INTO asset_authorizations (client_id, is_test_data, asset_id, asset_code, asset_label, kind, status, payload, requested_by, requested_by_user_id, escalated_to_user_id, escalated_to_label, auto, resolved_by, resolved_by_user_id, resolved_at)
+        VALUES (@clientId, @test, @assetId, @assetCode, @assetLabel, @kind, @status, @payload, @requestedBy, @requestedByUserId, @escalatedToUserId, @escalatedToLabel, @auto, @resolvedBy, @resolvedByUserId, ${status === 'pending' ? 'NULL' : "datetime('now')"})
+    `).run({
+        clientId, test: isTestData ? 1 : 0, assetId, assetCode: String(assetCode || '').slice(0, 40), assetLabel: String(assetLabel || '').slice(0, 200), kind, status,
+        payload: payload ? JSON.stringify(payload) : null, requestedBy: String(requestedBy || '').slice(0, 160), requestedByUserId: requestedByUserId || null,
+        escalatedToUserId: escalatedToUserId || null, escalatedToLabel: String(escalatedToLabel || '').slice(0, 160), auto: auto ? 1 : 0,
+        resolvedBy: String(resolvedBy || '').slice(0, 160), resolvedByUserId: resolvedByUserId || null,
+    });
+    return getAssetAuthorizationById(result.lastInsertRowid, clientId);
+}
+function resolveAssetAuthorization(id, { status, resolvedBy, resolvedByUserId, reason = '' }) {
+    db.prepare("UPDATE asset_authorizations SET status = ?, resolved_by = ?, resolved_by_user_id = ?, reason = ?, resolved_at = datetime('now') WHERE id = ? AND status = 'pending'")
+        .run(status, String(resolvedBy || '').slice(0, 160), resolvedByUserId || null, String(reason || '').trim().slice(0, 300), id);
+    return db.prepare('SELECT * FROM asset_authorizations WHERE id = ?').get(id);
+}
+function parseAssetAuthorizationPayload(row) {
+    if (!row || !row.payload) return null;
+    try { const parsed = JSON.parse(row.payload); return parsed && typeof parsed === 'object' ? parsed : null; } catch { return null; }
+}
+function setFixedAssetUseAuth(id, clientId, flag, forTestAccount = false) {
+    db.prepare('UPDATE fixed_assets SET use_auth = ? WHERE id = ? AND client_id = ?').run(flag ? 1 : 0, id, clientId);
+    return getFixedAssetById(id, clientId, forTestAccount);
+}
+// Las solicitudes por decidir de una empresa (de la cuenta real o de la de prueba), las más viejas primero; quién puede decidir cada una lo resuelve server.js.
+function listPendingAssetAuthorizations(clientId, forTestAccount = false) {
+    return db.prepare("SELECT * FROM asset_authorizations WHERE client_id = ? AND is_test_data = ? AND status = 'pending' ORDER BY id ASC LIMIT 200").all(clientId, forTestAccount ? 1 : 0);
+}
+// Lo que pidió una persona: pendientes (pestaña Solicitudes) o ya resueltas (pestaña Avisos). Las que se autorizó ella sola no avisan nada.
+function listAssetAuthorizationsRequestedBy(clientId, userId, statuses, forTestAccount = false) {
+    const placeholders = statuses.map(() => '?').join(',');
+    return db.prepare(`
+        SELECT * FROM asset_authorizations
+        WHERE client_id = ? AND is_test_data = ? AND requested_by_user_id = ? AND auto = 0 AND status IN (${placeholders})
+        ORDER BY COALESCE(resolved_at, created_at) DESC, id DESC LIMIT 50
+    `).all(clientId, forTestAccount ? 1 : 0, userId, ...statuses);
+}
+function markAssetAuthorizationsSeenForRequester(clientId, userId) {
+    db.prepare("UPDATE asset_authorizations SET requester_seen_at = datetime('now') WHERE client_id = ? AND requested_by_user_id = ? AND status != 'pending' AND requester_seen_at IS NULL").run(clientId, userId);
+}
+// Las solicitudes más recientes de cada activo (uso y edición) para pintar las pantallas: { assetId: { use, edit } }.
+function assetAuthorizationSummaryMap(clientId, forTestAccount = false) {
+    const out = new Map();
+    db.prepare(`
+        SELECT a.* FROM asset_authorizations a
+        WHERE a.client_id = ? AND a.is_test_data = ? AND a.id = (SELECT MAX(b.id) FROM asset_authorizations b WHERE b.asset_id = a.asset_id AND b.kind = a.kind)
+    `).all(clientId, forTestAccount ? 1 : 0).forEach((r) => {
+        const entry = out.get(r.asset_id) || { use: null, edit: null };
+        entry[r.kind === 'edit' ? 'edit' : 'use'] = r;
+        out.set(r.asset_id, entry);
+    });
+    return out;
+}
+// Una sola vez: los activos que YA estaban completos (o en edición) cuando se estrenó la autorización quedan autorizados para usarse. Lo completo es lo mismo que pide fixedAssetCompleteness (server.js): clasificación, modelo, número
+// de serie (salvo si su Tipo no lo lleva) y las 6 fotos.
+const ASSET_USE_AUTH_MIGRATION_KEY = 'seed-activos-autorizacion-uso-v1';
+function migrateAssetUseAuthOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ASSET_USE_AUTH_MIGRATION_KEY)) return;
+    const photo = (col) => `TRIM(COALESCE(${col}, '')) <> ''`;
+    const result = db.prepare(`
+        UPDATE fixed_assets SET use_auth = 1
+        WHERE use_auth = 0 AND (
+            editing = 1 OR (
+                COALESCE(class_id, 0) > 0 AND COALESCE(model_id, 0) > 0
+                AND (TRIM(COALESCE(serial_number, '')) <> '' OR COALESCE((SELECT c.needs_serial FROM article_categories c WHERE c.id = fixed_assets.type_id), 1) = 0)
+                AND ${['evidence_front', 'evidence_back', 'evidence_left', 'evidence_right', 'evidence_top', 'evidence_bottom'].map(photo).join(' AND ')}
+            )
+        )
+    `).run();
+    db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ASSET_USE_AUTH_MIGRATION_KEY);
+    console.log(`[db] Assets already complete stay authorized for use (one-time migration): ${result.changes} assets.`);
+}
 // Cuántos modelos tiene un Tipo (para no borrar un Tipo con modelos).
 function countAssetModelsByType(clientId, typeId) {
     return db.prepare("SELECT COUNT(*) AS n FROM article_categories WHERE client_id = ? AND category_type = 'activos-modelos' AND parent_id = ?").get(clientId, typeId).n;
@@ -13519,6 +13633,14 @@ function seedGestionActivosGrants() {
     const leaves = [gestion.submenuPrefix, ...['solo-ver', 'ver-y-operar'].map((level) => `${gestion.submenuPrefix}/class-botones/colActEditar/${level}`)];
     seedLeavesForScreenHolders(GESTION_ACTIVOS_SEED_KEY, alta, leaves, 'the Gestión > Activos screen and its Editar button');
 }
+// Autorización de activos (2026-11-13): la hoja «Autorizar activos» (Alta Activos > Botones, nivel Autorizar) decide el uso y la edición de los activos. Autorizar es una decisión de la empresa: se agrega, UNA vez, solo a lo contratado
+// (planes, adicionales del cliente y giros); a puestos y usuarios no se les da sola (el administrador del cliente no depende de hojas y la reparte desde el árbol). El jefe directo de quien captura decide sin esta hoja.
+const ASSET_AUTHORIZE_SEED_KEY = 'seed-activos-autorizar-hoja-v1';
+function seedAssetAuthorizeLeaf() {
+    const alta = TABLE_GRANT_PATHS['alta-activos'];
+    if (!alta) return;
+    seedLeavesForScreenHolders(ASSET_AUTHORIZE_SEED_KEY, alta, [`${alta.submenuPrefix}/class-botones/colActAutorizar/autorizar`], 'the Alta Activos Autorizar button', { contractOnly: true });
+}
 // Operaciones > QR's > Compra Pedido Manual y Surtido Pedido Manual (2026-11-12): las dos pantallas nuevas y los botones de descargar de Compra los reciben, una sola vez, quienes ya tienen la pantalla Pedido Manual (lo que se baja
 // sale de los mismos pedidos que ya ven). Los botones «Solo ver» y «Ver y operar», como el de descargar del Pedido Manual.
 const COMPRA_SURTIDO_SEED_KEY = 'seed-compra-surtido-pedido-manual-v1';
@@ -13566,9 +13688,11 @@ seedCompraSurtidoPedidoManualGrants();
 seedSurtidoPedidoManualButtons();
 backfillManualLegacyDeliveriesOnce();
 seedAssetModelLeaves();
+seedAssetAuthorizeLeaf();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
 migrateFixedAssetsToModelsOnce();
+migrateAssetUseAuthOnce();
 backfillFixedAssetHistoryOnce();
 moveScreensToGestionOnce();
 seedQrSeguridadScreenGrants();
@@ -13811,6 +13935,17 @@ module.exports = {
     setFixedAssetPendingChoices,
     setFixedAssetEditing,
     FIXED_ASSET_EMPTY_ON_EDIT,
+    getAssetAuthorizationById,
+    getLatestAssetAuthorization,
+    getPendingAssetAuthorization,
+    createAssetAuthorization,
+    resolveAssetAuthorization,
+    parseAssetAuthorizationPayload,
+    setFixedAssetUseAuth,
+    listPendingAssetAuthorizations,
+    listAssetAuthorizationsRequestedBy,
+    markAssetAuthorizationsSeenForRequester,
+    assetAuthorizationSummaryMap,
     countAssetModelsByType,
     listFixedAssets,
     getFixedAssetById,

@@ -8655,6 +8655,11 @@ td.sku-cell-marked.sku-cell-pending{ box-shadow: inset 0 0 0 0.125rem #d92d20; b
 td.sku-cell-marked select.editable-cell-select{ min-width: 7.5rem; }
 td.asset-missing{ color: color-mix(in srgb, #b54708 70%, var(--color-text-primary)); font-weight: 600; }
 .sku-editing-chip{ display: inline-block; margin-left: 0.45rem; padding: 0.05rem 0.5rem; border-radius: 999px; background: #fef0c7; color: #93370d; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.sku-editing-chip.asset-auth-chip-bad{ background: #fee4e2; color: #912018; }
+.sku-editing-chip.asset-auth-chip-block{ display: block; width: fit-content; max-width: 100%; margin: 0.2rem 0 0; white-space: normal; border-radius: 0.6rem; line-height: 1.25; }
+.notifications-asset-reason{ display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.4rem; }
+.notifications-asset-reason[hidden]{ display: none; }
+.notifications-asset-reason textarea{ width: 100%; min-height: 3.2rem; resize: vertical; font: inherit; padding: 0.4rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.4rem; background: var(--color-surface, transparent); color: inherit; }
 .sku-edit-win{ max-width: 40rem; display: flex; flex-direction: column; gap: 0.8rem; }
 .sku-edit-who{ margin: 0; font-size: 0.85rem; color: var(--color-text-secondary); }
 .sku-edit-group{ margin: 0; padding: 0.6rem 0.8rem 0.8rem; border: 1px solid var(--color-border); border-radius: 0.6rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.4rem 1rem; }

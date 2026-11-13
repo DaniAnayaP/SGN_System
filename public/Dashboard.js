@@ -10237,6 +10237,106 @@ function renderCatalogRequestRow(item, { showOutcome = false } = {}) {
     return row;
 }
 
+// --- Autorización de activos (uso y edición) -----------------------------------------------------------------------------------
+// kind 'asset-auth' (ver /api/business/notifications): el jefe directo de quien capturó (o quien tenga el permiso Autorizar) decide aquí, en Autorizar, si un activo ya completo se puede USAR o si se puede EDITAR. Aprobar lo aplica;
+// Rechazar pide, si se quiere, el motivo. Quien lo pidió lo ve en Solicitudes mientras espera y en Avisos cuando se decide.
+const ASSET_AUTH_FIELD_LABEL_KEYS = {
+    classId: 'main.colActClasificacion', modelId: 'main.colActElegirModelo', serialNumber: 'main.colActSerie', showInLayout: 'main.colActEnLayout', status: 'main.colActEstatus',
+    evidenceFront: 'main.colActFotoFrente', evidenceBack: 'main.colActFotoAtras', evidenceLeft: 'main.colActFotoIzq', evidenceRight: 'main.colActFotoDer', evidenceTop: 'main.colActFotoArriba', evidenceBottom: 'main.colActFotoAbajo',
+};
+async function resolveAssetAuthorization(item, action, row, reason) {
+    try {
+        const res = await fetch(`/api/business/asset-authorizations/${item.id}/${action}`, {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action === 'reject' ? { reason } : {}),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            showToast(body.message || t('admin.saveError'), res.status === 403 ? 'warning' : 'error');
+            if (res.status === 409) loadNotifications(); // ya la resolvió otra persona, o el activo cambió: la lista se actualiza
+            return;
+        }
+        row.remove();
+        showToast(t(action === 'approve' ? 'main.notificationAssetApproveDone' : 'main.notificationAssetRejectDone'), 'success');
+        loadNotifications();
+    } catch {
+        showToast(t('admin.saveError'), 'error');
+    }
+}
+function renderAssetAuthRow(item, tab) {
+    const row = document.createElement('div');
+    row.className = `notifications-item${tab === 'avisos' && !item.seen_at ? ' notifications-item-unseen' : ''}`;
+    const isEdit = item.authKind === 'edit';
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${t(isEdit ? 'main.notificationAssetEdit' : 'main.notificationAssetUse')} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    desc.textContent = [item.assetCode, item.assetLabel].filter(Boolean).join(' · ');
+    row.append(meta, desc);
+    const addLine = (text) => {
+        const line = document.createElement('div');
+        line.className = 'notifications-item-meta';
+        line.textContent = text;
+        row.appendChild(line);
+        return line;
+    };
+    if (isEdit && (item.fields || []).length) addLine(t('main.notificationAssetFields', { datos: item.fields.map((k) => t(ASSET_AUTH_FIELD_LABEL_KEYS[k] || k)).join(', ') }));
+    if (tab === 'avisos') {
+        addLine(t(item.status === 'approved' ? (isEdit ? 'main.notificationAssetEditApproved' : 'main.notificationAssetUseApproved') : 'main.notificationAssetRejectedBy', { name: item.resolvedBy || '—' }));
+        if (item.status === 'rejected' && item.reason) addLine(t('main.notificationAssetReason', { motivo: item.reason }));
+        return row;
+    }
+    if (tab === 'solicitudes') {
+        addLine(t('main.notificationAssetWaiting', { jefe: item.boss || t('main.assetAuthQuienAutoriza') }));
+        return row;
+    }
+    addLine(t('main.notificationAssetBy', { name: item.requestedBy || '—' }));
+    // Rechazar abre un cuadro para el motivo (opcional) y se confirma con un segundo clic; Aprobar aplica de una vez.
+    const reasonBox = document.createElement('div');
+    reasonBox.className = 'notifications-asset-reason';
+    reasonBox.hidden = true;
+    const reasonId = `asset-auth-reason-${item.id}`;
+    const reasonLabel = document.createElement('label');
+    reasonLabel.className = 'notifications-item-meta';
+    reasonLabel.htmlFor = reasonId;
+    reasonLabel.textContent = t('main.notificationAssetReasonLabel');
+    const reasonInput = document.createElement('textarea');
+    reasonInput.id = reasonId;
+    reasonInput.maxLength = 300;
+    reasonBox.append(reasonLabel, reasonInput);
+    const actions = document.createElement('div');
+    actions.className = 'notifications-item-actions';
+    const openLink = document.createElement('a');
+    openLink.className = 'btn btn-secondary';
+    openLink.href = isEdit ? 'GesCentroDistActivos.html' : 'OpCentroDistAltaActivos.html';
+    openLink.textContent = t('main.notificationAssetOpen');
+    const rejectBtn = document.createElement('button');
+    rejectBtn.type = 'button';
+    rejectBtn.className = 'btn btn-secondary';
+    rejectBtn.textContent = t('main.notificationReject');
+    const approveBtn = document.createElement('button');
+    approveBtn.type = 'button';
+    approveBtn.className = 'btn';
+    approveBtn.textContent = t('main.notificationApprove');
+    let confirming = false;
+    rejectBtn.addEventListener('click', () => {
+        if (!confirming) {
+            confirming = true;
+            reasonBox.hidden = false;
+            rejectBtn.textContent = t('main.notificationAssetRejectConfirm');
+            approveBtn.hidden = true;
+            reasonInput.focus();
+            return;
+        }
+        resolveAssetAuthorization(item, 'reject', row, reasonInput.value.trim());
+    });
+    approveBtn.addEventListener('click', () => resolveAssetAuthorization(item, 'approve', row));
+    actions.append(openLink, rejectBtn, approveBtn);
+    row.append(reasonBox, actions);
+    return row;
+}
+
 // --- Solicitudes de color (campana de las cuentas SaaS) -----------------------------------------------------------------
 // Quien puede personalizar colores pero no autorizarlos pide el cambio en el árbol (Árbol Maestro SaaS o Árbol de Permisos Maestro); la solicitud le llega
 // a quien debe decidirla (su jefe directo y, si ese no puede autorizar, el siguiente) aquí, en Notificaciones (kind: 'color-request', ver
@@ -10824,6 +10924,7 @@ function renderActiveNotificationTab() {
             if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
+            else if (item.kind === 'asset-auth') row = renderAssetAuthRow(item, activeNotificationTab);
             else if (activeNotificationTab === 'alertas') row = renderAlertRow(item);
             else if (activeNotificationTab === 'avisos') row = renderRequestRow(item, { showOutcome: true });
             else if (activeNotificationTab === 'solicitudes') row = renderRequestRow(item);
