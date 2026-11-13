@@ -1747,7 +1747,7 @@
     }
     // Lo que el registro de Alta Activos le da al activo del Layout: su código, su nombre (el personalizado y, sin él, el de compra), su tipo y su clasificación (ids de los catálogos), el dibujo de su tipo y sus medidas
     // en metros (largo = ol, profundidad = od, alto = oh). asset: { id, code, customName, purchaseName, typeId, classId, length, depth, height } con las medidas en cm. opts: { typeKind: el dibujo del tipo (SPACE_TYPES),
-    // metric: 'm2' | 'm3', la métrica de su clasificación }. Un activo en m² (operar o administrar) siempre tiene 1 nivel.
+    // metric: 'm2' | 'm3', la métrica de su clasificación }. Todo activo puede tener niveles, espacios y posiciones (Daniel, 2026-11-13: «más vale tener que no tener»), también los de m²; la métrica solo dice cómo cuenta el activo en los m² o m³ del Layout.
     function assetSpaceFields(asset, opts) {
         const o = opts || {};
         const meters = (cm) => { const n = Number(cm); return Number.isFinite(n) && n > 0 ? Math.max(0.01, Math.round(n) / 100) : null; };
@@ -1768,7 +1768,6 @@
         const turned = (Number(space && space.rot) || 0) % 2 === 1;
         const sizes = { ol: turned ? f.od : f.ol, od: turned ? f.ol : f.od, oh: f.oh };
         ['ol', 'od', 'oh'].forEach((k) => { if (sizes[k] !== null) next[k] = sizes[k]; else delete next[k]; });
-        if (f.metric === 'm2') next.levels = 1;
         return next;
     }
     // ---- Girar un activo del Layout ----------------------------------------------------------------------------------------------------------
