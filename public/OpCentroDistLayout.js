@@ -4950,8 +4950,11 @@ function openPlaceAssets(opts = {}) {
     const d = state.draft;
     if (!d || !canEdit(sensors ? 'sensores' : 'activos')) return;
     const placed = new Set([...d.spaces, ...(d.sensors || [])].map((s) => s.assetRef).filter(Boolean));
-    const list = (state.fixedAssets || []).filter((a) => a.status === 'active' && a.showInLayout && a.complete && !placed.has(a.id) && ((a.typeKind === 'sensor') === sensors)); // solo los activos completos en Alta Activos se pueden colocar
-    const dimsOk = (a) => sensors || (a.length > 0 && a.depth > 0 && a.height > 0);
+    // Salen los activos que aparecen en el Layout, están activos y no están colocados; SOLO los completos en Alta Activos se pueden marcar: de los demás se ve, en gris, lo que les falta (así se sabe qué terminar).
+    const list = (state.fixedAssets || []).filter((a) => a.status === 'active' && a.showInLayout && !placed.has(a.id) && ((a.typeKind === 'sensor') === sensors));
+    const faltaText = (a) => (a.missing || []).map((k) => (k === 'photos' ? t('main.assetFaltaFotos', { n: a.photoCount || 0 }) : t(`main.assetFalta_${k}`))).join(', ');
+    const dimsOk = (a) => a.complete && (sensors || (a.length > 0 && a.depth > 0 && a.height > 0));
+    const pickable = list.filter(dimsOk).length;
     if (!placeModalEl) {
         placeModalEl = document.createElement('div');
         placeModalEl.className = 'modal-overlay';
@@ -4962,7 +4965,7 @@ function openPlaceAssets(opts = {}) {
     }
     const zoneOptions = `<option value="">${esc(t('main.layoutActivoElegirZona'))}</option>${d.zones.filter((z) => z.active !== false).map((z) => `<option value="${esc(z.id)}">${esc(z.name || z.code)}</option>`).join('')}`;
     const detail = (a) => (sensors ? `${a.typeName || '—'} · ${a.model || '—'} · S/N ${a.serialNumber || '—'}` : `${a.typeName || '—'} · ${a.length} × ${a.depth} × ${a.height} cm`);
-    const rows = list.map((a) => `<label class="layout-place-row${dimsOk(a) ? '' : ' is-off'}" data-place-text="${esc(`${a.code} ${a.name} ${a.typeName} ${a.className} ${a.model || ''} ${a.serialNumber || ''}`.toLowerCase())}"><input type="checkbox" data-place-asset="${a.id}"${dimsOk(a) ? '' : ' disabled'}> <b>${esc(a.code)}</b> · ${esc(a.name)} <small>${esc(detail(a))}${dimsOk(a) ? '' : ` ${esc(t('main.layoutColocarSinMedidas'))}`}</small></label>`).join('');
+    const rows = list.map((a) => `<label class="layout-place-row${dimsOk(a) ? '' : ' is-off'}" data-place-text="${esc(`${a.code} ${a.name} ${a.typeName} ${a.className} ${a.model || ''} ${a.serialNumber || ''}`.toLowerCase())}"><input type="checkbox" data-place-asset="${a.id}"${dimsOk(a) ? '' : ' disabled'}> <b>${esc(a.code)}</b> · ${esc(a.name)} <small>${esc(detail(a))}${dimsOk(a) ? '' : ` ${esc(a.complete ? t('main.layoutColocarSinMedidas') : t('main.layoutColocarFalta', { falta: faltaText(a) }))}`}</small></label>`).join('');
     placeModalEl.innerHTML = `<div class="modal-panel" style="max-width: 40rem;" role="dialog" aria-modal="true" aria-labelledby="layout-place-title">
         <h3 id="layout-place-title" data-help-key="${sensors ? 'layoutColocarSensor' : 'layoutColocarActivo'}">${esc(t(sensors ? 'main.layoutColocarTituloSensor' : 'main.layoutColocarTitulo'))}</h3>
         ${sensors ? '' : `<div class="admin-form-grid">
@@ -4972,7 +4975,7 @@ function openPlaceAssets(opts = {}) {
         ${list.length ? `<input type="search" id="layout-place-search" placeholder="${esc(t('main.layoutColocarBuscar'))}" style="width:100%; margin-top:.6rem;"><div class="layout-place-list">${rows}</div>` : `<p class="layout-muted">${esc(t(sensors ? 'main.layoutColocarVacioSensor' : 'main.layoutColocarVacio'))}</p>`}
         <div id="layout-place-error" class="admin-error" role="alert" hidden></div>
         <div class="admin-form-actions">
-            <button type="button" class="btn" id="layout-place-ok"${list.length ? '' : ' disabled'}>${esc(t('main.layoutColocarBtn'))}</button>
+            <button type="button" class="btn" id="layout-place-ok"${pickable ? '' : ' disabled'}>${esc(t('main.layoutColocarBtn'))}</button>
             <button type="button" class="btn btn-secondary" data-place-cancel>${esc(t('admin.cancel'))}</button>
         </div>
     </div>`;
