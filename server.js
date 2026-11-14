@@ -172,7 +172,7 @@ const {
     getLayoutByPublicToken,
     startCleaningRecord, finishCleaningRecord, findCleaningByRef, finishCleaningFromApp, listOpenCleaningsOf, getCleaningLast, listCleaningRecords, getCleaningRecord, getCleaningPhoto, deleteCleaningRecord, updateCleaningRecord, CLEANING_PATCHABLE_FIELDS, updateTemperatureRecord, TEMPERATURE_PATCHABLE_FIELDS,
     MANUAL_ORDER_STATUSES, MANUAL_ORDER_PATCHABLE_FIELDS, STORAGE_CAPACITY_PATCHABLE_FIELDS, listStorageCapacity, getStorageCapacityByKey, createStorageCapacity, updateStorageCapacity, deleteStorageCapacity, listSkuCapacityData, listManualOrderItems, listManualItemCenters, listManualItemShips,getManualOrderItem, createManualOrder, findManualOrderByRef, listManualOrderLines, getManualOrderWithLines, getManualOrderLine, listManualLineDeliveries, getManualDelivery, addManualLineDelivery, voidManualLineDelivery, updateManualOrderLine, setManualOrderLineStatus, deleteManualOrderLine, INCIDENT_CATEGORIES, INCIDENT_STATUSES, INCIDENT_MAX_PHOTOS, INCIDENT_PATCHABLE_FIELDS, createIncident, findIncidentByRef, addIncidentPhotosByRef, addIncidentPhotos, listIncidents, getIncident, getIncidentPhoto, updateIncident, setIncidentStatus, deleteIncident, countIncidentsByCriterion,
-    addTemperatureRecord, findTemperatureByRef, getTemperatureLast, listTemperatureRecords, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
+    addTemperatureRecord, findTemperatureByRef, getTemperatureLast, listTemperatureRecords, listTemperatureActivity, hasTemperatureActivityBefore, getTemperatureRecord, getTemperaturePhoto, deleteTemperatureRecord, getQrLocksRaw, saveQrLocks,
     addSafetyCheck, findSafetyCheckByRef, listSafetyChecks, getSafetyCheck, getSafetyPhoto, deleteSafetyCheck, updateSafetyCheck, SAFETY_CHECK_PATCHABLE_FIELDS, getSafetyLast, clientLocalDay,
     ARTICLE_CATEGORY_TYPES,
     listArticleCategories,
@@ -9384,6 +9384,8 @@ app.get('/api/business/qr-apps/ficha', requireAuth, (req, res) => {
 // usuario) es Operaciones > Temperaturas.
 const TEMPERATURE_TABLE_KEY = 'temperaturas';
 const TEMPERATURE_SCREEN_LABEL = 'Temperaturas';
+// Los segundos que tardó quien llenó el QR (de que abrió la página a que guardó, medidos por su teléfono): un número de 0 a 6 horas; cualquier otra cosa se ignora (la lectura se guarda igual, sin tiempo).
+const parseDurationSeconds = (raw) => (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 && raw <= 21600 ? Math.round(raw) : null);
 const TEMPERATURE_MIN = -100;
 const TEMPERATURE_MAX = 100;
 // El refrigerador por su código público: solo cuentan los activos de tipo Frío; con su huella, su zona y su localizador (Z006.H003.F001).
@@ -9451,7 +9453,7 @@ app.post('/api/public/temperature/:token/:spaceId/reading', publicCleaningLimite
     const photo = parseCleaningPhoto(req.body && req.body.photo);
     if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
     const { row, space, footprint, zone, locator } = target;
-    const saved = addTemperatureRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature: Math.round(temperature * 10) / 10, humidity, limits: spaceLimits(space), photo, thumb: parseThumb(req.body && req.body.thumb) });
+    const saved = addTemperatureRecord({ clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature: Math.round(temperature * 10) / 10, humidity, limits: spaceLimits(space), photo, thumb: parseThumb(req.body && req.body.thumb), durationS: parseDurationSeconds(req.body && req.body.elapsedSeconds) });
     res.set('Cache-Control', 'no-store');
     res.status(201).json(lockedTemperatureRecord(saved, qrLocksOf('temperature', row.clientId, row.costCenterId || 0), true));
 });
@@ -9591,13 +9593,13 @@ app.post('/api/business/temperaturas/readings', requireAuth, (req, res) => {
         const { footprint, zone, locator } = cleaningLocatorOf(layoutRow.layout, space);
         saved = addTemperatureRecord({
             clientId: req.user.clientId, costCenterId: center.id, spaceId: space.id, spaceCode: space.code, spaceType: space.type, zoneName: zone ? zone.name : '', footprintCode: footprint ? footprint.code : '', locator, personName, temperature, humidity,
-            limits: spaceLimits(space), photo, thumb: parseThumb(body.thumb), source: 'app', userId: req.user.sub, clientRef, checkedAt,
+            limits: spaceLimits(space), photo, thumb: parseThumb(body.thumb), source: 'app', userId: req.user.sub, clientRef, checkedAt, durationS: parseDurationSeconds(body.elapsedSeconds),
         });
     } else {
         const zone = (layoutRow.layout.zones || []).find((z) => z.id === sensor.zoneId) || null;
         saved = addTemperatureRecord({
             clientId: req.user.clientId, costCenterId: center.id, spaceId: '', spaceCode: '', spaceType: '', zoneName: zone ? zone.name : '', footprintCode: '', locator: [zone && zone.code, sensor.code].filter(Boolean).join('.'), personName, temperature, humidity, limits: {},
-            photo, thumb: parseThumb(body.thumb), source: 'app', sensorId: sensor.id, sensorCode: sensor.code, sensorType: sensor.type, userId: req.user.sub, clientRef, checkedAt,
+            photo, thumb: parseThumb(body.thumb), source: 'app', sensorId: sensor.id, sensorCode: sensor.code, sensorType: sensor.type, userId: req.user.sub, clientRef, checkedAt, durationS: parseDurationSeconds(body.elapsedSeconds),
         });
     }
     res.status(201).json({ record: temperatureRowOf(saved, centers, client), offline: !!checkedAt });
@@ -9719,7 +9721,7 @@ app.post('/api/public/sensor/:token/:sensorId/reading', publicCleaningLimiter, (
     if (!photo) return res.status(400).json({ message: 'La foto no es válida o es demasiado grande.', code: 'PHOTO' });
     const saved = addTemperatureRecord({
         clientId: row.clientId, costCenterId: row.costCenterId || 0, spaceId: '', spaceCode: '', spaceType: '', zoneName: zone ? zone.name : '', footprintCode: '', locator, personName, temperature, humidity, limits: {},
-        photo, thumb: parseThumb(req.body && req.body.thumb), source: 'qr-sensor', sensorId: sensor.id, sensorCode: sensor.code, sensorType: sensor.type,
+        photo, thumb: parseThumb(req.body && req.body.thumb), source: 'qr-sensor', sensorId: sensor.id, sensorCode: sensor.code, sensorType: sensor.type, durationS: parseDurationSeconds(req.body && req.body.elapsedSeconds),
     });
     res.set('Cache-Control', 'no-store');
     res.status(201).json(lockedSensorRecord(saved, locks, true));
@@ -12567,6 +12569,111 @@ app.get('/api/business/asset-activity', requireAuth, (req, res) => {
     const env = assetAlertEnv(clientId, isTestAccount);
     res.set('Cache-Control', 'no-store');
     res.json({ assetId: asset.id, assetCode: fixedAssetCodeOf(asset), items: assetActivityOf(clientId, isTestAccount, asset, env, 40) });
+});
+
+// --- Actividades Activos (Gestión, C. Distribución) ---------------------------------------------------------------------------------------------------------
+// Lo que se registró de cada activo: por lo mientras, los llenados de los QR de sensores y de refrigeradores (las lecturas de temperatura y humedad, también las que mandó la App). Solo lectura: lo que se corrige se corrige donde se
+// registró (el QR o Operaciones > Temperaturas). La pantalla pide un rango de fechas (en la hora de quien mira, ya convertida a UTC) y arma ella misma el cuadro tipo Gantt; de cada lectura salen la persona, el resultado (dentro o fuera de
+// su rango), el tiempo que demoró y si trae foto. El detalle (con Control Interno) se pide aparte al tocar una marca. El rango de cada lectura es el que traía el refrigerador al guardarla o, si no trae (los sensores), el límite que hoy
+// tiene el activo en Temperatura y Humedad (Alta Activos).
+const ACTIVIDADES_SCREEN_LABEL = 'Actividades Activos';
+const ACTIVIDADES_MAX_ROWS = 20000;
+const ACTIVIDADES_MAX_RANGE_MS = 400 * 86400000;
+const isoToSqlUtc = (iso) => { const ms = Date.parse(iso); return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 19).replace('T', ' ') : null; };
+function activityLimitsOf(r, assetLimits, tempCrit, humCrit) {
+    const fromAsset = (crit) => { const l = crit && assetLimits ? assetLimits[crit.id] : null; return l && (l.min !== null || l.max !== null) ? { min: l.min, max: l.max } : null; };
+    const tempLimit = (r.temp_min !== null && r.temp_min !== undefined) || (r.temp_max !== null && r.temp_max !== undefined) ? { min: r.temp_min, max: r.temp_max } : fromAsset(tempCrit);
+    const humLimit = (r.hum_min !== null && r.hum_min !== undefined) || (r.hum_max !== null && r.hum_max !== undefined) ? { min: r.hum_min, max: r.hum_max } : fromAsset(humCrit);
+    const judge = (v, l) => {
+        if (v === null || v === undefined || !l || (l.min === null && l.max === null)) return null;
+        if (l.min !== null && l.min !== undefined && v < l.min) return 'low';
+        if (l.max !== null && l.max !== undefined && v > l.max) return 'high';
+        return 'ok';
+    };
+    const temp = judge(r.temperature, tempLimit);
+    const hum = judge(r.humidity, humLimit);
+    const out = ['low', 'high'].includes(temp) || ['low', 'high'].includes(hum);
+    return { temp, hum, tempLimit, humLimit, result: out ? 'out' : (temp || hum ? 'ok' : 'none') };
+}
+// Los activos de esta empresa que se llenan por QR (sensores y refrigeradores colocados en algún Layout) con el centro de costos donde están.
+function activityAssetKinds(clientId) {
+    const kinds = new Map();
+    listClientLayouts(clientId).forEach((l) => {
+        const cc = l.costCenterId || 0;
+        const lay = l.layout || {};
+        (lay.spaces || []).forEach((s) => { if (s && s.assetRef && s.type === 'cold' && s.active !== false) kinds.set(Number(s.assetRef), { kind: 'cold', cc }); });
+        (lay.sensors || []).forEach((s) => { if (s && s.assetRef) kinds.set(Number(s.assetRef), { kind: 'sensor', cc }); });
+    });
+    return kinds;
+}
+function activityEnv(req) {
+    const { clientId, isTestAccount } = req.user;
+    const ctx = fixedAssetContext(req);
+    return {
+        ctx, assets: new Map(listFixedAssets(clientId, isTestAccount).map((a) => [a.id, a])), layout: assetLayoutPlaces(clientId), limits: listAssetLimitsMap(clientId),
+        tempCrit: [...ctx.criteria.values()].find((c) => c.builtin_key === 'temperature') || null, humCrit: [...ctx.criteria.values()].find((c) => c.builtin_key === 'humidity') || null,
+    };
+}
+const activityAssetOf = (r, env) => {
+    const assetId = r.sensor_id ? env.layout.sensorAsset.get(`${r.cost_center_id}|${r.sensor_id}`) : env.layout.spaceAsset.get(`${r.cost_center_id}|${r.space_id}`);
+    return assetId ? env.assets.get(assetId) || null : null;
+};
+app.get('/api/business/asset-activities', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId } = req.user;
+    const sinceSql = isoToSqlUtc(req.query.since);
+    const untilSql = isoToSqlUtc(req.query.until);
+    const span = Date.parse(req.query.until) - Date.parse(req.query.since);
+    if (!sinceSql || !untilSql || !(span > 0) || span > ACTIVIDADES_MAX_RANGE_MS) return res.status(400).json({ message: 'El rango de fechas no es válido.', code: 'RANGE' });
+    const env = activityEnv(req);
+    const rows = listTemperatureActivity(clientId, { since: sinceSql, until: untilSql, limit: ACTIVIDADES_MAX_ROWS });
+    const seen = new Set();
+    const items = [];
+    rows.forEach((r) => {
+        const asset = activityAssetOf(r, env);
+        if (!asset) return; // una lectura de un lugar que no es un activo del registro no es actividad de un activo
+        seen.add(asset.id);
+        const judged = activityLimitsOf(r, env.limits.get(asset.id), env.tempCrit, env.humCrit);
+        items.push({ id: r.id, assetId: asset.id, at: sqlUtcIso(r.checked_at), person: r.person_name || '', temperature: r.temperature, humidity: r.humidity, result: judged.result, hasPhoto: !!r.has_photo, durationS: r.duration_s === null || r.duration_s === undefined ? null : r.duration_s, source: r.source || 'qr' });
+    });
+    // las filas del cuadro: los activos que se llenan por QR (aunque no hayan registrado nada en el rango) y cualquiera que sí registró
+    const kinds = activityAssetKinds(clientId);
+    const assets = [];
+    new Set([...kinds.keys(), ...seen]).forEach((id) => {
+        const a = env.assets.get(id);
+        if (!a) return;
+        const type = env.ctx.types.get(a.type_id);
+        const cls = env.ctx.classes.get(a.class_id);
+        const cc = env.ctx.centers.get(a.cost_center_id);
+        const k = kinds.get(id);
+        assets.push({ id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name || '', typeId: a.type_id || 0, typeName: type ? type.name : '', classId: a.class_id || 0, className: cls ? cls.name : '', costCenterId: a.cost_center_id || 0, costCenterName: cc ? cc.name : '', kind: k ? k.kind : '', active: a.status === 'active' });
+    });
+    assets.sort((a, z) => (a.className || '').localeCompare(z.className || '', 'es') || a.code.localeCompare(z.code, 'es', { numeric: true }));
+    res.set('Cache-Control', 'no-store');
+    res.json({ since: new Date(Date.parse(req.query.since)).toISOString(), until: new Date(Date.parse(req.query.until)).toISOString(), items, assets, hasOlder: hasTemperatureActivityBefore(clientId, sinceSql), truncated: rows.length >= ACTIVIDADES_MAX_ROWS });
+});
+app.get('/api/business/asset-activities/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId } = req.user;
+    const id = intOf(req.params.id);
+    const r = id ? getTemperatureRecord(id, clientId) : null;
+    if (!r) return res.status(404).json({ message: 'Esa actividad no existe.' });
+    const env = activityEnv(req);
+    const asset = activityAssetOf(r, env);
+    if (!asset) return res.status(404).json({ message: 'Esa actividad no existe.' });
+    const judged = activityLimitsOf(r, env.limits.get(asset.id), env.tempCrit, env.humCrit);
+    const type = env.ctx.types.get(asset.type_id);
+    const cls = env.ctx.classes.get(asset.class_id);
+    const cc = env.ctx.centers.get(r.cost_center_id) || env.ctx.centers.get(asset.cost_center_id);
+    const client = getClientById(clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        id: r.id, assetId: asset.id, assetCode: fixedAssetCodeOf(asset), assetName: asset.custom_name || asset.purchase_name || '', typeName: type ? type.name : '', className: cls ? cls.name : '', costCenterName: cc ? cc.name : '',
+        place: r.sensor_id ? r.sensor_code || '' : r.space_code || '', person: r.person_name || '', at: sqlUtcIso(r.checked_at), temperature: r.temperature, humidity: r.humidity,
+        tempStatus: judged.temp, humStatus: judged.hum, tempLimit: judged.tempLimit, humLimit: judged.humLimit, result: judged.result,
+        durationS: r.duration_s === null || r.duration_s === undefined ? null : r.duration_s, source: r.source || 'qr', hasPhoto: !!r.has_photo,
+        ...getSystemColumnsForRecord({ companyName: client && client.company_name, area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: ACTIVIDADES_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: r.checked_at }),
+    });
 });
 
 // --- Lecturas (Operaciones, C. Distribución) -----------------------------------------------------------------------------------------------------------------

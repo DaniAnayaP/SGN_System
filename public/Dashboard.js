@@ -13093,6 +13093,7 @@ const TABLE_GRANT_PATHS = {
     'alta-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-activos' },
     'calibraciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-calibraciones' },
     'lecturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-lecturas' },
+    'actividades-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-actividades-activos' },
     'mtto-preventivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-mtto-preventivo' },
     'mtto-correctivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-mtto-correctivo' },
     'localizadores': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-localizadores' },
@@ -13144,6 +13145,8 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-centro-dist-qr-incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-qr-incidentes' },
     // Gestión > Activos (2026-11-12): los activos completos, solo para buscar y consultar; Editar los regresa a Alta Activos con el dato marcado.
     'cat-gestion-centro-dist-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-activos' },
+    // Gestión > Actividades Activos (2026-11-13): lo que se registró de cada activo (por lo mientras, los llenados del QR de sensores y refrigeradores), en un cuadro tipo Gantt de solo lectura.
+    'cat-gestion-centro-dist-actividades-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-actividades-activos' },
     // Operaciones > QR's > Compra Pedido Manual y Surtido Pedido Manual (2026-11-12): lo que hay que comprar de los pedidos del QR (totales por código y desglose, PDF y Excel) y, por ahora vacía, el surtido.
     'cat-operaciones-centro-dist-compra-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-compra-pedido-manual' },
     'cat-operaciones-centro-dist-surtido-pedido-manual': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-surtido-pedido-manual' },
@@ -13712,6 +13715,7 @@ window.Dashboard = {
     hasColumnDeleteGrant,
     hasScreenGrant,
     bindExternalColumnFilters,
+    hasColumnSearchGrant,
     clearExternalColumnFilters,
     canEditField,
     assetAlertText,

@@ -2868,6 +2868,36 @@
               ]
             }
           ]
+        },
+        {
+          "id": "cat-gestion-centro-dist-actividades-activos", "labelKey": "menu.catCentroDistActividadesActivos", "abbrKeys": ["menu.catCentroDistActividadesActivosAbbr1", "menu.catCentroDistActividadesActivosAbbr2"], "icon": "bx-calendar-check", "href": "GesCentroDistActividadesActivos.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colAaClasificacion", "labelKey": "main.colAaClasificacion", "permissionOnly": true },
+            { "id": "colAaActivo", "labelKey": "main.colAaActivo", "permissionOnly": true },
+            { "id": "colAaQuien", "labelKey": "main.colAaQuien", "permissionOnly": true },
+            { "id": "colAaResultado", "labelKey": "main.colAaResultado", "permissionOnly": true },
+            { "id": "colAaFecha", "labelKey": "main.colAaFecha", "permissionOnly": true },
+            { "id": "colAaTiempo", "labelKey": "main.colAaTiempo", "permissionOnly": true },
+            { "id": "colAaEvidencias", "labelKey": "main.colAaEvidencias", "permissionOnly": true }
+          ]
         }
       ],
       "cat-admin": [

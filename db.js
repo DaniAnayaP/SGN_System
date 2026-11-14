@@ -3363,6 +3363,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'alta-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Activos' },
     'calibraciones': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Calibraciones' },
     'lecturas': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Lecturas' },
+    'actividades-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Actividades Activos' },
     'mtto-preventivo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Mantenimiento Preventivo' },
     'mtto-correctivo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Mantenimiento Correctivo' },
     'presentaciones-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones Distribución' },
@@ -3710,6 +3711,7 @@ const TABLE_GRANT_PATHS = {
     'alta-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-activos' },
     'calibraciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-calibraciones' },
     'lecturas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-lecturas' },
+    'actividades-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-actividades-activos' },
     'mtto-preventivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-mtto-preventivo' },
     'mtto-correctivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-mtto-correctivo' },
     // Operaciones > Limpieza y Temperaturas: sin estas rutas el permiso Eliminar (y el de corregir) de un usuario que no es administrador nunca se encontraba en el árbol.
@@ -7068,16 +7070,17 @@ db.exec(`
 `);
 // La App: client_ref = la clave que el celular le pone a cada lectura (si reenvía la misma, el servidor la reconoce y no la duplica); reporter_user_id = la cuenta que la mandó; received_at = cuándo la recibió el servidor
 // cuando se mandó sin señal (checked_at es entonces la hora del celular al tomarla).
-for (const [col, ddl] of [['client_ref', 'TEXT'], ['reporter_user_id', 'INTEGER'], ['received_at', 'TEXT']]) {
+// duration_s = cuántos segundos pasaron desde que la persona abrió la página del QR hasta que guardó la lectura (lo mide el teléfono, sin depender de su reloj); las lecturas anteriores no lo traen («—»). Lo ve Gestión > Actividades Activos.
+for (const [col, ddl] of [['client_ref', 'TEXT'], ['reporter_user_id', 'INTEGER'], ['received_at', 'TEXT'], ['duration_s', 'INTEGER']]) {
     if (!db.prepare('PRAGMA table_info(temperature_records)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE temperature_records ADD COLUMN ${col} ${ddl}`);
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_temperature_ref ON temperature_records(client_id, reporter_user_id, client_ref)');
 const TEMPERATURE_SELECT = `SELECT r.*, EXISTS(SELECT 1 FROM temperature_photos p WHERE p.record_id = r.id) AS has_photo FROM temperature_records r`;
 // Guarda una lectura: la hora la pone el servidor y la foto se guarda en la misma operación.
-function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, limits, photo, thumb, source = 'qr', sensorId = '', sensorCode = '', sensorType = '', userId = null, clientRef = null, checkedAt = null }) {
+function addTemperatureRecord({ clientId, costCenterId, spaceId, spaceCode, spaceType, zoneName, footprintCode, locator, personName, temperature, humidity, limits, photo, thumb, source = 'qr', sensorId = '', sensorCode = '', sensorType = '', userId = null, clientRef = null, checkedAt = null, durationS = null }) {
     return db.transaction(() => {
-        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, humidity, temp_min, temp_max, hum_min, hum_max, checked_at, source, sensor_id, sensor_code, sensor_type, reporter_user_id, client_ref, received_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, humidity === undefined ? null : humidity, limits && limits.tempMin !== undefined ? limits.tempMin : null, limits && limits.tempMax !== undefined ? limits.tempMax : null, limits && limits.humMin !== undefined ? limits.humMin : null, limits && limits.humMax !== undefined ? limits.humMax : null, checkedAt, source, sensorId || '', sensorCode || '', sensorType || '', userId, clientRef, checkedAt);
+        const info = db.prepare(`INSERT INTO temperature_records (client_id, cost_center_id, space_id, space_code, space_type, zone_name, footprint_code, locator, person_name, temperature, humidity, temp_min, temp_max, hum_min, hum_max, checked_at, source, sensor_id, sensor_code, sensor_type, reporter_user_id, client_ref, received_at, duration_s)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END, ?)`).run(clientId, costCenterId || 0, spaceId, spaceCode || '', spaceType || '', zoneName || '', footprintCode || '', locator || '', personName || '', temperature, humidity === undefined ? null : humidity, limits && limits.tempMin !== undefined ? limits.tempMin : null, limits && limits.tempMax !== undefined ? limits.tempMax : null, limits && limits.humMin !== undefined ? limits.humMin : null, limits && limits.humMax !== undefined ? limits.humMax : null, checkedAt, source, sensorId || '', sensorCode || '', sensorType || '', userId, clientRef, checkedAt, Number.isInteger(durationS) ? durationS : null);
         db.prepare('INSERT INTO temperature_photos (record_id, mime, data, thumb_mime, thumb) VALUES (?, ?, ?, ?, ?)').run(info.lastInsertRowid, photo.mime, photo.data, thumb ? thumb.mime : null, thumb ? thumb.data : null);
         return db.prepare(`${TEMPERATURE_SELECT} WHERE r.id = ?`).get(info.lastInsertRowid);
     })();
@@ -7103,6 +7106,18 @@ function listTemperatureRecords(clientId, { costCenterId, spaceId, sensorId, sen
     if (until) { where.push('r.checked_at < ?'); args.push(until); }
     const cap = limit ? ` LIMIT ${Math.max(1, Math.min(Number(limit) || 50, 5000))}` : '';
     return db.prepare(`${TEMPERATURE_SELECT} WHERE ${where.join(' AND ')} ORDER BY r.checked_at DESC, r.id DESC${cap}`).all(...args);
+}
+// Las lecturas de TODOS los centros de una empresa en un rango (since inclusive, until sin incluir, 'YYYY-MM-DD HH:MM:SS' en UTC) para Gestión > Actividades Activos: sin la foto (solo si la tiene), de la más nueva a la más vieja.
+function listTemperatureActivity(clientId, { since, until, limit = 20000 } = {}) {
+    const where = ['r.client_id = ?'];
+    const args = [clientId];
+    if (since) { where.push('r.checked_at >= ?'); args.push(since); }
+    if (until) { where.push('r.checked_at < ?'); args.push(until); }
+    return db.prepare(`${TEMPERATURE_SELECT} WHERE ${where.join(' AND ')} ORDER BY r.checked_at DESC, r.id DESC LIMIT ${Math.max(1, Math.min(Number(limit) || 20000, 50000))}`).all(...args);
+}
+// ¿Hay lecturas de esa empresa más viejas que esa hora? (para ofrecer «cargar más»)
+function hasTemperatureActivityBefore(clientId, before) {
+    return !!db.prepare('SELECT 1 FROM temperature_records WHERE client_id = ? AND checked_at < ? LIMIT 1').get(clientId, before);
 }
 function getTemperatureRecord(id, clientId) {
     return db.prepare(`${TEMPERATURE_SELECT} WHERE r.id = ? AND r.client_id = ?`).get(id, clientId);
@@ -14095,6 +14110,14 @@ function seedActivosCriteriosAvisosOnce() {
 }
 // Las dos pantallas nuevas las reciben, una sola vez, quienes ya tienen el catálogo Activos Fijos (los datos de las columnas no piden hoja: por omisión «Solo ver»).
 // Operaciones > Lecturas (2026-11-13): la pantalla la reciben, una sola vez, quienes ya tienen Alta Activos; su botón «Nueva lectura» solo en lo contratado (escribe datos). Con «Solo ver» + «Ver y operar».
+// Gestión > Actividades Activos (2026-11-13): la pantalla la reciben, una sola vez, quienes ya tienen Gestión > Activos (sus columnas no piden hoja: por omisión «Solo ver»).
+const ACTIVIDADES_ACTIVOS_SEED_KEY = 'seed-actividades-activos-pantalla-v1';
+function seedActividadesActivosGrants() {
+    const gestion = { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-activos' };
+    const aa = TABLE_GRANT_PATHS['actividades-activos'];
+    if (!aa) return;
+    seedLeavesForScreenHolders(ACTIVIDADES_ACTIVOS_SEED_KEY, gestion, [aa.submenuPrefix], 'the Actividades Activos screen (Gestión)');
+}
 const LECTURAS_SCREEN_SEED_KEY = 'seed-lecturas-pantalla-v1';
 const LECTURAS_BUTTON_SEED_KEY = 'seed-lecturas-boton-v1';
 function seedLecturasGrants() {
@@ -14540,6 +14563,7 @@ seedCalibrationGrants();
 seedMaintenanceGrants();
 seedMttoDeleteSoloVer();
 seedLecturasGrants();
+seedActividadesActivosGrants();
 migrateCalibrationSensorTypesOnce();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
@@ -14577,6 +14601,7 @@ seedTransitoEquiposValuesOnce();
 seedIncidentesCriteriosValuesOnce();
 
 module.exports = {
+    listTemperatureActivity, hasTemperatureActivityBefore,
     getUserExclusions, setUserExclusions, applyUserExclusions,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,
     latestAssetReadingRows, listAssetReadingsOfAsset, lastAssetReadingTimes, listMaintenanceRunsOfAsset, latestMaintenanceRunRows,

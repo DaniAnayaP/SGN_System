@@ -133,6 +133,7 @@ let draft = { name: '', temp: '', hum: '' }; // lo que se escribió antes de la 
 let draftThumb = '';
 let draftPhoto = '';      // la foto tomada que todavía no se confirma
 let lastResult = null;    // la lectura que se acaba de guardar
+let fillStart = 0;        // cuándo empezó a llenar esta lectura (reloj del teléfono, solo para medir cuánto tardó); se manda como elapsedSeconds y Gestión > Actividades Activos lo muestra
 let note = '';
 
 const fmtTime = (iso) => new Date(iso).toLocaleTimeString(LANG === 'en' ? 'en-US' : 'es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -197,6 +198,7 @@ function viewHome() {
     const name = draft.name || store.get(KEY_NAME) || '';
     const lk = info.locks || {};
     const canReg = lk.register !== false;
+    if (canReg && !fillStart) fillStart = performance.now();
     const canSee = lk.records !== false;
     show(`<div class="card"><h1>${esc(TEXT.title)}</h1>${placeHtml()}${calibrationHtml()}${errBox()}
         ${canReg ? `<div><label for="person">${esc(TEXT.yourName)}</label><input type="text" id="person" maxlength="60" autocomplete="name" placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(name)}"></div>
@@ -305,10 +307,11 @@ function viewConfirm() {
 }
 
 async function sendReading() {
-    const res = await fetch(`${API}/reading`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: draft.name, temperature: wantsTemp() ? parseTemp(draft.temp).value : null, humidity: wantsHum() ? parseHum(draft.hum).value : null, photo: draftPhoto, thumb: draftThumb }) });
+    const res = await fetch(`${API}/reading`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: draft.name, temperature: wantsTemp() ? parseTemp(draft.temp).value : null, humidity: wantsHum() ? parseHum(draft.hum).value : null, photo: draftPhoto, thumb: draftThumb, elapsedSeconds: fillStart ? Math.round((performance.now() - fillStart) / 1000) : undefined }) });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) { const e = new Error(json.message || 'error'); e.code = json.code || String(res.status); throw e; }
     lastResult = json;
+    fillStart = 0; // la siguiente lectura vuelve a medirse desde cero
     draft = { name: draft.name, temp: '', hum: '' };
     draftPhoto = '';
     note = '';

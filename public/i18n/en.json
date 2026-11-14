@@ -336,6 +336,9 @@
     "opCentroDistQrFichaAbbr1": "Sheet",
     "opCentroDistQrFichaAbbr2": "Sheet",
     "catCentroDistActivos": "Assets",
+    "catCentroDistActividadesActivos": "Asset Activities",
+    "catCentroDistActividadesActivosAbbr1": "Asset Activ.",
+    "catCentroDistActividadesActivosAbbr2": "Activities",
     "opCentroDistCompraPedidoManual": "Manual Order Purchase",
     "opCentroDistCompraPedidoManualAbbr1": "Purch. man. order",
     "opCentroDistCompraPedidoManualAbbr2": "Purch. order",
@@ -3561,6 +3564,72 @@
     "surErrSinPermiso": "You do not have permission for this.",
     "surEstatusSoloLectura": "The status comes from what is fulfilled in Manual Order Fulfillment.",
     "cpFiltroPedido": "Order",
+    "colAaClasificacion": "Asset classification",
+    "colAaActivo": "Asset",
+    "colAaQuien": "Recorded by",
+    "colAaResultado": "Result",
+    "colAaFecha": "Date and time",
+    "colAaTiempo": "Time it took",
+    "colAaEvidencias": "Evidence",
+    "aaBuscar": "Search",
+    "aaBuscarHint": "Search… ($ before, @ after, comma separates)",
+    "aaVerComo": "View as",
+    "aaVistaActivos": "Asset list",
+    "aaVistaFechas": "Date list",
+    "aaFiltroClasificacion": "Asset classification",
+    "aaFiltroTipo": "Asset type",
+    "aaFiltroQuien": "Recorded by",
+    "aaFiltroResultado": "Result",
+    "aaFiltroTiempo": "Time it took",
+    "aaFiltroEvidencias": "Evidence",
+    "aaCualquiera": "Any",
+    "aaTiempoMenos1": "Under 1 min",
+    "aaTiempo1a5": "1 to 5 min",
+    "aaTiempoMas5": "Over 5 min",
+    "aaTiempoSinDato": "No data",
+    "aaConYSin": "With and without",
+    "aaConEvidencia": "With evidence",
+    "aaSinEvidencia": "Without evidence",
+    "aaOcultarVacias": "Hide dates with no activity",
+    "aaResultadoDentro": "In range",
+    "aaResultadoFuera": "Out of range",
+    "aaResultadoSin": "No limit",
+    "aaLimRango": "{min} to {max}",
+    "aaLimMax": "max. {max}",
+    "aaLimMin": "min. {min}",
+    "aaSinClasificacion": "No classification",
+    "aaUnActivo": "1 asset",
+    "aaNActivos": "{n} assets",
+    "aaFechaActivo": "Date · Asset",
+    "aaHoy": "today",
+    "aaMostrarFecha": "Show this date",
+    "aaSinActividadDia": "{date} · no activity",
+    "aaSinActividadDiaOculta": "{date} · no activity (hidden)",
+    "aaMasN": "+{n} more",
+    "aaVacio": "There are no QR-filled assets yet.",
+    "aaVacioFiltros": "No activities match these filters.",
+    "aaResumen1": "1 activity in range",
+    "aaResumenN": "{n} activities in range",
+    "aaOcultaUna": "1 date hidden",
+    "aaOcultasN": "{n} dates hidden",
+    "aaCortado": "There are too many activities: the newest are shown. Narrow the dates.",
+    "aaCargarMas": "Load {n} more days",
+    "aaCargando": "Loading…",
+    "aaDiaTitulo": "Activities · {code}",
+    "aaVerDetalle": "View details",
+    "aaCerrar": "Close",
+    "aaDetalleCargando": "Activity",
+    "aaDetalleTitulo": "Activity · {code} {name}",
+    "aaDTemperatura": "Temperature",
+    "aaDHumedad": "Humidity",
+    "aaDOrigen": "Source",
+    "aaDActivo": "Asset",
+    "aaOrigen_qr": "Refrigerator QR",
+    "aaOrigen_qr-sensor": "Sensor QR",
+    "aaOrigen_app": "App",
+    "aaFotoLectura": "Reading photo",
+    "aaSinFoto": "This activity has no photo.",
+    "aaVerActivo": "View the asset",
     "cpFiltroDesde": "Date from",
     "cpFiltroHasta": "Date to",
     "cpFiltroLugar": "Requesting place",
@@ -6486,6 +6555,54 @@
     "cpPantalla": {
       "what": "Everything ordered with the Manual Order QR, together, for purchasing: above, how much to buy of each code; below, who ordered what. It can be filtered and downloaded as PDF and Excel. Only orders from the cost centers selected above show.",
       "example": "You put together the week's orders from every place and get the shopping list."
+    },
+    "aaPantalla": {
+      "what": "What was recorded for each asset. For now, the fills of the sensor and refrigerator QR codes. Read-only: corrections are made where it was recorded.",
+      "example": "You see at a glance which sensors were filled each day and which were not."
+    },
+    "aaBuscar": {
+      "what": "Searches the asset code, name, type and classification, who recorded it and the result. Use $ for what comes before, @ for what comes after and a comma for several searches.",
+      "example": "You type H001, Luis and see only those activities."
+    },
+    "aaVerComo": {
+      "what": "Switches between two ways of seeing the same data: «Asset list» (assets down, dates across) and «Date list» (dates down, assets across). Filters are kept.",
+      "example": "With few assets and many dates the date list reads better."
+    },
+    "aaFiltroClasificacion": {
+      "what": "Pick one or more asset classifications (for example, Asset to operate).",
+      "example": "You check «Asset to operate» and see only those assets."
+    },
+    "aaFiltroTipo": {
+      "what": "Pick one or more asset types (Sensor, Refrigerator…).",
+      "example": "You check Sensor and the refrigerators disappear."
+    },
+    "aaFiltroQuien": {
+      "what": "Pick who recorded the activity (the name typed on the QR or the App user).",
+      "example": "You check Luis Pérez and see only what he filled."
+    },
+    "aaFiltroResultado": {
+      "what": "In range, out of range or no limit. It is judged with the range the refrigerator had when saved or, for sensors, the asset limit in Temperature and Humidity.",
+      "example": "You choose «Out of range» and see only the readings with a problem."
+    },
+    "aaFiltroTiempo": {
+      "what": "How long the person took to fill the QR, from opening the page to saving. Activities from before this data show «No data».",
+      "example": "You choose «Under 1 min» to see very quick fills."
+    },
+    "aaFiltroEvidencias": {
+      "what": "With or without evidence (the reading photo).",
+      "example": "You choose «Without evidence» to find what has no photo."
+    },
+    "aaFiltroFechas": {
+      "what": "From and to which day is shown (in your time). If you pick a day older than what is loaded, the missing days are loaded.",
+      "example": "Nov 1 to Nov 15 to review the fortnight."
+    },
+    "aaOcultarVacias": {
+      "what": "Removes dates when none of the filtered assets recorded anything; a thin strip remains and tapping it shows the date again. Today is never hidden.",
+      "example": "With an empty weekend, Saturday and Sunday are hidden."
+    },
+    "aaCuadro": {
+      "what": "Each mark is an activity: the time and a color (green in range, red out of range, gray no limit). Several on the same day stack (3 and «+N»). Tap a mark for its detail. At the end 7 more days load.",
+      "example": "You tap the red 08:15 mark and see who recorded it and the photo."
     },
     "cpFiltroPedido": {
       "what": "Choose one, several or All orders (by folio). Useful to get only what was ordered in certain orders.",

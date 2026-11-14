@@ -336,6 +336,9 @@
     "opCentroDistQrFichaAbbr1": "Ficha código",
     "opCentroDistQrFichaAbbr2": "Ficha",
     "catCentroDistActivos": "Activos",
+    "catCentroDistActividadesActivos": "Actividades Activos",
+    "catCentroDistActividadesActivosAbbr1": "Activid. Activos",
+    "catCentroDistActividadesActivosAbbr2": "Activ. Activos",
     "opCentroDistCompraPedidoManual": "Compra Pedido Manual",
     "opCentroDistCompraPedidoManualAbbr1": "Compra ped. manual",
     "opCentroDistCompraPedidoManualAbbr2": "Compra ped.",
@@ -3560,6 +3563,72 @@
     "surErrSinPermiso": "No tienes permiso para esto.",
     "surEstatusSoloLectura": "El estatus sale de lo que se surte en Surtido Pedido Manual.",
     "cpFiltroPedido": "Pedido",
+    "colAaClasificacion": "Clasificación activo",
+    "colAaActivo": "Activo",
+    "colAaQuien": "Quién registró",
+    "colAaResultado": "Resultado",
+    "colAaFecha": "Fecha y hora",
+    "colAaTiempo": "Tiempo que demoró",
+    "colAaEvidencias": "Evidencias",
+    "aaBuscar": "Buscar",
+    "aaBuscarHint": "Buscar… ($ antes, @ después, la coma separa)",
+    "aaVerComo": "Ver como",
+    "aaVistaActivos": "Lista de activos",
+    "aaVistaFechas": "Lista de fechas",
+    "aaFiltroClasificacion": "Clasificación activo",
+    "aaFiltroTipo": "Tipo de activo",
+    "aaFiltroQuien": "Quién registró",
+    "aaFiltroResultado": "Resultado",
+    "aaFiltroTiempo": "Tiempo que demoró",
+    "aaFiltroEvidencias": "Evidencias",
+    "aaCualquiera": "Cualquiera",
+    "aaTiempoMenos1": "Menos de 1 min",
+    "aaTiempo1a5": "De 1 a 5 min",
+    "aaTiempoMas5": "Más de 5 min",
+    "aaTiempoSinDato": "Sin dato",
+    "aaConYSin": "Con y sin",
+    "aaConEvidencia": "Con evidencia",
+    "aaSinEvidencia": "Sin evidencia",
+    "aaOcultarVacias": "Ocultar fechas sin actividad",
+    "aaResultadoDentro": "Dentro de rango",
+    "aaResultadoFuera": "Fuera de rango",
+    "aaResultadoSin": "Sin límite",
+    "aaLimRango": "{min} a {max}",
+    "aaLimMax": "máx. {max}",
+    "aaLimMin": "mín. {min}",
+    "aaSinClasificacion": "Sin clasificación",
+    "aaUnActivo": "1 activo",
+    "aaNActivos": "{n} activos",
+    "aaFechaActivo": "Fecha · Activo",
+    "aaHoy": "hoy",
+    "aaMostrarFecha": "Mostrar esta fecha",
+    "aaSinActividadDia": "{date} · sin actividad",
+    "aaSinActividadDiaOculta": "{date} · sin actividad (oculta)",
+    "aaMasN": "+{n} más",
+    "aaVacio": "Todavía no hay activos que se llenen por QR.",
+    "aaVacioFiltros": "No hay actividades con estos filtros.",
+    "aaResumen1": "1 actividad en el rango",
+    "aaResumenN": "{n} actividades en el rango",
+    "aaOcultaUna": "1 fecha oculta",
+    "aaOcultasN": "{n} fechas ocultas",
+    "aaCortado": "Hay muchísimas actividades: se muestran las más nuevas. Acota las fechas.",
+    "aaCargarMas": "Cargar {n} días más",
+    "aaCargando": "Cargando…",
+    "aaDiaTitulo": "Actividades · {code}",
+    "aaVerDetalle": "Ver detalle",
+    "aaCerrar": "Cerrar",
+    "aaDetalleCargando": "Actividad",
+    "aaDetalleTitulo": "Actividad · {code} {name}",
+    "aaDTemperatura": "Temperatura",
+    "aaDHumedad": "Humedad",
+    "aaDOrigen": "Origen",
+    "aaDActivo": "Activo",
+    "aaOrigen_qr": "QR del refrigerador",
+    "aaOrigen_qr-sensor": "QR del sensor",
+    "aaOrigen_app": "App",
+    "aaFotoLectura": "Foto de la lectura",
+    "aaSinFoto": "Esta actividad no trae foto.",
+    "aaVerActivo": "Ver el activo",
     "cpFiltroDesde": "Fecha desde",
     "cpFiltroHasta": "Fecha hasta",
     "cpFiltroLugar": "Lugar que solicita",
@@ -6485,6 +6554,54 @@
     "cpPantalla": {
       "what": "Todo lo que se pidió con el QR de Pedido Manual, junto, para comprar: arriba cuánto hay que comprar de cada código y abajo quién pidió qué. Se filtra y se descarga en PDF y en Excel. Solo salen los pedidos de los centros de costos marcados arriba.",
       "example": "Juntas los pedidos de la semana de todos los lugares y sacas la lista de compra."
+    },
+    "aaPantalla": {
+      "what": "Lo que se registró de cada activo. Por ahora, los llenados de los QR de sensores y de refrigeradores. Es solo para consultar: lo que se corrige se corrige donde se registró.",
+      "example": "Ves de un vistazo qué sensores se llenaron cada día y cuáles no."
+    },
+    "aaBuscar": {
+      "what": "Busca en el código, nombre, tipo y clasificación del activo, en quién registró y en el resultado. Usa $ para lo que va antes, @ para lo que va después y la coma para varias búsquedas.",
+      "example": "Escribes H001, Luis y ves solo esas actividades."
+    },
+    "aaVerComo": {
+      "what": "Cambia entre dos formas de ver lo mismo: «Lista de activos» (los activos hacia abajo y las fechas en columnas) y «Lista de fechas» (las fechas hacia abajo y los activos en columnas). Los filtros se conservan.",
+      "example": "Con pocos activos y muchas fechas se lee mejor la lista de fechas."
+    },
+    "aaFiltroClasificacion": {
+      "what": "Elige una o varias clasificaciones de activo (por ejemplo, Activo para operar).",
+      "example": "Marcas «Activo para operar» y solo ves esos activos."
+    },
+    "aaFiltroTipo": {
+      "what": "Elige uno o varios tipos de activo (Sensor, Refrigerador…).",
+      "example": "Marcas Sensor y se quitan los refrigeradores."
+    },
+    "aaFiltroQuien": {
+      "what": "Elige quién registró la actividad (el nombre que escribió en el QR o su usuario en la App).",
+      "example": "Marcas Luis Pérez y ves solo lo que él llenó."
+    },
+    "aaFiltroResultado": {
+      "what": "Dentro de rango, fuera de rango o sin límite. Se juzga con el rango que traía el refrigerador al guardar o, en los sensores, con el límite del activo en Temperatura y Humedad.",
+      "example": "Eliges «Fuera de rango» y ves solo las lecturas con problema."
+    },
+    "aaFiltroTiempo": {
+      "what": "Cuánto tardó la persona en llenar el QR, desde que abrió la página hasta que guardó. Las actividades anteriores a este dato salen «Sin dato».",
+      "example": "Eliges «Menos de 1 min» para ver los llenados muy rápidos."
+    },
+    "aaFiltroEvidencias": {
+      "what": "Con o sin evidencia (la foto de la lectura).",
+      "example": "Eliges «Sin evidencia» para encontrar lo que no trae foto."
+    },
+    "aaFiltroFechas": {
+      "what": "Desde y hasta qué día se ve (en tu hora). Si eliges un día más viejo de lo cargado, se cargan los días que faltan.",
+      "example": "Del 1 al 15 de noviembre para revisar la quincena."
+    },
+    "aaOcultarVacias": {
+      "what": "Quita las fechas en las que ningún activo de los filtrados registró nada; queda una franja angosta que al tocarla vuelve a mostrar esa fecha. Hoy nunca se oculta.",
+      "example": "Con una semana de fin de semana vacío, se ocultan sábado y domingo."
+    },
+    "aaCuadro": {
+      "what": "Cada marca es una actividad: la hora y un color (verde dentro de su rango, rojo fuera de rango, gris sin límite). Varias en el mismo día se apilan (3 y «+N»). Toca una marca para ver su detalle. Al llegar al final se cargan 7 días más.",
+      "example": "Tocas la marca roja de las 08:15 y ves quién la registró y la foto."
     },
     "cpFiltroPedido": {
       "what": "Elige uno, varios o Todos los pedidos (por su folio). Sirve para sacar solo lo que pidieron en ciertos pedidos.",
