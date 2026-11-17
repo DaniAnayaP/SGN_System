@@ -5411,6 +5411,14 @@
     "tmpHumidity": "Humedad que marca",
     "tmpToggleSign": "Cambiar entre arriba y abajo de cero",
     "tmpRange": "Rango del equipo: {range}",
+    "aaAppFilters": "Filtros",
+    "aaAppFiltersN": "Filtros ({n})",
+    "aaAppCached": "Sin señal: se muestra lo último que se guardó en este celular.",
+    "aaAppNoData": "Sin señal y sin nada guardado en este celular. Conéctate para ver las actividades.",
+    "aaAppShowing": "Se muestran {n} de {total} activos: usa el buscador o los filtros para ver el resto.",
+    "aaAppGap": "{n} fecha(s) sin actividad: toca para mostrarla(s)",
+    "aaAppNoActivity": "Nadie registró nada este día.",
+    "aaAppDetailOffline": "Sin señal: se muestra lo que ya se había bajado (sin el Control Interno).",
     "tmpPhoto": "Foto de la lectura",
     "tmpPhotoHint": "Apunta al termómetro o a la pantalla del equipo y toma la foto. Es obligatoria.",
     "tmpAddPhoto": "Tomar o elegir foto",
@@ -5646,6 +5654,14 @@
     "appTmpTabs": {
       "what": "Cambia entre los refrigeradores y sensores que puedes leer y las lecturas ya tomadas.",
       "example": "en «Equipos» buscas el refrigerador que vas a revisar; en «Lecturas» ves lo que ya se leyó y si quedó en rango."
+    },
+    "appAaFiltros": {
+      "what": "Abre o cierra los filtros: Clasificación activo, Tipo de activo, Quién registró, Resultado, Fechas, Tiempo que demoró y Evidencias, y si se ocultan las fechas sin actividad. El número dice cuántos filtros hay puestos.",
+      "example": "Filtros (2): Resultado «Fuera de rango» y Tipo «Sensor»."
+    },
+    "appAaLista": {
+      "what": "Cada marca es una actividad: la hora y un color (verde dentro de su rango, rojo fuera de rango, gris sin límite). En «Lista de activos» cada activo trae sus días en una tira que se desliza (lo más nuevo, a la derecha); en «Lista de fechas» cada fecha trae sus activos. Varias en el mismo día se apilan (3 y «+N más»); si el activo tiene Horario, el día lleva su contador «3 de 3». Toca una marca para ver su detalle. «Cargar 7 días más» trae días más viejos.",
+      "example": "Tocas la marca roja de las 08:15 y ves quién la registró, el rango y la foto."
     },
     "appTmpEquipo": {
       "what": "Es el refrigerador o sensor que estás leyendo, con su código, el lugar donde está y su rango de temperatura y humedad (si lo tiene).",

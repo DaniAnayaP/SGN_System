@@ -437,7 +437,13 @@ function cardInfo(sel) {
     if (sel.type === 'ceiling') { const x = find(d.ceiling); return x && { title: x.name || typeLabel('ceiling', x.type), code: x.code, lines: [typeLabel('ceiling', x.type), zoneName(x.zoneId), `${t('main.layoutCuelgaA')} ${fmt(LC.ceilingHangOf(d, x))} m`] }; }
     if (sel.type === 'transit') { const x = find(d.transit); return x && { title: x.name || typeLabel('transit', x.type), code: x.code, lines: [typeLabel('transit', x.type), zoneName(x.zoneId), dims(x.l, x.w)] }; }
     if (sel.type === 'object') { const x = find(d.objects); return x && { title: x.name || typeLabel('object', x.type), code: x.code, lines: [dims(x.l, x.w, x.h)] }; }
-    if (sel.type === 'sensor') { const x = find(d.sensors); return x && { title: typeLabel('sensor', x.type), code: x.code, lines: [zoneName(x.zoneId)] }; }
+    if (sel.type === 'sensor') {
+        const x = find(d.sensors); if (!x) return null;
+        // Sensores de frío y de ambiente (2026-11-17): dentro de un activo de frío («Dentro de F001»), suelto en la nave o sobre una pared (sin texto, como siempre)
+        const box = x.place === 'inside' ? (d.spaces || []).find((s) => s.id === x.spaceId) : null;
+        const where = x.place === 'inside' ? `${t('main.layoutSensorDentroDeFijo')} ${(box && box.code) || ''}`.trim() : (x.place === 'free' ? t('main.layoutSensorEnNave') : '');
+        return { title: typeLabel('sensor', x.type), code: x.code, lines: [where, zoneName(x.zoneId)] };
+    }
     if (sel.type === 'power') { const x = find(d.power); return x && { title: typeLabel('power', x.type), code: x.code, lines: [] }; }
     if (sel.type === 'floor') { const x = LC.floorsAll(d).find((f) => f.id === sel.id); return x && { title: x.name || x.code, code: x.code, lines: [`${Number(x.lvl) > 0 ? '+' : ''}${fmt(Number(x.lvl) || 0)} m`, dims(x.l, x.w)] }; }
     if (sel.type === 'roof') { const x = find(d.roofs); return x && { title: x.name || typeLabel('roofShape', x.shape), code: x.code, lines: [typeLabel('roofShape', x.shape)] }; }

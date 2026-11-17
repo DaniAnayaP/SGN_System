@@ -9640,6 +9640,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'seguridad', labelKey: 'menu.opCentroDistSeguridad' },
     { key: 'limpieza', labelKey: 'menu.opCentroDistLimpieza' },
     { key: 'temperaturas', labelKey: 'menu.opCentroDistTemperaturas' },
+    { key: 'actividades-activos', labelKey: 'menu.catCentroDistActividadesActivos' },
     { key: 'capacidad-almacenamiento', labelKey: 'menu.opCentroDistCapacidadAlmacenamiento' },
     { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
     { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },

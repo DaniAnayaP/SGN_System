@@ -9539,7 +9539,9 @@ app.get('/api/business/temperaturas/options', requireAuth, (req, res) => {
         });
         (row.layout.sensors || []).filter((s) => s && s.code && SENSOR_ID_RE.test(String(s.id || ''))).forEach((s) => {
             const zone = (row.layout.zones || []).find((z) => z.id === s.zoneId) || null;
-            points.push({ kind: 'sensor', id: s.id, code: s.code, type: s.type || 'both', locator: [zone && zone.code, s.code].filter(Boolean).join('.'), zoneName: zone ? zone.name : '', footprintCode: '', limits: {} });
+            // Sensores de frío y de ambiente (2026-11-17): dónde está colocado, para que la App lo diga igual que la Web (sobre una pared —lo de siempre, sin texto—, «En la nave» o «Dentro de F001»).
+            const box = s.place === 'inside' ? (row.layout.spaces || []).find((sp) => sp && sp.id === s.spaceId) : null;
+            points.push({ kind: 'sensor', id: s.id, code: s.code, type: s.type || 'both', locator: [zone && zone.code, s.code].filter(Boolean).join('.'), zoneName: zone ? zone.name : '', footprintCode: '', limits: {}, ...(s.place === 'free' || s.place === 'inside' ? { place: s.place } : {}), ...(box && box.code ? { insideCode: box.code } : {}) });
         });
         pointsByCenter[cc] = points;
         const last = {};

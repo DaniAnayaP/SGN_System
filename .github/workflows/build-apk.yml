@@ -39,6 +39,8 @@ on:
       - 'public/LayoutCalc.js'
       - 'public/LayoutScene3D.js'
       - 'public/HelpMode.js'
+      - 'public/SearchSyntax.js'
+      - 'public/AssetSchedule.js'
       - 'public/vendor/three/**'
       - 'public/manifest.json'
       - 'public/sw.js'

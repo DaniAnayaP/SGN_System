@@ -5412,6 +5412,14 @@
     "tmpHumidity": "Humidity shown",
     "tmpToggleSign": "Switch between above and below zero",
     "tmpRange": "Equipment range: {range}",
+    "aaAppFilters": "Filters",
+    "aaAppFiltersN": "Filters ({n})",
+    "aaAppCached": "No signal: showing what was last saved on this phone.",
+    "aaAppNoData": "No signal and nothing saved on this phone. Connect to see the activities.",
+    "aaAppShowing": "Showing {n} of {total} assets: use the search or the filters to see the rest.",
+    "aaAppGap": "{n} date(s) with no activity: tap to show",
+    "aaAppNoActivity": "Nothing was registered this day.",
+    "aaAppDetailOffline": "No signal: showing what was already downloaded (without the Control Interno).",
     "tmpPhoto": "Photo of the reading",
     "tmpPhotoHint": "Point at the thermometer or the equipment display and take the photo. It is required.",
     "tmpAddPhoto": "Take or choose a photo",
@@ -5647,6 +5655,14 @@
     "appTmpTabs": {
       "what": "Switches between the refrigerators and sensors you can read and the readings already taken.",
       "example": "in «Equipment» you look for the refrigerator you will check; in «Readings» you see what was already read and whether it was in range."
+    },
+    "appAaFiltros": {
+      "what": "Opens or closes the filters: Asset classification, Asset type, Who registered, Result, Dates, Time it took and Evidence, and whether dates without activity are hidden. The number says how many filters are on.",
+      "example": "Filters (2): Result «Out of range» and Type «Sensor»."
+    },
+    "appAaLista": {
+      "what": "Each mark is an activity: the time and a color (green within range, red out of range, gray with no limit). In «Asset list» each asset has its days in a strip you can slide (newest on the right); in «Date list» each date has its assets. Several on the same day are stacked (3 and «+N more»); if the asset has a Schedule, the day carries its «3 of 3» counter. Tap a mark to see its detail. «Load 7 more days» brings older days.",
+      "example": "You tap the red 08:15 mark and see who registered it, the range and the photo."
     },
     "appTmpEquipo": {
       "what": "The refrigerator or sensor you are reading, with its code, where it is and its temperature and humidity range (if it has one).",

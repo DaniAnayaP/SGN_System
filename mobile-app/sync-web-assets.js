@@ -42,6 +42,7 @@ const FILES = [
     'AppSeguridad.html', 'AppSeguridad.js',
     'AppLimpieza.html', 'AppLimpieza.js',
     'AppTemperaturas.html', 'AppTemperaturas.js',
+    'AppActividadesActivos.html', 'AppActividadesActivos.js', 'AssetSchedule.js',
     'AppCapacidadAlmacenamiento.html', 'AppCapacidadAlmacenamiento.js',
     'AppLayout.html', 'AppLayout.js', 'LayoutCalc.js', 'LayoutScene3D.js', 'HelpMode.js',
     path.join('vendor', 'three', 'three.min.js'),

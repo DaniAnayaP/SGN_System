@@ -180,6 +180,8 @@ function typeLabel(kind, type) {
     return label && label !== key ? label : (type || '');
 }
 const pointText = (kind, code, type) => `${code || ''}${code ? ' · ' : ''}${typeLabel(kind, type)}`;
+// Dónde está colocado un sensor (Sensores de frío y de ambiente, 2026-11-17): «Dentro de F001» (un sensor de frío, dentro de su refrigerador), «En la nave» (suelto) o nada (sobre una pared, como siempre).
+const placeText = (p) => (!p || p.kind !== 'sensor' ? '' : p.place === 'inside' ? `${t('main.layoutSensorDentroDeFijo')} ${p.insideCode || ''}`.trim() : p.place === 'free' ? t('main.layoutSensorEnNave') : '');
 const pointKeyOf = (kind, id) => `${kind === 'sensor' ? 's' : 'f'}:${id}`;
 const centerOf = (ccId) => costCenters.find((c) => c.id === Number(ccId));
 const centerText = (cc) => (cc ? `${cc.code ? `${cc.code} · ` : ''}${cc.name}` : '');
@@ -462,7 +464,7 @@ function renderPoints() {
         const needle = search.trim().toLowerCase();
         const rows = [];
         centers.forEach((cc) => pointsOf(cc.id).forEach((p) => {
-            const hay = `${p.code} ${typeLabel(p.kind, p.type)} ${p.locator} ${p.zoneName} ${p.footprintCode} ${centerText(cc)}`.toLowerCase();
+            const hay = `${p.code} ${typeLabel(p.kind, p.type)} ${p.locator} ${p.zoneName} ${p.footprintCode} ${placeText(p)} ${centerText(cc)}`.toLowerCase();
             if (!needle || hay.includes(needle)) rows.push({ cc, p });
         }));
         if (!rows.length) { const e = document.createElement('p'); e.className = 'home-carga-empty-note'; e.textContent = t(needle ? 'home.tmpNoMatch' : 'home.tmpPointsEmpty'); listEl.appendChild(e); return; }
@@ -471,7 +473,7 @@ function renderPoints() {
             const row = document.createElement('button');
             row.type = 'button';
             row.className = 'home-carga-active-row';
-            const sub = [p.locator || p.zoneName, centers.length > 1 ? cc.name : ''].filter(Boolean).join(' · ');
+            const sub = [placeText(p), p.locator || p.zoneName, centers.length > 1 ? cc.name : ''].filter(Boolean).join(' · ');
             row.innerHTML = `
                 <span class="home-carga-active-row-icon"><i class="bx ${p.kind === 'sensor' ? 'bx-broadcast' : 'bx-fridge'}" aria-hidden="true"></i></span>
                 <span class="home-carga-active-row-label"><p>${esc(pointText(p.kind, p.code, p.type))}</p><span>${esc(sub)}</span></span>
@@ -657,7 +659,7 @@ function renderNew() {
     head.className = 'pm-app-card seg-app-head';
     head.setAttribute('data-help-key', 'appTmpEquipo');
     const range = rangeText(p.limits);
-    head.innerHTML = `<h4 class="pm-app-title">${esc(pointText(p.kind, p.code, p.type))}</h4><p class="pm-app-note">${esc([p.locator || p.zoneName, cc ? centerText(cc) : ''].filter(Boolean).join(' · '))}</p>${range ? `<p class="pm-app-note"><b>${esc(t('home.tmpRange', { range }))}</b></p>` : ''}`;
+    head.innerHTML = `<h4 class="pm-app-title">${esc(pointText(p.kind, p.code, p.type))}</h4><p class="pm-app-note">${esc([placeText(p), p.locator || p.zoneName, cc ? centerText(cc) : ''].filter(Boolean).join(' · '))}</p>${range ? `<p class="pm-app-note"><b>${esc(t('home.tmpRange', { range }))}</b></p>` : ''}`;
     bodyEl.appendChild(head);
     if (optionsState === 'cached') { const n = document.createElement('p'); n.className = 'pm-app-note'; n.textContent = t('home.tmpOptionsCached'); bodyEl.appendChild(n); }
 
