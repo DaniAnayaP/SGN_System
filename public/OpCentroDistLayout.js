@@ -650,6 +650,67 @@ function sensorLookOf(e) {
 }
 // «Zonas que mide» de un sensor: la pared solo sirve para colocarlo; aquí se eligen las zonas cuya temperatura y humedad mide (una o varias). Sin elegir ninguna mide la zona donde está colocado. La celda muestra lo elegido en
 // etiquetas chicas (con su ×) y un ＋ abre la lista de zonas para marcar más, igual que «Quién transita».
+// Sensores de frío y de ambiente (2026-11-17): el Uso sale del Tipo del sensor (no se edita aquí). Frío: solo va DENTRO de un activo de uso Frío. Ambiente: sobre una pared (como siempre) o suelto en la nave (X, Y y altura).
+const sensorUsageOf = (x) => { const a = x && x.assetRef ? (state.fixedAssets || []).find((r) => r.id === x.assetRef) : null; return a && a.typeUsage === 'cold' ? 'cold' : 'ambient'; };
+// Los activos de frío del Layout donde puede ir un sensor de frío: los que están en el Layout y su Tipo es de uso Frío.
+function coldBoxes() {
+    return (state.draft.spaces || []).filter((sp) => sp.type === 'cold' && sp.assetRef && (state.fixedAssets || []).some((a) => a.id === sp.assetRef && a.typeUsage === 'cold'));
+}
+function coldBoxOptions(selected) {
+    const boxes = coldBoxes();
+    const empty = selected && boxes.some((b) => b.id === selected) ? '' : `<option value="" selected>${esc(t('main.layoutSensorElegirFrio'))}</option>`;
+    return empty + boxes.map((b) => `<option value="${esc(b.id)}"${b.id === selected ? ' selected' : ''}>${esc(b.code || b.id)}${b.name ? ` · ${esc(b.name)}` : ''}</option>`).join('');
+}
+function sensorPlaceCells(x, i, d, dis) {
+    const usage = sensorUsageOf(x);
+    const place = x.place === 'free' || x.place === 'inside' ? x.place : 'wall';
+    const na = '<td class="layout-calc">—</td>';
+    const pill = `<td class="layout-calc"><span class="layout-use layout-use-${usage}" data-help-key="layoutSensorUso">${esc(t(usage === 'cold' ? 'main.layoutUsoFrio' : 'main.layoutUsoAmbiente'))}</span></td>`;
+    const opt = (value, key) => `<option value="${value}"${place === value ? ' selected' : ''}>${esc(t(key))}</option>`;
+    const where = usage === 'cold' ? `<td class="layout-calc" data-help-key="layoutSensorDondeVa">${esc(t('main.layoutSensorDentroDeFijo'))}</td>` : cellSelect('sensors', i, 'place', opt('wall', 'main.layoutSensorEnPared') + opt('free', 'main.layoutSensorEnNave'), dis, 'layoutSensorDondeVa');
+    const wallCells = [
+        cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis),
+        place === 'inside' ? cellSelect('sensors', i, 'spaceId', coldBoxOptions(x.spaceId), dis, 'layoutSensorDentroDe') : na,
+        place === 'wall' ? sensorSideCell(x, i, dis) : na,
+        place === 'wall' ? cellNum('sensors', i, 'dist', x.dist, dis) : na,
+        place === 'free' ? cellNum('sensors', i, 'x', x.x, dis) : na,
+        place === 'free' ? cellNum('sensors', i, 'y', x.y, dis) : na,
+        place === 'inside' ? na : cellNum('sensors', i, 'height', x.height, dis),
+    ];
+    if (place !== 'wall') wallCells[0] = na;
+    const info = place === 'wall'
+        ? `<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td>`
+        : `${na}${na}`;
+    return pill + where + wallCells.join('') + info;
+}
+// Pasar un sensor de ambiente de pared a la nave (y al revés): el renglón se queda con lo que le toca.
+function setSensorPlace(row, place) {
+    if (place === 'free') {
+        const vs = state.draft.vertices || [];
+        const cx = vs.length ? vs.reduce((acc, p) => acc + Number(p[0]), 0) / vs.length : 0;
+        const cy = vs.length ? vs.reduce((acc, p) => acc + Number(p[1]), 0) / vs.length : 0;
+        row.place = 'free';
+        if (!Number.isFinite(row.x)) row.x = Math.round(cx * 100) / 100;
+        if (!Number.isFinite(row.y)) row.y = Math.round(cy * 100) / 100;
+        if (!(Number(row.height) > 0)) row.height = 1.2;
+        row.dist = 0;
+        delete row.wallId; delete row.wall; delete row.side;
+    } else {
+        delete row.place; delete row.x; delete row.y;
+        if (!row.wallId) { const wall = (state.draft.obstacles || []).find((o) => o.kind === 'wall'); row.wallId = wall ? wall.id : ''; }
+        if (!(Number(row.dist) > 0)) row.dist = 1;
+        if (!(Number(row.height) > 0)) row.height = 2.5;
+    }
+}
+// Al quitar un activo de frío se van con él los sensores que llevaba adentro (siguen existiendo en Alta Activos). Devuelve cuántos.
+function dropOrphanInsideSensors() {
+    const ids = new Set((state.draft.spaces || []).map((sp) => sp.id));
+    const before = (state.draft.sensors || []).length;
+    state.draft.sensors = (state.draft.sensors || []).filter((sn) => sn.place !== 'inside' || ids.has(sn.spaceId));
+    const dropped = before - state.draft.sensors.length;
+    if (dropped) Dashboard.showToast(t('main.layoutSensoresDentroQuitados', { n: dropped }), 'warning');
+    return dropped;
+}
 function sensorZonesCell(x, i, d, dis) {
     const zoneOf = (id) => (d.zones || []).find((z) => z.id === id);
     const chips = (x.zones || []).filter((id) => zoneOf(id)).map((id) => `<span class="layout-chip" data-help-key="layoutSensorZonas">${esc(zoneOf(id).name || id)}${dis ? '' : `<button type="button" class="layout-chip-x" data-sz-del="${i}:${esc(id)}" aria-label="${esc(t('main.layoutQuitar'))}">×</button>`}</span>`).join('');
@@ -1629,8 +1690,8 @@ function stepHtml(step) {
         const assetOf = (x) => (x.assetRef ? (state.fixedAssets || []).find((r) => r.id === x.assetRef) : null);
         const equip = (x) => { const a = assetOf(x); return a && a.serialNumber ? a.serialNumber : '—'; };
         const equipFull = (x) => { const a = assetOf(x); return a ? [a.name, a.model, a.serialNumber ? `S/N ${a.serialNumber}` : ''].filter(Boolean).join(' · ') : ''; };
-        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td><td class="layout-calc" title="${esc([equipFull(x), t('main.layoutActivoDeRegistro')].filter(Boolean).join(' — '))}" data-help-key="layoutSensorEquipo">${esc(equip(x))}</td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${cellSelect('sensors', i, 'wallId', wallPickHtml(x.wallId), dis)}${sensorSideCell(x, i, dis)}${cellNum('sensors', i, 'dist', x.dist, dis)}${cellNum('sensors', i, 'height', x.height, dis)}<td class="layout-calc" data-wi-len="sensors:${i}">${wallInfoCell('sensors', x, 'len')}</td><td class="layout-calc" data-wi-h="sensors:${i}">${wallInfoCell('sensors', x, 'h')}</td><td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${sensorZonesCell(x, i, d, dis)}${removeCell('sensors', i, dis)}</tr>`);
-        return `${table(['main.layoutCodigo', 'main.layoutSensorEquipo', 'main.layoutTipo', 'main.layoutParedPuerta', 'main.layoutSensorLado', 'main.layoutDistanciaPared', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutSensorZonaColocado', 'main.layoutSensorZonasMide', ''], rows, 'layout-sensores')}${canEdit('sensores') && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-place-assets="sensors" data-main-add="1" data-help-key="layoutColocarSensor">${esc(t('main.layoutColocarSensor'))}</button>` : ''}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
+        const rows = (d.sensors || []).map((x, i) => `<tr><td class="layout-calc"><b data-sensor-code="${i}">${esc(x.code || '')}</b></td><td class="layout-calc" title="${esc([equipFull(x), t('main.layoutActivoDeRegistro')].filter(Boolean).join(' — '))}" data-help-key="layoutSensorEquipo">${esc(equip(x))}</td>${cellSelect('sensors', i, 'type', optionsHtml('sensor', LC.SENSOR_TYPES, x.type), dis)}${sensorPlaceCells(x, i, d, dis)}<td class="layout-calc" data-sensor-zone="${i}">${esc(zoneName(x.zoneId))}</td>${x.place === 'inside' ? '<td class="layout-calc">—</td>' : sensorZonesCell(x, i, d, dis)}${removeCell('sensors', i, dis)}</tr>`);
+        return `${table(['main.layoutCodigo', 'main.layoutSensorEquipo', 'main.layoutTipo', 'main.layoutSensorUso', 'main.layoutSensorDondeVa', 'main.layoutParedPuerta', 'main.layoutSensorDentroDe', 'main.layoutSensorLado', 'main.layoutDistanciaPared', 'main.layoutSensorX', 'main.layoutSensorY', 'main.layoutAlturaPiso', 'main.layoutPuertaParedLargo', 'main.layoutPuertaParedAlto', 'main.layoutSensorZonaColocado', 'main.layoutSensorZonasMide', ''], rows, 'layout-sensores')}${canEdit('sensores') && !dis ? `<button type="button" class="btn btn-secondary layout-add" data-place-assets="sensors" data-main-add="1" data-help-key="layoutColocarSensor">${esc(t('main.layoutColocarSensor'))}</button>` : ''}<div class="layout-vio" data-wi-issues="sensors" hidden></div>`;
     }
     if (step === 'seguridad') {
         // Cada renglón es un ELEMENTO de seguridad (extintor, hidrante, puerta de emergencia, botiquín, alarma o pulsador, regadera y lavaojos, punto de reunión o ruta de evacuación): un punto puesto en el plano con X e Y, en metros.
@@ -5105,11 +5166,34 @@ function openPlaceAssets(opts = {}) {
         modelSel.addEventListener('change', () => { clearChecks(); applyRows(); });
     }
     if (search) search.addEventListener('input', applyRows);
+    // Sensores de frío y de ambiente (2026-11-17): al marcar sensores sale lo que falta según su Uso. Frío: dentro de qué activo de frío van (solo los de uso Frío ya colocados). Ambiente: sobre una pared (como siempre) o en la nave.
+    if (sensors) {
+        placeModalEl.querySelector('#layout-place-error').insertAdjacentHTML('beforebegin', `<div id="layout-place-where" class="admin-form-grid" hidden>
+            <div class="admin-field" id="layout-place-inside-wrap" hidden><label for="layout-place-inside">${esc(t('main.layoutColocarDentroDe'))}</label><select id="layout-place-inside" data-help-key="layoutSensorDentroDe">${coldBoxOptions('')}</select></div>
+            <div class="admin-field" id="layout-place-ambient-wrap" hidden><label>${esc(t('main.layoutColocarDondeVa'))}</label><div class="layout-place-radios" data-help-key="layoutSensorDondeVa"><label><input type="radio" name="layout-place-ambient" value="wall" checked> ${esc(t('main.layoutColocarSobrePared'))}</label><label><input type="radio" name="layout-place-ambient" value="free"> ${esc(t('main.layoutSensorEnNave'))}</label></div></div>
+        </div>`);
+        const whereEl = placeModalEl.querySelector('#layout-place-where');
+        const refreshWhere = () => {
+            const picked = Array.from(placeModalEl.querySelectorAll('[data-place-asset]:checked')).map((el) => (state.fixedAssets || []).find((x) => x.id === Number(el.dataset.placeAsset))).filter(Boolean);
+            const anyCold = picked.some((a) => a.typeUsage === 'cold');
+            const anyAmbient = picked.some((a) => a.typeUsage !== 'cold');
+            whereEl.hidden = !anyCold && !anyAmbient;
+            placeModalEl.querySelector('#layout-place-inside-wrap').hidden = !anyCold;
+            placeModalEl.querySelector('#layout-place-ambient-wrap').hidden = !anyAmbient;
+        };
+        if (listEl) listEl.addEventListener('change', refreshWhere);
+        if (typeSel) typeSel.addEventListener('change', refreshWhere);
+        if (modelSel) modelSel.addEventListener('change', refreshWhere);
+    }
     placeModalEl.querySelector('#layout-place-ok').addEventListener('click', () => {
         const footprintId = sensors ? '' : placeModalEl.querySelector('#layout-place-fp').value;
         if (!sensors && !footprintId) { err('main.layoutColocarSinHuella'); return; }
         const picked = Array.from(placeModalEl.querySelectorAll('[data-place-asset]:checked')).map((el) => Number(el.dataset.placeAsset));
         if (!picked.length) { err('main.layoutColocarSinElegir'); return; }
+        // un sensor de frío solo va dentro de un activo de frío: hay que elegir cuál
+        const insideBox = sensors ? placeModalEl.querySelector('#layout-place-inside') : null;
+        const coldPicked = sensors && picked.some((id) => { const a = (state.fixedAssets || []).find((x) => x.id === id); return a && a.typeUsage === 'cold'; });
+        if (coldPicked && !insideBox.value) { err(coldBoxes().length ? 'main.layoutColocarSinActivoFrio' : 'main.layoutColocarSinFrioColocado'); return; }
         const total = (sensors ? (d.sensors || []).length : d.spaces.length) + picked.length;
         if (total > (sensors ? LC.LIMITS.sensors : LC.LIMITS.spaces)) { Dashboard.showToast(t('main.layoutHuellaActivosTope', { n: sensors ? LC.LIMITS.sensors : LC.LIMITS.spaces }), 'warning'); return; }
         clearFilterOf(sensors ? 'sensors' : 'activos');
@@ -5123,6 +5207,7 @@ function openPlaceAssets(opts = {}) {
                 s.look = a.look || ''; // solo para dibujarlo (no se guarda): la apariencia de su modelo y las medidas del equipo
                 if (a.look === 'photos' && a.photos) { s.modelId = a.modelId; s.photos = a.photos; }
                 s.dim = { w: a.length || 0, h: a.height || 0, d: a.depth || 0 };
+                if (a.typeUsage === 'cold') { s.place = 'inside'; s.spaceId = insideBox.value; s.wallId = ''; s.dist = 0; s.height = 0; } else if ((placeModalEl.querySelector('input[name="layout-place-ambient"]:checked') || {}).value === 'free') setSensorPlace(s, 'free');
                 (d.sensors = d.sensors || []).push(s);
                 return;
             }
@@ -5586,6 +5671,8 @@ function onEdit(event) {
             row.material = LC.ROOF_MATERIALS.includes(el.value) ? el.value : 'sheet';
         } else if (list === 'roofs' && key === 'color') {
             if (LC.ROOF_COLORS[el.value]) row.color = el.value; else delete row.color;
+        } else if (list === 'sensors' && key === 'place') {
+            setSensorPlace(row, el.value);
         } else if (list === 'sensors' && key === 'side') {
             // el lado de la pared donde está el sensor (A o B); vacío = automático (el lado de siempre)
             if (el.value === 'a' || el.value === 'b') row.side = el.value; else delete row.side;
@@ -5660,6 +5747,8 @@ function onEdit(event) {
     if (event.type === 'change' && list === 'obstacles' && ['kind', 'mode'].includes(el.getAttribute('data-k'))) renderPanel();
     // Al cambiar cómo abre una puerta, la bisagra y el lado se apagan si es fija.
     if (event.type === 'change' && list === 'doors' && el.getAttribute('data-k') === 'open') renderPanel();
+    // Al cambiar dónde va un sensor cambian las celdas de su renglón.
+    if (event.type === 'change' && list === 'sensors' && el.getAttribute('data-k') === 'place') renderPanel();
     // Al cambiar la pared de un sensor, el lado vuelve a «Automático» (el lado A y el B son de la pared nueva) y las dos opciones del lado se vuelven a escribir con las zonas de esa pared.
     if (event.type === 'change' && list === 'sensors' && el.getAttribute('data-k') === 'wallId') { const sn = state.draft.sensors[Number(el.getAttribute('data-i'))]; if (sn) delete sn.side; renderPanel(); }
     // Al cambiar de persona a montacargas cambian sus medidas (si eran las de partida) y su nombre.
@@ -5840,6 +5929,7 @@ $('layout-panel').addEventListener('click', (event) => {
         }
         // quitar una huella quita también sus activos
         if (list === 'footprints' && removed) state.draft.spaces = state.draft.spaces.filter((s) => s.footprintId !== removed.id);
+        if (list === 'spaces' || list === 'footprints') dropOrphanInsideSensors();
         if (list === 'zones' && removed) { delete state.open.zones[removed.id]; if (state.zoneOpen === removed.id) state.zoneOpen = null; if (state.catsOpen === removed.id) state.catsOpen = null; }
         if (list === 'vertices') {
             state.open.contorno = false;
@@ -5858,13 +5948,15 @@ $('layout-panel').addEventListener('click', (event) => {
         const [list, index] = del2.dataset.delete.split(':');
         const row = state.draft[list][Number(index)];
         const name = list === 'zones' || list === 'floors' || list === 'ramps' ? row.name : row.code;
-        const message = t(list === 'zones' ? 'main.layoutEliminarZonaConfirm' : (list === 'floors' ? 'main.layoutEliminarPisoConfirm' : (list === 'ramps' ? 'main.layoutEliminarRampaConfirm' : 'main.layoutEliminarEspacioConfirm'))).replace('{name}', name);
+        const insideN = list === 'spaces' && row ? (state.draft.sensors || []).filter((sn) => sn.place === 'inside' && sn.spaceId === row.id).length : 0;
+        const message = t(list === 'zones' ? 'main.layoutEliminarZonaConfirm' : (list === 'floors' ? 'main.layoutEliminarPisoConfirm' : (list === 'ramps' ? 'main.layoutEliminarRampaConfirm' : 'main.layoutEliminarEspacioConfirm'))).replace('{name}', name) + (insideN ? ` ${t('main.layoutEliminarEspacioSensores', { n: insideN })}` : '');
         Dashboard.confirm(message).then((ok) => {
             if (!ok) return;
             const current = state.draft[list].findIndex((r) => r.id === row.id);
             if (current < 0) return;
             state.draft[list].splice(current, 1);
             if (list === 'footprints') state.draft.spaces = state.draft.spaces.filter((s) => s.footprintId !== row.id);
+            if (list === 'spaces' || list === 'footprints') dropOrphanInsideSensors();
             if (list === 'zones') { delete state.open.zones[row.id]; if (state.zoneOpen === row.id) state.zoneOpen = null; if (state.catsOpen === row.id) state.catsOpen = null; }
             // Los espacios de una zona eliminada quedan sin zona (así también los deja el servidor al guardar).
             if (list === 'zones') state.draft.footprints.forEach((f) => { if (f.zoneId === row.id) f.zoneId = ''; });

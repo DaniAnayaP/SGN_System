@@ -1173,7 +1173,7 @@
                 fxItem = { type: 'sensor', id: e.id };
                 const sg = root.LayoutCalc && root.LayoutCalc.doorGeometry ? root.LayoutCalc.doorGeometry(layout, { ...e, width: 0 }) : null;
                 if (!sg) return;
-                const y = (sg.base || 0) + Math.max(0.2, Number(e.height) || 1.5);
+                const y = sg.sensorY !== undefined ? sg.sensorY : (sg.base || 0) + Math.max(0.2, Number(e.height) || 1.5);
                 if (e.look === 'photos' && e.photos && e.modelId && options.modelPhotoUrl) {
                     const spP = root.LayoutCalc.sensorPoint ? root.LayoutCalc.sensorPoint(layout, e) : null;
                     let pdx = 0; let pdz = 1; // hacia dónde mira el frente (el lado de la pared donde está montado)

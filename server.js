@@ -10031,7 +10031,9 @@ app.get('/api/business/climate-map', requireAuth, (req, res) => {
         companyName: pub.companyName, siteName: pub.siteName, companyColor: pub.companyColor, costCenter: center ? { id: center.id, name: center.name } : null,
         layout: {
             vertices: pub.layout.vertices, zones: pub.layout.zones.map((z) => ({ id: z.id, name: z.name, type: z.type, x: z.x, y: z.y, l: z.l, w: z.w, ...(Array.isArray(z.pts) ? { pts: z.pts } : {}) })),
-            sensors: (row.layout.sensors || []).map((s) => ({ id: s.id, code: s.code, type: s.type, ...(s.wallId ? { wallId: s.wallId } : { wall: s.wall }), dist: s.dist, height: s.height, zoneId: s.zoneId || '', measures: LayoutCalc.sensorZoneIds(s) })),
+            // un sensor suelto (place 'free': x, y) o dentro de un activo de frío (place 'inside': spaceId) no va sobre una pared; el de dentro no pinta ninguna zona (measures vacío + place) y su activo viaja en spaces para ubicarlo
+            sensors: (row.layout.sensors || []).map((s) => ({ id: s.id, code: s.code, type: s.type, ...(s.wallId ? { wallId: s.wallId } : { wall: s.wall }), dist: s.dist, height: s.height, zoneId: s.zoneId || '', measures: LayoutCalc.sensorZoneIds(s), ...(s.place ? { place: s.place } : {}), ...(s.place === 'free' ? { x: s.x, y: s.y } : {}), ...(s.place === 'inside' ? { spaceId: s.spaceId } : {}) })),
+            spaces: (row.layout.spaces || []).filter((sp) => (row.layout.sensors || []).some((s) => s.place === 'inside' && s.spaceId === sp.id)).map((sp) => ({ id: sp.id, code: sp.code || '', x: sp.x, y: sp.y, l: sp.l, d: sp.d, h: sp.h })),
             // las paredes (donde va cada sensor): solo lo que hace falta para ubicarlas
             obstacles: (row.layout.obstacles || []).filter((o) => o.kind === 'wall').map((o) => ({ id: o.id, name: o.name, kind: o.kind, mode: o.mode, wall: o.wall, dist: o.dist, x: o.x, y: o.y, l: o.l, w: o.w, ...(o.h > 0 ? { h: o.h } : {}), ...(o.h2 > 0 ? { h2: o.h2 } : {}) })),
         },
@@ -10701,10 +10703,26 @@ app.get('/api/business/asset-models/:id/photos/:face', requireAuth, (req, res) =
 // Clasificación de Activos: su campo propio es la métrica (kind): 'm2' = cuenta en los m² de mobiliario, 'm3' = mide los m³ de almacenamiento.
 const ASSET_CLASS_METRIC_LABELS = { m2: 'm² (activo para operar)', m3: 'm³ (activo para almacenar)' };
 // Tipo de activo: su campo propio es la LETRA del Localizador (kind = el tipo de espacio del Layout que le toca; vacío = sin letra todavía).
+// Uso del Tipo de activo (2026-11-17): Ambiente (por omisión) o Frío; solo los Tipos que se dibujan como Frío o como Sensor pueden ser de Frío.
+const ASSET_USAGES = ['ambient', 'cold'];
+const ASSET_USAGE_LABELS = { ambient: 'Ambiente', cold: 'Frío' };
+const typeUsageOf = (type) => (type && type.use_kind === 'cold' ? 'cold' : 'ambient');
+// Cuántos activos colocados en el Layout dejarían de cumplir la regla si el Tipo cambia a ese Uso: sensores del Tipo (de Frío van dentro de un activo de frío, de Ambiente fuera) y activos de frío del Tipo que llevan sensores adentro.
+function typeUsageConflicts(clientId, typeId, kind, newUsage) {
+    let n = 0;
+    listRawClientLayouts(clientId).forEach(({ layout }) => {
+        const sensors = (layout && layout.sensors) || [];
+        const spaces = (layout && layout.spaces) || [];
+        const typeOf = (ref) => { const a = getFixedAssetAnyScope(ref, clientId); return a ? a.type_id : 0; };
+        if (kind === 'sensor') sensors.forEach((s) => { if (s && s.assetRef && typeOf(s.assetRef) === typeId && (newUsage === 'cold') !== (s.place === 'inside')) n += 1; });
+        if (kind === 'cold' && newUsage !== 'cold') spaces.forEach((sp) => { if (sp && sp.assetRef && typeOf(sp.assetRef) === typeId && sensors.some((s) => s && s.place === 'inside' && s.spaceId === sp.id)) n += 1; });
+    });
+    return n;
+}
 const ASSET_TYPE_LETTER_LABELS = { rack: 'A · Anaquel', rackpal: 'R · Rack', cabinet: 'G · Gabeta', pallet: 'T · Tarima en piso', cold: 'F · Frío', cart: 'M · Rack móvil', sensor: 'Sensor' }; // «Sensor» se coloca en el paso Sensores del Layout (sobre una pared), no sobre una huella
 function prepareFixedAssetPatch(categoryType, patch, req = null, existing = null) {
     const has = (key) => Object.prototype.hasOwnProperty.call(patch, key);
-    if ((categoryType !== 'activos-clasificacion' && categoryType !== 'activos-fijos') || (!has('kind') && !(categoryType === 'activos-fijos' && (has('letter') || has('needsSerial') || has('needsCalibration'))))) return { patch, sanitizers: {} };
+    if ((categoryType !== 'activos-clasificacion' && categoryType !== 'activos-fijos') || (!has('kind') && !(categoryType === 'activos-fijos' && (has('letter') || has('needsSerial') || has('needsCalibration') || has('usage'))))) return { patch, sanitizers: {} };
     if (categoryType === 'activos-fijos') {
         const out = { patch: { ...patch }, sanitizers: {} };
         // «Lleva número de serie»: Sí (sensores, teléfonos, impresoras) o No (sillas, mesas). Cuenta para el 100% de sus activos solo cuando lo lleva.
@@ -10716,6 +10734,24 @@ function prepareFixedAssetPatch(categoryType, patch, req = null, existing = null
         if (has('needsCalibration')) {
             out.patch.needsCalibration = patch.needsCalibration === true || patch.needsCalibration === 1 || patch.needsCalibration === '1' || patch.needsCalibration === 'true' ? 1 : 0;
             out.sanitizers.needsCalibration = (v) => (Number(v) ? 'Sí' : 'No');
+        }
+        // «Uso» (2026-11-17): Ambiente o Frío. Solo los Tipos que se dibujan como Frío o como Sensor pueden ser de Frío (los demás quedan en Ambiente); no cambia mientras haya activos colocados en el Layout que dejarían de cumplir la regla.
+        {
+            const kindNow = has('kind') ? patch.kind : (existing ? existing.kind : '');
+            if (has('usage') || (has('kind') && kindNow !== 'cold' && kindNow !== 'sensor' && existing && existing.use_kind === 'cold')) {
+                let usage = has('usage') ? patch.usage : 'ambient';
+                if (!ASSET_USAGES.includes(usage)) return { error: { status: 400, message: 'El uso debe ser Ambiente o Frío.' } };
+                if (kindNow !== 'cold' && kindNow !== 'sensor') {
+                    if (has('usage') && usage === 'cold') return { error: { status: 400, message: 'Solo los Tipos que se dibujan como Frío o como Sensor pueden ser de uso Frío.' } };
+                    usage = 'ambient';
+                }
+                if (req && existing && usage !== (existing.use_kind || 'ambient')) {
+                    const bad = typeUsageConflicts(req.user.clientId, existing.id, existing.kind, usage); // con lo que son hoy sus activos (aunque el dibujo del Tipo también cambie)
+                    if (bad) return { error: { status: 409, message: `No se puede cambiar el uso de este Tipo: ${bad === 1 ? 'hay un activo colocado' : `hay ${bad} activos colocados`} en el Layout que dejaría${bad === 1 ? '' : 'n'} de cumplir la regla (un sensor de Frío va dentro de un activo de Frío y uno de Ambiente fuera). Quítalos o cámbialos de lugar primero.` } };
+                }
+                out.patch.usage = usage;
+                out.sanitizers.usage = (v) => ASSET_USAGE_LABELS[v] || '';
+            }
         }
         // «Se dibuja como»: el tipo de espacio del Layout que le toca (kind). Vacío = sin dibujo propio (su activo conserva el que ya tenía).
         if (has('kind')) {
@@ -10788,7 +10824,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             kind: row.kind, locations: row.kind === 'physical' ? parseWarehouseLocations(row.locations) : [],
         } : {}),
         ...(row.category_type === 'activos-clasificacion' || row.category_type === 'activos-fijos' ? { kind: row.kind } : {}),
-        ...(row.category_type === 'activos-fijos' ? { letter: row.letter || '', needsSerial: row.needs_serial !== 0, needsCalibration: row.needs_calibration === 1 } : {}),
+        ...(row.category_type === 'activos-fijos' ? { letter: row.letter || '', needsSerial: row.needs_serial !== 0, needsCalibration: row.needs_calibration === 1, usage: typeUsageOf(row) } : {}),
         ...(row.category_type === 'activos-modelos' ? {
             parentId: row.parent_id, customName: row.custom_name || '', modelNumber: row.model_number || '', shape: row.shape || 'rectangular',
             height: row.height_cm, length: row.length_cm, depth: row.depth_cm, weight: row.weight_kg, volume: row.volume_m3,
@@ -12913,6 +12949,19 @@ function applyFixedAssetsToLayout(layoutIn, { clientId, centerId, previous }) {
         seen.add(ref);
         if (asSensor && opts.typeKind !== 'sensor') return fail(`El activo ${code} no es un sensor: se coloca en el paso Activos.`);
         if (!asSensor && opts.typeKind === 'sensor') return fail(`El activo ${code} es un sensor: se coloca en el paso Sensores.`);
+        // Sensores de frío y de ambiente (2026-11-17): el Uso del Tipo del sensor decide dónde va. Frío: solo DENTRO de un activo de uso Frío. Ambiente: sobre una pared o suelto en la nave, nunca dentro de un refrigerador.
+        if (asSensor) {
+            const usage = typeUsageOf(cat.types.get(row.type_id));
+            const where = item.place === 'inside' ? 'inside' : (item.place === 'free' ? 'free' : 'wall');
+            if (usage === 'cold' && where !== 'inside') return fail(`El sensor ${code} es de uso Frío: solo se coloca dentro de un activo de uso Frío (un refrigerador o una cámara fría).`);
+            if (usage !== 'cold' && where === 'inside') return fail(`El sensor ${code} es de uso Ambiente: no va dentro de un refrigerador. Colócalo sobre una pared o en la nave, o cambia su Tipo.`);
+            if (where === 'inside') {
+                const box = spaces.find((sp) => sp && sp.id === item.spaceId);
+                if (!box) return fail(`El sensor ${code} va dentro de un activo que ya no está en el Layout: elige otro activo de frío.`);
+                const boxRow = Math.round(Number(box.assetRef)) > 0 ? getFixedAssetAnyScope(Math.round(Number(box.assetRef)), clientId) : null;
+                if (!boxRow || typeUsageOf(cat.types.get(boxRow.type_id)) !== 'cold') return fail(`El sensor ${code} va dentro de ${box.code || 'un activo'}, que no es un activo de uso Frío.`);
+            }
+        }
         if (!before.has(ref)) {
             if (row.status !== 'active') return fail(`El activo ${code} está desactivado en Alta Activos: actívalo para colocarlo.`);
             if (!row.show_in_layout) return fail(`El activo ${code} no aparece en el Layout (Alta Activos > Aparece en el Layout).`);
@@ -12956,7 +13005,8 @@ function fixedAssetPlacementOf(clientId, row) {
     if (sensor) {
         const zone = zones.get(sensor.zoneId);
         const wall = (raw.obstacles || []).find((o) => o.id === sensor.wallId);
-        return { zone: zone ? (zone.name || zone.code || '') : '', footprint: wall ? (wall.code || wall.name || '') : '' };
+        const box = sensor.place === 'inside' ? (raw.spaces || []).find((sp) => sp.id === sensor.spaceId) : null;
+        return { zone: zone ? (zone.name || zone.code || '') : '', footprint: sensor.place === 'inside' ? `Dentro de ${box && box.code ? box.code : 'un activo de frío'}` : (sensor.place === 'free' ? 'En la nave' : (wall ? (wall.code || wall.name || '') : '')) };
     }
     return null;
 }
@@ -12977,7 +13027,8 @@ function fixedAssetPlacementsMap(clientId) {
             if (!s || !s.assetRef) return;
             const zone = zones.get(s.zoneId);
             const wall = (layout.obstacles || []).find((o) => o.id === s.wallId);
-            map.set(s.assetRef, placementText({ zone: zone ? (zone.name || zone.code || '') : '', footprint: wall ? (wall.code || wall.name || '') : '' }));
+            const box = s.place === 'inside' ? (layout.spaces || []).find((sp) => sp.id === s.spaceId) : null;
+            map.set(s.assetRef, placementText({ zone: zone ? (zone.name || zone.code || '') : '', footprint: s.place === 'inside' ? `Dentro de ${box && box.code ? box.code : 'un activo de frío'}` : (s.place === 'free' ? 'En la nave' : (wall ? (wall.code || wall.name || '') : '')) }));
         });
     });
     return map;
@@ -12993,7 +13044,7 @@ function layoutFixedAssetsFor(req, layoutRow, centerId) {
         const cls = cat.classes.get(a.class_id);
         return {
             id: a.id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name, purchaseName: a.purchase_name, customName: a.custom_name, model: a.model, serialNumber: a.serial_number,
-            typeId: a.type_id || 0, modelId: a.model_id || 0, ...(() => { const m = cat.models.get(a.model_id); const faces = m && m.look === 'photos' ? assetModelPhotoMap(clientId).get(m.id) : null; return faces && Object.keys(faces).length ? { look: 'photos', photos: Object.fromEntries(Object.entries(faces).map(([f, v]) => [f, v.ver])) } : { look: (m && m.look) || '' }; })(), typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
+            typeId: a.type_id || 0, modelId: a.model_id || 0, ...(() => { const m = cat.models.get(a.model_id); const faces = m && m.look === 'photos' ? assetModelPhotoMap(clientId).get(m.id) : null; return faces && Object.keys(faces).length ? { look: 'photos', photos: Object.fromEntries(Object.entries(faces).map(([f, v]) => [f, v.ver])) } : { look: (m && m.look) || '' }; })(), typeName: type ? type.name : '', typeKind: type ? type.kind || '' : '', typeUsage: typeUsageOf(type), classId: a.class_id || 0, className: cls ? cls.name : '', metric: cls ? cls.kind || '' : '',
             // solo los activos completos Y autorizados para usarse se pueden colocar en el Layout; el selector dice qué le falta a los demás (awaitingAuth: está completo y espera la autorización de uso)
             ...(() => { const done = fixedAssetCompleteness(a, type); const authorized = !!a.use_auth; return { complete: done.complete && authorized, missing: done.missing, photoCount: done.photos, awaitingAuth: done.complete && !authorized && !a.editing }; })(),
             shape: a.shape, length: a.length_cm, depth: a.depth_cm, height: a.height_cm, status: a.status, showInLayout: !!a.show_in_layout,

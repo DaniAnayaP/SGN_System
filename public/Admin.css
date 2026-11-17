@@ -7581,6 +7581,13 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 .layout-legend .lg-forklift{ background: #f2c230; border-color: #7a5c00; }
 .layout-chips{ display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; min-width: 12rem; }
 .layout-chip{ display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.05rem 0.2rem 0.05rem 0.55rem; border: 1px solid var(--color-primary, #6c3ba0); border-radius: 999px; font-size: 0.72rem; font-weight: 600; background: var(--color-surface-2, #f6eef8); white-space: nowrap; }
+/* Sensores de frío y de ambiente: el Uso del sensor en el paso Sensores del Layout y el dónde va de «Colocar sensor». */
+.layout-use{ display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.1rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.layout-use::before{ content: ""; width: 0.45rem; height: 0.45rem; border-radius: 50%; background-color: currentColor; }
+.layout-use-cold{ background-color: color-mix(in srgb, #1f6fb5 16%, transparent); color: color-mix(in srgb, #1f6fb5 70%, var(--color-text-primary)); }
+.layout-use-ambient{ background-color: color-mix(in srgb, #a4620a 16%, transparent); color: color-mix(in srgb, #a4620a 70%, var(--color-text-primary)); }
+.layout-place-radios{ display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; }
+.layout-place-radios label{ display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
 .layout-chip-x{ border: 0; background: transparent; color: var(--color-text-secondary); font-size: 0.85rem; line-height: 1; width: 1.1rem; height: 1.1rem; border-radius: 50%; cursor: pointer; padding: 0; }
 .layout-chip-x:hover{ background: rgba(0,0,0,0.08); }
 .layout-chip.layout-bad{ border-color: #c0392b; background: #fdeceb; color: #c0392b; }

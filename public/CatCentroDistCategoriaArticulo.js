@@ -594,6 +594,14 @@ function buildExtraCells(record) {
         const calibrationTd = buildOptionCell(record, 'colActivoFijoCalibracion', 'needsCalibration', 'assetTypeCalibration',
             [{ value: '1', label: Dashboard.t('main.assetYes') }, { value: '0', label: Dashboard.t('main.assetNo') }], record.needsCalibration ? '1' : '0', '',
             (v) => ({ needsCalibration: v === '1' }));
+        // «Uso» (2026-11-17): Ambiente o Frío. Un sensor de Frío va dentro de un activo de uso Frío y uno de Ambiente sobre una pared o en la nave. Solo los Tipos que se dibujan como Frío o como Sensor pueden ser de Frío; los demás quedan en Ambiente.
+        const usageTd = buildOptionCell(record, 'colActivoFijoUso', 'usage', 'assetTypeUsage',
+            [{ value: 'ambient', label: Dashboard.t('main.layoutUsoAmbiente') }, { value: 'cold', label: Dashboard.t('main.layoutUsoFrio') }], record.usage === 'cold' ? 'cold' : 'ambient', '',
+            (v) => ({ usage: v }));
+        if (record.kind !== 'cold' && record.kind !== 'sensor') {
+            const usageSelect = usageTd.querySelector('select');
+            if (usageSelect) { usageSelect.disabled = true; usageSelect.title = Dashboard.t('main.assetTypeUsageLocked'); }
+        }
         // «Modelos»: abre debajo de la tabla la lista de modelos de este tipo (CatCentroDistActivosModelos.js).
         const modelsTd = document.createElement('td');
         modelsTd.dataset.col = 'colActivoFijoModelos';
@@ -610,7 +618,7 @@ function buildExtraCells(record) {
         modelsTd.appendChild(modelsBtn);
         return [letterTd, buildOptionCell(record, 'colActivoFijoLetra', 'kind', 'assetTypeLetter',
             kinds.map((k) => ({ value: k, label: Dashboard.t(`main.layoutType_space_${k}`) })), record.kind || '', '',
-            (v) => ({ kind: v })), serialTd, calibrationTd, modelsTd];
+            (v) => ({ kind: v })), serialTd, calibrationTd, usageTd, modelsTd];
     }
     if (CATEGORY_TYPE === 'activos-criterios') {
         // «Cómo se limita» (rango, solo máximo, solo mínimo o cada N horas) y su unidad: lo que pide la celda de cada activo en Alta Activos. Los de fábrica no cambian de forma ni de unidad; «Zona» todavía no existe.

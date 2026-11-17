@@ -79,7 +79,7 @@ function buildBuckets(readings) {
     return map;
 }
 // Un sensor mide las zonas que se eligieron en su renglón del Layout (o, sin elegir, la zona donde está colocado).
-const measuresZone = (sensor, zoneId) => (Array.isArray(sensor.measures) && sensor.measures.length ? sensor.measures : [sensor.zoneId]).includes(zoneId);
+const measuresZone = (sensor, zoneId) => sensor.place !== 'inside' && (Array.isArray(sensor.measures) && sensor.measures.length ? sensor.measures : [sensor.zoneId]).includes(zoneId);
 // Lo que marcó un sensor a esa hora para la medida elegida (null si no hay lectura o su tipo no la mide).
 function sensorReading(sensor, hour, metric) {
     const r = state.buckets.get(sensor.id) && state.buckets.get(sensor.id).get(hour);

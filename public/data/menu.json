@@ -1455,6 +1455,7 @@
             { "id": "colActivoFijoLetra", "labelKey": "main.colActivoFijoLetra", "permissionOnly": true },
             { "id": "colActivoFijoSerie", "labelKey": "main.colActivoFijoSerie", "permissionOnly": true },
             { "id": "colActivoFijoCalibracion", "labelKey": "main.colActivoFijoCalibracion", "permissionOnly": true },
+            { "id": "colActivoFijoUso", "labelKey": "main.colActivoFijoUso", "permissionOnly": true },
             { "id": "colActModNombreCompra", "labelKey": "main.colActModNombreCompra", "permissionOnly": true },
             { "id": "colActModNombrePersonalizado", "labelKey": "main.colActModNombrePersonalizado", "permissionOnly": true },
             { "id": "colActModModelo", "labelKey": "main.colActModModelo", "permissionOnly": true },

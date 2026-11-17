@@ -1922,6 +1922,25 @@
     "assetLook_sensor-disc": "Sensor compacto",
     "assetLookNoneYet": "Por ahora solo los sensores se dibujan según su modelo; los demás tipos siguen con la apariencia de su Tipo.",
     "layoutSensorLado": "Lado de la pared",
+    "layoutUsoFrio": "Frío",
+    "layoutUsoAmbiente": "Ambiente",
+    "layoutSensorUso": "Uso",
+    "layoutSensorDondeVa": "Dónde va",
+    "layoutSensorDentroDe": "Dentro de",
+    "layoutSensorX": "X (m)",
+    "layoutSensorY": "Y (m)",
+    "layoutSensorEnPared": "Pared",
+    "layoutSensorEnNave": "En la nave",
+    "layoutSensorDentroDeFijo": "Dentro de",
+    "layoutSensorElegirFrio": "Elige un activo de frío…",
+    "layoutColocarDentroDe": "Dentro de",
+    "layoutColocarDondeVa": "Dónde va",
+    "layoutColocarSobrePared": "Sobre una pared",
+    "layoutColocarSinActivoFrio": "Elige dentro de qué activo de frío van los sensores de frío.",
+    "layoutColocarSinFrioColocado": "Primero coloca un refrigerador o una cámara fría en el paso Activos.",
+    "layoutSensoresDentroQuitados": "Se quitaron {n} sensor(es) de frío que estaban dentro del activo que quitaste (siguen en Alta Activos).",
+    "layoutEliminarEspacioSensores": "Lleva {n} sensor(es) de frío adentro: también se quitan del Layout.",
+    "assetTypeUsageLocked": "Solo los Tipos que se dibujan como Frío o como Sensor pueden ser de uso Frío.",
     "layoutSensorLadoAuto": "Automático",
     "layoutSensorLadoA": "Lado A · {zone}",
     "layoutSensorLadoB": "Lado B · {zone}",
@@ -7227,6 +7246,22 @@
     "layoutColocarModelo": {
       "what": "El segundo paso: el modelo del tipo elegido (entre paréntesis, cuántas piezas hay de ese modelo sin colocar). Al elegirlo salen sus piezas, con su código y su número de serie, para marcar las que vas a colocar. «Sin modelo» son los activos de antes que todavía no tienen modelo en Alta Activos.",
       "example": "eliges TRACEABLE 4410TR (3) y salen H001, H002 y H003 con su S/N."
+    },
+    "assetTypeUsage": {
+      "what": "Si los activos de este tipo son de uso Ambiente o de uso Frío. Un sensor de uso Frío solo se coloca DENTRO de un activo de uso Frío (un refrigerador o una cámara fría); un sensor de uso Ambiente va sobre una pared o suelto en la nave. Solo los tipos que se dibujan como Frío o como Sensor pueden ser de Frío. No cambia mientras haya activos colocados en el Layout que dejarían de cumplir la regla.",
+      "example": "Refrigerador: Frío. Sensor de refrigerador: Frío. Termohigrómetro de pared: Ambiente."
+    },
+    "layoutSensorUso": {
+      "what": "El uso del sensor: Frío (va dentro de un refrigerador o cámara fría) o Ambiente (sobre una pared o en la nave). Sale del Tipo del sensor; se cambia en Catálogos > Activos Fijos.",
+      "example": "Un sensor de refrigerador es de uso Frío; un termohigrómetro de pared es de uso Ambiente."
+    },
+    "layoutSensorDondeVa": {
+      "what": "Dónde se coloca el sensor. Los de uso Frío siempre van «Dentro de» un activo de frío. Los de Ambiente van sobre una pared (con su lado, distancia y altura) o en la nave (con X, Y y altura en metros).",
+      "example": "Un termohigrómetro «En la nave» con X 12.4 y Y 6.0; un sensor de refrigerador «Dentro de» F001."
+    },
+    "layoutSensorDentroDe": {
+      "what": "El activo de frío donde va el sensor de uso Frío: solo salen los refrigeradores y cámaras de uso Frío que ya están colocados en el paso Activos. Puede llevar varios sensores. La zona del sensor es la de su activo, y si mueves el activo los sensores se mueven con él.",
+      "example": "F001 · Refrigerador lleva los sensores S003 y S004."
     },
     "layoutSensorLado": {
       "what": "De qué lado de la pared está montado el sensor. Cada pared tiene un Lado A y un Lado B y cada lado da a una zona (se ve en cada opción). De ahí sale «Zona donde está». «Automático» es el lado de siempre: se usa en los sensores de antes, hasta que elijas su lado. Al cambiar de pared vuelve a Automático.",

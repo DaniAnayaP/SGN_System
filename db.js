@@ -2426,7 +2426,9 @@ for (const [col, ddl] of [['custom_name', "TEXT NOT NULL DEFAULT ''"], ['model_n
     ['needs_calibration', 'INTEGER NOT NULL DEFAULT 0'], ['calibration_months', 'INTEGER NOT NULL DEFAULT 0'],
     // Criterios y avisos de activos (2026-11-13): del catálogo «Qué se mide» (activos-criterios): unit = su unidad (°C, %, kg, h) y builtin_key = a cuál de los de fábrica corresponde ('' = lo creó la empresa); kind = cómo se limita
     // (range | max | min | every | zone). Del catálogo «Qué se avisa» (activos-avisos): builtin_key. Del MODELO (activos-modelos): criteria_ids y aviso_ids = lo que mide y lo que avisa, como texto JSON canónico [id, id, ...] ('' = nada).
-    ['unit', "TEXT NOT NULL DEFAULT ''"], ['builtin_key', "TEXT NOT NULL DEFAULT ''"], ['criteria_ids', "TEXT NOT NULL DEFAULT ''"], ['aviso_ids', "TEXT NOT NULL DEFAULT ''"]]) {
+    ['unit', "TEXT NOT NULL DEFAULT ''"], ['builtin_key', "TEXT NOT NULL DEFAULT ''"], ['criteria_ids', "TEXT NOT NULL DEFAULT ''"], ['aviso_ids', "TEXT NOT NULL DEFAULT ''"],
+    // Uso del TIPO de activo (2026-11-17): 'ambient' (por omisión) o 'cold'. Solo los Tipos que se dibujan como Frío o como Sensor pueden ser de Frío: un sensor de Frío va dentro de un activo de uso Frío y uno de Ambiente sobre una pared o en la nave.
+    ['use_kind', "TEXT NOT NULL DEFAULT 'ambient'"]]) {
     if (!articleCategoryColumns.some((c) => c.name === col)) db.exec(`ALTER TABLE article_categories ADD COLUMN ${col} ${ddl}`);
 }
 
@@ -7471,6 +7473,7 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
         letter: { column: 'letter', fieldKey: 'main.colActivoFijoLetraCodigo' },
         needsSerial: { column: 'needs_serial', fieldKey: 'main.colActivoFijoSerie' },
         needsCalibration: { column: 'needs_calibration', fieldKey: 'main.colActivoFijoCalibracion' },
+        usage: { column: 'use_kind', fieldKey: 'main.colActivoFijoUso' },
     },
     'activos-modelos': {
         name: { column: 'name', fieldKey: 'main.colActModNombreCompra' },
@@ -7511,7 +7514,7 @@ function articleCategoryPatchableFields(categoryType) {
 const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' }, widthM: { column: 'width_m' }, lengthM: { column: 'length_m' }, heightM: { column: 'height_m' }, letter: { column: 'letter' },
     needsSerial: { column: 'needs_serial' }, customName: { column: 'custom_name' }, modelNumber: { column: 'model_number' }, shape: { column: 'shape' }, height: { column: 'height_cm' }, length: { column: 'length_cm' }, depth: { column: 'depth_cm' },
     weight: { column: 'weight_kg' }, volume: { column: 'volume_m3' }, look: { column: 'look' }, needsCalibration: { column: 'needs_calibration' }, calibrationMonths: { column: 'calibration_months' },
-    unit: { column: 'unit' }, criteriaIds: { column: 'criteria_ids' }, avisoIds: { column: 'aviso_ids' } };
+    unit: { column: 'unit' }, criteriaIds: { column: 'criteria_ids' }, avisoIds: { column: 'aviso_ids' }, usage: { column: 'use_kind' } };
 
 function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
     const sets = [];
@@ -14546,6 +14549,16 @@ function seedMttoDeleteSoloVer() {
     })();
     console.log(`[db] Added "Solo ver" to the Mantenimiento Preventivo deactivate button where only "Eliminar" was granted (one-time migration): ${JSON.stringify(counts)}.`);
 }
+// Los Tipos que ya se dibujaban como Frío (refrigerador, cámara) pasan a uso Frío; todo lo demás (los sensores de hoy incluidos) queda en Ambiente, como se manejaba hasta hoy.
+const TYPE_USAGE_KEY = 'migrate-asset-type-usage-v1';
+function migrateAssetTypeUsageOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(TYPE_USAGE_KEY)) return;
+    db.transaction(() => {
+        const changed = db.prepare("UPDATE article_categories SET use_kind = 'cold' WHERE category_type = 'activos-fijos' AND kind = 'cold' AND use_kind <> 'cold'").run().changes;
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(TYPE_USAGE_KEY);
+        if (changed) console.log(`[db] Marked ${changed} asset type(s) drawn as Frío with «Uso: Frío» (one-time).`);
+    })();
+}
 function migrateCalibrationSensorTypesOnce() {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CALIBRATION_SENSOR_TYPES_KEY)) return;
     db.transaction(() => {
@@ -14608,6 +14621,7 @@ seedMttoDeleteSoloVer();
 seedLecturasGrants();
 seedActividadesActivosGrants();
 migrateCalibrationSensorTypesOnce();
+migrateAssetTypeUsageOnce();
 migrateLayoutSpacesToFixedAssetsOnce();
 migrateLayoutSensorsToFixedAssetsOnce();
 migrateFixedAssetsToModelsOnce();

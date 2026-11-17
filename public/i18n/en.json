@@ -1922,6 +1922,25 @@
     "assetLook_sensor-disc": "Compact sensor",
     "assetLookNoneYet": "For now only sensors are drawn according to their model; the other types keep their Type's look.",
     "layoutSensorLado": "Side of the wall",
+    "layoutUsoFrio": "Cold",
+    "layoutUsoAmbiente": "Ambient",
+    "layoutSensorUso": "Use",
+    "layoutSensorDondeVa": "Placed",
+    "layoutSensorDentroDe": "Inside",
+    "layoutSensorX": "X (m)",
+    "layoutSensorY": "Y (m)",
+    "layoutSensorEnPared": "Wall",
+    "layoutSensorEnNave": "In the facility",
+    "layoutSensorDentroDeFijo": "Inside",
+    "layoutSensorElegirFrio": "Choose a cold asset…",
+    "layoutColocarDentroDe": "Inside",
+    "layoutColocarDondeVa": "Where it goes",
+    "layoutColocarSobrePared": "On a wall",
+    "layoutColocarSinActivoFrio": "Choose which cold asset the cold sensors go inside.",
+    "layoutColocarSinFrioColocado": "First place a refrigerator or a cold room in the Assets step.",
+    "layoutSensoresDentroQuitados": "{n} cold sensor(s) that were inside the asset you removed were removed too (they remain in Asset Registration).",
+    "layoutEliminarEspacioSensores": "It has {n} cold sensor(s) inside: they are removed from the Layout too.",
+    "assetTypeUsageLocked": "Only types drawn as Cold or as Sensor can be cold use.",
     "layoutSensorLadoAuto": "Automatic",
     "layoutSensorLadoA": "Side A · {zone}",
     "layoutSensorLadoB": "Side B · {zone}",
@@ -7228,6 +7247,22 @@
     "layoutColocarModelo": {
       "what": "The second step: the model of the chosen type (in brackets, how many unplaced pieces there are of that model). When you choose it, its pieces appear, with their code and serial number, to tick the ones you will place. «No model» are the older assets that do not have a model in Asset Registration yet.",
       "example": "you choose TRACEABLE 4410TR (3) and H001, H002 and H003 appear with their S/N."
+    },
+    "assetTypeUsage": {
+      "what": "Whether the assets of this type are for Ambient or Cold use. A Cold sensor is placed only INSIDE a Cold-use asset (a refrigerator or a cold room); an Ambient sensor goes on a wall or loose in the facility. Only types drawn as Cold or as Sensor can be Cold. It cannot change while placed assets would stop following the rule.",
+      "example": "Refrigerator: Cold. Refrigerator sensor: Cold. Wall thermohygrometer: Ambient."
+    },
+    "layoutSensorUso": {
+      "what": "The sensor use: Cold (goes inside a refrigerator or cold room) or Ambient (on a wall or in the facility). It comes from the sensor type; change it in Catalogs > Fixed Assets.",
+      "example": "A refrigerator sensor is Cold use; a wall thermohygrometer is Ambient use."
+    },
+    "layoutSensorDondeVa": {
+      "what": "Where the sensor is placed. Cold-use sensors always go «Inside» a cold asset. Ambient sensors go on a wall (with side, distance and height) or in the facility (with X, Y and height in meters).",
+      "example": "A thermohygrometer «In the facility» at X 12.4, Y 6.0; a refrigerator sensor «Inside» F001."
+    },
+    "layoutSensorDentroDe": {
+      "what": "The cold asset where the cold-use sensor goes: only refrigerators and cold rooms of Cold use already placed in the Assets step are listed. It can hold several sensors. The sensor zone is its asset zone, and if you move the asset its sensors move with it.",
+      "example": "F001 · Refrigerator holds sensors S003 and S004."
     },
     "layoutSensorLado": {
       "what": "Which side of the wall the sensor is mounted on. Each wall has a Side A and a Side B and each side faces a zone (shown in each option). «Zone where it is» comes from it. «Automatic» is the usual side: it is used by older sensors until you choose their side. Changing the wall goes back to Automatic.",

@@ -444,9 +444,28 @@
     }
     // Dónde queda una puerta: sus dos extremos (a y b, en metros, por el centro de la pared), hacia dónde va la pared, su grosor y lo que mide y de alto la pared; wall = la pared (o null si es una puerta de antes que todavía
     // no está en una, que se ubica sobre el lado del contorno como se hacía: legacy). null si no se puede ubicar. Un Layout girado (rotateLayout) trae la puerta ya girada en door._seg.
+    // Un sensor suelto en la nave o dentro de un activo de frío (2026-11-17) no va sobre una pared: su lugar es un punto (legacy: true para que el croquis no lo deje arrastrar por una pared). Los de dentro se reparten a lo largo del
+    // lado más largo del activo; sensorY = a qué altura se dibuja en 3D (la mitad del activo).
+    const pointSeg = (x, y, extra) => ({ a: { x, y }, b: { x, y }, ux: 1, uy: 0, nx: 0, ny: 1, thick: 0, wallLength: 0, legacy: true, ...extra });
+    function freeSensorSeg(s) {
+        const x = Number(s.x);
+        const y = Number(s.y);
+        return Number.isFinite(x) && Number.isFinite(y) ? pointSeg(x, y, {}) : null;
+    }
+    function insideSensorSeg(layout, s) {
+        const box = ((layout && layout.spaces) || []).find((sp) => sp && sp.id === s.spaceId);
+        if (!box || !(Number(box.l) > 0) || !(Number(box.d) > 0)) return null;
+        const mates = ((layout && layout.sensors) || []).filter((o) => o && o.place === 'inside' && o.spaceId === s.spaceId);
+        const at = Math.max(0, mates.findIndex((o) => o.id === s.id));
+        const t = (at + 1) / (Math.max(1, mates.length) + 1);
+        const along = box.l >= box.d;
+        return pointSeg(along ? box.x + box.l * t : box.x + box.l / 2, along ? box.y + box.d / 2 : box.y + box.d * t, { sensorY: (Number(box.h) > 0 ? box.h : 1) / 2 });
+    }
     function doorGeometry(layout, door) {
         if (!door) return null;
         if (door._seg) return door._seg;
+        if (door.place === 'free') return freeSensorSeg(door);
+        if (door.place === 'inside') return insideSensorSeg(layout, door);
         const dist = Math.max(Number(door.dist) || 0, 0);
         const width = Math.max(Number(door.width) || 0, 0);
         const wall = door.wallId ? ((layout && layout.obstacles) || []).find((o) => o && o.id === door.wallId && o.kind === 'wall') : null;
@@ -647,6 +666,7 @@
         if (!layout || !Array.isArray(layout[list])) return out;
         const isDoor = list === 'doors';
         layout[list].forEach((d, i) => {
+            if (list === 'sensors' && d && (d.place === 'free' || d.place === 'inside')) return; // suelto o dentro de un activo: no va sobre una pared
             const name = isDoor ? String((d && d.name) || 'Puerta') : (list === 'sensors' ? String((d && d.code) || `Sensor ${i + 1}`) : `#${i + 1}`);
             const noun = isDoor ? `La puerta «${name}»` : (list === 'sensors' ? `El sensor ${name}` : `La conexión de luz ${name}`);
             const g = doorGeometry(layout, isDoor ? d : { ...d, width: 0 });
@@ -1392,6 +1412,7 @@
     // Un sensor se coloca sobre una pared, igual que una conexión de luz: pared, distancia desde su esquina y altura del piso. Su ZONA no se elige: es la zona que toca el punto del sensor, tomado un poco hacia adentro
     // de la nave (la más específica si cae en varias; sin zona si cae fuera de todas). Su código (S001, S002…) lo pone el sistema, consecutivo en todo el Layout, y no se edita.
     function sensorPoint(layout, s) {
+        if (s && (s.place === 'free' || s.place === 'inside')) { const pg = doorGeometry(layout, { ...s, width: 0 }); return pg ? { x: pg.a.x, y: pg.a.y, inx: pg.a.x, iny: pg.a.y } : null; }
         // el sensor va sobre su pared (por el centro de la pared); un sensor de antes sin pared se ubica sobre su lado del contorno como siempre
         const g = doorGeometry(layout, { ...s, width: 0 });
         if (!g) return null;
@@ -1428,6 +1449,7 @@
     }
     // Las zonas que mide un sensor: las que se eligieron en su renglón (paso Sensores) o, sin elegir ninguna, la zona donde está colocado.
     function sensorZoneIds(s) {
+        if (s && s.place === 'inside') return []; // un sensor de frío mide adentro de su refrigerador: no pinta ninguna zona de la nave (mapa de calor)
         if (s && Array.isArray(s.zones) && s.zones.length) return s.zones;
         return s && s.zoneId ? [s.zoneId] : [];
     }
@@ -3281,12 +3303,26 @@
             if (!wallId && e && e.wall !== undefined && e.wall !== null && !(wall >= 1 && wall <= walls)) errors.push(`${label}: pared no válida`);
             // assetRef: el renglón de Alta Activos (un activo de tipo Sensor) de donde viene este sensor; su código lo manda el registro
             const sensorRef = Math.round(Number(e && e.assetRef));
-            const item = { id: idOf(e && e.id, sensorIds, label), code: text(e && e.code, label, false), ...(Number.isFinite(sensorRef) && sensorRef > 0 ? { assetRef: sensorRef } : {}), type: oneOf(e && e.type, SENSOR_TYPES, 'both'), zoneId: '', dist: meters(e && e.dist, label), height: meters(e && e.height, label) };
+            const place = e && (e.place === 'free' || e.place === 'inside') ? e.place : 'wall'; // dónde va (ver más abajo): suelto o dentro de un activo no llevan distancia de pared
+            const item = { id: idOf(e && e.id, sensorIds, label), code: text(e && e.code, label, false), ...(Number.isFinite(sensorRef) && sensorRef > 0 ? { assetRef: sensorRef } : {}), type: oneOf(e && e.type, SENSOR_TYPES, 'both'), zoneId: '', dist: place === 'wall' ? meters(e && e.dist, label) : 0, height: place === 'inside' ? 0 : meters(e && e.height, label) };
             // Las zonas que mide (una o varias; sin elegir mide la zona donde está colocado): solo se guarda si se eligió alguna. Las que ya no existen se quitan más abajo, cuando las zonas ya están limpias.
             const measured = Array.isArray(e && e.zones) ? [...new Set(e.zones.filter((zid) => typeof zid === 'string' && zid).map((zid) => zid.slice(0, 64)))].slice(0, LIMITS.zones) : [];
             // El lado de la pared donde está montado (a = Lado A, b = Lado B): opcional; sin elegir, el sensor toma el lado de siempre. Solo vale con una pared elegida.
             const side = e && (e.side === 'a' || e.side === 'b') ? e.side : '';
             const withZones = (obj) => { const withMeasured = measured.length ? { ...obj, zones: measured } : obj; return side && obj.wallId ? { ...withMeasured, side } : withMeasured; };
+            // Dónde va (2026-11-17): sobre una pared (la forma de siempre: no se guarda «place»), suelto en la nave (x, y en metros y su altura) o DENTRO de un activo de frío (spaceId); un sensor de frío solo va dentro y uno de ambiente nunca (lo revisa el servidor con el Uso de su Tipo)
+            if (place === 'free') {
+                const fx = Number(e && e.x);
+                const fy = Number(e && e.y);
+                if (!Number.isFinite(fx) || !Number.isFinite(fy) || Math.abs(fx) > LIMITS.maxM || Math.abs(fy) > LIMITS.maxM) errors.push(`${label}: escribe su lugar en la nave (X e Y en metros)`);
+                return withZones({ ...item, place: 'free', x: Number.isFinite(fx) ? round2(fx) : 0, y: Number.isFinite(fy) ? round2(fy) : 0, dist: 0 });
+            }
+            if (place === 'inside') {
+                const spaceId = e && typeof e.spaceId === 'string' ? e.spaceId.trim().slice(0, 64) : '';
+                if (!spaceId) errors.push(`${label}: elige el activo de frío donde va`);
+                if (!(Number.isFinite(sensorRef) && sensorRef > 0)) errors.push(`${label}: solo un sensor de Alta Activos puede ir dentro de un activo`);
+                return { ...item, place: 'inside', spaceId, dist: 0, height: 0 };
+            }
             if (wallId) return withZones({ ...item, wallId });
             return wall >= 1 && wall <= walls ? withZones({ ...item, wall }) : withZones({ ...item, wallId: '' });
         });
@@ -3710,6 +3746,14 @@
         // techos: una zona elegida que ya no existe se quita (borrar una zona no bloquea el guardado) y cada techo recibe su código
         { const known = new Set((out.zones || []).map((zz) => zz.id)); out.roofs = (out.roofs || []).map((r) => (r.cover === 'zones' ? { ...r, zoneIds: (r.zoneIds || []).filter((zid) => known.has(zid)) } : r)); const roofed = assignRoofCodes(out); out.roofs = roofed.roofs; if (roofed.roofNext) out.roofNext = roofed.roofNext; else delete out.roofNext; }
         out.spaces = assignSpaceCodes({ ...out, spaces: deriveSpaces({ ...out, ownAssetFmt: !!(src && src.ownAssetFmt === true) }).spaces }).spaces;
+        // un sensor dentro de un activo de frío: el activo tiene que seguir en el Layout (quitar un refrigerador con sensores adentro no se guarda) y su zona es la del activo
+        out.sensors.forEach((e, i) => {
+            if (e.place !== 'inside' || !e.spaceId) return;
+            const box = out.spaces.find((sp) => sp.id === e.spaceId);
+            if (!box) errors.push(`Sensor ${e.code || i + 1}: el activo de frío donde va ya no está en el Layout: quita el sensor o elígele otro activo de frío`);
+            else if (box.type !== 'cold') errors.push(`Sensor ${e.code || i + 1}: solo se coloca dentro de un activo de Frío`);
+        });
+        out.sensors = deriveSensorZones(out).sensors;
         // Posiciones (paso Posiciones): lugares libres dentro de un espacio (un nivel × una columna de un activo). Cada una lleva su lugar (x, y desde la esquina de arriba a la izquierda del espacio), su largo, su fondo y su alto, su número (P001…, el
         // consecutivo dentro del espacio, que no se reusa: posNext) y, solo si las cambió, sus caras de consumo. Una posición de un espacio que ya no existe (se quitó el activo, el nivel o la columna) se descarta sin avisar.
         {
