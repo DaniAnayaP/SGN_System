@@ -46,8 +46,186 @@
     }
     const assetTitle = (record) => [record.code, record.customName || record.purchaseName].filter(Boolean).join(' · ');
 
+    // --- el horario de un activo en un criterio de forma «Horario»: cuándo toca (semana, mes o año) y cuántas veces (horas específicas, abierto o cada N horas) -----------------------------------------
+    // La regla y su texto los entiende public/AssetSchedule.js (el mismo del servidor): aquí se arma la regla, se muestra cómo queda escrita y se manda al guardar.
+    function openScheduleEditor({ record, criterion, onSave }) {
+        const S = window.AssetSchedule;
+        const dlg = openDialog(criterion.name, assetTitle(record));
+        dlg.panel.classList.add('asset-sched-win');
+        const cur = (record.limitValues && record.limitValues[criterion.id] && record.limitValues[criterion.id].schedule) || null;
+        const dayNames = Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2024, 0, 1 + i)).toLocaleDateString(locale(), { weekday: 'short', timeZone: 'UTC' }).replace('.', ''));
+        const monthNames = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(2024, i, 1)).toLocaleDateString(locale(), { month: 'short', timeZone: 'UTC' }).replace('.', ''));
+        const st = {
+            when: cur && cur.mode !== 'every' ? cur.when : 'week',
+            weekDays: new Set(cur && cur.when === 'week' && cur.mode !== 'every' ? cur.days : [1, 2, 3, 4, 5]),
+            monthDays: new Set(cur && cur.when === 'month' ? cur.days : [1]),
+            yearDates: cur && cur.when === 'year' ? cur.days.map((d) => ({ ...d })) : [],
+            mode: cur ? cur.mode : 'hours',
+            hours: cur && cur.hours ? cur.hours.slice() : ['08:00'],
+            tol: cur && cur.tol !== undefined ? cur.tol : S.DEFAULT_TOL,
+            min: cur && cur.min ? cur.min : 1,
+            close: cur && cur.close ? cur.close : S.DEFAULT_CLOSE,
+            everyH: cur && cur.everyH ? cur.everyH : 4,
+        };
+        const build = () => ({
+            when: st.when, days: st.when === 'week' ? [...st.weekDays] : (st.when === 'month' ? [...st.monthDays] : st.yearDates), mode: st.mode, hours: st.hours, tol: st.tol, min: st.min, close: st.close, everyH: st.everyH,
+        });
+        const body = el('div', 'asset-sched');
+        dlg.panel.appendChild(body);
+        const preview = el('p', 'asset-sched-preview');
+        const problem = el('p', 'asset-sched-error');
+        const actions = el('div', 'admin-form-actions');
+        const saveBtn = button(t('main.assetLimitSave'), { primary: true, onClick: async () => { const n = S.normalize(build()); if (n.error) return; dlg.close(); await onSave({ [criterion.id]: n.rule }); } });
+        actions.append(button(t('main.assetEditarCancelar'), { onClick: dlg.close }));
+        if (cur) actions.append(button(t('main.schedClear'), { onClick: async () => { dlg.close(); await onSave({ [criterion.id]: null }); } }));
+        actions.append(saveBtn);
+        const refresh = () => {
+            const n = S.normalize(build());
+            preview.textContent = n.rule ? S.format(n.rule) : '';
+            problem.textContent = n.error || '';
+            saveBtn.disabled = !!n.error;
+        };
+        const seg = (options, current, onPick) => {
+            const wrap = el('div', 'aa-seg asset-sched-seg');
+            options.forEach(([value, label]) => {
+                const b = el('button', 'aa-seg-btn', label);
+                b.type = 'button';
+                b.classList.toggle('on', value === current);
+                b.addEventListener('click', () => { onPick(value); draw(); });
+                wrap.appendChild(b);
+            });
+            return wrap;
+        };
+        const toggle = (label, on, onClick, extra) => {
+            const b = el('button', `asset-sched-chip${on ? ' on' : ''}${extra ? ` ${extra}` : ''}`, label);
+            b.type = 'button';
+            b.setAttribute('aria-pressed', String(on));
+            b.addEventListener('click', onClick);
+            return b;
+        };
+        const numberField = (labelKey, value, { min, max, step = 1 }, onInput, unit) => {
+            const wrap = el('label', 'asset-limit-field');
+            wrap.appendChild(el('span', '', t(labelKey)));
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = String(min);
+            input.max = String(max);
+            input.step = String(step);
+            input.value = String(value);
+            input.addEventListener('input', () => { onInput(input.value === '' ? NaN : Number(input.value)); refresh(); });
+            wrap.appendChild(input);
+            if (unit) wrap.appendChild(el('small', '', unit));
+            return wrap;
+        };
+        const timeField = (value, onInput) => {
+            const input = document.createElement('input');
+            input.type = 'time';
+            input.value = value;
+            input.addEventListener('input', () => { onInput(input.value); refresh(); });
+            return input;
+        };
+        function drawWhen(host) {
+            host.appendChild(el('h4', '', t('main.schedWhen')));
+            host.appendChild(seg([['week', t('main.schedWhenWeek')], ['month', t('main.schedWhenMonth')], ['year', t('main.schedWhenYear')]], st.when, (v) => { st.when = v; }));
+            const box = el('div', 'asset-sched-box');
+            if (st.when === 'week') {
+                const row = el('div', 'asset-sched-chips');
+                dayNames.forEach((name, i) => row.appendChild(toggle(name, st.weekDays.has(i + 1), () => { if (st.weekDays.has(i + 1)) st.weekDays.delete(i + 1); else st.weekDays.add(i + 1); draw(); })));
+                box.appendChild(row);
+                const shortcuts = el('div', 'asset-sched-shortcuts');
+                shortcuts.append(
+                    button(t('main.schedShortcutWeekdays'), { onClick: () => { st.weekDays = new Set([1, 2, 3, 4, 5]); draw(); } }),
+                    button(t('main.schedShortcutAll'), { onClick: () => { st.weekDays = new Set([1, 2, 3, 4, 5, 6, 7]); draw(); } }),
+                );
+                box.appendChild(shortcuts);
+            } else if (st.when === 'month') {
+                const row = el('div', 'asset-sched-chips asset-sched-month');
+                for (let d = 1; d <= 31; d += 1) row.appendChild(toggle(String(d), st.monthDays.has(d), () => { if (st.monthDays.has(d)) st.monthDays.delete(d); else st.monthDays.add(d); draw(); }, 'asset-sched-num'));
+                box.appendChild(row);
+                box.appendChild(toggle(t('main.schedLastDay'), st.monthDays.has(S.LAST), () => { if (st.monthDays.has(S.LAST)) st.monthDays.delete(S.LAST); else st.monthDays.add(S.LAST); draw(); }));
+            } else {
+                const add = el('div', 'asset-sched-addrow');
+                const day = document.createElement('input');
+                day.type = 'number'; day.min = '1'; day.max = '31'; day.placeholder = t('main.schedYearDay'); day.setAttribute('aria-label', t('main.schedYearDay'));
+                const month = document.createElement('select');
+                month.setAttribute('aria-label', t('main.schedYearMonth'));
+                monthNames.forEach((name, i) => { const o = document.createElement('option'); o.value = String(i + 1); o.textContent = name; month.appendChild(o); });
+                const year = document.createElement('input');
+                year.type = 'number'; year.min = '2000'; year.max = '2100'; year.placeholder = t('main.schedYearYear'); year.setAttribute('aria-label', t('main.schedYearYear'));
+                add.append(day, month, year, button(t('main.schedYearAdd'), {
+                    onClick: () => {
+                        const item = { m: Number(month.value), d: Number(day.value), y: year.value.trim() === '' ? null : Number(year.value) };
+                        const probe = S.normalize({ when: 'year', days: [item], mode: 'open' });
+                        if (probe.error) { problem.textContent = probe.error; return; }
+                        if (!st.yearDates.some((x) => x.m === item.m && x.d === item.d && (x.y || null) === item.y)) st.yearDates.push(item);
+                        draw();
+                    },
+                }));
+                box.appendChild(add);
+                const chips = el('div', 'asset-sched-chips');
+                st.yearDates.forEach((x, i) => {
+                    const chip = toggle(`${x.d} ${monthNames[x.m - 1]}${x.y ? ` ${x.y}` : ''} ✕`, true, () => { st.yearDates.splice(i, 1); draw(); });
+                    chip.title = t('main.schedRemove');
+                    chips.appendChild(chip);
+                });
+                box.appendChild(chips);
+            }
+            host.appendChild(box);
+        }
+        function drawTimes(host) {
+            host.appendChild(el('h4', '', t('main.schedTimes')));
+            host.appendChild(seg([['hours', t('main.schedModeHours')], ['open', t('main.schedModeOpen')], ['every', t('main.schedModeEvery')]], st.mode, (v) => { st.mode = v; }));
+            const box = el('div', 'asset-sched-box');
+            if (st.mode === 'hours') {
+                const list = el('div', 'asset-sched-hours');
+                st.hours.forEach((h, i) => {
+                    const row = el('div', 'asset-sched-hour');
+                    row.appendChild(timeField(h, (v) => { st.hours[i] = v; }));
+                    const rm = button('✕', { onClick: () => { st.hours.splice(i, 1); draw(); } });
+                    rm.title = t('main.schedRemove');
+                    rm.setAttribute('aria-label', t('main.schedRemove'));
+                    row.appendChild(rm);
+                    list.appendChild(row);
+                });
+                box.appendChild(list);
+                box.appendChild(button(t('main.schedHoursAdd'), { onClick: () => { st.hours.push('12:00'); draw(); } }));
+                box.appendChild(numberField('main.schedTol', st.tol, { min: 0, max: 720 }, (v) => { st.tol = v; }, 'min'));
+            } else if (st.mode === 'open') {
+                box.appendChild(numberField('main.schedOpenMin', st.min, { min: 1, max: 999 }, (v) => { st.min = v; }));
+                const closeWrap = el('label', 'asset-limit-field');
+                closeWrap.appendChild(el('span', '', t('main.schedOpenClose')));
+                closeWrap.appendChild(timeField(st.close, (v) => { st.close = v; }));
+                box.appendChild(closeWrap);
+            } else {
+                box.appendChild(numberField('main.schedEveryHours', st.everyH, { min: 0.5, max: 8760, step: 'any' }, (v) => { st.everyH = v; }, 'h'));
+            }
+            host.appendChild(box);
+        }
+        function draw() {
+            body.textContent = '';
+            if (st.mode !== 'every') {
+                const whenHost = el('section', 'asset-sched-sec');
+                whenHost.setAttribute('data-help-key', 'schedWhen');
+                drawWhen(whenHost);
+                body.appendChild(whenHost);
+            }
+            const timesHost = el('section', 'asset-sched-sec');
+            timesHost.setAttribute('data-help-key', 'schedTimes');
+            drawTimes(timesHost);
+            body.appendChild(timesHost);
+            const sum = el('div', 'asset-sched-sum');
+            sum.setAttribute('data-help-key', 'schedPreview');
+            sum.append(el('small', '', t('main.schedPreview')), preview, problem);
+            body.appendChild(sum);
+            refresh();
+        }
+        dlg.panel.appendChild(actions);
+        draw();
+    }
+
     // --- el límite de un activo en un criterio (una columna por criterio) -------------------------------------------------------------------------------
     function openLimitEditor({ record, criterion, onSave }) {
+        if (criterion.kind === 'schedule') { openScheduleEditor({ record, criterion, onSave }); return; }
         const dlg = openDialog(criterion.name, assetTitle(record));
         const cur = (record.limitValues && record.limitValues[criterion.id]) || {};
         const form = el('div', 'asset-limit-form');
@@ -249,7 +427,7 @@
     }
 
     // --- el modelo elige qué se mide y qué se avisa (Catálogos > Activos Fijos > Modelos) --------------------------------------------------------------
-    const CRIT_KINDS = ['range', 'max', 'min', 'every'];
+    const CRIT_KINDS = ['range', 'max', 'min', 'every', 'schedule'];
     const API = '/api/business/article-categories';
     const usable = (kind, row) => !!row.name && (kind === 'criteria' ? CRIT_KINDS.includes(row.kind) : true) && row.status === 'active';
     function openCatalogPicker({ model, kind, catalog, canCreate, onSave, reload }) {
@@ -294,6 +472,7 @@
                     unit.type = 'text';
                     unit.placeholder = t('main.assetModelNewUnit');
                     unit.maxLength = 12;
+                    kindSel.addEventListener('change', () => { unit.hidden = kindSel.value === 'schedule'; }); // un Horario no lleva unidad
                     extras.push(kindSel, unit);
                 }
                 const go = button(t('main.assetModelNewCreate'), {
@@ -306,7 +485,7 @@
                             let data = await res.json().catch(() => ({}));
                             if (!res.ok) { Dashboard.showToast(data.message || t('admin.saveError'), res.status === 403 ? 'warning' : 'error'); return; }
                             const id = data.category.id;
-                            const patch = { name: name.value.trim(), status: 'active', ...(kind === 'criteria' ? { kind: kindSel.value, unit: unit.value.trim() } : {}) };
+                            const patch = { name: name.value.trim(), status: 'active', ...(kind === 'criteria' ? { kind: kindSel.value, unit: kindSel.value === 'schedule' ? '' : unit.value.trim() } : {}) };
                             res = await send('PATCH', `${API}/${type}/${id}`, patch);
                             data = await res.json().catch(() => ({}));
                             if (!res.ok) { Dashboard.showToast(data.message || t('admin.saveError'), res.status === 403 ? 'warning' : 'error'); return; }

@@ -8714,6 +8714,31 @@ td.asset-model-missing select{ border-color: #b26a00; background-color: #fff3dc;
 .aa-control{ margin-top: 0.8rem; }
 .aa-control summary{ cursor: pointer; font-size: 0.8rem; font-weight: 600; color: var(--color-text-secondary); }
 @media (max-width: 560px){ .aa-kv-row{ grid-template-columns: 1fr; gap: 0.1rem; } }
+/* Horario de las actividades (Alta Activos): el editor de la regla y el contador «3 de 3» de Actividades Activos. */
+.asset-sched-win{ width: min(34rem, 94vw); max-height: 90vh; overflow-y: auto; }
+.asset-sched{ display: grid; gap: 0.9rem; margin: 0.6rem 0 0.4rem; }
+.asset-sched-sec h4{ margin: 0 0 0.4rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-secondary); }
+.asset-sched-box{ display: grid; gap: 0.6rem; margin-top: 0.6rem; justify-items: start; }
+.asset-sched-chips{ display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.asset-sched-chip{ padding: 0.25rem 0.75rem; border: 1px solid var(--color-border); border-radius: 999px; background-color: var(--color-surface); color: var(--color-text-primary); font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+.asset-sched-chip.on{ background-color: var(--color-accent, #7d3f8f); border-color: var(--color-accent, #7d3f8f); color: #fff; }
+.asset-sched-chip:focus-visible{ outline: 2px solid var(--color-accent, #7d3f8f); outline-offset: 1px; }
+.asset-sched-num{ min-width: 2.2rem; padding: 0.25rem 0.4rem; text-align: center; font-variant-numeric: tabular-nums; }
+.asset-sched-month{ max-width: 24rem; }
+.asset-sched-shortcuts{ display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.asset-sched-addrow{ display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.asset-sched-addrow input[type="number"]{ width: 6.5rem; }
+.asset-sched-hours{ display: grid; gap: 0.35rem; }
+.asset-sched-hour{ display: flex; gap: 0.4rem; align-items: center; }
+.asset-sched-sum{ display: grid; gap: 0.25rem; padding: 0.6rem 0.8rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background-color: color-mix(in srgb, var(--color-accent, #7d3f8f) 8%, var(--color-surface)); }
+.asset-sched-sum small{ font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-secondary); }
+.asset-sched-preview{ margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.asset-sched-error{ margin: 0; font-size: 0.8rem; color: color-mix(in srgb, #b42318 70%, var(--color-text-primary)); }
+.asset-sched-error:empty{ display: none; }
+.aa-count{ display: block; font-size: 0.68rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.aa-count-done{ color: color-mix(in srgb, #1d7f55 62%, var(--color-text-primary)); }
+.aa-count-short{ color: color-mix(in srgb, #a4410a 70%, var(--color-text-primary)); }
+.aa-count-open{ color: var(--color-text-secondary); }
 /* Surtido Pedido Manual: el estatus de cada renglón, lo que falta y la ventana «Surtir» */
 .sur-tag{ display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; padding: 0.05rem 0.6rem; border-radius: 999px; border: 1px solid var(--color-border); white-space: nowrap; }
 .sur-tag[data-s="pending"]{ border-color: #c98a00; color: #8a5d00; }

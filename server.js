@@ -210,7 +210,7 @@ const {
     getUserExclusions, setUserExclusions,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,
     latestAssetReadingRows, listAssetReadingsOfAsset, lastAssetReadingTimes, listMaintenanceRunsOfAsset, latestMaintenanceRunRows,
-    getAssetLimitsOf, setAssetLimit, listAssetLimitsMap, deleteAssetLimitsOfCriterion, countAssetLimitsOfCriterion, countAssetReadingsOfCatalog,
+    getAssetLimitsOf, setAssetLimit, listAssetLimitsMap, listTemperatureTimesOfPlaceSince, listCleaningFinishedTimesSince, listAssetReadingTimesSince, deleteAssetLimitsOfCriterion, countAssetLimitsOfCriterion, countAssetReadingsOfCatalog,
     listAssetReadings, getAssetReadingById, createAssetReading, latestAssetReadingValues,
     listAssetAlertEpisodes, getAssetAlertEpisode, openAssetAlertEpisode, updateAssetAlertEpisode, closeAssetAlertEpisode, ackAssetAlertEpisode, markAssetAlertEpisodeNotified,
     setFixedAssetPendingChoices,
@@ -6742,6 +6742,7 @@ app.get('/api/business/sku-items/upcs', requireAuth, (req, res) => {
 // Sin "columns" se cargan todas las columnas que traiga la fila; con ella, solo las elegidas (el SKU y el UPC siempre son llaves). Una celda vacía nunca borra lo que el código ya tiene.
 const SkuTemplate = require('./public/SkuTemplate.js');
 const SearchSyntax = require('./public/SearchSyntax.js');
+const AssetSchedule = require('./public/AssetSchedule.js');
 // La Descripción Única de un código nunca se repite entre los códigos de la empresa (sin importar mayúsculas, acentos ni espacios de más). Devuelve el SKU (con ceros) que ya la tiene, o null. Vacía no cuenta.
 function skuUniqueDescriptionOwner(clientId, isTest, text, exceptId = 0) {
     const key = SkuTemplate.descKey(text);
@@ -12176,8 +12177,9 @@ function fixedAssetSanitizers(ctx) {
 // El catálogo «Qué se mide» (activos-criterios) dice cómo se limita cada criterio (kind): range = mínimo y máximo, max = solo máximo, min = solo mínimo, every = cada N horas, zone = zona (próximamente). El MODELO elige cuáles mide
 // (article_categories.criteria_ids); el LÍMITE lo escribe cada activo (asset_limits) y se muestra como UN texto («2 a 8 °C», «máx. 1200 kg», «cada 4 h»). Ese mismo texto es el valor que viaja en el historial de cambios, en las
 // autorizaciones y en la campana (se lee de vuelta con parseLimitDisplay), así no hace falta traducirlo en cada lugar.
-const CRITERION_KINDS = ['range', 'max', 'min', 'every', 'zone'];
-const CRITERION_KIND_LABELS = { range: 'Rango (mínimo y máximo)', max: 'Solo máximo', min: 'Solo mínimo', every: 'Cada N horas', zone: 'Zona permitida' };
+// schedule = Horario (2026-11-17): qué días toca y cuántas veces por día (horas específicas, abierto o cada N horas); su regla vive en asset_limits.schedule (public/AssetSchedule.js) y su texto es el valor del límite.
+const CRITERION_KINDS = ['range', 'max', 'min', 'every', 'schedule', 'zone'];
+const CRITERION_KIND_LABELS = { range: 'Rango (mínimo y máximo)', max: 'Solo máximo', min: 'Solo mínimo', every: 'Cada N horas', schedule: 'Horario', zone: 'Zona permitida' };
 const CRITERION_BUILTIN_COL = { temperature: 'colActCritTemperature', humidity: 'colActCritHumidity', weight: 'colActCritWeight', readOnTime: 'colActCritReadOnTime', cleanOnTime: 'colActCritCleanOnTime' };
 // La hoja del árbol (columna de Alta Activos / Gestión) de un criterio: una por cada criterio de fábrica y UNA compartida («Criterios nuevos») para los que crea la empresa.
 const criterionCol = (row) => CRITERION_BUILTIN_COL[row.builtin_key] || 'colActCritNuevos';
@@ -12186,6 +12188,7 @@ const criterionUsable = (row) => !!row && row.status === 'active' && !!row.name 
 const limitNumText = (n) => String(Math.round(Number(n) * 1000) / 1000);
 function limitDisplay(kind, unit, lim) {
     if (!lim) return '';
+    if (kind === 'schedule') return lim.schedule ? AssetSchedule.format(lim.schedule) : '';
     const hasMin = lim.min !== null && lim.min !== undefined;
     const hasMax = lim.max !== null && lim.max !== undefined;
     const u = unit ? ` ${unit}` : '';
@@ -12201,6 +12204,7 @@ function limitDisplay(kind, unit, lim) {
 }
 function parseLimitDisplay(kind, text) {
     const raw = String(text == null ? '' : text).trim();
+    if (kind === 'schedule') return { min: null, max: null, schedule: raw ? AssetSchedule.parse(raw) : null };
     const nums = (raw.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
     if (!nums.length) return { min: null, max: null };
     if (kind === 'every' || kind === 'max') return { min: null, max: nums[0] };
@@ -12212,7 +12216,12 @@ function parseLimitDisplay(kind, text) {
 // Lo que llega para un límite: null / '' = quitarlo; un número (según la forma) o { min, max }. Devuelve { lim: { min, max } } o { error }.
 function normalizeLimitInput(kind, input, label) {
     const bad = (message) => ({ error: { status: 400, message, code: 'LIMIT' } });
-    if (input === null || input === undefined || input === '') return { lim: { min: null, max: null } };
+    if (input === null || input === undefined || input === '') return { lim: { min: null, max: null, schedule: null } };
+    if (kind === 'schedule') {
+        const norm = AssetSchedule.normalize(input);
+        if (norm.error) return bad(`El horario de «${label}»: ${norm.error}`);
+        return { lim: { min: null, max: null, schedule: norm.rule } };
+    }
     const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
     let min;
     let max;
@@ -12240,7 +12249,7 @@ function assetCriteriaFields(row, ctx) {
         const c = ctx.criteria.get(id);
         const l = mine[id];
         limits[id] = l ? limitDisplay(c.kind, c.unit, l) : '';
-        limitValues[id] = l ? { min: l.min, max: l.max } : null;
+        limitValues[id] = l ? { min: l.min, max: l.max, schedule: l.schedule || null } : null;
     });
     const noticeIds = model ? parseClassificationIds(model.aviso_ids) : [];
     return { measures: ids, limits, limitValues, noticeIds };
@@ -12280,7 +12289,7 @@ function applyAssetLimitsPatch(req, existing, limitsIn, ctx, editInfo) {
     const who = changedByLabel(req);
     Object.entries(result.appliedPatch).forEach(([key, text]) => {
         const lim = parseLimitDisplay(critOf[key].kind, text);
-        setAssetLimit(existing.id, critOf[key].id, lim.min, lim.max, who);
+        setAssetLimit(existing.id, critOf[key].id, lim.min, lim.max, who, lim.schedule || null);
     });
     const blocked = new Set([...result.pendingFields, ...result.rejectedFields]);
     const resolvedIds = Object.keys(fieldsMap).filter((key) => !blocked.has(fieldsMap[key].fieldKey) && !result.conflictFields.length).map((key) => critOf[key].id);
@@ -12295,7 +12304,7 @@ function prepareCriteriaCatalogPatch(req, categoryType, existing, patch) {
     if (categoryType === 'activos-criterios') {
         const builtin = !!existing.builtin_key;
         if (has('kind')) {
-            if (!CRITERION_KINDS.includes(patch.kind)) return bad(400, 'Elige cómo se limita: Rango, Solo máximo, Solo mínimo, Cada N horas o Zona.', 'KIND');
+            if (!CRITERION_KINDS.includes(patch.kind)) return bad(400, 'Elige cómo se limita: Rango, Solo máximo, Solo mínimo, Cada N horas, Horario o Zona.', 'KIND');
             if (builtin && patch.kind !== existing.kind) return bad(403, 'Un criterio de fábrica no cambia de forma: crea uno nuevo si necesitas otra.', 'BUILTIN');
             if (existing.kind && patch.kind !== existing.kind && countAssetLimitsOfCriterion(req.user.clientId, existing.id)) return bad(409, 'Hay activos con límite en este criterio: no cambia de forma. Crea uno nuevo o márcalo como Inactivo.', 'IN_USE');
             sanitizers.kind = (v) => CRITERION_KIND_LABELS[v] || '';
@@ -12306,6 +12315,8 @@ function prepareCriteriaCatalogPatch(req, categoryType, existing, patch) {
             if (unit.length > 12 || /\d/.test(unit)) return bad(400, 'La unidad es corta y sin números (°C, %, kg, bar…).', 'UNIT');
             out.unit = unit;
         }
+        // un criterio de Horario no lleva unidad
+        if ((has('kind') ? patch.kind : existing.kind) === 'schedule') out.unit = '';
         if (has('status') && patch.status === 'active' && existing.builtin_key === 'leaveZone') return bad(400, 'Salir de la zona todavía no está disponible: necesita el GPS del celular.', 'SOON');
     }
     if (categoryType === 'activos-modelos') {
@@ -12378,7 +12389,23 @@ function assetAlertEnv(clientId, isTest) {
     listMaintenanceFaultsAnyScope(clientId).forEach((f) => { if (!faultsByAsset.has(f.asset_id)) faultsByAsset.set(f.asset_id, []); faultsByAsset.get(f.asset_id).push(f); });
     const progsByAsset = new Map();
     listMaintenancePrograms(clientId, isTest).filter((p) => p.status !== 'inactive').forEach((p) => { if (!progsByAsset.has(p.asset_id)) progsByAsset.set(p.asset_id, []); progsByAsset.get(p.asset_id).push(p); });
+    const clientRow = getClientById(clientId);
+    const zone = clientRow && clientRow.time_zone && isValidTimeZone(clientRow.time_zone) ? clientRow.time_zone : 'America/Mexico_City';
+    // cuándo se registró algo de ese criterio hoy (ms UTC): lecturas y limpiezas del Layout o lecturas capturadas (según el criterio)
+    const regTimes = (asset, crit, nowMs) => {
+        const w = AssetSchedule.wallParts(nowMs, zone);
+        const since = AssetSchedule.zonedToUtcMs(w.y, w.m, w.d, 0, 0, zone);
+        const places = layout.places.get(asset.id) || [];
+        const out = [];
+        if (crit.builtin_key === 'cleanOnTime') places.filter((p) => p.spaceId).forEach((p) => out.push(...listCleaningFinishedTimesSince(clientId, p.cc, p.spaceId, since)));
+        else if (crit.builtin_key === 'readOnTime') {
+            places.forEach((p) => out.push(...listTemperatureTimesOfPlaceSince(clientId, p.cc, p.spaceId, p.sensorId, since)));
+            out.push(...listAssetReadingTimesSince(clientId, asset.id, null, since));
+        } else out.push(...listAssetReadingTimesSince(clientId, asset.id, crit.id, since));
+        return out;
+    };
     return {
+        zone, regTimes,
         layout, temp, clean, lastRead, faultsByAsset, progsByAsset,
         readings: latestAssetReadingValues(clientId), limits: listAssetLimitsMap(clientId), calMap: latestCalibrationMap(clientId), runs: latestMaintenanceRunMap(clientId),
         models: new Map(listArticleCategories(clientId, 'activos-modelos', isTest).map((r) => [r.id, r])),
@@ -12402,8 +12429,20 @@ function computeAssetAlerts(asset, env, nowMs, todayIso) {
         const lim = mine[id];
         if (!lim) return; // sin límite no hay alerta de ese criterio
         const unit = c.unit ? ` ${c.unit}` : '';
-        if (c.kind === 'every') {
-            const hours = lim.max;
+        // Horario: «cada N horas» se evalúa como siempre; horas específicas y abierto, con los registros de hoy en la zona de la empresa
+        const everyMode = c.kind === 'every' || (c.kind === 'schedule' && lim.schedule && lim.schedule.mode === 'every');
+        if (c.kind === 'schedule' && !everyMode) {
+            if (!lim.schedule) return;
+            const what = c.builtin_key === 'readOnTime' ? 'Lectura' : (c.builtin_key === 'cleanOnTime' ? 'Limpieza' : c.name);
+            const sinceMs = Math.max(msOfTs(asset.created_at) || 0, msOfTs(lim.at) || 0);
+            AssetSchedule.evaluate(lim.schedule, { nowMs, zone: env.zone, regMs: env.regTimes(asset, c, nowMs), sinceMs }).forEach((d) => {
+                const text = d.code === 'sched-slot' ? `${what} de las ${d.params.time} sin registrar` : `Faltaron ${d.params.missing} de ${d.params.need} registros de hoy · ${what}`;
+                add(`crit:${id}:${d.key}`, 'medium', d.code, { ...d.params, name: c.name, what, kind: c.builtin_key === 'readOnTime' ? 'read' : (c.builtin_key === 'cleanOnTime' ? 'clean' : 'custom') }, text, isoOfMs(d.startedAtMs));
+            });
+            return;
+        }
+        if (everyMode) {
+            const hours = c.kind === 'every' ? lim.max : lim.schedule.everyH;
             if (!(hours > 0)) return;
             let last = NaN;
             let code = 'late-custom';
@@ -12618,6 +12657,15 @@ const activityAssetOf = (r, env) => {
     const assetId = r.sensor_id ? env.layout.sensorAsset.get(`${r.cost_center_id}|${r.sensor_id}`) : env.layout.spaceAsset.get(`${r.cost_center_id}|${r.space_id}`);
     return assetId ? env.assets.get(assetId) || null : null;
 };
+// El horario de lectura del activo (el criterio «Lectura a tiempo», si su modelo lo mide y tiene horas específicas o abierto): con él la pantalla cuenta «3 de 3» por día. null = sin horario que contar.
+function activityReadSchedule(asset, readCrit, env) {
+    if (!readCrit) return null;
+    const model = asset.model_id ? env.ctx.models.get(asset.model_id) : null;
+    if (!model || !parseClassificationIds(model.criteria_ids).includes(readCrit.id)) return null;
+    const lim = (env.limits.get(asset.id) || {})[readCrit.id];
+    const rule = lim && lim.schedule;
+    return rule && (rule.mode === 'hours' || rule.mode === 'open') ? rule : null;
+}
 app.get('/api/business/asset-activities', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId } = req.user;
@@ -12639,6 +12687,7 @@ app.get('/api/business/asset-activities', requireAuth, (req, res) => {
     // las filas del cuadro: los activos que se llenan por QR (aunque no hayan registrado nada en el rango) y cualquiera que sí registró
     const kinds = activityAssetKinds(clientId);
     const assets = [];
+    const readCrit = [...env.ctx.criteria.values()].find((c) => c.builtin_key === 'readOnTime' && c.kind === 'schedule') || null;
     new Set([...kinds.keys(), ...seen]).forEach((id) => {
         const a = env.assets.get(id);
         if (!a) return;
@@ -12646,7 +12695,7 @@ app.get('/api/business/asset-activities', requireAuth, (req, res) => {
         const cls = env.ctx.classes.get(a.class_id);
         const cc = env.ctx.centers.get(a.cost_center_id);
         const k = kinds.get(id);
-        assets.push({ id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name || '', typeId: a.type_id || 0, typeName: type ? type.name : '', classId: a.class_id || 0, className: cls ? cls.name : '', costCenterId: a.cost_center_id || 0, costCenterName: cc ? cc.name : '', kind: k ? k.kind : '', active: a.status === 'active' });
+        assets.push({ id, code: fixedAssetCodeOf(a), name: a.custom_name || a.purchase_name || '', typeId: a.type_id || 0, typeName: type ? type.name : '', classId: a.class_id || 0, className: cls ? cls.name : '', costCenterId: a.cost_center_id || 0, costCenterName: cc ? cc.name : '', kind: k ? k.kind : '', active: a.status === 'active', readSchedule: activityReadSchedule(a, readCrit, env) });
     });
     assets.sort((a, z) => (a.className || '').localeCompare(z.className || '', 'es') || a.code.localeCompare(z.code, 'es', { numeric: true }));
     res.set('Cache-Control', 'no-store');
@@ -12703,7 +12752,7 @@ function mapReading(row, ctx, companyName) {
     const aviso = row.aviso_id ? ctx.avisos.get(row.aviso_id) : null;
     const cc = ctx.centers.get(row.cost_center_id);
     let result = '';
-    if (row.kind === 'value' && crit && crit.kind !== 'every' && row.value !== null) {
+    if (row.kind === 'value' && crit && crit.kind !== 'every' && crit.kind !== 'schedule' && row.value !== null) {
         const lim = ((ctx.limits.get(row.asset_id) || {})[crit.id]) || null;
         if (lim) result = ((lim.min !== null && row.value < lim.min) || (lim.max !== null && row.value > lim.max)) ? 'out' : 'ok';
     }
@@ -12749,7 +12798,7 @@ app.post('/api/business/readings', requireAuth, (req, res) => {
         const crit = targets.criteria.find((c) => c.id === intOf(body.criterionId));
         if (!crit) return bad('Ese criterio no lo mide el modelo de este activo.', 'CRITERION');
         criterionId = crit.id;
-        if (crit.kind === 'every') value = 0;
+        if (crit.kind === 'every' || crit.kind === 'schedule') value = 0;
         else {
             const n = body.value === '' || body.value === null || body.value === undefined ? NaN : Number(body.value);
             if (!Number.isFinite(n) || Math.abs(n) > 1e9) return bad(`Escribe el valor de «${crit.name}» (un número).`, 'VALUE');
@@ -12779,7 +12828,7 @@ app.post('/api/business/readings', requireAuth, (req, res) => {
         const keys = new Set(model ? parseClassificationIds(model.aviso_ids).map((id) => (ctx.avisos.get(id) || {}).builtin_key || `#${id}`) : []);
         if (kind === 'activity' ? keys.has(`#${avisoId}`) : keys.has('readings')) {
             const crit = criterionId ? ctx.criteriaAll.get(criterionId) : null;
-            const text = kind === 'activity' ? `${(ctx.avisos.get(avisoId) || {}).name || ''} · ${note}` : `${crit.name}${crit.kind === 'every' ? '' : ` ${limitNumText(value)} ${crit.unit || ''}`.trimEnd()}`;
+            const text = kind === 'activity' ? `${(ctx.avisos.get(avisoId) || {}).name || ''} · ${note}` : `${crit.name}${crit.kind === 'every' || crit.kind === 'schedule' ? '' : ` ${limitNumText(value)} ${crit.unit || ''}`.trimEnd()}`;
             publishAssetNotice('asset-activity', { recipients: listColumnNotifyRecipientUserIds(clientId, FIXED_ASSET_TABLE_KEY, 'colActAvisos', 'change', [req.user.sub]), payload: { assetId: asset.id, assetCode: code, text, label: kind === 'activity' ? 'Actividad registrada' : 'Lectura registrada', by: who, at: new Date(readAtMs).toISOString() } });
         }
     } catch (err) { console.error('[lecturas] no se pudo avisar la actividad:', err.message); }
@@ -15565,7 +15614,7 @@ const PENDING_CHANGE_APPLIERS = {
             const crit = getArticleCategoryById(Number(k.slice(4)), clientId, !!existing.is_test_data);
             if (!crit || crit.category_type !== 'activos-criterios') return;
             const lim = parseLimitDisplay(crit.kind, patch[k]);
-            setAssetLimit(existing.id, crit.id, lim.min, lim.max, 'autorizado');
+            setAssetLimit(existing.id, crit.id, lim.min, lim.max, 'autorizado', lim.schedule || null);
         });
         let input = patch;
         let model = null;

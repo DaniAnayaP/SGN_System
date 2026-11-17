@@ -10574,7 +10574,9 @@ function renderMaintenanceNoticeRow(item) {
 // Alertas y avisos de activos (2026-11-13): el texto de una alerta (code + params que manda el servidor) y de un aviso de actividad, en el idioma de quien lo ve. Gestión > Activos y la campana lo comparten.
 function assetAlertText(alert) {
     const code = alert.code || '';
-    const p = alert.params || {};
+    let p = alert.params || {};
+    // las alertas de Horario traen qué se registraba (Lectura, Limpieza o el nombre del criterio): se escribe en el idioma de quien las ve
+    if (code.startsWith('sched-')) p = { ...p, what: p.kind === 'read' ? t('main.assetWhatRead') : (p.kind === 'clean' ? t('main.assetWhatClean') : (p.name || p.what || '')) };
     const key = `main.assetAlertL_${code}`;
     const label = t(key, p);
     const base = label === key ? (alert.label || alert.text || '') : label;

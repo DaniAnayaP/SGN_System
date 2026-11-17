@@ -4674,6 +4674,39 @@
     "assetAlertD_min-under": "{value} {unit} (mín. {limit})",
     "assetAlertD_late": "hace {since} (debía cada {hours} h)",
     "assetAlertD_late0": "sin registros (debía cada {hours} h)",
+    "critKind_schedule": "Horario",
+    "critScheduleNoUnit": "Un horario no lleva unidad: lo que se mide es cuándo y cuántas veces.",
+    "schedWhen": "Cuándo toca",
+    "schedWhenWeek": "Cada semana",
+    "schedWhenMonth": "Cada mes",
+    "schedWhenYear": "En el año",
+    "schedShortcutWeekdays": "Lun a Vie",
+    "schedShortcutAll": "Todos los días",
+    "schedLastDay": "Último día del mes",
+    "schedYearDay": "Día",
+    "schedYearMonth": "Mes",
+    "schedYearYear": "Año (opcional)",
+    "schedYearAdd": "Agregar fecha",
+    "schedRemove": "Quitar",
+    "schedTimes": "Cuántas veces",
+    "schedModeHours": "Horas específicas",
+    "schedModeOpen": "Abierto",
+    "schedModeEvery": "Cada N horas",
+    "schedHoursAdd": "Agregar hora",
+    "schedTol": "Tolerancia (± minutos)",
+    "schedOpenMin": "Mínimo de veces por día",
+    "schedOpenClose": "Se revisa a las",
+    "schedEveryHours": "Cada cuántas horas",
+    "schedPreview": "Así queda",
+    "schedClear": "Quitar horario",
+    "assetWhatRead": "Lectura",
+    "assetWhatClean": "Limpieza",
+    "assetAlertL_sched-slot": "{what} de las {time} sin registrar",
+    "assetAlertD_sched-slot": "debía hacerse entre las {from} y las {to}",
+    "assetAlertL_sched-day": "Faltaron {missing} de {need} registros de hoy ({what})",
+    "assetAlertD_sched-day": "se revisó a las {close}",
+    "aaCuenta": "{k} de {n}",
+    "aaCuentaTip": "Registros del día contra los que pide el horario: {horario}",
     "assetAlertD_cal-expired": "venció el {date}",
     "assetAlertD_cal-failed": "certificado del {date}",
     "assetAlertD_fault": "{folio} · {desc}",
@@ -6598,6 +6631,18 @@
     "aaOcultarVacias": {
       "what": "Quita las fechas en las que ningún activo de los filtrados registró nada; queda una franja angosta que al tocarla vuelve a mostrar esa fecha. Hoy nunca se oculta.",
       "example": "Con una semana de fin de semana vacío, se ocultan sábado y domingo."
+    },
+    "schedWhen": {
+      "what": "Elige cuándo toca registrar. Cada semana: marca los días (hay atajos). Cada mes: marca los días del mes; si el mes no tiene ese día, toca el último (el 31 en abril es el 30); «Último día del mes» toca siempre el último. En el año: agrega fechas que se repiten cada año; si escribes el año, toca una sola vez.",
+      "example": "Cada semana, lunes a viernes. Cada mes, el 1 y el 15. En el año, el 15 de marzo y el 15 de septiembre."
+    },
+    "schedTimes": {
+      "what": "Elige cuántas veces por día. Horas específicas: cada hora se cumple con un registro entre la hora menos y más la tolerancia (un registro cumple una sola hora). Abierto: al menos el mínimo de registros en el día, que se revisa a la hora de cierre; más del mínimo está bien. Cada N horas: si pasa ese tiempo sin registro hay alerta (toca todos los días). Las horas son de la zona horaria de la empresa.",
+      "example": "Horas 08:00, 14:00 y 20:00 con ±30 min: el registro de las 14:10 cumple la de las 14:00. Abierto con mínimo 3 y cierre 20:00: a las 20:00 se revisa que haya al menos 3."
+    },
+    "schedPreview": {
+      "what": "Así se escribe el horario en la celda, en el historial de cambios y en las autorizaciones. Si algo está mal aquí abajo sale el motivo y no se puede guardar.",
+      "example": "Lun a Vie · 3 veces: 08:00, 14:00, 20:00 (±30 min)"
     },
     "aaCuadro": {
       "what": "Cada marca es una actividad: la hora y un color (verde dentro de su rango, rojo fuera de rango, gris sin límite). Varias en el mismo día se apilan (3 y «+N»). Toca una marca para ver su detalle. Al llegar al final se cargan 7 días más.",

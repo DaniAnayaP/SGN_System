@@ -4675,6 +4675,39 @@
     "assetAlertD_min-under": "{value} {unit} (min. {limit})",
     "assetAlertD_late": "{since} ago (due every {hours} h)",
     "assetAlertD_late0": "no records (due every {hours} h)",
+    "critKind_schedule": "Schedule",
+    "critScheduleNoUnit": "A schedule has no unit: what is measured is when and how many times.",
+    "schedWhen": "When it applies",
+    "schedWhenWeek": "Every week",
+    "schedWhenMonth": "Every month",
+    "schedWhenYear": "During the year",
+    "schedShortcutWeekdays": "Mon to Fri",
+    "schedShortcutAll": "Every day",
+    "schedLastDay": "Last day of the month",
+    "schedYearDay": "Day",
+    "schedYearMonth": "Month",
+    "schedYearYear": "Year (optional)",
+    "schedYearAdd": "Add date",
+    "schedRemove": "Remove",
+    "schedTimes": "How many times",
+    "schedModeHours": "Specific times",
+    "schedModeOpen": "Open",
+    "schedModeEvery": "Every N hours",
+    "schedHoursAdd": "Add time",
+    "schedTol": "Tolerance (± minutes)",
+    "schedOpenMin": "Minimum times per day",
+    "schedOpenClose": "Checked at",
+    "schedEveryHours": "Every how many hours",
+    "schedPreview": "It will read",
+    "schedClear": "Remove schedule",
+    "assetWhatRead": "Reading",
+    "assetWhatClean": "Cleaning",
+    "assetAlertL_sched-slot": "{what} at {time} not recorded",
+    "assetAlertD_sched-slot": "was due between {from} and {to}",
+    "assetAlertL_sched-day": "Missing {missing} of {need} records today ({what})",
+    "assetAlertD_sched-day": "checked at {close}",
+    "aaCuenta": "{k} of {n}",
+    "aaCuentaTip": "Day records against what the schedule asks: {horario}",
     "assetAlertD_cal-expired": "expired on {date}",
     "assetAlertD_cal-failed": "certificate of {date}",
     "assetAlertD_fault": "{folio} · {desc}",
@@ -6599,6 +6632,18 @@
     "aaOcultarVacias": {
       "what": "Removes dates when none of the filtered assets recorded anything; a thin strip remains and tapping it shows the date again. Today is never hidden.",
       "example": "With an empty weekend, Saturday and Sunday are hidden."
+    },
+    "schedWhen": {
+      "what": "Choose when it must be recorded. Every week: check the days (there are shortcuts). Every month: check the days of the month; if the month lacks that day it applies on the last one (the 31st in April is the 30th); «Last day of the month» always applies on the last. During the year: add dates that repeat every year; if you type the year it applies only once.",
+      "example": "Every week, Monday to Friday. Every month, the 1st and the 15th. During the year, March 15 and September 15."
+    },
+    "schedTimes": {
+      "what": "Choose how many times per day. Specific times: each time is met by a record between the time minus and plus the tolerance (one record meets one time). Open: at least the minimum records in the day, checked at the closing time; more than the minimum is fine. Every N hours: if that time passes without a record there is an alert (applies every day). Times are in the company time zone.",
+      "example": "Times 08:00, 14:00 and 20:00 with ±30 min: the 14:10 record meets the 14:00 one. Open with minimum 3 and closing 20:00: at 20:00 it is checked that there are at least 3."
+    },
+    "schedPreview": {
+      "what": "This is how the schedule is written in the cell, in the change history and in authorizations. If something is wrong the reason appears below and it cannot be saved.",
+      "example": "Mon to Fri · 3 times: 08:00, 14:00, 20:00 (±30 min)"
     },
     "aaCuadro": {
       "what": "Each mark is an activity: the time and a color (green in range, red out of range, gray no limit). Several on the same day stack (3 and «+N»). Tap a mark for its detail. At the end 7 more days load.",

@@ -14067,8 +14067,8 @@ const ASSET_CRITERIA_DEFAULTS = [
     { key: 'temperature', name: 'Temperatura', kind: 'range', unit: '°C', description: 'Rango (mínimo y máximo). La lectura llega del QR y la App de Temperaturas o de Operaciones > Lecturas.' },
     { key: 'humidity', name: 'Humedad', kind: 'range', unit: '%', description: 'Rango (mínimo y máximo). La lectura llega del QR y la App de Temperaturas o de Operaciones > Lecturas.' },
     { key: 'weight', name: 'Peso', kind: 'max', unit: 'kg', description: 'Solo máximo. La lectura se captura en Operaciones > Lecturas.' },
-    { key: 'readOnTime', name: 'Lectura a tiempo', kind: 'every', unit: 'h', description: 'Cada cuántas horas debe leerse el activo; si pasa ese tiempo sin ninguna lectura hay alerta.' },
-    { key: 'cleanOnTime', name: 'Limpieza a tiempo', kind: 'every', unit: 'h', description: 'Cada cuántas horas debe limpiarse el activo (QR de Limpieza); si pasa ese tiempo sin limpiar hay alerta.' },
+    { key: 'readOnTime', name: 'Lectura a tiempo', kind: 'schedule', unit: '', description: 'Horario: qué días toca leer el activo y cuántas veces (horas específicas, abierto o cada N horas); lo que no se cumple en su horario es alerta.' },
+    { key: 'cleanOnTime', name: 'Limpieza a tiempo', kind: 'schedule', unit: '', description: 'Horario: qué días toca limpiar el activo (QR de Limpieza) y cuántas veces; lo que no se cumple en su horario es alerta.' },
     { key: 'leaveZone', name: 'Salir de la zona (GPS)', kind: 'zone', unit: '', status: 'inactive', description: 'Próximamente: el equipo sale de su zona permitida. Necesita el GPS del celular.' },
 ];
 const ASSET_AVISOS_DEFAULTS = [
@@ -14126,6 +14126,28 @@ function seedLecturasGrants() {
     if (!alta || !lec) return;
     seedLeavesForScreenHolders(LECTURAS_SCREEN_SEED_KEY, alta, [lec.submenuPrefix], 'the Lecturas screen');
     seedLeavesForScreenHolders(LECTURAS_BUTTON_SEED_KEY, alta, ['solo-ver', 'ver-y-operar'].map((level) => `${lec.submenuPrefix}/class-botones/colLecCreateAuth/${level}`), 'the Lecturas create button', { contractOnly: true });
+}
+// «Lectura a tiempo» y «Limpieza a tiempo» de fábrica pasan de «Cada N horas» a «Horario» (2026-11-17): los criterios cambian de forma (sin unidad) y cada límite «cada N h» que ya tenían los activos se convierte en el horario
+// «cada N h» (mode 'every'), que se evalúa igual que antes, así no se pierde ni se cambia nada. Los criterios de la empresa de forma «Cada N horas» se quedan como están.
+const CRITERIA_SCHEDULE_KEY = 'migrate-criteria-schedule-v1';
+function migrateCriteriaToScheduleOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CRITERIA_SCHEDULE_KEY)) return;
+    let criteria = 0;
+    let limits = 0;
+    db.transaction(() => {
+        const rows = db.prepare("SELECT id, builtin_key FROM article_categories WHERE category_type = 'activos-criterios' AND builtin_key IN ('readOnTime', 'cleanOnTime') AND kind = 'every'").all();
+        const description = { readOnTime: ASSET_CRITERIA_DEFAULTS.find((d) => d.key === 'readOnTime').description, cleanOnTime: ASSET_CRITERIA_DEFAULTS.find((d) => d.key === 'cleanOnTime').description };
+        rows.forEach((row) => {
+            db.prepare("UPDATE article_categories SET kind = 'schedule', unit = '', description = ? WHERE id = ?").run(description[row.builtin_key], row.id);
+            criteria += 1;
+            db.prepare('SELECT asset_id, max_value FROM asset_limits WHERE criterion_id = ? AND max_value IS NOT NULL AND schedule IS NULL').all(row.id).forEach((lim) => {
+                db.prepare('UPDATE asset_limits SET schedule = ?, min_value = NULL, max_value = NULL WHERE asset_id = ? AND criterion_id = ?').run(JSON.stringify({ when: 'week', days: [1, 2, 3, 4, 5, 6, 7], mode: 'every', everyH: lim.max_value }), lim.asset_id, row.id);
+                limits += 1;
+            });
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(CRITERIA_SCHEDULE_KEY);
+    })();
+    console.log(`[db] Criterios de tiempo a la forma Horario: ${criteria} criterios y ${limits} límites convertidos (one-time).`);
 }
 const CRITERIOS_SCREENS_SEED_KEY = 'seed-activos-criterios-avisos-pantallas-v1';
 function seedCriteriosCatalogScreens() {
@@ -14189,13 +14211,16 @@ db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_asset_alert_active ON asset_alert_episodes (asset_id, alert_key) WHERE ended_at IS NULL;
     CREATE INDEX IF NOT EXISTS idx_asset_alert_client ON asset_alert_episodes (client_id, is_test_data, ended_at);
 `);
-// Los límites de todos los activos de una empresa: Map(assetId -> { [criterionId]: { min, max } }).
+// schedule = el horario del criterio de forma «Horario» (JSON, ver public/AssetSchedule.js); en los demás criterios va vacío. Un límite «cada N horas» de antes pasó aquí con mode 'every'.
+if (!db.prepare('PRAGMA table_info(asset_limits)').all().some((c) => c.name === 'schedule')) db.exec('ALTER TABLE asset_limits ADD COLUMN schedule TEXT');
+const parseScheduleJson = (text) => { if (!text) return null; try { const v = JSON.parse(text); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } };
+// Los límites de todos los activos de una empresa: Map(assetId -> { [criterionId]: { min, max, schedule } }).
 function listAssetLimitsMap(clientId) {
     const map = new Map();
-    db.prepare('SELECT l.asset_id, l.criterion_id, l.min_value, l.max_value, l.updated_at FROM asset_limits l JOIN fixed_assets a ON a.id = l.asset_id WHERE a.client_id = ?').all(clientId).forEach((r) => {
+    db.prepare('SELECT l.asset_id, l.criterion_id, l.min_value, l.max_value, l.schedule, l.updated_at FROM asset_limits l JOIN fixed_assets a ON a.id = l.asset_id WHERE a.client_id = ?').all(clientId).forEach((r) => {
         let e = map.get(r.asset_id);
         if (!e) { e = {}; map.set(r.asset_id, e); }
-        e[r.criterion_id] = { min: r.min_value, max: r.max_value, at: r.updated_at };
+        e[r.criterion_id] = { min: r.min_value, max: r.max_value, schedule: parseScheduleJson(r.schedule), at: r.updated_at };
     });
     return map;
 }
@@ -14215,6 +14240,24 @@ function latestCleaningRowsAll(clientId) {
 }
 function listCleaningRowsOfSpace(clientId, costCenterId, spaceId, limit = 10) {
     return db.prepare('SELECT id, person_name, started_at, finished_at FROM cleaning_records WHERE client_id = ? AND cost_center_id = ? AND space_id = ? ORDER BY started_at DESC, id DESC LIMIT ?').all(clientId, costCenterId || 0, spaceId, limit);
+}
+// Cuándo se registró algo desde una hora (ms UTC): las lecturas de temperatura de un lugar del Layout, las limpiezas terminadas de un espacio y las lecturas capturadas de un activo (de un criterio o de cualquiera). Devuelven ms UTC.
+const tsMs = (s) => { if (!s) return NaN; const t = String(s); return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(t) ? Date.parse(`${t.replace(' ', 'T')}Z`) : Date.parse(t); };
+const sqlOfMs = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+function listTemperatureTimesOfPlaceSince(clientId, costCenterId, spaceId, sensorId, sinceMs) {
+    const rows = sensorId
+        ? db.prepare('SELECT checked_at AS at FROM temperature_records WHERE client_id = ? AND cost_center_id = ? AND sensor_id = ? AND checked_at >= ?').all(clientId, costCenterId || 0, sensorId, sqlOfMs(sinceMs))
+        : db.prepare("SELECT checked_at AS at FROM temperature_records WHERE client_id = ? AND cost_center_id = ? AND space_id = ? AND sensor_id = '' AND checked_at >= ?").all(clientId, costCenterId || 0, spaceId, sqlOfMs(sinceMs));
+    return rows.map((r) => tsMs(r.at)).filter(Number.isFinite);
+}
+function listCleaningFinishedTimesSince(clientId, costCenterId, spaceId, sinceMs) {
+    return db.prepare('SELECT finished_at AS at FROM cleaning_records WHERE client_id = ? AND cost_center_id = ? AND space_id = ? AND finished_at IS NOT NULL AND finished_at >= ?').all(clientId, costCenterId || 0, spaceId, sqlOfMs(sinceMs)).map((r) => tsMs(r.at)).filter(Number.isFinite);
+}
+function listAssetReadingTimesSince(clientId, assetId, criterionId, sinceMs) {
+    const rows = criterionId
+        ? db.prepare("SELECT read_at AS at FROM asset_readings WHERE client_id = ? AND asset_id = ? AND kind = 'value' AND criterion_id = ? AND read_at >= ?").all(clientId, assetId, criterionId, new Date(sinceMs).toISOString())
+        : db.prepare("SELECT read_at AS at FROM asset_readings WHERE client_id = ? AND asset_id = ? AND kind = 'value' AND read_at >= ?").all(clientId, assetId, new Date(sinceMs).toISOString());
+    return rows.map((r) => tsMs(r.at)).filter(Number.isFinite);
 }
 // Los datos del activo que cambiaron (el historial de Alta Activos sin los movimientos de pantalla ni de autorización): el último de cada activo, o los últimos de uno.
 const ASSET_DATA_CHANGE_SKIP = ['main.assetAutorizacion', 'main.assetUbicacionPantalla'];
@@ -14255,10 +14298,10 @@ function publishAssetNotice(kind, { recipients, payload }) {
     db.transaction(() => ids.forEach((id) => insert.run(id, kind, json)))();
     return ids;
 }
-// Los límites de UN activo: { [criterionId]: { min, max } }.
+// Los límites de UN activo: { [criterionId]: { min, max, schedule } }.
 function getAssetLimitsOf(assetId) {
     const out = {};
-    db.prepare('SELECT criterion_id, min_value, max_value, updated_at FROM asset_limits WHERE asset_id = ?').all(assetId).forEach((r) => { out[r.criterion_id] = { min: r.min_value, max: r.max_value, at: r.updated_at }; });
+    db.prepare('SELECT criterion_id, min_value, max_value, schedule, updated_at FROM asset_limits WHERE asset_id = ?').all(assetId).forEach((r) => { out[r.criterion_id] = { min: r.min_value, max: r.max_value, schedule: parseScheduleJson(r.schedule), at: r.updated_at }; });
     return out;
 }
 function countAssetLimitsOfCriterion(clientId, criterionId) {
@@ -14269,12 +14312,12 @@ function countAssetReadingsOfCatalog(clientId, field, id) {
     if (!['criterion_id', 'aviso_id'].includes(field)) return 0;
     return db.prepare(`SELECT COUNT(*) AS n FROM asset_readings WHERE client_id = ? AND ${field} = ?`).get(clientId, id).n;
 }
-// Guarda (o quita, con min y max en null) el límite de un activo en un criterio.
-function setAssetLimit(assetId, criterionId, minValue, maxValue, who = '') {
-    if (minValue === null && maxValue === null) { db.prepare('DELETE FROM asset_limits WHERE asset_id = ? AND criterion_id = ?').run(assetId, criterionId); return; }
-    db.prepare(`INSERT INTO asset_limits (asset_id, criterion_id, min_value, max_value, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))
-        ON CONFLICT(asset_id, criterion_id) DO UPDATE SET min_value = excluded.min_value, max_value = excluded.max_value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`)
-        .run(assetId, criterionId, minValue, maxValue, String(who || '').slice(0, 120));
+// Guarda (o quita, con min, max y horario en null) el límite de un activo en un criterio. schedule = la regla del horario (objeto) o null.
+function setAssetLimit(assetId, criterionId, minValue, maxValue, who = '', schedule = null) {
+    if (minValue === null && maxValue === null && !schedule) { db.prepare('DELETE FROM asset_limits WHERE asset_id = ? AND criterion_id = ?').run(assetId, criterionId); return; }
+    db.prepare(`INSERT INTO asset_limits (asset_id, criterion_id, min_value, max_value, schedule, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(asset_id, criterion_id) DO UPDATE SET min_value = excluded.min_value, max_value = excluded.max_value, schedule = excluded.schedule, updated_by = excluded.updated_by, updated_at = excluded.updated_at`)
+        .run(assetId, criterionId, minValue, maxValue, schedule ? JSON.stringify(schedule) : null, String(who || '').slice(0, 120));
 }
 function deleteAssetLimitsOfCriterion(clientId, criterionId) {
     return db.prepare('DELETE FROM asset_limits WHERE criterion_id = ? AND asset_id IN (SELECT id FROM fixed_assets WHERE client_id = ?)').run(criterionId, clientId).changes;
@@ -14593,6 +14636,7 @@ seedActivosFijosLetraCodigoOnce();
 seedActivosFijosDosLetrasOnce();
 seedActivosClasificacionValuesOnce();
 seedActivosCriteriosAvisosOnce();
+migrateCriteriaToScheduleOnce();
 seedCriteriosCatalogScreens();
 seedActivosClasificacionNombresOnce();
 seedActivosClasificacionAdministrarOnce();
@@ -14606,7 +14650,7 @@ module.exports = {
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,
     latestAssetReadingRows, listAssetReadingsOfAsset, lastAssetReadingTimes, listMaintenanceRunsOfAsset, latestMaintenanceRunRows,
     getAssetLimitsOf, countAssetLimitsOfCriterion, countAssetReadingsOfCatalog,
-    listAssetLimitsMap, setAssetLimit, deleteAssetLimitsOfCriterion, listAssetReadings, getAssetReadingById, createAssetReading, latestAssetReadingValues,
+    listAssetLimitsMap, setAssetLimit, listTemperatureTimesOfPlaceSince, listCleaningFinishedTimesSince, listAssetReadingTimesSince, deleteAssetLimitsOfCriterion, listAssetReadings, getAssetReadingById, createAssetReading, latestAssetReadingValues,
     listAssetAlertEpisodes, getAssetAlertEpisode, openAssetAlertEpisode, updateAssetAlertEpisode, closeAssetAlertEpisode, ackAssetAlertEpisode, markAssetAlertEpisodeNotified,
     seedActivosCriteriosAvisosValues,
     db,

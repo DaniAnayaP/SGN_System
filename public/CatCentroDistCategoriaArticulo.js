@@ -615,11 +615,16 @@ function buildExtraCells(record) {
     if (CATEGORY_TYPE === 'activos-criterios') {
         // «Cómo se limita» (rango, solo máximo, solo mínimo o cada N horas) y su unidad: lo que pide la celda de cada activo en Alta Activos. Los de fábrica no cambian de forma ni de unidad; «Zona» todavía no existe.
         const builtin = !!record.builtinKey;
-        const kindTd = buildOptionCell(record, 'colCritLimite', 'kind', 'critKind', ['range', 'max', 'min', 'every'].map((k) => ({ value: k, label: Dashboard.t(`main.critKind_${k}`) })), record.kind || '', record.kind === 'zone' ? Dashboard.t('main.critKind_zone') : '', (v) => ({ kind: v }));
+        const kindTd = buildOptionCell(record, 'colCritLimite', 'kind', 'critKind', ['range', 'max', 'min', 'every', 'schedule'].map((k) => ({ value: k, label: Dashboard.t(`main.critKind_${k}`) })), record.kind || '', record.kind === 'zone' ? Dashboard.t('main.critKind_zone') : '', (v) => ({ kind: v }));
         const unitTd = document.createElement('td');
         unitTd.dataset.col = 'colCritUnidad';
         unitTd.setAttribute('data-help-key', 'critUnit');
-        if (builtin) {
+        if (record.kind === 'schedule') {
+            // un Horario no lleva unidad (lo que se mide es cuándo y cuántas veces)
+            unitTd.textContent = '—';
+            unitTd.title = Dashboard.t('main.critScheduleNoUnit');
+            if (builtin) { kindTd.querySelector('select').disabled = true; kindTd.querySelector('select').title = Dashboard.t('main.critBuiltinLocked'); }
+        } else if (builtin) {
             kindTd.querySelector('select').disabled = true;
             kindTd.querySelector('select').title = Dashboard.t('main.critBuiltinLocked');
             unitTd.textContent = record.unit || '';

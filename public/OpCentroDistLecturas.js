@@ -73,7 +73,7 @@ function buildRow(record) {
     const registro = textCell('colLecRegistroUnico', record.registroUnico);
     registro.classList.add('col-system');
     const what = record.kind === 'activity' ? record.avisoName : record.criterionName;
-    const value = record.kind === 'activity' ? '' : (record.limitKind === 'every' ? tx('main.readingDone') : `${record.value} ${record.unit}`.trim());
+    const value = record.kind === 'activity' ? '' : (record.limitKind === 'every' || record.limitKind === 'schedule' ? tx('main.readingDone') : `${record.value} ${record.unit}`.trim());
     const asset = textCell('colLecActivo', record.assetCode, 'readingAsset');
     asset.title = [record.assetName, record.typeName].filter(Boolean).join(' · ');
     asset.style.fontWeight = '600';
@@ -205,7 +205,7 @@ function openCreateModal() {
         const a = selected();
         const [k, id] = String(whatSel.value || ':').split(':');
         const crit = a && k === 'c' ? a.criteria.find((c) => String(c.id) === id) : null;
-        valueWrap.hidden = !crit || crit.kind === 'every';
+        valueWrap.hidden = !crit || crit.kind === 'every' || crit.kind === 'schedule';
         unitEl.textContent = crit ? crit.unit : '';
         noteWrap.querySelector('span').textContent = tx(k === 'a' ? 'main.readingNoteRequired' : 'main.colLecNota');
     };

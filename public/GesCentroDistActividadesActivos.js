@@ -373,12 +373,14 @@ function compute() {
     for (let d = start; d <= end && days.length < 800; d = addDays(d, 1)) days.push(d);
     const inRange = new Set(days);
     const cell = new Map(); // `${assetId}|${day}` -> actividades de la más vieja a la más nueva
+    const counts = new Map(); // `${assetId}|${day}` -> cuántas hay ese día, sin los filtros de actividad: el contador «3 de 3» del horario cuenta todo lo registrado
     let count = 0;
     items.forEach((it) => {
         const asset = assetById.get(it.assetId);
         if (!asset) return;
         const day = dayOfIso(it.at);
         if (!inRange.has(day)) return;
+        counts.set(`${it.assetId}|${day}`, (counts.get(`${it.assetId}|${day}`) || 0) + 1);
         if (filters.who && !filters.who.has(it.person || '')) return;
         if (filters.result !== 'all' && it.result !== filters.result) return;
         if (!timeMatches(it.durationS)) return;
@@ -399,7 +401,7 @@ function compute() {
     const active = new Set();
     cell.forEach((list, key) => { const [id, day] = key.split('|'); if (shownIds.has(Number(id))) active.add(day); });
     const dayInfo = days.map((d) => ({ key: d, today: d === today, hidden: filters.hideEmpty && !active.has(d) && d !== today && !revealed.has(d) }));
-    return { assets: shownAssets, days: dayInfo, cell, count };
+    return { assets: shownAssets, days: dayInfo, cell, count, counts };
 }
 
 // ---- dibujo -------------------------------------------------------------------------------------------------------------------------------------------
@@ -413,7 +415,19 @@ function markButton(it, asset) {
     b.addEventListener('click', () => openDetail(it.id));
     return b;
 }
-function cellContent(list, asset, day) {
+// El contador del horario de lectura del activo («3 de 3»): en los días que le toca y que ya empezaron; verde si se cumplió, ámbar si faltó (hoy todavía puede llegar).
+function counterNode(asset, day, model) {
+    const rule = asset.readSchedule;
+    if (!rule || !window.AssetSchedule || day > todayKey()) return null;
+    const [y, m, d] = day.split('-').map(Number);
+    const need = AssetSchedule.expectedCount(rule);
+    if (!need || !AssetSchedule.appliesOn(rule, y, m, d)) return null;
+    const got = model.counts.get(`${asset.id}|${day}`) || 0;
+    const node = el('small', `aa-count aa-count-${got >= need ? 'done' : (day === todayKey() ? 'open' : 'short')}`, tx('main.aaCuenta', { k: got, n: need }));
+    node.title = tx('main.aaCuentaTip', { horario: AssetSchedule.format(rule) });
+    return node;
+}
+function cellContent(list, asset, day, model) {
     const box = el('div', 'aa-cell');
     list.slice(0, list.length > MAX_STACK ? MAX_STACK : list.length).forEach((it) => box.appendChild(markButton(it, asset)));
     if (list.length > MAX_STACK) {
@@ -422,6 +436,8 @@ function cellContent(list, asset, day) {
         more.addEventListener('click', () => openDayList(asset, day, list));
         box.appendChild(more);
     }
+    const counter = counterNode(asset, day, model);
+    if (counter) box.appendChild(counter);
     return box;
 }
 function dayHeaderContent(info) {
@@ -485,7 +501,7 @@ function renderAssetsView(model) {
             model.days.forEach((d) => {
                 const td = el('td', d.hidden ? 'aa-gap' : (d.today ? 'aa-today' : ''));
                 td.dataset.col = 'colAaFecha';
-                if (!d.hidden) td.appendChild(cellContent(model.cell.get(`${a.id}|${d.key}`) || [], a, d.key));
+                if (!d.hidden) td.appendChild(cellContent(model.cell.get(`${a.id}|${d.key}`) || [], a, d.key, model));
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);
@@ -543,7 +559,7 @@ function renderDatesView(model) {
         model.assets.forEach((a) => {
             const td = el('td', '');
             td.dataset.col = 'colAaFecha';
-            td.appendChild(cellContent(model.cell.get(`${a.id}|${d.key}`) || [], a, d.key));
+            td.appendChild(cellContent(model.cell.get(`${a.id}|${d.key}`) || [], a, d.key, model));
             tr.appendChild(td);
         });
         tbody.appendChild(tr);
