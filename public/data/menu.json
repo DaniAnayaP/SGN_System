@@ -8,7 +8,16 @@
         { "id": "dashboard", "labelKey": "menu.dashboard", "icon": "bx-bar-chart-alt-2", "href": "Inicio-en.html" },
         { "id": "btn-mensajes", "labelKey": "main.messages", "icon": "bx-message", "href": "#", "permissionOnly": true },
         { "id": "btn-chatbot", "labelKey": "main.chatbot", "icon": "bx-bot", "href": "#", "permissionOnly": true },
-        { "id": "btn-notificaciones", "labelKey": "main.notifications", "icon": "bx-bell", "href": "#", "permissionOnly": true },
+        {
+          "id": "btn-notificaciones", "labelKey": "main.notifications", "icon": "bx-bell", "href": "#", "permissionOnly": true,
+          "submenu": [
+            { "id": "notif-alertas", "labelKey": "main.notificationsTab_alertas", "icon": "bx-error-circle", "href": "#", "permissionOnly": true },
+            { "id": "notif-avisos", "labelKey": "main.notificationsTab_avisos", "icon": "bx-info-circle", "href": "#", "permissionOnly": true },
+            { "id": "notif-solicitudes", "labelKey": "main.notificationsTab_solicitudes", "icon": "bx-send", "href": "#", "permissionOnly": true },
+            { "id": "notif-autorizar", "labelKey": "main.notificationsTab_autorizar", "icon": "bx-check-shield", "href": "#", "permissionOnly": true },
+            { "id": "notif-soporte", "labelKey": "main.notificationsTab_soporte", "icon": "bx-support", "href": "#", "permissionOnly": true }
+          ]
+        },
         { "id": "btn-marcadores", "labelKey": "main.bookmarks", "icon": "bx-bookmarks", "href": "#", "permissionOnly": true },
         {
           "id": "btn-configuracion", "labelKey": "main.settings", "icon": "bx-cog", "href": "#", "permissionOnly": true,

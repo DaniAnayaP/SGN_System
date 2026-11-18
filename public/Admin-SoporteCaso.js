@@ -122,6 +122,7 @@ function renderHeader() {
         <div><dt>${esc(t('main.spFWhen'))}</dt><dd>${esc(t(`main.spWhen_${c.whenAffects}`))}</dd></div><div class="sp-wide"><dt>${esc(t('main.spFImpact'))}</dt><dd>${impacts}</dd></div>
         ${c.errorText ? `<div class="sp-wide"><dt>${esc(t('main.spFError'))}</dt><dd class="sp-pre">${esc(c.errorText)}</dd></div>` : ''}
         ${!d.inScope && c.atN4 && !c.assigneeId ? `<div class="sp-wide"><dd class="sp-muted">${esc(t('admin.saasSpOutOfScope'))}</dd></div>` : ''}
+        ${d.can.noTi ? `<div class="sp-wide"><dd class="sp-muted">${esc(t('admin.saasSpNoTiNote'))}</dd></div>` : ''}
         ${c.understood ? `<div class="sp-wide"><dt>${esc(t('main.supStep3'))}</dt><dd class="sp-pre">${esc(c.understood)}</dd></div>` : ''}</dl>`;
 }
 // Quien reportó, lo que la empresa le comparte al proveedor.
@@ -214,8 +215,26 @@ function renderComposer() {
             ${state.pending ? `<span class="sp-ok"><i class="bx bx-check" aria-hidden="true"></i> ${esc(state.pending.name)} <button type="button" class="ms-icon-btn" id="sc-unattach" aria-label="${esc(t('main.scRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button></span>` : ''}
             <button type="button" class="btn" id="sc-send"${state.sending ? ' disabled' : ''}>${esc(t(state.sending ? 'main.scSending' : 'main.scSend'))}</button></div>`;
 }
+// Cierre con el usuario de una empresa SIN TI contratado: el Nivel 4 es también su Mesa de ayuda. Conforme (causa, qué se hizo y evidencia de después de que quedó por confirmar), no conforme (se reabre en el Nivel 4) o sin respuesta tras 3 intentos.
+const closeAttempt = { channel: 'chat', note: '', sending: false };
+function renderCloseCard() {
+    const c = state.d.closing; const box = $('ss-close-card');
+    if (!c) { box.hidden = true; return; }
+    box.hidden = false;
+    const r = c.resolved;
+    const who = r ? `<div class="sp-meta-line"><b>${esc(t('main.clResolvedBy'))}:</b> ${esc(r.by)} · ${esc(fmtTime(r.createdAt))}<br><b>${esc(t('main.clDid'))}:</b> ${esc(r.did)}${r.fileCount ? `<br><b>${esc(t('main.mvFilesShort'))}:</b> ${r.fileCount}` : ''}</div>` : '';
+    const head = `<div class="sc-card-head"><h3>${esc(t('main.clCloseTitle'))}</h3><div class="sc-tags"><span class="sp-tag sp-status" data-k="confirm">${esc(t('main.spStatus_confirm'))}</span></div></div>`;
+    if (!c.canClose) { box.innerHTML = `${head}${who}<p class="sp-muted">${esc(t('admin.saasSpCloseNoButton'))}</p>`; return; }
+    const attempts = c.attempts.map((a, i) => `<div class="sc-attempt ok"><b>${i + 1}</b> ${esc(t(`main.clCh_${a.channel}`))} · ${esc(fmtTime(a.createdAt))} · ${esc(a.by || '')} — ${esc(a.note)}</div>`).join('');
+    const missing = Math.max(0, c.needAttempts - c.attempts.length);
+    const add = c.attempts.length < c.maxAttempts ? `<div class="sc-attempt-form"><select id="cl-ach">${c.channels.map((ch) => `<option value="${ch}"${ch === closeAttempt.channel ? ' selected' : ''}>${esc(t(`main.clCh_${ch}`))}</option>`).join('')}</select><input type="text" id="cl-anote" maxlength="500" placeholder="${esc(t('main.clAttemptNote'))}" value="${esc(closeAttempt.note)}"><button type="button" class="btn btn-secondary" id="cl-aadd"${closeAttempt.sending ? ' disabled' : ''}>${esc(t('main.clAttemptAdd'))}</button></div>` : '';
+    box.innerHTML = `${head}${who}<div class="sc-warn">${esc(t('main.clConfirmHint'))}</div>
+        <div class="sc-actions"><button type="button" class="btn" data-ss-close="ok">${esc(t('main.clConformYes'))}</button><button type="button" class="btn btn-secondary" data-ss-close="none">${esc(t('main.clConformNo'))}</button></div>
+        <div class="sc-sg"><h4>${esc(t('main.clNoReplyTitle'))}</h4>${attempts || `<p class="sp-muted">${esc(t('main.clNoAttempts'))}</p>`}${missing ? `<div class="sc-attempt miss"><b>!</b> ${esc(t('main.clAttemptsMissing', { n: missing }))}</div>` : ''}${add}
+        <p class="sp-muted">${esc(t('main.clNoReplyHint'))}</p><div class="admin-form-actions"><button type="button" class="btn btn-secondary" id="cl-noresp"${missing || closeAttempt.sending ? ' disabled' : ''}>${esc(t('main.clCloseNoReply'))}</button></div></div>`;
+}
 function renderAll(first) {
-    renderHeader(); renderReporter(); renderRate(); renderLane(); renderTabs(); renderThread(first); renderFlow(); renderFiles(); renderComposer();
+    renderHeader(); renderReporter(); renderRate(); renderCloseCard(); renderLane(); renderTabs(); renderThread(first); renderFlow(); renderFiles(); renderComposer();
 }
 
 // ---- datos ----------------------------------------------------------------------------------------------------------------------------
@@ -314,17 +333,28 @@ function evidenceHtml(f) {
 }
 function renderForm() {
     const d = state.d; const f = state.form;
-    const down = f.mode === 'down';
+    const mode = f.mode; const down = mode === 'down'; const closeOk = mode === 'close-ok'; const closeNone = mode === 'close-none';
     const reasons = down ? d.reasons.map((r) => `<button type="button" class="sp-chip${f.reason === r ? ' on' : ''}" role="radio" aria-checked="${f.reason === r}" data-fm-reason="${r}">${esc(t(`main.mvReason_${r}`))}</button>`).join('') : '';
-    formEl.querySelector('#fm-body').innerHTML = `${down ? `<label class="sp-field"><span>${esc(t('main.mvTo'))} *</span><select id="fm-to">${d.downTo.map((l) => `<option value="${l}"${l === f.to ? ' selected' : ''}>${esc(t(`main.sopLevel_${l}`))}</option>`).join('')}</select></label>
-        <div class="sp-field"><span>${esc(t('main.mvReason'))} *</span><div class="sp-chips" role="radiogroup">${reasons}</div></div>` : ''}
-        <label class="sp-field"><span>${esc(t(down ? 'main.mvDid' : 'main.rsDid'))} * <small class="sp-muted">${esc(t('main.mvDidHint'))}</small></span><textarea id="fm-did" rows="3" maxlength="${d.maxText}">${esc(f.did)}</textarea></label>
-        ${down ? `<label class="sp-field"><span>${esc(t('main.mvNotes'))} * <small class="sp-muted">${esc(t('main.mvNotesHint'))}</small></span><textarea id="fm-notes" rows="3" maxlength="${d.maxText}">${esc(f.notes)}</textarea></label>` : ''}
-        <div class="sp-field"><span>${esc(t('main.mvFiles'))} * <small class="sp-muted">${esc(t('main.mvFilesHint'))}</small></span>${evidenceHtml(f)}</div>`;
+    let body;
+    if (closeNone) {
+        body = `<label class="sp-field"><span>${esc(t('main.clSaid'))} *</span><textarea id="fm-said" rows="3" maxlength="${d.closing.maxText}">${esc(f.said)}</textarea></label><div class="sc-warn">${esc(t('main.clReopenHint'))}</div>`;
+    } else if (closeOk) {
+        const picks = d.closing.files.map((x) => `<label class="sc-sim"><input type="checkbox" data-fm-pick="${x.id}"${f.picked.has(x.id) ? ' checked' : ''}> <span>${lvBadge(x.level || 'n0')} <b>${esc(x.name)}</b> <small class="sp-muted">${esc(fmtSize(x.size))} · ${esc(x.by || '')} · ${esc(fmtTime(x.createdAt))}</small></span></label>`).join('');
+        body = `<label class="sp-field"><span>${esc(t('main.clCause'))} *</span><select id="fm-cause"><option value="">—</option>${d.closing.causes.map((c) => `<option value="${c.id}"${String(c.id) === f.cause ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+            <label class="sp-field"><span>${esc(t('main.clDid'))} * <small class="sp-muted">${esc(t('main.clDidHint'))}</small></span><textarea id="fm-did" rows="3" maxlength="${d.closing.maxText}">${esc(f.did)}</textarea></label>
+            <div class="sp-field"><span>${esc(t('main.clEvidence'))} * <small class="sp-muted">${esc(t('main.clEvidenceHint'))}</small></span><div class="sc-sim">${picks}</div>${evidenceHtml(f)}</div>`;
+    } else {
+        body = `${down ? `<label class="sp-field"><span>${esc(t('main.mvTo'))} *</span><select id="fm-to">${d.downTo.map((l) => `<option value="${l}"${l === f.to ? ' selected' : ''}>${esc(t(`main.sopLevel_${l}`))}</option>`).join('')}</select></label>
+            <div class="sp-field"><span>${esc(t('main.mvReason'))} *</span><div class="sp-chips" role="radiogroup">${reasons}</div></div>` : ''}
+            <label class="sp-field"><span>${esc(t(down ? 'main.mvDid' : 'main.rsDid'))} * <small class="sp-muted">${esc(t('main.mvDidHint'))}</small></span><textarea id="fm-did" rows="3" maxlength="${d.maxText}">${esc(f.did)}</textarea></label>
+            ${down ? `<label class="sp-field"><span>${esc(t('main.mvNotes'))} * <small class="sp-muted">${esc(t('main.mvNotesHint'))}</small></span><textarea id="fm-notes" rows="3" maxlength="${d.maxText}">${esc(f.notes)}</textarea></label>` : ''}
+            <div class="sp-field"><span>${esc(t('main.mvFiles'))} * <small class="sp-muted">${esc(t('main.mvFilesHint'))}</small></span>${evidenceHtml(f)}</div>`;
+    }
+    formEl.querySelector('#fm-body').innerHTML = body;
     const send = formEl.querySelector('#fm-send');
     send.disabled = f.sending;
-    send.textContent = f.sending ? t('main.spFSending') : (down ? t('main.mvSendDown', { level: t(`main.sopLevel_${f.to}`) }) : t('main.rsSend'));
-    formEl.querySelector('#fm-title').textContent = down ? t('main.mvDown') : t('main.rsTitle');
+    send.textContent = f.sending ? t('main.spFSending') : (closeOk ? t('main.clCloseBtn') : (closeNone ? t('main.clReopenBtn') : (down ? t('main.mvSendDown', { level: t(`main.sopLevel_${f.to}`) }) : t('main.rsSend'))));
+    formEl.querySelector('#fm-title').textContent = closeOk ? t('main.clConformYes') : (closeNone ? t('main.clConformNo') : (down ? t('main.mvDown') : t('main.rsTitle')));
 }
 function closeForm() { if (state.form && state.form.rec) { try { state.form.rec.ctl.stop(); } catch (err) { /* ya terminó */ } } if (formEl) formEl.hidden = true; state.form = null; }
 function openForm(mode) {
@@ -335,13 +365,13 @@ function openForm(mode) {
         formEl.innerHTML = '<div class="modal-panel sp-form sc-move" role="dialog" aria-modal="true" aria-labelledby="fm-title"><h3 id="fm-title"></h3><div id="fm-body"></div><p class="sp-muted" id="fm-note"></p><div class="admin-form-actions"><button type="button" class="btn" id="fm-send"></button><button type="button" class="btn btn-secondary" id="fm-cancel"></button></div></div>';
         document.body.appendChild(formEl);
         formEl.addEventListener('click', onFormClick);
-        formEl.addEventListener('input', (event) => { const f = state.form; if (!f) return; if (event.target.id === 'fm-did') f.did = event.target.value; else if (event.target.id === 'fm-notes') f.notes = event.target.value; });
+        formEl.addEventListener('input', (event) => { const f = state.form; if (!f) return; if (event.target.id === 'fm-did') f.did = event.target.value; else if (event.target.id === 'fm-notes') f.notes = event.target.value; else if (event.target.id === 'fm-said') f.said = event.target.value; });
         formEl.addEventListener('change', onFormChange);
         document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && state.form && !state.form.sending) closeForm(); });
     }
-    state.form = { mode, to: state.d.downTo[0], reason: '', did: '', notes: '', files: [], rec: null, sending: false };
+    state.form = { mode, to: state.d.downTo[0], reason: '', did: '', notes: '', said: '', cause: '', picked: new Set(), files: [], rec: null, sending: false };
     formEl.querySelector('#fm-cancel').textContent = t('main.spFCancel');
-    formEl.querySelector('#fm-note').textContent = t(mode === 'down' ? 'main.mvHint' : 'main.rsModalHint');
+    formEl.querySelector('#fm-note').textContent = mode === 'down' ? t('main.mvHint') : (mode === 'resolve' ? t('main.rsModalHint') : '');
     renderForm();
     formEl.hidden = false;
 }
@@ -349,6 +379,8 @@ async function onFormChange(event) {
     const f = state.form; if (!f) return;
     const el = event.target;
     if (el.id === 'fm-to') { f.to = el.value; renderForm(); return; }
+    if (el.id === 'fm-cause') { f.cause = el.value; return; }
+    if (el.matches('[data-fm-pick]')) { const id = Number(el.dataset.fmPick); if (el.checked) f.picked.add(id); else f.picked.delete(id); return; }
     if (el.id === 'fm-file') {
         const picked = [...(el.files || [])]; el.value = '';
         for (const file of picked) {
@@ -380,6 +412,42 @@ async function onFormClick(event) {
     if (event.target.closest('#fm-send')) submitForm();
 }
 async function submitForm() {
+    const f = state.form;
+    if (!f || f.sending) return;
+    if (f.mode === 'close-ok' || f.mode === 'close-none') return submitCloseForm();
+    return submitMoveForm();
+}
+async function submitCloseForm() {
+    const f = state.form; const c = state.d.closing;
+    const ok = f.mode === 'close-ok';
+    if (ok) {
+        if (!f.cause) { Dashboard.showToast(t('main.clErrCause'), 'warning'); return; }
+        if (f.did.trim().length < c.minText) { Dashboard.showToast(t('main.rsErrDid'), 'warning'); return; }
+        if (!f.picked.size && !f.files.length) { Dashboard.showToast(t('main.clErrEvidence'), 'warning'); return; }
+        if (f.rec) { Dashboard.showToast(t('main.spErrRecording'), 'warning'); return; }
+    } else if (f.said.trim().length < c.minSaid) { Dashboard.showToast(t('main.clErrSaid'), 'warning'); return; }
+    f.sending = true; renderForm();
+    try {
+        const ids = [...f.picked];
+        if (ok) {
+            for (const item of f.files) {
+                if (item.uploaded) { ids.push(item.uploaded); continue; }
+                try { item.uploaded = (await uploadFile(item, '?move=1')).id; } catch (err) { Dashboard.showToast(t('main.spFileFailed', { name: item.name, why: err.message }), 'warning'); f.sending = false; renderForm(); return; }
+                ids.push(item.uploaded);
+            }
+        }
+        const { ok: sent, out } = await postJson('close', ok ? { conformity: 'ok', causeId: Number(f.cause), did: f.did, fileIds: ids } : { conformity: 'none', said: f.said });
+        if (!sent) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); f.sending = false; renderForm(); return; }
+        closeForm();
+        Dashboard.showToast(ok ? t('main.clDoneClosed') : t('main.clDoneReopen', { level: t('main.sopLevel_n4') }), 'success');
+        await reload();
+    } catch (err) {
+        console.error('Soporte (SaaS): failed to close', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        if (state.form) { state.form.sending = false; renderForm(); }
+    }
+}
+async function submitMoveForm() {
     const f = state.form; const d = state.d;
     if (!f || f.sending) return;
     const down = f.mode === 'down';
@@ -419,6 +487,26 @@ document.addEventListener('click', async (event) => {
         else if (kind === 'down') openForm('down');
         return;
     }
+    const closeBtn = event.target.closest('[data-ss-close]');
+    if (closeBtn) { openForm(closeBtn.dataset.ssClose === 'ok' ? 'close-ok' : 'close-none'); return; }
+    if (event.target.closest('#cl-aadd')) {
+        if (closeAttempt.sending) return;
+        if (closeAttempt.note.trim().length < ((state.d.closing && state.d.closing.minSaid) || 5)) { Dashboard.showToast(t('main.clErrAttemptNote'), 'warning'); return; }
+        closeAttempt.sending = true; renderCloseCard();
+        const { ok, out } = await postJson('attempts', { channel: closeAttempt.channel, note: closeAttempt.note });
+        closeAttempt.sending = false;
+        if (!ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); renderCloseCard(); return; }
+        closeAttempt.note = '';
+        await reload();
+        return;
+    }
+    if (event.target.closest('#cl-noresp')) {
+        const { ok, out } = await postJson('close', { conformity: 'noresp' });
+        if (!ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); return; }
+        Dashboard.showToast(t('main.clDoneNoReply'), 'success');
+        await reload();
+        return;
+    }
     const star = event.target.closest('[data-rt-star]');
     if (star) { if (!state.rate.sending) { state.rate.stars = Number(star.dataset.n); renderRate(); } return; }
     const tag = event.target.closest('[data-rt-tag]');
@@ -433,6 +521,7 @@ document.addEventListener('click', async (event) => {
 });
 document.addEventListener('input', (event) => {
     if (event.target.id === 'rt-comment') state.rate.comment = event.target.value;
+    if (event.target.id === 'cl-anote') closeAttempt.note = event.target.value;
 });
 document.addEventListener('change', async (event) => {
     if (event.target.id === 'ss-status-pick') {
@@ -448,6 +537,7 @@ document.addEventListener('change', async (event) => {
         }
         return;
     }
+    if (event.target.id === 'cl-ach') { closeAttempt.channel = event.target.value; return; }
     if (event.target.id === 'sc-note') { renderComposer(); return; }
     if (event.target.id === 'sc-file') {
         const file = event.target.files && event.target.files[0];

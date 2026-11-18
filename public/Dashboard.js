@@ -183,7 +183,7 @@ function openSupportExplain(article, message) {
         try { await fetch(`/api/business/support-help/${article.id}/use`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ helped, source: 'error' }) }); } catch (err) { /* sin conexión */ }
         overlay.hidden = true;
         if (helped) showToast(t('main.soThanks'), 'success');
-        else location.href = `Soporte.html?new=1&title=${encodeURIComponent(article.title)}&error=${encodeURIComponent(message)}`;
+        else if (hasNotificationTabPermission('soporte')) location.href = `Soporte.html?new=1&title=${encodeURIComponent(article.title)}&error=${encodeURIComponent(message)}`;
     };
     overlay.hidden = false;
 }
@@ -1435,18 +1435,13 @@ function applyScreenGrantFilter(data) {
 // Inicio, Panel y Tablero (los tres de General) de un usuario o perfil del cliente salen solo si se los asignaron en su árbol, como todo lo demás: un usuario recién creado, sin nada asignado, no ve ninguna opción. El
 // administrador del cliente sin configuración propia los ve siempre (hasMainButtonPermission) y la cuenta SaaS arma su menú aparte (con sus propios permisos), así que no pasa por aquí.
 const MAIN_NAV_ITEM_IDS = ['home', 'panel', 'dashboard'];
-// «Soporte» (para todos los usuarios de una empresa con TI contratado, sin pasar por el árbol): sale junto a Inicio, Panel y Tablero.
-const SUPPORT_NAV_ITEM = { id: 'support', labelKey: 'menu.support', icon: 'bx-support', href: 'Soporte.html' };
 function applyMainNavGrantFilter(data) {
     if (currentRole === 'admin') return data;
-    const withSupport = contractedModuleKeys.includes('information-technology');
     return {
         ...data,
         sections: data.sections.map((s) => {
             if (s.id !== 'main') return s;
-            const items = (s.items || []).filter((i) => !MAIN_NAV_ITEM_IDS.includes(i.id) || hasMainButtonPermission(i.id));
-            if (withSupport) { const at = items.findIndex((i) => i.id === 'dashboard'); items.splice(at >= 0 ? at + 1 : items.length, 0, SUPPORT_NAV_ITEM); }
-            return { ...s, items };
+            return { ...s, items: (s.items || []).filter((i) => !MAIN_NAV_ITEM_IDS.includes(i.id) || hasMainButtonPermission(i.id)) };
         }),
     };
 }
@@ -9994,7 +9989,10 @@ const PENDING_CHANGE_TABLE_LABELS = {
     'mtto-preventivo': 'menu.opCentroDistMttoPreventivo',
     'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo',
 };
-const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar'];
+const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar', 'soporte'];
+// Cada pestaña es un nodo de Notificaciones en el árbol (menu.json: btn-notificaciones › notif-*). Soporte es la entrada del usuario al soporte: sus solicitudes y «Pedir soporte»; con TI contratado empieza en la Mesa de ayuda de la
+// empresa y sin TI contratado llega directo al Nivel 4 (GEIPSA).
+const NOTIFICATION_TAB_NODES = { alertas: 'notif-alertas', avisos: 'notif-avisos', solicitudes: 'notif-solicitudes', autorizar: 'notif-autorizar', soporte: 'notif-soporte' };
 // Titles collapse to just these icons under the same narrow-screen
 // breakpoint every other top-bar label already uses (see .dept-picker-btn
 // span's own display:none rule) — same "reducción de tamaño" the user
@@ -10004,9 +10002,12 @@ const NOTIFICATION_TAB_ICONS = {
     avisos: 'bx-info-circle',
     solicitudes: 'bx-send',
     autorizar: 'bx-check-shield',
+    soporte: 'bx-support',
 };
 let notificationsListEl = null;
-let notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [] };
+let notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [], soporte: [] };
+// Cuántas de mis solicitudes de soporte esperan algo de mí (calificar la atención): es lo que cuenta la pestaña Soporte y suma a la campana.
+let supportTabPending = 0;
 let activeNotificationTab = 'alertas';
 
 function closeNotificationsMenu() {
@@ -10720,7 +10721,8 @@ function renderSupportNoticeRow(item) {
         desc.textContent = t(v === 'general-linked' ? 'main.noticeSupportGeneralLinkedLine' : 'main.noticeSupportGeneralNotifyLine', { ...base, generalFolio: item.generalFolio || '', generalTitle: item.generalTitle || '', role: item.roleName || '—' });
     } else if (v === 'saas-arrived') {
         const base4 = { ...base, client: item.client || '—', priority: t(`main.msPri_${item.priority || 4}`) };
-        desc.textContent = item.from ? t('main.noticeSupportSaasArrivedLine', { ...base4, from: t(`main.sopLevel_${item.from}`), reason: t(`main.mvReason_${item.reason}`) }) : t('main.noticeSupportSaasArrivedDirectLine', base4);
+        if (item.reopened) desc.textContent = t('main.noticeSupportSaasReopenedLine', { ...base4, said: item.said || '' });
+        else desc.textContent = item.from ? t('main.noticeSupportSaasArrivedLine', { ...base4, from: t(`main.sopLevel_${item.from}`), reason: t(`main.mvReason_${item.reason}`) }) : t('main.noticeSupportSaasArrivedDirectLine', base4);
     } else if (v === 'saas-assigned') {
         desc.textContent = t('main.noticeSupportSaasAssignedLine', { ...base, client: item.client || '—' });
     } else if (v === 'case-arrived') {
@@ -11200,10 +11202,11 @@ function renderActiveNotificationTab() {
         el.textContent = t(`main.notificationsTab_${activeNotificationTab}`);
     });
     document.querySelectorAll('.notifications-tab-count').forEach((el) => {
-        el.textContent = String(notificationsData[el.dataset.tab]?.length || 0);
+        el.textContent = String(el.dataset.tab === 'soporte' ? supportTabPending : (notificationsData[el.dataset.tab]?.length || 0));
     });
     if (!notificationsListEl) return;
     notificationsListEl.innerHTML = '';
+    if (activeNotificationTab === 'soporte') { renderSupportTab(); return; }
     const items = notificationsData[activeNotificationTab] || [];
     if (!items.length) {
         const empty = document.createElement('div');
@@ -11232,15 +11235,95 @@ function renderActiveNotificationTab() {
     }
 }
 
+// ---- la pestaña Soporte de la campana: mis solicitudes (lo que espera algo de mí primero), «Pedir soporte» y «Ver todo» --------------------------------------------------------
+const SUPPORT_TAB_ROWS = 6;
+async function loadSupportTab() {
+    supportTabPending = 0;
+    notificationsData.soporte = [];
+    if (currentRole === 'admin' || !hasNotificationTabPermission('soporte')) return;
+    try {
+        const res = await fetch('/api/business/my-support', { credentials: 'include' });
+        if (!res.ok) return;
+        const out = await res.json();
+        const cases = out.cases || [];
+        supportTabPending = cases.filter((c) => c.rateCan).length;
+        // primero lo que me pide algo, luego lo que sigue en curso, luego lo cerrado (más nuevo primero)
+        const rank = (c) => (c.rateCan ? 0 : (['done', 'noresp'].includes(c.status) ? 2 : 1));
+        notificationsData.soporte = cases.slice().sort((a, b) => rank(a) - rank(b) || String(b.createdAt).localeCompare(String(a.createdAt)));
+        notificationsData.soporteMeta = { provider: !!out.provider, total: cases.length };
+    } catch { /* la pestaña queda vacía */ }
+}
+function renderSupportTab() {
+    const box = notificationsListEl;
+    const head = document.createElement('div');
+    head.className = 'notifications-item notifications-support-actions';
+    const hint = document.createElement('div');
+    hint.className = 'notifications-item-desc';
+    hint.textContent = t((notificationsData.soporteMeta || {}).provider ? 'main.notificationsSupportHintProvider' : 'main.notificationsSupportHint');
+    const actions = document.createElement('div');
+    actions.className = 'notifications-item-meta';
+    actions.style.display = 'flex'; actions.style.gap = '0.5rem'; actions.style.flexWrap = 'wrap';
+    const ask = document.createElement('a');
+    ask.className = 'btn';
+    ask.href = 'Soporte.html?new=1';
+    ask.textContent = t('main.notificationsSupportAsk');
+    const all = document.createElement('a');
+    all.className = 'btn btn-secondary';
+    all.href = 'Soporte.html';
+    all.textContent = t('main.notificationsSupportAll');
+    actions.append(ask, all);
+    head.append(hint, actions);
+    box.appendChild(head);
+    const cases = (notificationsData.soporte || []).slice(0, SUPPORT_TAB_ROWS);
+    if (!cases.length) {
+        const empty = document.createElement('div');
+        empty.className = 'notifications-empty';
+        empty.textContent = t('main.notificationsSupportEmpty');
+        box.appendChild(empty);
+        return;
+    }
+    cases.forEach((c) => {
+        const row = document.createElement('a');
+        row.className = 'notifications-item';
+        row.style.display = 'block'; row.style.textDecoration = 'none'; row.style.color = 'inherit';
+        row.href = `OpTISoporteCaso.html?id=${encodeURIComponent(c.id)}&from=support`;
+        const tag = document.createElement('div');
+        tag.className = 'notifications-item-meta';
+        tag.style.fontWeight = '700';
+        tag.textContent = `${c.folio} · ${t(`main.spStatus_${c.status}`)} · ${t(`main.sopLevel_${c.level}`)}`;
+        const desc = document.createElement('div');
+        desc.className = 'notifications-item-desc';
+        desc.textContent = c.summary;
+        row.append(tag, desc);
+        if (c.rateCan) {
+            const rate = document.createElement('div');
+            rate.className = 'notifications-item-meta';
+            rate.textContent = t('main.soRateNow');
+            row.appendChild(rate);
+        }
+        box.appendChild(row);
+    });
+    const total = (notificationsData.soporteMeta || {}).total || 0;
+    if (total > SUPPORT_TAB_ROWS) {
+        const more = document.createElement('a');
+        more.className = 'notifications-item-meta';
+        more.href = 'Soporte.html';
+        more.style.display = 'block';
+        more.textContent = t('main.notificationsSupportMore', { n: total - SUPPORT_TAB_ROWS });
+        box.appendChild(more);
+    }
+}
+
 async function loadNotifications() {
     if (!notificationsListEl) return;
     try {
         const res = await fetch('/api/business/notifications', { credentials: 'include' });
         if (!res.ok) return;
-        notificationsData = await res.json();
+        notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [], soporte: [], ...(await res.json()) };
+        await loadSupportTab();
         const unseenAlertas = notificationsData.alertas.filter((a) => !a.seen_at).length;
         const unseenAvisos = notificationsData.avisos.filter((a) => !a.seen_at).length;
-        setNotificationsBadge(unseenAlertas + unseenAvisos + notificationsData.autorizar.length);
+        setNotificationsBadge(unseenAlertas + unseenAvisos + notificationsData.autorizar.length + supportTabPending);
         renderActiveNotificationTab();
     } catch {
         // Leave whatever was already rendered — no network/parse errors surfaced here.
@@ -11953,7 +12036,31 @@ const TOP_BAR_BUTTONS = [
     { moduleKey: 'btn-datos-usuario-negocio', elementId: 'business-profile-menu', check: () => hasMainButtonPermission('btn-datos-usuario-negocio') },
 ];
 
+// ¿Esta cuenta ve la pestaña de la campana? Cada pestaña es un nodo de Notificaciones en el árbol (Alertas, Avisos, Solicitudes, Autorizar, Soporte). Los permisos guardados antes de que existieran los nodos
+// (el ícono Notificaciones sin ninguna pestaña) siguen dando todas, igual que Configuración con sus botones. El personal SaaS ve las cuatro de siempre y no la de Soporte (la suya es la bandeja de Servicio a Cliente).
+function hasNotificationTabPermission(tabKey) {
+    if (currentRole === 'admin') return tabKey !== 'soporte';
+    const nodeId = NOTIFICATION_TAB_NODES[tabKey];
+    if (!isEstatusVisible('main', 'btn-notificaciones', nodeId)) return false;
+    if (isUnrestrictedClientAdmin()) return true;
+    const grants = cachedBusinessProfile?.effectiveGrants || [];
+    if (grants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-notificaciones' && !g.submenuId)) return true;
+    return grants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-notificaciones' && g.submenuId === nodeId);
+}
+function syncNotificationTabs() {
+    const tabs = [...document.querySelectorAll('.notifications-tab')];
+    if (!tabs.length) return;
+    tabs.forEach((tabBtn) => { tabBtn.hidden = !hasNotificationTabPermission(tabBtn.dataset.tab); });
+    if (!hasNotificationTabPermission(activeNotificationTab)) {
+        const first = NOTIFICATION_TABS.find((k) => hasNotificationTabPermission(k));
+        if (first) activeNotificationTab = first;
+    }
+    if (typeof renderActiveNotificationTab === 'function') renderActiveNotificationTab();
+    // con los permisos ya cargados, la pestaña Soporte y la cuenta de la campana se vuelven a pedir
+    if (notificationsListEl && currentRole !== 'admin') loadNotifications();
+}
 function syncTopBarButtonVisibility() {
+    syncNotificationTabs();
     if (currentRole === 'admin') return;
     TOP_BAR_BUTTONS.forEach(({ moduleKey, elementId, check }) => {
         const el = document.getElementById(elementId);
@@ -13355,6 +13462,8 @@ function hasScreenAccess(activePage) {
     // Panel.html: igual que en el menú, solo con el permiso Panel del árbol (el administrador del cliente sin configuración propia siempre). Inicio-en.html NO se bloquea: es la página a la que se llega al entrar
     // (vacía, sin datos) y desde ella se llega a lo que la cuenta sí tiene.
     if (activePage === 'panel') return hasMainButtonPermission('panel');
+    // Soporte.html (la página completa de la pestaña Soporte de la campana): con el permiso de esa pestaña en el árbol (Notificaciones › Soporte).
+    if (activePage === 'support') return currentRole === 'admin' ? false : (hasMainButtonPermission('btn-notificaciones') && hasNotificationTabPermission('soporte'));
     // La pantalla de UN caso de soporte (OpTISoporteCaso.html) la abre quien reportó el caso (desde «Soporte», sin ninguna hoja del árbol), el equipo y quien ve Soportes cerrados: el servidor decide quién abre cada caso.
     if (activePage === 'cat-operaciones-ti-casos-soporte' && /OpTISoporteCaso\.html/i.test(location.pathname)) return true;
     const path = SCREEN_GRANT_PATHS[activePage];

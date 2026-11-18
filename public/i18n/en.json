@@ -1284,7 +1284,9 @@
     "saasSpScopeNone": "Your sectors and departments have not been chosen yet: you receive no new cases in «Unassigned». Ask for it in SaaS Team.",
     "saasSpOutOfScope": "This case belongs to a sector or department you do not handle: you can view it, but not take it. Coordination can assign it to you.",
     "saasSpAssignPick": "Assign to…",
-    "saasSpAssigned": "Case assigned to {name}."
+    "saasSpAssigned": "Case assigned to {name}.",
+    "saasSpNoTiNote": "This company has no IT contracted: it has no levels of its own. You are its Help Desk: you confirm with the user and close the case.",
+    "saasSpCloseNoButton": "Your account does not have the «Close cases of clients without IT» button: whoever has it closes the case."
   },
   "business": {
     "usersTitle": "Users",
@@ -4721,7 +4723,7 @@
     "soAssignee": "handled by {name}",
     "soRateNow": "Rate the service",
     "soReopenUntil": "you can reopen it until {when}",
-    "soNoSupport": "Your company does not have Support contracted yet.",
+    "soNoSupport": "Your account does not have the Support tab. Ask your administrator to give it to you.",
     "colSpCreateAuth": "New request",
     "spNew": "New request",
     "spNewTitle": "New support request",
@@ -5947,7 +5949,16 @@
     "noticeSupportSaasArrivedLine": "Case {folio} «{summary}» from {client} reached Level 4 as «{priority}». {by} passed it from {from}. Reason: {reason}.",
     "noticeSupportSaasArrivedDirectLine": "Case {folio} «{summary}» from {client} reached Level 4 as «{priority}». It came in directly: the company has no IT contracted.",
     "noticeSupportSaasAssigned": "Support · a case was assigned to you",
-    "noticeSupportSaasAssignedLine": "{by} assigned you case {folio} «{summary}» from {client} (reported by {target}). Open it in Customer Service › Support."
+    "noticeSupportSaasAssignedLine": "{by} assigned you case {folio} «{summary}» from {client} (reported by {target}). Open it in Customer Service › Support.",
+    "notificationsTab_soporte": "Support",
+    "notificationsSupportHint": "Ask for help and follow your requests. With IT contracted they start at your company's Help Desk.",
+    "notificationsSupportHintProvider": "Your company has no IT contracted: your requests go straight to GEIPSA support.",
+    "notificationsSupportAsk": "Ask for support",
+    "notificationsSupportAll": "See all",
+    "notificationsSupportEmpty": "You have not asked for support yet.",
+    "notificationsSupportMore": "+{n} more in Support",
+    "soProvider": "Your company has no IT contracted: your request goes straight to the GEIPSA support team.",
+    "noticeSupportSaasReopenedLine": "Case {folio} «{summary}» from {client} was reopened: {said}"
   },
   "home": {
     "title": "SGN",
@@ -9378,6 +9389,10 @@
     "saasSpAssign": {
       "what": "Coordination (the main administrator) assigns the case to a person who handles that sector and department. The case is put under their name and they get a bell notice.",
       "example": "You assign SP-0031 to Ana Torres, who handles the Health sector."
+    },
+    "saasSpClose": {
+      "what": "Closing with the user for a company WITHOUT IT contracted: since it has no Help Desk of its own, Level 4 confirms with the user. Satisfied: cause, what was done and evidence. Not satisfied: the case is reopened. No answer: after 3 logged contact attempts.",
+      "example": "You marked the case resolved; you talk to the user, they are satisfied and you close it with the cause «System error»."
     }
   }
 }

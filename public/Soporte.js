@@ -49,7 +49,8 @@ function helpHtml() {
 }
 function askHtml() {
     const desk = state.mine && state.mine.helpDesk && state.mine.helpDesk.length ? `<p class="sp-muted">${esc(t('main.soHelpDesk', { names: state.mine.helpDesk.join(', ') }))}</p>` : '';
-    return `<section class="sc-card" data-help-key="soPedir"><div class="sc-card-head"><h3>${esc(t('main.soAskTitle'))}</h3><button type="button" class="btn" id="so-new"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.spNew'))}</button></div><p>${esc(t('main.soAskText'))}</p>${desk}</section>`;
+    const provider = state.mine && state.mine.provider ? `<p class="sp-muted">${esc(t('main.soProvider'))}</p>` : '';
+    return `<section class="sc-card" data-help-key="soPedir"><div class="sc-card-head"><h3>${esc(t('main.soAskTitle'))}</h3><button type="button" class="btn" id="so-new"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.spNew'))}</button></div><p>${esc(t('main.soAskText'))}</p>${desk}${provider}</section>`;
 }
 function mineHtml() {
     const cases = state.mine ? state.mine.cases : [];

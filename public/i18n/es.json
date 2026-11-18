@@ -1283,7 +1283,9 @@
     "saasSpScopeNone": "Todavía no se elige qué giros y departamentos atiendes: no recibes casos nuevos en «Sin asignar». Pídelo en Equipo SaaS.",
     "saasSpOutOfScope": "Este caso es de un giro o departamento que no atiendes: lo puedes ver, pero no tomar. Coordinación te lo puede asignar.",
     "saasSpAssignPick": "Asignar a…",
-    "saasSpAssigned": "Caso asignado a {name}."
+    "saasSpAssigned": "Caso asignado a {name}.",
+    "saasSpNoTiNote": "Esta empresa no tiene TI contratado: no tiene niveles propios. Tú eres su Mesa de ayuda: confirmas con el usuario y cierras el caso.",
+    "saasSpCloseNoButton": "Tu cuenta no tiene el botón «Cerrar casos de clientes sin TI»: lo cierra quien lo tenga."
   },
   "business": {
     "usersTitle": "Usuarios",
@@ -4720,7 +4722,7 @@
     "soAssignee": "la atiende {name}",
     "soRateNow": "Califica la atención",
     "soReopenUntil": "puedes reabrirla hasta el {when}",
-    "soNoSupport": "Tu empresa todavía no tiene el Soporte contratado.",
+    "soNoSupport": "Tu cuenta no tiene la pestaña Soporte. Pídele a tu administrador que te la dé.",
     "colSpCreateAuth": "Nueva solicitud",
     "spNew": "Nueva solicitud",
     "spNewTitle": "Nueva solicitud de soporte",
@@ -5946,7 +5948,16 @@
     "noticeSupportSaasArrivedLine": "El caso {folio} «{summary}» de {client} llegó al Nivel 4 como «{priority}». Lo pasó {by} desde {from}. Motivo: {reason}.",
     "noticeSupportSaasArrivedDirectLine": "El caso {folio} «{summary}» de {client} llegó al Nivel 4 como «{priority}». Entró directo: la empresa no tiene TI contratado.",
     "noticeSupportSaasAssigned": "Soporte · te asignaron un caso",
-    "noticeSupportSaasAssignedLine": "{by} te asignó el caso {folio} «{summary}» de {client} (lo reportó {target}). Ábrelo en Servicio a Cliente › Soporte."
+    "noticeSupportSaasAssignedLine": "{by} te asignó el caso {folio} «{summary}» de {client} (lo reportó {target}). Ábrelo en Servicio a Cliente › Soporte.",
+    "notificationsTab_soporte": "Soporte",
+    "notificationsSupportHint": "Pide ayuda y sigue tus solicitudes. Con TI contratado empiezan en la Mesa de ayuda de tu empresa.",
+    "notificationsSupportHintProvider": "Tu empresa no tiene TI contratado: tus solicitudes llegan directo al soporte de GEIPSA.",
+    "notificationsSupportAsk": "Pedir soporte",
+    "notificationsSupportAll": "Ver todo",
+    "notificationsSupportEmpty": "Todavía no has pedido soporte.",
+    "notificationsSupportMore": "+{n} más en Soporte",
+    "soProvider": "Tu empresa no tiene TI contratado: tu solicitud llega directo al equipo de soporte de GEIPSA.",
+    "noticeSupportSaasReopenedLine": "El caso {folio} «{summary}» de {client} se reabrió: {said}"
   },
   "home": {
     "title": "SGN",
@@ -9377,6 +9388,10 @@
     "saasSpAssign": {
       "what": "La Coordinación (administrador principal) le asigna el caso a una persona que atiende ese giro y departamento. El caso queda a su nombre y le llega un aviso por la campana.",
       "example": "Asignas SP-0031 a Ana Torres, que atiende el giro Salud."
+    },
+    "saasSpClose": {
+      "what": "Cierre con el usuario de una empresa SIN TI contratado: como no tiene Mesa de ayuda propia, el Nivel 4 confirma con el usuario. Conforme: causa, qué se hizo y evidencia. No conforme: el caso se reabre. Sin respuesta: tras 3 intentos de contacto registrados.",
+      "example": "Marcaste resuelto el caso; hablas con el usuario, queda conforme y lo cierras con la causa «Error del sistema»."
     }
   }
 }

@@ -133,7 +133,7 @@ window.SAAS_ADMIN_CATALOG = [
                 apartados: [
                     tablaApartado('tabla',
                         ['Folio', 'Cliente', 'Giro', 'Tipo', 'Viene de', 'Motivo de la derivación', 'Prioridad', 'Estatus', 'Lo atiende', 'Evidencias', 'Chat y recorrido'],
-                        ['Tomar casos', 'Escribir en el chat', 'Notas internas', 'Cambiar estatus', 'Marcar resuelto', 'Devolver al nivel anterior', 'Calificar traspasos', 'Subir evidencias']),
+                        ['Tomar casos', 'Escribir en el chat', 'Notas internas', 'Cambiar estatus', 'Marcar resuelto', 'Devolver al nivel anterior', 'Calificar traspasos', 'Subir evidencias', 'Cerrar casos de clientes sin TI']),
                 ],
             },
         ],

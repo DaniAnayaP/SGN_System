@@ -10299,7 +10299,8 @@ function handleSupportCaseCreate(req, res, openToAll) {
         if (text) answers[key] = text;
     }
     const priority = SupportRules.priorityOf(impacts, body.when);
-    const level = SupportRules.entryLevel(category.kind, options.map);
+    // desde la pestaña Soporte, una empresa SIN TI contratado entra directo al Nivel 4; el formulario de Operaciones es del equipo de TI y sigue entrando por el nivel de su categoría
+    const level = openToAll && supportClientNoTi(clientId) ? 'n4' : SupportRules.entryLevel(category.kind, options.map);
     const minutes = SupportRules.firstResponseMinutes(priority, category.firstResponseMin, options.map);
     const created = createSupportCase({
         clientId, isTestAccount, type: 'c', summary, screen: screenText, action: actionText, screenNode, actionLeaf, errorText: clean(body.errorText, SUPPORT_TEXT_MAX),
@@ -10316,6 +10317,7 @@ function handleSupportCaseCreate(req, res, openToAll) {
         const levelUsers = (options.map[`${created.level}Users`] || []).filter((id) => id !== req.user.sub);
         publishSupportNotice({ recipients: levelUsers, actorUserId: req.user.sub, actorLabel: changedByLabel(req), payload: { variant: 'urgent-arrived', caseId: created.id, folio, summary: created.summary, targetName: created.reporter_name, level: created.level, priority } });
     }
+    if (created.level === 'n4') { try { publishSaasCaseArrived(created.id, { by: changedByLabel(req), actorUserId: req.user.sub }); } catch (err) { console.error('saas case arrived notice failed', err); } }
     try { logTableChange({ clientId, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: created.id, recordLabel: `Caso ${folio}`, action: 'create', changedBy: changedByLabel(req) }); } catch (err) { console.error('support case log failed', err); }
     notifyButtonAction(req, SUPPORT_CASE_TABLE_KEY, 'create', folio);
     res.status(201).json({ case: supportCaseRowOf(created, getClientById(clientId), true), maxFiles: SUPPORT_FILES_PER_CASE });
@@ -10383,7 +10385,7 @@ app.post('/api/business/support-cases/:id/messages', requireAuth, (req, res) => 
     if (!text && !fileId) return bad('Escribe un mensaje.', 'EMPTY');
     // un caso cerrado no recibe mensajes; si quien reportó escribe en uno «cerrado sin respuesta» (dentro de los 7 días), se reabre solo
     if (['done', 'noresp'].includes(rec.status)) {
-        if (rec.status === 'noresp' && !note && supportCanReopen(req, rec)) { supportReopenFlow(req, rec, { said: text || '…', toLevel: 'n1', byTeam: false }); rec = getSupportCase(id, req.user.clientId, req.user.isTestAccount); }
+        if (rec.status === 'noresp' && !note && supportCanReopen(req, rec)) { supportReopenFlow(req, rec, { said: text || '…', toLevel: supportClientNoTi(rec.client_id) ? 'n4' : 'n1', byTeam: false }); rec = getSupportCase(id, req.user.clientId, req.user.isTestAccount); }
         else return bad('Este caso ya está cerrado.', 'CLOSED');
     }
     if (!note && !supportIsReporter(req, rec) && ['n1', 'n2', 'n3', 'n4'].includes(supportAuthorLevel(req, rec)) && supportRateFirst(req, res, rec)) return;
@@ -10941,6 +10943,7 @@ function supportReopenFlow(req, rec, { said, toLevel = 'n1', byTeam = false }) {
     addSupportEvent(rec, 'reopened', { by, said, to: toLevel, byTeam }, { level: byTeam ? 'n1' : 'n0', authorName: by, authorUserId: req.user.sub });
     supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel(rec.status), supportStatusLabel('open'));
     supportNoticeToLevel(req, toLevel, { variant: 'case-reopened', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, targetName: rec.reporter_name, to: toLevel, said, by });
+    if (toLevel === 'n4') { try { publishSaasCaseArrived(rec.id, { by, reopened: true, said, actorUserId: req.user.sub }); } catch (err) { console.error('saas case reopened notice failed', err); } }
 }
 function supportClosingGate(req, res) {
     if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
@@ -11075,8 +11078,9 @@ app.post('/api/business/support-cases/:id/reopen', requireAuth, (req, res) => {
     if (!supportCanReopen(req, rec)) return bad(`Ya pasaron más de ${SUPPORT_REOPEN_DAYS} días desde que se cerró: abre una solicitud nueva.`, 'EXPIRED');
     const said = supportCleanText(req.body && req.body.said);
     if (said.length < SUPPORT_SAID_MIN) return bad('Cuéntanos qué sigue fallando.', 'SAID');
-    supportReopenFlow(req, rec, { said, toLevel: 'n1', byTeam: false });
-    res.json({ status: 'open', level: 'n1' });
+    const reopenLevel = supportClientNoTi(rec.client_id) ? 'n4' : 'n1';
+    supportReopenFlow(req, rec, { said, toLevel: reopenLevel, byTeam: false });
+    res.json({ status: 'open', level: reopenLevel });
 });
 // Resolver un Soporte general: cada caso ligado que se esté trabajando regresa a la Mesa de ayuda por confirmar con su usuario (ninguno se cierra solo) y se les avisa.
 app.post('/api/business/support-cases/:id/general-resolve', requireAuth, (req, res) => {
@@ -11537,8 +11541,11 @@ app.get('/api/business/support-kpi', requireAuth, (req, res) => {
 // ---- «Soporte» para todos los usuarios y Nivel 0 (ayuda rápida) ---------------------------------------------------------------------------------------------------------------------------------
 // Cualquier usuario de una empresa que tiene TI contratado abre «Soporte» (Soporte.html): busca ayuda rápida (los errores explicados y manuales que arma la empresa en TI › Catálogos › Errores y ayuda), dice si le sirvió o no (Nivel 0),
 // abre una solicitud nueva (sin necesitar la hoja «Nueva solicitud» del árbol, que es la de la lista de Operaciones) y sigue las suyas: estatus, nivel, quién las atiende, calificar la atención y reabrir. Rutas /api/business/my-support*.
-const supportOpenToAll = (req) => !!req.user.clientId && getClientModuleKeys(req.user.clientId).includes('information-technology');
-const supportNoSupport = (res) => res.status(403).json({ message: 'Tu empresa todavía no tiene el Soporte contratado.', code: 'NOSUPPORT' });
+// «Soporte» es una pestaña de la campana (Notificaciones › Soporte en el árbol): la tiene cualquier cuenta de cliente a la que se la dieron (o el ícono Notificaciones completo, como antes de que existieran las pestañas), la empresa tenga TI contratado o no.
+// Una empresa SIN TI contratado no tiene Mesa de ayuda propia: su solicitud entra directo al Nivel 4 (GEIPSA).
+const supportOpenToAll = (req) => !!req.user.clientId && (!!req.user.isClientAdmin || supportColGrants(req).some((g) => g.sectionId === 'main' && g.itemId === 'btn-notificaciones' && (!g.submenuId || g.submenuId === 'notif-soporte')));
+const supportClientNoTi = (clientId) => !getClientModuleKeys(clientId).includes('information-technology');
+const supportNoSupport = (res) => res.status(403).json({ message: 'Tu cuenta no tiene la pestaña Soporte.', code: 'NOSUPPORT' });
 app.get('/api/business/my-support', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!supportOpenToAll(req)) return supportNoSupport(res);
@@ -11550,7 +11557,7 @@ app.get('/api/business/my-support', requireAuth, (req, res) => {
     const rows = listSupportCases(clientId, isTestAccount, { limit: 2000 }).filter((r) => r.reporter_user_id === req.user.sub);
     res.set('Cache-Control', 'no-store');
     res.json({
-        canCreate: true, helpDesk, askRating: row.ask_user_rating === 1, reopenDays: SUPPORT_REOPEN_DAYS,
+        canCreate: true, helpDesk, provider: supportClientNoTi(clientId), askRating: row.ask_user_rating === 1, reopenDays: SUPPORT_REOPEN_DAYS,
         cases: rows.map((r) => ({ ...supportCaseRowOf(r, client, false), rateCan: supportUserRatingState(req, r).canRate, reopenCan: supportCanReopen(req, r), reopenUntil: supportCanReopen(req, r) ? new Date(supportReopenUntilMs(r)).toISOString() : null })),
     });
 });
@@ -11575,13 +11582,13 @@ app.post('/api/business/my-support', requireAuth, (req, res) => {
 // La ayuda rápida: los errores explicados y manuales activos de la empresa (los ve cualquier usuario; una empresa sin TI contratado recibe la lista vacía).
 const supportHelpOf = (a) => ({ id: a.id, title: a.title, errorText: a.error_text, what: a.what, need: a.need, manualTitle: a.manual_title, manualUrl: a.manual_url, status: a.status, updatedAt: sqlUtcIso(a.updated_at) });
 app.get('/api/business/support-help', requireAuth, (req, res) => {
-    if (!req.user.clientId || !supportOpenToAll(req)) return res.json({ articles: [] });
+    if (!req.user.clientId || supportClientNoTi(req.user.clientId)) return res.json({ articles: [] }); // la ayuda rápida la arma la TI de la empresa: sin TI contratado, vacía
     res.set('Cache-Control', 'private, max-age=30');
     res.json({ articles: listSupportHelpArticles(req.user.clientId, req.user.isTestAccount, { activeOnly: true }).map(supportHelpOf) });
 });
 // «Me sirvió» / «No me sirvió»: cada respuesta es una consulta de Nivel 0 (la que sirvió cuenta como resuelta sin abrir caso).
 app.post('/api/business/support-help/:id/use', requireAuth, (req, res) => {
-    if (!req.user.clientId || !supportOpenToAll(req)) return res.status(403).json({ message: 'Tu empresa todavía no tiene el Soporte contratado.', code: 'NOSUPPORT' });
+    if (!req.user.clientId || supportClientNoTi(req.user.clientId)) return res.status(403).json({ message: 'Tu empresa todavía no tiene el Soporte contratado.', code: 'NOSUPPORT' });
     const article = getSupportHelpArticle(Number(req.params.id), req.user.clientId, req.user.isTestAccount);
     if (!article || article.status !== 'active') return res.status(404).json({ message: 'Esa ayuda no existe.' });
     if (typeof (req.body || {}).helped !== 'boolean') return res.status(400).json({ message: 'Dinos si te sirvió o no.', code: 'HELPED' });
@@ -11691,7 +11698,7 @@ app.get('/api/business/support-cases/:id/files/:fileId', requireAuth, (req, res)
 // muestra si la empresa lo permite (interruptor del Mapa de soporte): nombre, puesto, departamento y jefe directo, sin horarios ni datos de contacto.
 const SAAS_SUPPORT_ITEM = 'saas-support';
 // Posición de cada columna (c) y botón (a) en SaasAdminCatalog.js: no cambiar el orden de ese catálogo.
-const SAAS_SUPPORT_LEAVES = { evidence: 'tabla::c9', chat: 'tabla::c10', take: 'tabla::a0', write: 'tabla::a1', notes: 'tabla::a2', status: 'tabla::a3', resolve: 'tabla::a4', down: 'tabla::a5', rate: 'tabla::a6', upload: 'tabla::a7' };
+const SAAS_SUPPORT_LEAVES = { evidence: 'tabla::c9', chat: 'tabla::c10', take: 'tabla::a0', write: 'tabla::a1', notes: 'tabla::a2', status: 'tabla::a3', resolve: 'tabla::a4', down: 'tabla::a5', rate: 'tabla::a6', upload: 'tabla::a7', close: 'tabla::a8' };
 const saasSupportCan = (req, key) => !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), SAAS_SUPPORT_ITEM, SAAS_SUPPORT_LEAVES[key]);
 const saasSupportHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_SUPPORT_ITEM);
 // Quién recibe qué: cada cuenta eligió en Equipo SaaS sus «Giros que atiende» y «Departamentos que atiende» (NULL = sin elegir → no recibe nada; [] = todos; lista = solo esos). El giro del caso sale del plan de su
@@ -11719,10 +11726,10 @@ function saasSupportAssignable(rec) {
     return listSaasSupportAccountNames([...ids]);
 }
 // Aviso de campana a quien atiende ese giro y departamento: llegó un caso al Nivel 4 (lo subió el Nivel 3 de la empresa o entró directo). Un caso de una cuenta de prueba no cuenta.
-function publishSaasCaseArrived(caseId, { by = '', fromLevel = '', reason = '', direction = 'up', actorUserId = null } = {}) {
+function publishSaasCaseArrived(caseId, { by = '', fromLevel = '', reason = '', direction = 'up', actorUserId = null, reopened = false, said = '' } = {}) {
     const rec = getSupportCaseForSaas(caseId);
     if (!rec) return [];
-    return publishSupportNotice({ recipients: saasSupportRecipients(rec, { exclude: actorUserId }), actorUserId, actorLabel: by || 'Sistema', payload: { variant: 'saas-arrived', saas: true, caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, client: rec.client_name, sector: rec.sector_name, targetName: rec.reporter_name, from: fromLevel, reason, direction, by, priority: rec.priority } });
+    return publishSupportNotice({ recipients: saasSupportRecipients(rec, { exclude: actorUserId }), actorUserId, actorLabel: by || 'Sistema', payload: { variant: 'saas-arrived', saas: true, caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, client: rec.client_name, sector: rec.sector_name, targetName: rec.reporter_name, from: fromLevel, reason, direction, by, priority: rec.priority, reopened: !!reopened, said: said || '' } });
 }
 // El mismo usuario de SaaS, pero «dentro» de la empresa del caso: así sirven las funciones de Soporte que ya existen (traspasos, avisos, bitácora) sin que sepan de SaaS.
 const saasSupportReq = (req, rec) => ({ user: { ...req.user, clientId: rec.client_id, isTestAccount: false, isClientAdmin: false } });
@@ -11751,13 +11758,16 @@ function saasSupportCanOf(req, rec) {
     const live = saasSupportAtN4(rec);
     const working = live && SUPPORT_WORKING_STATUSES.includes(rec.status);
     const row = getSupportMapRow(rec.client_id);
-    const downTo = SupportRules.downLevels('n4', { n2Enabled: row.n2_enabled === 1, n3Enabled: row.n3_enabled === 1 });
+    // una empresa sin TI contratado no tiene niveles por debajo: no hay a quién devolverle el caso
+    const noTi = supportClientNoTi(rec.client_id);
+    const downTo = noTi ? [] : SupportRules.downLevels('n4', { n2Enabled: row.n2_enabled === 1, n3Enabled: row.n3_enabled === 1 });
     const pending = saasSupportPendingReceive(req, rec);
     return {
         take: working && saasSupportCan(req, 'take') && !rec.assignee_user_id && saasSupportInScope(req, rec),
         write: live && saasSupportCan(req, 'write'), notes: live && saasSupportCan(req, 'notes'), upload: live && saasSupportCan(req, 'upload'),
         status: working && saasSupportCan(req, 'status'), resolve: working && saasSupportCan(req, 'resolve'), down: live && rec.status !== 'paused' && saasSupportCan(req, 'down') && downTo.length > 0, downTo,
         rate: !!pending, pending,
+        noTi, close: noTi && live && rec.status === 'confirm' && saasSupportCan(req, 'close'),
     };
 }
 // Quien reportó, lo que la empresa le muestra al proveedor: nombre, puesto, departamento y jefe directo (sin horarios ni contacto). null = la empresa no lo comparte.
@@ -11802,8 +11812,9 @@ app.get('/api/admin/support-cases/:id', requireAuth, requireAdmin, (req, res) =>
         reporter: saasSupportReporterCard(rec),
         files: canEvidence ? listSupportCaseFiles(rec.id).map(supportFileOf) : [], canEvidence, canChat,
         chat: { canSee: canChat, canSend: can.write, canWriteNotes: can.notes, canSeeNotes: saasSupportCan(req, 'notes'), max: SUPPORT_MESSAGE_MAX, meId: me },
-        can: { take: can.take, status: can.status, resolve: can.resolve, down: can.down, upload: can.upload, rate: can.rate, assign: !!req.user.isSaasSuperAdmin && saasSupportAtN4(rec) && SUPPORT_WORKING_STATUSES.includes(rec.status) }, inScope: saasSupportInScope(req, rec),
+        can: { take: can.take, status: can.status, resolve: can.resolve, down: can.down, upload: can.upload, rate: can.rate, close: can.close, noTi: can.noTi, assign: !!req.user.isSaasSuperAdmin && saasSupportAtN4(rec) && SUPPORT_WORKING_STATUSES.includes(rec.status) }, inScope: saasSupportInScope(req, rec),
         assignable: req.user.isSaasSuperAdmin && saasSupportAtN4(rec) ? saasSupportAssignable(rec).map((u) => ({ id: u.id, name: u.name })) : [],
+        closing: can.noTi && rec.status === 'confirm' && rec.level === 'n4' ? saasSupportClosingOf(req, rec, can.close) : null,
         downTo: can.downTo, pending: can.pending ? supportRatingMoveOf(can.pending) : null, ratingTags: SUPPORT_RATING_TAGS.receive, maxComment: SUPPORT_RATING_COMMENT_MAX,
         moves: moves.map(supportMoveOf), segments: canChat ? supportSegments(rec, moves) : [], reasons: SUPPORT_MOVE_REASONS.down, minText: SUPPORT_MOVE_TEXT_MIN, maxText: SUPPORT_MOVE_TEXT_MAX, statusTargets: SUPPORT_STATUS_TARGETS,
         limits: { files: SUPPORT_FILES_PER_CASE, bytes: SUPPORT_FILE_LIMITS },
@@ -11914,11 +11925,14 @@ app.post('/api/admin/support-cases/:id/resolve', requireAuth, requireAdmin, (req
     if (!supportMoveFilesOk(rec, fileIds)) return bad('Una de las evidencias no sirve (debe ser de lo que hiciste, nueva y de este caso).', 'FILES');
     const sreq = saasSupportReq(req, rec);
     const by = req.user.name;
-    supportApplyMove(sreq, rec, { direction: 'down', toLevel: 'n1', reason: 'solved', did, notes: '', fileIds, status: 'confirm' });
-    addSupportClosure({ caseId: rec.id, clientId: rec.client_id, kind: 'resolved', byUserId: req.user.sub, byName: by, fromLevel: 'n4', toLevel: 'n1', did, fileIds });
+    // sin TI contratado no hay Mesa de ayuda a quien regresarle el caso: se queda en el Nivel 4 por confirmar con el usuario y el Nivel 4 lo cierra
+    const noTi = supportClientNoTi(rec.client_id);
+    if (noTi) { ensureSupportThread(rec); setSupportCaseConfirm(rec.id); addSupportEvent(rec, 'resolved', { by }, { level: 'n4', authorName: by, authorUserId: req.user.sub }); }
+    else supportApplyMove(sreq, rec, { direction: 'down', toLevel: 'n1', reason: 'solved', did, notes: '', fileIds, status: 'confirm' });
+    addSupportClosure({ caseId: rec.id, clientId: rec.client_id, kind: 'resolved', byUserId: req.user.sub, byName: by, fromLevel: 'n4', toLevel: noTi ? 'n4' : 'n1', did, fileIds });
     supportLogCaseChange(sreq, rec, 'main.colSpEstatus', supportStatusLabel(rec.status), supportStatusLabel('confirm'));
     if (rec.reporter_user_id) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-resolved', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, by } });
-    res.status(201).json({ status: 'confirm', level: 'n1' });
+    res.status(201).json({ status: 'confirm', level: noTi ? 'n4' : 'n1' });
 });
 // Devolver el caso al nivel anterior de la empresa (el más cercano que usa): motivo, qué hizo, notas y evidencia, como cualquier traspaso.
 app.post('/api/admin/support-cases/:id/moves', requireAuth, requireAdmin, (req, res) => {
@@ -12004,6 +12018,83 @@ app.get('/api/admin/support-cases/:id/files/:fileId', requireAuth, requireAdmin,
     res.send(file.data);
 });
 
+// ---- Cierre de un caso de una empresa SIN TI contratado: el Nivel 4 es también la Mesa de ayuda, así que él confirma con el usuario y lo cierra (conforme, no conforme o sin respuesta tras 3 intentos), igual que lo haría la
+// Mesa de ayuda de una empresa con TI. Se da con el botón «Cerrar casos de clientes sin TI» del árbol SaaS.
+function saasSupportCauseOptions(rec) {
+    return listArticleCategories(rec.client_id, 'soporte-causas', !!rec.is_test_data).filter((c) => c.status === 'active' && String(c.name || '').trim()).map((c) => ({ id: c.id, name: String(c.name).trim() }));
+}
+function saasSupportClosingOf(req, rec, canClose) {
+    const closures = listSupportClosures(rec.id);
+    const lastResolved = [...closures].reverse().find((c) => c.kind === 'resolved') || null;
+    const attempts = listSupportAttempts(rec.id, rec.confirm_at);
+    return {
+        canClose: !!canClose, confirmAt: sqlUtcIso(rec.confirm_at), minText: SUPPORT_CLOSE_TEXT_MIN, minSaid: SUPPORT_SAID_MIN, maxText: SUPPORT_MOVE_TEXT_MAX, needAttempts: SUPPORT_NEED_ATTEMPTS, maxAttempts: SUPPORT_MAX_ATTEMPTS, channels: SUPPORT_ATTEMPT_CHANNELS,
+        causes: canClose ? saasSupportCauseOptions(rec) : [],
+        files: canClose && rec.confirm_at ? listSupportCaseFiles(rec.id).filter((f) => f.created_at >= rec.confirm_at).map(supportFileOf) : [],
+        attempts: attempts.map((a) => ({ id: a.id, channel: a.channel, note: a.note, by: a.by_name, createdAt: sqlUtcIso(a.created_at) })),
+        resolved: lastResolved ? { by: lastResolved.by_name, did: lastResolved.did, fileCount: parseJsonOr(lastResolved.file_ids, []).length, createdAt: sqlUtcIso(lastResolved.created_at) } : null,
+    };
+}
+const saasSupportCanClose = (req, rec) => saasSupportCan(req, 'close') && supportClientNoTi(rec.client_id) && rec.level === 'n4' && rec.status === 'confirm';
+app.post('/api/admin/support-cases/:id/attempts', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!saasSupportCanClose(req, rec)) return res.status(403).json({ message: 'Solo el Nivel 4 de una empresa sin TI registra los intentos de contacto de un caso por confirmar.', code: 'FORBIDDEN' });
+    const channel = String(body.channel || '');
+    if (!SUPPORT_ATTEMPT_CHANNELS.includes(channel)) return bad('Elige cómo lo contactaste.', 'CHANNEL');
+    const note = supportCleanText(body.note, 500);
+    if (note.length < SUPPORT_SAID_MIN) return bad('Escribe una nota del intento (qué hiciste y qué pasó).', 'NOTE');
+    const so = listSupportAttempts(rec.id, rec.confirm_at);
+    if (so.length >= SUPPORT_MAX_ATTEMPTS) return bad('Ya hay demasiados intentos registrados: ciérralo sin respuesta.', 'MAX');
+    ensureSupportThread(rec);
+    const by = req.user.name;
+    const a = addSupportAttempt({ caseId: rec.id, clientId: rec.client_id, channel, note, byUserId: req.user.sub, byName: by });
+    addSupportEvent(rec, 'int_attempt', { channel, n: so.length + 1, by }, { level: 'n4', authorName: by, authorUserId: req.user.sub });
+    res.status(201).json({ attempt: { id: a.id, channel: a.channel, note: a.note, by: a.by_name, createdAt: sqlUtcIso(a.created_at) }, count: so.length + 1 });
+});
+app.post('/api/admin/support-cases/:id/close', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!saasSupportCan(req, 'close') || !supportClientNoTi(rec.client_id)) return res.status(403).json({ message: 'Solo el Nivel 4 con el botón «Cerrar casos de clientes sin TI» cierra el caso de una empresa sin TI.', code: 'FORBIDDEN' });
+    if (rec.level !== 'n4' || rec.status !== 'confirm') return bad(SUPPORT_CLOSED_STATUSES.includes(rec.status) ? 'Este caso ya está cerrado.' : 'Primero hay que marcarlo resuelto: el cierre es con el caso por confirmar con el usuario.', SUPPORT_CLOSED_STATUSES.includes(rec.status) ? 'CLOSED' : 'STATE');
+    const conformity = String(body.conformity || '');
+    if (!['ok', 'none', 'noresp'].includes(conformity)) return bad('Elige si el usuario quedó conforme.', 'CONFORMITY');
+    const sreq = saasSupportReq(req, rec);
+    const by = req.user.name;
+    ensureSupportThread(rec);
+    if (conformity === 'none') {
+        const said = supportCleanText(body.said);
+        if (said.length < SUPPORT_SAID_MIN) return bad('Escribe qué dijo el usuario (qué sigue fallando).', 'SAID');
+        supportReopenFlow(sreq, rec, { said, toLevel: 'n4', byTeam: true });
+        return res.json({ status: 'open', level: 'n4' });
+    }
+    let status = 'done'; let causeId = null; let causeName = ''; let did = ''; let fileIds = [];
+    if (conformity === 'ok') {
+        const cause = saasSupportCauseOptions(rec).find((c) => c.id === Number(body.causeId));
+        if (!cause) return bad('Elige la causa del problema.', 'CAUSE');
+        causeId = cause.id; causeName = cause.name;
+        did = supportCleanText(body.did);
+        if (did.length < SUPPORT_CLOSE_TEXT_MIN) return bad('Cuenta qué se hizo para resolverlo (obligatorio).', 'DID');
+        fileIds = supportFileIdsOf(body);
+        if (!fileIds.length) return bad('Adjunta al menos una evidencia de que quedó resuelto.', 'FILES');
+        if (!fileIds.every((fileId) => { const f = getSupportCaseFile(rec.id, fileId); return !!f && !!rec.confirm_at && f.created_at >= rec.confirm_at; })) return bad('Las evidencias del cierre deben ser de este caso y de después de que quedó por confirmar.', 'FILES');
+    } else {
+        const attempts = listSupportAttempts(rec.id, rec.confirm_at);
+        if (attempts.length < SUPPORT_NEED_ATTEMPTS) return bad(`Para cerrarlo sin respuesta faltan intentos de contacto: llevas ${attempts.length} de ${SUPPORT_NEED_ATTEMPTS}.`, 'ATTEMPTS');
+        status = 'noresp';
+        did = supportCleanText(`Sin respuesta del usuario tras ${attempts.length} intentos de contacto.`);
+    }
+    closeSupportCase({ caseId: rec.id, status, by, causeId, causeName, did });
+    addSupportClosure({ caseId: rec.id, clientId: rec.client_id, kind: status === 'done' ? 'closed' : 'noresp', byUserId: req.user.sub, byName: by, fromLevel: 'n4', toLevel: 'n4', causeId, causeName, did, fileIds });
+    addSupportEvent(rec, 'closed', { by, noresp: status === 'noresp', cause: causeName, attempts: status === 'noresp' ? listSupportAttempts(rec.id, rec.confirm_at).length : 0 }, { level: 'n4', authorName: by, authorUserId: req.user.sub });
+    supportLogCaseChange(sreq, rec, 'main.colSpEstatus', supportStatusLabel('confirm'), supportStatusLabel(status));
+    if (rec.reporter_user_id) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-closed', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, noresp: status === 'noresp', until: new Date(Date.now() + SUPPORT_REOPEN_DAYS * 86400000).toISOString(), askRating: status === 'done' && getSupportMapRow(rec.client_id).ask_user_rating === 1, by } });
+    res.json({ status });
+});
 // Coordinación (el administrador principal) le asigna el caso a una persona que lo atiende: el caso queda a su nombre y le llega el aviso. Quien reasigna no cambia el estatus.
 app.post('/api/admin/support-cases/:id/assign', requireAuth, requireAdmin, (req, res) => {
     const rec = saasSupportGate(req, res);
