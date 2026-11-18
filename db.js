@@ -14852,7 +14852,7 @@ function addSupportMove(m) {
             .run(m.caseId, m.clientId, m.direction, m.fromLevel, m.toLevel, m.reason, m.did, m.notes, JSON.stringify(m.fileIds || []), m.missingAck ? 1 : 0, m.byUserId || null, m.byName || '').lastInsertRowid;
         // al llegar a un nivel nadie lo ha tomado: vuelve a «Abierto» (o queda «Por confirmar con el usuario» si lo regresan resuelto a la Mesa de ayuda)
         const status = m.status === 'confirm' ? 'confirm' : 'open';
-        db.prepare("UPDATE support_cases SET level = ?, status = ?, confirm_at = CASE WHEN ? = 'confirm' THEN datetime('now') ELSE NULL END WHERE id = ?").run(m.toLevel, status, status, m.caseId);
+        db.prepare(`UPDATE support_cases SET level = ?, status = ?, confirm_at = CASE WHEN ? = 'confirm' THEN datetime('now') ELSE NULL END, ${SUPPORT_PAUSE_END_SQL}, assignee_user_id = NULL, assignee_name = '', assigned_at = NULL WHERE id = ?`).run(m.toLevel, status, status, m.caseId);
         return db.prepare('SELECT * FROM support_case_moves WHERE id = ?').get(id);
     })();
 }
@@ -14894,7 +14894,7 @@ for (const [col, ddl] of [['general_id', 'INTEGER'], ['classified_at', 'TEXT'], 
     if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE support_cases ADD COLUMN ${col} ${ddl}`);
 }
 db.exec('CREATE INDEX IF NOT EXISTS idx_support_cases_general ON support_cases (general_id)');
-const SUPPORT_OPEN_STATUSES_SQL = "('open','review','working','testing')";
+const SUPPORT_OPEN_STATUSES_SQL = "('open','review','working','testing','paused')";
 function setSupportCaseStatus(caseId, status) {
     db.prepare('UPDATE support_cases SET status = ? WHERE id = ?').run(status, caseId);
 }
@@ -15021,13 +15021,13 @@ function listSupportAttempts(caseId, sinceSql) {
     return db.prepare('SELECT * FROM support_case_attempts WHERE case_id = ? AND created_at >= ? ORDER BY id ASC').all(caseId, sinceSql || '0000-00-00 00:00:00');
 }
 function setSupportCaseConfirm(caseId) {
-    db.prepare("UPDATE support_cases SET status = 'confirm', confirm_at = datetime('now') WHERE id = ?").run(caseId);
+    db.prepare(`UPDATE support_cases SET status = 'confirm', confirm_at = datetime('now'), ${SUPPORT_PAUSE_END_SQL} WHERE id = ?`).run(caseId);
 }
 function closeSupportCase({ caseId, status, by, causeId, causeName, did }) {
-    db.prepare("UPDATE support_cases SET status = ?, closed_at = datetime('now'), closed_by = ?, cause_id = ?, cause_name = ?, close_did = ? WHERE id = ?").run(status, by || '', causeId || null, causeName || '', did || '', caseId);
+    db.prepare(`UPDATE support_cases SET status = ?, closed_at = datetime('now'), closed_by = ?, cause_id = ?, cause_name = ?, close_did = ?, ${SUPPORT_PAUSE_END_SQL} WHERE id = ?`).run(status, by || '', causeId || null, causeName || '', did || '', caseId);
 }
 function reopenSupportCase(caseId) {
-    db.prepare("UPDATE support_cases SET status = 'open', confirm_at = NULL, closed_at = NULL, rating_reminded = 0, reopened_count = reopened_count + 1 WHERE id = ?").run(caseId);
+    db.prepare(`UPDATE support_cases SET status = 'open', confirm_at = NULL, closed_at = NULL, rating_reminded = 0, reopened_count = reopened_count + 1, ${SUPPORT_PAUSE_END_SQL}, assignee_user_id = NULL, assignee_name = '', assigned_at = NULL, urgent_alerted_at = NULL WHERE id = ?`).run(caseId);
 }
 function resolveSupportGeneral(id, { by, did }) {
     db.prepare("UPDATE support_generals SET status = 'resolved', resolved_at = datetime('now'), resolved_by = ?, resolved_did = ? WHERE id = ?").run(by || '', did || '', id);
@@ -15094,6 +15094,76 @@ function listSupportRatingReminderCandidates() {
 }
 function markSupportRatingReminded(caseId) {
     db.prepare('UPDATE support_cases SET rating_reminded = 1 WHERE id = ?').run(caseId);
+}
+// ---- Mi cola: quién atiende cada caso, lo urgente que interrumpe y pausar ------------------------------------------------------------------------------------------------------------------------
+// assignee_* = quién lo tomó en el nivel donde está (al pasar de nivel nadie lo ha tomado: se reinicia). Estatus «En pausa» (paused): quien atiende un caso lo pausa para atender uno Urgente; paused_at = desde cuándo,
+// paused_prev = el estatus al que regresa al retomarlo, paused_ms / pause_count = cuánto tiempo y cuántas veces estuvo en pausa (para los KPI). El reloj de la primera respuesta se detiene en pausa (si el Mapa lo pide).
+// support_interrupts guarda cada decisión cuando llega un Urgente y alguien está con algo menos urgente: cuánto le falta (minutes_left), qué recomendaba el sistema (recommended: pause | finish) y qué eligió (decision).
+// urgent_alerted_at = ya se avisó a Coordinación y al nivel que nadie tomó este Urgente a tiempo.
+for (const [col, ddl] of [['assignee_user_id', 'INTEGER'], ['assignee_name', "TEXT NOT NULL DEFAULT ''"], ['assigned_at', 'TEXT'], ['paused_at', 'TEXT'], ['paused_prev', "TEXT NOT NULL DEFAULT ''"],
+    ['paused_ms', 'INTEGER NOT NULL DEFAULT 0'], ['pause_count', 'INTEGER NOT NULL DEFAULT 0'], ['urgent_alerted_at', 'TEXT']]) {
+    if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE support_cases ADD COLUMN ${col} ${ddl}`);
+}
+db.exec(`
+    CREATE TABLE IF NOT EXISTS support_interrupts (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id        INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        urgent_case_id   INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+        working_case_id  INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+        user_id          INTEGER,
+        user_name        TEXT NOT NULL DEFAULT '',
+        minutes_left     INTEGER NOT NULL DEFAULT 0,
+        wait_min         INTEGER NOT NULL DEFAULT 0,
+        recommended      TEXT NOT NULL DEFAULT 'pause',
+        decision         TEXT NOT NULL DEFAULT 'pause',
+        due_at           TEXT,
+        alerted          INTEGER NOT NULL DEFAULT 0,
+        created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_interrupts_due ON support_interrupts (decision, alerted, due_at);
+`);
+const SUPPORT_PAUSE_END_SQL = "paused_ms = paused_ms + CASE WHEN paused_at IS NOT NULL THEN CAST((julianday('now') - julianday(paused_at)) * 86400000 AS INTEGER) ELSE 0 END, paused_at = NULL, paused_prev = ''";
+function assignSupportCase(caseId, userId, name) {
+    db.prepare("UPDATE support_cases SET assignee_user_id = ?, assignee_name = ?, assigned_at = datetime('now') WHERE id = ?").run(userId, name || '', caseId);
+}
+// Pasa el caso a «En pausa» (solo si se está trabajando); regresa true si se pausó.
+function pauseSupportCase(caseId) {
+    return db.prepare("UPDATE support_cases SET paused_prev = status, status = 'paused', paused_at = datetime('now'), pause_count = pause_count + 1 WHERE id = ? AND status IN ('review', 'working', 'testing')").run(caseId).changes > 0;
+}
+// Retoma un caso en pausa: regresa a su estatus anterior, suma el tiempo que estuvo en pausa y, si el reloj se detiene en pausa y todavía no tuvo primera respuesta, corre su plazo. Regresa { status, ms } o null.
+function resumeSupportCase(caseId, extendDue) {
+    return db.transaction(() => {
+        const c = db.prepare("SELECT paused_prev, first_response_at, first_response_due_at, CAST((julianday('now') - julianday(paused_at)) * 86400000 AS INTEGER) AS ms FROM support_cases WHERE id = ? AND status = 'paused' AND paused_at IS NOT NULL").get(caseId);
+        if (!c) return null;
+        const ms = Math.max(0, c.ms || 0);
+        const status = ['review', 'working', 'testing'].includes(c.paused_prev) ? c.paused_prev : 'working';
+        db.prepare("UPDATE support_cases SET status = ?, paused_at = NULL, paused_prev = '', paused_ms = paused_ms + ? WHERE id = ?").run(status, ms, caseId);
+        if (extendDue && !c.first_response_at && c.first_response_due_at) db.prepare("UPDATE support_cases SET first_response_due_at = datetime(first_response_due_at, '+' || ? || ' seconds') WHERE id = ?").run(Math.round(ms / 1000), caseId);
+        return { status, ms };
+    })();
+}
+// Los casos que se están atendiendo o esperan (para la cola de cada persona y de cada nivel).
+function listSupportQueueCases(clientId, isTestAccount) {
+    return db.prepare("SELECT * FROM support_cases WHERE client_id = ? AND is_test_data = ? AND status IN ('open', 'review', 'working', 'testing', 'paused', 'confirm') ORDER BY priority ASC, created_at ASC, id ASC LIMIT 1000").all(clientId, isTestAccount ? 1 : 0);
+}
+function addSupportInterrupt(i) {
+    const id = db.prepare('INSERT INTO support_interrupts (client_id, urgent_case_id, working_case_id, user_id, user_name, minutes_left, wait_min, recommended, decision, due_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(i.clientId, i.urgentCaseId, i.workingCaseId, i.userId || null, i.userName || '', i.minutesLeft, i.waitMin, i.recommended, i.decision, i.dueAt || null).lastInsertRowid;
+    return db.prepare('SELECT * FROM support_interrupts WHERE id = ?').get(id);
+}
+// Los «terminar primero» cuyo tiempo ya se acabó sin que alguien tomara el Urgente.
+function listDueSupportInterrupts(nowSql) {
+    return db.prepare("SELECT * FROM support_interrupts WHERE decision = 'finish' AND alerted = 0 AND due_at IS NOT NULL AND due_at <= ? ORDER BY id ASC LIMIT 100").all(nowSql);
+}
+function markSupportInterruptAlerted(id) {
+    db.prepare('UPDATE support_interrupts SET alerted = 1 WHERE id = ?').run(id);
+}
+// Los Urgentes (prioridad 1 o 2) que nadie ha tomado y ya pasaron el plazo de su primera respuesta.
+function listUrgentUntakenSupportCases(nowSql) {
+    return db.prepare("SELECT * FROM support_cases WHERE priority <= 2 AND status = 'open' AND assignee_user_id IS NULL AND urgent_alerted_at IS NULL AND first_response_due_at IS NOT NULL AND first_response_due_at <= ? ORDER BY id ASC LIMIT 100").all(nowSql);
+}
+function markSupportUrgentAlerted(caseId) {
+    db.prepare("UPDATE support_cases SET urgent_alerted_at = datetime('now') WHERE id = ?").run(caseId);
 }
 // ---- Quién reportó y su equipo: avisos e invitaciones del caso ----------------------------------------------------------------------------------------------------------------------------
 // Una fila por persona y caso. kind: 'notify' (se le AVISA: una nota en la campana, sin entrar al chat; debe tocar «Enterado») o 'invite' (se le INVITA al chat: ve la conversación y escribe, nunca las notas internas;
@@ -15470,6 +15540,7 @@ seedSoporteEvidenceKindsOnce();
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,
     addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,

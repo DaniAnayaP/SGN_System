@@ -10623,7 +10623,7 @@ function renderSupportNoticeRow(item) {
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
     const v = item.variant || '';
     const isPerson = v.startsWith('person-');
-    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated', 'general-linked': 'main.noticeSupportGeneralLinked', 'general-notify': 'main.noticeSupportGeneralNotify', 'case-resolved': 'main.noticeSupportResolved', 'case-closed': 'main.noticeSupportClosed', 'case-reopened': 'main.noticeSupportReopened', 'general-resolved': 'main.noticeSupportGeneralResolved', 'rate-reminder': 'main.noticeSupportRateReminder' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
+    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated', 'general-linked': 'main.noticeSupportGeneralLinked', 'general-notify': 'main.noticeSupportGeneralNotify', 'case-resolved': 'main.noticeSupportResolved', 'case-closed': 'main.noticeSupportClosed', 'case-reopened': 'main.noticeSupportReopened', 'general-resolved': 'main.noticeSupportGeneralResolved', 'rate-reminder': 'main.noticeSupportRateReminder', 'urgent-arrived': 'main.noticeSupportUrgentArrived', 'urgent-untaken': 'main.noticeSupportUrgentUntaken', 'interrupt-overridden': 'main.noticeSupportInterruptOverridden', 'case-paused': 'main.noticeSupportPaused' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
     const tag = document.createElement('div');
     tag.className = 'notifications-item-meta';
     tag.style.fontWeight = '700';
@@ -10645,6 +10645,14 @@ function renderSupportNoticeRow(item) {
         desc.textContent = `${text}${item.message ? ` — ${item.message}` : ''}`;
     } else if (v === 'case-resolved') {
         desc.textContent = t(item.generalFolio ? 'main.noticeSupportResolvedGeneralLine' : 'main.noticeSupportResolvedLine', { ...base, generalFolio: item.generalFolio || '' });
+    } else if (v === 'urgent-arrived') {
+        desc.textContent = t('main.noticeSupportUrgentArrivedLine', { ...base, level: t(`main.sopLevel_${item.level}`), priority: t(`main.msPri_${item.priority || 1}`) });
+    } else if (v === 'urgent-untaken') {
+        desc.textContent = t('main.noticeSupportUrgentUntakenLine', { ...base, level: t(`main.sopLevel_${item.level}`) });
+    } else if (v === 'interrupt-overridden') {
+        desc.textContent = t('main.noticeSupportInterruptOverriddenLine', { ...base, working: item.workingFolio || '', minutes: item.minutes || 0, wait: item.wait || 0 });
+    } else if (v === 'case-paused') {
+        desc.textContent = t('main.noticeSupportPausedLine', base);
     } else if (v === 'rate-reminder') {
         desc.textContent = t('main.noticeSupportRateReminderLine', base);
     } else if (v === 'case-closed') {
@@ -10703,7 +10711,7 @@ function renderSupportNoticeRow(item) {
             actions.append(hint);
         } else if (item.pStatus) showDone(item.pStatus);
         row.append(actions);
-    } else if (['access-request', 'case-arrived', 'general-linked', 'case-resolved', 'case-closed', 'case-reopened', 'rate-reminder'].includes(v) && item.caseId) {
+    } else if (['access-request', 'case-arrived', 'general-linked', 'case-resolved', 'case-closed', 'case-reopened', 'rate-reminder', 'urgent-arrived', 'urgent-untaken', 'interrupt-overridden', 'case-paused'].includes(v) && item.caseId) {
         const link = document.createElement('a');
         link.href = `OpTISoporteCaso.html?id=${encodeURIComponent(item.caseId)}`;
         link.className = 'notifications-item-meta';

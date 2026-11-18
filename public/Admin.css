@@ -9133,3 +9133,15 @@ video.sc-att.big{ max-width: 100%; max-height: 360px; }
 .sc-rate-block{ display: grid; gap: 0.5rem; padding: 0.7rem 0.8rem; border-radius: 0.7rem; border: 1px solid var(--color-border); } .sc-rate-block h4{ margin: 0; font-size: 0.9rem; }
 .sc-rate-pending{ background: #fdeed8; color: #6b3f06; border-color: transparent; } .sc-rate-pending .sp-muted{ color: #6b3f06; } .sc-rate-pending .sc-star{ color: #e3c79a; } .sc-rate-pending .sc-star.on{ color: #c58900; }
 .sc-rate-line{ display: grid; gap: 0.3rem; font-size: 0.82rem; }
+
+/* Casos de soporte: Mi cola (lo urgente primero, tomar y pausar) */
+.sp-status[data-k="paused"]{ background: #ececf1; color: #555a73; border-color: transparent; }
+.sc-mini{ padding: 0.15rem 0.7rem; font-size: 0.74rem; }
+.sp-queue{ display: grid; gap: 0.7rem; margin-bottom: 0.9rem; }
+.sp-q-alert{ display: grid; gap: 0.5rem; padding: 0.8rem 0.9rem; border-radius: 0.8rem; background: #fde4e1; color: #7a1f17; } .sp-q-alert h4{ margin: 0; font-size: 0.95rem; } .sp-q-alert .sp-muted{ color: #7a1f17; } .sp-q-alert a{ color: inherit; }
+.sp-q-clock{ display: grid; justify-items: end; } .sp-q-timer{ font-size: 1.4rem; font-variant-numeric: tabular-nums; } .sp-q-timer.over{ color: #b42318; }
+.sp-q-box{ display: grid; gap: 0.5rem; padding: 0.7rem 0.8rem; border-radius: 0.7rem; background: var(--color-surface); color: var(--color-text-primary); }
+.sp-q-opt{ display: grid; gap: 0.35rem; padding: 0.6rem 0.7rem; border-radius: 0.6rem; border: 1px solid var(--color-border); } .sp-q-opt.rec{ border-color: #b8741a; background: #fdeed8; color: #6b3f06; } .sp-q-opt.rec .sp-muted{ color: #6b3f06; }
+.sp-q-list{ display: grid; gap: 0.4rem; }
+.sp-q-row{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; border-radius: 0.6rem; border: 1px solid var(--color-border); background: var(--color-surface); } .sp-q-row.hot{ border-color: #c6372d; } .sp-q-row.paused{ opacity: 0.75; }
+.sp-q-main{ flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; font-size: 0.82rem; }

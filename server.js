@@ -582,6 +582,7 @@ const {
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,
     addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
@@ -10143,6 +10144,7 @@ function supportCaseRowOf(r, client, withFiles) {
         createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), firstResponseAt: sqlUtcIso(r.first_response_at), fileCount: r.file_count || 0, withFiles: !!withFiles,
         general: r.general_id ? { id: r.general_id, folio: supportGeneralFolio(r.general_number || 0) } : null, classifiedAt: sqlUtcIso(r.classified_at), classifiedBy: r.classified_by || '',
         confirmAt: sqlUtcIso(r.confirm_at), closedAt: sqlUtcIso(r.closed_at), closedBy: r.closed_by || '', closeDid: r.close_did || '', reopenedCount: r.reopened_count || 0, userStars: r.user_stars || null,
+        assigneeId: r.assignee_user_id || null, assigneeName: r.assignee_name || '', assignedAt: sqlUtcIso(r.assigned_at), pausedAt: sqlUtcIso(r.paused_at), pausedMs: r.paused_ms || 0, pauseCount: r.pause_count || 0,
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: SUPPORT_CASE_SCREEN_LABEL, centroCostos: '', createdAt: r.created_at }),
     };
 }
@@ -10291,6 +10293,10 @@ app.post('/api/business/support-cases', requireAuth, (req, res) => {
         const boss = resolveDirectSupervisorUserId(req.user.sub);
         if (boss && boss !== req.user.sub) { try { sendSupportPerson(created, { userId: boss, kind: 'notify', reason: 'auto_urgent', byName: 'Sistema', byUserId: null, level: created.level, auto: true }); } catch (err) { console.error('support urgent notice failed', err); } }
     }
+    if (priority <= 2 && ['n1', 'n2', 'n3'].includes(created.level)) {
+        const levelUsers = (options.map[`${created.level}Users`] || []).filter((id) => id !== req.user.sub);
+        publishSupportNotice({ recipients: levelUsers, actorUserId: req.user.sub, actorLabel: changedByLabel(req), payload: { variant: 'urgent-arrived', caseId: created.id, folio, summary: created.summary, targetName: created.reporter_name, level: created.level, priority } });
+    }
     try { logTableChange({ clientId, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: created.id, recordLabel: `Caso ${folio}`, action: 'create', changedBy: changedByLabel(req) }); } catch (err) { console.error('support case log failed', err); }
     notifyButtonAction(req, SUPPORT_CASE_TABLE_KEY, 'create', folio);
     res.status(201).json({ case: supportCaseRowOf(created, getClientById(clientId), true), maxFiles: SUPPORT_FILES_PER_CASE });
@@ -10315,6 +10321,7 @@ app.get('/api/business/support-cases/:id', requireAuth, (req, res) => {
         me: iAmIn ? { kind: iAmIn.kind, status: iAmIn.status } : null,
         statusCan: supportCanChangeStatus(req, rec), classCan: supportCanSeeClass(req) && !supportIsReporter(req, rec),
         closingCan: !supportIsReporter(req, rec) && (supportHasCol(req, 'colSpChat') || supportCan(req, 'colSpResolver') || supportCan(req, 'colSpCerrar')), reopenCan: supportCanReopen(req, rec), reopenUntil: supportCanReopen(req, rec) ? new Date(supportReopenUntilMs(rec)).toISOString() : null,
+        takeCan: supportCanTake(req, rec) && !rec.assignee_user_id && ['open', 'review', 'working', 'testing'].includes(rec.status), pauseCan: supportCanPause(req, rec) && supportQueueMap(req.user.clientId).allowPause && SUPPORT_PAUSABLE_STATUSES.includes(rec.status) && (!rec.assignee_user_id || rec.assignee_user_id === req.user.sub || !!req.user.isClientAdmin), resumeCan: supportCanPause(req, rec) && rec.status === 'paused',
     });
 });
 // El chat del caso. ?after=<id> trae solo lo posterior (la pantalla lo pide cada rato). Las notas internas solo salen con la columna Notas internas; los archivos de los mensajes, solo con la columna Evidencias o para quien abrió el caso.
@@ -10372,6 +10379,7 @@ app.post('/api/business/support-cases/:id/messages', requireAuth, (req, res) => 
     // el primer mensaje del equipo (de quien atiende, no de quien reportó ni de una persona invitada) saca al caso de «Abierto»: ya alguien lo está revisando
     if (!note && rec.status === 'open' && ['n1', 'n2', 'n3', 'n4'].includes(level)) {
         setSupportCaseStatus(id, 'review');
+        if (!rec.assignee_user_id) assignSupportCase(id, req.user.sub, changedByLabel(req));
         addSupportEvent(rec, 'status_changed', { from: 'open', to: 'review', by: changedByLabel(req), auto: true }, { level, authorName: changedByLabel(req), authorUserId: req.user.sub });
         supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel('open'), supportStatusLabel('review'));
     }
@@ -10671,6 +10679,7 @@ app.post('/api/business/support-cases/:id/moves', requireAuth, (req, res) => {
     const direction = body.direction === 'up' || body.direction === 'down' ? body.direction : '';
     if (!direction) return bad('Elige si el caso sube o se devuelve.', 'DIRECTION');
     if (['done', 'noresp'].includes(rec.status)) return bad('Este caso ya está cerrado.', 'CLOSED');
+    if (rec.status === 'paused') return bad('Este caso está en pausa: retómalo primero.', 'PAUSED');
     if (!supportCanMove(req, direction)) return res.status(403).json({ message: `No tienes permiso para ${direction === 'up' ? 'subir' : 'devolver'} casos.` });
     if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Este caso lo mueve quien lo atiende en su nivel actual.', code: 'LEVEL' });
     if (supportRateFirst(req, res, rec)) return;
@@ -10719,6 +10728,7 @@ app.post('/api/business/support-cases/:id/status', requireAuth, (req, res) => {
     if (!supportCan(req, 'colSpCambiarEstatus')) return res.status(403).json({ message: 'No tienes permiso para cambiar el estatus.' });
     if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'El estatus lo cambia quien atiende el caso en su nivel actual.', code: 'LEVEL' });
     if (supportRateFirst(req, res, rec)) return;
+    if (rec.status === 'paused') return bad('Este caso está en pausa: retómalo primero.', 'PAUSED');
     if (!['open', ...SUPPORT_STATUS_TARGETS].includes(rec.status)) return bad('Este caso ya no está en curso.', 'CLOSED');
     const status = String((req.body && req.body.status) || '');
     if (!SUPPORT_STATUS_TARGETS.includes(status)) return bad('Elige el estatus.', 'STATUS');
@@ -10726,6 +10736,7 @@ app.post('/api/business/support-cases/:id/status', requireAuth, (req, res) => {
     ensureSupportThread(rec);
     const by = changedByLabel(req);
     setSupportCaseStatus(rec.id, status);
+    if (!rec.assignee_user_id) assignSupportCase(rec.id, req.user.sub, by);
     addSupportEvent(rec, 'status_changed', { from: rec.status, to: status, by }, { level: supportAuthorLevel(req, rec), authorName: by, authorUserId: req.user.sub });
     supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel(rec.status), supportStatusLabel(status));
     res.json({ status });
@@ -10949,6 +10960,7 @@ app.post('/api/business/support-cases/:id/resolve', requireAuth, (req, res) => {
     if (!supportCan(req, 'colSpResolver')) return res.status(403).json({ message: 'No tienes permiso para marcar casos como resueltos.' });
     if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Este caso lo marca resuelto quien lo atiende en su nivel actual.', code: 'LEVEL' });
     if (supportRateFirst(req, res, rec)) return;
+    if (rec.status === 'paused') return bad('Este caso está en pausa: retómalo primero.', 'PAUSED');
     if (!SUPPORT_WORKING_STATUSES.includes(rec.status)) return bad(rec.status === 'confirm' ? 'Este caso ya está por confirmar con el usuario.' : 'Este caso ya está cerrado.', rec.status === 'confirm' ? 'CONFIRM' : 'CLOSED');
     const did = supportCleanText(body.did);
     if (did.length < SUPPORT_CLOSE_TEXT_MIN) return bad('Cuenta qué hiciste para resolverlo (obligatorio).', 'DID');
@@ -11211,6 +11223,176 @@ app.post('/api/business/support-cases/:id/ratings', requireAuth, (req, res) => {
     const row = addSupportRating({ caseId: rec.id, clientId: req.user.clientId, kind, refId, raterUserId: req.user.sub, raterName: by, raterLevel, targetLevel, targetName, stars, tags, comment });
     if (kind === 'user') addSupportEvent(rec, 'rated', { stars }, { level: 'n0', authorName: by, authorUserId: req.user.sub });
     res.status(201).json({ rating: supportRatingOf(row) });
+});
+// ---- Mi cola: tomar un caso, lo urgente que interrumpe y pausar ----------------------------------------------------------------------------------------------------------------------------------
+// Cada persona del equipo trabaja con una cola ordenada por prioridad (Casos de soporte › Mi cola): lo que ya tomó y lo que espera en su nivel. «Tomar» (hoja «Tomar casos») pone al caso a su nombre y lo saca de «Abierto»; al cambiar de
+// nivel nadie lo ha tomado. Un Urgente (prioridad 1, o 2 si lo que se atiende es de las dos prioridades no urgentes) interrumpe: quien está con algo menos urgente dice cuánto le falta; si le falta menos de lo que puede esperar el Urgente
+// (Mapa de soporte) termina primero, si no el sistema recomienda PAUSAR; la persona decide y queda registrado (support_interrupts). Pausar (hoja «Pausar y retomar») deja el caso «En pausa»: el usuario ve por qué, el reloj de su primera
+// respuesta se detiene (si el Mapa lo pide) y al retomarlo vuelve a su estatus. Si nadie toma un Urgente a tiempo (o quien quiso terminar primero se pasa del tiempo) se avisa a Coordinación y al nivel. La cola solo cuenta casos en curso.
+const SUPPORT_PAUSABLE_STATUSES = ['review', 'working', 'testing'];
+const supportCanTake = (req, rec) => !supportIsReporter(req, rec) && supportCan(req, 'colSpTomar') && supportCanActOnLevel(req, rec);
+const supportCanPause = (req, rec) => !supportIsReporter(req, rec) && supportCan(req, 'colSpPausar') && supportCanActOnLevel(req, rec);
+// Un Urgente interrumpe: la prioridad 1 puede pausar cualquier caso de menor prioridad; la 2, solo los dos que no son urgentes; la 3 y la 4 no interrumpen.
+const supportInterrupts = (urgentPriority, workingPriority) => (urgentPriority === 1 ? workingPriority > 1 : (urgentPriority === 2 ? workingPriority >= 3 : false));
+const supportQueueMap = (clientId) => { const row = getSupportMapRow(clientId); return { allowPause: row.allow_pause === 1, pauseStopsClock: row.pause_stops_clock === 1, wait: { 1: row.p1_wait_min, 2: row.p2_wait_min, 3: row.p3_wait_min, 4: row.p4_wait_min } }; };
+const supportQueueRowOf = (r, me, levels, q, canTake, canPause) => ({
+    id: r.id, folio: supportFolio(r.record_number), summary: r.summary, priority: r.priority, level: r.level, status: r.status, type: r.case_type, reporter: r.reporter_name, assigneeId: r.assignee_user_id || null, assigneeName: r.assignee_name || '',
+    createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), firstResponseAt: sqlUtcIso(r.first_response_at), pausedAt: sqlUtcIso(r.paused_at), whenAffects: r.when_affects, keepWorking: r.keep_working === 1,
+    impacts: parseJsonOr(r.impacts, []).filter((i) => i.level > 0), mine: r.assignee_user_id === me, canTake: canTake && !r.assignee_user_id && ['open', 'review', 'working', 'testing'].includes(r.status) && levels.includes(r.level),
+    canPause: canPause && q.allowPause && r.assignee_user_id === me && SUPPORT_PAUSABLE_STATUSES.includes(r.status), canResume: canPause && r.status === 'paused' && (r.assignee_user_id === me || !r.assignee_user_id || levels.includes(r.level)),
+});
+// A Coordinación (administradores de la empresa y el jefe directo de quien lo posponía) y a las personas del nivel: un Urgente que nadie toma.
+function supportAlertUrgentUntaken(c, { reason, byUserId = null }) {
+    const rec = listSupportAccessRecipients(c.client_id, byUserId, !!c.is_test_data);
+    const levelUsers = ['n1', 'n2', 'n3'].includes(c.level) ? parseClassificationIds(getSupportMapRow(c.client_id)[`${c.level}_users`]) : [];
+    const recipients = [...rec.admins, rec.boss, ...levelUsers].filter((id) => id && id !== byUserId);
+    publishSupportNotice({ recipients, actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'urgent-untaken', caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, targetName: c.reporter_name, level: c.level, priority: c.priority, since: sqlUtcIso(c.created_at), reason } });
+    addSupportEvent(c, 'int_urgent_alert', { reason }, { level: c.level, authorName: 'Sistema' });
+}
+function processSupportUrgent() {
+    const nowSql = sqlUtcFromMs(Date.now());
+    for (const it of listDueSupportInterrupts(nowSql)) {
+        markSupportInterruptAlerted(it.id);
+        const urgent = getSupportCaseById(it.urgent_case_id);
+        // un solo aviso por Urgente (aunque lo hayan pospuesto dos veces o ya haya pasado su plazo)
+        if (urgent && !urgent.assignee_user_id && urgent.status === 'open' && !urgent.urgent_alerted_at) {
+            markSupportUrgentAlerted(urgent.id);
+            try { supportAlertUrgentUntaken(urgent, { reason: 'deferred', byUserId: it.user_id }); } catch (err) { console.error('support urgent alert failed', err); }
+        }
+    }
+    for (const c of listUrgentUntakenSupportCases(nowSql)) {
+        markSupportUrgentAlerted(c.id);
+        try { supportAlertUrgentUntaken(c, { reason: 'overdue' }); } catch (err) { console.error('support urgent alert failed', err); }
+    }
+}
+// Poner el caso a nombre de quien lo atiende (y sacarlo de «Abierto»).
+function supportAssignTo(req, rec, { auto = false } = {}) {
+    const by = changedByLabel(req);
+    assignSupportCase(rec.id, req.user.sub, by);
+    ensureSupportThread(rec);
+    addSupportEvent(rec, 'taken', { by }, { level: supportAuthorLevel(req, rec), authorName: by, authorUserId: req.user.sub });
+    if (rec.status === 'open') {
+        setSupportCaseStatus(rec.id, 'review');
+        addSupportEvent(rec, 'status_changed', { from: 'open', to: 'review', by, auto: true }, { level: supportAuthorLevel(req, rec), authorName: by, authorUserId: req.user.sub });
+        supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel('open'), supportStatusLabel('review'));
+    }
+}
+app.get('/api/business/support-queue', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!supportHasCol(req, 'colSpMiCola')) return res.status(403).json({ message: 'No tienes permiso para Mi cola.' });
+    try { processSupportUrgent(); } catch (err) { console.error('support urgent failed', err); }
+    const me = req.user.sub;
+    const levels = ['n1', 'n2', 'n3', 'n4'].filter((l) => supportCanActOnLevel(req, { level: l }));
+    const q = supportQueueMap(req.user.clientId);
+    const canTake = supportCan(req, 'colSpTomar'); const canPause = supportCan(req, 'colSpPausar');
+    const rows = listSupportQueueCases(req.user.clientId, req.user.isTestAccount);
+    const out = (r) => supportQueueRowOf(r, me, levels, q, canTake, canPause);
+    const mine = rows.filter((r) => r.assignee_user_id === me).map(out);
+    const level = rows.filter((r) => levels.includes(r.level) && r.assignee_user_id !== me).map(out);
+    const urgent = rows.filter((r) => levels.includes(r.level) && r.priority <= 2 && r.status === 'open' && !r.assignee_user_id).map(out);
+    res.set('Cache-Control', 'no-store');
+    res.json({ me, levels, map: q, canTake, canPause, mine, level, urgent });
+});
+// Tomar un caso del nivel donde está.
+app.post('/api/business/support-cases/:id/take', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'Quien reportó no toma su propio caso.' });
+    if (!supportCan(req, 'colSpTomar')) return res.status(403).json({ message: 'No tienes permiso para tomar casos.' });
+    if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Este caso lo toma quien atiende su nivel actual.', code: 'LEVEL' });
+    if (!['open', 'review', 'working', 'testing'].includes(rec.status)) return bad(rec.status === 'paused' ? 'Este caso está en pausa: retómalo.' : 'Este caso ya no se puede tomar.', 'STATE');
+    if (rec.assignee_user_id === req.user.sub) return bad('Este caso ya es tuyo.', 'MINE');
+    if (rec.assignee_user_id) return bad(`Este caso ya lo tomó ${rec.assignee_name || 'otra persona'}.`, 'TAKEN');
+    if (supportRateFirst(req, res, rec)) return;
+    supportAssignTo(req, rec);
+    res.status(201).json({ assignee: changedByLabel(req) });
+});
+// Pausar el caso que se está atendiendo (para atender un Urgente o por otra razón); con forCaseId se registra la decisión y con takeUrgent también se toma el Urgente.
+app.post('/api/business/support-cases/:id/pause', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'Quien reportó no pausa el caso.' });
+    if (!supportCan(req, 'colSpPausar')) return res.status(403).json({ message: 'No tienes permiso para pausar casos.' });
+    if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Este caso lo pausa quien lo atiende en su nivel actual.', code: 'LEVEL' });
+    const q = supportQueueMap(req.user.clientId);
+    if (!q.allowPause) return bad('La empresa no permite pausar casos (Mapa de soporte).', 'OFF');
+    if (rec.status === 'paused') return bad('Este caso ya está en pausa.', 'PAUSED');
+    if (!SUPPORT_PAUSABLE_STATUSES.includes(rec.status)) return bad('Solo se pausa un caso que se está atendiendo (En revisión, En trabajo o En pruebas).', 'STATE');
+    if (rec.assignee_user_id && rec.assignee_user_id !== req.user.sub && !req.user.isClientAdmin) return res.status(403).json({ message: `Este caso lo atiende ${rec.assignee_name || 'otra persona'}.`, code: 'ASSIGNEE' });
+    if (supportRateFirst(req, res, rec)) return;
+    const minutes = body.minutes === undefined || body.minutes === null || body.minutes === '' ? null : Number(body.minutes);
+    if (minutes !== null && (!Number.isInteger(minutes) || minutes < 0 || minutes > 600)) return bad('Los minutos que te faltan van de 0 a 600.', 'MINUTES');
+    let urgent = null;
+    if (body.forCaseId !== undefined && body.forCaseId !== null) {
+        urgent = getSupportCase(Number(body.forCaseId), req.user.clientId, req.user.isTestAccount);
+        if (!urgent || urgent.id === rec.id || urgent.status !== 'open' || urgent.assignee_user_id || !supportInterrupts(urgent.priority, rec.priority)) return bad('Ese caso no interrumpe a este (debe ser un Urgente sin tomar y de mayor prioridad).', 'URGENT');
+        if (body.takeUrgent === true) {
+            if (!supportCanTake(req, urgent)) return res.status(403).json({ message: 'No puedes tomar ese caso (hoja «Tomar casos» y su nivel).', code: 'FORBIDDEN' });
+            if (supportRateFirst(req, res, urgent)) return;
+        }
+    }
+    const by = changedByLabel(req);
+    if (!pauseSupportCase(rec.id)) return bad('No se pudo pausar el caso.', 'STATE');
+    ensureSupportThread(rec);
+    addSupportEvent(rec, 'paused', { by, urgent: !!urgent }, { level: supportAuthorLevel(req, rec), authorName: by, authorUserId: req.user.sub });
+    supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel(rec.status), supportStatusLabel('paused'));
+    if (rec.reporter_user_id && rec.reporter_user_id !== req.user.sub) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-paused', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, by } });
+    let taken = false;
+    if (urgent) {
+        const wait = q.wait[urgent.priority] || 0;
+        const recommended = minutes === null ? 'pause' : (minutes <= wait ? 'finish' : 'pause');
+        addSupportInterrupt({ clientId: req.user.clientId, urgentCaseId: urgent.id, workingCaseId: rec.id, userId: req.user.sub, userName: by, minutesLeft: minutes === null ? 0 : minutes, waitMin: wait, recommended, decision: 'pause' });
+        if (body.takeUrgent === true) { supportAssignTo(req, urgent); taken = true; }
+    }
+    res.json({ status: 'paused', urgentTaken: taken });
+});
+app.post('/api/business/support-cases/:id/resume', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'Quien reportó no retoma el caso.' });
+    if (!supportCan(req, 'colSpPausar')) return res.status(403).json({ message: 'No tienes permiso para retomar casos.' });
+    if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Este caso lo retoma quien lo atiende en su nivel actual.', code: 'LEVEL' });
+    if (rec.status !== 'paused') return bad('Este caso no está en pausa.', 'STATE');
+    const q = supportQueueMap(req.user.clientId);
+    const out = resumeSupportCase(rec.id, q.pauseStopsClock);
+    if (!out) return bad('No se pudo retomar el caso.', 'STATE');
+    const by = changedByLabel(req);
+    ensureSupportThread(rec);
+    addSupportEvent(rec, 'resumed', { by, minutes: Math.round(out.ms / 60000), status: out.status }, { level: supportAuthorLevel(req, rec), authorName: by, authorUserId: req.user.sub });
+    supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel('paused'), supportStatusLabel(out.status));
+    if (!rec.assignee_user_id) assignSupportCase(rec.id, req.user.sub, by);
+    res.json({ status: out.status });
+});
+// «Terminar primero»: quien atiende un caso (:id) decide terminarlo antes de tomar un Urgente y dice cuánto le falta. Queda registrado; si le falta más de lo que el Urgente puede esperar (se recomendaba pausar) se avisa a Coordinación
+// en ese momento, y si el tiempo se acaba y nadie tomó el Urgente se avisa a Coordinación y al nivel.
+app.post('/api/business/support-cases/:id/defer', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'Esto es de quien atiende el caso.' });
+    if (!supportCan(req, 'colSpPausar')) return res.status(403).json({ message: 'No tienes permiso para decidir sobre un Urgente.' });
+    if (!supportCanActOnLevel(req, rec) || (rec.assignee_user_id && rec.assignee_user_id !== req.user.sub && !req.user.isClientAdmin)) return res.status(403).json({ message: 'Solo quien atiende este caso decide si lo termina primero.', code: 'LEVEL' });
+    if (!SUPPORT_PAUSABLE_STATUSES.includes(rec.status)) return bad('Solo se decide sobre un caso que se está atendiendo.', 'STATE');
+    const urgent = getSupportCase(Number(body.urgentCaseId), req.user.clientId, req.user.isTestAccount);
+    if (!urgent || urgent.id === rec.id || urgent.status !== 'open' || urgent.assignee_user_id || !supportInterrupts(urgent.priority, rec.priority)) return bad('Ese caso no interrumpe a este (debe ser un Urgente sin tomar y de mayor prioridad).', 'URGENT');
+    const minutes = Number(body.minutes);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 600) return bad('Dinos cuántos minutos te faltan (de 1 a 600).', 'MINUTES');
+    const q = supportQueueMap(req.user.clientId);
+    const wait = q.wait[urgent.priority] || 0;
+    const recommended = minutes <= wait ? 'finish' : 'pause';
+    const by = changedByLabel(req);
+    const dueAt = sqlUtcFromMs(Date.now() + (recommended === 'finish' ? minutes : wait) * 60000);
+    const it = addSupportInterrupt({ clientId: req.user.clientId, urgentCaseId: urgent.id, workingCaseId: rec.id, userId: req.user.sub, userName: by, minutesLeft: minutes, waitMin: wait, recommended, decision: 'finish', dueAt });
+    if (recommended === 'pause') {
+        const who = listSupportAccessRecipients(req.user.clientId, req.user.sub, req.user.isTestAccount);
+        publishSupportNotice({ recipients: [...who.admins, who.boss].filter((id) => id && id !== req.user.sub), actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'interrupt-overridden', caseId: urgent.id, folio: supportFolio(urgent.record_number), summary: urgent.summary, workingFolio: supportFolio(rec.record_number), minutes, wait, by } });
+    }
+    res.status(201).json({ recommended, dueAt: sqlUtcIso(it.due_at), waitMin: wait });
 });
 // Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
 app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {
@@ -17351,4 +17533,4 @@ app.post('/api/business/notifications/avisos/mark-seen', requireAuth, (req, res)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`SGN app listening on port ${PORT}`));
 // Los avisos e invitaciones de Soporte que nadie contestó a tiempo pasan al jefe de esa persona (cada minuto; también al abrir un caso o la campana).
-setInterval(() => { try { processSupportEscalations(); } catch (err) { console.error('support escalations failed', err); } try { processSupportRatingReminders(); } catch (err) { console.error('support rating reminders failed', err); } }, 60 * 1000).unref();
+setInterval(() => { try { processSupportEscalations(); } catch (err) { console.error('support escalations failed', err); } try { processSupportRatingReminders(); } catch (err) { console.error('support rating reminders failed', err); } try { processSupportUrgent(); } catch (err) { console.error('support urgent failed', err); } }, 60 * 1000).unref();

@@ -42,6 +42,7 @@ let formOptions = null;
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
         await refreshTable();
+        queueInit();
     } catch (err) {
         console.error('Casos de soporte failed to initialize:', err);
     }
@@ -138,6 +139,7 @@ function buildRow(r) {
         tagCell('colSpPrioridad', 'sp-tag sp-pri', String(r.priority), t(`main.msPri_${r.priority}`)),
         tagCell('colSpNivel', 'sp-tag sp-lv', r.level, t(`main.sopLevel_${r.level}`)),
         tagCell('colSpEstatus', 'sp-tag sp-status', r.status, t(`main.spStatus_${r.status}`)),
+        cell('colSpAtiende', r.assigneeName),
         cell('colSpCalificacion', r.userStars ? '★'.repeat(r.userStars) + '☆'.repeat(5 - r.userStars) : '—'),
         dueCell(r), filesCell(r),
     );
@@ -446,6 +448,118 @@ async function submitForm() {
         if (form) { form.sending = false; renderForm(); }
     }
 }
+// ---- Mi cola (panel arriba de la lista; hoja «Mi cola» del árbol) ----------------------------------------------------------------------------------------------------------------------
+// «Mi cola»: lo que yo atiendo, ordenado por prioridad; «Mi nivel»: lo que espera en el nivel que atiendo, para tomarlo. Cuando llega un caso Urgente, se avisa arriba; si estoy con algo menos urgente digo cuánto me falta: si me falta
+// menos de lo que el Urgente puede esperar (Mapa de soporte) termino primero; si no, se recomienda pausar (yo decido y queda registrado). Botones: Tomar y Pausar / Retomar (cada uno con su hoja del árbol).
+const qState = { data: null, tab: 'mine', minutes: {}, deferred: {}, busy: false, timer: null, poll: null };
+const Q_MINUTES = [5, 10, 15, 30, 60];
+const qFmtLeft = (iso) => {
+    const ms = new Date(iso).getTime() - Date.now();
+    const abs = Math.abs(ms); const m = Math.floor(abs / 60000); const s = Math.floor((abs % 60000) / 1000);
+    const text = m >= 120 ? `${Math.floor(m / 60)} h` : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return { text, over: ms < 0 };
+};
+async function queueLoad() {
+    const box = document.getElementById('sp-queue');
+    if (!box) return;
+    try {
+        const res = await fetch('/api/business/support-queue', { credentials: 'include' });
+        if (!res.ok) { box.hidden = true; return; }
+        qState.data = await res.json();
+        queueRender();
+    } catch (err) { /* sin conexión: se vuelve a intentar */ }
+}
+function queueInit() {
+    queueLoad();
+    if (!qState.poll) qState.poll = setInterval(() => { if (!qState.busy && !document.hidden) queueLoad(); }, 30000);
+    if (!qState.timer) qState.timer = setInterval(() => {
+        document.querySelectorAll('[data-q-timer]').forEach((el) => { const left = qFmtLeft(el.dataset.qTimer); el.textContent = `${left.over ? '−' : ''}${left.text}`; el.classList.toggle('over', left.over); });
+    }, 1000);
+}
+const qPriTag = (p) => `<span class="sp-tag sp-pri" data-k="${p}">${esc(t(`main.msPri_${p}`))}</span>`;
+const qLv = (l) => `<span class="sc-lv ${esc(l)}" title="${esc(t(`main.sopLevel_${l}`))}">${esc(String(l).toUpperCase())}</span>`;
+// Lo que me interrumpe: el Urgente sin tomar de mi nivel y el caso menos urgente que yo estoy atendiendo (si hay uno al que interrumpe).
+function qInterruptible(u, mine) {
+    const hits = (p) => (u.priority === 1 ? p > 1 : (u.priority === 2 ? p >= 3 : false));
+    return mine.filter((c) => ['review', 'working', 'testing'].includes(c.status) && hits(c.priority)).sort((a, b) => b.priority - a.priority || a.id - b.id)[0] || null;
+}
+function qUrgentHtml(u, d) {
+    const w = qInterruptible(u, d.mine);
+    const left = u.dueAt && !u.firstResponseAt ? qFmtLeft(u.dueAt) : null;
+    const impacts = u.impacts.map((i) => `<span class="sp-tag">${esc(i.name)} · ${esc(t(`main.spLevel_${i.level}`))}</span>`).join(' ');
+    const wait = d.map.wait[u.priority] || 0;
+    let decision = '';
+    if (w) {
+        const picked = qState.minutes[u.id];
+        const chips = Q_MINUTES.map((m) => `<button type="button" class="sp-chip${picked === m ? ' on' : ''}" data-q-min="${u.id}" data-m="${m}">${m === 60 ? esc(t('main.qMin60')) : m}</button>`).join('');
+        let advice = '';
+        if (picked) {
+            const finish = picked <= wait;
+            const canPause = d.map.allowPause && w.canPause;
+            const pauseBtn = canPause ? `<button type="button" class="btn${finish ? ' btn-secondary' : ''}" data-q-pause="${w.id}" data-u="${u.id}">${esc(t('main.qBtnPause', { a: w.folio, b: u.folio }))}</button>` : '';
+            const finishBtn = `<button type="button" class="btn${finish ? '' : ' btn-secondary'}" data-q-finish="${w.id}" data-u="${u.id}">${esc(finish ? t('main.qBtnFinish', { a: w.folio, b: u.folio }) : t('main.qBtnFinishAnyway'))}</button>`;
+            advice = `<div class="sp-q-opt ${finish ? '' : 'rec'}"><b>${esc(finish ? t('main.qRecFinish', { m: picked }) : t('main.qRecPause', { m: picked }))}</b><span>${esc(finish ? t('main.qRecFinishText', { min: wait }) : t('main.qRecPauseText'))}</span>
+                <div class="sc-actions">${finish ? `${finishBtn}${pauseBtn}` : `${pauseBtn}${finishBtn}`}</div>${finish ? '' : `<span class="sp-muted">${esc(t('main.qFinishOverride'))}</span>`}</div>`;
+        }
+        const deferred = qState.deferred[u.id] ? `<p class="sp-muted">${esc(t('main.qDeferredNote', { time: new Date(qState.deferred[u.id]).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) }))}</p>` : '';
+        decision = `<div class="sp-q-box"><b>${esc(t('main.qWorkingOn', { folio: w.folio, summary: w.summary }))}</b> ${qPriTag(w.priority)}
+            <div class="sp-field"><span>${esc(t('main.qHowLong'))}</span><div class="sp-chips">${chips}</div></div><p class="sp-muted">${esc(t('main.qWaitHint', { priority: t(`main.msPri_${u.priority}`), min: wait }))}</p>${advice}${deferred}</div>`;
+    }
+    return `<div class="sp-q-alert"><h4>⚠ ${esc(t('main.qUrgentTitle', { priority: t(`main.msPri_${u.priority}`), level: t(`main.sopLevel_${u.level}`) }))}</h4>
+        <div class="sc-card-head"><div><a href="OpTISoporteCaso.html?id=${u.id}"><b>${esc(u.folio)}</b></a> · ${esc(u.summary)}<br><span class="sp-muted">${esc(u.reporter || '—')}</span></div>
+        <div class="sp-q-clock">${left ? `<span class="sp-muted">${esc(t('main.qFirstResponse'))}</span><b class="sp-q-timer${left.over ? ' over' : ''}" data-q-timer="${esc(u.dueAt)}">${left.over ? '−' : ''}${esc(left.text)}</b>` : ''}</div></div>
+        <div class="sp-chips">${impacts}</div>${u.canTake ? `<div class="sc-actions"><button type="button" class="btn" data-q-take="${u.id}">${esc(t('main.qTake'))}</button></div>` : ''}${decision}</div>`;
+}
+function qRowHtml(r) {
+    const when = r.dueAt && !r.firstResponseAt ? qFmtLeft(r.dueAt) : null;
+    const sub = [t(`main.spStatus_${r.status}`), r.status === 'paused' ? t('main.qPausedSince', { when: new Date(r.pausedAt).toLocaleString(locale(), { hour: '2-digit', minute: '2-digit' }) }) : '', r.assigneeName && !r.mine ? t('main.qAssignee', { name: r.assigneeName }) : '', when ? `${t('main.qFirstResponse')} ${when.over ? '−' : ''}${when.text}` : ''].filter(Boolean).join(' · ');
+    const btns = `${r.canTake ? `<button type="button" class="btn btn-secondary" data-q-take="${r.id}">${esc(t('main.qTake'))}</button>` : ''}${r.canPause ? `<button type="button" class="btn btn-secondary" data-q-pausecase="${r.id}">${esc(t('main.qPause'))}</button>` : ''}${r.canResume ? `<button type="button" class="btn btn-secondary" data-q-resume="${r.id}">${esc(t('main.qResume'))}</button>` : ''}`;
+    return `<div class="sp-q-row${r.status === 'paused' ? ' paused' : ''}${r.priority <= 2 ? ' hot' : ''}">${qPriTag(r.priority)}<div class="sp-q-main"><a href="OpTISoporteCaso.html?id=${r.id}"><b>${esc(r.folio)}</b></a> · ${esc(r.summary)} ${qLv(r.level)}<div class="sp-muted">${esc(sub)}</div></div><div class="sc-actions">${btns}</div></div>`;
+}
+function queueRender() {
+    const box = document.getElementById('sp-queue'); const d = qState.data;
+    if (!box || !d) return;
+    const list = qState.tab === 'mine' ? d.mine : d.level;
+    box.hidden = false;
+    box.innerHTML = `<div class="sc-card-head"><h3>${esc(t('main.qTitle'))}</h3><div class="sp-chips" role="tablist"><button type="button" class="sp-chip${qState.tab === 'mine' ? ' on' : ''}" data-q-tab="mine">${esc(t('main.qTabMine'))} (${d.mine.length})</button><button type="button" class="sp-chip${qState.tab === 'level' ? ' on' : ''}" data-q-tab="level">${esc(t('main.qTabLevel'))} (${d.level.length})</button></div></div>
+        ${d.urgent.map((u) => qUrgentHtml(u, d)).join('')}
+        <div class="sp-q-list">${list.length ? list.map(qRowHtml).join('') : `<p class="sp-muted">${esc(t(qState.tab === 'mine' ? 'main.qEmptyMine' : 'main.qEmptyLevel'))}</p>`}</div>`;
+}
+async function qAction(path, body, okText) {
+    if (qState.busy) return null;
+    qState.busy = true;
+    try {
+        const res = await fetch(`${API}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body || {}) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); return null; }
+        if (okText) Dashboard.showToast(okText(out), 'success');
+        return out;
+    } catch (err) {
+        console.error('Mi cola: failed', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        return null;
+    } finally { qState.busy = false; }
+}
+async function qAfter() { await Promise.all([queueLoad(), refreshTable()]); }
+document.addEventListener('click', async (event) => {
+    const el = event.target.closest('[data-q-tab],[data-q-take],[data-q-min],[data-q-pause],[data-q-finish],[data-q-pausecase],[data-q-resume]');
+    if (!el || !document.getElementById('sp-queue') || !document.getElementById('sp-queue').contains(el)) return;
+    if (el.dataset.qTab) { qState.tab = el.dataset.qTab; queueRender(); return; }
+    if (el.dataset.qMin) { qState.minutes[Number(el.dataset.qMin)] = Number(el.dataset.m); queueRender(); return; }
+    if (el.dataset.qTake) { if (await qAction(`${el.dataset.qTake}/take`, {}, () => t('main.qDoneTake'))) await qAfter(); return; }
+    if (el.dataset.qPausecase) { if (!window.confirm(t('main.qPauseConfirm'))) return; if (await qAction(`${el.dataset.qPausecase}/pause`, {}, () => t('main.qDonePauseOnly'))) await qAfter(); return; }
+    if (el.dataset.qResume) { if (await qAction(`${el.dataset.qResume}/resume`, {}, () => t('main.qDoneResume'))) await qAfter(); return; }
+    if (el.dataset.qPause) {
+        const u = Number(el.dataset.u); const w = qState.data.mine.find((c) => c.id === Number(el.dataset.qPause)); const urgent = qState.data.urgent.find((c) => c.id === u);
+        if (await qAction(`${el.dataset.qPause}/pause`, { minutes: qState.minutes[u], forCaseId: u, takeUrgent: true }, () => t('main.qDonePause', { a: w ? w.folio : '', b: urgent ? urgent.folio : '' }))) await qAfter();
+        return;
+    }
+    if (el.dataset.qFinish) {
+        const u = Number(el.dataset.u);
+        const out = await qAction(`${el.dataset.qFinish}/defer`, { urgentCaseId: u, minutes: qState.minutes[u] }, (o) => t('main.qDoneFinish', { time: new Date(o.dueAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) }));
+        if (out) { qState.deferred[u] = out.dueAt; await queueLoad(); }
+    }
+});
 document.getElementById('sp-new-btn')?.addEventListener('click', () => {
     const q = new URLSearchParams(location.search);
     openForm({ screen: q.get('screen') || '', action: q.get('action') || '', errorText: q.get('error') || '' });

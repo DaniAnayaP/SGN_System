@@ -3691,6 +3691,11 @@
               "permissionOnly": true
             },
             {
+              "id": "colSpAtiende",
+              "labelKey": "main.colSpAtiende",
+              "permissionOnly": true
+            },
+            {
               "id": "colSpCalificacion",
               "labelKey": "main.colSpCalificacion",
               "permissionOnly": true
@@ -3733,6 +3738,11 @@
             {
               "id": "colSpCalificaciones",
               "labelKey": "main.colSpCalificaciones",
+              "permissionOnly": true
+            },
+            {
+              "id": "colSpMiCola",
+              "labelKey": "main.colSpMiCola",
               "permissionOnly": true
             },
             {
@@ -3783,6 +3793,16 @@
                 {
                   "id": "colSpCalificar",
                   "labelKey": "main.colSpCalificar",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSpTomar",
+                  "labelKey": "main.colSpTomar",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSpPausar",
+                  "labelKey": "main.colSpPausar",
                   "permissionOnly": true
                 }
               ]

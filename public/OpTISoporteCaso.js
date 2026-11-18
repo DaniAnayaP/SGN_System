@@ -56,6 +56,10 @@ function eventText(m) {
     if (m.eventKey === 'classified') return d.type === 'c' ? t('main.spEv_classified_c', { author }) : t(d.created ? 'main.spEv_classified_p_new' : 'main.spEv_classified_p_existing', { author, general: d.general }) + (d.others ? t('main.spEv_classified_more', { n: d.others }) : '');
     if (m.eventKey === 'general_linked') return t('main.spEv_general_linked', { author, general: d.general });
     if (m.eventKey === 'resolved') return t('main.spEv_resolved', { author });
+    if (m.eventKey === 'taken') return t('main.spEv_taken', { author });
+    if (m.eventKey === 'paused') return t(d.urgent ? 'main.spEv_paused' : 'main.spEv_paused_plain', { author });
+    if (m.eventKey === 'resumed') return t('main.spEv_resumed', { author });
+    if (m.eventKey === 'int_urgent_alert') return t('main.spEv_int_urgent_alert');
     if (m.eventKey === 'rated') return t('main.spEv_rated', { author, stars: starsText(d.stars) });
     if (m.eventKey === 'general_resolved') return t('main.spEv_general_resolved', { general: d.general });
     if (m.eventKey === 'closed') return d.noresp ? t('main.spEv_closed_noresp', { author, n: d.attempts || 0 }) : t('main.spEv_closed_ok', { author }) + (d.cause ? t('main.spEv_closed_cause', { cause: d.cause }) : '');
@@ -103,13 +107,15 @@ function renderHeader() {
         first = `${esc(t('main.scPendingDue', { when: fmtTime(c.dueAt) }))}${over ? ` <span class="sp-overdue">${esc(t('main.spOverdue'))}</span>` : ''}`;
     } else first = esc(t('main.scPendingNoLimit'));
     const statusPick = state.statusCan ? `<select id="sc-status-pick" class="sc-status-pick" data-help-key="spEstatus" aria-label="${esc(t('main.stChange'))}"><option value="">${esc(t('main.stChange'))}</option>${['review', 'working', 'testing'].filter((s) => s !== c.status).map((s) => `<option value="${s}">${esc(t(`main.spStatus_${s}`))}</option>`).join('')}</select>` : '';
+    const actionBtns = `${state.takeCan ? `<button type="button" class="btn btn-secondary sc-mini" data-cp-take>${esc(t('main.cpTake'))}</button>` : ''}${state.pauseCan ? `<button type="button" class="btn btn-secondary sc-mini" data-cp-pause>${esc(t('main.qPause'))}</button>` : ''}${state.resumeCan ? `<button type="button" class="btn btn-secondary sc-mini" data-cp-resume>${esc(t('main.qResume'))}</button>` : ''}`;
     $('sc-head').innerHTML = `<div><h2>${esc(c.folio)} · ${esc(c.summary)}</h2><span class="sp-muted">${esc([c.screen, c.action].filter(Boolean).join(' · '))}</span></div>
         <div class="sc-tags"><span class="sp-tag sp-type" data-k="${esc(c.type)}">${esc(t(`main.spType_${c.type}`))}</span><span class="sp-tag sp-pri" data-k="${c.priority}">${esc(t(`main.msPri_${c.priority}`))}</span>
-        <span class="sp-tag sp-lv" data-k="${esc(c.level)}">${esc(t(`main.sopLevel_${c.level}`))}</span><span class="sp-tag sp-status" data-k="${esc(c.status)}">${esc(t(`main.spStatus_${c.status}`))}</span>${c.general ? `<span class="sp-tag sp-general" title="${esc(t('main.colSpGeneral'))}">${esc(c.general.folio)}</span>` : ''}${statusPick}</div>`;
+        <span class="sp-tag sp-lv" data-k="${esc(c.level)}">${esc(t(`main.sopLevel_${c.level}`))}</span><span class="sp-tag sp-status" data-k="${esc(c.status)}">${esc(t(`main.spStatus_${c.status}`))}</span>${c.general ? `<span class="sp-tag sp-general" title="${esc(t('main.colSpGeneral'))}">${esc(c.general.folio)}</span>` : ''}${statusPick}${actionBtns}</div>`;
     $('sc-meta').innerHTML = `<dl class="sp-meta"><div><dt>${esc(t('main.colSpReporto'))}</dt><dd>${esc(c.reporter || '—')}</dd></div><div><dt>${esc(t('main.colSpFechaHora'))}</dt><dd>${esc(fmtDate(c.createdAt))}</dd></div>
         <div><dt>${esc(t('main.colSpCategoria'))}</dt><dd>${esc(c.category || '—')}</dd></div><div data-help-key="spPrimeraResp"><dt>${esc(t('main.scFirstResponse'))}</dt><dd>${first}</dd></div>
         <div><dt>${esc(t('main.spFWhen'))}</dt><dd>${esc(t(`main.spWhen_${c.whenAffects}`))}</dd></div><div><dt>${esc(t('main.spFKeep'))}</dt><dd>${esc(c.keepWorking ? t('main.spYes') : t('main.spNo'))}</dd></div>
         <div class="sp-wide"><dt>${esc(t('main.spFImpact'))}</dt><dd>${impacts}</dd></div>
+        <div><dt>${esc(t('main.cpAssignee'))}</dt><dd>${esc(c.assigneeName || '—')}${c.pauseCount ? ` <span class="sp-muted">· ${esc(t('main.cpPauses', { n: c.pauseCount }))}</span>` : ''}</dd></div>
         ${c.userStars ? `<div><dt>${esc(t('main.rtMetaStars'))}</dt><dd class="sc-stars-text">${esc(starsText(c.userStars))}</dd></div>` : ''}
         ${c.errorText ? `<div class="sp-wide"><dt>${esc(t('main.spFError'))}</dt><dd class="sp-pre">${esc(c.errorText)}</dd></div>` : ''}
         ${answers.map(([id, text]) => `<div class="sp-wide"><dt>${esc(t('main.spAnswer'))}</dt><dd class="sp-pre">${esc(text)}</dd></div>`).join('')}</dl>`;
@@ -160,6 +166,7 @@ async function loadCase() {
     if (!res.ok) throw new Error(body.message || 'load failed');
     state.c = body.case; state.files = body.files || []; state.chat = body.chat; state.contactCan = !!(body.contact && body.contact.canSee); state.peopleCan = !!(body.people && body.people.canSee);
     state.statusCan = !!body.statusCan; state.classCan = !!body.classCan;
+    state.takeCan = !!body.takeCan; state.pauseCan = !!body.pauseCan; state.resumeCan = !!body.resumeCan;
     state.closingCan = !!body.closingCan; state.reopenCan = !!body.reopenCan; state.reopenUntil = body.reopenUntil || null;
 }
 async function loadMessages(first) {
@@ -1093,6 +1100,28 @@ document.addEventListener('click', (event) => {
 document.addEventListener('input', (event) => {
     const c = event.target.closest && event.target.closest('[data-rt-comment]');
     if (c && rateState.forms[c.dataset.rtComment]) rateState.forms[c.dataset.rtComment].comment = c.value;
+});
+
+// ---- quién atiende el caso: tomar, pausar y retomar (botones junto al estatus) ----------------------------------------------------------------------------------------------------------
+async function caseAction(path, okKey) {
+    try {
+        const res = await fetch(`${API}/${caseId}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: '{}' });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); await loadCase(); renderHeader(); return; }
+        Dashboard.showToast(t(okKey), 'success');
+        await loadCase(); renderHeader();
+        await reloadRatings();
+        await refresh(false);
+        renderThread(true);
+    } catch (err) {
+        console.error('Caso de soporte: failed action', path, err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-cp-take]')) caseAction('take', 'main.cpDoneTake');
+    else if (event.target.closest('[data-cp-pause]')) { if (window.confirm(t('main.qPauseConfirm'))) caseAction('pause', 'main.qDonePauseOnly'); }
+    else if (event.target.closest('[data-cp-resume]')) caseAction('resume', 'main.qDoneResume');
 });
 
 // ---- eventos ----------------------------------------------------------------------------------------------------------------------------
