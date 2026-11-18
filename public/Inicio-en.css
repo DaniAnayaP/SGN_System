@@ -1342,6 +1342,14 @@
     .cc-picker-disabled{
         display: none;
     }
+    /* Eslabón de la cadena Departamento → Área → Sitios → Centros que todavía no se puede usar: se ve atenuado y al tocarlo avisa qué falta elegir. */
+    .cc-picker.picker-locked .cc-picker-btn{
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+    .cc-picker.picker-locked .cc-picker-dropdown{
+        display: none;
+    }
     /* Icon-only — see the same breakpoint on .dept-picker-btn above for
        why this moved from 700px to 1000px. */
     @media (max-width:1000px) or (max-height:550px){

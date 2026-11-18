@@ -709,6 +709,7 @@ async function loadLanguage(lang) {
     updateDeptPickerLabel();
     renderAreaPickerOptions(); // rebuilds labels for the current department's areas
     renderCostCenterPicker(); // no-op until costCenters loads; re-translates the "Todos"/count label after that
+    renderSitePicker(); // lo mismo para los sitios
     renderUserProfile(); // no-op until the profile panel has been opened at least once
     renderBusinessProfile(); // same, for the business-profile panel
     document.dispatchEvent(new CustomEvent('dashboard:language-changed', { detail: { lang } }));
@@ -1309,6 +1310,21 @@ function getStoredArea() {
 
 let selectedArea = getStoredArea();
 
+// Sitios de la barra de arriba (entre Área y Centros de Costo). Un sitio es el «código del sitio» de un centro de costos (el mismo de Asignación a laborar). Selección de varios, igual que la de centros:
+// 'all' = todos (por omisión, así nadie tiene que elegir nada para seguir trabajando) o un conjunto de códigos; se recuerda en este navegador.
+const SITE_SELECTION_KEY = 'siteSelection';
+function getStoredSiteSelection() {
+    const raw = localStorage.getItem(SITE_SELECTION_KEY);
+    if (!raw || raw === 'all') return 'all';
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return new Set(parsed.map(String));
+    } catch { /* por omisión: todos */ }
+    return 'all';
+}
+let selectedSiteCodes = getStoredSiteSelection();
+let sidebarSites = []; // [{ code, sucursal }] de los centros que esta cuenta puede ver
+
 // Every department's section is empty in menu.json — once an area is picked
 // (any area, any department), the selected department's section shows the
 // same shared category template (data.areaCategories: General/Catálogos/
@@ -1447,6 +1463,7 @@ function applyMainNavGrantFilter(data) {
 }
 
 function renderFilteredMenu() {
+    syncPickerCascade();
     if (menuData) renderMenu(applyMainNavGrantFilter(applyScreenGrantFilter(applyAreaFilter(applyDepartmentFilter(menuData)))));
     // Every department/área change (there are several call sites: the
     // dept/area pickers, "defaults" modal, login-defaults auto-apply...)
@@ -9647,6 +9664,7 @@ function applyHelpKeysByAttr(attr, map) {
 const HELP_CONTENT_KEYS = {
     'messages-btn': 'messages',
     'chatbot-btn': 'chatbot',
+    'site-picker-btn': 'sitePicker',
     'notifications-btn': 'notifications',
     'bookmarks-btn': 'bookmarks',
     'ui-scale-btn': 'uiScale',
@@ -11634,6 +11652,187 @@ areaPickerDropdown?.addEventListener('click', (event) => {
 
 renderAreaPickerOptions();
 
+// --- Site picker (barra de arriba, entre Área y Centros de Costo) ----------------
+// La barra es una cadena: Departamento → Área → Sitios → Centros de costos, y cada eslabón se habilita con el de arriba (sin Área no hay Sitios; sin sitios elegidos no hay centros). Un sitio es el «código del
+// sitio» de un centro de costos; salen de los centros que esta cuenta puede ver. Elegir sitios deja en el selector de centros solo los de esos sitios (los de un sitio que se agrega quedan marcados).
+function ensureSitePicker() {
+    let el = document.getElementById('site-picker');
+    if (el) return el;
+    const area = document.getElementById('area-picker');
+    if (!area) return null;
+    el = document.createElement('div');
+    el.className = 'cc-picker site-picker cc-picker-disabled'; // oculto hasta saber si hay sitios que elegir
+    el.id = 'site-picker';
+    el.innerHTML = `<button type="button" class="cc-picker-btn" id="site-picker-btn" aria-haspopup="true" aria-expanded="false">
+        <i class="bx bx-map-pin" aria-hidden="true"></i>
+        <span id="site-picker-label" data-i18n="sidebar.sites"></span>
+        <i class="bx bx-chevron-down" aria-hidden="true"></i>
+    </button>
+    <ul class="cc-picker-dropdown" id="site-picker-dropdown" role="menu"></ul>`;
+    area.after(el);
+    return el;
+}
+const topSitePicker = ensureSitePicker();
+const topSitePickerBtn = document.getElementById('site-picker-btn');
+const topSitePickerDropdown = document.getElementById('site-picker-dropdown');
+
+function closeSitePicker() {
+    topSitePicker?.classList.remove('open');
+    topSitePickerBtn?.setAttribute('aria-expanded', 'false');
+}
+registerTopBarDropdown(closeSitePicker);
+
+function isSiteSelected(code) {
+    return selectedSiteCodes === 'all' || selectedSiteCodes.has(code);
+}
+function persistSiteSelection() {
+    localStorage.setItem(SITE_SELECTION_KEY, selectedSiteCodes === 'all' ? 'all' : JSON.stringify(Array.from(selectedSiteCodes)));
+}
+// Los centros de costos de los sitios elegidos (un centro todavía sin código de sitio no se filtra: no tiene a qué sitio pertenecer).
+function pickerCostCenters() {
+    if (selectedSiteCodes === 'all') return sidebarCostCenters;
+    if (selectedSiteCodes.size === 0) return []; // sin sitios elegidos no hay centros (ni siquiera los que todavía no tienen sitio)
+    return sidebarCostCenters.filter((cc) => !cc.siteCode || selectedSiteCodes.has(cc.siteCode));
+}
+const siteOptionText = (site) => (site.sucursal ? `${site.code} - ${site.sucursal}` : site.code);
+const siteStepVisible = () => currentRole !== 'admin' && sidebarSites.length > 1;
+const selectedSiteCount = () => sidebarSites.filter((s) => isSiteSelected(s.code)).length;
+// ¿Falta elegir Departamento o Área antes de poder seguir? (Si no hay nada que elegir en ese paso, no frena.)
+function areaChainPending() {
+    if (currentRole === 'admin' || selectedArea) return false;
+    if (!selectedDepartment) return availableDepartments.length > 0;
+    return availableAreasForDepartment(selectedDepartment).length > 0;
+}
+function notifyPickerLocked(message) {
+    if (message) showToast(message, 'info');
+}
+// Habilita o bloquea (se ve atenuado y avisa por qué) los eslabones de abajo según lo elegido arriba.
+function syncPickerCascade() {
+    const siteEl = document.getElementById('site-picker');
+    const ccEl = document.getElementById('cc-picker');
+    const noArea = areaChainPending();
+    const noSites = siteStepVisible() && selectedSiteCount() === 0;
+    if (siteEl) {
+        const visible = siteStepVisible();
+        siteEl.classList.toggle('cc-picker-disabled', !visible);
+        siteEl.classList.toggle('picker-locked', visible && noArea);
+        const btn = siteEl.querySelector('.cc-picker-btn');
+        if (btn) { btn.title = visible && noArea ? t('sidebar.sitesLockedArea') : ''; btn.setAttribute('aria-disabled', String(visible && noArea)); }
+        if (noArea) closeSitePicker();
+    }
+    if (ccEl) {
+        const locked = noArea || noSites;
+        ccEl.classList.toggle('picker-locked', locked);
+        const btn = ccEl.querySelector('.cc-picker-btn');
+        if (btn) { btn.title = noArea ? t('sidebar.costCentersLockedArea') : (noSites ? t('sidebar.costCentersLockedSites') : ''); btn.setAttribute('aria-disabled', String(locked)); }
+        if (locked) closeCcPicker();
+    }
+}
+function updateSitePickerLabel() {
+    const label = document.getElementById('site-picker-label');
+    if (!label) return;
+    if (!sidebarSites.length) { label.textContent = t('sidebar.sites'); return; }
+    const selected = sidebarSites.filter((s) => isSiteSelected(s.code));
+    if (selected.length === 0) label.textContent = t('sidebar.sitesNone');
+    else if (selected.length === sidebarSites.length) label.textContent = t('sidebar.sitesAllCount', { count: sidebarSites.length });
+    else if (selected.length === 1) label.textContent = selected[0].code;
+    else label.textContent = t('sidebar.sitesSelectedCount', { count: selected.length });
+}
+// Cambió la selección de sitios: los centros de un sitio que se agrega quedan marcados y los de uno que se quita dejan de estarlo.
+function onSiteSelectionChanged(prevVisibleIds) {
+    const prevVisible = new Set(prevVisibleIds);
+    const nextVisible = pickerCostCenters();
+    const prevSelected = selectedCostCenterIds === 'all' ? prevVisible : selectedCostCenterIds;
+    selectedCostCenterIds = new Set(nextVisible.filter((cc) => prevSelected.has(cc.id) || !prevVisible.has(cc.id)).map((cc) => cc.id));
+    if (selectedSiteCodes === 'all' && selectedCostCenterIds.size === sidebarCostCenters.length) selectedCostCenterIds = 'all';
+    persistSiteSelection();
+    persistCostCenterSelection();
+    updateSitePickerLabel();
+    renderCostCenterPicker();
+    syncPickerCascade();
+}
+function renderSitePicker() {
+    if (!topSitePicker || !topSitePickerDropdown) return;
+    syncPickerCascade();
+    updateSitePickerLabel();
+    topSitePickerDropdown.innerHTML = '';
+    if (!sidebarSites.length) return;
+    const idsNow = () => pickerCostCenters().map((cc) => cc.id);
+
+    const allLi = document.createElement('li');
+    allLi.className = 'cc-option';
+    const allLabel = document.createElement('label');
+    const allCheckbox = document.createElement('input');
+    allCheckbox.type = 'checkbox';
+    allCheckbox.checked = sidebarSites.every((s) => isSiteSelected(s.code));
+    allCheckbox.addEventListener('change', () => {
+        const prev = idsNow();
+        selectedSiteCodes = allCheckbox.checked ? 'all' : new Set();
+        onSiteSelectionChanged(prev);
+        renderSitePicker();
+    });
+    const allSpan = document.createElement('span');
+    allSpan.textContent = t('sidebar.sitesAll');
+    allLabel.append(allCheckbox, allSpan);
+    allLi.appendChild(allLabel);
+    topSitePickerDropdown.appendChild(allLi);
+    topSitePickerDropdown.appendChild(Object.assign(document.createElement('li'), { className: 'cc-picker-divider' }));
+
+    sidebarSites.forEach((site) => {
+        const li = document.createElement('li');
+        li.className = 'cc-option';
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = isSiteSelected(site.code);
+        checkbox.addEventListener('change', () => {
+            const prev = idsNow();
+            if (selectedSiteCodes === 'all') selectedSiteCodes = new Set(sidebarSites.map((s) => s.code));
+            if (checkbox.checked) selectedSiteCodes.add(site.code);
+            else selectedSiteCodes.delete(site.code);
+            if (selectedSiteCodes.size === sidebarSites.length) selectedSiteCodes = 'all';
+            allCheckbox.checked = sidebarSites.every((s) => isSiteSelected(s.code));
+            onSiteSelectionChanged(prev);
+        });
+        const span = document.createElement('span');
+        span.textContent = siteOptionText(site);
+        label.append(checkbox, span);
+        li.appendChild(label);
+        topSitePickerDropdown.appendChild(li);
+    });
+}
+// Con los centros que esta cuenta puede ver: arma la lista de sitios y deja la selección guardada solo con sitios que existen (con 0 o 1 sitio no hay nada que elegir: va «todos»).
+function initSitePicker() {
+    const byCode = new Map();
+    sidebarCostCenters.forEach((cc) => { if (cc.siteCode && !byCode.has(cc.siteCode)) byCode.set(cc.siteCode, { code: cc.siteCode, sucursal: cc.sucursal || '' }); });
+    sidebarSites = Array.from(byCode.values()).sort((a, b) => a.code.localeCompare(b.code));
+    if (sidebarSites.length <= 1) {
+        selectedSiteCodes = 'all';
+    } else if (selectedSiteCodes !== 'all') {
+        const valid = new Set(sidebarSites.map((s) => s.code));
+        const kept = Array.from(selectedSiteCodes).filter((code) => valid.has(code));
+        selectedSiteCodes = kept.length === sidebarSites.length ? 'all' : new Set(kept);
+    }
+    persistSiteSelection();
+}
+
+topSitePickerBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (topSitePicker.classList.contains('picker-locked')) { notifyPickerLocked(topSitePickerBtn.title); return; }
+    const wasOpen = topSitePicker.classList.contains('open');
+    closeAllTopBarDropdowns();
+    if (!wasOpen) {
+        topSitePicker.classList.add('open');
+        topSitePickerBtn.setAttribute('aria-expanded', 'true');
+    }
+});
+document.addEventListener('click', (event) => {
+    if (topSitePicker && !topSitePicker.contains(event.target)) closeSitePicker();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeSitePicker();
+});
+
 // --- Cost center picker: multi-select (one, several, or all) ----------------
 // Selection persists in localStorage (same idea as the department picker)
 // ready for whatever screen ends up filtering by it — this just captures and
@@ -11667,6 +11866,11 @@ function isCostCenterSelected(id) {
 }
 
 function persistCostCenterSelection() {
+    // Los centros son siempre de los sitios elegidos: lo que quede fuera se quita de la selección (y «todos» pasa a ser los de esos sitios).
+    if (selectedSiteCodes !== 'all' && sidebarCostCenters.length) {
+        const inSites = new Set(pickerCostCenters().map((cc) => cc.id));
+        selectedCostCenterIds = selectedCostCenterIds === 'all' ? inSites : new Set(Array.from(selectedCostCenterIds).filter((id) => inSites.has(id)));
+    }
     localStorage.setItem(
         CC_SELECTION_KEY,
         selectedCostCenterIds === 'all' ? 'all' : JSON.stringify(Array.from(selectedCostCenterIds))
@@ -11685,6 +11889,14 @@ function getSelectedCostCenterIds() {
 }
 // Deja marcado solo ese centro en el selector (por ejemplo para volver al que se estaba editando).
 function selectOnlyCostCenter(id) {
+    // si el centro es de un sitio que no estaba elegido, ese sitio se agrega (los centros son siempre de los sitios elegidos)
+    const target = sidebarCostCenters.find((c) => c.id === id);
+    if (target && target.siteCode && selectedSiteCodes !== 'all' && !selectedSiteCodes.has(target.siteCode)) {
+        selectedSiteCodes = new Set([...selectedSiteCodes, target.siteCode]);
+        if (selectedSiteCodes.size === sidebarSites.length) selectedSiteCodes = 'all';
+        persistSiteSelection();
+        renderSitePicker();
+    }
     selectedCostCenterIds = new Set([id]);
     persistCostCenterSelection();
     renderCostCenterPicker();
@@ -11707,11 +11919,12 @@ async function fetchCostCenters() {
 function updateCostCenterPickerLabel() {
     const label = document.getElementById('cc-picker-label');
     if (!label || !sidebarCostCenters.length) return;
-    const selected = sidebarCostCenters.filter((cc) => isCostCenterSelected(cc.id));
+    const visible = pickerCostCenters();
+    const selected = visible.filter((cc) => isCostCenterSelected(cc.id));
     if (selected.length === 0) {
         label.textContent = t('sidebar.costCentersNone');
-    } else if (selected.length === sidebarCostCenters.length) {
-        label.textContent = t('sidebar.costCentersAllCount', { count: sidebarCostCenters.length });
+    } else if (selected.length === visible.length) {
+        label.textContent = t('sidebar.costCentersAllCount', { count: visible.length });
     } else if (selected.length === 1) {
         label.textContent = selected[0].code;
     } else {
@@ -11728,7 +11941,10 @@ registerTopBarDropdown(closeCcPicker);
 function renderCostCenterPicker() {
     if (!ccPicker || !ccPickerDropdown) return;
     ccPicker.classList.toggle('cc-picker-disabled', sidebarCostCenters.length <= 1 || currentRole === 'admin');
+    syncPickerCascade();
     if (!sidebarCostCenters.length) return;
+    // solo los centros de los sitios elegidos (sin sitios elegidos la lista queda vacía y el selector bloqueado)
+    const centers = pickerCostCenters();
 
     ccPickerDropdown.innerHTML = '';
 
@@ -11737,9 +11953,9 @@ function renderCostCenterPicker() {
     const allLabel = document.createElement('label');
     const allCheckbox = document.createElement('input');
     allCheckbox.type = 'checkbox';
-    allCheckbox.checked = sidebarCostCenters.every((cc) => isCostCenterSelected(cc.id));
+    allCheckbox.checked = centers.length > 0 && centers.every((cc) => isCostCenterSelected(cc.id));
     allCheckbox.addEventListener('change', () => {
-        selectedCostCenterIds = allCheckbox.checked ? new Set(sidebarCostCenters.map((cc) => cc.id)) : new Set();
+        selectedCostCenterIds = allCheckbox.checked ? new Set(centers.map((cc) => cc.id)) : new Set();
         persistCostCenterSelection();
         renderCostCenterPicker();
     });
@@ -11750,7 +11966,7 @@ function renderCostCenterPicker() {
     ccPickerDropdown.appendChild(allLi);
     ccPickerDropdown.appendChild(Object.assign(document.createElement('li'), { className: 'cc-picker-divider' }));
 
-    sidebarCostCenters.forEach((cc) => {
+    centers.forEach((cc) => {
         const li = document.createElement('li');
         li.className = 'cc-option';
         const label = document.createElement('label');
@@ -11758,12 +11974,12 @@ function renderCostCenterPicker() {
         checkbox.type = 'checkbox';
         checkbox.checked = isCostCenterSelected(cc.id);
         checkbox.addEventListener('change', () => {
-            if (selectedCostCenterIds === 'all') selectedCostCenterIds = new Set(sidebarCostCenters.map((c) => c.id));
+            if (selectedCostCenterIds === 'all') selectedCostCenterIds = new Set(centers.map((c) => c.id));
             if (checkbox.checked) selectedCostCenterIds.add(cc.id);
             else selectedCostCenterIds.delete(cc.id);
             persistCostCenterSelection();
             updateCostCenterPickerLabel();
-            allCheckbox.checked = sidebarCostCenters.every((c) => isCostCenterSelected(c.id));
+            allCheckbox.checked = centers.every((c) => isCostCenterSelected(c.id));
         });
         const span = document.createElement('span');
         span.textContent = `${cc.code} - ${cc.name}`;
@@ -11790,6 +12006,7 @@ function hasCostCenterPermission(ccId) {
 async function initCostCenterPicker(prefetchedCostCenters) {
     const allCostCenters = await (prefetchedCostCenters || fetchCostCenters());
     sidebarCostCenters = allCostCenters.filter((cc) => hasCostCenterPermission(cc.id));
+    initSitePicker();
     if (sidebarCostCenters.length === 1) {
         // Nothing to actually choose between — same idea as the department
         // and area pickers auto-picking their one option.
@@ -11800,11 +12017,15 @@ async function initCostCenterPicker(prefetchedCostCenters) {
         selectedCostCenterIds = new Set(Array.from(selectedCostCenterIds).filter((id) => validIds.has(id)));
         persistCostCenterSelection();
     }
+    // los centros son siempre de los sitios elegidos
+    if (selectedSiteCodes !== 'all') persistCostCenterSelection();
     renderCostCenterPicker();
+    renderSitePicker();
 }
 
 ccPickerBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
+    if (ccPicker.classList.contains('picker-locked')) { notifyPickerLocked(ccPickerBtn.title); return; }
     const wasOpen = ccPicker.classList.contains('open');
     closeAllTopBarDropdowns();
     if (!wasOpen) {
@@ -12303,7 +12524,7 @@ function openCostCenterDefaultPicker() {
     const allCheckbox = document.createElement('input');
     allCheckbox.type = 'checkbox';
     allCheckbox.id = 'default-picker-cc-all';
-    allCheckbox.checked = sidebarCostCenters.every((cc) => isCostCenterSelected(cc.id));
+    allCheckbox.checked = pickerCostCenters().every((cc) => isCostCenterSelected(cc.id));
     allCheckbox.addEventListener('change', () => {
         defaultPickerList.querySelectorAll('input[type="checkbox"]:not(#default-picker-cc-all)').forEach((cb) => {
             cb.checked = allCheckbox.checked;
@@ -12315,7 +12536,7 @@ function openCostCenterDefaultPicker() {
     allLi.appendChild(allLabel);
     defaultPickerList.appendChild(allLi);
 
-    sidebarCostCenters.forEach((cc) => {
+    pickerCostCenters().forEach((cc) => {
         const li = document.createElement('li');
         const label = document.createElement('label');
         label.className = 'logout-mode-option';
@@ -12339,7 +12560,7 @@ function openCostCenterDefaultPicker() {
 defaultPickerCcSaveBtn?.addEventListener('click', () => {
     const boxes = Array.from(defaultPickerList.querySelectorAll('input[type="checkbox"]:not(#default-picker-cc-all)'));
     const checkedIds = boxes.filter((cb) => cb.checked).map((cb) => Number(cb.dataset.ccId));
-    selectedCostCenterIds = checkedIds.length === sidebarCostCenters.length ? 'all' : new Set(checkedIds);
+    selectedCostCenterIds = checkedIds.length === sidebarCostCenters.length && selectedSiteCodes === 'all' ? 'all' : new Set(checkedIds);
     persistCostCenterSelection();
     renderCostCenterPicker();
     saveDefaults({ costCenters: selectedCostCenterIds === 'all' ? 'all' : checkedIds });

@@ -82,7 +82,15 @@
     "costCentersNone": "None selected",
     "deptNoPermission": "No permissions",
     "deptNoPermissionHint": "It is assigned to you, but your Position does not give you permissions in this department yet.",
-    "costCentersSelectedCount": "Several ({count})"
+    "costCentersSelectedCount": "Several ({count})",
+    "sites": "Sites",
+    "sitesAll": "All sites",
+    "sitesAllCount": "All ({count})",
+    "sitesNone": "None selected",
+    "sitesSelectedCount": "Several ({count})",
+    "sitesLockedArea": "Pick the Area first to be able to choose Sites.",
+    "costCentersLockedArea": "Pick the Area and the Sites first to be able to choose Cost Centers.",
+    "costCentersLockedSites": "Pick at least one Site first to be able to choose Cost Centers."
   },
   "menu": {
     "home": "Home",
@@ -6607,6 +6615,10 @@
     "bookmarks": {
       "what": "Saves your favorite screens so you can get back to them fast, without searching the menu every time.",
       "example": "you save the screen you use every day so you don't have to search for it again."
+    },
+    "sitePicker": {
+      "what": "Choose the sites where you will work. It turns on once you have picked the Area, and when you pick sites the Cost Centers picker only lets you choose the ones from those sites.",
+      "example": "your company has the Monterrey and Guadalajara sites: you pick only Monterrey and Cost Centers shows just the Monterrey ones."
     },
     "uiScale": {
       "what": "Makes the text and tables bigger or smaller across the whole application, only for as long as your session lasts.",

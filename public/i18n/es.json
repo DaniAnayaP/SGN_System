@@ -82,7 +82,15 @@
     "costCentersNone": "Ninguno seleccionado",
     "deptNoPermission": "Sin permisos",
     "deptNoPermissionHint": "Lo tienes asignado, pero tu Puesto todavía no te da permisos en este departamento.",
-    "costCentersSelectedCount": "Varios ({count})"
+    "costCentersSelectedCount": "Varios ({count})",
+    "sites": "Sitios",
+    "sitesAll": "Todos los sitios",
+    "sitesAllCount": "Todos ({count})",
+    "sitesNone": "Ninguno seleccionado",
+    "sitesSelectedCount": "Varios ({count})",
+    "sitesLockedArea": "Primero elige el Área para poder elegir los Sitios.",
+    "costCentersLockedArea": "Primero elige el Área y los Sitios para poder elegir los Centros de Costo.",
+    "costCentersLockedSites": "Primero elige al menos un Sitio para poder elegir los Centros de Costo."
   },
   "menu": {
     "home": "Inicio",
@@ -6606,6 +6614,10 @@
     "bookmarks": {
       "what": "Guarda tus pantallas favoritas para regresar a ellas rápido, sin buscar en el menú cada vez.",
       "example": "guardas la pantalla que usas todos los días para no buscarla cada vez."
+    },
+    "sitePicker": {
+      "what": "Elige los sitios donde vas a trabajar. Se habilita cuando ya elegiste el Área, y al elegir sitios, el selector de Centros de Costo solo te deja los de esos sitios.",
+      "example": "tu empresa tiene los sitios de Monterrey y de Guadalajara: eliges solo Monterrey y en Centros de Costo ves únicamente los de Monterrey."
     },
     "uiScale": {
       "what": "Hace el texto y las tablas más grandes o más chicas en toda la aplicación, solo mientras dure tu sesión.",
