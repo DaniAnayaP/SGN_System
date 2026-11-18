@@ -67,6 +67,7 @@ const TABLES = {
     support_materials: { action: WIPE, group: 'captures' },
     // Personalización y reglas de cada cliente
     field_fill_rules: { action: WIPE, group: 'clientSettings' },
+    support_map: { action: WIPE, group: 'clientSettings' }, // Admin > Mapa de soporte: los ajustes de Soporte de cada empresa (2026-11-18)
     saved_layouts: { action: WIPE, group: 'clientSettings' },
     saved_searches: { action: WIPE, group: 'clientSettings' },
     column_color_level_overrides: { action: PARTIAL, group: 'clientSettings', where: CLIENT_LEVELS_WHERE },

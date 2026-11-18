@@ -3547,6 +3547,46 @@
             }
           ]
         }
+      ],
+      "cat-admin": [
+        {
+          "id": "cat-admin-ti-mapa-soporte",
+          "labelKey": "menu.adminTiMapaSoporte",
+          "abbrKeys": [
+            "menu.adminTiMapaSoporteAbbr1"
+          ],
+          "icon": "bx-sitemap",
+          "href": "AdminMapaSoporte.html",
+          "submenu": [
+            {
+              "id": "colMsPrioridades",
+              "labelKey": "main.colMsPrioridades",
+              "permissionOnly": true
+            },
+            {
+              "id": "colMsImpactos",
+              "labelKey": "main.colMsImpactos",
+              "permissionOnly": true
+            },
+            {
+              "id": "colMsNiveles",
+              "labelKey": "main.colMsNiveles",
+              "permissionOnly": true
+            },
+            {
+              "id": "colMsReglas",
+              "labelKey": "main.colMsReglas",
+              "permissionOnly": true
+            }
+          ],
+          "iconsSubmenu": [
+            {
+              "id": "iconHistory",
+              "labelKey": "main.changeHistory",
+              "permissionOnly": true
+            }
+          ]
+        }
       ]
     }
   },

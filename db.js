@@ -3351,6 +3351,10 @@ function getTableChanges(clientId, tableKey, recordId) {
 // other table here, data_table_changes never records which cost center
 // the changed record belonged to, so there's nothing real to put there.
 const TABLE_CHANGES_SYSTEM_META = {
+    'soporte-categorias': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Categorías de Soporte' },
+    'soporte-evidencias': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Evidencias de Soporte' },
+    'soporte-causas': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Causas de Soporte' },
+    'mapa-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Mapa de soporte' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3756,6 +3760,8 @@ const TABLE_GRANT_PATHS = {
     'soporte-categorias': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-categorias' },
     'soporte-evidencias': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-evidencias' },
     'soporte-causas': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-causas' },
+    // Admin > Mapa de soporte: sus cuatro grupos de ajustes (colMsPrioridades, colMsImpactos, colMsNiveles, colMsReglas) y el icono del historial.
+    'mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
     // Gestión > Activos: su botón Editar (colActEditar)
     'gestion-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-activos' },
@@ -14518,6 +14524,87 @@ function seedSoporteCatalogsValuesOnce() {
     })();
     console.log(`[db] Seeded the Soporte catalogs (categorías, evidencias que se piden, causas al cerrar) for existing clients: ${seeded} values (one-time).`);
 }
+// ---- Mapa de soporte (TI > Operaciones TI > Admin): los ajustes de Soporte de cada empresa (una sola fila por empresa, se crea al abrirla por primera vez) --------------------------------------------
+// Prioridades (plazos en minutos), impactos que se le preguntan al usuario, niveles (qué niveles se usan y quién atiende cada uno) y reglas del caso. Cada campo se edita por separado con la hoja de su grupo
+// del árbol: colMsPrioridades, colMsImpactos, colMsNiveles y colMsReglas (los de arriba de la pantalla, como cualquier columna). El nivel 1 (Mesa de ayuda) siempre se usa: es la dueña del caso.
+const SUPPORT_MAP_TABLE_KEY = 'mapa-soporte';
+const SUPPORT_MAP_GROUP_FIELD_KEYS = { prioridades: 'main.colMsPrioridades', impactos: 'main.colMsImpactos', niveles: 'main.colMsNiveles', reglas: 'main.colMsReglas' };
+const SUPPORT_MAP_DEFAULT_IMPACTS = [
+    { name: 'Riesgo operativo', question: '¿Se detiene o se pone en riesgo la operación?' },
+    { name: 'Costos', question: '¿Cuesta dinero? (merma, multas, horas extra)' },
+    { name: 'Tiempos', question: '¿Cuánto tiempo se pierde?' },
+    { name: 'Retrasos', question: '¿Retrasa pedidos o entregas?' },
+    { name: 'Quejas de clientes', question: '¿Ya hubo o puede haber quejas?' },
+];
+// kind: int (con min y max) | bool | ids (usuarios de la empresa, JSON) | impacts (lista, JSON). label = cómo se llama el campo en el historial de cambios.
+const SUPPORT_MAP_FIELD_DEFS = (() => {
+    const defs = [];
+    const add = (key, column, kind, def, group, label, extra = {}) => defs.push({ key, column, kind, def, group, label, ...extra });
+    [['p1', 'Urgente', 5, 240, 10], ['p2', 'Urgente, poco importante', 60, 1440, 30], ['p3', 'No urgente pero importante', 1440, 4320, 120], ['p4', 'No importante y no urgente', 4320, 10080, 0]].forEach(([p, name, first, resolve, wait]) => {
+        add(`${p}FirstMin`, `${p}_first_min`, 'int', first, 'prioridades', `${name} · 1ª respuesta`, { min: 0, max: 525600, unit: 'min' });
+        add(`${p}ResolveMin`, `${p}_resolve_min`, 'int', resolve, 'prioridades', `${name} · Resolver en`, { min: 0, max: 525600, unit: 'min' });
+        add(`${p}WaitMin`, `${p}_wait_min`, 'int', wait, 'prioridades', `${name} · Puede esperar si termina en`, { min: 0, max: 525600, unit: 'min' });
+    });
+    add('allowPause', 'allow_pause', 'bool', 1, 'prioridades', 'Permitir pausar un caso para atender uno Urgente');
+    add('pauseStopsClock', 'pause_stops_clock', 'bool', 1, 'prioridades', 'El reloj del plazo se detiene en pausa');
+    add('impacts', 'impacts', 'impacts', JSON.stringify(SUPPORT_MAP_DEFAULT_IMPACTS), 'impactos', 'Impactos que se le preguntan al usuario');
+    add('n2Enabled', 'n2_enabled', 'bool', 1, 'niveles', 'Usar el Nivel 2 · Soporte especializado');
+    add('n3Enabled', 'n3_enabled', 'bool', 1, 'niveles', 'Usar el Nivel 3 · Ingeniería');
+    add('n1Users', 'n1_users', 'ids', '', 'niveles', 'Quién atiende el Nivel 1 · Mesa de ayuda');
+    add('n2Users', 'n2_users', 'ids', '', 'niveles', 'Quién atiende el Nivel 2 · Soporte especializado');
+    add('n3Users', 'n3_users', 'ids', '', 'niveles', 'Quién atiende el Nivel 3 · Ingeniería');
+    [['rateOnReceive', 'rate_on_receive', 'Calificar al recibir un caso'], ['accessCheck', 'access_check', 'La Mesa de ayuda revisa los accesos al tomar un caso'], ['closeByHelpdesk', 'close_by_helpdesk', 'El cierre lo hace siempre la Mesa de ayuda'],
+        ['notifyUrgent', 'notify_urgent', 'Avisar al jefe directo cuando la prioridad es Urgente'], ['notifyOverdue', 'notify_overdue', 'Avisar al jefe directo cuando vence el plazo'],
+        ['notifyEscalated', 'notify_escalated', 'Avisar al jefe directo cuando el caso sube a Nivel 3 o 4'], ['notifyClosed', 'notify_closed', 'Avisar al jefe directo cuando se cierra'],
+        ['allowInviteChat', 'allow_invite_chat', 'Dejar invitar al chat a su jefe y a sus compañeros'], ['askUserRating', 'ask_user_rating', 'Pedir calificación al usuario al terminar']].forEach(([key, column, label]) => add(key, column, 'bool', 1, 'reglas', label));
+    add('ratingReminderHours', 'rating_reminder_hours', 'int', 24, 'reglas', 'Recordatorio de la calificación', { min: 0, max: 720, unit: 'h' });
+    add('confirmWindowHours', 'confirm_window_hours', 'int', 2, 'reglas', 'Plazo para confirmar un aviso o aceptar una invitación', { min: 1, max: 720, unit: 'h' });
+    return defs;
+})();
+const SUPPORT_MAP_FIELDS = Object.fromEntries(SUPPORT_MAP_FIELD_DEFS.map((d) => [d.key, { column: d.column, fieldKey: SUPPORT_MAP_GROUP_FIELD_KEYS[d.group] }]));
+db.exec(`
+    CREATE TABLE IF NOT EXISTS support_map (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id  INTEGER NOT NULL UNIQUE REFERENCES clients(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+`);
+{
+    const have = new Set(db.prepare('PRAGMA table_info(support_map)').all().map((c) => c.name));
+    SUPPORT_MAP_FIELD_DEFS.forEach((d) => {
+        if (have.has(d.column)) return;
+        const ddl = d.kind === 'int' || d.kind === 'bool' ? `INTEGER NOT NULL DEFAULT ${Number(d.def)}` : `TEXT NOT NULL DEFAULT '${String(d.def).replace(/'/g, "''")}'`;
+        db.exec(`ALTER TABLE support_map ADD COLUMN ${d.column} ${ddl}`);
+    });
+}
+// Las personas de la empresa que se pueden poner a atender un nivel: usuarios activos (una cuenta de prueba solo ve las de prueba, como en el resto de las pantallas).
+function listSupportMapUsers(clientId, isTestAccount) {
+    return db.prepare("SELECT id, name, nickname FROM users WHERE client_id = ? AND active = 1 AND is_test_account = ? AND name != '' ORDER BY name COLLATE NOCASE ASC").all(clientId, isTestAccount ? 1 : 0);
+}
+// La fila de ajustes de una empresa (se crea con los valores de la maqueta la primera vez que se pide).
+function getSupportMapRow(clientId) {
+    let row = db.prepare('SELECT * FROM support_map WHERE client_id = ?').get(clientId);
+    if (!row) {
+        db.prepare('INSERT INTO support_map (client_id) VALUES (?)').run(clientId);
+        row = db.prepare('SELECT * FROM support_map WHERE client_id = ?').get(clientId);
+    }
+    return row;
+}
+// Aplica un PATCH ya revisado (claves camelCase de SUPPORT_MAP_FIELD_DEFS). Los valores de un cambio autorizado llegan como texto: aquí se vuelven a su forma.
+function updateSupportMap(clientId, patch) {
+    const row = getSupportMapRow(clientId);
+    const sets = []; const params = { id: row.id };
+    SUPPORT_MAP_FIELD_DEFS.forEach((d) => {
+        if (!Object.prototype.hasOwnProperty.call(patch, d.key)) return;
+        let v = patch[d.key];
+        if (d.kind === 'int') v = Number(v);
+        else if (d.kind === 'bool') v = (v === true || v === 1 || v === '1' || v === 'true') ? 1 : 0;
+        else v = v == null ? '' : String(v);
+        sets.push(`${d.column} = @${d.key}`); params[d.key] = v;
+    });
+    if (sets.length) db.prepare(`UPDATE support_map SET ${sets.join(', ')} WHERE id = @id`).run(params);
+    return db.prepare('SELECT * FROM support_map WHERE id = ?').get(row.id);
+}
 function seedActivosFijosValuesOnce() {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_SEED_KEY)) return;
     let seeded = 0;
@@ -14731,6 +14818,7 @@ seedIncidentesCriteriosValuesOnce();
 seedSoporteCatalogsValuesOnce();
 
 module.exports = {
+    SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     listTemperatureActivity, hasTemperatureActivityBefore,
     getUserExclusions, setUserExclusions, applyUserExclusions,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,

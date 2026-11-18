@@ -578,6 +578,7 @@ const {
     getSupportMaterialById,
     deleteSupportMaterial,
     SUPPORT_MATERIAL_CATEGORIES,
+    SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -10014,6 +10015,86 @@ app.get('/api/business/layout/safety-qr', requireAuth, (req, res) => {
     res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', ...qrBranding(req.user.clientId), zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces });
 });
 
+// --- Mapa de soporte (TI > Operaciones TI > Admin) --------------------------------------------------------------------------------------------------------
+// Los ajustes de Soporte de cada empresa (una sola fila): plazos de las 4 prioridades, impactos que se le preguntan al usuario, niveles que se usan y quién atiende cada uno, y las reglas del caso. Cada campo
+// se cambia por separado (PATCH con los campos que cambian): quien tiene la hoja de su grupo en el árbol lo aplica o lo pide, como en cualquier columna, y todo queda en el historial.
+function supportMapPayload(row, req) {
+    const map = { id: row.id };
+    SUPPORT_MAP_FIELD_DEFS.forEach((d) => {
+        const v = row[d.column];
+        if (d.kind === 'int') map[d.key] = Number(v);
+        else if (d.kind === 'bool') map[d.key] = Number(v) === 1;
+        else if (d.kind === 'ids') map[d.key] = parseClassificationIds(v);
+        else { let list = []; try { list = JSON.parse(v || '[]'); } catch { list = []; } map[d.key] = Array.isArray(list) ? list : []; }
+    });
+    const pending = getPendingColumnsByRecord(req.user.clientId, SUPPORT_MAP_TABLE_KEY);
+    const admin = !!req.user.isClientAdmin;
+    const grants = admin ? [] : getUserEffectiveGrants(req.user.sub);
+    return {
+        map, users: listSupportMapUsers(req.user.clientId, req.user.isTestAccount), pendingFields: (pending && pending.get(row.id)) || [],
+        permissions: { canHistory: admin || hasTableIconGrant(grants, SUPPORT_MAP_TABLE_KEY, 'iconHistory') },
+    };
+}
+function prepareSupportMapPatch(req, existing, patch) {
+    const bad = (message) => ({ error: { status: 400, message } });
+    const has = (key) => Object.prototype.hasOwnProperty.call(patch, key);
+    const out = {}; const sanitizers = {};
+    const users = listSupportMapUsers(req.user.clientId, req.user.isTestAccount);
+    const byUser = new Map(users.map((u) => [u.id, u]));
+    const namesOf = (value) => parseClassificationIds(value).map((id) => (byUser.get(id) || {}).name).filter(Boolean).join(', ') || 'Nadie';
+    for (const d of SUPPORT_MAP_FIELD_DEFS) {
+        if (!has(d.key)) continue;
+        const v = patch[d.key];
+        if (d.kind === 'int') {
+            const n = Number(v);
+            if (v === '' || v === null || typeof v === 'boolean' || !Number.isInteger(n) || n < d.min || n > d.max) return bad(`«${d.label}» debe ser un número entero entre ${d.min} y ${d.max}.`);
+            out[d.key] = n;
+            sanitizers[d.key] = (x) => `${d.label}: ${x} ${d.unit}`;
+        } else if (d.kind === 'bool') {
+            if (!(v === true || v === false || v === 0 || v === 1)) return bad(`«${d.label}» debe ser Sí o No.`);
+            out[d.key] = v ? 1 : 0;
+            sanitizers[d.key] = (x) => `${d.label}: ${String(x) === '1' ? 'Sí' : 'No'}`;
+        } else if (d.kind === 'ids') {
+            if (!Array.isArray(v) || !v.every((n) => Number.isInteger(Number(n)))) return bad('Las personas no tienen el formato correcto.');
+            const ids = [...new Set(v.map(Number))];
+            const current = new Set(parseClassificationIds(existing[d.column]));
+            if (ids.some((id) => !byUser.has(id) && !current.has(id))) return bad('Una de las personas ya no está activa en la empresa. Vuelve a elegirla.');
+            const ordered = [...users.filter((u) => ids.includes(u.id)).map((u) => u.id), ...ids.filter((id) => !byUser.has(id))];
+            out[d.key] = ordered.length ? JSON.stringify(ordered) : '';
+            sanitizers[d.key] = (x) => `${d.label}: ${namesOf(x)}`;
+        } else {
+            if (!Array.isArray(v) || v.length < 1 || v.length > 12) return bad('Debe haber entre 1 y 12 impactos.');
+            const clean = v.map((i) => ({ name: String((i && i.name) || '').trim().slice(0, 40), question: String((i && i.question) || '').trim().slice(0, 160) }));
+            if (clean.some((i) => !i.name)) return bad('Cada impacto necesita un nombre.');
+            if (new Set(clean.map((i) => i.name.toLowerCase())).size !== clean.length) return bad('Dos impactos no pueden llamarse igual.');
+            out[d.key] = JSON.stringify(clean);
+            sanitizers[d.key] = (x) => { let list = []; try { list = JSON.parse(x || '[]'); } catch { list = []; } return `${d.label}: ${list.map((i) => i.name).join(', ')}`; };
+        }
+    }
+    // la primera respuesta no puede tardar más que resolver el caso (0 = sin plazo)
+    for (const p of ['p1', 'p2', 'p3', 'p4']) {
+        if (!has(`${p}FirstMin`) && !has(`${p}ResolveMin`)) continue;
+        const first = has(`${p}FirstMin`) ? out[`${p}FirstMin`] : Number(existing[`${p}_first_min`]);
+        const resolve = has(`${p}ResolveMin`) ? out[`${p}ResolveMin`] : Number(existing[`${p}_resolve_min`]);
+        if (resolve > 0 && first > resolve) return bad('La primera respuesta no puede tardar más que resolver el caso.');
+    }
+    return { patch: out, sanitizers };
+}
+app.get('/api/business/support-map', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.json(supportMapPayload(getSupportMapRow(req.user.clientId), req));
+});
+app.patch('/api/business/support-map', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const existing = getSupportMapRow(req.user.clientId);
+    const { baseline, overrideConflicts, ...rawPatch } = req.body || {};
+    const prepared = prepareSupportMapPatch(req, existing, rawPatch);
+    if (prepared.error) return res.status(prepared.error.status).json({ message: prepared.error.message });
+    const { appliedPatch, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, SUPPORT_MAP_FIELDS, SUPPORT_MAP_TABLE_KEY, 'Mapa de soporte', prepared.sanitizers, { baseline, overrideConflicts });
+    const row = Object.keys(appliedPatch).length ? updateSupportMap(req.user.clientId, appliedPatch) : existing;
+    res.json({ ...supportMapPayload(row, req), rejectedFields, conflictFields });
+});
+
 // --- Mapa de calor (Admin) --------------------------------------------------------------------------------------------------------------------------
 // La pantalla Admin > Mapa de calor dibuja el Layout de UN centro de costos con cada zona pintada según lo que marcaron sus sensores a la hora elegida. El servidor manda el Layout (lo que hace falta para dibujarlo: contorno, zonas
 // y los sensores con su zona) y las lecturas de sensores de un rango de tiempo (hasta 48 h; las horas van en UTC); la hora local, el promedio por zona y los colores los saca la pantalla.
@@ -15832,6 +15913,8 @@ app.get('/api/business/table-changes', requireAuth, (req, res) => {
 // leak into data_table_changes at approval time even though the direct-edit
 // path already protects against that.
 const PENDING_CHANGE_APPLIERS = {
+    // Cambiar un ajuste del Mapa de soporte cuando lo autoriza otra persona (el valor llega como texto: updateSupportMap lo vuelve a su forma).
+    'mapa-soporte': (recordId, clientId, patch) => updateSupportMap(clientId, patch),
     'registro-combustible': (recordId, clientId, patch) => updateFuelRecord(recordId, clientId, patch),
     'mi-recurso-humano': (recordId, clientId, patch) => updateHrWorker(recordId, clientId, patch),
     // Fase 3 (choques de la cola offline) escalates a conflict override to
