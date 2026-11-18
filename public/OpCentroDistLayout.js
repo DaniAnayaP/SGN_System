@@ -4950,7 +4950,9 @@ async function relSearchCodes() {
     const box = $('lrel-results');
     if (!q || !rd) { box.hidden = true; return; }
     try {
-        const res = await fetch(`/api/business/code-relations/skus?q=${encodeURIComponent(q)}&mode=${Dashboard.searchModeOf($('lrel-code'))}`, { credentials: 'include' });
+        // solo los códigos que TI habilitó para el centro del Layout (Habilitación de Códigos)
+        const layoutCenter = Dashboard.getSingleSelectedCostCenterId ? Dashboard.getSingleSelectedCostCenterId() : null;
+        const res = await fetch(`/api/business/code-relations/skus?q=${encodeURIComponent(q)}&mode=${Dashboard.searchModeOf($('lrel-code'))}&${layoutCenter ? `cc=${layoutCenter}` : Dashboard.enabledCodesParam()}`, { credentials: 'include' });
         if (!res.ok) return;
         const { skus } = await res.json();
         skus.forEach((s) => relSkuCache.set(s.id, s));

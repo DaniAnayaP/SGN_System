@@ -596,7 +596,9 @@ async function searchCodes() {
     const box = $m('rel-results');
     if (!q || (st.sku && q === `${st.sku.sku} · ${st.sku.description}`)) { box.hidden = true; return; }
     try {
-        const res = await fetch(`${API}/skus?q=${encodeURIComponent(q)}&mode=${Dashboard.searchModeOf($m('rel-code'))}`, { credentials: 'include' });
+        // solo los códigos que TI habilitó para el centro de la relación (si ya se eligió) o para los centros elegidos arriba
+        const ccParam = Number(st.centro) > 0 ? `cc=${Number(st.centro)}` : Dashboard.enabledCodesParam();
+        const res = await fetch(`${API}/skus?q=${encodeURIComponent(q)}&mode=${Dashboard.searchModeOf($m('rel-code'))}&${ccParam}`, { credentials: 'include' });
         if (!res.ok) return;
         const { skus } = await res.json();
         skus.forEach((s) => skuCache.set(s.id, s));

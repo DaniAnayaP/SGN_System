@@ -149,7 +149,7 @@ const {
     deleteFleetUnit,
     suggestFuelTypeForEcoUnit,
     listSkuItems,
-    listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, SKU_ENABLEMENT_DEFAULT,
+    listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, isSkuEnabledAt, SKU_ENABLEMENT_DEFAULT,
     getSkuItemById,
     createSkuItem,
     SKU_ITEM_PATCHABLE_FIELDS,
@@ -8466,7 +8466,9 @@ function manualItemsFor(clientId, isTest, costCenterId = 0, placeId = 0) {
     const hit = manualItemsCache.get(key);
     if (hit && Date.now() - hit.at < 20000) return hit.items;
     const packsOf = manualPacksFor(clientId, isTest);
-    const items = listManualOrderItems(clientId, isTest, costCenterId || 0, placeId || 0).map((r) => {
+    // Solo los códigos que TI habilitó en C. Distribución para ese centro (o, sin centro, para algún centro): Habilitación de Códigos.
+    const enabled = listSkuIdsEnabledFor(clientId, isTest, { ...SKU_ENABLEMENT_DEFAULT, costCenterIds: costCenterId ? [costCenterId] : null });
+    const items = listManualOrderItems(clientId, isTest, costCenterId || 0, placeId || 0).filter((r) => enabled.has(r.id)).map((r) => {
         const sku = padSku(r.record_number, r.sku_code);
         const cats = [r.category_inventario, r.category_compra, r.category_almacenamiento, r.category_rotacion, r.category_manejo, r.category_riesgo, r.category_vidautil].map((c) => String(c || '').trim()).filter(Boolean);
         return {
@@ -8895,7 +8897,10 @@ app.delete('/api/business/pedido-manual/:id', requireAuth, (req, res) => {
 app.get('/api/business/pedido-manual/items', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const centersOf = new Map();
-    listManualItemCenters(req.user.clientId, !!req.user.isTestAccount).forEach((r) => { if (!centersOf.has(r.sku_item_id)) centersOf.set(r.sku_item_id, []); centersOf.get(r.sku_item_id).push(r.cost_center_id); });
+    // cada código solo se ofrece en los centros donde TI lo habilitó (Habilitación de Códigos)
+    const enabledAtCenter = new Map();
+    const enabledAt = (centerId) => { if (!enabledAtCenter.has(centerId)) enabledAtCenter.set(centerId, listSkuIdsEnabledFor(req.user.clientId, !!req.user.isTestAccount, { ...SKU_ENABLEMENT_DEFAULT, costCenterIds: [centerId] })); return enabledAtCenter.get(centerId); };
+    listManualItemCenters(req.user.clientId, !!req.user.isTestAccount).forEach((r) => { if (!enabledAt(r.cost_center_id).has(r.sku_item_id)) return; if (!centersOf.has(r.sku_item_id)) centersOf.set(r.sku_item_id, []); centersOf.get(r.sku_item_id).push(r.cost_center_id); });
     // «Lugar que solicita»: si el catálogo Lugares de Envío tiene lugares activos, la App pide el lugar y cada código trae a qué lugares se puede enviar desde cada centro: ship = [[centro, lugar], …] (Relación Código Envío)
     const places = listArticleCategories(req.user.clientId, 'lugares-envio', !!req.user.isTestAccount).filter((r) => r.status === 'active' && r.name).map((r) => ({ id: r.id, name: r.name }));
     const activePlaceIds = new Set(places.map((p) => p.id));
@@ -13446,6 +13451,8 @@ function validateCodeRelationState(req, state, selfId, existing, ctx) {
     if (!CODE_RELATION_CLASSES[state.classification || 'activo']) return bad('La clasificación no es una de las del catálogo (Producto Activo, Cuarentena, Aclaración o en Consigna).');
     if (!state.costCenterId || !ctx.costCenters.has(state.costCenterId)) return bad('Elige un centro de costos.');
     if (!(existing && existing.cost_center_id === state.costCenterId) && !ctx.isCompleteCenter(state.costCenterId)) return bad('Ese centro de costos está incompleto o inactivo. Complétalo primero en Nuestros Centros Costos.');
+    // Cada centro solo trabaja con los códigos que TI le habilitó en C. Distribución (Habilitación de Códigos): una relación nueva, o la que cambia de código o de centro, debe ser de un código habilitado ahí. Una que ya existía y no cambia de código ni de centro se respeta.
+    if (!(existing && existing.sku_item_id === state.skuItemId && existing.cost_center_id === state.costCenterId) && !isSkuEnabledAt(clientId, isTestAccount, state.skuItemId, state.costCenterId)) return bad('Ese código no está habilitado para este centro de costos. TI lo habilita en Habilitación de Códigos.');
     const layout = ctx.layoutFor(state.costCenterId);
     // La zona del lugar es la del activo hoy (la de su huella, que sale de dónde está en el croquis): una relación guardada con otra zona se corrige sola.
     if (state.spaceId) { const placed = layout.spaceById.get(state.spaceId); if (placed && placed.zoneId) state.zoneId = placed.zoneId; }
@@ -13598,17 +13605,20 @@ app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
     // como siempre (basta una parte de lo escrito).
     const mode = PUBLIC_SEARCH_MODES.includes(req.query.mode) ? req.query.mode : 'contains';
     const query = publicSearchQuery(term);
+    // cc (los centros elegidos arriba): solo los códigos que TI habilitó para esos centros en C. Distribución (Habilitación de Códigos). Sin cc (la App todavía, TI) salen todos.
+    const enabledIds = skuEnabledIdsFromQuery(req);
+    const keepEnabled = (list) => (enabledIds ? list.filter((s) => enabledIds.has(s.id)) : list);
     let found;
     if (req.query.all !== '1' && (mode !== 'contains' || /[$@,]/.test(query))) {
         if (!SearchSyntax.ready(mode, query)) found = [];
         else {
             const matches = publicSearchMatcher(mode, query);
-            found = searchSkuItems(req.user.clientId, '', req.user.isTestAccount, 100000)
-                .filter((s) => matches([padSku(s.record_number, s.sku_code), padSku(s.record_number), s.client_code, s.upc, s.unique_description, s.known_description, s.custom_description]))
+            found = keepEnabled(searchSkuItems(req.user.clientId, '', req.user.isTestAccount, 100000)
+                .filter((s) => matches([padSku(s.record_number, s.sku_code), padSku(s.record_number), s.client_code, s.upc, s.unique_description, s.known_description, s.custom_description])))
                 .slice(0, limit);
         }
     } else {
-        found = searchSkuItems(req.user.clientId, req.query.all === '1' ? '' : term, req.user.isTestAccount, limit);
+        found = keepEnabled(searchSkuItems(req.user.clientId, req.query.all === '1' ? '' : term, req.user.isTestAccount, enabledIds ? 100000 : limit)).slice(0, limit);
     }
     res.json({
         skus: found.map((s) => ({
@@ -14007,6 +14017,14 @@ function habCleanRows(rows, options) {
     }
     return { rows: normalizeEnablementRows(clean) };
 }
+// Los códigos que valen para los centros que manda la pantalla en «cc»: «all» = en cualquier centro, «3,5» = en alguno de esos centros (vacío = ningún centro elegido, solo lo habilitado en «todos los sitios»). Sin «cc» = sin filtro (null).
+// Es para las pantallas de C. Distribución (Relación Código, Relación Envío, Verificador…); TI y las pantallas maestras (Alta, Edición, Códigos, Presentaciones) no lo piden y ven todo.
+function skuEnabledIdsFromQuery(req, area = SKU_ENABLEMENT_DEFAULT) {
+    if (req.query.cc === undefined) return null;
+    const raw = String(req.query.cc);
+    const centers = raw === 'all' ? null : raw.split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0);
+    return listSkuIdsEnabledFor(req.user.clientId, !!req.user.isTestAccount, { ...area, costCenterIds: centers });
+}
 const habCatalog = (options) => ({ siteCodes: options.sites.map((s) => s.code), centersBySite: Object.fromEntries(options.sites.map((s) => [s.code, s.centers.map((c) => c.id)])) });
 const habPublicRow = (r) => ({ department: r.department, area: r.area, siteCode: r.siteCode, costCenterId: r.costCenterId || 0 });
 // Cómo se escribe una habilitación en el historial: «C. Distribución · PUEBL - Puebla › Compras» o «Punto Venta · todos los sitios».
@@ -14065,6 +14083,7 @@ app.put('/api/business/sku-enablements/:id', requireAuth, (req, res) => {
     if (clean.error) return res.status(400).json({ message: clean.error });
     const { added, removed } = setSkuEnablements(clientId, isTestAccount, skuRow.id, clean.rows);
     habLogChange(req, skuRow, options, added, removed);
+    manualItemsCache.clear(); // el catálogo del Pedido Manual guarda 20 segundos lo que ve cada centro: que el cambio se vea de inmediato
     res.json({ enabled: listSkuEnablements(clientId, isTestAccount, skuRow.id).map(habPublicRow), changed: added.length + removed.length });
 });
 // Varios códigos a la vez (la lista filtrada de la pantalla): mode 'add' agrega esas habilitaciones y 'remove' las quita.
@@ -14083,6 +14102,7 @@ app.post('/api/business/sku-enablements/bulk', requireAuth, (req, res) => {
     const ids = [...new Set(body.skuItemIds.map(Number))].filter((id) => items.has(id));
     const changes = bulkSkuEnablements(clientId, isTestAccount, ids, body.mode, clean.rows, habCatalog(options));
     changes.forEach((c) => habLogChange(req, items.get(c.skuItemId), options, c.added, c.removed));
+    manualItemsCache.clear();
     res.json({ changed: changes.length, total: ids.length });
 });
 

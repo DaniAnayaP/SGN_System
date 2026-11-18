@@ -5612,6 +5612,13 @@ function listSkuIdsEnabledFor(clientId, isTest, { department, area, siteCodes = 
     return ids;
 }
 
+// ¿Vale este código en este centro de costos (para un área; por omisión C. Distribución)? Vale si está habilitado en «todos los sitios», en «todos los centros» del sitio del centro, o en ese centro en particular.
+function isSkuEnabledAt(clientId, isTest, skuItemId, costCenterId, { department, area } = SKU_ENABLEMENT_DEFAULT) {
+    const site = (db.prepare('SELECT site_code AS siteCode FROM cost_centers WHERE id = ? AND client_id = ?').get(costCenterId, clientId) || {}).siteCode || '';
+    return !!db.prepare("SELECT 1 FROM sku_enablements WHERE client_id = ? AND is_test_data = ? AND sku_item_id = ? AND department = ? AND area = ? AND (site_code = '' OR (site_code = ? AND (cost_center_id = 0 OR cost_center_id = ?))) LIMIT 1")
+        .get(clientId, isTest ? 1 : 0, skuItemId, department, area, site, costCenterId);
+}
+
 const SKU_ITEM_PATCHABLE_FIELDS = {
     upc: { column: 'upc', fieldKey: 'main.colArticuloUpc' },
     uniqueDescription: { column: 'unique_description', fieldKey: 'main.colArticuloDescUnica' },
@@ -15974,7 +15981,7 @@ module.exports = {
     deleteSupportMaterial,
     SUPPORT_MATERIAL_CATEGORIES,
     listSkuItems,
-    listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, SKU_ENABLEMENT_DEFAULT,
+    listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, isSkuEnabledAt, SKU_ENABLEMENT_DEFAULT,
     getSkuItemById,
     createSkuItem,
     updateSkuItem,

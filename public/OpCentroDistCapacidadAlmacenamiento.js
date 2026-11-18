@@ -234,7 +234,7 @@ async function runSearch() {
     const mine = ++searchSeq;
     if (term.length < 2) { box.innerHTML = `<p class="cap-hint">${esc(t('main.capEscribe'))}</p>`; return; }
     try {
-        const res = await fetch(`/api/business/code-relations/skus?q=${encodeURIComponent(term)}`, { credentials: 'include' });
+        const res = await fetch(`/api/business/code-relations/skus?q=${encodeURIComponent(term)}&${Dashboard.enabledCodesParam()}`, { credentials: 'include' });
         if (mine !== searchSeq || !picking) return;
         if (!res.ok) { box.innerHTML = `<p class="cap-hint">${esc(Dashboard.t('admin.loadError'))}</p>`; return; }
         const { skus } = await res.json();

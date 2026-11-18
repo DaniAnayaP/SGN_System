@@ -461,7 +461,7 @@ async function searchCodes() {
     const box = $('udm-results');
     if (!q || f.rec) { box.hidden = true; return; }
     try {
-        const res = await fetch(`${SKU_API}?q=${encodeURIComponent(q)}&mode=${Dashboard.searchModeOf($('udm-code'))}`, { credentials: 'include' });
+        const res = await fetch(`${SKU_API}?q=${encodeURIComponent(q)}&mode=${Dashboard.searchModeOf($('udm-code'))}&${Dashboard.enabledCodesParam()}`, { credentials: 'include' });
         if (!res.ok) return;
         const { skus } = await res.json();
         box.innerHTML = skus.length

@@ -60,7 +60,8 @@
         const token = ++searchToken;
         if (!q) { box.hidden = true; return []; }
         try {
-            const res = await fetch(`${API}/code-relations/skus?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+            // solo los códigos que TI habilitó para los centros elegidos arriba (Habilitación de Códigos)
+            const res = await fetch(`${API}/code-relations/skus?q=${encodeURIComponent(q)}&${Dashboard.enabledCodesParam()}`, { credentials: 'include' });
             if (!res.ok) throw new Error('search failed');
             const { skus } = await res.json();
             if (token !== searchToken) return skus;

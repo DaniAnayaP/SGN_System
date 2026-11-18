@@ -11899,6 +11899,12 @@ function getSingleSelectedCostCenterId() {
 function getSelectedCostCenterIds() {
     return selectedCostCenterIds === 'all' ? null : Array.from(selectedCostCenterIds);
 }
+// Para pedirle al servidor solo los códigos HABILITADOS (Habilitación de Códigos, TI) en los centros elegidos arriba: «cc=all» (todos los centros) o «cc=3,5» (esos centros; vacío = ninguno elegido). Va en las búsquedas de códigos de las
+// pantallas de C. Distribución; TI y las pantallas maestras (Alta, Edición, Códigos, Presentaciones) no lo mandan y ven todo.
+function enabledCodesParam() {
+    const ids = getSelectedCostCenterIds();
+    return ids === null ? 'cc=all' : `cc=${ids.join(',')}`;
+}
 // Deja marcado solo ese centro en el selector (por ejemplo para volver al que se estaba editando).
 function selectOnlyCostCenter(id) {
     // si el centro es de un sitio que no estaba elegido, ese sitio se agrega (los centros son siempre de los sitios elegidos)
@@ -14230,6 +14236,7 @@ window.Dashboard = {
     getSingleSelectedCostCenterId,
     setBreadcrumbSuffix,
     getSelectedCostCenterIds,
+    enabledCodesParam,
     selectOnlyCostCenter,
     t,
     svgifyLogo,

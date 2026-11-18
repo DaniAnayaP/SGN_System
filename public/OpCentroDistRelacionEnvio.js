@@ -334,7 +334,8 @@ async function loadAllCodes() {
     box.innerHTML = `<span class="rel-muted">${esc(t('main.envListLoading'))}</span>`;
     box.hidden = false;
     try {
-        const res = await fetch(`${SKU_API}?all=1`, { credentials: 'include' });
+        // solo los códigos que TI habilitó para los centros elegidos arriba (Habilitación de Códigos)
+        const res = await fetch(`${SKU_API}?all=1&${Dashboard.enabledCodesParam()}`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const { skus } = await res.json();
         if (token !== codesToken || !f) return; // se cerró la ventana o se abrió otra vez
@@ -363,7 +364,7 @@ async function filterCodes() {
 // Un catálogo de más de 5,000 códigos: al escribir se busca en el servidor (hasta 20 resultados).
 async function searchCodesOnServer(q, mode) {
     try {
-        const res = await fetch(`${SKU_API}?q=${encodeURIComponent(q)}&mode=${mode}`, { credentials: 'include' });
+        const res = await fetch(`${SKU_API}?q=${encodeURIComponent(q)}&mode=${mode}&${Dashboard.enabledCodesParam()}`, { credentials: 'include' });
         if (!res.ok) return;
         const { skus } = await res.json();
         if ($('env-code').value.trim() !== q) return; // ya se escribió otra cosa
