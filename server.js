@@ -1886,7 +1886,7 @@ app.put('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (
         }
     }
     // el mínimo indispensable de lo que se vendió como adicional también entra (como adicional), salvo lo que el plan ya incluye (pieza 5b)
-    const expanded = autoEnableMinimums(grants, { isCovered: (g) => isTupleGranted(planGrants, g.sectionId, g.itemId, g.submenuId) });
+    const expanded = autoEnableMinimums(grants, { coverGrants: planGrants });
     grants = expanded.grants;
     const saved = setClientPermissionGrants(req.params.id, grants, changedByLabel(req));
     if (syncClientModulesFromPermissionGrants(req.params.id)) {
@@ -3503,7 +3503,7 @@ function accessLabelEs(key) {
 function autoEnableMinimums(grants, options = {}) {
     const overrides = buildMasterStatusOverrideMap(getMasterPermissionStatuses().filter((r) => r.status !== 'habilitado'));
     const canAdd = (g) => resolveMasterNodeStatus(g.sectionId, g.itemId, String(g.submenuId || '').replace(/#app$/, '') || null, overrides) === 'habilitado';
-    const out = expandAccessMinimums(grants, { canAdd, isCovered: options.isCovered });
+    const out = expandAccessMinimums(grants, { canAdd, isCovered: options.isCovered, coverGrants: options.coverGrants });
     const name = (list) => list.slice(0, 30).map((p) => ({ access: accessLabelEs(p.access), related: accessLabelEs(p.related), count: p.count || 0 }));
     return { grants: out.grants, autoEnabled: name(out.autoEnabled), blocked: name(out.blocked) };
 }

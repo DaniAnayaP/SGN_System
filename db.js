@@ -13347,7 +13347,6 @@ function parseAccessKey(key) {
 // ¿Esta lista de permisos (de una sola plataforma) deja habilitado ese acceso? Lo cubre un permiso de su departamento, de su área o de su pantalla (o de lo que lo contiene); a una columna, botón o icono también lo habilita uno de sus niveles.
 function grantsEnableAccess(grants, node, platform) {
     const t = parseAccessKey(node.k);
-    const leafLike = node.ty === 'column' || node.ty === 'button' || node.ty === 'icon';
     return grants.some((g) => {
         const isApp = typeof g.submenuId === 'string' && g.submenuId.endsWith(ACCESS_APP_SUFFIX);
         if (isApp !== (platform === ACCESS_APP_SUFFIX)) return false;
@@ -13358,10 +13357,18 @@ function grantsEnableAccess(grants, node, platform) {
         if (!sub) return true;
         if (!t.submenuId) return false;
         if (sub === t.submenuId || t.submenuId.startsWith(`${sub}/`)) return true;
-        return leafLike && sub.startsWith(`${t.submenuId}/`);
+        return sub.startsWith(`${t.submenuId}/`); // algo de lo de adentro (una columna, un botón, un icono o uno de sus niveles) ya lo habilita
     });
 }
-// Las tuplas que habilitan ese acceso en una plataforma ('' = Web, '#app' = App). Lo de departamento y área no tiene versión App.
+// Los niveles (hojas) que los árboles marcan por cada columna o botón (ver columnStatusLevelsFor / BUTTON_STATUS_LEVELS en PermissionTree.js): se agregan todos, y cada árbol toma los que usa («solo-ver» solo lo usan el Plan y el cliente).
+// Columna: solo-ver, ver-y-operar, editar, autorizar, eliminar, avisos de llenado y de cambio (menos en Control Interno) y las tres de búsqueda. Botón: solo-ver, ver-y-operar, autorizar y notificar.
+function accessLeafLevels(submenuPath) {
+    if (/(^|\/)class-botones\//.test(submenuPath)) return ['solo-ver', 'ver-y-operar', 'autorizar', 'notificar'];
+    const levels = ['solo-ver', 'ver-y-operar', 'editar', 'autorizar', 'eliminar'];
+    if (!/(^|\/)class-control-interno\//.test(submenuPath)) levels.push('notificar-llenado', 'notificar-cambio');
+    return levels.concat(['buscar-filtrar', 'buscar-reordenar', 'buscar-ordenar']);
+}
+// Las tuplas que habilitan ese acceso en una plataforma ('' = Web, '#app' = App): lo mismo que marca el árbol al tocarlo, o sea TODAS las hojas de adentro. Lo de departamento y área no tiene versión App.
 function accessMinimumTuples(key, platform) {
     const catalog = buildAccessCatalog();
     const node = catalog.index.get(key);
@@ -13371,10 +13378,18 @@ function accessMinimumTuples(key, platform) {
     const withSuffix = (sub) => (sub ? `${sub}${sfx}` : null);
     if (node.ty === 'department' || node.ty === 'area') return sfx ? [] : [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: null }];
     if (node.ty === 'apartado' || node.ty === 'group') return accessChildrenOf(key).flatMap((c) => accessMinimumTuples(c.k, platform));
-    if (node.ty === 'column' || node.ty === 'button') return ['solo-ver', 'ver-y-operar'].map((level) => ({ sectionId: t.sectionId, itemId: t.itemId, submenuId: `${t.submenuId}/${level}${sfx}` }));
-    // pantalla (y los botones o pantallas de General, que no llevan ruta): su tupla; en App con su sufijo (sin ruta no hay dónde ponerlo)
-    if (!t.submenuId) return sfx ? [] : [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: null }];
-    return [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: withSuffix(t.submenuId) }];
+    if (node.ty === 'column' || node.ty === 'button') return accessLeafLevels(t.submenuId).map((level) => ({ sectionId: t.sectionId, itemId: t.itemId, submenuId: `${t.submenuId}/${level}${sfx}` }));
+    if (node.ty === 'icon') {
+        const own = [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: withSuffix(t.submenuId) }];
+        // el «notificar» va primero: la tupla del icono (un nivel más arriba) lo cubriría al revisar lo ya agregado
+        return NOTIFY_ICON_IDS.includes(String(t.submenuId).split('/').pop()) ? [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: `${t.submenuId}/notificar${sfx}` }].concat(own) : own;
+    }
+    // pantalla: todas sus hojas (columnas, botones, iconos y pantallas anidadas); una pantalla sin nada adentro (y los botones o pantallas de General, que no llevan ruta) es su propia hoja
+    const kids = accessChildrenOf(key);
+    const own = !t.submenuId ? (sfx ? [] : [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: null }]) : [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: withSuffix(t.submenuId) }];
+    // las hojas van primero y la tupla de la pantalla al final (si no, la tupla cubriría a las hojas al revisar lo ya agregado): el Giro marca las hojas y el Plan y el cliente cuentan la pantalla misma como una hoja
+    if (node.ty === 'pantalla' && kids.length) return kids.flatMap((c) => accessMinimumTuples(c.k, platform)).concat(own);
+    return own;
 }
 // ¿Algo de la lista ya cubre esa tupla (la misma, o un permiso de su pantalla, su área o su departamento, en la misma plataforma)? Así no se agrega lo que ya está.
 function grantsCoverTuple(grants, tuple) {
@@ -13408,7 +13423,7 @@ function expandAccessMinimums(grants, options = {}) {
                 if (!grantsEnableAccess(all, accessNode, platform)) continue;
                 for (const tuple of accessMinimumTuples(rel.related, platform)) {
                     if (grantsCoverTuple(all, tuple)) continue;
-                    if (options.isCovered && options.isCovered(tuple)) continue;
+                    if ((options.coverGrants && grantsCoverTuple(options.coverGrants, tuple)) || (options.isCovered && options.isCovered(tuple))) continue;
                     const pairKey = `${rel.access}|${rel.related}`;
                     if (options.canAdd && !options.canAdd(tuple)) { blocked.set(pairKey, { access: rel.access, related: rel.related }); continue; }
                     all.push(tuple);
