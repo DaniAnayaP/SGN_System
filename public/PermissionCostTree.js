@@ -517,7 +517,7 @@
                     row.appendChild(appCostWrap);
                 }
             } else if (mode === 'clientTricolor') {
-                const isRedInteractive = !!(colorSlot && ((colorSlot.color === 'red' && interactive && !colorSlot.limitReason) || colorSlot.partial));
+                const isRedInteractive = !!(colorSlot && colorSlot.color === 'red' && interactive && !colorSlot.limitReason);
                 const isRemovable = !!(colorSlot && (colorSlot.color === 'yellow' || colorSlot.color === 'green') && interactive && colorSlot.removeKeys && colorSlot.removeKeys.length);
                 if (isRedInteractive || isRemovable) {
                     const labelEl = document.createElement('label');
@@ -526,7 +526,6 @@
                     input = document.createElement('input');
                     input.type = 'checkbox';
                     input.checked = isRemovable ? true : !!colorSlot.checked;
-                    if (colorSlot.partial) input.indeterminate = true; // a medias: el guion de la casilla es la «−» de siempre
                     input.addEventListener('change', () => { if (isRemovable) colorSlot.onRemove(); else colorSlot.onChange(input.checked); render(); });
                     const span = document.createElement('span');
                     span.textContent = labelText;
@@ -552,6 +551,25 @@
                     label.textContent = labelText;
                     applyClassificationColorTo(label, classificationId);
                     row.appendChild(label);
+                    // «+ Adicionales» del cliente, nivel a medias (la «−»): dos botoncitos para habilitar todo lo que está dentro o quitar todo lo adicional que está dentro
+                    if (colorSlot && colorSlot.partial) {
+                        const bulk = document.createElement('span');
+                        bulk.className = 'perm-tree-bulk';
+                        const makeBulkBtn = (cls, icon, key, handler) => {
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = `perm-tree-bulk-btn ${cls}`;
+                            btn.title = t(key);
+                            btn.setAttribute('aria-label', t(key));
+                            btn.setAttribute('data-help-key', 'permBulk');
+                            btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+                            btn.addEventListener('click', (event) => { event.stopPropagation(); handler(); render(); });
+                            return btn;
+                        };
+                        bulk.appendChild(makeBulkBtn('on', 'bx-check-double', 'main.permBulkEnable', colorSlot.onEnableAll));
+                        if (colorSlot.canRemoveAll) bulk.appendChild(makeBulkBtn('off', 'bx-x', 'main.permBulkDisable', colorSlot.onRemoveAll));
+                        row.appendChild(bulk);
+                    }
                     // Un centro de costos fuera de la asignación de la persona: el motivo se ve en la fila, no solo al tocarla.
                     if (colorSlot && colorSlot.limitReason === 'assignment') {
                         const tag = document.createElement('span');
@@ -651,11 +669,16 @@
             const stageable = [...own, ...(grantLimits ? nested.filter((k) => !isLimitLocked(k)) : nested)];
             // lo que todavía no cubre ni el plan ni lo ya vendido: es lo que agrega un nivel «a medias» al marcarlo
             const missing = stageable.filter((k) => !covered(k));
+            // lo adicional del cliente que hay dentro de un nivel a medias (lo que da el plan no se quita)
+            const partialRemoveKeys = allowRemoveExtras && interactive && color === null ? [...new Set([...leafKeys, ...deeper])].filter(isOwnExtra) : [];
             const removeKeys = canRemove && interactive && removableColor(color) ? [...new Set([...leafKeys, ...deeper])].filter(isOwnExtra) : [];
             const lockedReason = grantLimits && leafKeys.length > 0 && own.length === 0 ? limitReasonKey(leafKeys[0]) : null;
             return [ownKey, {
                 color,
-                partial: allowRemoveExtras && interactive && color === null && missing.length > 0,
+                partial: allowRemoveExtras && interactive && color === null && (missing.length > 0 || partialRemoveKeys.length > 0),
+                canRemoveAll: partialRemoveKeys.length > 0,
+                onEnableAll: () => missing.forEach(stageAdd),
+                onRemoveAll: () => partialRemoveKeys.forEach(stageDrop),
                 limitReason: color === 'red' ? lockedReason : null,
                 checked: color === 'red' && own.length > 0 && stageable.every((k) => pendingAdditions.has(k) || (clientGrantSet.has(k) && !pendingRemovals.has(k))),
                 removeKeys,

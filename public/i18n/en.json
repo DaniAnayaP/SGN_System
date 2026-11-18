@@ -5615,6 +5615,8 @@
     "permRemoveExtra": "Remove this access from this person (uncheck the box and save)",
     "permRemovePlan": "Remove this access from this person (their job position gave it; the position itself is not changed)",
     "permRemoveExtraClient": "Remove this additional from the client (uncheck the box and save)",
+    "permBulkEnable": "Enable everything inside",
+    "permBulkDisable": "Remove everything additional inside",
     "permExcludedTag": "Removed from this person",
     "colActCalibracion": "Calibration",
     "colActivoFijoCalibracion": "Needs calibration",
@@ -6626,6 +6628,10 @@
     "supportScreenSelect": {
       "what": "The list has every screen in the system, in the same order as the access tree. The colored dot tells you whether you already have it: green, you have it; red, you do not have it yet. If you want to get into one you do not have yet, pick it anyway so we know which one it is.",
       "example": "you want to use Calibrations and you do not have it: you pick it (it shows a red dot) and write what you needed to do."
+    },
+    "permBulk": {
+      "what": "On a level with one part on and another off (the «−»), the ✓✓ button enables everything inside and the ✕ button removes everything sold as an additional (what the plan gives is not removed). You must save for the change to stay.",
+      "example": "on «Distribution Center» you tap ✓✓ and all its screens and columns get enabled, without checking one by one."
     },
     "uiScale": {
       "what": "Makes the text and tables bigger or smaller across the whole application, only for as long as your session lasts.",
