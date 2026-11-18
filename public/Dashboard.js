@@ -10621,20 +10621,75 @@ function renderAssetNoticeRow(item) {
 function renderSupportNoticeRow(item) {
     const row = document.createElement('div');
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const v = item.variant || '';
+    const isPerson = v.startsWith('person-');
+    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated' }[v] || (item.auto ? 'main.noticeSupportUrgent' : 'main.noticeSupportNotify');
     const tag = document.createElement('div');
     tag.className = 'notifications-item-meta';
     tag.style.fontWeight = '700';
-    tag.textContent = t(item.variant === 'access-boss' ? 'main.noticeSupportAccessBoss' : 'main.noticeSupportAccess');
+    tag.textContent = t(tagKey);
     const meta = document.createElement('div');
     meta.className = 'notifications-item-meta';
     meta.textContent = `${t('menu.opTiCasosSoporte')} · ${formatNotificationDate(item.createdAt)}`;
     meta.title = timeStampTitle(item.createdAt);
     const desc = document.createElement('div');
     desc.className = 'notifications-item-desc';
-    const items = (item.items || []).map((i) => (i.labelKey ? t(i.labelKey) : t(`main.supAcc_${i.code}`))).join(', ');
-    desc.textContent = `${t('main.noticeSupportAccessLine', { by: item.actorLabel || '—', target: item.targetName || '—', folio: item.folio || '', screen: item.screenKey ? t(item.screenKey) : '', items })}${item.note ? ` — ${item.note}` : ''}`;
+    const base = { folio: item.folio || '', summary: item.summary || '', target: item.targetName || '—', by: item.by || item.actorLabel || '—' };
+    if (isPerson) {
+        let text;
+        if (v === 'person-escalated') {
+            const what = item.fromKind === 'invite' ? (item.reason === 'declined' ? 'main.noticeSupportWhatDeclined' : 'main.noticeSupportWhatNoAccept') : 'main.noticeSupportWhatNoConfirm';
+            text = t('main.noticeSupportEscalatedLine', { ...base, who: item.fromName || '—', what: t(what), reason: t(`main.perReason_${item.reason || 'no_response'}`) });
+        } else if (v === 'person-invite') text = t('main.noticeSupportInviteLine', base);
+        else text = item.auto ? t('main.noticeSupportUrgentLine', base) : t('main.noticeSupportNotifyLine', base);
+        desc.textContent = `${text}${item.message ? ` — ${item.message}` : ''}`;
+    } else {
+        const items = (item.items || []).map((i) => (i.labelKey ? t(i.labelKey) : t(`main.supAcc_${i.code}`))).join(', ');
+        desc.textContent = `${t('main.noticeSupportAccessLine', { by: item.actorLabel || '—', target: item.targetName || '—', folio: item.folio || '', screen: item.screenKey ? t(item.screenKey) : '', items })}${item.note ? ` — ${item.note}` : ''}`;
+    }
     row.append(tag, meta, desc);
-    if (item.variant === 'access-request' && item.caseId) {
+    if (isPerson) {
+        const actions = document.createElement('div');
+        actions.className = 'notifications-item-meta';
+        actions.style.display = 'flex';
+        actions.style.gap = '0.5rem';
+        actions.style.flexWrap = 'wrap';
+        const showDone = (status) => {
+            actions.textContent = '';
+            const done = document.createElement('span');
+            done.textContent = t(`main.noticePersonStatus_${status}`);
+            actions.append(done);
+            if (status === 'accepted' && item.caseId) {
+                const link = document.createElement('a');
+                link.href = `OpTISoporteCaso.html?id=${encodeURIComponent(item.caseId)}`;
+                link.textContent = t('main.noticeSupportOpen');
+                actions.append(link);
+            }
+        };
+        const respond = async (action) => {
+            let reason = '';
+            if (action === 'decline') { reason = window.prompt(t('main.noticeSupportDeclineWhy'), ''); if (reason === null) return; }
+            actions.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+            try {
+                const res = await fetch(`/api/business/support-cases/${encodeURIComponent(item.caseId)}/people/respond`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ action, reason }) });
+                const out = await res.json().catch(() => ({}));
+                if (!res.ok && out.code !== 'DONE') { showToast(out.message || t('admin.saveError'), 'warning'); actions.querySelectorAll('button').forEach((b) => { b.disabled = false; }); return; }
+                showDone(out.status || (action === 'confirm' ? 'confirmed' : (action === 'accept' ? 'accepted' : 'declined')));
+            } catch (err) {
+                showToast(t('admin.saveError'), 'error');
+                actions.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+            }
+        };
+        if (item.pStatus === 'pending') {
+            const mk = (key, action, primary) => { const b = document.createElement('button'); b.type = 'button'; b.className = primary ? 'btn' : 'btn btn-secondary'; b.textContent = t(key); b.addEventListener('click', () => respond(action)); return b; };
+            if (v === 'person-invite') actions.append(mk('main.noticeSupportAccept', 'accept', true), mk('main.noticeSupportDecline', 'decline', false));
+            else actions.append(mk('main.noticeSupportConfirm', 'confirm', true));
+            const hint = document.createElement('span');
+            hint.textContent = t('main.noticeSupportWaitHours', { hours: item.hours || 2 });
+            actions.append(hint);
+        } else if (item.pStatus) showDone(item.pStatus);
+        row.append(actions);
+    } else if (v === 'access-request' && item.caseId) {
         const link = document.createElement('a');
         link.href = `OpTISoporteCaso.html?id=${encodeURIComponent(item.caseId)}`;
         link.className = 'notifications-item-meta';

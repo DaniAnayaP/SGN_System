@@ -42,6 +42,14 @@ function eventText(m) {
     if (m.eventKey === 'access_request') return t('main.spEv_access_request', { author, items: (d.items || []).map(itemLabel).join(', ') });
     if (m.eventKey === 'understood') return t('main.spEv_understood', { author });
     if (m.eventKey === 'context') return t('main.spEv_context', { author, screen: d.screenKey ? t(d.screenKey) : '', action: d.actionKey ? t('main.spEv_context_action', { action: t(d.actionKey) }) : '' });
+    if (m.eventKey === 'int_notify') return t('main.spEv_int_notify', { author, to: d.to || '' });
+    if (m.eventKey === 'int_invite') return t('main.spEv_int_invite', { author, to: d.to || '' });
+    if (m.eventKey === 'int_escalated') return t('main.spEv_int_escalated', { from: d.from || '', to: d.to || '', why: t(`main.perReason_${d.reason || 'no_response'}`) });
+    if (m.eventKey === 'int_escalated_top') return t('main.spEv_int_escalated_top', { from: d.from || '' });
+    if (m.eventKey === 'int_escalated_known') return t('main.spEv_int_escalated_known', { from: d.from || '', to: d.to || '' });
+    if (m.eventKey === 'int_confirmed') return t('main.spEv_int_confirmed', { name: d.name || author, min: friendlyMinutes(d.minutes) });
+    if (m.eventKey === 'int_declined') return t('main.spEv_int_declined', { name: d.name || author }) + (d.reason ? ` — ${d.reason}` : '');
+    if (m.eventKey === 'person_joined') return t('main.spEv_person_joined', { name: d.name || author });
     return m.eventKey;
 }
 function friendlyMinutes(m) {
@@ -128,7 +136,7 @@ async function loadCase() {
     const res = await fetch(`${API}/${caseId}`, { credentials: 'include' });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.message || 'load failed');
-    state.c = body.case; state.files = body.files || []; state.chat = body.chat; state.contactCan = !!(body.contact && body.contact.canSee);
+    state.c = body.case; state.files = body.files || []; state.chat = body.chat; state.contactCan = !!(body.contact && body.contact.canSee); state.peopleCan = !!(body.people && body.people.canSee);
 }
 async function loadMessages(first) {
     if (!state.chat.canSee) return false;
@@ -148,6 +156,7 @@ async function refresh(first) {
             renderHeader(); renderFiles();
             if (state.contactCan) await reloadContact();
         }
+        if (!first && state.peopleCan) await reloadPeople();
         if (first || got) { renderThread(first); renderFlow(); }
         if (!first && !hadFirst && state.c.firstResponseAt) renderHeader();
     } catch (err) { console.error('Caso de soporte: failed to refresh', err); }
@@ -305,6 +314,110 @@ document.addEventListener('click', async (event) => {
     } finally { btn.disabled = false; }
 });
 
+// ---- quién reportó y su equipo ----------------------------------------------------------------------------------------------------------------------------
+// La ficha de quien reportó y su organigrama (jefes de arriba, jefe directo y compañeros). Con Ver y operar, cada persona lleva dos casillas: Avisar (una nota en su campana, sin entrar al chat; debe tocar «Enterado») e
+// Invitar (se suma al chat; debe aceptar). Si alguien no responde en el plazo, el aviso pasa al jefe de esa persona con la nota de qué pasó (se ve en la lista de seguimiento).
+const peopleState = { data: null, notify: new Set(), invite: new Set(), message: '' };
+function monthsSince(dateText) {
+    const d = new Date(dateText);
+    if (Number.isNaN(d.getTime())) return null;
+    const now = new Date();
+    return Math.max(0, (now.getFullYear() - d.getFullYear()) * 12 + now.getMonth() - d.getMonth());
+}
+async function loadPeople() {
+    const res = await fetch(`${API}/${caseId}/people`, { credentials: 'include' });
+    if (!res.ok) return false;
+    peopleState.data = await res.json();
+    return true;
+}
+function personStatusText(p) {
+    if (!p) return '';
+    const when = (iso) => fmtTime(iso);
+    if (p.status === 'pending') return t(p.kind === 'invite' ? 'main.perWaitingInvite' : 'main.perWaitingNotice', { when: when(p.dueAt) });
+    if (p.status === 'confirmed') return t('main.perConfirmed', { when: when(p.respondedAt) });
+    if (p.status === 'accepted') return t('main.perAccepted', { when: when(p.respondedAt) });
+    if (p.status === 'declined') return t('main.perDeclined');
+    if (p.status === 'expired') return t('main.perExpired');
+    return '';
+}
+function orgNodeHtml(n, { tag, me, direct } = {}) {
+    const d = peopleState.data;
+    const p = d.people.find((x) => x.userId === n.userId);
+    const selectable = d.canOperate && n.userId && !me;
+    const involved = !!p;
+    const boxes = selectable ? `<div class="osel"><label class="ob${peopleState.notify.has(n.userId) ? ' on' : ''}"><input type="checkbox" data-org-notify="${n.userId}"${peopleState.notify.has(n.userId) ? ' checked' : ''}${involved ? ' disabled' : ''}> ${esc(t('main.perNotify'))}</label>${d.allowInvite ? `<label class="ob${peopleState.invite.has(n.userId) ? ' on' : ''}"><input type="checkbox" data-org-invite="${n.userId}"${peopleState.invite.has(n.userId) ? ' checked' : ''}${involved && p.kind === 'invite' ? ' disabled' : ''}> ${esc(t('main.perInvite'))}</label>` : ''}</div>` : '';
+    const status = p ? `<span class="odone ${esc(p.status)}">${esc(personStatusText(p))}</span>` : '';
+    const noAccount = !n.userId && !me ? `<span class="sp-muted">${esc(t('main.perNoAccount'))}</span>` : '';
+    return `<div class="onode${me ? ' me' : ''}">${tag ? `<span class="otag${me ? ' me' : ''}">${esc(tag)}</span>` : ''}<span class="sc-av" aria-hidden="true">${esc(String(n.name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase())}</span><b>${esc(n.name || '—')}</b><span class="sp-muted">${esc(n.role || n.position || '')}</span>${me ? `<span class="odone">${esc(t('main.perInCase'))}</span>` : `${boxes}${status}${noAccount}`}</div>`;
+}
+function renderPeople() {
+    const d = peopleState.data;
+    const box = $('sc-people-card');
+    if (!d) { box.hidden = true; return; }
+    box.hidden = false;
+    const o = d.org; const person = o.person;
+    const months = monthsSince(person.startDate);
+    const card = `<div class="p1"><span class="sc-av big" aria-hidden="true">${esc(String(person.name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase())}</span><div><b>${esc(person.name || '—')}</b>
+        <span class="sp-muted">${esc([person.position, person.department, person.area].filter(Boolean).join(' · ') || '—')}</span>
+        <span class="sp-muted">${esc(t('main.perRole'))}: ${esc(person.role || '—')}${months !== null ? ` · ${esc(t('main.perTenure', { n: months }))}` : ''}</span></div></div>
+        ${person.workplaces.length ? `<div><span class="k">${esc(t('main.perWorks'))}</span><p>${esc(person.workplaces.join(' · '))}</p></div>` : ''}
+        ${person.email || person.phone ? `<div><span class="k">${esc(t('main.perContact'))}</span><p>${esc([person.email, person.phone].filter(Boolean).join(' · '))}</p></div>` : ''}`;
+    const chain = [...o.chain].reverse();
+    const levels = chain.map((lvl, i) => {
+        const isDirect = i === chain.length - 1;
+        return `<div class="olvl">${lvl.people.map((n) => orgNodeHtml(n, { tag: isDirect ? t('main.perDirectBoss') : '' })).join('') || `<div class="onode"><span class="sp-muted">${esc(lvl.positionName)} · ${esc(t('main.perNobody'))}</span></div>`}</div><div class="vl"></div>`;
+    }).join('');
+    const reporter = orgNodeHtml({ userId: person.userId, name: person.name, role: person.role || person.position }, { tag: t('main.perReported'), me: true });
+    const peers = o.peers.map((n) => `<div class="child">${orgNodeHtml(n)}</div>`).join('');
+    const direct = (chain.length ? chain[chain.length - 1].people : []).filter((n) => n.userId);
+    const allBosses = chain.flatMap((l) => l.people).filter((n) => n.userId);
+    const quick = d.canOperate ? `<div class="chipset"><span class="tagq">${esc(t('main.perQuick'))}</span><button type="button" class="chip" data-quick="direct"${direct.length ? '' : ' disabled'}>${esc(t('main.perDirectBoss'))}</button><button type="button" class="chip" data-quick="chain"${allBosses.length ? '' : ' disabled'}>${esc(t('main.perChain'))}</button><button type="button" class="chip" data-quick="peers"${o.peers.some((n) => n.userId) ? '' : ' disabled'}>${esc(t('main.perPeers'))}</button><button type="button" class="chip" data-quick="clear">${esc(t('main.perClear'))}</button></div>` : '';
+    const nameOf = (id) => { const all = [...o.chain.flatMap((l) => l.people), ...o.peers]; return (all.find((n) => n.userId === id) || {}).name || String(id); };
+    const total = peopleState.notify.size + peopleState.invite.size;
+    const summary = total ? `<div class="selsum"><b>${esc(t('main.perSelected', { n: total }))}</b> ${[...peopleState.notify].map((id) => `${esc(nameOf(id))} <span class="pill blue">${esc(t('main.perNotify').toLowerCase())}</span>`).join(' &nbsp; ')} ${[...peopleState.invite].map((id) => `${esc(nameOf(id))} <span class="pill good">${esc(t('main.perInviteChat'))}</span>`).join(' &nbsp; ')}</div>` : '';
+    const action = d.canOperate ? `<div class="actbar">${quick}${summary}<input type="text" id="sc-ppl-msg" maxlength="300" placeholder="${esc(t('main.perMessage'))}" value="${esc(peopleState.message)}"><div class="sc-actions"><button type="button" class="btn" id="sc-ppl-send"${total ? '' : ' disabled'}>${esc(t('main.perSend', { n: total }))}</button></div><p class="sp-muted">${esc(t('main.perHint', { hours: d.hours }))}</p></div>` : '';
+    const follow = d.people.length ? `<div class="sc-follow"><h4>${esc(t('main.perFollow'))}</h4><table class="ms-table"><thead><tr><th>${esc(t('main.perColWho'))}</th><th>${esc(t('main.perColWhat'))}</th><th>${esc(t('main.perColStatus'))}</th><th>${esc(t('main.perColNote'))}</th></tr></thead><tbody>${d.people.map((p) => `<tr><td>${esc(p.name)}</td><td>${esc(t(p.kind === 'invite' ? 'main.perKindInvite' : 'main.perKindNotice'))}</td><td><span class="sp-tag per-${esc(p.status)}">${esc(personStatusText(p))}</span></td><td>${p.fromName ? esc(t('main.perFromBoss', { name: p.fromName, reason: t(`main.perReason_${p.reason || 'no_response'}`) })) : (p.reason === 'auto_urgent' ? esc(t('main.perAutoUrgent')) : esc(p.message || ''))}</td></tr>`).join('')}</tbody></table></div>` : '';
+    box.innerHTML = `<div class="sc-card-head"><h3>${esc(t('main.scPeopleTitle'))}</h3></div>
+        <div class="ppl2"><div class="ppl-left">${card}</div><div class="orgbox"><div class="org">${levels}<div class="olvl">${reporter}</div>${peers ? `<div class="vl"></div><div class="branch">${peers}</div>` : ''}</div></div></div>${action}${follow}`;
+}
+async function reloadPeople() {
+    if (!state.peopleCan) return;
+    if (document.activeElement && document.activeElement.id === 'sc-ppl-msg') return; // sin quitarle el cursor a quien está escribiendo
+    if (await loadPeople()) renderPeople();
+}
+document.addEventListener('change', (event) => {
+    const el = event.target;
+    if (el.dataset && el.dataset.orgNotify) { const id = Number(el.dataset.orgNotify); if (el.checked) { peopleState.notify.add(id); peopleState.invite.delete(id); } else peopleState.notify.delete(id); renderPeople(); return; }
+    if (el.dataset && el.dataset.orgInvite) { const id = Number(el.dataset.orgInvite); if (el.checked) { peopleState.invite.add(id); peopleState.notify.delete(id); } else peopleState.invite.delete(id); renderPeople(); }
+});
+document.addEventListener('input', (event) => { if (event.target.id === 'sc-ppl-msg') peopleState.message = event.target.value; });
+document.addEventListener('click', async (event) => {
+    const quick = event.target.closest('[data-quick]');
+    if (quick && peopleState.data) {
+        const o = peopleState.data.org; const involved = new Set(peopleState.data.people.map((p) => p.userId));
+        const add = (list) => list.filter((n) => n.userId && !involved.has(n.userId)).forEach((n) => { peopleState.notify.add(n.userId); peopleState.invite.delete(n.userId); });
+        const chain = [...o.chain].reverse();
+        if (quick.dataset.quick === 'direct') add(chain.length ? chain[chain.length - 1].people : []);
+        else if (quick.dataset.quick === 'chain') add(chain.flatMap((l) => l.people));
+        else if (quick.dataset.quick === 'peers') add(o.peers);
+        else { peopleState.notify.clear(); peopleState.invite.clear(); }
+        renderPeople();
+        return;
+    }
+    const send = event.target.closest('#sc-ppl-send');
+    if (!send) return;
+    send.disabled = true;
+    try {
+        const res = await fetch(`${API}/${caseId}/people`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ notify: [...peopleState.notify], invite: [...peopleState.invite], message: peopleState.message }) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); return; }
+        peopleState.notify.clear(); peopleState.invite.clear(); peopleState.message = '';
+        Dashboard.showToast(t('main.perSent'), 'success');
+        await Promise.all([reloadPeople(), refresh(false)]);
+        renderThread(false);
+    } finally { send.disabled = false; }
+});
+
 // ---- eventos ----------------------------------------------------------------------------------------------------------------------------
 document.addEventListener('click', (event) => {
     const tab = event.target.closest('[data-tab]');
@@ -347,6 +460,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
         $('sc-root').hidden = false;
         renderHeader(); renderFiles();
         if (state.contactCan) { await loadScreens(); await loadContact(); renderContact(); }
+        if (state.peopleCan) { await loadPeople(); renderPeople(); }
         if (state.chat.canSee) { await loadMessages(true); renderTabs(); renderThread(true); renderFlow(); renderComposer(); } else { $('sc-chat-card').hidden = true; $('sc-flow-card').hidden = true; }
         state.timer = setInterval(() => { if (!document.hidden) refresh(false); }, POLL_MS);
     } catch (err) {

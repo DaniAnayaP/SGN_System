@@ -3711,6 +3711,11 @@
               "permissionOnly": true
             },
             {
+              "id": "colSpPersonas",
+              "labelKey": "main.colSpPersonas",
+              "permissionOnly": true
+            },
+            {
               "id": "class-botones",
               "labelKey": "menu.classBotones",
               "isClassification": true,

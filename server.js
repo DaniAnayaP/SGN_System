@@ -581,6 +581,7 @@ const {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
+    getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
@@ -10148,16 +10149,22 @@ const SUPPORT_MESSAGE_MAX = 2000;
 const supportIsReporter = (req, rec) => rec.reporter_user_id === req.user.sub;
 const supportColGrants = (req) => (req.user.isClientAdmin ? [] : getUserEffectiveGrants(req.user.sub));
 const supportHasCol = (req, colKey) => !!req.user.isClientAdmin || hasColumnGrant(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, colKey);
-const supportCanSeeChat = (req, rec) => supportIsReporter(req, rec) || supportHasCol(req, 'colSpChat');
+const SUPPORT_CASE_NODE = 'cat-operaciones/cat-operaciones-ti-casos-soporte';
+const supportIsParticipant = (req, rec) => isSupportParticipant(rec.id, req.user.sub);
+// Tener la pantalla «Casos de soporte» (ella, o cualquier hoja de sus columnas o botones, o el departamento o el área completos). Quien no la tiene solo ve los casos que abrió o a los que lo invitaron.
+const supportHasScreen = (req) => !!req.user.isClientAdmin || supportColGrants(req).some((g) => g.sectionId === 'information-technology' && (!g.itemId || (g.itemId === 'it-area-operations' && (!g.submenuId || g.submenuId === SUPPORT_CASE_NODE || String(g.submenuId).startsWith(`${SUPPORT_CASE_NODE}/`)))));
+const supportCanOpenCase = (req, rec) => supportHasScreen(req) || supportIsReporter(req, rec) || supportIsParticipant(req, rec);
+const supportCanSeeChat = (req, rec) => supportIsReporter(req, rec) || supportIsParticipant(req, rec) || supportHasCol(req, 'colSpChat');
 const supportCanSeeNotes = (req) => supportHasCol(req, 'colSpNotas');
 const supportCanWriteNotes = (req) => !!req.user.isClientAdmin || (hasColumnGrant(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpNotas') && getColumnGrantLevel(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpNotas') !== 'solo-ver');
-const supportCanSend = (req, rec) => supportIsReporter(req, rec) || supportCan(req, 'colSpChatSend');
+const supportCanSend = (req, rec) => supportIsReporter(req, rec) || supportIsParticipant(req, rec) || supportCan(req, 'colSpChatSend');
 // El nivel desde el que escribe alguien: el usuario es el nivel 0; el equipo escribe desde el nivel del caso si está en la lista de ese nivel (Mapa de soporte), si no, desde el más bajo en el que esté.
 function supportAuthorLevel(req, rec) {
     if (supportIsReporter(req, rec)) return 'n0';
     const row = getSupportMapRow(req.user.clientId);
     const mine = ['n1', 'n2', 'n3'].filter((l) => parseClassificationIds(row[`${l}_users`]).includes(req.user.sub));
     if (mine.includes(rec.level)) return rec.level;
+    if (!mine.length && supportIsParticipant(req, rec) && !supportCan(req, 'colSpChatSend')) return 'inv'; // una persona invitada al chat
     return mine[0] || (['n1', 'n2', 'n3', 'n4'].includes(rec.level) ? rec.level : 'n1');
 }
 // Un renglón del sistema en el chat (data = lo que el texto necesita; el texto sale de main.spEv_<key>).
@@ -10213,7 +10220,8 @@ app.get('/api/business/support-cases', requireAuth, (req, res) => {
     const { clientId, isTestAccount } = req.user;
     const client = getClientById(clientId);
     const LIMIT = 5000;
-    const rows = listSupportCases(clientId, isTestAccount, { limit: LIMIT });
+    let rows = listSupportCases(clientId, isTestAccount, { limit: LIMIT });
+    if (!supportHasScreen(req)) { const joined = new Set(listSupportAcceptedCaseIds(req.user.sub)); rows = rows.filter((r) => r.reporter_user_id === req.user.sub || joined.has(r.id)); }
     res.set('Cache-Control', 'no-store');
     res.json({ truncated: rows.length >= LIMIT, max: LIMIT, canCreate: supportCan(req, 'colSpCreateAuth'), canFiles: supportCanSeeFiles(req), cases: rows.map((r) => supportCaseRowOf(r, client, false)) });
 });
@@ -10273,6 +10281,10 @@ app.post('/api/business/support-cases', requireAuth, (req, res) => {
     });
     const folio = supportFolio(created.record_number);
     ensureSupportThread(created);
+    if (priority === 1 && options.map.notifyUrgent) {
+        const boss = resolveDirectSupervisorUserId(req.user.sub);
+        if (boss && boss !== req.user.sub) { try { sendSupportPerson(created, { userId: boss, kind: 'notify', reason: 'auto_urgent', byName: 'Sistema', byUserId: null, level: created.level, auto: true }); } catch (err) { console.error('support urgent notice failed', err); } }
+    }
     try { logTableChange({ clientId, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: created.id, recordLabel: `Caso ${folio}`, action: 'create', changedBy: changedByLabel(req) }); } catch (err) { console.error('support case log failed', err); }
     notifyButtonAction(req, SUPPORT_CASE_TABLE_KEY, 'create', folio);
     res.status(201).json({ case: supportCaseRowOf(created, getClientById(clientId), true), maxFiles: SUPPORT_FILES_PER_CASE });
@@ -10283,13 +10295,18 @@ app.get('/api/business/support-cases/:id', requireAuth, (req, res) => {
     const id = Number(req.params.id);
     const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
     if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
+    if (!supportCanOpenCase(req, rec)) return res.status(403).json({ message: 'No tienes permiso para ver este caso.' });
+    processSupportEscalations();
     const mine = rec.reporter_user_id === req.user.sub;
     const withFiles = mine || supportCanSeeFiles(req);
+    const iAmIn = getSupportPerson(rec.id, req.user.sub);
     res.set('Cache-Control', 'no-store');
     res.json({
         case: supportCaseRowOf(rec, getClientById(req.user.clientId), withFiles), files: withFiles ? listSupportCaseFiles(id).map(supportFileOf) : [], canAddFiles: mine || supportCan(req, 'colSpCreateAuth') || supportCan(req, 'colSpChatSend'), maxFiles: SUPPORT_FILES_PER_CASE,
         chat: { canSee: supportCanSeeChat(req, rec), canSend: supportCanSend(req, rec), canSeeNotes: supportCanSeeNotes(req), canWriteNotes: supportCanWriteNotes(req), max: SUPPORT_MESSAGE_MAX, meId: req.user.sub, isReporter: mine },
         contact: { canSee: supportCanSeeContact(req) },
+        people: { canSee: supportCanSeePeople(req), canOperate: supportCanOperatePeople(req) },
+        me: iAmIn ? { kind: iAmIn.kind, status: iAmIn.status } : null,
     });
 });
 // El chat del caso. ?after=<id> trae solo lo posterior (la pantalla lo pide cada rato). Las notas internas solo salen con la columna Notas internas; los archivos de los mensajes, solo con la columna Evidencias o para quien abrió el caso.
@@ -10304,7 +10321,8 @@ app.get('/api/business/support-cases/:id/messages', requireAuth, (req, res) => {
     const canFiles = supportIsReporter(req, rec) || supportCanSeeFiles(req);
     const filesById = new Map(listSupportCaseFiles(id).map((f) => [f.id, f]));
     res.set('Cache-Control', 'no-store');
-    res.json({ messages: listSupportCaseMessages(id, { afterId: after, includeNotes: supportCanSeeNotes(req) }).map((m) => supportMessageOf(m, rec, canFiles, filesById)) });
+    const seeInternal = supportCanSeeNotes(req);
+    res.json({ messages: listSupportCaseMessages(id, { afterId: after, includeNotes: seeInternal }).filter((m) => seeInternal || !(m.kind === 'event' && String(m.event_key).startsWith('int_'))).map((m) => supportMessageOf(m, rec, canFiles, filesById)) });
 });
 // Escribir en el chat: un mensaje (lo ve el usuario) o una nota interna (solo el equipo). Puede llevar una evidencia ya subida a este caso (fileId). La primera respuesta del equipo queda marcada una sola vez.
 app.post('/api/business/support-cases/:id/messages', requireAuth, (req, res) => {
@@ -10438,13 +10456,138 @@ app.post('/api/business/support-cases/:id/understood', requireAuth, (req, res) =
     addSupportCaseMessage({ caseId: rec.id, clientId: req.user.clientId, kind: 'event', level: supportAuthorLevel(req, rec), authorUserId: req.user.sub, authorName: by, body: text, eventKey: 'understood', eventData: {} });
     res.status(201).json({ understood: text, understoodBy: by });
 });
+// ---- quién reportó y su equipo: organigrama, avisos e invitaciones ------------------------------------------------------------------------------------------------------------------------
+// El organigrama sale de Roles, Usuarios y Mi Recurso Humano. Quien tiene la columna «Quién reportó y su equipo» (Ver) lo ve; con Ver y operar AVISA (una nota en la campana, sin entrar al chat; hay que tocar «Enterado») o
+// INVITA (se suma al chat: lo ve y escribe, nunca las notas internas; hay que aceptar). Si alguien no responde en el plazo del Mapa de soporte (o rechaza), el aviso pasa al jefe de esa persona con la nota de qué pasó, y así
+// hacia arriba. Quien recibe un aviso o una invitación responde desde su campana.
+const SUPPORT_PEOPLE_MAX = 20;
+const supportPeopleLevel = (req) => (req.user.isClientAdmin ? 'editar' : (hasColumnGrant(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpPersonas') ? getColumnGrantLevel(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpPersonas') : null));
+const supportCanSeePeople = (req) => !!supportPeopleLevel(req);
+const supportCanOperatePeople = (req) => ['ver-y-operar', 'editar'].includes(supportPeopleLevel(req));
+function supportPeopleGate(req, res, { operate = false } = {}) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec) { res.status(404).json({ message: 'Ese caso no existe.' }); return null; }
+    if (!(operate ? supportCanOperatePeople(req) : supportCanSeePeople(req))) { res.status(403).json({ message: 'No tienes permiso para ver a quién reportó y su equipo.' }); return null; }
+    return rec;
+}
+const supportWindowHours = (clientId) => Number(getSupportMapRow(clientId).confirm_window_hours) || 2;
+const sqlPlusHours = (hours) => sqlUtcFromMs(Date.now() + hours * 3600000);
+// Manda el aviso o la invitación a UNA persona: su fila del caso, el aviso de su campana y (solo para el equipo) el renglón del chat. { row, sent }: sent = false si ya lo tenía.
+function sendSupportPerson(rec, { userId, kind, depth = 0, message = '', fromPerson = null, reason = '', byName = '', byUserId = null, level = 'n1', auto = false }) {
+    const hours = supportWindowHours(rec.client_id);
+    const { row, created } = upsertSupportPerson({ caseId: rec.id, clientId: rec.client_id, userId, kind, depth, byUserId, byName, message, fromPersonId: fromPerson ? fromPerson.id : null, reason, dueAt: sqlPlusHours(hours) });
+    if (!created) return { row, sent: false };
+    const variant = fromPerson ? 'person-escalated' : (row.kind === 'invite' ? 'person-invite' : 'person-notify');
+    publishSupportNotice({
+        recipients: [userId], actorUserId: byUserId, actorLabel: byName,
+        payload: { variant, caseId: rec.id, folio: supportFolio(rec.record_number), participantId: row.id, targetName: rec.reporter_name, summary: rec.summary, message, hours, reason, fromName: fromPerson ? (fromPerson.user_name || '') : '', fromKind: fromPerson ? fromPerson.kind : '', by: byName, auto },
+    });
+    ensureSupportThread(rec);
+    addSupportEvent(rec, fromPerson ? 'int_escalated' : (row.kind === 'invite' ? 'int_invite' : 'int_notify'), { to: row.user_name || '', toUserId: userId, from: fromPerson ? (fromPerson.user_name || '') : '', fromKind: fromPerson ? fromPerson.kind : '', reason, hours, auto }, { level, authorName: byName, authorUserId: byUserId });
+    return { row, sent: true };
+}
+// Quien no respondió (o rechazó) pasa a su jefe: una fila nueva para el jefe, con la nota de qué pasó. Si el jefe ya estaba enterado no se le vuelve a avisar; si no hay jefe (o ya se subió muchas veces), queda dicho en el chat.
+function escalateSupportPerson(rec, person, reason) {
+    markSupportPersonEscalated(person.id, reason === 'declined' ? null : 'expired');
+    const boss = person.depth >= 8 ? null : resolveDirectSupervisorUserId(person.user_id);
+    const level = ['n1', 'n2', 'n3', 'n4'].includes(rec.level) ? rec.level : 'n1';
+    if (!boss || boss === rec.reporter_user_id) {
+        ensureSupportThread(rec);
+        addSupportEvent(rec, 'int_escalated_top', { from: person.user_name || '', reason }, { level });
+        return null;
+    }
+    const known = getSupportPerson(rec.id, boss);
+    if (known && (known.status === 'pending' || known.status === 'confirmed' || known.status === 'accepted')) {
+        ensureSupportThread(rec);
+        addSupportEvent(rec, 'int_escalated_known', { from: person.user_name || '', to: known.user_name || '', reason }, { level });
+        return known;
+    }
+    return sendSupportPerson(rec, { userId: boss, kind: 'notify', depth: person.depth + 1, fromPerson: person, reason, byName: person.by_name || '', byUserId: null, level }).row;
+}
+// Pasa al jefe lo que ya venció (se corre cada minuto y cuando alguien abre un caso o su campana).
+function processSupportEscalations() {
+    const due = listDueSupportPeople(sqlUtcFromMs(Date.now()));
+    for (const person of due) {
+        const rec = getSupportCaseById(person.case_id);
+        if (!rec) { markSupportPersonEscalated(person.id, 'expired'); continue; }
+        try { escalateSupportPerson(rec, person, 'no_response'); } catch (err) { console.error('support escalation failed', err); }
+    }
+    return due.length;
+}
+app.get('/api/business/support-cases/:id/people', requireAuth, (req, res) => {
+    const rec = supportPeopleGate(req, res);
+    if (!rec) return;
+    processSupportEscalations();
+    const org = rec.reporter_user_id ? getSupportOrgChart(req.user.clientId, rec.reporter_user_id) : { person: { userId: null, name: rec.reporter_name, position: '', role: '', department: '', area: '', startDate: '', email: '', phone: '', workplaces: [] }, chain: [], peers: [] };
+    const rows = listSupportPeople(rec.id);
+    const byId = new Map(rows.map((p) => [p.id, p]));
+    const people = rows.map((p) => ({
+        id: p.id, userId: p.user_id, name: p.user_name || '', kind: p.kind, status: p.status, depth: p.depth, by: p.by_name, message: p.message, reason: p.reason, escalated: p.escalated === 1,
+        fromName: p.from_person_id && byId.get(p.from_person_id) ? (byId.get(p.from_person_id).user_name || '') : '', createdAt: sqlUtcIso(p.created_at), dueAt: sqlUtcIso(p.due_at), respondedAt: sqlUtcIso(p.responded_at),
+    }));
+    res.set('Cache-Control', 'no-store');
+    res.json({ canOperate: supportCanOperatePeople(req), org, people, hours: supportWindowHours(req.user.clientId), allowInvite: getSupportMapRow(req.user.clientId).allow_invite_chat === 1, max: SUPPORT_PEOPLE_MAX, meId: req.user.sub });
+});
+app.post('/api/business/support-cases/:id/people', requireAuth, (req, res) => {
+    const rec = supportPeopleGate(req, res, { operate: true });
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const ids = (v) => (Array.isArray(v) ? [...new Set(v.map(Number).filter((n) => Number.isInteger(n)))] : []);
+    const invite = ids(body.invite).filter((id) => id !== req.user.sub && id !== rec.reporter_user_id);
+    const notify = ids(body.notify).filter((id) => id !== req.user.sub && id !== rec.reporter_user_id && !invite.includes(id));
+    if (!invite.length && !notify.length) return res.status(400).json({ message: 'Elige a quién avisar o invitar.', code: 'EMPTY' });
+    if (invite.length + notify.length > SUPPORT_PEOPLE_MAX) return res.status(400).json({ message: `Son demasiadas personas en un solo envío (hasta ${SUPPORT_PEOPLE_MAX}).`, code: 'MAX' });
+    if (invite.length && getSupportMapRow(req.user.clientId).allow_invite_chat !== 1) return res.status(400).json({ message: 'La empresa no permite invitar al chat (Mapa de soporte).', code: 'NOINVITE' });
+    const users = new Map(listSupportUsersByIds(req.user.clientId, [...invite, ...notify], req.user.isTestAccount).map((u) => [u.id, u]));
+    if ([...invite, ...notify].some((id) => !users.has(id))) return res.status(400).json({ message: 'Una de las personas ya no está activa en la empresa.', code: 'USER' });
+    const message = String(body.message || '').replace(/[ \t]+/g, ' ').trim().slice(0, 300);
+    const by = changedByLabel(req);
+    const level = supportAuthorLevel(req, rec);
+    const sent = [];
+    for (const userId of invite) sent.push({ userId, kind: 'invite', ...sendSupportPerson(rec, { userId, kind: 'invite', message, byName: by, byUserId: req.user.sub, level }) });
+    for (const userId of notify) sent.push({ userId, kind: 'notify', ...sendSupportPerson(rec, { userId, kind: 'notify', message, byName: by, byUserId: req.user.sub, level }) });
+    res.status(201).json({ sent: sent.map((s) => ({ userId: s.userId, kind: s.row.kind, status: s.row.status, sent: s.sent })) });
+});
+// La persona avisada o invitada responde: «Enterado» (aviso), aceptar o rechazar (invitación). Rechazar pasa el aviso a su jefe de inmediato.
+app.post('/api/business/support-cases/:id/people/respond', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    const me = rec ? getSupportPerson(rec.id, req.user.sub) : null;
+    if (!rec || !me) return res.status(404).json({ message: 'Ese aviso no existe.', code: 'NOTFOUND' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const action = String(body.action || '');
+    if (me.status !== 'pending') return res.status(400).json({ message: 'Ya respondiste este aviso.', code: 'DONE', status: me.status });
+    if (!((me.kind === 'notify' && action === 'confirm') || (me.kind === 'invite' && (action === 'accept' || action === 'decline')))) return res.status(400).json({ message: 'Esa respuesta no corresponde a este aviso.', code: 'ACTION' });
+    const now = sqlUtcFromMs(Date.now());
+    const name = changedByLabel(req);
+    const level = ['n1', 'n2', 'n3', 'n4'].includes(rec.level) ? rec.level : 'n1';
+    ensureSupportThread(rec);
+    if (action === 'confirm') {
+        respondSupportPerson(me.id, 'confirmed', now);
+        addSupportEvent(rec, 'int_confirmed', { name, minutes: Math.max(0, Math.round((Date.now() - new Date(sqlUtcIso(me.created_at)).getTime()) / 60000)) }, { level, authorName: name, authorUserId: req.user.sub });
+        return res.json({ status: 'confirmed' });
+    }
+    if (action === 'accept') {
+        respondSupportPerson(me.id, 'accepted', now);
+        addSupportEvent(rec, 'person_joined', { name }, { level: 'inv', authorName: name, authorUserId: req.user.sub });
+        return res.json({ status: 'accepted', caseId: rec.id });
+    }
+    const why = String(body.reason || '').replace(/[ \t]+/g, ' ').trim().slice(0, 200);
+    respondSupportPerson(me.id, 'declined', now);
+    addSupportEvent(rec, 'int_declined', { name, reason: why }, { level, authorName: name, authorUserId: req.user.sub });
+    escalateSupportPerson(rec, { ...getSupportPersonById(me.id) }, 'declined');
+    res.json({ status: 'declined' });
+});
 // Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
 app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const id = Number(req.params.id);
     const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
     if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
-    if (!(rec.reporter_user_id === req.user.sub || supportCan(req, 'colSpCreateAuth') || supportCan(req, 'colSpChatSend'))) return res.status(403).json({ message: 'No puedes agregar evidencias a este caso.' });
+    if (!(rec.reporter_user_id === req.user.sub || supportIsParticipant(req, rec) || supportCan(req, 'colSpCreateAuth') || supportCan(req, 'colSpChatSend'))) return res.status(403).json({ message: 'No puedes agregar evidencias a este caso.' });
     const buf = req.body;
     if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ message: 'No llegó ningún archivo.', code: 'EMPTY' });
     if (countSupportCaseFiles(id) >= SUPPORT_FILES_PER_CASE) return res.status(400).json({ message: `Un caso lleva hasta ${SUPPORT_FILES_PER_CASE} evidencias.`, code: 'MAXFILES' });
@@ -16518,7 +16661,8 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
     const assetToAct = listPendingAssetAuthorizations(req.user.clientId, req.user.isTestAccount).filter((r) => assetAuthCanDecide(req, r)).map(asAssetAuth);
     const assetMinePending = listAssetAuthorizationsRequestedBy(req.user.clientId, req.user.sub, ['pending'], req.user.isTestAccount).map(asAssetAuth);
     const assetMineResolved = listAssetAuthorizationsRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected'], req.user.isTestAccount).map(asAssetAuth);
-    const treeNotices = listTreeNoticesForUser(req.user.sub).map((n) => ({ ...n, seen_at: n.seenAt }));
+    processSupportEscalations();
+    const treeNotices = listTreeNoticesForUser(req.user.sub).map((n) => ({ ...n, seen_at: n.seenAt })).map((n) => (n.kind === 'support' && n.participantId ? { ...n, pStatus: (getSupportPersonById(n.participantId) || {}).status || '' } : n));
     res.json({
         alertas: [...treeNotices.filter(isAlertNotice), ...listAccessDeniedAlertsForUser(req.user.clientId, req.user.sub)],
         // Los avisos de "Color actualizado" / "Orden actualizado" del Árbol de Permisos Maestro (a quien se le modificó) van aquí también.
@@ -16574,3 +16718,5 @@ app.post('/api/business/notifications/avisos/mark-seen', requireAuth, (req, res)
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`SGN app listening on port ${PORT}`));
+// Los avisos e invitaciones de Soporte que nadie contestó a tiempo pasan al jefe de esa persona (cada minuto; también al abrir un caso o la campana).
+setInterval(() => { try { processSupportEscalations(); } catch (err) { console.error('support escalations failed', err); } }, 60 * 1000).unref();

@@ -14659,6 +14659,10 @@ db.exec(`
 if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === 'first_response_at')) db.exec('ALTER TABLE support_cases ADD COLUMN first_response_at TEXT');
 if (!db.prepare('PRAGMA table_info(support_case_files)').all().some((c) => c.name === 'level')) db.exec("ALTER TABLE support_case_files ADD COLUMN level TEXT NOT NULL DEFAULT ''");
 const SUPPORT_CASE_SELECT = 'SELECT c.*, (SELECT COUNT(*) FROM support_case_files f WHERE f.case_id = c.id) AS file_count FROM support_cases c';
+// Un caso por su id, sin importar de quién es (para lo que corre solo, como pasar un aviso al jefe).
+function getSupportCaseById(id) {
+    return db.prepare(`${SUPPORT_CASE_SELECT} WHERE c.id = ?`).get(id) || null;
+}
 function getSupportCase(id, clientId, isTestAccount) {
     return db.prepare(`${SUPPORT_CASE_SELECT} WHERE c.id = ? AND c.client_id = ? AND c.is_test_data = ?`).get(id, clientId, isTestAccount ? 1 : 0) || null;
 }
@@ -14815,6 +14819,112 @@ function createSupportAccessRequest(r) {
 }
 function listSupportAccessRequests(caseId) {
     return db.prepare('SELECT id, target_user_id, requested_by_name, items, note, created_at FROM support_access_requests WHERE case_id = ? ORDER BY id DESC').all(caseId);
+}
+// ---- Quién reportó y su equipo: avisos e invitaciones del caso ----------------------------------------------------------------------------------------------------------------------------
+// Una fila por persona y caso. kind: 'notify' (se le AVISA: una nota en la campana, sin entrar al chat; debe tocar «Enterado») o 'invite' (se le INVITA al chat: ve la conversación y escribe, nunca las notas internas;
+// debe aceptar). status: pending, confirmed (Enterado), accepted, declined o expired (no respondió en el plazo del Mapa de soporte). Si no responde (o rechaza), el aviso pasa al jefe de esa persona con la nota de qué
+// pasó: una fila nueva para el jefe (depth + 1, from_person_id = quien no respondió, reason = no_response | declined), que a su vez debe confirmar; así sube hasta que alguien confirma o ya no hay más jefes.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS support_case_people (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        case_id         INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        user_id         INTEGER NOT NULL,
+        kind            TEXT NOT NULL DEFAULT 'notify',
+        status          TEXT NOT NULL DEFAULT 'pending',
+        depth           INTEGER NOT NULL DEFAULT 0,
+        by_user_id      INTEGER,
+        by_name         TEXT NOT NULL DEFAULT '',
+        message         TEXT NOT NULL DEFAULT '',
+        from_person_id  INTEGER,
+        reason          TEXT NOT NULL DEFAULT '',
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        due_at          TEXT,
+        responded_at    TEXT,
+        escalated       INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (case_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_case_people_due ON support_case_people (status, escalated, due_at);
+`);
+const SUPPORT_PEOPLE_SELECT = 'SELECT p.*, u.name AS user_name FROM support_case_people p LEFT JOIN users u ON u.id = p.user_id';
+function listSupportPeople(caseId) {
+    return db.prepare(`${SUPPORT_PEOPLE_SELECT} WHERE p.case_id = ? ORDER BY p.depth ASC, p.id ASC`).all(caseId);
+}
+function getSupportPersonById(id) {
+    return db.prepare(`${SUPPORT_PEOPLE_SELECT} WHERE p.id = ?`).get(id) || null;
+}
+function getSupportPerson(caseId, userId) {
+    return db.prepare(`${SUPPORT_PEOPLE_SELECT} WHERE p.case_id = ? AND p.user_id = ?`).get(caseId, userId) || null;
+}
+// Agrega a una persona al caso (aviso o invitación). Si ya estaba: una invitación mejora un aviso; lo que ya está pendiente o respondido se deja; lo rechazado o vencido vuelve a pedirse.
+// Regresa { row, created } (created = hubo que mandarle el aviso de nuevo).
+function upsertSupportPerson(p) {
+    const existing = getSupportPerson(p.caseId, p.userId);
+    if (!existing) {
+        const id = db.prepare('INSERT INTO support_case_people (case_id, client_id, user_id, kind, depth, by_user_id, by_name, message, from_person_id, reason, due_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(p.caseId, p.clientId, p.userId, p.kind, p.depth || 0, p.byUserId || null, p.byName || '', p.message || '', p.fromPersonId || null, p.reason || '', p.dueAt || null).lastInsertRowid;
+        return { row: getSupportPersonById(id), created: true };
+    }
+    const upgrade = p.kind === 'invite' && existing.kind !== 'invite';
+    const retry = existing.status === 'declined' || existing.status === 'expired';
+    if (!upgrade && !retry) return { row: existing, created: false };
+    const kind = p.kind === 'invite' || existing.kind === 'invite' ? 'invite' : 'notify';
+    db.prepare("UPDATE support_case_people SET kind = ?, status = 'pending', by_user_id = ?, by_name = ?, message = ?, reason = ?, due_at = ?, responded_at = NULL, escalated = 0, created_at = datetime('now') WHERE id = ?")
+        .run(kind, p.byUserId || null, p.byName || '', p.message || '', p.reason || '', p.dueAt || null, existing.id);
+    return { row: getSupportPersonById(existing.id), created: true };
+}
+function respondSupportPerson(id, status, atSql) {
+    db.prepare('UPDATE support_case_people SET status = ?, responded_at = ? WHERE id = ?').run(status, atSql, id);
+    return getSupportPersonById(id);
+}
+function markSupportPersonEscalated(id, status) {
+    db.prepare('UPDATE support_case_people SET escalated = 1, status = COALESCE(?, status) WHERE id = ?').run(status || null, id);
+}
+// Los avisos e invitaciones que ya pasaron su plazo sin respuesta.
+function listDueSupportPeople(nowSql) {
+    return db.prepare(`${SUPPORT_PEOPLE_SELECT} WHERE p.status = 'pending' AND p.escalated = 0 AND p.due_at IS NOT NULL AND p.due_at <= ? ORDER BY p.id ASC LIMIT 200`).all(nowSql);
+}
+// Los casos a los que una persona fue invitada y aceptó (los ve aunque no tenga las hojas de Soporte).
+function listSupportAcceptedCaseIds(userId) {
+    return db.prepare("SELECT case_id FROM support_case_people WHERE user_id = ? AND kind = 'invite' AND status = 'accepted'").all(userId).map((r) => r.case_id);
+}
+function isSupportParticipant(caseId, userId) {
+    return !!db.prepare("SELECT 1 FROM support_case_people WHERE case_id = ? AND user_id = ? AND kind = 'invite' AND status = 'accepted'").get(caseId, userId);
+}
+// Personas de la empresa por id (activas; una cuenta de prueba solo ve las de prueba).
+function listSupportUsersByIds(clientId, ids, isTestAccount) {
+    const list = [...new Set((ids || []).filter((n) => Number.isInteger(n)))];
+    if (!list.length) return [];
+    return db.prepare(`SELECT id, name FROM users WHERE client_id = ? AND active != 0 AND is_test_account = ? AND id IN (${list.map(() => '?').join(',')})`).all(clientId, isTestAccount ? 1 : 0, ...list);
+}
+// El organigrama de quien reportó (de Roles, Usuarios y Mi Recurso Humano): su ficha, los jefes de arriba (cada puesto con su gente, del más cercano al más alto) y sus compañeros (los que reportan al mismo jefe).
+function getSupportOrgChart(clientId, userId) {
+    const w = db.prepare('SELECT hw.*, jp.name AS role_name, jp.reports_to_job_position_id AS boss_pos FROM hr_workers hw LEFT JOIN job_positions jp ON jp.id = hw.job_position_id WHERE hw.user_id = ? AND hw.client_id = ?').get(userId, clientId);
+    const account = db.prepare('SELECT id, name FROM users WHERE id = ?').get(userId);
+    const assignment = hrWorkerAssignmentOf(userId);
+    const centerNames = assignment && assignment.allowedCenters.size ? db.prepare(`SELECT name FROM cost_centers WHERE id IN (${[...assignment.allowedCenters].map(() => '?').join(',')}) ORDER BY name`).all(...assignment.allowedCenters).map((r) => r.name) : [];
+    const person = {
+        userId, name: (w && w.full_name) || (account && account.name) || '', position: (w && w.position) || '', role: (w && w.role_name) || '', department: (w && w.department) || '', area: (w && w.area) || '',
+        startDate: (w && w.start_date) || '', email: (w && w.email) || '', phone: (w && w.phone) || '', workplaces: centerNames,
+    };
+    const testFlag = w ? w.is_test_data : 0;
+    const peopleOf = (positionId) => db.prepare('SELECT hw.user_id AS userId, hw.full_name AS name, hw.position AS position, jp.name AS role FROM hr_workers hw LEFT JOIN job_positions jp ON jp.id = hw.job_position_id WHERE hw.job_position_id = ? AND hw.client_id = ? AND hw.is_test_data = ? ORDER BY hw.full_name COLLATE NOCASE').all(positionId, clientId, testFlag);
+    const chain = [];
+    const seen = new Set();
+    let pos = w ? w.boss_pos : null;
+    for (let hop = 0; pos && hop < 8 && !seen.has(pos); hop += 1) {
+        seen.add(pos);
+        const jp = db.prepare('SELECT id, name, reports_to_job_position_id AS up FROM job_positions WHERE id = ? AND client_id = ?').get(pos, clientId);
+        if (!jp) break;
+        chain.push({ positionId: jp.id, positionName: jp.name, people: peopleOf(jp.id) });
+        pos = jp.up;
+    }
+    let peers = [];
+    if (w && w.job_position_id) {
+        const positions = w.boss_pos ? db.prepare('SELECT id FROM job_positions WHERE reports_to_job_position_id = ? AND client_id = ?').all(w.boss_pos, clientId).map((r) => r.id) : [w.job_position_id];
+        peers = positions.flatMap((pid) => peopleOf(pid)).filter((p) => p.userId !== userId).slice(0, 12);
+    }
+    return { person, chain, peers };
 }
 // El aviso de la campana (pestaña Avisos): una fila por persona en saas_tree_notices con kind 'support'.
 function publishSupportNotice({ recipients, payload, actorUserId, actorLabel }) {
@@ -15084,8 +15194,9 @@ seedSoporteEvidenceKindsOnce();
 
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
-    getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
+    getSupportCaseById, getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
+    listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
     listTemperatureActivity, hasTemperatureActivityBefore,
     getUserExclusions, setUserExclusions, applyUserExclusions,

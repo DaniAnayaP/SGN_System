@@ -67,6 +67,7 @@ const TABLES = {
     support_materials: { action: WIPE, group: 'captures' },
     support_cases: { action: WIPE, group: 'captures' }, // Soporte por niveles: los casos (2026-11-18)
     support_case_files: { action: WIPE, group: 'captures' }, // y sus evidencias (capturas, grabaciones de pantalla, archivos)
+    support_case_people: { action: WIPE, group: 'captures' }, // los avisos e invitaciones de cada caso (y a quién subieron)
     support_access_requests: { action: WIPE, group: 'captures' }, // los accesos que la Mesa de ayuda pidió para quien reportó
     support_case_messages: { action: WIPE, group: 'captures' }, // y el chat de cada caso (mensajes, notas internas y renglones del sistema)
     // Personalización y reglas de cada cliente
