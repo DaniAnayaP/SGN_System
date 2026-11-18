@@ -525,7 +525,8 @@
     "ourSupportMaterial": "Nuestro Material de Apoyo",
     "ourSupportMaterialAbbr1": "Material de Apoyo",
     "ourSupportMaterialAbbr2": "Material Apoyo",
-    "ourSupportMaterialAbbr3": "Mat. Apoyo"
+    "ourSupportMaterialAbbr3": "Mat. Apoyo",
+    "saasSupport": "Soporte"
   },
   "admin": {
     "clientsTitle": "Clientes Nuevos",
@@ -1242,7 +1243,31 @@
     "masterCostCurrencySaved": "Moneda actualizada.",
     "masterCostSaveError": "No se pudo actualizar la moneda.",
     "masterCostPreviewCount": "Se convertirán {count} precios ya capturados.",
-    "masterCostPreviewEmpty": "Aún no hay precios capturados — solo se actualizará la moneda."
+    "masterCostPreviewEmpty": "Aún no hay precios capturados — solo se actualizará la moneda.",
+    "saasSpSubtitle": "Los casos de soporte de todos los clientes que llegaron hasta GEIPSA (Nivel 4, el proveedor): los que subió el Nivel 3 de la empresa o que entraron directo porque no contrató TI.",
+    "saasSpTabMine": "Mis casos",
+    "saasSpTabFree": "Sin asignar",
+    "saasSpTabAll": "Todos",
+    "saasSpColClient": "Cliente",
+    "saasSpColSector": "Giro",
+    "saasSpColFrom": "Viene de",
+    "saasSpColReason": "Motivo de la derivación",
+    "saasSpColChat": "Chat y recorrido",
+    "saasSpDirect": "Sin TI contratado · directo",
+    "saasSpFromLine": "{level} · {by} · {when}",
+    "saasSpOpen": "Abrir",
+    "saasSpMoves": "{n} movimientos",
+
+    "saasSpMove1": "{n} movimiento",
+    "saasSpTaken": "Caso tomado. Ya es tuyo.",
+    "saasSpReporterTitle": "Quién reportó",
+    "saasSpReporterHint": "Lo que la empresa comparte con el proveedor. No incluye horarios ni datos de contacto.",
+    "saasSpReporterHidden": "La empresa no comparte con el proveedor los datos de quien reportó. Pídelos en el chat si los necesitas.",
+    "saasSpRepName": "Nombre",
+    "saasSpRepPosition": "Puesto",
+    "saasSpRepDept": "Departamento",
+    "saasSpRepBoss": "Jefe directo",
+    "saasSpNoChat": "Tu cuenta no tiene el acceso «Chat y recorrido»: no puedes ver el chat de este caso."
   },
   "business": {
     "usersTitle": "Usuarios",
@@ -4494,6 +4519,8 @@
     "msNotifyClosed": "se cierra",
     "msAllowInviteChat": "Dejar invitar al chat a su jefe y a sus compañeros",
     "msAskUserRating": "Pedir calificación al usuario al terminar",
+
+    "msShareWithProvider": "Mostrar al proveedor (Nivel 4) quién reportó: nombre, puesto, departamento y jefe directo",
     "msRatingReminder": "Recordatorio de la calificación (horas)",
     "msConfirmWindow": "Plazo para confirmar un aviso o aceptar una invitación (horas)",
     "msImpactsTitle": "Impactos que se le preguntan al usuario",
@@ -9278,6 +9305,42 @@
     "clearLayout": {
       "what": "Quita el acomodo guardado que tienes aplicado y regresa la tabla a su acomodo por default: el que te asignaron, o el original de la tabla si no tienes uno.",
       "example": "aplicaste \"Vista Supervisores\" y quieres volver a como estaba: tocas la ✕."
+    },
+    "saasSpTabs": {
+      "what": "Filtra los casos: «Mis casos» son los que tomaste y siguen en el Nivel 4, «Sin asignar» los que esperan a que alguien los tome y «Todos» incluye también los que ya regresaron a la empresa.",
+      "example": "Entras y abres «Sin asignar»: ves los casos nuevos de cualquier cliente y tomas el más urgente."
+    },
+    "saasSpTable": {
+      "what": "Un renglón por caso de soporte que llegó al Nivel 4. Dice de qué cliente es, su giro, de dónde viene el caso y por qué lo subieron, su prioridad, estatus y quién lo atiende.",
+      "example": "SP-0031 del Hospital Santa Clara viene del Nivel 3 con motivo «Es un error del sistema (proveedor)», prioridad Urgente."
+    },
+    "saasSpTake": {
+      "what": "Pone el caso a tu nombre y lo saca de «Abierto» (pasa a «En revisión»). Quien ya lo tomó lo ve en «Mis casos».",
+      "example": "Tomas SP-0112: el cliente ve en su caso que lo atiende tu nombre."
+    },
+    "saasSpReporter": {
+      "what": "Quién reportó el caso, solo con lo que la empresa permite compartir con el proveedor: nombre, puesto, departamento y jefe directo. Nunca horarios ni contacto.",
+      "example": "Luis Pérez · Operador de almacén · Almacén · jefe directo: Marcos Salinas."
+    },
+    "saasSpLane": {
+      "what": "Por dónde pasó el caso: cuánto estuvo en cada nivel de la empresa antes de llegar a ti. La flecha ↩ marca que el caso volvió a un nivel anterior.",
+      "example": "N1 5 min → N2 2 h → N3 1 d → N4 (tú)."
+    },
+    "saasSpChat": {
+      "what": "El chat completo del caso, de principio a fin: lo que escribió el usuario y cada nivel de la empresa. Lo que escribes aquí lo ve el usuario; una nota interna solo la ve el equipo.",
+      "example": "Le pides al usuario que repita el paso con la grabación de pantalla y dejas una nota interna para tu equipo."
+    },
+    "saasSpRate": {
+      "what": "Antes de empezar, califica cómo te llegó el caso (1 clic): estrellas y, si quieres, etiquetas. Es una calificación interna entre el equipo: el usuario no la ve.",
+      "example": "5 estrellas con «Notas claras» y «Tenía evidencia» porque el Nivel 3 dejó todo explicado."
+    },
+    "saasSpResolve": {
+      "what": "Marca el caso como resuelto: escribes qué hiciste y adjuntas evidencia. El caso regresa a la Mesa de ayuda de la empresa para confirmarlo con el usuario; no se cierra aquí.",
+      "example": "Corregiste el reporte en la nueva versión y adjuntas una captura del reporte ya correcto."
+    },
+    "saasSpDown": {
+      "what": "Devuelve el caso al nivel anterior de la empresa con el motivo, qué hiciste, notas para ese nivel y evidencia. El nivel de destino lo recibe como un caso nuevo para él.",
+      "example": "Devuelves al Nivel 3 con motivo «Falta información» y pides el archivo que se subió cuando falló."
     }
   }
 }

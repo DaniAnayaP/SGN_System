@@ -11004,6 +11004,10 @@ const SAAS_TABLE_COLUMN_LEAVES = {
         screenItemId: 'saas-business-sectors', apartadoId: 'tabla',
         columns: ['icon', 'name', 'type', 'description', 'permsAssigned', 'status', 'createdBy', 'createdAt'],
     },
+    'soporte-saas': {
+        screenItemId: 'saas-support', apartadoId: 'tabla',
+        columns: ['folio', 'client', 'sector', 'type', 'from', 'reason', 'priority', 'status', 'assignee', 'evidence', 'chat'],
+    },
     'admin-nuestros-respaldos': {
         screenItemId: 'saas-backups', apartadoId: 'tabla',
         columns: ['colBackupFileName', 'colBackupScreen', 'colBackupType', 'colBackupRecordDate'],
@@ -14577,7 +14581,7 @@ const SUPPORT_MAP_FIELD_DEFS = (() => {
     [['rateOnReceive', 'rate_on_receive', 'Calificar al recibir un caso'], ['accessCheck', 'access_check', 'La Mesa de ayuda revisa los accesos al tomar un caso'], ['closeByHelpdesk', 'close_by_helpdesk', 'El cierre lo hace siempre la Mesa de ayuda'],
         ['notifyUrgent', 'notify_urgent', 'Avisar al jefe directo cuando la prioridad es Urgente'], ['notifyOverdue', 'notify_overdue', 'Avisar al jefe directo cuando vence el plazo'],
         ['notifyEscalated', 'notify_escalated', 'Avisar al jefe directo cuando el caso sube a Nivel 3 o 4'], ['notifyClosed', 'notify_closed', 'Avisar al jefe directo cuando se cierra'],
-        ['allowInviteChat', 'allow_invite_chat', 'Dejar invitar al chat a su jefe y a sus compañeros'], ['askUserRating', 'ask_user_rating', 'Pedir calificación al usuario al terminar']].forEach(([key, column, label]) => add(key, column, 'bool', 1, 'reglas', label));
+        ['allowInviteChat', 'allow_invite_chat', 'Dejar invitar al chat a su jefe y a sus compañeros'], ['askUserRating', 'ask_user_rating', 'Pedir calificación al usuario al terminar'], ['shareWithProvider', 'share_with_provider', 'Mostrar al proveedor (Nivel 4) quién reportó: nombre, puesto, departamento y jefe directo']].forEach(([key, column, label]) => add(key, column, 'bool', 1, 'reglas', label));
     add('ratingReminderHours', 'rating_reminder_hours', 'int', 24, 'reglas', 'Recordatorio de la calificación', { min: 0, max: 720, unit: 'h' });
     add('confirmWindowHours', 'confirm_window_hours', 'int', 2, 'reglas', 'Plazo para confirmar un aviso o aceptar una invitación', { min: 1, max: 720, unit: 'h' });
     return defs;
@@ -14860,6 +14864,23 @@ function addSupportMove(m) {
         db.prepare(`UPDATE support_cases SET level = ?, status = ?, confirm_at = CASE WHEN ? = 'confirm' THEN datetime('now') ELSE NULL END, ${SUPPORT_PAUSE_END_SQL}, assignee_user_id = NULL, assignee_name = '', assigned_at = NULL WHERE id = ?`).run(m.toLevel, status, status, m.caseId);
         return db.prepare('SELECT * FROM support_case_moves WHERE id = ?').get(id);
     })();
+}
+// ---- Soporte del lado SaaS: el Nivel 4 (el proveedor) ---------------------------------------------------------------------------------------------------------------------------------------
+// El equipo de SaaS ve los casos de TODAS las empresas que llegaron al Nivel 4 (están ahí ahora o pasaron por ahí), con su cliente y su giro (el del plan del cliente). Las cuentas de prueba no cuentan.
+// Un caso que entró directo al Nivel 4 (la empresa no contrató TI) también está aquí desde el principio.
+const SUPPORT_SAAS_SELECT = SUPPORT_CASE_SELECT.replace('SELECT c.*,', "SELECT c.*, COALESCE(NULLIF(cl.company_nickname, ''), cl.company_name) AS client_name, bs.id AS sector_id, COALESCE(bs.name, '') AS sector_name, (SELECT COUNT(*) FROM support_case_moves mm WHERE mm.case_id = c.id) AS move_count,")
+    + ' JOIN clients cl ON cl.id = c.client_id LEFT JOIN plans p ON p.name = cl.plan LEFT JOIN business_sectors bs ON bs.id = p.business_sector_id';
+const SUPPORT_REACHED_N4_SQL = "(c.level = 'n4' OR EXISTS (SELECT 1 FROM support_case_moves m4 WHERE m4.case_id = c.id AND m4.to_level = 'n4'))";
+function listSupportCasesForSaas({ limit = 3000 } = {}) {
+    return db.prepare(`${SUPPORT_SAAS_SELECT} WHERE c.is_test_data = 0 AND ${SUPPORT_REACHED_N4_SQL} ORDER BY c.created_at DESC, c.id DESC LIMIT ?`).all(limit);
+}
+function getSupportCaseForSaas(id) {
+    return db.prepare(`${SUPPORT_SAAS_SELECT} WHERE c.id = ? AND c.is_test_data = 0 AND ${SUPPORT_REACHED_N4_SQL}`).get(id) || null;
+}
+// El último traspaso que trajo cada caso al Nivel 4: Map(case_id → fila de support_case_moves). Un caso que entró directo no tiene.
+function mapSupportLastMovesIntoN4() {
+    const rows = db.prepare("SELECT m.* FROM support_case_moves m WHERE m.to_level = 'n4' AND m.id = (SELECT MAX(id) FROM support_case_moves WHERE case_id = m.case_id AND to_level = 'n4')").all();
+    return new Map(rows.map((r) => [r.case_id, r]));
 }
 // Las evidencias que ya se usaron en algún traspaso de este caso (no se vuelven a usar).
 function usedSupportMoveFileIds(caseId) {
@@ -15621,7 +15642,7 @@ seedSoporteEvidenceKindsOnce();
 
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
-    listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4,
     listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
     assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,

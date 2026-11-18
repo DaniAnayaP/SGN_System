@@ -525,7 +525,8 @@
     "ourSupportMaterial": "Our Support Material",
     "ourSupportMaterialAbbr1": "Support Material",
     "ourSupportMaterialAbbr2": "Supp. Material",
-    "ourSupportMaterialAbbr3": "Support"
+    "ourSupportMaterialAbbr3": "Support",
+    "saasSupport": "Support"
   },
   "admin": {
     "clientsTitle": "New Clients",
@@ -1243,7 +1244,31 @@
     "masterCostCurrencySaved": "Currency updated.",
     "masterCostSaveError": "Could not update the currency.",
     "masterCostPreviewCount": "{count} already-captured prices will be converted.",
-    "masterCostPreviewEmpty": "No prices captured yet -- only the currency will change."
+    "masterCostPreviewEmpty": "No prices captured yet -- only the currency will change.",
+    "saasSpSubtitle": "The support cases from every client that reached GEIPSA (Level 4, the provider): the ones the company's Level 3 escalated, or that came in directly because the company did not contract IT.",
+    "saasSpTabMine": "My cases",
+    "saasSpTabFree": "Unassigned",
+    "saasSpTabAll": "All",
+    "saasSpColClient": "Client",
+    "saasSpColSector": "Business sector",
+    "saasSpColFrom": "Comes from",
+    "saasSpColReason": "Reason for the handoff",
+    "saasSpColChat": "Chat and path",
+    "saasSpDirect": "No IT contracted · direct",
+    "saasSpFromLine": "{level} · {by} · {when}",
+    "saasSpOpen": "Open",
+    "saasSpMoves": "{n} moves",
+
+    "saasSpMove1": "{n} move",
+    "saasSpTaken": "Case taken. It is yours now.",
+    "saasSpReporterTitle": "Who reported",
+    "saasSpReporterHint": "What the company shares with the provider. It does not include schedules or contact details.",
+    "saasSpReporterHidden": "The company does not share the reporter's details with the provider. Ask for them in the chat if you need them.",
+    "saasSpRepName": "Name",
+    "saasSpRepPosition": "Position",
+    "saasSpRepDept": "Department",
+    "saasSpRepBoss": "Direct manager",
+    "saasSpNoChat": "Your account does not have the «Chat and path» access: you cannot see this case's chat."
   },
   "business": {
     "usersTitle": "Users",
@@ -4495,6 +4520,8 @@
     "msNotifyClosed": "it is closed",
     "msAllowInviteChat": "Allow inviting their manager and coworkers to the chat",
     "msAskUserRating": "Ask the user for a rating when finished",
+
+    "msShareWithProvider": "Show the provider (Level 4) who reported: name, position, department and direct manager",
     "msRatingReminder": "Rating reminder (hours)",
     "msConfirmWindow": "Time to confirm a notice or accept an invitation (hours)",
     "msImpactsTitle": "Impacts the user is asked about",
@@ -9279,6 +9306,42 @@
     "clearLayout": {
       "what": "Removes the saved layout you have applied and returns the table to its default layout: the one assigned to you, or the table's original if you have none.",
       "example": "you applied \"Supervisors view\" and want things back as they were: tap the ✕."
+    },
+    "saasSpTabs": {
+      "what": "Filters the cases: «My cases» are the ones you took and are still at Level 4, «Unassigned» are waiting for someone to take them and «All» also includes the ones that already went back to the company.",
+      "example": "You open «Unassigned»: you see the new cases from any client and take the most urgent one."
+    },
+    "saasSpTable": {
+      "what": "One row per support case that reached Level 4. It says which client it belongs to, its business sector, where the case comes from and why it was escalated, its priority, status and who handles it.",
+      "example": "SP-0031 from Hospital Santa Clara comes from Level 3 with reason «It is a system error (provider)», priority Urgent."
+    },
+    "saasSpTake": {
+      "what": "Puts the case under your name and moves it out of «Open» (it becomes «In review»). Whoever took it sees it in «My cases».",
+      "example": "You take SP-0112: the client sees your name as the person handling their case."
+    },
+    "saasSpReporter": {
+      "what": "Who reported the case, only with what the company allows sharing with the provider: name, position, department and direct manager. Never schedules or contact details.",
+      "example": "Luis Pérez · Warehouse operator · Warehouse · direct manager: Marcos Salinas."
+    },
+    "saasSpLane": {
+      "what": "The path of the case: how long it spent at each company level before reaching you. The ↩ arrow marks that the case went back to a lower level.",
+      "example": "L1 5 min → L2 2 h → L3 1 d → L4 (you)."
+    },
+    "saasSpChat": {
+      "what": "The whole case chat, from start to finish: what the user and each company level wrote. What you write here the user can see; an internal note is only seen by the team.",
+      "example": "You ask the user to repeat the step with a screen recording and leave an internal note for your team."
+    },
+    "saasSpRate": {
+      "what": "Before you start, rate how the case reached you (1 click): stars and, if you want, tags. It is an internal rating between team members: the user does not see it.",
+      "example": "5 stars with «Clear notes» and «Had evidence» because Level 3 left everything explained."
+    },
+    "saasSpResolve": {
+      "what": "Marks the case as resolved: you write what you did and attach evidence. The case goes back to the company's Help Desk to be confirmed with the user; it is not closed here.",
+      "example": "You fixed the report in the new version and attach a screenshot of the correct report."
+    },
+    "saasSpDown": {
+      "what": "Sends the case back to the company's previous level with the reason, what you did, notes for that level and evidence. The destination level receives it as a new case for it.",
+      "example": "You send it back to Level 3 with reason «Missing information» and ask for the file that was uploaded when it failed."
     }
   }
 }

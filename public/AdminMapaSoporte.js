@@ -132,6 +132,7 @@ function renderRules() {
         ${switchEl('reglas', 'notifyClosed', t('main.msNotifyClosed'))}
         ${switchEl('reglas', 'allowInviteChat', t('main.msAllowInviteChat'))}
         ${switchEl('reglas', 'askUserRating', t('main.msAskUserRating'))}
+        ${switchEl('reglas', 'shareWithProvider', t('main.msShareWithProvider'))}
         <div class="ms-switch-row"><span>${esc(t('main.msRatingReminder'))}</span>${numberEl('reglas', 'ratingReminderHours', { unit: 'h' })}</div>
         <div class="ms-switch-row"><span>${esc(t('main.msConfirmWindow'))}</span>${numberEl('reglas', 'confirmWindowHours', { unit: 'h' })}</div></div></section>`;
 }

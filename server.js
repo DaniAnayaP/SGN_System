@@ -581,7 +581,7 @@ const {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
-    listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4,
     listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
     assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,
@@ -11672,6 +11672,293 @@ app.get('/api/business/support-cases/:id/files/:fileId', requireAuth, (req, res)
     if (!rec || !Number.isInteger(fileId)) return res.status(404).end();
     if (!(rec.reporter_user_id === req.user.sub || supportCanSeeFiles(req))) return res.status(403).end();
     const file = getSupportCaseFile(id, fileId);
+    if (!file) return res.status(404).end();
+    const inline = file.kind === 'capture' || file.kind === 'recording';
+    res.set({ 'Content-Type': file.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}` });
+    res.send(file.data);
+});
+
+// --- Soporte del lado SaaS: el Nivel 4 (el proveedor) ------------------------------------------------------------------------------------------------------------------------------------------
+// Cuando un caso de una empresa llega al Nivel 4 (lo subió su Nivel 3, o la empresa no contrató TI y entró directo) aparece en Servicio a Cliente › Soporte, del lado de GEIPSA: la bandeja trae los casos de TODAS las empresas
+// (con su cliente y su giro), «Mis casos», «Sin asignar» y «Todos». Quien lo atiende recibe el caso con todo su recorrido (chat, traspasos, evidencias). Puede tomarlo, escribirle al usuario, dejar notas internas, cambiar su estatus,
+// MARCARLO RESUELTO (regresa a la Mesa de ayuda de la empresa para confirmarlo con el usuario) o DEVOLVERLO al nivel anterior de la empresa con motivo, qué hizo, notas y evidencia. Es el mismo caso y el mismo folio de principio a fin:
+// lo que escribe el Nivel 4 queda en el chat de la empresa con su nivel. Cada acción se da en el árbol de accesos de la cuenta (Equipo SaaS › Soporte: columnas «Evidencias» y «Chat y recorrido», y los botones). Quien reportó solo se
+// muestra si la empresa lo permite (interruptor del Mapa de soporte): nombre, puesto, departamento y jefe directo, sin horarios ni datos de contacto.
+const SAAS_SUPPORT_ITEM = 'saas-support';
+// Posición de cada columna (c) y botón (a) en SaasAdminCatalog.js: no cambiar el orden de ese catálogo.
+const SAAS_SUPPORT_LEAVES = { evidence: 'tabla::c9', chat: 'tabla::c10', take: 'tabla::a0', write: 'tabla::a1', notes: 'tabla::a2', status: 'tabla::a3', resolve: 'tabla::a4', down: 'tabla::a5', rate: 'tabla::a6', upload: 'tabla::a7' };
+const saasSupportCan = (req, key) => !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), SAAS_SUPPORT_ITEM, SAAS_SUPPORT_LEAVES[key]);
+const saasSupportHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_SUPPORT_ITEM);
+// El mismo usuario de SaaS, pero «dentro» de la empresa del caso: así sirven las funciones de Soporte que ya existen (traspasos, avisos, bitácora) sin que sepan de SaaS.
+const saasSupportReq = (req, rec) => ({ user: { ...req.user, clientId: rec.client_id, isTestAccount: false, isClientAdmin: false } });
+function saasSupportGate(req, res) {
+    if (!saasSupportHasScreen(req)) { res.status(403).json({ message: 'No tienes permiso para ver el Soporte.' }); return null; }
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCaseForSaas(id) : null;
+    if (!rec) { res.status(404).json({ message: 'Ese caso no existe.' }); return null; }
+    return rec;
+}
+const saasSupportAtN4 = (rec) => rec.level === 'n4' && !SUPPORT_CLOSED_STATUSES.includes(rec.status);
+// El traspaso que trajo el caso al Nivel 4 y que quien lo atiende debe calificar antes de empezar (null = nada): lo pide el Mapa de la empresa, la cuenta tiene el botón «Calificar traspasos» y no lo hizo ella misma.
+function saasSupportPendingReceive(req, rec) {
+    if (!saasSupportCan(req, 'rate') || !saasSupportAtN4(rec)) return null;
+    if (getSupportMapRow(rec.client_id).rate_on_receive !== 1) return null;
+    const incoming = supportIncomingMove(rec);
+    return incoming && incoming.to_level === 'n4' && incoming.by_user_id !== req.user.sub && !getSupportRating(rec.id, 'receive', incoming.id) ? incoming : null;
+}
+function saasSupportRateFirst(req, res, rec) {
+    if (!saasSupportPendingReceive(req, rec)) return false;
+    res.status(400).json({ message: 'Antes de empezar, califica cómo te llegó el caso (1 clic).', code: 'RATE_FIRST' });
+    return true;
+}
+// Lo que cada cuenta puede hacer con este caso AHORA (el botón del árbol y que el caso siga en el Nivel 4).
+function saasSupportCanOf(req, rec) {
+    const live = saasSupportAtN4(rec);
+    const working = live && SUPPORT_WORKING_STATUSES.includes(rec.status);
+    const row = getSupportMapRow(rec.client_id);
+    const downTo = SupportRules.downLevels('n4', { n2Enabled: row.n2_enabled === 1, n3Enabled: row.n3_enabled === 1 });
+    const pending = saasSupportPendingReceive(req, rec);
+    return {
+        take: working && saasSupportCan(req, 'take') && !rec.assignee_user_id,
+        write: live && saasSupportCan(req, 'write'), notes: live && saasSupportCan(req, 'notes'), upload: live && saasSupportCan(req, 'upload'),
+        status: working && saasSupportCan(req, 'status'), resolve: working && saasSupportCan(req, 'resolve'), down: live && rec.status !== 'paused' && saasSupportCan(req, 'down') && downTo.length > 0, downTo,
+        rate: !!pending, pending,
+    };
+}
+// Quien reportó, lo que la empresa le muestra al proveedor: nombre, puesto, departamento y jefe directo (sin horarios ni contacto). null = la empresa no lo comparte.
+function saasSupportReporterCard(rec) {
+    if (getSupportMapRow(rec.client_id).share_with_provider !== 1) return { shared: false };
+    if (!rec.reporter_user_id) return { shared: true, name: rec.reporter_name, position: '', role: '', department: '', boss: '' };
+    const org = getSupportOrgChart(rec.client_id, rec.reporter_user_id);
+    const boss = org.chain[0] ? (org.chain[0].people.map((p) => p.name).filter(Boolean).join(', ') || org.chain[0].positionName) : '';
+    return { shared: true, name: org.person.name || rec.reporter_name, position: org.person.position, role: org.person.role, department: org.person.department, boss };
+}
+const saasSupportRowOf = (r, from, me) => ({
+    id: r.id, folio: supportFolio(r.record_number), clientId: r.client_id, client: r.client_name, sector: r.sector_name, type: r.case_type, summary: r.summary, screen: r.screen_label, category: r.category_name,
+    priority: r.priority, status: r.status, level: r.level, atN4: saasSupportAtN4(r), assigneeId: r.assignee_user_id || null, assigneeName: r.assignee_name || '', mine: r.assignee_user_id === me,
+    from: from ? { level: from.from_level, by: from.by_name, at: sqlUtcIso(from.created_at), reason: from.reason } : null, direct: !from, fileCount: r.file_count || 0, moves: r.move_count || 0,
+    createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), firstResponseAt: sqlUtcIso(r.first_response_at), reporter: r.reporter_name,
+});
+app.get('/api/admin/support-cases', requireAuth, requireAdmin, (req, res) => {
+    if (!saasSupportHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver el Soporte.' });
+    const me = req.user.sub;
+    const last = mapSupportLastMovesIntoN4();
+    const LIMIT = 3000;
+    const rows = listSupportCasesForSaas({ limit: LIMIT }).map((r) => saasSupportRowOf(r, last.get(r.id) || null, me));
+    const free = (c) => c.atN4 && !c.assigneeId;
+    const mine = (c) => c.atN4 && c.mine;
+    res.set('Cache-Control', 'no-store');
+    res.json({ cases: rows, counts: { mine: rows.filter(mine).length, free: rows.filter(free).length, all: rows.length }, truncated: rows.length >= LIMIT, me, canEvidence: saasSupportCan(req, 'evidence'), canChat: saasSupportCan(req, 'chat'), canTake: saasSupportCan(req, 'take') });
+});
+app.get('/api/admin/support-cases/:id', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    const me = req.user.sub;
+    const canChat = saasSupportCan(req, 'chat');
+    const canEvidence = saasSupportCan(req, 'evidence');
+    const last = mapSupportLastMovesIntoN4().get(rec.id) || null;
+    const moves = canChat ? listSupportMoves(rec.id) : [];
+    const can = saasSupportCanOf(req, rec);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        case: { ...saasSupportRowOf(rec, last, me), whenAffects: rec.when_affects, impacts: parseJsonOr(rec.impacts, []), errorText: rec.error_text, action: rec.action_label, understood: rec.understood || '', closedAt: sqlUtcIso(rec.closed_at), confirmAt: sqlUtcIso(rec.confirm_at) },
+        reporter: saasSupportReporterCard(rec),
+        files: canEvidence ? listSupportCaseFiles(rec.id).map(supportFileOf) : [], canEvidence, canChat,
+        chat: { canSee: canChat, canSend: can.write, canWriteNotes: can.notes, canSeeNotes: saasSupportCan(req, 'notes'), max: SUPPORT_MESSAGE_MAX, meId: me },
+        can: { take: can.take, status: can.status, resolve: can.resolve, down: can.down, upload: can.upload, rate: can.rate },
+        downTo: can.downTo, pending: can.pending ? supportRatingMoveOf(can.pending) : null, ratingTags: SUPPORT_RATING_TAGS.receive, maxComment: SUPPORT_RATING_COMMENT_MAX,
+        moves: moves.map(supportMoveOf), segments: canChat ? supportSegments(rec, moves) : [], reasons: SUPPORT_MOVE_REASONS.down, minText: SUPPORT_MOVE_TEXT_MIN, maxText: SUPPORT_MOVE_TEXT_MAX, statusTargets: SUPPORT_STATUS_TARGETS,
+        limits: { files: SUPPORT_FILES_PER_CASE, bytes: SUPPORT_FILE_LIMITS },
+    });
+});
+app.get('/api/admin/support-cases/:id/messages', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    if (!saasSupportCan(req, 'chat')) return res.status(403).json({ message: 'No tienes permiso para ver el chat de este caso.' });
+    ensureSupportThread(rec);
+    const after = Number(req.query.after) || 0;
+    const canFiles = saasSupportCan(req, 'evidence');
+    const filesById = new Map(listSupportCaseFiles(rec.id).map((f) => [f.id, f]));
+    const seeInternal = saasSupportCan(req, 'notes');
+    const shown = listSupportCaseMessages(rec.id, { afterId: after, includeNotes: seeInternal }).filter((m) => seeInternal || !(m.kind === 'event' && String(m.event_key).startsWith('int_'))).map((m) => supportMessageOf(m, rec, canFiles, filesById));
+    if (!seeInternal) shown.forEach((m) => {
+        if (m.kind === 'event' && m.eventKey === 'moved') m.eventData = { direction: m.eventData.direction, from: m.eventData.from, to: m.eventData.to, solved: m.eventData.reason === 'solved' };
+        else if (m.kind === 'event' && m.eventKey === 'closed') m.eventData = { noresp: !!m.eventData.noresp, attempts: m.eventData.attempts || 0 };
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ messages: shown });
+});
+// Escribir en el chat del caso desde el Nivel 4: un mensaje (lo ve el usuario) o una nota interna (solo el equipo). Lo escrito no se edita ni se borra.
+app.post('/api/admin/support-cases/:id/messages', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code, status = 400) => res.status(status).json({ message, code });
+    const note = body.note === true;
+    if (!saasSupportCan(req, note ? 'notes' : 'write')) return bad(note ? 'No tienes permiso para escribir notas internas.' : 'No tienes permiso para escribir en este chat.', 'FORBIDDEN', 403);
+    if (SUPPORT_CLOSED_STATUSES.includes(rec.status)) return bad('Este caso ya está cerrado.', 'CLOSED');
+    if (rec.level !== 'n4') return bad('Este caso ya no está en el Nivel 4.', 'LEVEL');
+    const text = supportCleanText(body.body, SUPPORT_MESSAGE_MAX);
+    let fileId = null;
+    if (body.fileId !== undefined && body.fileId !== null) {
+        fileId = Number(body.fileId);
+        if (!Number.isInteger(fileId) || !getSupportCaseFile(rec.id, fileId)) return bad('Esa evidencia no es de este caso.', 'FILE');
+    }
+    if (!text && !fileId) return bad('Escribe un mensaje.', 'EMPTY');
+    if (!note && saasSupportRateFirst(req, res, rec)) return;
+    ensureSupportThread(rec);
+    const by = req.user.name;
+    const created = addSupportCaseMessage({ caseId: rec.id, clientId: rec.client_id, kind: note ? 'note' : 'message', level: 'n4', authorUserId: req.user.sub, authorName: by, body: text, fileId });
+    // la primera respuesta del equipo (un mensaje al usuario; una nota no cuenta)
+    if (!note && setSupportFirstResponse(rec.id, sqlUtcFromMs(Date.now()))) {
+        const minutes = Math.max(0, Math.round((Date.now() - new Date(sqlUtcIso(rec.created_at)).getTime()) / 60000));
+        const due = rec.first_response_due_at ? new Date(sqlUtcIso(rec.first_response_due_at)).getTime() : null;
+        addSupportEvent(rec, 'first_response', { minutes, onTime: due === null ? null : Date.now() <= due }, { level: 'n4', authorName: by, authorUserId: req.user.sub });
+    }
+    // el primer mensaje del Nivel 4 saca al caso de «Abierto»: ya alguien lo está revisando
+    if (!note && rec.status === 'open') {
+        setSupportCaseStatus(rec.id, 'review');
+        if (!rec.assignee_user_id) assignSupportCase(rec.id, req.user.sub, by);
+        addSupportEvent(rec, 'status_changed', { from: 'open', to: 'review', by, auto: true }, { level: 'n4', authorName: by, authorUserId: req.user.sub });
+        supportLogCaseChange(saasSupportReq(req, rec), rec, 'main.colSpEstatus', supportStatusLabel('open'), supportStatusLabel('review'));
+    }
+    const filesById = new Map(listSupportCaseFiles(rec.id).map((f) => [f.id, f]));
+    res.status(201).json({ message: supportMessageOf(created, rec, saasSupportCan(req, 'evidence'), filesById) });
+});
+app.post('/api/admin/support-cases/:id/take', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!saasSupportCan(req, 'take')) return res.status(403).json({ message: 'No tienes permiso para tomar casos.' });
+    if (rec.level !== 'n4' || !SUPPORT_WORKING_STATUSES.includes(rec.status)) return bad(rec.status === 'paused' ? 'Este caso está en pausa.' : 'Este caso ya no se puede tomar.', 'STATE');
+    if (rec.assignee_user_id === req.user.sub) return bad('Este caso ya es tuyo.', 'MINE');
+    if (rec.assignee_user_id) return bad(`Este caso ya lo tomó ${rec.assignee_name || 'otra persona'}.`, 'TAKEN');
+    if (saasSupportRateFirst(req, res, rec)) return;
+    supportAssignTo(saasSupportReq(req, rec), rec);
+    res.status(201).json({ assignee: req.user.name });
+});
+app.post('/api/admin/support-cases/:id/status', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!saasSupportCan(req, 'status')) return res.status(403).json({ message: 'No tienes permiso para cambiar el estatus.' });
+    if (rec.level !== 'n4') return bad('Este caso ya no está en el Nivel 4.', 'LEVEL');
+    if (saasSupportRateFirst(req, res, rec)) return;
+    if (rec.status === 'paused') return bad('Este caso está en pausa.', 'PAUSED');
+    if (!['open', ...SUPPORT_STATUS_TARGETS].includes(rec.status)) return bad('Este caso ya no está en curso.', 'CLOSED');
+    const status = String((req.body && req.body.status) || '');
+    if (!SUPPORT_STATUS_TARGETS.includes(status)) return bad('Elige el estatus.', 'STATUS');
+    if (status === rec.status) return bad('El caso ya tiene ese estatus.', 'SAME');
+    ensureSupportThread(rec);
+    const by = req.user.name;
+    setSupportCaseStatus(rec.id, status);
+    if (!rec.assignee_user_id) assignSupportCase(rec.id, req.user.sub, by);
+    addSupportEvent(rec, 'status_changed', { from: rec.status, to: status, by }, { level: 'n4', authorName: by, authorUserId: req.user.sub });
+    supportLogCaseChange(saasSupportReq(req, rec), rec, 'main.colSpEstatus', supportStatusLabel(rec.status), supportStatusLabel(status));
+    res.json({ status });
+});
+// Marcar resuelto: qué se hizo y evidencia; el caso regresa a la Mesa de ayuda de la empresa (Nivel 1) por confirmar con el usuario, igual que desde cualquier otro nivel.
+app.post('/api/admin/support-cases/:id/resolve', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!saasSupportCan(req, 'resolve')) return res.status(403).json({ message: 'No tienes permiso para marcar casos como resueltos.' });
+    if (rec.level !== 'n4') return bad('Este caso ya no está en el Nivel 4.', 'LEVEL');
+    if (saasSupportRateFirst(req, res, rec)) return;
+    if (rec.status === 'paused') return bad('Este caso está en pausa.', 'PAUSED');
+    if (!SUPPORT_WORKING_STATUSES.includes(rec.status)) return bad(rec.status === 'confirm' ? 'Este caso ya está por confirmar con el usuario.' : 'Este caso ya está cerrado.', rec.status === 'confirm' ? 'CONFIRM' : 'CLOSED');
+    const did = supportCleanText(body.did);
+    if (did.length < SUPPORT_CLOSE_TEXT_MIN) return bad('Cuenta qué hiciste para resolverlo (obligatorio).', 'DID');
+    const fileIds = supportFileIdsOf(body);
+    if (!fileIds.length) return bad('Adjunta al menos una evidencia de lo que hiciste.', 'FILES');
+    if (!supportMoveFilesOk(rec, fileIds)) return bad('Una de las evidencias no sirve (debe ser de lo que hiciste, nueva y de este caso).', 'FILES');
+    const sreq = saasSupportReq(req, rec);
+    const by = req.user.name;
+    supportApplyMove(sreq, rec, { direction: 'down', toLevel: 'n1', reason: 'solved', did, notes: '', fileIds, status: 'confirm' });
+    addSupportClosure({ caseId: rec.id, clientId: rec.client_id, kind: 'resolved', byUserId: req.user.sub, byName: by, fromLevel: 'n4', toLevel: 'n1', did, fileIds });
+    supportLogCaseChange(sreq, rec, 'main.colSpEstatus', supportStatusLabel(rec.status), supportStatusLabel('confirm'));
+    if (rec.reporter_user_id) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-resolved', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, by } });
+    res.status(201).json({ status: 'confirm', level: 'n1' });
+});
+// Devolver el caso al nivel anterior de la empresa (el más cercano que usa): motivo, qué hizo, notas y evidencia, como cualquier traspaso.
+app.post('/api/admin/support-cases/:id/moves', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!saasSupportCan(req, 'down')) return res.status(403).json({ message: 'No tienes permiso para devolver casos.' });
+    if (SUPPORT_CLOSED_STATUSES.includes(rec.status)) return bad('Este caso ya está cerrado.', 'CLOSED');
+    if (rec.level !== 'n4') return bad('Este caso ya no está en el Nivel 4.', 'LEVEL');
+    if (rec.status === 'paused') return bad('Este caso está en pausa.', 'PAUSED');
+    if (saasSupportRateFirst(req, res, rec)) return;
+    const options = saasSupportCanOf(req, rec).downTo;
+    if (!options.length) return bad('Este caso ya está en el primer nivel.', 'BOTTOM');
+    const toLevel = body.toLevel ? String(body.toLevel) : options[0];
+    if (!options.includes(toLevel)) return bad('Ese nivel no está disponible para este traspaso.', 'LEVEL');
+    const reason = String(body.reason || '');
+    if (!SUPPORT_MOVE_REASONS.down.includes(reason)) return bad('Elige el motivo.', 'REASON');
+    const did = supportCleanText(body.did);
+    const notes = supportCleanText(body.notes);
+    if (did.length < SUPPORT_MOVE_TEXT_MIN) return bad('Cuenta qué hiciste en tu nivel (obligatorio).', 'DID');
+    if (notes.length < SUPPORT_MOVE_TEXT_MIN) return bad('Escribe las notas para el siguiente nivel.', 'NOTES');
+    const fileIds = supportFileIdsOf(body);
+    if (!fileIds.length) return bad('Adjunta al menos una evidencia de lo que hiciste.', 'FILES');
+    if (!supportMoveFilesOk(rec, fileIds)) return bad('Una de las evidencias no sirve para este traspaso (debe ser de lo que hiciste, nueva y de este caso).', 'FILES');
+    const move = supportApplyMove(saasSupportReq(req, rec), rec, { direction: 'down', toLevel, reason, did, notes, fileIds, missingAck: false });
+    res.status(201).json({ move: supportMoveOf(move), level: toLevel });
+});
+// Calificar cómo llegó el caso al Nivel 4 (1 clic, obligatoria si el Mapa de la empresa lo pide): estrellas, etiquetas y un comentario.
+app.post('/api/admin/support-cases/:id/ratings', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!saasSupportCan(req, 'rate')) return res.status(403).json({ message: 'No tienes permiso para calificar traspasos.', code: 'FORBIDDEN' });
+    if (rec.level !== 'n4') return bad('Lo califica quien atiende el caso en el Nivel 4.', 'LEVEL');
+    const incoming = supportIncomingMove(rec);
+    if (!incoming || incoming.to_level !== 'n4' || incoming.id !== Number(body.moveId)) return bad('Ese traspaso no es el que llegó a tu nivel.', 'MOVE');
+    if (incoming.by_user_id === req.user.sub) return bad('Un traspaso que hiciste tú no lo calificas.', 'SELF');
+    if (getSupportRating(rec.id, 'receive', incoming.id)) return bad('Este traspaso ya se calificó.', 'DONE');
+    const stars = Number(body.stars);
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) return bad('Elige de 1 a 5 estrellas.', 'STARS');
+    const allowed = [...SUPPORT_RATING_TAGS.receive.good, ...SUPPORT_RATING_TAGS.receive.bad];
+    const tags = Array.isArray(body.tags) ? [...new Set(body.tags.map(String))] : [];
+    if (tags.some((tg) => !allowed.includes(tg))) return bad('Una de las etiquetas no es válida.', 'TAGS');
+    ensureSupportThread(rec);
+    const row = addSupportRating({ caseId: rec.id, clientId: rec.client_id, kind: 'receive', refId: incoming.id, raterUserId: req.user.sub, raterName: req.user.name, raterLevel: 'n4', targetLevel: incoming.from_level, targetName: incoming.by_name || '', stars, tags, comment: supportCleanText(body.comment, SUPPORT_RATING_COMMENT_MAX) });
+    res.status(201).json({ rating: supportRatingOf(row) });
+});
+// Subir UNA evidencia al caso desde el Nivel 4 (el archivo tal cual; X-File-Name = su nombre codificado). Igual que las de la empresa: no se editan ni se borran.
+app.post('/api/admin/support-cases/:id/files', requireAuth, requireAdmin, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    if (!saasSupportCan(req, 'upload')) return res.status(403).json({ message: 'No tienes permiso para subir evidencias.' });
+    if (SUPPORT_CLOSED_STATUSES.includes(rec.status)) return res.status(400).json({ message: 'Este caso ya está cerrado.', code: 'CLOSED' });
+    if (rec.level !== 'n4') return res.status(400).json({ message: 'Este caso ya no está en el Nivel 4.', code: 'LEVEL' });
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ message: 'No llegó ningún archivo.', code: 'EMPTY' });
+    if (countSupportCaseFiles(rec.id) >= SUPPORT_FILES_PER_CASE) return res.status(400).json({ message: `Un caso lleva hasta ${SUPPORT_FILES_PER_CASE} evidencias.`, code: 'MAXFILES' });
+    let name = '';
+    try { name = decodeURIComponent(String(req.headers['x-file-name'] || '')); } catch { name = ''; }
+    name = name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').trim().slice(0, 120) || 'evidencia';
+    const kindInfo = sniffSupportFile(buf, name);
+    if (!kindInfo) return res.status(400).json({ message: 'Ese tipo de archivo no se acepta. Sube una imagen, un video o un PDF, Excel, Word, texto o ZIP.', code: 'TYPE' });
+    if (buf.length > SUPPORT_FILE_LIMITS[kindInfo.kind]) return res.status(400).json({ message: `El archivo pesa demasiado (hasta ${Math.round(SUPPORT_FILE_LIMITS[kindInfo.kind] / 1048576)} MB).`, code: 'SIZE' });
+    const by = req.user.name;
+    const fileId = addSupportCaseFile({ caseId: rec.id, clientId: rec.client_id, evidenceId: null, kind: kindInfo.kind, name, mime: kindInfo.mime, data: buf, level: 'n4', uploadedBy: by });
+    ensureSupportThread(rec);
+    if (req.query.chat !== '1' && req.query.move !== '1') addSupportEvent(rec, 'file', { name, kind: kindInfo.kind }, { level: 'n4', authorName: by, authorUserId: req.user.sub, fileId });
+    try { logTableChange({ clientId: rec.client_id, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: rec.id, recordLabel: `Caso ${supportFolio(rec.record_number)}`, action: 'update', fieldKey: 'main.colSpEvidencias', oldValue: '', newValue: name, changedBy: by }); } catch (err) { console.error('support file log failed', err); }
+    res.status(201).json({ file: supportFileOf({ id: fileId, evidence_id: null, kind: kindInfo.kind, name, mime: kindInfo.mime, size: buf.length, level: 'n4', uploaded_by: by, created_at: sqlUtcFromMs(Date.now()) }), fileCount: countSupportCaseFiles(rec.id) });
+});
+app.get('/api/admin/support-cases/:id/files/:fileId', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    const fileId = Number(req.params.fileId);
+    if (!rec) return;
+    if (!Number.isInteger(fileId)) return res.status(404).end();
+    if (!saasSupportCan(req, 'evidence')) return res.status(403).end();
+    const file = getSupportCaseFile(rec.id, fileId);
     if (!file) return res.status(404).end();
     const inline = file.kind === 'capture' || file.kind === 'recording';
     res.set({ 'Content-Type': file.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}` });

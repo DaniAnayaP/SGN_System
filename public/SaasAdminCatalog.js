@@ -126,6 +126,16 @@ window.SAAS_ADMIN_CATALOG = [
                     { id: 'modal-permisos-asignados', label: 'Modal: Permisos Asignados (solo lectura)', acciones: ['Ver resumen'], nestUnder: { host: 'tabla', column: 'Permisos asignados' } },
                 ],
             },
+            {
+                // Soporte (Nivel 4, el proveedor): los casos de los clientes que llegaron hasta GEIPSA (Admin-SoporteCasos.html y el caso por dentro, Admin-SoporteCaso.html). El ORDEN de columnas y botones no debe
+                // cambiar una vez guardado: server.js los lee por su posición (SAAS_SUPPORT_LEAVES). Lo nuevo va al final.
+                itemId: 'saas-support', labelKey: 'menu.saasSupport', href: 'Admin-SoporteCasos.html',
+                apartados: [
+                    tablaApartado('tabla',
+                        ['Folio', 'Cliente', 'Giro', 'Tipo', 'Viene de', 'Motivo de la derivación', 'Prioridad', 'Estatus', 'Lo atiende', 'Evidencias', 'Chat y recorrido'],
+                        ['Tomar casos', 'Escribir en el chat', 'Notas internas', 'Cambiar estatus', 'Marcar resuelto', 'Devolver al nivel anterior', 'Calificar traspasos', 'Subir evidencias']),
+                ],
+            },
         ],
     },
     {

@@ -922,6 +922,7 @@ const SAAS_SCREEN_GRANT_PATHS = {
     'admin-nuestras-apps': 'saas-apps',
     'admin-master-permissions': 'saas-master-permissions-tree',
     'admin-business-sectors': 'saas-business-sectors',
+    'admin-soporte-saas': 'saas-support',
     'admin-limits-audit': 'saas-limits-audit',
     'admin-system-reset': 'saas-system-reset',
     'admin-equipo-saas': 'saas-team',
@@ -958,6 +959,7 @@ const SAAS_TABLE_ICON_SCREENS = {
     'mis-planes': { screenItemId: 'saas-plans', apartadoId: 'tabla' },
     'nuestras-apps': { screenItemId: 'saas-apps', apartadoId: 'catalogo' },
     'business-sectors': { screenItemId: 'saas-business-sectors', apartadoId: 'tabla' },
+    'soporte-saas': { screenItemId: 'saas-support', apartadoId: 'tabla' },
     'admin-nuestros-respaldos': { screenItemId: 'saas-backups', apartadoId: 'tabla' },
     'admin-material-apoyo': { screenItemId: 'saas-material-apoyo', apartadoId: 'tabla' },
 };
@@ -1012,6 +1014,7 @@ const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
     'admin-nuestras-apps': 'saas-apps',
     'admin-master-permissions': 'saas-master-permissions-tree',
     'admin-business-sectors': 'saas-business-sectors',
+    'admin-soporte-saas': 'saas-support',
 };
 const SAAS_CONFIG_SAAS_ORDER_IDS = {
     'admin-saas-master-status': 'saas-master-tree',
@@ -1096,6 +1099,8 @@ function buildSidebarData(data, role, activePage) {
             // applySubmenuAbbreviations below).
             abbrKeys: ['menu.businessSectorsAbbr1', 'menu.businessSectorsAbbr2', 'menu.businessSectorsAbbr3', 'menu.businessSectorsAbbr4'],
         },
+        // Soporte: el Nivel 4 (el proveedor). Los casos de los clientes que llegaron hasta GEIPSA.
+        { id: 'admin-soporte-saas', labelKey: 'menu.saasSupport', href: 'Admin-SoporteCasos.html', icon: 'bx-support', saasItemId: 'saas-support' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const customerServiceSubmenuOrdered = applySaasSidebarOrder(customerServiceSubmenu, 'customerService', CUSTOMER_SERVICE_SAAS_ORDER_IDS);
     const saasConfigSubmenu = [
