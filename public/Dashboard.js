@@ -11266,8 +11266,6 @@ function setSupportPanelMode(on) {
     const panel = dropdown.querySelector('.ns-panel');
     dropdown.classList.toggle('ns-active', on);
     notificationsListEl.style.display = on ? 'none' : '';
-    const label = dropdown.querySelector('.notifications-active-label');
-    if (label) label.hidden = on;
     if (panel) panel.hidden = !on;
     dropdown.querySelectorAll(':scope > .menu-resize-grip').forEach((g) => g.remove());
     if (on) addMenuResizeGrip(dropdown, { lists: ['.ns-scroll'], state: supportResize, fromLeft: true });
@@ -11282,7 +11280,7 @@ function renderSupportTab() {
     const view = supportView();
     const meta = notificationsData.soporteMeta || {};
     panel.querySelector('.ns-hint').textContent = t(meta.provider ? 'main.notificationsSupportHintProvider' : 'main.notificationsSupportHint');
-    panel.querySelectorAll('[data-ns-view]').forEach((b) => { const on = b.dataset.nsView === view; const label = t(b.dataset.nsView === 'list' ? 'main.nsViewList' : 'main.nsViewCards'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.title = label; b.setAttribute('aria-label', label); });
+    panel.querySelectorAll('[data-ns-view]').forEach((b) => { const on = b.dataset.nsView === view; const label = t(b.dataset.nsView === 'list' ? 'main.nsViewList' : 'main.nsViewCards'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.title = label; b.setAttribute('aria-label', label); const word = b.querySelector('span'); if (word) word.textContent = t(b.dataset.nsView === 'list' ? 'main.nsViewListShort' : 'main.nsViewCardsShort'); });
     const ask = panel.querySelector('.ns-ask span'); if (ask) ask.textContent = t('main.notificationsSupportAsk');
     const scroll = panel.querySelector('.ns-scroll');
     scroll.classList.toggle('ns-phone', view === 'cards');
@@ -11343,15 +11341,15 @@ document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
         <div class="notifications-active-label"></div>
         <div class="notifications-list" data-role="list"></div>
         <div class="ns-panel" hidden>
-            <div class="ns-bar">
-                <p class="ns-hint"></p>
-                <div class="ns-views" role="group" data-i18n-aria="main.nsViewTitle">
-                    <button type="button" data-ns-view="list" data-i18n-aria="main.nsViewList"><i class="bx bx-table" aria-hidden="true"></i></button>
-                    <button type="button" data-ns-view="cards" data-i18n-aria="main.nsViewCards"><i class="bx bx-mobile-alt" aria-hidden="true"></i></button>
-                </div>
-            </div>
+            <p class="ns-hint"></p>
             <div class="ns-scroll"></div>
-            <a class="btn ns-ask" href="Soporte.html?new=1"><i class="bx bx-plus" aria-hidden="true"></i> <span data-i18n="main.notificationsSupportAsk"></span></a>
+            <div class="ns-foot">
+                <div class="ns-views" role="group" data-i18n-aria="main.nsViewTitle">
+                    <button type="button" data-ns-view="list" data-i18n-aria="main.nsViewList"><i class="bx bx-table" aria-hidden="true"></i><span></span></button>
+                    <button type="button" data-ns-view="cards" data-i18n-aria="main.nsViewCards"><i class="bx bx-mobile-alt" aria-hidden="true"></i><span></span></button>
+                </div>
+                <a class="btn ns-ask" href="Soporte.html?new=1"><i class="bx bx-plus" aria-hidden="true"></i> <span data-i18n="main.notificationsSupportAsk"></span></a>
+            </div>
         </div>
     `;
     wrapper.appendChild(dropdown);

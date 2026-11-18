@@ -5965,7 +5965,9 @@
     "noticeSupportSaasReopenedLine": "Case {folio} «{summary}» from {client} was reopened: {said}",
     "nsViewTitle": "How to view my requests",
     "nsViewList": "View as list (table)",
-    "nsViewCards": "View as action (cards)"
+    "nsViewCards": "View as action (cards)",
+    "nsViewListShort": "List",
+    "nsViewCardsShort": "Action"
   },
   "home": {
     "title": "SGN",
