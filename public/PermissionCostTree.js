@@ -521,7 +521,7 @@
                 const isRemovable = !!(colorSlot && (colorSlot.color === 'yellow' || colorSlot.color === 'green') && interactive && colorSlot.removeKeys && colorSlot.removeKeys.length);
                 if (isRedInteractive || isRemovable) {
                     const labelEl = document.createElement('label');
-                    labelEl.className = isRemovable ? `perm-tree-check ${colorSlot.color === 'green' ? 'perm-tree-check-plan' : 'perm-tree-check-extra'}` : 'perm-tree-check';
+                    labelEl.className = isRemovable && allowRemove ? `perm-tree-check ${colorSlot.color === 'green' ? 'perm-tree-check-plan' : 'perm-tree-check-extra'}` : 'perm-tree-check';
                     if (isRemovable) labelEl.title = t(colorSlot.color === 'green' ? 'main.permRemovePlan' : (allowRemove ? 'main.permRemoveExtra' : 'main.permRemoveExtraClient'));
                     input = document.createElement('input');
                     input.type = 'checkbox';
@@ -532,6 +532,8 @@
                     span.textContent = labelText;
                     applyClassificationColorTo(span, classificationId);
                     labelEl.append(input, span);
+                    // «+ Adicionales» del cliente: lo vendido como adicional conserva su ⊕ amarillo de siempre, junto a la casilla que permite quitarlo
+                    if (isRemovable && !allowRemove) labelEl.insertBefore(buildStatusBadge('yellow'), span);
                     row.appendChild(labelEl);
                     if (colorSlot && colorSlot.excluded) {
                         const tag = document.createElement('span');
@@ -934,7 +936,7 @@
             const isRemovable = !!((appColorSlot.color === 'yellow' || appColorSlot.color === 'green') && interactive && appColorSlot.removeKeys && appColorSlot.removeKeys.length);
             if (isRedInteractive || isRemovable) {
                 const label = document.createElement('label');
-                label.className = isRemovable ? `perm-tree-app-toggle ${appColorSlot.color === 'green' ? 'perm-tree-check-plan' : 'perm-tree-check-extra'}` : 'perm-tree-app-toggle';
+                label.className = isRemovable && allowRemove ? `perm-tree-app-toggle ${appColorSlot.color === 'green' ? 'perm-tree-check-plan' : 'perm-tree-check-extra'}` : 'perm-tree-app-toggle';
                 label.title = isRemovable ? t(appColorSlot.color === 'green' ? 'main.permRemovePlan' : (allowRemove ? 'main.permRemoveExtra' : 'main.permRemoveExtraClient')) : t('main.appVisionColumn');
                 const input = document.createElement('input');
                 input.type = 'checkbox';
