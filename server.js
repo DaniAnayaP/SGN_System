@@ -581,6 +581,7 @@ const {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
+    listSupportScreens, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -10131,7 +10132,7 @@ const sqlUtcFromMs = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T'
 // Lo que el servidor manda de un caso (una fila de la tabla). Las evidencias solo salen con ids para quien tiene la columna Evidencias o abrió el caso.
 function supportCaseRowOf(r, client, withFiles) {
     return {
-        id: r.id, folio: supportFolio(r.record_number), type: r.case_type, summary: r.summary, screen: r.screen_label, action: r.action_label, errorText: r.error_text,
+        id: r.id, folio: supportFolio(r.record_number), type: r.case_type, summary: r.summary, screen: r.screen_label, action: r.action_label, screenNode: r.screen_node || '', actionLeaf: r.action_leaf || '', errorText: r.error_text,
         categoryId: r.category_id, category: r.category_name, priority: r.priority, level: r.level, status: r.status, whenAffects: r.when_affects, keepWorking: r.keep_working === 1,
         impacts: parseJsonOr(r.impacts, []), answers: parseJsonOr(r.answers, {}), reporter: r.reporter_name, reporterUserId: r.reporter_user_id,
         createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), firstResponseAt: sqlUtcIso(r.first_response_at), fileCount: r.file_count || 0, withFiles: !!withFiles,
@@ -10185,6 +10186,22 @@ function supportFormOptions(req) {
         .map((c) => ({ id: c.id, name: String(c.name).trim(), kind: c.kind || '', firstResponseMin: c.first_response_min || 0, evidences: parseClassificationIds(c.evidence_ids).map((id) => evidences.get(id)).filter(Boolean) }));
     return { map, categories, impacts: map.impacts, limits: { summary: SUPPORT_SUMMARY_MAX, text: SUPPORT_TEXT_MAX, answer: SUPPORT_ANSWER_MAX, files: SUPPORT_FILES_PER_CASE, bytes: SUPPORT_FILE_LIMITS } };
 }
+// Las pantallas del sistema (de los departamentos que la empresa tiene) con lo que se puede hacer en cada una: para elegir «qué pantalla y qué acción» en una solicitud y en el primer contacto.
+let supportEsDict = null;
+function supportLabelEs(labelKey) {
+    if (!supportEsDict) { try { supportEsDict = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'i18n', 'es.json'), 'utf8')); } catch { supportEsDict = {}; } }
+    const [ns, ...rest] = String(labelKey || '').split('.');
+    return String((supportEsDict[ns] && supportEsDict[ns][rest.join('.')]) || '');
+}
+const supportContactLevel = (req) => (req.user.isClientAdmin ? 'editar' : (hasColumnGrant(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpContacto') ? getColumnGrantLevel(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpContacto') : null));
+const supportCanSeeContact = (req) => !!supportContactLevel(req);
+const supportCanOperateContact = (req) => ['ver-y-operar', 'editar'].includes(supportContactLevel(req));
+app.get('/api/business/support-cases/screens', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!(supportCan(req, 'colSpCreateAuth') || supportCanSeeContact(req))) return res.status(403).json({ message: 'No tienes permiso para ver las pantallas.' });
+    res.set('Cache-Control', 'private, max-age=60');
+    res.json({ screens: listSupportScreens(req.user.clientId).map((s) => ({ id: s.id, labelKey: s.labelKey, categoryLabelKey: s.categoryLabelKey, nodeId: s.nodeId, department: s.sectionId, area: s.itemId, categoryId: s.categoryId, actions: s.actions.map((a) => ({ id: a.id, kind: a.kind, labelKey: a.labelKey, needs: a.needs })) })) });
+});
 app.get('/api/business/support-cases/form', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const o = supportFormOptions(req);
@@ -10223,6 +10240,19 @@ app.post('/api/business/support-cases', requireAuth, (req, res) => {
         levelOf.set(name, level);
     }
     const impacts = options.impacts.map((i) => ({ name: i.name, level: levelOf.get(i.name) || 0 }));
+    // La pantalla y la acción pueden venir elegidas de la lista del sistema (de ahí la Mesa de ayuda compara los accesos) o escritas con palabras.
+    let screenNode = ''; let actionLeaf = '';
+    let screenText = clean(body.screen, 120); let actionText = clean(body.action, 120);
+    if (body.screenId) {
+        const screen = listSupportScreens(clientId).find((s) => s.id === body.screenId);
+        if (!screen) return bad('Esa pantalla no existe.', 'SCREEN');
+        screenNode = screen.id; screenText = supportLabelEs(screen.labelKey) || screenText;
+        if (body.actionId) {
+            const action = screen.actions.find((a) => a.id === body.actionId);
+            if (!action) return bad('Esa acción no es de esa pantalla.', 'ACTION');
+            actionLeaf = action.id; actionText = supportLabelEs(action.labelKey) || actionText;
+        }
+    } else if (body.actionId) return bad('Falta elegir la pantalla.', 'SCREEN');
     if (!SupportRules.WHEN_AFFECTS.includes(body.when)) return bad('Falta decir cuándo te afecta.', 'WHEN');
     if (typeof body.keepWorking !== 'boolean') return bad('Falta decir si puedes seguir trabajando mientras.', 'KEEP');
     // Lo escrito que pide la categoría (las evidencias de tipo «dato»): solo las de esa categoría.
@@ -10237,7 +10267,7 @@ app.post('/api/business/support-cases', requireAuth, (req, res) => {
     const level = SupportRules.entryLevel(category.kind, options.map);
     const minutes = SupportRules.firstResponseMinutes(priority, category.firstResponseMin, options.map);
     const created = createSupportCase({
-        clientId, isTestAccount, type: 'c', summary, screen: clean(body.screen, 120), action: clean(body.action, 120), errorText: clean(body.errorText, SUPPORT_TEXT_MAX),
+        clientId, isTestAccount, type: 'c', summary, screen: screenText, action: actionText, screenNode, actionLeaf, errorText: clean(body.errorText, SUPPORT_TEXT_MAX),
         categoryId: category.id, categoryName: category.name, impacts, when: body.when, keepWorking: body.keepWorking, priority, level, answers,
         reporterUserId: req.user.sub, reporterName: changedByLabel(req), dueAt: minutes ? sqlUtcFromMs(Date.now() + minutes * 60000) : null,
     });
@@ -10259,6 +10289,7 @@ app.get('/api/business/support-cases/:id', requireAuth, (req, res) => {
     res.json({
         case: supportCaseRowOf(rec, getClientById(req.user.clientId), withFiles), files: withFiles ? listSupportCaseFiles(id).map(supportFileOf) : [], canAddFiles: mine || supportCan(req, 'colSpCreateAuth') || supportCan(req, 'colSpChatSend'), maxFiles: SUPPORT_FILES_PER_CASE,
         chat: { canSee: supportCanSeeChat(req, rec), canSend: supportCanSend(req, rec), canSeeNotes: supportCanSeeNotes(req), canWriteNotes: supportCanWriteNotes(req), max: SUPPORT_MESSAGE_MAX, meId: req.user.sub, isReporter: mine },
+        contact: { canSee: supportCanSeeContact(req) },
     });
 });
 // El chat del caso. ?after=<id> trae solo lo posterior (la pantalla lo pide cada rato). Las notas internas solo salen con la columna Notas internas; los archivos de los mensajes, solo con la columna Evidencias o para quien abrió el caso.
@@ -10304,6 +10335,108 @@ app.post('/api/business/support-cases/:id/messages', requireAuth, (req, res) => 
     const canFiles = supportIsReporter(req, rec) || supportCanSeeFiles(req);
     const filesById = new Map(listSupportCaseFiles(id).map((f) => [f.id, f]));
     res.status(201).json({ message: supportMessageOf(created, rec, canFiles, filesById) });
+});
+// ---- primer contacto de la Mesa de ayuda -------------------------------------------------------------------------------------------------------------------------------------------------
+// Lo ve quien tiene la columna «Primer contacto» (Ver); la opera quien tiene Ver y operar. 1) Revisa los accesos que necesita la pantalla y la acción contra los de quien reportó (el sistema los compara y la persona confirma);
+// si falta alguno lo PIDE ahí mismo (botón «Pedir el acceso»: le llega al administrador de la empresa y al jefe directo) sin subir el caso. 2) Habla con el usuario (el chat). 3) Escribe lo que entendió de la situación, que viaja con el caso.
+const SUPPORT_UNDERSTOOD_MAX = 1000;
+function supportContactGate(req, res, { operate = false } = {}) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec) { res.status(404).json({ message: 'Ese caso no existe.' }); return null; }
+    if (!(operate ? supportCanOperateContact(req) : supportCanSeeContact(req))) { res.status(403).json({ message: 'No tienes permiso para el primer contacto de este caso.' }); return null; }
+    return rec;
+}
+// Qué de lo que pide la categoría ya llegó (un dato escrito o al menos una evidencia de ese renglón).
+function supportEvidenceStatus(req, rec) {
+    const category = supportFormOptions(req).categories.find((c) => c.id === rec.category_id);
+    if (!category) return [];
+    const answers = parseJsonOr(rec.answers, {});
+    const given = new Set(listSupportCaseFiles(rec.id).map((f) => f.evidence_id).filter(Boolean));
+    return category.evidences.map((e) => ({ id: e.id, name: e.name, kind: e.kind, done: e.kind === 'data' ? !!String(answers[e.id] || '').trim() : given.has(e.id) }));
+}
+function supportReviewOf(req, rec) {
+    if (!rec.screen_node || !rec.reporter_user_id) return null;
+    return reviewSupportAccess({ clientId: req.user.clientId, userId: rec.reporter_user_id, screenId: rec.screen_node, actionId: rec.action_leaf || '' });
+}
+app.get('/api/business/support-cases/:id/contact', requireAuth, (req, res) => {
+    const rec = supportContactGate(req, res);
+    if (!rec) return;
+    const screen = rec.screen_node ? findSupportScreen(rec.screen_node) : null;
+    const requests = listSupportAccessRequests(rec.id).map((r) => ({ id: r.id, by: r.requested_by_name, items: parseJsonOr(r.items, []), note: r.note, createdAt: sqlUtcIso(r.created_at) }));
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        canOperate: supportCanOperateContact(req), canRequest: supportCan(req, 'colSpPedirAcceso') && !supportIsReporter(req, rec), reporter: rec.reporter_name, reporterUserId: rec.reporter_user_id,
+        screenNode: rec.screen_node || '', actionLeaf: rec.action_leaf || '', screenLabel: rec.screen_label, actionLabel: rec.action_label, screen: screen ? { id: screen.id, labelKey: screen.labelKey, actions: screen.actions.map((a) => ({ id: a.id, kind: a.kind, labelKey: a.labelKey, needs: a.needs })) } : null,
+        review: supportReviewOf(req, rec), accessOk: rec.access_ok === null || rec.access_ok === undefined ? null : rec.access_ok === 1, accessCheckedAt: sqlUtcIso(rec.access_checked_at), accessCheckedBy: rec.access_checked_by || '',
+        talked: !!rec.first_response_at, evidence: supportEvidenceStatus(req, rec), understood: rec.understood || '', understoodAt: sqlUtcIso(rec.understood_at), understoodBy: rec.understood_by || '', requests, maxUnderstood: SUPPORT_UNDERSTOOD_MAX,
+    });
+});
+// Corregir la pantalla y la acción del caso (lo que escribió quien reportó puede no ser lo que era): la revisión de accesos se vuelve a hacer.
+app.patch('/api/business/support-cases/:id/context', requireAuth, (req, res) => {
+    const rec = supportContactGate(req, res, { operate: true });
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const screen = listSupportScreens(req.user.clientId).find((s) => s.id === body.screenId);
+    if (!screen) return res.status(400).json({ message: 'Esa pantalla no existe.', code: 'SCREEN' });
+    let action = null;
+    if (body.actionId) { action = screen.actions.find((a) => a.id === body.actionId); if (!action) return res.status(400).json({ message: 'Esa acción no es de esa pantalla.', code: 'ACTION' }); }
+    updateSupportCaseContext(rec.id, { screenNode: screen.id, actionLeaf: action ? action.id : '', screenLabel: supportLabelEs(screen.labelKey), actionLabel: action ? supportLabelEs(action.labelKey) : '' });
+    setSupportAccessCheck(rec.id, null, '', null); // vuelve a «sin revisar»
+    ensureSupportThread(rec);
+    addSupportEvent(rec, 'context', { screenKey: screen.labelKey, actionKey: action ? action.labelKey : '' }, { level: supportAuthorLevel(req, rec), authorName: changedByLabel(req), authorUserId: req.user.sub });
+    res.json({ ok: true });
+});
+// Confirmar la revisión: «los accesos están bien» solo se puede cuando el sistema los encuentra completos; «algo no cuadra» siempre.
+app.post('/api/business/support-cases/:id/access-review', requireAuth, (req, res) => {
+    const rec = supportContactGate(req, res, { operate: true });
+    if (!rec) return;
+    const ok = !!(req.body && req.body.ok === true);
+    const review = supportReviewOf(req, rec);
+    if (!review) return res.status(400).json({ message: 'Primero elige la pantalla y la acción de este caso.', code: 'NOSCREEN' });
+    if (ok && review.result !== 'ok') return res.status(400).json({ message: 'Todavía faltan accesos: pídelos o marca «algo no cuadra».', code: 'MISSING' });
+    const missing = review.rows.filter((r) => !r.ok).length;
+    setSupportAccessCheck(rec.id, ok, changedByLabel(req), sqlUtcFromMs(Date.now()));
+    ensureSupportThread(rec);
+    addSupportEvent(rec, 'access_review', { ok, missing }, { level: supportAuthorLevel(req, rec), authorName: changedByLabel(req), authorUserId: req.user.sub });
+    res.json({ accessOk: ok, missing });
+});
+// Pedir un acceso que falta: queda en el chat y les llega a los administradores de la empresa y al jefe directo de quien lo necesita.
+app.post('/api/business/support-cases/:id/access-request', requireAuth, (req, res) => {
+    const rec = supportContactGate(req, res, { operate: true });
+    if (!rec) return;
+    if (!supportCan(req, 'colSpPedirAcceso')) return res.status(403).json({ message: 'No tienes permiso para pedir accesos.' });
+    const review = supportReviewOf(req, rec);
+    if (!review) return res.status(400).json({ message: 'Primero elige la pantalla y la acción de este caso.', code: 'NOSCREEN' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const codes = Array.isArray(body.codes) ? [...new Set(body.codes.map(String))] : [];
+    const failing = review.rows.filter((r) => !r.ok);
+    if (!codes.length || !codes.every((c) => failing.some((r) => r.code === c))) return res.status(400).json({ message: 'Elige alguno de los accesos que faltan.', code: 'ITEMS' });
+    const screen = findSupportScreen(rec.screen_node);
+    const items = codes.map((c) => { const r = failing.find((x) => x.code === c); return { code: c, labelKey: r.labelKey || '' }; });
+    const note = String(body.note || '').replace(/[ \t]+/g, ' ').trim().slice(0, 300);
+    const by = changedByLabel(req);
+    const requestId = createSupportAccessRequest({ caseId: rec.id, clientId: req.user.clientId, targetUserId: rec.reporter_user_id, requestedByUserId: req.user.sub, requestedByName: by, items, note });
+    ensureSupportThread(rec);
+    addSupportEvent(rec, 'access_request', { items, screenKey: screen ? screen.labelKey : '' }, { level: supportAuthorLevel(req, rec), authorName: by, authorUserId: req.user.sub });
+    const { admins, boss } = listSupportAccessRecipients(req.user.clientId, rec.reporter_user_id, req.user.isTestAccount);
+    const base = { caseId: rec.id, folio: supportFolio(rec.record_number), targetName: rec.reporter_name, screenKey: screen ? screen.labelKey : '', items, note };
+    const sentAdmins = publishSupportNotice({ recipients: admins.filter((id) => id !== req.user.sub), payload: { ...base, variant: 'access-request' }, actorUserId: req.user.sub, actorLabel: by });
+    const sentBoss = publishSupportNotice({ recipients: [boss].filter((id) => id && id !== req.user.sub && !admins.includes(id)), payload: { ...base, variant: 'access-boss' }, actorUserId: req.user.sub, actorLabel: by });
+    res.status(201).json({ requestId, notified: { admins: sentAdmins.length, boss: sentBoss.length } });
+});
+// Lo que entendió la Mesa de ayuda: viaja con el caso. Cada vez que se escribe queda un renglón en el chat (lo anterior no se borra).
+app.post('/api/business/support-cases/:id/understood', requireAuth, (req, res) => {
+    const rec = supportContactGate(req, res, { operate: true });
+    if (!rec) return;
+    const text = String((req.body && req.body.text) || '').replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, SUPPORT_UNDERSTOOD_MAX);
+    if (text.length < 10) return res.status(400).json({ message: 'Cuenta con tus palabras lo que entendiste de la situación (al menos una frase).', code: 'SHORT' });
+    const by = changedByLabel(req);
+    setSupportUnderstood(rec.id, text, by, sqlUtcFromMs(Date.now()));
+    ensureSupportThread(rec);
+    addSupportCaseMessage({ caseId: rec.id, clientId: req.user.clientId, kind: 'event', level: supportAuthorLevel(req, rec), authorUserId: req.user.sub, authorName: by, body: text, eventKey: 'understood', eventData: {} });
+    res.status(201).json({ understood: text, understoodBy: by });
 });
 // Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
 app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {

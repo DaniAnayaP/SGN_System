@@ -223,6 +223,18 @@ async function loadFormOptions() {
     const res = await fetch(`${API}/form`, { credentials: 'include' });
     if (!res.ok) throw new Error('form failed');
     formOptions = await res.json();
+    // las pantallas del sistema (de los departamentos de la empresa) para elegir cuál era y qué se quería hacer; sin ellas se escribe con palabras
+    formOptions.screens = [];
+    try {
+        const sr = await fetch(`${API}/screens`, { credentials: 'include' });
+        if (sr.ok) {
+            const list = (await sr.json()).screens;
+            const base = list.map((s) => `${t(s.labelKey)}${s.categoryLabelKey ? ` · ${t(s.categoryLabelKey)}` : ''}`);
+            const count = new Map();
+            base.forEach((b) => count.set(b, (count.get(b) || 0) + 1));
+            formOptions.screens = list.map((s, i) => ({ ...s, label: count.get(base[i]) > 1 ? `${base[i]} (${String(s.nodeId).replace(/^cat-[a-z]+-/, '')})` : base[i] })).sort((a, b) => a.label.localeCompare(b.label, locale()));
+        }
+    } catch (err) { /* sin lista: se escribe con palabras */ }
 }
 const categoryOf = () => (formOptions.categories.find((c) => c.id === form.categoryId) || null);
 function priorityPreview() {
@@ -246,8 +258,7 @@ function renderForm() {
     formEl.querySelector('#sp-form-body').innerHTML = `
         <div class="sp-grid">
             <label class="sp-field sp-wide"><span>${esc(t('main.spFSummary'))} *</span><input type="text" id="sp-f-summary" maxlength="${formOptions.limits.summary}" value="${esc(form.summary)}"></label>
-            <label class="sp-field"><span>${esc(t('main.spFScreen'))}</span><input type="text" id="sp-f-screen" maxlength="120" value="${esc(form.screen)}"></label>
-            <label class="sp-field"><span>${esc(t('main.spFAction'))}</span><input type="text" id="sp-f-action" maxlength="120" value="${esc(form.action)}"></label>
+            ${screenPickerHtml()}
             <label class="sp-field sp-wide"><span>${esc(t('main.spFError'))}</span><textarea id="sp-f-error" rows="2" maxlength="${formOptions.limits.text}">${esc(form.errorText)}</textarea></label>
             <label class="sp-field sp-wide"><span>${esc(t('main.spFCategory'))} *</span><select id="sp-f-category"><option value="">${esc(t('main.spFChoose'))}</option>${formOptions.categories.map((c) => `<option value="${c.id}"${c.id === form.categoryId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
         </div>
@@ -282,8 +293,17 @@ function slotHtml(e) {
     return `<div class="sp-slot">${label}<div class="sp-slot-row"><label class="btn btn-secondary"><i class="bx bx-paperclip" aria-hidden="true"></i> ${esc(t('main.spFAttach'))}<input type="file"${accept} data-slot-file="${e.id}" hidden></label>${state}</div></div>`;
 }
 const fmtClock = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+// Pantalla y acción: de la lista del sistema (de ahí la Mesa de ayuda compara los accesos) o «otra / no sé» escrita con palabras.
+function screenPickerHtml() {
+    const free = `<label class="sp-field"><span>${esc(t('main.spFScreen'))}</span><input type="text" id="sp-f-screen" maxlength="120" value="${esc(form.screen)}"></label><label class="sp-field"><span>${esc(t('main.spFAction'))}</span><input type="text" id="sp-f-action" maxlength="120" value="${esc(form.action)}"></label>`;
+    if (!formOptions.screens.length) return free;
+    const picked = formOptions.screens.find((s) => s.id === form.screenId);
+    const screenSel = `<label class="sp-field"><span>${esc(t('main.spFScreen'))}</span><select id="sp-f-screen-sel"><option value="">${esc(t('main.spFChoose'))}</option>${formOptions.screens.map((s) => `<option value="${esc(s.id)}"${s.id === form.screenId ? ' selected' : ''}>${esc(s.label)}</option>`).join('')}<option value="__other"${form.screenId === '__other' ? ' selected' : ''}>${esc(t('main.spFOtherScreen'))}</option></select></label>`;
+    const actionSel = picked ? `<label class="sp-field"><span>${esc(t('main.spFAction'))}</span><select id="sp-f-action-sel"><option value="">${esc(t('main.spFChoose'))}</option>${[...picked.actions].sort((a, b) => ['button', 'column', 'icon'].indexOf(a.kind) - ['button', 'column', 'icon'].indexOf(b.kind)).map((a) => `<option value="${esc(a.id)}"${a.id === form.actionId ? ' selected' : ''}>${esc(t(`main.supActKind_${a.kind}`))}: ${esc(t(a.labelKey))}</option>`).join('')}</select></label>` : '<div></div>';
+    return form.screenId === '__other' ? `${screenSel}<div></div>${free}` : `${screenSel}${actionSel}`;
+}
 function newForm(prefill) {
-    return { summary: '', screen: (prefill && prefill.screen) || '', action: (prefill && prefill.action) || '', errorText: (prefill && prefill.errorText) || '', categoryId: null, impacts: new Map(), when: '', keep: null, answers: new Map(), slots: new Map(), extras: [], rec: null, sending: false };
+    return { screenId: '', actionId: '', summary: '', screen: (prefill && prefill.screen) || '', action: (prefill && prefill.action) || '', errorText: (prefill && prefill.errorText) || '', categoryId: null, impacts: new Map(), when: '', keep: null, answers: new Map(), slots: new Map(), extras: [], rec: null, sending: false };
 }
 function closeForm() {
     if (form && form.rec) { try { form.rec.ctl.stop(); } catch (err) { /* ya terminó */ } }
@@ -321,6 +341,8 @@ function onFormInput(event) {
 async function onFormChange(event) {
     const el = event.target;
     if (!form) return;
+    if (el.id === 'sp-f-screen-sel') { form.screenId = el.value; form.actionId = ''; renderForm(); return; }
+    if (el.id === 'sp-f-action-sel') { form.actionId = el.value; return; }
     if (el.id === 'sp-f-category') {
         form.categoryId = el.value ? Number(el.value) : null;
         form.slots = new Map(); form.answers = new Map();
@@ -400,7 +422,7 @@ async function submitForm() {
         form.answers.forEach((text, id) => { if (String(text).trim()) answers[id] = String(text).trim(); });
         const res = await fetch(API, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-            body: JSON.stringify({ summary: form.summary.trim(), screen: form.screen, action: form.action, errorText: form.errorText, categoryId: cat.id, when: form.when, keepWorking: form.keep,
+            body: JSON.stringify({ summary: form.summary.trim(), screen: form.screen, action: form.action, screenId: form.screenId && form.screenId !== '__other' ? form.screenId : undefined, actionId: form.screenId && form.screenId !== '__other' && form.actionId ? form.actionId : undefined, errorText: form.errorText, categoryId: cat.id, when: form.when, keepWorking: form.keep,
                 impacts: formOptions.impacts.map((i) => ({ name: i.name, level: form.impacts.get(i.name) || 0 })), answers }),
         });
         const body = await res.json().catch(() => ({}));

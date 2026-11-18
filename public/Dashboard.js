@@ -10617,7 +10617,34 @@ function renderAssetNoticeRow(item) {
     row.append(tag, meta, desc, link);
     return row;
 }
+// Aviso de Soporte (kind 'support', ver publishSupportNotice en db.js): la Mesa de ayuda pidió un acceso para quien reportó un caso. Al administrador le sale con un enlace al caso; al jefe directo, solo el aviso.
+function renderSupportNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    tag.textContent = t(item.variant === 'access-boss' ? 'main.noticeSupportAccessBoss' : 'main.noticeSupportAccess');
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${t('menu.opTiCasosSoporte')} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    const items = (item.items || []).map((i) => (i.labelKey ? t(i.labelKey) : t(`main.supAcc_${i.code}`))).join(', ');
+    desc.textContent = `${t('main.noticeSupportAccessLine', { by: item.actorLabel || '—', target: item.targetName || '—', folio: item.folio || '', screen: item.screenKey ? t(item.screenKey) : '', items })}${item.note ? ` — ${item.note}` : ''}`;
+    row.append(tag, meta, desc);
+    if (item.variant === 'access-request' && item.caseId) {
+        const link = document.createElement('a');
+        link.href = `OpTISoporteCaso.html?id=${encodeURIComponent(item.caseId)}`;
+        link.className = 'notifications-item-meta';
+        link.textContent = t('main.noticeSupportView');
+        row.append(link);
+    }
+    return row;
+}
 function renderTreeNoticeRow(item) {
+    if (item.kind === 'support') return renderSupportNoticeRow(item);
     if (item.kind === 'asset-alert' || item.kind === 'asset-activity') return renderAssetNoticeRow(item);
     if (item.kind === 'maintenance') return renderMaintenanceNoticeRow(item);
     if (item.kind === 'calibration') return renderCalibrationNoticeRow(item);
@@ -11048,7 +11075,7 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity') row = renderTreeNoticeRow(item);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity' || item.kind === 'support') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (item.kind === 'asset-auth') row = renderAssetAuthRow(item, activeNotificationTab);

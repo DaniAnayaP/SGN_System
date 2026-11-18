@@ -3706,6 +3706,11 @@
               "permissionOnly": true
             },
             {
+              "id": "colSpContacto",
+              "labelKey": "main.colSpContacto",
+              "permissionOnly": true
+            },
+            {
               "id": "class-botones",
               "labelKey": "menu.classBotones",
               "isClassification": true,
@@ -3718,6 +3723,11 @@
                 {
                   "id": "colSpChatSend",
                   "labelKey": "main.colSpChatSend",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSpPedirAcceso",
+                  "labelKey": "main.colSpPedirAcceso",
                   "permissionOnly": true
                 }
               ]

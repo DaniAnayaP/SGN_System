@@ -14669,9 +14669,10 @@ function listSupportCases(clientId, isTestAccount, { limit = 5000 } = {}) {
 function createSupportCase(c) {
     return db.transaction(() => {
         const n = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM support_cases WHERE client_id = ?').get(c.clientId).n;
-        const id = db.prepare(`INSERT INTO support_cases (client_id, is_test_data, record_number, case_type, summary, screen_label, action_label, error_text, category_id, category_name, impacts, when_affects, keep_working,
+        const id = db.prepare(`INSERT INTO support_cases (client_id, is_test_data, record_number, case_type, summary, screen_label, action_label, screen_node, action_leaf, error_text, category_id, category_name, impacts, when_affects, keep_working,
             priority, level, answers, reporter_user_id, reporter_name, first_response_due_at)
-            VALUES (@clientId, @isTest, @n, @type, @summary, @screen, @action, @errorText, @categoryId, @categoryName, @impacts, @when, @keepWorking, @priority, @level, @answers, @reporterUserId, @reporterName, @due)`).run({
+            VALUES (@clientId, @isTest, @n, @type, @summary, @screen, @action, @screenNode, @actionLeaf, @errorText, @categoryId, @categoryName, @impacts, @when, @keepWorking, @priority, @level, @answers, @reporterUserId, @reporterName, @due)`).run({
+            screenNode: c.screenNode || '', actionLeaf: c.actionLeaf || '',
             clientId: c.clientId, isTest: c.isTestAccount ? 1 : 0, n, type: c.type || 'c', summary: c.summary, screen: c.screen || '', action: c.action || '', errorText: c.errorText || '', categoryId: c.categoryId,
             categoryName: c.categoryName || '', impacts: JSON.stringify(c.impacts || []), when: c.when, keepWorking: c.keepWorking ? 1 : 0, priority: c.priority, level: c.level, answers: JSON.stringify(c.answers || {}),
             reporterUserId: c.reporterUserId || null, reporterName: c.reporterName || '', due: c.dueAt || null,
@@ -14697,6 +14698,138 @@ function countSupportCaseEvents(caseId) {
 // La primera respuesta del equipo: se guarda una sola vez (la primera). Regresa true si esta fue la primera.
 function setSupportFirstResponse(caseId, atSql) {
     return db.prepare('UPDATE support_cases SET first_response_at = ? WHERE id = ? AND first_response_at IS NULL').run(atSql, caseId).changes > 0;
+}
+
+// ---- Primer contacto de la Mesa de ayuda: qué pantalla y qué acción era, la revisión de accesos y «lo que entendí» ----------------------------------------------------------------------
+// screen_node / action_leaf: la pantalla del sistema y lo que se quería hacer en ella (de la lista de pantallas de abajo); access_ok: NULL = sin revisar, 1 = los accesos están completos, 0 = algo no cuadra;
+// understood: lo que entendió la Mesa de ayuda de la situación (viaja con el caso; cada vez que se escribe queda un renglón en el chat).
+for (const [col, ddl] of [['screen_node', "TEXT NOT NULL DEFAULT ''"], ['action_leaf', "TEXT NOT NULL DEFAULT ''"], ['understood', "TEXT NOT NULL DEFAULT ''"], ['understood_at', 'TEXT'], ['understood_by', "TEXT NOT NULL DEFAULT ''"],
+    ['access_ok', 'INTEGER'], ['access_checked_at', 'TEXT'], ['access_checked_by', "TEXT NOT NULL DEFAULT ''"]]) {
+    if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE support_cases ADD COLUMN ${col} ${ddl}`);
+}
+// Un acceso que la Mesa de ayuda pide para quien reportó: le llega al administrador de la empresa y a su jefe directo (aviso en la campana) y queda en el chat del caso.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS support_access_requests (
+        id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+        case_id               INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+        client_id             INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        target_user_id        INTEGER,
+        requested_by_user_id  INTEGER,
+        requested_by_name     TEXT NOT NULL DEFAULT '',
+        items                 TEXT NOT NULL DEFAULT '[]',
+        note                  TEXT NOT NULL DEFAULT '',
+        created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_access_requests_case ON support_access_requests (case_id);
+`);
+// Las pantallas de las áreas (las que tienen su propio apartado en menu.json) con lo que se puede hacer en cada una: un botón (pide «Ver y operar»), modificar una columna (pide «Modificar») o un ícono. Es lo que la Mesa de ayuda
+// compara contra los accesos de quien reportó. id = «departamento/área/apartado/pantalla».
+let supportScreensCache = null;
+function supportScreenCatalog() {
+    if (supportScreensCache) return supportScreensCache;
+    const out = [];
+    for (const [key, apartados] of Object.entries(menuData.areaOverrides || {})) {
+        const [sectionId, itemId] = key.split('/');
+        for (const [categoryId, nodes] of Object.entries(apartados)) {
+            const categoryLabelKey = ((menuData.areaCategories || []).find((c) => c.id === categoryId) || {}).labelKey || '';
+            for (const node of nodes) {
+                if (!node.href || node.href === '#') continue;
+                const actions = [];
+                (node.submenu || []).forEach((s) => {
+                    if (!s.isClassification) { if (s.permissionOnly) actions.push({ id: s.id, kind: 'column', labelKey: s.labelKey, needs: 'editar', col: s.id }); return; }
+                    if (s.id === 'class-control-interno') return;
+                    (s.submenu || []).forEach((leaf) => actions.push(s.id === 'class-botones' ? { id: `${s.id}/${leaf.id}`, kind: 'button', labelKey: leaf.labelKey, needs: 'ver-y-operar', col: leaf.id } : { id: leaf.id, kind: 'column', labelKey: leaf.labelKey, needs: 'editar', col: leaf.id }));
+                });
+                (node.iconsSubmenu || []).forEach((i) => actions.push({ id: i.id, kind: 'icon', labelKey: i.labelKey, needs: 'access', col: i.id }));
+                out.push({ id: `${sectionId}/${itemId}/${categoryId}/${node.id}`, sectionId, itemId, categoryId, nodeId: node.id, submenuPrefix: `${categoryId}/${node.id}`, labelKey: node.labelKey, categoryLabelKey, actions });
+            }
+        }
+    }
+    supportScreensCache = out;
+    return out;
+}
+// Solo las de los departamentos que la empresa tiene contratados.
+function listSupportScreens(clientId) {
+    const modules = new Set(getClientModuleKeys(clientId));
+    return supportScreenCatalog().filter((s) => modules.has(s.sectionId));
+}
+function findSupportScreen(id) {
+    return supportScreenCatalog().find((s) => s.id === id) || null;
+}
+// «Accesos necesarios vs accesos del usuario»: cada renglón es algo que la pantalla y la acción necesitan, lo que la persona tiene hoy y de dónde le viene (el puesto o un permiso adicional). code: module, plan, screen, action
+// o centers; ok: lo tiene; source: plan, role, extra, limit (lo tiene guardado pero queda fuera de los límites del contrato) o none (no lo tiene). Regresa { rows, result: 'ok' | 'missing' }.
+function reviewSupportAccess({ clientId, userId, screenId, actionId }) {
+    const screen = findSupportScreen(screenId);
+    if (!screen) return null;
+    const action = actionId ? screen.actions.find((a) => a.id === actionId) : null;
+    const eff = getUserEffectiveGrants(userId);
+    const raw = getUserEffectiveGrantsRaw(userId);
+    const roleGrants = getUserJobPositionGrants(userId);
+    const extraGrants = getUserGrants(userId);
+    const roleName = (db.prepare('SELECT jp.name AS name FROM hr_workers hw JOIN job_positions jp ON jp.id = hw.job_position_id WHERE hw.user_id = ?').get(userId) || {}).name || '';
+    const path = { sectionId: screen.sectionId, itemId: screen.itemId, submenuPrefix: screen.submenuPrefix };
+    const sourceOf = (test) => (test(roleGrants) ? 'role' : (test(extraGrants) ? 'extra' : 'none'));
+    const rows = [];
+    const modules = new Set(getClientModuleKeys(clientId));
+    rows.push({ code: 'module', ok: modules.has(screen.sectionId), need: 'contracted', have: modules.has(screen.sectionId) ? 'yes' : 'no', source: 'plan' });
+    const contract = getClientContractGrants(clientId);
+    if (contract) {
+        const inPlan = isTupleGranted(contract, screen.sectionId, screen.itemId, screen.submenuPrefix);
+        rows.push({ code: 'plan', ok: inPlan, need: 'included', have: inPlan ? 'yes' : 'no', source: 'plan' });
+    }
+    const covers = (grants) => grants.some((g) => g.sectionId === screen.sectionId && (!g.itemId || (g.itemId === screen.itemId && (!g.submenuId || g.submenuId === screen.submenuPrefix || String(g.submenuId).startsWith(`${screen.submenuPrefix}/`)))));
+    const hasScreen = covers(eff);
+    rows.push({ code: 'screen', ok: hasScreen, need: 'view', have: hasScreen ? 'yes' : 'no', source: hasScreen ? sourceOf(covers) : (covers(raw) ? 'limit' : 'none'), roleName: hasScreen ? roleName : '' });
+    if (action && action.kind === 'icon') {
+        const has = (grants) => grants.some((g) => g.sectionId === screen.sectionId && g.itemId === screen.itemId && g.submenuId === `${screen.submenuPrefix}/${action.col}`);
+        const ok = has(eff);
+        rows.push({ code: 'action', kind: 'icon', labelKey: action.labelKey, ok, need: 'access', have: ok ? 'yes' : 'no', source: ok ? sourceOf(has) : (has(raw) ? 'limit' : 'none'), roleName: ok ? roleName : '' });
+    } else if (action) {
+        const base = columnSubmenuBase(path, action.col);
+        const levelOf = (grants) => getColumnGrantLevel(grants, null, action.col, path);
+        const level = levelOf(eff);
+        const okLevels = action.needs === 'editar' ? ['editar'] : ['ver-y-operar', 'editar'];
+        const ok = okLevels.includes(level);
+        const hasLevel = (grants) => grants.some((g) => g.sectionId === screen.sectionId && g.itemId === screen.itemId && okLevels.some((lv) => g.submenuId === `${base}/${lv}`));
+        rows.push({
+            code: 'action', kind: action.kind, labelKey: action.labelKey, ok, need: action.needs === 'editar' ? 'edit' : 'operate', have: { 'solo-ver': 'view', 'ver-y-operar': 'operate', editar: 'edit' }[level] || 'view',
+            source: ok ? sourceOf(hasLevel) : (hasLevel(raw) ? 'limit' : 'none'), roleName: ok ? roleName : '',
+        });
+    }
+    const assignment = hrWorkerAssignmentOf(userId);
+    if (assignment) rows.push({ code: 'centers', ok: assignment.allowedCenters.size > 0, need: 'one', have: assignment.allowedCenters.size, source: 'role', roleName });
+    return { rows, result: rows.every((r) => r.ok) ? 'ok' : 'missing', roleName };
+}
+function updateSupportCaseContext(id, { screenNode, actionLeaf, screenLabel, actionLabel }) {
+    db.prepare('UPDATE support_cases SET screen_node = ?, action_leaf = ?, screen_label = ?, action_label = ? WHERE id = ?').run(screenNode, actionLeaf, screenLabel, actionLabel, id);
+}
+function setSupportAccessCheck(id, ok, by, atSql) {
+    db.prepare('UPDATE support_cases SET access_ok = ?, access_checked_at = ?, access_checked_by = ? WHERE id = ?').run(ok === null ? null : (ok ? 1 : 0), atSql, by || '', id);
+}
+function setSupportUnderstood(id, text, by, atSql) {
+    db.prepare('UPDATE support_cases SET understood = ?, understood_at = ?, understood_by = ? WHERE id = ?').run(text, atSql, by || '', id);
+}
+function createSupportAccessRequest(r) {
+    return db.prepare('INSERT INTO support_access_requests (case_id, client_id, target_user_id, requested_by_user_id, requested_by_name, items, note) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(r.caseId, r.clientId, r.targetUserId || null, r.requestedByUserId || null, r.requestedByName || '', JSON.stringify(r.items || []), r.note || '').lastInsertRowid;
+}
+function listSupportAccessRequests(caseId) {
+    return db.prepare('SELECT id, target_user_id, requested_by_name, items, note, created_at FROM support_access_requests WHERE case_id = ? ORDER BY id DESC').all(caseId);
+}
+// El aviso de la campana (pestaña Avisos): una fila por persona en saas_tree_notices con kind 'support'.
+function publishSupportNotice({ recipients, payload, actorUserId, actorLabel }) {
+    const ids = [...new Set((recipients || []).filter((id) => Number.isInteger(id)))];
+    if (!ids.length) return [];
+    const json = JSON.stringify(payload);
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'support', 'data', ?, ?, ?)");
+    db.transaction(() => ids.forEach((id) => insert.run(id, json, actorUserId == null ? null : actorUserId, actorLabel || '')))();
+    return ids;
+}
+// A quién le llega un acceso pedido: los administradores de la empresa y el jefe directo de la persona que lo necesita.
+function listSupportAccessRecipients(clientId, targetUserId, isTestAccount) {
+    const admins = db.prepare('SELECT id FROM users WHERE client_id = ? AND is_client_admin = 1 AND active != 0 AND is_test_account = ?').all(clientId, isTestAccount ? 1 : 0).map((u) => u.id);
+    const boss = targetUserId ? resolveDirectSupervisorUserId(targetUserId) : null;
+    return { admins, boss };
 }
 function countSupportCaseFiles(caseId) {
     return db.prepare('SELECT COUNT(*) AS n FROM support_case_files WHERE case_id = ?').get(caseId).n;
@@ -14953,6 +15086,7 @@ module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
+    listSupportScreens, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
     listTemperatureActivity, hasTemperatureActivityBefore,
     getUserExclusions, setUserExclusions, applyUserExclusions,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,
