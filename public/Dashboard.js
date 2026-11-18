@@ -1439,14 +1439,15 @@ function applyScreenGrantFilter(data) {
             if (s.id !== selectedDepartment) return s;
             return {
                 ...s,
+                // Los seis apartados (Catálogos, Operaciones, Admin, Gestión, Reportes y Material de Apoyo) salen SIEMPRE en toda área, aunque esa persona no tenga ninguna pantalla en alguno (Daniel, 2026-11-18): el vacío
+                // sale atenuado y sin pantallas (empty), no se esconde.
                 items: s.items
-                    .map((cat) => ({
-                        ...cat,
-                        submenu: groupSidebarScreens((cat.submenu || []).filter((pantalla) => (
+                    .map((cat) => {
+                        const submenu = groupSidebarScreens((cat.submenu || []).filter((pantalla) => (
                             pantalla.permissionOnly || hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.id}`)
-                        )), cat.id),
-                    }))
-                    .filter((cat) => (cat.submenu || []).length > 0),
+                        )), cat.id);
+                        return { ...cat, submenu, empty: !submenu.some((p) => !p.permissionOnly) };
+                    }),
             };
         }),
     };
@@ -1658,10 +1659,16 @@ function buildMenuItem(item) {
     const navigable = hasNavigableChildren(item.submenu);
     li.className = 'menu-item' + (navigable ? ' menu-item-dropdown' : ' menu-item-static');
     if (item.active) li.classList.add('active');
+    // Un apartado de un área sin ninguna pantalla para esta persona (applyScreenGrantFilter) se queda visible pero atenuado y sin ir a ningún lado.
+    if (item.empty) li.classList.add('menu-item-empty');
 
     const a = document.createElement('a');
     a.href = item.href || '#';
     a.className = 'menu-link';
+    if (item.empty) {
+        a.setAttribute('aria-disabled', 'true');
+        a.addEventListener('click', (event) => event.preventDefault());
+    }
 
     const icon = document.createElement('i');
     icon.className = `bx ${item.icon}`;

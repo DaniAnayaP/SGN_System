@@ -643,7 +643,12 @@
         border-radius: 0.3rem;
         white-space: nowrap;
     }
-    .menu-item:hover .menu-link, 
+    /* Apartado del área sin ninguna pantalla para esta persona: visible, atenuado y sin acción */
+    .menu .menu-item-empty .menu-link{
+        opacity: 0.5;
+        cursor: default;
+    }
+    .menu-item:hover .menu-link,
     .sub-menu .sub-menu-link:hover,
     .menu-item.active .menu-link{
         color: var(--color-text-primary);
