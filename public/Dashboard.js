@@ -1240,8 +1240,11 @@ let selectedDepartment = getStoredDepartment();
 // Only the always-visible sections + whichever department is selected.
 // Sin departamento elegido (y habiendo departamentos entre los que elegir) la barra lateral de una cuenta de un cliente no muestra NINGUNA opción, ni siquiera Inicio, Panel y Tablero (ni, por lo tanto, el buscador): todo cuelga de un departamento
 // y hasta que se elige uno no hay nada que mostrar. Si el cliente no tiene ningún departamento entre los que elegir se deja como estaba (si no, la cuenta se quedaría sin ninguna opción y sin cómo elegir). El personal SaaS no tiene selector de departamento.
+// Lo mismo con el ÁREA (Daniel, 2026-11-18): con el departamento elegido pero sin área tampoco sale nada (ni Inicio, Panel y Tablero): esos tres aparecen cuando se elige un área, los que esa persona tenga asignados. Si el
+// departamento no tiene ningún área entre las que elegir se deja como estaba.
 function applyDepartmentFilter(data) {
-    if (currentRole !== 'admin' && !selectedDepartment && availableDepartments.length > 0) {
+    if (currentRole !== 'admin' && availableDepartments.length > 0
+        && (!selectedDepartment || (!selectedArea && availableAreasForDepartment(selectedDepartment).length > 0))) {
         return { ...data, sections: [] };
     }
     return {
