@@ -12,6 +12,7 @@ const emptyMsg = document.getElementById('cc-empty');
 
 let costCenters = [];
 let limit = 0;
+let sitesLimit = 0; // el contrato lleva dos límites: centros de costos (limit) y sitios (sitesLimit)
 let newBtn = null;
 
 // Same spot/style as Registro Combustible's own "+ Nuevo Registro" (see
@@ -224,6 +225,7 @@ async function loadCostCenters() {
         const data = await res.json();
         costCenters = data.costCenters || [];
         limit = data.limit || 0;
+        sitesLimit = data.sitesLimit || 0;
         renderCostCenters();
     } catch {
         Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
@@ -654,7 +656,8 @@ async function saveCcModal() {
             const body = await res.json().catch(() => ({}));
             modalError.textContent = body.message === 'Cost center limit reached for this client.'
                 ? Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit })
-                : (body.message === 'That site is already in another state or locality.' ? Dashboard.t('business.ccSiteOtherPlace') : (body.message || Dashboard.t('admin.saveError')));
+                : (body.message === 'Site limit reached for this client.' ? Dashboard.t('business.ccSiteLimitReached', { limit: sitesLimit })
+                    : (body.message === 'That site is already in another state or locality.' ? Dashboard.t('business.ccSiteOtherPlace') : (body.message || Dashboard.t('admin.saveError'))));
             modalError.hidden = false;
             return;
         }

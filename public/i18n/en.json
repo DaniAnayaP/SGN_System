@@ -626,6 +626,8 @@
     "addenda": "Addenda",
     "addendaTitle": "Addenda",
     "extraCostCenters": "Extra cost centers",
+    "extraSites": "Extra sites",
+    "sitesLimit": "Allowed sites",
     "extraModulesLabel": "Extra modules (not included in the plan)",
     "noExtraModulesAvailable": "This plan already includes every module.",
     "addendaNoPlan": "This client has no plan assigned yet — extras still apply on top of nothing until one is chosen.",
@@ -1413,6 +1415,7 @@
     "ccGeoCodeInvalid3": "The code is 3 letters.",
     "ccGeoCodeInvalid4": "The code is 4 letters.",
     "ccSiteCodeInvalid": "The site code is 5 letters.",
+    "ccSiteLimitReached": "You've reached your plan's site limit ({limit}). Pick one of your sites or contact GEIPSA to hire more.",
     "ccSiteOtherPlace": "That site already exists in another State or Locality. The cost centers of one site must be in the same State and the same Locality.",
     "ccNeedGeoCodes": "The chosen State and Locality need their short code. Type it and save it below each one.",
     "ccNickname": "Nickname",
@@ -6678,6 +6681,14 @@
     "habMatriz": {
       "what": "Check the area and the places where the code should apply. «All» also applies to the area's new sites. A site with several cost centers has its «Whole site» box (it also applies to its new centers) and one box per center, to enable only some of them.",
       "example": "you check Distribution Center in all its sites and Point of Sale only in the Checkout center of PV North."
+    },
+    "planSitesLimit": {
+      "what": "How many sites (physical places) a client on this plan can have. It is a separate limit from the cost center one: a site can have several centers, and adding another center to an existing site does not use up a site. It is frozen when the plan is activated.",
+      "example": "a plan with 2 sites and 6 cost centers allows, for example, 2 DCs with 3 centers each."
+    },
+    "clientExtraSites": {
+      "what": "Sites this client hired on top of the ones in its plan. They add to the plan's sites for the site limit (extra cost centers are handled separately).",
+      "example": "the plan brings 2 sites and 1 extra is hired: the client can have 3 sites."
     },
     "permBulk": {
       "what": "On a level with one part on and another off (the «−»), the ✓✓ button enables everything inside and the ✕ button removes everything sold as an additional (what the plan gives is not removed). You must save for the change to stay.",

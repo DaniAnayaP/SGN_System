@@ -51,6 +51,7 @@ const createdAtField = document.getElementById('plan-created-at');
 const createdByField = document.getElementById('plan-created-by');
 const endDateField = document.getElementById('plan-end-date');
 const costCentersLimitField = document.getElementById('plan-cost-centers-limit');
+const sitesLimitField = document.getElementById('plan-sites-limit');
 const currencyField = document.getElementById('plan-currency');
 const costPerCostCenterField = document.getElementById('plan-cost-per-cost-center');
 const businessSectorField = document.getElementById('plan-sector');
@@ -441,6 +442,7 @@ function openEditModal(plan) {
     createdByField.value = plan.createdBy || '';
     endDateField.value = plan.endDate || '';
     costCentersLimitField.value = plan.costCentersLimit || 0;
+    sitesLimitField.value = plan.sitesLimit || 0;
     currencyField.value = plan.currency || 'MXN';
     costPerCostCenterField.value = plan.costPerCostCenter || 0;
     editOnlyFields.hidden = false;
@@ -457,6 +459,7 @@ function openCreateModal() {
     form.reset();
     idField.value = '';
     costCentersLimitField.value = 0;
+    sitesLimitField.value = 0;
     editOnlyFields.hidden = true;
     editModalTitle.textContent = Dashboard.t('admin.addPlan');
     submitBtn.textContent = Dashboard.t('admin.addPlan');
@@ -508,6 +511,7 @@ form.addEventListener('submit', async (event) => {
     const description = descriptionField.value.trim();
     const businessSectorId = businessSectorField.value ? Number(businessSectorField.value) : null;
     const costCentersLimit = Math.max(0, parseInt(costCentersLimitField.value, 10) || 0);
+    const sitesLimit = Math.max(0, parseInt(sitesLimitField.value, 10) || 0);
     const createdAt = createdAtField.value || null;
     const createdBy = createdByField.value.trim();
     const endDate = endDateField.value || null;
@@ -526,7 +530,7 @@ form.addEventListener('submit', async (event) => {
             method: isCreate ? 'POST' : 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ name, description, businessSectorId, costCentersLimit, createdAt, createdBy, endDate, currency, costPerCostCenter }),
+            body: JSON.stringify({ name, description, businessSectorId, costCentersLimit, sitesLimit, createdAt, createdBy, endDate, currency, costPerCostCenter }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));

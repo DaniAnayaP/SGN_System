@@ -1107,6 +1107,28 @@ if (!planColumns.some((c) => c.name === 'currency')) {
 if (!planColumns.some((c) => c.name === 'cost_per_cost_center')) {
     db.exec('ALTER TABLE plans ADD COLUMN cost_per_cost_center REAL NOT NULL DEFAULT 0');
 }
+// Sitios contratados: un límite APARTE del de centros de costos (la cadena es Sitio > Centro de costos y un sitio puede tener varios centros; el contrato lleva los dos límites). Un plan trae su límite de sitios (se congela al
+// activarlo, igual que el de centros); un cliente trae el aplicado (sites_limit = el del plan + los sitios extra, extra_sites). Hasta hoy sitio y centro eran 1 a 1, así que lo que ya estaba contratado se siembra con el mismo número (una sola vez).
+if (!planColumns.some((c) => c.name === 'sites_limit')) {
+    db.exec('ALTER TABLE plans ADD COLUMN sites_limit INTEGER NOT NULL DEFAULT 0');
+}
+if (!clientColumns.some((c) => c.name === 'sites_limit')) {
+    db.exec('ALTER TABLE clients ADD COLUMN sites_limit INTEGER NOT NULL DEFAULT 0');
+}
+if (!clientColumns.some((c) => c.name === 'extra_sites')) {
+    db.exec('ALTER TABLE clients ADD COLUMN extra_sites INTEGER NOT NULL DEFAULT 0');
+}
+{
+    const SITES_LIMIT_SEED_KEY = 'seed-sites-limit-v1';
+    if (!db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SITES_LIMIT_SEED_KEY)) {
+        db.transaction(() => {
+            db.exec('UPDATE plans SET sites_limit = cost_centers_limit');
+            db.exec('UPDATE clients SET sites_limit = cost_centers_limit, extra_sites = extra_cost_centers');
+            db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(SITES_LIMIT_SEED_KEY);
+        })();
+        console.log('[db] Sitios contratados: el límite de sitios de planes y clientes arranca igual al de centros de costos (one-time).');
+    }
+}
 // DEPRECATED: a Plan no longer decides a client's mobile-app experience —
 // that's now clients.sector_negocio, matched against saas_apps.sector (see
 // Nuestras APPs redesign). Column kept (never drop columns in this file) but
@@ -4204,21 +4226,28 @@ function setClientCostCentersLimit(clientId, limit) {
     db.prepare('UPDATE clients SET cost_centers_limit = ? WHERE id = ?').run(limit, clientId);
     return getClientById(clientId).cost_centers_limit;
 }
+// Cuántos SITIOS puede tener el cliente (el aplicado: el del plan + los sitios extra). Se cuenta con countSites.
+function setClientSitesLimit(clientId, limit) {
+    db.prepare('UPDATE clients SET sites_limit = ? WHERE id = ?').run(limit, clientId);
+    return getClientById(clientId).sites_limit;
+}
 
 // --- Anexos: per-client extras on top of their plan --------------------------
 function getClientAddenda(clientId) {
-    const row = db.prepare('SELECT extra_cost_centers, extra_modules FROM clients WHERE id = ?').get(clientId);
+    const row = db.prepare('SELECT extra_cost_centers, extra_sites, extra_modules FROM clients WHERE id = ?').get(clientId);
     if (!row) return null;
     let extraModules = [];
     try { extraModules = JSON.parse(row.extra_modules) || []; } catch { extraModules = []; }
-    return { extraCostCenters: row.extra_cost_centers, extraModules };
+    return { extraCostCenters: row.extra_cost_centers, extraSites: row.extra_sites || 0, extraModules };
 }
 
-function setClientAddenda(clientId, { extraCostCenters, extraModules }) {
-    db.prepare('UPDATE clients SET extra_cost_centers = @extraCostCenters, extra_modules = @extraModules WHERE id = @id')
+// extraSites en undefined deja los sitios extra como estaban (los que solo editan módulos no los tocan).
+function setClientAddenda(clientId, { extraCostCenters, extraSites, extraModules }) {
+    db.prepare('UPDATE clients SET extra_cost_centers = @extraCostCenters, extra_sites = @extraSites, extra_modules = @extraModules WHERE id = @id')
         .run({
             id: clientId,
             extraCostCenters: extraCostCenters || 0,
+            extraSites: extraSites === undefined ? getClientAddenda(clientId).extraSites : (extraSites || 0),
             extraModules: JSON.stringify(extraModules || []),
         });
     return getClientAddenda(clientId);
@@ -4245,6 +4274,14 @@ function countSites(clientId, forTestAccount = false) {
     return db.prepare("SELECT COUNT(DISTINCT site_code) AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND site_code <> ''").get(clientId, forTestAccount ? 1 : 0).n;
 }
 
+// ¿Dejar este centro en este sitio pasaría del límite de SITIOS contratados? Cuenta los sitios que quedan sin este centro (excludeId) y suma el sitio nuevo solo si ningún otro centro activo ya lo usa: meter otro centro en un sitio que ya existe nunca gasta un sitio.
+function wouldExceedSitesLimit(clientId, forTestAccount, siteCode, limit, excludeId = 0) {
+    if (!siteCode) return false;
+    const lane = forTestAccount ? 1 : 0;
+    const others = db.prepare("SELECT COUNT(DISTINCT site_code) AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND site_code <> '' AND id != ?").get(clientId, lane, excludeId || 0).n;
+    const joinsExisting = !!db.prepare("SELECT 1 FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND site_code = ? AND id != ? LIMIT 1").get(clientId, lane, siteCode, excludeId || 0);
+    return others + (joinsExisting ? 0 : 1) > (Number(limit) || 0);
+}
 // Un sitio es UN lugar físico: si otro centro del cliente ya usa ese código de sitio, el centro nuevo (o el que se edita) debe estar en el mismo Estado y la misma Localidad, porque el localizador se arma con Estado + Localidad + sitio. Devuelve ese otro centro si choca, o null. excludeId deja fuera al propio centro al editar.
 function findSiteInOtherPlace(clientId, forTestAccount, siteCode, stateId, localityId, excludeId = 0) {
     if (!siteCode) return null;
@@ -9733,7 +9770,7 @@ seedSaasScreenActionGrants();
 function deserializePlan(row) {
     if (!row) return row;
     const {
-        modules, cost_centers_limit, created_by, end_date, locked, cost_per_cost_center, app_id, business_sector_id,
+        modules, cost_centers_limit, sites_limit, created_by, end_date, locked, cost_per_cost_center, app_id, business_sector_id,
         cost_adjust_type, cost_adjust_value_web, cost_adjust_value_app, ...rest
     } = row;
     let parsedModules = [];
@@ -9742,6 +9779,7 @@ function deserializePlan(row) {
         ...rest, // currency passes through as-is (already camelCase-compatible column name)
         modules: parsedModules,
         costCentersLimit: cost_centers_limit,
+        sitesLimit: sites_limit || 0,
         createdBy: created_by || '',
         endDate: end_date || '',
         locked: !!locked,
@@ -9776,16 +9814,16 @@ function getPlanByName(name) {
 // that sector's current sector_grants (see the migration comment above) --
 // after this, the two evolve independently: editing the Sector's own
 // defaults later never reaches back into a Plan that already copied them.
-function createPlan({ name, description, modules, costCentersLimit, createdBy, businessSectorId }) {
+function createPlan({ name, description, modules, costCentersLimit, sitesLimit, createdBy, businessSectorId }) {
     const create = db.transaction(() => {
         const result = db
             .prepare(`
-                INSERT INTO plans (name, description, modules, cost_centers_limit, created_by, status, business_sector_id)
-                VALUES (@name, @description, @modules, @costCentersLimit, @createdBy, 'revision', @businessSectorId)
+                INSERT INTO plans (name, description, modules, cost_centers_limit, sites_limit, created_by, status, business_sector_id)
+                VALUES (@name, @description, @modules, @costCentersLimit, @sitesLimit, @createdBy, 'revision', @businessSectorId)
             `)
             .run({
                 name, description: description || '',
-                modules: JSON.stringify(modules || []), costCentersLimit: costCentersLimit || 0,
+                modules: JSON.stringify(modules || []), costCentersLimit: costCentersLimit || 0, sitesLimit: sitesLimit || 0,
                 createdBy: createdBy || '', businessSectorId: businessSectorId || null,
             });
         if (businessSectorId) {
@@ -9805,13 +9843,13 @@ function createPlan({ name, description, modules, costCentersLimit, createdBy, b
 // and currency/costPerCostCenter are pricing, a separate ongoing commercial
 // concern from the frozen access-tree definition (see Costo Accesos-Permisos).
 function updatePlan(id, {
-    name, description, modules, costCentersLimit, status, endDate, currency, costPerCostCenter,
+    name, description, modules, costCentersLimit, sitesLimit, status, endDate, currency, costPerCostCenter,
     createdAt, createdBy, businessSectorId,
 }) {
     const existing = getPlanById(id);
     db.prepare(`
         UPDATE plans SET name = @name, description = @description, modules = @modules,
-            cost_centers_limit = @costCentersLimit, status = @status, end_date = @endDate,
+            cost_centers_limit = @costCentersLimit, sites_limit = @sitesLimit, status = @status, end_date = @endDate,
             currency = @currency, cost_per_cost_center = @costPerCostCenter,
             created_at = @createdAt, created_by = @createdBy, business_sector_id = @businessSectorId
         WHERE id = @id
@@ -9821,6 +9859,7 @@ function updatePlan(id, {
         description: (description ?? existing.description) || '',
         modules: JSON.stringify(modules ?? existing.modules ?? []),
         costCentersLimit: costCentersLimit ?? existing.costCentersLimit ?? 0,
+        sitesLimit: sitesLimit ?? existing.sitesLimit ?? 0,
         status: status ?? existing.status ?? 'active',
         endDate: endDate ?? existing.end_date ?? null,
         currency: currency ?? existing.currency ?? 'MXN',
@@ -16237,6 +16276,7 @@ module.exports = {
     getClientModules,
     setClientModules,
     setClientCostCentersLimit,
+    setClientSitesLimit,
     getClientAddenda,
     setClientAddenda,
     getClientModuleKeys,
@@ -16244,6 +16284,7 @@ module.exports = {
     countCostCenters,
     countSites,
     findSiteInOtherPlace,
+    wouldExceedSitesLimit,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,

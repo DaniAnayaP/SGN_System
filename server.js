@@ -60,6 +60,7 @@ const {
     getClientModules,
     setClientModules,
     setClientCostCentersLimit,
+    setClientSitesLimit,
     getClientAddenda,
     setClientAddenda,
     getClientModuleKeys,
@@ -67,6 +68,7 @@ const {
     countCostCenters,
     countSites,
     findSiteInOtherPlace,
+    wouldExceedSitesLimit,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,
@@ -1375,6 +1377,7 @@ app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
         const plan = client.plan ? getPlanByName(client.plan) : null;
         const planAccessPermissionsCost = plan ? computeAccessCostTotal(plan.id) : 0;
         const planCostCentersLimit = plan ? plan.costCentersLimit : 0;
+        const planSitesLimit = plan ? plan.sitesLimit : 0;
         const planCostPerCostCenter = plan ? plan.costPerCostCenter : 0;
         const planCurrency = plan ? plan.currency : 'MXN';
         const additionalCostCentersPayment = (client.extra_cost_centers || 0) * planCostPerCostCenter;
@@ -1385,6 +1388,7 @@ app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
             sitesUsed: countSites(client.id),
             planAccessPermissionsCost,
             planCostCentersLimit,
+            planSitesLimit,
             planCostPerCostCenter,
             planCurrency,
             contractedCostComputed: planAccessPermissionsCost + (planCostCentersLimit * planCostPerCostCenter),
@@ -1473,6 +1477,7 @@ function applyEffectiveEntitlements(clientId) {
     const plan = client.plan ? getPlanByName(client.plan) : null;
     const baseModules = plan ? plan.modules : [];
     const baseCostCenters = plan ? plan.costCentersLimit : 0;
+    const baseSites = plan ? plan.sitesLimit : 0;
     const addenda = getClientAddenda(clientId);
     const moduleStates = MODULE_CATALOG.map((m) => ({
         key: m.key,
@@ -1480,6 +1485,7 @@ function applyEffectiveEntitlements(clientId) {
     }));
     setClientModules(clientId, moduleStates);
     setClientCostCentersLimit(clientId, baseCostCenters + addenda.extraCostCenters);
+    setClientSitesLimit(clientId, baseSites + addenda.extraSites);
 }
 
 // Una vez al arrancar: un cliente con adicionales guardados antes de que un adicional abriera su departamento con uno solo asignado no tenía el
@@ -1645,17 +1651,21 @@ app.patch('/api/admin/clients/:id', requireAuth, requireAdmin, async (req, res) 
     // the main client save now. extraModules is preserved as-is since there
     // is no remaining UI to edit it directly (it's only ever touched by
     // syncClientModulesFromPermissionGrants).
-    const { extraCostCenters } = req.body || {};
+    const { extraCostCenters, extraSites } = req.body || {};
     if (extraCostCenters !== undefined && (!Number.isInteger(extraCostCenters) || extraCostCenters < 0)) {
         return res.status(400).json({ message: 'extraCostCenters must be a non-negative integer.' });
+    }
+    if (extraSites !== undefined && (!Number.isInteger(extraSites) || extraSites < 0)) {
+        return res.status(400).json({ message: 'extraSites must be a non-negative integer.' });
     }
     // updateClient no tolera un status ausente (la columna es NOT NULL): un guardado parcial tumbaba el servidor entero. Sin status, se queda el que tiene.
     const clientFields = extractClientFields(req.body);
     if (clientFields.status === undefined) clientFields.status = existing.status;
     const client = updateClient(req.params.id, clientFields);
     logClientFieldChanges(req, existing, client);
-    if (extraCostCenters !== undefined) {
-        setClientAddenda(req.params.id, { extraCostCenters, extraModules: getClientAddenda(req.params.id).extraModules });
+    if (extraCostCenters !== undefined || extraSites !== undefined) {
+        const addenda = getClientAddenda(req.params.id);
+        setClientAddenda(req.params.id, { extraCostCenters: extraCostCenters !== undefined ? extraCostCenters : addenda.extraCostCenters, extraSites: extraSites !== undefined ? extraSites : addenda.extraSites, extraModules: addenda.extraModules });
     }
     applyEffectiveEntitlements(client.id);
     const { generatedAdmin, generatedTrainingAccount } = await applyClientLifecycle(client);
@@ -2055,11 +2065,14 @@ app.put('/api/admin/module-costs', requireAuth, requireAdmin, (req, res) => {
 // paquete" field in Clientes Nuevos. Not tied to module entitlements —
 // clients.plan just stores the chosen name as free text (see db.js).
 function validatePlanBody(body) {
-    const { name, modules, costCentersLimit, createdAt } = body || {};
+    const { name, modules, costCentersLimit, sitesLimit, createdAt } = body || {};
     if (!name || !name.trim()) return 'name is required.';
     if (modules !== undefined && !Array.isArray(modules)) return 'modules must be an array.';
     if (costCentersLimit !== undefined && (!Number.isInteger(costCentersLimit) || costCentersLimit < 0)) {
         return 'costCentersLimit must be a non-negative integer.';
+    }
+    if (sitesLimit !== undefined && (!Number.isInteger(sitesLimit) || sitesLimit < 0)) {
+        return 'sitesLimit must be a non-negative integer.';
     }
     if (createdAt !== undefined && createdAt !== null && (typeof createdAt !== 'string' || !DATE_RE.test(createdAt))) {
         return 'createdAt must be a date in YYYY-MM-DD format.';
@@ -2097,11 +2110,11 @@ app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
     }
     const error = validatePlanBody(req.body);
     if (error) return res.status(400).json({ message: error });
-    const { name, description, modules, costCentersLimit, businessSectorId } = req.body;
+    const { name, description, modules, costCentersLimit, sitesLimit, businessSectorId } = req.body;
     try {
         const plan = createPlan({
             name: name.trim(), description,
-            modules: sanitizePlanModules(modules), costCentersLimit: costCentersLimit || 0,
+            modules: sanitizePlanModules(modules), costCentersLimit: costCentersLimit || 0, sitesLimit: sitesLimit || 0,
             createdBy: `${req.user.username} - ${req.user.name}`, businessSectorId: businessSectorId || null,
         });
         logPlanChange({ planId: plan.id, action: 'create', changedBy: changedByLabel(req) });
@@ -2161,7 +2174,7 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
     // costPerCostCenter) — always allowed, even locked. Pricing is a
     // separate, ongoing commercial concern from the frozen access-tree
     // definition (see Costo Accesos-Permisos) — never gated by `locked`.
-    const isDefinitionChange = ['name', 'description', 'modules', 'costCentersLimit', 'createdAt', 'createdBy', 'businessSectorId']
+    const isDefinitionChange = ['name', 'description', 'modules', 'costCentersLimit', 'sitesLimit', 'createdAt', 'createdBy', 'businessSectorId']
         .some((k) => Object.prototype.hasOwnProperty.call(req.body || {}, k));
     if (isDefinitionChange && existing.locked && !DEV_MODE_ALLOW_LOCKED_PLAN_EDITS) {
         return res.status(409).json({ message: 'Este plan ya fue guardado y no puede modificarse.' });
@@ -2170,13 +2183,14 @@ app.patch('/api/admin/plans/:id', requireAuth, requireAdmin, (req, res) => {
         const error = validatePlanBody({ ...existing, ...req.body });
         if (error) return res.status(400).json({ message: error });
     }
-    const { name, description, modules, costCentersLimit, businessSectorId } = req.body;
+    const { name, description, modules, costCentersLimit, sitesLimit, businessSectorId } = req.body;
     try {
         const plan = updatePlan(req.params.id, {
             name: name != null ? name.trim() : undefined,
             description,
             modules: modules != null ? sanitizePlanModules(modules) : undefined,
             costCentersLimit,
+            sitesLimit,
             status,
             endDate,
             currency,
@@ -4822,6 +4836,8 @@ app.get('/api/business/cost-centers', requireAuth, (req, res) => {
     res.json({
         costCenters: listCostCenters(req.user.clientId, req.user.isTestAccount).map((cc) => mapCostCenter(cc, client.company_name)),
         limit: client.cost_centers_limit,
+        sitesLimit: client.sites_limit,
+        sitesUsed: countSites(req.user.clientId, req.user.isTestAccount),
         siteReady: hasCompleteCostCenter(req.user.clientId, req.user.isTestAccount),
     });
 });
@@ -4837,6 +4853,10 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
     const siteCode = normalizeShortCode(req.body.siteCode, SHORT_CODE_LENGTH.site);
     if (findSiteInOtherPlace(req.user.clientId, req.user.isTestAccount, siteCode, stateId, localityId)) {
         return res.status(409).json({ message: 'That site is already in another state or locality.' });
+    }
+    // el contrato lleva dos límites: centros de costos (arriba) y SITIOS; un centro nuevo en un sitio que ya existe no gasta un sitio
+    if (wouldExceedSitesLimit(req.user.clientId, req.user.isTestAccount, siteCode, client.sites_limit)) {
+        return res.status(409).json({ message: 'Site limit reached for this client.' });
     }
     try {
         const costCenter = createCostCenter({
@@ -4867,6 +4887,10 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     const siteCode = normalizeShortCode(req.body.siteCode, SHORT_CODE_LENGTH.site);
     if (findSiteInOtherPlace(req.user.clientId, req.user.isTestAccount, siteCode, stateId, localityId, existing.id)) {
         return res.status(409).json({ message: 'That site is already in another state or locality.' });
+    }
+    // pasar el centro a un sitio nuevo no puede dejar al cliente con más sitios de los contratados (si el centro ya era el único de su sitio, ese sitio se libera)
+    if ((existing.site_code || '') !== siteCode && wouldExceedSitesLimit(req.user.clientId, req.user.isTestAccount, siteCode, getClientById(req.user.clientId).sites_limit, existing.id)) {
+        return res.status(409).json({ message: 'Site limit reached for this client.' });
     }
     try {
         const costCenter = updateCostCenter(req.params.id, req.user.clientId, {

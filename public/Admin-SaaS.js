@@ -49,6 +49,7 @@ const contractedCostDisplay = document.getElementById('client-contracted-cost-di
 const initialPaymentField = document.getElementById('client-initial-payment');
 const monthlyPaymentField = document.getElementById('client-monthly-payment');
 const extraCostCentersField = document.getElementById('client-extra-cost-centers');
+const extraSitesField = document.getElementById('client-extra-sites');
 const contractInput = document.getElementById('client-contract');
 const contractDataField = document.getElementById('client-contract-data');
 const contractFilenameField = document.getElementById('client-contract-filename');
@@ -450,10 +451,11 @@ function renderClients() {
         const tdAnexoChanges = document.createElement('td');
         tdAnexoChanges.appendChild(iconButton('bx-history', Dashboard.t('admin.anexoChanges'), () => openAnexoChangesModal(client)));
 
-        const planLimit = client.planCostCentersLimit ?? 0;
-        const extraCC = client.extra_cost_centers || 0;
+        // «Sitios Contratados»: los del plan + los sitios extra del cliente (el contrato lleva también un límite aparte de centros de costos, que se edita en el plan y en «Centros de costo extra»)
+        const planLimit = client.planSitesLimit ?? 0;
+        const extraSites = client.extra_sites || 0;
         const tdCostCentersContracted = textCell(
-            extraCC > 0 ? Dashboard.t('admin.costCentersContractedWithExtra', { planLimit, extra: extraCC }) : String(planLimit),
+            extraSites > 0 ? Dashboard.t('admin.costCentersContractedWithExtra', { planLimit, extra: extraSites }) : String(planLimit),
         );
 
         const months = contractTermMonths(client.contract_start_date, client.contract_end_date);
@@ -548,7 +550,7 @@ function renderClients() {
             textCell(formatMoney(client.contractedCostComputed)),
             textCell(formatMoney(client.initial_payment)),
             textCell(formatMoney(client.monthly_payment)),
-            textCell(`${client.sitesUsed ?? 0} / ${client.cost_centers_limit ?? 0}`),
+            textCell(`${client.sitesUsed ?? 0} / ${client.sites_limit ?? 0}`),
             tdCostCentersContracted,
             tdAnexoChanges,
             textCell(client.contract_registered_date),
@@ -733,6 +735,7 @@ function startEdit(client) {
     initialPaymentField.value = client.initial_payment || '';
     monthlyPaymentField.value = client.monthly_payment || '';
     extraCostCentersField.value = client.extra_cost_centers || 0;
+    extraSitesField.value = client.extra_sites || 0;
     setContractPreview(client.contract_file_data_url || '', client.contract_file_name || '');
     setContractWordPreview(client.contract_word_data_url || '', client.contract_word_file_name || '');
     contractedCostDisplay.textContent = client.contractedCostComputed != null ? formatMoney(client.contractedCostComputed) : '—';
@@ -761,6 +764,7 @@ function openCreateClientModal() {
     paletteWidget.setPalette(null);
     contractedCostDisplay.textContent = '—';
     extraCostCentersField.value = 0;
+    extraSitesField.value = 0;
     clientEditModalTitle.textContent = Dashboard.t('admin.addClient');
     submitBtn.textContent = Dashboard.t('admin.addClient');
     clearError();
@@ -910,6 +914,7 @@ form.addEventListener('submit', async (event) => {
         initialPayment: initialPaymentField.value ? Number(initialPaymentField.value) : 0,
         monthlyPayment: monthlyPaymentField.value ? Number(monthlyPaymentField.value) : 0,
         extraCostCenters: Math.max(0, parseInt(extraCostCentersField.value, 10) || 0),
+        extraSites: Math.max(0, parseInt(extraSitesField.value, 10) || 0),
     };
 
     const editingId = idField.value;

@@ -626,6 +626,8 @@
     "addenda": "Anexos",
     "addendaTitle": "Anexos",
     "extraCostCenters": "Centros de costo extra",
+    "extraSites": "Sitios extra",
+    "sitesLimit": "Sitios permitidos",
     "extraModulesLabel": "Módulos extra (no incluidos en el plan)",
     "noExtraModulesAvailable": "Este plan ya incluye todos los módulos.",
     "addendaNoPlan": "Este cliente aún no tiene un plan asignado — los extras se suman sobre cero hasta que elijas uno.",
@@ -1412,6 +1414,7 @@
     "ccGeoCodeInvalid3": "El código son 3 letras.",
     "ccGeoCodeInvalid4": "El código son 4 letras.",
     "ccSiteCodeInvalid": "El código del sitio son 5 letras.",
+    "ccSiteLimitReached": "Has alcanzado el límite de sitios de tu plan ({limit}). Elige uno de tus sitios o contacta a GEIPSA para contratar más.",
     "ccSiteOtherPlace": "Ese sitio ya existe en otro Estado o en otra Localidad. Los centros de costos de un mismo sitio deben estar en el mismo Estado y la misma Localidad.",
     "ccNeedGeoCodes": "El Estado y la Localidad elegidos necesitan su código corto. Escríbelo y guárdalo debajo de cada uno.",
     "ccNickname": "Apodo",
@@ -6677,6 +6680,14 @@
     "habMatriz": {
       "what": "Marca el área y los lugares donde el código debe valer. «Todos» vale también para los sitios nuevos del área. Un sitio con varios centros de costos tiene su casilla «Todo el sitio» (vale también para sus centros nuevos) y una casilla por cada centro, para habilitar solo algunos.",
       "example": "marcas C. Distribución en todos sus sitios y Punto Venta solo en el centro Caja de PV Norte."
+    },
+    "planSitesLimit": {
+      "what": "Cuántos sitios (lugares físicos) puede tener un cliente con este plan. Es un límite aparte del de centros de costos: un sitio puede tener varios centros, y meter otro centro en un sitio que ya existe no gasta un sitio. Se congela al activar el plan.",
+      "example": "un plan con 2 sitios y 6 centros de costos deja tener, por ejemplo, 2 CEDIS con 3 centros cada uno."
+    },
+    "clientExtraSites": {
+      "what": "Sitios que este cliente contrató además de los de su plan. Se suman a los del plan para el límite de sitios (los centros de costos extra se manejan aparte).",
+      "example": "el plan trae 2 sitios y se contrata 1 extra: el cliente puede tener 3 sitios."
     },
     "permBulk": {
       "what": "En un nivel que tiene una parte activa y otra no (el «−»), el botón ✓✓ habilita todo lo que está dentro y el botón ✕ quita todo lo que se vendió como adicional (lo que da el plan no se quita). Hay que guardar para que el cambio quede.",
