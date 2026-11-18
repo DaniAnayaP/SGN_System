@@ -152,6 +152,8 @@ const {
     suggestFuelTypeForEcoUnit,
     listSkuItems,
     listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, isSkuEnabledAt, SKU_ENABLEMENT_DEFAULT,
+    createSkuRequest, getSkuRequest, listSkuRequests, listSkuRequestEvents, updateSkuRequestData, setSkuRequestStatus, skuRequestTimes, skuRequestProgress, skuRequestDescriptionsInUse, sanitizeSkuRequestData,
+    SKU_REQUEST_STATUSES, SKU_REQUEST_OPEN, SKU_REQUEST_HOLDER, SKU_REQUEST_REQUIRED_KEYS, skuRequestFilled, skuLettersFor,
     getSkuItemById,
     createSkuItem,
     SKU_ITEM_PATCHABLE_FIELDS,
@@ -1475,7 +1477,8 @@ function applyEffectiveEntitlements(clientId) {
     const client = getClientById(clientId);
     if (!client) return;
     const plan = client.plan ? getPlanByName(client.plan) : null;
-    const baseModules = plan ? plan.modules : [];
+    // TI se habilita por defecto en todo contrato, con lo mínimo (ver TI_MINIMUM_GRANTS en db.js)
+    const baseModules = [...new Set([...(plan ? plan.modules : []), 'information-technology'])];
     const baseCostCenters = plan ? plan.costCentersLimit : 0;
     const baseSites = plan ? plan.sitesLimit : 0;
     const addenda = getClientAddenda(clientId);
@@ -4839,6 +4842,39 @@ app.get('/api/business/cost-centers', requireAuth, (req, res) => {
         sitesLimit: client.sites_limit,
         sitesUsed: countSites(req.user.clientId, req.user.isTestAccount),
         siteReady: hasCompleteCostCenter(req.user.clientId, req.user.isTestAccount),
+    });
+});
+
+// Sitios Contratados (Administración del Negocio › Servicio Contratado): los sitios del cliente (el código de sitio de sus centros de costos), cada uno con sus centros adentro, y lo usado contra lo contratado (sitios y centros de costos).
+// Solo lectura, para cualquier persona de la cuenta (el menú decide quién llega, igual que Nuestros Centros Costos).
+const SITES_SCREEN = { area: '', modulo: 'Administración del Negocio', pantalla: 'Sitios Contratados' };
+app.get('/api/business/sites', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const centers = listCostCenters(clientId, isTestAccount);
+    const bySite = new Map();
+    centers.filter((cc) => cc.site_code).forEach((cc) => { if (!bySite.has(cc.site_code)) bySite.set(cc.site_code, []); bySite.get(cc.site_code).push(cc); });
+    const sites = [...bySite.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, list]) => {
+        const first = list[0];
+        const state = first.state_id ? getStateById(Number(first.state_id)) : null;
+        const locality = first.locality_id ? getLocalityById(Number(first.locality_id)) : null;
+        const oldest = list.map((cc) => cc.created_at).filter(Boolean).sort()[0];
+        return {
+            code, sucursal: first.sucursal || '', state: state ? state.name : '', locality: locality ? locality.name : '',
+            status: list.some((cc) => cc.status === 'active') ? 'active' : 'inactive',
+            centers: list.map((cc) => ({ id: cc.id, code: cc.code, name: cc.name, status: cc.status })),
+            ...getSystemColumnsForRecord({ companyName: client.company_name, ...SITES_SCREEN, centroCostos: first.name || '', createdAt: oldest }),
+        };
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        sites,
+        limits: {
+            sitesLimit: client.sites_limit, sitesUsed: countSites(clientId, isTestAccount),
+            costCentersLimit: client.cost_centers_limit, costCentersUsed: countCostCenters(clientId, isTestAccount),
+            withoutSite: centers.filter((cc) => !cc.site_code).length,
+        },
     });
 });
 

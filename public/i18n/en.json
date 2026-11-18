@@ -131,6 +131,9 @@
     "contractedService": "Contracted Service",
     "contractedServiceAbbr1": "Contracted Svc.",
     "contractedServiceAbbr2": "Contracted",
+    "contractedSites": "Contracted Sites",
+    "contractedSitesAbbr1": "Contr. Sites",
+    "contractedSitesAbbr2": "Sites",
     "ourCostCenters": "Our Cost Centers",
     "ourCostCentersAbbr1": "Cost Centers",
     "ourCostCentersAbbr2": "Cost Ctrs.",
@@ -4742,6 +4745,15 @@
     "soReopenUntil": "you can reopen it until {when}",
     "soNoSupport": "Your account does not have the Support tab. Ask your administrator to give it to you.",
     "colSpCreateAuth": "New request",
+    "colSitCodigo": "Site code",
+    "colSitSucursal": "Branch",
+    "colSitUbicacion": "State · Locality",
+    "colSitCentros": "Cost centers",
+    "colSitNumCentros": "# Cost centers",
+    "colSitEstatus": "Status",
+    "sitLimitSites": "Sites {used} of {limit}",
+    "sitLimitCenters": "Cost centers {used} of {limit}",
+    "sitLoadError": "The contracted sites could not be read.",
     "colHabSku": "SKU",
     "colHabDescripcion": "Unique Description",
     "colHabUpc": "UPC",
@@ -6683,6 +6695,10 @@
     "habMatriz": {
       "what": "Check the area and the places where the code should apply. «All» also applies to the area's new sites. A site with several cost centers has its «Whole site» box (it also applies to its new centers) and one box per center, to enable only some of them.",
       "example": "you check Distribution Center in all its sites and Point of Sale only in the Checkout center of PV North."
+    },
+    "sitLimits": {
+      "what": "What you already use of what you hired: sites (physical places) and cost centers. A site can have several centers; adding another center to a site you already have does not use up a site. To create new sites or centers go to Our Cost Centers; to hire more, contact GEIPSA.",
+      "example": "«Sites 2 of 3» and «Cost centers 5 of 8»: you have 1 site and 3 centers left to use."
     },
     "planSitesLimit": {
       "what": "How many sites (physical places) a client on this plan can have. It is a separate limit from the cost center one: a site can have several centers, and adding another center to an existing site does not use up a site. It is frozen when the plan is activated.",

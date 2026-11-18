@@ -3383,6 +3383,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'habilitacion-codigos': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Habilitación de Códigos' },
     'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
     'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
+    'sitios-contratados': { area: '', modulo: 'Administración del Negocio', pantalla: 'Sitios Contratados' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3729,6 +3730,7 @@ function getLastChangedBy(clientId, tableKey, recordId, fieldKey) {
 // HR_WORKER_PATCHABLE_FIELDS/COST_CENTER_FIELDS, and must match the `id` of
 // that pantalla's column entries in menu.json exactly.
 const TABLE_GRANT_PATHS = {
+    'sitios-contratados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-contracted-sites' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'carga-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-carga-combustible' },
@@ -5445,8 +5447,27 @@ function getClientSkuPrefix(clientId) {
     db.prepare('UPDATE clients SET sku_prefix = ? WHERE id = ?').run(prefix, clientId);
     return prefix;
 }
-function buildSkuCode(clientId, recordNumber) {
-    return `${getClientSkuPrefix(clientId)}${SKU_DEPARTMENT_CODE}${SKU_AREA_CODE}${String(recordNumber).padStart(6, '0')}`;
+// Las 2 letras de departamento y las 2 de área del SKU son las del ÁREA PARA LA QUE SE CREA el código (la que lo pidió): CMCSCD000001 = cliente CM, Cadena de Suministro, C. Distribución. Nunca se usan las de TI (TI solo crea; no es «de dónde viene»
+// el código): un código pedido desde TI o sin área lleva las de siempre (CS/CD). Los códigos que ya existen no cambian.
+const SKU_DEPARTMENT_LETTERS = {
+    'supply-chain': 'CS', 'human-resources': 'RH', finance: 'FN', accounting: 'CN', marketing: 'MK', commercial: 'CL', purchasing: 'CP',
+    'management-control': 'CG', 'general-management': 'DG', 'steering-committee': 'CC', certifications: 'CE',
+};
+const SKU_AREA_LETTERS = {
+    'sc-area-raw-material': 'MP', 'sc-area-production': 'PR', 'sc-area-transport-1': 'TV', 'sc-area-distribution-center': 'CD', 'sc-area-transport-2': 'UM',
+    'sc-area-point-of-sale': 'PV', 'sc-area-delivery': 'DE', 'sc-area-end-customer': 'CF', 'sc-area-customer-complaints': 'QC',
+    'hr-area-recruitment': 'RS', 'hr-area-personnel-admin': 'AP', 'hr-area-training-development': 'FD', 'hr-area-compensation-benefits': 'CB',
+    'hr-area-organizational-development': 'DO', 'hr-area-occupational-health-safety': 'SS', 'hr-area-hris': 'SI', 'hr-area-hr-analytics': 'AN',
+    'area-1': 'A1', 'area-2': 'A2', 'area-3': 'A3',
+};
+function skuLettersFor(department, area) {
+    const dept = SKU_DEPARTMENT_LETTERS[department];
+    if (!dept) return { dept: SKU_DEPARTMENT_CODE, area: SKU_AREA_CODE };
+    return { dept, area: SKU_AREA_LETTERS[area] || 'GN' };
+}
+function buildSkuCode(clientId, recordNumber, letters = null) {
+    const l = letters || { dept: SKU_DEPARTMENT_CODE, area: SKU_AREA_CODE };
+    return `${getClientSkuPrefix(clientId)}${l.dept}${l.area}${String(recordNumber).padStart(6, '0')}`;
 }
 // Los códigos que ya existían (de otros clientes) reciben su SKU de 12 caracteres con su mismo número de siempre; una sola vez.
 function backfillSkuCodes() {
@@ -5478,7 +5499,8 @@ function getSkuItemById(id, clientId, forTestAccount = false) {
 }
 
 // Sin número, el SKU es el siguiente al más alto. Con número (la carga por plantilla: el SKU es el número de código del cliente) se da de alta con ese mismo SKU, si nadie lo tiene.
-function createSkuItem({ clientId, isTestData = false, recordNumber: wanted = 0 }) {
+// department/area (opcional): el área para la que se crea el código; definen las letras de su SKU. enableRows (opcional): dónde queda habilitado ([{ department, area, siteCode, costCenterId }]); sin él nace habilitado en C. Distribución, todos sus sitios.
+function createSkuItem({ clientId, isTestData = false, recordNumber: wanted = 0, department = '', area = '', enableRows = null }) {
     if (wanted && db.prepare('SELECT 1 FROM sku_items WHERE client_id = ? AND is_test_data = ? AND record_number = ?').get(clientId, isTestData ? 1 : 0, wanted)) {
         throw Object.assign(new Error('sku exists'), { code: 'SKU_EXISTS' });
     }
@@ -5488,10 +5510,11 @@ function createSkuItem({ clientId, isTestData = false, recordNumber: wanted = 0 
     const create = db.transaction(() => {
         const result = db
             .prepare('INSERT INTO sku_items (client_id, db_id, record_number, is_test_data, sku_code) VALUES (@clientId, @dbId, @recordNumber, @isTestData, @skuCode)')
-            .run({ clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuCode: buildSkuCode(clientId, recordNumber) });
-        // Un código nuevo nace habilitado en C. Distribución (todos sus sitios), que es donde se crea hoy; TI decide después dónde más vale (Habilitación de Códigos).
-        db.prepare('INSERT OR IGNORE INTO sku_enablements (client_id, is_test_data, sku_item_id, department, area, site_code) VALUES (?, ?, ?, ?, ?, ?)')
-            .run(clientId, isTestData ? 1 : 0, result.lastInsertRowid, SKU_ENABLEMENT_DEFAULT.department, SKU_ENABLEMENT_DEFAULT.area, '');
+            .run({ clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuCode: buildSkuCode(clientId, recordNumber, department ? skuLettersFor(department, area) : null) });
+        // Un código nuevo nace habilitado en C. Distribución (todos sus sitios), que es donde se crea hoy; TI decide después dónde más vale (Habilitación de Códigos). Uno que viene de una solicitud nace habilitado donde se pidió.
+        const where = enableRows && enableRows.length ? enableRows : [{ department: SKU_ENABLEMENT_DEFAULT.department, area: SKU_ENABLEMENT_DEFAULT.area, siteCode: '', costCenterId: 0 }];
+        where.forEach((w) => db.prepare('INSERT OR IGNORE INTO sku_enablements (client_id, is_test_data, sku_item_id, department, area, site_code, cost_center_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            .run(clientId, isTestData ? 1 : 0, result.lastInsertRowid, w.department, w.area, w.siteCode || '', w.siteCode ? (Number(w.costCenterId) || 0) : 0));
         return result.lastInsertRowid;
     });
     return getSkuItemById(create(), clientId, isTestData);
@@ -5708,6 +5731,166 @@ function countSkuItemsByClassification(clientId, forTestAccount, classificationI
     const byCategory = categoryName !== null;
     return db.prepare(`SELECT COUNT(*) AS n FROM sku_items WHERE client_id = ? AND is_test_data = ? AND classification_id = ?${byCategory ? ' AND category_inventario = ?' : ''}`)
         .get(...[clientId, forTestAccount ? 1 : 0, classificationId, ...(byCategory ? [categoryName] : [])]).n;
+}
+
+// ---- Solicitudes de alta de código (Operaciones › «Pedir alta de código» y TI › Operaciones TI › «Solicitudes de alta de código») ---------------------------------------------------------------------
+// Cada área (o sitio) pide un código y llena TODA la información que conoce; lo que no sabe se marca «lo llena TI». TI lo ve desde el primer registro con su estatus y un reloj que mide cuánto tiempo está en manos de quien pidió y
+// cuánto en manos de TI (solo se mide: sin metas por ahora). Estatus: info_pending (Información pendiente, en manos de quien pidió) → to_review (Por revisar, TI) → needs_info (TI pide datos, quien pidió) → in_review (En revisión, TI) →
+// created (Código creado) | rejected (Rechazada). Los datos viajan en un JSON con las mismas llaves que un código (SKU_ITEM_PATCHABLE_FIELDS) para que TI los copie tal cual al crearlo.
+const SKU_REQUEST_STATUSES = ['info_pending', 'to_review', 'needs_info', 'in_review', 'created', 'rejected'];
+const SKU_REQUEST_OPEN = ['info_pending', 'to_review', 'needs_info', 'in_review'];
+const SKU_REQUEST_HOLDER = { info_pending: 'requester', needs_info: 'requester', to_review: 'ti', in_review: 'ti', created: '', rejected: '' };
+db.exec(`
+    CREATE TABLE IF NOT EXISTS sku_requests (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id            INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data         INTEGER NOT NULL DEFAULT 0,
+        folio                INTEGER NOT NULL,
+        department           TEXT NOT NULL,
+        area                 TEXT NOT NULL,
+        site_code            TEXT NOT NULL DEFAULT '',
+        cost_center_id       INTEGER NOT NULL DEFAULT 0,
+        requested_by         TEXT NOT NULL DEFAULT '',
+        requested_by_user_id INTEGER,
+        status               TEXT NOT NULL DEFAULT 'info_pending',
+        unique_description   TEXT NOT NULL DEFAULT '',
+        data                 TEXT NOT NULL DEFAULT '{}',
+        ti_fields            TEXT NOT NULL DEFAULT '[]',
+        ti_note              TEXT NOT NULL DEFAULT '',
+        sku_item_id          INTEGER,
+        created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
+        closed_at            TEXT,
+        UNIQUE (client_id, is_test_data, folio)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sku_requests_scope ON sku_requests (client_id, is_test_data, status);
+    CREATE TABLE IF NOT EXISTS sku_request_events (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id  INTEGER NOT NULL REFERENCES sku_requests(id) ON DELETE CASCADE,
+        status      TEXT NOT NULL,
+        holder      TEXT NOT NULL DEFAULT '',
+        note        TEXT NOT NULL DEFAULT '',
+        by_label    TEXT NOT NULL DEFAULT '',
+        by_user_id  INTEGER,
+        at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_sku_request_events_request ON sku_request_events (request_id, id);
+`);
+// Los 24 datos que completan un código (los opcionales no cuentan).
+const SKU_REQUEST_REQUIRED_KEYS = Object.entries(SKU_ITEM_PATCHABLE_FIELDS).filter(([, f]) => !f.optional).map(([key]) => key);
+const SKU_REQUEST_DATA_KEYS = Object.keys(SKU_ITEM_PATCHABLE_FIELDS);
+const SKU_REQUEST_NUMBER_KEYS = new Set(['height', 'length', 'width', 'articleWeight', 'packageWeight', 'unitsPerLayer', 'layersPerPallet', 'maxStack']);
+function skuRequestFilled(value) { return value !== null && value !== undefined && value !== '' && value !== 0; }
+// Deja solo llaves conocidas y valores del tipo de su columna (número o texto); null/'' = vacío. classificationId es número o null.
+function sanitizeSkuRequestData(raw) {
+    const out = {};
+    Object.entries(raw || {}).forEach(([key, value]) => {
+        if (!SKU_REQUEST_DATA_KEYS.includes(key)) return;
+        if (key === 'classificationId') { const n = Number(value); out[key] = Number.isInteger(n) && n > 0 ? n : null; return; }
+        if (SKU_REQUEST_NUMBER_KEYS.has(key)) { const n = Number(value); out[key] = Number.isFinite(n) && n >= 0 ? n : 0; return; }
+        out[key] = String(value === null || value === undefined ? '' : value).trim().slice(0, 600);
+    });
+    return out;
+}
+function parseSkuRequestJson(text, fallback) { try { const v = JSON.parse(text); return v && typeof v === 'object' ? v : fallback; } catch { return fallback; } }
+function mapSkuRequestRow(row) {
+    if (!row) return row;
+    return {
+        id: row.id, folio: row.folio, department: row.department, area: row.area, siteCode: row.site_code || '', costCenterId: row.cost_center_id || 0,
+        requestedBy: row.requested_by || '', requestedByUserId: row.requested_by_user_id || null, status: row.status, holder: SKU_REQUEST_HOLDER[row.status] || '',
+        uniqueDescription: row.unique_description || '', data: parseSkuRequestJson(row.data, {}), tiFields: Array.isArray(parseSkuRequestJson(row.ti_fields, [])) ? parseSkuRequestJson(row.ti_fields, []) : [],
+        tiNote: row.ti_note || '', skuItemId: row.sku_item_id || null, createdAt: row.created_at, updatedAt: row.updated_at, closedAt: row.closed_at || null,
+    };
+}
+// Cuántos de los 24 datos hay: llenos, los que se marcaron «lo llena TI» y los que faltan.
+function skuRequestProgress(data, tiFields) {
+    const flagged = new Set(tiFields || []);
+    const filled = []; const byTi = []; const missing = [];
+    SKU_REQUEST_REQUIRED_KEYS.forEach((key) => {
+        if (skuRequestFilled((data || {})[key])) filled.push(key);
+        else if (flagged.has(key)) byTi.push(key);
+        else missing.push(key);
+    });
+    return { total: SKU_REQUEST_REQUIRED_KEYS.length, filled: filled.length, byTi: byTi.length, missing };
+}
+function nextSkuRequestFolio(clientId, isTest) {
+    return db.prepare('SELECT COALESCE(MAX(folio), 0) + 1 AS n FROM sku_requests WHERE client_id = ? AND is_test_data = ?').get(clientId, isTest ? 1 : 0).n;
+}
+function addSkuRequestEvent(requestId, status, { note = '', byLabel = '', byUserId = null, at = null } = {}) {
+    db.prepare('INSERT INTO sku_request_events (request_id, status, holder, note, by_label, by_user_id, at) VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, datetime(\'now\')))')
+        .run(requestId, status, SKU_REQUEST_HOLDER[status] || '', String(note || '').slice(0, 1000), byLabel || '', byUserId, at);
+}
+function createSkuRequest({ clientId, isTest = false, department, area, siteCode = '', costCenterId = 0, requestedBy = '', requestedByUserId = null, data = {}, tiFields = [] }) {
+    const clean = sanitizeSkuRequestData(data);
+    const create = db.transaction(() => {
+        const folio = nextSkuRequestFolio(clientId, isTest);
+        const id = db.prepare(`
+            INSERT INTO sku_requests (client_id, is_test_data, folio, department, area, site_code, cost_center_id, requested_by, requested_by_user_id, status, unique_description, data, ti_fields)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'info_pending', ?, ?, ?)
+        `).run(clientId, isTest ? 1 : 0, folio, department, area, siteCode || '', siteCode ? (Number(costCenterId) || 0) : 0, requestedBy, requestedByUserId, clean.uniqueDescription || '', JSON.stringify(clean), JSON.stringify([...new Set((tiFields || []).filter((k) => SKU_REQUEST_REQUIRED_KEYS.includes(k)))])).lastInsertRowid;
+        addSkuRequestEvent(id, 'info_pending', { byLabel: requestedBy, byUserId: requestedByUserId });
+        return id;
+    });
+    return getSkuRequest(create(), clientId, isTest);
+}
+function getSkuRequest(id, clientId, isTest = false) {
+    return mapSkuRequestRow(db.prepare('SELECT * FROM sku_requests WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, isTest ? 1 : 0));
+}
+function listSkuRequests(clientId, isTest = false, { userId = null } = {}) {
+    const rows = userId
+        ? db.prepare('SELECT * FROM sku_requests WHERE client_id = ? AND is_test_data = ? AND requested_by_user_id = ? ORDER BY id DESC').all(clientId, isTest ? 1 : 0, userId)
+        : db.prepare('SELECT * FROM sku_requests WHERE client_id = ? AND is_test_data = ? ORDER BY id DESC').all(clientId, isTest ? 1 : 0);
+    return rows.map(mapSkuRequestRow);
+}
+function listSkuRequestEvents(requestIds) {
+    const ids = [...new Set(requestIds)].filter((n) => Number.isInteger(n));
+    const byRequest = new Map();
+    if (!ids.length) return byRequest;
+    db.prepare(`SELECT * FROM sku_request_events WHERE request_id IN (${ids.map(() => '?').join(',')}) ORDER BY id ASC`).all(...ids).forEach((e) => {
+        if (!byRequest.has(e.request_id)) byRequest.set(e.request_id, []);
+        byRequest.get(e.request_id).push({ id: e.id, status: e.status, holder: e.holder, note: e.note, by: e.by_label, byUserId: e.by_user_id || null, at: e.at });
+    });
+    return byRequest;
+}
+// Mezcla datos nuevos sobre lo guardado (un valor vacío borra ese dato) y fija la lista de «lo llena TI» si llega. La descripción única va también en su columna para buscarla.
+function updateSkuRequestData(id, clientId, isTest, patch, tiFields = null) {
+    const current = getSkuRequest(id, clientId, isTest);
+    if (!current) return null;
+    const merged = { ...current.data, ...sanitizeSkuRequestData(patch) };
+    const flagged = tiFields === null ? current.tiFields : [...new Set((tiFields || []).filter((k) => SKU_REQUEST_REQUIRED_KEYS.includes(k)))];
+    db.prepare("UPDATE sku_requests SET data = ?, ti_fields = ?, unique_description = ?, updated_at = datetime('now') WHERE id = ? AND client_id = ? AND is_test_data = ?")
+        .run(JSON.stringify(merged), JSON.stringify(flagged), merged.uniqueDescription || '', id, clientId, isTest ? 1 : 0);
+    return getSkuRequest(id, clientId, isTest);
+}
+// Cambia el estatus: guarda el evento (para los relojes) y, si cierra la solicitud, su fecha de cierre. note = lo que TI pide o el motivo del rechazo.
+function setSkuRequestStatus(id, clientId, isTest, status, { note = '', byLabel = '', byUserId = null, skuItemId = null } = {}) {
+    if (!SKU_REQUEST_STATUSES.includes(status)) throw new Error('estatus no válido');
+    db.transaction(() => {
+        db.prepare(`UPDATE sku_requests SET status = ?, ti_note = CASE WHEN ? <> '' THEN ? ELSE ti_note END, sku_item_id = COALESCE(?, sku_item_id), updated_at = datetime('now'), closed_at = CASE WHEN ? IN ('created', 'rejected') THEN datetime('now') ELSE NULL END WHERE id = ? AND client_id = ? AND is_test_data = ?`)
+            .run(status, note || '', note || '', skuItemId, status, id, clientId, isTest ? 1 : 0);
+        addSkuRequestEvent(id, status, { note, byLabel, byUserId });
+    })();
+    return getSkuRequest(id, clientId, isTest);
+}
+// Los relojes de una solicitud: cada evento deja la solicitud en manos de alguien (quien pidió o TI) hasta el siguiente; el último sigue corriendo hasta ahora (o hasta cerrarse). Todo en milisegundos.
+function skuRequestTimes(request, events, now = Date.now()) {
+    const toMs = (s) => Date.parse(`${String(s).replace(' ', 'T')}Z`);
+    const list = events || [];
+    let requesterMs = 0; let tiMs = 0; let stageMs = 0;
+    const end = request.closedAt ? toMs(request.closedAt) : now;
+    list.forEach((e, i) => {
+        const from = toMs(e.at);
+        const to = i + 1 < list.length ? toMs(list[i + 1].at) : end;
+        const span = Math.max(0, to - from);
+        if (e.holder === 'requester') requesterMs += span; else if (e.holder === 'ti') tiMs += span;
+        if (i === list.length - 1) stageMs = span;
+    });
+    const start = list.length ? toMs(list[0].at) : toMs(request.createdAt);
+    return { totalMs: Math.max(0, end - start), requesterMs, tiMs, stageMs, open: !request.closedAt };
+}
+function skuRequestDescriptionsInUse(clientId, isTest, exceptId = 0) {
+    return db.prepare(`SELECT id, folio, unique_description FROM sku_requests WHERE client_id = ? AND is_test_data = ? AND status IN (${SKU_REQUEST_OPEN.map(() => '?').join(',')}) AND unique_description <> '' AND id != ?`)
+        .all(clientId, isTest ? 1 : 0, ...SKU_REQUEST_OPEN, exceptId || 0);
 }
 
 // Activa o desactiva un código (nunca se elimina).
@@ -9751,6 +9934,36 @@ function moveCodeScreensToTiOnce() {
     })();
     console.log('[db] Códigos desde TI (pieza 2): las pantallas de códigos pasaron de C. Distribución a Operaciones TI con sus permisos, y se contrató TI a quien las tenía (una vez): ' + JSON.stringify(stats) + '.');
 }
+// TI por defecto con lo mínimo (Daniel, 2026-11-19): una sola vez, todo plan que ya existe recibe el módulo de TI y el grupo «Administración del Negocio» de TI › Operaciones (TI_MINIMUM_GRANTS), y a todo cliente se le abre el departamento de TI. Solo agrega.
+// Los planes nuevos y los guardados después ya lo traen (createPlan / setPlanGrants).
+const TI_MINIMUM_SEED_KEY = 'seed-ti-minimo-por-defecto-v1';
+function seedTiMinimumOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(TI_MINIMUM_SEED_KEY)) return;
+    const stats = { plans: 0, planGrants: 0, clients: 0 };
+    db.transaction(() => {
+        db.prepare('SELECT id, modules FROM plans').all().forEach((plan) => {
+            let modules = [];
+            try { modules = JSON.parse(plan.modules) || []; } catch { modules = []; }
+            if (!modules.includes(TI_MINIMUM_MODULE)) { modules.push(TI_MINIMUM_MODULE); db.prepare('UPDATE plans SET modules = ? WHERE id = ?').run(JSON.stringify(modules), plan.id); stats.plans += 1; }
+            TI_MINIMUM_GRANTS.forEach((g) => {
+                if (!db.prepare('SELECT 1 FROM plan_grants WHERE plan_id = ? AND section_id = ? AND item_id = ? AND submenu_id = ?').get(plan.id, g.sectionId, g.itemId, g.submenuId)) {
+                    db.prepare('INSERT INTO plan_grants (plan_id, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)').run(plan.id, g.sectionId, g.itemId, g.submenuId);
+                    stats.planGrants += 1;
+                }
+            });
+        });
+        db.prepare('SELECT id FROM clients').all().forEach((client) => {
+            const opened = db.prepare('UPDATE client_modules SET enabled = 1 WHERE client_id = ? AND module_key = ? AND enabled != 1').run(client.id, TI_MINIMUM_MODULE).changes;
+            if (opened) { stats.clients += 1; return; }
+            if (!db.prepare('SELECT 1 FROM client_modules WHERE client_id = ? AND module_key = ?').get(client.id, TI_MINIMUM_MODULE)) {
+                db.prepare('INSERT INTO client_modules (client_id, module_key, enabled) VALUES (?, ?, 1)').run(client.id, TI_MINIMUM_MODULE);
+                stats.clients += 1;
+            }
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(TI_MINIMUM_SEED_KEY);
+    })();
+    console.log('[db] TI por defecto con lo mínimo (una vez): ' + JSON.stringify(stats) + '.');
+}
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
     const path = TABLE_GRANT_PATHS['pedido-manual'];
@@ -9961,12 +10174,11 @@ function createPlan({ name, description, modules, costCentersLimit, sitesLimit, 
             `)
             .run({
                 name, description: description || '',
-                modules: JSON.stringify(modules || []), costCentersLimit: costCentersLimit || 0, sitesLimit: sitesLimit || 0,
+                modules: JSON.stringify([...new Set([...(modules || []), TI_MINIMUM_MODULE])]), costCentersLimit: costCentersLimit || 0, sitesLimit: sitesLimit || 0,
                 createdBy: createdBy || '', businessSectorId: businessSectorId || null,
             });
-        if (businessSectorId) {
-            setPlanGrants(result.lastInsertRowid, getSectorGrants(businessSectorId));
-        }
+        // todo plan nace con TI y su mínimo (además de lo que copia de su giro)
+        setPlanGrants(result.lastInsertRowid, businessSectorId ? getSectorGrants(businessSectorId) : []);
         return result.lastInsertRowid;
     });
     return getPlanById(create());
@@ -12743,7 +12955,18 @@ function getPlanGrants(planId) {
         .all(planId);
 }
 
-function setPlanGrants(planId, grants) {
+// TI se habilita por defecto en todo contrato con lo MÍNIMO indispensable (Daniel, 2026-11-19): hoy es el grupo «Administración del Negocio» dentro de TI › Operaciones TI › Operaciones (sus 8 pantallas). Todo plan lo trae siempre; lo demás de TI se
+// contrata aparte. Cuando exista la pantalla «Relación de Accesos», el mínimo saldrá de la marca de cada acceso y esta lista desaparecerá.
+const TI_MINIMUM_MODULE = 'information-technology';
+const TI_MINIMUM_GRANTS = [
+    { sectionId: 'information-technology', itemId: 'it-area-operations', submenuId: 'cat-operaciones/cat-operaciones-ti-admin-negocio' },
+];
+function withTiMinimumGrants(grants) {
+    const has = (g) => (grants || []).some((x) => x.sectionId === g.sectionId && (x.itemId || null) === (g.itemId || null) && (x.submenuId || null) === (g.submenuId || null));
+    return [...(grants || []), ...TI_MINIMUM_GRANTS.filter((g) => !has(g))];
+}
+function setPlanGrants(planId, rawGrants) {
+    const grants = withTiMinimumGrants(rawGrants);
     const replace = db.transaction((rows) => {
         db.prepare('DELETE FROM plan_grants WHERE plan_id = ?').run(planId);
         const insert = db.prepare(`
@@ -16035,6 +16258,7 @@ backfillFixedAssetHistoryOnce();
 moveScreensToGestionOnce();
 // todo o nada (una sola transacción): si algo falla se avisa, el servidor sigue arriba y se reintenta en el siguiente arranque
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
+try { seedTiMinimumOnce(); } catch (err) { console.error('[db] TI por defecto: no se pudo abrir el mínimo (se reintentará al arrancar):', err.message); }
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
@@ -16161,6 +16385,8 @@ module.exports = {
     SUPPORT_MATERIAL_CATEGORIES,
     listSkuItems,
     listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, isSkuEnabledAt, SKU_ENABLEMENT_DEFAULT,
+    createSkuRequest, getSkuRequest, listSkuRequests, listSkuRequestEvents, updateSkuRequestData, setSkuRequestStatus, skuRequestTimes, skuRequestProgress, skuRequestDescriptionsInUse, sanitizeSkuRequestData,
+    SKU_REQUEST_STATUSES, SKU_REQUEST_OPEN, SKU_REQUEST_HOLDER, SKU_REQUEST_REQUIRED_KEYS, skuRequestFilled, skuLettersFor,
     getSkuItemById,
     createSkuItem,
     updateSkuItem,

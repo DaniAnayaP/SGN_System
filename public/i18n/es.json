@@ -131,6 +131,9 @@
     "contractedService": "Servicio Contratado",
     "contractedServiceAbbr1": "Serv. Contratado",
     "contractedServiceAbbr2": "Contratado",
+    "contractedSites": "Sitios Contratados",
+    "contractedSitesAbbr1": "Sitios Contr.",
+    "contractedSitesAbbr2": "Sitios",
     "ourCostCenters": "Nuestros Centros Costos",
     "ourCostCentersAbbr1": "Centros Costos",
     "ourCostCentersAbbr2": "Ctros. Costos",
@@ -4741,6 +4744,15 @@
     "soReopenUntil": "puedes reabrirla hasta el {when}",
     "soNoSupport": "Tu cuenta no tiene la pestaña Soporte. Pídele a tu administrador que te la dé.",
     "colSpCreateAuth": "Nueva solicitud",
+    "colSitCodigo": "Código del sitio",
+    "colSitSucursal": "Sucursal",
+    "colSitUbicacion": "Estado · Localidad",
+    "colSitCentros": "Centros de costos",
+    "colSitNumCentros": "# Centros de costos",
+    "colSitEstatus": "Estatus",
+    "sitLimitSites": "Sitios {used} de {limit}",
+    "sitLimitCenters": "Centros de costos {used} de {limit}",
+    "sitLoadError": "No se pudieron leer los sitios contratados.",
     "colHabSku": "SKU",
     "colHabDescripcion": "Descripción Única",
     "colHabUpc": "UPC",
@@ -6682,6 +6694,10 @@
     "habMatriz": {
       "what": "Marca el área y los lugares donde el código debe valer. «Todos» vale también para los sitios nuevos del área. Un sitio con varios centros de costos tiene su casilla «Todo el sitio» (vale también para sus centros nuevos) y una casilla por cada centro, para habilitar solo algunos.",
       "example": "marcas C. Distribución en todos sus sitios y Punto Venta solo en el centro Caja de PV Norte."
+    },
+    "sitLimits": {
+      "what": "Lo que ya usas de lo que contrataste: los sitios (lugares físicos) y los centros de costos. Un sitio puede tener varios centros; meter otro centro en un sitio que ya tienes no gasta un sitio. Para crear sitios o centros nuevos ve a Nuestros Centros Costos; para contratar más, a GEIPSA.",
+      "example": "«Sitios 2 de 3» y «Centros de costos 5 de 8»: te falta 1 sitio y 3 centros por usar."
     },
     "planSitesLimit": {
       "what": "Cuántos sitios (lugares físicos) puede tener un cliente con este plan. Es un límite aparte del de centros de costos: un sitio puede tener varios centros, y meter otro centro en un sitio que ya existe no gasta un sitio. Se congela al activar el plan.",

@@ -165,6 +165,17 @@
               "id": "ab-contracted-service", "labelKey": "menu.contractedService", "abbrKeys": ["menu.contractedServiceAbbr1", "menu.contractedServiceAbbr2"], "href": "#", "icon": "bx-purchase-tag-alt",
               "submenu": [
                 {
+                  "id": "ab-contracted-sites", "labelKey": "menu.contractedSites", "abbrKeys": ["menu.contractedSitesAbbr1", "menu.contractedSitesAbbr2"], "href": "Business-SitiosContratados.html", "icon": "bx-map-pin",
+                  "submenu": [
+                    { "id": "colSitCodigo", "labelKey": "main.colSitCodigo", "permissionOnly": true },
+                    { "id": "colSitSucursal", "labelKey": "main.colSitSucursal", "permissionOnly": true },
+                    { "id": "colSitUbicacion", "labelKey": "main.colSitUbicacion", "permissionOnly": true },
+                    { "id": "colSitCentros", "labelKey": "main.colSitCentros", "permissionOnly": true },
+                    { "id": "colSitNumCentros", "labelKey": "main.colSitNumCentros", "permissionOnly": true },
+                    { "id": "colSitEstatus", "labelKey": "main.colSitEstatus", "permissionOnly": true }
+                  ]
+                },
+                {
                   "id": "ab-our-cost-centers", "labelKey": "menu.ourCostCenters", "abbrKeys": ["menu.ourCostCentersAbbr1", "menu.ourCostCentersAbbr2", "menu.ourCostCentersAbbr3"], "href": "Business-CentrosCosto.html", "icon": "bx-purchase-tag-alt",
                   "submenu": [
                     { "id": "ccCode", "labelKey": "business.ccCode", "permissionOnly": true },
@@ -4040,6 +4051,123 @@
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
             { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+          ]
+        },
+        {
+          "id": "cat-operaciones-ti-admin-negocio",
+          "labelKey": "menu.adminBusiness",
+          "abbrKeys": [
+            "menu.adminBusinessAbbr1",
+            "menu.adminBusinessAbbr2",
+            "menu.adminBusinessAbbr3"
+          ],
+          "icon": "bx-shopping-bag",
+          "href": "#",
+          "submenu": [
+            {
+              "id": "cat-operaciones-ti-ab-contracted-service",
+              "labelKey": "menu.contractedService",
+              "abbrKeys": [
+                "menu.contractedServiceAbbr1",
+                "menu.contractedServiceAbbr2"
+              ],
+              "href": "#",
+              "icon": "bx-purchase-tag-alt",
+              "submenu": [
+                {
+                  "id": "cat-operaciones-ti-ab-contracted-sites",
+                  "labelKey": "menu.contractedSites",
+                  "abbrKeys": [
+                    "menu.contractedSitesAbbr1",
+                    "menu.contractedSitesAbbr2"
+                  ],
+                  "href": "Business-SitiosContratados.html",
+                  "icon": "bx-map-pin"
+                },
+                {
+                  "id": "cat-operaciones-ti-ab-our-cost-centers",
+                  "labelKey": "menu.ourCostCenters",
+                  "abbrKeys": [
+                    "menu.ourCostCentersAbbr1",
+                    "menu.ourCostCentersAbbr2",
+                    "menu.ourCostCentersAbbr3"
+                  ],
+                  "href": "Business-CentrosCosto.html",
+                  "icon": "bx-purchase-tag-alt"
+                },
+                {
+                  "id": "cat-operaciones-ti-ab-my-access",
+                  "labelKey": "menu.myContractedAccess",
+                  "abbrKeys": [
+                    "menu.myContractedAccessAbbr1",
+                    "menu.myContractedAccessAbbr2",
+                    "menu.myContractedAccessAbbr3"
+                  ],
+                  "href": "Business-MisAccesos.html",
+                  "icon": "bx-key"
+                }
+              ]
+            },
+            {
+              "id": "cat-operaciones-ti-ab-expansions",
+              "labelKey": "menu.expansions",
+              "href": "#",
+              "icon": "bx-trending-up"
+            },
+            {
+              "id": "cat-operaciones-ti-ab-business-config",
+              "labelKey": "menu.businessConfig",
+              "abbrKeys": [
+                "menu.businessConfigAbbr1",
+                "menu.businessConfigAbbr2"
+              ],
+              "href": "Business-Config.html",
+              "icon": "bx-palette"
+            },
+            {
+              "id": "cat-operaciones-ti-ab-client-data",
+              "labelKey": "menu.clientData",
+              "abbrKeys": [
+                "menu.clientDataAbbr1",
+                "menu.clientDataAbbr2"
+              ],
+              "href": "Business-DatosCliente.html",
+              "icon": "bx-id-card"
+            },
+            {
+              "id": "cat-operaciones-ti-ab-roles",
+              "labelKey": "menu.roles",
+              "href": "Business-Roles.html",
+              "icon": "bx-shield"
+            },
+            {
+              "id": "cat-operaciones-ti-ab-users",
+              "labelKey": "menu.users",
+              "href": "Business-Usuarios.html",
+              "icon": "bx-group"
+            },
+            {
+              "id": "cat-operaciones-ti-ab-upcoming-updates",
+              "labelKey": "menu.upcomingUpdates",
+              "abbrKeys": [
+                "menu.upcomingUpdatesAbbr1",
+                "menu.upcomingUpdatesAbbr2",
+                "menu.upcomingUpdatesAbbr3"
+              ],
+              "href": "#",
+              "icon": "bx-calendar"
+            },
+            {
+              "id": "cat-operaciones-ti-ab-training-sessions",
+              "labelKey": "menu.trainingSessions",
+              "abbrKeys": [
+                "menu.trainingSessionsAbbr1",
+                "menu.trainingSessionsAbbr2",
+                "menu.trainingSessionsAbbr3"
+              ],
+              "href": "#",
+              "icon": "bx-chalkboard"
+            }
           ]
         }
       ],
