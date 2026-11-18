@@ -10623,7 +10623,7 @@ function renderSupportNoticeRow(item) {
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
     const v = item.variant || '';
     const isPerson = v.startsWith('person-');
-    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
+    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated', 'general-linked': 'main.noticeSupportGeneralLinked', 'general-notify': 'main.noticeSupportGeneralNotify' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
     const tag = document.createElement('div');
     tag.className = 'notifications-item-meta';
     tag.style.fontWeight = '700';
@@ -10643,6 +10643,8 @@ function renderSupportNoticeRow(item) {
         } else if (v === 'person-invite') text = t('main.noticeSupportInviteLine', base);
         else text = item.auto ? (item.reason === 'auto_escalated' ? t('main.noticeSupportEscalatedAutoLine', { ...base, to: t(`main.sopLevel_${item.toLevel}`) }) : t('main.noticeSupportUrgentLine', base)) : t('main.noticeSupportNotifyLine', base);
         desc.textContent = `${text}${item.message ? ` — ${item.message}` : ''}`;
+    } else if (v === 'general-linked' || v === 'general-notify') {
+        desc.textContent = t(v === 'general-linked' ? 'main.noticeSupportGeneralLinkedLine' : 'main.noticeSupportGeneralNotifyLine', { ...base, generalFolio: item.generalFolio || '', generalTitle: item.generalTitle || '', role: item.roleName || '—' });
     } else if (v === 'case-arrived') {
         desc.textContent = t(item.direction === 'up' ? 'main.noticeSupportArrivedUp' : 'main.noticeSupportArrivedDown', { ...base, from: t(`main.sopLevel_${item.from}`), to: t(`main.sopLevel_${item.to}`), reason: t(`main.mvReason_${item.reason}`) });
     } else {
@@ -10691,7 +10693,7 @@ function renderSupportNoticeRow(item) {
             actions.append(hint);
         } else if (item.pStatus) showDone(item.pStatus);
         row.append(actions);
-    } else if ((v === 'access-request' || v === 'case-arrived') && item.caseId) {
+    } else if ((v === 'access-request' || v === 'case-arrived' || v === 'general-linked') && item.caseId) {
         const link = document.createElement('a');
         link.href = `OpTISoporteCaso.html?id=${encodeURIComponent(item.caseId)}`;
         link.className = 'notifications-item-meta';

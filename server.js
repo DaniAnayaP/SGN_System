@@ -582,6 +582,7 @@ const {
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
 } = require('./db');
@@ -10138,6 +10139,7 @@ function supportCaseRowOf(r, client, withFiles) {
         categoryId: r.category_id, category: r.category_name, priority: r.priority, level: r.level, status: r.status, whenAffects: r.when_affects, keepWorking: r.keep_working === 1,
         impacts: parseJsonOr(r.impacts, []), answers: parseJsonOr(r.answers, {}), reporter: r.reporter_name, reporterUserId: r.reporter_user_id,
         createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), firstResponseAt: sqlUtcIso(r.first_response_at), fileCount: r.file_count || 0, withFiles: !!withFiles,
+        general: r.general_id ? { id: r.general_id, folio: supportGeneralFolio(r.general_number || 0) } : null, classifiedAt: sqlUtcIso(r.classified_at), classifiedBy: r.classified_by || '',
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: SUPPORT_CASE_SCREEN_LABEL, centroCostos: '', createdAt: r.created_at }),
     };
 }
@@ -10308,6 +10310,7 @@ app.get('/api/business/support-cases/:id', requireAuth, (req, res) => {
         contact: { canSee: supportCanSeeContact(req) },
         people: { canSee: supportCanSeePeople(req), canOperate: supportCanOperatePeople(req) },
         me: iAmIn ? { kind: iAmIn.kind, status: iAmIn.status } : null,
+        statusCan: supportCanChangeStatus(req, rec), classCan: supportCanSeeClass(req) && !supportIsReporter(req, rec),
     });
 });
 // El chat del caso. ?after=<id> trae solo lo posterior (la pantalla lo pide cada rato). Las notas internas solo salen con la columna Notas internas; los archivos de los mensajes, solo con la columna Evidencias o para quien abrió el caso.
@@ -10352,6 +10355,12 @@ app.post('/api/business/support-cases/:id/messages', requireAuth, (req, res) => 
         const minutes = Math.max(0, Math.round((Date.now() - new Date(sqlUtcIso(rec.created_at)).getTime()) / 60000));
         const due = rec.first_response_due_at ? new Date(sqlUtcIso(rec.first_response_due_at)).getTime() : null;
         addSupportEvent(rec, 'first_response', { minutes, onTime: due === null ? null : Date.now() <= due }, { level, authorName: changedByLabel(req), authorUserId: req.user.sub });
+    }
+    // el primer mensaje del equipo (de quien atiende, no de quien reportó ni de una persona invitada) saca al caso de «Abierto»: ya alguien lo está revisando
+    if (!note && rec.status === 'open' && ['n1', 'n2', 'n3', 'n4'].includes(level)) {
+        setSupportCaseStatus(id, 'review');
+        addSupportEvent(rec, 'status_changed', { from: 'open', to: 'review', by: changedByLabel(req), auto: true }, { level, authorName: changedByLabel(req), authorUserId: req.user.sub });
+        supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel('open'), supportStatusLabel('review'));
     }
     const canFiles = supportIsReporter(req, rec) || supportCanSeeFiles(req);
     const filesById = new Map(listSupportCaseFiles(id).map((f) => [f.id, f]));
@@ -10683,6 +10692,155 @@ app.post('/api/business/support-cases/:id/moves', requireAuth, (req, res) => {
         if (boss && boss !== req.user.sub) { try { sendSupportPerson(moved, { userId: boss, kind: 'notify', reason: 'auto_escalated', byName: 'Sistema', byUserId: null, level: toLevel, auto: true, extra: { toLevel } }); } catch (err) { console.error('support escalation notice failed', err); } }
     }
     res.status(201).json({ move: supportMoveOf(move), level: toLevel });
+});
+// ---- estatus del caso ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Estatus en curso: Abierto (nadie lo ha tomado), En revisión, En trabajo y En pruebas. Lo cambia quien tenga el botón «Cambiar estatus» y atienda el nivel donde está el caso (igual que subir o devolver); cada cambio
+// queda como renglón del chat. Solo: el primer mensaje del equipo al usuario lo pasa de Abierto a En revisión, y al cambiar de nivel vuelve a Abierto. «Por confirmar con el usuario» y «Terminado» llegan con el cierre.
+const SUPPORT_STATUS_TARGETS = ['review', 'working', 'testing'];
+const supportStatusLabel = (key) => supportLabelEs(`main.spStatus_${key}`) || key;
+const supportTypeLabel = (key) => supportLabelEs(`main.spType_${key}`) || key;
+const supportCanChangeStatus = (req, rec) => !supportIsReporter(req, rec) && supportCan(req, 'colSpCambiarEstatus') && supportCanActOnLevel(req, rec) && ['open', ...SUPPORT_STATUS_TARGETS].includes(rec.status);
+function supportLogCaseChange(req, rec, fieldKey, oldValue, newValue) {
+    try { logTableChange({ clientId: req.user.clientId, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: rec.id, recordLabel: `Caso ${supportFolio(rec.record_number)}`, action: 'update', fieldKey, oldValue, newValue, changedBy: changedByLabel(req) }); } catch (err) { console.error('support case log failed', err); }
+}
+app.post('/api/business/support-cases/:id/status', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
+    if (!supportCanOpenCase(req, rec)) return res.status(403).json({ message: 'No tienes permiso para ver este caso.' });
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'El estatus lo cambia el equipo de soporte.' });
+    if (!supportCan(req, 'colSpCambiarEstatus')) return res.status(403).json({ message: 'No tienes permiso para cambiar el estatus.' });
+    if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'El estatus lo cambia quien atiende el caso en su nivel actual.', code: 'LEVEL' });
+    if (!['open', ...SUPPORT_STATUS_TARGETS].includes(rec.status)) return bad('Este caso ya no está en curso.', 'CLOSED');
+    const status = String((req.body && req.body.status) || '');
+    if (!SUPPORT_STATUS_TARGETS.includes(status)) return bad('Elige el estatus.', 'STATUS');
+    if (status === rec.status) return bad('El caso ya tiene ese estatus.', 'SAME');
+    ensureSupportThread(rec);
+    const by = changedByLabel(req);
+    setSupportCaseStatus(rec.id, status);
+    addSupportEvent(rec, 'status_changed', { from: rec.status, to: status, by }, { level: supportAuthorLevel(req, rec), authorName: by, authorUserId: req.user.sub });
+    supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel(rec.status), supportStatusLabel(status));
+    res.json({ status });
+});
+
+// ---- clasificar el caso: Correctivo o Preventivo (y el Soporte general) -------------------------------------------------------------------------------------------------------------------
+// La Mesa de ayuda decide al dar seguimiento: si solo le afectó a ese usuario, sigue Correctivo; si puede afectar a otras personas con el mismo rol, es Preventivo y se abre un Soporte general (SG-0007) que junta los casos
+// parecidos (o se liga a uno que ya está abierto) para resolverlo una sola vez; se avisa a las personas que podrían verse afectadas y a quien reportó cada caso ligado. El sistema le muestra el rol, cuántas personas lo tienen
+// y los casos parecidos de la semana. Lo ve quien tenga la columna «Clasificación» (Ver) y lo decide con Ver y operar (y atendiendo el nivel del caso o la Mesa de ayuda, que es la dueña del caso). Preventivo ya no regresa.
+const SUPPORT_GENERAL_TITLE_MIN = 5;
+const SUPPORT_GENERAL_TITLE_MAX = 120;
+const SUPPORT_AFFECTED_CHECK_CAP = 300;
+const supportGeneralFolio = (n) => `SG-${String(n).padStart(4, '0')}`;
+const supportClassLevel = (req) => (req.user.isClientAdmin ? 'editar' : (hasColumnGrant(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpClasificacion') ? getColumnGrantLevel(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpClasificacion') : null));
+const supportCanSeeClass = (req) => !!supportClassLevel(req);
+const supportCanOperateClass = (req, rec) => ['ver-y-operar', 'editar'].includes(supportClassLevel(req)) && !supportIsReporter(req, rec) && (supportCanActOnLevel(req, rec) || supportCanActOnLevel(req, { level: 'n1' }));
+function supportClassGate(req, res) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec) { res.status(404).json({ message: 'Ese caso no existe.' }); return null; }
+    if (!supportCanSeeClass(req) || (supportIsReporter(req, rec) && !req.user.isClientAdmin)) { res.status(403).json({ message: 'No tienes permiso para la clasificación de este caso.' }); return null; }
+    return rec;
+}
+// Las personas con el mismo rol que quien reportó (su puesto en Mi Recurso Humano) y, de ellas, las que tienen el mismo acceso a esa pantalla y acción (las que de verdad podrían toparse con lo mismo).
+function supportAffectedOf(req, rec) {
+    const role = rec.reporter_user_id ? getSupportUserRole(rec.reporter_user_id) : null;
+    const people = role ? listSupportSameRolePeople(req.user.clientId, role.roleId, req.user.isTestAccount) : [];
+    const accessChecked = !!rec.screen_node && people.length <= SUPPORT_AFFECTED_CHECK_CAP;
+    let affected = people;
+    if (accessChecked) {
+        affected = people.filter((p) => p.userId === rec.reporter_user_id || (() => { const r = reviewSupportAccess({ clientId: req.user.clientId, userId: p.userId, screenId: rec.screen_node, actionId: rec.action_leaf || '' }); return !!r && r.result === 'ok'; })());
+    }
+    return { role, people, affected, accessChecked };
+}
+const supportGeneralOf = (g, cases, { withCases = false } = {}) => ({
+    id: g.id, folio: supportGeneralFolio(g.record_number), title: g.title, role: g.role_name, screen: g.screen_label, action: g.action_label, level: g.level, priority: g.priority, status: g.status, affected: g.affected_count, notified: g.notified_count,
+    casesCount: g.cases_count === undefined ? (cases ? cases.length : 0) : g.cases_count, openedBy: g.opened_by_name, createdAt: sqlUtcIso(g.created_at),
+    ...(withCases ? { cases: (cases || []).map((c) => ({ id: c.id, folio: supportFolio(c.record_number), reporter: c.reporter_name, status: c.status, level: c.level, priority: c.priority })) } : {}),
+});
+app.get('/api/business/support-cases/:id/classification', requireAuth, (req, res) => {
+    const rec = supportClassGate(req, res);
+    if (!rec) return;
+    const map = supportMapPayload(getSupportMapRow(req.user.clientId), req).map;
+    const canOperate = supportCanOperateClass(req, rec);
+    const general = rec.general_id ? getSupportGeneralById(rec.general_id) : null;
+    const out = {
+        canOperate, type: rec.case_type, classifiedAt: sqlUtcIso(rec.classified_at), classifiedBy: rec.classified_by || '', locked: !!rec.general_id,
+        general: general ? supportGeneralOf(general, listSupportGeneralCases(general.id), { withCases: true }) : null, analysis: null,
+        levels: SupportRules.enabledLevels(map).filter((l) => l !== 'n4'), titleMin: SUPPORT_GENERAL_TITLE_MIN, titleMax: SUPPORT_GENERAL_TITLE_MAX, defaultTitle: rec.summary.slice(0, SUPPORT_GENERAL_TITLE_MAX),
+    };
+    if (canOperate && !rec.general_id) {
+        const a = supportAffectedOf(req, rec);
+        out.analysis = {
+            roleName: a.role ? a.role.roleName : '', roleCount: a.people.length, affectedCount: a.affected.length, accessChecked: a.accessChecked, screen: rec.screen_label, action: rec.action_label,
+            similar: listSimilarSupportCases(rec).map((c) => ({ id: c.id, folio: supportFolio(c.record_number), reporter: c.reporter_name, status: c.status, level: c.level, priority: c.priority, summary: c.summary })),
+            openGenerals: listOpenSupportGenerals(req.user.clientId, req.user.isTestAccount).map((g) => ({ ...supportGeneralOf(g), sameScreen: !!rec.screen_node && g.screen_node === rec.screen_node && (!g.action_leaf || g.action_leaf === rec.action_leaf) })),
+        };
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json(out);
+});
+app.post('/api/business/support-cases/:id/classify', requireAuth, (req, res) => {
+    const rec = supportClassGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!supportCanOperateClass(req, rec)) return res.status(403).json({ message: 'Solo la Mesa de ayuda (o quien atiende el caso) lo clasifica.', code: 'FORBIDDEN' });
+    if (rec.general_id) return bad('Este caso ya es Preventivo y está ligado a un Soporte general.', 'ALREADY');
+    if (!['c', 'p'].includes(body.type)) return bad('Elige si es Correctivo o Preventivo.', 'TYPE');
+    const by = changedByLabel(req);
+    ensureSupportThread(rec);
+    const authorOpts = { level: supportAuthorLevel(req, rec), authorName: by, authorUserId: req.user.sub };
+    if (body.type === 'c') {
+        markSupportCaseClassified(rec.id, by);
+        addSupportEvent(rec, 'classified', { type: 'c', by }, authorOpts);
+        return res.json({ type: 'c', general: null });
+    }
+    const map = supportMapPayload(getSupportMapRow(req.user.clientId), req).map;
+    const mode = body.mode === 'existing' ? 'existing' : 'new';
+    // los casos parecidos que se juntan (solo los que el sistema propuso: de esta empresa, de la semana, en curso y sin Soporte general)
+    const similarIds = new Set(listSimilarSupportCases(rec).map((c) => c.id));
+    const extra = [...new Set((Array.isArray(body.linkCaseIds) ? body.linkCaseIds : []).map(Number).filter((n) => Number.isInteger(n) && n !== rec.id))];
+    if (extra.some((n) => !similarIds.has(n))) return bad('Uno de los casos que quieres juntar no es parecido a este (o ya está ligado a un Soporte general).', 'CASES');
+    let general;
+    const a = supportAffectedOf(req, rec);
+    const notify = body.notify !== false;
+    if (mode === 'existing') {
+        general = getSupportGeneral(Number(body.generalId), req.user.clientId, req.user.isTestAccount);
+        if (!general || general.status !== 'open') return bad('Ese Soporte general no existe o ya no está abierto.', 'GENERAL');
+    } else {
+        const title = String(body.title === null || body.title === undefined ? '' : body.title).replace(/\s+/g, ' ').trim().slice(0, SUPPORT_GENERAL_TITLE_MAX);
+        if (title.length < SUPPORT_GENERAL_TITLE_MIN) return bad('Escribe qué es el problema (al menos una frase corta).', 'TITLE');
+        const level = body.level ? String(body.level) : (SupportRules.enabledLevels(map).filter((l) => l !== 'n4').includes(rec.level) ? rec.level : 'n1');
+        if (!SupportRules.enabledLevels(map).filter((l) => l !== 'n4').includes(level)) return bad('Ese nivel no atiende Soportes generales.', 'LEVEL');
+        general = createSupportGeneral({
+            clientId: req.user.clientId, isTestAccount: req.user.isTestAccount, title, roleId: a.role ? a.role.roleId : null, roleName: a.role ? a.role.roleName : '', screenNode: rec.screen_node || '', actionLeaf: rec.action_leaf || '',
+            screenLabel: rec.screen_label || '', actionLabel: rec.action_label || '', level, priority: rec.priority, affected: a.affected.length, notified: 0, byUserId: req.user.sub, byName: by,
+        });
+    }
+    const linkedIds = [rec.id, ...extra];
+    const linked = linkSupportCasesToGeneral({ generalId: general.id, caseIds: linkedIds, by });
+    const folio = supportGeneralFolio(linked.record_number);
+    addSupportEvent(rec, 'classified', { type: 'p', general: folio, generalId: linked.id, created: mode === 'new', others: extra.length, by }, authorOpts);
+    supportLogCaseChange(req, rec, 'main.colSpTipo', supportTypeLabel(rec.case_type), supportTypeLabel('p'));
+    const others = extra.map((id) => getSupportCaseById(id)).filter(Boolean);
+    others.forEach((c) => {
+        addSupportEvent(c, 'general_linked', { general: folio, generalId: linked.id, by }, { level: c.level, authorName: by, authorUserId: req.user.sub });
+        supportLogCaseChange(req, c, 'main.colSpTipo', supportTypeLabel(c.case_type), supportTypeLabel('p'));
+    });
+    // avisos de la campana: a quien reportó cada caso ligado («tu caso se ligó») y, al abrir uno nuevo, a las demás personas que podrían verse afectadas («lo estamos revisando»)
+    const caseNotice = (c) => ({ variant: 'general-linked', caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, generalFolio: folio, generalTitle: linked.title, by });
+    const reporters = new Set([rec, ...others].map((c) => c.reporter_user_id).filter(Boolean));
+    [rec, ...others].forEach((c) => { if (c.reporter_user_id && c.reporter_user_id !== req.user.sub) publishSupportNotice({ recipients: [c.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: caseNotice(c) }); });
+    let notified = 0;
+    if (mode === 'new' && notify) {
+        const list = a.affected.map((p) => p.userId).filter((uid) => !reporters.has(uid) && uid !== req.user.sub).slice(0, 500);
+        notified = publishSupportNotice({ recipients: list, actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'general-notify', generalId: linked.id, generalFolio: folio, generalTitle: linked.title, roleName: a.role ? a.role.roleName : '', by } }).length;
+        setSupportGeneralNotified(linked.id, notified);
+    }
+    res.status(201).json({ type: 'p', general: supportGeneralOf(getSupportGeneralById(linked.id), listSupportGeneralCases(linked.id), { withCases: true }), notified });
 });
 // Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
 app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {

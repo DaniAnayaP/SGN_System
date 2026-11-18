@@ -9107,3 +9107,14 @@ video.sc-att.big{ max-width: 100%; max-height: 360px; }
 .sc-warn{ display: grid; gap: 0.3rem; padding: 0.5rem 0.7rem; border-radius: 0.6rem; background: #fdeed8; color: #6b3f06; font-size: 0.78rem; }
 .sc-warn label{ display: inline-flex; align-items: center; gap: 0.4rem; }
 .sc-why{ text-align: left; font-size: 0.74rem; background: var(--color-surface); color: var(--color-text-primary); border-radius: 0.5rem; padding: 0.35rem 0.6rem; max-width: 100%; overflow-wrap: anywhere; }
+
+/* Casos de soporte > un caso: estatus, clasificación (Correctivo / Preventivo) y Soporte general */
+.sp-tag.sp-general{ background: #e7e1f7; color: #4b2f9a; border-color: transparent; }
+.sp-status[data-k="review"]{ background: #dde8fb; color: #2a54a8; border-color: transparent; } .sp-status[data-k="working"]{ background: #fdeed8; color: #8a5a1d; border-color: transparent; } .sp-status[data-k="testing"]{ background: #e7e1f7; color: #4b2f9a; border-color: transparent; }
+.sc-status-pick{ font: inherit; font-size: 0.74rem; padding: 0.15rem 0.5rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; }
+.sc-sg{ display: grid; gap: 0.6rem; padding: 0.7rem 0.8rem; border-radius: 0.7rem; background: var(--color-surface); border: 1px solid var(--color-border); }
+.sc-sg h4{ margin: 0; font-size: 0.9rem; }
+.sc-sim{ display: grid; gap: 0.3rem; }
+.sc-sim label{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.78rem; }
+.sc-warn-line{ display: flex; align-items: flex-start; gap: 0.4rem; font-size: 0.78rem; } .sc-warn-line input{ margin-top: 0.15rem; flex: none; }
+.sc-sg-table{ overflow-x: auto; max-width: 100%; }

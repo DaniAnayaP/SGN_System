@@ -15,7 +15,7 @@ const SYSTEM_COLUMN_KEYS = [
     'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
     'colSysAnio', 'colSysSemana', 'colSysHora',
 ];
-const SEARCH_COLUMNS = ['colSpFolio', 'colSpReporto', 'colSpPantalla', 'colSpResumen', 'colSpCategoria', 'colSpTipo', 'colSpPrioridad', 'colSpNivel', 'colSpEstatus'];
+const SEARCH_COLUMNS = ['colSpFolio', 'colSpReporto', 'colSpPantalla', 'colSpResumen', 'colSpCategoria', 'colSpTipo', 'colSpGeneral', 'colSpPrioridad', 'colSpNivel', 'colSpEstatus'];
 const SR = window.SupportRules;
 const t = (key, params) => {
     let text = Dashboard.t(key);
@@ -134,6 +134,7 @@ function buildRow(r) {
         cell('colCatRegistroUnico', r.folio, 'col-system'),
         cell('colSpFolio', r.folio), timeCell('colSpFechaHora', r.createdAt), cell('colSpReporto', r.reporter), cell('colSpPantalla', r.screen), cell('colSpResumen', r.summary), cell('colSpCategoria', r.category),
         tagCell('colSpTipo', 'sp-tag sp-type', r.type, t(`main.spType_${r.type}`)),
+        r.general ? tagCell('colSpGeneral', 'sp-tag sp-general', null, r.general.folio) : cell('colSpGeneral', '—'),
         tagCell('colSpPrioridad', 'sp-tag sp-pri', String(r.priority), t(`main.msPri_${r.priority}`)),
         tagCell('colSpNivel', 'sp-tag sp-lv', r.level, t(`main.sopLevel_${r.level}`)),
         tagCell('colSpEstatus', 'sp-tag sp-status', r.status, t(`main.spStatus_${r.status}`)),

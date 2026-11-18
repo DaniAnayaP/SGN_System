@@ -3671,6 +3671,11 @@
               "permissionOnly": true
             },
             {
+              "id": "colSpGeneral",
+              "labelKey": "main.colSpGeneral",
+              "permissionOnly": true
+            },
+            {
               "id": "colSpPrioridad",
               "labelKey": "main.colSpPrioridad",
               "permissionOnly": true
@@ -3716,6 +3721,11 @@
               "permissionOnly": true
             },
             {
+              "id": "colSpClasificacion",
+              "labelKey": "main.colSpClasificacion",
+              "permissionOnly": true
+            },
+            {
               "id": "class-botones",
               "labelKey": "menu.classBotones",
               "isClassification": true,
@@ -3743,6 +3753,11 @@
                 {
                   "id": "colSpDevolver",
                   "labelKey": "main.colSpDevolver",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSpCambiarEstatus",
+                  "labelKey": "main.colSpCambiarEstatus",
                   "permissionOnly": true
                 }
               ]

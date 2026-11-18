@@ -51,6 +51,9 @@ function eventText(m) {
     if (m.eventKey === 'int_declined') return t('main.spEv_int_declined', { name: d.name || author }) + (d.reason ? ` — ${d.reason}` : '');
     if (m.eventKey === 'person_joined') return t('main.spEv_person_joined', { name: d.name || author });
     if (m.eventKey === 'moved') return t(d.direction === 'up' ? 'main.spEv_moved_up' : 'main.spEv_moved_down', { author, from: t(`main.sopLevel_${d.from}`), to: t(`main.sopLevel_${d.to}`) });
+    if (m.eventKey === 'status_changed') return t(d.auto ? 'main.spEv_status_auto' : 'main.spEv_status_changed', { author, from: t(`main.spStatus_${d.from}`), to: t(`main.spStatus_${d.to}`) });
+    if (m.eventKey === 'classified') return d.type === 'c' ? t('main.spEv_classified_c', { author }) : t(d.created ? 'main.spEv_classified_p_new' : 'main.spEv_classified_p_existing', { author, general: d.general }) + (d.others ? t('main.spEv_classified_more', { n: d.others }) : '');
+    if (m.eventKey === 'general_linked') return t('main.spEv_general_linked', { author, general: d.general });
     return m.eventKey;
 }
 // El detalle de un traspaso (solo lo ve el equipo con las notas internas): motivo, lo que hizo, las notas y cuántas evidencias.
@@ -92,9 +95,10 @@ function renderHeader() {
         const over = Date.now() > new Date(c.dueAt).getTime();
         first = `${esc(t('main.scPendingDue', { when: fmtTime(c.dueAt) }))}${over ? ` <span class="sp-overdue">${esc(t('main.spOverdue'))}</span>` : ''}`;
     } else first = esc(t('main.scPendingNoLimit'));
+    const statusPick = state.statusCan ? `<select id="sc-status-pick" class="sc-status-pick" data-help-key="spEstatus" aria-label="${esc(t('main.stChange'))}"><option value="">${esc(t('main.stChange'))}</option>${['review', 'working', 'testing'].filter((s) => s !== c.status).map((s) => `<option value="${s}">${esc(t(`main.spStatus_${s}`))}</option>`).join('')}</select>` : '';
     $('sc-head').innerHTML = `<div><h2>${esc(c.folio)} · ${esc(c.summary)}</h2><span class="sp-muted">${esc([c.screen, c.action].filter(Boolean).join(' · '))}</span></div>
         <div class="sc-tags"><span class="sp-tag sp-type" data-k="${esc(c.type)}">${esc(t(`main.spType_${c.type}`))}</span><span class="sp-tag sp-pri" data-k="${c.priority}">${esc(t(`main.msPri_${c.priority}`))}</span>
-        <span class="sp-tag sp-lv" data-k="${esc(c.level)}">${esc(t(`main.sopLevel_${c.level}`))}</span><span class="sp-tag sp-status" data-k="${esc(c.status)}">${esc(t(`main.spStatus_${c.status}`))}</span></div>`;
+        <span class="sp-tag sp-lv" data-k="${esc(c.level)}">${esc(t(`main.sopLevel_${c.level}`))}</span><span class="sp-tag sp-status" data-k="${esc(c.status)}">${esc(t(`main.spStatus_${c.status}`))}</span>${c.general ? `<span class="sp-tag sp-general" title="${esc(t('main.colSpGeneral'))}">${esc(c.general.folio)}</span>` : ''}${statusPick}</div>`;
     $('sc-meta').innerHTML = `<dl class="sp-meta"><div><dt>${esc(t('main.colSpReporto'))}</dt><dd>${esc(c.reporter || '—')}</dd></div><div><dt>${esc(t('main.colSpFechaHora'))}</dt><dd>${esc(fmtDate(c.createdAt))}</dd></div>
         <div><dt>${esc(t('main.colSpCategoria'))}</dt><dd>${esc(c.category || '—')}</dd></div><div data-help-key="spPrimeraResp"><dt>${esc(t('main.scFirstResponse'))}</dt><dd>${first}</dd></div>
         <div><dt>${esc(t('main.spFWhen'))}</dt><dd>${esc(t(`main.spWhen_${c.whenAffects}`))}</dd></div><div><dt>${esc(t('main.spFKeep'))}</dt><dd>${esc(c.keepWorking ? t('main.spYes') : t('main.spNo'))}</dd></div>
@@ -145,6 +149,7 @@ async function loadCase() {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.message || 'load failed');
     state.c = body.case; state.files = body.files || []; state.chat = body.chat; state.contactCan = !!(body.contact && body.contact.canSee); state.peopleCan = !!(body.people && body.people.canSee);
+    state.statusCan = !!body.statusCan; state.classCan = !!body.classCan;
 }
 async function loadMessages(first) {
     if (!state.chat.canSee) return false;
@@ -164,6 +169,7 @@ async function refresh(first) {
             renderHeader(); renderFiles();
             if (state.contactCan) await reloadContact();
             await reloadMoves();
+            await reloadClass();
         }
         if (!first && state.peopleCan) await reloadPeople();
         if (first || got) { renderThread(first); renderFlow(); }
@@ -586,6 +592,137 @@ document.addEventListener('click', (event) => {
     if (mv && moveState.data) openMove(mv.dataset.move);
 });
 
+// ---- estatus y clasificación (Correctivo / Preventivo) -------------------------------------------------------------------------------------------------------------
+// El estatus se cambia desde el desplegable del encabezado (con el botón «Cambiar estatus» del árbol). La tarjeta «Clasificación» (columna del árbol) le muestra a la Mesa de ayuda el rol de quien reportó, cuántas personas lo tienen
+// y los casos parecidos de la semana; ella decide si es Correctivo o Preventivo (y en ese caso abre un Soporte general o liga el caso a uno abierto). Preventivo ya no regresa.
+const STATUS_TARGETS = ['review', 'working', 'testing'];
+const classState = { data: null, form: null };
+async function changeStatus(status) {
+    try {
+        const res = await fetch(`${API}/${caseId}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status }) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); await loadCase(); renderHeader(); return; }
+        Dashboard.showToast(t('main.stDone', { status: t(`main.spStatus_${status}`) }), 'success');
+        await loadCase(); renderHeader();
+        await refresh(false);
+        renderThread(true);
+    } catch (err) {
+        console.error('Caso de soporte: failed to change status', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+    }
+}
+async function loadClass() {
+    const res = await fetch(`${API}/${caseId}/classification`, { credentials: 'include' });
+    if (!res.ok) return false;
+    classState.data = await res.json();
+    return true;
+}
+function newClassForm() {
+    const d = classState.data;
+    const a = d.analysis;
+    return { type: '', mode: 'new', title: d.defaultTitle, level: d.levels.includes(state.c.level) ? state.c.level : d.levels[0], notify: true, general: a && a.openGenerals.length ? String((a.openGenerals.find((g) => g.sameScreen) || a.openGenerals[0]).id) : '', link: new Set(a ? a.similar.map((c) => c.id) : []), sending: false };
+}
+function generalBoxHtml(g) {
+    const rows = (g.cases || []).map((c) => `<tr><td><b>${esc(c.folio)}</b></td><td>${esc(c.reporter || '—')}</td><td>${lvBadge(c.level)}</td><td><span class="sp-tag sp-status" data-k="${esc(c.status)}">${esc(t(`main.spStatus_${c.status}`))}</span></td></tr>`).join('');
+    return `<div class="sc-sg"><div class="sc-card-head"><h4>${esc(t('main.clGeneralTitle', { folio: g.folio }))}</h4><span class="sp-tag sp-type" data-k="p">${esc(t('main.spType_p'))}</span></div>
+        <dl class="sp-meta"><div class="sp-wide"><dt>${esc(t('main.clGenWhat'))}</dt><dd>${esc(g.title)}</dd></div><div><dt>${esc(t('main.clGenRole'))}</dt><dd>${esc(g.role ? t('main.clGenRoleVal', { role: g.role, n: g.affected }) : '—')}</dd></div>
+        <div><dt>${esc(t('main.clGenLevel'))}</dt><dd>${esc(t(`main.sopLevel_${g.level}`))}</dd></div><div><dt>${esc(t('main.colSpPrioridad'))}</dt><dd><span class="sp-tag sp-pri" data-k="${g.priority}">${esc(t(`main.msPri_${g.priority}`))}</span></dd></div><div><dt>${esc(t('main.clGenNotified'))}</dt><dd>${g.notified}</dd></div></dl>
+        <div class="sc-sg-table"><table class="ms-table"><thead><tr><th>${esc(t('main.clColCase'))}</th><th>${esc(t('main.clColUser'))}</th><th>${esc(t('main.colSpNivel'))}</th><th>${esc(t('main.colSpEstatus'))}</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="sp-muted">${esc(t('main.clGenHint'))}</p></div>`;
+}
+function renderClass() {
+    const d = classState.data;
+    const box = $('sc-class-card');
+    if (!d) { box.hidden = true; return; }
+    box.hidden = false;
+    const c = state.c;
+    const typeTag = `<span class="sp-tag sp-type" data-k="${esc(c.type)}">${esc(t(`main.spType_${c.type}`))}</span>`;
+    const decided = d.classifiedAt ? `<span class="sp-muted">${esc(t('main.clDecided', { by: d.classifiedBy || '—', when: fmtTime(d.classifiedAt) }))}</span>` : `<span class="sp-muted">${esc(t('main.clPending'))}</span>`;
+    let inner = '';
+    if (d.general) inner = generalBoxHtml(d.general) + `<p class="sp-muted">${esc(t('main.clLocked'))}</p>`;
+    else if (d.canOperate && d.analysis) {
+        if (!classState.form) classState.form = newClassForm();
+        const f = classState.form; const a = d.analysis;
+        const facts = `<dl class="sp-meta"><div><dt>${esc(t('main.clRole'))}</dt><dd>${esc(a.roleName || t('main.clNoRole'))}</dd></div><div><dt>${esc(t('main.clRoleCount'))}</dt><dd>${a.roleCount}</dd></div>
+            <div><dt>${esc(t('main.clAffected'))}</dt><dd>${a.accessChecked ? a.affectedCount : `${a.affectedCount} <span class="sp-muted">${esc(t('main.clAffectedAll'))}</span>`}</dd></div><div><dt>${esc(t('main.clSimilarCount'))}</dt><dd>${a.similar.length}</dd></div></dl>`;
+        const choice = `<div class="sp-field"><span>${esc(t('main.clQuestion'))} *</span><div class="sp-chips" role="radiogroup"><button type="button" class="sp-chip${f.type === 'c' ? ' on' : ''}" role="radio" aria-checked="${f.type === 'c'}" data-cl-type="c">${esc(t('main.clNo'))} · <b>${esc(t('main.spType_c'))}</b></button>
+            <button type="button" class="sp-chip${f.type === 'p' ? ' on' : ''}" role="radio" aria-checked="${f.type === 'p'}" data-cl-type="p">${esc(t('main.clYes'))} · <b>${esc(t('main.spType_p'))}</b></button></div></div>`;
+        let more = '';
+        if (f.type === 'p') {
+            const modes = a.openGenerals.length ? `<div class="sp-chips" role="radiogroup"><button type="button" class="sp-chip${f.mode === 'new' ? ' on' : ''}" data-cl-mode="new">${esc(t('main.clModeNew'))}</button><button type="button" class="sp-chip${f.mode === 'existing' ? ' on' : ''}" data-cl-mode="existing">${esc(t('main.clModeExisting'))}</button></div>` : '';
+            const fresh = f.mode === 'new'
+                ? `<label class="sp-field"><span>${esc(t('main.clGenTitleLabel'))} * <small class="sp-muted">${esc(t('main.clGenTitleHint'))}</small></span><input type="text" id="cl-title" maxlength="${d.titleMax}" value="${esc(f.title)}"></label>
+                   <label class="sp-field"><span>${esc(t('main.clGenLevel'))}</span><select id="cl-level">${d.levels.map((l) => `<option value="${l}"${l === f.level ? ' selected' : ''}>${esc(t(`main.sopLevel_${l}`))}</option>`).join('')}</select></label>
+                   ${a.affectedCount > 1 ? `<label class="sc-warn-line"><input type="checkbox" id="cl-notify"${f.notify ? ' checked' : ''}> ${esc(t('main.clNotify', { n: Math.max(0, a.affectedCount - 1) }))}</label>` : `<p class="sp-muted">${esc(t('main.clNotifyNone'))}</p>`}`
+                : `<label class="sp-field"><span>${esc(t('main.clPickGeneral'))} *</span><select id="cl-general">${a.openGenerals.map((g) => `<option value="${g.id}"${String(g.id) === f.general ? ' selected' : ''}>${esc(`${g.folio} · ${g.title}${g.sameScreen ? ` ★ ${t('main.clSameScreen')}` : ''}`)}</option>`).join('')}</select></label>`;
+            const similar = a.similar.length ? `<div class="sp-field"><span>${esc(t('main.clSimilarTitle'))} <small class="sp-muted">${esc(t('main.clSimilarHint'))}</small></span><div class="sc-sim">${a.similar.map((s) => `<label><input type="checkbox" data-cl-link="${s.id}"${f.link.has(s.id) ? ' checked' : ''}> <b>${esc(s.folio)}</b> · ${esc(s.reporter || '—')} · ${esc(s.summary)} <span class="sp-tag sp-status" data-k="${esc(s.status)}">${esc(t(`main.spStatus_${s.status}`))}</span></label>`).join('')}</div></div>` : `<p class="sp-muted">${esc(t('main.clSimilarNone'))}</p>`;
+            more = `${modes}${fresh}${similar}`;
+        }
+        const label = f.type === 'p' ? (f.mode === 'new' ? t('main.clSaveP') : t('main.clSavePExisting')) : t('main.clSaveC');
+        inner = `${facts}${choice}${more}<div class="admin-form-actions"><button type="button" class="btn" id="cl-save"${f.type && !f.sending ? '' : ' disabled'}>${esc(f.sending ? t('main.spFSending') : label)}</button></div>`;
+    } else inner = `<p class="sp-muted">${esc(t('main.clReadOnly'))}</p>`;
+    box.innerHTML = `<div class="sc-card-head"><h3>${esc(t('main.clTitle'))}</h3><div class="sc-tags">${typeTag}${decided}</div></div>${inner}`;
+}
+async function reloadClass() {
+    if (!state.classCan) return;
+    if (await loadClass()) {
+        if (classState.data.general || !classState.data.canOperate) classState.form = null;
+        renderClass();
+    }
+}
+async function submitClass() {
+    const f = classState.form; const d = classState.data;
+    if (!f || f.sending) return;
+    if (!f.type) { Dashboard.showToast(t('main.clErrType'), 'warning'); return; }
+    const body = { type: f.type };
+    if (f.type === 'p') {
+        body.mode = f.mode; body.linkCaseIds = [...f.link];
+        if (f.mode === 'new') {
+            if (f.title.trim().length < d.titleMin) { Dashboard.showToast(t('main.clErrTitle'), 'warning'); return; }
+            body.title = f.title; body.level = f.level; body.notify = f.notify;
+        } else {
+            if (!f.general) { Dashboard.showToast(t('main.clErrGeneral'), 'warning'); return; }
+            body.generalId = Number(f.general);
+        }
+    }
+    f.sending = true; renderClass();
+    try {
+        const res = await fetch(`${API}/${caseId}/classify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); f.sending = false; renderClass(); return; }
+        Dashboard.showToast(out.type === 'p' ? t('main.clDoneP', { folio: out.general.folio }) : t('main.clDoneC'), 'success');
+        classState.form = null;
+        await loadCase(); renderHeader();
+        await reloadClass();
+        await refresh(false);
+        renderThread(true);
+    } catch (err) {
+        console.error('Caso de soporte: failed to classify', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        if (classState.form) { classState.form.sending = false; renderClass(); }
+    }
+}
+document.addEventListener('change', (event) => {
+    const el = event.target;
+    if (el.id === 'sc-status-pick') { const v = el.value; if (v) changeStatus(v); return; }
+    const f = classState.form; if (!f) return;
+    if (el.id === 'cl-level') f.level = el.value;
+    else if (el.id === 'cl-general') f.general = el.value;
+    else if (el.id === 'cl-notify') f.notify = el.checked;
+    else if (el.dataset && el.dataset.clLink) { const id = Number(el.dataset.clLink); if (el.checked) f.link.add(id); else f.link.delete(id); }
+});
+document.addEventListener('input', (event) => {
+    if (event.target.id === 'cl-title' && classState.form) classState.form.title = event.target.value;
+});
+document.addEventListener('click', (event) => {
+    const f = classState.form; if (!f || f.sending) return;
+    const ty = event.target.closest('[data-cl-type]');
+    if (ty) { f.type = ty.dataset.clType; renderClass(); return; }
+    const mo = event.target.closest('[data-cl-mode]');
+    if (mo) { f.mode = mo.dataset.clMode; renderClass(); return; }
+    if (event.target.closest('#cl-save')) submitClass();
+});
+
 // ---- eventos ----------------------------------------------------------------------------------------------------------------------------
 document.addEventListener('click', (event) => {
     const tab = event.target.closest('[data-tab]');
@@ -630,6 +767,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
         if (state.contactCan) { await loadScreens(); await loadContact(); renderContact(); }
         if (state.peopleCan) { await loadPeople(); renderPeople(); }
         if (state.chat.canSee && !state.chat.isReporter) { if (await loadMoves()) renderLane(); }
+        if (state.classCan) { if (await loadClass()) renderClass(); }
         if (state.chat.canSee) { await loadMessages(true); renderTabs(); renderThread(true); renderFlow(); renderComposer(); } else { $('sc-chat-card').hidden = true; $('sc-flow-card').hidden = true; }
         state.timer = setInterval(() => { if (!document.hidden) refresh(false); }, POLL_MS);
     } catch (err) {

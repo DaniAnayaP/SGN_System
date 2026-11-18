@@ -69,6 +69,7 @@ const TABLES = {
     support_case_files: { action: WIPE, group: 'captures' }, // y sus evidencias (capturas, grabaciones de pantalla, archivos)
     support_case_moves: { action: WIPE, group: 'captures' }, // los traspasos de cada caso (subió o se devolvió, con su motivo y lo que se hizo)
     support_case_people: { action: WIPE, group: 'captures' }, // los avisos e invitaciones de cada caso (y a quién subieron)
+    support_generals: { action: WIPE, group: 'captures' }, // los Soportes generales (SG-0007): lo que se abre cuando un caso Preventivo puede afectar a más personas con el mismo rol
     support_access_requests: { action: WIPE, group: 'captures' }, // los accesos que la Mesa de ayuda pidió para quien reportó
     support_case_messages: { action: WIPE, group: 'captures' }, // y el chat de cada caso (mensajes, notas internas y renglones del sistema)
     // Personalización y reglas de cada cliente

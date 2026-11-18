@@ -14658,7 +14658,7 @@ db.exec(`
 // first_response_at: cuándo respondió por primera vez alguien del equipo (la de un mensaje, no la de una nota). level de una evidencia: el nivel de quien la subió (n0 = el usuario).
 if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === 'first_response_at')) db.exec('ALTER TABLE support_cases ADD COLUMN first_response_at TEXT');
 if (!db.prepare('PRAGMA table_info(support_case_files)').all().some((c) => c.name === 'level')) db.exec("ALTER TABLE support_case_files ADD COLUMN level TEXT NOT NULL DEFAULT ''");
-const SUPPORT_CASE_SELECT = 'SELECT c.*, (SELECT COUNT(*) FROM support_case_files f WHERE f.case_id = c.id) AS file_count FROM support_cases c';
+const SUPPORT_CASE_SELECT = 'SELECT c.*, (SELECT COUNT(*) FROM support_case_files f WHERE f.case_id = c.id) AS file_count, (SELECT g.record_number FROM support_generals g WHERE g.id = c.general_id) AS general_number FROM support_cases c';
 // Un caso por su id, sin importar de quién es (para lo que corre solo, como pasar un aviso al jefe).
 function getSupportCaseById(id) {
     return db.prepare(`${SUPPORT_CASE_SELECT} WHERE c.id = ?`).get(id) || null;
@@ -14850,7 +14850,7 @@ function addSupportMove(m) {
     return db.transaction(() => {
         const id = db.prepare('INSERT INTO support_case_moves (case_id, client_id, direction, from_level, to_level, reason, did, notes, file_ids, missing_ack, by_user_id, by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
             .run(m.caseId, m.clientId, m.direction, m.fromLevel, m.toLevel, m.reason, m.did, m.notes, JSON.stringify(m.fileIds || []), m.missingAck ? 1 : 0, m.byUserId || null, m.byName || '').lastInsertRowid;
-        db.prepare('UPDATE support_cases SET level = ? WHERE id = ?').run(m.toLevel, m.caseId);
+        db.prepare("UPDATE support_cases SET level = ?, status = 'open' WHERE id = ?").run(m.toLevel, m.caseId); // al llegar a un nivel nadie lo ha tomado: vuelve a «Abierto»
         return db.prepare('SELECT * FROM support_case_moves WHERE id = ?').get(id);
     })();
 }
@@ -14859,6 +14859,106 @@ function usedSupportMoveFileIds(caseId) {
     const used = new Set();
     listSupportMoves(caseId).forEach((m) => { try { JSON.parse(m.file_ids || '[]').forEach((id) => used.add(Number(id))); } catch { /* sin evidencias legibles */ } });
     return used;
+}
+// ---- Estatus y clasificación del caso (Correctivo / Preventivo) y Soporte general ----------------------------------------------------------------------------------------------------------
+// Estatus en curso (open = Abierto, review = En revisión, working = En trabajo, testing = En pruebas); «Por confirmar con el usuario» y «Terminado» llegan con el cierre. Un caso que cambia de nivel vuelve a «Abierto»
+// (nadie de ese nivel lo ha tomado). La Mesa de ayuda decide al dar seguimiento si el caso es Correctivo (solo le afectó a ese usuario) o Preventivo (puede afectar a más personas con el mismo rol): el Preventivo se liga a un
+// Soporte general (SG-0007), que junta los casos parecidos para resolverlos una sola vez. classified_at / classified_by = cuándo y quién lo decidió (vacío = todavía sin clasificar, se queda como Correctivo).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS support_generals (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id          INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data       INTEGER NOT NULL DEFAULT 0,
+        record_number      INTEGER NOT NULL,
+        title              TEXT NOT NULL DEFAULT '',
+        role_id            INTEGER,
+        role_name          TEXT NOT NULL DEFAULT '',
+        screen_node        TEXT NOT NULL DEFAULT '',
+        action_leaf        TEXT NOT NULL DEFAULT '',
+        screen_label       TEXT NOT NULL DEFAULT '',
+        action_label       TEXT NOT NULL DEFAULT '',
+        level              TEXT NOT NULL DEFAULT 'n1',
+        priority           INTEGER NOT NULL DEFAULT 4,
+        status             TEXT NOT NULL DEFAULT 'open',
+        affected_count     INTEGER NOT NULL DEFAULT 0,
+        notified_count     INTEGER NOT NULL DEFAULT 0,
+        opened_by_user_id  INTEGER,
+        opened_by_name     TEXT NOT NULL DEFAULT '',
+        created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (client_id, record_number)
+    );
+`);
+for (const [col, ddl] of [['general_id', 'INTEGER'], ['classified_at', 'TEXT'], ['classified_by', "TEXT NOT NULL DEFAULT ''"]]) {
+    if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE support_cases ADD COLUMN ${col} ${ddl}`);
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_support_cases_general ON support_cases (general_id)');
+const SUPPORT_OPEN_STATUSES_SQL = "('open','review','working','testing')";
+function setSupportCaseStatus(caseId, status) {
+    db.prepare('UPDATE support_cases SET status = ? WHERE id = ?').run(status, caseId);
+}
+const SUPPORT_GENERAL_SELECT = 'SELECT g.*, (SELECT COUNT(*) FROM support_cases c WHERE c.general_id = g.id) AS cases_count FROM support_generals g';
+function getSupportGeneral(id, clientId, isTestAccount) {
+    return db.prepare(`${SUPPORT_GENERAL_SELECT} WHERE g.id = ? AND g.client_id = ? AND g.is_test_data = ?`).get(id, clientId, isTestAccount ? 1 : 0) || null;
+}
+function getSupportGeneralById(id) {
+    return db.prepare(`${SUPPORT_GENERAL_SELECT} WHERE g.id = ?`).get(id) || null;
+}
+// Los Soportes generales abiertos de la empresa (para ligar un caso nuevo a uno que ya existe).
+function listOpenSupportGenerals(clientId, isTestAccount) {
+    return db.prepare(`${SUPPORT_GENERAL_SELECT} WHERE g.client_id = ? AND g.is_test_data = ? AND g.status = 'open' ORDER BY g.id DESC LIMIT 200`).all(clientId, isTestAccount ? 1 : 0);
+}
+function listSupportGeneralCases(generalId) {
+    return db.prepare('SELECT id, record_number, reporter_user_id, reporter_name, status, level, priority, summary, created_at FROM support_cases WHERE general_id = ? ORDER BY id ASC').all(generalId);
+}
+// El folio es por empresa (SG-0001, SG-0002...); la cuenta de prueba comparte la secuencia para no repetir folios.
+function createSupportGeneral(g) {
+    return db.transaction(() => {
+        const n = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM support_generals WHERE client_id = ?').get(g.clientId).n;
+        const id = db.prepare(`INSERT INTO support_generals (client_id, is_test_data, record_number, title, role_id, role_name, screen_node, action_leaf, screen_label, action_label, level, priority, affected_count, notified_count, opened_by_user_id, opened_by_name)
+            VALUES (@clientId, @isTest, @n, @title, @roleId, @roleName, @screenNode, @actionLeaf, @screenLabel, @actionLabel, @level, @priority, @affected, @notified, @byUserId, @byName)`).run({
+            clientId: g.clientId, isTest: g.isTestAccount ? 1 : 0, n, title: g.title, roleId: g.roleId || null, roleName: g.roleName || '', screenNode: g.screenNode || '', actionLeaf: g.actionLeaf || '', screenLabel: g.screenLabel || '', actionLabel: g.actionLabel || '',
+            level: g.level, priority: g.priority, affected: g.affected || 0, notified: g.notified || 0, byUserId: g.byUserId || null, byName: g.byName || '',
+        }).lastInsertRowid;
+        return getSupportGeneralById(id);
+    })();
+}
+// Pasa los casos a Preventivo y los liga al Soporte general; la prioridad del general es la del caso más urgente que junta.
+function linkSupportCasesToGeneral({ generalId, caseIds, by }) {
+    return db.transaction(() => {
+        const mark = db.prepare("UPDATE support_cases SET case_type = 'p', general_id = ?, classified_at = datetime('now'), classified_by = ? WHERE id = ?");
+        caseIds.forEach((id) => mark.run(generalId, by || '', id));
+        const best = db.prepare('SELECT MIN(priority) AS p FROM support_cases WHERE general_id = ?').get(generalId).p;
+        if (best) db.prepare('UPDATE support_generals SET priority = ? WHERE id = ?').run(best, generalId);
+        return getSupportGeneralById(generalId);
+    })();
+}
+// «No, solo le afectó a este usuario»: se queda como Correctivo y queda anotado quién lo decidió.
+function markSupportCaseClassified(caseId, by) {
+    db.prepare("UPDATE support_cases SET classified_at = datetime('now'), classified_by = ? WHERE id = ?").run(by || '', caseId);
+}
+function setSupportGeneralNotified(generalId, n) {
+    db.prepare('UPDATE support_generals SET notified_count = ? WHERE id = ?').run(n, generalId);
+}
+// Los casos parecidos que se podrían juntar: de la misma empresa, de los últimos 7 días, todavía sin Soporte general y en curso; la misma pantalla y acción, o (si el caso no tiene pantalla) la misma categoría.
+function listSimilarSupportCases(rec, { days = 7 } = {}) {
+    const base = `SELECT id, record_number, reporter_user_id, reporter_name, status, level, priority, summary, created_at FROM support_cases WHERE client_id = ? AND is_test_data = ? AND id != ? AND general_id IS NULL AND status IN ${SUPPORT_OPEN_STATUSES_SQL} AND created_at >= datetime('now', ?)`;
+    const span = `-${Math.max(1, Math.round(days))} days`;
+    if (rec.screen_node) {
+        return rec.action_leaf
+            ? db.prepare(`${base} AND screen_node = ? AND action_leaf = ? ORDER BY id ASC LIMIT 50`).all(rec.client_id, rec.is_test_data, rec.id, span, rec.screen_node, rec.action_leaf)
+            : db.prepare(`${base} AND screen_node = ? ORDER BY id ASC LIMIT 50`).all(rec.client_id, rec.is_test_data, rec.id, span, rec.screen_node);
+    }
+    return db.prepare(`${base} AND screen_node = '' AND category_id IS ? ORDER BY id ASC LIMIT 50`).all(rec.client_id, rec.is_test_data, rec.id, span, rec.category_id);
+}
+// El rol de una persona (su puesto en Mi Recurso Humano) y las personas de la empresa con ese mismo rol.
+function getSupportUserRole(userId) {
+    const r = db.prepare('SELECT hw.job_position_id AS roleId, jp.name AS roleName FROM hr_workers hw LEFT JOIN job_positions jp ON jp.id = hw.job_position_id WHERE hw.user_id = ?').get(userId);
+    return r && r.roleId ? { roleId: r.roleId, roleName: r.roleName || '' } : null;
+}
+function listSupportSameRolePeople(clientId, roleId, isTestAccount) {
+    if (!roleId) return [];
+    return db.prepare('SELECT hw.user_id AS userId, u.name AS name FROM hr_workers hw JOIN users u ON u.id = hw.user_id WHERE hw.client_id = ? AND hw.job_position_id = ? AND hw.is_test_data = ? AND u.active != 0 AND u.is_test_account = ? ORDER BY u.name ASC LIMIT 1000')
+        .all(clientId, roleId, isTestAccount ? 1 : 0, isTestAccount ? 1 : 0);
 }
 // ---- Quién reportó y su equipo: avisos e invitaciones del caso ----------------------------------------------------------------------------------------------------------------------------
 // Una fila por persona y caso. kind: 'notify' (se le AVISA: una nota en la campana, sin entrar al chat; debe tocar «Enterado») o 'invite' (se le INVITA al chat: ve la conversación y escribe, nunca las notas internas;
@@ -15235,6 +15335,7 @@ seedSoporteEvidenceKindsOnce();
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
