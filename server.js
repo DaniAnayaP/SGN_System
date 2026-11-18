@@ -589,7 +589,7 @@ const {
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
-    listSupportScreens, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
+    listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -10220,7 +10220,7 @@ app.get('/api/business/support-cases/screens', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!(supportCan(req, 'colSpCreateAuth') || supportCanSeeContact(req))) return res.status(403).json({ message: 'No tienes permiso para ver las pantallas.' });
     res.set('Cache-Control', 'private, max-age=60');
-    res.json({ screens: listSupportScreens(req.user.clientId).map((s) => ({ id: s.id, labelKey: s.labelKey, categoryLabelKey: s.categoryLabelKey, nodeId: s.nodeId, department: s.sectionId, area: s.itemId, categoryId: s.categoryId, actions: s.actions.map((a) => ({ id: a.id, kind: a.kind, labelKey: a.labelKey, needs: a.needs })) })) });
+    res.json({ screens: listSupportScreensForUser(req.user.clientId, req.user.sub).map((s) => ({ has: s.has, id: s.id, labelKey: s.labelKey, categoryLabelKey: s.categoryLabelKey, nodeId: s.nodeId, department: s.sectionId, area: s.itemId, categoryId: s.categoryId, actions: s.actions.map((a) => ({ id: a.id, kind: a.kind, labelKey: a.labelKey, needs: a.needs })) })) });
 });
 app.get('/api/business/support-cases/form', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -11571,7 +11571,7 @@ app.get('/api/business/my-support/screens', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     if (!supportOpenToAll(req)) return supportNoSupport(res);
     res.set('Cache-Control', 'private, max-age=60');
-    res.json({ screens: listSupportScreens(req.user.clientId).map((s) => ({ id: s.id, labelKey: s.labelKey, categoryLabelKey: s.categoryLabelKey, nodeId: s.nodeId, department: s.sectionId, area: s.itemId, categoryId: s.categoryId, actions: s.actions.map((a) => ({ id: a.id, kind: a.kind, labelKey: a.labelKey, needs: a.needs })) })) });
+    res.json({ screens: listSupportScreensForUser(req.user.clientId, req.user.sub).map((s) => ({ has: s.has, id: s.id, labelKey: s.labelKey, categoryLabelKey: s.categoryLabelKey, nodeId: s.nodeId, department: s.sectionId, area: s.itemId, categoryId: s.categoryId, actions: s.actions.map((a) => ({ id: a.id, kind: a.kind, labelKey: a.labelKey, needs: a.needs })) })) });
 });
 app.post('/api/business/my-support', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });

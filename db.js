@@ -14768,6 +14768,16 @@ function listSupportScreens(clientId) {
     const modules = new Set(getClientModuleKeys(clientId));
     return supportScreenCatalog().filter((s) => modules.has(s.sectionId));
 }
+// La misma lista, marcando con `has` cuáles pantallas tiene esta persona hoy: el formulario de soporte las separa en «las que ya tienes» y «las que todavía no», y quien quiere una que no tiene la puede elegir igual.
+// El administrador del cliente sin lista propia (sin restricciones) tiene lo que se le asignó en el contrato (plan + adicionales; sin nada asignado en el árbol, todo el departamento).
+function listSupportScreensForUser(clientId, userId) {
+    const screens = listSupportScreens(clientId);
+    const account = db.prepare('SELECT is_client_admin AS isClientAdmin FROM users WHERE id = ?').get(userId);
+    const eff = getUserEffectiveGrants(userId);
+    const contract = account && account.isClientAdmin && eff.length === 0 ? getClientAdminContractGrants(clientId) : null;
+    const covers = (grants, s) => grants.some((g) => g.sectionId === s.sectionId && (!g.itemId || (g.itemId === s.itemId && (!g.submenuId || g.submenuId === s.submenuPrefix || String(g.submenuId).startsWith(`${s.submenuPrefix}/`)))));
+    return screens.map((s) => ({ ...s, has: contract ? (contract.length === 0 || covers(contract, s)) : covers(eff, s) }));
+}
 function findSupportScreen(id) {
     return supportScreenCatalog().find((s) => s.id === id) || null;
 }
@@ -15706,7 +15716,7 @@ module.exports = {
     getSupportCaseById, getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
-    listSupportScreens, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
+    listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
     listTemperatureActivity, hasTemperatureActivityBefore,
     getUserExclusions, setUserExclusions, applyUserExclusions,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,
