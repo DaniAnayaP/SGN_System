@@ -3872,6 +3872,243 @@
           ]
         }
       ],
+      "cat-gestion": [
+        {
+          "id": "cat-gestion-ti-soportes-cerrados",
+          "labelKey": "menu.gesTiSoportesCerrados",
+          "abbrKeys": [
+            "menu.gesTiSoportesCerradosAbbr1"
+          ],
+          "icon": "bx-archive",
+          "href": "GesTISoportesCerrados.html",
+          "submenu": [
+            {
+              "id": "class-control-interno",
+              "labelKey": "menu.classControlInterno",
+              "isClassification": true,
+              "submenu": [
+                {
+                  "id": "colSysEmpresa",
+                  "labelKey": "main.colSysEmpresa",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysArea",
+                  "labelKey": "main.colSysArea",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysModulo",
+                  "labelKey": "main.colSysModulo",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysPantalla",
+                  "labelKey": "main.colSysPantalla",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysCentroCostos",
+                  "labelKey": "main.colSysCentroCostos",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysFecha",
+                  "labelKey": "main.colSysFecha",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysDiaNum",
+                  "labelKey": "main.colSysDiaNum",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysDiaTexto",
+                  "labelKey": "main.colSysDiaTexto",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysMesNum",
+                  "labelKey": "main.colSysMesNum",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysMesTexto",
+                  "labelKey": "main.colSysMesTexto",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysAnio",
+                  "labelKey": "main.colSysAnio",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysSemana",
+                  "labelKey": "main.colSysSemana",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSysHora",
+                  "labelKey": "main.colSysHora",
+                  "permissionOnly": true
+                }
+              ]
+            },
+            {
+              "id": "colScFolio",
+              "labelKey": "main.colScFolio",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScFechaHora",
+              "labelKey": "main.colScFechaHora",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScCerrado",
+              "labelKey": "main.colScCerrado",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScReporto",
+              "labelKey": "main.colScReporto",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScPantalla",
+              "labelKey": "main.colScPantalla",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScResumen",
+              "labelKey": "main.colScResumen",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScCategoria",
+              "labelKey": "main.colScCategoria",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScTipo",
+              "labelKey": "main.colScTipo",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScGeneral",
+              "labelKey": "main.colScGeneral",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScPrioridad",
+              "labelKey": "main.colScPrioridad",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScEstatus",
+              "labelKey": "main.colScEstatus",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScCausa",
+              "labelKey": "main.colScCausa",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScQueSeHizo",
+              "labelKey": "main.colScQueSeHizo",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScCerro",
+              "labelKey": "main.colScCerro",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScTiempo",
+              "labelKey": "main.colScTiempo",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScReabierto",
+              "labelKey": "main.colScReabierto",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScCalificacion",
+              "labelKey": "main.colScCalificacion",
+              "permissionOnly": true
+            },
+            {
+              "id": "colScEvidencias",
+              "labelKey": "main.colScEvidencias",
+              "permissionOnly": true
+            }
+          ],
+          "iconsSubmenu": [
+            {
+              "id": "iconZoomOut",
+              "labelKey": "main.decreaseFontSize",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconZoomIn",
+              "labelKey": "main.increaseFontSize",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconPin",
+              "labelKey": "main.pinColumns",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconVisibility",
+              "labelKey": "main.columnVisibility",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconHistory",
+              "labelKey": "main.changeHistory",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconLegend",
+              "labelKey": "main.columnLegendBtn",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconFilter",
+              "labelKey": "main.filterToggle",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconFilterClear",
+              "labelKey": "main.filterClearBtn",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconFilterAdvanced",
+              "labelKey": "main.filterAdvancedBtn",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconSavedSearch",
+              "labelKey": "main.savedSearchBtn",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconSavedLayout",
+              "labelKey": "main.savedLayoutBtn",
+              "permissionOnly": true
+            },
+            {
+              "id": "iconFieldRules",
+              "labelKey": "main.fieldRulesBtn",
+              "permissionOnly": true
+            }
+          ]
+        }
+      ],
       "cat-admin": [
         {
           "id": "cat-admin-ti-mapa-soporte",

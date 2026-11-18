@@ -455,6 +455,8 @@
     "adminTiMapaSoporteAbbr1": "Sup. map",
     "opTiCasosSoporte": "Support cases",
     "opTiCasosSoporteAbbr1": "Cases",
+    "gesTiSoportesCerrados": "Closed support cases",
+    "gesTiSoportesCerradosAbbr1": "Closed",
     "opTransVolNuestrosTraslados": "Our Transfers",
     "opTransVolNuestrosTrasladosAbbr1": "Our Transf.",
     "opTransVolNuestrosTrasladosAbbr2": "Transfers",
@@ -4531,6 +4533,24 @@
     "colSpEstatus": "Status",
     "colSpResponder": "Respond before",
     "colSpEvidencias": "Evidence",
+    "colScFolio": "Folio",
+    "colScFechaHora": "Opened",
+    "colScCerrado": "Closed",
+    "colScReporto": "Reported by",
+    "colScPantalla": "Screen",
+    "colScResumen": "Summary",
+    "colScCategoria": "Category",
+    "colScTipo": "Type",
+    "colScGeneral": "General support",
+    "colScPrioridad": "Priority",
+    "colScEstatus": "Status",
+    "colScCausa": "Cause",
+    "colScQueSeHizo": "What was done",
+    "colScCerro": "Closed by",
+    "colScTiempo": "Total time",
+    "colScReabierto": "Times reopened",
+    "colScCalificacion": "Rating",
+    "colScEvidencias": "Evidence",
     "colSpCreateAuth": "New request",
     "spNew": "New request",
     "spNewTitle": "New support request",
@@ -7862,6 +7882,14 @@
     "spMiCola": {
       "what": "Your work queue: what you handle ordered by priority (“My queue”) and what waits at your level for you to take (“My level”). When an Urgent case arrives it is announced here with its countdown; if you are on something less urgent you say how long you have left: if it is less than the Urgent can wait, you finish first; if not, the system recommends pausing (you decide and it is recorded). A paused case notifies the user and stops its deadline clock. It is enabled with the “My queue”, “Take cases” and “Pause and resume” tree sheets.",
       "example": "An Urgent arrives; Marta is on a usage question with 30 minutes left: the system recommends pausing it and handling the Urgent."
+    },
+    "scCausaCol": {
+      "what": "The cause the Help desk chose when closing the case (System error, Lack of training, Wrongly assigned permissions...). It comes from the “Support causes” catalog. A case closed without reply has no cause.",
+      "example": "System error."
+    },
+    "scTiempoCol": {
+      "what": "What passed from when the case was opened until it was closed (it includes the time paused and the time it waited for the user).",
+      "example": "1 d 5 h: opened Monday at 10:00 and closed Tuesday at 15:00."
     },
     "spPersonas": {
       "what": "The reporter’s profile and their org chart (from Roles, Users and My Human Resource): the managers above, their direct manager and their coworkers. With View and operate, mark each person with \"Notify\" (a note in their bell, without entering the chat; they must tap \"Acknowledged\") or \"Invite\" (they join the chat and do not see internal notes; they must accept). If someone does not respond in the Support map deadline, or declines, the notice goes to their manager with the note of what happened, and so on upward.",

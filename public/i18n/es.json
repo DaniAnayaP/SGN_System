@@ -459,6 +459,8 @@
     "adminTiMapaSoporteAbbr1": "Mapa soporte",
     "opTiCasosSoporte": "Casos de soporte",
     "opTiCasosSoporteAbbr1": "Casos",
+    "gesTiSoportesCerrados": "Soportes cerrados",
+    "gesTiSoportesCerradosAbbr1": "Cerrados",
     "opTransVolNuestrosTraslados": "Nuestros Traslados",
     "opTransVolNuestrosTrasladosAbbr1": "Nuestros Trasl.",
     "opTransVolNuestrosTrasladosAbbr2": "Traslados",
@@ -4530,6 +4532,24 @@
     "colSpEstatus": "Estatus",
     "colSpResponder": "Responder antes de",
     "colSpEvidencias": "Evidencias",
+    "colScFolio": "Folio",
+    "colScFechaHora": "Abierto",
+    "colScCerrado": "Cerrado",
+    "colScReporto": "Reportó",
+    "colScPantalla": "Pantalla",
+    "colScResumen": "Resumen",
+    "colScCategoria": "Categoría",
+    "colScTipo": "Tipo",
+    "colScGeneral": "Soporte general",
+    "colScPrioridad": "Prioridad",
+    "colScEstatus": "Estatus",
+    "colScCausa": "Causa",
+    "colScQueSeHizo": "Qué se hizo",
+    "colScCerro": "Lo cerró",
+    "colScTiempo": "Tiempo total",
+    "colScReabierto": "Veces reabierto",
+    "colScCalificacion": "Calificación",
+    "colScEvidencias": "Evidencias",
     "colSpCreateAuth": "Nueva solicitud",
     "spNew": "Nueva solicitud",
     "spNewTitle": "Nueva solicitud de soporte",
@@ -7861,6 +7881,14 @@
     "spMiCola": {
       "what": "Tu cola de trabajo: lo que atiendes ordenado por prioridad («Mi cola») y lo que espera en tu nivel para tomarlo («Mi nivel»). Cuando llega un caso Urgente se avisa aquí con su cuenta regresiva; si estás con algo menos urgente dices cuánto te falta: si es menos de lo que el Urgente puede esperar, terminas primero; si no, el sistema recomienda pausar (tú decides y queda registrado). Un caso en pausa avisa al usuario y detiene el reloj de su plazo. Se activa con las hojas «Mi cola», «Tomar casos» y «Pausar y retomar» del árbol.",
       "example": "Llega un Urgente; Marta está con una duda de uso y le faltan 30 minutos: el sistema recomienda pausarla y atender el Urgente."
+    },
+    "scCausaCol": {
+      "what": "La causa que eligió la Mesa de ayuda al cerrar el caso (Error del sistema, Falta de capacitación, Permisos mal asignados...). Sale del catálogo «Causas de soporte». Un caso cerrado sin respuesta no tiene causa.",
+      "example": "Error del sistema."
+    },
+    "scTiempoCol": {
+      "what": "Lo que pasó desde que se abrió el caso hasta que se cerró (incluye el tiempo en pausa y el que esperó al usuario).",
+      "example": "1 d 5 h: se abrió el lunes a las 10:00 y se cerró el martes a las 15:00."
     },
     "spPersonas": {
       "what": "La ficha de quien reportó y su organigrama (de Roles, Usuarios y Mi Recurso Humano): los jefes de arriba, su jefe directo y sus compañeros. Con Ver y operar, marca a cada persona con «Avisar» (una nota en su campana, sin entrar al chat; debe tocar «Enterado») o «Invitar» (se suma al chat y no ve las notas internas; debe aceptar). Si alguien no responde en el plazo del Mapa de soporte, o rechaza, el aviso pasa a su jefe con la nota de qué pasó, y así hacia arriba.",

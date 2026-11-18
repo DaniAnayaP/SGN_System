@@ -3356,6 +3356,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'soporte-causas': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Causas de Soporte' },
     'mapa-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Mapa de soporte' },
     'casos-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Casos de soporte' },
+    'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3763,6 +3764,7 @@ const TABLE_GRANT_PATHS = {
     'soporte-causas': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-causas' },
     // Operaciones > Casos de soporte: sus columnas, su botón «Nueva solicitud» (colSpCreateAuth) y los iconos de la tabla.
     'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
+    'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     // Admin > Mapa de soporte: sus cuatro grupos de ajustes (colMsPrioridades, colMsImpactos, colMsNiveles, colMsReglas) y el icono del historial.
     'mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },

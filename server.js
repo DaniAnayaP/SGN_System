@@ -10136,7 +10136,7 @@ function sniffSupportFile(buf, name) {
 }
 const sqlUtcFromMs = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
 // Lo que el servidor manda de un caso (una fila de la tabla). Las evidencias solo salen con ids para quien tiene la columna Evidencias o abrió el caso.
-function supportCaseRowOf(r, client, withFiles) {
+function supportCaseRowOf(r, client, withFiles, screenLabel = SUPPORT_CASE_SCREEN_LABEL) {
     return {
         id: r.id, folio: supportFolio(r.record_number), type: r.case_type, summary: r.summary, screen: r.screen_label, action: r.action_label, screenNode: r.screen_node || '', actionLeaf: r.action_leaf || '', errorText: r.error_text,
         categoryId: r.category_id, category: r.category_name, priority: r.priority, level: r.level, status: r.status, whenAffects: r.when_affects, keepWorking: r.keep_working === 1,
@@ -10145,7 +10145,7 @@ function supportCaseRowOf(r, client, withFiles) {
         general: r.general_id ? { id: r.general_id, folio: supportGeneralFolio(r.general_number || 0) } : null, classifiedAt: sqlUtcIso(r.classified_at), classifiedBy: r.classified_by || '',
         confirmAt: sqlUtcIso(r.confirm_at), closedAt: sqlUtcIso(r.closed_at), closedBy: r.closed_by || '', closeDid: r.close_did || '', reopenedCount: r.reopened_count || 0, userStars: r.user_stars || null,
         assigneeId: r.assignee_user_id || null, assigneeName: r.assignee_name || '', assignedAt: sqlUtcIso(r.assigned_at), pausedAt: sqlUtcIso(r.paused_at), pausedMs: r.paused_ms || 0, pauseCount: r.pause_count || 0,
-        system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: SUPPORT_CASE_SCREEN_LABEL, centroCostos: '', createdAt: r.created_at }),
+        system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: screenLabel, centroCostos: '', createdAt: r.created_at }),
     };
 }
 const supportFileOf = (f) => ({ id: f.id, evidenceId: f.evidence_id, kind: f.kind, name: f.name, mime: f.mime, size: f.size, level: f.level || '', by: f.uploaded_by, createdAt: sqlUtcIso(f.created_at) });
@@ -10161,7 +10161,11 @@ const SUPPORT_CASE_NODE = 'cat-operaciones/cat-operaciones-ti-casos-soporte';
 const supportIsParticipant = (req, rec) => isSupportParticipant(rec.id, req.user.sub);
 // Tener la pantalla «Casos de soporte» (ella, o cualquier hoja de sus columnas o botones, o el departamento o el área completos). Quien no la tiene solo ve los casos que abrió o a los que lo invitaron.
 const supportHasScreen = (req) => !!req.user.isClientAdmin || supportColGrants(req).some((g) => g.sectionId === 'information-technology' && (!g.itemId || (g.itemId === 'it-area-operations' && (!g.submenuId || g.submenuId === SUPPORT_CASE_NODE || String(g.submenuId).startsWith(`${SUPPORT_CASE_NODE}/`)))));
-const supportCanOpenCase = (req, rec) => supportHasScreen(req) || supportIsReporter(req, rec) || supportIsParticipant(req, rec);
+// Gestión › Soportes cerrados: los casos terminados (Terminado o Cerrado sin respuesta) salen de Operaciones y se ven aquí. Quien tiene esa pantalla abre los casos cerrados (no los que siguen en curso).
+const SUPPORT_CLOSED_NODE = 'cat-gestion/cat-gestion-ti-soportes-cerrados';
+const SUPPORT_CLOSED_LIST = ['done', 'noresp'];
+const supportHasClosedScreen = (req) => !!req.user.isClientAdmin || supportColGrants(req).some((g) => g.sectionId === 'information-technology' && (!g.itemId || (g.itemId === 'it-area-operations' && (!g.submenuId || g.submenuId === SUPPORT_CLOSED_NODE || String(g.submenuId).startsWith(`${SUPPORT_CLOSED_NODE}/`)))));
+const supportCanOpenCase = (req, rec) => supportHasScreen(req) || supportIsReporter(req, rec) || supportIsParticipant(req, rec) || (SUPPORT_CLOSED_LIST.includes(rec.status) && supportHasClosedScreen(req));
 const supportCanSeeChat = (req, rec) => supportIsReporter(req, rec) || supportIsParticipant(req, rec) || supportHasCol(req, 'colSpChat');
 const supportCanSeeNotes = (req) => supportHasCol(req, 'colSpNotas');
 const supportCanWriteNotes = (req) => !!req.user.isClientAdmin || (hasColumnGrant(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpNotas') && getColumnGrantLevel(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpNotas') !== 'solo-ver');
@@ -10230,8 +10234,21 @@ app.get('/api/business/support-cases', requireAuth, (req, res) => {
     const LIMIT = 5000;
     let rows = listSupportCases(clientId, isTestAccount, { limit: LIMIT });
     if (!supportHasScreen(req)) { const joined = new Set(listSupportAcceptedCaseIds(req.user.sub)); rows = rows.filter((r) => r.reporter_user_id === req.user.sub || joined.has(r.id)); }
+    // lo terminado pasa a Gestión › Soportes cerrados (quien reportó el caso lo sigue viendo aquí)
+    rows = rows.filter((r) => !SUPPORT_CLOSED_LIST.includes(r.status) || r.reporter_user_id === req.user.sub);
     res.set('Cache-Control', 'no-store');
     res.json({ truncated: rows.length >= LIMIT, max: LIMIT, canCreate: supportCan(req, 'colSpCreateAuth'), canFiles: supportCanSeeFiles(req), cases: rows.map((r) => supportCaseRowOf(r, client, false)) });
+});
+// Gestión › Soportes cerrados: los casos terminados de la empresa, el más reciente primero (con la causa, qué se hizo, quién lo cerró y cuánto tardó).
+app.get('/api/business/support-closed', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!supportHasClosedScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver los soportes cerrados.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const LIMIT = 5000;
+    const rows = listSupportCases(clientId, isTestAccount, { limit: 20000 }).filter((r) => SUPPORT_CLOSED_LIST.includes(r.status)).sort((a, b) => String(b.closed_at || '').localeCompare(String(a.closed_at || '')) || b.id - a.id).slice(0, LIMIT);
+    res.set('Cache-Control', 'no-store');
+    res.json({ truncated: rows.length >= LIMIT, max: LIMIT, cases: rows.map((r) => ({ ...supportCaseRowOf(r, client, false, 'Soportes cerrados'), causeName: r.cause_name || '', totalMinutes: r.closed_at ? Math.max(0, Math.round((new Date(sqlUtcIso(r.closed_at)).getTime() - new Date(sqlUtcIso(r.created_at)).getTime()) / 60000)) : 0 })) });
 });
 app.post('/api/business/support-cases', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
