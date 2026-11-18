@@ -1288,7 +1288,8 @@
     "saasSpAssignPick": "Assign to…",
     "saasSpAssigned": "Case assigned to {name}.",
     "saasSpNoTiNote": "This company has no IT contracted: it has no levels of its own. You are its Help Desk: you confirm with the user and close the case.",
-    "saasSpCloseNoButton": "Your account does not have the «Close cases of clients without IT» button: whoever has it closes the case."
+    "saasSpCloseNoButton": "Your account does not have the «Close cases of clients without IT» button: whoever has it closes the case.",
+    "additionalsOmittedByPlan": "Saved. {count} permission(s) were not saved as additionals because the plan of the client already includes them: {list}."
   },
   "business": {
     "usersTitle": "Users",

@@ -1839,16 +1839,15 @@ app.put('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (
     if (denySaasLeaf(req, res, 'saas-clients', ['tabla::ta1','modal-permisos::a1'], 'No tienes permiso para dar permisos adicionales.')) return;
     const client = getClientById(req.params.id);
     if (!client) return res.status(404).json({ message: 'Client not found.' });
-    const { grants } = req.body || {};
+    let { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
     const plan = client.plan ? getPlanByName(client.plan) : null;
     const planGrants = plan ? getPlanGrants(plan.id) : [];
-    for (const g of grants) {
-        if (isTupleGranted(planGrants, g.sectionId, g.itemId, g.submenuId)) {
-            return res.status(400).json({ message: 'Ese permiso ya está incluido en el plan del cliente.' });
-        }
-    }
+    // Lo que el plan YA incluye no se vende como adicional (nunca se cobra dos veces): se omite al guardar y se avisa cuáles fueron. Antes un solo permiso así (por ejemplo uno que se vendió como adicional y después entró al plan)
+    // hacía que el servidor rechazara TODO el guardado del cliente, y como el aviso quedaba fuera de la vista parecía que se había guardado.
+    const coveredByPlan = grants.filter((g) => isTupleGranted(planGrants, g.sectionId, g.itemId, g.submenuId));
+    if (coveredByPlan.length) grants = grants.filter((g) => !coveredByPlan.includes(g));
     // Lo que no está habilitado para servicio en el Árbol Maestro no se puede asignar al cliente (lo nuevo; lo que ya estaba guardado se queda). El árbol ya lo muestra con aviso; esto es por si llega de otro lado.
     const serviceKey = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
     const alreadySaved = new Set(getClientPermissionGrants(req.params.id).map(serviceKey));
@@ -1864,7 +1863,7 @@ app.put('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (
     if (syncClientModulesFromPermissionGrants(req.params.id)) {
         applyEffectiveEntitlements(req.params.id);
     }
-    res.json({ grants: saved, additionalPermissionsPayment: computeClientAdditionalPermissionsCost(req.params.id) });
+    res.json({ grants: saved, additionalPermissionsPayment: computeClientAdditionalPermissionsCost(req.params.id), omittedByPlan: coveredByPlan.map((g) => [g.sectionId, g.itemId, g.submenuId].filter(Boolean).join(" › ")) });
 });
 
 // Per-node "Cambios" for the tree above -- see client_permission_change_log's

@@ -1271,20 +1271,29 @@ permisosAdicionalesSaveBtn.addEventListener('click', async () => {
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            permisosAdicionalesError.textContent = body.message || Dashboard.t('admin.saveError');
-            permisosAdicionalesError.hidden = false;
+            showAdicionalesSaveError(body.message || Dashboard.t('admin.saveError'));
             return;
         }
+        const saved = await res.json().catch(() => ({}));
         await loadClients();
         closePermisosAdicionalesModal();
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+        // lo que el plan ya incluía no se guardó como adicional: se dice cuántos y cuáles
+        if (saved.omittedByPlan && saved.omittedByPlan.length) Dashboard.showToast(Dashboard.t('admin.additionalsOmittedByPlan', { count: saved.omittedByPlan.length, list: saved.omittedByPlan.slice(0, 5).join(', ') }), 'info');
     } catch {
-        permisosAdicionalesError.textContent = Dashboard.t('admin.saveError');
-        permisosAdicionalesError.hidden = false;
+        showAdicionalesSaveError(Dashboard.t('admin.saveError'));
     } finally {
         permisosAdicionalesSaveBtn.disabled = false;
     }
 });
+// El guardado de los permisos adicionales falló: la ventana es muy larga, así que el mensaje va arriba (junto a Guardar), se lleva la vista hasta él y además sale como aviso. Nada se guardó: lo marcado sigue sin guardar.
+function showAdicionalesSaveError(message) {
+    permisosAdicionalesError.textContent = message;
+    permisosAdicionalesError.hidden = false;
+    const panel = permisosAdicionalesModal.querySelector('.modal-panel');
+    if (panel) panel.scrollTop = 0;
+    Dashboard.showToast(message, 'error');
+}
 permisosAdicionalesCloseBtn.addEventListener('click', closePermisosAdicionalesModal);
 permisosAdicionalesModal.addEventListener('click', (event) => {
     if (event.target === permisosAdicionalesModal) closePermisosAdicionalesModal();
