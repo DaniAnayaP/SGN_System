@@ -1462,6 +1462,15 @@ function applyMainNavGrantFilter(data) {
     };
 }
 
+// Al cambiar el departamento o el área desde los selectores de arriba, una pantalla que es de otra área ya no va: se sale de ella (a «Panel») para no dejar, por ejemplo, el Layout de C. Distribución abierto estando en Transporte Volumen.
+// Solo se llama cuando la persona cambia el selector (no al abrir la pantalla). Las pantallas generales (Inicio, Panel, Configuración) y las que no pertenecen a un área se quedan.
+function leaveScreenIfOutOfArea() {
+    const page = document.body && document.body.dataset ? document.body.dataset.activePage : '';
+    const grant = page && typeof SCREEN_GRANT_PATHS !== 'undefined' ? SCREEN_GRANT_PATHS[page] : null;
+    if (!grant || grant.sectionId === 'main') return;
+    if (grant.sectionId === selectedDepartment && grant.itemId === selectedArea) return;
+    location.href = 'Panel.html';
+}
 function renderFilteredMenu() {
     syncPickerCascade();
     if (menuData) renderMenu(applyMainNavGrantFilter(applyScreenGrantFilter(applyAreaFilter(applyDepartmentFilter(menuData)))));
@@ -11609,6 +11618,7 @@ deptPickerDropdown?.addEventListener('click', (event) => {
     renderAreaPickerOptions();
     updateAreaPickerVisibility();
     renderFilteredMenu();
+    leaveScreenIfOutOfArea();
     closeDeptPicker();
 });
 
@@ -11648,6 +11658,7 @@ areaPickerDropdown?.addEventListener('click', (event) => {
     localStorage.setItem('area', selectedArea || '');
     updateAreaPickerLabel();
     renderFilteredMenu();
+    leaveScreenIfOutOfArea();
     closeAreaPicker();
 });
 
@@ -12461,6 +12472,7 @@ function openDepartmentDefaultPicker() {
             renderAreaPickerOptions();
             updateAreaPickerVisibility();
             renderFilteredMenu();
+            leaveScreenIfOutOfArea();
             saveDefaults({ department: dept.key, area: null });
             closeDefaultPickerModal();
         }));
@@ -12483,6 +12495,7 @@ function openAreaDefaultPicker() {
             localStorage.setItem('area', area.key);
             updateAreaPickerLabel();
             renderFilteredMenu();
+            leaveScreenIfOutOfArea();
             saveDefaults({ area: area.key });
             closeDefaultPickerModal();
         }));
