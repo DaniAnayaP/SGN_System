@@ -44,6 +44,10 @@ const CATEGORY_TYPE_TABLE_KEYS = {
     'transito-equipos': 'transito-equipos',
     // Criterios de Incidentes: cada criterio lleva su categoría (No conformidad Mayor, No conformidad Menor o Recomendación).
     'incidentes-criterios': 'incidentes-criterios',
+    // Soporte por niveles (TI > Operaciones TI > Catálogos): categorías (con «Entra en», plazo y evidencias que se piden), el catálogo de evidencias y las causas al cerrar un caso.
+    'soporte-categorias': 'soporte-categorias',
+    'soporte-evidencias': 'soporte-evidencias',
+    'soporte-causas': 'soporte-causas',
 };
 
 const CATEGORY_TYPE = document.body.dataset.categoryType;
@@ -51,12 +55,15 @@ const TABLE_KEY = CATEGORY_TYPE_TABLE_KEYS[CATEGORY_TYPE];
 const CATEGORY_API_BASE = `/api/business/article-categories/${CATEGORY_TYPE}`;
 const DELETE_AUTH_COL = 'colCatDeleteAuth';
 const IS_WAREHOUSE = CATEGORY_TYPE === 'almacenes' || CATEGORY_TYPE === 'sub-almacenes';
-const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'transito-equipos' ? 'main.newTransitEquip' : CATEGORY_TYPE === 'incidentes-criterios' ? 'main.newIncCriterion' : CATEGORY_TYPE === 'activos-criterios' ? 'main.newAssetCriterion' : CATEGORY_TYPE === 'activos-avisos' ? 'main.newAssetAviso' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : CATEGORY_TYPE === 'marcas' ? 'main.newBrand' : CATEGORY_TYPE === 'lugares-envio' ? 'main.newShipPlace' : 'main.newArticleCategory';
+const NEW_RECORD_KEY = CATEGORY_TYPE === 'almacenes' ? 'main.newWarehouse' : CATEGORY_TYPE === 'sub-almacenes' ? 'main.newSubWarehouse' : CATEGORY_TYPE === 'activos-fijos' ? 'main.newFixedAsset' : CATEGORY_TYPE === 'activos-clasificacion' ? 'main.newAssetClass' : CATEGORY_TYPE === 'transito-equipos' ? 'main.newTransitEquip' : CATEGORY_TYPE === 'incidentes-criterios' ? 'main.newIncCriterion' : CATEGORY_TYPE === 'soporte-categorias' ? 'main.newSupportCategory' : CATEGORY_TYPE === 'soporte-evidencias' ? 'main.newSupportEvidence' : CATEGORY_TYPE === 'soporte-causas' ? 'main.newSupportCause' : CATEGORY_TYPE === 'activos-criterios' ? 'main.newAssetCriterion' : CATEGORY_TYPE === 'activos-avisos' ? 'main.newAssetAviso' : CATEGORY_TYPE === 'clasificaciones' ? 'main.newClassification' : CATEGORY_TYPE === 'marcas' ? 'main.newBrand' : CATEGORY_TYPE === 'lugares-envio' ? 'main.newShipPlace' : 'main.newArticleCategory';
 // Centros de costos completos, almacenes y, por cada centro, las zonas / anaqueles de su Layout (GET /api/business/warehouse-options).
 let warehouseOptions = { costCenters: [], warehouses: [], zonesByCenter: {} };
 // Categorías de Inventario: cada una elige cuáles clasificaciones (catálogo Nuestras Clasificaciones) tiene; aquí van todas las del catálogo con su estatus.
 const IS_INVENTORY = CATEGORY_TYPE === 'inventario';
 let classificationOptions = [];
+// Categorías de Soporte: cada una elige cuáles evidencias pide (catálogo «Evidencias de Soporte»); aquí van todas las del catálogo con su estatus.
+const IS_SUPPORT_CATEGORY = CATEGORY_TYPE === 'soporte-categorias';
+let evidenceOptions = [];
 
 (async function init() {
     try {
@@ -64,6 +71,7 @@ let classificationOptions = [];
         if (!role) return;
         if (IS_WAREHOUSE) await loadWarehouseOptions();
         if (IS_INVENTORY) await loadClassificationOptions();
+        if (IS_SUPPORT_CATEGORY) await loadEvidenceOptions();
         renderNewRecordButton();
         await refreshTable();
     } catch (err) {
@@ -297,7 +305,7 @@ function applyCategoryFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colActivoFijoLetraCodigo', 'colActivoFijoLetra', 'colTrEquipTipo', 'colIncCritCategoria', 'colCritLimite', 'colCritUnidad']
+        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colActivoFijoLetraCodigo', 'colActivoFijoLetra', 'colTrEquipTipo', 'colIncCritCategoria', 'colSopEntraEn', 'colSopPrimeraRespuesta', 'colSopEvidencias', 'colCritLimite', 'colCritUnidad']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
@@ -546,6 +554,113 @@ function saveClassificationDialog() {
 }
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && clsState) closeClassificationDialog(); });
 
+// --- Evidencias que pide una Categoría de Soporte -------------------------------------------------------------------------------------
+async function loadEvidenceOptions() {
+    try {
+        const res = await fetch('/api/business/article-categories/soporte-evidencias', { credentials: 'include' });
+        if (!res.ok) throw new Error('options failed');
+        const { categories } = await res.json();
+        evidenceOptions = categories.map((c) => ({ id: c.id, code: c.code, name: c.name, description: c.description, status: c.status }));
+    } catch (err) {
+        console.error('Categorías de Soporte: failed to load evidences', err);
+    }
+}
+
+function describeEvidences(record) {
+    const byId = new Map(evidenceOptions.map((e) => [e.id, e]));
+    return (record.evidenceIds || []).map((id) => (byId.get(id) || {}).name).filter(Boolean).join(', ');
+}
+
+function buildEvidenceCell(record) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colSopEvidencias';
+    const summary = describeEvidences(record);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-secondary wh-location-btn';
+    btn.setAttribute('data-help-key', 'sopEvidenciasBtn');
+    btn.textContent = summary || Dashboard.t('main.sopEvidenciasAssign');
+    btn.title = summary || Dashboard.t('main.sopEvidenciasAssign');
+    btn.disabled = isPending(record, 'evidenceIds') || !Dashboard.canEditField(TABLE_KEY, 'colSopEvidencias', summary);
+    if (btn.disabled) btn.title = Dashboard.t(isPending(record, 'evidenceIds') ? 'main.changePending' : 'main.fieldLocked');
+    btn.addEventListener('click', () => openEvidenceDialog(record));
+    td.appendChild(btn);
+    return td;
+}
+
+let sevModalEl = null;
+let sevState = null; // { record, picked: Set(id) }
+
+function ensureEvidenceModal() {
+    if (sevModalEl) return;
+    sevModalEl = document.createElement('div');
+    sevModalEl.className = 'modal-overlay';
+    sevModalEl.id = 'sev-modal';
+    sevModalEl.hidden = true;
+    sevModalEl.innerHTML = `<div class="modal-panel wh-location-dialog" role="dialog" aria-modal="true" aria-labelledby="sev-title">
+        <h3 id="sev-title"></h3>
+        <div class="wh-location-list" id="sev-list"></div>
+        <div class="admin-form-actions"><button type="button" class="btn" id="sev-save">${Dashboard.t('main.whSave')}</button><button type="button" class="btn btn-secondary" id="sev-close">${Dashboard.t('main.whClose')}</button></div>
+    </div>`;
+    document.body.appendChild(sevModalEl);
+    sevModalEl.addEventListener('click', (event) => {
+        if (event.target === sevModalEl || event.target.closest('#sev-close')) { closeEvidenceDialog(); return; }
+        if (event.target.closest('#sev-save')) saveEvidenceDialog();
+    });
+    sevModalEl.addEventListener('change', (event) => {
+        const box = event.target;
+        if (!(box instanceof HTMLInputElement) || !sevState) return;
+        const id = Number(box.value);
+        if (box.checked) sevState.picked.add(id); else sevState.picked.delete(id);
+    });
+}
+
+function openEvidenceDialog(record) {
+    ensureEvidenceModal();
+    sevState = { record, picked: new Set(record.evidenceIds || []) };
+    document.getElementById('sev-title').textContent = Dashboard.t('main.sopEvidenciasAssignTitle').replace('{name}', record.name || record.code || '');
+    const list = document.getElementById('sev-list');
+    list.innerHTML = '';
+    // las activas, y las inactivas solo si la categoría ya las pide (se pueden quitar, no agregar)
+    const shown = evidenceOptions.filter((e) => e.status === 'active' || sevState.picked.has(e.id));
+    if (!shown.length) {
+        const p = document.createElement('p');
+        p.className = 'wh-muted';
+        p.textContent = Dashboard.t('main.sopEvidenciasNone');
+        list.appendChild(p);
+    }
+    shown.forEach((e) => {
+        const label = document.createElement('label');
+        label.className = 'wh-zone-all';
+        label.setAttribute('data-help-key', 'sopEvidenciaPick');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = String(e.id);
+        cb.checked = sevState.picked.has(e.id);
+        const title = document.createElement('b');
+        title.textContent = e.name || Dashboard.t('main.whNoName');
+        const hint = document.createElement('span');
+        hint.className = 'wh-muted';
+        hint.textContent = [e.description, e.status === 'active' ? '' : `(${Dashboard.t('admin.statusInactivo')})`].filter(Boolean).join(' · ');
+        label.append(cb, title, hint);
+        list.appendChild(label);
+    });
+    sevModalEl.hidden = false;
+}
+
+function closeEvidenceDialog() {
+    if (sevModalEl) sevModalEl.hidden = true;
+    sevState = null;
+}
+
+function saveEvidenceDialog() {
+    if (!sevState) return;
+    const { record, picked } = sevState;
+    closeEvidenceDialog();
+    ensureCreatedThenPatch(record, { evidenceIds: Array.from(picked) });
+}
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && sevState) closeEvidenceDialog(); });
+
 function buildExtraCells(record) {
     if (IS_INVENTORY) return [buildClassificationCell(record)];
     if (CATEGORY_TYPE === 'almacenes') {
@@ -568,6 +683,20 @@ function buildExtraCells(record) {
         return [
             buildOptionCell(record, 'colTrEquipTipo', 'kind', 'transitEquipKind', ['person', 'forklift', 'cart', 'platform', 'other'].map((k) => ({ value: k, label: Dashboard.t(`main.trKind_${k}`) })), record.kind || '', '', (v) => ({ kind: v })),
             sizeCell('colTrEquipAncho', 'widthM', record.widthM), sizeCell('colTrEquipLargo', 'lengthM', record.lengthM), sizeCell('colTrEquipAlto', 'heightM', record.heightM),
+        ];
+    }
+    if (IS_SUPPORT_CATEGORY) {
+        // Categorías de Soporte: en qué nivel entra el caso (N0 a N3; el N4 es el proveedor), los minutos de la primera respuesta (vacío = sin plazo) y las evidencias que se piden.
+        const minutesTd = document.createElement('td');
+        minutesTd.dataset.col = 'colSopPrimeraRespuesta';
+        minutesTd.setAttribute('data-help-key', 'sopPrimeraRespuesta');
+        Dashboard.attachInlineEdit(minutesTd, {
+            value: record.firstResponseMin > 0 ? String(record.firstResponseMin) : '', inputType: 'number', step: '1', tableKey: TABLE_KEY, colKey: 'colSopPrimeraRespuesta', pending: isPending(record, 'firstResponseMin'),
+            onCommit: (val) => ensureCreatedThenPatch(record, { firstResponseMin: val === '' ? 0 : Number(val) }),
+        });
+        return [
+            buildOptionCell(record, 'colSopEntraEn', 'kind', 'sopEntraEn', ['n0', 'n1', 'n2', 'n3'].map((k) => ({ value: k, label: Dashboard.t(`main.sopLevel_${k}`) })), record.kind || '', '', (v) => ({ kind: v })),
+            minutesTd, buildEvidenceCell(record),
         ];
     }
     if (CATEGORY_TYPE === 'incidentes-criterios') {

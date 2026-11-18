@@ -10814,6 +10814,48 @@ function prepareIncidentCriterionPatch(categoryType, patch) {
     if (!['', ...INCIDENT_CATEGORIES].includes(patch.kind)) return { error: { status: 400, message: 'La categoría debe ser No conformidad Mayor, No conformidad Menor o Recomendación.' } };
     return { patch, sanitizers: { kind: (v) => INCIDENT_CATEGORY_LABELS[v] || '' } };
 }
+// Categorías de Soporte (TI > Catálogos): «Entra en» (el nivel donde entra el caso: N0 a N3, el N4 es el proveedor y no se elige), minutos de primera respuesta (0 = sin plazo) y las evidencias que se piden (ids del catálogo
+// «Evidencias de Soporte», sin repetir y en el orden del catálogo; las inactivas solo si ya estaban puestas).
+const SUPPORT_ENTRY_LEVELS = ['n0', 'n1', 'n2', 'n3'];
+const SUPPORT_ENTRY_LEVEL_LABELS = { n0: 'Nivel 0 · Autoservicio', n1: 'Nivel 1 · Mesa de ayuda', n2: 'Nivel 2 · Soporte especializado', n3: 'Nivel 3 · Ingeniería' };
+function prepareSupportCategoryPatch(req, categoryType, existing, patch) {
+    if (categoryType !== 'soporte-categorias') return { patch, sanitizers: {} };
+    const bad = (message) => ({ error: { status: 400, message } });
+    const out = { ...patch };
+    const sanitizers = {};
+    if (Object.prototype.hasOwnProperty.call(out, 'kind')) {
+        if (!['', ...SUPPORT_ENTRY_LEVELS].includes(out.kind)) return bad('«Entra en» debe ser el Nivel 0, 1, 2 o 3.');
+        sanitizers.kind = (v) => SUPPORT_ENTRY_LEVEL_LABELS[v] || '';
+    }
+    if (Object.prototype.hasOwnProperty.call(out, 'firstResponseMin')) {
+        if (out.firstResponseMin === '' || out.firstResponseMin === null) out.firstResponseMin = 0;
+        const n = Number(out.firstResponseMin);
+        if (!Number.isInteger(n) || n < 0 || n > 43200) return bad('El plazo de primera respuesta debe ser un número entero de minutos entre 0 y 43,200 (30 días).');
+        out.firstResponseMin = n;
+        sanitizers.firstResponseMin = (v) => (Number(v) > 0 ? `${v} min` : 'Sin plazo');
+    }
+    if (Object.prototype.hasOwnProperty.call(out, 'evidenceIds')) {
+        const { clientId, isTestAccount } = req.user;
+        const input = out.evidenceIds;
+        let ids = [];
+        if (input !== '' && input != null) {
+            if (!Array.isArray(input) || !input.every((n) => Number.isInteger(Number(n)))) return bad('Las evidencias no tienen el formato correcto.');
+            ids = [...new Set(input.map(Number))];
+        }
+        const all = listArticleCategories(clientId, 'soporte-evidencias', isTestAccount);
+        const byId = new Map(all.map((r) => [r.id, r]));
+        const current = new Set(parseClassificationIds(existing.evidence_ids));
+        for (const id of ids) {
+            const row = byId.get(id);
+            if (!row) return bad('Una de las evidencias ya no existe. Vuelve a elegirla.');
+            if (row.status !== 'active' && !current.has(id)) return bad(`La evidencia "${row.name || `SEV-${String(row.record_number).padStart(3, '0')}`}" está inactiva. Elige una activa.`);
+        }
+        const ordered = all.filter((r) => ids.includes(r.id)).map((r) => r.id);
+        out.evidenceIds = ordered.length ? JSON.stringify(ordered) : '';
+        sanitizers.evidenceIds = (value) => parseClassificationIds(value).map((id) => (byId.get(id) || {}).name).filter(Boolean).join(', ');
+    }
+    return { patch: out, sanitizers };
+}
 function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null) {
     if (!row) return row;
     const config = articleCategoryTypeConfig(row.category_type);
@@ -10838,6 +10880,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             criteriaIds: parseClassificationIds(row.criteria_ids), avisoIds: parseClassificationIds(row.aviso_ids),
         } : {}),
         ...(row.category_type === 'incidentes-criterios' ? { kind: row.kind } : {}),
+        ...(row.category_type === 'soporte-categorias' ? { kind: row.kind || '', firstResponseMin: row.first_response_min || 0, evidenceIds: parseClassificationIds(row.evidence_ids) } : {}),
         ...(row.category_type === 'activos-criterios' ? { kind: row.kind || '', unit: row.unit || '', builtinKey: row.builtin_key || '', colId: criterionCol(row) } : {}),
         ...(row.category_type === 'activos-avisos' ? { builtinKey: row.builtin_key || '' } : {}),
         ...(row.category_type === 'transito-equipos' ? { kind: row.kind, widthM: row.width_m || 0, lengthM: row.length_m || 0, heightM: row.height_m || 0 } : {}),
@@ -10914,11 +10957,13 @@ app.patch('/api/business/article-categories/:categoryType/:id', requireAuth, req
     if (preparedTransit.error) return res.status(preparedTransit.error.status).json({ message: preparedTransit.error.message });
     const preparedIncident = prepareIncidentCriterionPatch(req.params.categoryType, preparedTransit.patch);
     if (preparedIncident.error) return res.status(preparedIncident.error.status).json({ message: preparedIncident.error.message });
-    const preparedCrit = prepareCriteriaCatalogPatch(req, req.params.categoryType, existing, preparedIncident.patch);
+    const preparedSupport = prepareSupportCategoryPatch(req, req.params.categoryType, existing, preparedIncident.patch);
+    if (preparedSupport.error) return res.status(preparedSupport.error.status).json({ message: preparedSupport.error.message });
+    const preparedCrit = prepareCriteriaCatalogPatch(req, req.params.categoryType, existing, preparedSupport.patch);
     if (preparedCrit.error) return res.status(preparedCrit.error.status).json({ message: preparedCrit.error.message, code: preparedCrit.error.code });
     const preparedModel = prepareAssetModelPatch(req, req.params.categoryType, existing, preparedCrit.patch);
     if (preparedModel.error) return res.status(preparedModel.error.status).json({ message: preparedModel.error.message, code: preparedModel.error.code });
-    const prepared = { patch: preparedModel.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers, ...preparedTransit.sanitizers, ...preparedIncident.sanitizers, ...preparedCrit.sanitizers, ...preparedModel.sanitizers } };
+    const prepared = { patch: preparedModel.patch, sanitizers: { ...preparedWarehouse.sanitizers, ...preparedClassification.sanitizers, ...preparedFixedAsset.sanitizers, ...preparedTransit.sanitizers, ...preparedIncident.sanitizers, ...preparedSupport.sanitizers, ...preparedCrit.sanitizers, ...preparedModel.sanitizers } };
     const { appliedPatch, pendingFields, rejectedFields, conflictFields } = checkAndLogFieldChanges(req, existing, prepared.patch, articleCategoryPatchableFields(req.params.categoryType), config.tableKey, `#${existing.id}`, prepared.sanitizers, { baseline, overrideConflicts });
     const category = finishAssetModelPatch(req, existing, updateArticleCategory(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount), appliedPatch);
     const client = getClientById(req.user.clientId);
@@ -10976,6 +11021,11 @@ app.delete('/api/business/article-categories/:categoryType/:id', requireAuth, re
     if (req.params.categoryType === 'incidentes-criterios') {
         const used = countIncidentsByCriterion(req.user.clientId, existing.id);
         if (used) return res.status(409).json({ message: `Hay ${used === 1 ? 'un reporte' : `${used} reportes`} de Incidentes con este criterio. Márcalo como Inactivo en vez de eliminarlo.` });
+    }
+    // Una evidencia que alguna categoría de Soporte ya pide no se borra (se deja Inactiva): esas categorías dejarían de pedirla sin que nadie lo decida.
+    if (req.params.categoryType === 'soporte-evidencias') {
+        const used = listArticleCategories(req.user.clientId, 'soporte-categorias', req.user.isTestAccount).filter((c) => parseClassificationIds(c.evidence_ids).includes(existing.id)).length;
+        if (used) return res.status(409).json({ message: `Hay ${used === 1 ? 'una categoría' : `${used} categorías`} de Soporte que piden esta evidencia. Quítala de ahí primero o márcala como Inactiva.` });
     }
     // Una marca que alguna presentación de Presentaciones de Distribución ya usa no se borra (se deja Inactiva): esas presentaciones perderían su marca.
     if (req.params.categoryType === 'marcas') {

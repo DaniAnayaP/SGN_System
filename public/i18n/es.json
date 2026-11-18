@@ -447,6 +447,14 @@
     "catCentroDistIncidentesCriterios": "Criterios de Incidentes",
     "catCentroDistIncidentesCriteriosAbbr1": "Criterios de Incidentes",
     "catCentroDistIncidentesCriteriosAbbr2": "Criterios",
+    "catTiSoporteCategorias": "Categorías de soporte",
+    "catTiSoporteCategoriasAbbr1": "Categ. de soporte",
+    "catTiSoporteCategoriasAbbr2": "Categorías",
+    "catTiSoporteEvidencias": "Evidencias que se piden",
+    "catTiSoporteEvidenciasAbbr1": "Evidencias pedidas",
+    "catTiSoporteEvidenciasAbbr2": "Evidencias",
+    "catTiSoporteCausas": "Causas al cerrar",
+    "catTiSoporteCausasAbbr1": "Causas",
     "opTransVolNuestrosTraslados": "Nuestros Traslados",
     "opTransVolNuestrosTrasladosAbbr1": "Nuestros Trasl.",
     "opTransVolNuestrosTrasladosAbbr2": "Traslados",
@@ -4433,6 +4441,19 @@
     "incKind_mayor": "No conformidad Mayor",
     "incKind_menor": "No conformidad Menor",
     "incKind_recomendacion": "Recomendación",
+    "colSopEntraEn": "Entra en",
+    "colSopPrimeraRespuesta": "1ª respuesta (min)",
+    "colSopEvidencias": "Evidencias que se piden",
+    "sopLevel_n0": "Nivel 0 · Autoservicio",
+    "sopLevel_n1": "Nivel 1 · Mesa de ayuda",
+    "sopLevel_n2": "Nivel 2 · Soporte especializado",
+    "sopLevel_n3": "Nivel 3 · Ingeniería",
+    "newSupportCategory": "Nueva categoría de soporte",
+    "newSupportEvidence": "Nueva evidencia",
+    "newSupportCause": "Nueva causa",
+    "sopEvidenciasAssign": "Elegir evidencias",
+    "sopEvidenciasAssignTitle": "Evidencias que pide «{name}»",
+    "sopEvidenciasNone": "Todavía no hay evidencias. Agrégalas en Catálogos › Evidencias que se piden.",
     "colIncFolio": "Folio",
     "colIncFechaHora": "Fecha y hora",
     "colIncQuien": "Quién reporta",
@@ -7191,6 +7212,22 @@
     "incEvidencias": {
       "what": "Las fotos que subió quien reportó. Se ven chicas en la tabla; al tocar una se abre grande y puedes pasar a la siguiente. Un reporte lleva mínimo una evidencia.",
       "example": "tocas la primera miniatura y ves la foto del pallet mal acomodado; con la flecha pasas a las otras dos."
+    },
+    "sopEntraEn": {
+      "what": "En qué nivel de soporte entra un caso de esta categoría: Nivel 0 (el usuario se ayuda solo con los manuales), Nivel 1 (Mesa de ayuda), Nivel 2 (Soporte especializado) o Nivel 3 (Ingeniería). El Nivel 4 es el proveedor y no se elige aquí.",
+      "example": "«Error al guardar» entra en el Nivel 1; «Cambio o mejora» entra directo en el Nivel 3."
+    },
+    "sopPrimeraRespuesta": {
+      "what": "Los minutos que tiene el nivel donde entra para dar la primera respuesta. Déjalo vacío si esta categoría no lleva plazo. Si se vence, el caso sale marcado y avisa en la campana.",
+      "example": "60 = una hora; 1440 = un día."
+    },
+    "sopEvidenciasBtn": {
+      "what": "Las evidencias que se le piden a quien abre un caso de esta categoría, para que el siguiente nivel no tenga que volver a preguntarle. El sistema avisa lo que falta antes de subir el caso.",
+      "example": "«Error al guardar» pide la captura del error, la grabación de pantalla, la hora y qué datos puso."
+    },
+    "sopEvidenciaPick": {
+      "what": "Marca las evidencias que esta categoría pide. Las inactivas solo se pueden quitar, no agregar.",
+      "example": "marcas «Captura del error» y «Hora aproximada»."
     },
     "incCritKind": {
       "what": "A qué categoría pertenece este criterio: No conformidad Mayor, No conformidad Menor o Recomendación. Quien reporta con el QR primero elige la categoría y luego ve solo los criterios de ella. Un criterio sin categoría no aparece en el QR.",

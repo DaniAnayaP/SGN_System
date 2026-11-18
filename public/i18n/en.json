@@ -443,6 +443,14 @@
     "catCentroDistIncidentesCriterios": "Incident Criteria",
     "catCentroDistIncidentesCriteriosAbbr1": "Incident Criteria",
     "catCentroDistIncidentesCriteriosAbbr2": "Criteria",
+    "catTiSoporteCategorias": "Support categories",
+    "catTiSoporteCategoriasAbbr1": "Support categ.",
+    "catTiSoporteCategoriasAbbr2": "Categories",
+    "catTiSoporteEvidencias": "Requested evidence",
+    "catTiSoporteEvidenciasAbbr1": "Evidence",
+    "catTiSoporteEvidenciasAbbr2": "Evid.",
+    "catTiSoporteCausas": "Closing causes",
+    "catTiSoporteCausasAbbr1": "Causes",
     "opTransVolNuestrosTraslados": "Our Transfers",
     "opTransVolNuestrosTrasladosAbbr1": "Our Transf.",
     "opTransVolNuestrosTrasladosAbbr2": "Transfers",
@@ -4434,6 +4442,19 @@
     "incKind_mayor": "Major nonconformity",
     "incKind_menor": "Minor nonconformity",
     "incKind_recomendacion": "Recommendation",
+    "colSopEntraEn": "Enters at",
+    "colSopPrimeraRespuesta": "1st response (min)",
+    "colSopEvidencias": "Evidence requested",
+    "sopLevel_n0": "Level 0 · Self-service",
+    "sopLevel_n1": "Level 1 · Help desk",
+    "sopLevel_n2": "Level 2 · Specialized support",
+    "sopLevel_n3": "Level 3 · Engineering",
+    "newSupportCategory": "New support category",
+    "newSupportEvidence": "New evidence",
+    "newSupportCause": "New cause",
+    "sopEvidenciasAssign": "Choose evidence",
+    "sopEvidenciasAssignTitle": "Evidence requested by \"{name}\"",
+    "sopEvidenciasNone": "There is no evidence yet. Add it in Catalogs › Requested evidence.",
     "colIncFolio": "Folio",
     "colIncFechaHora": "Date and time",
     "colIncQuien": "Reported by",
@@ -7192,6 +7213,22 @@
     "incEvidencias": {
       "what": "The photos uploaded by whoever reported. They show small in the table; tap one to open it large and move on to the next. A report carries at least one piece of evidence.",
       "example": "you tap the first thumbnail and see the photo of the badly stacked pallet; the arrow takes you to the other two."
+    },
+    "sopEntraEn": {
+      "what": "The support level where a case of this category enters: Level 0 (the user helps themselves with the manuals), Level 1 (Help desk), Level 2 (Specialized support) or Level 3 (Engineering). Level 4 is the vendor and is not chosen here.",
+      "example": "\"Error when saving\" enters at Level 1; \"Change or improvement\" enters straight at Level 3."
+    },
+    "sopPrimeraRespuesta": {
+      "what": "The minutes the entry level has to give the first response. Leave it empty if this category has no deadline. When it expires the case is flagged and the bell warns.",
+      "example": "60 = one hour; 1440 = one day."
+    },
+    "sopEvidenciasBtn": {
+      "what": "The evidence asked from whoever opens a case of this category, so the next level does not have to ask again. The system warns what is missing before the case moves up.",
+      "example": "\"Error when saving\" asks for the error screenshot, the screen recording, the time and what data was entered."
+    },
+    "sopEvidenciaPick": {
+      "what": "Check the evidence this category asks for. Inactive ones can only be removed, not added.",
+      "example": "you check \"Error screenshot\" and \"Approximate time\"."
     },
     "incCritKind": {
       "what": "Which category this criterion belongs to: Major nonconformity, Minor nonconformity or Recommendation. Whoever reports through the QR first picks the category and then only sees that category's criteria. A criterion without a category does not show in the QR.",

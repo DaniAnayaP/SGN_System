@@ -2428,7 +2428,9 @@ for (const [col, ddl] of [['custom_name', "TEXT NOT NULL DEFAULT ''"], ['model_n
     // (range | max | min | every | zone). Del catálogo «Qué se avisa» (activos-avisos): builtin_key. Del MODELO (activos-modelos): criteria_ids y aviso_ids = lo que mide y lo que avisa, como texto JSON canónico [id, id, ...] ('' = nada).
     ['unit', "TEXT NOT NULL DEFAULT ''"], ['builtin_key', "TEXT NOT NULL DEFAULT ''"], ['criteria_ids', "TEXT NOT NULL DEFAULT ''"], ['aviso_ids', "TEXT NOT NULL DEFAULT ''"],
     // Uso del TIPO de activo (2026-11-17): 'ambient' (por omisión) o 'cold'. Solo los Tipos que se dibujan como Frío o como Sensor pueden ser de Frío: un sensor de Frío va dentro de un activo de uso Frío y uno de Ambiente sobre una pared o en la nave.
-    ['use_kind', "TEXT NOT NULL DEFAULT 'ambient'"]]) {
+    ['use_kind', "TEXT NOT NULL DEFAULT 'ambient'"],
+    // Categorías de soporte (2026-11-18, TI > Catálogos): kind = «Entra en» (n0..n3), first_response_min = minutos para la primera respuesta (0 = sin plazo) y evidence_ids = las evidencias que se piden (texto JSON [id, id, ...]; '' = ninguna).
+    ['first_response_min', 'INTEGER NOT NULL DEFAULT 0'], ['evidence_ids', "TEXT NOT NULL DEFAULT ''"]]) {
     if (!articleCategoryColumns.some((c) => c.name === col)) db.exec(`ALTER TABLE article_categories ADD COLUMN ${col} ${ddl}`);
 }
 
@@ -3162,6 +3164,7 @@ function createClient({
     seedActivosCriteriosAvisosValues(created.id);
     seedTransitoEquiposValues(created.id);
     seedIncidentesCriteriosValues(created.id);
+    seedSoporteCatalogsValues(created.id);
     resetClientTimeZoneCache();
     return created;
 }
@@ -3749,6 +3752,10 @@ const TABLE_GRANT_PATHS = {
     'activos-avisos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-avisos' },
     'transito-equipos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-transito-equipos' },
     'incidentes-criterios': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-incidentes-criterios' },
+    // Tecnologías de la Información > Operaciones TI > Catálogos (Soporte por niveles): categorías, evidencias que se piden y causas al cerrar.
+    'soporte-categorias': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-categorias' },
+    'soporte-evidencias': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-evidencias' },
+    'soporte-causas': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-causas' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
     // Gestión > Activos: su botón Editar (colActEditar)
     'gestion-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-activos' },
@@ -3957,6 +3964,9 @@ const BUTTON_NOTIFY_COLUMNS = {
     'activos-avisos': CATEGORY_BUTTON_NOTIFY,
     'transito-equipos': CATEGORY_BUTTON_NOTIFY,
     'incidentes-criterios': CATEGORY_BUTTON_NOTIFY,
+    'soporte-categorias': CATEGORY_BUTTON_NOTIFY,
+    'soporte-evidencias': CATEGORY_BUTTON_NOTIFY,
+    'soporte-causas': CATEGORY_BUTTON_NOTIFY,
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
     'udm-distribucion': { create: 'colUdmDCreateAuth', delete: 'colUdmDDeleteAuth' },
@@ -7374,6 +7384,10 @@ const ARTICLE_CATEGORY_TYPES = {
     'transito-equipos': { prefix: 'TRE', tableKey: 'transito-equipos', pantalla: 'Lo que Transita' },
     // Criterios de Incidentes (Pickeo cruzado, Error de lote, Acomodar por agrupación…): cada criterio pertenece a UNA categoría (kind = mayor | menor | recomendacion). Los eligen quienes reportan en el QR de Incidentes.
     'incidentes-criterios': { prefix: 'ICR', tableKey: 'incidentes-criterios', pantalla: 'Criterios de Incidentes' },
+    // Soporte por niveles (TI > Operaciones TI > Catálogos): las categorías de un caso (cada una entra en un nivel, con su plazo de primera respuesta y las evidencias que se piden), el catálogo de esas evidencias y las causas que se eligen al cerrar un caso.
+    'soporte-categorias': { prefix: 'SCA', tableKey: 'soporte-categorias', pantalla: 'Categorías de Soporte', area: 'Operaciones TI' },
+    'soporte-evidencias': { prefix: 'SEV', tableKey: 'soporte-evidencias', pantalla: 'Evidencias de Soporte', area: 'Operaciones TI' },
+    'soporte-causas': { prefix: 'SCU', tableKey: 'soporte-causas', pantalla: 'Causas de Soporte', area: 'Operaciones TI' },
 };
 
 // El catálogo de lo que transita de una empresa, como lo usa el Layout: [{ id, name, kind, w, l, h, status }] (solo lo que ya tiene nombre). Se pone en layout.transitCatalog al leer el Layout (no se guarda con él).
@@ -7507,6 +7521,13 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
     'incidentes-criterios': {
         kind: { column: 'kind', fieldKey: 'main.colIncCritCategoria' },
     },
+    'soporte-categorias': {
+        kind: { column: 'kind', fieldKey: 'main.colSopEntraEn' },
+        firstResponseMin: { column: 'first_response_min', fieldKey: 'main.colSopPrimeraRespuesta' },
+        evidenceIds: { column: 'evidence_ids', fieldKey: 'main.colSopEvidencias' },
+    },
+    'soporte-evidencias': {},
+    'soporte-causas': {},
     'transito-equipos': {
         kind: { column: 'kind', fieldKey: 'main.colTrEquipTipo' },
         widthM: { column: 'width_m', fieldKey: 'main.colTrEquipAncho' },
@@ -7520,7 +7541,8 @@ function articleCategoryPatchableFields(categoryType) {
 const ARTICLE_CATEGORY_UPDATE_COLUMNS = { ...ARTICLE_CATEGORY_PATCHABLE_FIELDS, parentId: { column: 'parent_id' }, kind: { column: 'kind' }, locations: { column: 'locations' }, classificationIds: { column: 'classification_ids' }, widthM: { column: 'width_m' }, lengthM: { column: 'length_m' }, heightM: { column: 'height_m' }, letter: { column: 'letter' },
     needsSerial: { column: 'needs_serial' }, customName: { column: 'custom_name' }, modelNumber: { column: 'model_number' }, shape: { column: 'shape' }, height: { column: 'height_cm' }, length: { column: 'length_cm' }, depth: { column: 'depth_cm' },
     weight: { column: 'weight_kg' }, volume: { column: 'volume_m3' }, look: { column: 'look' }, needsCalibration: { column: 'needs_calibration' }, calibrationMonths: { column: 'calibration_months' },
-    unit: { column: 'unit' }, criteriaIds: { column: 'criteria_ids' }, avisoIds: { column: 'aviso_ids' }, usage: { column: 'use_kind' } };
+    unit: { column: 'unit' }, criteriaIds: { column: 'criteria_ids' }, avisoIds: { column: 'aviso_ids' }, usage: { column: 'use_kind' },
+    firstResponseMin: { column: 'first_response_min' }, evidenceIds: { column: 'evidence_ids' } };
 
 function updateArticleCategory(id, clientId, patch, forTestAccount = false) {
     const sets = [];
@@ -14457,6 +14479,45 @@ function seedIncidentesCriteriosValuesOnce() {
     })();
     console.log(`[db] Seeded the Criterios de Incidentes catalog (Pickeo cruzado, Error de lote, Acomodar por agrupación) for existing clients: ${seeded} values (one-time).`);
 }
+// Soporte por niveles (TI > Operaciones TI > Catálogos): cada empresa arranca con las evidencias, las categorías y las causas de la maqueta de Daniel; agrega y cambia las suyas desde Catálogos.
+const SOPORTE_EVIDENCIAS_DEFAULTS = ['Captura del error', 'Grabación de pantalla', 'Hora aproximada', 'Qué datos puso', 'Qué botón no ve', 'Dato esperado', 'Excel o archivo', 'Descripción', 'Ejemplo o dibujo'];
+const SOPORTE_CATEGORIAS_DEFAULTS = [
+    { name: 'Duda de uso', kind: 'n0', minutes: 0, evidence: [] },
+    { name: 'Error al guardar', kind: 'n1', minutes: 60, evidence: ['Captura del error', 'Grabación de pantalla', 'Hora aproximada', 'Qué datos puso'] },
+    { name: 'Permisos y accesos', kind: 'n1', minutes: 60, evidence: ['Captura del error', 'Qué botón no ve'] },
+    { name: 'Dato que no cuadra', kind: 'n2', minutes: 120, evidence: ['Captura del error', 'Dato esperado', 'Excel o archivo'] },
+    { name: 'Cambio o mejora', kind: 'n3', minutes: 1440, evidence: ['Descripción', 'Ejemplo o dibujo'] },
+];
+const SOPORTE_CAUSAS_DEFAULTS = ['Error del sistema', 'Falta de capacitación', 'Permisos mal asignados', 'Dato mal capturado', 'Solicitud de mejora', 'Otro'];
+const SOPORTE_CATALOGS_SEED_KEY = 'seed-soporte-catalogos-v1';
+function seedSoporteCatalogsValues(clientId) {
+    if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type IN ('soporte-categorias', 'soporte-evidencias', 'soporte-causas') LIMIT 1").get(clientId)) return 0;
+    const evidenceIdByName = new Map();
+    SOPORTE_EVIDENCIAS_DEFAULTS.forEach((name) => {
+        const row = createArticleCategory({ clientId, categoryType: 'soporte-evidencias', isTestData: false });
+        db.prepare("UPDATE article_categories SET name = ?, status = 'active' WHERE id = ?").run(name, row.id);
+        evidenceIdByName.set(name, row.id);
+    });
+    SOPORTE_CATEGORIAS_DEFAULTS.forEach(({ name, kind, minutes, evidence }) => {
+        const row = createArticleCategory({ clientId, categoryType: 'soporte-categorias', isTestData: false });
+        const ids = evidence.map((n) => evidenceIdByName.get(n)).filter(Boolean);
+        db.prepare("UPDATE article_categories SET name = ?, kind = ?, first_response_min = ?, evidence_ids = ?, status = 'active' WHERE id = ?").run(name, kind, minutes, ids.length ? JSON.stringify(ids) : '', row.id);
+    });
+    SOPORTE_CAUSAS_DEFAULTS.forEach((name) => {
+        const row = createArticleCategory({ clientId, categoryType: 'soporte-causas', isTestData: false });
+        db.prepare("UPDATE article_categories SET name = ?, status = 'active' WHERE id = ?").run(name, row.id);
+    });
+    return SOPORTE_EVIDENCIAS_DEFAULTS.length + SOPORTE_CATEGORIAS_DEFAULTS.length + SOPORTE_CAUSAS_DEFAULTS.length;
+}
+function seedSoporteCatalogsValuesOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SOPORTE_CATALOGS_SEED_KEY)) return;
+    let seeded = 0;
+    db.transaction(() => {
+        db.prepare('SELECT id FROM clients').all().forEach((c) => { seeded += seedSoporteCatalogsValues(c.id); });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(SOPORTE_CATALOGS_SEED_KEY);
+    })();
+    console.log(`[db] Seeded the Soporte catalogs (categorías, evidencias que se piden, causas al cerrar) for existing clients: ${seeded} values (one-time).`);
+}
 function seedActivosFijosValuesOnce() {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_SEED_KEY)) return;
     let seeded = 0;
@@ -14667,6 +14728,7 @@ seedActivosClasificacionAdministrarOnce();
 migrateCodeRelationPositionsOnce();
 seedTransitoEquiposValuesOnce();
 seedIncidentesCriteriosValuesOnce();
+seedSoporteCatalogsValuesOnce();
 
 module.exports = {
     listTemperatureActivity, hasTemperatureActivityBefore,
