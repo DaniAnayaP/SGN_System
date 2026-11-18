@@ -147,6 +147,7 @@ const {
     deleteFleetUnit,
     suggestFuelTypeForEcoUnit,
     listSkuItems,
+    listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, SKU_ENABLEMENT_DEFAULT,
     getSkuItemById,
     createSkuItem,
     SKU_ITEM_PATCHABLE_FIELDS,
@@ -313,6 +314,7 @@ const {
     parseHrAssignment,
     serializeHrAssignment,
     hrAssignmentOptions,
+    hrAreaNameEs, HR_DEPARTMENT_NAMES_ES,
     resolveHrAssignment,
     describeHrAssignment,
     getTableChanges,
@@ -13958,6 +13960,106 @@ function skuDistDoneSkus(distRows, skuItems) {
     });
     return done;
 }
+// ---- Habilitación de Códigos (TI › Operaciones TI) --------------------------------------------------------------------------------------------------
+// Dónde vale cada código: por departamento, área y sitio (el sitio es también el centro de costos que lo lleva: 1 a 1 hoy). TI ve todos los códigos; cada sitio verá solo lo habilitado (ver skuEnabledScope). Quien tiene el botón «Autorización para
+// Habilitar» (o el administrador del cliente) agrega y quita; todo cambio queda en el historial del código.
+const HAB_TABLE_KEY = 'habilitacion-codigos';
+const HAB_SCREEN = { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Habilitación de Códigos' };
+const habCanEdit = (req) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), HAB_TABLE_KEY, 'colHabCreateAuth');
+// Lo que se puede elegir: las áreas reales de los departamentos contratados (sin las genéricas «Área 1-3») y los sitios del cliente (cada uno con su centro de costos).
+function habOptions(req) {
+    const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
+    const areas = [];
+    options.departments.forEach((department) => (options.areas[department] || []).forEach((a) => {
+        if (!/^area-\d+$/.test(a.id)) areas.push({ department, area: a.id, labelKey: a.labelKey, labelParams: a.labelParams || null });
+    }));
+    const sites = options.sites.map((code) => {
+        const cc = options.centers.find((c) => c.site_code === code) || {};
+        return { code, sucursal: cc.sucursal || '', centerId: cc.id || null, centerCode: cc.code || '', centerName: cc.name || '' };
+    });
+    return { areas, sites };
+}
+// Revisa lo que llega: cada renglón debe ser un área de un departamento contratado y «todos los sitios» ('') o un sitio del cliente. Regresa los renglones limpios o { error }.
+function habCleanRows(rows, options) {
+    if (!Array.isArray(rows) || rows.length > 5000) return { error: 'La lista de habilitaciones no es válida.' };
+    const validAreas = new Set(options.areas.map((a) => `${a.department}/${a.area}`));
+    const validSites = new Set(options.sites.map((s) => s.code));
+    const clean = [];
+    for (const r of rows) {
+        const row = { department: String((r && r.department) || ''), area: String((r && r.area) || ''), siteCode: String((r && r.siteCode) || '') };
+        if (!validAreas.has(`${row.department}/${row.area}`)) return { error: 'Hay un área que el cliente no tiene.' };
+        if (row.siteCode !== '' && !validSites.has(row.siteCode)) return { error: 'Hay un sitio que el cliente no tiene.' };
+        clean.push(row);
+    }
+    return { rows: normalizeEnablementRows(clean) };
+}
+// Cómo se escribe una habilitación en el historial: «C. Distribución · CEDIS Puebla (PUEBL)» o «Punto Venta · todos los sitios».
+function habLabel(row, options) {
+    const site = row.siteCode ? (() => { const s = options.sites.find((x) => x.code === row.siteCode); return s ? `${s.centerName || s.sucursal || s.code} (${s.code})` : row.siteCode; })() : 'todos los sitios';
+    return `${hrAreaNameEs(row.department, row.area)} · ${site}`;
+}
+function habLogChange(req, skuRow, options, added, removed) {
+    const changedBy = changedByLabel(req);
+    const sku = padSku(skuRow.record_number, skuRow.sku_code);
+    removed.forEach((r) => logTableChange({ clientId: req.user.clientId, tableKey: HAB_TABLE_KEY, recordId: skuRow.id, recordLabel: sku, action: 'update', fieldKey: 'main.colHabHabilitado', oldValue: habLabel(r, options), newValue: '', changedBy }));
+    added.forEach((r) => logTableChange({ clientId: req.user.clientId, tableKey: HAB_TABLE_KEY, recordId: skuRow.id, recordLabel: sku, action: 'update', fieldKey: 'main.colHabHabilitado', oldValue: '', newValue: habLabel(r, options), changedBy }));
+}
+app.get('/api/business/sku-enablements', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const options = habOptions(req);
+    const byCode = new Map();
+    listSkuEnablements(clientId, isTestAccount).forEach((r) => { if (!byCode.has(r.skuItemId)) byCode.set(r.skuItemId, []); byCode.get(r.skuItemId).push({ department: r.department, area: r.area, siteCode: r.siteCode }); });
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        ...options,
+        canEdit: habCanEdit(req),
+        codes: listSkuItems(clientId, isTestAccount).map((row) => ({
+            id: row.id,
+            registroUnico: row.db_id,
+            sku: padSku(row.record_number, row.sku_code),
+            upc: row.upc || '',
+            description: row.unique_description || row.known_description || row.custom_description || '',
+            status: row.status === 'inactive' ? 'inactive' : 'active',
+            enabled: byCode.get(row.id) || [],
+            ...getSystemColumnsForRecord({ companyName: client.company_name, ...HAB_SCREEN, centroCostos: '', createdAt: row.created_at }),
+        })),
+    });
+});
+// Un código: deja sus habilitaciones exactamente como llegan.
+app.put('/api/business/sku-enablements/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!habCanEdit(req)) return res.status(403).json({ message: 'No tienes permiso para habilitar códigos.' });
+    const { clientId, isTestAccount } = req.user;
+    const skuRow = getSkuItemById(req.params.id, clientId, isTestAccount);
+    if (!skuRow) return res.status(404).json({ message: 'Code not found.' });
+    const options = habOptions(req);
+    const clean = habCleanRows(req.body && req.body.rows, options);
+    if (clean.error) return res.status(400).json({ message: clean.error });
+    const { added, removed } = setSkuEnablements(clientId, isTestAccount, skuRow.id, clean.rows);
+    habLogChange(req, skuRow, options, added, removed);
+    res.json({ enabled: listSkuEnablements(clientId, isTestAccount, skuRow.id).map((r) => ({ department: r.department, area: r.area, siteCode: r.siteCode })), changed: added.length + removed.length });
+});
+// Varios códigos a la vez (la lista filtrada de la pantalla): mode 'add' agrega esas habilitaciones y 'remove' las quita.
+app.post('/api/business/sku-enablements/bulk', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!habCanEdit(req)) return res.status(403).json({ message: 'No tienes permiso para habilitar códigos.' });
+    const { clientId, isTestAccount } = req.user;
+    const body = req.body || {};
+    if (!['add', 'remove'].includes(body.mode)) return res.status(400).json({ message: 'La acción no es válida.' });
+    if (!Array.isArray(body.skuItemIds) || !body.skuItemIds.length || body.skuItemIds.length > 100000) return res.status(400).json({ message: 'No hay códigos elegidos.' });
+    const options = habOptions(req);
+    const clean = habCleanRows(body.rows, options);
+    if (clean.error) return res.status(400).json({ message: clean.error });
+    if (!clean.rows.length) return res.status(400).json({ message: 'Marca al menos un lugar.' });
+    const items = new Map(listSkuItems(clientId, isTestAccount).map((row) => [row.id, row]));
+    const ids = [...new Set(body.skuItemIds.map(Number))].filter((id) => items.has(id));
+    const changes = bulkSkuEnablements(clientId, isTestAccount, ids, body.mode, clean.rows, options.sites.map((s) => s.code));
+    changes.forEach((c) => habLogChange(req, items.get(c.skuItemId), options, c.added, c.removed));
+    res.json({ changed: changes.length, total: ids.length });
+});
+
 app.get('/api/business/sku-distribution', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;

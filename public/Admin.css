@@ -9220,3 +9220,23 @@ video.sc-att.big{ max-width: 100%; max-height: 360px; }
 .perm-tree-bulk-btn{ width: 1.55rem; height: 1.55rem; padding: 0; display: inline-grid; place-items: center; font-size: 1rem; border: 1px solid var(--color-border); border-radius: 50%; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
 .perm-tree-bulk-btn.on:hover{ color: #2c8f4a; border-color: #2c8f4a; background: color-mix(in srgb, #2c8f4a 10%, transparent); }
 .perm-tree-bulk-btn.off:hover{ color: #b3261e; border-color: #b3261e; background: color-mix(in srgb, #b3261e 10%, transparent); }
+/* TI › Habilitación de Códigos: resumen por área en la tabla y la matriz Área × Sitio de la ventana */
+.hab-chips{ display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.hab-chip{ padding: 0.1rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; white-space: nowrap; background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg)); color: var(--color-text-primary); }
+.hab-chip.none{ background: var(--color-bg); color: var(--color-text-secondary); font-weight: 500; }
+td.hab-click{ cursor: pointer; }
+.hab-bulk-btn{ margin-right: 0.6rem; }
+.modal-panel.hab-panel{ max-width: min(70rem, 96vw); width: 100%; }
+.hab-modes{ display: flex; gap: 1.2rem; margin: 0.4rem 0 0.2rem; font-size: 0.85rem; }
+.hab-modes[hidden]{ display: none; }
+.hab-modes label{ display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+.hab-wrap{ overflow: auto; max-height: 52vh; margin: 0.6rem 0 0.9rem; border: 1px solid var(--color-border); border-radius: 0.5rem; }
+.hab-table{ border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.78rem; }
+.hab-table th, .hab-table td{ padding: 0.4rem 0.65rem; border-bottom: 1px solid var(--color-border); text-align: center; white-space: nowrap; background: var(--color-surface); }
+.hab-table th{ position: sticky; top: 0; z-index: 2; font-weight: 700; color: var(--color-text-secondary); }
+.hab-table th:first-child, .hab-table td:first-child{ text-align: left; position: sticky; left: 0; z-index: 1; }
+.hab-table th:first-child{ z-index: 3; }
+.hab-table tr.hab-dept td{ background: var(--color-bg); font-weight: 700; text-align: left; position: static; }
+.hab-site-code{ display: block; }
+.hab-site-name{ display: block; font-size: 0.66rem; font-weight: 500; max-width: 8rem; overflow: hidden; text-overflow: ellipsis; }
+.hab-table input[type="checkbox"]{ width: 1rem; height: 1rem; accent-color: var(--color-text-primary); cursor: pointer; }

@@ -13601,6 +13601,7 @@ const TABLE_GRANT_PATHS = {
     'soporte-causas': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-causas' },
     'mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
+    'habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
@@ -13687,6 +13688,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-admin-mapa-calor': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-mapa-calor' },
     'cat-admin-ti-mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'cat-operaciones-ti-casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
+    'cat-operaciones-ti-habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
     'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
     'cat-operaciones-pv-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },

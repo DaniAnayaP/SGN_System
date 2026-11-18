@@ -49,6 +49,7 @@ const TABLES = {
     freight_quotes: { action: WIPE, group: 'captures' },
     transfers: { action: WIPE, group: 'captures' },
     sku_items: { action: WIPE, group: 'captures' },
+    sku_enablements: { action: WIPE, group: 'captures' },
     fixed_assets: { action: WIPE, group: 'captures' }, // Alta Activos (2026-11-12)
     asset_authorizations: { action: WIPE, group: 'captures' }, // autorización del jefe directo para usar y editar activos (2026-11-13)
     asset_model_photos: { action: WIPE, group: 'captures' }, // fotos de las 6 caras de cada modelo de activo (2026-11-13)

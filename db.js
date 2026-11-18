@@ -3356,6 +3356,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'soporte-causas': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Causas de Soporte' },
     'mapa-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Mapa de soporte' },
     'casos-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Casos de soporte' },
+    'habilitacion-codigos': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Habilitación de Códigos' },
     'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
     'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
@@ -3765,6 +3766,7 @@ const TABLE_GRANT_PATHS = {
     'soporte-causas': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-causas' },
     // Operaciones > Casos de soporte: sus columnas, su botón «Nueva solicitud» (colSpCreateAuth) y los iconos de la tabla.
     'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
+    'habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
@@ -3982,6 +3984,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'soporte-evidencias': CATEGORY_BUTTON_NOTIFY,
     'soporte-causas': CATEGORY_BUTTON_NOTIFY,
     'casos-soporte': { create: 'colSpCreateAuth' },
+    'habilitacion-codigos': { create: 'colHabCreateAuth' },
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
     'udm-distribucion': { create: 'colUdmDCreateAuth', delete: 'colUdmDDeleteAuth' },
@@ -5435,9 +5438,119 @@ function createSkuItem({ clientId, isTestData = false, recordNumber: wanted = 0 
         const result = db
             .prepare('INSERT INTO sku_items (client_id, db_id, record_number, is_test_data, sku_code) VALUES (@clientId, @dbId, @recordNumber, @isTestData, @skuCode)')
             .run({ clientId, dbId: generateBigDateId(), recordNumber, isTestData: isTestData ? 1 : 0, skuCode: buildSkuCode(clientId, recordNumber) });
+        // Un código nuevo nace habilitado en C. Distribución (todos sus sitios), que es donde se crea hoy; TI decide después dónde más vale (Habilitación de Códigos).
+        db.prepare('INSERT OR IGNORE INTO sku_enablements (client_id, is_test_data, sku_item_id, department, area, site_code) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(clientId, isTestData ? 1 : 0, result.lastInsertRowid, SKU_ENABLEMENT_DEFAULT.department, SKU_ENABLEMENT_DEFAULT.area, '');
         return result.lastInsertRowid;
     });
     return getSkuItemById(create(), clientId, isTestData);
+}
+
+// ---- Habilitación de códigos (TI › Operaciones TI › Habilitación de Códigos) -----------------------------------------------------------------------------------------
+// Dónde vale cada código: un renglón por (código, departamento, área, sitio). site_code '' = TODOS los sitios de esa área (también los que se creen después); si no, el código de sitio (cost_centers.site_code). Sitio y centro
+// de costos son 1 a 1 hoy (el código de sitio es único por centro), así que el sitio nombra también a su centro. Los que ya existían quedan habilitados en C. Distribución con todos sus sitios (siembra de una sola vez).
+const SKU_ENABLEMENT_DEFAULT = { department: 'supply-chain', area: 'sc-area-distribution-center' };
+db.exec(`
+    CREATE TABLE IF NOT EXISTS sku_enablements (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data INTEGER NOT NULL DEFAULT 0,
+        sku_item_id  INTEGER NOT NULL REFERENCES sku_items(id) ON DELETE CASCADE,
+        department   TEXT NOT NULL,
+        area         TEXT NOT NULL,
+        site_code    TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (sku_item_id, department, area, site_code)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sku_enablements_scope ON sku_enablements (client_id, is_test_data, department, area);
+`);
+{
+    const SEED_KEY = 'seed-sku-enablements-v1';
+    if (!db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SEED_KEY)) {
+        const seeded = db.prepare(`
+            INSERT OR IGNORE INTO sku_enablements (client_id, is_test_data, sku_item_id, department, area, site_code)
+            SELECT client_id, is_test_data, id, ?, ?, '' FROM sku_items
+        `).run(SKU_ENABLEMENT_DEFAULT.department, SKU_ENABLEMENT_DEFAULT.area).changes;
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(SEED_KEY);
+        if (seeded) console.log(`[db] Habilitación de códigos: ${seeded} código(s) habilitados en C. Distribución con todos sus sitios (one-time).`);
+    }
+}
+const enablementKey = (r) => `${r.department}/${r.area}/${r.siteCode || ''}`;
+// Lo guardado de un código, o de todos: [{ department, area, siteCode }] (siteCode '' = todos los sitios del área).
+function listSkuEnablements(clientId, isTest, skuItemId = null) {
+    const rows = skuItemId
+        ? db.prepare('SELECT sku_item_id AS skuItemId, department, area, site_code AS siteCode FROM sku_enablements WHERE client_id = ? AND is_test_data = ? AND sku_item_id = ? ORDER BY department, area, site_code').all(clientId, isTest ? 1 : 0, skuItemId)
+        : db.prepare('SELECT sku_item_id AS skuItemId, department, area, site_code AS siteCode FROM sku_enablements WHERE client_id = ? AND is_test_data = ? ORDER BY department, area, site_code').all(clientId, isTest ? 1 : 0);
+    return rows;
+}
+// Sin repetidos, y un área habilitada en todos sus sitios ('') sustituye a los sitios sueltos de esa misma área.
+function normalizeEnablementRows(rows) {
+    const clean = [];
+    const seen = new Set();
+    (rows || []).forEach((r) => {
+        const row = { department: String(r.department || ''), area: String(r.area || ''), siteCode: String(r.siteCode || '') };
+        if (!row.department || !row.area) return;
+        const key = enablementKey(row);
+        if (seen.has(key)) return;
+        seen.add(key);
+        clean.push(row);
+    });
+    const wholeAreas = new Set(clean.filter((r) => r.siteCode === '').map((r) => `${r.department}/${r.area}`));
+    return clean.filter((r) => r.siteCode === '' || !wholeAreas.has(`${r.department}/${r.area}`));
+}
+// Deja las habilitaciones de UN código exactamente como llegan (renglones nuevos y quitados). Regresa { added, removed } con las llaves de lo que cambió, para el historial.
+function setSkuEnablements(clientId, isTest, skuItemId, rows) {
+    const next = normalizeEnablementRows(rows);
+    const before = listSkuEnablements(clientId, isTest, skuItemId);
+    const beforeKeys = new Set(before.map(enablementKey));
+    const nextKeys = new Set(next.map(enablementKey));
+    const removed = before.filter((r) => !nextKeys.has(enablementKey(r)));
+    const added = next.filter((r) => !beforeKeys.has(enablementKey(r)));
+    const apply = db.transaction(() => {
+        removed.forEach((r) => db.prepare('DELETE FROM sku_enablements WHERE sku_item_id = ? AND department = ? AND area = ? AND site_code = ?').run(skuItemId, r.department, r.area, r.siteCode));
+        added.forEach((r) => db.prepare('INSERT OR IGNORE INTO sku_enablements (client_id, is_test_data, sku_item_id, department, area, site_code) VALUES (?, ?, ?, ?, ?, ?)').run(clientId, isTest ? 1 : 0, skuItemId, r.department, r.area, r.siteCode));
+    });
+    apply();
+    return { added, removed };
+}
+// Agrega o quita las mismas habilitaciones a varios códigos (la lista filtrada de la pantalla). mode 'add' | 'remove'. Quitar un sitio de un área que estaba en «todos los sitios» deja el área con los demás sitios (allSiteCodes).
+// Regresa [{ skuItemId, added, removed }] solo de los códigos que sí cambiaron.
+function bulkSkuEnablements(clientId, isTest, skuItemIds, mode, rows, allSiteCodes = []) {
+    const wanted = normalizeEnablementRows(rows);
+    const bySku = new Map();
+    listSkuEnablements(clientId, isTest).forEach((r) => { if (!bySku.has(r.skuItemId)) bySku.set(r.skuItemId, []); bySku.get(r.skuItemId).push({ department: r.department, area: r.area, siteCode: r.siteCode }); });
+    const changes = [];
+    skuItemIds.forEach((skuItemId) => {
+        const current = bySku.get(skuItemId) || [];
+        let next = current.slice();
+        if (mode === 'add') {
+            next = next.concat(wanted);
+        } else {
+            wanted.forEach((w) => {
+                if (w.siteCode === '') { next = next.filter((r) => !(r.department === w.department && r.area === w.area)); return; }
+                const wholeArea = next.some((r) => r.department === w.department && r.area === w.area && r.siteCode === '');
+                if (wholeArea) {
+                    next = next.filter((r) => !(r.department === w.department && r.area === w.area));
+                    allSiteCodes.filter((code) => code !== w.siteCode).forEach((code) => next.push({ department: w.department, area: w.area, siteCode: code }));
+                } else {
+                    next = next.filter((r) => !(r.department === w.department && r.area === w.area && r.siteCode === w.siteCode));
+                }
+            });
+        }
+        const normalized = normalizeEnablementRows(next);
+        const same = normalized.length === current.length && normalized.every((r) => current.some((c) => enablementKey(c) === enablementKey(r)));
+        if (same) return;
+        const { added, removed } = setSkuEnablements(clientId, isTest, skuItemId, normalized);
+        changes.push({ skuItemId, added, removed });
+    });
+    return changes;
+}
+// Los códigos habilitados para un área (y, si se dan, para alguno de esos sitios): Set de ids. siteCodes null = sin filtrar por sitio. Un renglón del área con site_code '' vale para cualquier sitio.
+function listSkuIdsEnabledFor(clientId, isTest, { department, area, siteCodes = null }) {
+    const rows = db.prepare("SELECT sku_item_id AS id, site_code AS siteCode FROM sku_enablements WHERE client_id = ? AND is_test_data = ? AND department = ? AND area = ?").all(clientId, isTest ? 1 : 0, department, area);
+    const ids = new Set();
+    rows.forEach((r) => { if (!siteCodes || r.siteCode === '' || siteCodes.includes(r.siteCode)) ids.add(r.id); });
+    return ids;
 }
 
 const SKU_ITEM_PATCHABLE_FIELDS = {
@@ -15802,6 +15915,7 @@ module.exports = {
     deleteSupportMaterial,
     SUPPORT_MATERIAL_CATEGORIES,
     listSkuItems,
+    listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, SKU_ENABLEMENT_DEFAULT,
     getSkuItemById,
     createSkuItem,
     updateSkuItem,
@@ -16164,6 +16278,7 @@ module.exports = {
     parseHrAssignment,
     serializeHrAssignment,
     hrAssignmentOptions,
+    hrAreaNameEs, HR_DEPARTMENT_NAMES_ES,
     resolveHrAssignment,
     describeHrAssignment,
     applyHrAssignmentLimits,
