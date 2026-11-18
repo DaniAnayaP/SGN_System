@@ -240,6 +240,9 @@
         // allowRemoveExtras («+ Adicionales» de un cliente): lo vendido como adicional (amarillo, ya guardado o de esta sesión) se puede quitar; lo que da el PLAN (verde) no. canRemove: cualquiera de los dos modos.
         const canRemove = allowRemove || allowRemoveExtras;
         const removableColor = (c) => c === 'yellow' || (allowRemove && c === 'green');
+        // «+ Adicionales» de un cliente (interactivo): el marcador de color ES el interruptor. Un clic lo activa (⊕ amarillo) y otro lo desactiva (⊕ apagado); un nivel a medias (−) activa con un clic todo lo de adentro y con otro lo quita.
+        // Sin casillas azules ni botoncitos aparte. Lo que da el plan (verde) no se quita.
+        const toggleMode = allowRemoveExtras && interactive;
         // allowRemove: lo que da el PUESTO y se le quita a esta persona (las llaves, ya guardadas o de esta sesión), y los permisos crudos del puesto (para saber qué contenedores cubren lo quitado).
         let excludedKeys = new Set();
         let planRawGrants = [];
@@ -425,6 +428,22 @@
             return status;
         }
 
+        // El interruptor de «+ Adicionales» (ver toggleMode): kind 'on' = adicional activado (⊕ amarillo), 'green' = lo cubre el plan (✓ verde, solo si trae adicionales adentro que se pueden quitar), 'off' = apagado (⊕ gris), 'mixed' = a medias (−).
+        function buildToggleBadge(kind, title, onClick, iconClass) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `perm-tree-status perm-tree-toggle-badge perm-tree-toggle-${kind}`;
+            btn.title = title;
+            btn.setAttribute('aria-label', title);
+            btn.setAttribute('data-help-key', 'permToggle');
+            const icon = document.createElement('i');
+            icon.className = `bx ${iconClass || (kind === 'green' ? 'bx-check' : (kind === 'mixed' ? 'bx-minus' : 'bx-plus-circle'))}`;
+            icon.setAttribute('aria-hidden', 'true');
+            btn.appendChild(icon);
+            btn.addEventListener('click', (event) => { event.stopPropagation(); onClick(); render(); });
+            return btn;
+        }
+
         // Read-only twins of PermissionTree.js's own classificationColor/
         // classificationTextColor (see this file's own classificationColors
         // init() fetch) -- same palette/hash fallback, so a classification
@@ -519,7 +538,19 @@
             } else if (mode === 'clientTricolor') {
                 const isRedInteractive = !!(colorSlot && colorSlot.color === 'red' && interactive && !colorSlot.limitReason);
                 const isRemovable = !!(colorSlot && (colorSlot.color === 'yellow' || colorSlot.color === 'green') && interactive && colorSlot.removeKeys && colorSlot.removeKeys.length);
-                if (isRedInteractive || isRemovable) {
+                if (toggleMode && (isRedInteractive || isRemovable || (colorSlot && colorSlot.partial))) {
+                    // el marcador de color es el interruptor: un clic activa, otro desactiva
+                    let badge;
+                    if (isRemovable) badge = buildToggleBadge(colorSlot.color === 'green' ? 'green' : 'on', t('main.permToggleOff'), () => colorSlot.onRemove());
+                    else if (isRedInteractive) badge = buildToggleBadge('off', t('main.permToggleOn'), () => colorSlot.onChange(true));
+                    else badge = buildToggleBadge('mixed', t(colorSlot.canAdd ? 'main.permToggleOnAll' : 'main.permToggleOffAll'), () => (colorSlot.canAdd ? colorSlot.onEnableAll() : colorSlot.onRemoveAll()));
+                    row.appendChild(badge);
+                    const label = document.createElement('span');
+                    label.className = 'perm-tree-status-label';
+                    label.textContent = labelText;
+                    applyClassificationColorTo(label, classificationId);
+                    row.appendChild(label);
+                } else if (isRedInteractive || isRemovable) {
                     const labelEl = document.createElement('label');
                     labelEl.className = isRemovable && allowRemove ? `perm-tree-check ${colorSlot.color === 'green' ? 'perm-tree-check-plan' : 'perm-tree-check-extra'}` : 'perm-tree-check';
                     if (isRemovable) labelEl.title = t(colorSlot.color === 'green' ? 'main.permRemovePlan' : (allowRemove ? 'main.permRemoveExtra' : 'main.permRemoveExtraClient'));
@@ -551,25 +582,6 @@
                     label.textContent = labelText;
                     applyClassificationColorTo(label, classificationId);
                     row.appendChild(label);
-                    // «+ Adicionales» del cliente, nivel a medias (la «−»): dos botoncitos para habilitar todo lo que está dentro o quitar todo lo adicional que está dentro
-                    if (colorSlot && colorSlot.partial) {
-                        const bulk = document.createElement('span');
-                        bulk.className = 'perm-tree-bulk';
-                        const makeBulkBtn = (cls, icon, key, handler) => {
-                            const btn = document.createElement('button');
-                            btn.type = 'button';
-                            btn.className = `perm-tree-bulk-btn ${cls}`;
-                            btn.title = t(key);
-                            btn.setAttribute('aria-label', t(key));
-                            btn.setAttribute('data-help-key', 'permBulk');
-                            btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
-                            btn.addEventListener('click', (event) => { event.stopPropagation(); handler(); render(); });
-                            return btn;
-                        };
-                        bulk.appendChild(makeBulkBtn('on', 'bx-check-double', 'main.permBulkEnable', colorSlot.onEnableAll));
-                        if (colorSlot.canRemoveAll) bulk.appendChild(makeBulkBtn('off', 'bx-x', 'main.permBulkDisable', colorSlot.onRemoveAll));
-                        row.appendChild(bulk);
-                    }
                     // Un centro de costos fuera de la asignación de la persona: el motivo se ve en la fila, no solo al tocarla.
                     if (colorSlot && colorSlot.limitReason === 'assignment') {
                         const tag = document.createElement('span');
@@ -676,6 +688,7 @@
             return [ownKey, {
                 color,
                 partial: allowRemoveExtras && interactive && color === null && (missing.length > 0 || partialRemoveKeys.length > 0),
+                canAdd: missing.length > 0,
                 canRemoveAll: partialRemoveKeys.length > 0,
                 onEnableAll: () => missing.forEach(stageAdd),
                 onRemoveAll: () => partialRemoveKeys.forEach(stageDrop),
@@ -957,7 +970,12 @@
             if (!appColorSlot) return;
             const isRedInteractive = !!(appColorSlot.color === 'red' && interactive && !appColorSlot.locked);
             const isRemovable = !!((appColorSlot.color === 'yellow' || appColorSlot.color === 'green') && interactive && appColorSlot.removeKeys && appColorSlot.removeKeys.length);
-            if (isRedInteractive || isRemovable) {
+            if (toggleMode && (isRedInteractive || isRemovable)) {
+                // «+ Adicionales» del cliente: el celular de color es el interruptor (un clic activa, otro desactiva), sin casilla azul
+                row.appendChild(isRemovable
+                    ? buildToggleBadge(appColorSlot.color === 'green' ? 'green' : 'on', t('main.permToggleOff'), () => appColorSlot.onRemove(), 'bx-mobile-alt')
+                    : buildToggleBadge('off', t('main.permToggleOn'), () => appColorSlot.onChange(true), 'bx-mobile-alt'));
+            } else if (isRedInteractive || isRemovable) {
                 const label = document.createElement('label');
                 label.className = isRemovable && allowRemove ? `perm-tree-app-toggle ${appColorSlot.color === 'green' ? 'perm-tree-check-plan' : 'perm-tree-check-extra'}` : 'perm-tree-app-toggle';
                 label.title = isRemovable ? t(appColorSlot.color === 'green' ? 'main.permRemovePlan' : (allowRemove ? 'main.permRemoveExtra' : 'main.permRemoveExtraClient')) : t('main.appVisionColumn');

@@ -5655,8 +5655,10 @@
     "permRemoveExtra": "Quitar este acceso a esta persona (desmarca la casilla y guarda)",
     "permRemovePlan": "Quitar este acceso a esta persona (se lo daba su puesto; al puesto no le cambia nada)",
     "permRemoveExtraClient": "Quitar este adicional al cliente (desmarca la casilla y guarda)",
-    "permBulkEnable": "Habilitar todo lo que está dentro",
-    "permBulkDisable": "Quitar todo lo adicional que está dentro",
+    "permToggleOn": "Clic para activarlo como adicional",
+    "permToggleOff": "Clic para quitar este adicional",
+    "permToggleOnAll": "Clic para activar todo lo que está dentro",
+    "permToggleOffAll": "Clic para quitar todo lo adicional que está dentro",
     "permExcludedTag": "Quitado a esta persona",
     "colActCalibracion": "Calibración",
     "colActivoFijoCalibracion": "Lleva calibración",
@@ -6689,9 +6691,9 @@
       "what": "Sitios que este cliente contrató además de los de su plan. Se suman a los del plan para el límite de sitios (los centros de costos extra se manejan aparte).",
       "example": "el plan trae 2 sitios y se contrata 1 extra: el cliente puede tener 3 sitios."
     },
-    "permBulk": {
-      "what": "En un nivel que tiene una parte activa y otra no (el «−»), el botón ✓✓ habilita todo lo que está dentro y el botón ✕ quita todo lo que se vendió como adicional (lo que da el plan no se quita). Hay que guardar para que el cambio quede.",
-      "example": "en «C. Distribución» tocas ✓✓ y quedan habilitadas todas sus pantallas y columnas, sin marcar una por una."
+    "permToggle": {
+      "what": "El marcador de color es el interruptor: un clic lo activa (⊕ amarillo = adicional) y otro clic lo desactiva (⊕ gris). En un nivel que tiene una parte activa y otra no (el «−»), un clic activa todo lo que está dentro y otro clic quita todo lo que se vendió como adicional. Lo que da el plan (verde) no se quita. Hay que guardar para que el cambio quede.",
+      "example": "en «C. Distribución» das un clic al «−» y quedan activadas todas sus pantallas y columnas; otro clic y se quitan, sin marcar una por una."
     },
     "uiScale": {
       "what": "Hace el texto y las tablas más grandes o más chicas en toda la aplicación, solo mientras dure tu sesión.",

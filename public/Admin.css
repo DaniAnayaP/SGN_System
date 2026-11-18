@@ -9216,10 +9216,14 @@ video.sc-att.big{ max-width: 100%; max-height: 360px; }
 .sp-recbar.sp-rec-float{ position: fixed; top: 0.8rem; left: 50%; transform: translateX(-50%); z-index: 100000; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25); }
 .sp-recbar.sp-rec-float .btn{ padding: 0.3rem 0.9rem; font-size: 0.75rem; }
 /* «+ Adicionales» del cliente: botones de «habilitar todo» y «quitar todo» en los niveles a medias */
-.perm-tree-bulk{ display: inline-flex; gap: 0.3rem; margin-left: 0.6rem; vertical-align: middle; }
-.perm-tree-bulk-btn{ width: 1.55rem; height: 1.55rem; padding: 0; display: inline-grid; place-items: center; font-size: 1rem; border: 1px solid var(--color-border); border-radius: 50%; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
-.perm-tree-bulk-btn.on:hover{ color: #2c8f4a; border-color: #2c8f4a; background: color-mix(in srgb, #2c8f4a 10%, transparent); }
-.perm-tree-bulk-btn.off:hover{ color: #b3261e; border-color: #b3261e; background: color-mix(in srgb, #b3261e 10%, transparent); }
+/* «+ Adicionales» de un cliente: el marcador de color es el interruptor (un clic activa, otro desactiva). ⊕ amarillo = adicional activado, ⊕ gris = apagado, «−» = a medias, ✓ verde = lo cubre el plan. */
+.perm-tree-toggle-badge{ box-sizing: border-box; border: 1.5px solid transparent; padding: 0; cursor: pointer; font: inherit; transition: transform .12s ease, box-shadow .12s ease; }
+.perm-tree-toggle-badge:hover{ transform: scale(1.14); box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
+.perm-tree-toggle-badge:focus-visible{ outline: 2px solid currentColor; outline-offset: 2px; }
+.perm-tree-toggle-on{ background-color: color-mix(in srgb, #c9860b 22%, transparent); color: #c9860b; }
+.perm-tree-toggle-green{ background-color: color-mix(in srgb, #2c8f4a 18%, transparent); color: #2c8f4a; }
+.perm-tree-toggle-off{ background-color: transparent; color: var(--color-text-secondary); border-color: color-mix(in srgb, var(--color-text-secondary) 55%, transparent); border-style: dashed; }
+.perm-tree-toggle-mixed{ background-color: color-mix(in srgb, var(--color-text-secondary) 15%, transparent); color: var(--color-text-secondary); }
 /* TI › Habilitación de Códigos: resumen por área en la tabla y la matriz Área × Sitio de la ventana */
 .hab-chips{ display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .hab-chip{ padding: 0.1rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; white-space: nowrap; background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg)); color: var(--color-text-primary); }
