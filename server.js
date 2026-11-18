@@ -152,7 +152,7 @@ const {
     suggestFuelTypeForEcoUnit,
     listSkuItems,
     listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, isSkuEnabledAt, SKU_ENABLEMENT_DEFAULT,
-    createSkuRequest, getSkuRequest, listSkuRequests, listSkuRequestEvents, updateSkuRequestData, setSkuRequestStatus, skuRequestTimes, skuRequestProgress, skuRequestDescriptionsInUse, sanitizeSkuRequestData,
+    createSkuRequest, getSkuRequest, listSkuRequests, setSkuRequestPhoto, setSkuRequestPlace, listSkuRequestEvents, updateSkuRequestData, setSkuRequestStatus, skuRequestTimes, skuRequestProgress, skuRequestDescriptionsInUse, sanitizeSkuRequestData,
     SKU_REQUEST_STATUSES, SKU_REQUEST_OPEN, SKU_REQUEST_HOLDER, SKU_REQUEST_REQUIRED_KEYS, skuRequestFilled, skuLettersFor,
     getSkuItemById,
     createSkuItem,
@@ -352,6 +352,8 @@ const {
     canDeleteColumn,
     getSearchGatedColumns,
     publishDataChangeNotice,
+    listUserIdsWithScreenGrant,
+    publishSkuRequestNotice,
     publishButtonActionNotice,
     publishIconUpdateNotice,
     hasTableIconGrant,
@@ -620,7 +622,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
+const EXTRA_SCREEN_LABEL_KEYS = { 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -14164,6 +14166,288 @@ app.post('/api/business/sku-enablements/bulk', requireAuth, (req, res) => {
     changes.forEach((c) => habLogChange(req, items.get(c.skuItemId), options, c.added, c.removed));
     manualItemsCache.clear();
     res.json({ changed: changes.length, total: ids.length });
+});
+
+// ---- Solicitudes de alta de código ------------------------------------------------------------------------------------------------------------------------------
+// Operaciones › «Pedir alta de código» (existe en cada área) y TI › Operaciones TI › «Solicitudes de alta de código». Quien pide llena todo lo que sabe (lo que no sabe se marca «lo llena TI») y la manda; TI la ve desde el primer registro con su
+// estatus y un reloj (cuánto en manos de quien pidió y cuánto en manos de TI), pide datos, la revisa, la rechaza o crea el código (con las letras del SKU del área que lo pidió) y lo deja habilitado donde se pidió. Ver SKU_REQUEST_* en db.js.
+const SKU_REQ_TABLE = 'solicitudes-codigo';
+const SKU_REQ_SCREEN = 'cat-operaciones/cat-operaciones-pedir-alta-codigo'; // el mismo nodo existe en cada área: el permiso es el de esa área
+const SKU_REQ_TI = { sectionId: 'information-technology', itemId: 'it-area-operations', submenuId: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' };
+const SKU_REQ_PHOTOS = ['evidenceFront', 'evidenceBack', 'evidenceLeft', 'evidenceRight', 'evidenceTop', 'evidenceBottom'];
+const skuReqLabel = (r) => `SOL-${String(r.folio).padStart(4, '0')}`;
+const skuReqIsTi = (req) => !!req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), SKU_REQ_TI.sectionId, SKU_REQ_TI.itemId, SKU_REQ_TI.submenuId);
+const skuReqCanRequest = (req, department, area) => !!req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), department, area, SKU_REQ_SCREEN);
+const skuReqIsOwner = (req, r) => !!r.requestedByUserId && r.requestedByUserId === req.user.sub;
+const skuReqAreaLabel = (r) => `${HR_DEPARTMENT_NAMES_ES[r.department] || r.department} › ${hrAreaNameEs(r.department, r.area)}`;
+// Quién puede cambiar los datos ahora: quien pidió mientras está en sus manos (Información pendiente / TI pidió datos); TI cuando la tomó en revisión.
+function skuReqCanEdit(req, r) {
+    if (r.status === 'info_pending' || r.status === 'needs_info') return skuReqIsOwner(req, r);
+    if (r.status === 'in_review') return skuReqIsTi(req);
+    return false;
+}
+function mapSkuRequestFor(req, r, events, viewTi) {
+    const client = getClientById(req.user.clientId);
+    const center = r.costCenterId ? getCostCenterById(r.costCenterId, req.user.clientId, req.user.isTestAccount) : null;
+    const times = skuRequestTimes(r, events);
+    const progress = skuRequestProgress(r.data, r.tiFields);
+    const photos = {};
+    SKU_REQ_PHOTOS.forEach((k) => { photos[k] = !!r.data[k]; });
+    const data = { ...r.data };
+    SKU_REQ_PHOTOS.forEach((k) => { delete data[k]; });
+    const sku = r.skuItemId ? getSkuItemById(r.skuItemId, req.user.clientId, req.user.isTestAccount) : null;
+    return {
+        id: r.id, folio: r.folio, label: skuReqLabel(r), department: r.department, area: r.area, areaLabel: skuReqAreaLabel(r), siteCode: r.siteCode, costCenterId: r.costCenterId,
+        costCenterName: center ? center.name : '', requestedBy: r.requestedBy, mine: skuReqIsOwner(req, r),
+        status: r.status, holder: r.holder, tiNote: r.tiNote, uniqueDescription: r.uniqueDescription, data, photos, tiFields: r.tiFields,
+        progress: { total: progress.total, filled: progress.filled, byTi: progress.byTi, missing: progress.missing },
+        times, canEdit: skuReqCanEdit(req, r), skuItemId: r.skuItemId, sku: sku ? padSku(sku.record_number, sku.sku_code) : '',
+        createdAt: r.createdAt, updatedAt: r.updatedAt, closedAt: r.closedAt,
+        events: (events || []).map((e) => ({ status: e.status, holder: e.holder, note: e.note, by: e.by, at: e.at })),
+        ...getSystemColumnsForRecord({
+            companyName: client ? client.company_name : '', area: viewTi ? 'Operaciones TI' : hrAreaNameEs(r.department, r.area), modulo: viewTi ? 'Tecnologías de la Información' : (HR_DEPARTMENT_NAMES_ES[r.department] || r.department),
+            pantalla: viewTi ? 'Solicitudes de alta de código' : 'Pedir alta de código', centroCostos: center ? center.name : '', createdAt: r.createdAt,
+        }),
+    };
+}
+// ¿esta descripción única ya la tiene un código o otra solicitud abierta? → el SKU / el folio que la tiene, o null
+function skuReqDescriptionOwner(req, text, exceptId = 0) {
+    const key = SkuTemplate.descKey(text);
+    if (!key) return null;
+    const sku = skuUniqueDescriptionOwner(req.user.clientId, req.user.isTestAccount, text, 0);
+    if (sku) return sku;
+    const hit = skuRequestDescriptionsInUse(req.user.clientId, req.user.isTestAccount, exceptId).find((r) => SkuTemplate.descKey(r.unique_description) === key);
+    return hit ? skuReqLabel(hit) : null;
+}
+function skuReqPlaceCheck(req, siteCode, costCenterId) {
+    if (!siteCode) return { siteCode: '', costCenterId: 0 };
+    const centers = listCostCenters(req.user.clientId, req.user.isTestAccount).filter((cc) => cc.status === 'active' && cc.site_code === siteCode);
+    if (!centers.length) return { error: 'Ese sitio no existe.' };
+    const id = Number(costCenterId) || 0;
+    if (id && !centers.some((cc) => cc.id === id)) return { error: 'Ese centro de costos no es de ese sitio.' };
+    return { siteCode, costCenterId: id };
+}
+function loadSkuRequest(req, res, { needTi = false } = {}) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
+    const r = getSkuRequest(Number(req.params.id), req.user.clientId, req.user.isTestAccount);
+    if (!r) { res.status(404).json({ message: 'Esa solicitud no existe.' }); return null; }
+    if (needTi ? !skuReqIsTi(req) : !(skuReqIsOwner(req, r) || skuReqIsTi(req))) { res.status(403).json({ message: 'No tienes permiso para esta solicitud.' }); return null; }
+    return r;
+}
+function skuReqLog(req, r, action, fieldKey, oldValue, newValue) {
+    logTableChange({ clientId: req.user.clientId, tableKey: SKU_REQ_TABLE, recordId: r.id, recordLabel: skuReqLabel(r), action, fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
+}
+const SKU_REQ_STATUS_ES = { info_pending: 'Información pendiente', to_review: 'Por revisar', needs_info: 'TI pidió datos', in_review: 'En revisión', created: 'Código creado', rejected: 'Rechazada' };
+function skuReqMove(req, r, status, note, extra = {}) {
+    const updated = setSkuRequestStatus(r.id, req.user.clientId, req.user.isTestAccount, status, { note, byLabel: changedByLabel(req), byUserId: req.user.sub, ...extra });
+    skuReqLog(req, r, 'update', 'main.colSolEstatus', SKU_REQ_STATUS_ES[r.status] || r.status, `${SKU_REQ_STATUS_ES[status] || status}${note ? ` · ${note}` : ''}`);
+    return updated;
+}
+// Avisos de la campana (pestaña Avisos): a TI cuando entra una solicitud nueva y cuando queda lista para revisar; a quien pidió cuando TI pide datos, la rechaza o crea el código. Nunca a quien hizo la acción.
+function skuReqNotify(req, r, event, { sku = '', note = '' } = {}) {
+    try {
+        const toTi = event === 'new' || event === 'submitted';
+        const recipientIds = toTi
+            ? listUserIdsWithScreenGrant(req.user.clientId, req.user.isTestAccount, SKU_REQ_TI, [req.user.sub])
+            : [r.requestedByUserId].filter((id) => id && id !== req.user.sub);
+        publishSkuRequestNotice({
+            recipientIds, event, toTi, request: { id: r.id, label: skuReqLabel(r), uniqueDescription: r.uniqueDescription, areaLabel: skuReqAreaLabel(r) }, sku, note, actorUserId: req.user.sub, actorLabel: changedByLabel(req),
+        });
+    } catch (err) {
+        console.error('Solicitud de código: no se pudo avisar en la campana', err && err.message);
+    }
+}
+// La lista: quien pide ve las suyas; TI (view=ti) ve todas y trae los contadores de su bandeja.
+app.get('/api/business/sku-requests', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const viewTi = req.query.view === 'ti';
+    if (viewTi && !skuReqIsTi(req)) return res.status(403).json({ message: 'No tienes permiso para ver la bandeja de TI.' });
+    const rows = listSkuRequests(req.user.clientId, req.user.isTestAccount, viewTi ? {} : { userId: req.user.sub });
+    const events = listSkuRequestEvents(rows.map((r) => r.id));
+    const requests = rows.map((r) => mapSkuRequestFor(req, r, events.get(r.id) || [], viewTi));
+    const count = (s) => requests.filter((r) => r.status === s).length;
+    const open = requests.filter((r) => r.times.open);
+    const closedCreated = requests.filter((r) => r.status === 'created');
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        requests,
+        canManage: skuReqIsTi(req),
+        counters: viewTi ? {
+            infoPending: count('info_pending'), toReview: count('to_review'), needsInfo: count('needs_info'), inReview: count('in_review'), created: count('created'), rejected: count('rejected'),
+            oldestOpenMs: open.length ? Math.max(...open.map((r) => r.times.totalMs)) : 0,
+            avgTiMs: closedCreated.length ? Math.round(closedCreated.reduce((n, r) => n + r.times.tiMs, 0) / closedCreated.length) : 0,
+        } : null,
+    });
+});
+// Lo que necesita el formulario de «Pedir alta de código»: el área para la que se pide (la elegida en la barra de arriba), si se puede pedir ahí y los sitios del cliente con sus centros.
+app.get('/api/business/sku-requests/options', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const department = String(req.query.department || '');
+    const area = String(req.query.area || '');
+    const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
+    const validArea = options.departments.includes(department) && (options.areas[department] || []).some((a) => a.id === area);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        department, area, validArea, canRequest: validArea && skuReqCanRequest(req, department, area),
+        areaLabel: validArea ? `${HR_DEPARTMENT_NAMES_ES[department] || department} › ${hrAreaNameEs(department, area)}` : '',
+        sites: habOptions(req).sites.map((s) => ({ code: s.code, sucursal: s.sucursal, centers: s.centers })),
+    });
+});
+app.get('/api/business/sku-requests/:id', requireAuth, (req, res) => {
+    const r = loadSkuRequest(req, res);
+    if (!r) return;
+    const events = listSkuRequestEvents([r.id]).get(r.id) || [];
+    res.set('Cache-Control', 'no-store');
+    res.json({ request: mapSkuRequestFor(req, r, events, skuReqIsTi(req) && req.query.view === 'ti') });
+});
+// Pedir un código: basta la Descripción Única (no repetida); lo demás se va llenando. Nace «Información pendiente», en manos de quien pidió, y TI ya la ve.
+app.post('/api/business/sku-requests', requireAuth, requireCostCenter, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const body = req.body || {};
+    const department = String(body.department || '');
+    const area = String(body.area || '');
+    const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
+    if (!options.departments.includes(department) || !(options.areas[department] || []).some((a) => a.id === area)) return res.status(400).json({ message: 'Elige el departamento y el área para los que pides el código.', code: 'AREA' });
+    if (!skuReqCanRequest(req, department, area)) return res.status(403).json({ message: 'No tienes permiso para pedir códigos en esta área.' });
+    const place = skuReqPlaceCheck(req, String(body.siteCode || ''), body.costCenterId);
+    if (place.error) return res.status(400).json({ message: place.error, code: 'PLACE' });
+    const data = sanitizeSkuRequestData(body.data);
+    SKU_REQ_PHOTOS.forEach((k) => { delete data[k]; }); // las fotos se suben aparte
+    if (!data.uniqueDescription) return res.status(400).json({ message: 'La Descripción Única es lo mínimo para pedir un código.', code: 'DESCRIPTION' });
+    const taken = skuReqDescriptionOwner(req, data.uniqueDescription);
+    if (taken) return res.status(409).json({ message: `Esa Descripción Única ya la tiene ${taken}.`, code: 'DESCRIPTION_TAKEN', owner: taken });
+    const created = createSkuRequest({
+        clientId: req.user.clientId, isTest: req.user.isTestAccount, department, area, siteCode: place.siteCode, costCenterId: place.costCenterId,
+        requestedBy: changedByLabel(req), requestedByUserId: req.user.sub, data, tiFields: Array.isArray(body.tiFields) ? body.tiFields : [],
+    });
+    skuReqLog(req, created, 'create', '', '', '');
+    skuReqNotify(req, created, 'new');
+    const events = listSkuRequestEvents([created.id]).get(created.id) || [];
+    res.status(201).json({ request: mapSkuRequestFor(req, created, events, false) });
+});
+// Completar o corregir datos (y qué datos «los llena TI»). Quien pidió mientras está en sus manos; TI cuando la tiene en revisión.
+app.patch('/api/business/sku-requests/:id', requireAuth, (req, res) => {
+    const r = loadSkuRequest(req, res);
+    if (!r) return;
+    if (!skuReqCanEdit(req, r)) return res.status(409).json({ message: 'Esta solicitud ya no se puede cambiar en este momento.', code: 'LOCKED' });
+    const body = req.body || {};
+    const patch = sanitizeSkuRequestData(body.data);
+    SKU_REQ_PHOTOS.forEach((k) => { delete patch[k]; });
+    if (Object.prototype.hasOwnProperty.call(patch, 'uniqueDescription')) {
+        if (!patch.uniqueDescription) return res.status(400).json({ message: 'La Descripción Única no puede quedar vacía.', code: 'DESCRIPTION' });
+        const taken = skuReqDescriptionOwner(req, patch.uniqueDescription, r.id);
+        if (taken) return res.status(409).json({ message: `Esa Descripción Única ya la tiene ${taken}.`, code: 'DESCRIPTION_TAKEN', owner: taken });
+    }
+    const place = Object.prototype.hasOwnProperty.call(body, 'siteCode') ? skuReqPlaceCheck(req, String(body.siteCode || ''), body.costCenterId) : null;
+    if (place && place.error) return res.status(400).json({ message: place.error, code: 'PLACE' });
+    const before = r.data;
+    const updated = updateSkuRequestData(r.id, req.user.clientId, req.user.isTestAccount, patch, Array.isArray(body.tiFields) ? body.tiFields : null);
+    if (place) setSkuRequestPlace(updated.id, req.user.clientId, req.user.isTestAccount, place.siteCode, place.costCenterId);
+    const changed = Object.keys(patch).filter((k) => String(before[k] ?? '') !== String(patch[k] ?? ''));
+    if (changed.length) skuReqLog(req, r, 'update', 'main.colSolDatos', '', changed.join(', '));
+    const fresh = getSkuRequest(r.id, req.user.clientId, req.user.isTestAccount);
+    res.json({ request: mapSkuRequestFor(req, fresh, listSkuRequestEvents([r.id]).get(r.id) || [], skuReqIsTi(req) && req.query.view === 'ti') });
+});
+// Las 6 fotos: el servidor las guarda en el mismo almacenamiento (R2) que las de Alta Artículos; sin R2 configurado (solo pruebas) se guarda la foto dentro de la solicitud.
+app.post('/api/business/sku-requests/:id/photo/:field', requireAuth, express.raw({ type: (rq) => /^image\//i.test(String(rq.headers['content-type'] || '')), limit: '8mb' }), async (req, res) => {
+    const r = loadSkuRequest(req, res);
+    if (!r) return;
+    const field = String(req.params.field);
+    if (!SKU_REQ_PHOTOS.includes(field)) return res.status(400).json({ message: 'Esa foto no existe.', code: 'FIELD' });
+    if (!skuReqCanEdit(req, r)) return res.status(409).json({ message: 'Esta solicitud ya no se puede cambiar en este momento.', code: 'LOCKED' });
+    const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+    if (!EVIDENCE_IMAGE_TYPES.has(contentType) || !Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ message: 'La foto no es válida.', code: 'FILE' });
+    try {
+        let stored;
+        if (isR2Configured()) {
+            stored = buildEvidenceStorageKey({ clientId: req.user.clientId, tableKey: SKU_REQ_TABLE, recordId: r.id, fieldKey: field, ext: extFromContentType(contentType) });
+            await putObject(stored, req.body, contentType);
+        } else {
+            if (req.body.length > 3 * 1024 * 1024) return res.status(413).json({ message: 'La foto pesa demasiado para guardarla sin el almacenamiento de archivos.', code: 'SIZE' });
+            stored = `data:${contentType};base64,${req.body.toString('base64')}`;
+        }
+        setSkuRequestPhoto(r.id, req.user.clientId, req.user.isTestAccount, field, stored);
+        skuReqLog(req, r, 'update', 'main.colSolFotos', '', field);
+        res.json({ ok: true, field });
+    } catch (err) {
+        console.error('Solicitud de código: no se pudo guardar la foto', err && err.message);
+        res.status(502).json({ message: 'El almacenamiento de archivos no recibió la foto.', code: 'R2' });
+    }
+});
+app.get('/api/business/sku-requests/:id/photo/:field', requireAuth, async (req, res) => {
+    const r = loadSkuRequest(req, res);
+    if (!r) return;
+    const field = String(req.params.field);
+    const value = SKU_REQ_PHOTOS.includes(field) ? r.data[field] : '';
+    if (!value) return res.status(404).json({ message: 'Esa foto no existe.' });
+    if (String(value).startsWith('data:')) return res.json({ url: value });
+    try { res.json({ url: await getDownloadUrl(value) }); } catch (err) { res.status(503).json({ message: 'El almacenamiento de archivos no está configurado todavía.' }); }
+});
+// Mandarla a TI para revisión: los 24 datos deben estar llenos o marcados «lo llena TI».
+app.post('/api/business/sku-requests/:id/submit', requireAuth, requireCostCenter, (req, res) => {
+    const r = loadSkuRequest(req, res);
+    if (!r) return;
+    if (!skuReqIsOwner(req, r) || !['info_pending', 'needs_info'].includes(r.status)) return res.status(409).json({ message: 'Esta solicitud no se puede mandar a revisión ahora.', code: 'STATE' });
+    if (!r.uniqueDescription) return res.status(400).json({ message: 'Falta la Descripción Única.', code: 'DESCRIPTION' });
+    const progress = skuRequestProgress(r.data, r.tiFields);
+    if (progress.missing.length) return res.status(400).json({ message: 'Faltan datos: llénalos o márcalos «lo llena TI».', code: 'INCOMPLETE', missing: progress.missing });
+    const updated = skuReqMove(req, r, 'to_review', '');
+    skuReqNotify(req, r, 'submitted');
+    res.json({ request: mapSkuRequestFor(req, updated, listSkuRequestEvents([r.id]).get(r.id) || [], false) });
+});
+// TI: tomarla en revisión.
+app.post('/api/business/sku-requests/:id/review', requireAuth, (req, res) => {
+    const r = loadSkuRequest(req, res, { needTi: true });
+    if (!r) return;
+    if (r.status !== 'to_review') return res.status(409).json({ message: 'Solo se toma en revisión una solicitud «Por revisar».', code: 'STATE' });
+    const updated = skuReqMove(req, r, 'in_review', '');
+    res.json({ request: mapSkuRequestFor(req, updated, listSkuRequestEvents([r.id]).get(r.id) || [], true) });
+});
+// TI: pedir datos a quien la pidió (vuelve a sus manos con lo que falta).
+app.post('/api/business/sku-requests/:id/request-info', requireAuth, (req, res) => {
+    const r = loadSkuRequest(req, res, { needTi: true });
+    if (!r) return;
+    if (!['to_review', 'in_review'].includes(r.status)) return res.status(409).json({ message: 'Solo se piden datos en una solicitud por revisar o en revisión.', code: 'STATE' });
+    const note = String((req.body && req.body.note) || '').trim().slice(0, 600);
+    if (!note) return res.status(400).json({ message: 'Escribe qué datos necesitas.', code: 'NOTE' });
+    const updated = skuReqMove(req, r, 'needs_info', note);
+    skuReqNotify(req, r, 'needs_info', { note });
+    res.json({ request: mapSkuRequestFor(req, updated, listSkuRequestEvents([r.id]).get(r.id) || [], true) });
+});
+app.post('/api/business/sku-requests/:id/reject', requireAuth, (req, res) => {
+    const r = loadSkuRequest(req, res, { needTi: true });
+    if (!r) return;
+    if (!['info_pending', 'to_review', 'needs_info', 'in_review'].includes(r.status)) return res.status(409).json({ message: 'Esta solicitud ya está cerrada.', code: 'STATE' });
+    const reason = String((req.body && req.body.reason) || '').trim().slice(0, 600);
+    if (!reason) return res.status(400).json({ message: 'Escribe el motivo del rechazo.', code: 'NOTE' });
+    const updated = skuReqMove(req, r, 'rejected', reason);
+    skuReqNotify(req, r, 'rejected', { note: reason });
+    res.json({ request: mapSkuRequestFor(req, updated, listSkuRequestEvents([r.id]).get(r.id) || [], true) });
+});
+// TI: crear el código. Toma los datos de la solicitud, su SKU lleva las letras del área que lo pidió y queda habilitado donde se pidió; lo que falte se completa en Alta Artículos.
+app.post('/api/business/sku-requests/:id/create-code', requireAuth, requireCostCenter, (req, res) => {
+    const r = loadSkuRequest(req, res, { needTi: true });
+    if (!r) return;
+    if (!['to_review', 'in_review'].includes(r.status)) return res.status(409).json({ message: 'Solo se crea el código de una solicitud por revisar o en revisión.', code: 'STATE' });
+    const taken = skuReqDescriptionOwner(req, r.uniqueDescription, r.id);
+    if (taken && !String(taken).startsWith('SOL-')) return res.status(409).json({ message: `Esa Descripción Única ya la tiene ${taken}.`, code: 'DESCRIPTION_TAKEN', owner: taken });
+    const { clientId, isTestAccount } = req.user;
+    let skuItem = createSkuItem({ clientId, isTestData: isTestAccount, department: r.department, area: r.area, enableRows: [{ department: r.department, area: r.area, siteCode: r.siteCode, costCenterId: r.costCenterId }] });
+    const patch = {};
+    Object.entries(r.data).forEach(([key, value]) => {
+        if (!SKU_ITEM_PATCHABLE_FIELDS[key]) return;
+        if (key === 'classificationId' && value == null) return;
+        if (value === '' || value === 0 || value === null || value === undefined) return;
+        patch[key] = value;
+    });
+    skuItem = updateSkuItem(skuItem.id, clientId, patch, isTestAccount);
+    skuItem = maybeIssueSkuPublicToken(skuItem, clientId, isTestAccount);
+    const sku = padSku(skuItem.record_number, skuItem.sku_code);
+    logTableChange({ clientId, tableKey: 'nuestros-articulos', recordId: skuItem.id, recordLabel: `#${skuItem.id}`, action: 'create', changedBy: changedByLabel(req) });
+    const updated = skuReqMove(req, r, 'created', sku, { skuItemId: skuItem.id });
+    skuReqNotify(req, r, 'created', { sku });
+    manualItemsCache.clear();
+    res.json({ request: mapSkuRequestFor(req, updated, listSkuRequestEvents([r.id]).get(r.id) || [], true), sku });
 });
 
 app.get('/api/business/sku-distribution', requireAuth, (req, res) => {

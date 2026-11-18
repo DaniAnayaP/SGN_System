@@ -1298,7 +1298,8 @@ const AREAS_BY_DEPARTMENT = {
         { key: 'cert-area-iso-9001', labelKey: 'menu.area.iso9001', abbrKey: 'menu.area.iso9001Abbr', icon: 'bx-badge-check' }
     ],
     'information-technology': [
-        { key: 'it-area-operations', labelKey: 'menu.area.itOperations', icon: 'bx-chip' }
+        { key: 'it-area-operations', labelKey: 'menu.area.itOperations', icon: 'bx-chip' },
+        { key: 'it-area-company-config', labelKey: 'menu.area.itCompanyConfig', icon: 'bx-cog' }
     ]
 };
 
@@ -10528,6 +10529,33 @@ function renderDataChangeNoticeRow(item) {
     return row;
 }
 
+// Solicitudes de alta de código (kind 'sku-request', ver publishSkuRequestNotice en db.js): qué pasó con la solicitud (nueva, lista para revisar, TI pidió datos, rechazada o código creado), de qué área, y quién fue.
+// Abre la pantalla que le toca a quien lo recibe: la bandeja de TI (toTi) o «Pedir alta de código».
+function renderSkuRequestNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    tag.textContent = t(`main.noticeSkuReq_${item.event}`);
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${item.label || ''} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    desc.textContent = [item.description, item.areaLabel, item.event === 'created' && item.sku ? `SKU: ${item.sku}` : '', (item.event === 'needs_info' || item.event === 'rejected') && item.note ? item.note : ''].filter(Boolean).join(' · ') || '—';
+    const by = document.createElement('div');
+    by.className = 'notifications-item-meta';
+    by.textContent = t('main.noticeChangedBy', { name: item.actorLabel || '—' });
+    const link = document.createElement('a');
+    link.href = item.toTi ? 'OpTISolicitudesCodigo.html' : 'OpPedirAltaCodigo.html';
+    link.className = 'notifications-item-meta';
+    link.textContent = t('main.solView');
+    row.append(tag, meta, desc, by, link);
+    return row;
+}
+
 // Cambios de accesos (kind 'access-change', ver publishAccessChangeNotice en db.js): quién lo hizo, a quién, el detalle (dado / editado / quitado) y por qué te llegó.
 const ACCESS_LEVEL_LABEL_KEYS = {
     'solo-ver': 'main.permSoloVer', 'ver-y-operar': 'main.permVerYOperar', editar: 'main.permEditar', autorizar: 'main.permAutorizar', eliminar: 'main.permEliminar',
@@ -10820,6 +10848,7 @@ function renderTreeNoticeRow(item) {
     if (item.kind === 'calibration') return renderCalibrationNoticeRow(item);
     if (item.kind === 'access-denied') return renderAccessDeniedNoticeRow(item);
     if (item.kind === 'data-change') return renderDataChangeNoticeRow(item);
+    if (item.kind === 'sku-request') return renderSkuRequestNoticeRow(item);
     if (item.kind === 'access-change') return renderAccessChangeNoticeRow(item);
     const row = document.createElement('div');
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
@@ -11247,7 +11276,7 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity' || item.kind === 'support') row = renderTreeNoticeRow(item);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity' || item.kind === 'support' || item.kind === 'sku-request') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (item.kind === 'asset-auth') row = renderAssetAuthRow(item, activeNotificationTab);
@@ -13609,6 +13638,7 @@ const TABLE_GRANT_PATHS = {
     'mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
+    'solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
@@ -13696,6 +13726,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-admin-ti-mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'cat-operaciones-ti-casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'cat-operaciones-ti-habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
+    'cat-operaciones-ti-solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
     'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
     'cat-operaciones-pv-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },

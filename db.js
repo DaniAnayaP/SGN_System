@@ -3381,6 +3381,8 @@ const TABLE_CHANGES_SYSTEM_META = {
     'mapa-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Mapa de soporte' },
     'casos-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Casos de soporte' },
     'habilitacion-codigos': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Habilitación de Códigos' },
+    'solicitudes-codigo': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Solicitudes de alta de código' },
+    'pedir-alta-codigo': { area: '', modulo: 'Operaciones', pantalla: 'Pedir alta de código' },
     'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
     'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
     'sitios-contratados': { area: '', modulo: 'Administración del Negocio', pantalla: 'Sitios Contratados' },
@@ -3793,6 +3795,7 @@ const TABLE_GRANT_PATHS = {
     // Operaciones > Casos de soporte: sus columnas, su botón «Nueva solicitud» (colSpCreateAuth) y los iconos de la tabla.
     'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
+    'solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
@@ -4011,6 +4014,8 @@ const BUTTON_NOTIFY_COLUMNS = {
     'soporte-causas': CATEGORY_BUTTON_NOTIFY,
     'casos-soporte': { create: 'colSpCreateAuth' },
     'habilitacion-codigos': { create: 'colHabCreateAuth' },
+    'solicitudes-codigo': { create: 'colSolTiGestionar' },
+    'pedir-alta-codigo': { create: 'colSolCreateAuth' },
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
     'udm-distribucion': { create: 'colUdmDCreateAuth', delete: 'colUdmDDeleteAuth' },
@@ -5870,6 +5875,19 @@ function setSkuRequestStatus(id, clientId, isTest, status, { note = '', byLabel 
             .run(status, note || '', note || '', skuItemId, status, id, clientId, isTest ? 1 : 0);
         addSkuRequestEvent(id, status, { note, byLabel, byUserId });
     })();
+    return getSkuRequest(id, clientId, isTest);
+}
+// Guarda UNA foto (llave de R2, o la foto misma si R2 no está configurado) dentro de los datos de la solicitud.
+function setSkuRequestPhoto(id, clientId, isTest, field, value) {
+    const current = getSkuRequest(id, clientId, isTest);
+    if (!current) return null;
+    const merged = { ...current.data, [field]: String(value || '') };
+    db.prepare("UPDATE sku_requests SET data = ?, updated_at = datetime('now') WHERE id = ? AND client_id = ? AND is_test_data = ?").run(JSON.stringify(merged), id, clientId, isTest ? 1 : 0);
+    return getSkuRequest(id, clientId, isTest);
+}
+// Dónde se quiere usar el código (sitio y, si se quiere, un centro de ese sitio); '' = todos los sitios.
+function setSkuRequestPlace(id, clientId, isTest, siteCode, costCenterId) {
+    db.prepare("UPDATE sku_requests SET site_code = ?, cost_center_id = ?, updated_at = datetime('now') WHERE id = ? AND client_id = ? AND is_test_data = ?").run(siteCode || '', siteCode ? (Number(costCenterId) || 0) : 0, id, clientId, isTest ? 1 : 0);
     return getSkuRequest(id, clientId, isTest);
 }
 // Los relojes de una solicitud: cada evento deja la solicitud en manos de alguien (quien pidió o TI) hasta el siguiente; el último sigue corriendo hasta ahora (o hasta cerrarse). Todo en milisegundos.
@@ -9964,6 +9982,37 @@ function seedTiMinimumOnce() {
     })();
     console.log('[db] TI por defecto con lo mínimo (una vez): ' + JSON.stringify(stats) + '.');
 }
+// TI › «Configuración Compañía» (Daniel, 2026-11-18): el grupo anidado «Administración del Negocio» de TI › Operaciones TI (cat-operaciones-ti-admin-negocio) desaparece y sus entradas pasan a ser el área nueva «Configuración Compañía»
+// (it-area-company-config, Operaciones, 9 entradas). Quien ya tenía el grupo viejo (los planes, por el mínimo de TI, y cualquier árbol donde se haya marcado) recibe, UNA vez, las 9 entradas nuevas en su lugar. Solo cambia lo del grupo viejo.
+const TI_CONFIG_AREA_KEY = 'seed-ti-configuracion-compania-v1';
+const TI_OLD_ADMIN_GROUP = 'cat-operaciones/cat-operaciones-ti-admin-negocio';
+function moveTiAdminGroupToConfigAreaOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(TI_CONFIG_AREA_KEY)) return;
+    const FROM = { sectionId: 'information-technology', itemId: 'it-area-operations' };
+    const stats = {};
+    db.transaction(() => {
+        const newPaths = TI_MINIMUM_GRANTS.map((g) => g.submenuId);
+        db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name).forEach((table) => {
+            const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+            if (!cols.includes('section_id') || !cols.includes('item_id') || !cols.includes('submenu_id')) return;
+            const rows = db.prepare(`SELECT rowid AS __rid, * FROM ${table} WHERE section_id = ? AND item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)`)
+                .all(FROM.sectionId, FROM.itemId, TI_OLD_ADMIN_GROUP, TI_OLD_ADMIN_GROUP.length + 1, `${TI_OLD_ADMIN_GROUP}/`);
+            if (!rows.length) return;
+            const keep = cols.filter((c) => c !== 'id' && c !== 'item_id' && c !== 'submenu_id');
+            const insert = db.prepare(`INSERT OR IGNORE INTO ${table} (${keep.concat(['item_id', 'submenu_id']).join(', ')}) VALUES (${keep.concat(['item_id', 'submenu_id']).map(() => '?').join(', ')})`);
+            const seen = new Set();
+            rows.forEach((row) => {
+                db.prepare(`DELETE FROM ${table} WHERE rowid = ?`).run(row.__rid);
+                const owner = JSON.stringify(keep.map((c) => row[c]));
+                if (seen.has(owner)) return;
+                seen.add(owner);
+                newPaths.forEach((p) => { stats[table] = (stats[table] || 0) + insert.run(...keep.map((c) => row[c]), TI_MINIMUM_GRANTS[0].itemId, p).changes; });
+            });
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(TI_CONFIG_AREA_KEY);
+    })();
+    console.log('[db] TI › Configuración Compañía: el grupo «Administración del Negocio» de Operaciones TI pasó al área nueva, con sus permisos (una vez): ' + JSON.stringify(stats) + '.');
+}
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
     const path = TABLE_GRANT_PATHS['pedido-manual'];
@@ -12220,6 +12269,25 @@ function publishDataChangeNotice({ clientId, tableKey, screenKey, colKey, record
     db.transaction(() => recipients.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
     return recipients;
 }
+// Las personas activas de un cliente que pueden entrar a una pantalla (el administrador del cliente siempre; los demás por sus permisos efectivos). Para avisarles de algo que les toca atender.
+function listUserIdsWithScreenGrant(clientId, forTestAccount, tuple, skipUserIds = []) {
+    const skip = new Set((skipUserIds || []).filter((id) => id != null));
+    return db.prepare('SELECT id, is_client_admin AS isAdmin FROM users WHERE client_id = ? AND active != 0 AND COALESCE(is_test_account, 0) = ?').all(clientId, forTestAccount ? 1 : 0)
+        .filter((u) => !skip.has(u.id) && (u.isAdmin || isTupleGranted(getUserEffectiveGrants(u.id), tuple.sectionId, tuple.itemId, tuple.submenuId)))
+        .map((u) => u.id);
+}
+// Aviso de una solicitud de alta de código (kind 'sku-request', scope 'data'): una fila por persona en saas_tree_notices, en la pestaña Avisos de la campana. event = new | submitted | needs_info | rejected | created;
+// toTi = el aviso es para TI (si no, para quien pidió). Devuelve a quién le llegó.
+function publishSkuRequestNotice({ recipientIds, event, toTi, request, sku = '', note = '', actorUserId, actorLabel }) {
+    const ids = [...new Set((recipientIds || []).filter((id) => id != null))];
+    if (!ids.length) return [];
+    const payload = JSON.stringify({
+        event, toTi: !!toTi, requestId: request.id, label: request.label || '', description: String(request.uniqueDescription || '').slice(0, 160), areaLabel: request.areaLabel || '', sku: sku || '', note: String(note || '').slice(0, 200),
+    });
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'sku-request', 'data', ?, ?, ?)");
+    db.transaction(() => ids.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
+    return ids;
+}
 // ---------------------------------------------------------------------------
 // Avisos de cambios de accesos (2026-10-29, diseño de Daniel): cuando se DA, se EDITA (cambia de nivel: Operar → Modificar registro) o se QUITA un acceso en el árbol de
 // un usuario o de un puesto, se manda UN aviso por Guardar (con el detalle adentro) que dice quién lo hizo y qué cambió. Le llega a: la persona afectada (en un puesto, a
@@ -12955,12 +13023,12 @@ function getPlanGrants(planId) {
         .all(planId);
 }
 
-// TI se habilita por defecto en todo contrato con lo MÍNIMO indispensable (Daniel, 2026-11-19): hoy es el grupo «Administración del Negocio» dentro de TI › Operaciones TI › Operaciones (sus 8 pantallas). Todo plan lo trae siempre; lo demás de TI se
-// contrata aparte. Cuando exista la pantalla «Relación de Accesos», el mínimo saldrá de la marca de cada acceso y esta lista desaparecerá.
+// TI se habilita por defecto en todo contrato con lo MÍNIMO indispensable (Daniel, 2026-11-19): es el área «Configuración Compañía» de TI (it-area-company-config), con sus 9 entradas de Operaciones. Todo plan la trae siempre; lo demás de TI se
+// contrata aparte. Cuando exista la pantalla «Relación de Accesos», el mínimo saldrá de la marca de cada acceso y esta lista desaparecerá. (Hasta el 2026-11-18 el mínimo era un grupo anidado dentro de Operaciones TI: ver moveTiAdminGroupToConfigAreaOnce.)
 const TI_MINIMUM_MODULE = 'information-technology';
-const TI_MINIMUM_GRANTS = [
-    { sectionId: 'information-technology', itemId: 'it-area-operations', submenuId: 'cat-operaciones/cat-operaciones-ti-admin-negocio' },
-];
+const TI_COMPANY_CONFIG_AREA = 'it-area-company-config';
+const TI_COMPANY_CONFIG_NODES = ['datos-compania', 'diseno-compania', 'servicio-contratado', 'gestion-accesos', 'soporte', 'expansiones', 'proximas-actualizaciones', 'sesiones-capacitacion', 'config-botones'];
+const TI_MINIMUM_GRANTS = TI_COMPANY_CONFIG_NODES.map((id) => ({ sectionId: 'information-technology', itemId: TI_COMPANY_CONFIG_AREA, submenuId: `cat-operaciones/cat-operaciones-ti-cc-${id}` }));
 function withTiMinimumGrants(grants) {
     const has = (g) => (grants || []).some((x) => x.sectionId === g.sectionId && (x.itemId || null) === (g.itemId || null) && (x.submenuId || null) === (g.submenuId || null));
     return [...(grants || []), ...TI_MINIMUM_GRANTS.filter((g) => !has(g))];
@@ -16259,6 +16327,7 @@ moveScreensToGestionOnce();
 // todo o nada (una sola transacción): si algo falla se avisa, el servidor sigue arriba y se reintenta en el siguiente arranque
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
 try { seedTiMinimumOnce(); } catch (err) { console.error('[db] TI por defecto: no se pudo abrir el mínimo (se reintentará al arrancar):', err.message); }
+try { moveTiAdminGroupToConfigAreaOnce(); } catch (err) { console.error('[db] TI › Configuración Compañía: no se pudo pasar el grupo anterior (se reintentará al arrancar):', err.message); }
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();
@@ -16366,6 +16435,8 @@ module.exports = {
     listColumnNotifyRecipientUserIds,
     getSearchGatedColumns,
     publishDataChangeNotice,
+    listUserIdsWithScreenGrant,
+    publishSkuRequestNotice,
     publishButtonActionNotice,
     publishIconUpdateNotice,
     hasTableIconGrant,
@@ -16385,7 +16456,7 @@ module.exports = {
     SUPPORT_MATERIAL_CATEGORIES,
     listSkuItems,
     listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, isSkuEnabledAt, SKU_ENABLEMENT_DEFAULT,
-    createSkuRequest, getSkuRequest, listSkuRequests, listSkuRequestEvents, updateSkuRequestData, setSkuRequestStatus, skuRequestTimes, skuRequestProgress, skuRequestDescriptionsInUse, sanitizeSkuRequestData,
+    createSkuRequest, getSkuRequest, listSkuRequests, setSkuRequestPhoto, setSkuRequestPlace, listSkuRequestEvents, updateSkuRequestData, setSkuRequestStatus, skuRequestTimes, skuRequestProgress, skuRequestDescriptionsInUse, sanitizeSkuRequestData,
     SKU_REQUEST_STATUSES, SKU_REQUEST_OPEN, SKU_REQUEST_HOLDER, SKU_REQUEST_REQUIRED_KEYS, skuRequestFilled, skuLettersFor,
     getSkuItemById,
     createSkuItem,

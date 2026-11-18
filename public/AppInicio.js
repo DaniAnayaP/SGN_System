@@ -1585,6 +1585,7 @@ const AREAS_BY_DEPARTMENT = {
     ],
     'information-technology': [
         { key: 'it-area-operations', labelKey: 'menu.area.itOperations', icon: 'bx-chip' },
+        { key: 'it-area-company-config', labelKey: 'menu.area.itCompanyConfig', icon: 'bx-cog' },
     ],
 };
 // home-tab-* button ids -> the areaCategories entry (data/menu.json) each

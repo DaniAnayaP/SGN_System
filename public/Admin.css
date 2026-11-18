@@ -9251,3 +9251,49 @@ td.hab-click{ cursor: pointer; }
 .sit-limits{ display: inline-flex; flex-wrap: wrap; gap: 0.5rem; margin-right: 0.8rem; vertical-align: middle; }
 .sit-limit{ padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; background-color: color-mix(in srgb, var(--color-accent) 14%, transparent); color: var(--color-accent); white-space: nowrap; }
 .sit-limit-over{ background-color: color-mix(in srgb, #b3261e 14%, transparent); color: #b3261e; }
+/* Solicitudes de alta de código (Pedir alta de código / bandeja de TI): estatus, formulario, detalle y línea del tiempo. */
+.sol-chip{ display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.74rem; font-weight: 700; white-space: nowrap; background-color: color-mix(in srgb, var(--color-text-secondary) 15%, transparent); color: var(--color-text-secondary); }
+.sol-chip-info_pending{ background-color: color-mix(in srgb, #c9860b 20%, transparent); color: #a4410a; }
+.sol-chip-needs_info{ background-color: color-mix(in srgb, #b3261e 16%, transparent); color: #b3261e; }
+.sol-chip-to_review{ background-color: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-accent); }
+.sol-chip-in_review{ background-color: color-mix(in srgb, #6c4ba6 18%, transparent); color: #6c4ba6; }
+.sol-chip-created{ background-color: color-mix(in srgb, #2c8f4a 18%, transparent); color: #1d7f55; }
+.sol-chip-rejected{ background-color: color-mix(in srgb, var(--color-text-secondary) 22%, transparent); color: var(--color-text-secondary); text-decoration: line-through; }
+.sol-counters{ display: inline-flex; flex-wrap: wrap; gap: 0.4rem; margin-right: 0.8rem; vertical-align: middle; }
+.sol-count b{ font-weight: 800; }
+.sol-count-time{ padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.74rem; background-color: color-mix(in srgb, var(--color-text-secondary) 12%, transparent); color: var(--color-text-secondary); white-space: nowrap; }
+.modal-panel.sol-panel{ max-width: min(44rem, 96vw); width: 100%; max-height: 92vh; overflow-y: auto; }
+.modal-panel.sol-panel-wide{ max-width: min(66rem, 96vw); }
+.sol-photo-big{ max-width: 100%; max-height: 70vh; border-radius: 0.5rem; display: block; margin: 0.6rem auto; }
+.sol-form{ display: grid; gap: 1rem; margin: 0.6rem 0; }
+.sol-section{ border: 1px solid var(--color-border); border-radius: 0.6rem; padding: 0.6rem 0.9rem 0.9rem; margin: 0; }
+.sol-section legend{ padding: 0 0.4rem; font-weight: 700; font-size: 0.82rem; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+.sol-grid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: 0.7rem 1rem; }
+.sol-field input[type="text"], .sol-field input[type="number"], .sol-field select{ width: 100%; }
+.sol-ti{ display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; font-size: 0.74rem; color: var(--color-text-secondary); cursor: pointer; }
+.sol-photo-row{ display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.sol-progress{ display: inline-block; margin: 0.3rem 0; padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.8rem; font-weight: 700; background-color: color-mix(in srgb, var(--color-accent) 14%, transparent); color: var(--color-accent); }
+.sol-place{ display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem 1rem; margin-bottom: 0.4rem; }
+.sol-times{ display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 0.4rem 0 0.8rem; font-size: 0.85rem; }
+.sol-times b{ color: var(--color-text-secondary); margin-right: 0.25rem; font-weight: 600; }
+.sol-detail-head{ display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.sol-detail-head h3{ margin: 0; }
+.sol-holder{ font-size: 0.82rem; color: var(--color-text-secondary); margin-left: 0.4rem; }
+.sol-note{ margin: 0.5rem 0; padding: 0.5rem 0.8rem; border-left: 3px solid #c9860b; background-color: color-mix(in srgb, #c9860b 10%, transparent); border-radius: 0.3rem; font-size: 0.88rem; }
+.sol-detail-cols{ display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+@media (max-width: 780px){ .sol-detail-cols{ grid-template-columns: 1fr; } .sol-place{ grid-template-columns: 1fr; } }
+.sol-detail-cols h4{ margin: 0 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-secondary); }
+.sol-data{ width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+.sol-data th{ text-align: left; font-weight: 600; color: var(--color-text-secondary); padding: 0.3rem 0.6rem 0.3rem 0; width: 45%; vertical-align: top; }
+.sol-data td{ padding: 0.3rem 0; border-bottom: 1px solid var(--color-border); word-break: break-word; }
+.sol-by-ti{ color: #6c4ba6; font-style: normal; font-weight: 700; font-size: 0.8rem; }
+.sol-timeline{ list-style: none; margin: 0; padding: 0 0 0 0.9rem; border-left: 2px solid var(--color-border); display: grid; gap: 0.7rem; }
+.sol-step{ position: relative; }
+.sol-step::before{ content: ''; position: absolute; left: -1.28rem; top: 0.35rem; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--color-text-secondary); }
+.sol-step-ti::before{ background: var(--color-accent); }
+.sol-step-requester::before{ background: #c9860b; }
+.sol-step-head{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.sol-step-who{ font-size: 0.76rem; color: var(--color-text-secondary); }
+.sol-step-time{ margin-left: auto; font-size: 0.76rem; font-weight: 700; }
+.sol-step-meta{ font-size: 0.74rem; color: var(--color-text-secondary); margin-top: 0.1rem; }
+.sol-step-note{ margin-top: 0.25rem; font-size: 0.82rem; }
